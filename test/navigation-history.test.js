@@ -219,13 +219,20 @@ test('Administration: late context responses cannot replace the most recent bran
   ctx.contextQuery = () => `&location=${ctx.state.locationId}`; ctx.showToast = () => {};
   ctx.state.weekStart = '2026-09-07'; ctx.state.vacationYear = 2026;
   ctx.canReadManagerRequests = ctx.canReadLoanManagement = ctx.canManageBranchOrders = () => false;
-  vm.runInContext('let loadAllGeneration = 0; let planningPeriodController = null;\n' + functionSource(appSource, 'loadAll'), ctx);
+  ctx.enrichLoadedSchedule = () => Promise.resolve(false);
+  vm.runInContext('let loadAllGeneration = 0; let planningPeriodController = null;\n'
+    + ['applyLoadedSchedule', 'loadAll']
+      .map(name => functionSource(appSource, name)).join('\n'), ctx);
   function initial() { const rows = pending.splice(0); for (const row of rows) row.resolve(row.url === '/api/locations' ? ctx.state.locations : row.url.endsWith('/status') ? {} : []); }
-  function finish(rows, locationId) { for (const row of rows) row.resolve(row.url.startsWith('/api/schedule') ? { weekStart: '2026-09-07', context: { locationId }, settings: {} } : row.url.startsWith('/api/vacations') ? { year: 2026 } : []); }
+  async function finish(rows, locationId) {
+    for (const row of rows) row.resolve(row.url.startsWith('/api/schedule') ? { weekStart: '2026-09-07', context: { locationId }, settings: {} } : row.url.startsWith('/api/vacations') ? { year: 2026 } : []);
+    await new Promise(setImmediate);
+    for (const row of pending.splice(0)) row.resolve(row.url.startsWith('/api/vacations') ? { year: 2026 } : []);
+  }
   const first = ctx.loadAll({ restoreContext: false }); initial(); await new Promise(setImmediate);
   const slow = pending.splice(0); ctx.state.locationId = '20';
   const second = ctx.loadAll({ restoreContext: false }); initial(); await new Promise(setImmediate);
-  finish(pending.splice(0), '20'); await second; finish(slow, '18'); await first;
+  await finish(pending.splice(0), '20'); await second; await finish(slow, '18'); await first;
   assert.equal(ctx.state.locationId, '20'); assert.equal(ctx.state.data.context.locationId, '20');
 });
 

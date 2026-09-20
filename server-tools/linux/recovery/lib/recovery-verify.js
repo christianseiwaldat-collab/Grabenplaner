@@ -529,10 +529,21 @@ function parseArguments(argv) {
   };
 }
 
+const PUBLIC_RECOVERY_FAILURES = new Set([
+  "PG_RECOVERY_STALLED", "PG_RECOVERY_ACTIVITY_UNAVAILABLE", "PG_RECOVERY_STOP_UNCONFIRMED",
+  "PG_RECOVERY_INTERRUPTED", "PG_RECOVERY_WORKER_FAILED", "PG_RECOVERY_CLEANUP_FAILED",
+  "PG_RECOVERY_CLEANUP_GUARD", "PG_RECOVERY_APPLICATION_SMOKE", "PG_RECOVERY_RESULT_BINDING",
+]);
+function recoveryFailureDiagnostic(error) {
+  const code = PUBLIC_RECOVERY_FAILURES.has(error?.code) ? error.code
+    : PUBLIC_RECOVERY_FAILURES.has(error?.message) ? error.message : "RECOVERY_VERIFY_FAILED";
+  return { event: "recovery-verification-failed", code };
+}
+
 if (require.main === module) {
-  verifyRecovery(parseArguments(process.argv.slice(2)))
+  Promise.resolve().then(() => verifyRecovery(parseArguments(process.argv.slice(2))))
     .then((result) => process.stdout.write(`${JSON.stringify({ ok: true, databaseSha256: result.databaseSha256 })}\n`))
-    .catch((error) => { process.stderr.write(`${error?.message || "Recovery-Pruefung fehlgeschlagen."}\n`); process.exitCode = 1; });
+    .catch((error) => { process.stderr.write(`${JSON.stringify(recoveryFailureDiagnostic(error))}\n`); process.exitCode = 1; });
 }
 
 module.exports = {
@@ -543,4 +554,5 @@ module.exports = {
   protectedRecordChecks,
   encryptionConfiguration,
   verifyRecovery,
+  recoveryFailureDiagnostic,
 };

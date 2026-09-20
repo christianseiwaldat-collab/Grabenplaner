@@ -1,4 +1,8 @@
 'use strict';
+function formatSalesReportDuration(value) {
+  const totalSeconds = Math.max(0, Math.round(Number(value) || 0));
+  return `${Math.floor(totalSeconds / 60)}min ${totalSeconds % 60}sek`;
+}
 window.createSalesReportJobUi = function ({ api, visible, navigate = () => {} }) {
   const controls = window.SalesReportControls;
   const el = id => document.getElementById(id), form = el('salesAnalyticsRequestForm'), hint = el('salesAnalyticsRequestHint'), list = el('salesReportJobList');
@@ -84,7 +88,7 @@ window.createSalesReportJobUi = function ({ api, visible, navigate = () => {} })
     const query = el('salesReportJobFilter').value.toLocaleLowerCase('de-AT'); list.replaceChildren();
     for (const row of rows.filter(r => r.title.toLocaleLowerCase('de-AT').includes(query))) {
       const card = node('article', '', 'sales-report-job');
-      card.append(node('h3', row.title), node('p', `${labels[row.status]} · ${row.format === 'pdf' ? row.query.chartType === 'timeline' ? 'Grafik-PDF' : 'PDF' : 'HTML (früherer Bericht)'} · ${row.processed} Positionen verarbeitet${row.phase === 'comparison' ? ' · Vergleichszeitraum' : ''}${row.restarts ? ` · ${row.restarts} Wiederanläufe` : ''}`),
+      card.append(node('h3', row.title), node('p', `${labels[row.status]} · ${row.format === 'pdf' ? row.query.chartType === 'timeline' ? 'Grafik-PDF' : 'PDF' : 'HTML (früherer Bericht)'} · ${row.processed} Positionen verarbeitet${row.phase === 'comparison' ? ' · Vergleichszeitraum' : ''}${row.restarts ? ` · ${row.restarts} Wiederanläufe` : ''}${row.status === 'completed' && Number.isFinite(Number(row.durationSeconds)) ? ` · Dauer: ${formatSalesReportDuration(row.durationSeconds)}` : ''}`),
         node('p', `${row.query.dateFrom} – ${row.query.dateTo}${row.query.comparisonFrom && row.query.chartType !== 'timeline' ? ` · Vergleich ${row.query.comparisonFrom} – ${row.query.comparisonTo}` : ''} · ${new Date(row.created).toLocaleString('de-AT')}`));
       if (row.error) card.append(node('p', errors[row.error] || 'Der Auftrag konnte nicht abgeschlossen werden. Bitte erneut beauftragen.'));
       const actions = node('div', '', 'sales-report-job-actions');

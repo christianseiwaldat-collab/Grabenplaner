@@ -25,6 +25,7 @@ readonly OFFSITE_STATUS_FILE="$OFFSITE_STATE_ROOT/status.json"
 readonly OFFSITE_ASSURANCE_ROOT="/var/lib/grabenplaner-assurance"
 readonly OFFSITE_ASSURANCE_HISTORY="$OFFSITE_ASSURANCE_ROOT/history"
 readonly OFFSITE_ASSURANCE_LOCK="$OFFSITE_RUN_ROOT/assurance.lock"
+readonly OFFSITE_MAINTENANCE_SCHEDULE_ROOT="/var/lib/grabenplaner-maintenance-schedules"
 readonly OFFSITE_APP_ROOT="/opt/grabenplaner/app"
 readonly OFFSITE_DATA_ROOT="/var/lib/grabenplaner"
 readonly OFFSITE_BACKUP_ROOT="/var/backups/grabenplaner"
@@ -525,7 +526,7 @@ offsite_record_assurance_queue() {
 
 # A new offsite module can precede the matching application package. The
 # runtime-5/module-7 predecessor retains the full workflow; module 8 adds short
-# deploys; modules 9/10 also require the paired PostgreSQL operations.
+# deploys; modules 9 through 11 also require the paired PostgreSQL operations.
 offsite_core_deploy_workflow() {
   "$OFFSITE_NODE" - "$OFFSITE_APP_ROOT" <<'NODE'
 const fs = require("node:fs"), path = require("node:path");
@@ -537,7 +538,7 @@ const read = name => {
 };
 const runtime = read("server-tools/linux/runtime-schema.json");
 const moduleVersion = read("server-tools/linux/offsite/module-schema.json").moduleVersion;
-if (runtime.deploymentSchemaVersion !== 5 || ![7, 8, 9, 10].includes(moduleVersion)) process.exit(1);
+if (runtime.deploymentSchemaVersion !== 5 || ![7, 8, 9, 10, 11].includes(moduleVersion)) process.exit(1);
 if (moduleVersion >= 8) {
   for (const name of ["lib/backup-maintenance.js", "server-tools/linux/lib/deploy-policy.js",
     "server-tools/linux/lib/deferred-backups.js", "server-tools/linux/lib/backup-metadata.js"]) {

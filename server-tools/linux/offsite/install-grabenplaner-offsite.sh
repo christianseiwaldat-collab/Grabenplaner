@@ -216,6 +216,24 @@ assert_existing_directory "$OFFSITE_CREDENTIAL_STATE_ROOT" "$offsite_uid" "$offs
 assert_existing_directory "$OFFSITE_UPLOADER_HOME" "$offsite_uid" "$offsite_gid" 700
 assert_existing_directory "$OFFSITE_CONFIG_ROOT" 0 0 700
 assert_existing_directory "$OFFSITE_MODULE_ROOT" 0 0 755
+assert_existing_directory "$OFFSITE_MAINTENANCE_SCHEDULE_ROOT" 0 0 700
+
+maintenance_schedule_dropin_dirs=(
+  /etc/systemd/system/grabenplaner-monitor.timer.d
+  /etc/systemd/system/grabenplaner-offsite-assurance.timer.d
+  /etc/systemd/system/grabenplaner-offsite-check.timer.d
+  /etc/systemd/system/grabenplaner-offsite-restore-test.timer.d
+  /etc/systemd/system/grabenplaner-host-security-audit.timer.d
+)
+for schedule_dropin_dir in "${maintenance_schedule_dropin_dirs[@]}"; do
+  assert_existing_directory "$schedule_dropin_dir" 0 0 755
+  schedule_dropin_file="$schedule_dropin_dir/20-grabenplaner-schedule.conf"
+  if [[ -e "$schedule_dropin_file" || -L "$schedule_dropin_file" ]]; then
+    [[ -f "$schedule_dropin_file" && ! -L "$schedule_dropin_file" \
+      && "$(stat --format='%u:%g:%a:%h' -- "$schedule_dropin_file")" == "0:0:644:1" ]] \
+      || offsite_die "Ein vorhandener Wartungszeitplan ist unsicher: $schedule_dropin_file"
+  fi
+done
 
 for config_name in repository repository-id installation-id restic-password rclone-config-password installed-contract.json binary-pins.json; do
   config_path="$OFFSITE_CONFIG_ROOT/$config_name"
@@ -258,7 +276,7 @@ if [[ -e "$OFFSITE_MODULE_ROOT" || -L "$OFFSITE_MODULE_ROOT" ]]; then
   installed_module_version="$("$OFFSITE_NODE" - "$OFFSITE_CONFIG_ROOT/installed-contract.json" <<'NODE'
 const fs = require("node:fs");
 const value = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(value.moduleVersion)) process.exit(1);
+if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(value.moduleVersion)) process.exit(1);
 process.stdout.write(String(value.moduleVersion));
 NODE
 )" || offsite_die "Die installierte Offsite-Modulversion ist nicht migrationsfaehig."
@@ -270,6 +288,10 @@ install -d -m 0750 -o root -g "$OFFSITE_GROUP" -- "$OFFSITE_STAGE_ROOT" "$OFFSIT
 install -d -m 0700 -o root -g root -- "$OFFSITE_RECOVERY_SET_ROOT"
 install -d -m 0700 -o "$OFFSITE_USER" -g "$OFFSITE_GROUP" -- "$OFFSITE_CREDENTIAL_STATE_ROOT" "$OFFSITE_UPLOADER_HOME"
 install -d -m 0700 -o root -g root -- "$OFFSITE_CONFIG_ROOT"
+install -d -m 0700 -o root -g root -- "$OFFSITE_MAINTENANCE_SCHEDULE_ROOT"
+for schedule_dropin_dir in "${maintenance_schedule_dropin_dirs[@]}"; do
+  install -d -m 0755 -o root -g root -- "$schedule_dropin_dir"
+done
 offsite_prepare_run_root
 
 contract_receipt="$(mktemp --tmpdir="$OFFSITE_RUN_ROOT" module-contract.XXXXXXXX)"
@@ -445,6 +467,9 @@ trap cleanup EXIT
 if (( installed_module_version >= 1 && installed_module_version <= 5 )); then
   offsite_info "Das verifizierte Offsite-Modul v${installed_module_version} wird kontrolliert auf v6 migriert."
 fi
+if (( installed_module_version >= 6 && installed_module_version <= 10 )); then
+  offsite_info "Das verifizierte Offsite-Modul v${installed_module_version} wird kontrolliert auf v11 mit geschützter Zeitplansteuerung migriert."
+fi
 if getent group "$OFFSITE_CONTROL_GROUP" >/dev/null; then
   control_gid="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $3}')"
   control_primary="$(getent passwd | awk -F: -v gid="$control_gid" '$4==gid {print $1}' | sort | paste -sd, -)"
@@ -542,6 +567,16 @@ core_common="$OFFSITE_APP_ROOT/server-tools/linux/lib/common.sh"
 [[ -f "$core_common" && ! -L "$core_common" ]] || offsite_die "Die verifizierte Core-Wartungssperre fehlt."
 # shellcheck source=server-tools/linux/lib/common.sh
 source "$core_common"
+gp_acquire_maintenance_lock
+# Validate existing matrix state before pausing any timer. An older Core may
+# migrate without this helper only when no matrix receipt exists yet.
+maintenance_schedule_state=none
+if [[ -e "$OFFSITE_MAINTENANCE_SCHEDULE_ROOT/schedules.json" || -L "$OFFSITE_MAINTENANCE_SCHEDULE_ROOT/schedules.json" ]]; then
+  declare -F gp_maintenance_schedule_state >/dev/null \
+    || offsite_die "Der vorhandene Wartungszeitplan kann mit diesem Core nicht sicher geprueft werden."
+  maintenance_schedule_state="$(gp_maintenance_schedule_state "$OFFSITE_APP_ROOT" "$OFFSITE_NODE")" \
+    || offsite_die "Der vorhandene Wartungszeitplan ist ungueltig."
+fi
 timers=(grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer)
 for index in 0 1 2 3; do
   systemctl is-enabled --quiet "${timers[index]}" && timer_was_enabled[index]=1 || true
@@ -563,7 +598,6 @@ if [[ "$(systemctl show --property=LoadState --value "$target_control_socket" 2>
 fi
 systemctl stop 'grabenplaner-offsite-target-control@*.service' >/dev/null 2>&1 || true
 target_control_socket_paused=1
-gp_acquire_maintenance_lock
 offsite_acquire_assurance_lock
 offsite_acquire_repository_lock
 previous_provider_id=""
@@ -861,14 +895,43 @@ else
   offsite_status bind-provider >/dev/null
 fi
 systemctl daemon-reload
-systemctl enable --now grabenplaner-offsite-assurance-control.socket \
-  grabenplaner-offsite-assurance.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer >/dev/null
+systemctl enable --now grabenplaner-offsite-assurance-control.socket >/dev/null
+# Only a fresh installation receives defaults. Upgrades restore each timer's
+# independently captured enabled and active states, including disabled rows.
+if (( installed_module_version >= 1 )); then
+  for index in 0 1 2 3; do
+    if (( timer_was_enabled[index] == 1 )); then
+      systemctl enable "${timers[index]}" >/dev/null
+    else
+      systemctl disable "${timers[index]}" >/dev/null
+    fi
+    if (( timer_was_active[index] == 1 )); then
+      systemctl start "${timers[index]}" >/dev/null
+    else
+      systemctl stop "${timers[index]}" >/dev/null
+    fi
+  done
+else
+  systemctl enable --now grabenplaner-offsite-assurance.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer >/dev/null
+fi
 # A module can precede its matching app. Keep the predecessor schedule until
 # the new Core is installed; the updater converges it after the application swap.
-if declare -F gp_configure_nightly_backups >/dev/null; then
-  gp_configure_nightly_backups "$OFFSITE_APP_ROOT" "$OFFSITE_NODE"
-else
-  systemctl enable --now grabenplaner-offsite-upload.timer >/dev/null
+core_offsite_module_version="$($OFFSITE_NODE - "$OFFSITE_APP_ROOT/server-tools/linux/offsite/module-schema.json" <<'NODE'
+const fs=require("node:fs");
+const value=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));
+if(value?.format!=="grabenplaner-linux-offsite-module-contract"||value?.schemaVersion!==1
+  ||![7,8,9,10,11].includes(value?.moduleVersion))process.exit(1);
+process.stdout.write(String(value.moduleVersion));
+NODE
+)" || offsite_die "Der installierte Core-Offsite-Vertrag ist ungueltig."
+if (( installed_module_version == 0 )); then
+  if (( core_offsite_module_version >= 10 )); then
+    systemctl disable --now grabenplaner-offsite-upload.timer >/dev/null
+  elif declare -F gp_configure_nightly_backups >/dev/null; then
+    gp_configure_nightly_backups "$OFFSITE_APP_ROOT" "$OFFSITE_NODE"
+  else
+    systemctl enable --now grabenplaner-offsite-upload.timer >/dev/null
+  fi
 fi
 if [[ "$validated_provider" == "google_drive" ]]; then
   systemctl enable --now grabenplaner-offsite-target-control.socket >/dev/null

@@ -154,6 +154,10 @@ const {
   requestRecoveryAssuranceRun,
 } = require("./lib/recovery-assurance-control-client");
 const {
+  readMaintenanceSchedules,
+  updateMaintenanceSchedules,
+} = require("./lib/maintenance-schedule-control-client");
+const {
   DEFAULT_STATUS_PATH: DEFAULT_MONITOR_STATUS_PATH,
   readServerMonitorStatus,
 } = require("./lib/server-monitor-status");
@@ -3693,9 +3697,11 @@ async function authorizePersistenceOperation({readOnly} = {}) {
   return fingerprint(previous) === fingerprint(current);
 }
 
-function initializeApplicationPersistence() {
+function initializeApplicationPersistence({ onProgress } = {}) {
   if (!applicationInitialization) {
     applicationInitialization = (async () => {
+      const startupProgress = phase => { try { onProgress?.(phase); } catch { /* Diagnostic observers cannot alter startup. */ } };
+      startupProgress('application-data');
       if (postgresqlActive) {
         await applicationPersistence.ready;
         await postgresqlStartupOperations.seedDefaults({defaultSettings,builtinPortalRoles});
@@ -3732,7 +3738,9 @@ function initializeApplicationPersistence() {
         await reconcileOpenAmuResponsibilities("migration");
       }
       if (postgresqlActive) {
+        startupProgress('receipt-workers');
         await postgresqlReceiptWorkers.warm();
+        startupProgress('report-worker');
         await salesReportBatchWorker.run({operation:'initialize'});
         startupIntegrity[0] = 'ok';
       }
@@ -19217,7 +19225,7 @@ async function branchSupervisionAssessmentForSchedule(
   weekStart,
   locationId,
   planningChange = null,
-  { dates = null } = {},
+  { dates = null, snapshot = null } = {},
 ) {
   const weekEnd = addDays(weekStart, 6);
   const planningQuery = {
@@ -19226,11 +19234,13 @@ async function branchSupervisionAssessmentForSchedule(
     weekStart,
     weekEnd,
   };
-  const [settings, employees, storedShifts] = await Promise.all([
-    settingsForLocation(locationId),
-    planningSettingsRepository.listScheduleEmployees(planningQuery),
-    planningSettingsRepository.listScheduleShifts(planningQuery),
-  ]);
+  const [settings, employees, storedShifts] = snapshot
+    ? [snapshot.settings, [...snapshot.employees], [...snapshot.shifts]]
+    : await Promise.all([
+      settingsForLocation(locationId),
+      planningSettingsRepository.listScheduleEmployees(planningQuery),
+      planningSettingsRepository.listScheduleShifts(planningQuery),
+    ]);
   const shifts = projectBranchSupervisionShifts(storedShifts, planningChange, {
     locationId: String(locationId),
     weekStart,
@@ -19508,11 +19518,12 @@ async function plannedShiftBreaks(shift, settings) {
   return { start, end, rawMinutes, breakMinutes, lunchBreakMinutes, dayConfig };
 }
 
-async function shiftMetrics(shift, settings, { legacyOnly = false } = {}) {
+async function shiftMetrics(shift, settings, { legacyOnly = false, saturdayCutover } = {}) {
   // The dated employee assignment is needed only when evaluating Saturday
   // credit below. Ordinary workdays need the immutable cutover alone.
   const cutover = !legacyOnly && shift.employee_number && isIsoDate(shift.shift_date)
-    ? await saturdayCreditService.cutover() : null;
+    ? (saturdayCutover === undefined ? await saturdayCreditService.cutover() : saturdayCutover)
+    : null;
   if (cutover && shift.shift_date < cutover.effectiveDate) {
     const saved = cutover.legacySettings[String(shift.location_id || '')] || cutover.legacySettings['*'];
     if (saved) settings = { ...settings, saturday_bonus_enabled: saved.enabled ? '1' : '0', saturday_bonus_from: saved.from, saturday_bonus_factor: String(saved.factor) };
@@ -22276,7 +22287,8 @@ async function searchScheduleShifts(session, input = {}) {
   };
 }
 
-async function getSchedule(weekValue, contextInput = {}, session = null) {
+async function getSchedule(weekValue, contextInput = {}, session = null, options = {}) {
+  const fast = options.fast === true;
   const weekStart = getMonday(isIsoDate(weekValue) ? weekValue : undefined);
   const weekEnd = addDays(weekStart, 6);
   const context = await resolvePlanningContext(contextInput);
@@ -22284,6 +22296,8 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
   const settings = applyScopedPdfSettings(await settingsForLocation(context.locationId), context, "schedule");
   const allowPastWeekEditing = await pastWeekEditingAllowedForActor(session, settings);
   settings.allow_past_week_editing = allowPastWeekEditing ? "1" : "0";
+  const locationsPromise = getLocationsForSession(session, true);
+  const scheduleNotePromise = getScheduleNote(weekStart, context);
   const globalDayBlocks = getGlobalDayBlocksForRange(weekStart, weekEnd, context.locationId);
   const globalBlockDates = new Set(globalDayBlocks.map((block) => block.block_date));
   const planningQuery = {
@@ -22298,7 +22312,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     filterDepartment: context.departmentId ? 1 : 0,
     weekStart,
   };
-  const [employeeRows, shiftRows, employeeWeekShiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows, xoffiSnapshots] = await Promise.all([
+  const [employeeRows, shiftRows, employeeWeekShiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows, xoffiSnapshots, saturdayCutover] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningEmployeeShifts(planningQuery),
@@ -22308,6 +22322,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     timeTrackingRepository.listActiveXoffiWeekDays(xoffiQuery),
     timeTrackingRepository.listLatestXoffiBalances(xoffiQuery),
     timeTrackingRepository.listXoffiSnapshots({ locationId: context.locationId, departmentId: Number(context.departmentId || 0), weekStart }),
+    saturdayCreditService.cutover(),
   ]);
   const employees = employeeRows.map(serializeEmployee);
   const visibleEmployeeNumbers = new Set(employees.map((employee) => employee.personnel_number));
@@ -22315,7 +22330,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     .filter((employee) => String(employee.home_location_id) === String(context.locationId))
     .map((employee) => employee.personnel_number));
   const shifts = await Promise.all(
-    shiftRows.map(async (shift) => ({ ...shift, ...await shiftMetrics(shift, settings) })),
+    shiftRows.map(async (shift) => ({ ...shift, ...await shiftMetrics(shift, settings, { saturdayCutover }) })),
   );
   const externalShiftRows = employeeWeekShiftRows.filter((shift) => (
     visibleEmployeeNumbers.has(shift.employee_number)
@@ -22333,6 +22348,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     ...await shiftMetrics(
       shift,
       externalLocationSettings.get(String(shift.location_id || "")) || settings,
+      { saturdayCutover },
     ),
   })));
   const countedWeekShifts = [...shifts, ...externalShifts];
@@ -22491,7 +22507,9 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
       creditMinutes,
     );
   }
-  const saturdayStats = await buildSaturdayServiceStats(weekStart, context, employees, shifts, settings);
+  const saturdayStats = fast
+    ? { byEmployee: {}, estimated: false, pending: true }
+    : await buildSaturdayServiceStats(weekStart, context, employees, shifts, settings);
   const creditedHolidayDates = new Set();
   for (const holiday of publicHolidaysForRange(weekStart, weekEnd)) {
     const day = new Date(`${holiday.date}T12:00:00Z`).getUTCDay();
@@ -22520,10 +22538,18 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     }
   }
   const [workRuleAssessment, branchSupervisionAssessment, manualScheduleLock] = await Promise.all([
-    sessionCanReadWorkRules(session)
+    !fast && sessionCanReadWorkRules(session)
       ? evaluateScheduleWorkRules(weekStart, context, employees).then((result) => result.assessment)
       : Promise.resolve(null),
-    branchSupervisionAssessmentForSchedule(weekStart, context.locationId),
+    fast
+      ? Promise.resolve(null)
+      : branchSupervisionAssessmentForSchedule(weekStart, context.locationId, null, {
+        snapshot: context.departmentId ? null : {
+          settings,
+          employees: employeeRows,
+          shifts: shiftRows,
+        },
+      }),
     getScheduleManualLock(context.locationId, weekStart, session),
   ]);
   const xoffiWeekByEmployee = {};
@@ -22579,7 +22605,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     weekEnd,
     calendarWeek: getIsoWeek(weekStart),
     context,
-    locations: await getLocationsForSession(session, true),
+    locations: await locationsPromise,
     settings,
     currentWeekStart: currentWeekStart(),
     isPastWeek: isPastWeekStart(weekStart),
@@ -22593,7 +22619,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     staffAssignments: employeeLendings,
     pdfStaffAssignmentShifts,
     globalDayBlocks,
-    scheduleNote: await getScheduleNote(weekStart, context),
+    scheduleNote: await scheduleNotePromise,
     globalBlockDates: Array.from(globalBlockDates),
     publicHolidays: publicHolidaysForRange(weekStart, weekEnd),
     totals,
@@ -22611,6 +22637,51 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     },
     workRuleAssessment,
     branchSupervisionAssessment,
+    enrichmentPending: fast,
+  };
+}
+
+async function getScheduleEnrichment(weekValue, contextInput = {}, session = null) {
+  const weekStart = getMonday(isIsoDate(weekValue) ? weekValue : undefined);
+  const weekEnd = addDays(weekStart, 6);
+  const context = await resolvePlanningContext(contextInput);
+  assertSessionContextScope(session, context);
+  const settings = applyScopedPdfSettings(await settingsForLocation(context.locationId), context, "schedule");
+  const planningQuery = {
+    locationId: context.locationId,
+    departmentId: context.departmentId || null,
+    weekStart,
+    weekEnd,
+  };
+  const [employeeRows, shiftRows] = await Promise.all([
+    planningSettingsRepository.listScheduleEmployees(planningQuery),
+    planningSettingsRepository.listScheduleShifts(planningQuery),
+  ]);
+  const employees = employeeRows.map(serializeEmployee);
+  const currentWeekShifts = await Promise.all(shiftRows.map(async (shift) => {
+    const { rawMinutes } = await plannedShiftBreaks(shift, settings);
+    return { ...shift, raw_minutes: rawMinutes };
+  }));
+  const [workRuleAssessment, branchSupervisionAssessment, saturdayStats] = await Promise.all([
+    sessionCanReadWorkRules(session)
+      ? evaluateScheduleWorkRules(weekStart, context, employees).then((result) => result.assessment)
+      : Promise.resolve(null),
+    branchSupervisionAssessmentForSchedule(weekStart, context.locationId, null, {
+      snapshot: context.departmentId ? null : {
+        settings,
+        employees: employeeRows,
+        shifts: shiftRows,
+      },
+    }),
+    buildSaturdayServiceStats(weekStart, context, employees, currentWeekShifts, settings),
+  ]);
+  return {
+    weekStart,
+    context,
+    workRuleAssessment,
+    branchSupervisionAssessment,
+    saturdayStats,
+    enrichmentPending: false,
   };
 }
 
@@ -26159,10 +26230,11 @@ function validateXoffiReviewedRows(inputRows, preview) {
   }
   const candidates = new Set(preview.candidates.map((employee) => employee.employeeNumber));
   const employeeNumbers = new Set();
-  return inputRows.map((row, rowIndex) => {
+  const reviewedRows = inputRows.map((row, rowIndex) => {
     const sourceName = String(row?.sourceName || "").trim().slice(0, 120);
     const employeeNumber = String(row?.employeeNumber || "").trim();
     const original = preview.employees[rowIndex];
+    if (sourceName === original?.sourceName && row?.excluded === true && !employeeNumber) return null;
     if (sourceName !== original?.sourceName || !candidates.has(employeeNumber) || employeeNumbers.has(employeeNumber)) {
       throw httpError(400, "Jede xoffi-Zeile muss genau einem Teammitglied des ausgewählten Bereichs zugeordnet sein.", "XOFFI_EMPLOYEE_MAPPING_INVALID");
     }
@@ -26221,7 +26293,9 @@ function validateXoffiReviewedRows(inputRows, preview) {
         "Die Tagesintervalle, Tagesstunden und Wochensummen passen nicht zusammen. Bitte die geänderten Werte prüfen.", "XOFFI_REVIEW_INVALID");
     }
     return reviewed;
-  });
+  }).filter(Boolean);
+  if (!reviewedRows.length) throw httpError(400, "Bitte mindestens ein Teammitglied übernehmen.", "XOFFI_REVIEW_INVALID");
+  return reviewedRows;
 }
 
 function assertXoffiScreenshotWeekConfirmation(preview, input = {}) {
@@ -26350,6 +26424,7 @@ async function storeXoffiTimeImport(session, preview, reviewedRows, useAsActual,
       detectedWeekStart: weekResolution.detectedWeekStart,
       screenshotWeekConfirmed: weekResolution.confirmationRequired,
       employeeRows: reviewedRows.length,
+      excludedSourceNames: (preview.employees || reviewedRows).filter(row => !reviewedRows.some(reviewed => reviewed.sourceName === row.sourceName)).map(row => row.sourceName),
       useAsActual: Boolean(useAsActual),
       sourceSha256: preview.sourceSha256,
     }));
@@ -27743,6 +27818,55 @@ app.get("/api/server-diagnostics", async (request, response) => {
 app.get("/api/server-status", async (request, response) => {
   const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
   response.json((await serverStatusForActor((await serverDiagnostics()), actor)));
+});
+
+function requireMaintenanceScheduleActor(request, { write = false } = {}) {
+  if (!serverModeActive || process.platform !== "linux") {
+    throw httpError(409, "Wartungszeitpläne werden ausschließlich am eingerichteten Ubuntu-Server verwaltet.", "MAINTENANCE_SCHEDULE_SERVER_REQUIRED");
+  }
+  const actor = requirePortalAdminOrLocal(request, "backup:write");
+  if (isLocalSystemSession(actor) || !BACKUP_ADMIN_ROLES.has(actor.role)) {
+    throw httpError(403, "Diese Zeitpläne dürfen nur Developer, IT-Administration oder Administration verwalten.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (write) assertPortalCsrf(request);
+  return actor;
+}
+
+function maintenanceScheduleHttpError(error) {
+  const code = String(error?.code || "FAILED");
+  if (code === "STALE") return httpError(409, "Die Serverzeitpläne wurden inzwischen geändert. Bitte neu laden; es wurde nichts überschrieben.", "MAINTENANCE_SCHEDULE_STALE");
+  if (code === "BUSY") return httpError(409, "Eine Sicherung oder Wartung läuft bereits. Der Zeitplan wurde nicht verändert.", "MAINTENANCE_SCHEDULE_BUSY");
+  if (code === "INVALID") return httpError(400, "Der Wartungszeitplan ist unvollständig oder ungültig.", "MAINTENANCE_SCHEDULE_INVALID");
+  return httpError(503, "Die geschützte Wartungszeitplan-Steuerung ist derzeit nicht verfügbar.", "MAINTENANCE_SCHEDULE_CONTROL_UNAVAILABLE");
+}
+
+app.get("/api/portal/v1/maintenance-schedules", async (request, response) => {
+  requireMaintenanceScheduleActor(request);
+  try {
+    response.setHeader("Cache-Control", "no-store");
+    response.json(await readMaintenanceSchedules());
+  } catch (error) {
+    throw maintenanceScheduleHttpError(error);
+  }
+});
+
+app.put("/api/portal/v1/maintenance-schedules", async (request, response) => {
+  const actor = requireMaintenanceScheduleActor(request, { write: true });
+  const body = request.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || Object.keys(body).length !== 2 || !Array.isArray(body.schedules)
+    || !/^[a-f0-9]{64}$/.test(String(body.expectedRevision || ""))) {
+    throw httpError(400, "Der Wartungszeitplan ist unvollständig.", "MAINTENANCE_SCHEDULE_INVALID");
+  }
+  try {
+    const result = await updateMaintenanceSchedules(body.schedules, { expectedRevision: body.expectedRevision });
+    await auditPortal(actor.employeeNumber, "system.maintenance_schedules.updated", "system", "maintenance-schedules",
+      JSON.stringify({ revision: result.revision, tasks: result.tasks.map((task) => task.id) }));
+    response.setHeader("Cache-Control", "no-store");
+    response.json(result);
+  } catch (error) {
+    throw maintenanceScheduleHttpError(error);
+  }
 });
 
 function runtimeDriveInfo() {
@@ -31551,7 +31675,12 @@ function readModelResponse(build) {
 }
 
 app.get("/api/schedule", readModelResponse(request =>
-  getSchedule(request.query.week, request.query, request.portalSession)));
+  getSchedule(request.query.week, request.query, request.portalSession, {
+    fast: request.query.fast === "1",
+  })));
+
+app.get("/api/schedule/enrichment", readModelResponse(request =>
+  getScheduleEnrichment(request.query.week, request.query, request.portalSession)));
 
 app.put("/api/schedule/manual-lock", async (request, response) => {
   const requestedLocationId = String(
@@ -47299,12 +47428,22 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
   }
   const note = normalizeLoanNotes(request.body?.note, 1000);
   await expireLoanReturnConfirmations();
-  if (await loanPendingReturnConfirmationRow(row.id)) {
-    throw httpError(
-      409,
-      "Für diese Leihe wartet bereits eine Rücknahme auf Bestätigung.",
-      "LOAN_RETURN_CONFIRMATION_PENDING",
-    );
+  const pendingConfirmation = await loanPendingReturnConfirmationRow(row.id);
+  let supersededConfirmationId = "";
+  if (pendingConfirmation) {
+    if (managesLocation && !witness) {
+      supersededConfirmationId = await cancelPendingLoanReturnConfirmation(
+        row.id,
+        new Date().toISOString(),
+        "Durch direkte Rücknahme der Filialleitung ersetzt.",
+      ) || "";
+    } else {
+      throw httpError(
+        409,
+        "Für diese Leihe wartet bereits eine Rücknahme auf Bestätigung.",
+        "LOAN_RETURN_CONFIRMATION_PENDING",
+      );
+    }
   }
   const existingPreparation = await loanReturnPreparationRow(row.id);
   if (existingPreparation
@@ -47354,6 +47493,7 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
       photoCount: photoIds.length,
       photoAttachmentCount: photoAttachmentIds.length,
       noteProvided: Boolean(note),
+      supersededConfirmationId: supersededConfirmationId || null,
     })));
     response.json({
       direct: true,
@@ -58721,7 +58861,9 @@ app.post("/api/portal/v1/xoffi-time-import/apply", async (request, response) => 
   response.status(201).json({
     ok: true,
     importId,
-    schedule: await getSchedule(preview.weekStart, context, session),
+    schedule: await (postgresqlActive
+      ? applicationPersistence.readSnapshot(() => getSchedule(preview.weekStart, context, session))
+      : getSchedule(preview.weekStart, context, session)),
   });
 });
 
@@ -64086,6 +64228,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
     if (finished) return;
     finished = true;
     await importDrain;
+    await amuScannerProbe.catch(() => {});
     await salesReportJobs.stop().catch(() => {});
     await postgresqlReceiptWorkers?.close().catch(() => {});
     if (!databaseClosed) {
