@@ -154,6 +154,10 @@ const {
   requestRecoveryAssuranceRun,
 } = require("./lib/recovery-assurance-control-client");
 const {
+  readMaintenanceSchedules,
+  updateMaintenanceSchedules,
+} = require("./lib/maintenance-schedule-control-client");
+const {
   DEFAULT_STATUS_PATH: DEFAULT_MONITOR_STATUS_PATH,
   readServerMonitorStatus,
 } = require("./lib/server-monitor-status");
@@ -1038,7 +1042,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: BRANCH_ORDER_MANAGE_PERMISSION, label: "Filialbestellungen verwalten", description: "Warengruppen, Positionen, Einheiten, E-Mail-Ziele, Vorlagen und Bestellnachweise standortübergreifend im freigegebenen Bereich verwalten.", group: "Filialbestellungen", warningLevel: "high", eligibleRoles: ["hr", "admin", "developer"] },
   { id: BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION, label: "Anzeige des Filialkontos festlegen", description: "Dienstplanansicht, mobile Tagesausblendung und automatisches Speichern für den zugewiesenen Standort einstellen.", group: "Filialkonto", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: MOBILE_PORTAL_LOCATION_DISPLAY_MANAGE_PERMISSION, label: "Mobile Mitarbeiteransicht des Standorts festlegen", description: "Legt fest, welche fachlich freigegebenen Bereiche Mitarbeitende der eigenen Filiale in ihrer mobilen Portalansicht sehen.", group: "Mitarbeiterportal", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
-  { id: XOFFI_TIME_IMPORT_PERMISSION, label: "xoffi-Zeiterfassung importieren", description: "Geprüfte xoffi-Bilddaten ausschließlich für vergangene Wochen im eigenen Verantwortungsbereich als Ist-Zeit übernehmen.", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: XOFFI_TIME_IMPORT_PERMISSION, label: "xoffi-Zeiterfassung importieren", description: "Geprüfte xoffi-Daten nach dem letzten geplanten Dienstende der Woche im eigenen Verantwortungsbereich als Ist-Zeit übernehmen.", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION, label: "Passwort eines Filialkontos neu vergeben", description: "Passwort ausschließlich für aktive Filialkonten im zugewiesenen Standort zurücksetzen; beendet bestehende Filialkonto-Sitzungen.", group: "Zugänge & Rechte", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "processes:write", label: "Eigene Prozesse und Benachrichtigungsregeln verwalten", description: "Unternehmensweite Prozessdefinitionen anlegen, aktivieren, auslösen und archivieren.", group: "Zugänge & Rechte", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "integrations:read", label: "Schnittstellen und Laufprotokolle lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
@@ -3693,9 +3697,11 @@ async function authorizePersistenceOperation({readOnly} = {}) {
   return fingerprint(previous) === fingerprint(current);
 }
 
-function initializeApplicationPersistence() {
+function initializeApplicationPersistence({ onProgress } = {}) {
   if (!applicationInitialization) {
     applicationInitialization = (async () => {
+      const startupProgress = phase => { try { onProgress?.(phase); } catch { /* Diagnostic observers cannot alter startup. */ } };
+      startupProgress('application-data');
       if (postgresqlActive) {
         await applicationPersistence.ready;
         await postgresqlStartupOperations.seedDefaults({defaultSettings,builtinPortalRoles});
@@ -3732,7 +3738,9 @@ function initializeApplicationPersistence() {
         await reconcileOpenAmuResponsibilities("migration");
       }
       if (postgresqlActive) {
+        startupProgress('receipt-workers');
         await postgresqlReceiptWorkers.warm();
+        startupProgress('report-worker');
         await salesReportBatchWorker.run({operation:'initialize'});
         startupIntegrity[0] = 'ok';
       }
@@ -6367,7 +6375,7 @@ function installationFeaturesForApiPath(apiPath) {
   if (/^\/portal\/v1\/(?:me\/)?(?:vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:wifi-automation|wifi-suggestions)|portal\/v1\/wifi-automation|wifi(?:-|\/|$)|integrations\/wifi)/.test(requestPath)) required.add("wifiSuggestions");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
-  if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
+  if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence|xoffi-plan-comparison)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
   if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
   if (/^\/portal\/v1\/personnel-lifecycle(?:\/|$)/.test(requestPath)) required.add("personnelLifecycle");
   if (/^\/portal\/v1\/me\/candidate-evaluations(?:\/|$)/.test(requestPath)) required.add("personnelLifecycle");
@@ -23440,7 +23448,23 @@ function newestDatabaseBackup(...backups) {
     .sort((left, right) => Number(right.modifiedMs) - Number(left.modifiedMs))[0] || null;
 }
 
+const postgresqlSystemHealthCache = createSystemCenterTechnicalCache({
+  ttlMs: 30_000,
+  fingerprint: () => persistenceConfiguration.providerId,
+  load: async () => {
+    if (persistenceConfiguration.providerId !== "postgresql") return null;
+    try {
+      return await require('./lib/persistence/postgresql/application-operations/system-health')
+        .readPostgresqlSystemHealth(persistenceConfiguration);
+    } catch {
+      // An unavailable measurement is not evidence of an empty or corrupt database.
+      return null;
+    }
+  },
+});
+
 async function serverDiagnostics() {
+  const postgresqlHealth = await postgresqlSystemHealthCache.read();
   const settings = getSettings();
   const portal = getPortalStatus();
   const migration = (await sqliteSystemDiagnosticsOperations.latestMigration());
@@ -23693,7 +23717,9 @@ async function serverDiagnostics() {
       journalMode: databasePragmaValue("journal_mode"),
       synchronous: databasePragmaValue("synchronous"),
       busyTimeoutMs: Number(databasePragmaValue("busy_timeout") || 0),
-      foreignKeys: Boolean(databasePragmaValue("foreign_keys")),
+      foreignKeys: persistenceConfiguration.providerId === "postgresql"
+        ? postgresqlHealth?.foreignKeys ?? null : Boolean(databasePragmaValue("foreign_keys")),
+      bytes: postgresqlHealth?.databaseBytes ?? null,
       migration,
     },
     instanceLock: { enabled: Boolean(instanceLockPath), held: instanceLockHeld },
@@ -26189,12 +26215,38 @@ async function xoffiTimeImportContext(session, input = {}) {
   return context;
 }
 
-function assertPastXoffiWeek(weekStart) {
+async function assertCompletedXoffiWeek(weekStart, context, now = new Date()) {
   if (!isIsoDate(weekStart) || getMonday(weekStart) !== weekStart) {
-    throw httpError(400, "Bitte eine vergangene Kalenderwoche mit Montag als Wochenbeginn auswählen.", "XOFFI_WEEK_INVALID");
+    throw httpError(400, "Bitte eine gültige Kalenderwoche mit Montag als Wochenbeginn auswählen.", "XOFFI_WEEK_INVALID");
   }
-  if (weekStart >= currentWeekStart()) {
-    throw httpError(409, "xoffi-Daten dürfen ausschließlich für bereits abgeschlossene Kalenderwochen importiert werden.", "XOFFI_WEEK_NOT_PAST");
+  const today = viennaTodayIso(now), currentWeek = getMonday(today);
+  if (weekStart < currentWeek) return weekStart;
+  if (weekStart > currentWeek) {
+    throw httpError(409, "Eine künftige Kalenderwoche kann noch nicht aus xoffi übernommen werden.", "XOFFI_WEEK_NOT_PAST");
+  }
+  const shifts = await planningSettingsRepository.listScheduleShifts({
+    locationId: context.locationId, departmentId: context.departmentId || null,
+    weekStart, weekEnd: addDays(weekStart, 6),
+  });
+  if (!shifts.length) {
+    throw httpError(409, "Für diese laufende Kalenderwoche ist im gewählten Bereich kein letzter Dienst hinterlegt. Bitte den Dienstplan prüfen oder nach Ende der Kalenderwoche importieren.", "XOFFI_WEEK_NOT_PAST");
+  }
+  let lastEnd = 0;
+  for (const shift of shifts) {
+    if (!isIsoDate(shift.shift_date) || !isTime(shift.start_time) || !isTime(shift.end_time)
+        || shift.shift_date < weekStart || shift.shift_date > addDays(weekStart, 6)) {
+      throw httpError(409, "Das letzte Dienstende ist nicht eindeutig. Bitte die Dienstzeiten im gewählten Bereich prüfen.", "XOFFI_WEEK_NOT_PAST");
+    }
+    const endDate = shift.end_time <= shift.start_time ? addDays(shift.shift_date, 1) : shift.shift_date;
+    lastEnd = Math.max(lastEnd, viennaLocalDateTime(endDate, shift.end_time).getTime());
+  }
+  // Keep the existing test-day clock consistent; production uses the actual instant.
+  const localNow = viennaNowLocal(now);
+  const nowMs = today === localNow.slice(0, 10) ? now.getTime()
+    : viennaLocalDateTime(today, localNow.slice(11)).getTime();
+  if (nowMs < lastEnd) {
+    const label = new Date(lastEnd).toLocaleString("de-AT", { timeZone: "Europe/Vienna", dateStyle: "short", timeStyle: "short" });
+    throw httpError(409, `Der xoffi-Import ist ab dem letzten geplanten Dienstende möglich: ${label} Uhr (Wien). Im gewählten Bereich stehen noch Dienste aus oder laufen noch.`, "XOFFI_WEEK_NOT_PAST");
   }
   return weekStart;
 }
@@ -27810,6 +27862,55 @@ app.get("/api/server-diagnostics", async (request, response) => {
 app.get("/api/server-status", async (request, response) => {
   const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
   response.json((await serverStatusForActor((await serverDiagnostics()), actor)));
+});
+
+function requireMaintenanceScheduleActor(request, { write = false } = {}) {
+  if (!serverModeActive || process.platform !== "linux") {
+    throw httpError(409, "Wartungszeitpläne werden ausschließlich am eingerichteten Ubuntu-Server verwaltet.", "MAINTENANCE_SCHEDULE_SERVER_REQUIRED");
+  }
+  const actor = requirePortalAdminOrLocal(request, "backup:write");
+  if (isLocalSystemSession(actor) || !BACKUP_ADMIN_ROLES.has(actor.role)) {
+    throw httpError(403, "Diese Zeitpläne dürfen nur Developer, IT-Administration oder Administration verwalten.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (write) assertPortalCsrf(request);
+  return actor;
+}
+
+function maintenanceScheduleHttpError(error) {
+  const code = String(error?.code || "FAILED");
+  if (code === "STALE") return httpError(409, "Die Serverzeitpläne wurden inzwischen geändert. Bitte neu laden; es wurde nichts überschrieben.", "MAINTENANCE_SCHEDULE_STALE");
+  if (code === "BUSY") return httpError(409, "Eine Sicherung oder Wartung läuft bereits. Der Zeitplan wurde nicht verändert.", "MAINTENANCE_SCHEDULE_BUSY");
+  if (code === "INVALID") return httpError(400, "Der Wartungszeitplan ist unvollständig oder ungültig.", "MAINTENANCE_SCHEDULE_INVALID");
+  return httpError(503, "Die geschützte Wartungszeitplan-Steuerung ist derzeit nicht verfügbar.", "MAINTENANCE_SCHEDULE_CONTROL_UNAVAILABLE");
+}
+
+app.get("/api/portal/v1/maintenance-schedules", async (request, response) => {
+  requireMaintenanceScheduleActor(request);
+  try {
+    response.setHeader("Cache-Control", "no-store");
+    response.json(await readMaintenanceSchedules());
+  } catch (error) {
+    throw maintenanceScheduleHttpError(error);
+  }
+});
+
+app.put("/api/portal/v1/maintenance-schedules", async (request, response) => {
+  const actor = requireMaintenanceScheduleActor(request, { write: true });
+  const body = request.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || Object.keys(body).length !== 2 || !Array.isArray(body.schedules)
+    || !/^[a-f0-9]{64}$/.test(String(body.expectedRevision || ""))) {
+    throw httpError(400, "Der Wartungszeitplan ist unvollständig.", "MAINTENANCE_SCHEDULE_INVALID");
+  }
+  try {
+    const result = await updateMaintenanceSchedules(body.schedules, { expectedRevision: body.expectedRevision });
+    await auditPortal(actor.employeeNumber, "system.maintenance_schedules.updated", "system", "maintenance-schedules",
+      JSON.stringify({ revision: result.revision, tasks: result.tasks.map((task) => task.id) }));
+    response.setHeader("Cache-Control", "no-store");
+    response.json(result);
+  } catch (error) {
+    throw maintenanceScheduleHttpError(error);
+  }
 });
 
 function runtimeDriveInfo() {
@@ -38530,7 +38631,11 @@ async function systemCenterUpdateStatus() {
 
 function systemCenterResourceSummary(diagnostics) {
   let databaseBytes = null;
-  try { databaseBytes = fs.statSync(databasePath).size; } catch { databaseBytes = null; }
+  if (diagnostics.database?.providerId === "postgresql") {
+    databaseBytes = diagnostics.database.bytes;
+  } else {
+    try { databaseBytes = fs.statSync(databasePath).size; } catch { databaseBytes = null; }
+  }
   return {
     uptimeSeconds: Math.max(0, Math.floor(process.uptime())),
     cpu: {
@@ -58644,6 +58749,62 @@ app.delete("/api/portal/v1/me/time-corrections/:id", async (request, response) =
   response.status(204).end();
 });
 
+function xoffiComparisonSettingsKey(context) {
+  return `xoffi_comparison_v1_${context.locationId}_${Number(context.departmentId || 0)}`;
+}
+
+function xoffiComparisonSettings(context) {
+  const comparison = require("./lib/xoffi-plan-comparison");
+  try { return comparison.thresholds(JSON.parse(getPortalSettings()[xoffiComparisonSettingsKey(context)])); }
+  catch { return { ...comparison.DEFAULT_THRESHOLDS }; }
+}
+
+app.get("/api/portal/v1/xoffi-plan-comparison", async (request, response) => {
+  const session = requirePortalReadOrLocal(request, "time:read");
+  const context = await resolvePlanningContext(request.query || {});
+  assertSessionContextScope(session, context);
+  const weekStart = String(request.query.weekStart || "");
+  if (!isIsoDate(weekStart) || getMonday(weekStart) !== weekStart) {
+    throw httpError(400, "Bitte eine Kalenderwoche mit Montag als Beginn wählen.", "XOFFI_WEEK_INVALID");
+  }
+  const query = { locationId: context.locationId, departmentId: context.departmentId || null,
+    weekStart, weekEnd: addDays(weekStart, 6), filterDepartment: context.departmentId ? 1 : 0 };
+  const [employees, shifts, imports, importDays, settings] = await Promise.all([
+    planningSettingsRepository.listScheduleEmployees(query), planningSettingsRepository.listScheduleShifts(query),
+    timeTrackingRepository.listActiveXoffiWeekRows(query), timeTrackingRepository.listActiveXoffiWeekDays(query),
+    settingsForLocation(context.locationId),
+  ]);
+  const measuredShifts = await Promise.all(shifts.map(async shift => {
+    const metrics = await plannedShiftBreaks(shift, settings);
+    return { ...shift, raw_minutes: metrics.rawMinutes, break_minutes: metrics.breakMinutes };
+  }));
+  const limits = xoffiComparisonSettings(context);
+  response.json({ weekStart, weekEnd: query.weekEnd, limits,
+    canChange: session.localSystem === true || session.permissions.includes("time:settings"),
+    employees: require("./lib/xoffi-plan-comparison").buildComparison({
+      dates: Array.from({ length: 7 }, (_, day) => addDays(weekStart, day)), employees,
+      shifts: measuredShifts, imports, importDays, limits, departmentId: context.departmentId,
+    }),
+  });
+});
+
+app.put("/api/portal/v1/xoffi-plan-comparison/settings", async (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "time:settings");
+  const context = await resolvePlanningContext(request.body || {});
+  assertSessionContextScope(session, context);
+  let limits;
+  try {
+    if (!request.body?.limits) throw new Error("Bitte beide Ampelgrenzen angeben.");
+    limits = require("./lib/xoffi-plan-comparison").thresholds(request.body.limits);
+  }
+  catch (error) { throw httpError(400, error.message, "XOFFI_COMPARISON_LIMITS_INVALID"); }
+  const previous = xoffiComparisonSettings(context);
+  await setPortalSetting(xoffiComparisonSettingsKey(context), JSON.stringify(limits));
+  await auditPortal(session.employeeNumber, "time.xoffi-comparison-settings.update", "portal_settings",
+    xoffiComparisonSettingsKey(context), JSON.stringify({ previous, limits }));
+  response.json({ limits });
+});
+
 app.get("/api/portal/v1/time-summary", async (request, response) => {
   const session = requirePortalReadOrLocal(request, "time:read");
   const context = await resolvePlanningContext(request.query || {});
@@ -58699,14 +58860,14 @@ app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
   let fileName = String(request.get("X-Import-Filename") || "xoffi.png");
   try { fileName = decodeURIComponent(fileName); } catch {}
   const isMhtml = /\.mht(?:ml)?$/i.test(fileName) || /^(?:multipart\/related|message\/rfc822|application\/x-mimearchive)(?:;|$)/i.test(request.get("Content-Type") || "");
-  let expectedWeekStart = isMhtml ? "" : assertPastXoffiWeek(String(request.query?.weekStart || ""));
+  let expectedWeekStart = isMhtml ? "" : await assertCompletedXoffiWeek(String(request.query?.weekStart || ""), context);
   let inspected;
   try {
     if (isMhtml) inspected = inspectXoffiMhtmlBuffer(request.body, { fileName });
   } catch (error) {
     throw xoffiTimeImportHttpError(error);
   }
-  if (isMhtml) expectedWeekStart = assertPastXoffiWeek(inspected.weekStart);
+  if (isMhtml) expectedWeekStart = await assertCompletedXoffiWeek(inspected.weekStart, context);
   const candidateRows = await planningSettingsRepository.listScheduleEmployees({
     locationId: context.locationId, departmentId: context.departmentId || null,
     weekStart: expectedWeekStart, weekEnd: addDays(expectedWeekStart, 6),
@@ -58779,12 +58940,12 @@ app.post("/api/portal/v1/xoffi-time-import/apply", async (request, response) => 
     throw error;
   }
   const preview = entry.value;
-  assertPastXoffiWeek(preview.weekStart);
   const weekResolution = assertXoffiScreenshotWeekConfirmation(preview, request.body || {});
   const context = await xoffiTimeImportContext(session, preview.context);
   if (context.locationId !== preview.context.locationId || Number(context.departmentId || 0) !== Number(preview.context.departmentId || 0)) {
     throw httpError(403, "Der geprüfte Import liegt nicht mehr im freigegebenen Bereich.", "XOFFI_SCOPE_CHANGED");
   }
+  await assertCompletedXoffiWeek(preview.weekStart, context);
   const reviewedRows = validateXoffiReviewedRows(request.body?.employees, preview);
   const currentCandidates = new Set((await planningSettingsRepository.listScheduleEmployees({
     locationId: context.locationId, departmentId: context.departmentId || null,

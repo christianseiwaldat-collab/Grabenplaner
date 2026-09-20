@@ -654,6 +654,10 @@ const state = {
   serverStatus: null,
   serverDiagnostics: null,
   serverDiagnosticsLoading: false,
+  maintenanceSchedules: null,
+  maintenanceSchedulesLoadState: "idle",
+  maintenanceSchedulesMessage: "",
+  maintenanceSchedulesPending: false,
   serverMonitorActionPending: "",
   serverMonitorActionFeedback: null,
   serverMonitorRestartAccepted: false,
@@ -764,7 +768,7 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 const elements = Object.fromEntries(
   [
     "staffAssignmentRequestDeadline",
-    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "tradeInsightsView", "tradeInsightsNavButton", "tradeInsightsDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "loanManagementReturnDialog", "loanManagementReturnForm", "loanManagementReturnTitle", "loanManagementReturnSubtitle", "loanManagementReturnItems", "loanManagementReturnNote", "loanManagementReturnConfirmed", "loanManagementReturnStatus", "loanManagementReturnSubmit", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "tradeInsightsView", "tradeInsightsNavButton", "tradeInsightsDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "loanManagementReturnDialog", "loanManagementReturnForm", "loanManagementReturnTitle", "loanManagementReturnSubtitle", "loanManagementReturnItems", "loanManagementReturnNote", "loanManagementReturnConfirmed", "loanManagementReturnStatus", "loanManagementReturnSubmit", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "xoffiComparisonDate", "xoffiComparisonPrevious", "xoffiComparisonNext", "xoffiComparisonLoad", "xoffiComparisonStatus", "xoffiComparisonList", "xoffiComparisonGreen", "xoffiComparisonYellow", "xoffiComparisonSave", "xoffiComparisonSettingsForm", "timeLegacyPanel", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleLastImport", "salesArticleLastImportValue", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchOrderNumber", "salesArticleSearchStatusFilter", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportDatabasePasswordField", "salesArticleImportDatabasePassword", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
@@ -795,7 +799,7 @@ const elements = Object.fromEntries(
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
-    "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "vpsRebootModal", "vpsRebootForm", "vpsRebootCloseButton", "vpsRebootCancelButton", "vpsRebootConfirmButton", "vpsRebootCurrentPassword", "vpsRebootMessage", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "offsiteProviderSelect", "offsiteProviderPolicyHint", "googleDriveManagementStatus", "googleDriveFolderControls", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
+    "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "vpsRebootModal", "vpsRebootForm", "vpsRebootCloseButton", "vpsRebootCancelButton", "vpsRebootConfirmButton", "vpsRebootCurrentPassword", "vpsRebootMessage", "maintenanceScheduleCard", "maintenanceScheduleStatus", "maintenanceScheduleForm", "maintenanceScheduleRows", "reloadMaintenanceSchedulesButton", "saveMaintenanceSchedulesButton", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "offsiteProviderSelect", "offsiteProviderPolicyHint", "googleDriveManagementStatus", "googleDriveFolderControls", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "branchSupervisionSettingsCard", "branchSupervisionMode", "branchSupervisionIntensity", "branchSupervisionThresholds", "branchSupervisionPrimaryCoveragePercent", "branchSupervisionDepartmentGapMinutes", "branchSupervisionSettingsHint", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
@@ -2855,6 +2859,7 @@ function applyRoleVisibility() {
   elements.birthdayPresentationSettingsCard?.classList.toggle("hidden", !birthdayPresentationSettingsAccess);
   elements.serverDiagnosticsCard?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
   elements.refreshServerDiagnosticsButton?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
+  elements.maintenanceScheduleCard?.classList.toggle("hidden", !serverBackupAdministrationAccess);
   elements.databaseBackupSettingsCard?.classList.toggle("hidden", serverActive ? !serverBackupAdministrationAccess : !backupWriteAccess);
   elements.legacyLocalBackupControls?.classList.toggle("hidden", serverActive);
   elements.serverDatabaseDownloadPanel?.classList.toggle("hidden", !serverBackupAdministrationAccess);
@@ -5923,7 +5928,7 @@ function scheduleEmployeeAccessibleLabel(employee) {
 
 function xoffiImportedBadge(employeeNumber) {
   const imported = state.data?.xoffiTime?.weekByEmployee?.[employeeNumber];
-  if (!state.data?.isPastWeek || !imported?.useAsActual || imported.days?.length !== 7) return "";
+  if (!imported?.useAsActual || imported.days?.length !== 7) return "";
   const label = `xoffi-Stunden für KW ${state.data.calendarWeek} übernommen`;
   return `<span class="xoffi-imported-check" role="img" aria-label="${escapeHtmlAttribute(label)}" title="${escapeHtmlAttribute(label)}">✓</span>`;
 }
@@ -6114,7 +6119,7 @@ function renderHoursOverview() {
   const showSaturdayStats = state.data.settings.show_saturday_service_stats !== "0";
   if (elements.xoffiImportButton) {
     elements.xoffiImportButton.disabled = !canImportXoffiTime();
-    elements.xoffiImportButton.title = "MHTML-Datei einer abgeschlossenen Kalenderwoche importieren; die Woche wird automatisch erkannt.";
+    elements.xoffiImportButton.title = "MHTML-Datei ab dem letzten Dienstende der Woche importieren; die Woche wird automatisch erkannt.";
   }
   let hasEstimatedSaturdayStats = false;
   elements.hoursOverview.innerHTML = state.data.employees.map((employee) => {
@@ -6681,6 +6686,219 @@ function renderHostSecurityDiagnostics(hostSecurity, monitorActions = {}) {
       ${rebootGuidance}
       ${vpsRebootButton}
     </section>`;
+}
+
+const maintenanceScheduleWeekdays = Object.freeze([
+  ["monday", "Mo"], ["tuesday", "Di"], ["wednesday", "Mi"], ["thursday", "Do"],
+  ["friday", "Fr"], ["saturday", "Sa"], ["sunday", "So"],
+]);
+const maintenanceScheduleTaskMeta = Object.freeze({
+  "server-monitor": Object.freeze({ label: "Systemprüfung", detail: "Erreichbarkeit und Serverzustand", cadences: ["interval", "weekly"], monthDay: null }),
+  "complete-backup": Object.freeze({ label: "Vollständige Sicherung", detail: "Datenbank, Dokumente und Wiederherstellungsprüfung", cadences: ["weekly"], monthDay: null }),
+  "repository-check": Object.freeze({ label: "Repository-Prüfung", detail: "Vollständige Prüfung des externen Sicherungsbestands", cadences: ["weekly", "monthly"], monthDay: 1 }),
+  "restore-test": Object.freeze({ label: "Wiederherstellungstest", detail: "Isolierter Test-Restore", cadences: ["weekly", "monthly", "quarterly"], monthDay: 2 }),
+  "security-audit": Object.freeze({ label: "Sicherheitsprüfung", detail: "Ubuntu-, Firewall- und Aktualisierungsprüfung", cadences: ["weekly"], monthDay: null }),
+});
+
+function canManageMaintenanceSchedules() {
+  const role = state.portalSession?.user?.role || "";
+  const permissions = state.portalSession?.user?.permissions || [];
+  return state.portalStatus?.operationMode === "server"
+    && ["developer", "it_admin", "admin"].includes(role)
+    && permissions.includes("backup:write");
+}
+
+function maintenanceScheduleCadenceLabel(value, task) {
+  if (value === "interval") return `Alle ${Number(task.intervalMinutes || 5)} Minuten`;
+  if (value === "weekly") return "Gewählte Wochentage";
+  if (value === "monthly") return `Monatlich am ${Number(task.monthDay || maintenanceScheduleTaskMeta[task.id]?.monthDay || 1)}.`;
+  return `Vierteljährlich am ${Number(task.monthDay || maintenanceScheduleTaskMeta[task.id]?.monthDay || 1)}.`;
+}
+
+function maintenanceScheduleTimestamp(value) {
+  if (!value) return "–";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "–" : parsed.toLocaleString("de-AT", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function maintenanceScheduleValidationMessage(tasks = []) {
+  for (const task of tasks) {
+    if (!task?.installed || task.cadence === "unsupported") continue;
+    const label = maintenanceScheduleTaskMeta[task.id]?.label || task.id;
+    if (task.cadence === "weekly" && !(task.weekdays || []).length) {
+      return `Für „${label}“ muss mindestens ein Wochentag ausgewählt sein.`;
+    }
+    if (task.cadence !== "interval" && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(task.time || ""))) {
+      return `Für „${label}“ muss eine gültige Uhrzeit eingetragen sein.`;
+    }
+    if (task.cadence === "interval" && ![5, 10, 15, 20, 30, 60].includes(Number(task.intervalMinutes))) {
+      return `Für „${label}“ muss ein gültiges Prüfintervall ausgewählt sein.`;
+    }
+  }
+  return "";
+}
+
+function maintenanceScheduleCadenceControl(task, disabled) {
+  const meta = maintenanceScheduleTaskMeta[task.id];
+  if (meta.cadences.length === 1) return `<span class="maintenance-schedule-cadence">${escapeHtml(maintenanceScheduleCadenceLabel(task.cadence, task))}</span>`;
+  const cadenceControl = `<label class="maintenance-schedule-compact"><span class="sr-only">Rhythmus für ${escapeHtml(meta.label)}</span><select data-maintenance-cadence ${disabled ? "disabled" : ""}>${meta.cadences.map((cadence) => `<option value="${cadence}" ${task.cadence === cadence ? "selected" : ""}>${escapeHtml(maintenanceScheduleCadenceLabel(cadence, { ...task, cadence }))}</option>`).join("")}</select></label>`;
+  if (task.cadence !== "interval") return cadenceControl;
+  return cadenceControl + `<label class="maintenance-schedule-compact"><span class="sr-only">Intervall für ${escapeHtml(meta.label)}</span><select data-maintenance-interval ${disabled ? "disabled" : ""}>${[5, 10, 15, 20, 30, 60].map((minutes) => `<option value="${minutes}" ${Number(task.intervalMinutes) === minutes ? "selected" : ""}>Alle ${minutes} Minuten</option>`).join("")}</select></label>`;
+}
+
+function renderMaintenanceSchedules() {
+  if (!elements.maintenanceScheduleRows || !elements.maintenanceScheduleStatus) return;
+  const result = state.maintenanceSchedules;
+  const pending = state.maintenanceSchedulesPending;
+  const tasks = Array.isArray(result?.tasks) ? result.tasks : [];
+  const validationMessage = maintenanceScheduleValidationMessage(tasks);
+  if (state.maintenanceSchedulesLoadState === "loading" && !tasks.length) {
+    elements.maintenanceScheduleRows.innerHTML = '<tr><td colspan="12">Zeitpläne werden geladen …</td></tr>';
+  } else if (!tasks.length) {
+    elements.maintenanceScheduleRows.innerHTML = '<tr><td colspan="12">Die Zeitpläne sind derzeit nicht verfügbar.</td></tr>';
+  } else {
+    elements.maintenanceScheduleRows.innerHTML = tasks.map((task) => {
+      const meta = maintenanceScheduleTaskMeta[task.id] || { label: task.id, detail: "", cadences: [task.cadence] };
+      const disabled = pending || !task.installed;
+      const weekly = task.cadence === "weekly";
+      const weekdays = new Set(task.weekdays || []);
+      const next = task.running ? '<strong class="maintenance-schedule-running">Läuft gerade</strong>'
+        : task.enabled && task.active ? escapeHtml(maintenanceScheduleTimestamp(task.nextRunAt))
+          : task.installed ? "Deaktiviert" : "Nicht eingerichtet";
+      if (task.cadence === "unsupported") {
+        const reason = ({
+          "not-installed": "Dieser Vorgang ist auf dem Server nicht eingerichtet.",
+          "additional-triggers": "Dieser Zeitplan enthält zusätzliche Auslöser, etwa nach einem Serverstart. Er bleibt unverändert und kann hier nicht bearbeitet werden.",
+          "different-target": "Dieser Zeitplan startet einen abweichenden Vorgang. Er bleibt unverändert und kann hier nicht bearbeitet werden.",
+          "calendar-not-supported": "Der vorhandene Zeitplan lässt sich in dieser Matrix nicht vollständig darstellen. Er bleibt unverändert und kann hier nicht bearbeitet werden.",
+        })[task.unsupportedReason] || "Dieser Zeitplan bleibt unverändert und kann hier nicht bearbeitet werden.";
+        return `<tr data-maintenance-task="${escapeHtmlAttribute(task.id)}"><th scope="row"><strong>${escapeHtml(meta.label)}</strong></th><td colspan="10">${escapeHtml(reason)}</td><td>${next}</td></tr>`;
+      }
+      return `<tr data-maintenance-task="${escapeHtmlAttribute(task.id)}" class="${task.running ? "running" : ""} ${task.installed ? "" : "unavailable"}">
+        <th scope="row"><strong>${escapeHtml(meta.label)}</strong><small>${escapeHtml(meta.detail)}</small></th>
+        <td>${maintenanceScheduleCadenceControl(task, disabled)}</td>
+        ${maintenanceScheduleWeekdays.map(([day, label]) => `<td class="maintenance-schedule-day"><label><span class="sr-only">${label} für ${escapeHtml(meta.label)}</span><input type="checkbox" data-maintenance-day="${day}" ${weekdays.has(day) ? "checked" : ""} ${disabled || !weekly ? "disabled" : ""}></label></td>`).join("")}
+        <td><label class="maintenance-schedule-compact"><span class="sr-only">Uhrzeit für ${escapeHtml(meta.label)}</span><input type="time" data-maintenance-time value="${escapeHtmlAttribute(task.time || "")}" ${disabled || task.cadence === "interval" ? "disabled" : ""}></label></td>
+        <td class="maintenance-schedule-enabled"><label><span class="sr-only">${escapeHtml(meta.label)} aktiv</span><input type="checkbox" data-maintenance-enabled ${task.enabled ? "checked" : ""} ${disabled ? "disabled" : ""}></label></td>
+        <td class="maintenance-schedule-next">${next}</td>
+      </tr>`;
+    }).join("");
+  }
+  const stateMessage = validationMessage || state.maintenanceSchedulesMessage
+    || (pending ? "Zeitpläne werden gespeichert …"
+      : result?.checkedAt ? `Serverstand: ${maintenanceScheduleTimestamp(result.checkedAt)}`
+        : "Zeitpläne werden beim Öffnen geladen.");
+  elements.maintenanceScheduleStatus.textContent = stateMessage;
+  elements.maintenanceScheduleStatus.dataset.state = validationMessage ? "error" : state.maintenanceSchedulesLoadState;
+  if (elements.reloadMaintenanceSchedulesButton) elements.reloadMaintenanceSchedulesButton.disabled = pending || state.maintenanceSchedulesLoadState === "loading";
+  if (elements.saveMaintenanceSchedulesButton) {
+    elements.saveMaintenanceSchedulesButton.disabled = pending || !tasks.length || Boolean(validationMessage) || tasks.some((task) => task.running);
+    elements.saveMaintenanceSchedulesButton.textContent = pending ? "Zeitpläne werden gespeichert …" : "Zeitpläne speichern";
+  }
+}
+
+async function loadMaintenanceSchedules({ announce = false } = {}) {
+  if (!canManageMaintenanceSchedules() || state.maintenanceSchedulesLoadState === "loading" || state.maintenanceSchedulesPending) return false;
+  state.maintenanceSchedulesLoadState = "loading";
+  state.maintenanceSchedulesMessage = "Zeitpläne werden geladen …";
+  renderMaintenanceSchedules();
+  try {
+    state.maintenanceSchedules = await api("/api/portal/v1/maintenance-schedules");
+    state.maintenanceSchedulesLoadState = "ready";
+    state.maintenanceSchedulesMessage = "";
+    renderMaintenanceSchedules();
+    if (announce) showToast("Wartungs- und Backupzeiten aktualisiert.");
+    return true;
+  } catch (error) {
+    state.maintenanceSchedulesLoadState = "error";
+    state.maintenanceSchedulesMessage = error.message;
+    renderMaintenanceSchedules();
+    if (announce) showToast(error.message, true);
+    return false;
+  }
+}
+
+function maintenanceSchedulesForSave() {
+  return (state.maintenanceSchedules?.tasks || []).map((task) => ({
+    id: task.id,
+    enabled: Boolean(task.enabled),
+    cadence: task.cadence,
+    weekdays: [...(task.weekdays || [])],
+    time: task.time,
+    intervalMinutes: task.intervalMinutes,
+    monthDay: task.monthDay,
+  }));
+}
+
+async function saveMaintenanceSchedules(event) {
+  event?.preventDefault();
+  if (!canManageMaintenanceSchedules() || state.maintenanceSchedulesPending || !state.maintenanceSchedules?.tasks?.length) return;
+  const validationMessage = maintenanceScheduleValidationMessage(state.maintenanceSchedules.tasks);
+  if (validationMessage) {
+    state.maintenanceSchedulesLoadState = "error";
+    state.maintenanceSchedulesMessage = validationMessage;
+    renderMaintenanceSchedules();
+    showToast(validationMessage, true);
+    return;
+  }
+  state.maintenanceSchedulesPending = true;
+  state.maintenanceSchedulesLoadState = "saving";
+  state.maintenanceSchedulesMessage = "Zeitpläne werden geschützt gespeichert …";
+  renderMaintenanceSchedules();
+  try {
+    state.maintenanceSchedules = await api("/api/portal/v1/maintenance-schedules", {
+      method: "PUT",
+      body: JSON.stringify({ schedules: maintenanceSchedulesForSave(), expectedRevision: state.maintenanceSchedules.revision }),
+    });
+    state.maintenanceSchedulesLoadState = "ready";
+    state.maintenanceSchedulesMessage = "Geänderte Zeitpläne wurden gespeichert. Verpasste Termine werden dadurch nicht nachgeholt.";
+    showToast("Wartungs- und Backupzeiten gespeichert.");
+  } catch (error) {
+    state.maintenanceSchedulesLoadState = "error";
+    state.maintenanceSchedulesMessage = error.message;
+    showToast(error.message, true);
+  } finally {
+    state.maintenanceSchedulesPending = false;
+    renderMaintenanceSchedules();
+  }
+}
+
+function updateMaintenanceScheduleDraft(event) {
+  const row = event.target.closest?.("[data-maintenance-task]");
+  const task = state.maintenanceSchedules?.tasks?.find((entry) => entry.id === row?.dataset.maintenanceTask);
+  if (!task || state.maintenanceSchedulesPending) return;
+  if (event.target.matches("[data-maintenance-enabled]")) task.enabled = event.target.checked;
+  if (event.target.matches("[data-maintenance-interval]")) task.intervalMinutes = Number(event.target.value);
+  if (event.target.matches("[data-maintenance-time]")) task.time = event.target.value;
+  if (event.target.matches("[data-maintenance-day]")) {
+    const selected = new Set(task.weekdays || []);
+    if (event.target.checked) selected.add(event.target.dataset.maintenanceDay);
+    else selected.delete(event.target.dataset.maintenanceDay);
+    task.weekdays = maintenanceScheduleWeekdays.map(([day]) => day).filter((day) => selected.has(day));
+  }
+  if (event.target.matches("[data-maintenance-cadence]")) {
+    task.cadence = event.target.value;
+    task.intervalMinutes = null;
+    if (task.cadence === "interval") {
+      task.weekdays = [];
+      task.time = null;
+      task.intervalMinutes = 5;
+      task.monthDay = null;
+    } else if (task.cadence === "weekly") {
+      task.weekdays = task.weekdays?.length ? task.weekdays : ["monday"];
+      task.monthDay = null;
+      task.time ||= "03:00";
+    } else {
+      task.weekdays = [];
+      task.monthDay = maintenanceScheduleTaskMeta[task.id]?.monthDay || 1;
+      task.time ||= "03:00";
+    }
+  }
+  state.maintenanceSchedulesLoadState = "changed";
+  state.maintenanceSchedulesMessage = "Änderungen sind noch nicht gespeichert.";
+  renderMaintenanceSchedules();
 }
 
 function canManageOffsiteFolders() {
@@ -22174,6 +22392,7 @@ function renderSettings() {
   localStorage.setItem(rememberContextCacheKey("planning"), elements.rememberLastScheduleOverallPlan.checked ? "1" : "0");
   localStorage.setItem(rememberContextCacheKey("vacations"), elements.rememberLastVacationOverallPlan.checked ? "1" : "0");
   renderPortalAccessState();
+  renderMaintenanceSchedules();
   updatePdfPreview();
 }
 
@@ -22659,7 +22878,7 @@ function resetXoffiImport() {
   if (elements.xoffiImportPreview) elements.xoffiImportPreview.innerHTML = "";
   elements.xoffiImportConfirmation?.classList.add("hidden");
   if (elements.xoffiApplyButton) elements.xoffiApplyButton.disabled = true;
-  if (elements.xoffiImportStatus) elements.xoffiImportStatus.textContent = "MHTML-Datei auswählen. Mitarbeiter und abgeschlossene Kalenderwoche werden aus der Datei ermittelt.";
+  if (elements.xoffiImportStatus) elements.xoffiImportStatus.textContent = "MHTML-Datei auswählen. Mitarbeiter und Kalenderwoche werden automatisch erkannt. Die Übernahme ist ab dem letzten geplanten Dienstende im gewählten Bereich möglich.";
 }
 
 function xoffiWeekRangeLabel(weekStart, weekEnd = addDays(weekStart, 6)) {
@@ -22747,7 +22966,7 @@ function renderXoffiImportPreview() {
       : weekResolution.status === "uncertain"
         ? `${Number(weekResolution.matchedDateColumns || 0)} von sieben Datumsspalten stützen ${targetWeek}; mindestens eine Spalte wurde abweichend oder nicht sicher erkannt. `
         : "Die sieben Datumsspalten konnten nicht ausreichend sicher einer Woche zugeordnet werden. ";
-    elements.xoffiScreenshotWeekConfirmationText.textContent = `${evidence}Als Ziel ist ${targetWeek} im Grabenplaner ausgewählt. Wenn der Screenshot tatsächlich zu dieser Woche gehört, bestätigen Sie die Zuordnung ausdrücklich; andernfalls schließen Sie den Dialog und öffnen Sie die richtige vergangene GP-Woche.`;
+    elements.xoffiScreenshotWeekConfirmationText.textContent = `${evidence}Als Ziel ist ${targetWeek} im Grabenplaner ausgewählt. Wenn der Screenshot tatsächlich zu dieser Woche gehört, bestätigen Sie die Zuordnung ausdrücklich; andernfalls schließen Sie den Dialog und öffnen Sie die richtige GP-Woche.`;
     elements.xoffiScreenshotWeekConfirmationLabel.textContent = `Ich bestätige, dass dieser Screenshot zu ${targetWeek} gehört.`;
   }
   updateXoffiApplyAvailability();
@@ -22759,13 +22978,9 @@ async function inspectXoffiImportFile() {
     elements.xoffiImportStatus.textContent = "Bitte zuerst eine MHTML-Datei oder eine JPG-, PNG- oder WebP-Datei auswählen.";
     return;
   }
-  if (!/\.mht(?:ml)?$/i.test(file.name) && !state.data?.isPastWeek) {
-    elements.xoffiImportStatus.textContent = "Der Import ist nur in einer vergangenen Kalenderwoche möglich.";
-    return;
-  }
   elements.xoffiInspectButton.disabled = true;
   elements.xoffiApplyButton.disabled = true;
-  elements.xoffiImportStatus.textContent = "Datei wird ausgelesen und der abgeschlossenen Kalenderwoche zugeordnet.";
+  elements.xoffiImportStatus.textContent = "Datei wird ausgelesen und der Kalenderwoche zugeordnet. Das letzte Dienstende wird geprüft.";
   try {
     const parameters = new URLSearchParams({
       weekStart: state.data.weekStart,
@@ -24698,7 +24913,7 @@ function fallbackSystemCenterFactors(payload) {
   const platformState = systemCenterCheckState(status, ["https", "monitor", "host-security"]);
   return [
     {
-      id: "core", label: "Kernbetrieb & SQLite",
+      id: "core", label: "Kernbetrieb & Datenbank",
       state: status.live?.ok && status.ready?.ok && systemCenterCheckState(status, ["database", "data"]) !== "critical" ? "ok" : "critical",
       detail: status.ready?.ok ? "Anwendung und Datenbank sind betriebsbereit." : "Mindestens ein Kernbestandteil benötigt Aufmerksamkeit.",
     },
@@ -24798,6 +25013,7 @@ function renderSystemCenterRun(run) {
 }
 
 function systemCenterByteLabel(bytes) {
+  if (bytes === null || bytes === undefined || bytes === "") return "Nicht verfügbar";
   const value = Number(bytes);
   if (!Number.isFinite(value) || value < 0) return "Nicht verfügbar";
   if (value < 1024 ** 2) return `${Math.round(value / 1024)} KB`;
@@ -24882,7 +25098,8 @@ function renderSystemCenterOperations(automation, notifications) {
     <article class="system-center-operation ${automationState}">
       <header><div><span class="eyebrow">Automatische Prüfung</span><h2>Nächtliche Recovery Assurance</h2></div><span class="system-center-state ${automationState}"><i aria-hidden="true">${automationCopy.icon}</i>${escapeHtml(automationCopy.label)}</span></header>
       <p>${schedule.enabled === false ? "Die automatische Prüfung ist auf diesem System nicht aktiv." : escapeHtml(schedule.scheduleLabel || "Tägliche Ausführung mit zufälliger Startverzögerung und geschützter Parallelitätssperre.")}</p>
-      <dl><div><dt>Letzter Lauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.lastRunAt))}</dd></div><div><dt>Nächster Lauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.nextRunAt))}</dd></div><div><dt>Isolierter App-Start</dt><dd><span class="system-center-inline-state ${smokeState}"><i aria-hidden="true">${smokeCopy.icon}</i>${escapeHtml(smokeCopy.label)}</span></dd></div></dl>
+      <dl><div><dt>Letzter Nachtlauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.lastRunAt))}</dd></div><div><dt>Nächster Lauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.nextRunAt))}</dd></div><div><dt>App-Start im letzten Nachtlauf</dt><dd><span class="system-center-inline-state ${smokeState}"><i aria-hidden="true">${smokeCopy.icon}</i>${escapeHtml(smokeCopy.label)}</span></dd></div>${schedule.latestFullProofAt ? `<div><dt>Letzter vollständiger Nachweis (alle Auslöser)</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.latestFullProofAt))}</dd></div>` : ""}</dl>
+      ${schedule.state !== "healthy" ? '<a href="/?view=settings&amp;section=backup">Beheben</a>' : ""}
       ${schedule.overdue === true ? '<strong class="system-center-operation-warning">Der automatische Nachweis ist überfällig und benötigt Aufmerksamkeit.</strong>' : ""}
     </article>
     <article class="system-center-operation ${notificationState}">
@@ -24913,9 +25130,9 @@ function normalizedSystemCenterTrendPoints(trends) {
   }).filter(Boolean).sort((left, right) => Date.parse(left.at) - Date.parse(right.at)).slice(-120);
 }
 
-function renderSystemCenterSparkline(points, { key, label, formatter, colorClass }) {
+function renderSystemCenterSparkline(points, { key, label, formatter, colorClass, currentLabel = null }) {
   const series = points.filter((point) => Number.isFinite(point[key]));
-  if (!series.length) return `<article class="system-center-trend-card empty"><small>${escapeHtml(label)}</small><strong>Noch keine Werte</strong><span>Der Verlauf entsteht automatisch aus künftigen Systemprüfungen.</span></article>`;
+  if (!series.length) return `<article class="system-center-trend-card empty"><small>${escapeHtml(label)}</small><strong>${escapeHtml(currentLabel ?? "Noch keine Werte")}</strong><span>Der Verlauf entsteht automatisch aus künftigen Systemprüfungen.</span></article>`;
   const values = series.map((point) => point[key]);
   const minimum = Math.min(...values);
   const maximum = Math.max(...values);
@@ -24931,17 +25148,18 @@ function renderSystemCenterSparkline(points, { key, label, formatter, colorClass
   const first = series[0];
   const last = series[series.length - 1];
   const delta = last[key] - first[key];
-  const deltaText = Math.abs(delta) < 0.01 ? "stabil" : `${delta > 0 ? "+" : ""}${escapeHtml(formatter(delta, { delta: true }))}`;
+  const deltaText = Math.abs(delta) < 0.01 ? "stabil" : `${delta > 0 ? "+" : "−"}${escapeHtml(formatter(Math.abs(delta), { delta: true }))}`;
   const pointsAttribute = coordinates.map((point) => `${point.x},${point.y}`).join(" ");
   const latest = coordinates[coordinates.length - 1];
   return `<article class="system-center-trend-card ${escapeHtml(colorClass)}">
-    <header><div><small>${escapeHtml(label)}</small><strong>${escapeHtml(formatter(last[key]))}</strong></div><span>${deltaText}</span></header>
+    <header><div><small>${escapeHtml(label)}</small><strong>${escapeHtml(currentLabel ?? formatter(last[key]))}</strong></div><span>${deltaText}</span></header>
+    ${currentLabel !== null ? '<small>Aktuelle Messung oben · gespeicherter Verlauf darunter</small>' : ''}
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(label)}: ${escapeHtml(formatter(first[key]))} bis ${escapeHtml(formatter(last[key]))}"><path d="M ${padding} ${height - padding} H ${width - padding}" aria-hidden="true"></path><polyline points="${pointsAttribute}" aria-hidden="true"></polyline><circle cx="${latest.x}" cy="${latest.y}" r="4" aria-hidden="true"></circle></svg>
     <footer><span>${escapeHtml(diagnosticTimestamp(first.at))}</span><span>${series.length} Messpunkte</span><span>${escapeHtml(diagnosticTimestamp(last.at))}</span></footer>
   </article>`;
 }
 
-function renderSystemCenterTrends(trends) {
+function renderSystemCenterTrends(trends, resources) {
   const points = normalizedSystemCenterTrendPoints(trends);
   const retentionDays = Math.max(0, Number(trends?.retentionDays || 0));
   const integrityState = points.length && trends?.integrityVerified === true
@@ -24951,7 +25169,7 @@ function renderSystemCenterTrends(trends) {
     <div class="system-center-section-heading"><div><span class="eyebrow">Begrenzte Langzeitwerte</span><h2>Entwicklung des Systemzustands</h2><p>Die Messreihe enthält ausschließlich technische Kennzahlen und keine Personal-, Pfad- oder Zugangsdaten.</p></div><span class="system-center-state ${integrityState}"><i aria-hidden="true">${integrityCopy.icon}</i>${escapeHtml(integrityCopy.label)}${retentionDays ? ` · ${retentionDays} Tage` : ""}</span></div>
     <div class="system-center-trend-grid">
       ${renderSystemCenterSparkline(points, { key: "trustScore", label: "Vertrauensindex", formatter: (value) => `${Math.round(value)} / 100`, colorClass: "trust" })}
-      ${renderSystemCenterSparkline(points, { key: "databaseBytes", label: "Datenbankgröße", formatter: (value) => systemCenterByteLabel(Math.abs(value)), colorClass: "database" })}
+      ${renderSystemCenterSparkline(points, { key: "databaseBytes", label: "Datenbankgröße", formatter: (value) => systemCenterByteLabel(Math.abs(value)), colorClass: "database", currentLabel: resources ? systemCenterByteLabel(resources.storage?.databaseBytes) : null })}
       ${renderSystemCenterSparkline(points, { key: "backupDurationSeconds", label: "Sicherungsdauer", formatter: (value) => systemCenterDurationLabel(Math.abs(value)), colorClass: "backup" })}
       ${renderSystemCenterSparkline(points, { key: "recoveryDurationSeconds", label: "Wiederherstellungsdauer", formatter: (value) => systemCenterDurationLabel(Math.abs(value)), colorClass: "recovery" })}
     </div>
@@ -24988,7 +25206,8 @@ function renderProductReadiness(payload) {
         return `<article class="product-readiness-gate ${copy.state}">
           <header><div><strong>${escapeHtml(gate.label)}</strong><small>${escapeHtml(gate.standard?.label || "Technischer Nachweis")}</small></div><span class="system-center-state ${copy.state}"><i aria-hidden="true">${copy.icon}</i>${escapeHtml(copy.label)}</span></header>
           <p>${escapeHtml(gate.detail || "")}</p>
-          ${gate.standard?.url ? `<a href="${escapeHtml(gate.standard.url)}" target="_blank" rel="noreferrer">Prüfbasis öffnen</a>` : ""}
+          ${copy.state !== "ok" ? `<a href="#system-center-factor-${escapeHtml(gate.repairFactorId || (gate.id === "security" ? "server" : "recovery"))}">Beheben – betroffene Prüfungen ansehen</a> · ` : ""}
+          ${gate.standard?.url ? `<a href="${escapeHtml(gate.standard.url)}" target="_blank" rel="noreferrer">OWASP-Referenz öffnen</a>` : ""}
         </article>`;
       }).join("")}
       ${manualGates.map((gate) => {
@@ -25061,7 +25280,7 @@ function renderSystemCenter(payload) {
     ${renderSystemCenterOffsiteProvider(payload?.status)}
     ${systemCenterResourceCards(payload?.resources)}
     ${renderSystemCenterOperations(payload?.automation, payload?.notifications)}
-    ${renderSystemCenterTrends(payload?.trends)}
+    ${renderSystemCenterTrends(payload?.trends, payload?.resources)}
     ${renderProductReadiness(payload?.productReadiness)}
     <section class="system-center-factor-grid" aria-label="Bestandteile des technischen Vertrauensindex">${factors.map((factor) => {
       const copy = systemCenterStateCopy(factor.state);
@@ -25069,14 +25288,18 @@ function renderSystemCenter(payload) {
       const evidence = factor.evidenceAt ? `Nachweis ${diagnosticTimestamp(factor.evidenceAt)}` : "Kein datierter Nachweis";
       const coverage = factor.coverage === null ? "" : `<span class="system-center-coverage"><i style="--coverage:${factor.coverage}%"></i><small>${factor.coverage}% Abdeckung</small></span>`;
       const checks = factor.checks.length
-        ? `<ul class="system-center-card-checks">${factor.checks.slice(0, 4).map((check) => {
+        ? `<ul class="system-center-card-checks">${factor.checks.map((check) => {
           const checkState = systemCenterVisualState(check?.state || check?.status || (check?.ok === true ? "pass" : check?.ok === false ? "fail" : "unknown"), "neutral");
           const checkCopy = systemCenterStateCopy(checkState);
           const checkLabel = typeof check === "string" ? check : check?.label || check?.name || check?.id || "Prüfung";
-          return `<li class="${checkState}"><i aria-hidden="true">${checkCopy.icon}</i><span>${escapeHtml(checkLabel)}</span></li>`;
+          const notApplicable = ["not_applicable", "not-applicable"].includes(check?.state);
+          const explanation = notApplicable ? (check?.id === "backup_external"
+            ? "Nicht erforderlich im Serverbetrieb; lokale Serversicherung und Offsite werden separat geprüft."
+            : "Für diese Betriebsart nicht erforderlich.") : "";
+          return `<li class="${checkState}"><i aria-hidden="true">${checkCopy.icon}</i><span>${escapeHtml(checkLabel)}${explanation ? `<small>${escapeHtml(explanation)}</small>` : ""}</span>${checkState !== "ok" && !notApplicable ? `<a href="/?view=settings&amp;section=backup" aria-label="${escapeHtml(checkLabel)}: Beheben">Beheben</a>` : ""}</li>`;
         }).join("")}</ul>`
         : "";
-      return `<article class="system-center-factor ${factor.state}"><header><span aria-hidden="true">${copy.icon}</span><small>${escapeHtml(points)}</small></header><strong>${escapeHtml(factor.label)}</strong><p>${escapeHtml(factor.detail)}</p>${coverage}${checks}<footer><span class="system-center-state ${factor.state}">${escapeHtml(copy.label)}</span><small>${escapeHtml(evidence)}</small></footer></article>`;
+      return `<article id="system-center-factor-${escapeHtml(factor.id)}" class="system-center-factor ${factor.state}"><header><span aria-hidden="true">${copy.icon}</span><small>${escapeHtml(points)}</small></header><strong>${escapeHtml(factor.label)}</strong><p>${escapeHtml(factor.detail)}</p>${coverage}${checks}<footer><span class="system-center-state ${factor.state}">${escapeHtml(copy.label)}</span><small>${escapeHtml(evidence)}</small></footer></article>`;
     }).join("")}</section>
     <section class="system-center-history">
       <div class="system-center-section-heading"><div><span class="eyebrow">Signierte Prüfhistorie</span><h2>Recovery-Assurance-Läufe</h2><p>Die angezeigten Läufe wurden serverseitig aus der vollständig geprüften Signaturkette zusammengefasst.</p></div><span>${Number(assurance.eventCount || 0)} bestätigte Ereignisse</span></div>
@@ -27141,6 +27364,58 @@ async function refreshManagerVacationRequests(session) {
     elements.requestsNavButton?.classList.toggle("hidden", error.status === 403);
     if (error.status !== 403) elements.managerVacationRequestList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
   }
+}
+
+let xoffiComparisonRequest = 0;
+
+function xoffiComparisonLabel(row) {
+  if (row.severity === "missing") return row.importState === "incomplete" ? "Import unvollständig" : "Nicht importiert";
+  if (row.severity === "scope") return "Importbereich abweichend · Bereich wählen";
+  if (row.severity === "unplanned") return "Ohne Planstunden · prüfen";
+  const percent = Math.abs(Number(row.percent)).toLocaleString("de-AT", { maximumFractionDigits: 1 });
+  return `${row.percent > 0 ? "+" : row.percent < 0 ? "−" : ""}${percent} % · ${row.severity === "green" ? "Im Rahmen" : row.severity === "yellow" ? "Auffällig" : "Starke Abweichung"}`;
+}
+
+function renderXoffiComparison(result) {
+  const cells = row => `<td>${formatHours(row.plannedMinutes)}</td><td>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</td><td>${row.differenceMinutes === null ? "–" : formatTimeDifference(row.differenceMinutes)}</td><td><span class="xoffi-variance ${escapeHtml(row.severity)}">${escapeHtml(xoffiComparisonLabel(row))}</span></td>`;
+  const heads = '<th scope="col">Tag</th><th scope="col">GP-Plan</th><th scope="col">xoffi-Ist</th><th scope="col">Differenz</th><th scope="col">Abweichung</th>';
+  elements.xoffiComparisonList.innerHTML = result.employees.length ? result.employees.map(row => `<details class="xoffi-comparison-person"><summary>
+    <strong>MA ${escapeHtml(row.employeeNumber)} · ${escapeHtml(row.fullName)}</strong>
+    <span>Plan ${formatHours(row.plannedMinutes)} · xoffi ${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</span>
+    <span class="xoffi-variance ${escapeHtml(row.severity)}">${escapeHtml(xoffiComparisonLabel(row))}</span></summary>
+    <div class="xoffi-comparison-table"><table><caption>Tagesvergleich für MA ${escapeHtml(row.employeeNumber)}</caption><thead><tr>${heads}</tr></thead><tbody>${row.days.map(day => `<tr><th scope="row">${escapeHtml(formatDate(day.date))}${day.absence ? `<small>${escapeHtml(({sick:"Krank",vacation:"Urlaub"})[day.absence] || day.absence)}</small>` : ""}${day.intervals.length ? `<small>${escapeHtml(day.intervals.join(" · "))}</small>` : ""}</th>${cells(day)}</tr>`).join("")}</tbody><tfoot><tr><th scope="row">Woche</th>${cells(row)}</tr></tfoot></table></div>
+    <p class="settings-note">${row.importId ? `Importiert: ${escapeHtml(new Date(row.importedAt).toLocaleString("de-AT"))}. ${row.useAsActual ? "Als Ist-Zeit übernommen." : "Import vorhanden, nicht als Ist-Zeit aktiviert."}` : "Für diese Person liegt in dieser KW kein Import vor."}${row.valuedMinutes !== null ? ` xoffi gewertet (inkl. Zuschläge und Abwesenheitsgutschriften): ${formatHours(row.valuedMinutes)}.` : ""}</p></details>`).join("") : '<p class="settings-note">Keine Teammitglieder oder importierten Zeiten für diesen Bereich.</p>';
+  elements.xoffiComparisonGreen.value = result.limits.greenMax;
+  elements.xoffiComparisonYellow.value = result.limits.yellowMax;
+  for (const element of [elements.xoffiComparisonGreen, elements.xoffiComparisonYellow, elements.xoffiComparisonSave]) element.disabled = !result.canChange;
+  const imported = result.employees.filter(row => row.importState === "complete").length;
+  elements.xoffiComparisonStatus.textContent = `KW ${getIsoWeek(result.weekStart)} · ${formatDate(result.weekStart)}–${formatDate(result.weekEnd)} · ${imported}/${result.employees.length} vollständig importiert. Grün ≤ ${result.limits.greenMax} %, Gelb ≤ ${result.limits.yellowMax} %, darüber Rot.`;
+}
+
+async function loadXoffiComparison() {
+  if (!elements.xoffiComparisonList) return;
+  prepareTimePresenceControls();
+  if (!elements.xoffiComparisonDate.value) elements.xoffiComparisonDate.value = state.weekStart || toIsoDate(new Date());
+  const selected = elements.xoffiComparisonDate.value;
+  const weekStart = getMonday(`${selected}T12:00:00`);
+  elements.xoffiComparisonDate.value = weekStart;
+  const parameters = selectedTimeContextParameters();
+  parameters.set("weekStart", weekStart);
+  const request = ++xoffiComparisonRequest;
+  elements.xoffiComparisonStatus.textContent = "xoffi-Zeiten und Dienstplan werden verglichen …";
+  elements.xoffiComparisonList.replaceChildren();
+  for (const element of [elements.xoffiComparisonGreen, elements.xoffiComparisonYellow, elements.xoffiComparisonSave]) element.disabled = true;
+  try {
+    const result = await api(`/api/portal/v1/xoffi-plan-comparison?${parameters}`);
+    if (request === xoffiComparisonRequest) renderXoffiComparison(result);
+  } catch (error) {
+    if (request === xoffiComparisonRequest) elements.xoffiComparisonStatus.textContent = error.message;
+  }
+}
+
+async function refreshTimeTrackingView() {
+  await Promise.all([loadXoffiComparison(), ...(elements.timeLegacyPanel?.open
+    ? [loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()] : [])]);
 }
 
 let timePresenceRefreshTimer = null;
@@ -34878,8 +35153,8 @@ function setView(view) {
   if (view === "timeTracking") {
     initializeTimeSummaryDates();
     initializeTimeReviewDate();
-    Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]);
-    timePresenceRefreshTimer = setInterval(() => { if (!document.hidden && state.currentView === "timeTracking") loadTimePresence(); }, 30000);
+    refreshTimeTrackingView();
+    timePresenceRefreshTimer = setInterval(() => { if (!document.hidden && state.currentView === "timeTracking" && elements.timeLegacyPanel?.open) loadTimePresence(); }, 30000);
   }
   globalThis.grabenplanerNavigation?.record();
 }
@@ -35021,6 +35296,7 @@ function setSettingsTab(tab) {
   if (activeTab === "timeTracking") loadWifiAutomationSettings();
   if (activeTab === "backup") {
     refreshServerDiagnostics();
+    if (canManageMaintenanceSchedules()) loadMaintenanceSchedules();
     if (canManageOffsiteFolders()) loadManagedOffsiteFolders();
   }
   if (personnelTarget || databaseTarget) {
@@ -38864,6 +39140,9 @@ elements.validatePersonnelLifecycleEditorButton?.addEventListener("click", () =>
   validatePersonnelLifecycleEditorDraft().catch(() => {});
 });
 elements.refreshServerDiagnosticsButton?.addEventListener("click", () => refreshServerDiagnostics({ announce: true }));
+elements.reloadMaintenanceSchedulesButton?.addEventListener("click", () => loadMaintenanceSchedules({ announce: true }));
+elements.maintenanceScheduleForm?.addEventListener("submit", saveMaintenanceSchedules);
+elements.maintenanceScheduleRows?.addEventListener("change", updateMaintenanceScheduleDraft);
 elements.serverDiagnostics?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-server-monitor-action]");
   if (!button || button.disabled) return;
@@ -38971,7 +39250,32 @@ elements.xoffiImportConfirmed?.addEventListener("change", () => {
 elements.xoffiScreenshotWeekConfirmed?.addEventListener("change", updateXoffiApplyAvailability);
 elements.xoffiImportPreview?.addEventListener("change", updateXoffiApplyAvailability);
 elements.xoffiImportForm?.addEventListener("submit", applyXoffiImport);
-elements.refreshTimePresenceButton?.addEventListener("click", () => Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]));
+elements.xoffiComparisonLoad?.addEventListener("click", loadXoffiComparison);
+elements.xoffiComparisonDate?.addEventListener("change", loadXoffiComparison);
+for (const [button, days] of [[elements.xoffiComparisonPrevious, -7], [elements.xoffiComparisonNext, 7]]) {
+  button?.addEventListener("click", () => {
+    elements.xoffiComparisonDate.value = addDays(elements.xoffiComparisonDate.value || toIsoDate(new Date()), days);
+    loadXoffiComparison();
+  });
+}
+elements.timeLegacyPanel?.addEventListener("toggle", () => {
+  if (elements.timeLegacyPanel.open) Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]);
+});
+elements.xoffiComparisonSettingsForm?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const context = Object.fromEntries(selectedTimeContextParameters());
+  const limits = { greenMax: Number(elements.xoffiComparisonGreen.value), yellowMax: Number(elements.xoffiComparisonYellow.value) };
+  elements.xoffiComparisonSave.disabled = true;
+  try {
+    await api("/api/portal/v1/xoffi-plan-comparison/settings", { method: "PUT", body: JSON.stringify({ ...context, limits }) });
+    showToast("Ampelgrenzen gespeichert.");
+    await loadXoffiComparison();
+  } catch (error) {
+    showToast(error.message, true);
+    elements.xoffiComparisonSave.disabled = false;
+  }
+});
+elements.refreshTimePresenceButton?.addEventListener("click", () => refreshTimeTrackingView());
 elements.loadTimeDayReviewButton?.addEventListener("click", loadTimeDayReview);
 elements.timeReviewFilter?.addEventListener("change", renderTimeDayReview);
 elements.loadTimeSummaryButton?.addEventListener("click", loadTimeSummary);
@@ -38990,9 +39294,9 @@ elements.monthlyTimeRecordsList?.addEventListener("click", (event) => {
 elements.monthlyTimeRecordActionForm?.addEventListener("submit", saveMonthlyTimeRecordAction);
 elements.timeTrackingLocation?.addEventListener("change", () => {
   refreshTimePresenceDepartments();
-  Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]);
+  refreshTimeTrackingView();
 });
-elements.timeTrackingDepartment?.addEventListener("change", () => Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]));
+elements.timeTrackingDepartment?.addEventListener("change", () => refreshTimeTrackingView());
 elements.timeDayReviewList?.addEventListener("click", (event) => {
   const row = event.target.closest("[data-time-day-employee]");
   if (row && event.target.closest("[data-open-time-day-review]")) openTimeDayReview(row.dataset.timeDayEmployee);

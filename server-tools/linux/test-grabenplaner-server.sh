@@ -55,7 +55,7 @@ while (($#)); do
       printf '%s\n' "Verwendung: sudo ./test-grabenplaner-server.sh [--public-url https://...] [weitere Optionen]"
       printf '%s\n' "Standard: vollstaendige Datenbank- und Backuppruefung." \
         "--monitor-mode: kurze laufende Betriebspruefung, nur Backup-Metadaten." \
-        "--deploy-mode: kurze Betriebspruefung; aktivierte Timer duerfen mit geerbter Wartungssperre pausieren." \
+        "--deploy-mode: kurze Betriebspruefung; aktivierter Monitor-Timer darf pausiert sein." \
         "--nightly-mode: vollstaendige Datenbank- und Backuppruefung im Recovery-Lauf."
       exit 0
       ;;
@@ -122,23 +122,19 @@ csp_has_exact_directive() {
   return 1
 }
 
+maintenance_schedule_state="$(gp_maintenance_schedule_state "$app_dir" "$node")" || maintenance_schedule_state=invalid
 maintenance_deploy_pause=0
 if (( deploy_checks == 1 )) \
   && [[ "$(readlink -f -- "/proc/${BASHPID:-$$}/fd/9" 2>/dev/null || true)" == /run/grabenplaner/maintenance.lock ]] \
   && flock --nonblock 9; then maintenance_deploy_pause=1; fi
-postcheck_timer_ready() {
-  local timer="${1:?Timer fehlt}" enabled active
-  enabled="$(systemctl is-enabled "$timer" 2>/dev/null)" || return 1
-  active="$(systemctl is-active "$timer" 2>/dev/null)" || [[ "$active" == inactive ]] || return 1
-  [[ "$enabled" == enabled && ( "$active" == active || ( "$maintenance_deploy_pause" == 1 && "$active" == inactive ) ) ]]
-}
-
 for unit in "$service" "$caddy_service" "$monitor_timer"; do
   if [[ "$unit" == "$monitor_timer" ]]; then
-    if gp_systemd_unit_exists "$unit" && postcheck_timer_ready "$unit"; then
-      check_ok "Dienst $unit" "aktiviert; eine belegte Deploypause ist beruecksichtigt"
+    if monitor_expected="$(gp_maintenance_timer_expected "$maintenance_schedule_state" "$unit")" \
+      && gp_systemd_unit_exists "$unit" \
+      && gp_maintenance_timer_matches "$unit" "$monitor_expected" "$maintenance_deploy_pause"; then
+      check_ok "Dienst $unit" "entspricht dem gespeicherten Zeitplan; eine belegte Deploypause ist beruecksichtigt"
     else
-      check_fail "Dienst $unit" "nicht aktiviert, unerwartet pausiert oder nicht installiert"
+      check_fail "Dienst $unit" "weicht vom gespeicherten Zeitplan ab oder ist nicht installiert"
     fi
   elif gp_systemd_unit_exists "$unit" && systemctl is-active --quiet "$unit"; then
     check_ok "Dienst $unit" "aktiv"
@@ -354,7 +350,11 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$monitor_mode" -eq 1 ]]
     offsite_timers+=(grabenplaner-offsite-upload.timer)
   fi
   for offsite_timer in "${offsite_timers[@]}"; do
-    if ! postcheck_timer_ready "$offsite_timer"; then
+    offsite_expected=1
+    if [[ "$offsite_timer" != grabenplaner-offsite-upload.timer ]]; then
+      offsite_expected="$(gp_maintenance_timer_expected "$maintenance_schedule_state" "$offsite_timer")" || offsite_timer_ok=0
+    fi
+    if ! gp_maintenance_timer_matches "$offsite_timer" "$offsite_expected" "$maintenance_deploy_pause"; then
       offsite_timer_ok=0
     fi
   done

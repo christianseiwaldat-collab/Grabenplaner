@@ -33,6 +33,7 @@ const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/lib/application-smoke.js",
   "server-tools/linux/offsite/lib/assurance-history.js",
   "server-tools/linux/offsite/lib/assurance-control-broker.js",
+  "server-tools/linux/offsite/lib/maintenance-schedule-broker.js",
   "server-tools/linux/offsite/lib/offsite-target-broker.js",
   "server-tools/linux/offsite/lib/offsite-rclone-policy.js",
   "server-tools/linux/offsite/lib/offsite-restore-verify.js",
@@ -300,7 +301,7 @@ function readOffsiteModuleContract() {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der optionale Offsite-Modulvertrag fehlt oder ist unzulaessig.");
   const contract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, ""));
   if (contract?.format !== "grabenplaner-linux-offsite-module-contract" || contract?.schemaVersion !== 1
-    || !(runtimeOnly ? [6, 7, 8, 9, 10] : [10]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
+    || !(runtimeOnly ? [6, 7, 8, 9, 10, 11] : [11]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
     || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expectedOffsiteArtifacts.length
     || expectedOffsiteArtifacts.some((relative) => !contract.managedArtifacts.includes(relative))) {
     throw new Error("Der optionale Offsite-Modulvertrag wird nicht unterstuetzt.");

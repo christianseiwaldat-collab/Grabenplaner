@@ -39,7 +39,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.61 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.63 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -616,7 +616,7 @@
 
         <section id="timeTrackingView" class="view">
           <header class="topbar">
-            <div><span class="eyebrow">Arbeitszeit</span><h1>Live-Anwesenheit</h1><p class="subtitle">Aktueller Status sowie erste Soll-/Ist-Auswertung je Teammitglied.</p></div>
+            <div><span class="eyebrow">Arbeitszeit</span><h1>Zeiterfassung</h1><p class="subtitle">xoffi-Arbeitszeiten je Kalenderwoche mit dem GP-Dienstplan vergleichen.</p></div>
             <div class="topbar-actions time-presence-controls">
               <label class="week-jump"><span>Filiale</span><select id="timeTrackingLocation"></select></label>
               <label class="week-jump"><span>Abteilung</span><select id="timeTrackingDepartment"><option value="">Gesamte Filiale</option></select></label>
@@ -624,6 +624,20 @@
               <div class="page-theme-switch" role="group" aria-label="Darstellung der Zeiterfassung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
             </div>
           </header>
+          <section class="vacation-panel xoffi-comparison-panel">
+            <div class="vacation-panel-heading"><div><h2>xoffi · Plan und Ist</h2><p>Arbeitszeit nach Pausen, ohne Zuschläge. Vergleich mit dem aktuellen Dienstplan der gewählten KW.</p></div>
+              <div class="time-summary-controls"><button type="button" class="secondary-button" id="xoffiComparisonPrevious" aria-label="Vorherige Kalenderwoche">←</button><label class="field"><span>Kalenderwoche · Datum auswählen</span><input id="xoffiComparisonDate" type="date" /></label><button type="button" class="secondary-button" id="xoffiComparisonNext" aria-label="Nächste Kalenderwoche">→</button><button type="button" class="secondary-button" id="xoffiComparisonLoad">Anzeigen</button></div>
+            </div>
+            <p id="xoffiComparisonStatus" role="status" aria-live="polite"></p>
+            <details class="xoffi-comparison-settings"><summary>Ampelgrenzen für diesen Bereich</summary><form id="xoffiComparisonSettingsForm" class="time-summary-controls">
+              <label class="field"><span>Grün bis einschließlich (%)</span><input id="xoffiComparisonGreen" type="number" min="0" max="999" step="0.1" value="5" required /></label>
+              <label class="field"><span>Gelb bis einschließlich (%)</span><input id="xoffiComparisonYellow" type="number" min="0.1" max="1000" step="0.1" value="15" required /></label>
+              <button type="submit" class="secondary-button" id="xoffiComparisonSave">Grenzen speichern</button>
+              <p class="settings-note">Darüber rot. Bewertet wird der Betrag der Abweichung; +/− zeigt Mehr- oder Minderstunden. Die Grenzen gelten für die gewählte Filiale und Abteilung. Ohne Planstunden wird keine Prozentzahl berechnet.</p>
+            </form></details>
+            <div id="xoffiComparisonList" class="xoffi-comparison-list"><p class="settings-note">Kalenderwoche auswählen.</p></div>
+          </section>
+          <details id="timeLegacyPanel" class="vacation-panel"><summary>GP-Zeitbuchungen und Tagesprüfung</summary>
           <section class="time-presence-summary" id="timePresenceSummary"></section>
           <section class="vacation-panel time-presence-panel">
             <div class="vacation-panel-heading"><div><h2>Teamstatus heute</h2><p id="timePresenceUpdated">Noch nicht aktualisiert.</p></div></div>
@@ -652,6 +666,7 @@
             <div class="vacation-panel-heading"><div><h2>Zeitkorrekturen</h2><p>Anträge prüfen, bei Bedarf anpassen und nachvollziehbar entscheiden.</p></div><span class="status-badge inactive" id="timeCorrectionCount">0 offen</span></div>
             <div class="time-correction-list" id="timeCorrectionRequestList"><p class="settings-note">Korrekturanträge werden geladen.</p></div>
           </section>
+          </details>
         </section>
 
         <section id="vacationsView" class="view">
@@ -2773,6 +2788,21 @@
               <div class="card-heading"><div class="card-icon">Server</div><div><h2>Serverzustand &amp; Wiederherstellbarkeit</h2><p>Zeigt Live- und Betriebsbereitschaft, lokale Sicherungen, verschlüsselte Offsite-Kopien sowie automatische Prüf- und Wiederherstellungsnachweise.</p></div></div>
               <div class="server-diagnostics" id="serverDiagnostics"><p class="settings-note">Diagnosedaten werden geladen.</p></div>
               <div class="backup-actions"><button type="button" class="secondary-button" id="refreshServerDiagnosticsButton">Diagnose aktualisieren</button></div>
+            </div>
+            <div class="settings-card full-settings-card maintenance-schedule-card hidden" id="maintenanceScheduleCard">
+              <div class="card-heading"><div class="card-icon">Zeit</div><div><h2>Wartungs- &amp; Backupzeiten</h2><p>Automatische Sicherungen und Wartungen nach Wochentag, Rhythmus und Uhrzeit festlegen.</p></div></div>
+              <p class="settings-note security-note">Aktive Läufe werden niemals abgebrochen. Vor einem Release pausiert der Server diese Zeitgeber automatisch und setzt ihren vorherigen Zustand anschließend wieder fort.</p>
+              <p class="settings-note">Die Matrix zeigt die wirksamen Serverzeitpläne. Uhrzeiten gelten in der Serverzeitzone; vorhandene Verzögerungen bleiben erhalten. Nur geänderte Zeilen werden gespeichert, ohne verpasste Termine sofort nachzuholen.</p>
+              <div class="maintenance-schedule-status" id="maintenanceScheduleStatus" role="status" aria-live="polite">Zeitpläne werden beim Öffnen geladen.</div>
+              <form id="maintenanceScheduleForm">
+                <div class="maintenance-schedule-table-wrap">
+                  <table class="maintenance-schedule-table">
+                    <thead><tr><th>Vorgang</th><th>Rhythmus</th><th>Mo</th><th>Di</th><th>Mi</th><th>Do</th><th>Fr</th><th>Sa</th><th>So</th><th>Zeitpunkt</th><th>Aktiv</th><th>Nächster Lauf</th></tr></thead>
+                    <tbody id="maintenanceScheduleRows"><tr><td colspan="12">Zeitpläne werden geladen …</td></tr></tbody>
+                  </table>
+                </div>
+                <div class="backup-actions"><button type="button" class="secondary-button" id="reloadMaintenanceSchedulesButton">Neu laden</button><button type="submit" class="primary-button" id="saveMaintenanceSchedulesButton">Zeitpläne speichern</button></div>
+              </form>
             </div>
             <div class="settings-card full-settings-card hidden" id="databaseBackupSettingsCard">
               <div class="card-heading"><div class="card-icon">DB</div><div><h2>Datenbank &amp; Backups</h2><p>Interne Sicherungen, ein geprüfter Datenbankexport und die externe Wiederherstellbarkeit werden passend zur Betriebsart bereitgestellt.</p></div></div>

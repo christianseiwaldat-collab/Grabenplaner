@@ -7,6 +7,9 @@ After=network-online.target grabenplaner.service
 [Service]
 Type=oneshot
 ExecStart=/opt/grabenplaner-offsite/module/grabenplaner-offsite-assurance.sh --trigger %i
+# Publish fresh independent health evidence after the successful run released its lock.
+# A monitor scheduling failure must not rewrite the signed assurance result.
+ExecStartPost=-/usr/bin/systemctl --no-block start grabenplaner-monitor.service
 LoadCredential=repository:/etc/grabenplaner/offsite/repository
 LoadCredential=repository-id:/etc/grabenplaner/offsite/repository-id
 LoadCredential=installation-id:/etc/grabenplaner/offsite/installation-id

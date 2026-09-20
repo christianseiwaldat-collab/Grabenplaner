@@ -14,6 +14,9 @@ function section(begin, end) {
 }
 const checks = section("maintenance_deploy_pause=0", "monitor_status_gid=");
 const offsite = section("  offsite_timer_ok=1", "  # A recovery fix");
+const common = fs.readFileSync(path.join(__dirname, "../server-tools/linux/lib/common.sh"), "utf8").replace(/\r\n/g, "\n");
+const timerHelpers = common.slice(common.indexOf("gp_maintenance_timer_expected()"), common.indexOf("gp_configure_nightly_backups()"));
+assert.ok(timerHelpers.includes("gp_maintenance_timer_matches()"), "actual saved-schedule timer helpers exist");
 const cases = [
   { name: "controlled deploy accepts enabled paused monitor and offsite timers", deploy: 1, lease: "held", active: "inactive", expected: true },
   { name: "monitor rejects unexpectedly paused timers", deploy: 0, lease: "held", active: "inactive", expected: false },
@@ -25,6 +28,9 @@ const cases = [
   { name: "disabled active timers still fail during controlled deploy", deploy: 1, lease: "held", enabled: "disabled", active: "active", expected: false },
   { name: "failed timers cannot masquerade as a controlled pause", deploy: 1, lease: "held", active: "failed", expected: false },
   { name: "ordinary checks accept healthy enabled active timers", deploy: 0, lease: "none", active: "active", expected: true },
+  { name: "saved disabled timers remain valid outside deployment", deploy: 0, lease: "none", enabled: "disabled", active: "inactive", savedState: "disabled", expected: true },
+  { name: "saved disabled timers reject unexpected activation", deploy: 1, lease: "held", active: "active", savedState: "disabled", expected: false },
+  { name: "invalid saved schedule fails closed during deployment", deploy: 1, lease: "held", active: "inactive", savedState: "invalid", expected: false },
   { name: "controlled pause also covers required legacy upload timer", deploy: 1, lease: "held", active: "inactive", schedule: "legacy", expected: true },
   { name: "single schedule still rejects an enabled upload timer", deploy: 1, lease: "held", active: "inactive", uploadEnabled: true, expected: false, monitorExpected: true },
 ];
@@ -43,6 +49,8 @@ caddy_service=caddy.service
 monitor_timer=grabenplaner-monitor.timer
 app_dir=/fixture/app
 node=/fixture/node
+maintenance_schedule_state='${scenario.savedState === "disabled" ? ["grabenplaner-monitor.timer", "grabenplaner-offsite-assurance.timer", "grabenplaner-offsite-check.timer", "grabenplaner-offsite-restore-test.timer"].map(unit => unit + "=0").join("\n") : scenario.savedState || "none"}'
+${timerHelpers}
 readlink() {
   [[ "$1" == -f && "$2" == -- && "$3" =~ ^/proc/[0-9]+/fd/9$ ]] || return 92
   printf '%s\\n' '${scenario.lease === "none" ? "" : scenario.lease === "wrong-path" ? "/other/maintenance.lock" : "/run/grabenplaner/maintenance.lock"}'

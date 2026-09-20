@@ -37,6 +37,13 @@ function fixture(t) {
     path.join(installed, "server-tools/linux/lib/postgresql-operations.js"));
   fs.copyFileSync(path.join(sourceRoot, "test-support/postgresql-backup-repair/paired-restore-before.txt"),
     path.join(installed, "lib/persistence/postgresql/operations/paired-restore.js"));
+  // This bridge only admits the historical scanner repair, never the current
+  // telemetry/parallel-restore release. Preserve its reviewed after-bytes too.
+  for (const [name, relative] of [["runtime-after.txt", "runtime.js"],
+    ["paired-restore-after.txt", "paired-restore.js"]]) {
+    fs.copyFileSync(path.join(sourceRoot, "test-support/postgresql-backup-repair", name),
+      path.join(candidate, "lib/persistence/postgresql/operations", relative));
+  }
   const metadata = JSON.parse(fs.readFileSync(path.join(installed, "package.json"), "utf8"));
   metadata.version = "0.92.58-beta";
   fs.writeFileSync(path.join(installed, "package.json"), JSON.stringify(metadata));
@@ -48,6 +55,15 @@ test("reviewed scanner repair retains the old configuration and paired-bundle co
   assert.deepEqual(verifyBackupRepairCompatibility(f.installed, f.candidate), {
     verified: true, configurationUnchanged: true, pairedFormatUnchanged: true, excludedVolatilePath: "private/amu/tmp",
   });
+});
+
+test("the historical bridge rejects the current telemetry and parallel-restore release", (t) => {
+  const f = fixture(t);
+  for (const name of ["runtime.js", "paired-restore.js"]) {
+    const relative = "lib/persistence/postgresql/operations/" + name;
+    fs.copyFileSync(path.join(sourceRoot, relative), path.join(f.candidate, relative));
+  }
+  assert.throws(() => verifyBackupRepairCompatibility(f.installed, f.candidate), /PG_BACKUP_REPAIR_UNREVIEWED/);
 });
 
 for (const scenario of ["runtime", "format", "retention", "native-tools", "restore-verification", "configuration-binding", "new-library", "dependency"]) {

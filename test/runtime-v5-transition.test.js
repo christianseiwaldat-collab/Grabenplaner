@@ -84,11 +84,11 @@ test("runtime-v5 uses a complete verified candidate for fresh backups and binds 
   assert.match(updater, /trap 'exit 143' TERM/);
   assert.doesNotMatch(migration, /\bsystemctl\s+(reboot|poweroff)|\bshutdown\s+-r/);
 });
-test("runtime-v5 and offsite-v10 are the current package contracts", () => {
+test("runtime-v5 and offsite-v11 are the current package contracts", () => {
   const result = spawnSync(process.execPath, [path.join(root, "server-tools/linux/lib/verify-package.js"), "--runtime-contract", root], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).deploymentSchemaVersion, 5);
-  assert.equal(JSON.parse(read("server-tools/linux/offsite/module-schema.json")).moduleVersion, 10);
+  assert.equal(JSON.parse(read("server-tools/linux/offsite/module-schema.json")).moduleVersion, 11);
 });
 
 test("the historical runtime migration never authorizes module 8", t => {

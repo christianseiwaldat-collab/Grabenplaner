@@ -1,5 +1,22 @@
 # Grabenplaner Versions-Log
 
+## v0.92.63 Beta – vorbereitet, noch nicht ausgerollt
+
+- PostgreSQL-Größe und Referenzintegrität im System-Center, tägliche Nachweisfristen und verständliche Beheben-Verweise.
+- Begrenzter paralleler Restore im isolierten Prüfcluster und Phasenmessung bei Sicherungen.
+- Vorbereitete Host-Neustartkorrekturen; kein Neustart durch diese Releasevorbereitung.
+- xoffi-Import ab dem letzten geplanten Dienstende der Woche und KW-/Tagesvergleich zum GP-Plan mit einstellbarer 5-/15-Prozent-Ampel.
+- Auslieferung setzt zuerst die dokumentierte Offsite-Modulwartung und deren vollständigen Nachweis voraus; siehe [Releasevorbereitung](docs/DEPLOY-RELEASE-v09263.md).
+
+## v0.92.62 Beta – vorbereitet, noch nicht ausgerollt
+
+- Einstellungen → System & Backup ergänzt eine direkt bearbeitbare Matrix für Systemprüfung, vollständige Sicherung, Repository-Prüfung, Wiederherstellungstest und die eingerichtete Sicherheitsprüfung.
+- Die Matrix liest die wirksamen Serverzeitpläne und zeigt Wochentage, Rhythmus, Uhrzeit, Aktivzustand und nächsten Lauf. Nicht vollständig darstellbare Zeitpläne bleiben mit verständlicher Erklärung unverändert.
+- Nur geänderte Zeilen werden angewendet. Vorhandene Verzögerungen, Zeitgenauigkeit und Persistenz bleiben erhalten; Speichern löst keine sofortige Nachholung verpasster Termine aus. Laufende Wartungen und zwischenzeitlich geänderte Zeitpläne verhindern eine Übernahme.
+- Gespeicherte Einstellungen einschließlich deaktivierter Vorgänge bleiben bei App- und Modulupdates erhalten. Die Betriebsprüfung berücksichtigt bewusst deaktivierte Zeitgeber; mehrzeilige Änderungen benötigen nur eine systemd-Neuladung und vertragen die gemessenen längeren Neuladezeiten unter Last.
+- Isolierte Wiederherstellungstests hinterlassen sichere Fortschrittsmeldungen und fest begrenzte Fehlercodes im Journal.
+- Offsite-Modul 11 ergänzt die geschützte Zeitplansteuerung für Administration, IT-Administration und Developer mit dem Recht backup:write. Die Reparaturen aus v0.92.61 bleiben enthalten; dieser Stand bestätigt noch keine produktive Bereitstellung.
+
 ## v0.92.61 Beta – vorbereitet, noch nicht ausgerollt
 
 - Dienstplanraster und Stundenkarten stehen vor aufwendigen Hintergrundprüfungen bereit. Der Programmstart lädt kleinere fachliche Datenmengen.

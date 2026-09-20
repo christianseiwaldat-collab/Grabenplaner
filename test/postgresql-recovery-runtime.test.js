@@ -4,7 +4,7 @@ const {recoveryUnitProperties}=require('../server-tools/linux/recovery/lib/postg
 test('native restoration and full application smoke use observed progress without an elapsed runtime cap or relaxed isolation',()=>{
   const root='/var/lib/grabenplaner-offsite/postgresql-recovery/099b476b-e49d-4937-908c-8ce7eab2c95f';
   const properties=recoveryUnitProperties(root);
-  for(const property of ['RuntimeMaxSec=infinity','CPUAccounting=yes','IOAccounting=yes','TimeoutStopSec=30s','SendSIGKILL=yes','CPUQuota=100%','MemoryMax=1536M','KillMode=control-group','PrivateNetwork=yes','ProtectSystem=strict','ReadWritePaths='+root])assert.ok(properties.includes(property),property);
+  for(const property of ['RuntimeMaxSec=infinity','CPUAccounting=yes','IOAccounting=yes','TimeoutStopSec=30s','SendSIGKILL=yes','CPUQuota=200%','MemoryMax=3G','KillMode=control-group','PrivateNetwork=yes','ProtectSystem=strict','ReadWritePaths='+root])assert.ok(properties.includes(property),property);
   assert.throws(()=>recoveryUnitProperties('/var/lib/grabenplaner'),/PG_RECOVERY_UNIT_ROOT/);
 });
 test('restored application copy applies the bound Xoffi upgrade through the isolated connector',async t=>{
