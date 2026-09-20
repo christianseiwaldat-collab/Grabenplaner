@@ -49,6 +49,23 @@ Der GP694-Befund ist daher ein konkreter, zum Nachtfehler passender Reparaturkan
 
 ## Fortsetzung
 
+### Nachtrag: tatsächlich installierte Zeitlimits
+
+Auf Nachfrage wurden die installierten Dateien erneut direkt gelesen. Die Initialisierung über `initializeApplicationPersistence()` hat im Recovery-App-Test keinen eigenen festen Minuten-Countdown. Der übergeordnete Aktivitätswächter meldet `PG_RECOVERY_STALLED` nach zehn Minuten ohne hinreichende CPU-/I/O-Aktivität oder Phasenfortschritt. Die private Recovery-Unit hat `RuntimeMaxSec=infinity`; die Assurance-Unit hat ebenfalls keine feste Laufzeitgrenze und einen systemd-Startzeitrahmen von 40 Stunden. Diese äußeren Grenzen haben den protokollierten `PERSISTENCE_TIMEOUT` nicht erzeugt.
+
+Die tatsächlich wirksamen Core-/Sales-Einstellungen sind:
+
+| Grenze | Wert | Bedeutung |
+| --- | --- | --- |
+| Verbindungserwerb | 5 Sekunden | Pool-/Verbindungsaufbau; im installierten Provider umfasst die vorgelagerte Poolfunktion auch die Schemaqualifizierung. |
+| PostgreSQL-Statement | 10 Sekunden | Je einzelne SQL-Anweisung. |
+| Treiber-Abfrage | 12 Sekunden | Je einzelne Abfrage im Node-Treiber. |
+| Leerlauf einer offenen Transaktion | 30 Sekunden | `idle_in_transaction_session_timeout`; ausdrücklich keine maximale Gesamtdauer einer aktiv arbeitenden Transaktion und kein Limit für den gesamten App-Start. |
+
+Die allgemeinen Policy-Standardwerte 30/32/60 Sekunden werden für Core/Sales ausdrücklich durch 10/12/30 Sekunden überschrieben. Die Werte sind im installierten JavaScript festgelegt; für diese Grenzen gibt es im geprüften Konfigurationsweg keinen Umgebungs- oder Einstellungsparameter. Eine Erhöhung über systemd würde diese inneren Grenzen nicht ändern; eine PostgreSQL-Servervorgabe ersetzt insbesondere den JavaScript-Verbindungstimer nicht.
+
+Eine Änderung im installierten Code wäre ein Hotfix und damit trotzdem eine Codeaktualisierung, auch ohne vollständigen Releaseprozess. Für einen isolierten Diagnosekandidaten können die Grenzen getrennt vom produktiven GP variiert werden. Eine solche Variation muss ausdrücklich als Diagnose gelten und darf nicht einen unveränderten produktiven Stand als erfolgreich qualifiziert ausgeben. Bei dieser Auslese wurden keine Limits geändert.
+
 Die vorrangige Untersuchung des Nachtlaufs ist damit abgeschlossen. Die angeforderte spätere automatische Fortsetzung ist als Thread-Automation `gp-fr-here-deploy-fehlerdiagnose-fortsetzen` eingerichtet. Sie soll die frühere Deploydiagnose einmalig fortsetzen, anschließend pausieren und weder einen Deploy noch eine Wiederholungsschleife auslösen.
 
 Für den nächsten notwendigen vollständigen isolierten Test sind der korrigierte Kandidat, die zusätzliche Fehlerdiagnose und ein frischer Preflight zu verwenden. Vorher sicherstellen, dass Datenbank-Zeitüberschreitungen im Test ausreichend unterschieden werden können; eine erneute bloße Sammelmeldung wäre unzureichend. Keine identische Wiederholung des unveränderten 0.92.61-Laufs. Keine weiteren Windows-Tests, keine produktive Installation als Ersatz für einen isolierten Test.
