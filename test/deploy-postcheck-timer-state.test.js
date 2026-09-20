@@ -85,6 +85,12 @@ printf '%s %s %s\\n' "$failures" "$offsite_timer_ok" "$maintenance_deploy_pause"
 `;
     fs.writeFileSync(path.join(root, "run.sh"), script);
     const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: root, encoding: "utf8", timeout: 10000, windowsHide: true });
+    if (scenario.savedState === "invalid") {
+      assert.equal(result.status, 1, "an invalid schedule must abort the postcheck");
+      assert.match(result.stderr, /Aktivierung fehlt/);
+      assert.equal(result.stdout, "", "an invalid schedule must not report readiness");
+      return;
+    }
     assert.equal(result.status, 0, result.stderr);
     const [failures, offsiteReady, pause] = result.stdout.trim().split(" ").map(Number);
     assert.equal(failures, (scenario.monitorExpected ?? scenario.expected) ? 0 : 1);
