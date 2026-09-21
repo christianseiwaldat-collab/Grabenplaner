@@ -177,10 +177,10 @@ test("hardening stays separate from the current core runtime and binds its exact
   // prepares its state directory. GP710 adopted these exact bytes explicitly.
   // Older hosts still require that module maintenance before an app update.
   assert.equal(result.fingerprint, "21f541a85b74ced5e5b6ec84ff2561badcd6635ad1fceb7438cb32350392cd8c");
-  // Offsite v11 additionally queues the monitor after successful assurance.
+  // Offsite v11 queues the monitor and handles a disconnected control reply.
   // Adoption requires the explicit Offsite module update, never a receipt edit.
   assert.equal(result.offsiteModule.moduleVersion, 11);
-  assert.equal(result.offsiteModule.fingerprint, "cec9c21772b003638c74441dc3c5f89aa39085bd7debdfea4e465b6773f753ac");
+  assert.equal(result.offsiteModule.fingerprint, "e82e2abf6876533a12571dd1f2fae3ad5d2217e2953ed57e4dd30fa4aea5bf73");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 
