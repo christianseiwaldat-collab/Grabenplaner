@@ -424,6 +424,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/data-import-mapping-runtime.js",
   "lib/persistence/repositories/sales-history-runtime.js",
   "lib/persistence/sqlite/data-import-runtime-catalog.js",
+  "lib/persistence/sqlite/data-import-delete-catalog.js",
   "lib/persistence/sqlite/operations/data-import-runtime-schema.js",
   "lib/persistence/statements/data-import-runtime.js",
   "lib/persistence/statements/saturday-credit.js",
@@ -2600,6 +2601,7 @@ function architectureBoundaryViolationsForText(file, text) {
   ]);
   const statementDefinitionFiles = new Set([
     "lib/persistence/contract.js",
+    "lib/persistence/sqlite/data-import-delete-catalog.js",
     ...PHASE_3_STATEMENT_FILES,
     "lib/persistence/statements/sales-analytics.js",
     "lib/persistence/postgresql/boundary/catalog.js",
