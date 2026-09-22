@@ -12,6 +12,7 @@ class Element {
   setAttribute(key, value) { this.attributes[key] = value; }
   replaceChildren(...children) { this.children = children; this.innerHTML = ''; }
   add(child) { this.children.push(child); }
+  insertAdjacentHTML(where, html) { this.innerHTML=html+this.innerHTML; }
   close() { this.open = false; this.emit('close'); }
   focus() { this.focused = true; }
 }
@@ -92,4 +93,25 @@ test('Context loading follows the newest requested tab and refuses missing permi
 test('Legacy URLs retain only known tabs and never redirect outside GP', () => {
   for (const tab of tabs) assert.equal(legacyUrl('?tab=' + tab), '/?view=tradeInsights&section=' + tab);
   assert.equal(legacyUrl('?tab=https://elsewhere.example/&view=outside'), '/?view=tradeInsights&section=purchasing');
+});
+
+test('stock summary requires a branch, omits period filters and replaces partial totals on continuation', async t=>{
+ const SavedFormData=globalThis.FormData;
+ globalThis.FormData=class { constructor(form){this.entries=Object.entries(form.elements).map(([k,v])=>[k,v.value]);} [Symbol.iterator](){return this.entries[Symbol.iterator]();} };
+ t.after(()=>{globalThis.FormData=SavedFormData;});
+ const f=fixture(),pending=f.workspace.activate('stock-summary');
+ f.requests[0].resolve({...context,projection:{...context.projection,costs:true}});await tick();
+ f.requests[1].resolve({groups:[],wgr:[]});await pending;
+ const form=f.node('filters');assert.equal(form.elements.locationId.required,true);assert.equal(f.node('[data-period]').hidden,true);
+ form.elements.locationId.value='93';form.elements.dateFrom.value='2026-01-01';
+ form.emit('submit',{preventDefault(){}});await tick();
+ const first=f.requests.at(-1),query=JSON.parse(first.options.body);
+ assert.equal(query.locationId,'93');assert.equal(query.dateFrom,undefined);assert.equal(query.dateTo,undefined);assert.equal(query.days,undefined);
+ const total={positions:1,quantity:'1',provisionalNet:'10',confirmedNet:'0',excluded:0,ambiguous:0,missingArticle:0,missingQuantity:0,negative:0,unclassified:1,missingCost:0,zeroCost:0};
+ first.resolve({available:true,cumulative:true,complete:false,scanned:100,next:'continuation',rows:[],totals:total});await tick();
+ assert.match(f.node('results').innerHTML,/Zwischenstand/);
+ assert.equal(JSON.parse(f.requests.at(-1).options.body).cursor,'continuation');
+ f.requests.at(-1).resolve({available:true,cumulative:true,complete:true,scanned:105,next:null,rows:[],totals:{...total,positions:2,provisionalNet:'20'}});await tick();
+ assert.match(f.node('results').innerHTML,/Alle Quellenpositionen geprüft/);assert.doesNotMatch(f.node('results').innerHTML,/Zwischenstand/);
+ assert.equal(f.node('more').hidden,true);f.workspace.destroy();
 });

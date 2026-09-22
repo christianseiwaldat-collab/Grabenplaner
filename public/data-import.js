@@ -3,7 +3,7 @@
   'use strict';
   const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const labels={dating:'Datenstand wird ermittelt',queued:'Wartet auf Verarbeitung',retrying:'Automatischer Wiederholungsversuch geplant',paused:'Auftrag pausiert',failed:'Auftrag benötigt Aufmerksamkeit',reading:'Datei wird bereitgestellt',interrupted:'Bereitstellung unterbrochen',staging:'Zwischenspeicherung',reviewing:'Prüfung läuft',rechecking:'Prüfung wird vorbereitet',
-    needs_review:'Prüfung erforderlich',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen'};
+    needs_review:'Prüfung erforderlich',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen',deleting:'Endgültige Löschung begonnen'};
   const label=state=>labels[state]||'Prüfung erforderlich';
   const number=value=>Number(value||0).toLocaleString('de-AT');
   const sourceLabel=kind=>({cash:'Kassen-Umsätze',trade:'TradeFoto-Stamm und Historie',bestell:'TradeFoto-Bestellungen, Rechnungen und Reparaturen'})[kind]||'Unbekannte Quelle';
@@ -30,6 +30,7 @@
       ${takingOver?`<p>${number(applied)} / ${number(received)} Zeilen übernommen oder unverändert bestätigt · ${number(tables.filter(t=>t.run?.status==='applied').length)} / ${number(tables.length)} Tabellen abgeschlossen.</p><progress max="${Math.max(received,1)}" value="${applied}" aria-label="Übernommene Quellzeilen"></progress>${source.currentStep&&source.status!=='applied'?`<p>${escape(source.currentStep.table)} · ${escape(label(source.currentStep.phase))}</p>`:''}`:''}
       <p class="data-import-note">${source.uploadFileAvailable?'Die Access-Datei ist für diesen Auftrag vorübergehend gespeichert.':'Keine Access-Datei auf dem Server gespeichert.'} Die Daten und Importprotokolle im GP bleiben erhalten.</p>
       ${source.uploadFileAvailable?`<button type="button" data-i-delete-upload ${!projection.prepare||source.active?'disabled':''}>Access-Datei löschen</button>`:''}
+      ${projection.prepare&&!['applying','applied','reverting','reverted'].includes(source.status)&&!tables.some(t=>['applying','applied','reverting','reverted'].includes(t.run?.status))?`<button type="button" data-i-delete-source ${source.active?'disabled':''}>${source.status==='deleting'?'Endgültige Löschung fortsetzen':'Nicht übernommenen Import endgültig löschen'}</button><p class="data-import-note">Entfernt auch die eingelesenen Importdaten dieser Quelle vom Server. Bereits übernommene oder freigegebene Datenquellen sind geschützt.</p>`:''}
       ${source.storage==='cash-compact-v1'?'<p class="data-import-note">Gesamte Kassenhistorie · alle Zeiträume · alle Filialen in einem Import.</p>':''}
       ${job?`<p role="status">${fileDeleted?'Die Access-Datei ist gelöscht. Zum Fortsetzen dieselbe Datei erneut hochladen; bereits eingelesene GP-Daten bleiben erhalten.':['queued','reading','reviewing','applying','dating'].includes(job.status)?'Der Server arbeitet selbstständig weiter. Sie können den GP schließen.':job.status==='retrying'?`Ein vorübergehender Fehler ist aufgetreten. Wiederholungsversuch ${number(job.retries)} von ${number(job.maxRetries)} ist für ${escape(new Date(job.nextAt).toLocaleString('de-AT'))} geplant; kein erneuter Upload nötig.`:job.status==='paused'?`Die ${jobName} ist pausiert. Sie können sie ohne erneuten Upload fortsetzen.`:'Die automatischen Versuche wurden angehalten. Sie können den Auftrag am gespeicherten Stand erneut versuchen.'}</p>
         ${job.error?`<details><summary>Technischer Hinweis</summary><p>${escape(job.error)}</p></details>`:''}
@@ -50,7 +51,7 @@
       ${tables.flatMap(t=>(t.run?.acceptedDeviations||[]).map(p=>`<aside class="data-import-tolerance"><strong>Bestätigte Quellzähler-Abweichung · ${escape(t.name)}</strong><p>${number(p.expectedRows)} lesbare / ${number(p.declaredRows)} deklarierte Zeilen. Nur für diesen Dateistand akzeptiert.</p><small>Freigabe: ${escape(p.approvalReference)} · ${escape(p.recordedAt)}<br>Prüfnachweis: ${escape(p.evidenceReference)} · ${escape(p.id)}</small></aside>`)).join('')}
       ${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-action="undo" ${!projection.undo||source.active||!['applied','applying','reverting'].includes(source.status)?'disabled':''}>Rücknahme starten / fortsetzen</button>`}
       <div class="data-import-scroll" tabindex="0" role="region" aria-label="Tabellen und Prüfstatus"><table><thead><tr><th scope="col">Quelltabelle</th><th scope="col">Gelesen / deklariert</th><th scope="col">Status / Hinweise</th><th scope="col">Prüfung</th></tr></thead><tbody>
-      ${tables.map(t=>`<tr><td>${escape(t.name)}</td><td>${number(t.run?.receivedRows)} / ${number(t.declaredRows)}</td><td>${escape(label(t.run?.status||'staging'))}${t.run?.counts.invalid?` · ${number(t.run.counts.invalid)} ungültig`:''}${t.run?.counts.conflict?` · ${number(t.run.counts.conflict)} Konflikte`:''}${t.run?.gates?.length?` · ${t.run.gates.map(escape).join(', ')}`:''}</td><td>${t.run?`${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-log="${escape(t.run.id)}">Protokoll</button> `}<button type="button" data-i-rows="${escape(t.run.id)}">Zeilenstatus</button>${projection.undo&&['applied','applying','reverting'].includes(t.run.status)?` <button type="button" data-i-undo-preview="${escape(t.run.id)}">Rücknahme prüfen</button>`:''}`:'–'}</td></tr>`).join('')}
+      ${tables.map(t=>`<tr><td>${escape(t.name)}</td><td>${number(t.run?.receivedRows)} / ${number(t.declaredRows)}</td><td>${escape(label(t.run?.status||'staging'))}${t.run?.counts?.invalid?` · ${number(t.run.counts.invalid)} ungültig`:''}${t.run?.counts?.conflict?` · ${number(t.run.counts.conflict)} Konflikte`:''}${t.run?.gates?.length?` · ${t.run.gates.map(escape).join(', ')}`:''}</td><td>${t.run?`${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-log="${escape(t.run.id)}">Protokoll</button> `}<button type="button" data-i-rows="${escape(t.run.id)}">Zeilenstatus</button>${projection.undo&&['applied','applying','reverting'].includes(t.run.status)?` <button type="button" data-i-undo-preview="${escape(t.run.id)}">Rücknahme prüfen</button>`:''}`:'–'}</td></tr>`).join('')}
       </tbody></table></div><p class="data-import-note">Nicht übernommene technische Tabellen: ${(source.excludedTableNames||[]).map(escape).join(', ')||'Noch nicht ermittelt'}.</p></details>`;
   }
   function mount(root,{api,confirmAction=message=>globalThis.confirm(message)}) {
@@ -70,7 +71,7 @@
       const detail=el('detail');if(!detail)return;
       const sameSource=selected?.id===renderedSourceId,technicalOpen=sameSource&&detail.querySelector('.data-import-technical')?.open;
       const focused=globalThis.document?.activeElement,restoreFocus=sameSource&&focused&&detail.contains(focused);
-      const attributes=['data-i-action','data-i-job','data-i-delete-upload','data-i-publish','data-i-log','data-i-rows','data-i-undo-preview'];
+      const attributes=['data-i-action','data-i-job','data-i-delete-upload','data-i-delete-source','data-i-publish','data-i-log','data-i-rows','data-i-undo-preview'];
       const focusedAttribute=restoreFocus&&attributes.find(name=>focused.hasAttribute(name)),focusedValue=focusedAttribute&&focused.getAttribute(focusedAttribute);
       const focusedSummary=restoreFocus&&focused.matches('.data-import-technical > summary');
       detail.innerHTML=selected?renderSource(selected,context.projection):'';renderedSourceId=selected?.id;
@@ -139,6 +140,21 @@
       try {
         if(target.hasAttribute('data-i-publish')&&selected){publicationView?.destroy();publicationView=globalThis.GrabenplanerCashPublication?.mount(el('publication'),{api,source:selected,confirmAction});return;}
         if(target.hasAttribute('data-i-stop')){working=false;message('Nach dem laufenden Paket angehalten.');return;}
+        if(target.hasAttribute('data-i-delete-source')&&selected){
+          const preview=await post(`/api/data-import/sources/${selected.id}/delete-preview`,{expectedRevision:selected.revision});
+          if(!confirmAction(`${sourceFileName(selected)} endgültig vom VPS löschen? Betroffen sind ${number(preview.rows)} vorbereitete Quellzeilen, Importprotokolle und eine eventuell noch vorhandene Upload-Datei. Die Löschung lässt sich nicht rückgängig machen. Bereits übernommene Daten bleiben geschützt. Bestehende Sicherungen unterliegen weiterhin ihrer Aufbewahrung.`))return;
+          working=true;clearTimeout(timer);el('detail').innerHTML='<p role="status">Importdaten werden endgültig gelöscht …</p><button type="button" data-i-stop>Nach diesem Paket anhalten</button>';
+          try{
+            do{
+              const result=await post(`/api/data-import/sources/${selected.id}/delete`,{expectedRevision:selected.revision});
+              if(disposed||ticket!==generation)return;
+              message(`${number(result.removedRows)} Quellzeilen endgültig gelöscht.`);
+              if(result.deleted){selected=null;working=false;sourcePage={};el('log').replaceChildren();renderSelected();await refresh();message('Nicht übernommene Datenquelle und Importdaten endgültig vom VPS gelöscht.');return;}
+              selected={...selected,revision:result.revision,status:'deleting'};
+            }while(working);
+          }catch(error){if(!disposed&&ticket===generation)await refresh().catch(()=>{});throw error;}finally{working=false;}
+          await refresh();message('Löschung angehalten. Bereits entfernte Daten bleiben gelöscht; die restliche Löschung kann fortgesetzt werden.');return;
+        }
         if(target.hasAttribute('data-i-delete-upload')&&selected) {
           if(!confirmAction('Nur die hochgeladene Access-Datei auf dem Server löschen? Alle GP-Daten, Importstände und Protokolle bleiben erhalten. Ein unterbrochener Import benötigt zum Fortsetzen dieselbe Datei erneut.'))return;
           selected=await post(`/api/data-import/sources/${selected.id}/delete-upload`,{expectedRevision:selected.revision});

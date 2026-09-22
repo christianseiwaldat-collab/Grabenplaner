@@ -58,6 +58,23 @@ test('deleting a paused Access copy removes bytes and password, but never writes
  await f.enqueue();await f.queue.tick();assert.equal(f.sources.get(source.id).status,'ready');
 });
 
+test('permanent source deletion checks eligibility before removing a paused upload and its credentials',async t=>{
+ const f=await fixture(t),source=await f.enqueue();
+ await assert.rejects(f.queue.deleteSource(f.getSession,source.id,{expectedRevision:1}),{code:'IMPORT_SOURCE_BUSY'});
+ await f.queue.action(f.getSession,source.id,'pause');
+ let eligible=false,calls=[];f.runtime.sourceOperation=async(get,id,action)=>{
+  await get();calls.push(action);if(!eligible)throw new C.DataImportError('IMPORT_DELETE_ALREADY_APPLIED',409);
+  if(action==='delete-preview')return {canDelete:true};
+  assert.deepEqual(await fsp.readdir(f.directory),[]);return {deleted:true,id};
+ };
+ await assert.rejects(f.queue.deleteSource(f.getSession,source.id,{expectedRevision:1}),{code:'IMPORT_DELETE_ALREADY_APPLIED'});
+ assert.equal((await fsp.readdir(f.directory)).length,2);
+ eligible=true;assert.equal((await f.queue.deleteSource(f.getSession,source.id,{expectedRevision:1},true)).canDelete,true);
+ assert.equal((await fsp.readdir(f.directory)).length,2);
+ assert.equal((await f.queue.deleteSource(f.getSession,source.id,{expectedRevision:1})).deleted,true);
+ assert.deepEqual(calls,['delete-preview','delete-preview','delete-preview','delete']);
+});
+
 test('content-date backfill survives a restart and never authorizes apply or reuploads a file',async t=>{
  const f=await fixture(t),source=await f.enqueue();await f.queue.tick();
  let dates=0;const original=f.runtime.sourceOperation;
