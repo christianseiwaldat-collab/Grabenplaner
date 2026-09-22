@@ -100,8 +100,8 @@ test("trend selection uses time spacing, exact values, persisted period and keyb
 });
 
 test("APT and backup share an exclusive lock, and needrestart defers jobs but not database services", { skip: process.platform !== "linux" }, () => {
-  const script = path.join(__dirname, "../server-tools/linux/hardening/apt-maintenance-lock.py");
-  execFileSync("python3", ["-c", `
+  const script = path.join(__dirname, "../server-tools/linux/lib/apt-maintenance-lock.py");
+  execFileSync("python3", ["-B", "-c", `
 import importlib.util, sys, tempfile, fcntl, subprocess
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('apt_lock',sys.argv[1]); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)

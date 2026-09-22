@@ -180,7 +180,7 @@ test("hardening stays separate from the current core runtime and binds its exact
   // Offsite v11 queues the monitor and handles a disconnected control reply.
   // Adoption requires the explicit Offsite module update, never a receipt edit.
   assert.equal(result.offsiteModule.moduleVersion, 11);
-  assert.equal(result.offsiteModule.fingerprint, "e82e2abf6876533a12571dd1f2fae3ad5d2217e2953ed57e4dd30fa4aea5bf73");
+  assert.equal(result.offsiteModule.fingerprint, "5b5579a709c4847746a7a78d67df669a8d47736bba0eaef111f093c7e9caacc8");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 
