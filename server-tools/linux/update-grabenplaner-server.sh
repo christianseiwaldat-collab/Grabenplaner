@@ -1121,6 +1121,7 @@ if (( ${xoffi_snapshots_migration:-0} == 1 )); then
   "$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$schema_migration_result" \
     || gp_die "Der Xoffi-Migrationsnachweis ist unvollstaendig."
 fi
+if [[ "$database_provider" == postgresql ]]; then
 begin_deploy_phase import-deletion-schema-migration
 installed_manifest_sha256="$(gp_sha256 "$app_dir/grabenplaner-server-manifest.json")"
 "$node" "$app_dir/server-tools/linux/lib/import-delete-migrate.js" \
@@ -1128,6 +1129,7 @@ installed_manifest_sha256="$(gp_sha256 "$app_dir/grabenplaner-server-manifest.js
   || gp_die "Die Erweiterung zum Loeschen nicht uebernommener Importe ist fehlgeschlagen; die neue App wird nicht gestartet."
 "$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.coreUnchanged!==true)process.exit(1)' "$schema_migration_result" \
   || gp_die "Der Import-Loeschnachweis ist unvollstaendig."
+fi
 begin_deploy_phase application-start
 gp_start_service "$service"
 gp_configure_nightly_backups "$app_dir" "$node" || gp_die "Der gemeinsame naechtliche Sicherungsablauf konnte nicht aktiviert werden."

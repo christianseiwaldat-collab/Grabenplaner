@@ -38,7 +38,7 @@ test("an asynchronous snapshot connection failure cannot crash or seal a backup"
   const root = directory(t), clients = [];
   const domains = ["core", "sales"].map(domain => {
     const c = new EventEmitter(); clients.push(c); c.release = error => { c.released = true; c.releaseError = error; };
-    c.query = async sql => ({ rows: sql.includes("current_database") ? [{ name: domain }]
+    c.query = async sql => ({ rows: sql.includes("pg_database_size") ? [{ bytes: "1048576" }] : sql.includes("current_database") ? [{ name: domain }]
       : sql.includes("pg_tables") ? [{ schemaname: "gp", tablename: "synthetic" }]
         : sql.includes("pg_export_snapshot") ? [{ id: "AB-12" }] : [] });
     return { domain, database: domain, ownerRole: "gp_owner", pool: { connect: async () => c } };

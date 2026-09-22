@@ -34,6 +34,7 @@ test('paired backup returns phase timings outside the unchanged signed checkpoin
  let released=0,commits=0;
  const domains=['core','sales'].map(domain=>({domain,database:'test_'+domain,ownerRole:'test_owner',pool:{async connect(){return {
   async query(sql){
+   if(sql.includes('pg_database_size'))return {rows:[{bytes:'1048576'}]};
    if(sql.includes('current_database()'))return {rows:[{name:'test_'+domain}]};
    if(sql.includes('FROM pg_tables'))return {rows:[{schemaname:'gp',tablename:'example'}]};
    if(sql.includes('pg_export_snapshot'))return {rows:[{id:'123-A'}]};
@@ -51,5 +52,6 @@ test('paired backup returns phase timings outside the unchanged signed checkpoin
  assert.ok(result.phaseTimings.some(e=>e.phase==='hash-and-seal'&&e.succeeded));
  const verified=await verifyPairBundle(result.bundle,result.commitMarker);
  assert.deepEqual(verified.manifest.checkpoint.domains,{core:{fixture:'core'},sales:{fixture:'sales'}});
+ assert.deepEqual(verified.manifest.checkpoint.databaseBytes,{core:1048576,sales:1048576});
  assert.equal(Object.hasOwn(verified.manifest,'phaseTimings'),false);
 });
