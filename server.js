@@ -23720,6 +23720,7 @@ async function serverDiagnostics() {
       foreignKeys: persistenceConfiguration.providerId === "postgresql"
         ? postgresqlHealth?.foreignKeys ?? null : Boolean(databasePragmaValue("foreign_keys")),
       bytes: postgresqlHealth?.databaseBytes ?? null,
+      databases: postgresqlHealth?.databases ?? null,
       migration,
     },
     instanceLock: { enabled: Boolean(instanceLockPath), held: instanceLockHeld },
@@ -38629,6 +38630,10 @@ async function systemCenterUpdateStatus() {
   }
 }
 
+const databaseSizeHistory = require("./lib/database-size-history").createDatabaseSizeHistory(
+  path.join(dataDirectory, "system-center-database-sizes.json"),
+);
+
 function systemCenterResourceSummary(diagnostics) {
   let databaseBytes = null;
   if (diagnostics.database?.providerId === "postgresql") {
@@ -38647,6 +38652,7 @@ function systemCenterResourceSummary(diagnostics) {
       freeBytes: Number.isFinite(diagnostics.storage?.data?.freeBytes)
         ? diagnostics.storage.data.freeBytes : null,
       databaseBytes: Number.isFinite(databaseBytes) ? databaseBytes : null,
+      databases: diagnostics.database?.databases ?? null,
     },
   };
 }
@@ -38690,6 +38696,10 @@ const systemCenterTechnicalCache = createSystemCenterTechnicalCache({
     diagnostics.recoveryAssurance.scheduler = control.scheduler;
     const automation = deriveAutomationStatus(diagnostics.recoveryAssurance, { now: new Date() });
     const resources = systemCenterResourceSummary(diagnostics);
+    let databaseHistoryWriteFailed = false;
+    try { databaseSizeHistory.record(resources.storage.databases); }
+    catch { databaseHistoryWriteFailed = true; }
+    resources.databaseHistory = { ...databaseSizeHistory.read(), writeFailed: databaseHistoryWriteFailed };
     const trustIndex = buildSystemTrustIndex({
       diagnostics,
       status,
@@ -38947,7 +38957,9 @@ async function systemCenterPayload(actor) {
     recoveryAssurance: {
       ...status.recoveryAssurance,
       recentRuns: Array.isArray(status.recoveryAssurance?.recentRuns)
-        ? status.recoveryAssurance.recentRuns : [],
+        ? status.recoveryAssurance.recentRuns.map(run => ({ ...run,
+          reportAvailable: technicalDiagnostics && diagnostics.recoveryAssurance?.integrityVerified === true,
+        })) : [],
     },
     resources: technicalDiagnostics ? technical.resources : null,
     automation: technical.automation,
@@ -38986,6 +38998,24 @@ async function systemCenterPayload(actor) {
 app.get("/api/portal/v1/system-center", async (request, response) => {
   const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
   response.json(await systemCenterPayload(actor));
+});
+
+app.get("/api/portal/v1/system-center/recovery-assurance/reports/:filename", (request, response) => {
+  requirePortalAnyPermission(request, ["system:diagnostics:technical"]);
+  const match = /^([a-f0-9]{64})\.(pdf|md)$/.exec(request.params.filename);
+  if (!match) throw httpError(400, "Ungültiger Prüfbericht.", "ASSURANCE_REPORT_INVALID");
+  const history = readRecoveryAssuranceStatus({ configured: serverModeActive, reportId: match[1] });
+  if (!history.statusAvailable || !history.integrityVerified) {
+    throw httpError(503, "Die Signaturkette ist derzeit nicht verifizierbar.", "ASSURANCE_REPORT_UNVERIFIED");
+  }
+  const run = history.recentRuns.find(item => item.reportId === match[1]);
+  if (!run) throw httpError(404, "Dieser Prüflauf ist nicht vorhanden.", "ASSURANCE_REPORT_NOT_FOUND");
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("Content-Disposition", contentDispositionHeader(`Recovery-Assurance-${run.runIdPrefix}.${match[2]}`));
+  const report = require("./lib/recovery-assurance-report");
+  if (match[2] === "md") return response.type("text/markdown; charset=utf-8").send(report.markdownReport(run, history.checkedAt));
+  response.type("application/pdf");
+  report.pdfReport(run, history.checkedAt, response).on("error", error => response.destroy(error));
 });
 
 app.post("/api/portal/v1/system-center/recovery-assurance/run", async (request, response) => {

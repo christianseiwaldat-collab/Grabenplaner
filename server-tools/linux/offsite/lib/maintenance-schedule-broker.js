@@ -42,7 +42,7 @@ const TASKS = Object.freeze([
       "grabenplaner-offsite-assurance@offsite-config-changed.service",
       "grabenplaner-offsite-assurance@offsite-module-changed.service",
     ]),
-    cadences: Object.freeze(["weekly"]),
+    cadences: Object.freeze(["weekly", "hours"]),
     defaults: Object.freeze({ enabled: true, cadence: "weekly", weekdays: WEEKDAYS, time: "03:45", intervalMinutes: null, monthDay: null }),
   }),
   Object.freeze({
@@ -114,6 +114,9 @@ function normalizeSchedule(value, task, { allowUnsupported = false } = {}) {
     if (orderedDays.length || time !== null || !INTERVALS.has(intervalMinutes) || monthDay !== null) {
       fail("MAINTENANCE_SCHEDULE_INVALID");
     }
+  } else if (value.cadence === "hours") {
+    if (task.id !== "complete-backup" || orderedDays.length || monthDay !== null
+      || ![360, 720].includes(intervalMinutes) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) fail("MAINTENANCE_SCHEDULE_INVALID");
   } else {
     if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time) || intervalMinutes !== null) {
       fail("MAINTENANCE_SCHEDULE_INVALID");
@@ -140,6 +143,12 @@ function defaultSchedules() {
   return TASKS.map((task) => normalizeSchedule({ id: task.id, ...task.defaults }, task));
 }
 function calendarExpression(schedule) {
+  if (schedule.cadence === "hours") {
+    const [hour, minute] = schedule.time.split(":").map(Number);
+    const step = schedule.intervalMinutes / 60;
+    const hours = Array.from({ length: 24 / step }, (_, i) => (hour + i * step) % 24).sort((a, b) => a - b);
+    return `*-*-* ${hours.map(h => String(h).padStart(2, "0")).join(",")}:${String(minute).padStart(2, "0")}:00`;
+  }
   if (schedule.cadence === "interval") return `*:0/${schedule.intervalMinutes}`;
   if (schedule.cadence === "weekly") {
     return `${schedule.weekdays.map((day) => SYSTEMD_WEEKDAYS[day]).join(",")} *-*-* ${schedule.time}:00`;
@@ -230,6 +239,14 @@ function timerProperties(task, options = {}) {
 }
 function scheduleFromCalendar(expression, task, enabled) {
   const base = { id: task.id, enabled, weekdays: [], time: null, intervalMinutes: null, monthDay: null };
+  const hourly = /^\*-\*-\* ([\d,]+):([0-5]\d):00$/.exec(expression);
+  if (hourly && hourly[1].includes(",") && task.id === "complete-backup") {
+    const hours = hourly[1].split(",").map(Number);
+    const step = 24 / hours.length;
+    if (![6, 12].includes(step) || hours.some((h, i) => h < 0 || h > 23 || (i > 0 && h - hours[i - 1] !== step))
+      || hours[0] + 24 - hours.at(-1) !== step) return null;
+    return normalizeSchedule({ ...base, cadence: "hours", time: `${String(hours[0]).padStart(2, "0")}:${hourly[2]}`, intervalMinutes: step * 60 }, task);
+  }
   const interval = /^(?:\*-\*-\* )?\*:(?:0?0\/([0-9]+)|00):00$/.exec(expression);
   if (interval) return normalizeSchedule({ ...base, cadence: "interval", intervalMinutes: Number(interval[1] || 60) }, task);
   const match = /^(?:(\S+) )?\*-([*\d,]+)-([*\d]+) ([0-2]\d:[0-5]\d):00$/.exec(expression);

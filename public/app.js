@@ -6504,7 +6504,7 @@ function renderOffsiteBackupDiagnostics(offsite) {
         <span><small>Vollständiger Monatscheck</small><strong>${escapeHtml(diagnosticTimestamp(offsite?.lastFullCheckAt))}${escapeHtml(diagnosticAge(offsite?.agesHours?.fullCheck))}</strong></span>
         <span><small>Isolierter Test-Restore</small><strong>${escapeHtml(diagnosticTimestamp(offsite?.lastRestoreTestAt))}${escapeHtml(diagnosticAge(offsite?.agesHours?.restoreTest))}</strong></span>
         <span><small>Letzter Versuch</small><strong>${escapeHtml(diagnosticTimestamp(offsite?.lastAttemptAt))}${escapeHtml(diagnosticAge(offsite?.agesHours?.attempt))}</strong></span>
-        <span><small>Aufbewahrung</small><strong>${Number(retention.daily || 14)} täglich · ${Number(retention.weekly || 8)} wöchentlich · ${Number(retention.monthly || 12)} monatlich</strong></span>
+        <span><small>Aufbewahrung</small><strong>${Number(retention.daily || 14)} Tagesstände · ${Number(retention.weekly || 8)} Wochenstände · ${Number(retention.monthly || 12)} Monatsstände</strong></span>
       </div>
       ${failure ? `<p class="offsite-diagnostic-error"><strong>Letzter Fehler:</strong> ${escapeHtml(failure)}</p>` : ""}
     </section>`;
@@ -6694,7 +6694,7 @@ const maintenanceScheduleWeekdays = Object.freeze([
 ]);
 const maintenanceScheduleTaskMeta = Object.freeze({
   "server-monitor": Object.freeze({ label: "Systemprüfung", detail: "Erreichbarkeit und Serverzustand", cadences: ["interval", "weekly"], monthDay: null }),
-  "complete-backup": Object.freeze({ label: "Vollständige Sicherung", detail: "Datenbank, Dokumente und Wiederherstellungsprüfung", cadences: ["weekly"], monthDay: null }),
+  "complete-backup": Object.freeze({ label: "Vollständige Sicherung", detail: "Beide Datenbanken, Dokumente, Offsite-Upload und Wiederherstellungsprüfung", cadences: ["weekly", "hours"], monthDay: null }),
   "repository-check": Object.freeze({ label: "Repository-Prüfung", detail: "Vollständige Prüfung des externen Sicherungsbestands", cadences: ["weekly", "monthly"], monthDay: 1 }),
   "restore-test": Object.freeze({ label: "Wiederherstellungstest", detail: "Isolierter Test-Restore", cadences: ["weekly", "monthly", "quarterly"], monthDay: 2 }),
   "security-audit": Object.freeze({ label: "Sicherheitsprüfung", detail: "Ubuntu-, Firewall- und Aktualisierungsprüfung", cadences: ["weekly"], monthDay: null }),
@@ -6710,7 +6710,8 @@ function canManageMaintenanceSchedules() {
 
 function maintenanceScheduleCadenceLabel(value, task) {
   if (value === "interval") return `Alle ${Number(task.intervalMinutes || 5)} Minuten`;
-  if (value === "weekly") return "Gewählte Wochentage";
+  if (value === "hours") return "Mehrmals täglich";
+  if (value === "weekly") return (task.weekdays || []).length === 7 ? "Täglich" : "Gewählte Wochentage";
   if (value === "monthly") return `Monatlich am ${Number(task.monthDay || maintenanceScheduleTaskMeta[task.id]?.monthDay || 1)}.`;
   return `Vierteljährlich am ${Number(task.monthDay || maintenanceScheduleTaskMeta[task.id]?.monthDay || 1)}.`;
 }
@@ -6733,6 +6734,9 @@ function maintenanceScheduleValidationMessage(tasks = []) {
     if (task.cadence !== "interval" && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(task.time || ""))) {
       return `Für „${label}“ muss eine gültige Uhrzeit eingetragen sein.`;
     }
+    if (task.cadence === "hours" && (task.id !== "complete-backup" || ![360, 720].includes(Number(task.intervalMinutes)))) {
+      return `Für „${label}“ muss ein gültiges Sicherungsintervall ausgewählt sein.`;
+    }
     if (task.cadence === "interval" && ![5, 10, 15, 20, 30, 60].includes(Number(task.intervalMinutes))) {
       return `Für „${label}“ muss ein gültiges Prüfintervall ausgewählt sein.`;
     }
@@ -6744,6 +6748,7 @@ function maintenanceScheduleCadenceControl(task, disabled) {
   const meta = maintenanceScheduleTaskMeta[task.id];
   if (meta.cadences.length === 1) return `<span class="maintenance-schedule-cadence">${escapeHtml(maintenanceScheduleCadenceLabel(task.cadence, task))}</span>`;
   const cadenceControl = `<label class="maintenance-schedule-compact"><span class="sr-only">Rhythmus für ${escapeHtml(meta.label)}</span><select data-maintenance-cadence ${disabled ? "disabled" : ""}>${meta.cadences.map((cadence) => `<option value="${cadence}" ${task.cadence === cadence ? "selected" : ""}>${escapeHtml(maintenanceScheduleCadenceLabel(cadence, { ...task, cadence }))}</option>`).join("")}</select></label>`;
+  if (task.cadence === "hours") return cadenceControl + `<label class="maintenance-schedule-compact"><span class="sr-only">Sicherungsintervall</span><select data-maintenance-interval ${disabled ? "disabled" : ""}>${[720, 360].map(minutes => `<option value="${minutes}" ${task.intervalMinutes === minutes ? "selected" : ""}>Alle ${minutes / 60} Stunden</option>`).join("")}</select></label>`;
   if (task.cadence !== "interval") return cadenceControl;
   return cadenceControl + `<label class="maintenance-schedule-compact"><span class="sr-only">Intervall für ${escapeHtml(meta.label)}</span><select data-maintenance-interval ${disabled ? "disabled" : ""}>${[5, 10, 15, 20, 30, 60].map((minutes) => `<option value="${minutes}" ${Number(task.intervalMinutes) === minutes ? "selected" : ""}>Alle ${minutes} Minuten</option>`).join("")}</select></label>`;
 }
@@ -6755,9 +6760,9 @@ function renderMaintenanceSchedules() {
   const tasks = Array.isArray(result?.tasks) ? result.tasks : [];
   const validationMessage = maintenanceScheduleValidationMessage(tasks);
   if (state.maintenanceSchedulesLoadState === "loading" && !tasks.length) {
-    elements.maintenanceScheduleRows.innerHTML = '<tr><td colspan="12">Zeitpläne werden geladen …</td></tr>';
+    elements.maintenanceScheduleRows.innerHTML = '<p>Zeitpläne werden geladen …</p>';
   } else if (!tasks.length) {
-    elements.maintenanceScheduleRows.innerHTML = '<tr><td colspan="12">Die Zeitpläne sind derzeit nicht verfügbar.</td></tr>';
+    elements.maintenanceScheduleRows.innerHTML = '<p>Die Zeitpläne sind derzeit nicht verfügbar.</p>';
   } else {
     elements.maintenanceScheduleRows.innerHTML = tasks.map((task) => {
       const meta = maintenanceScheduleTaskMeta[task.id] || { label: task.id, detail: "", cadences: [task.cadence] };
@@ -6774,16 +6779,15 @@ function renderMaintenanceSchedules() {
           "different-target": "Dieser Zeitplan startet einen abweichenden Vorgang. Er bleibt unverändert und kann hier nicht bearbeitet werden.",
           "calendar-not-supported": "Der vorhandene Zeitplan lässt sich in dieser Matrix nicht vollständig darstellen. Er bleibt unverändert und kann hier nicht bearbeitet werden.",
         })[task.unsupportedReason] || "Dieser Zeitplan bleibt unverändert und kann hier nicht bearbeitet werden.";
-        return `<tr data-maintenance-task="${escapeHtmlAttribute(task.id)}"><th scope="row"><strong>${escapeHtml(meta.label)}</strong></th><td colspan="10">${escapeHtml(reason)}</td><td>${next}</td></tr>`;
+        return `<article class="maintenance-schedule-item unavailable"><header><strong>${escapeHtml(meta.label)}</strong><small>${escapeHtml(reason)}</small></header><span>${next}</span></article>`;
       }
-      return `<tr data-maintenance-task="${escapeHtmlAttribute(task.id)}" class="${task.running ? "running" : ""} ${task.installed ? "" : "unavailable"}">
-        <th scope="row"><strong>${escapeHtml(meta.label)}</strong><small>${escapeHtml(meta.detail)}</small></th>
-        <td>${maintenanceScheduleCadenceControl(task, disabled)}</td>
-        ${maintenanceScheduleWeekdays.map(([day, label]) => `<td class="maintenance-schedule-day"><label><span class="sr-only">${label} für ${escapeHtml(meta.label)}</span><input type="checkbox" data-maintenance-day="${day}" ${weekdays.has(day) ? "checked" : ""} ${disabled || !weekly ? "disabled" : ""}></label></td>`).join("")}
-        <td><label class="maintenance-schedule-compact"><span class="sr-only">Uhrzeit für ${escapeHtml(meta.label)}</span><input type="time" data-maintenance-time value="${escapeHtmlAttribute(task.time || "")}" ${disabled || task.cadence === "interval" ? "disabled" : ""}></label></td>
-        <td class="maintenance-schedule-enabled"><label><span class="sr-only">${escapeHtml(meta.label)} aktiv</span><input type="checkbox" data-maintenance-enabled ${task.enabled ? "checked" : ""} ${disabled ? "disabled" : ""}></label></td>
-        <td class="maintenance-schedule-next">${next}</td>
-      </tr>`;
+      return `<article data-maintenance-task="${escapeHtmlAttribute(task.id)}" class="maintenance-schedule-item ${task.running ? "running" : ""} ${task.installed ? "" : "unavailable"}">
+        <header><strong>${escapeHtml(meta.label)}</strong><small>${escapeHtml(meta.detail)}</small><span class="maintenance-schedule-next">${task.running ? next : `Nächster Lauf: ${next}`}</span></header>
+        <div class="maintenance-schedule-options"><div class="maintenance-schedule-rhythm"><span class="maintenance-schedule-caption">Rhythmus</span>${maintenanceScheduleCadenceControl(task, disabled)}${task.id === "complete-backup" ? `<button type="button" class="secondary-button compact-button" data-maintenance-daily ${disabled ? "disabled" : ""}>Täglich um 03:00</button>` : ""}</div>
+        <fieldset class="maintenance-schedule-days" ${disabled || !weekly ? "disabled" : ""}><legend>Wochentage</legend>${maintenanceScheduleWeekdays.map(([day, label]) => `<label><input aria-label="${label} für ${escapeHtml(meta.label)}" type="checkbox" data-maintenance-day="${day}" ${weekdays.has(day) ? "checked" : ""}><span>${label}</span></label>`).join("")}</fieldset>
+        <label class="maintenance-schedule-time"><span class="maintenance-schedule-caption">Uhrzeit</span><input aria-label="Uhrzeit für ${escapeHtml(meta.label)}" type="time" data-maintenance-time value="${escapeHtmlAttribute(task.time || "")}" ${disabled || task.cadence === "interval" ? "disabled" : ""}></label>
+        <label class="maintenance-schedule-switch"><input aria-label="${escapeHtml(meta.label)} aktiv" type="checkbox" data-maintenance-enabled ${task.enabled ? "checked" : ""} ${disabled ? "disabled" : ""}><span>Aktiv</span></label></div>
+      </article>`;
     }).join("");
   }
   const stateMessage = validationMessage || state.maintenanceSchedulesMessage
@@ -6869,6 +6873,10 @@ function updateMaintenanceScheduleDraft(event) {
   const row = event.target.closest?.("[data-maintenance-task]");
   const task = state.maintenanceSchedules?.tasks?.find((entry) => entry.id === row?.dataset.maintenanceTask);
   if (!task || state.maintenanceSchedulesPending) return;
+  if (event.target.matches("[data-maintenance-daily]")) {
+    task.cadence = "weekly"; task.weekdays = maintenanceScheduleWeekdays.map(([day]) => day);
+    task.time = "03:00"; task.intervalMinutes = null; task.monthDay = null; task.enabled = true;
+  }
   if (event.target.matches("[data-maintenance-enabled]")) task.enabled = event.target.checked;
   if (event.target.matches("[data-maintenance-interval]")) task.intervalMinutes = Number(event.target.value);
   if (event.target.matches("[data-maintenance-time]")) task.time = event.target.value;
@@ -6886,6 +6894,8 @@ function updateMaintenanceScheduleDraft(event) {
       task.time = null;
       task.intervalMinutes = 5;
       task.monthDay = null;
+    } else if (task.cadence === "hours") {
+      task.weekdays = []; task.monthDay = null; task.time ||= "03:00"; task.intervalMinutes = 720;
     } else if (task.cadence === "weekly") {
       task.weekdays = task.weekdays?.length ? task.weekdays : ["monday"];
       task.monthDay = null;
@@ -24850,6 +24860,10 @@ function reorderLocationDashboardCard(locationId, targetIndex) {
 const systemCenterPhaseLabels = Object.freeze({
   oauthPolicy: "Google-OAuth-Richtlinie",
   oauthPolicyPassed: "Google-OAuth-Richtlinie",
+  "oauth-policy": "Google-OAuth-Richtlinie",
+  "repository-check": "Repository-Prüfung",
+  "restore-test": "Isolierter Daten-Restore",
+  "application-smoke": "Isolierter App-Start",
   "oauth-policy-passed": "Google-OAuth-Richtlinie",
   backup: "Sicherung und Upload",
   backupPassed: "Sicherung und Upload",
@@ -24973,6 +24987,7 @@ function systemCenterPhaseEntries(run) {
     return source.filter(Boolean).map((phase, index) => {
       const value = typeof phase === "object" ? phase : { state: phase };
       return {
+        notRun: value.status === "not_run",
         id: String(value.id || value.eventType || `phase-${index + 1}`),
         label: String(value.label || systemCenterPhaseLabels[value.id] || systemCenterPhaseLabels[value.eventType] || "Prüfschritt"),
         state: systemCenterVisualState(value.state || value.status || (value.ok === true ? "ok" : ""), "neutral"),
@@ -25005,9 +25020,11 @@ function renderSystemCenterRun(run) {
       <header><div><strong>${escapeHtml(trigger)}</strong><small>${escapeHtml(diagnosticTimestamp(startedAt))}${finishedAt ? ` · abgeschlossen ${escapeHtml(diagnosticTimestamp(finishedAt))}` : ""}${identifier ? ` · Lauf ${escapeHtml(identifier)}` : ""}</small></div><span class="system-center-state ${stateName}">${escapeHtml(stateCopy.label)}</span></header>
       ${phases.length ? `<ol class="system-center-run-phases">${phases.map((phase) => {
         const phaseCopy = systemCenterStateCopy(phase.state);
+        if (phase.notRun) phaseCopy.label = "Nicht ausgeführt";
         return `<li class="${phase.state}"><i aria-hidden="true">${phaseCopy.icon}</i><span>${escapeHtml(phase.label)}</span><small>${escapeHtml(phaseCopy.label)}</small></li>`;
       }).join("")}</ol>` : '<p class="system-center-run-empty">Für diesen Eintrag sind keine einzelnen Prüfschritte vorhanden.</p>'}
       ${run?.errorCode ? `<p class="system-center-run-error"><strong>Fehlercode:</strong> ${escapeHtml(run.errorCode)}</p>` : ""}
+      ${run?.reportAvailable && /^[a-f0-9]{64}$/.test(run.reportId || "") ? `<nav class="system-center-run-reports" aria-label="Prüfbericht"><a href="/api/portal/v1/system-center/recovery-assurance/reports/${run.reportId}.pdf" download>Prüfbericht · PDF</a><a href="/api/portal/v1/system-center/recovery-assurance/reports/${run.reportId}.md" download>Markdown · .md</a></nav>` : ""}
     </div>
   </article>`;
 }
@@ -25100,6 +25117,7 @@ function renderSystemCenterOperations(automation, notifications) {
       <p>${schedule.enabled === false ? "Die automatische Prüfung ist auf diesem System nicht aktiv." : escapeHtml(schedule.scheduleLabel || "Tägliche Ausführung mit zufälliger Startverzögerung und geschützter Parallelitätssperre.")}</p>
       <dl><div><dt>Letzter Nachtlauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.lastRunAt))}</dd></div><div><dt>Nächster Lauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.nextRunAt))}</dd></div><div><dt>App-Start im letzten Nachtlauf</dt><dd><span class="system-center-inline-state ${smokeState}"><i aria-hidden="true">${smokeCopy.icon}</i>${escapeHtml(smokeCopy.label)}</span></dd></div>${schedule.latestFullProofAt ? `<div><dt>Letzter vollständiger Nachweis (alle Auslöser)</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.latestFullProofAt))}</dd></div>` : ""}</dl>
       ${schedule.state !== "healthy" ? '<a href="/?view=settings&amp;section=backup">Beheben</a>' : ""}
+      ${schedule.reasonCode === "AUTOMATION_RUN_FAILED" && schedule.latestFullProofAt && Date.parse(schedule.latestFullProofAt) > Date.parse(schedule.lastRunAt) ? '<p>Ein späterer vollständiger Lauf hat die Wiederherstellbarkeit bestätigt. Der fehlgeschlagene Nachtlauf bleibt als Störung der Automatik sichtbar.</p>' : ""}
       ${schedule.overdue === true ? '<strong class="system-center-operation-warning">Der automatische Nachweis ist überfällig und benötigt Aufmerksamkeit.</strong>' : ""}
     </article>
     <article class="system-center-operation ${notificationState}">
@@ -25127,53 +25145,95 @@ function normalizedSystemCenterTrendPoints(trends) {
       backupDurationSeconds: numeric(point.backupDurationSeconds),
       recoveryDurationSeconds: numeric(point.recoveryDurationSeconds),
     };
-  }).filter(Boolean).sort((left, right) => Date.parse(left.at) - Date.parse(right.at)).slice(-120);
+  }).filter(Boolean).sort((left, right) => Date.parse(left.at) - Date.parse(right.at)).slice(-1600);
+}
+
+function systemCenterTrendDays() {
+  try {
+    const value = Number(localStorage.getItem("grabenplaner-system-center-days"));
+    return [7, 30, 90, 180].includes(value) ? value : 180;
+  } catch { return 180; }
 }
 
 function renderSystemCenterSparkline(points, { key, label, formatter, colorClass, currentLabel = null }) {
   const series = points.filter((point) => Number.isFinite(point[key]));
-  if (!series.length) return `<article class="system-center-trend-card empty"><small>${escapeHtml(label)}</small><strong>${escapeHtml(currentLabel ?? "Noch keine Werte")}</strong><span>Der Verlauf entsteht automatisch aus künftigen Systemprüfungen.</span></article>`;
+  if (!series.length) return `<article class="system-center-trend-card empty"><small>${escapeHtml(label)}</small><strong>${escapeHtml(currentLabel ?? "Noch keine Werte")}</strong><span>Für diesen Zeitraum sind noch keine einzelnen Messwerte vorhanden.</span></article>`;
   const values = series.map((point) => point[key]);
-  const minimum = Math.min(...values);
-  const maximum = Math.max(...values);
+  const minimum = key === "trustScore" ? 0 : Math.min(...values);
+  const maximum = key === "trustScore" ? 100 : Math.max(...values);
   const span = maximum - minimum || Math.max(1, maximum * 0.05);
-  const width = 320;
-  const height = 88;
-  const padding = 8;
-  const coordinates = series.map((point, index) => {
-    const x = series.length === 1 ? width / 2 : padding + (index / (series.length - 1)) * (width - padding * 2);
-    const y = height - padding - ((point[key] - minimum) / span) * (height - padding * 2);
-    return { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) };
+  const width = 320, height = 104, padding = 8;
+  const first = series[0], last = series.at(-1);
+  const timeSpan = Date.parse(last.at) - Date.parse(first.at);
+  const coordinates = series.map((point) => {
+    const x = !timeSpan ? width / 2 : padding + (Date.parse(point.at) - Date.parse(first.at)) / timeSpan * (width - padding * 2);
+    const y = height - padding - (point[key] - minimum) / span * (height - padding * 2);
+    const exact = /Bytes$/.test(key) ? `${point[key].toLocaleString("de-AT")} Byte`
+      : /Seconds$/.test(key) ? `${point[key].toLocaleString("de-AT")} Sekunden` : `${point[key]} / 100`;
+    const date = new Date(point.at).toLocaleString("de-AT", { dateStyle: "medium", timeStyle: "medium" });
+    return { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)), text: `${date} · ${formatter(point[key])}${key === "trustScore" ? "" : ` (${exact})`}` };
   });
-  const first = series[0];
-  const last = series[series.length - 1];
   const delta = last[key] - first[key];
   const deltaText = Math.abs(delta) < 0.01 ? "stabil" : `${delta > 0 ? "+" : "−"}${escapeHtml(formatter(Math.abs(delta), { delta: true }))}`;
-  const pointsAttribute = coordinates.map((point) => `${point.x},${point.y}`).join(" ");
-  const latest = coordinates[coordinates.length - 1];
+  const latest = coordinates.at(-1);
   return `<article class="system-center-trend-card ${escapeHtml(colorClass)}">
     <header><div><small>${escapeHtml(label)}</small><strong>${escapeHtml(currentLabel ?? formatter(last[key]))}</strong></div><span>${deltaText}</span></header>
-    ${currentLabel !== null ? '<small>Aktuelle Messung oben · gespeicherter Verlauf darunter</small>' : ''}
-    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(label)}: ${escapeHtml(formatter(first[key]))} bis ${escapeHtml(formatter(last[key]))}"><path d="M ${padding} ${height - padding} H ${width - padding}" aria-hidden="true"></path><polyline points="${pointsAttribute}" aria-hidden="true"></polyline><circle cx="${latest.x}" cy="${latest.y}" r="4" aria-hidden="true"></circle></svg>
+    ${currentLabel !== null ? '<small class="system-center-trend-note">Aktuell oben · gespeicherter Verlauf darunter</small>' : ''}
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" tabindex="0" role="slider" aria-label="${escapeHtml(label)} – Messpunkte mit Pfeiltasten wählen" aria-valuemin="1" aria-valuemax="${series.length}" aria-valuenow="${series.length}" aria-valuetext="${escapeHtml(latest.text)}" data-trend-series="${escapeHtml(JSON.stringify(coordinates))}" data-trend-index="${series.length - 1}">
+      <path d="M ${padding} ${height - padding} H ${width - padding}" aria-hidden="true"></path>
+      <polyline points="${coordinates.map(p => `${p.x},${p.y}`).join(" ")}" aria-hidden="true"></polyline>
+      <circle data-trend-marker cx="${latest.x}" cy="${latest.y}" r="4" aria-hidden="true"></circle>
+    </svg>
+    <output class="system-center-trend-value" aria-live="polite">${escapeHtml(latest.text)}</output>
     <footer><span>${escapeHtml(diagnosticTimestamp(first.at))}</span><span>${series.length} Messpunkte</span><span>${escapeHtml(diagnosticTimestamp(last.at))}</span></footer>
   </article>`;
 }
 
-function renderSystemCenterTrends(trends, resources) {
-  const points = normalizedSystemCenterTrendPoints(trends);
-  const retentionDays = Math.max(0, Number(trends?.retentionDays || 0));
+function renderSystemCenterTrends(trends, resources, currentScore = null) {
+  const days = systemCenterTrendDays();
+  const cutoff = Date.now() - days * 86400000;
+  const inRange = point => Date.parse(point.at) >= cutoff && Date.parse(point.at) <= Date.now();
+  const points = normalizedSystemCenterTrendPoints(trends).filter(inRange);
   const integrityState = points.length && trends?.integrityVerified === true
     ? "ok" : trends?.integrityVerified === false ? "critical" : "neutral";
   const integrityCopy = systemCenterStateCopy(integrityState);
+  const split = resources?.storage?.databases;
+  const history = resources?.databaseHistory;
+  const dbPoints = history?.integrityVerified === true ? history.points.filter(inRange) : [];
   return `<section class="system-center-trends" aria-label="Technische Langzeittrends">
-    <div class="system-center-section-heading"><div><span class="eyebrow">Begrenzte Langzeitwerte</span><h2>Entwicklung des Systemzustands</h2><p>Die Messreihe enthält ausschließlich technische Kennzahlen und keine Personal-, Pfad- oder Zugangsdaten.</p></div><span class="system-center-state ${integrityState}"><i aria-hidden="true">${integrityCopy.icon}</i>${escapeHtml(integrityCopy.label)}${retentionDays ? ` · ${retentionDays} Tage` : ""}</span></div>
-    <div class="system-center-trend-grid">
-      ${renderSystemCenterSparkline(points, { key: "trustScore", label: "Vertrauensindex", formatter: (value) => `${Math.round(value)} / 100`, colorClass: "trust" })}
-      ${renderSystemCenterSparkline(points, { key: "databaseBytes", label: "Datenbankgröße", formatter: (value) => systemCenterByteLabel(Math.abs(value)), colorClass: "database", currentLabel: resources ? systemCenterByteLabel(resources.storage?.databaseBytes) : null })}
-      ${renderSystemCenterSparkline(points, { key: "backupDurationSeconds", label: "Sicherungsdauer", formatter: (value) => systemCenterDurationLabel(Math.abs(value)), colorClass: "backup" })}
-      ${renderSystemCenterSparkline(points, { key: "recoveryDurationSeconds", label: "Wiederherstellungsdauer", formatter: (value) => systemCenterDurationLabel(Math.abs(value)), colorClass: "recovery" })}
+    <div class="system-center-section-heading"><div><span class="eyebrow">Technischer Verlauf</span><h2>Entwicklung des Systemzustands</h2><p>Mit der Maus erkunden, per Klick auswählen oder die Pfeiltasten verwenden. Angezeigt wird der nächstgelegene gemessene Wert.</p></div><label class="system-center-period">Zeitraum<select aria-label="Zeitraum" data-system-center-period>${[180, 90, 30, 7].map(value => `<option value="${value}" ${value === days ? "selected" : ""}>${value} Tage</option>`).join("")}</select></label></div>
+    <div class="system-center-trend-grid ${split ? "has-split" : ""}">
+      ${renderSystemCenterSparkline(points, { key: "trustScore", label: "Vertrauensindex", formatter: value => `${Math.round(value)} / 100`, colorClass: "trust", currentLabel: Number.isFinite(currentScore) ? `${Math.round(currentScore)} / 100` : null })}
+      ${renderSystemCenterSparkline(points, { key: "backupDurationSeconds", label: "Sicherungsdauer", formatter: value => systemCenterDurationLabel(Math.abs(value)), colorClass: "backup" })}
+      ${renderSystemCenterSparkline(points, { key: "recoveryDurationSeconds", label: "Wiederherstellungsdauer", formatter: value => systemCenterDurationLabel(Math.abs(value)), colorClass: "recovery" })}
+      ${split ? ["core", "sales"].map(domain => renderSystemCenterSparkline(dbPoints, { key: `${domain}Bytes`, label: domain === "core" ? "Kerndatenbank" : "Verkaufsdatenbank", formatter: value => systemCenterByteLabel(Math.abs(value)), colorClass: "database", currentLabel: systemCenterByteLabel(split[domain]?.bytes) })).join("") : renderSystemCenterSparkline(points, { key: "databaseBytes", label: "Datenbankgröße", formatter: value => systemCenterByteLabel(Math.abs(value)), colorClass: "database", currentLabel: resources ? systemCenterByteLabel(resources.storage?.databaseBytes) : null })}
     </div>
+    <p class="system-center-trend-note">${escapeHtml(integrityCopy.label)} · Aufbewahrung ${Number(trends?.retentionDays || 180)} Tage.${split ? ' Die getrennte Datenbankmessung beginnt mit dieser Version. Frühere Gesamtgrößen werden nicht nachträglich aufgeteilt.' : ''}${history?.integrityVerified === false ? ' Der getrennte Datenbankverlauf ist derzeit nicht verifizierbar.' : ''}${history?.writeFailed ? ' Der aktuelle Datenbankmesswert konnte nicht gespeichert werden.' : ''}</p>
   </section>`;
+}
+
+function inspectSystemCenterTrend(event) {
+  const svg = event.target.closest?.("[data-trend-series]");
+  if (!svg) return;
+  const series = JSON.parse(svg.dataset.trendSeries);
+  let index = Number(svg.dataset.trendIndex || 0);
+  if (event.type === "keydown") {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    index = event.key === "Home" ? 0 : event.key === "End" ? series.length - 1 : index + (event.key === "ArrowLeft" ? -1 : 1);
+  } else {
+    const box = svg.getBoundingClientRect();
+    const x = (event.clientX - box.left) / box.width * 320;
+    index = series.reduce((best, p, i) => Math.abs(p.x - x) < Math.abs(series[best].x - x) ? i : best, 0);
+  }
+  index = Math.max(0, Math.min(series.length - 1, index));
+  const point = series[index];
+  svg.dataset.trendIndex = String(index);
+  svg.setAttribute("aria-valuenow", String(index + 1));
+  svg.setAttribute("aria-valuetext", point.text);
+  const marker = svg.querySelector("[data-trend-marker]");
+  marker.setAttribute("cx", point.x); marker.setAttribute("cy", point.y);
+  svg.closest("article").querySelector("output").textContent = point.text;
 }
 
 function productReadinessStateCopy(value) {
@@ -25280,7 +25340,7 @@ function renderSystemCenter(payload) {
     ${renderSystemCenterOffsiteProvider(payload?.status)}
     ${systemCenterResourceCards(payload?.resources)}
     ${renderSystemCenterOperations(payload?.automation, payload?.notifications)}
-    ${renderSystemCenterTrends(payload?.trends, payload?.resources)}
+    ${renderSystemCenterTrends(payload?.trends, payload?.resources, score)}
     ${renderProductReadiness(payload?.productReadiness)}
     <section class="system-center-factor-grid" aria-label="Bestandteile des technischen Vertrauensindex">${factors.map((factor) => {
       const copy = systemCenterStateCopy(factor.state);
@@ -39603,7 +39663,20 @@ elements.personnelRulesSimulationDepartment?.addEventListener("change", () => {
 elements.runPersonnelRulesSimulation?.addEventListener("click", runPersonnelRulesSimulation);
 elements.refreshSystemCenter?.addEventListener("click", () => loadSystemCenter());
 elements.startRecoveryAssurance?.addEventListener("click", startRecoveryAssurance);
+elements.maintenanceScheduleRows?.addEventListener("click", event => {
+  if (event.target.matches("[data-maintenance-daily]")) updateMaintenanceScheduleDraft(event);
+});
+elements.systemCenterContent?.addEventListener("pointermove", inspectSystemCenterTrend);
+elements.systemCenterContent?.addEventListener("keydown", inspectSystemCenterTrend);
+elements.systemCenterContent?.addEventListener("change", event => {
+  if (!event.target.matches("[data-system-center-period]")) return;
+  const days = Number(event.target.value);
+  if (![7, 30, 90, 180].includes(days)) return;
+  try { localStorage.setItem("grabenplaner-system-center-days", String(days)); } catch { /* Storage may be disabled. */ }
+  renderSystemCenter(state.systemCenter);
+});
 elements.systemCenterContent?.addEventListener("click", (event) => {
+  inspectSystemCenterTrend(event);
   const evidence = event.target.closest("[data-readiness-evidence]");
   if (evidence) {
     saveProductReadinessEvidence(evidence.dataset.readinessEvidence, evidence.dataset.readinessOutcome);
