@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.92.64 Beta – Releasevorbereitung 23.09.2026
+
+- Getrennte interaktive Datenbankdiagramme mit gespeichertem Zeitraum, aktuelle Vertrauensbewertung und PDF-/Markdown-Prüfberichte im System-Center.
+- Überarbeitete Wartungszeiten mit einstellbarem Sicherungsrhythmus; Aufbewahrung wird von der Sicherungshäufigkeit unterschieden.
+- Filialbestand und Nettowert nach Sortimentsgruppen auf Basis des letzten übernommenen Datenstands; bestätigte Dienstleistungen bleiben außerhalb des Warenbestands.
+- Dauerhafte, geschützte und wiederaufnehmbare Löschung nicht übernommener Importquellen. Übernommene Daten und historische Veröffentlichungen bleiben geschützt.
+- APT und GP koordinieren ihre Wartungssperre. Neue PostgreSQL-Sicherungen liefern Größenmessungen für die Restore-Platzreserve; Verbindungsabbrüche werden kontrolliert behandelt.
+- Die tatsächliche Bereitstellung und die vollständige Recovery-Prüfung werden im separaten Releasebeleg dokumentiert; siehe [Auslieferungsablauf](docs/DEPLOY-RELEASE-v09264.md).
+
 ## v0.92.63 Beta – vorbereitet, noch nicht ausgerollt
 
 - PostgreSQL-Größe und Referenzintegrität im System-Center, tägliche Nachweisfristen und verständliche Beheben-Verweise.

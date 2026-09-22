@@ -65,6 +65,7 @@ for(const domain of ['core','sales'])for(const failReplacement of [false,true]){
    '../boundary/migrate':{verifyCoreSchema:async()=>({boundary:true})},
    './layout':{SCHEMAS:['gp'],SEARCH_PATH:'pg_catalog,gp'},
    './import-work-queues':{indexedImportWorkQueues:entries=>entries},
+   './import-delete':{target:async(_client,base)=>base},
   };
   modules['../core/environment']=modules['./environment'];modules['../core/fingerprint']=modules['./fingerprint'];
   const file=path.resolve(__dirname,'../lib/persistence/postgresql/'+domain+'/application.js');

@@ -28,6 +28,11 @@ html[data-active-page-theme="dark"] .trade-insights-workspace button:is(.active,
 .trade-insights-workspace summary { cursor:pointer; font-weight:650; }
 .trade-insights-workspace .facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; }
 .trade-insights-workspace .facts small { display:block; color:var(--muted); }
+.trade-insights-workspace .trade-stock-summary { margin:16px 0; padding:18px; border:1px solid var(--line); border-radius:14px; background:var(--surface-soft); }
+.trade-insights-workspace .trade-stock-summary .facts > div { min-width:0; padding:14px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+.trade-insights-workspace .trade-stock-summary .facts strong { display:block; margin-top:5px; font-size:clamp(18px,2vw,25px); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.trade-insights-workspace .trade-stock-summary > p { color:var(--muted); font-size:13px; }
+.trade-insights-workspace .trade-stock-summary + .table-scroll th { overflow-wrap:normal; }
 .trade-insights-workspace dialog { width:min(780px,calc(100vw - 24px)); max-height:90dvh; padding:20px; overflow:auto; border:1px solid var(--line); border-radius:14px; color:var(--ink); background:var(--surface); font:inherit; }
 .trade-insights-workspace dialog::backdrop { background:#102b2370; }
 .trade-insights-workspace .dialog-actions { justify-content:flex-end; padding:0; border:0; background:transparent; }

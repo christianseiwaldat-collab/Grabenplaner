@@ -26,12 +26,12 @@ test("v0.78: System-Center zeigt Nachtbetrieb, App-Smoke und redigierte Eskalati
 
 test("v0.78: Langzeitwerte sind begrenzt, barrierearm und ohne externe Diagrammbibliothek", () => {
   assert.match(script, /function normalizedSystemCenterTrendPoints\(trends\)/);
-  assert.match(script, /\.slice\(-120\)/);
+  assert.match(script, /\.slice\(-1600\)/);
   assert.match(script, /trustScore/);
   assert.match(script, /databaseBytes/);
   assert.match(script, /backupDurationSeconds/);
   assert.match(script, /recoveryDurationSeconds/);
-  assert.match(script, /<svg viewBox="0 0 \$\{width\} \$\{height\}" role="img" aria-label=/);
+  assert.match(script, /role="slider" aria-label=/);
   assert.doesNotMatch(script, /Chart\(|d3\.|plotly/i);
 });
 

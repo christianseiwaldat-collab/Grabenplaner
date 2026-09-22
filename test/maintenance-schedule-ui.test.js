@@ -16,9 +16,9 @@ test("System & Backup exposes the protected editable maintenance matrix", () => 
   const styles = read("public/styles.css");
 
   assert.match(html, /id="maintenanceScheduleCard"[\s\S]*Wartungs- &amp; Backupzeiten/);
-  for (const heading of ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So", "Zeitpunkt", "Aktiv", "Nächster Lauf"]) {
-    assert.match(html, new RegExp(`>${heading}<`));
-  }
+  assert.match(html, /id="maintenanceScheduleRows"/);
+  assert.match(app, /maintenance-schedule-days/);
+  assert.match(app, /Täglich um 03:00/);
   assert.match(app, /maintenanceScheduleValidationMessage/);
   assert.match(app, /mindestens ein Wochentag ausgewählt/);
   assert.match(app, /api\("\/api\/portal\/v1\/maintenance-schedules"/);
@@ -27,7 +27,7 @@ test("System & Backup exposes the protected editable maintenance matrix", () => 
   assert.match(server, /app\.put\("\/api\/portal\/v1\/maintenance-schedules"/);
   assert.match(server, /requirePortalAdminOrLocal\(request, "backup:write"\)/);
   assert.match(server, /if \(write\) assertPortalCsrf\(request\)/);
-  assert.match(styles, /\.maintenance-schedule-table-wrap[^}]*overflow:auto/);
+  assert.match(styles, /\.maintenance-schedule-options[^}]*flex-wrap:wrap/);
 });
 
 test("the monitor can switch between nightly weekdays and minute intervals in the matrix", () => {
