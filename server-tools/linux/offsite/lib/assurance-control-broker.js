@@ -465,6 +465,29 @@ function readStandardInput() {
   });
 }
 
+function writeResponse(output, result) {
+  return new Promise((resolve, reject) => {
+    // A timed-out/disconnected caller cannot receive the completed result.
+    // Do not crash or repeat a privileged operation when its reply is lost.
+    // Keep the listener through the asynchronous error event after write's
+    // callback; only EPIPE is an expected transport disconnect.
+    const onError = (error) => {
+      if (error?.code === "EPIPE") resolve(false);
+      else reject(error);
+    };
+    output.once("error", onError);
+    try {
+      output.write(`${JSON.stringify(result)}\n`, (error) => {
+        if (error) onError(error);
+        else { output.removeListener("error", onError); resolve(true); }
+      });
+    } catch (error) {
+      output.removeListener("error", onError);
+      onError(error);
+    }
+  });
+}
+
 async function main() {
   if (process.platform !== "linux" || typeof process.getuid !== "function" || process.getuid() !== 0
     || process.argv.length !== 2) {
@@ -474,7 +497,9 @@ async function main() {
   let result;
   try { result = handleRequest(await readStandardInput()); }
   catch { result = response(null, "ASSURANCE_REQUEST_INVALID"); }
-  process.stdout.write(`${JSON.stringify(result)}\n`);
+  if (!await writeResponse(process.stdout, result)) {
+    process.stderr.write("ASSURANCE_RESPONSE_DISCONNECTED\n");
+  }
 }
 
 if (require.main === module) main().catch(() => { process.exitCode = 1; });
@@ -501,4 +526,5 @@ module.exports = {
   schedulerEvidence,
   startAssuranceUnit,
   writeRateLimitState,
+  writeResponse,
 };

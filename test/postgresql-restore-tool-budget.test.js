@@ -38,7 +38,7 @@ test('restore disables autovacuum only in its disposable cluster before starting
   const workRoot='/synthetic/restore',socket='/tmp/gp-pg-recovery-synthetic',writes=[],started=new Error('synthetic cluster start boundary');
   const accounts=Object.fromEntries(['gp_migration_admin','gp_operations_monitor',...['core','sales'].flatMap(d=>['app','reader','migrator'].map(p=>'gp_'+d+'_'+p))].map(name=>[name,'x'.repeat(24)]));
   const config={format:'grabenplaner-postgresql-operations-v1',recoveryAccounts:accounts,domains:['core','sales'].map(domain=>({domain,database:'grabenplaner_'+domain}))};
-  const verified={manifest:{files:[{file:'postgresql-operations.json'}],databases:config.domains,checkpoint:{domains:{core:{restore:{}},sales:{restore:{}}}}}};
+  const verified={manifest:{files:[{file:'postgresql-operations.json',bytes:1024}],databases:config.domains,checkpoint:{domains:{core:{restore:{}},sales:{restore:{}}}}}};
   function scope(name){assert.ok(name.startsWith(workRoot+'/')||name===socket,'unexpected filesystem mutation: '+name);}
   const virtualFs={
    statSync:()=>({uid:500}),readdirSync:()=>[],statfsSync:()=>({bavail:20,bsize:1024**3}),

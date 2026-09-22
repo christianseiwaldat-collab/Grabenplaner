@@ -212,6 +212,11 @@ test("RAS reader aggregates complete redacted runs before applying the history l
     assert.equal(result.recentRuns[0].snapshotIdPrefix.length, 12);
     assert.equal(result.recentRuns[0].receiptSha256Prefix.length, 12);
     assert.equal(Object.hasOwn(result.recentRuns[0], "runId"), false);
+    assert.match(result.recentRuns[0].reportId, /^[a-f0-9]{64}$/);
+    const selected = readRecoveryAssuranceStatus({ ...fixture.options,
+      now: new Date("2026-07-20T03:00:00.000Z"), reportId: result.recentRuns.at(-1).reportId });
+    assert.equal(selected.recentRuns.length, 1);
+    assert.equal(selected.recentRuns[0].reportId, result.recentRuns.at(-1).reportId);
     assert.doesNotMatch(JSON.stringify(result.recentRuns), /receiptSha256"|eventHash|signature|keyId/);
   } finally { cleanup(fixture); }
 });

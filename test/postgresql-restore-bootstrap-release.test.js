@@ -9,7 +9,7 @@ function fixture({adminEndFails=false,stopFails=false}={}){
  const events=[],clients=[],accounts=Object.fromEntries(['gp_migration_admin','gp_operations_monitor',...['core','sales'].flatMap(d=>['app','reader','migrator'].map(p=>'gp_'+d+'_'+p))].map(name=>[name,'x'.repeat(24)]));
  const config={format:'grabenplaner-postgresql-operations-v1',recoveryAccounts:accounts,domains:['core','sales'].map(domain=>({domain,database:'grabenplaner_'+domain,environmentId:'synthetic',profile:'synthetic'}))};
  const verified={manifestSha256:'synthetic',manifest:{
-  files:[{file:'postgresql-operations.json'}],databases:config.domains,
+  files:[{file:'postgresql-operations.json',bytes:1024}],databases:config.domains,
   checkpoint:{domains:{core:{restore:{}},sales:{restore:{}}}},
  }};
  const closeError=new Error('synthetic bootstrap close failure'),stopError=new Error('synthetic cluster stop failure');

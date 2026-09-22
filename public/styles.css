@@ -1678,6 +1678,28 @@ html[data-ui-mode="mobile"] .app-shell { padding-top:var(--deployment-banner-hei
 .maintenance-schedule-next { min-width:130px; color:var(--muted); line-height:1.35; }
 .maintenance-schedule-running { color:#246048; }
 .maintenance-schedule-card .backup-actions { gap:8px; padding-top:12px; }
+.maintenance-schedule-list { display:grid; gap:12px; }
+#settingsView .maintenance-schedule-item { display:grid; gap:12px; padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--surface); }
+#settingsView .maintenance-schedule-item > header { display:grid; gap:4px; }
+#settingsView .maintenance-schedule-item header strong { font-size:14px; color:var(--ink); overflow-wrap:normal; word-break:normal; }
+#settingsView .maintenance-schedule-item header small,.maintenance-schedule-next { font-size:11px; color:var(--muted); }
+#settingsView .maintenance-schedule-options { display:flex; flex-wrap:wrap; align-items:end; gap:12px 20px; }
+#settingsView .maintenance-schedule-caption,.maintenance-schedule-days legend { display:block; margin-bottom:6px; font-size:11px; font-weight:700; color:var(--muted); }
+#settingsView .maintenance-schedule-rhythm { display:grid; gap:5px; flex:1 1 165px; max-width:250px; }
+#settingsView .maintenance-schedule-rhythm .maintenance-schedule-caption { margin-bottom:0; }
+#settingsView .maintenance-schedule-cadence { font-size:12px; max-width:none; min-height:32px; display:flex; align-items:center; }
+#settingsView .maintenance-schedule-compact :is(select,input[type="time"]),#settingsView .maintenance-schedule-time input { min-height:36px; padding:6px 9px; font-size:12px; width:auto; max-width:100%; }
+#settingsView .maintenance-schedule-days { display:flex; flex-wrap:wrap; gap:5px; margin:0; padding:0; border:0; min-width:0; }
+#settingsView .maintenance-schedule-days label { position:relative; display:block; margin:0; }
+#settingsView .maintenance-schedule-days input { position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; }
+#settingsView .maintenance-schedule-days label span { display:grid; place-items:center; min-width:34px; min-height:36px; border:1px solid var(--line); border-radius:9px; background:var(--surface-soft); font-size:12px; color:var(--ink); }
+#settingsView .maintenance-schedule-days input:checked + span { background:var(--green); color:#fff; border-color:var(--green); }
+#settingsView .maintenance-schedule-days input:focus-visible + span { outline:2px solid var(--ink); outline-offset:3px; }
+#settingsView .maintenance-schedule-days:disabled { opacity:.5; }
+#settingsView .maintenance-schedule-switch { display:flex; align-items:center; gap:8px; min-height:36px; font-size:12px; }
+#settingsView .maintenance-schedule-switch input { width:19px; height:19px; accent-color:var(--green); }
+#settingsView .maintenance-schedule-item.running { border-color:var(--green); }
+.sr-only { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
 .backup-import-row { align-items: end; }
 .database-backup-path { display: grid; gap: 4px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid #dce2df; border-radius: 10px; background: #f8faf8; }
 .database-backup-path span { color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
@@ -4889,6 +4911,30 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 .system-center-trend-card.empty small { color:var(--rd-muted); font-size:7px; font-weight:850; text-transform:uppercase; letter-spacing:.05em; }
 .system-center-trend-card.empty strong { margin-top:7px; color:var(--rd-text); font-size:10px; }
 .system-center-trend-card.empty span { margin-top:5px; color:var(--rd-muted); font-size:7.5px; line-height:1.4; }
+.system-center-period { display:grid; gap:5px; min-width:110px; color:var(--rd-muted); font-size:10px; }
+.system-center-period select { border:1px solid var(--rd-line); border-radius:9px; padding:8px; background:var(--rd-surface); color:var(--rd-text); font:inherit; }
+.system-center-trend-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr)); }
+.system-center-trend-card svg { cursor:crosshair; height:125px; }
+.system-center-trend-card svg:focus-visible { outline:2px solid currentColor; outline-offset:3px; border-radius:5px; }
+.system-center-trend-value { display:block; min-height:3em; color:var(--rd-text); font-size:10px; line-height:1.5; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.system-center-trend-note { font-size:10px; line-height:1.5; color:var(--rd-muted); }
+.system-center-run-reports { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.system-center-run-reports a { padding:6px 10px; border:1px solid var(--rd-line); border-radius:8px; color:var(--rd-accent); background:var(--rd-surface); font-size:10px; font-weight:700; text-decoration:none; }
+.system-center-trend-grid.has-split { grid-template-columns:repeat(6,minmax(0,1fr)); }
+.system-center-trend-grid.has-split > article { grid-column:span 2; }
+.system-center-trend-grid.has-split > article.database { grid-column:span 3; }
+.system-center-trend-card > header small { font-size:10px; }
+.system-center-trend-card > header strong { font-size:17px; }
+.system-center-trend-card > header > span { font-size:10px; }
+.system-center-trend-card > footer { font-size:9px; }
+.system-center-trend-value { font-size:11px; }
+@media (max-width:980px) {
+  .system-center-trend-grid.has-split { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .system-center-trend-grid.has-split > article,.system-center-trend-grid.has-split > article.database { grid-column:auto; }
+}
+@media (max-width:700px) {
+  .system-center-trend-grid.has-split { grid-template-columns:minmax(0,1fr); }
+}
 .product-readiness { padding:18px; border:1px solid var(--rd-line); border-radius:17px; color:var(--rd-text); background:var(--rd-surface); }
 .product-readiness-gates { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
 .product-readiness-gate { min-width:0; padding:14px; border:1px solid var(--rd-line); border-top:4px solid var(--rd-restricted); border-radius:14px; background:var(--rd-surface-soft); }

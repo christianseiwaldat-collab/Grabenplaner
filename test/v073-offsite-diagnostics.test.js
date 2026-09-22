@@ -38,7 +38,7 @@ test("v0.73 renders backup age, repository check, full check and isolated restor
   assert.match(client, /Isolierter Test-Restore/);
   assert.match(client, /offsite\?\.agesHours\?\.repositoryCheck/);
   assert.match(client, /String\(offsite\?\.summary/);
-  assert.match(client, /14\)\} täglich/);
+  assert.match(client, /14\)\} Tagesstände/);
   assert.doesNotMatch(client, /offsite\?\.(?:repository|statusPath|account|token|password)/);
   assert.match(styles, /\.offsite-diagnostics/);
   assert.match(styles, /data-active-page-theme="dark"[\s\S]+\.offsite-diagnostics/);

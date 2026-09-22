@@ -179,10 +179,10 @@ test("M5-Audit-Inventar klassifiziert das neue SQLite-Schema und den erweiterten
     /"lib\/persistence\/sqlite\/operations\/personnel-workflow-instance-schema\.js"/,
   );
   for (const expected of [
-    "PHASE_4_EXPECTED_STATEMENT_COUNT = 1405",
-    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1361",
-    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1288",
-    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1280",
-    "PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 125",
+    "PHASE_4_EXPECTED_STATEMENT_COUNT = 1427",
+    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1383",
+    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1310",
+    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1301",
+    "PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 126",
   ]) assert.match(persistenceAudit, new RegExp(expected));
 });

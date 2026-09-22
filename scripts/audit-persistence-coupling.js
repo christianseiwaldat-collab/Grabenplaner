@@ -73,6 +73,12 @@ const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemaile
 const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresql/transfer/history.js']);
 // User-authorized 2026 migration blocks; isolated environment, never product activation.
 const MIGRATION_DEVELOPMENT_FILES = new Set([
+  'lib/persistence/postgresql/core/import-delete-catalog.js',
+  'lib/persistence/postgresql/sales/import-delete-catalog.js',
+  'lib/persistence/postgresql/sales/import-delete.js',
+  'lib/persistence/postgresql/operations/restore-capacity.js',
+  'server-tools/linux/lib/import-delete-migrate.js',
+  'test/postgresql-stock-import-delete.test.js',
   'test/postgresql-trade-insights.test.js',
   'test/postgresql-login-resilience.test.js',
   'test/postgresql-branch-order-settings.test.js',
@@ -253,6 +259,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-migration-queries.test.js',
 ]);
 const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
+  'server-tools/linux/lib/import-delete-migrate.js',
   'lib/persistence/postgresql/application-operations/system-health.js',
   'test-support/postgresql-recovery-performance-probe.js',
   'scripts/benchmark-data-import.cjs',
@@ -413,9 +420,11 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/data-import-jobs.js",
   "lib/data-import-job-store.js",
   "lib/persistence/repositories/data-import-runtime.js",
+  "lib/persistence/repositories/data-import-delete.js",
   "lib/persistence/repositories/data-import-mapping-runtime.js",
   "lib/persistence/repositories/sales-history-runtime.js",
   "lib/persistence/sqlite/data-import-runtime-catalog.js",
+  "lib/persistence/sqlite/data-import-delete-catalog.js",
   "lib/persistence/sqlite/operations/data-import-runtime-schema.js",
   "lib/persistence/statements/data-import-runtime.js",
   "lib/persistence/statements/saturday-credit.js",
@@ -753,10 +762,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1405;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1427;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 44;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1361;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1288;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1383;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1310;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -882,8 +891,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1280;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 125;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1301;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 126;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",
@@ -2592,6 +2601,7 @@ function architectureBoundaryViolationsForText(file, text) {
   ]);
   const statementDefinitionFiles = new Set([
     "lib/persistence/contract.js",
+    "lib/persistence/sqlite/data-import-delete-catalog.js",
     ...PHASE_3_STATEMENT_FILES,
     "lib/persistence/statements/sales-analytics.js",
     "lib/persistence/postgresql/boundary/catalog.js",
