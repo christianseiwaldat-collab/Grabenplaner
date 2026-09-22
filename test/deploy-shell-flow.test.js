@@ -81,7 +81,7 @@ printf '%s\\n' "$trusted_package_verifier" "$installed_runtime_verifier" "$verif
   });
 }
 
-for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", "xoffi", "failed-xoffi", "invalid-xoffi"]) {
+for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", "xoffi", "failed-xoffi", "invalid-xoffi", "import-delete", "failed-import-delete", "invalid-import-delete"]) {
   test(`actual updater orchestration: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
     assert.ok(source.indexOf(entry) > 0);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-deploy-shell-"));
@@ -92,6 +92,13 @@ for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", 
     write("app/old.txt", "old application");
     write("candidate/server-tools/linux/test-grabenplaner-server.sh", '#!/usr/bin/env bash\nprintf "short-checks\\n" >> "$EVENTS_FILE"\n');
     const xoffi = scenario.includes("xoffi");
+    const importDelete = scenario.includes("import-delete");
+    if (importDelete) write("candidate/server-tools/linux/lib/import-delete-migrate.js", `
+const fs=require('node:fs');
+fs.appendFileSync(process.env.EVENTS_FILE, 'import-migration\\n');
+require('node:assert/strict').deepEqual(process.argv.slice(2), ['${"a".repeat(64)}','--maintenance-lock-held']);
+${scenario === "failed-import-delete" ? "process.exit(42);" : `console.log(JSON.stringify({verified:${scenario !== "invalid-import-delete"},coreUnchanged:true}));`}
+`);
     if (xoffi) write("candidate/server-tools/linux/lib/xoffi-snapshots-migrate.js", `
 const fs=require('node:fs');
 fs.appendFileSync(process.env.EVENTS_FILE, 'schema-migration\\n');
@@ -112,6 +119,7 @@ app_dir="$PWD/app"
 extract_root="$PWD/candidate"
 rollback_root="$PWD/previous"
 database="$PWD/live.db"
+database_provider=${importDelete ? "postgresql" : "sqlite"}
 data_dir="$PWD/data"
 backup_dir="$PWD/backups"
 backup_result_file="$PWD/backup.json"
@@ -165,9 +173,10 @@ ${workflow}
     write("run.sh", script);
     const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: root, encoding: "utf8", timeout: 15000 });
     const events = fs.readFileSync(path.join(root, "events"), "utf8").trim().split("\n");
-    if (["failed-readiness", "failed-schedule", "failed-xoffi", "invalid-xoffi"].includes(scenario)) {
+    if (["failed-readiness", "failed-schedule", "failed-xoffi", "invalid-xoffi", "failed-import-delete", "invalid-import-delete"].includes(scenario)) {
       assert.notEqual(result.status, 0); assert.ok(events.includes("failed")); assert.ok(!events.includes("commit")); assert.ok(!events.includes("queue-assurance"));
       if (xoffi) { assert.ok(events.includes("schema-migration")); assert.ok(!events.includes("start")); }
+      if (importDelete) { assert.ok(events.includes("import-migration")); assert.ok(!events.includes("start")); }
     } else {
       assert.equal(result.status, 0, result.stderr);
       assert.equal(events.filter(event => event === "verified-backup").length, scenario === "full" ? 2 : 1);
@@ -180,6 +189,11 @@ ${workflow}
       assert.ok(events.indexOf("short-checks") < events.indexOf("success-receipt"));
       assert.ok(events.indexOf("commit") < events.indexOf("queue-assurance"));
       assert.ok(fs.existsSync(path.join(root, "previous/old.txt")));
+      assert.equal(events.includes("import-migration"), importDelete);
+      if (importDelete) {
+        assert.ok(events.indexOf("import-migration") > events.indexOf("verified-backup"));
+        assert.ok(events.indexOf("import-migration") < events.indexOf("start"));
+      }
       if (xoffi) {
         assert.ok(events.indexOf("schema-migration") > events.indexOf("database-lock"));
         assert.ok(events.indexOf("schema-migration") < events.indexOf("start"));
