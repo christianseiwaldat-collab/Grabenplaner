@@ -39002,7 +39002,7 @@ app.get("/api/portal/v1/system-center", async (request, response) => {
 
 app.get("/api/portal/v1/system-center/recovery-assurance/reports/:filename", (request, response) => {
   requirePortalAnyPermission(request, ["system:diagnostics:technical"]);
-  const match = /^([a-f0-9]{64})\.(pdf|md)$/.exec(request.params.filename);
+  const match = String(request.params.filename).match(/^([a-f0-9]{64})\.(pdf|md)$/);
   if (!match) throw httpError(400, "Ungültiger Prüfbericht.", "ASSURANCE_REPORT_INVALID");
   const history = readRecoveryAssuranceStatus({ configured: serverModeActive, reportId: match[1] });
   if (!history.statusAvailable || !history.integrityVerified) {
