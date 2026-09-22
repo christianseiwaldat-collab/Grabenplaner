@@ -378,3 +378,17 @@ test("ungueltige oder fehlende Eingaben werfen nicht und bleiben unbekannt", () 
   assert.equal(result.cards.length, 8);
   assert.ok(result.cards.every((entry) => Object.values(CHECK_STATES).includes(entry.state)));
 });
+
+test("a later full recovery proof removes only the historical nightly cap, not its failed check", () => {
+  const input = healthyInput({ appSmoke: { state: "pass", checkedAt: RESTORE_AT } });
+  input.automationStatus = { state: "critical", reasonCode: "AUTOMATION_RUN_FAILED", lastRunAt: "2026-07-21T03:08:00Z", latestFullProofAt: RESTORE_AT };
+  let result = buildSystemTrustIndex(input);
+  assert.ok(result.score > 49); assert.ok(result.score < 100);
+  assert.equal(evidence(result, "recovery_nightly_automation").state, "fail");
+  assert.equal(evidence(result, "recovery_nightly_automation").critical, false);
+  input.automationStatus.reasonCode = "AUTOMATION_TIMER_DISABLED";
+  assert.equal(buildSystemTrustIndex(input).capReason, "CRITICAL_CHECK_FAILED");
+  input.automationStatus.reasonCode = "AUTOMATION_RUN_FAILED";
+  input.diagnostics.recoveryAssurance.integrityVerified = false;
+  assert.equal(buildSystemTrustIndex(input).capReason, "CRITICAL_CHECK_FAILED");
+});

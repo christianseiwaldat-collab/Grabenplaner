@@ -2791,16 +2791,11 @@
             </div>
             <div class="settings-card full-settings-card maintenance-schedule-card hidden" id="maintenanceScheduleCard">
               <div class="card-heading"><div class="card-icon">Zeit</div><div><h2>Wartungs- &amp; Backupzeiten</h2><p>Automatische Sicherungen und Wartungen nach Wochentag, Rhythmus und Uhrzeit festlegen.</p></div></div>
-              <p class="settings-note security-note">Aktive Läufe werden niemals abgebrochen. Vor einem Release pausiert der Server diese Zeitgeber automatisch und setzt ihren vorherigen Zustand anschließend wieder fort.</p>
-              <p class="settings-note">Die Matrix zeigt die wirksamen Serverzeitpläne. Uhrzeiten gelten in der Serverzeitzone; vorhandene Verzögerungen bleiben erhalten. Nur geänderte Zeilen werden gespeichert, ohne verpasste Termine sofort nachzuholen.</p>
+              <p class="settings-note security-note">Aktive Läufe werden nicht abgebrochen. Geänderte Termine werden ohne nachträgliche Zusatzläufe gespeichert. Manuelle Prüfungen und Sicherungen bei Wartungen bleiben separate Auslöser.</p>
+              <p class="settings-note">Wähle Wochentage und Uhrzeit für jeden Vorgang. „Täglich um 03:00“ bereitet einen vollständigen Sicherungslauf pro Tag vor; erst „Zeitpläne speichern“ übernimmt die Änderung. Alle Zeiten gelten in der Serverzeitzone.</p>
               <div class="maintenance-schedule-status" id="maintenanceScheduleStatus" role="status" aria-live="polite">Zeitpläne werden beim Öffnen geladen.</div>
               <form id="maintenanceScheduleForm">
-                <div class="maintenance-schedule-table-wrap">
-                  <table class="maintenance-schedule-table">
-                    <thead><tr><th>Vorgang</th><th>Rhythmus</th><th>Mo</th><th>Di</th><th>Mi</th><th>Do</th><th>Fr</th><th>Sa</th><th>So</th><th>Zeitpunkt</th><th>Aktiv</th><th>Nächster Lauf</th></tr></thead>
-                    <tbody id="maintenanceScheduleRows"><tr><td colspan="12">Zeitpläne werden geladen …</td></tr></tbody>
-                  </table>
-                </div>
+                <div class="maintenance-schedule-list" id="maintenanceScheduleRows"><p>Zeitpläne werden geladen …</p></div>
                 <div class="backup-actions"><button type="button" class="secondary-button" id="reloadMaintenanceSchedulesButton">Neu laden</button><button type="submit" class="primary-button" id="saveMaintenanceSchedulesButton">Zeitpläne speichern</button></div>
               </form>
             </div>
