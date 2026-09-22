@@ -57,6 +57,16 @@ test('background upload acknowledges durable acceptance before any reader work a
   assert.equal((await f.request('/api/data-import/sources/'+ 'a'.repeat(64)+'/retry',{method:'POST'})).status,403);
 });
 
+test('permanent source deletion has a separate CSRF boundary and applied sources do not expose its control',async t=>{
+ let calls=0;const f=await fixture(t,{jobs:{deleteSource:async(get,id,input,preview)=>{await get();calls++;return {id,preview,revision:input.expectedRevision};}}});
+ const url='/api/data-import/sources/'+'a'.repeat(64),options={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expectedRevision:4})};
+ assert.equal((await (await f.request(url+'/delete-preview',options)).json()).preview,true);
+ assert.equal((await (await f.request(url+'/delete',options)).json()).preview,false);
+ f.state.csrf=false;assert.equal((await f.request(url+'/delete',options)).status,403);assert.equal(calls,2);
+ assert.doesNotMatch(UI.renderSource({status:'applied',tables:[]},{prepare:true}),/data-i-delete-source/);
+ assert.match(UI.renderSource({status:'deleting',tables:[]},{prepare:true}),/Endgültige Löschung fortsetzen/);
+});
+
 test('background progress explains automatic retry without asking for another upload and escapes its error',()=>{
   const html=UI.renderSource({kind:'trade',status:'interrupted',error:'IMPORT_SOURCE_READ_TIMEOUT',tables:[],background:{status:'retrying',retries:1,maxRetries:3,nextAt:'2026-09-14T10:00:00.000Z',error:'<script>bad</script>'}},{prepare:true});
   assert.match(html,/kein erneuter Upload nötig/);assert.doesNotMatch(html,/Bitte denselben Dateistand erneut auswählen|<script>/);

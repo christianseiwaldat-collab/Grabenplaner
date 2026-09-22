@@ -30,6 +30,12 @@ function readerFactory(kind,values={},counts={}) {
 }
 const rawMaster=(name,extra)=>({...Object.fromEntries(M.tableFor(name).columns.map(c=>[c.name,null])),...extra});
 const rawHistory=(name,extra)=>({...Object.fromEntries(H.tableFor('cash',name).columns.map(c=>[c.name,null])),...extra});
+async function removeSource(f,source){
+ f.database.exec('CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY,actor TEXT,action TEXT,entity_type TEXT,entity_id TEXT,detail TEXT,created_at TEXT)');
+ let result={revision:source.revision};
+ for(let n=0;n<200&&!result.deleted;n++)result=await f.runtime.sourceOperation(f.getSession,source.id,'delete',{expectedRevision:result.revision});
+ assert.equal(result.deleted,true);return result;
+}
 async function fixture(t,{kind='trade',values={},counts={},allowApply=true}={}) {
   const app=openSqliteApplicationPersistence({databasePath:':memory:',catalog:SQLITE_APPLICATION_CATALOG});
   ensureSqliteDataImportRuntimeSchema(app.database);ensureSqliteDataImportRuntimeSchema(app.database);
@@ -50,6 +56,63 @@ async function fixture(t,{kind='trade',values={},counts={},allowApply=true}={}) 
   t.after(async()=>{await app.provider.close();app.database.close();});
   return {...app,state,getSession,keyVault,options,upload,reload,finish,get runtime(){return runtime;}};
 }
+
+test('unapplied source deletion removes rows, exclusive payloads and source while preserving shared blocks',async t=>{
+ const values={ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'123',Artikelbezeichnung:'Synthetic shared article'})]};
+ const f=await fixture(t,{values});f.options.sharedPayloads=true;f.reload();
+ let first=await f.upload();first=await f.finish(first,'review');
+ const buffer=sourceBuffer();buffer[4000]=42;let second=await f.upload(buffer);second=await f.finish(second,'review');
+ const before=f.database.prepare('SELECT COUNT(*) AS n FROM data_import_payload_blocks').get().n;assert.ok(before>0);
+ const preview=await f.runtime.sourceOperation(f.getSession,first.id,'delete-preview',{expectedRevision:first.revision});assert.equal(preview.canDelete,true);
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,first.id,'delete',{expectedRevision:first.revision+1}),code('IMPORT_REVISION_CONFLICT'));
+ await removeSource(f,first);
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,first.id,'read'),code('IMPORT_SOURCE_NOT_FOUND'));
+ assert.equal((await f.runtime.sourceOperation(f.getSession,second.id,'read')).status,'ready');
+ assert.ok(f.database.prepare('SELECT COUNT(*) AS n FROM data_import_payload_blocks').get().n>0);
+ await removeSource(f,second);
+ for(const name of ['data_import_sources','data_import_runs','data_import_rows','data_import_row_payload_refs','data_import_events','data_import_payload_blocks'])assert.equal(f.database.prepare('SELECT COUNT(*) AS n FROM '+name).get().n,0,name);
+});
+
+test('source deletion is owner-authorized, resumable and refuses even a partially applied source',async t=>{
+ const f=await fixture(t,{values:{ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'123'})]}});
+ let source=await f.upload();source=await f.finish(source,'review');
+ f.state.session.permissions=f.state.session.permissions.filter(p=>p!==P.PREPARE);
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'delete',{expectedRevision:source.revision}),code('IMPORT_FORBIDDEN'));
+ f.state.session=base();source=await f.runtime.sourceOperation(f.getSession,source.id,'apply',{expectedRevision:source.revision});
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'delete-preview',{expectedRevision:source.revision}),code('IMPORT_DELETE_ALREADY_APPLIED'));
+ const other=await fixture(t,{values:{ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'123'})]}});
+ const staged=await other.upload();const step=await other.runtime.sourceOperation(other.getSession,staged.id,'delete',{expectedRevision:staged.revision});assert.equal(step.deleted,false);
+ other.reload();await assert.rejects(other.upload(),code('IMPORT_DELETE_IN_PROGRESS'));
+ await removeSource(other,{id:staged.id,revision:step.revision});
+});
+
+test('deletion recovers both a lost import-table checkpoint and a lost deletion checkpoint',async t=>{
+ const f=await fixture(t,{values:{ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'123'})]}});
+ let source=await f.upload();
+ const protection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+ const original=f.database.prepare('SELECT * FROM data_import_sources WHERE id=?').get(source.id),context=['source',original.scope_id,original.owner_id,original.id,original.revision];
+ const data=protection.open(original.payload,context);data.tables=[];
+ f.database.prepare('UPDATE data_import_sources SET payload=? WHERE id=?').run(protection.seal(data,context),source.id);protection.destroy();
+ const first=await f.runtime.sourceOperation(f.getSession,source.id,'delete',{expectedRevision:source.revision});
+ const checkpoint=f.database.prepare('SELECT revision,payload FROM data_import_sources WHERE id=?').get(source.id);
+ let step=await f.runtime.sourceOperation(f.getSession,source.id,'delete',{expectedRevision:first.revision});
+ // Simulated Core checkpoint loss after the Sales row/run deletion committed.
+ f.database.prepare('UPDATE data_import_sources SET revision=?,payload=? WHERE id=?').run(checkpoint.revision,checkpoint.payload,source.id);
+ f.reload();const result=await removeSource(f,{id:source.id,revision:checkpoint.revision});
+ assert.equal(result.removedRows,1);assert.equal(f.database.prepare('SELECT COUNT(*) n FROM data_import_runs').get().n,0);
+});
+
+test('compact cash deletion protects every published dataset and removes only an unpublished candidate',async t=>{
+ const f=await fixture(t,{kind:'cash',values:{KassenJournal:[rawHistory('KassenJournal',{Vorgang:'1'})]}});
+ f.options.compactCash=true;f.reload();const source=await f.upload();
+ const slot=f.database.prepare('SELECT slot FROM cash_snapshot_datasets WHERE id=?').get(source.id).slot;
+ f.database.prepare('INSERT INTO cash_publications VALUES(?,?,?,?,?,?)').run('f'.repeat(64),'grabenplaner-main',source.id,'synthetic-1',TIME,'synthetic protected publication');
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'delete',{expectedRevision:source.revision}),code('IMPORT_DELETE_ALREADY_APPLIED'));
+ const other=await fixture(t,{kind:'cash',values:{KassenJournal:[rawHistory('KassenJournal',{Vorgang:'1'})]}});
+ other.options.compactCash=true;other.reload();await removeSource(other,await other.upload());
+ assert.equal(other.database.prepare('SELECT COUNT(*) AS n FROM cash_snapshot_datasets').get().n,0);
+ assert.equal(f.database.prepare('SELECT COUNT(*) AS n FROM cash_snapshot_datasets WHERE slot=?').get(slot).n,1);
+});
 
 test('original upload names remain encrypted and survive reservation, background reading and reconstruction for all three databases',async t=>{
   for(const kind of ['trade','cash','bestell']) {
