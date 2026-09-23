@@ -85,12 +85,18 @@ test("report route requires technical permission, a valid identifier and a verif
 test("trend selection uses time spacing, exact values, persisted period and keyboard navigation", () => {
   const saved = new Map([["grabenplaner-system-center-days", "7"]]);
   const context = vm.createContext({ Date, Number, Array, JSON, Math, localStorage: { getItem: k => saved.get(k) },
-    escapeHtml: text => String(text).replaceAll('"', '&quot;'), diagnosticTimestamp: String });
+    escapeHtml: text => String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;'), diagnosticTimestamp: String });
+  vm.runInContext(source.slice(source.indexOf('function escapeHtmlAttribute('), source.indexOf('function activeLocations(')), context);
   vm.runInContext(source.slice(source.indexOf("function systemCenterTrendDays("), source.indexOf("function productReadinessStateCopy(")), context);
   assert.equal(context.systemCenterTrendDays(), 7);
   saved.set("grabenplaner-system-center-days", "91"); assert.equal(context.systemCenterTrendDays(), 180);
-  const html = context.renderSystemCenterSparkline([{ at: "2026-09-01T00:00:00Z", coreBytes: 100 }, { at: "2026-09-02T00:00:00Z", coreBytes: 200 }, { at: "2026-09-11T00:00:00Z", coreBytes: 300 }], { key: "coreBytes", label: "Core", formatter: String, colorClass: "database" });
-  const series = JSON.parse(html.match(/data-trend-series="([^"]+)"/)[1].replaceAll("&quot;", '"'));
+  const label = 'Core "Reserve" & <Messung>';
+  const html = context.renderSystemCenterSparkline([{ at: "2026-09-01T00:00:00Z", coreBytes: 100 }, { at: "2026-09-02T00:00:00Z", coreBytes: 200 }, { at: "2026-09-11T00:00:00Z", coreBytes: 300 }], { key: "coreBytes", label, formatter: String, colorClass: "database" });
+  let attributes;
+  new (require('htmlparser2').Parser)({ onopentag(name, values) { if (name === 'svg') attributes = values; } }).end(html);
+  const series = JSON.parse(attributes['data-trend-series']);
+  assert.equal(attributes['aria-label'], label + ' – Messpunkte mit Pfeiltasten wählen');
+  assert.equal(attributes['aria-valuetext'], series.at(-1).text);
   assert.equal(series[1].x, 38.4); assert.match(series[1].text, /200 Byte/);
   const output = {}, marker = { setAttribute() {} }, svg = { dataset: { trendSeries: JSON.stringify(series), trendIndex: "2" }, setAttribute() {}, querySelector: () => marker, closest: () => ({ querySelector: () => output }), getBoundingClientRect: () => ({ left: 0, width: 320 }) };
   context.inspectSystemCenterTrend({ type: "pointermove", target: { closest: () => svg }, clientX: 40 });

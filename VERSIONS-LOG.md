@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.92.65 Beta – Diagrammbedienung
+
+- Messpunktdaten werden korrekt als HTML-Attribute kodiert. Hover, Klick und Tastatur können dadurch den gewählten Wert aus der gezeichneten Datenreihe anzeigen.
+- Die Regression wird mit einem echten HTML-Parser und der produktiven Attributkodierung geprüft, einschließlich Anführungszeichen und Sonderzeichen.
+- Die Funktionen aus v0.92.64 bleiben enthalten. Die Produktivprüfung und der Recovery-Nachweis werden im Releasebeleg dokumentiert.
+
 ## v0.92.64 Beta – Releasevorbereitung 23.09.2026
 
 - Getrennte interaktive Datenbankdiagramme mit gespeichertem Zeitraum, aktuelle Vertrauensbewertung und PDF-/Markdown-Prüfberichte im System-Center.
