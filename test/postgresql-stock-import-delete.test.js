@@ -10,6 +10,16 @@ test('native deletion migration is atomic, fingerprinted, idempotent and keeps r
    const fault=new Error('Synthetic interruption');
    await assert.rejects(migration.migrate({query:(sql,...args)=>sql.startsWith('CREATE TABLE gp.import_delete_')?Promise.reject(fault):client.query(sql,...args)}),e=>e===fault);
    assert.equal((await client.query("SELECT to_regclass('integration.import_history_reference_master') AS name")).rows[0].name,null);
+   // Recreate the already released v0.92.64 migration before testing its upgrade.
+   await client.query('BEGIN');await client.query('SET LOCAL ROLE gp_sales_owner');
+   await client.query('SET LOCAL search_path=pg_catalog,gp,kassa,integration,trade,reporting');
+   for(const sql of migration.statements)await client.query(sql);
+   const previous=(await client.query('SELECT target_sha256 FROM gp.sales_migration_history ORDER BY stage DESC LIMIT 1')).rows[0].target_sha256;
+   const legacy=await require('../lib/persistence/postgresql/core/fingerprint').schemaFingerprint(client,require('../lib/persistence/postgresql/sales/layout').SCHEMAS);
+   await client.query('INSERT INTO gp.import_delete_migration_history VALUES(1,$1,$2,$3)',[migration.digest,previous,legacy]);await client.query('COMMIT');
+   await assert.rejects(migration.migrate({query:(sql,...args)=>sql.startsWith('CREATE TABLE gp.import_delete_performance_')?Promise.reject(fault):client.query(sql,...args)}),e=>e===fault);
+   assert.equal((await client.query("SELECT to_regclass('integration.data_import_links_last_run') AS name")).rows[0].name,null);
+   assert.equal((await client.query('SELECT target_sha256 FROM gp.import_delete_migration_history')).rows[0].target_sha256,legacy);
   }
   await migration.migrate(client);assert.equal((await migration.migrate(client)).applied,false);
   const indexes=await client.query("SELECT c.relname,i.indisvalid,i.indisready FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname IN ('data_import_links_last_run','import_history_versions_run')");
