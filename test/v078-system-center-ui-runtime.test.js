@@ -28,7 +28,7 @@ test("unavailable database sizes never display as zero KB", () => {
 
 test("live size is separated from stored history and negative deltas retain their sign", () => {
   const render = loadFunction("renderSystemCenterSparkline", "renderSystemCenterTrends", {
-    escapeHtml: String, diagnosticTimestamp: String,
+    escapeHtml: String, escapeHtmlAttribute: loadFunction("escapeHtmlAttribute", "activeLocations"), diagnosticTimestamp: String,
   });
   const points = [{ at: '2026-09-19T00:00:00Z', bytes: 952 }, { at: '2026-09-20T00:00:00Z', bytes: 0 }];
   const original = JSON.stringify(points);

@@ -25179,7 +25179,7 @@ function renderSystemCenterSparkline(points, { key, label, formatter, colorClass
   return `<article class="system-center-trend-card ${escapeHtml(colorClass)}">
     <header><div><small>${escapeHtml(label)}</small><strong>${escapeHtml(currentLabel ?? formatter(last[key]))}</strong></div><span>${deltaText}</span></header>
     ${currentLabel !== null ? '<small class="system-center-trend-note">Aktuell oben · gespeicherter Verlauf darunter</small>' : ''}
-    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" tabindex="0" role="slider" aria-label="${escapeHtml(label)} – Messpunkte mit Pfeiltasten wählen" aria-valuemin="1" aria-valuemax="${series.length}" aria-valuenow="${series.length}" aria-valuetext="${escapeHtml(latest.text)}" data-trend-series="${escapeHtml(JSON.stringify(coordinates))}" data-trend-index="${series.length - 1}">
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" tabindex="0" role="slider" aria-label="${escapeHtmlAttribute(label)} – Messpunkte mit Pfeiltasten wählen" aria-valuemin="1" aria-valuemax="${series.length}" aria-valuenow="${series.length}" aria-valuetext="${escapeHtmlAttribute(latest.text)}" data-trend-series="${escapeHtmlAttribute(JSON.stringify(coordinates))}" data-trend-index="${series.length - 1}">
       <path d="M ${padding} ${height - padding} H ${width - padding}" aria-hidden="true"></path>
       <polyline points="${coordinates.map(p => `${p.x},${p.y}`).join(" ")}" aria-hidden="true"></polyline>
       <circle data-trend-marker cx="${latest.x}" cy="${latest.y}" r="4" aria-hidden="true"></circle>
