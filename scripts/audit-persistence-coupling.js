@@ -76,6 +76,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'lib/persistence/postgresql/core/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete.js',
+  'lib/persistence/postgresql/sales/import-delete-performance.js',
   'lib/persistence/postgresql/operations/restore-capacity.js',
   'server-tools/linux/lib/import-delete-migrate.js',
   'test/postgresql-stock-import-delete.test.js',

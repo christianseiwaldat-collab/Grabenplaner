@@ -25050,7 +25050,7 @@ function systemCenterResourceCards(resources) {
   if (!resources || typeof resources !== "object") return "";
   const metrics = [
     { label: "Serverlaufzeit", value: systemCenterUptimeLabel(resources.uptimeSeconds), detail: "Seit dem letzten App-Start" },
-    { label: "CPU", value: Number.isFinite(resources.cpu?.loadAverageOneMinute) ? `${resources.cpu.loadAverageOneMinute} Last` : "Aktiv", detail: `${Number(resources.cpu?.logicalProcessors || 0)} logische Prozessoren` },
+    { label: "CPU", value: Number.isFinite(resources.cpu?.loadAverageOneMinute) ? `${resources.cpu.loadAverageOneMinute} Last` : "Aktiv", detail: Number.isInteger(resources.cpu?.logicalProcessors) && resources.cpu.logicalProcessors > 0 ? `${resources.cpu.logicalProcessors} logische Prozessoren` : "Prozessoranzahl nicht verfügbar" },
     { label: "Arbeitsspeicher", value: Number.isFinite(resources.memory?.usedPercent) ? `${resources.memory.usedPercent}% belegt` : "Nicht verfügbar", detail: `${systemCenterByteLabel(resources.memory?.availableBytes ?? resources.memory?.freeBytes)} verfügbar` },
     { label: "Freier Speicher", value: systemCenterByteLabel(resources.storage?.freeBytes), detail: `Datenbank ${systemCenterByteLabel(resources.storage?.databaseBytes)}` },
   ];
@@ -25179,7 +25179,7 @@ function renderSystemCenterSparkline(points, { key, label, formatter, colorClass
   return `<article class="system-center-trend-card ${escapeHtml(colorClass)}">
     <header><div><small>${escapeHtml(label)}</small><strong>${escapeHtml(currentLabel ?? formatter(last[key]))}</strong></div><span>${deltaText}</span></header>
     ${currentLabel !== null ? '<small class="system-center-trend-note">Aktuell oben · gespeicherter Verlauf darunter</small>' : ''}
-    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" tabindex="0" role="slider" aria-label="${escapeHtml(label)} – Messpunkte mit Pfeiltasten wählen" aria-valuemin="1" aria-valuemax="${series.length}" aria-valuenow="${series.length}" aria-valuetext="${escapeHtml(latest.text)}" data-trend-series="${escapeHtml(JSON.stringify(coordinates))}" data-trend-index="${series.length - 1}">
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" tabindex="0" role="slider" aria-label="${escapeHtmlAttribute(label)} – Messpunkte mit Pfeiltasten wählen" aria-valuemin="1" aria-valuemax="${series.length}" aria-valuenow="${series.length}" aria-valuetext="${escapeHtmlAttribute(latest.text)}" data-trend-series="${escapeHtmlAttribute(JSON.stringify(coordinates))}" data-trend-index="${series.length - 1}">
       <path d="M ${padding} ${height - padding} H ${width - padding}" aria-hidden="true"></path>
       <polyline points="${coordinates.map(p => `${p.x},${p.y}`).join(" ")}" aria-hidden="true"></polyline>
       <circle data-trend-marker cx="${latest.x}" cy="${latest.y}" r="4" aria-hidden="true"></circle>
