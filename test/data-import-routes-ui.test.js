@@ -200,7 +200,7 @@ test('Productive Block 1: preview markup escapes fields, exposes blocked counts,
   const ui=fs.readFileSync(path.join(__dirname,'../public/data-import.js'),'utf8');assert.doesNotMatch(ui,/localStorage|sessionStorage/);
   assert.match(ui,/visibilitychange/);assert.match(ui,/controller\?\.abort/);
   const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');assert.equal(server.split('...DATA_IMPORT_PERMISSION_CATALOG').length-1,2);
-  assert.match(server,/createDataImportRuntime\(\{[^}]*allowApply: true, sharedPayloads: true/);assert.match(server,/refreshSession: \(request\) => loadPortalSessionFromRequest\(request, \{ touch: false \}\)/);
+  assert.match(server,/createDataImportRuntime\(\{[^}]*allowApply: true, sharedPayloads: true/);assert.match(server,/refreshSession: async \(request\) => loadPortalSessionFromRequest\(request, \{\s+touch: false,/);
 });
 
 test('compact cash preview shows full history and value verification without unsupported row undo or audit actions',()=>{
