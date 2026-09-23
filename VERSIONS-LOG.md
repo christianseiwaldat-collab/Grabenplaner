@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.92.66 Beta – Recovery-Funktionsprobe
+
+- Fehlgeschlagene Funktionsproben behalten den festen Prüfschritt und die technische Fehlerklasse nach dem Aufräumen der isolierten Testumgebung. HTTP-Abweichungen nennen Soll- und Iststatus; Kundendaten, Suchbegriffe und rohe Fehlermeldungen werden nicht übernommen.
+- Die Importprobe prüft zufällige Kandidaten einschließlich archivierter Artikel und wählt bei einer Kollision eine andere Nummer. Nach begrenzten Versuchen bricht sie weiterhin ab; vorhandene Artikel werden nicht überschrieben.
+- Regressionstests führen den vollständigen HTTP-Prüfablauf mit synthetischen Antworten aus und prüfen Fehlerweitergabe, Bereinigung, Datenschutz und die unveränderte abschließende Rechteentzugsprüfung.
+- Der tatsächliche Produktiv- und Recovery-Nachweis wird separat im Auslieferungsbeleg dokumentiert.
+
 ## v0.92.65 Beta – Diagrammbedienung und Importlöschung
 
 - Messpunktdaten werden korrekt als HTML-Attribute kodiert. Hover, Klick und Tastatur können dadurch den gewählten Wert aus der gezeichneten Datenreihe anzeigen.
