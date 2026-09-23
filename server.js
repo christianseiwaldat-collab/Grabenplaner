@@ -25855,7 +25855,10 @@ const dataImportRoutes=registerDataImportRoutes(app, {
   mappings: createDataImportMappingRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowMapping: false }),
   cashPublications: createCashPublicationRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: true, policies: CASH_SOURCE_POLICIES }),
   requireSession: requireEmployeePortalSession,
-  refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }),
+  refreshSession: async (request) => loadPortalSessionFromRequest(request, {
+    touch: false,
+    ...(postgresqlActive ? { repository: (await applicationPersistence.ready).authorizationRepositories.portalAccess } : {}),
+  }),
   assertCsrf: assertPortalCsrf,
 });
 const postgresqlWorkerConfiguration = postgresqlActive ? persistenceConfiguration.readers : null;

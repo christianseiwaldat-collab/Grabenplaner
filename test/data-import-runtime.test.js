@@ -73,6 +73,34 @@ test('unapplied source deletion removes rows, exclusive payloads and source whil
  for(const name of ['data_import_sources','data_import_runs','data_import_rows','data_import_row_payload_refs','data_import_events','data_import_payload_blocks'])assert.equal(f.database.prepare('SELECT COUNT(*) AS n FROM '+name).get().n,0,name);
 });
 
+test('server import authorization uses its independent reader inside deletion transactions',async t=>{
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+ const f=await fixture(t),authorization=await fixture(t);
+ const source=await f.upload();
+ const statement=require('../lib/persistence/statements/data-import-runtime').DATA_IMPORT_RUNTIME_STATEMENTS.key;
+ const text=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
+ const start=text.indexOf('  refreshSession:',text.indexOf('const dataImportRoutes='));
+ const end=text.indexOf('  assertCsrf:',start);
+ const refresh=vm.runInNewContext('({'+text.slice(start,end)+'})',{
+  postgresqlActive:true,applicationPersistence:{ready:Promise.resolve({authorizationRepositories:{portalAccess:authorization.provider}})},
+  async loadPortalSessionFromRequest(_request,options){
+   assert.equal(options.touch,false);
+   await (options.repository||f.provider).queryOne(statement,{id:'synthetic-session-read'});
+   return f.state.session;
+  },
+ }).refreshSession;
+ const get=()=>refresh({});
+ const legacyGet=async()=>{await f.provider.queryOne(statement,{id:'synthetic-session-read'});return f.state.session;};
+ await assert.rejects(f.runtime.sourceOperation(legacyGet,source.id,'delete-preview',{expectedRevision:source.revision}),code('PERSISTENCE_TRANSACTION_STATE_INVALID'));
+ assert.equal((await f.runtime.sourceOperation(get,source.id,'delete-preview',{expectedRevision:source.revision})).canDelete,true);
+ f.database.exec('CREATE TABLE audit_log(id INTEGER PRIMARY KEY,actor TEXT,action TEXT,entity_type TEXT,entity_id TEXT,detail TEXT,created_at TEXT)');
+ let result={revision:source.revision};
+ for(let i=0;i<200&&!result.deleted;i++)result=await f.runtime.sourceOperation(get,source.id,'delete',{expectedRevision:result.revision});
+ assert.equal(result.deleted,true);
+ f.state.session.permissions=[];
+ await assert.rejects(f.runtime.sourceOperation(get,source.id,'delete-preview',{expectedRevision:result.revision||1}),code('IMPORT_FORBIDDEN'));
+});
+
 test('source deletion is owner-authorized, resumable and refuses even a partially applied source',async t=>{
  const f=await fixture(t,{values:{ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'123'})]}});
  let source=await f.upload();source=await f.finish(source,'review');

@@ -14,7 +14,7 @@ async function main(args=process.argv.slice(2)){
  if(hash(manifestBytes)!==expectedManifest)throw new Error('PG_IMPORT_DELETE_MIGRATION_MANIFEST');
  const manifest=JSON.parse(manifestBytes);
  require('./deploy-policy').applicationContract(app);
- for(const relative of ['server-tools/linux/lib/import-delete-migrate.js','lib/persistence/postgresql/sales/import-delete.js']){
+ for(const relative of ['server-tools/linux/lib/import-delete-migrate.js','lib/persistence/postgresql/sales/import-delete.js','lib/persistence/postgresql/sales/import-delete-performance.js']){
   const entry=manifest.files.find(f=>f.path===relative);
   if(!entry||hash(fs.readFileSync(app+'/'+relative))!==entry.sha256)throw new Error('PG_IMPORT_DELETE_MIGRATION_SOURCE');
  }
