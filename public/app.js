@@ -25050,7 +25050,7 @@ function systemCenterResourceCards(resources) {
   if (!resources || typeof resources !== "object") return "";
   const metrics = [
     { label: "Serverlaufzeit", value: systemCenterUptimeLabel(resources.uptimeSeconds), detail: "Seit dem letzten App-Start" },
-    { label: "CPU", value: Number.isFinite(resources.cpu?.loadAverageOneMinute) ? `${resources.cpu.loadAverageOneMinute} Last` : "Aktiv", detail: `${Number(resources.cpu?.logicalProcessors || 0)} logische Prozessoren` },
+    { label: "CPU", value: Number.isFinite(resources.cpu?.loadAverageOneMinute) ? `${resources.cpu.loadAverageOneMinute} Last` : "Aktiv", detail: Number.isInteger(resources.cpu?.logicalProcessors) && resources.cpu.logicalProcessors > 0 ? `${resources.cpu.logicalProcessors} logische Prozessoren` : "Prozessoranzahl nicht verfügbar" },
     { label: "Arbeitsspeicher", value: Number.isFinite(resources.memory?.usedPercent) ? `${resources.memory.usedPercent}% belegt` : "Nicht verfügbar", detail: `${systemCenterByteLabel(resources.memory?.availableBytes ?? resources.memory?.freeBytes)} verfügbar` },
     { label: "Freier Speicher", value: systemCenterByteLabel(resources.storage?.freeBytes), detail: `Datenbank ${systemCenterByteLabel(resources.storage?.databaseBytes)}` },
   ];
