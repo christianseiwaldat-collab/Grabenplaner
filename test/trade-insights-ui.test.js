@@ -107,9 +107,11 @@ test('stock summary requires a branch, omits period filters and replaces partial
  form.emit('submit',{preventDefault(){}});await tick();
  const first=f.requests.at(-1),query=JSON.parse(first.options.body);
  assert.equal(query.locationId,'93');assert.equal(query.dateFrom,undefined);assert.equal(query.dateTo,undefined);assert.equal(query.days,undefined);
- const total={positions:1,quantity:'1',provisionalNet:'10',confirmedNet:'0',excluded:0,ambiguous:0,missingArticle:0,missingQuantity:0,negative:0,unclassified:1,missingCost:0,zeroCost:0};
+ const total={positions:1,quantity:'1',positivePositions:1,positiveQuantity:'1',confirmedQuantity:'0',provisionalNet:'10',confirmedNet:'0',excluded:0,ambiguous:0,missingArticle:0,missingQuantity:0,negative:0,unclassified:1,missingCost:0,zeroCost:0};
  first.resolve({available:true,cumulative:true,complete:false,scanned:100,next:'continuation',rows:[],totals:total});await tick();
  assert.match(f.node('results').innerHTML,/Zwischenstand/);
+ assert.match(f.node('results').innerHTML,/Erfasster Bestand \(vorläufig\).*?<strong>1<\/strong>/);
+ assert.match(f.node('note').textContent,/Importiert am:/);
  assert.equal(JSON.parse(f.requests.at(-1).options.body).cursor,'continuation');
  f.requests.at(-1).resolve({available:true,cumulative:true,complete:true,scanned:105,next:null,rows:[],totals:{...total,positions:2,provisionalNet:'20'}});await tick();
  assert.match(f.node('results').innerHTML,/Alle Quellenpositionen geprüft/);assert.doesNotMatch(f.node('results').innerHTML,/Zwischenstand/);

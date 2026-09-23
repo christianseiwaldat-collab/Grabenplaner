@@ -21,6 +21,7 @@ test('branch stock totals are exact, grouped and distinguish provisional value f
  const f=await fixture(t);await prepare(f);
  let r=await f.run('stock-summary',{locationId:'18'});
  assert.equal(r.complete,true);assert.equal(r.totals.positions,5);assert.equal(r.totals.quantity,'5.3');
+ assert.equal(r.totals.positiveQuantity,'5.3');assert.equal(r.totals.positivePositions,4);assert.equal(r.totals.confirmedQuantity,'0');
  assert.equal(r.totals.provisionalNet,'246.93');assert.equal(r.totals.confirmedNet,'0');
  assert.equal(r.totals.excluded,1);assert.equal(r.totals.missingCost,1);assert.equal(r.totals.zeroCost,1);
  assert.equal(r.rows.find(g=>g.id==='20').provisionalNet,'0.03');
@@ -42,6 +43,7 @@ test('duplicates, negative quantities and orphan articles cannot inflate the val
  {EAN:'b',FilialID:18,FBestand:'-2'},{EAN:'missing',FilialID:18,FBestand:'100'}],{sourceInstance:'tradefoto-trade',snapshotAt:'2026-09-15T10:00:00.000Z'});
  const r=await f.run('stock-summary',{locationId:'18'});
  assert.equal(r.totals.provisionalNet,'0');assert.equal(r.totals.ambiguous,2);assert.equal(r.totals.negative,1);assert.equal(r.totals.missingArticle,1);
+ assert.equal(r.totals.positiveQuantity,'0');assert.equal(r.totals.positivePositions,0);
 });
 test('continuation never presents an incomplete page as a total and rejects changed data or authority',async t=>{
  const f=await fixture(t);
