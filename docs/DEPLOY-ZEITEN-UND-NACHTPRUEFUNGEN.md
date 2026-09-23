@@ -1,5 +1,20 @@
 # Kürzere Bereitstellung und nächtliche Wiederherstellungsprüfung
 
+## Diagnose später Funktionsproben
+
+Ein erfolgreicher Datenbank-Restore und App-Start sind noch kein vollständiger
+Recovery-Erfolg. Ab v0.92.66 bleibt bei späteren Fehlern ein `smokeFailure` im
+bereinigten Laufbeleg erhalten: fester Prüfschritt, Fehlerklasse und bei einer
+HTTP-Abweichung tatsächlicher und erwarteter Status. Es werden keine Antworten,
+Suchbegriffe, Artikelnummern, Zugangsdaten oder rohen Fehlermeldungen übernommen.
+Der normale Fehlschlag, die Aufräumregeln und alle Funktionsprüfungen bleiben erhalten.
+
+Die synthetische Importprobe muss eine unbenutzte sechsstellige Artikelnummer
+finden. Ein Zufallstreffer auf bestehende oder archivierte Artikel wird nicht
+überschrieben, sondern führt zur Auswahl eines anderen Kandidaten. Die Suche ist
+auf 20 Versuche begrenzt. Ein leerer oder fehlerhafter API-Nachweis wird nicht als
+freie Artikelnummer akzeptiert.
+
 ## Verbindlicher Diagnose-Vorabcheck (20.09.2026)
 
 Vor jedem Deploy oder isolierten Recovery-Versuch mit Diagnose-Preload gehört

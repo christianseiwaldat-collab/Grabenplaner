@@ -1,6 +1,7 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path');
 const {applicationStartupPhase,sanitizeReportWorkerDiagnostic}=require('../../../../lib/report-worker-diagnostics');
+const {sanitizeSmokeFailure}=require('./postgresql-smoke-diagnostics');
 const PHASES=new Set(['preparing','requiring-server','server-required','initializing-application','application-data','receipt-workers','report-worker','initialization-wait','initialization-failed','application-initialized','starting-listener','listener-ready','/api/health/live','/api/health/ready']);
 function boundedFile(root,name,limit,tail=false){
  const file=path.join(root,'work','application',name);let fd;
@@ -15,6 +16,7 @@ function boundedFile(root,name,limit,tail=false){
 }
 function safeDiagnostics(root){
  const result={},progress=[];
+ try{const failure=sanitizeSmokeFailure(JSON.parse(boundedFile(root,'smoke-failure.json',4096)||'null'));if(failure)result.smokeFailure=failure;}catch{/* Fixed technical steps only. */}
  for(const line of (boundedFile(root,'http-progress.jsonl',65536,true)||'').trim().split('\n').slice(-64)){
   try{
    const row=JSON.parse(line);if(!PHASES.has(row.phase))continue;
