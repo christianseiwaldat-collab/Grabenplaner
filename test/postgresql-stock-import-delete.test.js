@@ -12,6 +12,9 @@ test('native deletion migration is atomic, fingerprinted, idempotent and keeps r
    assert.equal((await client.query("SELECT to_regclass('integration.import_history_reference_master') AS name")).rows[0].name,null);
   }
   await migration.migrate(client);assert.equal((await migration.migrate(client)).applied,false);
+  const indexes=await client.query("SELECT c.relname,i.indisvalid,i.indisready FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname IN ('data_import_links_last_run','import_history_versions_run')");
+  assert.equal(indexes.rows.length,2);assert.ok(indexes.rows.every(r=>r.indisvalid&&r.indisready));
+  assert.equal((await client.query("SELECT has_table_privilege('gp_sales_app','gp.import_delete_performance_history','UPDATE') AS allowed")).rows[0].allowed,false);
   const base=(await client.query('SELECT target_sha256 FROM gp.sales_migration_history ORDER BY stage DESC LIMIT 1')).rows[0].target_sha256;
   await client.query('SET search_path=pg_catalog,gp,kassa,integration,trade,reporting');
   assert.equal(await migration.target(client,base),await require('../lib/persistence/postgresql/core/fingerprint').schemaFingerprint(client,require('../lib/persistence/postgresql/sales/layout').SCHEMAS));
