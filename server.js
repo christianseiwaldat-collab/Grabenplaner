@@ -25887,8 +25887,18 @@ require("./lib/receipt-search-routes").registerReceiptSearchRoutes(app, {
   runtime: managedSalesHistoryRuntime, requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
   refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }), preferences: uiPreferencesRepository,
 });
+const tradeInsightRuntime = require('./lib/persistence/repositories/trade-insights').createTradeInsightRuntime({ access: persistenceProvider, vault: integrationSecretVault });
+const tradeInsightJobs = require('./lib/persistence/repositories/trade-insight-jobs').createTradeInsightJobs({
+  access: persistenceProvider, vault: integrationSecretVault, runtime: tradeInsightRuntime, resolvePrincipal: resolveSalesReportPrincipal,
+  ...(postgresqlActive ? { dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
+  onError: code => console.error('Gespeicherte Einkaufsergebnisse derzeit nicht verfügbar:', code),
+});
+require('./lib/trade-insight-job-routes').registerTradeInsightJobRoutes(app, {
+  jobs: tradeInsightJobs, requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
+  refreshSession: request => loadPortalSessionFromRequest(request, { touch: false }),
+});
 require('./lib/trade-insights-routes').registerTradeInsightRoutes(app, {
-  runtime: require('./lib/persistence/repositories/trade-insights').createTradeInsightRuntime({ access: persistenceProvider, vault: integrationSecretVault }),
+  runtime: tradeInsightRuntime,
   ...(postgresqlActive ? { dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
   requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
   refreshSession: (request, executor) => loadPortalSessionFromRequest(request, { touch: false, ...(executor ? { repository: require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor) } : {}) }),
@@ -58792,32 +58802,87 @@ function xoffiComparisonSettings(context) {
   catch { return { ...comparison.DEFAULT_THRESHOLDS }; }
 }
 
+async function xoffiPlannedOptionCredits(options, shifts, query, sicknessCredits = []) {
+  const creditedTypes = new Set(["school", "vocational_school", "branch", "external_appointment", "team_meeting", "other", "vacation", "sick", "special_leave"]);
+  const candidates = options.filter(option => creditedTypes.has(option.option_type));
+  const sicknessDates = new Set(sicknessCredits.filter(credit => Number(credit.minutes) > 0)
+    .map(credit => `${credit.employee_number}|${credit.date}`));
+  const scheduledDates = new Set(shifts.map(shift => `${shift.employee_number}|${shift.shift_date}`));
+  const claimedDates = new Set();
+  const credits = [];
+  for (const option of candidates) {
+    const minutes = Math.max(0, finiteScheduleMinutes(optionMinutesPerDay(option, option.contracted_hours)));
+    if (!minutes) continue;
+    const teamMeeting = isTeamWideMeetingOption(option);
+    for (const date of creditedOptionDatesInRange(option, query.weekStart, query.weekEnd, query.locationId)) {
+      if (teamMeeting && employeeDateHasSickness(options, sicknessDates, option.employee_number, date)) continue;
+      if (!teamMeeting && optionIsAllDay(option)
+        && !claimEmployeeDate(option.employee_number, date, scheduledDates, claimedDates)) continue;
+      if (!optionIsAllDay(option)) claimedDates.add(`${option.employee_number}|${date}`);
+      credits.push({ employeeNumber: String(option.employee_number), date, minutes, label: optionLabel(option.option_type) });
+    }
+  }
+  for (const credit of sicknessCredits) {
+    if (Number(credit.minutes) <= 0 || credit.date < query.weekStart || credit.date > query.weekEnd
+      || options.some(option => option.employee_number === credit.employee_number && option.option_type === "sick"
+        && credit.date >= option.date_from && credit.date <= option.date_to)
+      || !claimEmployeeDate(credit.employee_number, credit.date, scheduledDates, claimedDates)) continue;
+    credits.push({ employeeNumber: String(credit.employee_number), date: credit.date,
+      minutes: Number(credit.minutes), label: "Krankenstand" });
+  }
+  return credits;
+}
+
 app.get("/api/portal/v1/xoffi-plan-comparison", async (request, response) => {
   const session = requirePortalReadOrLocal(request, "time:read");
   const context = await resolvePlanningContext(request.query || {});
   assertSessionContextScope(session, context);
   const weekStart = String(request.query.weekStart || "");
-  if (!isIsoDate(weekStart) || getMonday(weekStart) !== weekStart) {
+  const hasRange = request.query.from !== undefined || request.query.to !== undefined;
+  if (!hasRange && (!isIsoDate(weekStart) || getMonday(weekStart) !== weekStart)) {
     throw httpError(400, "Bitte eine Kalenderwoche mit Montag als Beginn wählen.", "XOFFI_WEEK_INVALID");
   }
-  const query = { locationId: context.locationId, departmentId: context.departmentId || null,
-    weekStart, weekEnd: addDays(weekStart, 6), filterDepartment: context.departmentId ? 1 : 0 };
-  const [employees, shifts, imports, importDays, settings] = await Promise.all([
-    planningSettingsRepository.listScheduleEmployees(query), planningSettingsRepository.listScheduleShifts(query),
-    timeTrackingRepository.listActiveXoffiWeekRows(query), timeTrackingRepository.listActiveXoffiWeekDays(query),
-    settingsForLocation(context.locationId),
+  const dateFrom = hasRange ? String(request.query.from || "") : weekStart;
+  const dateTo = hasRange ? String(request.query.to || "") : addDays(weekStart, 6);
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom || daysBetweenInclusive(dateFrom, dateTo) > 370) {
+    throw httpError(400, "Bitte einen gültigen Zeitraum von höchstens 370 Tagen wählen.", "XOFFI_RANGE_INVALID");
+  }
+  const [settings, saturdayCutover] = await Promise.all([
+    settingsForLocation(context.locationId), saturdayCreditService.cutover(),
   ]);
-  const measuredShifts = await Promise.all(shifts.map(async shift => {
-    const metrics = await plannedShiftBreaks(shift, settings);
-    return { ...shift, raw_minutes: metrics.rawMinutes, break_minutes: metrics.breakMinutes };
-  }));
   const limits = xoffiComparisonSettings(context);
-  response.json({ weekStart, weekEnd: query.weekEnd, limits,
+  const comparison = require("./lib/xoffi-plan-comparison");
+  const snapshots = [];
+  for (let start = getMonday(dateFrom); start <= dateTo; start = addDays(start, 7)) {
+    const query = { locationId: context.locationId, departmentId: context.departmentId || null,
+      weekStart: start, weekEnd: addDays(start, 6), filterDepartment: context.departmentId ? 1 : 0 };
+    const [employees, shifts, imports, importDays, weekOptions] = await Promise.all([
+      planningSettingsRepository.listScheduleEmployees(query), planningSettingsRepository.listScheduleShifts(query),
+      timeTrackingRepository.listActiveXoffiWeekRows(query), timeTrackingRepository.listActiveXoffiWeekDays(query),
+      planningSettingsRepository.listScheduleWeekOptions(query),
+    ]);
+    snapshots.push({ query, employees, shifts, imports, importDays, weekOptions });
+  }
+  const allSicknessCredits = await sicknessCreditsForEmployeesInRange(
+    [...new Set(snapshots.flatMap(snapshot => snapshot.employees.map(employee => employee.personnel_number)))],
+    getMonday(dateFrom), addDays(getMonday(dateTo), 6),
+  );
+  const weeks = [];
+  for (const { query, employees, shifts, imports, importDays, weekOptions } of snapshots) {
+    const visible = new Set(employees.map(employee => String(employee.personnel_number)));
+    const sicknessCredits = allSicknessCredits.filter(credit => visible.has(String(credit.employee_number))
+      && credit.date >= query.weekStart && credit.date <= query.weekEnd);
+    const measuredShifts = await Promise.all(shifts.map(async shift => ({
+      ...shift, ...await shiftMetrics(shift, settings, { saturdayCutover }),
+    })));
+    const planCredits = await xoffiPlannedOptionCredits(weekOptions, shifts, query, sicknessCredits);
+    weeks.push(comparison.buildComparison({ dates: Array.from({ length: 7 }, (_, day) => addDays(query.weekStart, day)),
+      employees, shifts: measuredShifts, planCredits, imports, importDays, limits, departmentId: context.departmentId }));
+  }
+  const dates = Array.from({ length: daysBetweenInclusive(dateFrom, dateTo) }, (_, day) => addDays(dateFrom, day));
+  response.json({ weekStart: getMonday(dateFrom), weekEnd: addDays(getMonday(dateTo), 6), dateFrom, dateTo, limits,
     canChange: session.localSystem === true || session.permissions.includes("time:settings"),
-    employees: require("./lib/xoffi-plan-comparison").buildComparison({
-      dates: Array.from({ length: 7 }, (_, day) => addDays(weekStart, day)), employees,
-      shifts: measuredShifts, imports, importDays, limits, departmentId: context.departmentId,
-    }),
+    employees: comparison.combineComparisons(weeks, dates, limits),
   });
 });
 
@@ -64217,6 +64282,7 @@ async function closePersistenceForTests() {
     throw new Error("Die Test-Persistence darf nur im Testbetrieb geschlossen werden.");
   }
   if (!databaseClosed) {
+    await tradeInsightJobs.stop();
     await salesReportJobs.stop();
     await postgresqlReceiptWorkers?.close();
     await persistenceProvider.close();
@@ -64266,7 +64332,7 @@ async function startServer() {
       for (const url of getLanUrls(listeningPort)) console.log(`LAN-Zugriff: ${url}`);
     }
     scheduleAutomaticBackups();
-    if (process.env.GRABENPLANER_DEPLOYMENT_KIND !== 'recovery-smoke') {salesReportJobs.start();dataImportJobs.start();}
+    if (process.env.GRABENPLANER_DEPLOYMENT_KIND !== 'recovery-smoke') {salesReportJobs.start();tradeInsightJobs.start();dataImportJobs.start();}
     try { await reconcileInterruptedIntegrationDeliveries(); } catch (error) { console.error("Unterbrochene Lohnübergaben konnten nicht abgeglichen werden:", error); }
     try { await reconcileOrphanAmuBlobs(); } catch (error) { console.error("AUM-Abgleich fehlgeschlagen:", error); }
     try { await runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
@@ -64366,6 +64432,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
     finished = true;
     await importDrain;
     await amuScannerProbe.catch(() => {});
+    await tradeInsightJobs.stop().catch(() => {});
     await salesReportJobs.stop().catch(() => {});
     await postgresqlReceiptWorkers?.close().catch(() => {});
     if (!databaseClosed) {

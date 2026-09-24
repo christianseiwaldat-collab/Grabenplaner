@@ -664,6 +664,18 @@ test("xoffi comparison: scoped weekly import data, missing persons and persisted
   assert.equal(row.importState,'complete');assert.equal(row.actualMinutes,1245);
   assert.equal(row.days.length,7);assert.equal(row.days[0].actualMinutes,510);
   assert.equal(row.plannedMinutes,100);assert.equal(row.severity,'red');assert.equal(row.percent,1145);
+  assert.equal(row.valuedComparison.actualMinutes, row.valuedMinutes);
+  const schoolId=db.prepare("INSERT INTO week_options(employee_number,week_start,date_from,date_to,option_type,all_day,credited_minutes_per_day) VALUES(?,'2026-09-14','2026-09-15','2026-09-15','school',1,600)").run(MANAGER).lastInsertRowid;
+  try {
+    const withSchool=await fetch(url,{headers:{Cookie:auth.cookie}});
+    const schoolBody=await withSchool.json();
+    assert.equal(withSchool.status,200,JSON.stringify(schoolBody));
+    const comparison=schoolBody.employees.find(entry=>entry.employeeNumber===MANAGER);
+    assert.equal(comparison.plannedMinutes,700);
+    assert.equal(comparison.days[1].plannedMinutes,600);
+    assert.deepEqual(comparison.days[1].planCredits,[{label:'Schulung',minutes:600}]);
+    assert.equal(comparison.actualMinutes,1245);
+  } finally { db.prepare('DELETE FROM week_options WHERE id=?').run(schoolId); }
   assert.equal(body.employees.find(entry=>entry.employeeNumber===DEPARTMENT_MANAGER).importState,'missing');
   const otherLocation=db.prepare('SELECT id FROM locations WHERE id != ? LIMIT 1').get(LOCATION).id;
   const foreign=await fetch(url.replace(`locationId=${LOCATION}`,`locationId=${otherLocation}`).replace(`&departmentId=${departmentId}`,''),{headers:{Cookie:auth.cookie}});
@@ -678,4 +690,29 @@ test("xoffi comparison: scoped weekly import data, missing persons and persisted
   assert.deepEqual(body.limits,{greenMax:8,yellowMax:20});
   const branch=await fetch(url.replace(`&departmentId=${departmentId}`,''),{headers:{Cookie:auth.cookie}});
   assert.deepEqual((await branch.json()).limits,{greenMax:5,yellowMax:15});
+});
+
+test("xoffi comparison: date ranges clip weekly imports, flag gaps and keep the scope boundary", async () => {
+  const auth = createSession(MANAGER);
+  const get = (from, to, location = LOCATION) => fetch(`${baseUrl}/api/portal/v1/xoffi-plan-comparison?from=${from}&to=${to}&locationId=${location}${location === LOCATION ? `&departmentId=${departmentId}` : ''}`, { headers: { Cookie: auth.cookie } });
+  let response = await get('2026-09-14', '2026-09-14'), body = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(body));
+  let row = body.employees.find(person => person.employeeNumber === MANAGER);
+  assert.equal(row.days.length, 1);
+  assert.equal(row.actualMinutes, 510);
+  assert.equal(row.importState, 'complete');
+  response = await get('2026-09-01', '2026-09-30'); body = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(body));
+  row = body.employees.find(person => person.employeeNumber === MANAGER);
+  assert.equal(row.days.length, 30);
+  assert.equal(row.coveredDays, 14);
+  assert.equal(row.imports.length, 2);
+  assert.equal(row.valuedComparison.actualMinutes, null);
+  assert.equal(row.valuedComparison.severity, 'missing');
+  assert.equal(row.days[13].actualMinutes, 510);
+  for (const [from, to] of [['bad', '2026-09-30'], ['2026-09-30', '2026-09-01'], ['2025-01-01', '2026-09-30'], ['2026-02-30', '2026-03-01'], ['2026-09-01', '']]) {
+    assert.equal((await get(from, to)).status, 400, `${from}–${to}`);
+  }
+  const otherLocation = db.prepare('SELECT id FROM locations WHERE id != ? LIMIT 1').get(LOCATION).id;
+  assert.equal((await get('2026-09-01', '2026-09-30', otherLocation)).status, 403);
 });

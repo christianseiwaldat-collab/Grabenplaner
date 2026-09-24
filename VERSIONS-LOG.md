@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.67 Beta – Zeiterfassung und gespeicherte Einkaufsergebnisse
+
+- Zeiterfassung berücksichtigt bewertete Schulungen und Krankenstände. Ein Umschalter zeigt alternativ die physische Anwesenheit; Woche, Monat, Quartal und ein frei gewählter Zeitraum nutzen den gemeinsamen Zeitraumkalender. Fehlende Importe bleiben als unbekannt erkennbar.
+- Überarbeitete Zeiterfassungsansicht und Zeitraumkalender für Planungsoptionen innerhalb der ausgewählten Planungswoche.
+- Suchen in Einkauf & Bestand laufen als dauerhafte Serveraufträge weiter. Abgeschlossene Ergebnisstände lassen sich umbenennen, unverändert wieder öffnen, sortieren und mit derselben Sortierung vollständig als PDF exportieren. Aktuelle Berechtigungen gelten auch für gespeicherte Ergebnisse.
+- Natürlich alphanumerisch sortierte Auswahlmenüs, gemeinsame Bestände aller freigegebenen Filial-IDs und Entfernung des Filialpreisvergleichs aus der Oberfläche.
+- Ergebnisablage verwendet die vorhandene verschlüsselte Berichtswarteschlange; keine neue Datenbankmigration. Grenzen: 50 Aufträge pro Benutzer, 3 gleichzeitig laufend, 20.000 Zeilen und 16 MiB je Ergebnis sowie der bestehende geschützte Speicherrahmen. Änderungen der Quellen während einer Suche ergeben einen sichtbaren Fehler statt gemischter Datenstände.
+
 ## v0.92.66 Beta – Recovery-Funktionsprobe
 
 - Fehlgeschlagene Funktionsproben behalten den festen Prüfschritt und die technische Fehlerklasse nach dem Aufräumen der isolierten Testumgebung. HTTP-Abweichungen nennen Soll- und Iststatus; Kundendaten, Suchbegriffe und rohe Fehlermeldungen werden nicht übernommen.

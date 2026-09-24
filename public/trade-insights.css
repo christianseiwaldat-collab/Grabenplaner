@@ -37,6 +37,25 @@ html[data-active-page-theme="dark"] .trade-insights-workspace button:is(.active,
 .trade-insights-workspace dialog::backdrop { background:#102b2370; }
 .trade-insights-workspace .dialog-actions { justify-content:flex-end; padding:0; border:0; background:transparent; }
 .trade-insights-workspace .long-text { white-space:pre-wrap; overflow-wrap:anywhere; }
+.trade-insights-workspace .trade-job-hint { color:var(--muted); margin:10px 2px 20px; font-size:13px; }
+.trade-insights-workspace [data-ti="archive"] { margin:20px 0; }
+.trade-insights-workspace [data-ti="archive"] summary { display:flex; gap:8px; align-items:center; }
+.trade-insights-workspace [data-ti="job-count"] { color:var(--muted); font-weight:400; }
+.trade-insights-workspace [data-ti="jobs"] { margin-top:14px; }
+.trade-insights-workspace [data-ti="jobs"] .table-scroll { max-height:320px; }
+.trade-insights-workspace th button { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; border:0; padding:4px 0; background:transparent; font-weight:650; text-align:left; }
+.trade-insights-workspace th[aria-sort]:not([aria-sort="none"]) { box-shadow:inset 0 -3px var(--green); }
+.trade-insights-workspace td.numeric { text-align:right; }
+.trade-insights-workspace td small { display:block; color:var(--muted); margin-top:6px; }
+.trade-insights-workspace .trade-job-actions { min-width:230px; }
+.trade-insights-workspace .trade-job-actions > * { display:inline-flex; align-items:center; margin:2px; }
+.trade-insights-workspace .trade-pdf-link { display:inline-flex; align-items:center; justify-content:center; min-height:44px; box-sizing:border-box; padding:9px 14px; border:1px solid var(--line); border-radius:9px; color:var(--ink); background:var(--surface); font-weight:600; text-decoration:none; }
+.trade-insights-workspace .trade-pdf-link:hover { border-color:var(--green); }
+.trade-insights-workspace .trade-job-state { display:inline-block; padding:3px 9px; border-radius:6px; background:var(--surface-muted); white-space:nowrap; }
+.trade-insights-workspace .trade-job-state[data-state="completed"] { color:var(--green); background:var(--surface-soft); }
+.trade-insights-workspace [data-ti="snapshot"] { margin-top:22px; border-color:var(--green); }
+.trade-insights-workspace [data-ti="snapshot"] label { flex:1 1 280px; }
+.trade-insights-workspace [data-ti="snapshot-info"] { flex-basis:100%; margin:0; color:var(--muted); font-size:12px; }
 @media(max-width:600px) {
   .trade-insights-workspace form { gap:10px; padding:12px; }
   .trade-insights-workspace label,

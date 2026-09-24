@@ -23,13 +23,13 @@ function fixture() {
   const root = node('root'); root.ownerDocument = { createElement: () => new Element() };
   root.querySelector = selector => node(selector.match(/^\[data-ti="(.+)"\]$/)?.[1] || selector);
   root.querySelectorAll = selector => selector === '[data-kind]' ? buttons : [node(selector)];
-  for (const [key, fields] of Object.entries({ filters: ['days', 'dateFrom', 'dateTo', 'customer', 'serial', 'supplier', 'query', 'locationId', 'group', 'wgr'], 'class-form': ['level', 'articleKey', 'groupKey'], 'class-save': ['kind'], 'repair-status-form': ['state'] })) {
+  for (const [key, fields] of Object.entries({ filters: ['days', 'dateFrom', 'dateTo', 'customer', 'serial', 'supplier', 'query', 'locationId', 'group', 'wgr', 'resultTitle'], snapshot: ['title'], 'class-form': ['level', 'articleKey', 'groupKey'], 'class-save': ['kind'], 'repair-status-form': ['state'] })) {
     const form = node(key); form.elements = Object.fromEntries(fields.map(field => [field, node(key + '-' + field)]));
     form.querySelector = () => node(key + '-button'); form.parentElement = node(key + '-panel');
   }
   node('class-form').elements.level.value = 'wgr';
   const requests = [], changes = [], routeOptions = [];
-  const workspace = mount(root, { onTabChange: (tab, options) => { changes.push(tab); routeOptions.push(options); }, api: (url, options) => new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })) });
+  const workspace = mount(root, { onTabChange: (tab, options) => { changes.push(tab); routeOptions.push(options); }, api: (url, options) => url.endsWith('/jobs')&&!options.method?Promise.resolve([]):new Promise((resolve, reject) => requests.push({ url, options, resolve, reject })) });
   return { root, node, all, buttons, requests, changes, routeOptions, workspace };
 }
 const context = { projection: { inventory: true, purchasing: true, customers: true, repairs: true, classify: true }, locations: [{ id: '93', label: 'Testfiliale' }], today: '2026-09-16' };
@@ -91,29 +91,35 @@ test('Context loading follows the newest requested tab and refuses missing permi
 });
 
 test('Legacy URLs retain only known tabs and never redirect outside GP', () => {
+  assert.equal(legacyUrl('?tab=prices'), '/?view=tradeInsights&section=purchasing');assert.ok(!tabs.includes('prices'));
   for (const tab of tabs) assert.equal(legacyUrl('?tab=' + tab), '/?view=tradeInsights&section=' + tab);
   assert.equal(legacyUrl('?tab=https://elsewhere.example/&view=outside'), '/?view=tradeInsights&section=purchasing');
 });
 
-test('stock summary requires a branch, omits period filters and replaces partial totals on continuation', async t=>{
+
+test('stock summary offers all IDs and submits a durable server job that survives leaving the view',async t=>{
  const SavedFormData=globalThis.FormData;
- globalThis.FormData=class { constructor(form){this.entries=Object.entries(form.elements).map(([k,v])=>[k,v.value]);} [Symbol.iterator](){return this.entries[Symbol.iterator]();} };
+ globalThis.FormData=class {constructor(form){this.entries=Object.entries(form.elements).map(([k,v])=>[k,v.value]);}[Symbol.iterator](){return this.entries[Symbol.iterator]();}};
  t.after(()=>{globalThis.FormData=SavedFormData;});
- const f=fixture(),pending=f.workspace.activate('stock-summary');
- f.requests[0].resolve({...context,projection:{...context.projection,costs:true}});await tick();
- f.requests[1].resolve({groups:[],wgr:[]});await pending;
- const form=f.node('filters');assert.equal(form.elements.locationId.required,true);assert.equal(f.node('[data-period]').hidden,true);
- form.elements.locationId.value='93';form.elements.dateFrom.value='2026-01-01';
- form.emit('submit',{preventDefault(){}});await tick();
- const first=f.requests.at(-1),query=JSON.parse(first.options.body);
- assert.equal(query.locationId,'93');assert.equal(query.dateFrom,undefined);assert.equal(query.dateTo,undefined);assert.equal(query.days,undefined);
- const total={positions:1,quantity:'1',positivePositions:1,positiveQuantity:'1',confirmedQuantity:'0',provisionalNet:'10',confirmedNet:'0',excluded:0,ambiguous:0,missingArticle:0,missingQuantity:0,negative:0,unclassified:1,missingCost:0,zeroCost:0};
- first.resolve({available:true,cumulative:true,complete:false,scanned:100,next:'continuation',rows:[],totals:total});await tick();
- assert.match(f.node('results').innerHTML,/Zwischenstand/);
- assert.match(f.node('results').innerHTML,/Erfasster Bestand \(vorläufig\).*?<strong>1<\/strong>/);
- assert.match(f.node('note').textContent,/Importiert am:/);
- assert.equal(JSON.parse(f.requests.at(-1).options.body).cursor,'continuation');
- f.requests.at(-1).resolve({available:true,cumulative:true,complete:true,scanned:105,next:null,rows:[],totals:{...total,positions:2,provisionalNet:'20'}});await tick();
- assert.match(f.node('results').innerHTML,/Alle Quellenpositionen geprüft/);assert.doesNotMatch(f.node('results').innerHTML,/Zwischenstand/);
- assert.equal(f.node('more').hidden,true);f.workspace.destroy();
+ const f=fixture(),pending=f.workspace.activate('stock-summary');f.requests[0].resolve(context);await tick();
+ f.requests[1].resolve({groups:[{id:'10',label:'Zehn'},{id:'2',label:'Zwei'}],wgr:[],stockLocations:[{id:'trade-source:19',label:'Filiale 19'},{id:'trade-source:2',label:'Filiale 2'}]});await pending;
+ const form=f.node('filters');assert.equal(form.elements.locationId.required,false);assert.equal(f.node('[data-period]').hidden,true);
+ assert.deepEqual(form.elements.group.children.map(n=>n.value),['','2','10']);
+ assert.deepEqual(form.elements.locationId.children.map(n=>n.value),['','trade-source:2','trade-source:19']);
+ form.elements.resultTitle.value='September';form.emit('submit',{preventDefault(){}});await tick();
+ const first=f.requests.at(-1),body=JSON.parse(first.options.body);assert.match(first.url,/jobs$/);assert.equal(body.kind,'stock-summary');assert.equal(body.title,'September');
+ assert.equal(body.query.locationId,'');assert.equal(body.query.dateFrom,undefined);assert.equal(body.query.days,undefined);
+ first.resolve({id:'saved-job',status:'queued'});await tick();assert.match(f.node('status').textContent,/Server gestartet/);
+ f.workspace.suspend();assert.ok(!f.requests.some(r=>r.url.endsWith('/cancel')));
+ await f.workspace.activate('stock-summary');assert.equal(f.workspace.getTab(),'stock-summary');f.workspace.destroy();
+});
+
+test('opening a saved result while metadata loads preserves the dropdowns and later selection',async()=>{
+ const f=fixture(),pending=f.workspace.activate('stock-summary');f.requests[0].resolve(context);await tick();
+ const metadata=f.requests[1];
+ f.node('jobs').emit('click',{target:{closest:selector=>selector==='[data-job-open]'?{dataset:{jobOpen:'saved'}}:null}});await tick();
+ const open=f.requests.at(-1);assert.match(open.url,/jobs\/saved$/);
+ open.resolve({id:'saved',kind:'stock-summary',title:'Gespeichert',created:'2026-09-24T10:00:00Z',completedAt:'2026-09-24T10:01:00Z',processed:0,query:{},result:{rows:[],sourceDate:'2026-09-20T10:00:00Z'}});await tick();
+ metadata.resolve({groups:[{id:'2',label:'Objektive'}],wgr:[],stockLocations:[]});await pending;
+ assert.deepEqual(f.node('filters').elements.group.children.map(n=>n.value),['','2']);assert.equal(f.node('snapshot').hidden,false);assert.equal(f.node('snapshot').elements.title.value,'Gespeichert');f.workspace.destroy();
 });
