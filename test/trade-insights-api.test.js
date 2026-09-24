@@ -28,7 +28,7 @@ test('Trade views use actual session authority, CSRF and protected read/write co
 });
 
 test('Legacy trade links enter the GP shell with the requested supported tab',async()=>{
- for(const tab of ['purchasing','transfers','inventory','prices','repairs','customer-history','device-history']){
+ for(const tab of ['purchasing','transfers','inventory','repairs','customer-history','device-history']){
   const response=await fetch(url+'/trade-insights.html?tab='+tab,{redirect:'manual'});
   assert.equal(response.status,302);assert.equal(response.headers.get('location'),'/?view=tradeInsights&section='+tab);
  }

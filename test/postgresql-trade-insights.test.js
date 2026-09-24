@@ -27,6 +27,22 @@ test('Six-block views run against native Core/Sales, preserve GP annotations and
   const runtime=require('../lib/persistence/repositories/trade-insights').createTradeInsightRuntime({...f.runtimeOptions,today:()=> '2026-09-14'}),run=(kind,query={})=>runtime.run(()=>f.resolvePrincipal('00001'),kind,query);
   const worker=(kind,query={})=>f.worker.run({operation:'trade-insights',kind,query,session:{employeeNumber:'00001'}});
   let page=await worker('purchasing');assert.equal(page.rows.length,50);page=await worker('purchasing',{cursor:page.next});assert.equal(page.rows.length,15);
+  const {createTradeInsightJobs}=require('../lib/persistence/repositories/trade-insight-jobs');
+  const session=await f.resolvePrincipal('00001');let queueTime=Date.now();
+  const makeInsightQueue=()=>createTradeInsightJobs({access:f.access,vault:f.vault,runtime,resolvePrincipal:f.resolvePrincipal,dispatchRead:input=>f.worker.run(input),scopeId:'synthetic-migration',now:()=>queueTime});
+  const firstQueue=makeInsightQueue();let resumedQueue;
+  try {
+   const job=await firstQueue.create(session,{kind:'purchasing',query:{},title:'Native Ergebnisablage'});
+   await firstQueue.tick();assert.equal((await firstQueue.list(session))[0].processed,50);await firstQueue.stop();
+   queueTime+=180001;resumedQueue=makeInsightQueue();await resumedQueue.tick();
+   const saved=await resumedQueue.get(session,job.id);assert.equal(saved.status,'completed');assert.equal(saved.result.rows.length,65);
+   assert.equal(new Set(saved.result.rows.map(row=>row.id)).size,65);
+   const payload=(await f.access.queryOne(require('../lib/persistence/statements/sales-report-jobs').SALES_REPORT_JOB_STATEMENTS.get,{scope:'synthetic-migration:trade-insights',id:job.id})).payload;
+   assert.doesNotMatch(payload,/Native Ergebnisablage|articleNumber/);
+   await resumedQueue.rename(session,job.id,{title:'Gespeicherter Stand'});
+   assert.deepEqual((await resumedQueue.get(session,job.id)).result,saved.result);
+   await resumedQueue.remove(session,job.id);assert.equal((await resumedQueue.list(session)).length,0);
+  } finally {await firstQueue.stop();await resumedQueue?.stop();}
   const context=await worker('context');assert.equal(context.projection.classify,true);assert.equal(context.projection.repairWrite,true);
   await run('classification-save',{level:'wgr',key:'1',kind:'goods',expectedRevision:0});
   let inventory=await worker('inventory');assert.equal(inventory.rows[0].classification.kind,'goods');assert.equal(inventory.rows[0].stockValue,'200');

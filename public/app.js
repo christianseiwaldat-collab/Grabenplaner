@@ -768,7 +768,12 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 const elements = Object.fromEntries(
   [
     "staffAssignmentRequestDeadline",
-    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "tradeInsightsView", "tradeInsightsNavButton", "tradeInsightsDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "loanManagementReturnDialog", "loanManagementReturnForm", "loanManagementReturnTitle", "loanManagementReturnSubtitle", "loanManagementReturnItems", "loanManagementReturnNote", "loanManagementReturnConfirmed", "loanManagementReturnStatus", "loanManagementReturnSubmit", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "xoffiComparisonDate", "xoffiComparisonPrevious", "xoffiComparisonNext", "xoffiComparisonLoad", "xoffiComparisonStatus", "xoffiComparisonList", "xoffiComparisonGreen", "xoffiComparisonYellow", "xoffiComparisonSave", "xoffiComparisonSettingsForm", "timeLegacyPanel", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "optionDateRangeButton", "optionDateRangeText", "optionDateRangeDialog", "optionDateRangeForm", "optionDateRangeGrid", "optionDateRangeMonthLabel", "optionDateRangeStartText", "optionDateRangeEndText",
+    "optionDateRangePreviousMonth", "optionDateRangeNextMonth", "optionDateRangeOpenEnd", "optionDateRangeApply", "optionDateRangeClose", "optionDateRangeCancel",
+    "xoffiComparisonMode", "xoffiComparisonPeriod", "xoffiComparisonDescription", "xoffiComparisonRangeButton", "xoffiComparisonRangeText", "xoffiComparisonRangeLabel",
+    "xoffiComparisonRangeDialog", "xoffiComparisonRangeForm", "xoffiComparisonRangeGrid", "xoffiComparisonRangeMonthLabel", "xoffiComparisonRangeMonth", "xoffiComparisonRangeStartText", "xoffiComparisonRangeEndText",
+    "xoffiComparisonRangePreviousMonth", "xoffiComparisonRangeNextMonth", "xoffiComparisonRangeOpenEnd", "xoffiComparisonRangeApply", "xoffiComparisonRangeClose", "xoffiComparisonRangeCancel",
+    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "tradeInsightsView", "tradeInsightsNavButton", "tradeInsightsDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "loanManagementReturnDialog", "loanManagementReturnForm", "loanManagementReturnTitle", "loanManagementReturnSubtitle", "loanManagementReturnItems", "loanManagementReturnNote", "loanManagementReturnConfirmed", "loanManagementReturnStatus", "loanManagementReturnSubmit", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "xoffiComparisonPrevious", "xoffiComparisonNext", "xoffiComparisonLoad", "xoffiComparisonStatus", "xoffiComparisonList", "xoffiComparisonGreen", "xoffiComparisonYellow", "xoffiComparisonSave", "xoffiComparisonSettingsForm", "timeLegacyPanel", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleLastImport", "salesArticleLastImportValue", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchOrderNumber", "salesArticleSearchStatusFilter", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportDatabasePasswordField", "salesArticleImportDatabasePassword", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
@@ -27427,6 +27432,113 @@ async function refreshManagerVacationRequests(session) {
 }
 
 let xoffiComparisonRequest = 0;
+let xoffiComparisonResult = null;
+let xoffiComparisonMode = "valued";
+let xoffiComparisonPeriod = "week";
+let xoffiComparisonRange = null;
+let xoffiComparisonCalendar = null;
+
+function xoffiPeriodRange(period, anchor) {
+  if (period === "week") {
+    const from = getMonday(`${anchor}T12:00:00`);
+    return { from, to: addDays(from, 6) };
+  }
+  const date = new Date(`${anchor}T12:00:00`);
+  const month = period === "quarter" ? Math.floor(date.getMonth() / 3) * 3 : date.getMonth();
+  return { from: toIsoDate(new Date(date.getFullYear(), month, 1, 12)),
+    to: toIsoDate(new Date(date.getFullYear(), month + (period === "quarter" ? 3 : 1), 0, 12)) };
+}
+
+function xoffiShiftedRange(range, period, direction) {
+  if (period === "month" || period === "quarter") {
+    const date = new Date(`${range.from}T12:00:00`);
+    date.setDate(1);
+    date.setMonth(date.getMonth() + direction * (period === "quarter" ? 3 : 1));
+    return xoffiPeriodRange(period, toIsoDate(date));
+  }
+  const length = Math.round((new Date(`${range.to}T12:00:00`) - new Date(`${range.from}T12:00:00`)) / 86400000) + 1;
+  return { from: addDays(range.from, direction * length), to: addDays(range.to, direction * length) };
+}
+
+function updateXoffiComparisonControls() {
+  if (!xoffiComparisonRange) xoffiComparisonRange = xoffiPeriodRange("week", state.weekStart || toIsoDate(new Date()));
+  const { from, to } = xoffiComparisonRange;
+  elements.xoffiComparisonRangeText.textContent = `${formatDate(from)} – ${formatDate(to)}`;
+  elements.xoffiComparisonRangeLabel.textContent = xoffiComparisonPeriod === "week" ? `KW ${getIsoWeek(from)}`
+    : xoffiComparisonPeriod === "month" ? formatDate(from, { month: "long", year: "numeric" })
+      : xoffiComparisonPeriod === "quarter" ? `${Math.floor((Number(from.slice(5, 7)) - 1) / 3) + 1}. Quartal ${from.slice(0, 4)}` : "Freier Zeitraum";
+  elements.xoffiComparisonPeriod.querySelectorAll("[data-xoffi-period]").forEach(button => {
+    button.setAttribute("aria-pressed", String(button.dataset.xoffiPeriod === xoffiComparisonPeriod));
+  });
+  elements.xoffiComparisonMode.querySelectorAll("[data-xoffi-mode]").forEach(button => {
+    button.setAttribute("aria-pressed", String(button.dataset.xoffiMode === xoffiComparisonMode));
+  });
+  elements.xoffiComparisonDescription.textContent = xoffiComparisonMode === "valued"
+    ? "Gewertete Stunden einschließlich Krankenstand, weiterer Gutschriften und Zuschläge aus dem gespeicherten xoffi-Import."
+    : "Anwesenheit laut xoffi-Intervallen, ohne Abwesenheitsgutschriften und Zuschläge. Im GP-Plan zählen die Filialdienste ohne Pausen.";
+}
+
+function initializeXoffiComparisonCalendar() {
+  const factory = window.GrabenplanerDateRangeCalendar?.createDateRangeCalendar;
+  if (!factory || !elements.xoffiComparisonRangeDialog) return;
+  xoffiComparisonCalendar = factory({
+    dialog: elements.xoffiComparisonRangeDialog, form: elements.xoffiComparisonRangeForm,
+    grid: elements.xoffiComparisonRangeGrid, title: elements.xoffiComparisonRangeMonthLabel,
+    startText: elements.xoffiComparisonRangeStartText, endText: elements.xoffiComparisonRangeEndText,
+    previousButton: elements.xoffiComparisonRangePreviousMonth, nextButton: elements.xoffiComparisonRangeNextMonth,
+    monthInput: elements.xoffiComparisonRangeMonth, openEndCheckbox: elements.xoffiComparisonRangeOpenEnd,
+    applyButton: elements.xoffiComparisonRangeApply,
+    closeButtons: [elements.xoffiComparisonRangeClose, elements.xoffiComparisonRangeCancel],
+  });
+}
+
+function openXoffiComparisonCalendar() {
+  updateXoffiComparisonControls();
+  xoffiComparisonCalendar?.open({ start: xoffiComparisonRange.from, end: xoffiComparisonRange.to,
+    maxEndDays: 369, allowOpenEnd: false, onCommit(from, to) {
+      xoffiComparisonRange = { from, to };
+      xoffiComparisonPeriod = "range";
+      loadXoffiComparison();
+    },
+  });
+}
+
+function xoffiDisplayComparison(row) {
+  const valued = xoffiComparisonMode === "valued";
+  const comparison = row[valued ? "valuedComparison" : "presenceComparison"];
+  const partial = comparison.actualMinutes === null && row.coveredDays > 0 && !row.scopeMismatch;
+  return { ...row, presenceMinutes: row.actualMinutes, ...comparison, partial,
+    actualMinutes: partial ? (valued ? row.knownValuedMinutes : row.knownActualMinutes) : comparison.actualMinutes,
+    planCredits: xoffiComparisonMode === "valued" ? row.planCredits : [],
+  };
+}
+
+function xoffiDifference(row) {
+  return row.differenceMinutes === null ? "–" : row.differenceMinutes === 0 ? formatHours(0) : formatTimeDifference(row.differenceMinutes);
+}
+
+function xoffiComparisonCells(row) {
+  const credit = !row.partial && row.actualMinutes !== null && xoffiComparisonMode === "valued" ? Math.max(0, row.valuedMinutes - row.presenceMinutes) : 0;
+  return `<td class="xoffi-hours"><strong>${formatHours(row.plannedMinutes)}</strong>${(row.planCredits || []).map(item => `<small class="xoffi-plan-credit">${escapeHtml(item.label)} · ${formatHours(item.minutes)}</small>`).join("")}</td>
+    <td class="xoffi-hours"><strong>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</strong>${row.partial ? `<small>Teilstand · ${row.coveredDays}/${row.totalDays} Tage</small>` : ""}${credit ? `<small>${formatHours(row.presenceMinutes)} anwesend<br>+ ${formatHours(credit)} ${row.absence === "sick" ? "Krankenstand" : "Gutschrift / Zuschlag"}</small>` : ""}${row.intervals?.length ? `<small class="xoffi-intervals">${row.intervals.map(escapeHtml).join("<br>")}</small>` : ""}</td>
+    <td class="xoffi-hours xoffi-difference">${xoffiDifference(row)}</td><td><span class="xoffi-variance ${escapeHtml(row.severity)}">${escapeHtml(xoffiComparisonLabel(row))}</span></td>`;
+}
+
+function renderXoffiPersonDays(details) {
+  if (!details.open || details.dataset.rendered === "true") return;
+  const source = xoffiComparisonResult?.employees.find(row => row.employeeNumber === details.dataset.xoffiPerson);
+  if (!source) return;
+  const row = xoffiDisplayComparison(source);
+  const imports = source.imports || [];
+  const label = xoffiComparisonMode === "valued" ? "xoffi gewertet" : "Anwesenheit";
+  details.querySelector(".xoffi-person-content").innerHTML = `
+    <div class="xoffi-comparison-table ${row.days.length > 7 ? "long" : ""}" tabindex="0" role="region" aria-label="Tagesvergleich für MA ${escapeHtmlAttribute(row.employeeNumber)}"><table><caption class="sr-only">Tagesvergleich für MA ${escapeHtml(row.employeeNumber)} · ${label}</caption><thead><tr><th scope="col">Tag</th><th scope="col">GP-Plan</th><th scope="col">${label}</th><th scope="col">Differenz</th><th scope="col">Abweichung</th></tr></thead><tbody>${row.days.map(sourceDay => {
+      const day = xoffiDisplayComparison(sourceDay);
+      return `<tr class="${day.plannedMinutes === 0 && day.actualMinutes === 0 ? "xoffi-day-empty" : ""}"><th scope="row"><span class="xoffi-day-name">${escapeHtml(new Date(`${day.date}T12:00:00`).toLocaleDateString("de-AT", { weekday: "short" }))}</span> ${escapeHtml(formatDate(day.date))}${day.absence ? `<small>${escapeHtml(({sick:"Krankenstand",vacation:"Urlaub"})[day.absence] || day.absence)}</small>` : ""}</th>${xoffiComparisonCells(day)}</tr>`;
+    }).join("")}</tbody><tfoot><tr><th scope="row">Zeitraumsumme</th>${xoffiComparisonCells(row)}</tr></tfoot></table></div>
+    <footer class="xoffi-comparison-source"><span>${row.coveredDays} / ${row.totalDays} Tage importiert${row.coveredDays < row.totalDays ? " · Fehlende Tage zählen nicht als 0 h; Abweichung erst bei vollständigem Import" : ""}</span><span>${imports.length ? `${imports.length} ${imports.length === 1 ? "Import" : "Importe"} · Stand ${escapeHtml(new Date(row.importedAt).toLocaleString("de-AT"))} · ${row.useAsActual ? "Als Ist-Zeit übernommen" : "Nicht alle Importe als Ist-Zeit aktiviert"}` : "Für diesen Zeitraum liegt kein Import vor."}</span></footer>`;
+  details.dataset.rendered = "true";
+}
 
 function xoffiComparisonLabel(row) {
   if (row.severity === "missing") return row.importState === "incomplete" ? "Import unvollständig" : "Nicht importiert";
@@ -27437,33 +27549,44 @@ function xoffiComparisonLabel(row) {
 }
 
 function renderXoffiComparison(result) {
-  const cells = row => `<td>${formatHours(row.plannedMinutes)}</td><td>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</td><td>${row.differenceMinutes === null ? "–" : formatTimeDifference(row.differenceMinutes)}</td><td><span class="xoffi-variance ${escapeHtml(row.severity)}">${escapeHtml(xoffiComparisonLabel(row))}</span></td>`;
-  const heads = '<th scope="col">Tag</th><th scope="col">GP-Plan</th><th scope="col">xoffi-Ist</th><th scope="col">Differenz</th><th scope="col">Abweichung</th>';
-  elements.xoffiComparisonList.innerHTML = result.employees.length ? result.employees.map(row => `<details class="xoffi-comparison-person"><summary>
-    <strong>MA ${escapeHtml(row.employeeNumber)} · ${escapeHtml(row.fullName)}</strong>
-    <span>Plan ${formatHours(row.plannedMinutes)} · xoffi ${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</span>
+  xoffiComparisonResult = result;
+  updateXoffiComparisonControls();
+  const opened = new Set([...elements.xoffiComparisonList.querySelectorAll("details[open]")].map(details => details.dataset.xoffiPerson));
+  const employees = result.employees.map(xoffiDisplayComparison);
+  const complete = employees.filter(row => row.importState === "complete" && !row.scopeMismatch).length;
+  const attention = employees.filter(row => ["yellow", "red", "unplanned"].includes(row.severity)).length;
+  const inRange = employees.filter(row => row.severity === "green").length;
+  const label = xoffiComparisonMode === "valued" ? "xoffi gewertet" : "Anwesenheit";
+  const overview = `<div class="xoffi-comparison-overview" aria-label="Zeitraumüberblick">
+    <article><span>Teammitglieder</span><strong>${employees.length}</strong></article>
+    <article><span>Vergleich vollständig</span><strong>${complete}<small> / ${employees.length}</small></strong></article>
+    <article><span>Im Rahmen</span><strong>${inRange}</strong></article>
+    <article class="${attention ? "attention" : ""}"><span>Abweichungen prüfen</span><strong>${attention}</strong></article>
+  </div>`;
+  elements.xoffiComparisonList.innerHTML = overview + (employees.length ? employees.map(row => `<details class="xoffi-comparison-person" data-xoffi-person="${escapeHtmlAttribute(row.employeeNumber)}" ${opened.has(row.employeeNumber) ? "open" : ""}><summary>
+    <span class="xoffi-person-name"><small>MA ${escapeHtml(row.employeeNumber)}</small><strong>${escapeHtml(row.fullName)}</strong></span>
+    <span class="xoffi-person-metrics"><span><small>GP-Plan</small><strong>${formatHours(row.plannedMinutes)}</strong></span><span><small>${label}</small><strong>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</strong>${row.partial ? `<small>Teilstand · ${row.coveredDays}/${row.totalDays} Tage</small>` : ""}</span><span><small>Differenz</small><strong>${xoffiDifference(row)}</strong></span></span>
     <span class="xoffi-variance ${escapeHtml(row.severity)}">${escapeHtml(xoffiComparisonLabel(row))}</span></summary>
-    <div class="xoffi-comparison-table"><table><caption>Tagesvergleich für MA ${escapeHtml(row.employeeNumber)}</caption><thead><tr>${heads}</tr></thead><tbody>${row.days.map(day => `<tr><th scope="row">${escapeHtml(formatDate(day.date))}${day.absence ? `<small>${escapeHtml(({sick:"Krank",vacation:"Urlaub"})[day.absence] || day.absence)}</small>` : ""}${day.intervals.length ? `<small>${escapeHtml(day.intervals.join(" · "))}</small>` : ""}</th>${cells(day)}</tr>`).join("")}</tbody><tfoot><tr><th scope="row">Woche</th>${cells(row)}</tr></tfoot></table></div>
-    <p class="settings-note">${row.importId ? `Importiert: ${escapeHtml(new Date(row.importedAt).toLocaleString("de-AT"))}. ${row.useAsActual ? "Als Ist-Zeit übernommen." : "Import vorhanden, nicht als Ist-Zeit aktiviert."}` : "Für diese Person liegt in dieser KW kein Import vor."}${row.valuedMinutes !== null ? ` xoffi gewertet (inkl. Zuschläge und Abwesenheitsgutschriften): ${formatHours(row.valuedMinutes)}.` : ""}</p></details>`).join("") : '<p class="settings-note">Keine Teammitglieder oder importierten Zeiten für diesen Bereich.</p>';
+    <div class="xoffi-person-content"></div></details>`).join("") : '<p class="xoffi-comparison-empty">Keine Teammitglieder oder importierten Zeiten für diesen Bereich.</p>');
+  elements.xoffiComparisonList.querySelectorAll("details[open]").forEach(renderXoffiPersonDays);
   elements.xoffiComparisonGreen.value = result.limits.greenMax;
   elements.xoffiComparisonYellow.value = result.limits.yellowMax;
   for (const element of [elements.xoffiComparisonGreen, elements.xoffiComparisonYellow, elements.xoffiComparisonSave]) element.disabled = !result.canChange;
   const imported = result.employees.filter(row => row.importState === "complete").length;
-  elements.xoffiComparisonStatus.textContent = `KW ${getIsoWeek(result.weekStart)} · ${formatDate(result.weekStart)}–${formatDate(result.weekEnd)} · ${imported}/${result.employees.length} vollständig importiert. Grün ≤ ${result.limits.greenMax} %, Gelb ≤ ${result.limits.yellowMax} %, darüber Rot.`;
+  elements.xoffiComparisonStatus.textContent = `${formatDate(result.dateFrom)}–${formatDate(result.dateTo)} · ${imported}/${result.employees.length} vollständig importiert`;
 }
 
 async function loadXoffiComparison() {
   if (!elements.xoffiComparisonList) return;
   prepareTimePresenceControls();
-  if (!elements.xoffiComparisonDate.value) elements.xoffiComparisonDate.value = state.weekStart || toIsoDate(new Date());
-  const selected = elements.xoffiComparisonDate.value;
-  const weekStart = getMonday(`${selected}T12:00:00`);
-  elements.xoffiComparisonDate.value = weekStart;
+  updateXoffiComparisonControls();
   const parameters = selectedTimeContextParameters();
-  parameters.set("weekStart", weekStart);
+  parameters.set("from", xoffiComparisonRange.from);
+  parameters.set("to", xoffiComparisonRange.to);
   const request = ++xoffiComparisonRequest;
   elements.xoffiComparisonStatus.textContent = "xoffi-Zeiten und Dienstplan werden verglichen …";
   elements.xoffiComparisonList.replaceChildren();
+  xoffiComparisonResult = null;
   for (const element of [elements.xoffiComparisonGreen, elements.xoffiComparisonYellow, elements.xoffiComparisonSave]) element.disabled = true;
   try {
     const result = await api(`/api/portal/v1/xoffi-plan-comparison?${parameters}`);
@@ -36541,6 +36664,37 @@ function updateOptionWeekControls() {
   if (!elements.globalBlockDate.value || elements.globalBlockDate.value < state.weekStart || elements.globalBlockDate.value > weekEnd) {
     elements.globalBlockDate.value = state.weekStart;
   }
+  updateOptionDateRangeLabel();
+}
+
+function updateOptionDateRangeLabel() {
+  const from = document.querySelector("#optionDateFrom").value;
+  const to = document.querySelector("#optionDateTo").value;
+  if (elements.optionDateRangeText) elements.optionDateRangeText.textContent = window.GrabenplanerDateRangeCalendar?.rangeLabel(from, to)
+    || (from ? `${formatDate(from)} – ${formatDate(to)}` : "Zeitraum auswählen");
+}
+
+function initializeOptionDateRangeCalendar() {
+  const factory = window.GrabenplanerDateRangeCalendar?.createDateRangeCalendar;
+  if (!factory || !elements.optionDateRangeDialog) return;
+  const calendar = factory({
+    dialog: elements.optionDateRangeDialog, form: elements.optionDateRangeForm,
+    grid: elements.optionDateRangeGrid, title: elements.optionDateRangeMonthLabel,
+    startText: elements.optionDateRangeStartText, endText: elements.optionDateRangeEndText,
+    previousButton: elements.optionDateRangePreviousMonth, nextButton: elements.optionDateRangeNextMonth,
+    openEndCheckbox: elements.optionDateRangeOpenEnd, applyButton: elements.optionDateRangeApply,
+    closeButtons: [elements.optionDateRangeClose, elements.optionDateRangeCancel],
+  });
+  elements.optionDateRangeButton?.addEventListener("click", () => {
+    const from = document.querySelector("#optionDateFrom"), to = document.querySelector("#optionDateTo");
+    calendar.open({ start: from.value || state.weekStart, end: to.value || from.value || state.weekStart,
+      min: state.weekStart, max: addDays(state.weekStart, 6), allowOpenEnd: false,
+      onCommit(start, end) {
+        from.value = start; to.value = end;
+        updateOptionDateRangeLabel();
+      },
+    });
+  });
 }
 
 async function switchOptionsWeek(offsetWeeks) {
@@ -36591,6 +36745,7 @@ function resetOptionEditor() {
   document.querySelector("#optionTeamWide").checked = true;
   elements.optionSubmitButton.textContent = "Hinzufügen";
   elements.cancelOptionEditButton.classList.add("hidden");
+  updateOptionDateRangeLabel();
 }
 
 function fillOptionForm(option) {
@@ -36606,6 +36761,7 @@ function fillOptionForm(option) {
   document.querySelector("#optionType").disabled = isTeamWideMeetingOption(option);
   document.querySelector("#optionDateFrom").value = option.date_from;
   document.querySelector("#optionDateTo").value = option.date_to;
+  updateOptionDateRangeLabel();
   document.querySelector("#optionAllDay").checked = optionIsAllDay(option);
   document.querySelector("#optionStartTime").value = option.start_time || "09:00";
   document.querySelector("#optionEndTime").value = option.end_time || "18:00";
@@ -39311,10 +39467,30 @@ elements.xoffiScreenshotWeekConfirmed?.addEventListener("change", updateXoffiApp
 elements.xoffiImportPreview?.addEventListener("change", updateXoffiApplyAvailability);
 elements.xoffiImportForm?.addEventListener("submit", applyXoffiImport);
 elements.xoffiComparisonLoad?.addEventListener("click", loadXoffiComparison);
-elements.xoffiComparisonDate?.addEventListener("change", loadXoffiComparison);
-for (const [button, days] of [[elements.xoffiComparisonPrevious, -7], [elements.xoffiComparisonNext, 7]]) {
+elements.xoffiComparisonRangeButton?.addEventListener("click", openXoffiComparisonCalendar);
+elements.xoffiComparisonPeriod?.addEventListener("click", event => {
+  const period = event.target.closest("[data-xoffi-period]")?.dataset.xoffiPeriod;
+  if (!period) return;
+  if (period === "range") return openXoffiComparisonCalendar();
+  updateXoffiComparisonControls();
+  xoffiComparisonPeriod = period;
+  xoffiComparisonRange = xoffiPeriodRange(period, xoffiComparisonRange.from);
+  loadXoffiComparison();
+});
+elements.xoffiComparisonMode?.addEventListener("click", event => {
+  const mode = event.target.closest("[data-xoffi-mode]")?.dataset.xoffiMode;
+  if (!mode || mode === xoffiComparisonMode) return;
+  xoffiComparisonMode = mode;
+  updateXoffiComparisonControls();
+  if (xoffiComparisonResult) renderXoffiComparison(xoffiComparisonResult);
+});
+elements.xoffiComparisonList?.addEventListener("toggle", event => {
+  if (event.target.matches("details[data-xoffi-person]")) renderXoffiPersonDays(event.target);
+}, true);
+for (const [button, direction] of [[elements.xoffiComparisonPrevious, -1], [elements.xoffiComparisonNext, 1]]) {
   button?.addEventListener("click", () => {
-    elements.xoffiComparisonDate.value = addDays(elements.xoffiComparisonDate.value || toIsoDate(new Date()), days);
+    updateXoffiComparisonControls();
+    xoffiComparisonRange = xoffiShiftedRange(xoffiComparisonRange, xoffiComparisonPeriod, direction);
     loadXoffiComparison();
   });
 }
@@ -41561,11 +41737,13 @@ document.querySelector("#optionDateFrom").addEventListener("change", () => {
   const from = document.querySelector("#optionDateFrom").value;
   const to = document.querySelector("#optionDateTo").value;
   if (to < from) document.querySelector("#optionDateTo").value = from;
+  updateOptionDateRangeLabel();
 });
 document.querySelector("#optionDateTo").addEventListener("change", () => {
   const from = document.querySelector("#optionDateFrom").value;
   const to = document.querySelector("#optionDateTo").value;
   if (to < from) document.querySelector("#optionDateFrom").value = to;
+  updateOptionDateRangeLabel();
 });
 elements.employeeForm.addEventListener("submit", saveEmployee);
 document.querySelector('#employeeSalesSave')?.addEventListener('click', () => saveEmployeeSaturdayCredit());
@@ -41838,6 +42016,8 @@ elements.vacationCalendar.addEventListener("click", (event) => {
 initializeRequestBlackoutDateRangeCalendar();
 initializeStaffAssignmentRequestDateRangeCalendar();
 initializeScheduleSearchDateRangeCalendar();
+initializeXoffiComparisonCalendar();
+initializeOptionDateRangeCalendar();
 initializePersonnelCandidateTrialDateRangeCalendar();
 globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create({
   window, app: "administration", keys: ["view", "section", "kind", "dashboard", "process", "location", "department"],

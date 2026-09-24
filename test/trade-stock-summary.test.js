@@ -35,7 +35,23 @@ test('scopes and cost permissions apply to totals and groups, not only visible r
  const r=await f.run('stock-summary',{locationId:'18'});assert.equal(r.totals.positions,5);
  assert.doesNotMatch(JSON.stringify(r),/provisionalNet|confirmedNet|246\.93|123\.45/);
  await assert.rejects(f.run('stock-summary',{locationId:'19'}),e=>e.status===403);
- await assert.rejects(f.run('stock-summary',{}),e=>e.status===422);
+ const all=await f.run('stock-summary',{});assert.equal(all.totals.positions,5);
+ assert.doesNotMatch(JSON.stringify(all),/provisionalNet|confirmedNet/);
+});
+
+test('all source branch IDs aggregate quantities and values without duplicating articles',async t=>{
+ const f=await fixture(t);await prepare(f);
+ const all=await f.run('stock-summary',{});
+ assert.equal(all.totals.positions,6);assert.equal(all.totals.positiveQuantity,'9.3');assert.equal(all.totals.provisionalNet,'740.73');
+ assert.equal(all.rows.find(r=>r.id==='10').provisionalNet,'740.7');
+});
+
+test('all source IDs include more than one index batch of 32 branches',async t=>{
+ const f=await fixture(t),branches=Array.from({length:40},(_,i)=>i+2);
+ await f.ingest('FILIALEN',branches.map(FilialID=>({FilialID,FName:'Filiale '+FilialID})),{master:true});
+ await f.ingest('ARTIKEL_STAMM',[{EAN:'a',Artikelbezeichnung:'Kamera',DurchschnittEK:'10'}],{master:true});
+ await f.ingest('ARTIKEL_FILIALEN',branches.map(FilialID=>({EAN:'a',FilialID,FBestand:'2'})),{sourceInstance:'tradefoto-trade'});
+ const all=await f.run('stock-summary',{});assert.equal(all.complete,true);assert.equal(all.totals.positions,40);assert.equal(all.totals.positiveQuantity,'80');assert.equal(all.totals.provisionalNet,'800');
 });
 test('duplicates, negative quantities and orphan articles cannot inflate the valuation',async t=>{
  const f=await fixture(t);await prepare(f);
