@@ -42,12 +42,13 @@
 html[data-active-page-theme="dark"] #databaseImportSettings .data-import-form button[type=submit] { color:#10211b; }
 #databaseImportSettings summary { overflow-wrap:anywhere; }
 .data-import-form input[type=file] { white-space:normal; }
-.data-import-workspace { display:grid; grid-template-columns:minmax(230px,340px) minmax(0,1fr); gap:clamp(1.5rem,4vw,4rem); align-items:start; }
+.data-import-workspace { display:grid; grid-template-columns:minmax(0,1fr); gap:.8rem; align-items:start; }
 .data-import-workspace > * { min-width:0; }
 .data-import-workspace .data-import-form { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:.8rem; }
 .data-import-workspace .data-import-form button { justify-self:start; }
 .data-import-overview-heading { display:flex; gap:.8rem; align-items:center; justify-content:space-between; }
 .data-import-overview-heading h3 { margin:.8rem 0; }
+.data-import-overview-heading > button { flex-shrink:0; white-space:nowrap !important; }
 .data-import-overview .data-import-scroll { margin:.8rem 0; max-height:360px; }
 .data-import-source-table caption { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); }
 .data-import-source-table table { table-layout:fixed; }
@@ -75,3 +76,41 @@ html[data-active-page-theme="dark"] #databaseImportSettings .data-import-form bu
 .data-import-panel [data-m="editor"],.data-import-panel [data-m="preview"] { overflow-wrap:anywhere; }
 @media(max-width:600px) { .import-mapping-fields { grid-template-columns:minmax(0,1fr); } }
 @media(max-width:600px) { .data-import-panel { padding:.7rem; } .data-import-scroll table { min-width:650px; } .data-import-form label { flex-basis:100%; } }
+.data-import-catalog-table { max-height:none !important; }
+.data-import-catalog-table table { table-layout:fixed; min-width:680px; }
+.data-import-catalog-table caption { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); }
+.data-import-catalog-table th:nth-child(1) { width:33%; }
+.data-import-catalog-table th:nth-child(2) { width:15%; }
+.data-import-catalog-table th:nth-child(3) { width:17%; }
+.data-import-catalog-table th:nth-child(4) { width:20%; }
+.data-import-catalog-table th:nth-child(5) { width:15%; }
+.data-import-catalog-table th[scope=row] { position:static; background:transparent; font-weight:400; }
+.data-import-catalog-table :is(th,td) { overflow-wrap:anywhere; padding:.7rem .6rem; }
+.data-import-catalog-table small,.data-import-other li small { display:block; color:var(--muted); line-height:1.45; margin-top:.3rem; }
+.data-import-catalog-table .is-selected { background:color-mix(in srgb,var(--green) 10%,var(--surface)); }
+#databaseImportSettings .data-import-catalog-table .data-import-source-link { padding:0; min-height:32px; background:transparent; border:0; text-align:left; font-weight:700; }
+.data-import-source-link:hover { text-decoration:underline; }
+.data-import-source-link[aria-current=true] { outline:2px solid var(--green); outline-offset:2px; }
+.data-import-other,.data-import-history { margin-top:.8rem; }
+.data-import-other > summary,.data-import-history > summary { cursor:pointer; font-weight:600; padding:.5rem 0; }
+.data-import-other li { margin:.65rem 0; }
+.data-import-upload { max-width:none; border:1px solid var(--line); border-radius:8px; padding:.8rem 1rem; }
+.data-import-workspace .data-import-form { grid-template-columns:minmax(220px,1fr) minmax(180px,300px); gap:.65rem 1rem; }
+.data-import-workspace .data-import-form > :is(p,.data-import-actions) { grid-column:1 / -1; margin:.2rem 0; }
+.data-import-upload h3 { margin-top:0; }
+@media(max-width:600px) { .data-import-workspace .data-import-form { grid-template-columns:minmax(0,1fr); } .data-import-catalog-table { margin-inline:-.2rem; } }
+@media(max-width:740px) {
+  .data-import-catalog-table table { min-width:0 !important; table-layout:auto; }
+  .data-import-catalog-table thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+  .data-import-catalog-table tbody { display:block; }
+  .data-import-catalog-table tbody tr { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); padding:.65rem; gap:.55rem .8rem; border-bottom:1px solid var(--line); }
+  .data-import-catalog-table tbody tr:last-child { border-bottom:0; }
+  .data-import-catalog-table :is(th,td) { display:block; width:auto !important; border:0; padding:0; min-width:0; }
+  .data-import-catalog-table th[scope=row] { grid-column:1 / -1; }
+  .data-import-catalog-table td::before { display:block; color:var(--muted); font-size:11px; margin-bottom:.15rem; }
+  .data-import-catalog-table td:nth-child(2)::before { content:'Datenstand'; }
+  .data-import-catalog-table td:nth-child(3)::before { content:'Hochgeladen am'; }
+  .data-import-catalog-table td:nth-child(4)::before { content:'Status'; }
+  .data-import-catalog-table td:last-child { align-self:end; }
+  .data-import-catalog-table td:last-child button { min-height:44px !important; width:100%; }
+}

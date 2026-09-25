@@ -7,9 +7,9 @@
   const label=state=>labels[state]||'Prüfung erforderlich';
   const number=value=>Number(value||0).toLocaleString('de-AT');
   const sourceLabel=kind=>({cash:'Kassen-Umsätze',trade:'TradeFoto-Stamm und Historie',bestell:'TradeFoto-Bestellungen, Rechnungen und Reparaturen'})[kind]||'Unbekannte Quelle';
-  const sourceFileName=source=>source.fileName||({cash:'Kassen_Umsätze.accdb',trade:'Trade_Daten.accdb',bestell:'Trade_DatenBestell.accdb'})[source.kind]||'Unbekannte Datenbank';
+  const sourceFileName=source=>source.fileName||({cash:'Kassen_Umsätze.accdb',trade:'Trade_Daten.accdb',bestell:'Trade_DatenBestell.accdb',weum:'WEUM.accdb',inventur:'InventurProtokoll.accdb'})[source.kind]||'Unbekannte Datenbank';
   const dateTime=value=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleString('de-AT',{dateStyle:'short',timeStyle:'short'}):'Nicht erfasst';
-  const kindForFile=name=>/^Trade_DatenBestell(?:[ ._-]|$)/i.test(name)?'bestell':/^Trade_Daten(?:[ ._-]|$)/i.test(name)?'trade':/^Kassen[_ -]Ums[aä]tze(?:[ ._-]|$)/i.test(name)?'cash':null;
+  const kindForFile=name=>/^Trade_DatenBestell(?:[ ._-]|$)/i.test(name)?'bestell':/^Trade_Daten(?:[ ._-]|$)/i.test(name)?'trade':/^Kassen[_ -]Ums[aä]tze(?:[ ._-]|$)/i.test(name)?'cash':/^WEUM(?:[ ._-]|$)/i.test(name)?'weum':/^InventurProtokoll(?:[ ._-]|$)/i.test(name)?'inventur':null;
   function contentDate(source) {
     const date=source.contentDate;
     if(date?.status!=='complete')return source.complete?(source.background?.phase==='content-date'&&source.active?'Wird ermittelt …':'Noch nicht ermittelt'):'Nach dem Einlesen';
@@ -21,6 +21,22 @@
     if(!items.length)return '<p>Noch keine eigenen Datenbankimporte.</p>';
     return `<div class="data-import-scroll data-import-source-table" tabindex="0" role="region" aria-label="Datenquellen und Datenstand"><table><caption>Datenquellen · Details mit Klick auf den Namen</caption><thead><tr><th scope="col">Datenquelle</th><th scope="col">Datenstand</th></tr></thead><tbody>${items.map(s=>`<tr${s.id===selectedId?' class="is-selected"':''}><th scope="row"><button type="button" data-i-source="${escape(s.id)}"${s.id===selectedId?' aria-current="true"':''}>${escape(sourceFileName(s))}</button><small>${escape(label(s.background?.status||s.status))}${s.uploadFileAvailable?' · Access-Datei noch vorhanden':''}</small>${!s.fileName?'<small>Bei älteren Importen ohne Originalnamen wird der Dateityp angezeigt.</small>':''}</th><td>${contentDate(s)}</td></tr>`).join('')}</tbody></table></div>`;
   }
+  const defaultCatalog=[['trade','Trade_Daten.accdb'],['cash','Kassen_Umsätze.accdb'],['bestell','Trade_DatenBestell.accdb']].map(([kind,fileName])=>({kind,fileName,purpose:sourceLabel(kind),group:'recommended',available:true}));
+  function renderOverview(items=[],selectedId,context={},complete=true) {
+    const catalog=context.sourceCatalog||defaultCatalog;
+    const latest=new Map(items.map(source=>[source.kind,source]));
+    function table(sources,caption) {
+      return `<div class="data-import-scroll data-import-catalog-table" tabindex="0" role="region" aria-label="${escape(caption)}"><table><caption>${escape(caption)}</caption><thead><tr><th scope="col">Datenbank</th><th scope="col">Datenstand</th><th scope="col">Hochgeladen am</th><th scope="col">Status</th><th scope="col">Aktion</th></tr></thead><tbody>${sources.map(def=>{
+        const source=latest.get(def.kind),enabled=def.available&&context.available&&context.projection?.prepare;
+        const status=source?label(source.background?.status||source.status):def.group==='local'?'Lokal behalten':!def.available?'Noch nicht angebunden':complete?'Noch nicht hochgeladen':'Ältere Importe noch ungeprüft';
+        return `<tr${source?.id===selectedId&&source?' class="is-selected"':''}><th scope="row">${source?`<button type="button" class="data-import-source-link" data-i-source="${escape(source.id)}"${source.id===selectedId?' aria-current="true"':''}>${escape(def.fileName)}</button>`:`<strong>${escape(def.fileName)}</strong>`}<small>${escape(def.purpose||'')}</small>${source?.fileName&&source.fileName!==def.fileName?`<small>Datei: ${escape(source.fileName)}</small>`:''}</th><td>${source?contentDate(source):'–'}</td><td>${source?`<time datetime="${escape(source.createdAt)}">${escape(dateTime(source.createdAt))}</time>`:'–'}</td><td><span class="data-import-state">${escape(status)}</span></td><td>${def.available?`<button type="button" data-i-upload="${escape(def.kind)}" aria-label="${escape(def.fileName)} hochladen" ${enabled?'':'disabled'}>Hochladen</button>${!context.projection?.prepare?'<small>Uploadrecht erforderlich</small>':!context.available?'<small>Import derzeit nicht verfügbar</small>':''}`:`<small>${def.group==='local'?'Kein Upload vorgesehen':def.group==='optional'?'Bei Bedarf ergänzen':'Anbindung vorgesehen'}</small>`}</td></tr>`;
+      }).join('')}</tbody></table></div>`;
+    }
+    return table(catalog.filter(s=>s.group==='recommended'),'Datenbanken für den regelmäßigen Import')+
+      (catalog.some(s=>s.group==='optional')?`<details class="data-import-other"><summary>Weitere Datenquellen bei Bedarf</summary>${table(catalog.filter(s=>s.group==='optional'),'Optionale Datenquellen')}</details>`:'')+
+      (catalog.some(s=>s.group==='local')?`<details class="data-import-other"><summary>Lokal behalten · kein Import vorgesehen</summary><ul>${catalog.filter(s=>s.group==='local').map(s=>`<li><strong>${escape(s.fileName)}</strong><small>${escape(s.purpose)}</small></li>`).join('')}</ul></details>`:'')+
+      (!complete?'<p class="data-import-note">Die Übersicht enthält die neuesten gefundenen Importe. Nicht gefundene Quellen können in älteren Importen liegen; bitte den Importverlauf prüfen.</p>':'');
+  }
   function renderSource(source,projection={}) {
     const tables=source.tables||[], received=tables.reduce((n,t)=>n+(t.run?.receivedRows||0),0), expected=tables.reduce((n,t)=>n+t.declaredRows,0),job=source.background;
     const applied=tables.reduce((n,t)=>n+(t.run?.status==='applied'?t.run.receivedRows:t.run?.counts?.applied||0),0),takingOver=job?.phase==='applying'||['applying','applied'].includes(source.status),jobName=job?.phase==='content-date'?'Ermittlung des Datenstands':job?.phase==='applying'?'Übernahme':'Prüfung';
@@ -29,6 +45,7 @@
       <progress max="${Math.max(expected,received,1)}" value="${received}" aria-label="Bereitgestellte Quellzeilen"></progress>
       ${takingOver?`<p>${number(applied)} / ${number(received)} Zeilen übernommen oder unverändert bestätigt · ${number(tables.filter(t=>t.run?.status==='applied').length)} / ${number(tables.length)} Tabellen abgeschlossen.</p><progress max="${Math.max(received,1)}" value="${applied}" aria-label="Übernommene Quellzeilen"></progress>${source.currentStep&&source.status!=='applied'?`<p>${escape(source.currentStep.table)} · ${escape(label(source.currentStep.phase))}</p>`:''}`:''}
       <p class="data-import-note">${source.uploadFileAvailable?'Die Access-Datei ist für diesen Auftrag vorübergehend gespeichert.':'Keine Access-Datei auf dem Server gespeichert.'} Die Daten und Importprotokolle im GP bleiben erhalten.</p>
+      ${source.selection?`<p class="data-import-note">${source.kind==='inventur'?'Kompakter Inventurimport: belegte Inventuren als Zusammenfassung; auf Positionsebene nur Differenzen und Mengenprüffälle. Unveränderte Zählstände bleiben in Ihrer lokalen Quelldatei.':'Begrenzter Import: Warenbewegungen und historische Artikelreferenzen. Gelöschte Artikel werden als Historie gespeichert und nicht wieder aktiviert.'}</p><p class="data-import-note">${(source.selection.tables||[]).map(t=>`${escape(t.name)}: ${number(t.selectedRows)} ausgewählt aus ${number(t.sourceRows)} Quellzeilen`).join(' · ')}</p>`:''}
       ${source.uploadFileAvailable?`<button type="button" data-i-delete-upload ${!projection.prepare||source.active?'disabled':''}>Access-Datei löschen</button>`:''}
       ${projection.prepare&&!['applying','applied','reverting','reverted'].includes(source.status)&&!tables.some(t=>['applying','applied','reverting','reverted'].includes(t.run?.status))?`<button type="button" data-i-delete-source ${source.active?'disabled':''}>${source.status==='deleting'?'Endgültige Löschung fortsetzen':'Nicht übernommenen Import endgültig löschen'}</button><p class="data-import-note">Entfernt auch die eingelesenen Importdaten dieser Quelle vom Server. Bereits übernommene oder freigegebene Datenquellen sind geschützt.</p>`:''}
       ${source.storage==='cash-compact-v1'?'<p class="data-import-note">Gesamte Kassenhistorie · alle Zeiträume · alle Filialen in einem Import.</p>':''}
@@ -46,11 +63,11 @@
       ${source.kind==='trade'?`<p class="data-import-note">Die Übernahme aktualisiert auch Artikelnummern, Barcodes und Preise im Artikelkatalog.${source.catalog?` ${number(source.catalog.changed)} aktualisiert · ${number(source.catalog.unchanged)} unverändert${source.catalog.blocked?` · ${number(source.catalog.blocked)} zur Prüfung zurückgestellt`:''}.`:''}${source.catalogUpdatePending?' Bei diesem älteren Import steht der Katalogabgleich noch aus.':''}</p>`:''}
       <details class="data-import-technical"><summary>Prüfprotokolle und technische Details · ${number(tables.length)} Tabellen</summary>
       ${source.storage==='cash-compact-v1'?`<p class="data-import-note">${number(source.verifiedRows)} gespeicherte Zeilen vollständig zurückgelesen und verglichen. Die Filialzuordnung dient nur der Auswertung; sie schränkt den Import nicht ein.</p>`:''}
-      <p class="data-import-note">${number(received)} gelesene / ${number(expected)} deklarierte Zeilen · Hochgeladen: ${escape(dateTime(source.createdAt))} · GP-Bearbeitung: ${escape(dateTime(source.updatedAt||source.createdAt))}</p><p class="data-import-note">Dateifingerabdruck <code>${escape(source.fileSha256)}</code></p>
+      <p class="data-import-note">${number(received)} gelesene / ${number(expected)} ${source.selection?'ausgewählte':'deklarierte'} Zeilen · Hochgeladen: ${escape(dateTime(source.createdAt))} · GP-Bearbeitung: ${escape(dateTime(source.updatedAt||source.createdAt))}</p><p class="data-import-note">Dateifingerabdruck <code>${escape(source.fileSha256)}</code></p>
       ${source.contentDate?.evidence?`<p class="data-import-note">Datenstand ermittelt aus ${escape(source.contentDate.evidence.table)} · ${escape(source.contentDate.evidence.field)}.</p>`:''}
       ${tables.flatMap(t=>(t.run?.acceptedDeviations||[]).map(p=>`<aside class="data-import-tolerance"><strong>Bestätigte Quellzähler-Abweichung · ${escape(t.name)}</strong><p>${number(p.expectedRows)} lesbare / ${number(p.declaredRows)} deklarierte Zeilen. Nur für diesen Dateistand akzeptiert.</p><small>Freigabe: ${escape(p.approvalReference)} · ${escape(p.recordedAt)}<br>Prüfnachweis: ${escape(p.evidenceReference)} · ${escape(p.id)}</small></aside>`)).join('')}
       ${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-action="undo" ${!projection.undo||source.active||!['applied','applying','reverting'].includes(source.status)?'disabled':''}>Rücknahme starten / fortsetzen</button>`}
-      <div class="data-import-scroll" tabindex="0" role="region" aria-label="Tabellen und Prüfstatus"><table><thead><tr><th scope="col">Quelltabelle</th><th scope="col">Gelesen / deklariert</th><th scope="col">Status / Hinweise</th><th scope="col">Prüfung</th></tr></thead><tbody>
+      <div class="data-import-scroll" tabindex="0" role="region" aria-label="Tabellen und Prüfstatus"><table><thead><tr><th scope="col">Quelltabelle</th><th scope="col">Gelesen / ${source.selection?'ausgewählt':'deklariert'}</th><th scope="col">Status / Hinweise</th><th scope="col">Prüfung</th></tr></thead><tbody>
       ${tables.map(t=>`<tr><td>${escape(t.name)}</td><td>${number(t.run?.receivedRows)} / ${number(t.declaredRows)}</td><td>${escape(label(t.run?.status||'staging'))}${t.run?.counts?.invalid?` · ${number(t.run.counts.invalid)} ungültig`:''}${t.run?.counts?.conflict?` · ${number(t.run.counts.conflict)} Konflikte`:''}${t.run?.gates?.length?` · ${t.run.gates.map(escape).join(', ')}`:''}</td><td>${t.run?`${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-log="${escape(t.run.id)}">Protokoll</button> `}<button type="button" data-i-rows="${escape(t.run.id)}">Zeilenstatus</button>${projection.undo&&['applied','applying','reverting'].includes(t.run.status)?` <button type="button" data-i-undo-preview="${escape(t.run.id)}">Rücknahme prüfen</button>`:''}`:'–'}</td></tr>`).join('')}
       </tbody></table></div><p class="data-import-note">Nicht übernommene technische Tabellen: ${(source.excludedTableNames||[]).map(escape).join(', ')||'Noch nicht ermittelt'}.</p></details>`;
   }
@@ -82,23 +99,34 @@
     async function refresh(next=false) {
       const ticket=generation;
       if(next&&cursor)sourcePage=cursor;
-      const result=await post('/api/data-import/sources/search',sourcePage);
+      const [result,overview]=await Promise.all([post('/api/data-import/sources/search',sourcePage),context.sourceCatalog?request('/api/data-import/overview'):Promise.resolve(null)]);
       if(disposed||ticket!==generation)return;
       cursor=result.next;el('next').hidden=!cursor;
       el('sources').innerHTML=renderSources(result.items,selected?.id);
+      const overviewElement=el('overview');
+      if(overviewElement) {
+        const opened=Array.from(overviewElement.querySelectorAll('details')).map(d=>d.open);
+        const focused=globalThis.document?.activeElement,attribute=overviewElement.contains(focused)&&['data-i-upload','data-i-source'].find(a=>focused.hasAttribute(a)),value=attribute&&focused.getAttribute(attribute);
+        overviewElement.innerHTML=renderOverview(overview?.items||result.items,selected?.id,context,overview?.complete!==false);
+        Array.from(overviewElement.querySelectorAll('details')).forEach((d,i)=>{d.open=!!opened[i];});
+        if(attribute)Array.from(overviewElement.querySelectorAll('button')).find(b=>!b.disabled&&b.getAttribute(attribute)===value)?.focus({preventScroll:true});
+      }
       if(selected) {const selectedId=selected.id;const latest=await request(`/api/data-import/sources/${selectedId}`);if(disposed||ticket!==generation||selected?.id!==selectedId)return;selected=latest;renderSelected();}
-      if(!working && visible() && !globalThis.document?.hidden && (selected?.active||result.items.some(s=>s.active))) timer=setTimeout(()=>refresh().catch(e=>message(e.message)),2500);
+      clearTimeout(timer);
+      if(!working && visible() && !globalThis.document?.hidden && (selected?.active||result.items.some(s=>s.active)||overview?.items?.some(s=>s.active))) timer=setTimeout(()=>refresh().catch(e=>message(e.message)),2500);
     }
     async function load() {
       if(disposed||!visible())return;cancel();const ticket=generation;controller=new AbortController();body.textContent='Importanbindung wird geprüft …';
       try {
         context=await request('/api/data-import/context');if(disposed||ticket!==generation)return;
-        body.innerHTML=`<div class="data-import-workspace"><div class="data-import-upload"><h3>Datenbank hochladen</h3>
-          <form data-i="form" class="data-import-form" autocomplete="off"><label>Datenquelle<select data-i="kind" aria-describedby="dataImportSourceHint"><option value="trade">Trade_Daten.accdb</option><option value="cash">Kassen_Umsätze.accdb</option><option value="bestell">Trade_DatenBestell.accdb</option></select><small data-i="kind-hint" id="dataImportSourceHint">${sourceLabel('trade')}</small></label>
+        body.innerHTML=`<div class="data-import-workspace"><div class="data-import-overview"><div class="data-import-overview-heading"><h3>Datenbanken und Aktualisierung</h3><button type="button" data-i-refresh>Aktualisieren</button></div><p class="data-import-note">Eigene Importstände · Datenstand: letztes fachliches Änderungs- oder Belegdatum in der Datei. Hochgeladen am: Eingang dieser Datei im GP. Der Status zeigt, ob die Daten bereits übernommen wurden.</p><div data-i="overview">${renderOverview([],null,context,false)}</div></div>
+          <section class="data-import-upload" data-i="upload" hidden aria-labelledby="dataImportUploadTitle"><h3 data-i="upload-title" id="dataImportUploadTitle">Datenbank hochladen</h3>
+          <form data-i="form" class="data-import-form" autocomplete="off"><input type="hidden" data-i="kind" value="trade"><p class="data-import-note" data-i="kind-hint" id="dataImportSourceHint">${sourceLabel('trade')}</p>
           <label>ACCDB-Datei<input data-i="file" type="file" accept=".accdb" required aria-describedby="dataImportFileHint"><small id="dataImportFileHint">Maximal 512 MiB · alle Filialen und Zeiträume.</small></label><label>Dateikennwort (falls erforderlich)<input data-i="password" type="password" autocomplete="new-password" maxlength="256"></label>
-          <button type="submit" ${!context.available||!context.projection.prepare?'disabled':''}>Datei prüfen</button></form><p data-i="file-name" class="data-import-note" aria-live="polite"></p>
-          <p class="data-import-note">${context.available?'Nach dem Hochladen automatisch prüfen, danach übernehmen.':escape(context.message)}</p><p class="data-import-note">${context.backgroundEnabled?'Die Access-Datei wird nach dem Einlesen automatisch gelöscht. Bei Unterbrechungen spätestens nach 72 Stunden.':'Die Access-Datei wird nicht gespeichert.'} GP-Daten und Importprotokolle bleiben erhalten.</p></div>
-          <div class="data-import-overview"><div class="data-import-overview-heading"><h3>Vorhandene Datenquellen</h3><button type="button" data-i-refresh>Aktualisieren</button></div><p class="data-import-note">Datenstand = letztes fachliches Änderungs- oder Belegdatum innerhalb der Datenbank.</p><div data-i="sources"></div><button type="button" data-i="next" hidden>Ältere Importe</button></div></div>
+          <div class="data-import-actions"><button type="submit" ${!context.available||!context.projection.prepare?'disabled':''}>Prüfen und hochladen</button><button type="button" data-i-upload-cancel>Abbrechen</button></div></form><p data-i="file-name" class="data-import-note" aria-live="polite"></p>
+          <p class="data-import-note">${context.available?'Nach dem Hochladen automatisch prüfen, danach übernehmen.':escape(context.message)}</p><p class="data-import-note">${context.backgroundEnabled?'Die Access-Datei wird nach dem Einlesen automatisch gelöscht. Bei Unterbrechungen spätestens nach 72 Stunden.':'Die Access-Datei wird nicht gespeichert.'} GP-Daten und Importprotokolle bleiben erhalten.</p></section></div>
+          ${!context.available?`<p class="data-import-note" role="status">${escape(context.message)}</p>`:''}
+          <details class="data-import-history"><summary>Importverlauf und frühere Dateistände</summary><div data-i="sources"></div><button type="button" data-i="next" hidden>Ältere Importe</button></details>
           <p data-i="message" role="status" aria-live="polite"></p><button type="button" data-i="stop" data-i-stop hidden>Anhalten</button><section data-i="detail"></section><section data-i="publication"></section><section data-i="log"></section>`;
         if(context.available)await refresh();
       }catch(error){if(!disposed&&ticket===generation)body.textContent=error.message||'Importanbindung nicht verfügbar.';}
@@ -135,9 +163,21 @@
     }
     async function click(event) {
       const target=event.target.closest?.('button');if(!target||working&& !target.hasAttribute('data-i-stop'))return;
+      if(target.disabled)return;
       if(!target.hasAttribute('data-i-stop')){cancel();controller=new AbortController();}
       const ticket=generation;
       try {
+        if(target.dataset.iUpload) {
+          const def=(context.sourceCatalog||defaultCatalog).find(s=>s.kind===target.dataset.iUpload&&s.available);
+          if(!def||!context.available||!context.projection?.prepare)return;
+          el('kind').value=def.kind;el('kind-hint').textContent=def.purpose||sourceLabel(def.kind);el('upload-title').textContent=def.fileName+' hochladen';
+          el('password').value='';el('file').value='';el('file-name').textContent='';el('upload').hidden=false;message('');
+          el('upload').scrollIntoView?.({block:'nearest'});el('file').click();return;
+        }
+        if(target.hasAttribute('data-i-upload-cancel')) {
+          const kind=el('kind').value;el('upload').hidden=true;el('file').value='';el('password').value='';el('file-name').textContent='';message('');
+          body.querySelector(`[data-i-upload="${kind}"]`)?.focus();await refresh();return;
+        }
         if(target.hasAttribute('data-i-publish')&&selected){publicationView?.destroy();publicationView=globalThis.GrabenplanerCashPublication?.mount(el('publication'),{api,source:selected,confirmAction});return;}
         if(target.hasAttribute('data-i-stop')){working=false;message('Nach dem laufenden Paket angehalten.');return;}
         if(target.hasAttribute('data-i-delete-source')&&selected){
@@ -173,13 +213,16 @@
     }
     async function submit(event) {
       if(event.target!==el('form'))return;event.preventDefault();if(working)return;
+      const kind=el('kind').value,definition=(context.sourceCatalog||defaultCatalog).find(s=>s.kind===kind&&s.available);
+      if(!definition||!context.available||!context.projection?.prepare){message('Für diese Datenbank ist derzeit kein Upload möglich.');return;}
       const file=el('file').files[0];if(!file||file.size<4096||file.size>context.maxBytes||!file.name.toLowerCase().endsWith('.accdb')){message('Bitte eine vollständige ACCDB-Datei bis 512 MiB auswählen.');return;}
+      const recognized=kindForFile(file.name);if(recognized&&recognized!==kind){message(`Die ausgewählte Datei gehört zu einer anderen Datenbank. Bitte ${definition.fileName} auswählen.`);return;}
       const ticket=generation;working=true;message('Datei wird geschützt übertragen …');
       let password=el('password').value;el('password').value='';
       try {
         const passwordHeader=btoa(Array.from(new TextEncoder().encode(password),b=>String.fromCharCode(b)).join(''));password='';
-        const result=await request(`/api/data-import/upload/${el('kind').value}`,{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Import-Password':passwordHeader,'X-Import-File-Name':encodeURIComponent(file.name)},body:file});
-        if(disposed||ticket!==generation)return;el('file').value='';
+        const result=await request(`/api/data-import/upload/${kind}`,{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Import-Password':passwordHeader,'X-Import-File-Name':encodeURIComponent(file.name)},body:file});
+        if(disposed||ticket!==generation)return;el('file').value='';el('file-name').textContent='';el('upload').hidden=true;
         const source=await request(`/api/data-import/sources/${result.id}`);if(disposed||ticket!==generation)return;selected=source;sourcePage={};working=false;
         message(context.backgroundEnabled?'Datei sicher angenommen. Der Server liest und prüft sie automatisch; Sie können den GP jetzt schließen.':'Datei angenommen. Der Fortschritt wird laufend aktualisiert.');await refresh();
       }catch(error){if(!disposed&&ticket===generation)message(error.message);}
@@ -195,7 +238,7 @@
       if(event.target===el('kind')) el('kind-hint').textContent=sourceLabel(el('kind').value);
       if(event.target===el('file')) {
         const name=el('file').files[0]?.name||'',kind=kindForFile(name);el('file-name').textContent=name;
-        if(kind){el('kind').value=kind;el('kind-hint').textContent=sourceLabel(kind);}
+        message(kind&&kind!==el('kind').value?'Diese Datei gehört zu einer anderen Datenbank. Bitte die Datei für die ausgewählte Zeile verwenden.':'');
       }
     };
     root.addEventListener('toggle',visibility);body.addEventListener('click',click);body.addEventListener('submit',submit);body.addEventListener('change',change);
@@ -213,5 +256,5 @@
     visibility();
     return {destroy(){disposed=true;cancel();publicationView?.destroy();observer?.disconnect();root.removeEventListener('toggle',visibility);body.removeEventListener('click',click);body.removeEventListener('submit',submit);body.removeEventListener('change',change);globalThis.document?.removeEventListener('visibilitychange',documentVisibility);body.replaceChildren();selected=null;logState=null;}};
   }
-  return {mount,renderSource,renderSources,contentDate,kindForFile};
+  return {mount,renderSource,renderSources,renderOverview,contentDate,kindForFile};
 }));

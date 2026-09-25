@@ -32,7 +32,7 @@ test('shutdown drains upload work after HTTP 202, blocks admission and records o
 async function fixture(t,{jobs=null}={}) {
   const state={session:session(),calls:0,csrf:true,available:true,password:null},app=express();app.use(express.json({limit:'16kb'}));
   const runtime={context:async get=>({available:state.available,projection:buildDataImportProjection(await get()),message:state.available?'ready':'Protected key unavailable'}),
-    list:async get=>{await get();return {items:[]};},sourceOperation:async(get,_id,action,body)=>{await get();state.calls++;return {action,body};},
+    list:async get=>{await get();return {items:[]};},overview:async get=>{await get();return {items:[],complete:true};},sourceOperation:async(get,_id,action,body)=>{await get();state.calls++;return {action,body};},
     upload:async(get,{buffer,kind,fileName,password,onStarted})=>{await get();state.calls++;state.kind=kind;state.fileName=fileName;state.password=password;assert.ok(Buffer.isBuffer(buffer));onStarted({id:'a'.repeat(64),status:'reading'});buffer.fill(0);}};
   const mappings={operation:async(get,action,body)=>{await get();state.calls++;return {action,body};}};
   registerDataImportRoutes(app,{runtime,mappings,jobs,requireSession(_r,permission){if(!state.session)throw Object.assign(new Error('private'),{status:401});
@@ -105,16 +105,16 @@ test('Productive Block 1: wrong kinds, compression, MIME and missing vault canno
   f.state.available=false;assert.equal((await send('cash')).status,503);assert.equal(f.state.calls,0);
 });
 
-test('Central imports: all three source kinds use the same protected upload route',async t=>{
+test('Central imports: all five supported source kinds use the same protected upload route',async t=>{
   const f=await fixture(t),options={method:'POST',headers:{'Content-Type':'application/octet-stream'},body:Buffer.alloc(4096)};
-  for(const kind of ['cash','trade','bestell']) {
+  for(const kind of ['cash','trade','bestell','weum','inventur']) {
     const result=await f.request(`/api/data-import/upload/${kind}`,options);
     assert.equal(result.status,202);assert.equal(f.state.kind,kind);
     assert.deepEqual(await result.json(),{id:'a'.repeat(64),status:'reading'});
   }
   f.state.csrf=false;
   assert.equal((await f.request('/api/data-import/upload/bestell',options)).status,403);
-  assert.equal(f.state.calls,3);
+  assert.equal(f.state.calls,5);
 });
 
 test('upload preserves a Unicode basename for both direct and background imports and rejects malformed names',async t=>{
@@ -143,6 +143,52 @@ test('source overview shows two columns with the date from contents, never the p
   assert.equal(UI.contentDate({complete:true,active:true,background:{phase:'content-date'}}), 'Wird ermittelt …');
   assert.equal(UI.contentDate({complete:true,active:false,background:{phase:'content-date',status:'failed'}}), 'Noch nicht ermittelt');
   assert.equal(UI.contentDate({complete:true,contentDate:{status:'complete',value:null}}),'Kein fachliches Datum');
+});
+
+test('database overview keeps one row per source, distinguishes business date/upload/status and only enables supported authorized uploads',()=>{
+ const {SOURCE_CATALOG}=require('../lib/data-import-source-catalog');
+ const source={id:'one',kind:'weum',fileName:'WEUM <script>.accdb',createdAt:'2026-09-25T10:00:00.000Z',updatedAt:'2099-12-31T10:00:00.000Z',status:'ready',complete:true,contentDate:{status:'complete',value:'2026-09-18T23:00:00.000'}};
+ const context={sourceCatalog:SOURCE_CATALOG,available:true,projection:{prepare:true}};
+ const html=UI.renderOverview([source],'one',context);
+ assert.match(html,/Datenbank<\/th>.*Datenstand<\/th>.*Hochgeladen am<\/th>.*Status<\/th>.*Aktion<\/th>/);
+ assert.match(html,/18.09.2026/);assert.match(html,/datetime="2026-09-25T10:00:00.000Z"/);assert.doesNotMatch(html,/2099|<script>/);
+ assert.equal((html.match(/data-i-upload="/g)||[]).length,5);assert.match(html,/data-i-upload="weum"/);assert.match(html,/data-i-upload="inventur"/);
+ assert.doesNotMatch(html,/data-i-upload="(?:email|fehler|rio|belieferung)"/);assert.match(html,/Lokal behalten/);assert.match(html,/aria-current="true"/);
+ const readOnly=UI.renderOverview([],null,{...context,projection:{prepare:false}});
+ assert.equal((readOnly.match(/hochladen" disabled/g)||[]).length,5);
+ assert.match(UI.renderOverview([],null,context,false),/Ältere Importe noch ungeprüft/);
+ assert.doesNotMatch(UI.renderOverview([],null,context,false),/Noch nicht hochgeladen/);
+});
+
+test('overview route retains personal authorization and private no-store responses',async t=>{
+ const f=await fixture(t);const response=await f.request('/api/data-import/overview');
+ assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/private, no-store/);assert.deepEqual(await response.json(),{items:[],complete:true});
+ f.state.session.permissions=[];assert.equal((await f.request('/api/data-import/overview')).status,403);
+});
+
+test('row upload keeps its chosen database and rejects a mismatched filename before sending any bytes',async()=>{
+ const {SOURCE_CATALOG}=require('../lib/data-import-source-catalog');
+ const fields=Object.fromEntries(['next','sources','detail','message','log','form','kind','kind-hint','file','password','file-name','upload','upload-title'].map(n=>[n,{hidden:true,innerHTML:'',textContent:'',value:'',files:[],dataset:{},hasAttribute:()=>false,querySelector:()=>null,replaceChildren(){},click(){this.clicked=true;}}]));
+ const handlers={},uploads=[],body={innerHTML:'',querySelector:s=>fields[/data-i="([^"]+)"/.exec(s)?.[1]],addEventListener:(n,h)=>handlers[n]=h,removeEventListener(){},replaceChildren(){}};
+ const root={open:true,querySelector:()=>body,addEventListener(){},removeEventListener(){}};
+ const context={sourceCatalog:SOURCE_CATALOG,available:true,maxBytes:512*1024*1024,projection:{prepare:true},backgroundEnabled:true};
+ const view=UI.mount(root,{api:async(url,options)=>{
+  if(url.endsWith('/context'))return context;
+  if(url.endsWith('/overview'))return {items:[],complete:true};
+  if(url.endsWith('/sources/search'))return {items:[],next:null};
+  if(url.includes('/upload/')){uploads.push({url,options});return{id:'new'};}
+  return{id:'new',kind:'weum',status:'queued',tables:[]};
+ }});
+ await new Promise(r=>setImmediate(r));
+ await handlers.click({target:{closest:()=>({dataset:{iUpload:'weum'},hasAttribute:()=>false})}});
+ assert.equal(fields.kind.value,'weum');assert.equal(fields.file.clicked,true);assert.equal(fields.upload.hidden,false);
+ fields.file.files=[{name:'Kassen_Umsätze.accdb',size:4096}];
+ handlers.change({target:fields.file});assert.equal(fields.kind.value,'weum');
+ await handlers.submit({target:fields.form,preventDefault(){}});assert.equal(uploads.length,0);assert.match(fields.message.textContent,/andere.*Datenbank/);
+ fields.file.files=[{name:'WEUM.accdb',size:4096}];
+ await handlers.submit({target:fields.form,preventDefault(){}});
+ assert.equal(uploads.length,1);assert.equal(uploads[0].url,'/api/data-import/upload/weum');assert.equal(fields.upload.hidden,true);assert.equal(fields.password.value,'');
+ view.destroy();
 });
 
 test('temporary file deletion uses its own CSRF-protected route, without a GP-source deletion operation',async t=>{

@@ -1,0 +1,419 @@
+{
+  "weum": {
+    "fileName": "WEUM.accdb",
+    "excludedTables": [
+      "ARTIKEL_GENR",
+      "Anforderungen",
+      "UmAvis"
+    ],
+    "tables": [
+      {
+        "name": "ARTIKEL_STAMMGelöscht",
+        "keys": [
+          "EAN"
+        ],
+        "columns": [
+          {
+            "name": "EAN",
+            "type": "text"
+          },
+          {
+            "name": "Artikelbezeichnung",
+            "type": "text"
+          },
+          {
+            "name": "Suchname",
+            "type": "text"
+          },
+          {
+            "name": "Bestellnummer",
+            "type": "text"
+          },
+          {
+            "name": "Sonderartikel",
+            "type": "text"
+          },
+          {
+            "name": "MWST",
+            "type": "byte"
+          },
+          {
+            "name": "Kondition",
+            "type": "text"
+          },
+          {
+            "name": "Provision",
+            "type": "double"
+          },
+          {
+            "name": "ProvisionKz",
+            "type": "text"
+          },
+          {
+            "name": "Sortiment",
+            "type": "long"
+          },
+          {
+            "name": "Set",
+            "type": "boolean"
+          },
+          {
+            "name": "SOnderRoh",
+            "type": "double"
+          },
+          {
+            "name": "Änderungsdatum",
+            "type": "datetime"
+          },
+          {
+            "name": "Gerät",
+            "type": "boolean"
+          },
+          {
+            "name": "SPreis",
+            "type": "boolean"
+          },
+          {
+            "name": "Abverkauf",
+            "type": "boolean"
+          },
+          {
+            "name": "Sonderbestellung",
+            "type": "boolean"
+          },
+          {
+            "name": "Änderungsperson",
+            "type": "long"
+          },
+          {
+            "name": "Anlagedatum",
+            "type": "datetime"
+          },
+          {
+            "name": "AnlagePerson",
+            "type": "long"
+          },
+          {
+            "name": "Löschdatum",
+            "type": "datetime"
+          },
+          {
+            "name": "Löschperson",
+            "type": "long"
+          },
+          {
+            "name": "DurchschnittEK",
+            "type": "double"
+          },
+          {
+            "name": "Listeneckpreis",
+            "type": "double"
+          },
+          {
+            "name": "Rechnungspreis",
+            "type": "double"
+          },
+          {
+            "name": "Verkaufspreis",
+            "type": "double"
+          },
+          {
+            "name": "NNPreis",
+            "type": "double"
+          },
+          {
+            "name": "Großhandelspreis",
+            "type": "double"
+          }
+        ]
+      },
+      {
+        "name": "WE",
+        "keys": [
+          "We_ID"
+        ],
+        "columns": [
+          {
+            "name": "We_ID",
+            "type": "long"
+          },
+          {
+            "name": "Suchname",
+            "type": "text"
+          },
+          {
+            "name": "EAN",
+            "type": "text"
+          },
+          {
+            "name": "FilialID",
+            "type": "byte"
+          },
+          {
+            "name": "InterneLieferscheinnr1",
+            "type": "long"
+          },
+          {
+            "name": "Menge",
+            "type": "double"
+          },
+          {
+            "name": "Filialid2",
+            "type": "byte"
+          },
+          {
+            "name": "InterneLieferscheinnr2",
+            "type": "long"
+          },
+          {
+            "name": "WEDatum",
+            "type": "datetime"
+          },
+          {
+            "name": "AkWeDatum",
+            "type": "datetime"
+          },
+          {
+            "name": "Lieferscheinnr",
+            "type": "text"
+          },
+          {
+            "name": "Bestellnr",
+            "type": "long"
+          },
+          {
+            "name": "Bemerkung",
+            "type": "text"
+          },
+          {
+            "name": "NR",
+            "type": "boolean"
+          },
+          {
+            "name": "We",
+            "type": "boolean"
+          },
+          {
+            "name": "Umlagerung",
+            "type": "boolean"
+          },
+          {
+            "name": "Autoid",
+            "type": "long"
+          },
+          {
+            "name": "Autoid2",
+            "type": "long"
+          },
+          {
+            "name": "Sonderartikel",
+            "type": "boolean"
+          },
+          {
+            "name": "DurchschnittEK",
+            "type": "double"
+          },
+          {
+            "name": "Listeneckpreis",
+            "type": "double"
+          },
+          {
+            "name": "Rechnungspreis",
+            "type": "double"
+          },
+          {
+            "name": "Verkaufspreis",
+            "type": "double"
+          },
+          {
+            "name": "NNPreis",
+            "type": "double"
+          },
+          {
+            "name": "WEVerkaeuferid",
+            "type": "long"
+          },
+          {
+            "name": "Unr",
+            "type": "long"
+          },
+          {
+            "name": "UNROk",
+            "type": "boolean"
+          },
+          {
+            "name": "ArtikelSuchname",
+            "type": "text"
+          },
+          {
+            "name": "Rechnungsnr",
+            "type": "text"
+          },
+          {
+            "name": "Reueber",
+            "type": "boolean"
+          },
+          {
+            "name": "WKondition",
+            "type": "text"
+          },
+          {
+            "name": "Wertmenge",
+            "type": "double"
+          },
+          {
+            "name": "WertmengeDatum",
+            "type": "datetime"
+          },
+          {
+            "name": "KorbId",
+            "type": "long"
+          },
+          {
+            "name": "KorbDatum",
+            "type": "datetime"
+          },
+          {
+            "name": "WKostenträgercode",
+            "type": "text"
+          },
+          {
+            "name": "WEZusatz",
+            "type": "text"
+          },
+          {
+            "name": "TRNr",
+            "type": "long"
+          },
+          {
+            "name": "LampWEID",
+            "type": "long"
+          },
+          {
+            "name": "NEWID",
+            "type": "text"
+          },
+          {
+            "name": "NDurchschnittEK",
+            "type": "double"
+          },
+          {
+            "name": "WEIDWIEN",
+            "type": "long"
+          },
+          {
+            "name": "WArtikelbezeichnung",
+            "type": "text"
+          },
+          {
+            "name": "WEAnFiliale",
+            "type": "long"
+          },
+          {
+            "name": "ArchivID",
+            "type": "text"
+          },
+          {
+            "name": "KontrollVerkaeuferID",
+            "type": "long"
+          }
+        ]
+      }
+    ]
+  },
+  "inventur": {
+    "fileName": "InventurProtokoll.accdb",
+    "excludedTables": [],
+    "tables": [
+      {
+        "name": "Inventur",
+        "keys": [
+          "InventurNummer",
+          "InventurFilialid"
+        ],
+        "columns": [
+          {
+            "name": "InventurNummer",
+            "type": "long"
+          },
+          {
+            "name": "InventurFilialid",
+            "type": "byte"
+          },
+          {
+            "name": "InventurDatum",
+            "type": "datetime"
+          },
+          {
+            "name": "Inventurzeit",
+            "type": "datetime"
+          },
+          {
+            "name": "VerkäuferID",
+            "type": "long"
+          },
+          {
+            "name": "Bemerkung",
+            "type": "text"
+          },
+          {
+            "name": "gebucht",
+            "type": "boolean"
+          }
+        ]
+      },
+      {
+        "name": "Inventurdetails",
+        "keys": [
+          "ID"
+        ],
+        "columns": [
+          {
+            "name": "Inventurnummer",
+            "type": "long"
+          },
+          {
+            "name": "InventurFilialid",
+            "type": "byte"
+          },
+          {
+            "name": "EAN",
+            "type": "text"
+          },
+          {
+            "name": "Artikelbezeichnung",
+            "type": "text"
+          },
+          {
+            "name": "AlteMenge",
+            "type": "double"
+          },
+          {
+            "name": "Differenz",
+            "type": "double"
+          },
+          {
+            "name": "NeueMenge",
+            "type": "double"
+          },
+          {
+            "name": "Suchname",
+            "type": "text"
+          },
+          {
+            "name": "Sortiment",
+            "type": "long"
+          },
+          {
+            "name": "NNPreis",
+            "type": "currency"
+          },
+          {
+            "name": "ID",
+            "type": "long"
+          }
+        ]
+      }
+    ]
+  }
+}
