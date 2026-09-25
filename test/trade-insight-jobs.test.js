@@ -10,6 +10,9 @@ test('server queue persists every page and reloads the original encrypted result
  const job=await jobs.create(f.state.session,{kind:'purchasing',query:{},title:'September Ergebnis'});
  assert.equal(job.status,'queued');await complete(jobs,f.state.session);
  const before=await jobs.get(f.state.session,job.id);assert.equal(before.status,'completed');assert.ok(before.result.rows.length>50);
+ f.state.session={...f.state.session,permissions:[...f.state.session.permissions,'sales:articles:access','sales:articles:read']};
+ assert.equal((await f.run('context')).projection.articleHistory,true);
+ assert.deepEqual((await jobs.get(f.state.session,job.id)).result,before.result,'article-history access does not change the authority of existing saved results');
  const raw=f.app.database.prepare('SELECT payload FROM sales_report_jobs WHERE id=?').get(job.id).payload;assert.doesNotMatch(raw,/September Ergebnis|articleNumber|synthetic-owner/);
  await f.ingest('BESTELLDETAILS',[{BestellId:'999',BestellNr:1,EAN:'new-result',BMenge:'9',gMenge:'1'}]);
  const restarted=queue(f);t.after(()=>restarted.stop());

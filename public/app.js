@@ -1850,7 +1850,7 @@ function canAccessSalesAnalytics() {
 function canAccessTradeInsights() {
   const user = state.portalSession?.user;
   return Boolean(user?.salesHistory?.read && (user.salesHistory.customerPurchases
-    || user.salesAnalytics?.inventory));
+    || user.salesAnalytics?.inventory || canReadSalesArticles()));
 }
 
 function canAccessCrm() {
@@ -32765,6 +32765,22 @@ let receiptSearchWorkspace = null;
 let tradeInsightsWorkspace = null;
 let tradeInsightsTab = "purchasing";
 let salesHistoryActorKey = "";
+function canReadTradeMovements() {
+  const user=state.portalSession?.user;
+  return !!(user?.salesHistory?.read && user?.salesAnalytics?.inventory && user.permissions?.includes('sales:purchasing:read'));
+}
+document.getElementById('salesArticleMovementsButton')?.addEventListener('click', () => {
+  if (!canReadTradeMovements()) return;
+  const articleNumber=state.salesArticleCatalog.selectedArticleNumber;
+  tradeInsightsTab='movements';setView('tradeInsights');
+  void tradeInsightsWorkspace?.openMovements(articleNumber?{articleNumber}:{query:(elements.salesArticleSearchQuery?.value||'').slice(0,150)});
+});
+document.getElementById('salesArticleHistoryButton')?.addEventListener('click', () => {
+  if (!state.portalSession?.user?.salesHistory?.read || !canReadSalesArticles()) return;
+  tradeInsightsTab = 'article-history';
+  setView('tradeInsights');
+  void tradeInsightsWorkspace?.openArticleHistory((elements.salesArticleSearchQuery?.value || '').slice(0,150));
+});
 function syncSalesHistoryAccess() {
   const user = state.portalSession?.user;
   const nextKey = user ? JSON.stringify([user.employeeNumber, user.salesHistory, user.dataImport, user.permissions, user.scopes]) : "";
@@ -32772,6 +32788,8 @@ function syncSalesHistoryAccess() {
   salesHistoryActorKey = nextKey;
   tradeInsightsWorkspace?.destroy(); tradeInsightsWorkspace = null;
   const tradeInsightsAccess = canAccessTradeInsights();
+  document.getElementById('salesArticleMovementsButton')?.classList.toggle('hidden', !canReadTradeMovements());
+  document.getElementById('salesArticleHistoryButton')?.classList.toggle('hidden', !(user?.salesHistory?.read && canReadSalesArticles()));
   elements.tradeInsightsNavButton?.classList.toggle("hidden", !tradeInsightsAccess);
   elements.tradeInsightsDashboardCard?.classList.toggle("hidden", !tradeInsightsAccess);
   if (tradeInsightsAccess) tradeInsightsWorkspace = window.GrabenplanerTradeInsights?.mount(document.getElementById("tradeInsightsWorkspace"), {

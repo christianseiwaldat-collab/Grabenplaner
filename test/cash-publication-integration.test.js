@@ -14,14 +14,14 @@ const { CASH_SOURCE_POLICIES } = require('../lib/cash-source-policies');
 const TIME = '2026-09-07T12:00:00.000Z';
 const code = c => e => e.code === c;
 const raw = (name, values) => ({ ...Object.fromEntries(H.tableFor('cash', name).columns.map(c => [c.name, null])), ...values });
-function rows({ count = 1, price = '12', seller = '07', location = '018', unknown = false } = {}) {
+function rows({ count = 1, price = '12', seller = '07', location = '018', unknown = false, description = 'Synthetic article' } = {}) {
   const flags = CASH_SOURCE_POLICIES[0].policy.statusRules[3].flags;
   const head = raw('Umsatz_KASSE', { Bonnr: '000001', Filialid: location, Kassenid: '01', Bondatum: '2010-01-02T00:00:00.000',
     VerkäuferID: '08', KUND_NR: '00031', RechnungsBetrag: String(count * Number(price)) });
   return { Umsatz_KASSE: [head], Umsatz_Kasse_Details: Array.from({ length: count }, (_, i) => raw('Umsatz_Kasse_Details', {
     Bonnr: head.Bonnr, Filialid: location, Kassenid: head.Kassenid, Bondatum: head.Bondatum,
     RepID: '00000000-0000-0000-0000-' + String(i + 1).padStart(12, '0'), EAN: '00042', VKMenge: '1', VK_Preis: price,
-    MWST: '20', Verkäuferid: seller, Artikelbezeichnung: 'Synthetic article', ...flags, ...(unknown ? { Beratung: true } : {}) })) };
+    MWST: '20', Verkäuferid: seller, Artikelbezeichnung: description, ...flags, ...(unknown ? { Beratung: true } : {}) })) };
 }
 // Exercise the PostgreSQL repository branch through a real transactional
 // synthetic database. The adapter delegates each batch to equivalent scalar
@@ -94,6 +94,41 @@ async function fixture(t, options = {}) {
   t.after(async () => { protection.destroy(); await app.provider.close(); app.database.close(); });
   return f;
 }
+test('Article archive enrichment preserves cash bindings, original text and checked amounts across imports',async t=>{
+ const f=await fixture(t);await f.activate();
+ const source=await require('../test-support/trade-insights-fixture').insightFixture({access:f.app.provider,protection:f.protection,...f.actor,seedBase:false});
+ const runtime=f.history();
+ const before=await runtime.run(f.get,w=>w.search(f.query()));
+ const search=await runtime.run(f.get,w=>w.receipts.search(f.query()));
+ const getDocs=()=>runtime.run(f.get,w=>w.receipts.documents({ids:[search.items[0].id]}));
+ const original=(await getDocs()).items[0];
+ const article={EAN:'00042',Artikelbezeichnung:'Archivkamera mit fehlendem Belegtext',Anlagedatum:'2000-01-01T00:00:00.000',Löschdatum:'2015-01-01T00:00:00.000'};
+ await source.ingest('ARTIKEL_STAMMGelöscht',[article],{sourceInstance:'tradefoto-weum'});
+ const after=await runtime.run(f.get,w=>w.search(f.query()));
+ assert.deepEqual(after.totals,before.totals);assert.deepEqual(after.items[0].articleReference,before.items[0].articleReference);
+ assert.equal(after.items[0].description,'Synthetic article');assert.equal(after.items[0].displayDescription,'Synthetic article');
+ assert.equal(after.items[0].articleDisplay.status,'archived');
+ const enriched=(await getDocs()).items[0];assert.equal(enriched.gross,original.gross);assert.equal(enriched.lines[0].sourcePrice,original.lines[0].sourcePrice);assert.equal(enriched.lines[0].description,original.lines[0].description);
+ assert.equal(enriched.lines[0].articleDisplay.label,article.Artikelbezeichnung);
+ const found=await runtime.run(f.get,w=>w.receipts.search(f.query({query:'Archivkamera'})));assert.equal(found.items.length,1,'receipt summary cache must refresh after article imports');
+ await source.ingest('ARTIKEL_STAMM',[{EAN:'00042',Artikelbezeichnung:'Neue Kamera ab 2020',Anlagedatum:'2020-01-01T00:00:00.000'}],{master:true});
+ assert.equal((await getDocs()).items[0].lines[0].articleDisplay.status,'archived');
+ f.session={...f.session,permissions:f.session.permissions.filter(p=>!['sales:analytics:company:read','sales:history:unassigned:read'].includes(p)),scopes:[{locationId:'branch-b'}]};
+ await assert.rejects(getDocs(),e=>e.status===403);
+});
+test('Missing receipt descriptions use only temporally confirmed article labels',async t=>{
+ const f=await fixture(t,{description:null});await f.activate();
+ const source=await require('../test-support/trade-insights-fixture').insightFixture({access:f.app.provider,protection:f.protection,...f.actor,seedBase:false});
+ const data={EAN:'00042',Artikelbezeichnung:'Ergänzende Archivbezeichnung',Anlagedatum:'2000-01-01T00:00:00.000',Löschdatum:'2015-01-01T00:00:00.000'};
+ await source.ingest('ARTIKEL_STAMMGelöscht',[data],{sourceInstance:'tradefoto-weum'});
+ const runtime=f.history(),sale=await runtime.run(f.get,w=>w.search(f.query()));
+ assert.equal(sale.items[0].description,null);assert.equal(sale.items[0].displayDescription,data.Artikelbezeichnung);
+ const found=await runtime.run(f.get,w=>w.receipts.search(f.query({query:'Archivbezeichnung'})));
+ const doc=await runtime.run(f.get,w=>w.receipts.documents({ids:[found.items[0].id]}));
+ assert.equal(doc.items[0].lines[0].description,null);assert.equal(doc.items[0].lines[0].displayDescription,data.Artikelbezeichnung);
+ await source.ingest('ARTIKEL_STAMMGelöscht',[{...data,Löschdatum:null}],{sourceInstance:'tradefoto-weum',snapshotAt:'2026-09-15T09:00:00.000Z'});
+ const unclear=await runtime.run(f.get,w=>w.search(f.query()));assert.equal(unclear.items[0].articleDisplay.status,'period_unknown');assert.equal(unclear.items[0].displayDescription,'');assert.deepEqual(unclear.totals,sale.totals);
+});
 async function reportPdfText(buffer) {
   assert.ok(Buffer.isBuffer(buffer)); assert.equal(buffer.subarray(0, 5).toString(), '%PDF-');
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
