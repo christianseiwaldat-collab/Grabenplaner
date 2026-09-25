@@ -20,6 +20,14 @@ test('Trade views use actual session authority, CSRF and protected read/write co
  assert.equal((await request('context',null,null)).status,401);
  let res=await request('context');assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.projection.repairWrite,true);
  res=await request('purchasing',{});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.rows.length,50);
+ await source.ingest('ARTIKEL_STAMMGelöscht',[{EAN:'000042',Artikelbezeichnung:'Synthetic archive camera',Anlagedatum:'2000-01-01T00:00:00.000',Löschdatum:'2020-01-01T00:00:00.000'}],{sourceInstance:'tradefoto-weum'});
+ assert.equal((await request('article-history',{query:'archive'},{...auth,csrf:'wrong'})).status,403);
+ res=await request('article-history',{query:'archive'});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.rows[0].status,'archived');
+ await source.ingest('WE',[{We_ID:'1',We:true,Umlagerung:false,EAN:'000042',FilialID:'93',Menge:'-2',WEDatum:'2026-09-10T00:00:00.000'}],{sourceInstance:'tradefoto-weum'});
+ assert.equal((await request('movements',{},{...auth,csrf:'wrong'})).status,403);
+ res=await request('movements',{});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.rows[0].quantity,'-2');
+ await require('../test-support/trade-stocktakes-fixture').seedStocktakes(source,{branches:['93','94']});
+ for(const kind of ['stocktakes','suggestions']){assert.equal((await request(kind,{},null)).status,401);assert.equal((await request(kind,{},{...auth,csrf:'wrong'})).status,403);res=await request(kind,{});assert.equal(res.status,200,JSON.stringify(res.data));assert.ok(Array.isArray(res.data.rows));}
  const cases=await request('repairs',{});assert.equal(cases.status,200,JSON.stringify(cases.data));const r=cases.data.rows[0];assert.equal(r.gpStatus,'unassigned');
  assert.equal((await request('repair-save',{id:r.id,state:'collected',expectedRevision:0},{...auth,csrf:'wrong'})).status,403);
  res=await request('repair-save',{id:r.id,state:'collected',expectedRevision:0});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.gpStatus,'collected');
@@ -28,7 +36,7 @@ test('Trade views use actual session authority, CSRF and protected read/write co
 });
 
 test('Legacy trade links enter the GP shell with the requested supported tab',async()=>{
- for(const tab of ['purchasing','transfers','inventory','repairs','customer-history','device-history']){
+ for(const tab of ['movements','stocktakes','suggestions','article-history','purchasing','transfers','inventory','repairs','customer-history','device-history']){
   const response=await fetch(url+'/trade-insights.html?tab='+tab,{redirect:'manual'});
   assert.equal(response.status,302);assert.equal(response.headers.get('location'),'/?view=tradeInsights&section='+tab);
  }

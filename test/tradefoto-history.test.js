@@ -461,7 +461,7 @@ test('Block 4: every selected history profile writes and reads a complete synthe
     if (table.name === 'Umsatz_Kasse_Details') value = line();
     if (table.name === 'KassenJournal_Details') value.Vorgang = '7';
     if (table.name === 'Inventurdetails') { value.Inventurnummer='synthetic-key';value.InventurFilialid='synthetic-key'; }
-    const { records: [record] } = await f.ingest(table.source, table.name, [value]);
+    const { records: [record] } = await f.ingest(table.source, table.name, [value], ['Inventur','Inventurdetails'].includes(table.name)?{fileSha256:SHA}:{});
     const detail = await f.service.detail(record.id); assert.equal(Object.keys(detail.fields).length, table.columns.length, table.name);
   }
   assert.equal(f.database.prepare('SELECT count(DISTINCT source_table) n FROM import_history_records').get().n, 68);

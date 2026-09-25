@@ -23,7 +23,7 @@ function fixture() {
   const root = node('root'); root.ownerDocument = { createElement: () => new Element() };
   root.querySelector = selector => node(selector.match(/^\[data-ti="(.+)"\]$/)?.[1] || selector);
   root.querySelectorAll = selector => selector === '[data-kind]' ? buttons : [node(selector)];
-  for (const [key, fields] of Object.entries({ filters: ['days', 'dateFrom', 'dateTo', 'customer', 'serial', 'supplier', 'query', 'locationId', 'group', 'wgr', 'resultTitle'], snapshot: ['title'], 'class-form': ['level', 'articleKey', 'groupKey'], 'class-save': ['kind'], 'repair-status-form': ['state'] })) {
+  for (const [key, fields] of Object.entries({ filters: ['suggestionType','stocktakeId','stocktakeVersion','stocktakeSource','difference','articleNumber', 'movementType', 'review', 'days', 'dateFrom', 'dateTo', 'customer', 'serial', 'supplier', 'query', 'locationId', 'group', 'wgr', 'resultTitle'], snapshot: ['title'], 'class-form': ['level', 'articleKey', 'groupKey'], 'class-save': ['kind'], 'repair-status-form': ['state'] })) {
     const form = node(key); form.elements = Object.fromEntries(fields.map(field => [field, node(key + '-' + field)]));
     form.querySelector = () => node(key + '-button'); form.parentElement = node(key + '-panel');
   }
@@ -122,4 +122,32 @@ test('opening a saved result while metadata loads preserves the dropdowns and la
  open.resolve({id:'saved',kind:'stock-summary',title:'Gespeichert',created:'2026-09-24T10:00:00Z',completedAt:'2026-09-24T10:01:00Z',processed:0,query:{},result:{rows:[],sourceDate:'2026-09-20T10:00:00Z'}});await tick();
  metadata.resolve({groups:[{id:'2',label:'Objektive'}],wgr:[],stockLocations:[]});await pending;
  assert.deepEqual(f.node('filters').elements.group.children.map(n=>n.value),['','2']);assert.equal(f.node('snapshot').hidden,false);assert.equal(f.node('snapshot').elements.title.value,'Gespeichert');f.workspace.destroy();
+});
+test('movement filters exclude undated rows explicitly and article links submit exact keys without stale dates',async t=>{
+ const SavedFormData=globalThis.FormData;globalThis.FormData=class{constructor(form){this.entries=Object.entries(form.elements).map(([k,v])=>[k,v.value]);}[Symbol.iterator](){return this.entries[Symbol.iterator]();}};t.after(()=>{globalThis.FormData=SavedFormData;});
+ const f=fixture(),pending=f.workspace.activate('movements');f.requests[0].resolve(context);await pending;
+ const form=f.node('filters');assert.equal(form.elements.dateFrom.value,'2026-08-18');
+ form.elements.review.value='missing_date';form.elements.review.emit('change');assert.equal(form.elements.dateFrom.value,'');assert.equal(form.elements.dateTo.value,'');
+ const opening=f.workspace.openMovements({articleNumber:'000042'});await tick();const request=f.requests.at(-1),body=JSON.parse(request.options.body);
+ assert.equal(body.kind,'movements');assert.equal(body.query.articleNumber,'000042');assert.equal(body.query.query,'');assert.equal(body.query.dateFrom,'');assert.equal(body.query.review,'');assert.equal(body.query.days,undefined);
+ request.resolve({id:'movement-job',status:'queued'});await opening;f.workspace.destroy();
+});
+test('saved movement results collapse filters and retain their own criteria when filters are reopened',async()=>{
+ const f=fixture(),pending=f.workspace.activate('movements');f.requests[0].resolve(context);await pending;
+ f.node('jobs').emit('click',{target:{closest:selector=>selector==='[data-job-open]'?{dataset:{jobOpen:'saved'}}:null}});await tick();
+ f.requests.at(-1).resolve({id:'saved',kind:'movements',title:'Archiv',created:'2026-09-24T10:00:00Z',completedAt:'2026-09-24T10:01:00Z',processed:0,query:{articleNumber:'000042',review:'negative'},result:{rows:[],sourceDate:'2026-09-20T10:00:00Z'}});await tick();
+ assert.equal(f.node('filters').hidden,true);assert.equal(f.node('archive').open,false);assert.match(f.node('snapshot-info').textContent,/000042.*Negative Mengen/);
+ f.node('movement-filter-toggle').emit('click');assert.equal(f.node('filters').hidden,false);assert.equal(f.node('filters').elements.articleNumber.value,'000042');f.workspace.destroy();
+});
+test('saved stocktake details and suggestions use valid PDF sorts; opening an overview clears detail criteria',async()=>{
+ const f=fixture(),pending=f.workspace.activate('stocktakes');f.requests[0].resolve(context);await pending;
+ async function open(kind,query,result){f.node('jobs').emit('click',{target:{closest:selector=>selector==='[data-job-open]'?{dataset:{jobOpen:'saved'}}:null}});await tick();f.requests.at(-1).resolve({id:'saved',kind,title:'Gespeichert',created:'2026-09-25T10:00:00Z',completedAt:'2026-09-25T10:01:00Z',processed:0,query,result:{rows:[],...result}});await tick();const sort=new URL(f.node('pdf').href,'http://localhost').searchParams.get('sort');assert.ok(require('../public/trade-insight-results').columns(kind,context.projection,result).some(c=>c.key===sort));assert.equal(f.node('snapshot').hidden,false);}
+ await open('stocktakes',{stocktakeId:'head',stocktakeVersion:'1',stocktakeSource:'hash',difference:'negative'},{stocktake:{number:'101',positions:20,unchanged:18,sourceLocation:'18',date:'2026-09-10'}});
+ assert.equal(f.node('filters').elements.stocktakeId.value,'head');f.node('filters').elements.dateFrom.value='2026-09-07';f.node('filters').elements.query.value='alter Filter';await open('stocktakes',{},{});assert.equal(f.node('filters').elements.dateFrom.value,'');assert.equal(f.node('filters').elements.query.value,'');assert.equal(f.node('filters').elements.stocktakeId.value,'');assert.equal(f.node('filters').elements.difference.value,'');
+ await open('suggestions',{}, {dateFrom:'2026-08-01',dateTo:'2026-09-10'});assert.equal(f.node('filters').elements.dateFrom.value,'2026-08-01');f.workspace.destroy();
+});
+
+test('suggestions retain an explicit exact article filter and hide it for stocktakes',async t=>{
+ const previous=globalThis.FormData;globalThis.FormData=class{constructor(form){this.entries=Object.entries(form.elements).map(([k,v])=>[k,v.value]);}[Symbol.iterator](){return this.entries[Symbol.iterator]();}};t.after(()=>{globalThis.FormData=previous;});
+ const f=fixture(),pending=f.workspace.activate('suggestions');f.requests[0].resolve(context);await pending;assert.equal(f.node('[data-article-exact]').hidden,false);const form=f.node('filters');form.elements.articleNumber.value='000042';form.emit('submit',{preventDefault(){}});await tick();const request=f.requests.at(-1),body=JSON.parse(request.options.body);assert.equal(body.query.articleNumber,'000042');assert.equal(body.query.movementType,undefined);request.resolve({id:'exact-hint',status:'queued'});await tick();await f.workspace.activate('stocktakes');assert.equal(f.node('[data-article-exact]').hidden,true);f.workspace.destroy();
 });

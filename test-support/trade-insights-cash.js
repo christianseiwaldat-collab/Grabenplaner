@@ -1,15 +1,15 @@
 'use strict';
 const C=require('../lib/data-import-contract'),H=require('../lib/tradefoto-history-profiles');
 const {CASH_SNAPSHOT_TABLES:TABLES}=require('../lib/persistence/statements/cash-snapshots');
-async function insightCashFixture(f,{scopeId='grabenplaner-main',ownerId='synthetic-owner',count=4,customer='0'}={}){
- const actor={scopeId,ownerId},time='2026-09-14T09:00:00.000Z';
+async function insightCashFixture(f,{scopeId='grabenplaner-main',ownerId='synthetic-owner',count=4,customer='0',entries=null,mappings=null,time='2026-09-14T09:00:00.000Z'}={}){
+ const actor={scopeId,ownerId};if(entries)count=entries.length;
  const flags=require('../lib/cash-source-policies').CASH_SOURCE_POLICIES[0].policy.statusRules[3].flags;
  const blank=(table,v)=>({...Object.fromEntries(H.tableFor('cash',table).columns.map(c=>[c.name,null])),...v});
  const data={Umsatz_KASSE:[],Umsatz_Kasse_Details:[]};
  for(let i=0;i<count;i++){
-  const date=i===0?'2026-06-01':i===1?'2026-09-01':'2026-08-01',branch=i===2?'19':'018',quantity=i===3?'-1':'2',price=i===2?'150':'120';
+  const date=entries?.[i]?.date||(i===0?'2026-06-01':i===1?'2026-09-01':'2026-08-01'),branch=entries?.[i]?.branch||(i===2?'19':'018'),quantity=entries?.[i]?.quantity||(i===3?'-1':'2'),price=entries?.[i]?.price||(i===2?'150':'120');
   const head=blank('Umsatz_KASSE',{Bonnr:String(i+1),Filialid:branch,Kassenid:'0',Bondatum:date+'T09:00:00.000',RechnungsBetrag:String(Number(quantity)*Number(price)),RechnungsNr:'0',KUND_NR:customer});
-  data.Umsatz_KASSE.push(head);data.Umsatz_Kasse_Details.push(blank('Umsatz_Kasse_Details',{Bonnr:head.Bonnr,Filialid:branch,Kassenid:'0',Bondatum:head.Bondatum,RepID:'00000000-0000-0000-0000-'+String(i+1).padStart(12,'0'),EAN:'000042',Artikelbezeichnung:'Synthetic camera',VKMenge:quantity,VK_Preis:price,MWST:'20',Bestandsfilialid:branch,RohertragDM:'20',KalkRohertrag:String(Number(quantity)*20),...flags}));
+  data.Umsatz_KASSE.push(head);data.Umsatz_Kasse_Details.push(blank('Umsatz_Kasse_Details',{Bonnr:head.Bonnr,Filialid:branch,Kassenid:'0',Bondatum:head.Bondatum,RepID:'00000000-0000-0000-0000-'+String(i+1).padStart(12,'0'),EAN:entries?.[i]?.articleNumber||'000042',Artikelbezeichnung:'Synthetic camera',VKMenge:quantity,VK_Preis:price,MWST:'20',Bestandsfilialid:entries?.[i]?.stockBranch||branch,RohertragDM:'20',KalkRohertrag:String(Number(quantity)*20),...flags}));
  }
  const fileSha256=C.fingerprint(data),id=f.protection.digest(['source',actor,'cash',fileSha256]);
  const store=require('../lib/persistence/repositories/cash-snapshots').createCashSnapshotStore({access:f.app.provider,protection:f.protection,actor,clock:()=>time});
@@ -19,6 +19,7 @@ async function insightCashFixture(f,{scopeId='grabenplaner-main',ownerId='synthe
  const policy={...require('../lib/cash-source-policies').CASH_SOURCE_POLICIES[0],fileSha256};
  const publisher=require('../lib/persistence/repositories/cash-publication-runtime').createCashPublicationRuntime({access:f.app.provider,vault:f.vault,policies:[policy],scopeId,enabled:true,clock:()=>time});
  const request={sourceId:id,expectedRevision:0,label:'Synthetic stock/price qualification',policyId:policy.id,resolveArticles:false,mappings:[{kind:'FILIALEN',sourceId:'018',targetId:'18',historical:false},{kind:'FILIALEN',sourceId:'19',targetId:'19',historical:false}]};
+ if(mappings)request.mappings=mappings;
  const session={...f.state.session,employeeNumber:ownerId,permissions:[...f.state.session.permissions,'data:imports:read','data:imports:prepare','data:imports:apply','locations:write']};
  const preview=await publisher.operation(async()=>session,'preview',{request});await publisher.operation(async()=>session,'activate',{request,planHash:preview.planHash});
  return {fileSha256,id};

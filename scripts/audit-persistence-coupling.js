@@ -582,6 +582,7 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/branch-time-off-api.test.js",
   "test/trade-stock.test.js",
   "test/trade-insights-api.test.js",
+  "test/trade-article-history.test.js",
   "test/login-resilience-api.test.js",
 
   "test/branch-sales-api.test.js",
@@ -765,10 +766,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1427;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1437;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 44;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1383;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1310;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1393;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1320;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -894,7 +895,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1301;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1311;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 126;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",

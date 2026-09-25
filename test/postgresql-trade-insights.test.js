@@ -1,6 +1,27 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const enabled=!!process.env.GP_CORE_MIGRATOR_URL;
+test('Trade blocks 2-5 use native PostgreSQL worker reads, paired inventory snapshots and durable suggestions',{skip:!enabled},async()=>{
+ await require('../test-support/postgresql-migration/report-fixture').withReportFixture(async f=>{
+  await f.core.migrator.query('SET ROLE gp_core_owner');await f.core.migrator.query("INSERT INTO gp.cost_centers(id,code,name,type,cost_center_type_id) VALUES('cc19','19','Synthetic 19','branch','branch'); INSERT INTO gp.locations(id,name,active,cost_center_id) VALUES('19','Synthetic 19',1,'cc19')");await f.core.migrator.query('RESET ROLE');
+  const source=await require('../test-support/trade-insights-fixture').insightFixture({access:f.access,protection:f.protection,scopeId:'synthetic-migration',ownerId:'00001'});
+  const runtime=require('../lib/persistence/repositories/trade-insights').createTradeInsightRuntime(f.runtimeOptions),run=(kind,input={})=>runtime.run(()=>f.resolvePrincipal('00001'),kind,input),worker=(kind,query={})=>f.worker.run({operation:'trade-insights',kind,query,session:{employeeNumber:'00001'}}),session=await f.resolvePrincipal('00001');
+  await require('../test-support/trade-suggestions-fixture').seedSuggestions({...source,scopeId:'synthetic-migration',app:{provider:f.access},vault:f.vault,protection:f.protection,state:{session},run},{snapshotAt:'2026-09-12T09:00:00.000Z'});
+  await source.ingest('ARTIKEL_STAMMGelöscht',[{EAN:'OLD-42',Artikelbezeichnung:'Native archive',Anlagedatum:'2010-01-01T00:00:00.000',Löschdatum:'2026-09-11T00:00:00.000'}],{sourceInstance:'tradefoto-weum'});
+  const inventory=await require('../test-support/trade-stocktakes-fixture').seedStocktakes(source,{snapshotAt:'2026-09-12T09:00:00.000Z'});
+  assert.equal((await worker('article-history',{query:'OLD-42',searchMode:'exact'})).rows[0].status,'archived');
+  await source.ingest('WE',[{We_ID:'99',We:false,Umlagerung:true,EAN:'000042',FilialID:'19',Filialid2:'18',Menge:'-2',WEDatum:'2026-09-10T00:00:00.000',KorbId:1}],{sourceInstance:'tradefoto-weum'});
+  const movement=(await worker('movements',{dateFrom:'2026-09-01'})).rows[0];assert.equal(movement.quantity,'-2');assert.equal(movement.references.basket.status,'matched');
+  const overview=await worker('stocktakes'),head=overview.rows.find(r=>r.sourceLocation==='18'),q={stocktakeId:head.id,stocktakeVersion:String(head.revision),stocktakeSource:head.sourceHash};assert.equal(head.positions,120);const detail=await worker('stocktakes',q);assert.equal(detail.rows.length,4);assert.equal(detail.rows.find(r=>r.articleNumber==='OLD-42').articleReference.status,'archived');
+  const exact=await worker('suggestions',{articleNumber:'000042'});assert.equal(exact.scanned,2);assert.equal(exact.rows.length,2);
+  const suggestions=await worker('suggestions');assert.equal(suggestions.rows.find(r=>r.articleNumber==='000042'&&r.sourceLocation==='18').type,'transfer');assert.ok(suggestions.rows.every(r=>r.availableTransferQuantity===null));
+  const queue=require('../lib/persistence/repositories/trade-insight-jobs').createTradeInsightJobs({access:f.access,vault:f.vault,runtime,resolvePrincipal:f.resolvePrincipal,dispatchRead:input=>f.worker.run(input),scopeId:'synthetic-migration'});
+  try{const job=await queue.create(session,{kind:'stocktakes',query:q,title:'Native Inventurdifferenzen'});await queue.tick();const saved=await queue.get(session,job.id);assert.equal(saved.result.rows.length,4);
+   const next={...inventory.options,fileSha256:'c'.repeat(64),snapshotAt:'2026-09-13T09:00:00.000Z'};await source.ingest('Inventur',inventory.heads,next);await assert.rejects(worker('stocktakes'),e=>e.code==='IMPORT_BESTELL_SOURCE_INCOMPLETE');await source.ingest('Inventurdetails',inventory.details,next);assert.equal((await worker('stocktakes')).rows.length,2);await assert.rejects(worker('stocktakes',q),e=>e.code==='IMPORT_HISTORY_ANALYSIS_CHANGED');assert.deepEqual((await queue.get(session,job.id)).result,saved.result);
+  }finally{await queue.stop();}
+  console.log(JSON.stringify({qualification:'trade-blocks-2-through-5-native',articleHistory:true,movements:true,stocktakes:true,suggestions:true,sourceReplacement:true,savedSnapshot:true}));
+ });
+});
 test('Six-block views run against native Core/Sales, preserve GP annotations and enforce worker authority', {skip:!enabled},async()=>{
  await require('../test-support/postgresql-migration/report-fixture').withReportFixture(async f=>{
   const migration=require('../lib/persistence/postgresql/core/trade-annotations');

@@ -5,6 +5,7 @@
   if (root) root.GrabenplanerSalesHistory = api;
 }(typeof globalThis !== 'undefined' ? globalThis : this, function historyModule() {
   'use strict';
+  const ArticleHistory = typeof module === 'object' && module.exports ? require('./trade-article-history') : globalThis.GrabenplanerArticleHistory;
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const statuses = { linked: 'Zugeordnet', historical_mapping: 'Historisch zugeordnet', unassigned: 'Nicht zugeordnet',
     unlinked: 'Zuordnung offen', missing_source: 'Altreferenz fehlt', target_missing: 'GP-Ziel fehlt', target_inactive: 'GP-Ziel inaktiv' };
@@ -18,12 +19,12 @@
   const refLabel = ref => ref?.targetId ? `${ref.targetId} · ${statuses[ref.status] || 'Zuordnung prüfen'}` : statuses[ref?.status] || 'Nicht zugeordnet';
   const option = (value, label) => `<option value="${escape(value)}">${escape(label)}</option>`;
   function renderTable(items, kind, sort = { key: 'date', direction: -1 }) {
-    const sales = kind === 'sales', rows = [...items].sort((a, b) => String(a[sort.key] ?? '').localeCompare(String(b[sort.key] ?? ''), 'de-AT', { numeric: true }) * sort.direction);
+    const sales = kind === 'sales', rows = [...items].sort((a, b) => String((sort.key==='description'?a.displayDescription||a.description:a[sort.key]) ?? '').localeCompare(String((sort.key==='description'?b.displayDescription||b.description:b[sort.key]) ?? ''), 'de-AT', { numeric: true }) * sort.direction);
     const heading = (key, label) => `<th scope="col" aria-sort="${sort.key === key ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}"><button type="button" data-history-sort="${key}">${label}</button></th>`;
     return `<div class="sales-history-table-scroll" tabindex="0" role="region" aria-label="Suchergebnisse, sortierbare aktuelle Seite"><table>
       <caption>Sortierung der angezeigten Seite · ${items.length} Datensätze</caption><thead><tr>${heading('date', 'Tag')}${heading('receipt', 'Beleg')}${heading('description', sales ? 'Artikel / Bezeichnung' : 'Buchung')}
       ${sales ? '<th scope="col">Menge</th><th scope="col">Geprüft brutto</th>' : '<th scope="col">Einzahlung</th><th scope="col">Auszahlung</th>'}<th scope="col">Details</th></tr></thead>
-      <tbody>${rows.map(row => `<tr><td>${escape(row.date)}</td><td>${escape(row.receipt || '–')}</td><td>${escape(row.description || 'Ohne Bezeichnung')}${sales ? `<small>${escape(row.article || 'Artikelreferenz fehlt')}</small>` : ''}</td>
+      <tbody>${rows.map(row => `<tr><td>${escape(row.date)}</td><td>${escape(row.receipt || '–')}</td><td>${escape(row.displayDescription || row.description || 'Ohne Bezeichnung')}${ArticleHistory.referenceMarkup(row.articleDisplay,row.description)}${sales ? `<small>${escape(row.article || 'Artikelreferenz fehlt')}</small>` : ''}</td>
       ${sales ? `<td>${escape(number(row.quantity))}</td><td>${row.metric ? `${escape(number(row.metric.gross))} ${escape(row.metric.currency)}` : '<span class="sales-history-review">Prüfung offen</span>'}</td>`
         : `<td>${escape(number(row.inflow))}</td><td>${escape(number(row.outflow))}</td>`}
       <td><details><summary>Details</summary><dl><dt>Filialzuordnung</dt><dd>${escape(refLabel(row.location))}</dd>

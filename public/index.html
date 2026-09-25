@@ -13,6 +13,9 @@
     <link rel="stylesheet" href="/sales-history.css" />
     <link rel="stylesheet" href="/receipt-search.css" />
     <link rel="stylesheet" href="/trade-insights.css" />
+    <link rel="stylesheet" href="/trade-movements.css" />
+    <link rel="stylesheet" href="/trade-stocktakes.css" />
+    <link rel="stylesheet" href="/trade-article-history.css" />
     <link rel="stylesheet" href="/data-import.css" />
     <link rel="stylesheet" href="/mobile-refinements.css" />
   </head>
@@ -1598,6 +1601,8 @@
             <div class="sales-article-catalog-heading"><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesArticleCatalogTitle">Artikelstamm</h1><p class="subtitle">Zentrale Artikeldaten schnell und übersichtlich finden.</p><p class="sales-article-last-import" id="salesArticleLastImport" aria-live="polite"><span>Letzter TradeFoto-Import</span><time id="salesArticleLastImportValue">Wird geladen …</time></p></div>
             <div class="topbar-actions sales-article-topbar-actions">
               <button class="secondary-button hidden" id="salesArticleActionsLogButton" type="button" aria-haspopup="dialog" aria-controls="personalActionsAdminDialog">Meine Aktionen</button>
+              <button class="secondary-button hidden" id="salesArticleMovementsButton" type="button">Warenbewegungen</button>
+              <button class="secondary-button hidden" id="salesArticleHistoryButton" type="button">Artikelhistorie</button>
               <button class="primary-button hidden" id="salesArticleCreateButton" type="button" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">+ Artikel anlegen</button>
             </div>
           </header>
@@ -4357,10 +4362,15 @@
     <script src="/api-errors.js"></script>
     <script src="/vendor/quill/quill.js"></script>
     <script src="/date-range-calendar.js"></script>
+    <script src="/trade-article-history.js"></script>
     <script src="/sales-history.js"></script>
     <script src="/receipt-line-format.js"></script>
     <script src="/receipt-search.js"></script>
   <script src="/trade-insight-results.js"></script>
+  <script src="/trade-movements.js"></script>
+  <script src="/trade-stocktakes.js"></script>
+  <script src="/trade-suggestions.js"></script>
+  <script src="/trade-period.js"></script>
   <script src="/trade-insights.js"></script>
     <script src="/data-import.js"></script>
     <script src="/cash-publication.js"></script>

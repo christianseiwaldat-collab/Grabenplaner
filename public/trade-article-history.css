@@ -1,0 +1,38 @@
+.article-history-table table { min-width:800px; }
+.article-history-table th,.article-history-table button { white-space:nowrap; }
+.article-history-workspace h2 { margin:0 0 6px; font-size:24px; }
+.article-history-workspace > p:first-of-type { color:var(--muted); margin:0 0 20px; }
+.article-history-workspace [data-ah="form"] > label:first-child { flex:1 1 280px; max-width:520px; }
+.article-history-note { color:var(--muted); font-size:13px; line-height:1.55; }
+.article-history-workspace [data-ah="status"] { font-weight:650; min-height:1.5em; }
+.article-history-badge { display:inline-block; border:1px solid var(--line); background:var(--surface-soft); color:var(--ink); padding:3px 9px; border-radius:20px; font-size:12px; font-weight:650; white-space:nowrap; }
+.article-history-badge[data-state="current"] { border-color:var(--green); }
+.article-history-badge[data-state="archived"] { border-style:dashed; }
+.article-history-badge[data-state="ambiguous"],.article-history-badge[data-state="period_unknown"] { border-color:#b88630; }
+.article-history-workspace [data-ah="more"] { margin-top:14px; }
+.article-history-source { border:1px solid var(--line); border-radius:12px; padding:14px; margin:12px 0; background:var(--surface-soft); overflow-wrap:anywhere; }
+.article-history-source h3 { margin:0 0 10px; font-size:16px; }
+.article-history-source dl { display:grid; grid-template-columns:minmax(90px,130px) minmax(0,1fr); gap:7px 14px; margin:0; font-size:13px; }
+.article-history-source dt { color:var(--muted); }
+.article-history-source dd { margin:0; }
+.article-history-reference { margin:8px 0; font-size:13px; }
+.article-history-reference summary { cursor:pointer; }
+.article-history-reference p { overflow-wrap:anywhere; }
+.article-history-workspace dialog { width:min(650px,calc(100vw - 24px)); }
+@media(max-width:800px) {
+ .article-history-workspace [data-ah="form"] { padding:12px; }
+ .article-history-workspace [data-ah="form"] > label { flex:1 1 100%; max-width:none; }
+ .article-history-workspace .article-history-table { overflow:visible; max-height:none; border:0; background:transparent; }
+ .article-history-table table,.article-history-table tbody { display:block; min-width:0; }
+ .article-history-table thead { display:block; }
+ .article-history-table thead tr { display:flex; flex-wrap:wrap; gap:6px; padding:10px; }
+ .article-history-table thead th { display:none; padding:0; border:0; }
+ .article-history-table thead th:has(button) { display:block; }
+ .article-history-table thead button { white-space:normal; min-height:36px; }
+ .article-history-table tr { display:block; border:1px solid var(--line); border-radius:12px; padding:8px 12px; margin:0 0 12px; background:var(--surface); }
+ .trade-insights-workspace .article-history-table td { display:grid; grid-template-columns:90px minmax(0,1fr); gap:12px; border:0; padding:6px 0; max-width:none; min-width:0; }
+ .article-history-table td:before { content:attr(data-label); color:var(--muted); font-size:12px; }
+ .article-history-table td button { justify-self:start; }
+ .article-history-source dl { grid-template-columns:100px minmax(0,1fr); gap:7px 10px; }
+ .article-history-source dd { margin-bottom:0; }
+}

@@ -290,8 +290,8 @@ test("Block 5/7: der reale 1257er SQLite-Katalog wird vollständig und geschloss
   const portable = compiled.filter((entry) => entry.strategy === "portable-generated");
   const blocked = compiled.filter((entry) => entry.strategy === "requires-override");
 
-  assert.equal(compiled.length, 1427);
-  assert.equal(portable.length, 1301);
+  assert.equal(compiled.length, 1437);
+  assert.equal(portable.length, 1311);
   assert.equal(blocked.length, 126);
   assert.ok(portable.every((entry) => (
     typeof entry.compiledSql === "string"
