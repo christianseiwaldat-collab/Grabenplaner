@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.92.68 Beta – Trade-Importübersicht und Bestandsanalysen
+
+- Einstellungen zeigen die ergänzenden Trade-Datenbanken mit Importstand und direktem Upload. Die ausgewählten Ergänzungsprofile übernehmen fachlich benötigte Daten; Inventuren werden auf Übersicht und prüfbare Abweichungen verdichtet.
+- Aktuelle und archivierte Artikelreferenzen ergänzen historische Belege. Herkunft, Zeitraum und mehrdeutige Kennungen bleiben sichtbar; die exakte Artikelsuche erhält führende Nullen und nutzt bestehende Indizes.
+- Warenbewegungen zeigen Wareneingänge und Umlagerungen mit Datum, Artikel, Mengen, Filialen und Belegverweisen.
+- Inventuren und Differenzen verbinden ausschließlich zusammengehörige Quellstände. Die Übersicht enthält vollständige Zählstatistiken; Details zeigen Abweichungen, fehlende Mengen und widersprüchliche Mengenrechnungen.
+- Handlungsvorschläge begründen mögliche Umlagerungen, Nachbeschaffung, Bestandsabbau und den Abgleich von Zulauf. Ungeprüfte oder unpassende Daten ergeben Datenprüfhinweise; Bestellungen und Umbuchungen werden nicht automatisch ausgelöst.
+- Gemeinsamer Zeitraumkalender, sortierbare Datenspalten auf Desktop und Mobilgeräten, gespeicherte Ergebnisse und PDF-Ausgabe. Fach-, Rechte-, PostgreSQL- und Volumenprüfungen sind im lokalen Abschlussbericht dokumentiert; der Auslieferungsnachweis wird separat geführt.
+
 ## v0.92.67 Beta – Zeiterfassung und gespeicherte Einkaufsergebnisse
 
 - Zeiterfassung berücksichtigt bewertete Schulungen und Krankenstände. Ein Umschalter zeigt alternativ die physische Anwesenheit; Woche, Monat, Quartal und ein frei gewählter Zeitraum nutzen den gemeinsamen Zeitraumkalender. Fehlende Importe bleiben als unbekannt erkennbar.
