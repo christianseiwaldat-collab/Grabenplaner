@@ -285,9 +285,9 @@ test('Productive Block 2: empty and partially unverified selections never become
   assert.ok(result.days.every(day => day.gross === null));
 });
 
-test('History retains the 43 original tables and adds the 21 reviewed Bestell profiles', () => {
-  assert.deepEqual(H.TRADEFOTO_HISTORY_METADATA.coverage, { tables: 64, fields: 1161 });
-  assert.equal(H.TRADEFOTO_HISTORY_PROFILES.length, 64);
+test('History retains the 43 original tables, 21 Bestell profiles and four limited supplement profiles', () => {
+  assert.deepEqual(H.TRADEFOTO_HISTORY_METADATA.coverage, { tables: 68, fields: 1201 });
+  assert.equal(H.TRADEFOTO_HISTORY_PROFILES.length, 68);
   assert.equal(H.TRADEFOTO_HISTORY_METADATA.tables.filter(t=>!t.sourceFile).length,43);
   const B=require('../lib/tradefoto-bestell/profiles');
   for(const table of B.metadata.tables.filter(t=>t.included)) assert.equal(H.profileFor('trade',table.name),B.profileFor(table.name));
@@ -460,10 +460,11 @@ test('Block 4: every selected history profile writes and reads a complete synthe
     for (const key of table.keys || []) value[key] = H.profileFor(table.source, table.name).fields.find(f => f.source === key).type === 'guid' ? '00000000-0000-0000-0000-000000000001' : 'synthetic-key';
     if (table.name === 'Umsatz_Kasse_Details') value = line();
     if (table.name === 'KassenJournal_Details') value.Vorgang = '7';
+    if (table.name === 'Inventurdetails') { value.Inventurnummer='synthetic-key';value.InventurFilialid='synthetic-key'; }
     const { records: [record] } = await f.ingest(table.source, table.name, [value]);
     const detail = await f.service.detail(record.id); assert.equal(Object.keys(detail.fields).length, table.columns.length, table.name);
   }
-  assert.equal(f.database.prepare('SELECT count(DISTINCT source_table) n FROM import_history_records').get().n, 64);
+  assert.equal(f.database.prepare('SELECT count(DISTINCT source_table) n FROM import_history_records').get().n, 68);
 });
 
 test('Central imports use the existing portable history catalog and permission-checked apply', () => {

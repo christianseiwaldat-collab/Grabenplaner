@@ -613,6 +613,8 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test-support/tradefoto-block6-store.js",
   "test-support/tradefoto-block3-store.js",
   "test/tradefoto-history.test.js",
+  "test/tradefoto-supplements.test.js",
+  "test/trade-insight-jobs.test.js",
   "test/tradefoto-storage-comparison.test.js",
   "test/tradefoto-master-data.test.js",
   "test/tradefoto-crm-maintenance-import.test.js",
