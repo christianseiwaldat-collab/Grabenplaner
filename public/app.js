@@ -30322,7 +30322,7 @@ async function loadSalesArticleTablePreferences() {
     if (catalog.tableColumns && !catalog.tableColumns.includes('articleNumber')) catalog.tableColumns.unshift('articleNumber');
     catalog.visibleRows = Math.min(20, Math.max(5, Number(result.visibleRows) || 10));
     if (!catalog.searchStarted && selectedSalesArticleColumns().some(c => c.id === result.sort)) { catalog.sort = result.sort; catalog.direction = result.direction === 'desc' ? 'desc' : 'asc'; }
-    catalog.tablePreferencesKey = key; renderSalesArticleColumnOptions(); renderSalesArticleCatalogResults();
+    catalog.tablePreferencesKey = key; renderSalesArticleColumnOptions(); renderSalesArticleCatalogResults({ detail: false });
   } catch (error) { if (request === catalog.tablePreferencesRequest) { catalog.tablePreferencesKey = key; renderSalesArticleColumnOptions(); setSalesArticleCatalogStatus(`Tabelleneinstellungen konnten nicht geladen werden: ${error.message}`, true); } }
   finally { if (request === catalog.tablePreferencesRequest) catalog.tablePreferencesPending = false; }
 }
@@ -32088,10 +32088,10 @@ function renderSalesArticleCatalogRows() {
   elements.salesArticleTableBody.innerHTML = `${salesArticleCatalogSpacerRow(start * SALES_ARTICLE_CATALOG_ROW_HEIGHT, columnCount)}${rows}${salesArticleCatalogSpacerRow((catalog.items.length - end) * SALES_ARTICLE_CATALOG_ROW_HEIGHT, columnCount)}${catalog.loading && end === catalog.items.length ? `<tr class="sales-article-loading-row"><td colspan="${columnCount}">Weitere Artikel werden geladen …</td></tr>` : ""}`;
 }
 
-function renderSalesArticleCatalogResults() {
+function renderSalesArticleCatalogResults({ detail = true } = {}) {
   const catalog = state.salesArticleCatalog;
   renderSalesArticleLastImport();
-  renderSalesArticleCatalogDetail();
+  if (detail) renderSalesArticleCatalogDetail();
   if (!elements.salesArticleResults || !elements.salesArticleTableBody) return;
   renderSalesArticleCatalogHead();
   renderSalesArticleCatalogRows();
@@ -32191,7 +32191,8 @@ async function loadSalesArticleCatalog({ reset = false, preserveDetail = false }
   catalog.loading = true;
   catalog.error = "";
   setSalesArticleCatalogStatus(reset ? "Artikel werden gesucht …" : "Weitere Artikel werden geladen …");
-  renderSalesArticleCatalogResults();
+  // List paging and sorting do not change the selected article or its local trial values.
+  renderSalesArticleCatalogResults({ detail: reset && !preserveDetail });
   try {
     const payload = await api(`/api/sales/articles?${salesArticleCatalogSearchParameters(offset)}`);
     if (requestId !== catalog.requestId) return;
@@ -32223,7 +32224,7 @@ async function loadSalesArticleCatalog({ reset = false, preserveDetail = false }
   } finally {
     if (requestId === catalog.requestId) {
       catalog.loading = false;
-      renderSalesArticleCatalogResults();
+      renderSalesArticleCatalogResults({ detail: false });
     }
   }
 }
@@ -40774,7 +40775,7 @@ elements.salesArticleSearchReset?.addEventListener("click", () => {
 });
 elements.salesArticleResultsToggle?.addEventListener("click", () => {
   state.salesArticleCatalog.resultsExpanded = !state.salesArticleCatalog.resultsExpanded;
-  renderSalesArticleCatalogResults();
+  renderSalesArticleCatalogResults({ detail: false });
 });
 elements.salesArticleResults?.addEventListener("click", (event) => {
   const sortButton = event.target.closest("[data-sales-article-sort]");

@@ -185,7 +185,7 @@ test("Artikel werden ausschließlich nach einer ausdrücklichen Trefferauswahl g
   const rows = between(
     app,
     "function renderSalesArticleCatalogRows()",
-    "function renderSalesArticleCatalogResults()",
+    "function renderSalesArticleCatalogResults(",
   );
   assert.match(rows, /data-sales-article-number=/);
   assert.match(app, /data-sales-article-open=/);

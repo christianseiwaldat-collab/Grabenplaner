@@ -2,6 +2,8 @@
  'use strict';
  const titles={suggestions:'Handlungsvorschläge',stocktakes:'Inventuren & Differenzen',movements:'Warenbewegungen',purchasing:'Einkauf / Lieferstände',transfers:'Filialversorgung','stock-summary':'Filialbestand & Warenwert',inventory:'Bestand / Langsamdreher',repairs:'Reparaturen','customer-history':'Kundenhistorie','device-history':'Gerätehistorie'};
  const collator=new Intl.Collator('de-AT',{numeric:true,sensitivity:'base'});
+ const numberFormatter=new Intl.NumberFormat('de-AT',{maximumFractionDigits:4});
+ const moneyFormatter=new Intl.NumberFormat('de-AT',{style:'currency',currency:'EUR'});
  const kinds={goods:'Lagerware',service:'Dienstleistung',account:'Verrechnung',excluded:'Ohne Lagerbestand',unknown:'Ungeklärt'};
  const states={quantity_missing:'Menge fehlt',correction_or_return:'Korrektur / Rücknahme',overdelivered_quantity:'Mehr geliefert',zero_order:'Bestellmenge 0',quantity_fulfilled:'Menge geliefert',partial_quantity:'Teilmenge geliefert',undelivered_quantity:'Keine Lieferung vermerkt',transfer_processed:'Umlagerung vermerkt',transfer_requested:'Umlagerung angefordert',ordering_processed:'Bestellt',request_declined:'Abgelehnt',request_pending:'Anforderung',status_unknown:'Status ungeklärt'};
  const column=(key,label,type='text',value=r=>r[key])=>({key,label,type,value});
@@ -20,7 +22,7 @@
   if(value==null||value==='')return '–';
   if(type==='decimal')return String(value).replace('.',',');
   if(type==='date')return String(value).slice(0,10).split('-').reverse().join('.');
-  if(type==='number'||type==='money')return new Intl.NumberFormat('de-AT',type==='money'?{style:'currency',currency:'EUR'}:{maximumFractionDigits:4}).format(Number(value));
+  if(type==='number'||type==='money')return (type==='money'?moneyFormatter:numberFormatter).format(Number(value));
   return String(value);
  }
  // Decimal strings stay exact while sorting (including amounts beyond 2^53).
@@ -39,5 +41,14 @@
    return (direction==='desc'?-order:order)||a.index-b.index;
   }).map(v=>v.row);
  }
- return {titles,columns,format,sortRows,collator};
+ function relatedArticles(rows,limit=12){
+  const seen=new Set(),result=[];
+  for(const row of rows){
+   if(seen.has(row.articleNumber))continue;
+   seen.add(row.articleNumber);result.push(row);
+   if(result.length>=limit)break;
+  }
+  return result;
+ }
+ return {titles,columns,format,sortRows,collator,relatedArticles};
 });
