@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.92.69 Beta – Artikelkartei, Lieferantenrechnungen und schnellere Trade-Abfragen
+
+- Lieferantenrechnungen lassen sich je Artikel mit Anlege- und Buchdatum, Rechnungsnummer, Menge und freigegebenen Einkaufspreisen suchen. Der Import bleibt auf die benötigten Rechnungsdaten beschränkt.
+- Die Übernahme vollständiger Kassenimporte erhält alle Filialen und verwendet einen vereinfachten, nachvollziehbaren Ablauf.
+- Die Artikelkartei zeigt kompaktere Stammdaten, einen eigenen Notizen-Tab und Artikelbilder. UCW, wählbare Preisspalten und die Versuchsspalte unterstützen Preisvergleiche und Rohertragsberechnungen.
+- Einstellungen und Mitarbeiterportal sind als Textlinks im Kontobereich erreichbar. Das schmale Hauptmenü schließt nach Auswahl einer Seite.
+- Gebündelte Artikel-, Bestands-, Beleg- und Rechnungsabfragen reduzieren Datenbankzugriffe. Tabellenformatierung und Aufbau vermeiden doppelte Arbeit; Versuchswerte und Notizenfilter bleiben beim Sortieren der Artikelliste erhalten.
+- Fach-, Rechte-, PostgreSQL-, Browser- und Volumenprüfungen sind dokumentiert. Der tatsächliche Deploy- und Recovery-Status wird im separaten Auslieferungsbeleg geführt.
+
 ## v0.92.68 Beta – Trade-Importübersicht und Bestandsanalysen
 
 - Einstellungen zeigen die ergänzenden Trade-Datenbanken mit Importstand und direktem Upload. Die ausgewählten Ergänzungsprofile übernehmen fachlich benötigte Daten; Inventuren werden auf Übersicht und prüfbare Abweichungen verdichtet.
