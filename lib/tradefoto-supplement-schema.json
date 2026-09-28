@@ -415,5 +415,290 @@
         ]
       }
     ]
+  },
+  "lieferantenrechnungen": {
+    "tables": [
+      {
+        "name": "Rechnung_A",
+        "keys": [
+          "Rechnungsnr",
+          "Suchname"
+        ],
+        "columns": [
+          {
+            "name": "ID",
+            "type": "long"
+          },
+          {
+            "name": "Rechnungsnr",
+            "type": "text"
+          },
+          {
+            "name": "Suchname",
+            "type": "text"
+          },
+          {
+            "name": "Anlegedatum",
+            "type": "datetime"
+          },
+          {
+            "name": "Filialid",
+            "type": "byte"
+          },
+          {
+            "name": "VerkäuferID",
+            "type": "long"
+          },
+          {
+            "name": "KontoNr",
+            "type": "long"
+          },
+          {
+            "name": "BFirma",
+            "type": "text"
+          },
+          {
+            "name": "BA1",
+            "type": "text"
+          },
+          {
+            "name": "BA2",
+            "type": "text"
+          },
+          {
+            "name": "BA3",
+            "type": "text"
+          },
+          {
+            "name": "BLand",
+            "type": "text"
+          },
+          {
+            "name": "BPLZ",
+            "type": "text"
+          },
+          {
+            "name": "BORT",
+            "type": "text"
+          },
+          {
+            "name": "BTelefon",
+            "type": "text"
+          },
+          {
+            "name": "BTelefax",
+            "type": "text"
+          },
+          {
+            "name": "Rechnungsbetrag",
+            "type": "double"
+          },
+          {
+            "name": "Zahlungsart",
+            "type": "text"
+          },
+          {
+            "name": "Zahldatum",
+            "type": "datetime"
+          },
+          {
+            "name": "bez",
+            "type": "boolean"
+          },
+          {
+            "name": "SkontoT1",
+            "type": "integer"
+          },
+          {
+            "name": "SkontoP1",
+            "type": "double"
+          },
+          {
+            "name": "SkontoT2",
+            "type": "integer"
+          },
+          {
+            "name": "SkontoP2",
+            "type": "double"
+          },
+          {
+            "name": "SkontoT3",
+            "type": "integer"
+          },
+          {
+            "name": "SkontoP3",
+            "type": "double"
+          },
+          {
+            "name": "NettoTage",
+            "type": "integer"
+          },
+          {
+            "name": "Kopftext",
+            "type": "text"
+          },
+          {
+            "name": "FesterZahlungstermin",
+            "type": "text"
+          },
+          {
+            "name": "Buchdatum",
+            "type": "datetime"
+          },
+          {
+            "name": "Bezahlt",
+            "type": "double"
+          },
+          {
+            "name": "Zahlbetrag",
+            "type": "double"
+          },
+          {
+            "name": "Skonto",
+            "type": "double"
+          },
+          {
+            "name": "romwst",
+            "type": "boolean"
+          },
+          {
+            "name": "ustid",
+            "type": "text"
+          },
+          {
+            "name": "verbucht",
+            "type": "boolean"
+          },
+          {
+            "name": "Info",
+            "type": "memo"
+          },
+          {
+            "name": "Kostenträgercode",
+            "type": "text"
+          },
+          {
+            "name": "Fälligkeitsdatum",
+            "type": "datetime"
+          },
+          {
+            "name": "DF",
+            "type": "text"
+          },
+          {
+            "name": "SummeTeilzahlungen",
+            "type": "double"
+          }
+        ]
+      },
+      {
+        "name": "Rechnungsdetails_A",
+        "keys": [
+          "ID",
+          "we_id"
+        ],
+        "columns": [
+          {
+            "name": "ID",
+            "type": "long"
+          },
+          {
+            "name": "we_id",
+            "type": "long"
+          },
+          {
+            "name": "Rechnungsnr",
+            "type": "text"
+          },
+          {
+            "name": "Suchname",
+            "type": "text"
+          },
+          {
+            "name": "Filialid",
+            "type": "byte"
+          },
+          {
+            "name": "EAN",
+            "type": "text"
+          },
+          {
+            "name": "Artikelbezeichnung",
+            "type": "text"
+          },
+          {
+            "name": "menge",
+            "type": "double"
+          },
+          {
+            "name": "WELieferscheinnr",
+            "type": "text"
+          },
+          {
+            "name": "WELieferscheindatum",
+            "type": "datetime"
+          },
+          {
+            "name": "MWST",
+            "type": "byte"
+          },
+          {
+            "name": "Bestellnr",
+            "type": "text"
+          },
+          {
+            "name": "Sonderartikel",
+            "type": "boolean"
+          },
+          {
+            "name": "DurchschnittEK",
+            "type": "double"
+          },
+          {
+            "name": "Listeneckpreis",
+            "type": "double"
+          },
+          {
+            "name": "Rechnungspreis",
+            "type": "double"
+          },
+          {
+            "name": "Verkaufspreis",
+            "type": "double"
+          },
+          {
+            "name": "NNPreis",
+            "type": "double"
+          },
+          {
+            "name": "WEVerkaeuferid",
+            "type": "long"
+          },
+          {
+            "name": "RKondition",
+            "type": "text"
+          },
+          {
+            "name": "Artikelsuchname",
+            "type": "text"
+          },
+          {
+            "name": "gebucht",
+            "type": "boolean"
+          },
+          {
+            "name": "Artikelzusatz",
+            "type": "text"
+          },
+          {
+            "name": "rob",
+            "type": "boolean"
+          }
+        ]
+      }
+    ],
+    "excludedTables": [
+      "Teilzahlungen_A"
+    ]
   }
 }

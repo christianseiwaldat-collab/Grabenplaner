@@ -59,9 +59,9 @@ async function runtimeFixture(t,kind,values) {
  t.after(async()=>{await runtime.stop();await app.provider.close();app.database.close();});return {...app,runtime,get,state,finish};
 }
 test('supplements persist only the compact selection, support review/apply/replay/undo and do not create active articles or cash sales',async t=>{
- for(const [kind,values,total] of [['inventur',F.inventory(),5],['weum',{WE:[{We_ID:1,We:true,Umlagerung:false,EAN:'001',Menge:-2,WEDatum:new Date('2026-09-18T00:00:00Z')}],'ARTIKEL_STAMMGelöscht':[{EAN:'001',Artikelbezeichnung:'Archiviert'}]},2]]) {
+ for(const [kind,values,total] of [['lieferantenrechnungen',{Rechnung_A:[{ID:1,Rechnungsnr:'RE-1',Suchname:'Demo'}],Rechnungsdetails_A:[{ID:2,we_id:3,Rechnungsnr:'RE-1',Suchname:'demo',EAN:'001',menge:1,Rechnungspreis:10}]},2],['inventur',F.inventory(),5],['weum',{WE:[{We_ID:1,We:true,Umlagerung:false,EAN:'001',Menge:-2,WEDatum:new Date('2026-09-18T00:00:00Z')}],'ARTIKEL_STAMMGelöscht':[{EAN:'001',Artikelbezeichnung:'Archiviert'}]},2]]) {
   const f=await runtimeFixture(t,kind,values),upload=()=>f.runtime.upload(f.get,{buffer:F.buffer(),kind,fileName:kind+'.accdb'});
-  let source=await upload();assert.ok(source.selection);source=await f.finish(source,'review');assert.equal(source.status,kind==='inventur'?'needs_review':'ready');
+  let source=await upload();assert.ok(source.selection);source=await f.finish(source,'review');assert.equal(source.status,['inventur','lieferantenrechnungen'].includes(kind)?'needs_review':'ready');
   source=await f.finish(source,'apply');assert.equal(source.status,'applied');assert.equal(f.database.prepare('SELECT count(*) n FROM import_history_records').get().n,total);
   assert.equal(f.database.prepare('SELECT count(*) n FROM import_master_records').get().n,0);
   assert.equal(f.database.prepare("SELECT count(*) n FROM import_history_records WHERE source='cash'").get().n,0);
