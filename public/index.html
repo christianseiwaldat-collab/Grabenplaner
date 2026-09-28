@@ -53,11 +53,15 @@
             <span id="sidebarSessionIdentity"></span>
             <span id="sidebarSessionPosition"></span>
             <button class="sidebar-personal-actions-button" id="personalActionsAdminButton" type="button" aria-haspopup="dialog" aria-controls="personalActionsAdminDialog" aria-expanded="false">Meine Aktionen</button>
-            <button id="portalLogoutButton" type="button">(Logout)</button>
           </div>
           <button class="sidebar-darkmode-toggle" id="sidebarDarkmodeToggle" type="button" role="switch" aria-checked="false" aria-label="Darkmode einschalten">
             <span>Darkmode</span><i aria-hidden="true"><b></b></i>
           </button>
+          <div class="sidebar-session-links" aria-label="Konto und Einstellungen">
+            <button id="portalLogoutButton" type="button">(Logout)</button>
+            <a class="sidebar-session-link hidden" id="employeePortalLink" href="/portal.html">Mitarbeiterportal</a>
+            <button class="nav-item sidebar-session-link" data-view="settings" id="settingsNavButton" type="button">Einstellungen</button>
+          </div>
         </div>
         <section class="function-search hidden" id="functionSearch" aria-label="Funktionen durchsuchen">
           <label class="visually-hidden" for="functionSearchInput">Funktion suchen</label>
@@ -201,19 +205,6 @@
             </div>
           </section>
         </nav>
-
-        <div class="sidebar-settings-shortcut">
-          <button class="nav-item" data-view="settings" id="settingsNavButton">
-            <span class="nav-symbol">⚙</span><span>Einstellungen</span>
-          </button>
-        </div>
-
-        <div class="sidebar-actions" aria-label="Ansicht und System">
-          <a class="sidebar-portal-link hidden" id="employeePortalLink" href="/portal.html">Mitarbeiterportal öffnen</a>
-          <button class="sidebar-exit-button" id="systemExitButton" type="button">
-            <span>Beenden</span>
-          </button>
-        </div>
 
       </aside>
       <button class="sidebar-backdrop" id="mobileNavigationBackdrop" type="button" aria-label="Hauptmenü schließen" tabindex="-1"></button>
@@ -1660,6 +1651,8 @@
               <section class="sales-article-photo-card hidden" id="salesArticlePhotoCard" aria-label="Artikelfoto">
                 <h3>Artikelfoto</h3>
                 <button type="button" class="sales-article-detail-symbol sales-article-image-button" id="salesArticleImageButton" aria-label="Eigenes Artikelbild hinzufügen" aria-haspopup="dialog" aria-controls="salesArticleImageDialog" disabled><span aria-hidden="true">▧</span></button>
+                <div class="sales-article-image-links"><a id="salesArticleImageSearch" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="Google-Bildersuche zur EAN öffnen">get image</a><button type="button" id="salesArticleImageEdit" class="hidden" aria-haspopup="dialog">edit</button></div>
+                <p id="salesArticleImageSearchStatus" class="sales-article-image-search-status" role="status"></p>
               </section>
               <div class="sales-article-detail-actions hidden" id="salesArticleDetailActions" aria-label="Aktionen für den ausgewählten Artikel">
                 <button class="text-button" id="salesArticleEditButton" type="button" data-sales-article-action="edit" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">Bearbeiten</button>
@@ -1669,6 +1662,7 @@
               <nav class="sales-article-detail-navigation hidden" id="salesArticleDetailNavigation" aria-label="Bereiche der Artikelansicht">
                 <a href="#salesArticleMasterDataSection">Stammdaten</a>
                 <a href="#salesArticlePricesSection">Preise</a>
+                <a href="#salesArticleNotesSection">Notizen</a>
                 <a href="#salesArticleIdentifiersSection">Kennungen &amp; Verlauf</a>
               </nav>
               <div class="sales-article-detail-body" id="salesArticleDetailBody">
@@ -3077,7 +3071,8 @@
         <header class="sales-article-image-heading"><div><h2 id="salesArticleImageTitle">Artikelbild festlegen</h2><p id="salesArticleImageArticle"></p></div><button type="button" class="text-button" data-close-article-image aria-label="Bilddialog schließen">×</button></header>
         <img id="salesArticleImagePreview" class="sales-article-image-preview hidden" alt="Vorschau des Artikelbildes" />
         <div id="salesArticleImageEditor">
-          <p>Das eigene Bild bleibt bei TradeFoto-Updates erhalten.</p>
+          <p>Das eigene Bild bleibt bei TradeFoto-Updates erhalten und wird auf höchstens 50 KB verkleinert.</p>
+          <div id="salesArticleImagePaste" class="sales-article-image-paste" tabindex="0">Bild hier einfügen (Strg+V) oder eine Bilddatei hereinziehen.</div>
           <label class="field"><span>Bild auswählen</span><select id="salesArticleImageSource"><option value="local">Datei vom Computer</option><option value="url">Bild aus Webadresse</option></select></label>
           <label class="field" id="salesArticleImageLocalField"><span>JPG, PNG oder WebP · bis 10 MB</span><input type="file" id="salesArticleImageFile" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" /></label>
           <label class="field hidden" id="salesArticleImageUrlField"><span>Direkte HTTPS-Bildadresse</span><input type="url" id="salesArticleImageUrl" maxlength="4000" placeholder="https://beispiel.at/produkt.jpg" /><small>Das Bild wird einmalig übernommen und bei uns gespeichert.</small></label>
@@ -4389,6 +4384,8 @@
     <script src="/sales-report-jobs.js"></script>
     <script src="/sales-article-image.js"></script>
     <script src="/sales-article-layout.js"></script>
+    <script src="/branch-article-calculation.js"></script>
+    <script src="/sales-article-price-controls.js"></script>
     <script src="/navigation-history.js"></script>
     <script src="/learning-library.js"></script>
     <script src="/learning-assessment.js"></script>

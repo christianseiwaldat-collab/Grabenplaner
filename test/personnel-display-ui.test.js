@@ -34,9 +34,11 @@ test("Darkmode gestaltet Rechtekarten und Dialog-Scrollbalken durchgängig dunke
   assert.match(styles, /data-active-page-theme="dark"\] :is\(\.modal,\.modal form,\.modal \*\)::-webkit-scrollbar-track/);
 });
 
-test("Serverbetrieb meldet am unteren Seitenrand ab und beendet nicht den Host", () => {
-  assert.match(script, /querySelector\("span"\)\.textContent = serverActive \? "Logout" : "Beenden"/);
-  assert.match(script, /if \(serverActive\) return logoutPortal\(\)/);
-  assert.match(styles, /\.sidebar-exit-button\.logout-mode/);
+test("Kontozugänge stehen als Text oben; Logout wird nicht am unteren Seitenrand wiederholt", () => {
+  const account = html.slice(html.indexOf('id="sidebarSessionInfo"'), html.indexOf('id="functionSearch"'));
+  assert.match(account, /class="sidebar-session-links"/);
+  assert.match(account, /id="employeePortalLink"[^>]*>Mitarbeiterportal<\/a>/);
+  assert.match(account, /id="settingsNavButton"/);
+  assert.doesNotMatch(html, /id="systemExitButton"|class="sidebar-settings-shortcut"/);
   assert.match(html, /id="portalLogoutButton"[^>]*>\(Logout\)<\/button>/);
 });

@@ -67,11 +67,21 @@ test('Bildaufbereitung skaliert ohne Zuschnitt, entfernt Metadaten und weist Dok
   const buffer = await sharp(await raster()).withMetadata({ orientation: 6 }).jpeg().toBuffer();
   const image = await prepareSalesArticleImage(buffer), metadata = await sharp(image.buffer).metadata();
   assert.equal(image.mime, 'image/webp'); assert.equal(image.height, 1280); assert.equal(image.width, 674);
-  assert.ok(image.buffer.length <= 524288); assert.equal(metadata.exif, undefined); assert.equal(metadata.orientation, undefined);
+  assert.ok(image.buffer.length <= 50 * 1024); assert.equal(metadata.exif, undefined); assert.equal(metadata.orientation, undefined);
   for (const input of [Buffer.alloc(0), Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), Buffer.from('%PDF-1.7'), Buffer.from([255, 216, 255, 0])]) {
     await assert.rejects(prepareSalesArticleImage(input));
   }
   await assert.rejects(prepareSalesArticleImage(Buffer.alloc(MAX_INPUT_BYTES + 1)), { code: 'ARTICLE_IMAGE_TOO_LARGE' });
+});
+
+test('Even detailed noisy images are permanently reduced below 50 KB', async () => {
+  const pixels = crypto.randomBytes(1400 * 1000 * 3);
+  const input = await sharp(pixels,{raw:{width:1400,height:1000,channels:3}}).png().toBuffer();
+  assert.ok(input.length > 50 * 1024);
+  const image = await prepareSalesArticleImage(input);
+  assert.ok(image.buffer.length <= 50 * 1024);
+  assert.ok(image.width >= 240 && image.width <= 1280);
+  assert.ok(Math.abs(image.width / image.height - 1.4) < .02, 'Aspect ratio preserved');
 });
 
 test('Webbilder verwenden geprüfte DNS-Adressen, keine Cookies, begrenzte sichere Weiterleitungen', async () => {

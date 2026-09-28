@@ -236,13 +236,28 @@ test('Eigene Tabelleneinstellungen benötigen nur Leserecht, prüfen CSRF und fi
   assert.equal((await requestJson('/api/sales/articles?sort=purchaseNet')).response.status, 403);
 });
 
+test("Mitarbeitende mit Artikel-Leserecht erhalten die Kartei einschließlich Notizen ohne Preis- oder Schreibrechte", async () => {
+  db.prepare("UPDATE portal_users SET role = 'employee' WHERE employee_number = ?").run(EMPLOYEE_NUMBER);
+  try {
+    const result = await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}`);
+    assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+    assert.deepEqual(result.payload.article.notes, { items: [], available: false, sourceAt: null });
+    assert.deepEqual(result.payload.article.prices, { sales: null, costs: null });
+    assert.deepEqual(result.payload.capabilities, { pricesRead: false, costsRead: false, write: false, import: false });
+    const denied = await requestMutationJson('/api/sales/articles', { method: 'POST', body: {} });
+    assert.equal(denied.response.status, 403);
+  } finally {
+    db.prepare("UPDATE portal_users SET role = 'manager' WHERE employee_number = ?").run(EMPLOYEE_NUMBER);
+  }
+});
+
 test("Detailroute hält Stammdaten, Verkaufs- und Kostenpreise serverseitig getrennt", async () => {
   const base = await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}`);
   assert.equal(base.response.status, 200, JSON.stringify(base.payload));
   assert.match(base.response.headers.get("cache-control") || "", /private/);
   assert.deepEqual(Object.keys(base.payload).sort(), ["article", "capabilities", "revisions"]);
   assert.deepEqual(Object.keys(base.payload.article).sort(), [
-    "active", "articleNumber", "branchStock", "currentRevision", "description", "identifiers", "image", "priceMatrix", "prices", "provenance", "sourceSections",
+    "active", "articleNumber", "branchStock", "currentRevision", "description", "identifiers", "image", "notes", "priceMatrix", "prices", "provenance", "sourceSections",
   ]);
   assert.equal(base.payload.article.articleNumber, ARTICLE_NUMBER);
   assert.deepEqual(base.payload.article.identifiers, [{

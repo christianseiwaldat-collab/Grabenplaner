@@ -1376,7 +1376,9 @@ function hideLoginGate() {
 function renderSidebarSession() {
   const user = state.portalSession?.user;
   const visible = state.portalStatus?.portalEnabled === true && Boolean(user);
-  elements.sidebarSessionInfo?.classList.toggle("hidden", !visible);
+  elements.sidebarSessionInfo?.classList.toggle("hidden", state.portalStatus?.portalEnabled === true && !visible);
+  elements.sidebarSessionInfo?.querySelector(".sidebar-session-copy")?.classList.toggle("hidden", !visible);
+  elements.portalLogoutButton?.classList.toggle("hidden", !visible);
   elements.personalActionsAdminButton?.classList.toggle("hidden", !visible || user?.isEmployee === false);
   elements.salesArticleActionsLogButton?.classList.toggle("hidden", !visible || user?.isEmployee === false);
   if (!visible) return;
@@ -30353,7 +30355,7 @@ function changeSalesArticleColumns(id, move = 0) {
   if (sortChanged && catalog.searchStarted) void loadSalesArticleCatalog({ reset: true, preserveDetail: true });
 }
 function applySalesArticleDetailTabs() {
-  const panels = ['salesArticleOverviewPanel','salesArticlePricesSection','salesArticleIdentifiersSection'];
+  const panels = ['salesArticleOverviewPanel','salesArticlePricesSection','salesArticleNotesSection','salesArticleIdentifiersSection'];
   const active = panels.includes(state.salesArticleCatalog.detailTab) ? state.salesArticleCatalog.detailTab : panels[0];
   const nav = elements.salesArticleDetailNavigation; if (!nav) return;
   nav.setAttribute('role', 'tablist');
@@ -30416,9 +30418,9 @@ const SALES_ARTICLE_PRICE_TYPE_LABELS = Object.freeze({
   special: "Sonderpreis",
   internet_1: "Internet 1",
   internet_2: "Internet 2",
-  internet_3: "Internet 3",
+  internet_3: "UCW",
   internet_4: "Internet 4",
-  internet_5: "Internet 5",
+  internet_5: "Versuch",
   zdek: "ZDEK",
   dek_a: "DEK A",
   future_upe: "Künftige UVP",
@@ -30606,6 +30608,7 @@ function normalizeSalesArticleDetailPayload(payload = {}) {
       articleNumber: String(articleValue.articleNumber || ""),
       description: String(articleValue.description || ""),
       sourceSections: Array.isArray(articleValue.sourceSections) ? articleValue.sourceSections : [],
+      notes: articleValue.notes || {items:[],available:false,sourceAt:null},
       branchStock: articleValue.branchStock || { rows: [], sourceAt: null },
       priceMatrix: window.SalesArticleLayout.restrictPrices(articleValue.priceMatrix, effectiveCapabilities),
       image: articleValue.image && typeof articleValue.image === 'object' ? articleValue.image : null,
@@ -31852,7 +31855,8 @@ function renderSalesArticleCatalogDetail() {
         setSalesArticleCatalogDetailStatus(image.present ? 'Eigenes Artikelbild gespeichert.' : 'Eigenes Artikelbild entfernt.');
       } });
     const article = !catalog.detailLoading && !catalog.detailError ? catalog.detail?.article : null;
-    catalog.imageUi.render({ articleNumber: article?.articleNumber || '', image: article?.image, read: canReadSalesArticles(), write: salesArticleDetailCanWrite() });
+    catalog.imageUi.render({ articleNumber: article?.articleNumber || '', image: article?.image,
+      ean: article?.identifiers.find(i => i.isPrimary)?.identifierValue || '', read: canReadSalesArticles(), write: salesArticleDetailCanWrite() });
   }
 
   if (catalog.detailLoading) {
@@ -31907,6 +31911,7 @@ function renderSalesArticleCatalogDetail() {
       + (additionalPrices.length ? renderSalesArticleDetailPriceGroup(additionalPrices, {title:'Weitere Preisangaben',description:''}) : '')
       : renderSalesArticleDetailPriceGroup(article.prices.sales, {title:'Verkaufspreise',description:'',protectedMessage:'Verkaufspreise sind nicht freigegeben.'})
       + renderSalesArticleDetailPriceGroup(article.prices.costs, {title:'EK & Kalkulation',description:'',protectedMessage:'Einkaufswerte sind nicht freigegeben.'})) + '</section>'
+    + '<section id="salesArticleNotesSection" class="sales-article-detail-tab-panel">' + layout.notes(article.notes, formats) + '</section>'
     + '<section id="salesArticleIdentifiersSection" class="sales-article-identifiers-history" aria-labelledby="salesArticleIdentifiersTitle">'
     + '<section class="sales-article-detail-card"><header><h3 id="salesArticleIdentifiersTitle">EAN / GTIN</h3></header>'
     + renderSalesArticleDetailIdentifiers(article.identifiers) + '</section>'
@@ -31916,6 +31921,10 @@ function renderSalesArticleCatalogDetail() {
     + '<div><dt>Quelle aktualisiert</dt><dd>' + escapeHtml(salesArticleCatalogTimestamp(provenance.sourceUpdatedAt)) + '</dd></div></dl></section>'
     + '<section class="sales-article-detail-card" id="salesArticleHistorySection"><header><h3>Versionsverlauf</h3></header>'
     + renderSalesArticleDetailHistory(revisions, article.currentRevision) + '</section></section></div>';
+  window.SalesArticlePriceControls.mount(elements.salesArticleDetailBody, article.priceMatrix, formats, {
+    preferenceKey: 'gp.article-price-columns.v1.' + currentSalesArticleCatalogActorKey(),
+  });
+  layout.mountNotes(elements.salesArticleDetailBody, article.notes);
   if (photo) { document.getElementById('salesArticlePhotoSlot').append(photo); photo.classList.remove('hidden'); }
   applySalesArticleDetailTabs();
   if (catalog.detailMoveFocus) {
@@ -39029,6 +39038,7 @@ function syncMobileNavigationMode() {
 }
 
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
+  closeMobileNavigation({ restoreFocus: false });
   const view = button.dataset.view;
   if (button.dataset.personnelAdministrationRoute) {
     setPersonnelAdministrationTab(button.dataset.personnelAdministrationRoute);
@@ -39036,7 +39046,6 @@ document.querySelectorAll(".nav-item").forEach((button) => button.addEventListen
   const contextChanged = restoreRememberedOverallContext(view);
   setView(view);
   if (contextChanged || planningContextNeedsReload(view)) loadPlanningView(view);
-  closeMobileNavigation({ restoreFocus: false });
 }));
 document.getElementById("salesAnalyticsTabs")?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-sales-analytics-tab]");
@@ -40385,6 +40394,7 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
   }
   const button = event.target.closest("[data-context-view]");
   if (!button) return;
+  closeMobileNavigation({ restoreFocus: false });
   state.locationId = button.dataset.locationId || state.locationId;
   state.departmentId = button.dataset.departmentId || "";
   rememberOverallContext(button.dataset.contextView, state.locationId, state.departmentId);

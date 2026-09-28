@@ -9,6 +9,7 @@ test('Native article workspace: current order sources, EAN aliases, stock and in
     const scopeId='synthetic-migration';
     const source=await require('../test-support/trade-insights-fixture').insightFixture({access:f.access,protection:f.protection,scopeId,ownerId:'00001'});
     const {article}=await require('../test-support/sales-article-workspace-fixture').seedWorkspace({access:f.access,source});
+    await source.ingest('Artikel_Bemerkungen',[{EAN:'005479',Datum:'2026-09-20T00:00:00.000',Text:'Synthetische Bestellung',LBAe:42}],{master:true,snapshotAt:'2026-09-20T10:00:00.000Z'});
     const search=(orderNumber,query='',projection={read:true})=>require('../lib/persistence/repositories/sales-article-workspace').searchSalesArticleWorkspace({
       access:f.access,vault:f.vault,scopeId,projection,orderNumber,
       search:require('../lib/sales-article-catalog').normalizeSalesArticleSearch({query})});
@@ -22,6 +23,9 @@ test('Native article workspace: current order sources, EAN aliases, stock and in
       access:f.access,vault:f.vault,scopeId,article,projection:{read:true,pricesRead:true,costsRead:true}});
     assert.deepEqual(data.branchStock.rows.map(r=>[r.id,r.quantity]),[['18','3'],['19','0']]);
     assert.equal(data.priceMatrix.sales.find(p=>p.id==='sales').margin.amount,'20.833333333333');
+    const readOnly=await require('../lib/sales-article-detail-source').loadSalesArticleDetailData({access:f.access,vault:f.vault,scopeId,article,projection:{read:true}});
+    assert.equal(readOnly.notes.items[0].text,'Synthetische Bestellung');
+    assert.equal(readOnly.priceMatrix.purchase,null);
     assert.equal((await search('NEW-77')).items[0].purchaseNet,undefined);
   },{warmWorkers:false});
 });
