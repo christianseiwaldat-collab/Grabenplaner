@@ -1,8 +1,10 @@
 (function(host,factory){'use strict';const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;if(host)host.GrabenplanerSupplierInvoices=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
  'use strict';
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- const number=v=>v==null?'–':new Intl.NumberFormat('de-AT',{maximumFractionDigits:4}).format(Number(v));
- const money=v=>v==null?'–':new Intl.NumberFormat('de-AT',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(Number(v));
+ const numberFormatter=new Intl.NumberFormat('de-AT',{maximumFractionDigits:4});
+ const moneyFormatter=new Intl.NumberFormat('de-AT',{style:'currency',currency:'EUR',maximumFractionDigits:2});
+ const number=v=>v==null?'–':numberFormatter.format(Number(v));
+ const money=v=>v==null?'–':moneyFormatter.format(Number(v));
  const date=v=>v?String(v).slice(0,10).split('-').reverse().join('.'):'–';
  const columns=[['created','Anlegedatum'],['booked','Buchdatum'],['number','Rechnungsnummer'],['supplier','Lieferant'],['quantity','Menge'],['priceMin','EK netto']];
  const collator=new Intl.Collator('de-AT',{numeric:true,sensitivity:'base'});

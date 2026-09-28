@@ -151,3 +151,17 @@ test('suggestions retain an explicit exact article filter and hide it for stockt
  const previous=globalThis.FormData;globalThis.FormData=class{constructor(form){this.entries=Object.entries(form.elements).map(([k,v])=>[k,v.value]);}[Symbol.iterator](){return this.entries[Symbol.iterator]();}};t.after(()=>{globalThis.FormData=previous;});
  const f=fixture(),pending=f.workspace.activate('suggestions');f.requests[0].resolve(context);await pending;assert.equal(f.node('[data-article-exact]').hidden,false);const form=f.node('filters');form.elements.articleNumber.value='000042';form.emit('submit',{preventDefault(){}});await tick();const request=f.requests.at(-1),body=JSON.parse(request.options.body);assert.equal(body.query.articleNumber,'000042');assert.equal(body.query.movementType,undefined);request.resolve({id:'exact-hint',status:'queued'});await tick();await f.workspace.activate('stocktakes');assert.equal(f.node('[data-article-exact]').hidden,true);f.workspace.destroy();
 });
+
+test('specialized Trade results build their table only once and keep sortable headers',async()=>{
+ for(const kind of ['movements','stocktakes','suggestions']){
+  const f=fixture(),pending=f.workspace.activate(kind);f.requests[0].resolve(context);await pending;
+  const result=f.node('results');let writes=0,markup='';
+  Object.defineProperty(result,'innerHTML',{get(){return markup;},set(value){writes++;markup=value;},configurable:true});
+  f.node('jobs').emit('click',{target:{closest:selector=>selector==='[data-job-open]'?{dataset:{jobOpen:'saved'}}:null}});await tick();
+  f.requests.at(-1).resolve({id:'saved',kind,title:'Gespeichert',created:'2026-09-28T10:00:00Z',completedAt:'2026-09-28T10:01:00Z',processed:0,query:{},result:{rows:[]}});await tick();
+  assert.equal(writes,1,kind+' must not build a throwaway generic table');
+  assert.match(markup,/aria-sort="ascending"|aria-sort="descending"/);
+  assert.match(markup,/data-sort=/);
+  f.workspace.destroy();
+ }
+});
