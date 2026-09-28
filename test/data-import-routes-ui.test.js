@@ -105,16 +105,16 @@ test('Productive Block 1: wrong kinds, compression, MIME and missing vault canno
   f.state.available=false;assert.equal((await send('cash')).status,503);assert.equal(f.state.calls,0);
 });
 
-test('Central imports: all five supported source kinds use the same protected upload route',async t=>{
+test('Central imports: all six supported source kinds use the same protected upload route',async t=>{
   const f=await fixture(t),options={method:'POST',headers:{'Content-Type':'application/octet-stream'},body:Buffer.alloc(4096)};
-  for(const kind of ['cash','trade','bestell','weum','inventur']) {
+  for(const kind of ['cash','trade','bestell','weum','inventur','lieferantenrechnungen']) {
     const result=await f.request(`/api/data-import/upload/${kind}`,options);
     assert.equal(result.status,202);assert.equal(f.state.kind,kind);
     assert.deepEqual(await result.json(),{id:'a'.repeat(64),status:'reading'});
   }
   f.state.csrf=false;
   assert.equal((await f.request('/api/data-import/upload/bestell',options)).status,403);
-  assert.equal(f.state.calls,5);
+  assert.equal(f.state.calls,6);
 });
 
 test('upload preserves a Unicode basename for both direct and background imports and rejects malformed names',async t=>{
@@ -152,10 +152,10 @@ test('database overview keeps one row per source, distinguishes business date/up
  const html=UI.renderOverview([source],'one',context);
  assert.match(html,/Datenbank<\/th>.*Datenstand<\/th>.*Hochgeladen am<\/th>.*Status<\/th>.*Aktion<\/th>/);
  assert.match(html,/18.09.2026/);assert.match(html,/datetime="2026-09-25T10:00:00.000Z"/);assert.doesNotMatch(html,/2099|<script>/);
- assert.equal((html.match(/data-i-upload="/g)||[]).length,5);assert.match(html,/data-i-upload="weum"/);assert.match(html,/data-i-upload="inventur"/);
+ assert.equal((html.match(/data-i-upload="/g)||[]).length,6);assert.match(html,/data-i-upload="weum"/);assert.match(html,/data-i-upload="inventur"/);
  assert.doesNotMatch(html,/data-i-upload="(?:email|fehler|rio|belieferung)"/);assert.match(html,/Lokal behalten/);assert.match(html,/aria-current="true"/);
  const readOnly=UI.renderOverview([],null,{...context,projection:{prepare:false}});
- assert.equal((readOnly.match(/hochladen" disabled/g)||[]).length,5);
+ assert.equal((readOnly.match(/hochladen" disabled/g)||[]).length,6);
  assert.match(UI.renderOverview([],null,context,false),/Ältere Importe noch ungeprüft/);
  assert.doesNotMatch(UI.renderOverview([],null,context,false),/Noch nicht hochgeladen/);
 });

@@ -1850,7 +1850,7 @@ function canAccessSalesAnalytics() {
 function canAccessTradeInsights() {
   const user = state.portalSession?.user;
   return Boolean(user?.salesHistory?.read && (user.salesHistory.customerPurchases
-    || user.salesAnalytics?.inventory || canReadSalesArticles()));
+    || user.salesAnalytics?.inventory || canReadSalesArticles() || user.permissions?.includes('sales:supplier-invoices:read')));
 }
 
 function canAccessCrm() {

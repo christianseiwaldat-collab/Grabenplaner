@@ -6,7 +6,7 @@
  if(host?.location?.pathname==='/trade-insights.html')host.location.replace(api.legacyUrl(host.location.search));
 })(typeof globalThis!=='undefined'?globalThis:this,function createTradeInsights(){
  'use strict';
- const tabs=Object.freeze(['purchasing','transfers','movements','stock-summary','inventory','stocktakes','suggestions','article-history','repairs','customer-history','device-history']);
+ const tabs=Object.freeze(['purchasing','transfers','movements','stock-summary','inventory','stocktakes','suggestions','article-history','supplier-invoices','repairs','customer-history','device-history']);
  const model=typeof module==='object'&&module.exports?require('./trade-insight-results'):globalThis.GrabenplanerTradeResults;
  const normalizeTab=value=>tabs.includes(value)?value:'purchasing';
  const legacyUrl=search=>'/?view=tradeInsights&section='+normalizeTab(new URLSearchParams(search).get('tab'));
@@ -21,6 +21,9 @@
   if(!root||typeof request!=='function')throw new TypeError('Trade insights need a workspace and the GP API.');
   root.innerHTML=markup;
   const q=key=>root.querySelector('[data-ti="'+key+'"]');
+  let supplierInvoices=null;
+  q('tabs').insertAdjacentHTML('beforeend','<button type="button" data-kind="supplier-invoices" id="tradeInsightsTab-supplier-invoices" role="tab" aria-selected="false" aria-controls="tradeSupplierInvoicesPanel" tabindex="-1" disabled>Lieferantenrechnungen</button>');
+  root.insertAdjacentHTML('beforeend','<section id="tradeSupplierInvoicesPanel" data-ti="supplier-invoices" role="tabpanel" aria-labelledby="tradeInsightsTab-supplier-invoices" hidden></section>');
   q('tabs').insertAdjacentHTML('beforeend','<button type="button" data-kind="article-history" id="tradeInsightsTab-article-history" role="tab" aria-selected="false" aria-controls="tradeArticleHistoryPanel" tabindex="-1" disabled>Artikelhistorie</button>');
   root.insertAdjacentHTML('beforeend','<section id="tradeArticleHistoryPanel" data-ti="article-history" class="article-history-workspace" role="tabpanel" aria-labelledby="tradeInsightsTab-article-history" hidden></section>');
   q('tabs').insertAdjacentHTML('beforeend','<button type="button" data-kind="stocktakes" id="tradeInsightsTab-stocktakes" role="tab" aria-selected="false" aria-controls="tradeInsightsPanel" tabindex="-1" disabled>Inventuren &amp; Differenzen</button>');
@@ -149,7 +152,8 @@
   for(const b of root.querySelectorAll('[data-kind]')){const chosen=b===button;b.classList.toggle('active',chosen);b.setAttribute('aria-selected',String(chosen));b.tabIndex=chosen?0:-1;}
   q('filters').parentElement.setAttribute('aria-labelledby',button.id);
   onTabChange(kind,{replace});
-  q('filters').parentElement.hidden=kind==='article-history';historyPanel.hidden=kind!=='article-history';
+  q('filters').parentElement.hidden=['article-history','supplier-invoices'].includes(kind);historyPanel.hidden=kind!=='article-history';q('supplier-invoices').hidden=kind!=='supplier-invoices';
+  if(kind==='supplier-invoices'){supplierInvoices||=globalThis.GrabenplanerSupplierInvoices.mount(q('supplier-invoices'),{api,today:()=>context.today||new Date().toISOString().slice(0,10)});supplierInvoices.activate();return;}
   if(kind==='article-history'){articleHistory||=historyModule.mount(historyPanel,{api,onMovements:context.projection.purchasing?articleNumber=>openMovements({articleNumber}):null});articleHistory.activate();return;}
   q('inventory-intro').hidden=kind!=='stocktakes';q('suggestions-intro').hidden=kind!=='suggestions';root.querySelector('[data-suggestion-filter]').hidden=kind!=='suggestions';root.querySelector('[data-stocktake-difference]').hidden=true;
   root.querySelector('[data-customer]').hidden=!['repairs','customer-history','device-history'].includes(kind);root.querySelector('[data-serial]').hidden=!['repairs','device-history'].includes(kind);form.elements.customer.required=kind==='customer-history';form.elements.serial.required=kind==='device-history';
@@ -186,7 +190,7 @@
   try{const data=await api('repair-save',{id:selected.id,state:repairForm.elements.state.value,expectedRevision:selected.revision});if(ticket!==repairGeneration)return;repairSelection=data;renderRepair(data);repairStatus.textContent='GP-Status gespeichert.';repairStatus.textContent+=' Der gespeicherte Ergebnisstand bleibt unverändert.';}catch(err){if(ticket===repairGeneration&&err.name!=='AbortError')repairStatus.textContent=err.message;}finally{button.disabled=false;}});
 
  function cancelPending(){
-  articleHistory?.suspend();period.close();
+  articleHistory?.suspend();supplierInvoices?.suspend();period.close();
   openGeneration++;opening=null;clearTimeout(jobTimer);jobTimer=null;jobRefresh=null;
   lifecycle++;generation++;classGeneration++;repairGeneration++;
   for(const pending of requests)pending.abort();requests.clear();
@@ -207,7 +211,7 @@
    const pending=api('context').then(data=>{
     context=data;
     for(const b of root.querySelectorAll('[data-kind]')){
-     b.disabled=!data.projection?.[b.dataset.kind==='article-history'?'articleHistory':['inventory','stock-summary','stocktakes','suggestions'].includes(b.dataset.kind)?'inventory':b.dataset.kind==='repairs'?'repairs':['customer-history','device-history'].includes(b.dataset.kind)?'customers':'purchasing'];
+     b.disabled=!data.projection?.[b.dataset.kind==='supplier-invoices'?'supplierInvoices':b.dataset.kind==='article-history'?'articleHistory':['inventory','stock-summary','stocktakes','suggestions'].includes(b.dataset.kind)?'inventory':b.dataset.kind==='repairs'?'repairs':['customer-history','device-history'].includes(b.dataset.kind)?'customers':'purchasing'];
     }
     form.elements.locationId.replaceChildren(option('Alle freigegebenen Filialen',''));
     for(const l of [...(data.locations||[])].sort((a,b)=>model.collator.compare(a.label,b.label)))form.elements.locationId.add(option(l.label,l.id));
@@ -221,7 +225,7 @@
   form.querySelector('button[type=submit]').disabled=!button;
   if(!button){status.textContent='Für diese Auswertungen fehlt die Freigabe.';return;}
   if(!selected||button.dataset.kind!==kind||(['inventory','stock-summary'].includes(kind)&&!metadata))await choose(button,{replace:button.dataset.kind!==requestedTab});
-  else {if(kind!==requestedTab)onTabChange(kind,{replace:true});if(kind==='article-history')articleHistory.activate();else void refreshJobs();}
+  else {if(kind!==requestedTab)onTabChange(kind,{replace:true});if(kind==='article-history')articleHistory.activate();else if(kind==='supplier-invoices')supplierInvoices.activate();else void refreshJobs();}
  }
  async function openRelated(target,criteria={}){
   await activate(target);if(!active||kind!==target)return;
@@ -257,7 +261,7 @@
   const index=event.key==='Home'?0:event.key==='End'?allowed.length-1:(current+(event.key==='ArrowRight'?1:-1)+allowed.length)%allowed.length;
   allowed[index].focus();void choose(allowed[index]);
  });
- return {activate,suspend,openMovements,async openArticleHistory(query=''){await activate('article-history');if(active&&kind==='article-history')articleHistory.activate(query);},getTab:()=>kind,destroy(){if(disposed)return;suspend();disposed=true;articleHistory?.destroy();for(const remove of listeners)remove();root.replaceChildren();}};
+ return {activate,suspend,openMovements,async openArticleHistory(query=''){await activate('article-history');if(active&&kind==='article-history')articleHistory.activate(query);},getTab:()=>kind,destroy(){if(disposed)return;suspend();disposed=true;articleHistory?.destroy();supplierInvoices?.destroy();for(const remove of listeners)remove();root.replaceChildren();}};
  }
  return {mount,normalizeTab,legacyUrl,tabs};
 });
