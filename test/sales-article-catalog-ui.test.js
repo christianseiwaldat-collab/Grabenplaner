@@ -147,7 +147,7 @@ test("Globale Funktionssuche öffnet den freigegebenen Artikelstamm direkt", () 
   );
 });
 
-test("Rechts von der Suche öffnet sich die Artikelkartei mit drei Tabs", () => {
+test("Rechts von der Suche öffnet sich die Artikelkartei mit vier Tabs einschließlich Notizen", () => {
   const view = between(html, '<section id="salesArticleCatalogView"', '<section id="crmView"');
   assert.match(view, /id="salesArticleDetail"[^>]*aria-labelledby="salesArticleDetailTitle"[^>]*aria-busy="false"/);
   assert.match(view, /id="salesArticleDetailTitle"[^>]*tabindex="-1"/);
@@ -155,6 +155,7 @@ test("Rechts von der Suche öffnet sich die Artikelkartei mit drei Tabs", () => 
   assert.match(view, /href="#salesArticleMasterDataSection"/);
   assert.match(view, /href="#salesArticleIdentifiersSection"/);
   assert.match(view, /href="#salesArticlePricesSection"/);
+  assert.match(view, /href="#salesArticleNotesSection"/);
   assert.doesNotMatch(view, /href="#salesArticleHistorySection"/);
   assert.match(view, /Kennungen &amp; Verlauf/);
   assert.match(view, /id="salesArticleDetailStatus"[^>]*role="status"[^>]*aria-live="polite"/);
@@ -176,7 +177,8 @@ test("Rechts von der Suche öffnet sich die Artikelkartei mit drei Tabs", () => 
   assert.match(renderer, /EK & Kalkulation/);
   assert.match(renderer, /Herkunft/);
   assert.match(renderer, /Versionsverlauf/);
-  assert.doesNotMatch(renderer, /Lieferant|Filialwerte|Taxonomie|Warengruppe|Notizen|Zubehör/);
+  assert.match(renderer, /layout\.notes\(article\.notes, formats\)/);
+  assert.doesNotMatch(renderer, /Lieferant|Filialwerte|Taxonomie|Warengruppe|Zubehör/);
 });
 
 test("Artikel werden ausschließlich nach einer ausdrücklichen Trefferauswahl geladen", () => {

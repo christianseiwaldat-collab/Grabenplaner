@@ -80,9 +80,9 @@ test("v0.75.2 Navigation: Personal-Unterseiten sind aufklappbar, adressierbar un
 
 test("v0.75.2 Navigation: Teamstatus entfällt und Einstellungen bleiben außerhalb des Scrollmenüs erreichbar", () => {
   assert.doesNotMatch(html, /sidebar-summary|sidebarEmployeeCount|Aktive Teammitglieder/);
-  const afterNavigation = html.slice(html.indexOf("</nav>"), html.indexOf('<div class="sidebar-actions"'));
-  assert.match(afterNavigation, /class="sidebar-settings-shortcut"/);
-  assert.match(afterNavigation, /<button(?=[^>]*id="settingsNavButton")(?=[^>]*data-view="settings")[^>]*>/);
-  assert.match(styles, /\.sidebar-settings-shortcut \{ flex: 0 0 auto; margin-top: 8px; \}/);
+  const beforeNavigation = html.slice(html.indexOf('id="sidebarSessionInfo"'), html.indexOf('<nav'));
+  assert.match(beforeNavigation, /class="sidebar-session-links"/);
+  assert.match(beforeNavigation, /<button(?=[^>]*id="settingsNavButton")(?=[^>]*data-view="settings")[^>]*>/);
+  assert.match(styles, /\.sidebar-session-links \{[^}]*flex-wrap:wrap/);
   assert.doesNotMatch(app, /sidebarEmployeeCount/);
 });

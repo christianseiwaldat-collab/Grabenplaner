@@ -127,8 +127,11 @@ test("Preisarten sind vollständig und ohne Überschneidung auf Verkaufs- und Ko
   assert.equal(salesArticlePriceGroup("future-unclassified-price"), null);
 });
 
-test("Rechtekatalog begrenzt Artikelstamm auf kaufmännische Rollen und erhält Developer-Vollzugriff", () => {
-  for (const permission of ["ACCESS", "READ", "PRICES_READ", "COSTS_READ", "WRITE", "IMPORT"]) {
+test("Artikel-Leserecht ist Mitarbeitenden zuweisbar; Preis- und Schreibrechte bleiben geschützt", () => {
+  for (const permission of ["ACCESS", "READ"]) {
+    assert.match(server, new RegExp(`SALES_ARTICLE_CATALOG_PERMISSIONS\\.${permission}[^\\n]+eligibleRoles: \\["employee", "manager", "admin", "developer"\\]`));
+  }
+  for (const permission of ["PRICES_READ", "COSTS_READ", "WRITE", "IMPORT"]) {
     assert.match(
       server,
       new RegExp(`SALES_ARTICLE_CATALOG_PERMISSIONS\\.${permission}[\\s\\S]{0,420}eligibleRoles: \\["manager", "admin", "developer"\\]`),
