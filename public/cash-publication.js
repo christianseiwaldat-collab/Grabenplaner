@@ -11,7 +11,7 @@
   function locationMappings(locations, targets) {
     return locations.filter(m => m.targetId).map(m => {
       if (!targets.some(t => t.id === m.targetId)) throw new Error('Bitte einen vorhandenen GP-Standort auswählen.');
-      return { kind: 'FILIALEN', sourceId: m.sourceId, targetId: m.targetId, historical: m.historical };
+      return { kind: 'FILIALEN', sourceId: m.sourceId, targetId: m.targetId, historical: m.historical, ...(m.sourceOnly ? { sourceOnly: true } : {}) };
     });
   }
   function mount(root, { api, source, confirmAction = message => globalThis.confirm(message) }) {
@@ -102,6 +102,8 @@
       const index = event.target.dataset?.cLocation, historical = event.target.dataset?.cHistorical;
       if (index !== undefined && locations[index]) {
         locations[index].targetId = event.target.value; locations[index].match = null;
+        if (/^cash-location-[0-9a-f]{64}$/.test(event.target.value)) locations[index].sourceOnly = true;
+        else delete locations[index].sourceOnly;
         const note = root.querySelector(`[data-c-match="${index}"]`);
         if (note) note.textContent = event.target.value ? 'Manuell ausgewählt' : 'Ohne GP-Standort';
       }
