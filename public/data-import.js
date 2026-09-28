@@ -5,6 +5,7 @@
   const labels={dating:'Datenstand wird ermittelt',queued:'Wartet auf Verarbeitung',retrying:'Automatischer Wiederholungsversuch geplant',paused:'Auftrag pausiert',failed:'Auftrag benötigt Aufmerksamkeit',reading:'Datei wird bereitgestellt',interrupted:'Bereitstellung unterbrochen',staging:'Zwischenspeicherung',reviewing:'Prüfung läuft',rechecking:'Prüfung wird vorbereitet',
     needs_review:'Prüfung erforderlich',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen',deleting:'Endgültige Löschung begonnen'};
   const label=state=>labels[state]||'Prüfung erforderlich';
+  const sourceState=source=>source.cashPublication?.active?'applied':source.background?.status||source.status;
   const number=value=>Number(value||0).toLocaleString('de-AT');
   const sourceLabel=kind=>({cash:'Kassen-Umsätze',trade:'TradeFoto-Stamm und Historie',bestell:'TradeFoto-Bestellungen, Rechnungen und Reparaturen'})[kind]||'Unbekannte Quelle';
   const sourceFileName=source=>source.fileName||({cash:'Kassen_Umsätze.accdb',trade:'Trade_Daten.accdb',bestell:'Trade_DatenBestell.accdb',weum:'WEUM.accdb',inventur:'InventurProtokoll.accdb'})[source.kind]||'Unbekannte Datenbank';
@@ -19,7 +20,7 @@
   }
   function renderSources(items,selectedId) {
     if(!items.length)return '<p>Noch keine eigenen Datenbankimporte.</p>';
-    return `<div class="data-import-scroll data-import-source-table" tabindex="0" role="region" aria-label="Datenquellen und Datenstand"><table><caption>Datenquellen · Details mit Klick auf den Namen</caption><thead><tr><th scope="col">Datenquelle</th><th scope="col">Datenstand</th></tr></thead><tbody>${items.map(s=>`<tr${s.id===selectedId?' class="is-selected"':''}><th scope="row"><button type="button" data-i-source="${escape(s.id)}"${s.id===selectedId?' aria-current="true"':''}>${escape(sourceFileName(s))}</button><small>${escape(label(s.background?.status||s.status))}${s.uploadFileAvailable?' · Access-Datei noch vorhanden':''}</small>${!s.fileName?'<small>Bei älteren Importen ohne Originalnamen wird der Dateityp angezeigt.</small>':''}</th><td>${contentDate(s)}</td></tr>`).join('')}</tbody></table></div>`;
+    return `<div class="data-import-scroll data-import-source-table" tabindex="0" role="region" aria-label="Datenquellen und Datenstand"><table><caption>Datenquellen · Details mit Klick auf den Namen</caption><thead><tr><th scope="col">Datenquelle</th><th scope="col">Datenstand</th></tr></thead><tbody>${items.map(s=>`<tr${s.id===selectedId?' class="is-selected"':''}><th scope="row"><button type="button" data-i-source="${escape(s.id)}"${s.id===selectedId?' aria-current="true"':''}>${escape(sourceFileName(s))}</button><small>${escape(label(sourceState(s)))}${s.uploadFileAvailable?' · Access-Datei noch vorhanden':''}</small>${!s.fileName?'<small>Bei älteren Importen ohne Originalnamen wird der Dateityp angezeigt.</small>':''}</th><td>${contentDate(s)}</td></tr>`).join('')}</tbody></table></div>`;
   }
   const defaultCatalog=[['trade','Trade_Daten.accdb'],['cash','Kassen_Umsätze.accdb'],['bestell','Trade_DatenBestell.accdb']].map(([kind,fileName])=>({kind,fileName,purpose:sourceLabel(kind),group:'recommended',available:true}));
   function renderOverview(items=[],selectedId,context={},complete=true) {
@@ -28,7 +29,7 @@
     function table(sources,caption) {
       return `<div class="data-import-scroll data-import-catalog-table" tabindex="0" role="region" aria-label="${escape(caption)}"><table><caption>${escape(caption)}</caption><thead><tr><th scope="col">Datenbank</th><th scope="col">Datenstand</th><th scope="col">Hochgeladen am</th><th scope="col">Status</th><th scope="col">Aktion</th></tr></thead><tbody>${sources.map(def=>{
         const source=latest.get(def.kind),enabled=def.available&&context.available&&context.projection?.prepare;
-        const status=source?label(source.background?.status||source.status):def.group==='local'?'Lokal behalten':!def.available?'Noch nicht angebunden':complete?'Noch nicht hochgeladen':'Ältere Importe noch ungeprüft';
+        const status=source?label(sourceState(source)):def.group==='local'?'Lokal behalten':!def.available?'Noch nicht angebunden':complete?'Noch nicht hochgeladen':'Ältere Importe noch ungeprüft';
         return `<tr${source?.id===selectedId&&source?' class="is-selected"':''}><th scope="row">${source?`<button type="button" class="data-import-source-link" data-i-source="${escape(source.id)}"${source.id===selectedId?' aria-current="true"':''}>${escape(def.fileName)}</button>`:`<strong>${escape(def.fileName)}</strong>`}<small>${escape(def.purpose||'')}</small>${source?.fileName&&source.fileName!==def.fileName?`<small>Datei: ${escape(source.fileName)}</small>`:''}</th><td>${source?contentDate(source):'–'}</td><td>${source?`<time datetime="${escape(source.createdAt)}">${escape(dateTime(source.createdAt))}</time>`:'–'}</td><td><span class="data-import-state">${escape(status)}</span></td><td>${def.available?`<button type="button" data-i-upload="${escape(def.kind)}" aria-label="${escape(def.fileName)} hochladen" ${enabled?'':'disabled'}>Hochladen</button>${!context.projection?.prepare?'<small>Uploadrecht erforderlich</small>':!context.available?'<small>Import derzeit nicht verfügbar</small>':''}`:`<small>${def.group==='local'?'Kein Upload vorgesehen':def.group==='optional'?'Bei Bedarf ergänzen':'Anbindung vorgesehen'}</small>`}</td></tr>`;
       }).join('')}</tbody></table></div>`;
     }
@@ -41,27 +42,28 @@
     const tables=source.tables||[], received=tables.reduce((n,t)=>n+(t.run?.receivedRows||0),0), expected=tables.reduce((n,t)=>n+t.declaredRows,0),job=source.background;
     const applied=tables.reduce((n,t)=>n+(t.run?.status==='applied'?t.run.receivedRows:t.run?.counts?.applied||0),0),takingOver=job?.phase==='applying'||['applying','applied'].includes(source.status),jobName=job?.phase==='content-date'?'Ermittlung des Datenstands':job?.phase==='applying'?'Übernahme':'Prüfung';
     const fileDeleted=job?.error==='IMPORT_JOB_FILE_DELETED';
-    return `<header><h3>${escape(sourceFileName(source))}</h3><p>${escape(label(job?.status||source.status))} · Datenstand: ${contentDate(source)}</p></header>
+    return `<header><h3>${escape(sourceFileName(source))}</h3><p>${escape(label(sourceState(source)))} · Datenstand: ${contentDate(source)}</p></header>
       <progress max="${Math.max(expected,received,1)}" value="${received}" aria-label="Bereitgestellte Quellzeilen"></progress>
       ${takingOver?`<p>${number(applied)} / ${number(received)} Zeilen übernommen oder unverändert bestätigt · ${number(tables.filter(t=>t.run?.status==='applied').length)} / ${number(tables.length)} Tabellen abgeschlossen.</p><progress max="${Math.max(received,1)}" value="${applied}" aria-label="Übernommene Quellzeilen"></progress>${source.currentStep&&source.status!=='applied'?`<p>${escape(source.currentStep.table)} · ${escape(label(source.currentStep.phase))}</p>`:''}`:''}
       <p class="data-import-note">${source.uploadFileAvailable?'Die Access-Datei ist für diesen Auftrag vorübergehend gespeichert.':'Keine Access-Datei auf dem Server gespeichert.'} Die Daten und Importprotokolle im GP bleiben erhalten.</p>
-      ${source.selection?`<p class="data-import-note">${source.kind==='inventur'?'Kompakter Inventurimport: belegte Inventuren als Zusammenfassung; auf Positionsebene nur Differenzen und Mengenprüffälle. Unveränderte Zählstände bleiben in Ihrer lokalen Quelldatei.':'Begrenzter Import: Warenbewegungen und historische Artikelreferenzen. Gelöschte Artikel werden als Historie gespeichert und nicht wieder aktiviert.'}</p><p class="data-import-note">${(source.selection.tables||[]).map(t=>`${escape(t.name)}: ${number(t.selectedRows)} ausgewählt aus ${number(t.sourceRows)} Quellzeilen`).join(' · ')}</p>`:''}
+      ${source.selection?`<p class="data-import-note">${source.kind==='lieferantenrechnungen'?'Lieferantenrechnungen: nur benötigte Kopf- und Artikeldaten. Teilzahlungen, Zahlungsstatus und Adressdaten werden nicht übernommen.':source.kind==='inventur'?'Kompakter Inventurimport: belegte Inventuren als Zusammenfassung; auf Positionsebene nur Differenzen und Mengenprüffälle. Unveränderte Zählstände bleiben in Ihrer lokalen Quelldatei.':'Begrenzter Import: Warenbewegungen und historische Artikelreferenzen. Gelöschte Artikel werden als Historie gespeichert und nicht wieder aktiviert.'}</p><p class="data-import-note">${(source.selection.tables||[]).map(t=>`${escape(t.name)}: ${number(t.selectedRows)} ausgewählt aus ${number(t.sourceRows)} Quellzeilen`).join(' · ')}</p>`:''}
       ${source.uploadFileAvailable?`<button type="button" data-i-delete-upload ${!projection.prepare||source.active?'disabled':''}>Access-Datei löschen</button>`:''}
-      ${projection.prepare&&!['applying','applied','reverting','reverted'].includes(source.status)&&!tables.some(t=>['applying','applied','reverting','reverted'].includes(t.run?.status))?`<button type="button" data-i-delete-source ${source.active?'disabled':''}>${source.status==='deleting'?'Endgültige Löschung fortsetzen':'Nicht übernommenen Import endgültig löschen'}</button><p class="data-import-note">Entfernt auch die eingelesenen Importdaten dieser Quelle vom Server. Bereits übernommene oder freigegebene Datenquellen sind geschützt.</p>`:''}
+      ${projection.prepare&&!source.cashPublication?.active&&!['applying','applied','reverting','reverted'].includes(source.status)&&!tables.some(t=>['applying','applied','reverting','reverted'].includes(t.run?.status))?`<button type="button" data-i-delete-source ${source.active?'disabled':''}>${source.status==='deleting'?'Endgültige Löschung fortsetzen':'Nicht übernommenen Import endgültig löschen'}</button><p class="data-import-note">Entfernt auch die eingelesenen Importdaten dieser Quelle vom Server. Bereits übernommene oder freigegebene Datenquellen sind geschützt.</p>`:''}
       ${source.storage==='cash-compact-v1'?'<p class="data-import-note">Gesamte Kassenhistorie · alle Zeiträume · alle Filialen in einem Import.</p>':''}
       ${job?`<p role="status">${fileDeleted?'Die Access-Datei ist gelöscht. Zum Fortsetzen dieselbe Datei erneut hochladen; bereits eingelesene GP-Daten bleiben erhalten.':['queued','reading','reviewing','applying','dating'].includes(job.status)?'Der Server arbeitet selbstständig weiter. Sie können den GP schließen.':job.status==='retrying'?`Ein vorübergehender Fehler ist aufgetreten. Wiederholungsversuch ${number(job.retries)} von ${number(job.maxRetries)} ist für ${escape(new Date(job.nextAt).toLocaleString('de-AT'))} geplant; kein erneuter Upload nötig.`:job.status==='paused'?`Die ${jobName} ist pausiert. Sie können sie ohne erneuten Upload fortsetzen.`:'Die automatischen Versuche wurden angehalten. Sie können den Auftrag am gespeicherten Stand erneut versuchen.'}</p>
         ${job.error?`<details><summary>Technischer Hinweis</summary><p>${escape(job.error)}</p></details>`:''}
         <div class="data-import-actions">${fileDeleted?'':['paused','failed'].includes(job.status)?`<button type="button" data-i-job="retry" ${!projection.prepare||job?.phase==='applying'&&!projection.apply?'disabled':''}>${jobName} fortsetzen</button>`:`<button type="button" data-i-job="pause" ${!projection.prepare||job?.phase==='applying'&&!projection.apply?'disabled':''}>${jobName} pausieren</button>`}</div>`
         :source.error?`<p role="status">Unterbrechung: ${escape(source.error)}. Bitte denselben Dateistand erneut auswählen; bereits geprüfte Pakete bleiben erhalten.</p>`:''}
       <div class="data-import-actions">
-        ${source.storage==='cash-compact-v1'&&source.status==='ready'?'<button type="button" data-i-publish>Kassenstand für Auswertungen auswählen</button>':''}
+        ${source.storage==='cash-compact-v1'?`<button type="button" data-i-action="apply" ${!projection.apply||!projection.prepare||!source.complete||source.active||source.status!=='ready'||!source.cashPublication?.available||source.cashPublication.active||!Number.isInteger(source.cashPublication.revision)?'disabled':''}>Übernehmen</button>`:''}
         ${job||source.status!=='reviewing'?'':`<button type="button" data-i-action="review" ${!projection.prepare||!source.complete||source.active?'disabled':''}>Prüfung fortsetzen</button>`}
         ${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-action="apply" ${!projection.apply||!source.activationEnabled||!source.complete||source.active||!source.catalogUpdatePending&&!['ready','needs_review','applying'].includes(source.status)?'disabled':''}>Übernehmen</button>
         `}
       </div>
-      ${source.storage==='cash-compact-v1'?'<p class="data-import-note">Bereitstellung und Prüfung aktivieren noch keine Auswertung. Den geprüften Kassenstand anschließend bewusst für Auswertungen auswählen.</p>':!source.activationEnabled?'<p class="data-import-note">Produktive Übernahme noch nicht freigegeben. Keine neuen Kunden, Artikel oder Verkaufskennzahlen werden durch die Vorschau angelegt.</p>':''}
+      ${source.storage==='cash-compact-v1'?'<p class="data-import-note">Übernehmen aktualisiert den gesamten Kassenstand für Kassenhistorie und Auswertungen. Bestehende Zuordnungen bleiben erhalten. Zentrallager, Onlinefilialen und im GP inaktive Filialen sind eingeschlossen.</p>':!source.activationEnabled?'<p class="data-import-note">Produktive Übernahme noch nicht freigegeben. Keine neuen Kunden, Artikel oder Verkaufskennzahlen werden durch die Vorschau angelegt.</p>':''}
       ${source.kind==='trade'?`<p class="data-import-note">Die Übernahme aktualisiert auch Artikelnummern, Barcodes und Preise im Artikelkatalog.${source.catalog?` ${number(source.catalog.changed)} aktualisiert · ${number(source.catalog.unchanged)} unverändert${source.catalog.blocked?` · ${number(source.catalog.blocked)} zur Prüfung zurückgestellt`:''}.`:''}${source.catalogUpdatePending?' Bei diesem älteren Import steht der Katalogabgleich noch aus.':''}</p>`:''}
       <details class="data-import-technical"><summary>Prüfprotokolle und technische Details · ${number(tables.length)} Tabellen</summary>
+      ${source.storage==='cash-compact-v1'&&source.status==='ready'?'<button type="button" data-i-publish>Zuordnungen und vorherigen Kassenstand verwalten</button>':''}
       ${source.storage==='cash-compact-v1'?`<p class="data-import-note">${number(source.verifiedRows)} gespeicherte Zeilen vollständig zurückgelesen und verglichen. Die Filialzuordnung dient nur der Auswertung; sie schränkt den Import nicht ein.</p>`:''}
       <p class="data-import-note">${number(received)} gelesene / ${number(expected)} ${source.selection?'ausgewählte':'deklarierte'} Zeilen · Hochgeladen: ${escape(dateTime(source.createdAt))} · GP-Bearbeitung: ${escape(dateTime(source.updatedAt||source.createdAt))}</p><p class="data-import-note">Dateifingerabdruck <code>${escape(source.fileSha256)}</code></p>
       ${source.contentDate?.evidence?`<p class="data-import-note">Datenstand ermittelt aus ${escape(source.contentDate.evidence.table)} · ${escape(source.contentDate.evidence.field)}.</p>`:''}
@@ -91,7 +93,7 @@
       const attributes=['data-i-action','data-i-job','data-i-delete-upload','data-i-delete-source','data-i-publish','data-i-log','data-i-rows','data-i-undo-preview'];
       const focusedAttribute=restoreFocus&&attributes.find(name=>focused.hasAttribute(name)),focusedValue=focusedAttribute&&focused.getAttribute(focusedAttribute);
       const focusedSummary=restoreFocus&&focused.matches('.data-import-technical > summary');
-      detail.innerHTML=selected?renderSource(selected,context.projection):'';renderedSourceId=selected?.id;
+      detail.innerHTML=selected?renderSource(selected,{...context.projection,apply:context.projection.apply&&!working}):'';renderedSourceId=selected?.id;
       const technical=detail.querySelector('.data-import-technical');if(technical)technical.open=!!technicalOpen;
       if(focusedSummary)technical?.querySelector('summary')?.focus({preventScroll:true});
       else if(focusedAttribute)Array.from(detail.querySelectorAll('button')).find(button=>!button.disabled&&button.getAttribute(focusedAttribute)===focusedValue)?.focus({preventScroll:true});
@@ -133,9 +135,16 @@
     }
     async function runAction(action) {
       if(!selected||working)return;
-      if(action!=='review'&&!confirmAction(action==='apply'?'Geprüfte Quelltabellen schrittweise übernehmen?':'Eigene Importänderungen schrittweise zurücknehmen? Spätere Änderungen und Abhängigkeiten werden vor jedem Paket erneut geprüft. Es kann nur ein Teil rücknehmbar sein.'))return;
+      const cash=action==='apply'&&selected.storage==='cash-compact-v1';
+      if(action!=='review'&&!confirmAction(cash?'Den gesamten geprüften Kassenstand übernehmen? Bestehende Zuordnungen werden beibehalten; Zentrallager, Onlinefilialen und im GP inaktive Filialen sind eingeschlossen.':action==='apply'?'Geprüfte Quelltabellen schrittweise übernehmen?':'Eigene Importänderungen schrittweise zurücknehmen? Spätere Änderungen und Abhängigkeiten werden vor jedem Paket erneut geprüft. Es kann nur ein Teil rücknehmbar sein.'))return;
       const ticket=generation;working=true;el('stop')?.removeAttribute('hidden');
       try {
+        if(cash){
+          renderSelected();el('stop')?.setAttribute('hidden','');message('Gesamter Kassenstand wird übernommen …');
+          await post('/api/data-import/cash/apply',{sourceId:selected.id,expectedRevision:selected.cashPublication.revision});
+          if(disposed||ticket!==generation)return;
+          await refresh();message('Kassenstand übernommen. Alle Filialen stehen für Kassenhistorie und Auswertungen bereit. Eine bereits offene Auswertung bitte neu starten.');return;
+        }
         if(action==='apply'&&context.backgroundEnabled){
           const result=await post(`/api/data-import/sources/${selected.id}/apply-background`,{expectedRevision:selected.revision});
           if(disposed||ticket!==generation)return;selected=result;renderSelected();working=false;
@@ -149,7 +158,7 @@
         }while(working&&visible()&&!globalThis.document?.hidden&&selected.status===({review:'reviewing',apply:'applying',undo:'reverting'}[action]));
         message(label(selected.status));
       }catch(error){if(!disposed&&ticket===generation)message(error.message);}
-      finally{if(!disposed&&ticket===generation){working=false;el('stop')?.setAttribute('hidden','');}}
+      finally{if(!disposed&&ticket===generation){working=false;el('stop')?.setAttribute('hidden','');renderSelected();}}
     }
     async function log(action,runId,next=false) {
       const ticket=generation,previous=next?logState:null;
