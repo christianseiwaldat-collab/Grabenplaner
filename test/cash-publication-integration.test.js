@@ -797,6 +797,101 @@ test('compact cash becomes usable through the normal history runtime with exact 
   assert.equal(f.app.database.prepare('SELECT COUNT(*) n FROM data_import_rows').get().n, 0);
   assert.equal(f.app.database.prepare('SELECT COUNT(*) n FROM cash_snapshot_6').get().n, 1);
 });
+
+test('whole cash apply preserves assignments and includes zero, inactive and online branches exactly once', async t => {
+  const f = await fixture(t); await f.activate();
+  f.app.database.exec("UPDATE locations SET active=0 WHERE id='branch-a'; INSERT INTO locations VALUES('13','Filiale 13',0),('77','Filiale 77',0),('99','Filiale 99',0)");
+  const branches = ['0', '00', '13', '77', '99', '70', '90', '018'];
+  const combined = price => {
+    const all = branches.map((location, i) => {
+      const data = rows({ location, price });
+      data.Umsatz_KASSE[0].Bonnr = String(i + 10);
+      Object.assign(data.Umsatz_Kasse_Details[0], { Bonnr: String(i + 10), RepID: `00000000-0000-0000-0000-${String(i + 100).padStart(12, '0')}` });
+      return data;
+    });
+    return { Umsatz_KASSE: all.flatMap(d => d.Umsatz_KASSE), Umsatz_Kasse_Details: all.flatMap(d => d.Umsatz_Kasse_Details) };
+  };
+  const id = await f.build(combined('12'));
+  const sealedBefore = f.app.database.prepare('SELECT payload FROM cash_snapshot_6 ORDER BY dataset_slot,source_row').all();
+  const applied = await f.publish.operation(f.get, 'apply', { sourceId: id, expectedRevision: 1 });
+  assert.equal(applied.revision, 2);
+  assert.deepEqual(f.app.database.prepare('SELECT payload FROM cash_snapshot_6 ORDER BY dataset_slot,source_row').all(), sealedBefore);
+  const context = await f.publish.operation(f.get, 'context', { sourceId: id }), setup = context.mappingSetup;
+  assert.deepEqual(setup.locations.map(l => l.sourceId).sort(), [...branches].sort());
+  assert.equal(setup.locations.find(l => l.sourceId === '018').targetId, 'branch-a');
+  for (const sourceId of ['13', '77', '99', '018']) assert.equal(setup.locations.find(l => l.sourceId === sourceId).historical, true);
+  for (const sourceId of ['0', '00', '70', '90']) assert.equal(setup.locations.find(l => l.sourceId === sourceId).sourceOnly, true);
+  assert.equal(setup.mappings.filter(m => m.kind === 'MITARBEITER').length, 2);
+  assert.deepEqual(f.app.database.prepare('SELECT id FROM locations WHERE active=0 ORDER BY id').all().map(r => r.id), ['13', '77', '99', 'branch-a']);
+  const runtime = f.history(), sales = await runtime.run(f.get, w => w.search(f.query()));
+  assert.equal(sales.items.length, 8); assert.equal(sales.totals.gross, '96.00');
+  const zeroId = setup.locations.find(l => l.sourceId === '0').targetId;
+  assert.equal((await runtime.run(f.get, w => w.search(f.query({ locationId: zeroId })))).totals.gross, '12.00');
+  const receipt = await runtime.run(f.get, w => w.receipts.search(f.query({ locationId: zeroId })));
+  assert.equal(receipt.items.length, 1);
+  assert.equal((await runtime.run(f.get, w => w.receipts.documents({ ids: [receipt.items[0].id] }))).items[0].gross, '12.00');
+  const metadata = await runtime.run(f.get, w => w.reports.metadata());
+  assert.ok(metadata.locations.some(l => /70.*Straub Online/.test(l.label)));
+  assert.ok(metadata.locations.some(l => /90.*United C\. Online/.test(l.label)));
+  for (const locationIds of [metadata.locations.map(l => l.id), metadata.locations.map(l => l.id).reverse()]) {
+    let report;
+    do { report = await runtime.run(f.get, w => w.reports.step(f.query({ reportVersion: 3, locationIds, groupBy: ['location'], metrics: ['netRevenue', 'receiptCount'] }), metadata, report?.analysis.cursor)); } while (!report.analysis.complete);
+    assert.equal(report.report.total.metrics.netRevenue.current, '80.00');
+    assert.equal(report.report.total.metrics.receiptCount.current, '8');
+  }
+  const retry = await f.publish.operation(f.get, 'apply', { sourceId: id, expectedRevision: 1 });
+  assert.equal(retry.alreadyApplied, true); assert.equal(retry.active, applied.active); assert.equal(retry.revision, 2);
+  assert.equal((await f.publish.operation(f.get, 'status')).sourceId, id);
+  const nextId = await f.build(combined('24'));
+  await assert.rejects(f.publish.operation(f.get, 'apply', { sourceId: nextId, expectedRevision: 1 }), code('IMPORT_REVISION_CONFLICT'));
+  const updated = await f.publish.operation(f.get, 'apply', { sourceId: nextId, expectedRevision: 2 });
+  assert.equal(updated.previous, applied.active);
+  assert.deepEqual((await f.publish.operation(f.get, 'context', { sourceId: nextId })).mappingSetup.locations, setup.locations);
+  assert.equal((await runtime.run(f.get, w => w.search(f.query()))).totals.gross, '192.00');
+  const rollback = await f.publish.operation(f.get, 'rollback-preview', { expectedRevision: 3 });
+  await f.publish.operation(f.get, 'rollback', { expectedRevision: 3, planHash: rollback.planHash });
+  assert.equal((await runtime.run(f.get, w => w.search(f.query()))).totals.gross, '96.00');
+  f.session = { ...f.session, permissions: f.session.permissions.filter(p => !['sales:analytics:company:read', 'sales:history:unassigned:read'].includes(p)).concat('sales:analytics:location:read'), scopes: [{ locationId: 'branch-a', departmentId: 0 }] };
+  assert.equal((await runtime.run(f.get, w => w.search(f.query()))).totals.gross, '12.00');
+  await assert.rejects(runtime.run(f.get, w => w.search(f.query({ locationId: zeroId }))), code('IMPORT_FORBIDDEN'));
+});
+
+test('whole cash apply distinguishes legacy branch zero from missing locations beyond a search page', async t => {
+  const f = await fixture(t), data = rows({ location: '0' });
+  data.Tagesbericht = Array.from({ length: 207 }, (_, i) => raw('Tagesbericht', { ZBon: String(i), KoBeschreibung: i ? 'Missing branch' : 'Zentrallager',
+    Bondatum: '2010-01-02T00:00:00.000', Filialid: i ? null : '0', Einnahmen: '12', Ausgaben: '0' }));
+  const id = await f.build(data); await f.publish.operation(f.get, 'apply', { sourceId: id, expectedRevision: 0 });
+  f.session.permissions.push('sales:history:finance:read');
+  const setup = (await f.publish.operation(f.get, 'context', { sourceId: id })).mappingSetup;
+  const locationId = setup.locations.find(l => l.sourceId === '0').targetId;
+  const daily = { kind: 'daily', snapshot: C.fingerprint(data) };
+  const runtime = f.history(), zero = await runtime.run(f.get, w => w.search(f.query({ ...daily, locationId })));
+  assert.equal(zero.items.length, 1); assert.equal(zero.items[0].description, 'Zentrallager'); assert.equal(zero.analysis.complete, true);
+  let missing = await runtime.run(f.get, w => w.search(f.query({ ...daily, locationId: 'unassigned' })));
+  assert.ok(missing.items.every(r => r.description === 'Missing branch'));
+  while (!missing.analysis.complete) missing = await runtime.run(f.get, w => w.analyze({ query: f.query({ ...daily, locationId: 'unassigned' }), cursor: missing.analysis.cursor }));
+  assert.equal(missing.analysis.processed, 206);
+});
+
+test('whole cash apply enforces source ownership, rights, verification and feature availability', async t => {
+  const f = await fixture(t), original = f.session;
+  for (const permission of ['data:imports:apply', 'data:imports:prepare', 'locations:write']) {
+    f.session = { ...original, permissions: original.permissions.filter(p => p !== permission) };
+    await assert.rejects(f.publish.operation(f.get, 'apply', { sourceId: f.id, expectedRevision: 0 }), code('IMPORT_FORBIDDEN'));
+  }
+  f.session = { ...original, employeeNumber: 'another-owner' };
+  await assert.rejects(f.publish.operation(f.get, 'apply', { sourceId: f.id, expectedRevision: 0 }), code('IMPORT_SOURCE_NOT_FOUND'));
+  f.session = original;
+  const pending = await f.build(rows({ price: '24' }), { ready: false });
+  await assert.rejects(f.publish.operation(f.get, 'apply', { sourceId: pending, expectedRevision: 0 }), code('IMPORT_SOURCE_INCOMPLETE'));
+  const disabled = createCashPublicationRuntime({ access: f.app.provider, vault: f.vault, policies: f.policies, scopeId: f.actor.scopeId });
+  await assert.rejects(disabled.operation(f.get, 'apply', { sourceId: f.id, expectedRevision: 0 }), code('IMPORT_NOT_ACTIVATED'));
+  assert.equal(f.app.database.prepare('SELECT count(*) n FROM cash_publications').get().n, 0);
+  const batched = publicationBatchFixture(f.app.provider); t.after(() => batched.access.close());
+  const runtime = createCashPublicationRuntime({ access: batched.access, vault: f.vault, policies: f.policies, scopeId: f.actor.scopeId, enabled: true, clock: () => TIME });
+  await runtime.operation(f.get, 'apply', { sourceId: f.id, expectedRevision: 0 });
+  assert.ok(batched.state.batches > 0); assert.equal(batched.state.options.at(-1).readOnly, false);
+});
 test('personal report templates persist encrypted settings, isolate owners and reject stale writes or revoked rights', async t => {
   const f = await fixture(t); await f.activate();
   f.app.database.exec('CREATE TABLE portal_user_preferences(employee_number TEXT,preference_key TEXT,value TEXT,updated_at TEXT,PRIMARY KEY(employee_number,preference_key))');
@@ -923,7 +1018,8 @@ test('published cash survives a real database copy, a fresh vault and full re-ve
 test('publication HTTP actions enforce CSRF and refreshed personal rights; body flags cannot grant activation', async t => {
   const express = require('express'), { registerDataImportRoutes } = require('../lib/data-import-routes');
   const f = await fixture(t), app = express(); app.use(express.json());
-  registerDataImportRoutes(app, { runtime: {}, cashPublications: f.publish, requireSession: () => f.session, refreshSession: f.get,
+  const source = { id: f.id, kind: 'cash', storage: 'cash-compact-v1', status: 'ready', complete: true, tables: [] };
+  registerDataImportRoutes(app, { runtime: { overview: async () => ({ items: [source] }), list: async () => ({ items: [source] }), sourceOperation: async () => source }, cashPublications: f.publish, requireSession: () => f.session, refreshSession: f.get,
     assertCsrf: req => { if (req.get('X-CSRF-Token') !== 'test') throw new C.DataImportError('PORTAL_CSRF_INVALID', 403); } });
   const server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r)); t.after(() => new Promise(r => server.close(r)));
   const post = (action, body, csrf = true) => fetch(`http://127.0.0.1:${server.address().port}/api/data-import/cash/${action}`, {
@@ -931,8 +1027,17 @@ test('publication HTTP actions enforce CSRF and refreshed personal rights; body 
   assert.equal((await post('context', { sourceId: f.id }, false)).status, 403);
   const response = await post('context', { sourceId: f.id }); assert.match(response.headers.get('cache-control'), /no-store/); assert.equal(response.status, 200);
   assert.equal((await post('preview', { request: { ...f.request(), approved: true } })).status, 422);
+  assert.equal((await post('apply', { sourceId: f.id, expectedRevision: 0 }, false)).status, 403);
+  assert.equal((await post('apply', { sourceId: f.id, expectedRevision: 0, approved: true })).status, 422);
+  assert.equal((await post('apply', { sourceId: f.id, expectedRevision: 0 })).status, 200);
+  const read = route => fetch(`http://127.0.0.1:${server.address().port}/api/data-import/${route}`);
+  for (const route of ['overview', 'sources/' + f.id]) {
+    const response = await read(route); assert.equal(response.status, 200); assert.match(response.headers.get('cache-control'), /no-store/);
+    const data = await response.json(); assert.equal((data.items?.[0] || data).cashPublication.active, true);
+  }
   f.session.permissions = f.session.permissions.filter(p => p !== 'data:imports:apply');
   assert.equal((await post('activate', { request: f.request(), planHash: 'a'.repeat(64) })).status, 403);
+  assert.equal((await post('apply', { sourceId: f.id, expectedRevision: 1 })).status, 403);
 });
 test('zero-price tax evidence cannot approve a nonzero tax-code-zero position', async t => {
   const f = await fixture(t), data = rows(); data.Umsatz_Kasse_Details[0].MWST = '0';
