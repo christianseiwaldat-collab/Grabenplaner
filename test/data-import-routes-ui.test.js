@@ -255,8 +255,40 @@ test('compact cash preview shows full history and value verification without uns
     {read:true,prepare:true,apply:true,undo:true});
   assert.match(html,/Gesamte Kassenhistorie · alle Zeiträume/);
   assert.match(html,/3 gespeicherte Zeilen vollständig zurückgelesen/);
-  assert.match(html,/data-i-publish/);assert.doesNotMatch(html,/data-i-action="apply"/);
+  assert.match(html,/data-i-publish/);assert.match(html,/data-i-action="apply"/);
   assert.match(html,/data-i-rows=/);assert.doesNotMatch(html,/data-i-log=|data-i-undo-preview=/);
+});
+
+test('cash uses one apply action, keeps mapping controls in details and shows the persisted active state',async()=>{
+  const source={id:'a'.repeat(64),kind:'cash',storage:'cash-compact-v1',status:'ready',complete:true,revision:9,tables:[],
+    cashPublication:{active:false,available:true,revision:2}};
+  const projection={read:true,prepare:true,apply:true};
+  const html=UI.renderSource(source,projection),main=html.split('<details class="data-import-technical">')[0];
+  assert.match(main,/data-i-action="apply" >Übernehmen/);assert.doesNotMatch(main,/data-i-publish/);
+  assert.match(UI.renderSource(source,{...projection,apply:false}),/data-i-action="apply" disabled/);
+  const fields=Object.fromEntries(['next','sources','detail','message','log','stop'].map(name=>[name,{hidden:true,innerHTML:'',textContent:'',dataset:{},querySelector:()=>null,replaceChildren(){},setAttribute(){},removeAttribute(){}}]));
+  const handlers={},calls=[];let confirmations=0;
+  const body={innerHTML:'',querySelector:s=>fields[/data-i="([^"]+)"/.exec(s)?.[1]],addEventListener:(n,h)=>handlers[n]=h,removeEventListener(){},replaceChildren(){}};
+  const root={open:true,querySelector:()=>body,addEventListener(){},removeEventListener(){}};
+  const view=UI.mount(root,{confirmAction:()=>{confirmations++;return true;},api:async(url,options)=>{
+    calls.push(url);
+    if(url==='/api/data-import/context')return{available:true,projection,backgroundEnabled:true};
+    if(url.endsWith('/sources/search'))return{items:[source],next:null};
+    if(url==='/api/data-import/cash/apply'){
+      assert.deepEqual(JSON.parse(options.body),{sourceId:source.id,expectedRevision:2});
+      source.cashPublication={active:true,available:true,revision:3};return{revision:3};
+    }
+    assert.equal(url,'/api/data-import/sources/'+source.id);return source;
+  }});
+  await new Promise(resolve=>setImmediate(resolve));
+  const click=dataset=>handlers.click({target:{closest:()=>({dataset,hasAttribute:()=>false})}});
+  await click({iSource:source.id});await click({iAction:'apply'});
+  assert.equal(confirmations,1);assert.equal(calls.filter(url=>url==='/api/data-import/cash/apply').length,1);
+  assert.ok(calls.every(url=>!url.endsWith('/preview')&&!url.endsWith('/activate')&&!url.endsWith('/apply-background')));
+  assert.match(fields.detail.innerHTML,/Übernommen/);assert.doesNotMatch(fields.detail.innerHTML,/data-i-delete-source/);
+  assert.match(fields.message.textContent,/Kassenstand übernommen/);
+  assert.match(UI.renderOverview([source],source.id,{available:true,projection}),/>Übernommen</);
+  view.destroy();
 });
 test('Productive Block 1: closing an account view cancels reads and ignores late private context',async()=>{
   let resolve;const wait=new Promise(r=>resolve=r),handlers={},body={textContent:'',querySelector:()=>null,replaceChildren(){this.textContent='';},addEventListener(){},removeEventListener(){}};
