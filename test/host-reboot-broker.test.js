@@ -229,7 +229,7 @@ test('root-owned read-only status group is accepted; non-root writers and link a
   assert.throws(() => broker.assertHostSecurityAllowsReboot(Date.now(), options));
 });
 
-test('reboot state preparation creates only a private directory and preserves existing history', t => {
+test('reboot state preparation creates only a private directory and preserves existing history', { skip: process.platform !== 'linux' }, t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gp-reboot-prepare-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.chmodSync(root, 0o700);

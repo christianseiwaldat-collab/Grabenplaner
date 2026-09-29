@@ -6,7 +6,7 @@ const C=require('../lib/data-import-contract'),{DATA_IMPORT_PERMISSIONS:P}=requi
 const session=()=>({employeeNumber:'synthetic',accountId:null,isEmployee:true,permissions:[...Object.values(P),'sales:analytics:access','sales:analytics:company:read']});
 const sourceBuffer=()=>{const b=Buffer.alloc(4096);b.write('Standard ACE DB',4);b[0x14]=3;b.write('private synthetic input',256);return b;};
 const turn=()=>new Promise(r=>setImmediate(r));
-async function fixture(t,{advancingClock=false}={}){
+async function fixture(t,{advancingClock=false,cashPublications=null}={}){
  // Windows CI exposes TEMP through an 8.3 alias. The private spool deliberately
  // requires canonical paths, so resolve the fixture parent before creating it.
  const temporaryRoot=await fsp.realpath(os.tmpdir());
@@ -23,12 +23,64 @@ async function fixture(t,{advancingClock=false}={}){
     if(action==='apply'){if(state.beforeApply)await state.beforeApply();s.applied=(s.applied||0)+1;s.revision++;s.status=s.applied>=3?'applied':'applying';}return {...s};}};
  let queue;const now=()=>advancingClock?state.now++:state.now;
  const store=createDataImportJobStore({directory,vault,now});
- const options={directory,vault,runtime,store,resolvePrincipal:getSession,now};
+ const options={directory,vault,runtime,cashPublications,store,resolvePrincipal:getSession,now};
  const make=()=>{queue=createDataImportJobs({...options,lifecycle:createDataImportLifecycle()});return queue;};make();
  const enqueue=()=>queue.enqueue(getSession,{buffer:sourceBuffer(),kind:'trade',password:'synthetic-password'});
  t.after(async()=>{await queue.stop();assert.equal(path.dirname(await fsp.realpath(parent)),await fsp.realpath(os.tmpdir()));await fsp.rm(parent,{recursive:true,force:true});});
  return {directory,store,state,getSession,make,enqueue,runtime,sources,get queue(){return queue;}};
 }
+
+async function cashJobFixture(t,{revision=0}={}){
+ const cash={revision,sourceId:null,available:true,calls:0,fail:null,afterCommit:null};
+ const cashPublications={async operation(get,action,input){
+   const principal=await get();assert.ok(principal.permissions.includes(P.APPLY));
+   if(action==='status')return {revision:cash.revision,sourceId:cash.sourceId,available:cash.available};
+   assert.equal(action,'apply');cash.calls++;if(cash.fail)throw cash.fail;
+   assert.equal(input.expectedRevision,cash.revision);cash.sourceId=input.sourceId;cash.revision++;
+   if(cash.afterCommit)throw cash.afterCommit;
+   return {revision:cash.revision};
+ }};
+ const f=await fixture(t,{cashPublications});
+ const source=await f.runtime.reserve(f.getSession,{buffer:sourceBuffer(),kind:'cash'});
+ Object.assign(f.sources.get(source.id),{status:'ready',complete:true,activationEnabled:false,storage:'cash-compact-v1'});
+ return {...f,original:f,cash,id:source.id};
+}
+test('cash takeover is durably queued without a browser and confirms the active publication',async t=>{
+ const f=await cashJobFixture(t),q=f.original.queue;
+ const accepted=await q.enqueueCashApply(f.getSession,{sourceId:f.id,expectedRevision:0});
+ assert.equal(accepted.background.phase,'applying');assert.equal(f.cash.calls,0);
+ const stored=await f.store.read(f.id);assert.equal(stored.requestedRevision,0);assert.equal(stored.blob,null);
+ await q.enqueueCashApply(f.getSession,{sourceId:f.id,expectedRevision:0});
+ await q.stop();const resumed=f.make();await resumed.tick();
+ assert.equal(f.cash.calls,1);assert.equal(f.cash.sourceId,f.id);assert.deepEqual(await fsp.readdir(f.directory),[]);
+});
+test('cash timeout retries preserve the admitted revision and recover a lost acknowledgement once',async t=>{
+ const f=await cashJobFixture(t,{revision:4}),q=f.original.queue;
+ await q.enqueueCashApply(f.getSession,{sourceId:f.id,expectedRevision:4});
+ f.cash.fail=Object.assign(new Error('synthetic'),{code:'PERSISTENCE_TIMEOUT'});await q.tick();
+ assert.equal((await q.overlay(f.sources.get(f.id))).background.status,'retrying');
+ f.state.now+=30001;f.cash.fail=null;f.cash.afterCommit=Object.assign(new Error('synthetic'),{code:'PERSISTENCE_CONNECTION_UNAVAILABLE'});
+ await q.tick();assert.equal(f.cash.calls,2);assert.equal(f.cash.sourceId,f.id);
+ f.state.now+=120001;await q.tick();assert.equal(f.cash.calls,2,'never repeat an already committed activation');
+ assert.deepEqual(await fsp.readdir(f.directory),[]);
+});
+test('cash retries stop on a newer publication, revoked rights, or an unverified source',async t=>{
+ const f=await cashJobFixture(t),q=f.original.queue;
+ Object.assign(f.sources.get(f.id),{complete:false});
+ await assert.rejects(q.enqueueCashApply(f.getSession,{sourceId:f.id,expectedRevision:0}),{code:'IMPORT_SOURCE_INCOMPLETE'});
+ Object.assign(f.sources.get(f.id),{complete:true});
+ await q.enqueueCashApply(f.getSession,{sourceId:f.id,expectedRevision:0});f.cash.revision=1;f.cash.sourceId='f'.repeat(64);
+ await q.tick();assert.equal(f.cash.calls,0);assert.equal((await q.overlay(f.sources.get(f.id))).background.error,'IMPORT_PREVIEW_CHANGED');
+ await q.action(f.getSession,f.id,'retry');f.state.principal={...session(),permissions:[]};await q.tick();
+ assert.equal((await q.overlay(f.sources.get(f.id))).background.error,'IMPORT_FORBIDDEN');assert.equal(f.cash.calls,0);
+});
+test('cash pause and maintenance retain the queued request without starting activation',async t=>{
+ const f=await cashJobFixture(t),q=f.original.queue;
+ await q.enqueueCashApply(f.getSession,{sourceId:f.id,expectedRevision:0});await q.action(f.getSession,f.id,'pause');await q.tick();
+ assert.equal(f.cash.calls,0);await q.action(f.getSession,f.id,'retry');
+ f.cash.fail=Object.assign(new Error('synthetic'),{code:'IMPORT_MAINTENANCE'});await q.tick();
+ assert.equal((await q.overlay(f.sources.get(f.id))).background.status,'queued');assert.equal(f.cash.sourceId,null);
+});
 
 test('accepted file is encrypted and completes reading plus review with no browser or session token',async t=>{
  const f=await fixture(t),source=await f.enqueue();assert.equal(f.state.calls,0);

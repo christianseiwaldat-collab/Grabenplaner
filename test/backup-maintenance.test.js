@@ -62,6 +62,7 @@ test("updater-owned shutdown still drains work and closes persistence before rel
     amuScannerProbe,
     dataImportJobs: { stop: async () => events.push("imports-stop") },
     dataImportRoutes: { stop: async () => events.push("import-routes-stop") },
+    tradeInsightJobs: { stop: async () => events.push("trade-insights-stop") },
     salesReportJobs: { stop: async () => events.push("reports-stop") },
     postgresqlReceiptWorkers: {close:async()=>events.push('receipt-workers-stop')},
     backupInterval: null, retentionInterval: null, scannerProbeInterval: null, sicknessSweepInterval: null,
@@ -76,5 +77,5 @@ test("updater-owned shutdown still drains work and closes persistence before rel
   stop(); await new Promise(setImmediate);
   assert.deepEqual(events, ["imports-stop", "import-routes-stop"], "shutdown must wait for the active scanner before backup and persistence cleanup");
   finishScanner(); await new Promise(setImmediate);
-  assert.deepEqual(events, ["imports-stop", "import-routes-stop", "reports-stop", "receipt-workers-stop", "drain", "persistence-close", "checkpoint", "database-close", "release", "exit-0"]);
+  assert.deepEqual(events, ["imports-stop", "import-routes-stop", "trade-insights-stop", "reports-stop", "receipt-workers-stop", "drain", "persistence-close", "checkpoint", "database-close", "release", "exit-0"]);
 });

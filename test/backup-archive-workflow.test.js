@@ -156,6 +156,7 @@ test("shutdown shares one deadline with drain and does not release the instance 
     const events = [], deadlines = [];
     const dependencies = { postgresqlActive: false, shutdownStarted: false, server: null, databaseClosed: false, maintenanceOwnsLifecycleBackup: () => false,
       dataImportJobs: { stop: async () => {} }, dataImportRoutes: { stop: async () => {} },
+      tradeInsightJobs: { stop: async () => {} },
       salesReportJobs: { stop: async () => {} },
       postgresqlReceiptWorkers: null,
       amuScannerProbe: Promise.resolve(),
