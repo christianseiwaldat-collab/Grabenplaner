@@ -47,7 +47,7 @@ test('native cash reference pages preserve all keys and active cross-database wo
     },{readOnly:true});
     const runtime=require('../lib/persistence/repositories/cash-publication-runtime').createCashPublicationRuntime({access:f.access,vault:f.vault,scopeId:f.cash.actor.scopeId,enabled:true,policies:require('../lib/cash-source-policies').CASH_SOURCE_POLICIES});
     const principal=async()=>({...await f.resolvePrincipal('00001'),employeeNumber:'00001',isEmployee:true,
-      permissions:[...Object.values(require('../lib/data-import-access').DATA_IMPORT_PERMISSIONS),'locations:write','personnel:central:read','personnel:central:write','sales:articles:access','sales:articles:read','sales:articles:import']});
+      permissions:[...Object.values(require('../lib/data-import-access').DATA_IMPORT_PERMISSIONS),'sales:analytics:access','sales:analytics:company:read','locations:write','personnel:central:read','personnel:central:write','sales:articles:access','sales:articles:read','sales:articles:import']});
     const applied=await runtime.operation(principal,'apply',{sourceId:built.id,expectedRevision:0});
     assert.equal(applied.revision,1);
     const repeated=await runtime.operation(principal,'apply',{sourceId:built.id,expectedRevision:0});
