@@ -3,7 +3,7 @@
   'use strict';
   const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const labels={dating:'Datenstand wird ermittelt',queued:'Wartet auf Verarbeitung',retrying:'Automatischer Wiederholungsversuch geplant',paused:'Auftrag pausiert',failed:'Auftrag benötigt Aufmerksamkeit',reading:'Datei wird bereitgestellt',interrupted:'Bereitstellung unterbrochen',staging:'Zwischenspeicherung',reviewing:'Prüfung läuft',rechecking:'Prüfung wird vorbereitet',
-    needs_review:'Prüfung erforderlich',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen',deleting:'Endgültige Löschung begonnen'};
+    needs_review:'Vorschau abgeschlossen · Prüffälle offen',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen',deleting:'Endgültige Löschung begonnen'};
   const label=state=>labels[state]||'Prüfung erforderlich';
   const sourceState=source=>source.cashPublication?.active?'applied':source.background?.status||source.status;
   const number=value=>Number(value||0).toLocaleString('de-AT');
@@ -11,6 +11,31 @@
   const sourceFileName=source=>source.fileName||({cash:'Kassen_Umsätze.accdb',trade:'Trade_Daten.accdb',bestell:'Trade_DatenBestell.accdb',weum:'WEUM.accdb',inventur:'InventurProtokoll.accdb'})[source.kind]||'Unbekannte Datenbank';
   const dateTime=value=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleString('de-AT',{dateStyle:'short',timeStyle:'short'}):'Nicht erfasst';
   const kindForFile=name=>/^TRADE_AusgangsRech(?:[ ._-]|$)/i.test(name)?'lieferantenrechnungen':/^Trade_DatenBestell(?:[ ._-]|$)/i.test(name)?'bestell':/^Trade_Daten(?:[ ._-]|$)/i.test(name)?'trade':/^Kassen[_ -]Ums[aä]tze(?:[ ._-]|$)/i.test(name)?'cash':/^WEUM(?:[ ._-]|$)/i.test(name)?'weum':/^InventurProtokoll(?:[ ._-]|$)/i.test(name)?'inventur':null;
+  const invoiceHeads=source=>(source.tables||[]).find(t=>t.name==='Rechnung_A');
+  function renderReviewSummary(source,pendingAction,uncertainApply) {
+    if(pendingAction==='apply'&&source.storage==='cash-compact-v1')return '<aside class="data-import-review-summary" role="status"><strong>Kassenstand wird übernommen …</strong><p>Die Rückmeldung des Servers steht noch aus. Der angezeigte Stand wird danach aktualisiert.</p></aside>';
+    if(uncertainApply&&!source.cashPublication?.active)return '<aside class="data-import-review-summary" role="status"><strong>Ergebnis der Übernahme noch unklar</strong><p>Für diesen Import ist noch keine erfolgreiche Übernahme bestätigt. Der zuletzt bestätigte Kassenstand bleibt aktiv. Bitte „Status aktualisieren“; ein erneuter Upload ist nicht nötig.</p></aside>';
+    if(!source.complete||source.active||source.background||source.cashPublication?.active||!['ready','needs_review'].includes(source.status))return '';
+    const invoice=source.kind==='lieferantenrechnungen',heads=invoiceHeads(source),headsApplied=heads?.run?.status==='applied';
+    return `<aside class="data-import-review-summary"><strong>Vorschau abgeschlossen · Übernahme ausstehend</strong><p>Die Vorschauprüfung ist beendet. Es läuft derzeit kein Hintergrundauftrag für diese Quelle.</p>
+      ${invoice?`<ol><li><strong>Rechnungsköpfe ${headsApplied?'übernommen':'zuerst übernehmen'}</strong><span>Rechnung_A · Rechnungsnummern und allgemeine Rechnungsdaten aus dieser Datei.</span></li><li><strong>Positionen danach erneut prüfen und übernehmen</strong><span>Rechnungsdetails_A · Artikel, Mengen und Einkaufspreise werden ihren Rechnungsköpfen zugeordnet.</span></li></ol>
+        <p>Beide Teile stammen aus <strong>TRADE_AusgangsRech.accdb</strong>. Die Kassen_Umsätze.accdb ist dafür nicht erforderlich.</p>
+        <p>„Übernehmen“ führt diese Schritte der Reihe nach aus. Fehlende Rechnungsköpfe können zunächst offene Prüffälle auslösen. Bleiben nach der erneuten Prüfung Konflikte bestehen, hält die Übernahme an dieser Tabelle an; bereits übernommene Tabellen bleiben erhalten.</p>`
+        :`<p>${source.status==='needs_review'?'Offene Prüffälle finden Sie unter „Zeilenstatus“. Dort steht, welche Zuordnung fehlt oder welche Angabe geprüft werden muss.':'Mit „Übernehmen“ wird der geprüfte Datenstand aktiviert.'} ${source.storage==='cash-compact-v1'?'Bis zur bestätigten Übernahme bleibt der bisherige Kassenstand aktiv.':''}</p>`}
+      </aside>`;
+  }
+  function rowStatusText(source,runId,row) {
+    const states={staged:'Noch ungeprüft',create:'Bereit zum Anlegen',update:'Bereit zum Aktualisieren',refresh:'Bereit zum Aktualisieren',unchanged:'Unverändert',duplicate:'Doppelte Quellzeile',conflict:'Offener Prüffall',invalid:'Ungültige Angaben',applied:'Übernommen',reverted:'Zurückgenommen'};
+    const table=(source.tables||[]).find(t=>t.run?.id===runId),invoice=source.kind==='lieferantenrechnungen'&&table?.name==='Rechnungsdetails_A';
+    let issue=row.issue||'';
+    if(invoice&&issue==='HISTORY_PARENT_REQUIRED')issue=invoiceHeads(source)?.run?.status==='applied'
+      ?'Zugehöriger Rechnungskopf fehlt auch nach der Übernahme. Rechnungsnummer und Lieferant in der Quelldatei prüfen.'
+      :'Zugehöriger Rechnungskopf noch nicht übernommen. Er wird in Rechnung_A derselben Datei erwartet; nach dessen Übernahme wird diese Position erneut geprüft.';
+    else if(invoice&&issue==='HISTORY_SOURCE_PAIR_CHANGED')issue='Der Rechnungskopf gehört zu einem anderen Dateistand. Rechnung_A und diese Position müssen aus derselben Datei übernommen werden.';
+    else if(invoice&&issue==='HISTORY_PARENT_KEY_MISSING')issue='Die Zuordnung zum Rechnungskopf ist unvollständig. Rechnungsnummer und Lieferant in der Quelldatei prüfen.';
+    return `Zeile ${row.rowNumber} · ${states[row.state]||row.state||'Unbekannter Status'}${issue?' · '+issue:''}`;
+  }
+  const errorMessage=error=>error?.name==='AbortError'?'Die Anfrage wurde unterbrochen. Bitte den Status aktualisieren; eine bereits gesendete Übernahme kann am Server weiterlaufen.':error?.message||'Der Status konnte nicht geladen werden. Bitte erneut aktualisieren.';
   function contentDate(source) {
     const date=source.contentDate;
     if(date?.status!=='complete')return source.complete?(source.background?.phase==='content-date'&&source.active?'Wird ermittelt …':'Noch nicht ermittelt'):'Nach dem Einlesen';
@@ -54,11 +79,13 @@
         ${job.error?`<details><summary>Technischer Hinweis</summary><p>${escape(job.error)}</p></details>`:''}
         <div class="data-import-actions">${fileDeleted?'':['paused','failed'].includes(job.status)?`<button type="button" data-i-job="retry" ${!projection.prepare||job?.phase==='applying'&&!projection.apply?'disabled':''}>${jobName} fortsetzen</button>`:`<button type="button" data-i-job="pause" ${!projection.prepare||job?.phase==='applying'&&!projection.apply?'disabled':''}>${jobName} pausieren</button>`}</div>`
         :source.error?`<p role="status">Unterbrechung: ${escape(source.error)}. Bitte denselben Dateistand erneut auswählen; bereits geprüfte Pakete bleiben erhalten.</p>`:''}
+      ${renderReviewSummary(source,projection.pendingAction,projection.uncertainApply)}
       <div class="data-import-actions">
         ${source.storage==='cash-compact-v1'?`<button type="button" data-i-action="apply" ${!projection.apply||!projection.prepare||!source.complete||source.active||source.status!=='ready'||!source.cashPublication?.available||source.cashPublication.active||!Number.isInteger(source.cashPublication.revision)?'disabled':''}>Übernehmen</button>`:''}
         ${job||source.status!=='reviewing'?'':`<button type="button" data-i-action="review" ${!projection.prepare||!source.complete||source.active?'disabled':''}>Prüfung fortsetzen</button>`}
         ${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-action="apply" ${!projection.apply||!source.activationEnabled||!source.complete||source.active||!source.catalogUpdatePending&&!['ready','needs_review','applying'].includes(source.status)?'disabled':''}>Übernehmen</button>
         `}
+        ${source.complete?`<button type="button" data-i-check-status ${projection.pendingAction?'disabled':''}>Status aktualisieren</button>`:''}
       </div>
       ${source.storage==='cash-compact-v1'?'<p class="data-import-note">Übernehmen aktualisiert den gesamten Kassenstand für Kassenhistorie und Auswertungen. Bestehende Zuordnungen bleiben erhalten. Zentrallager, Onlinefilialen und im GP inaktive Filialen sind eingeschlossen.</p>':!source.activationEnabled?'<p class="data-import-note">Produktive Übernahme noch nicht freigegeben. Keine neuen Kunden, Artikel oder Verkaufskennzahlen werden durch die Vorschau angelegt.</p>':''}
       ${source.kind==='trade'?`<p class="data-import-note">Die Übernahme aktualisiert auch Artikelnummern, Barcodes und Preise im Artikelkatalog.${source.catalog?` ${number(source.catalog.changed)} aktualisiert · ${number(source.catalog.unchanged)} unverändert${source.catalog.blocked?` · ${number(source.catalog.blocked)} zur Prüfung zurückgestellt`:''}.`:''}${source.catalogUpdatePending?' Bei diesem älteren Import steht der Katalogabgleich noch aus.':''}</p>`:''}
@@ -70,18 +97,18 @@
       ${tables.flatMap(t=>(t.run?.acceptedDeviations||[]).map(p=>`<aside class="data-import-tolerance"><strong>Bestätigte Quellzähler-Abweichung · ${escape(t.name)}</strong><p>${number(p.expectedRows)} lesbare / ${number(p.declaredRows)} deklarierte Zeilen. Nur für diesen Dateistand akzeptiert.</p><small>Freigabe: ${escape(p.approvalReference)} · ${escape(p.recordedAt)}<br>Prüfnachweis: ${escape(p.evidenceReference)} · ${escape(p.id)}</small></aside>`)).join('')}
       ${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-action="undo" ${!projection.undo||source.active||!['applied','applying','reverting'].includes(source.status)?'disabled':''}>Rücknahme starten / fortsetzen</button>`}
       <div class="data-import-scroll" tabindex="0" role="region" aria-label="Tabellen und Prüfstatus"><table><thead><tr><th scope="col">Quelltabelle</th><th scope="col">Gelesen / ${source.selection?'ausgewählt':'deklariert'}</th><th scope="col">Status / Hinweise</th><th scope="col">Prüfung</th></tr></thead><tbody>
-      ${tables.map(t=>`<tr><td>${escape(t.name)}</td><td>${number(t.run?.receivedRows)} / ${number(t.declaredRows)}</td><td>${escape(label(t.run?.status||'staging'))}${t.run?.counts?.invalid?` · ${number(t.run.counts.invalid)} ungültig`:''}${t.run?.counts?.conflict?` · ${number(t.run.counts.conflict)} Konflikte`:''}${t.run?.gates?.length?` · ${t.run.gates.map(escape).join(', ')}`:''}</td><td>${t.run?`${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-log="${escape(t.run.id)}">Protokoll</button> `}<button type="button" data-i-rows="${escape(t.run.id)}">Zeilenstatus</button>${projection.undo&&['applied','applying','reverting'].includes(t.run.status)?` <button type="button" data-i-undo-preview="${escape(t.run.id)}">Rücknahme prüfen</button>`:''}`:'–'}</td></tr>`).join('')}
+      ${tables.map(t=>`<tr><td>${escape(t.name)}</td><td>${number(t.run?.receivedRows)} / ${number(t.declaredRows)}</td><td>${escape(label(t.run?.status||'staging'))}${t.run?.counts?.invalid?` · ${number(t.run.counts.invalid)} ungültig`:''}${t.run?.counts?.conflict?` · ${number(t.run.counts.conflict)} offene Prüffälle`:''}${source.kind==='lieferantenrechnungen'&&t.name==='Rechnungsdetails_A'&&t.run?.status==='needs_review'&&invoiceHeads(source)&&invoiceHeads(source).run?.status!=='applied'?'<small class="data-import-table-hint">Erneute Prüfung nach Übernahme der Rechnungsköpfe aus derselben Datei. Einzelne Gründe: „Zeilenstatus“.</small>':''}${t.run?.gates?.length?` · ${t.run.gates.map(escape).join(', ')}`:''}</td><td>${t.run?`${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-log="${escape(t.run.id)}">Protokoll</button> `}<button type="button" data-i-rows="${escape(t.run.id)}">Zeilenstatus</button>${projection.undo&&['applied','applying','reverting'].includes(t.run.status)?` <button type="button" data-i-undo-preview="${escape(t.run.id)}">Rücknahme prüfen</button>`:''}`:'–'}</td></tr>`).join('')}
       </tbody></table></div><p class="data-import-note">Nicht übernommene technische Tabellen: ${(source.excludedTableNames||[]).map(escape).join(', ')||'Noch nicht ermittelt'}.</p></details>`;
   }
   function mount(root,{api,confirmAction=message=>globalThis.confirm(message)}) {
     const body=root.querySelector('[data-import-body]');
-    let disposed=false,generation=0,controller=null,timer=null,context=null,selected=null,cursor=null,sourcePage={},working=false,logState=null,publicationView=null;
+    let disposed=false,generation=0,controller=null,timer=null,context=null,selected=null,cursor=null,sourcePage={},working=false,pendingAction=null,unconfirmedCashSource=null,logState=null,publicationView=null;
     const el=name=>body.querySelector(`[data-i="${name}"]`);
     const containers=[];
     for(let node=root.parentElement;node;node=node.parentElement) if(node.matches?.('.view,.settings-section,details')) containers.push(node);
     const visible=()=>root.open && containers.every(node=>!node.classList.contains('hidden')
       && (node.matches('details')?node.open:node.classList.contains('active')));
-    const cancel=()=>{generation++;controller?.abort();controller=null;clearTimeout(timer);working=false;};
+    const cancel=()=>{generation++;controller?.abort();controller=null;clearTimeout(timer);working=false;pendingAction=null;};
     async function request(url,options={}) {return api(url,{...options,signal:controller?.signal});}
     const post=(url,data={})=>request(url,{method:'POST',body:JSON.stringify(data)});
     const message=text=>{if(el('message'))el('message').textContent=text;};
@@ -90,10 +117,10 @@
       const detail=el('detail');if(!detail)return;
       const sameSource=selected?.id===renderedSourceId,technicalOpen=sameSource&&detail.querySelector('.data-import-technical')?.open;
       const focused=globalThis.document?.activeElement,restoreFocus=sameSource&&focused&&detail.contains(focused);
-      const attributes=['data-i-action','data-i-job','data-i-delete-upload','data-i-delete-source','data-i-publish','data-i-log','data-i-rows','data-i-undo-preview'];
+      const attributes=['data-i-action','data-i-job','data-i-delete-upload','data-i-delete-source','data-i-publish','data-i-log','data-i-rows','data-i-undo-preview','data-i-check-status'];
       const focusedAttribute=restoreFocus&&attributes.find(name=>focused.hasAttribute(name)),focusedValue=focusedAttribute&&focused.getAttribute(focusedAttribute);
       const focusedSummary=restoreFocus&&focused.matches('.data-import-technical > summary');
-      detail.innerHTML=selected?renderSource(selected,{...context.projection,apply:context.projection.apply&&!working}):'';renderedSourceId=selected?.id;
+      detail.innerHTML=selected?renderSource(selected,{...context.projection,apply:context.projection.apply&&!working,pendingAction,uncertainApply:selected.id===unconfirmedCashSource}):'';renderedSourceId=selected?.id;
       const technical=detail.querySelector('.data-import-technical');if(technical)technical.open=!!technicalOpen;
       if(focusedSummary)technical?.querySelector('summary')?.focus({preventScroll:true});
       else if(focusedAttribute)Array.from(detail.querySelectorAll('button')).find(button=>!button.disabled&&button.getAttribute(focusedAttribute)===focusedValue)?.focus({preventScroll:true});
@@ -115,7 +142,11 @@
       }
       if(selected) {const selectedId=selected.id;const latest=await request(`/api/data-import/sources/${selectedId}`);if(disposed||ticket!==generation||selected?.id!==selectedId)return;selected=latest;renderSelected();}
       clearTimeout(timer);
-      if(!working && visible() && !globalThis.document?.hidden && (selected?.active||result.items.some(s=>s.active)||overview?.items?.some(s=>s.active))) timer=setTimeout(()=>refresh().catch(e=>message(e.message)),2500);
+      if(!working && visible() && !globalThis.document?.hidden && (selected?.active||result.items.some(s=>s.active)||overview?.items?.some(s=>s.active))) timer=setTimeout(refreshQuietly,2500);
+    }
+    async function refreshQuietly() {
+      const ticket=generation;
+      try{await refresh();}catch(error){if(!disposed&&ticket===generation&&error?.name!=='AbortError')message(errorMessage(error));}
     }
     async function load() {
       if(disposed||!visible())return;cancel();const ticket=generation;controller=new AbortController();body.textContent='Importanbindung wird geprüft …';
@@ -136,8 +167,8 @@
     async function runAction(action) {
       if(!selected||working)return;
       const cash=action==='apply'&&selected.storage==='cash-compact-v1';
-      if(action!=='review'&&!confirmAction(cash?'Den gesamten geprüften Kassenstand übernehmen? Bestehende Zuordnungen werden beibehalten; Zentrallager, Onlinefilialen und im GP inaktive Filialen sind eingeschlossen.':action==='apply'?'Geprüfte Quelltabellen schrittweise übernehmen?':'Eigene Importänderungen schrittweise zurücknehmen? Spätere Änderungen und Abhängigkeiten werden vor jedem Paket erneut geprüft. Es kann nur ein Teil rücknehmbar sein.'))return;
-      const ticket=generation;working=true;el('stop')?.removeAttribute('hidden');
+      if(action!=='review'&&!confirmAction(cash?'Den gesamten geprüften Kassenstand übernehmen? Bestehende Zuordnungen werden beibehalten; Zentrallager, Onlinefilialen und im GP inaktive Filialen sind eingeschlossen.':action==='apply'?selected.kind==='lieferantenrechnungen'?'Rechnungen aus dieser Datei übernehmen? Zuerst werden die Rechnungsköpfe übernommen, danach die Positionen erneut geprüft und übernommen. Die Kassen_Umsätze.accdb wird dafür nicht benötigt. Verbleibende Konflikte halten die Übernahme an der betroffenen Tabelle an; bereits übernommene Tabellen bleiben erhalten.':'Geprüfte Quelltabellen schrittweise übernehmen?':'Eigene Importänderungen schrittweise zurücknehmen? Spätere Änderungen und Abhängigkeiten werden vor jedem Paket erneut geprüft. Es kann nur ein Teil rücknehmbar sein.'))return;
+      const ticket=generation;working=true;pendingAction=action;el('stop')?.removeAttribute('hidden');
       try {
         if(cash){
           renderSelected();el('stop')?.setAttribute('hidden','');message('Gesamter Kassenstand wird übernommen …');
@@ -157,8 +188,22 @@
           await new Promise(resolve=>setTimeout(resolve,30));
         }while(working&&visible()&&!globalThis.document?.hidden&&selected.status===({review:'reviewing',apply:'applying',undo:'reverting'}[action]));
         message(label(selected.status));
-      }catch(error){if(!disposed&&ticket===generation)message(error.message);}
-      finally{if(!disposed&&ticket===generation){working=false;el('stop')?.setAttribute('hidden','');renderSelected();}}
+      }catch(error){
+        if(disposed||ticket!==generation)return;
+        if(cash){
+          unconfirmedCashSource=selected.id;
+          message('Die Übernahme wurde nicht bestätigt. Der gespeicherte Kassenstand wird jetzt geprüft …');
+          controller=new AbortController();
+          try{
+            const latest=await request(`/api/data-import/sources/${selected.id}`);
+            if(disposed||ticket!==generation)return;
+            selected=latest;
+            if(selected.cashPublication?.active)unconfirmedCashSource=null;
+            message(selected.cashPublication?.active?'Kassenstand übernommen. Der gespeicherte Status wurde erneut bestätigt.':'Die Rückmeldung zur Übernahme wurde unterbrochen. Der neue Kassenstand ist bisher nicht als übernommen bestätigt. Eine bereits gesendete Übernahme kann noch am Server laufen. Bitte „Status aktualisieren“, bevor Sie die Übernahme erneut versuchen.');
+          }catch(statusError){if(!disposed&&ticket===generation)message('Die Rückmeldung zur Übernahme und die Statusabfrage wurden unterbrochen. Das Ergebnis ist noch unklar. Bitte „Status aktualisieren“, sobald die Verbindung wieder besteht.');}
+        }else message(errorMessage(error));
+      }
+      finally{if(!disposed&&ticket===generation){working=false;pendingAction=null;el('stop')?.setAttribute('hidden','');renderSelected();}}
     }
     async function log(action,runId,next=false) {
       const ticket=generation,previous=next?logState:null;
@@ -168,7 +213,7 @@
       const rows=Array.isArray(result)?result:result.rows;
       const last=rows.at(-1),nextCursor=!last?null:action==='events'?{after:last.revision}:action==='rows'?{after:last.rowNumber}:{beforeRow:last.rowNumber};
       logState={action,runId,cursor:nextCursor};
-      el('log').innerHTML=`<h3>${action==='events'?'Importprotokoll':action==='rows'?'Zeilenstatus':'Rücknahmeprüfung'}</h3><p>Diese Seite zeigt nur ${rows.length} Einträge. Die Rücknahme prüft jede Änderung erneut.</p><ul>${rows.map(r=>`<li>${escape(action==='events'?`${r.at} · ${r.action==='import.source-tolerance.accepted'?'Bestätigte Quellzähler-Abweichung protokolliert':r.action} · Revision ${r.revision}`:`Zeile ${r.rowNumber} · ${r.state|| (r.canUndo?'rücknehmbar':'nicht rücknehmbar')} ${r.issue||''}`)}</li>`).join('')}</ul>${nextCursor?'<button type="button" data-i-log-next>Weitere Einträge prüfen</button>':''}`;
+      el('log').innerHTML=`<h3>${action==='events'?'Importprotokoll':action==='rows'?'Zeilenstatus':'Rücknahmeprüfung'}</h3><p>Diese Seite zeigt ${rows.length} Einträge.${action==='undo-preview'?' Die Rücknahme prüft jede Änderung erneut.':action==='rows'?' Offene Prüffälle werden hier einzeln erklärt.':''}</p><ul>${rows.map(r=>`<li>${escape(action==='events'?`${r.at} · ${r.action==='import.source-tolerance.accepted'?'Bestätigte Quellzähler-Abweichung protokolliert':r.action} · Revision ${r.revision}`:action==='rows'?rowStatusText(selected,runId,r):`Zeile ${r.rowNumber} · ${r.canUndo?'rücknehmbar':'nicht rücknehmbar'} ${r.issue||''}`)}</li>`).join('')}</ul>${nextCursor?'<button type="button" data-i-log-next>Weitere Einträge prüfen</button>':''}`;
     }
     async function click(event) {
       const target=event.target.closest?.('button');if(!target||working&& !target.hasAttribute('data-i-stop'))return;
@@ -211,6 +256,7 @@
         }
         if(target.dataset.iJob&&selected){selected=await post(`/api/data-import/sources/${selected.id}/${target.dataset.iJob}`);renderSelected();await refresh();return;}
         if(target.dataset.iAction)return await runAction(target.dataset.iAction);
+        if(target.hasAttribute('data-i-check-status')){await refresh();if(disposed||ticket!==generation)return;message(selected.id===unconfirmedCashSource&&!selected.cashPublication?.active?'Status aktualisiert: Der neue Kassenstand ist noch nicht als übernommen bestätigt.':`Status aktualisiert: ${label(sourceState(selected))}.`);return;}
         if(target.hasAttribute('data-i-refresh')){clearTimeout(timer);sourcePage={};return await refresh();}
         if(target===el('next'))return await refresh(true);
         if(target.dataset.iSource){publicationView?.destroy();publicationView=null;const result=await request(`/api/data-import/sources/${target.dataset.iSource}`);if(disposed||ticket!==generation)return;selected=result;logState=null;el('log').replaceChildren();renderSelected();await refresh();return;}
@@ -218,7 +264,7 @@
         if(target.dataset.iRows)return await log('rows',target.dataset.iRows);
         if(target.dataset.iUndoPreview)return await log('undo-preview',target.dataset.iUndoPreview);
         if(target.hasAttribute('data-i-log-next')&&logState)return await log(logState.action,logState.runId,true);
-      }catch(error){if(!disposed&&ticket===generation)message(error.message);}
+      }catch(error){if(!disposed&&ticket===generation)message(errorMessage(error));}
     }
     async function submit(event) {
       if(event.target!==el('form'))return;event.preventDefault();if(working)return;
@@ -257,7 +303,7 @@
     const documentVisibility=()=>{
       clearTimeout(timer);
       if(!globalThis.document?.hidden&&visible()&&context?.available&&el('form')&&!working)
-        void refresh().catch(e=>message(e.message));
+        void refreshQuietly();
     };
     globalThis.document?.addEventListener('visibilitychange',documentVisibility);
     const observer=containers.length&&globalThis.MutationObserver?new MutationObserver(visibility):null;
@@ -265,5 +311,5 @@
     visibility();
     return {destroy(){disposed=true;cancel();publicationView?.destroy();observer?.disconnect();root.removeEventListener('toggle',visibility);body.removeEventListener('click',click);body.removeEventListener('submit',submit);body.removeEventListener('change',change);globalThis.document?.removeEventListener('visibilitychange',documentVisibility);body.replaceChildren();selected=null;logState=null;}};
   }
-  return {mount,renderSource,renderSources,renderOverview,contentDate,kindForFile};
+  return {mount,renderSource,renderSources,renderOverview,contentDate,kindForFile,rowStatusText};
 }));

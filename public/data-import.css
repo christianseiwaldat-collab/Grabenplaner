@@ -7,6 +7,11 @@
 .data-import-note { color:var(--muted); font-size:.85rem; overflow-wrap:anywhere; }
 .data-import-tolerance { border:1px solid var(--line); border-left:4px solid #b8860b; padding:.65rem .8rem; margin:.7rem 0; font-size:.85rem; overflow-wrap:anywhere; }
 .data-import-tolerance p { margin:.35rem 0; }
+.data-import-review-summary { margin:.9rem 0; padding:.85rem 1rem; border:1px solid var(--line); border-left:4px solid var(--green); border-radius:8px; background:color-mix(in srgb,var(--green) 5%,var(--surface)); overflow-wrap:anywhere; }
+.data-import-review-summary p { margin:.45rem 0; }
+.data-import-review-summary ol { margin:.75rem 0; padding-left:1.4rem; }
+.data-import-review-summary li + li { margin-top:.55rem; }
+.data-import-review-summary li span,.data-import-table-hint { display:block; margin-top:.2rem; color:var(--muted); line-height:1.45; }
 .data-import-actions,.data-import-sources { display:flex; gap:.5rem; flex-wrap:wrap; margin:.75rem 0; }
 .data-import-panel button { font-size:.85rem; padding:.45rem .7rem; }
 .data-import-panel button:disabled { opacity:.55; cursor:not-allowed; }
