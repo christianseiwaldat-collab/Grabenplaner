@@ -67,9 +67,10 @@
     const tables=source.tables||[], received=tables.reduce((n,t)=>n+(t.run?.receivedRows||0),0), expected=tables.reduce((n,t)=>n+t.declaredRows,0),job=source.background;
     const applied=tables.reduce((n,t)=>n+(t.run?.status==='applied'?t.run.receivedRows:t.run?.counts?.applied||0),0),takingOver=job?.phase==='applying'||['applying','applied'].includes(source.status),jobName=job?.phase==='content-date'?'Ermittlung des Datenstands':job?.phase==='applying'?'Übernahme':'Prüfung';
     const fileDeleted=job?.error==='IMPORT_JOB_FILE_DELETED';
+    const cashTakeover=takingOver&&source.storage==='cash-compact-v1';
     return `<header><h3>${escape(sourceFileName(source))}</h3><p>${escape(label(sourceState(source)))} · Datenstand: ${contentDate(source)}</p></header>
       <progress max="${Math.max(expected,received,1)}" value="${received}" aria-label="Bereitgestellte Quellzeilen"></progress>
-      ${takingOver?`<p>${number(applied)} / ${number(received)} Zeilen übernommen oder unverändert bestätigt · ${number(tables.filter(t=>t.run?.status==='applied').length)} / ${number(tables.length)} Tabellen abgeschlossen.</p><progress max="${Math.max(received,1)}" value="${applied}" aria-label="Übernommene Quellzeilen"></progress>${source.currentStep&&source.status!=='applied'?`<p>${escape(source.currentStep.table)} · ${escape(label(source.currentStep.phase))}</p>`:''}`:''}
+      ${cashTakeover?'<p>Die Zuordnungen werden geprüft und der gesamte Kassenstand gemeinsam freigegeben. Bis zum erfolgreichen Abschluss bleibt der bisherige Kassenstand aktiv.</p>':takingOver?`<p>${number(applied)} / ${number(received)} Zeilen übernommen oder unverändert bestätigt · ${number(tables.filter(t=>t.run?.status==='applied').length)} / ${number(tables.length)} Tabellen abgeschlossen.</p><progress max="${Math.max(received,1)}" value="${applied}" aria-label="Übernommene Quellzeilen"></progress>${source.currentStep&&source.status!=='applied'?`<p>${escape(source.currentStep.table)} · ${escape(label(source.currentStep.phase))}</p>`:''}`:''}
       <p class="data-import-note">${source.uploadFileAvailable?'Die Access-Datei ist für diesen Auftrag vorübergehend gespeichert.':'Keine Access-Datei auf dem Server gespeichert.'} Die Daten und Importprotokolle im GP bleiben erhalten.</p>
       ${source.selection?`<p class="data-import-note">${source.kind==='lieferantenrechnungen'?'Lieferantenrechnungen: nur benötigte Kopf- und Artikeldaten. Teilzahlungen, Zahlungsstatus und Adressdaten werden nicht übernommen.':source.kind==='inventur'?'Kompakter Inventurimport: belegte Inventuren als Zusammenfassung; auf Positionsebene nur Differenzen und Mengenprüffälle. Unveränderte Zählstände bleiben in Ihrer lokalen Quelldatei.':'Begrenzter Import: Warenbewegungen und historische Artikelreferenzen. Gelöschte Artikel werden als Historie gespeichert und nicht wieder aktiviert.'}</p><p class="data-import-note">${(source.selection.tables||[]).map(t=>`${escape(t.name)}: ${number(t.selectedRows)} ausgewählt aus ${number(t.sourceRows)} Quellzeilen`).join(' · ')}</p>`:''}
       ${source.uploadFileAvailable?`<button type="button" data-i-delete-upload ${!projection.prepare||source.active?'disabled':''}>Access-Datei löschen</button>`:''}
@@ -172,8 +173,9 @@
       try {
         if(cash){
           renderSelected();el('stop')?.setAttribute('hidden','');message('Gesamter Kassenstand wird übernommen …');
-          await post('/api/data-import/cash/apply',{sourceId:selected.id,expectedRevision:selected.cashPublication.revision});
+          const result=await post('/api/data-import/cash/apply',{sourceId:selected.id,expectedRevision:selected.cashPublication.revision});
           if(disposed||ticket!==generation)return;
+          if(result.background){working=false;pendingAction=null;message('Der Kassenstand wird im Hintergrund übernommen. Sie können den GP schließen.');await refresh();return;}
           await refresh();message('Kassenstand übernommen. Alle Filialen stehen für Kassenhistorie und Auswertungen bereit. Eine bereits offene Auswertung bitte neu starten.');return;
         }
         if(action==='apply'&&context.backgroundEnabled){

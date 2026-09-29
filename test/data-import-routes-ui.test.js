@@ -29,13 +29,13 @@ test('shutdown drains upload work after HTTP 202, blocks admission and records o
   release();await stopping;await new Promise(r=>setImmediate(r));
   assert.equal(saved,true);assert.ok(bytes.every(b=>b===0));assert.deepEqual(logged,['IMPORT_SOURCE_INTERRUPTED']);
 });
-async function fixture(t,{jobs=null}={}) {
+async function fixture(t,{jobs=null,cashPublications=null}={}) {
   const state={session:session(),calls:0,csrf:true,available:true,password:null},app=express();app.use(express.json({limit:'16kb'}));
   const runtime={context:async get=>({available:state.available,projection:buildDataImportProjection(await get()),message:state.available?'ready':'Protected key unavailable'}),
     list:async get=>{await get();return {items:[]};},overview:async get=>{await get();return {items:[],complete:true};},sourceOperation:async(get,_id,action,body)=>{await get();state.calls++;return {action,body};},
     upload:async(get,{buffer,kind,fileName,password,onStarted})=>{await get();state.calls++;state.kind=kind;state.fileName=fileName;state.password=password;assert.ok(Buffer.isBuffer(buffer));onStarted({id:'a'.repeat(64),status:'reading'});buffer.fill(0);}};
   const mappings={operation:async(get,action,body)=>{await get();state.calls++;return {action,body};}};
-  registerDataImportRoutes(app,{runtime,mappings,jobs,requireSession(_r,permission){if(!state.session)throw Object.assign(new Error('private'),{status:401});
+  registerDataImportRoutes(app,{runtime,mappings,jobs,cashPublications,requireSession(_r,permission){if(!state.session)throw Object.assign(new Error('private'),{status:401});
     if(!state.session.permissions.includes(permission))throw Object.assign(new Error('private'),{status:403});return state.session;},
     refreshSession:async()=>state.session,assertCsrf(){if(!state.csrf)throw Object.assign(new Error('csrf-secret'),{status:403});}});
   const listener=app.listen(0,'127.0.0.1');await new Promise(r=>listener.once('listening',r));
@@ -83,6 +83,18 @@ test('background takeover admission is a separate authenticated CSRF action, whi
   f.state.csrf=true;assert.equal((await f.request(url+'/undo',options)).status,409);assert.equal(f.state.calls,0);
   const html=UI.renderSource({kind:'trade',status:'applying',currentStep:{table:'ARTIKEL_BILDER_V2',phase:'rechecking'},tables:[{name:'table',declaredRows:100,run:{receivedRows:100,status:'applying',counts:{applied:25},gates:[]}}],background:{phase:'applying',status:'applying'}},{prepare:true,apply:true});
   assert.match(html,/25 \/ 100 Zeilen/);assert.match(html,/Sie können den GP schließen/);assert.match(html,/Übernahme pausieren/);assert.match(html,/Prüfung wird vorbereitet/);
+});
+
+test('cash takeover HTTP acknowledges the durable job instead of holding the request open for publication',async t=>{
+  let admitted=0,published=0;
+  const id='b'.repeat(64),input={sourceId:id,expectedRevision:0};
+  const f=await fixture(t,{jobs:{async enqueueCashApply(get,body){await get();assert.deepEqual(body,input);admitted++;return {id,background:{status:'queued',phase:'applying'}};}},
+    cashPublications:{async operation(){published++;throw new Error('Publication belongs to the background worker');}}});
+  const send=()=>f.request('/api/data-import/cash/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});
+  const response=await send();assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/private, no-store/);
+  assert.equal((await response.json()).background.status,'queued');assert.equal(admitted,1);assert.equal(published,0);
+  f.state.csrf=false;assert.equal((await send()).status,403);
+  f.state.csrf=true;f.state.session=null;assert.equal((await send()).status,401);assert.equal(admitted,1);assert.equal(published,0);
 });
 test('Productive Block 1: routes require personal company rights, CSRF and no-store, with no role-only grants',async t=>{
   const f=await fixture(t);let res=await f.request('/api/data-import/context');assert.equal(res.status,200);assert.match(res.headers.get('cache-control'),/no-store/);

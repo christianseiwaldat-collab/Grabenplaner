@@ -25844,8 +25844,9 @@ const dataImportLifecycle=require('./lib/data-import-lifecycle').createDataImpor
   maintenanceActive:()=>serverModeActive&&require('./lib/backup-maintenance').ownsLifecycleBackup(databasePath),
 });
 const dataImportRuntime=createDataImportRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowApply: true, sharedPayloads: true, compactCash: true, syncArticleCatalog: true,lifecycle:dataImportLifecycle });
+const cashPublicationRuntime=createCashPublicationRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: true, policies: CASH_SOURCE_POLICIES });
 const dataImportJobs=require('./lib/data-import-jobs').createDataImportJobs({
-  directory:path.join(dataRootDirectory,'import-jobs'),vault:integrationSecretVault,runtime:dataImportRuntime,
+  directory:path.join(dataRootDirectory,'import-jobs'),vault:integrationSecretVault,runtime:dataImportRuntime,cashPublications:cashPublicationRuntime,
   lifecycle:dataImportLifecycle,resolvePrincipal:resolveSalesReportPrincipal,
   onError:code=>console.warn('Datenbankimport-Auftrag:',code),
 });
@@ -25853,7 +25854,7 @@ const dataImportRoutes=registerDataImportRoutes(app, {
   lifecycle:dataImportLifecycle,
   runtime:dataImportRuntime,jobs:dataImportJobs,
   mappings: createDataImportMappingRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowMapping: false }),
-  cashPublications: createCashPublicationRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: true, policies: CASH_SOURCE_POLICIES }),
+  cashPublications: cashPublicationRuntime,
   requireSession: requireEmployeePortalSession,
   refreshSession: async (request) => loadPortalSessionFromRequest(request, {
     touch: false,

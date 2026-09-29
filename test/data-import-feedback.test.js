@@ -59,6 +59,17 @@ test('invoice confirmation describes parent-first apply and row feedback is esca
   assert.match(ui.confirmations[0],/Zuerst werden die Rechnungsköpfe übernommen/);assert.match(ui.confirmations[0],/Verbleibende Konflikte halten/);
 });
 
+test('accepted cash background job is shown as running without claiming a completed takeover',async t=>{
+  const source=cashSource();const ui=await mount(t,source,url=>{
+    if(url==='/api/data-import/cash/apply'){source.background={phase:'applying',status:'queued'};source.active=true;return structuredClone(source);}
+  });
+  await ui.click({iAction:'apply'});
+  assert.match(ui.fields.message.textContent,/im Hintergrund übernommen/);
+  assert.doesNotMatch(ui.fields.message.textContent,/Kassenstand übernommen\./);
+  assert.match(ui.fields.detail.innerHTML,/Server arbeitet selbstständig weiter/);
+  assert.equal(ui.requests.filter(r=>r.url==='/api/data-import/cash/apply').length,1);
+});
+
 for(const outcome of ['active','inactive','unavailable'])test(`cash lost response checks status once without retrying the write: ${outcome}`,async t=>{
   const source=cashSource();let attempted=false;
   const ui=await mount(t,source,(url)=>{

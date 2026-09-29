@@ -891,6 +891,8 @@ test('whole cash apply enforces source ownership, rights, verification and featu
   const runtime = createCashPublicationRuntime({ access: batched.access, vault: f.vault, policies: f.policies, scopeId: f.actor.scopeId, enabled: true, clock: () => TIME });
   await runtime.operation(f.get, 'apply', { sourceId: f.id, expectedRevision: 0 });
   assert.ok(batched.state.batches > 0); assert.equal(batched.state.options.at(-1).readOnly, false);
+  assert.equal(batched.state.queries.filter(id=>id==='cash-publications.references.artikel-stamm').length,0);
+  assert.equal(batched.state.queries.filter(id=>id==='cash-publications.references.filialen').length,2,'automatic mapping setup and one plan, never two identical plans');
 });
 test('personal report templates persist encrypted settings, isolate owners and reject stale writes or revoked rights', async t => {
   const f = await fixture(t); await f.activate();

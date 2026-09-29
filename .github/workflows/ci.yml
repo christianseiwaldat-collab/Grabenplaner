@@ -102,7 +102,7 @@ jobs:
           test/v087-database-block6-postgresql-tools.test.js
           test/v087-database-block6-recovery-assurance.test.js
           test/v087-database-block6-no-cutover.test.js
-      - name: Native two-database stock and unapplied-import deletion
+      - name: Native two-database imports and cash takeover
         run: node test-support/postgresql-migration/ci-stock-import-delete.js
 
   test:
