@@ -89,6 +89,11 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'server-tools/linux/lib/xoffi-snapshots-migrate.js',
   'test/postgresql-xoffi-mhtml.test.js',
   'lib/persistence/postgresql/sales/cash-publication-batches.js',
+  'lib/persistence/postgresql/sales/cash-location-reads.js',
+  'lib/persistence/postgresql/sales/cash-reference-pages.js',
+  'lib/persistence/postgresql/boundary/transaction-activity.js',
+  'test/postgresql-cash-takeover.test.js',
+  'test/postgresql-transaction-activity.test.js',
   'lib/persistence/postgresql/sales/import-recheck-catalog.js',
   'lib/persistence/postgresql/sales/import-work-queues.js',
   'lib/persistence/postgresql/import-reader-batches.js',
@@ -381,6 +386,8 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/xoffi-snapshots-catalog.js",
   "lib/persistence/sqlite/operations/xoffi-snapshots-schema.js",
   "lib/persistence/statements/cash-publication-batches.js",
+  "lib/persistence/statements/cash-location-reads.js",
+  "lib/persistence/sqlite/cash-location-reads-catalog.js",
   "lib/persistence/statements/import-batches.js",
   "lib/persistence/statements/import-reader-batches.js",
   "lib/persistence/statements/data-import-recheck.js",
@@ -577,6 +584,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  'test/sales-article-performance.test.js',
   "test-support/session-touch-race.js",
   "test-support/personnel-learning/fixture.js",
   "test/branch-time-off-api.test.js",
@@ -766,10 +774,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1437;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1465;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 44;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1393;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1320;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1421;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1348;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -895,8 +903,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1311;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 126;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1332;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 133;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",
@@ -1455,6 +1463,7 @@ const PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES = Object.freeze([
   "scripts/cleanup-branch-order-test-data.js",
 ]);
 const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
+  'test/sales-article-performance.test.js',
   "scripts/benchmark-cash-assigned-search.js",
   "test/sales-article-catalog-search.test.js",
   "scripts/benchmark-sales-search.js",
@@ -2609,6 +2618,7 @@ function architectureBoundaryViolationsForText(file, text) {
     ...PHASE_3_STATEMENT_FILES,
     "lib/persistence/statements/sales-analytics.js",
     "lib/persistence/postgresql/boundary/catalog.js",
+    "lib/persistence/postgresql/boundary/transaction-activity.js",
     "lib/persistence/postgresql/reporting/catalog.js",
     "lib/persistence/postgresql/boundary/personal-actions.js",
   ]);
