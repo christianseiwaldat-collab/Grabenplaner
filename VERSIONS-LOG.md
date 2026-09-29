@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.70 Beta – Zuverlässige Übernahme großer Trade-Importe
+
+- Die Übernahme der Kassenhistorie läuft als geschützter, dauerhaft gespeicherter Hintergrundauftrag. Fortschritt, Unterbrechungen und erneute Versuche bleiben nachvollziehbar; bereits veröffentlichte Daten werden bei einer Wiederaufnahme erkannt.
+- Aktive Arbeit hält die beteiligten PostgreSQL-Transaktionen gezielt verbunden. Unveränderte Zeitlimits schützen weiterhin vor tatsächlich untätigen Transaktionen; auch die übrigen Trade-Importe nutzen diesen gemeinsamen Schutz.
+- Begrenzte, indexgestützte Referenzabfragen und die einmalige Berechnung der Übernahmeplanung vermeiden wiederholte Vollabfragen großer Kassenbestände.
+- Importanzeigen erklären ausstehende übergeordnete Belege und tatsächliche Konflikte verständlicher. Rechnungspositionen beziehen sich auf die Rechnungsköpfe ihrer eigenen Quelle.
+- Fach-, Rechte-, Wiederaufnahme- und native PostgreSQL-Prüfungen sind bestanden. Der Produktiv- und Wiederherstellungsnachweis wird im separaten Auslieferungsbeleg dokumentiert.
+
 ## v0.92.69 Beta – Artikelkartei, Lieferantenrechnungen und schnellere Trade-Abfragen
 
 - Lieferantenrechnungen lassen sich je Artikel mit Anlege- und Buchdatum, Rechnungsnummer, Menge und freigegebenen Einkaufspreisen suchen. Der Import bleibt auf die benötigten Rechnungsdaten beschränkt.
