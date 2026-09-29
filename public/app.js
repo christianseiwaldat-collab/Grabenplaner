@@ -1,4 +1,6 @@
 let personnelLearningAssessmentEditor=null, personnelLearningAssessmentPanel=null, personnelLearningTeam=null;
+const sidebarNavigationGroups = window.GrabenplanerSidebarLayout.createGroups();
+let sidebarLayout = null;
 (() => {
   const storageKey = "grabenplaner-bootstrap-token";
   const parameters = new URLSearchParams(window.location.search);
@@ -1332,6 +1334,7 @@ function closeAdminCredentialDialogsForLogin() {
 
 function showLoginGate(message = "") {
   globalThis.grabenplanerNavigation?.stop();
+  sidebarNavigationGroups.reset();
   loadAllGeneration++;
   clearUsbProvisioningPasswords();
   resetAdminPersonalActionsState("");
@@ -4903,7 +4906,7 @@ function setNavigationCurrent(element, current) {
 function applyNavigationGroupState(key, visible = true) {
   const group = navigationGroups()[key];
   if (!group?.toggle || !group.children) return false;
-  const open = localStorage.getItem(`grabenplaner-nav-${key}`) !== "closed";
+  const open = sidebarNavigationGroups.isOpen(key);
   group.children.classList.toggle("hidden", !visible || !open);
   group.toggle.classList.toggle("hidden", !visible);
   group.toggle.classList.toggle("expanded", open);
@@ -4912,6 +4915,7 @@ function applyNavigationGroupState(key, visible = true) {
 }
 
 function renderContextNavigation() {
+  const routeChanged = sidebarNavigationGroups.sync(JSON.stringify(currentAdministrationRoute()), state.currentView);
   const locations = activeLocations();
   const departmentOnly = state.portalSession?.user?.role === "department_manager";
   const filialViewActive = ["filialAdministration", "personnel", "planning", "vacations", "loans", "branchOrders"].includes(state.currentView);
@@ -4979,6 +4983,15 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.tradeInsightsNavButton, state.currentView === "tradeInsights");
   setNavigationCurrent(elements.salesArticleCatalogNavButton, state.currentView === "articleCatalog");
   setNavigationCurrent(elements.crmNavButton, state.currentView === "crm");
+  if (routeChanged) requestAnimationFrame(() => {
+    const nav = document.querySelector(".main-nav");
+    const active = nav?.querySelector('[aria-current="page"]');
+    if (!active || active.closest(".hidden")) return;
+    const bounds = nav.getBoundingClientRect(), item = active.getBoundingClientRect();
+    const scale = Number.parseFloat(getComputedStyle(document.body).zoom) || 1;
+    if (item.top < bounds.top) nav.scrollTop += (item.top - bounds.top) / scale;
+    else if (item.bottom > bounds.bottom) nav.scrollTop += (item.bottom - bounds.bottom) / scale;
+  });
 }
 
 function schedulePdfDesignCatalog(settings = state.data?.settings) {
@@ -24245,6 +24258,7 @@ function applyAppFontScalePercent(value) {
   document.documentElement.dataset.appFontScalePercent = String(normalized);
   document.documentElement.style.setProperty("--app-font-scale", String(scale));
   document.documentElement.style.setProperty("--app-font-scale-inverse", String(1 / scale));
+  sidebarLayout?.refresh();
   if (elements.appFontScalePercent) elements.appFontScalePercent.value = String(normalized);
   if (elements.decreaseAppFontScale) elements.decreaseAppFontScale.disabled = normalized <= APP_FONT_SCALE_MIN;
   if (elements.increaseAppFontScale) elements.increaseAppFontScale.disabled = normalized >= APP_FONT_SCALE_MAX;
@@ -40387,7 +40401,7 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
     const children = group?.children;
     if (!children) return;
     const opening = children.classList.contains("hidden");
-    localStorage.setItem(`grabenplaner-nav-${key}`, opening ? "open" : "closed");
+    sidebarNavigationGroups.setOpen(key, opening);
     children.classList.toggle("hidden", !opening);
     toggle.classList.toggle("expanded", opening);
     toggle.setAttribute("aria-expanded", String(opening));
@@ -42048,6 +42062,10 @@ initializeScheduleSearchDateRangeCalendar();
 initializeXoffiComparisonCalendar();
 initializeOptionDateRangeCalendar();
 initializePersonnelCandidateTrialDateRangeCalendar();
+sidebarLayout = window.GrabenplanerSidebarLayout.mount({
+  window, document, sidebar: elements.mainSidebar,
+  handle: document.getElementById("sidebarResizeHandle"), mobileMedia: mobileNavigationMedia,
+});
 globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create({
   window, app: "administration", keys: ["view", "section", "kind", "dashboard", "process", "location", "department"],
   read: currentAdministrationRoute, apply: () => applyRequestedView({ fromHistory: true }),

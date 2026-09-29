@@ -43,7 +43,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.92.70 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.70 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -101,54 +101,54 @@
           </button>
           <section class="nav-module" id="filialManagementNav" aria-label="Filialverwaltung">
             <div class="nav-branch nav-module-heading">
-              <button type="button" class="nav-disclosure expanded" id="filialManagementToggle" data-nav-toggle="filialManagement" aria-controls="filialManagementNavChildren" aria-label="Unterpunkte der Filialverwaltung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+              <button type="button" class="nav-disclosure" id="filialManagementToggle" data-nav-toggle="filialManagement" aria-controls="filialManagementNavChildren" aria-label="Unterpunkte der Filialverwaltung ein- oder ausklappen" aria-expanded="false"><span aria-hidden="true"></span></button>
               <button class="nav-item nav-module-main" data-view="filialAdministration" id="filialDashboardNavButton">
-                <span class="nav-symbol" aria-hidden="true">⌂</span><span>Filialverwaltung</span>
+                <span class="nav-symbol" aria-hidden="true">⌂</span><span>Filial&shy;verwaltung</span>
               </button>
             </div>
-            <div class="nav-module-children" id="filialManagementNavChildren">
+            <div class="nav-module-children hidden" id="filialManagementNavChildren">
               <button class="nav-item nav-module-route" data-view="personnel" id="filialTeamsNavButton">
                 <span class="nav-symbol">◎</span><span>Teams &amp; Standorte</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="loans" id="loanManagementNavButton">
-                <span class="nav-symbol">▣</span><span>Leihverwaltung</span><strong class="nav-count hidden" id="loanManagementNavCount">0</strong>
+                <span class="nav-symbol">▣</span><span>Leih&shy;verwaltung</span><strong class="nav-count hidden" id="loanManagementNavCount">0</strong>
               </button>
               <button class="nav-item nav-module-route hidden" id="branchOrdersManagementNavButton" type="button" data-view="branchOrders">
-                <span class="nav-symbol">▤</span><span>Filialbestellungen</span>
+                <span class="nav-symbol">▤</span><span>Filial&shy;bestellungen</span>
               </button>
               <div class="nav-submodule">
                 <div class="nav-branch">
-                  <button type="button" class="nav-disclosure expanded" data-nav-toggle="planning" aria-controls="planningNavChildren" aria-label="Dienstplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+                  <button type="button" class="nav-disclosure" data-nav-toggle="planning" aria-controls="planningNavChildren" aria-label="Dienstplanung ein- oder ausklappen" aria-expanded="false"><span aria-hidden="true"></span></button>
                   <button class="nav-item" data-view="planning" id="planningNavButton">
-                    <span class="nav-symbol">▦</span><span>Dienstplanung</span>
+                    <span class="nav-symbol">▦</span><span>Dienst&shy;planung</span>
                   </button>
                 </div>
-                <div class="nav-children" id="planningNavChildren"></div>
+                <div class="nav-children hidden" id="planningNavChildren"></div>
               </div>
               <div class="nav-submodule">
                 <div class="nav-branch">
-                  <button type="button" class="nav-disclosure expanded" data-nav-toggle="vacations" aria-controls="vacationNavChildren" aria-label="Urlaubsplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+                  <button type="button" class="nav-disclosure" data-nav-toggle="vacations" aria-controls="vacationNavChildren" aria-label="Urlaubsplanung ein- oder ausklappen" aria-expanded="false"><span aria-hidden="true"></span></button>
                   <button class="nav-item" data-view="vacations" id="vacationsNavButton">
-                    <span class="nav-symbol">☀</span><span>Urlaubsplanung</span>
+                    <span class="nav-symbol">☀</span><span>Urlaubs&shy;planung</span>
                   </button>
                 </div>
-                <div class="nav-children" id="vacationNavChildren"></div>
+                <div class="nav-children hidden" id="vacationNavChildren"></div>
               </div>
             </div>
           </section>
           <section class="nav-module hidden" id="personnelAdministrationNav" aria-label="Personalverwaltung">
             <div class="nav-branch nav-module-heading">
-              <button type="button" class="nav-disclosure expanded" id="personnelAdministrationToggle" data-nav-toggle="personnelAdministration" aria-controls="personnelAdministrationNavChildren" aria-label="Unterpunkte der Personalverwaltung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+              <button type="button" class="nav-disclosure" id="personnelAdministrationToggle" data-nav-toggle="personnelAdministration" aria-controls="personnelAdministrationNavChildren" aria-label="Unterpunkte der Personalverwaltung ein- oder ausklappen" aria-expanded="false"><span aria-hidden="true"></span></button>
               <button class="nav-item nav-module-main" data-view="personnelAdministration" data-personnel-administration-route="dashboard" id="personnelDashboardNavButton">
                 <span class="nav-symbol" aria-hidden="true">◎</span><span>Personal</span>
               </button>
             </div>
-            <div class="nav-module-children" id="personnelAdministrationNavChildren">
+            <div class="nav-module-children hidden" id="personnelAdministrationNavChildren">
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="employees" id="personnelDirectoryNavButton">
                 <span class="nav-symbol">◉</span><span>Mitarbeitende</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="positions" id="positionManagementNavButton">
-                <span class="nav-symbol text-nav-symbol" aria-hidden="true">Pos</span><span>Positionsverwaltung</span>
+                <span class="nav-symbol text-nav-symbol" aria-hidden="true">Pos</span><span>Positions&shy;verwaltung</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="applications" id="candidatePreboardingNavButton">
                 <span class="nav-symbol">✦</span><span>Bewerbungen &amp; Preboarding</span>
@@ -160,41 +160,41 @@
                 <span class="nav-symbol">◆</span><span>Schulung &amp; Wissen</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="tasks" id="personnelTasksNavButton">
-                <span class="nav-symbol">□</span><span>Personalaufgaben</span>
+                <span class="nav-symbol">□</span><span>Personal&shy;aufgaben</span>
               </button>
               <button class="nav-item nav-module-route request-nav-item hidden" data-view="requests" id="requestsNavButton">
                 <span class="nav-symbol">✓</span><span>Anträge</span><strong class="nav-count hidden" id="requestsNavCount">0</strong>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="timeTracking" id="timeTrackingNavButton">
-                <span class="nav-symbol">◷</span><span>Zeiterfassung</span>
+                <span class="nav-symbol">◷</span><span>Zeit&shy;erfassung</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="costCenters" id="costCentersNavButton">
-                <span class="nav-symbol">▦</span><span>Kostenstellen</span>
+                <span class="nav-symbol">▦</span><span>Kosten&shy;stellen</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="ruleDrafts" id="customWorkRulesNavButton">
                 <span class="nav-symbol">◇</span><span>Regelwerk</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="collectiveAgreements" id="collectiveAgreementsNavButton">
-                <span class="nav-symbol">≡</span><span>Kollektivverträge</span>
+                <span class="nav-symbol">≡</span><span>Kollektiv&shy;verträge</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="vacations" id="centralVacationsNavButton">
                 <span class="nav-symbol">☀</span><span>Urlaube (Unternehmen)</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="dataRequests" id="dataSubjectRequestsNavButton">
-                <span class="nav-symbol">§</span><span>Datenanfragen</span><strong class="nav-count hidden" id="dataSubjectRequestsNavCount">0</strong>
+                <span class="nav-symbol">§</span><span>Daten&shy;anfragen</span><strong class="nav-count hidden" id="dataSubjectRequestsNavCount">0</strong>
               </button>
             </div>
           </section>
           <section class="nav-module hidden" id="salesAdministrationNav" aria-label="Verkaufsverwaltung">
             <div class="nav-branch nav-module-heading">
-              <button type="button" class="nav-disclosure expanded" id="salesAdministrationToggle" data-nav-toggle="salesAdministration" aria-controls="salesAdministrationNavChildren" aria-label="Unterpunkte der Verkaufsverwaltung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+              <button type="button" class="nav-disclosure" id="salesAdministrationToggle" data-nav-toggle="salesAdministration" aria-controls="salesAdministrationNavChildren" aria-label="Unterpunkte der Verkaufsverwaltung ein- oder ausklappen" aria-expanded="false"><span aria-hidden="true"></span></button>
               <button class="nav-item nav-module-main" data-view="salesAdministration" id="salesDashboardNavButton"><span class="nav-symbol" aria-hidden="true">▤</span><span>Verkauf</span></button>
             </div>
-            <div class="nav-module-children" id="salesAdministrationNavChildren">
+            <div class="nav-module-children hidden" id="salesAdministrationNavChildren">
               <button class="nav-item nav-module-route hidden" data-view="salesAnalytics" id="salesAnalyticsNavButton">
-                <span class="nav-symbol" aria-hidden="true">⌁</span><span>Verkaufsanalysen</span>
+                <span class="nav-symbol" aria-hidden="true">⌁</span><span>Verkaufs&shy;analysen</span>
               </button>
-              <button class="nav-item nav-module-route hidden" data-view="receiptSearch" id="receiptSearchNavButton"><span class="nav-symbol" aria-hidden="true">▤</span><span>Kassenberichte &amp; Belegsuche</span></button>
+              <button class="nav-item nav-module-route hidden" data-view="receiptSearch" id="receiptSearchNavButton"><span class="nav-symbol" aria-hidden="true">▤</span><span>Kassen&shy;berichte &amp; Beleg&shy;suche</span></button>
               <button class="nav-item nav-module-route hidden" data-view="articleCatalog" id="salesArticleCatalogNavButton">
                 <span class="nav-symbol article-catalog-nav-symbol" aria-hidden="true">Art</span><span>Artikelstamm</span>
               </button>
@@ -206,6 +206,7 @@
           </section>
         </nav>
 
+        <div class="sidebar-resize-handle" id="sidebarResizeHandle" role="separator" tabindex="0" aria-label="Breite des Hauptmenüs" aria-orientation="vertical" aria-controls="mainSidebar" aria-valuemin="200" aria-valuemax="380" aria-valuenow="240" title="Menübreite ziehen · Pfeiltasten zum Anpassen · Doppelklick für Standardbreite"></div>
       </aside>
       <button class="sidebar-backdrop" id="mobileNavigationBackdrop" type="button" aria-label="Hauptmenü schließen" tabindex="-1"></button>
 
@@ -4387,6 +4388,7 @@
     <script src="/branch-article-calculation.js"></script>
     <script src="/sales-article-price-controls.js"></script>
     <script src="/navigation-history.js"></script>
+    <script src="/sidebar-layout.js"></script>
     <script src="/learning-library.js"></script>
     <script src="/learning-assessment.js"></script>
     <script src="/learning-team.js"></script>

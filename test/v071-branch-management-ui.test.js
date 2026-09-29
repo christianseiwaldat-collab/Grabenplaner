@@ -22,7 +22,7 @@ function between(source, start, end) {
 test("v0.71 Block 7 UI: Filialverwaltung fasst Teams, Dienst- und Urlaubsplanung barrierearm zusammen", () => {
   const navigation = between(html, '<section class="nav-module" id="filialManagementNav"', '<section class="nav-module hidden" id="personnelAdministrationNav"');
   assert.match(navigation, /aria-label="Filialverwaltung"/);
-  assert.match(navigation, /id="filialManagementToggle"[^>]*data-nav-toggle="filialManagement"[^>]*aria-controls="filialManagementNavChildren"[^>]*aria-expanded="true"/);
+  assert.match(navigation, /id="filialManagementToggle"[^>]*data-nav-toggle="filialManagement"[^>]*aria-controls="filialManagementNavChildren"[^>]*aria-expanded="false"/);
   assert.match(navigation, /<button(?=[^>]*id="filialDashboardNavButton")(?=[^>]*data-view="filialAdministration")[^>]*>/);
   assert.match(navigation, /id="filialManagementNavChildren"/);
   assert.match(navigation, /<button[^>]*data-view="personnel"[^>]*id="filialTeamsNavButton"/);
@@ -49,7 +49,7 @@ test("v0.71 Block 7 UI: alle Navigationsgruppen verwenden dieselbe Toggle-Map", 
   assert.match(groups, /vacations:\s*\{[^}]*children:\s*elements\.vacationNavChildren\s*\}/);
   const handler = between(app, 'document.querySelector(".main-nav").addEventListener("click"', 'document.querySelectorAll("[data-close]")');
   assert.match(handler, /const group = navigationGroups\(\)\[key\]/);
-  assert.match(handler, /localStorage\.setItem\(`grabenplaner-nav-\$\{key\}`/);
+  assert.match(handler, /sidebarNavigationGroups\.setOpen\(key, opening\)/);
   assert.match(handler, /toggle\.setAttribute\("aria-expanded", String\(opening\)\)/);
 });
 

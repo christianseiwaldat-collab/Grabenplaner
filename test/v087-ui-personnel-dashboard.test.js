@@ -23,9 +23,9 @@ test("UI Block 1: Personalverwaltung trennt Dashboard-Ziel und Disclosure semant
   const navigation = between(
     html,
     '<section class="nav-module hidden" id="personnelAdministrationNav"',
-    '<div class="nav-module-children" id="personnelAdministrationNavChildren">',
+    '<div class="nav-module-children hidden" id="personnelAdministrationNavChildren">',
   );
-  assert.match(navigation, /<button(?=[^>]*id="personnelAdministrationToggle")(?=[^>]*class="nav-disclosure expanded")(?=[^>]*data-nav-toggle="personnelAdministration")[^>]*>/);
+  assert.match(navigation, /<button(?=[^>]*id="personnelAdministrationToggle")(?=[^>]*class="nav-disclosure")(?=[^>]*aria-expanded="false")(?=[^>]*data-nav-toggle="personnelAdministration")[^>]*>/);
   assert.match(navigation, /<button(?=[^>]*id="personnelDashboardNavButton")(?=[^>]*data-view="personnelAdministration")(?=[^>]*data-personnel-administration-route="dashboard")[^>]*>/);
   assert.ok(navigation.indexOf("</button>") < navigation.indexOf("personnelDashboardNavButton"), "Disclosure und Navigationsziel dürfen nicht ineinander verschachtelt sein");
   assert.match(app, /personnelAdministrationTab:\s*"dashboard"/);

@@ -23,7 +23,7 @@ function between(source, start, end) {
 test("Personalmodul-Fundament: neue Einstiege bleiben Teil der bestehenden Personalverwaltung", () => {
   const navigation = between(
     html,
-    '<div class="nav-module-children" id="personnelAdministrationNavChildren">',
+    '<div class="nav-module-children hidden" id="personnelAdministrationNavChildren">',
     "</section>",
   );
   for (const [id, route] of [
