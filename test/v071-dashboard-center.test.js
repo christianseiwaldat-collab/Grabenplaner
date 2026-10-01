@@ -133,7 +133,7 @@ test("v0.71 Block 2: persönliches Dashboard steht zuerst und das Steuerungscent
   assert.ok(html.indexOf("startDashboardNavButton") < html.indexOf("data-nav-toggle=\"planning\""));
   assert.match(html, /id="startDashboardNavButton"[\s\S]{0,100}<span>Dashboard<\/span>/);
   assert.doesNotMatch(html, /id="rightsDashboardNavButton"/);
-  assert.match(html, /id="startDashboardControlCenterButton"[\s\S]{0,240}id="startDashboardControlCenterTitle">System-Center<\/strong>/);
+  assert.match(html, /id="startDashboardControlCenterButton"[\s\S]{0,240}id="startDashboardControlCenterTitle">Steuerungscenter<\/strong>/);
   assert.match(script, /elements\.startDashboardControlCenterButton\?\.classList\.toggle\("hidden", !startDashboardMode\)/);
   assert.match(script, /view === "rightsDashboard" && accessibleDashboardModes\(\)\.length === 0/);
   for (const mode of ["locations", "rights", "processes"]) assert.match(html, new RegExp(`data-rights-dashboard-mode="${mode}"`));

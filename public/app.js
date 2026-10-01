@@ -2535,10 +2535,9 @@ function accessibleDashboardModes() {
   return [
     ...(canReadGovernanceDashboards() ? ["locations", "rights", "processes"] : []),
     ...(canReadPersonnelRulesDashboard() ? ["personnelRules"] : []),
-    ...(canReadSystemCenter() ? ["systemCenter"] : []),
   ].sort((left, right) => (
-    ["locations", "rights", "personnelRules", "processes", "systemCenter"].indexOf(left)
-    - ["locations", "rights", "personnelRules", "processes", "systemCenter"].indexOf(right)
+    ["locations", "rights", "personnelRules", "processes"].indexOf(left)
+    - ["locations", "rights", "personnelRules", "processes"].indexOf(right)
   ));
 }
 
@@ -2694,29 +2693,19 @@ function applyRoleVisibility() {
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   const systemCenterAccess = diagnosticsReadAccess || diagnosticsTechnicalAccess;
+  elements.systemCenterPanel?.classList.toggle("hidden", !systemCenterAccess);
   const updateAccess = !lanActive || permissions.includes("update:write");
   const personnelRulesDashboardAccess = canReadPersonnelRulesDashboard();
   document.querySelectorAll('[data-dashboard-capability="rights"]').forEach((button) => button.classList.toggle("hidden", !rightsAccess));
   document.querySelectorAll('[data-dashboard-capability="workRules"]').forEach((button) => button.classList.toggle("hidden", !personnelRulesDashboardAccess));
-  document.querySelectorAll('[data-dashboard-capability="system"]').forEach((button) => button.classList.toggle("hidden", !systemCenterAccess));
   const dashboardModes = accessibleDashboardModes();
   if (!dashboardModes.includes(state.rightsDashboardMode)) {
-    state.rightsDashboardMode = dashboardModes[0] || "systemCenter";
+    state.rightsDashboardMode = dashboardModes[0] || "locations";
   }
-  const startDashboardMode = dashboardModes.includes("systemCenter") ? "systemCenter" : dashboardModes[0] || "";
+  const startDashboardMode = dashboardModes[0] || "";
   elements.startDashboardControlCenterButton?.classList.toggle("hidden", !startDashboardMode);
   if (elements.startDashboardControlCenterButton) {
     elements.startDashboardControlCenterButton.dataset.startDashboardMode = startDashboardMode;
-  }
-  if (elements.startDashboardControlCenterTitle) {
-    elements.startDashboardControlCenterTitle.textContent = startDashboardMode === "systemCenter"
-      ? "System-Center"
-      : "Steuerungscenter";
-  }
-  if (elements.startDashboardControlCenterDescription) {
-    elements.startDashboardControlCenterDescription.textContent = startDashboardMode === "systemCenter"
-      ? "Technischen Zustand, Sicherungen und Wiederherstellbarkeit prüfen."
-      : "Berechtigte Filial-, Rechte-, Regel- und Prozessübersichten öffnen.";
   }
   const databaseImportAccess = Boolean(state.portalSession?.user?.dataImport?.read) || canImportSalesArticles();
   const anySettingsAccess = databaseImportAccess || settingsAccess || pdfSettingsAccess || scheduleSettingsAccess || scopeAccess || rightsAccess || brandingAccess
@@ -2736,6 +2725,7 @@ function applyRoleVisibility() {
     rights: rightsAccess,
     dataProtection: retentionReadAccess,
     backup: databaseImportAccess || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess,
+    systemCenter: systemCenterAccess,
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
   document.querySelectorAll("[data-personnel-settings-group]").forEach(group => {
@@ -2755,8 +2745,9 @@ function applyRoleVisibility() {
   const integrationTabActive = document.querySelector('[data-settings-tab="integrations"]')?.classList.contains("active");
   const dataProtectionTabActive = document.querySelector('[data-settings-tab="dataProtection"]')?.classList.contains("active");
   const backupTabActive = document.querySelector('[data-settings-tab="backup"]')?.classList.contains("active");
+  const systemCenterTabActive = document.querySelector('[data-settings-tab="systemCenter"]')?.classList.contains("active");
   elements.saveSettingsButton?.classList.toggle("hidden", (!(settingsAccess || pdfSettingsAccess || brandingAccess || (scheduleTabActive && scheduleSettingsAccess)) && !backupTabActive)
-    || integrationTabActive || dataProtectionTabActive
+    || integrationTabActive || dataProtectionTabActive || systemCenterTabActive
     || (timeTrackingTabActive && !settingsAccess)
     || (backupTabActive && (serverActive || !backupConfigurationAccess)));
   const canExit = serverActive
@@ -25528,12 +25519,11 @@ async function saveProductReadinessAcceptance(discipline) {
 
 function setRightsDashboardMode(mode, { load = true } = {}) {
   const allowedModes = accessibleDashboardModes();
-  const normalized = allowedModes.includes(mode) ? mode : (allowedModes[0] || "systemCenter");
+  const normalized = allowedModes.includes(mode) ? mode : (allowedModes[0] || "locations");
   state.rightsDashboardMode = normalized;
   document.querySelectorAll("[data-rights-dashboard-mode]").forEach((button) => {
     button.setAttribute("aria-selected", String(button.dataset.rightsDashboardMode === normalized));
   });
-  elements.systemCenterPanel?.classList.toggle("hidden", normalized !== "systemCenter");
   elements.rightsDashboardLocationsPanel?.classList.toggle("hidden", normalized !== "locations");
   elements.rightsDashboardRightsPanel?.classList.toggle("hidden", normalized !== "rights");
   elements.personnelRulesDashboardPanel?.classList.toggle("hidden", normalized !== "personnelRules");
@@ -25542,8 +25532,7 @@ function setRightsDashboardMode(mode, { load = true } = {}) {
   if (normalized === "processes") renderRightsProcessDashboard();
   globalThis.grabenplanerNavigation?.record();
   if (!load) return;
-  if (normalized === "systemCenter") loadSystemCenter();
-  else if (normalized === "personnelRules") loadPersonnelRulesDashboard();
+  if (normalized === "personnelRules") loadPersonnelRulesDashboard();
   else if (!state.rightsDashboard) loadGovernanceDashboards();
   else if (normalized === "locations" && !state.locationDashboard) loadLocationDashboard();
 }
@@ -26649,8 +26638,7 @@ async function loadRightsDashboard() {
   const selected = modes.includes(state.rightsDashboardMode) ? state.rightsDashboardMode : modes[0];
   if (!selected) return;
   setRightsDashboardMode(selected, { load: false });
-  if (selected === "systemCenter") await loadSystemCenter();
-  else if (selected === "personnelRules") await loadPersonnelRulesDashboard();
+  if (selected === "personnelRules") await loadPersonnelRulesDashboard();
   else await loadGovernanceDashboards();
 }
 
@@ -35359,6 +35347,7 @@ function setView(view) {
     const activeSettingsTab = document.querySelector("[data-settings-tab].active:not(.hidden)");
     const firstAllowedSettingsTab = document.querySelector("[data-settings-tab]:not(.hidden)");
     if (!activeSettingsTab && firstAllowedSettingsTab) setSettingsTab(firstAllowedSettingsTab.dataset.settingsTab);
+    else if (activeSettingsTab?.dataset.settingsTab === "systemCenter") loadSystemCenter();
   }
   if (view === "requests") loadManagerVacationRequests();
   if (view === "loans") loadLoanManagement();
@@ -35387,6 +35376,14 @@ function setView(view) {
 function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
+  if (requestedView === "rightsDashboard" && parameters.get("dashboard") === "systemCenter") {
+    if (canReadSystemCenter()) {
+      setView("settings");
+      if (state.currentView === "settings") setSettingsTab("systemCenter");
+    } else setView("startDashboard");
+    if (fromHistory) closeMobileNavigation({ restoreFocus: false });
+    return;
+  }
   if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
     setView("startDashboard");
     return;
@@ -35410,7 +35407,7 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
   }
   if (requestedView === "rightsDashboard") {
     const dashboardMode = parameters.get("dashboard");
-    if (["locations", "rights", "personnelRules", "processes", "systemCenter"].includes(dashboardMode)) state.rightsDashboardMode = dashboardMode;
+    if (["locations", "rights", "personnelRules", "processes"].includes(dashboardMode)) state.rightsDashboardMode = dashboardMode;
     const processId = parameters.get("process");
     state.rightsDashboardSelectedProcessId = String(processId || "").slice(0, 120);
     state.rightsProcessCategoryId = "all";
@@ -35459,6 +35456,7 @@ function currentAdministrationRoute() {
 }
 
 function setSettingsTab(tab) {
+  if (tab === "systemCenter" && !canReadSystemCenter()) return;
   if (tab === "usbProvisioning") tab = "backup";
   const personnelTarget = ["vacation", "timeTracking", "integrations"].includes(tab) ? tab : "";
   const databaseTarget = tab === "databaseImports";
@@ -35476,6 +35474,7 @@ function setSettingsTab(tab) {
   elements.accessSettings.classList.toggle("active", activeTab === "access");
   elements.rightsSettings?.classList.toggle("active", activeTab === "rights");
   elements.backupSettings.classList.toggle("active", activeTab === "backup");
+  elements.systemCenterPanel?.classList.toggle("active", activeTab === "systemCenter");
   if (activeTab === "general" && canManageLoanSettings()) {
     loadLoanSettings();
   }
@@ -35490,7 +35489,7 @@ function setSettingsTab(tab) {
   const canSaveBranding = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("branding:write");
   const serverBackupTab = activeTab === "backup" && state.portalStatus?.operationMode === "server";
-  elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "dataProtection"].includes(activeTab)
+  elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "dataProtection", "systemCenter"].includes(activeTab)
     || serverBackupTab
     || (activeTab === "backup"
       ? !canSaveBackupSettings
@@ -35511,6 +35510,7 @@ function setSettingsTab(tab) {
     loadApprovalDelegations();
   }
   if (activeTab === "rights") loadRightsManagement();
+  if (activeTab === "systemCenter") loadSystemCenter();
   if (activeTab === "integrations") loadIntegrations().catch((error) => showToast(error.message, true));
   if (activeTab === "dataProtection") {
     if (elements.retentionPreviewAsOf && !elements.retentionPreviewAsOf.value) {

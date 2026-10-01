@@ -1,6 +1,7 @@
 (function attach(root,factory){'use strict';const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.GrabenplanerDataImport=api;
 }(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
+  const progressUI=typeof module==='object'&&module.exports?require('./data-import-progress'):globalThis.GrabenplanerImportProgress;
   const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const labels={dating:'Datenstand wird ermittelt',queued:'Wartet auf Verarbeitung',retrying:'Automatischer Wiederholungsversuch geplant',paused:'Auftrag pausiert',failed:'Auftrag benötigt Aufmerksamkeit',reading:'Datei wird bereitgestellt',interrupted:'Bereitstellung unterbrochen',staging:'Zwischenspeicherung',reviewing:'Prüfung läuft',rechecking:'Prüfung wird vorbereitet',
     needs_review:'Vorschau abgeschlossen · Prüffälle offen',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen',deleting:'Endgültige Löschung begonnen'};
@@ -69,8 +70,9 @@
     const fileDeleted=job?.error==='IMPORT_JOB_FILE_DELETED';
     const cashTakeover=takingOver&&source.storage==='cash-compact-v1';
     return `<header><h3>${escape(sourceFileName(source))}</h3><p>${escape(label(sourceState(source)))} · Datenstand: ${contentDate(source)}</p></header>
-      <progress max="${Math.max(expected,received,1)}" value="${received}" aria-label="Bereitgestellte Quellzeilen"></progress>
-      ${cashTakeover?'<p>Die Zuordnungen werden geprüft und der gesamte Kassenstand gemeinsam freigegeben. Bis zum erfolgreichen Abschluss bleibt der bisherige Kassenstand aktiv.</p>':takingOver?`<p>${number(applied)} / ${number(received)} Zeilen übernommen oder unverändert bestätigt · ${number(tables.filter(t=>t.run?.status==='applied').length)} / ${number(tables.length)} Tabellen abgeschlossen.</p><progress max="${Math.max(received,1)}" value="${applied}" aria-label="Übernommene Quellzeilen"></progress>${source.currentStep&&source.status!=='applied'?`<p>${escape(source.currentStep.table)} · ${escape(label(source.currentStep.phase))}</p>`:''}`:''}
+      ${progressUI.render(source,projection.progressTracker)}
+      ${cashTakeover?'<p>Die Zuordnungen werden geprüft und der gesamte Kassenstand gemeinsam freigegeben. Bis zum erfolgreichen Abschluss bleibt der bisherige Kassenstand aktiv.</p>':takingOver?`<p>${number(applied)} / ${number(received)} Zeilen übernommen oder unverändert bestätigt · ${number(tables.filter(t=>t.run?.status==='applied').length)} / ${number(tables.length)} Tabellen abgeschlossen.</p>`:''}
+      ${source.currentStep&&!tables.some(t=>t.name===source.currentStep.table)&&source.currentStep.table!=='Artikelkatalog'&&source.status!=='applied'?`<p>${escape(source.currentStep.table)} · ${escape(label(source.currentStep.phase))}</p>`:''}
       <p class="data-import-note">${source.uploadFileAvailable?'Die Access-Datei ist für diesen Auftrag vorübergehend gespeichert.':'Keine Access-Datei auf dem Server gespeichert.'} Die Daten und Importprotokolle im GP bleiben erhalten.</p>
       ${source.selection?`<p class="data-import-note">${source.kind==='lieferantenrechnungen'?'Lieferantenrechnungen: nur benötigte Kopf- und Artikeldaten. Teilzahlungen, Zahlungsstatus und Adressdaten werden nicht übernommen.':source.kind==='inventur'?'Kompakter Inventurimport: belegte Inventuren als Zusammenfassung; auf Positionsebene nur Differenzen und Mengenprüffälle. Unveränderte Zählstände bleiben in Ihrer lokalen Quelldatei.':'Begrenzter Import: Warenbewegungen und historische Artikelreferenzen. Gelöschte Artikel werden als Historie gespeichert und nicht wieder aktiviert.'}</p><p class="data-import-note">${(source.selection.tables||[]).map(t=>`${escape(t.name)}: ${number(t.selectedRows)} ausgewählt aus ${number(t.sourceRows)} Quellzeilen`).join(' · ')}</p>`:''}
       ${source.uploadFileAvailable?`<button type="button" data-i-delete-upload ${!projection.prepare||source.active?'disabled':''}>Access-Datei löschen</button>`:''}
@@ -104,6 +106,7 @@
   function mount(root,{api,confirmAction=message=>globalThis.confirm(message)}) {
     const body=root.querySelector('[data-import-body]');
     let disposed=false,generation=0,controller=null,timer=null,context=null,selected=null,cursor=null,sourcePage={},working=false,pendingAction=null,unconfirmedCashSource=null,logState=null,publicationView=null;
+    const progressTracker=progressUI.createTracker();
     const el=name=>body.querySelector(`[data-i="${name}"]`);
     const containers=[];
     for(let node=root.parentElement;node;node=node.parentElement) if(node.matches?.('.view,.settings-section,details')) containers.push(node);
@@ -121,7 +124,7 @@
       const attributes=['data-i-action','data-i-job','data-i-delete-upload','data-i-delete-source','data-i-publish','data-i-log','data-i-rows','data-i-undo-preview','data-i-check-status'];
       const focusedAttribute=restoreFocus&&attributes.find(name=>focused.hasAttribute(name)),focusedValue=focusedAttribute&&focused.getAttribute(focusedAttribute);
       const focusedSummary=restoreFocus&&focused.matches('.data-import-technical > summary');
-      detail.innerHTML=selected?renderSource(selected,{...context.projection,apply:context.projection.apply&&!working,pendingAction,uncertainApply:selected.id===unconfirmedCashSource}):'';renderedSourceId=selected?.id;
+      detail.innerHTML=selected?renderSource(selected,{...context.projection,progressTracker,apply:context.projection.apply&&!working,pendingAction,uncertainApply:selected.id===unconfirmedCashSource}):'';renderedSourceId=selected?.id;
       const technical=detail.querySelector('.data-import-technical');if(technical)technical.open=!!technicalOpen;
       if(focusedSummary)technical?.querySelector('summary')?.focus({preventScroll:true});
       else if(focusedAttribute)Array.from(detail.querySelectorAll('button')).find(button=>!button.disabled&&button.getAttribute(focusedAttribute)===focusedValue)?.focus({preventScroll:true});

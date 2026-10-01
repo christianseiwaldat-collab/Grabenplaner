@@ -218,9 +218,8 @@ test("Block 3/7: Dashboard ist zwischen Rechteübersicht und Abläufe & Prozesse
   const rightsTab = html.indexOf('data-rights-dashboard-mode="rights"');
   const rulesTab = html.indexOf('data-rights-dashboard-mode="personnelRules"');
   const processesTab = html.indexOf('data-rights-dashboard-mode="processes"');
-  const systemTab = html.indexOf('data-rights-dashboard-mode="systemCenter"');
   assert.ok(rightsTab >= 0 && rightsTab < rulesTab);
-  assert.ok(rulesTab < processesTab && processesTab < systemTab);
+  assert.ok(rulesTab < processesTab);
   assert.match(html, /data-dashboard-capability="workRules"[^>]*>Personal-Regelwerk<\/button>/);
   for (const id of [
     "personnelRulesDashboardPanel",

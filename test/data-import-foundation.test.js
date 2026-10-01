@@ -104,6 +104,33 @@ test('Small import transactions retain every checkpoint and resume to the identi
  assert.deepEqual(f.targets(),[]);
 });
 
+test('adaptive review packets retain authenticated plans and resume after engine reconstruction',async t=>{
+ const f=await fixture(t),{createReviewBatchPolicy}=require('../lib/data-import-review-batching');
+ const options={...f.composition,operationBudgetMs:750,reviewBatchPolicy:createReviewBatchPolicy()};
+ let engine=createDataImportEngine(options),run=await engine.start({profileHash:f.profile.fingerprint,manifest:f.manifest(35)});
+ run=await engine.stage(run.id,{expectedRevision:run.revision,startRow:1,rows:Array.from({length:35},(_,i)=>sourceRow(String(i+1)))});
+ run=await engine.seal(run.id,run.revision);run=await engine.review(run.id,run.revision);
+ assert.equal(run.counts.create,16);assert.equal(run.counts.staged,19);
+ engine=createDataImportEngine({...options,reviewBatchPolicy:createReviewBatchPolicy()});
+ f.context.denied.add('review');await assert.rejects(engine.review(run.id,run.revision),permissionError('IMPORT_FORBIDDEN'));f.context.denied.clear();
+ do{run=await engine.review(run.id,run.revision);}while(run.status==='reviewing');
+ assert.equal(run.counts.create,35);do{run=await engine.apply(run.id,run.revision);}while(run.status==='applying');assert.equal(run.status,'applied');assert.equal(f.targets().length,35);
+ run=await engine.undo(run.id,run.revision);assert.equal(run.status,'reverted');assert.deepEqual(f.targets(),[]);
+});
+
+test('adaptive apply feedback is not accepted after a rolled-back writer failure',async t=>{
+ const f=await fixture(t,{failOnNumber:'2'}),{createReviewBatchPolicy}=require('../lib/data-import-review-batching');
+ const policy=createReviewBatchPolicy(),observed=[];
+ const engine=createDataImportEngine({...f.composition,operationBudgetMs:750,reviewBatchPolicy:{limit:key=>policy.limit(key),observe(key,data){observed.push(key);policy.observe(key,data);}}});
+ let run=await engine.start({profileHash:f.profile.fingerprint,manifest:f.manifest(3)});
+ run=await engine.stage(run.id,{expectedRevision:run.revision,startRow:1,rows:['1','2','3'].map(number=>sourceRow(number))});
+ run=await engine.seal(run.id,run.revision);run=await engine.review(run.id,run.revision);
+ assert.equal(observed.length,1);
+ await assert.rejects(engine.apply(run.id,run.revision));
+ assert.equal(observed.length,1);assert.equal(policy.limit('apply:'+f.profile.fingerprint),16);
+ assert.deepEqual(f.targets(),[]);assert.equal((await engine.checkpoint(run.id)).revision,run.revision);
+});
+
 test('Q01: trusted exact snapshot tolerance preserves evidence, idempotence, restart, revocation and undo', async t => {
   const f = await fixture(t), manifest = f.manifest(1, { declaredRows: 2 });
   const input = { id: 'synthetic-count-approval', recordedAt: f.context.time, approvalReference: 'synthetic-user-approval', reason: 'Synthetic test, no source correction',

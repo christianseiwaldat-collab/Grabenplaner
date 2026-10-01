@@ -255,6 +255,14 @@ test("Scrollen respektiert reduzierte Bewegung und die Markierung räumt sich be
   assert.deepEqual(durations, [6000]);
 });
 
+test("Funktionssuche öffnet System-Center in seinem Einstellungsreiter", () => {
+  const entry = FUNCTION_SEARCH_CATALOG.find(item => item.id === "dashboards.system-center");
+  assert.ok(entry);
+  assert.equal(entry.target.view, "settings");
+  assert.equal(entry.target.settingsTab, "systemCenter");
+  assert.equal(entry.target.focusId, "systemCenterPanel");
+});
+
 test("App setzt jede Zielart über bestehende sichere Zustandsfunktionen und prüft danach den Zielzustand", () => {
   assert.match(appSource, /setView\(target\.view\)/);
   assert.match(appSource, /setPersonnelAdministrationTab\(target\.personnelAdministrationTab\)/);

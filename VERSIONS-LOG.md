@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.92.71 Beta – Importfortschritt und übersichtlichere Navigation
+
+- Die Prüfung und Übernahme großer Trade-Importe nutzt zeitlich begrenzte, an die gemessene Laufzeit angepasste Arbeitspakete. Dauerhafte Zwischenstände und der bestehende Schutz gegen doppelte Übernahme bleiben erhalten.
+- Importanzeigen zeigen Prozentangaben und die bisherige Laufzeit. Eine verbleibende Zeit wird erst bei ausreichenden Fortschrittsmessungen geschätzt; bei Unterbrechungen oder ausbleibendem Fortschritt wird keine veraltete Schätzung angezeigt.
+- Das Hauptmenü lässt sich unabhängig vom Seiteninhalt scrollen und in der breiten Ansicht mit Maus oder Tastatur in der Breite anpassen. Der aktive Menüpfad bleibt erhalten; lange Bezeichnungen werden lesbar dargestellt.
+- Das System-Center ist als letzter Reiter in den Einstellungen neben System & Backups erreichbar. Bestehende Verweise und die Funktionssuche führen zum neuen Ort; die bisherigen Zugriffsrechte gelten weiter.
+- Produktiv-, Sicherungs- und Neustartnachweise werden im separaten Auslieferungsbeleg dokumentiert.
+
 ## v0.92.70 Beta – Zuverlässige Übernahme großer Trade-Importe
 
 - Die Übernahme der Kassenhistorie läuft als geschützter, dauerhaft gespeicherter Hintergrundauftrag. Fortschritt, Unterbrechungen und erneute Versuche bleiben nachvollziehbar; bereits veröffentlichte Daten werden bei einer Wiederaufnahme erkannt.
