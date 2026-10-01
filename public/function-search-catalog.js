@@ -55,9 +55,10 @@
     "rights",
     "dataProtection",
     "backup",
+    "systemCenter",
     "databaseImports",
   ]);
-  const SUPPORTED_DASHBOARD_MODES = new Set(["locations", "rights", "personnelRules", "processes", "systemCenter"]);
+  const SUPPORTED_DASHBOARD_MODES = new Set(["locations", "rights", "personnelRules", "processes"]);
   const SUPPORTED_REQUEST_KINDS = new Set(["vacation", "time_off", "amu"]);
   const ALLOWED_ENTRY_KEYS = new Set(["id", "label", "path", "description", "synonyms", "access", "target"]);
   const ALLOWED_TARGET_KEYS = new Set([
@@ -699,11 +700,11 @@
     entry(
       "dashboards.system-center",
       "System-Center öffnen",
-      ["Dashboards", "System-Center"],
+      ["Einstellungen", "System-Center"],
       "Öffnet die berechtigte technische Systemübersicht.",
       ["systemcenter", "systemstatus", "server", "diagnose", "technik", "betrieb", "health"],
-      ["startDashboardControlCenterButton", "systemCenterDashboardTab"],
-      { view: "rightsDashboard", dashboardMode: "systemCenter", focusId: "systemCenterPanel" },
+      ["settingsSystemCenterTab"],
+      { view: "settings", settingsTab: "systemCenter", focusId: "systemCenterPanel" },
     ),
 
     entry(

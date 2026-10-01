@@ -31,7 +31,7 @@ test("Verkaufsverwaltung ist ein fester Hauptbereich mit erstem Unterpunkt", () 
   assert.match(navigation, /aria-label="Verkaufsverwaltung"/);
   assert.match(navigation, /<button(?=[^>]*id="salesDashboardNavButton")(?=[^>]*data-view="salesAdministration")[^>]*>/);
   assert.match(navigation, /<button(?=[^>]*id="salesAnalyticsNavButton")(?=[^>]*data-view="salesAnalytics")[^>]*>/);
-  assert.match(navigation, /<span>Verkaufsanalysen<\/span>/);
+  assert.match(navigation, /<span>Verkaufs&shy;analysen<\/span>/);
   assert.match(navigation, /<button(?=[^>]*id="crmNavButton")(?=[^>]*data-view="crm")[^>]*>/);
   assert.match(navigation, /<span>CRM<\/span>/);
   assert.ok(html.indexOf("personnelAdministrationNav") < html.indexOf("salesAdministrationNav"));

@@ -109,7 +109,7 @@ function element(dataset = {}) {
 }
 
 function administration() {
-  const settings = ['general', 'rights', 'schedule', 'developer'].map(settingsTab => element({ settingsTab }));
+  const settings = ['general', 'rights', 'schedule', 'developer', 'systemCenter'].map(settingsTab => element({ settingsTab }));
   settings[0].classList.toggle('active', true); settings[3].classList.toggle('hidden', true);
   const win = browser(), calls = [], elements = new Proxy({}, { get(target, key) { return target[key] ||= element(); } });
   win.GrabenplanerTradeInsights = require('../public/trade-insights');
@@ -130,6 +130,8 @@ function administration() {
     setSalesAnalyticsTab: tab => { ctx.state.salesAnalytics.tab = tab; },
     setPersonnelTab: tab => { ctx.state.personnelTab = tab; },
     setRightsDashboardMode: mode => { ctx.state.rightsDashboardMode = mode; },
+    canReadSystemCenter: () => true,
+    loadSystemCenter: () => calls.push('loadSystemCenter'),
   };
   for (const name of ['canReadManagerRequests', 'canReadManagedTimeTracking', 'canOpenPersonnelAdministrationModule', 'canOpenSalesAdministrationModule', 'canAccessSalesAnalytics', 'canAccessSalesArticleCatalog', 'canAccessCrm', 'canAccessTradeInsights', 'canReadLoanManagement', 'canManageBranchOrders']) ctx[name] = () => true;
   for (const name of ['clearUsbProvisioningPasswords', 'clearPersonnelLifecycleEditorState', 'clearPersonnelLifecycleAutomationState', 'renderContextNavigation', 'applyActivePageAppearance', 'loadStartDashboard', 'loadRightsDashboard', 'ensureAccessibleManagerRequestTab', 'loadManagerVacationRequests', 'loadLoanManagement', 'loadBranchOrdersManagement', 'renderSalesArticleCatalogResults', 'syncCrmCustomerWorkspace']) ctx[name] = () => {};
@@ -211,6 +213,34 @@ test('Administration: deep linked process survives canonicalization and resets s
   assert.equal(ctx.currentAdministrationRoute().process, 'onboarding');
   assert.equal(ctx.state.rightsProcessCategoryId, 'all');
   assert.equal(win.location.searchParams.get('process'), 'onboarding');
+});
+
+test('Administration: legacy System-Center links redirect to settings and preserve access guards', () => {
+  const { ctx, win } = administration();
+  win.history.replaceState(null, '', '?view=rightsDashboard&dashboard=systemCenter');
+  ctx.applyRequestedView({ fromHistory: true }); ctx.grabenplanerNavigation.replace();
+  assert.equal(ctx.state.currentView, 'settings');
+  assert.equal(ctx.currentAdministrationRoute().section, 'systemCenter');
+  assert.equal(win.location.search, '?view=settings&section=systemCenter');
+
+  ctx.canReadSystemCenter = () => false;
+  win.history.replaceState(null, '', '?view=rightsDashboard&dashboard=systemCenter');
+  ctx.applyRequestedView({ fromHistory: true }); ctx.grabenplanerNavigation.replace();
+  assert.equal(ctx.state.currentView, 'startDashboard');
+  assert.equal(win.location.search, '?view=startDashboard');
+});
+
+test('Administration: System-Center settings survive Back and Forward', () => {
+  const { ctx, win, calls } = administration();
+  win.history.replaceState(null, '', '?view=settings&section=systemCenter');
+  ctx.applyRequestedView(); ctx.grabenplanerNavigation.replace();
+  ctx.setView('salesAdministration'); win.flush();
+  win.history.go(-1); win.flush();
+  assert.equal(ctx.state.currentView, 'settings');
+  assert.equal(ctx.currentAdministrationRoute().section, 'systemCenter');
+  assert.ok(calls.includes('loadSystemCenter'));
+  win.history.go(1); win.flush();
+  assert.equal(ctx.state.currentView, 'salesAdministration');
 });
 
 test('Administration: late context responses cannot replace the most recent branch', async () => {

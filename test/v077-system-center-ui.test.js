@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const root = path.join(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
@@ -16,8 +17,9 @@ function functionSource(name, nextName) {
   return script.slice(start, end);
 }
 
-test("Block 2/7: fachliche Dashboards stehen vorne und das System-Center ganz rechts", () => {
-  const systemTab = html.indexOf('data-rights-dashboard-mode="systemCenter"');
+test("System-Center steht in den Einstellungen rechts neben System & Backups", () => {
+  const systemTab = html.indexOf('data-settings-tab="systemCenter"');
+  const backupTab = html.indexOf('data-settings-tab="backup"');
   const locationTab = html.indexOf('data-rights-dashboard-mode="locations"');
   const rightsTab = html.indexOf('data-rights-dashboard-mode="rights"');
   const personnelRulesTab = html.indexOf('data-rights-dashboard-mode="personnelRules"');
@@ -25,11 +27,17 @@ test("Block 2/7: fachliche Dashboards stehen vorne und das System-Center ganz re
   assert.ok(locationTab >= 0 && locationTab < rightsTab);
   assert.ok(rightsTab < personnelRulesTab);
   assert.ok(personnelRulesTab < processesTab);
-  assert.ok(processesTab < systemTab);
-  assert.match(html, /data-rights-dashboard-mode="systemCenter" data-dashboard-capability="system"/);
+  assert.ok(backupTab >= 0 && backupTab < systemTab);
+  const settingsTabStrip = html.slice(html.indexOf('<div class="settings-tabs" role="tablist">'), html.indexOf('<section id="generalSettings"'));
+  assert.equal([...settingsTabStrip.matchAll(/data-settings-tab="([^"]+)"/g)].at(-1)[1], "systemCenter");
+  assert.doesNotMatch(html, /data-rights-dashboard-mode="systemCenter"/);
+  const startDashboard = html.slice(html.indexOf('<section id="startDashboardView"'), html.indexOf('<section id="filialAdministrationView"'));
+  assert.doesNotMatch(startDashboard, /System-Center/);
+  const settingsPanel = html.indexOf('class="settings-section settings-system-center" id="systemCenterPanel"');
+  assert.ok(settingsPanel > html.indexOf('<section id="settingsView"'));
+  assert.ok(settingsPanel < html.indexOf('<section id="usbProvisioningSettings"'));
   assert.match(html, /data-rights-dashboard-mode="locations" data-dashboard-capability="rights"/);
   assert.match(html, /data-rights-dashboard-mode="processes"[^>]*>Abläufe &amp; Prozesse<\/button>/);
-  assert.match(html, /class="system-center-panel hidden" id="systemCenterPanel"/);
   assert.match(html, /class="location-dashboard-panel" id="rightsDashboardLocationsPanel"/);
   for (const marker of ["systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent"]) {
     assert.match(html, new RegExp(`id="${marker}"`));
@@ -39,18 +47,20 @@ test("Block 2/7: fachliche Dashboards stehen vorne und das System-Center ganz re
   assert.match(script, /system:diagnostics:read/);
   assert.match(script, /system:diagnostics:technical/);
   assert.match(script, /rightsDashboardMode: "locations"/);
-  assert.match(script, /\["locations", "rights", "personnelRules", "processes", "systemCenter"\]\.includes\(dashboardMode\)/);
+  assert.match(script, /systemCenter: systemCenterAccess/);
 });
 
 test("v0.77: System-Center lädt nur seinen Diagnose-Endpunkt", () => {
   const systemLoader = functionSource("loadSystemCenter", "startRecoveryAssurance");
   const governanceLoader = functionSource("loadGovernanceDashboards", "loadRightsDashboard");
   const router = functionSource("loadRightsDashboard", "saveMobileLeadershipSettings");
+  const settingsRouter = functionSource("setSettingsTab", "setPersonnelTab");
   assert.match(systemLoader, /api\("\/api\/portal\/v1\/system-center"\)/);
   assert.doesNotMatch(systemLoader, /rights-dashboard|personnel-field-rights|dashboards\/locations/);
   assert.match(governanceLoader, /if \(!canReadGovernanceDashboards\(\)\) return;/);
   assert.match(governanceLoader, /\/api\/portal\/v1\/rights-dashboard/);
-  assert.match(router, /if \(selected === "systemCenter"\) await loadSystemCenter\(\);/);
+  assert.doesNotMatch(router, /loadSystemCenter/);
+  assert.match(settingsRouter, /if \(activeTab === "systemCenter"\) loadSystemCenter\(\);/);
   assert.match(router, /else await loadGovernanceDashboards\(\);/);
 });
 
@@ -62,6 +72,59 @@ test("v0.77: Manueller Recovery-Test benötigt Bestätigung und explizites API-T
   assert.match(start, /confirmation: "RECOVERY_ASSURANCE_START"/);
   assert.match(script, /startRecoveryAssurance\?\.addEventListener\("click", startRecoveryAssurance\)/);
   assert.match(script, /refreshSystemCenter\?\.addEventListener\("click", \(\) => loadSystemCenter\(\)\)/);
+});
+
+function settingsFixture(permissions) {
+  function element(dataset = {}) {
+    const classes = new Set();
+    return { dataset, classList: {
+      contains: value => classes.has(value),
+      toggle: (value, enabled) => enabled ? classes.add(value) : classes.delete(value),
+    }, scrollIntoView() {} };
+  }
+  const tabs = ["general", "backup", "systemCenter"].map(settingsTab => element({ settingsTab }));
+  tabs[0].classList.toggle("active", true);
+  const calls = [];
+  const elements = Object.fromEntries(["generalSettings", "scheduleSettings", "personnelSettings", "dataProtectionSettings", "accessSettings", "rightsSettings", "backupSettings", "systemCenterPanel", "saveSettingsButton"].map(id => [id, element()]));
+  elements.generalSettings.classList.toggle("active", true);
+  const context = {
+    state: { portalStatus: { portalEnabled: true, operationMode: "server" }, portalSession: { user: { permissions } } },
+    elements,
+    document: { querySelectorAll: () => tabs, querySelector: selector => tabs.find(tab => selector.includes(`"${tab.dataset.settingsTab}"`)) },
+    schedulePdfSettingsWritePermission: "schedule:pdf:settings:write",
+    loadSystemCenter: () => calls.push("systemCenter"),
+    refreshServerDiagnostics: () => calls.push("backup"),
+    canManageMaintenanceSchedules: () => false, canManageOffsiteFolders: () => false,
+    clearUsbProvisioningPasswords() {}, scheduleAllSettingsPackedGrids() {},
+  };
+  vm.createContext(context);
+  vm.runInContext(functionSource("canReadSystemCenter", "canReadPersonnelRulesDashboard")
+    + functionSource("setSettingsTab", "setPersonnelTab"), context);
+  return { context, elements, tabs, calls };
+}
+
+test("System-Center settings load only diagnostics, switch panels and hide the unrelated save action", () => {
+  for (const permission of ["system:diagnostics:read", "system:diagnostics:technical"]) {
+    const { context, elements, calls } = settingsFixture([permission, "settings:write"]);
+    context.setSettingsTab("systemCenter");
+    assert.equal(elements.systemCenterPanel.classList.contains("active"), true);
+    assert.equal(elements.generalSettings.classList.contains("active"), false);
+    assert.equal(elements.saveSettingsButton.classList.contains("hidden"), true);
+    assert.deepEqual(calls, ["systemCenter"]);
+    context.setSettingsTab("backup");
+    assert.equal(elements.systemCenterPanel.classList.contains("active"), false);
+    assert.equal(elements.backupSettings.classList.contains("active"), true);
+    assert.deepEqual(calls, ["systemCenter", "backup"]);
+  }
+});
+
+test("System-Center cannot be opened with settings or backup rights alone", () => {
+  const { context, elements, calls, tabs } = settingsFixture(["settings:write", "backup:write"]);
+  context.setSettingsTab("systemCenter");
+  assert.equal(elements.systemCenterPanel.classList.contains("active"), false);
+  assert.equal(elements.generalSettings.classList.contains("active"), true);
+  assert.equal(tabs[0].classList.contains("active"), true);
+  assert.deepEqual(calls, []);
 });
 
 test("v0.77: Vertrauensindex, Nachweiskarten und signierte Laufhistorie sind vertragstreu", () => {
@@ -77,7 +140,7 @@ test("v0.77: Vertrauensindex, Nachweiskarten und signierte Laufhistorie sind ver
   assert.match(script, /system-center-state/);
 });
 
-test("v0.77: System-Center folgt Dashboard-Darkmode, globaler Schriftgröße und Responsive Layout", () => {
+test("System-Center folgt Einstellungen-Darkmode, globaler Schriftgröße und Responsive Layout", () => {
   assert.match(styles, /\.system-center-hero/);
   assert.match(styles, /\.system-center-factor-grid/);
   assert.match(styles, /\.system-center-run-phases/);
@@ -85,6 +148,7 @@ test("v0.77: System-Center folgt Dashboard-Darkmode, globaler Schriftgröße und
   assert.match(styles, /\.system-center-state\.warning/);
   assert.match(styles, /\.system-center-state\.ok/);
   assert.match(styles, /rights-dashboard\[data-dashboard-theme="dark"\][\s\S]*--rd-critical-soft/);
+  assert.match(styles, /#settingsView\[data-page-theme="dark"\] \.settings-system-center/);
   assert.match(styles, /--app-font-scale:\s*1;/);
   assert.match(styles, /body \{[^}]*zoom:\s*var\(--app-font-scale\);/);
   assert.doesNotMatch(styles, /data-dashboard-font-size=/);

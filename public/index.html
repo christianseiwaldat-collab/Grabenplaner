@@ -43,7 +43,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.70 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.71 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -223,7 +223,7 @@
           </header>
           <button class="start-dashboard-control-center hidden" id="startDashboardControlCenterButton" type="button">
             <span class="start-dashboard-control-center-symbol" aria-hidden="true">◈</span>
-            <span><small>Schnellzugriff</small><strong id="startDashboardControlCenterTitle">System-Center</strong><em id="startDashboardControlCenterDescription">Technischen Zustand, Sicherungen und Wiederherstellbarkeit prüfen.</em></span>
+            <span><small>Schnellzugriff</small><strong id="startDashboardControlCenterTitle">Steuerungscenter</strong><em id="startDashboardControlCenterDescription">Berechtigte Filial-, Rechte-, Regel- und Prozessübersichten öffnen.</em></span>
             <b aria-hidden="true">→</b>
           </button>
           <section class="start-dashboard-customizer hidden" id="startDashboardCustomizer" aria-labelledby="startDashboardCustomizerTitle">
@@ -2020,14 +2020,13 @@
 
         <section id="rightsDashboardView" class="view rights-dashboard" data-dashboard-theme="light">
           <header class="topbar rights-dashboard-topbar">
-            <div><span class="eyebrow">Rechte, Regeln &amp; System</span><h1>Steuerungscenter</h1><p class="subtitle">Wirksame Rechte, Personalregeln, betriebliche Abläufe und technischen Zustand im berechtigten Bereich nachvollziehbar prüfen.</p></div>
+            <div><span class="eyebrow">Rechte, Regeln &amp; Abläufe</span><h1>Steuerungscenter</h1><p class="subtitle">Wirksame Rechte, Personalregeln und betriebliche Abläufe im berechtigten Bereich nachvollziehbar prüfen.</p></div>
             <div class="rights-dashboard-header-actions">
               <div class="rights-dashboard-mode-switch" role="tablist" aria-label="Dashboard-Bereich">
                 <button type="button" id="rightsLocationsDashboardTab" role="tab" data-rights-dashboard-mode="locations" data-dashboard-capability="rights" aria-selected="true">Filialübersicht</button>
                 <button type="button" id="rightsPermissionsDashboardTab" role="tab" data-rights-dashboard-mode="rights" data-dashboard-capability="rights" aria-selected="false">Rechteübersicht</button>
                 <button type="button" id="personnelRulesDashboardTab" role="tab" data-rights-dashboard-mode="personnelRules" data-dashboard-capability="workRules" aria-selected="false">Personal-Regelwerk</button>
                 <button type="button" id="rightsProcessesDashboardTab" role="tab" data-rights-dashboard-mode="processes" data-dashboard-capability="rights" aria-selected="false">Abläufe &amp; Prozesse</button>
-                <button type="button" id="systemCenterDashboardTab" role="tab" data-rights-dashboard-mode="systemCenter" data-dashboard-capability="system" aria-selected="false">System-Center</button>
               </div>
               <div class="page-theme-switch dashboard-theme-switch" role="group" aria-label="Darstellung der Dashboards">
                 <span>Darstellung</span>
@@ -2036,20 +2035,6 @@
               </div>
             </div>
           </header>
-
-          <section class="system-center-panel hidden" id="systemCenterPanel" aria-label="System-Center">
-            <div class="system-center-toolbar">
-              <div><span class="eyebrow">Nachweisbarer Systemzustand</span><h2>System-Center</h2><p>Server, Sicherungen und Wiederherstellbarkeit auf Basis redigierter, serverseitig geprüfter Nachweise.</p></div>
-              <div class="system-center-actions">
-                <span id="systemCenterUpdated">Noch nicht aktualisiert</span>
-                <button class="secondary-button" id="refreshSystemCenter" type="button">Aktualisieren</button>
-                <button class="primary-button hidden" id="startRecoveryAssurance" type="button">Recovery-Test starten</button>
-              </div>
-            </div>
-            <div class="system-center-content" id="systemCenterContent" aria-live="polite" aria-busy="true">
-              <p class="settings-note">System-Center wird geladen.</p>
-            </div>
-          </section>
 
           <section class="location-dashboard-panel" id="rightsDashboardLocationsPanel" aria-label="Aktuelle Filialübersicht">
             <div class="location-dashboard-toolbar">
@@ -2223,6 +2208,7 @@
             <button class="settings-tab" id="settingsRightsTab" data-settings-tab="rights">Rechtemanagement</button>
             <button class="settings-tab hidden" id="settingsDataProtectionTab" data-settings-tab="dataProtection">Datenschutz</button>
             <button class="settings-tab" id="settingsBackupTab" data-settings-tab="backup">System &amp; Backups</button>
+            <button class="settings-tab hidden" id="settingsSystemCenterTab" data-settings-tab="systemCenter">System-Center</button>
           </div>
 
           <section id="generalSettings" class="settings-section settings-two-column active">
@@ -2877,6 +2863,22 @@
             </div>
           </section>
 
+          <section class="settings-section settings-system-center" id="systemCenterPanel" aria-label="System-Center">
+            <div class="system-center-panel">
+              <div class="system-center-toolbar">
+                <div><span class="eyebrow">Nachweisbarer Systemzustand</span><h2>System-Center</h2><p>Server, Sicherungen und Wiederherstellbarkeit auf Basis redigierter, serverseitig geprüfter Nachweise.</p></div>
+                <div class="system-center-actions">
+                  <span id="systemCenterUpdated">Noch nicht aktualisiert</span>
+                  <button class="secondary-button" id="refreshSystemCenter" type="button">Aktualisieren</button>
+                  <button class="primary-button hidden" id="startRecoveryAssurance" type="button">Recovery-Test starten</button>
+                </div>
+              </div>
+              <div class="system-center-content" id="systemCenterContent" aria-live="polite" aria-busy="true">
+                <p class="settings-note">System-Center wird geladen.</p>
+              </div>
+            </div>
+          </section>
+
           <section id="usbProvisioningSettings" class="settings-section settings-two-column">
             <div class="settings-card full-span usb-availability-card" id="usbProvisioningAvailabilityCard">
               <div class="card-heading"><div class="card-icon">USB</div><div><h2>USB-Stick erstellen</h2><p>Am Windows-Host einen vorkonfigurierten Grabenplaner-Stick als eigenständige lokale Installation erstellen.</p></div></div>
@@ -3023,7 +3025,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.70 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.71 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -4370,6 +4372,7 @@
   <script src="/trade-suggestions.js"></script>
   <script src="/trade-period.js"></script>
   <script src="/trade-insights.js"></script>
+    <script src="/data-import-progress.js"></script>
     <script src="/data-import.js"></script>
     <script src="/cash-publication.js"></script>
     <script src="/import-mappings.js"></script>

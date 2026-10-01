@@ -57,6 +57,22 @@ async function fixture(t,{kind='trade',values={},counts={},allowApply=true}={}) 
   return {...app,state,getSession,keyVault,options,upload,reload,finish,get runtime(){return runtime;}};
 }
 
+test('progress timings survive runtime reconstruction without resetting an active operation',async t=>{
+ const f=await fixture(t);let at=TIME;
+ f.options.clock=()=>at;f.reload();let source=await f.upload();
+ assert.equal(source.readCompletedAt,TIME);
+ at=new Date(Date.parse(TIME)+60000).toISOString();
+ source=await f.runtime.sourceOperation(f.getSession,source.id,'review',{expectedRevision:source.revision});
+ const startedAt=source.progress.startedAt;
+ f.reload();const reopened=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+ assert.deepEqual(reopened.progress,source.progress);
+ at=new Date(Date.parse(TIME)+120000).toISOString();
+ source=await f.runtime.sourceOperation(f.getSession,source.id,'review',{expectedRevision:reopened.revision});
+ assert.equal(source.progress.startedAt,startedAt);
+ source=await f.finish(source,'review');assert.equal(source.progress.finishedAt,at);
+ f.reload();assert.deepEqual((await f.runtime.sourceOperation(f.getSession,source.id,'read')).progress,source.progress);
+});
+
 test('unapplied source deletion removes rows, exclusive payloads and source while preserving shared blocks',async t=>{
  const values={ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'123',Artikelbezeichnung:'Synthetic shared article'})]};
  const f=await fixture(t,{values});f.options.sharedPayloads=true;f.reload();
@@ -218,6 +234,9 @@ test('a lost date checkpoint resumes the file and backfills earlier committed ro
  f.state.beforeMessage=null;f.reload();let source=await f.upload();assert.equal(source.contentDate.status,'pending');
  let n=0;do{source=await f.runtime.sourceOperation(f.getSession,source.id,'content-date');assert.ok(++n<80);}while(source.contentDate.status!=='complete');
  assert.equal(source.contentDate.value,'2026-09-03T23:58:00.000');
+ assert.equal(source.dateProgress.completedRows,source.dateProgress.totalRows);
+ assert.equal(source.dateProgress.finishedAt,TIME);
+ f.reload();assert.deepEqual((await f.runtime.sourceOperation(f.getSession,source.id,'read')).dateProgress,source.dateProgress);
  assert.equal(source.tables.find(t=>t.name==='ARTIKEL_STAMM').run.receivedRows,201);
 });
 
