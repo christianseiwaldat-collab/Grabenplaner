@@ -383,6 +383,15 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/sales-article-workspace.js",
   "lib/persistence/sqlite/sales-article-workspace-catalog.js",
   "lib/persistence/repositories/sales-article-workspace.js",
+  // These article tools reuse catalog-bound queries and encrypted annotations.
+  // Classification does not grant a driver import or raw database access.
+  "lib/persistence/repositories/sales-article-local-notes.js",
+  "lib/sales-article-sales-statements.js",
+  "lib/sales-article-sales-catalog.js",
+  "lib/sales-article-sales-identity.js",
+  "lib/sales-article-sales.js",
+  "lib/sales-article-sales-routes.js",
+  "lib/sales-price-label-template-store.js",
   "lib/persistence/sqlite/xoffi-snapshots-catalog.js",
   "lib/persistence/sqlite/operations/xoffi-snapshots-schema.js",
   "lib/persistence/statements/cash-publication-batches.js",
@@ -591,6 +600,11 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/trade-stock.test.js",
   "test/trade-insights-api.test.js",
   "test/trade-article-history.test.js",
+  "test/trade-movements.test.js",
+  "test/sales-article-local-notes.test.js",
+  "test/sales-article-sales.test.js",
+  "test/sales-price-label-template-store.test.js",
+  "test/sales-price-labels-server-access.test.js",
   "test/login-resilience-api.test.js",
 
   "test/branch-sales-api.test.js",
@@ -736,7 +750,12 @@ const PHASE_3_SQLITE_DRIVER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_DRIVER_FILE_SET = new Set(PHASE_3_SQLITE_DRIVER_FILES);
 const PHASE_3_STATEMENT_FILES = Object.freeze(
-  PHASE_3_SQLITE_PROVIDER_FILES.filter((file) => file.startsWith("lib/persistence/statements/")),
+  PHASE_3_SQLITE_PROVIDER_FILES.filter((file) => (
+    file.startsWith("lib/persistence/statements/")
+    // The exact article-sales statement module is catalog-bound; other lib/
+    // modules still cannot declare provider statements.
+    || file === "lib/sales-article-sales-statements.js"
+  )),
 );
 const PHASE_3_SQLITE_RAW_ACCESS_FILES = Object.freeze(
   PHASE_3_SQLITE_PROVIDER_FILES.filter((file) => (
@@ -774,10 +793,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1465;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1471;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 44;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1421;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1348;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1427;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1354;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -903,7 +922,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1332;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1338;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 133;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",

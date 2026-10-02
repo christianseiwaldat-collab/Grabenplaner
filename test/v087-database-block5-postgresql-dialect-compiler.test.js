@@ -283,15 +283,15 @@ test("Block 5/7: SQLite-Quoted-Identifier werden erkannt, ihre Inhalte aber nich
   assert.deepEqual(result.blockingFeatures, ["sqlite.quoted-identifier"]);
 });
 
-test("Block 5/7: der reale 1465er SQLite-Katalog wird vollständig und geschlossen klassifiziert", () => {
+test("Block 5/7: der reale 1471er SQLite-Katalog wird vollständig und geschlossen klassifiziert", () => {
   const compiled = SQLITE_APPLICATION_CATALOG.map((entry) => (
     compilePostgresqlDialectEntry(entry)
   ));
   const portable = compiled.filter((entry) => entry.strategy === "portable-generated");
   const blocked = compiled.filter((entry) => entry.strategy === "requires-override");
 
-  assert.equal(compiled.length, 1465);
-  assert.equal(portable.length, 1332);
+  assert.equal(compiled.length, 1471);
+  assert.equal(portable.length, 1338);
   assert.equal(blocked.length, 133);
   assert.ok(portable.every((entry) => (
     typeof entry.compiledSql === "string"
