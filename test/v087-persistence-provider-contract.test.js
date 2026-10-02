@@ -508,7 +508,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     report.phase5Progress.compilerVersion,
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1465);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1471);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -526,7 +526,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1465,
+    requiredReceiptCount: 1471,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -671,4 +671,42 @@ test("v0.87 Datenbank Block 5: Vertragsdokument hält Historie und aktuellen Pro
     assert.equal(Object.hasOwn(packageJson.optionalDependencies || {}, dependency), false);
     assert.equal(Object.hasOwn(packageJson.peerDependencies || {}, dependency), false);
   }
+});
+
+test("Article tools classify exact persistence modules without granting drivers or unrelated statement declarations", () => {
+  const namedSlices = [
+    "lib/persistence/repositories/sales-article-local-notes.js",
+    "lib/sales-article-sales-statements.js",
+    "lib/sales-article-sales-catalog.js",
+    "lib/sales-article-sales-identity.js",
+    "lib/sales-article-sales.js",
+    "lib/sales-article-sales-routes.js",
+    "lib/sales-price-label-template-store.js",
+  ];
+  for (const file of namedSlices) {
+    assert.equal(PHASE_3_SQLITE_PROVIDER_FILES.filter(entry => entry === file).length, 1, file);
+    assert.deepEqual(architectureBoundaryViolationsForText(file, fs.readFileSync(path.join(root, file), "utf8")), [], file);
+    assert.equal(architectureBoundaryViolationsForText(file, "const driver = require('node:" + "sqlite');")
+      .some(entry => entry.kind === "sqlite-driver-import-outside-boundary"), true, file);
+    assert.equal(architectureBoundaryViolationsForText(file, "const driver = require('pg');")
+      .some(entry => entry.kind === "postgresql-driver-import"), true, file);
+    assert.equal(architectureBoundaryViolationsForText(file, "const provider = createPersistenceProviderFacade(adapter);")
+      .some(entry => entry.kind === "provider-facade-outside-boundary"), true, file);
+    assert.equal(architectureBoundaryViolationsForText(file, "const statement = definePersistenceStatement({});")
+      .some(entry => entry.kind === "provider-statement-outside-boundary"),
+    file !== "lib/sales-article-sales-statements.js", file);
+  }
+  for (const file of ["lib/sales-article-sales-other-statements.js", "lib/sales-price-label-other-store.js"]) {
+    const source = "const contract = require('./persistence/contract'); const statement = definePersistenceStatement({});";
+    const violations = architectureBoundaryViolationsForText(file, source);
+    assert.equal(violations.some(entry => entry.kind === "provider-contract-runtime-import"), true, file);
+    assert.equal(violations.some(entry => entry.kind === "provider-statement-outside-boundary"), true, file);
+  }
+  for (const file of [
+    "test/sales-article-local-notes.test.js",
+    "test/sales-article-sales.test.js",
+    "test/sales-price-label-template-store.test.js",
+    "test/sales-price-labels-server-access.test.js",
+    "test/trade-movements.test.js",
+  ]) assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.filter(entry => entry === file).length, 1, file);
 });

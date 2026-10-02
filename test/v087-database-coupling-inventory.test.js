@@ -328,7 +328,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // The explicitly classified historical transfer, paired recovery and full application
   // rehearsal adapters extend the frozen pre-migration inventory. Unknown files still fail.
   // The explicit Xoffi snapshot migration is an additional classified adapter.
-  assert.equal(report.summary.productionDirectFiles, 94);
+  // The article-sales route adds an HTTP cache header that the lexical scanner
+  // counts as a direct signal; its exact classification grants no raw SQL access.
+  assert.equal(report.summary.productionDirectFiles, 95);
   // Five archive/child operating adapters and one read-only recovery-key
   // verifier and isolated full-source measurement extend the existing indirect
   // inventory; no raw business access or productive import activation.
@@ -451,7 +453,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1465);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1471);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -468,7 +470,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1465,
+    requiredReceiptCount: 1471,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
