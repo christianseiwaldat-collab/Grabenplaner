@@ -16,6 +16,13 @@
     if (numbers.length > 100 || numbers.some(number => number.length > 80 || /[\u0000-\u001f\u007f]/u.test(number))) throw new Error('Bitte höchstens 100 gültige Artikelnummern eingeben.');
     return numbers;
   }
+  function articleTemplateIntent(article, template, {copy = false} = {}) {
+    const numbers = parseArticleNumbers(typeof article === 'string' ? article : article?.articleNumber);
+    if (numbers.length !== 1) throw new Error('Bitte genau einen Artikel auswählen.');
+    if (template && (typeof template.id !== 'string' || !template.id)) throw new Error('Die gespeicherte Vorlage ist nicht verfügbar.');
+    return {articleNumber: numbers[0], templateId: template?.id || '',
+      copy: Boolean(template && (copy || template.received !== false || template.canEdit !== true))};
+  }
   function normalizeOptions(value = {}) {
     const options = { ...defaults, ...value };
     for (const field of ['paperWidthMm', 'paperHeightMm', 'labelWidthMm', 'labelHeightMm']) if (!Number.isFinite(options[field]) || options[field] < 10 || options[field] > 500) throw new Error('Papier- und Schildmaße müssen zwischen 10 und 500 mm liegen.');
@@ -367,7 +374,7 @@
       libraryMode = 'defaults'; selectedTemplate = null; libraryReady = false; libraryLoading = false; fillLibrarySelect(); renderRecipients();
       q('library-title').value = ''; q('library-scope').value = 'private'; q('library-reload').hidden = true; q('saved').textContent = ''; render();
     }
-    return {
+    const workspace = {
       async load() {
         const nextOwner = accessKey(); if (owner !== nextOwner) { suspend(); form.elements.articleNumbers.value = ''; setOptions(defaults); setFileOptions(fileDefaults); }
         active = true; owner = nextOwner; const ticket = ++generation; libraryLoading = true; status('Gespeicherte Einstellungen werden geladen …'); render();
@@ -385,9 +392,40 @@
         } else if (results[0].reason?.name !== 'AbortError') status(results[0].reason.message, true);
         if (results[2].status === 'rejected' && results[2].reason?.name !== 'AbortError') q('saved').textContent = 'Die Vorlagenbibliothek ist gerade nicht erreichbar. Deine Standardeinstellung kannst du weiterhin speichern.';
         render();
+      },
+      async openArticle(article, templateId = '', {copy = false} = {}) {
+        let ticket = generation;
+        try {
+          const initial = articleTemplateIntent(article, null), requestedOwner = accessKey();
+          suspend(); const loading = workspace.load(); ticket = generation;
+          await loading;
+          if (owner !== requestedOwner || !permitted(ticket)) return false;
+          if (templateId) {
+            const template = await request('/api/sales/price-labels/library/' + encodeURIComponent(templateId));
+            if (!permitted(ticket)) return false;
+            const intent = articleTemplateIntent(initial.articleNumber, template, {copy});
+            library.templates = [...library.templates.filter(item => item.id !== template.id), template];
+            chooseTemplate(template.id);
+            if (intent.copy) newTemplate(true);
+            if (intent.copy && libraryMode !== 'new') throw new Error('Für eine eigene Kopie fehlt die Freigabe.');
+          } else {
+            chooseTemplate(''); newTemplate(false);
+            if (libraryMode !== 'new') throw new Error('Für eine neue Vorlage fehlt die Freigabe.');
+            q('library-title').value = 'Preisschild ' + initial.articleNumber;
+          }
+          form.elements.articleNumbers.value = initial.articleNumber;
+          form.elements.priceType.value = 'sales';
+          exportForm.elements.name.value = (q('library-title').value + '-' + initial.articleNumber).slice(0, 110);
+          loadedKey = ''; render(); await loadArticles();
+          return permitted(ticket);
+        } catch (error) {
+          if (permitted(ticket) && error.name !== 'AbortError') status(error.message, true);
+          return false;
+        }
       }, suspend,
       destroy() { suspend(); for (const off of listeners) off(); root.replaceChildren(); },
     };
+    return workspace;
   }
-  return { mount, defaults, parseArticleNumbers, normalizeOptions, paperLayout, price };
+  return { mount, defaults, parseArticleNumbers, articleTemplateIntent, normalizeOptions, paperLayout, price };
 });

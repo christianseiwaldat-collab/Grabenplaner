@@ -69,6 +69,20 @@ test('article Umlagerungen retain unresolved legacy references without scanning 
  const result=await f.run('article-movements',{articleNumber:'000042'});assert.deepEqual(result.rows.map(r=>r.movementNumber),['1']);assert.equal(result.scanned,2);assert.equal(result.rows[0].label,'Imported later');
  f.state.session={...f.state.session,permissions:f.state.session.permissions.filter(v=>v!=='sales:purchasing:read')};await assert.rejects(f.run('article-movements',{articleNumber:'000042'}),e=>e.status===403);
 });
+test('Article transfer endpoint filters are directional, permission checked and bound to cursors',async t=>{
+ const f=await seed(t,[movement(1,{We:false,Umlagerung:true,FilialID:'19',Filialid2:'18'}),movement(2,{We:false,Umlagerung:true,FilialID:'18',Filialid2:'19'}),movement(3,{We:false,Umlagerung:true,FilialID:'98',Filialid2:'18'})]);
+ const query={articleNumber:'000042'};
+ assert.deepEqual((await f.run('article-movements',{...query,fromLocationId:'19',toLocationId:'18'})).rows.map(r=>r.movementNumber),['1']);
+ assert.deepEqual((await f.run('article-movements',{...query,fromLocationId:'18'})).rows.map(r=>r.movementNumber),['2']);
+ assert.deepEqual((await f.run('article-movements',{...query,fromLocationId:'trade-source:98',toLocationId:'18'})).rows.map(r=>r.movementNumber),['3']);
+ const base=f.state.session;f.state.session={...base,permissions:base.permissions.filter(v=>!v.includes('company')&&!v.includes('unassigned')),scopes:[{locationId:'18'}]};
+ const own=await f.run('article-movements',{...query,toLocationId:'18'});assert.equal(own.rows.length,2);assert.ok(own.rows.every(r=>r.endpoints.from.sourceId===null));
+ for(const filters of [{fromLocationId:'19'},{toLocationId:'19'},{fromLocationId:'trade-source:98'}])await assert.rejects(f.run('article-movements',{...query,...filters}),e=>e.status===403);
+ f.state.session=base;
+ await f.ingest('WE',Array.from({length:210},(_,i)=>movement(i+100,{We:false,Umlagerung:true,FilialID:'19',Filialid2:'18'})),{sourceInstance,snapshotAt:'2026-09-15T09:00:00.000Z'});
+ const page=await f.run('article-movements',{...query,toLocationId:'18'});assert.ok(page.next);
+ await assert.rejects(f.run('article-movements',{...query,toLocationId:'19',cursor:page.next}),e=>e.code==='IMPORT_BESTELL_CURSOR');
+});
 
 test('article display numbers resolve only explicit Trade source links, preserving different numeric identities',async t=>{
  const f=await fixture(t),C=require('../lib/data-import-contract'),sourceKey='0000000000042';

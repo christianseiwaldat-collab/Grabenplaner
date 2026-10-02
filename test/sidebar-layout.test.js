@@ -1,6 +1,9 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
 const { createGroups, mount } = require("../public/sidebar-layout");
 
 test("Navigation restores only the active path, including the planning branch", () => {
@@ -30,7 +33,7 @@ test("Route changes open their own module and leave unrelated modules closed", (
   }
 });
 
-function surface({ stored = null, zoom = 1, viewport = 1600, blockedStorage = false } = {}) {
+function surface({ stored = null, zoom = 1, viewport = 1600, viewportHeight = 900, bannerHeight = 0, blockedStorage = false } = {}) {
   function target() {
     const handlers = new Map();
     return {
@@ -38,7 +41,7 @@ function surface({ stored = null, zoom = 1, viewport = 1600, blockedStorage = fa
       fire(name, args = {}) { const event = { preventDefault() {}, ...args }; for (const handler of handlers.get(name) || []) handler(event); },
     };
   }
-  const attributes = {}, classes = new Set(), style = {};
+  const attributes = {}, classes = new Set(), style = { "--deployment-banner-height": `${bannerHeight}px` };
   const handle = Object.assign(target(), {
     focus() {}, setAttribute(key, value) { attributes[key] = value; },
     setPointerCapture(id) { this.capture = id; }, hasPointerCapture(id) { return this.capture === id; },
@@ -46,7 +49,8 @@ function surface({ stored = null, zoom = 1, viewport = 1600, blockedStorage = fa
   });
   const mobileMedia = Object.assign(target(), { matches: false });
   const win = Object.assign(target(), {
-    innerWidth: viewport, getComputedStyle: () => ({ zoom }),
+    innerWidth: viewport, innerHeight: viewportHeight,
+    getComputedStyle: () => ({ zoom, getPropertyValue: key => style[key] || "" }),
     localStorage: { getItem() { if (blockedStorage) throw new Error("disabled"); return stored; }, setItem(key, value) { if (blockedStorage) throw new Error("disabled"); stored = value; } },
   });
   const doc = {
@@ -108,4 +112,56 @@ test("Keyboard resizing is bounded, survives unavailable storage and restores af
   blocked.handle.fire("keydown", { key: "ArrowRight" });
   assert.equal(blocked.width(), 250);
   assert.equal(surface({ stored: "not-a-number" }).width(), 240);
+});
+
+test("Sidebar fills the visible viewport with GP zoom, a changing banner and a narrow menu", () => {
+  const s = surface({ zoom: 1.5, viewport: 1500, viewportHeight: 960, bannerHeight: 60 });
+  const rendered = name => Number.parseFloat(s.style[name]) * 1.5;
+  assert.equal(rendered("--sidebar-top"), 60);
+  assert.equal(rendered("--sidebar-height"), 900);
+  assert.equal(rendered("--sidebar-top") + rendered("--sidebar-height"), 960);
+  s.style["--deployment-banner-height"] = "0px";
+  s.controller.refreshViewport();
+  assert.equal(rendered("--sidebar-height"), 960);
+  s.win.innerHeight = 600;
+  s.win.innerWidth = 390;
+  s.mobileMedia.matches = true;
+  s.win.fire("resize");
+  assert.equal(rendered("--sidebar-height"), 600);
+  assert.equal(rendered("--sidebar-mobile-width"), 348);
+});
+
+test("Logistik opens its child path and marks only Einkauf / Lieferstände as the current page", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
+  const functions = source.slice(source.indexOf("function navigationGroups()"), source.indexOf("function schedulePdfDesignCatalog("));
+  const nodes = new Map();
+  function node(id) {
+    if (!nodes.has(id)) {
+      const classes = new Set(), attributes = {};
+      nodes.set(id, {
+        classes, attributes,
+        classList: { contains: name => classes.has(name), toggle(name, enabled) { enabled ? classes.add(name) : classes.delete(name); } },
+        setAttribute(name, value) { attributes[name] = value; }, removeAttribute(name) { delete attributes[name]; },
+      });
+    }
+    return nodes.get(id);
+  }
+  const context = {
+    elements: new Proxy({}, { get: (_, id) => node(id) }),
+    state: { currentView: "logistics", portalSession: null },
+    sidebarNavigationGroups: createGroups(), activeLocations: () => [],
+    currentAdministrationRoute: () => ({ view: "logistics", section: "purchasing" }),
+    document: { getElementById: node, querySelector: selector => selector === ".main-nav" ? null : node(selector) },
+    requestAnimationFrame: callback => callback(),
+  };
+  vm.createContext(context); vm.runInContext(functions, context);
+  context.renderContextNavigation();
+  assert.equal(node("logisticsNavButton").attributes["aria-current"], undefined);
+  assert.equal(node("logisticsNavButton").classes.has("active"), false);
+  assert.equal(node("logisticsPurchasingNavButton").attributes["aria-current"], "page");
+  assert.equal(node("logisticsPurchasingNavButton").classes.has("active"), true);
+  assert.equal(node("logisticsNavChildren").classes.has("hidden"), false);
+  context.sidebarNavigationGroups.setOpen("logistics", false);
+  context.renderContextNavigation();
+  assert.equal(node("logisticsNavChildren").classes.has("hidden"), true, "Background renders preserve manual disclosure");
 });

@@ -25897,7 +25897,7 @@ require('./lib/sales-article-sales-routes').registerSalesArticleSalesRoutes(app,
   runtime:managedSalesHistoryRuntime, requireSession:requireEmployeePortalSession,assertCsrf:assertPortalCsrf,
   refreshSession:request=>loadPortalSessionFromRequest(request,{touch:false}),
 });
-const tradeInsightRuntime = require('./lib/persistence/repositories/trade-insights').createTradeInsightRuntime({ access: persistenceProvider, vault: integrationSecretVault });
+const tradeInsightRuntime = require('./lib/persistence/repositories/trade-insights').createTradeInsightRuntime({ access: persistenceProvider, vault: integrationSecretVault, today: () => viennaTodayIso() });
 const tradeInsightJobs = require('./lib/persistence/repositories/trade-insight-jobs').createTradeInsightJobs({
   access: persistenceProvider, vault: integrationSecretVault, runtime: tradeInsightRuntime, resolvePrincipal: resolveSalesReportPrincipal,
   ...(postgresqlActive ? { dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
@@ -38029,6 +38029,14 @@ require('./lib/sales-article-local-notes-routes').registerSalesArticleLocalNotes
 require('./lib/sales-article-tools-routes').registerSalesArticleToolsRoutes(app,{
   ...salesArticleToolAuth, preferences:uiPreferencesRepository,notes:salesArticleLocalNotesRepository,images:salesArticleImagesRepository,
   refreshSession:(request,original)=>isLocalSystemSession(original)?Promise.resolve(original):loadPortalSessionFromRequest(request,{touch:false}),
+  today:()=>viennaTodayIso(),
+  loadHistoryContext:async(session,fresh)=>{
+    const sales=require('./lib/sales-article-sales-model').capabilities(session).sales
+      ?await managedSalesHistoryRuntime.run(fresh,workspace=>workspace?.articleSales?.context()||{locations:[]}):null;
+    const movements=require('./lib/tradefoto-bestell/access').projectionFor(session).purchasing
+      ?await tradeInsightRuntime.run(fresh,'context',{}):null;
+    return {salesLocations:[...(sales?.locations||[]),...(sales?.unassigned?[{id:'unassigned',label:'Filialzuordnung offen'}]:[])],movementLocations:movements?.purchasingLocations||movements?.locations||[]};
+  },
   loadDetail:async(article,session)=>{
     const projection=salesArticleCatalogProjectionForSession(session),revisions=await salesArticleCatalogRepository.listRevisions(article.productId),result=await projectSalesArticleDetail(article,revisions,projection);
     Object.assign(result.article,await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({access:persistenceProvider,vault:integrationSecretVault,article,projection}));return result;

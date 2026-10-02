@@ -96,6 +96,21 @@ test('Legacy URLs retain only known tabs and never redirect outside GP', () => {
   assert.equal(legacyUrl('?tab=https://elsewhere.example/&view=outside'), '/?view=tradeInsights&section=purchasing');
 });
 
+test('Logistics uses authorized imported receiving choices while other views retain their branch list',async()=>{
+ const f=fixture();f.workspace.setArea('logistics');
+ const pending=f.workspace.activate('purchasing');
+ f.requests[0].resolve({...context,purchasingLocations:[{id:'trade-source:0',label:'0 · Zentrallager'},{id:'3',label:'3 · Großhandel'},{id:'99',label:'99 · United Camera Wien'}]});
+ await pending;
+ const form=f.node('filters');
+ assert.deepEqual(form.elements.locationId.children.map(n=>n.value),['','trade-source:0','3','99']);
+ assert.equal(form.elements.locationId.children[0].textContent,'Alle freigegebenen Lieferstellen');
+ assert.equal(f.node('purchasing-location-hint').hidden,false);
+ f.workspace.setArea('stock');await f.workspace.activate('repairs');
+ assert.deepEqual(form.elements.locationId.children.map(n=>n.value),['','93']);
+ assert.equal(f.node('purchasing-location-hint').hidden,true);
+ f.workspace.destroy();
+});
+
 
 test('stock summary offers all IDs and submits a durable server job that survives leaving the view',async t=>{
  const SavedFormData=globalThis.FormData;

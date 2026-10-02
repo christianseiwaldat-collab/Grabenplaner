@@ -46,6 +46,17 @@
       const value = Number.parseFloat(win.getComputedStyle(doc.body).zoom);
       return Number.isFinite(value) && value > 0 ? value : 1;
     };
+    function refreshViewport() {
+      const zoom = scale();
+      const viewportHeight = win.visualViewport?.height || win.innerHeight;
+      const bannerHeight = Number.parseFloat(win.getComputedStyle(doc.documentElement)
+        .getPropertyValue("--deployment-banner-height")) || 0;
+      // CSS viewport units also change with zoom in some browser versions. Use
+      // the visible viewport once, then convert to the GP's zoomed coordinates.
+      doc.documentElement.style.setProperty("--sidebar-top", `${bannerHeight / zoom}px`);
+      doc.documentElement.style.setProperty("--sidebar-height", `${Math.max(0, viewportHeight - bannerHeight) / zoom}px`);
+      doc.documentElement.style.setProperty("--sidebar-mobile-width", `${Math.min(320, Math.max(0, win.innerWidth - 42) / zoom)}px`);
+    }
     const maximum = () => Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(win.innerWidth / scale() * .45)));
     const clamp = value => Math.round(Math.max(MIN_WIDTH, Math.min(maximum(), value)));
     function render(value) {
@@ -71,6 +82,7 @@
     }
     function refresh() {
       finish(true);
+      refreshViewport();
       render(preferred);
     }
     function onPointerDown(event) {
@@ -105,10 +117,11 @@
     handle.addEventListener("keydown", onKeyDown);
     handle.addEventListener("dblclick", resetWidth);
     win.addEventListener("resize", refresh);
+    win.visualViewport?.addEventListener("resize", refresh);
     win.addEventListener("blur", () => finish(true));
     mobileMedia.addEventListener("change", refresh);
-    render(preferred);
-    return { refresh };
+    refresh();
+    return { refresh, refreshViewport };
   }
   return { navigationPath, createGroups, mount };
 });

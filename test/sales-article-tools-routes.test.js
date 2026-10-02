@@ -20,6 +20,8 @@ async function fixture(t) {
   const imageBuffer = await sharp({ create: { width: 220, height: 160, channels: 3, background: '#26725f' } }).webp().toBuffer();
   app.use(express.json({ limit: '1mb' }));
   registerSalesArticleToolsRoutes(app, {
+    today:()=> '2026-10-03',
+    async loadHistoryContext(session,fresh){await fresh();return {salesLocations:[{id:'branch-a',label:'18 · Branch A'}],movementLocations:[{id:'branch-a',label:'18 · Branch A'},{id:'trade-source:0',label:'0 · Zentrallager'}]};},
     preferences: { async get(owner, key) { const value = stored.get(owner + ':' + key); await state.preferencesHook?.(); return { value }; }, async upsert(owner, key, value) { stored.set(owner + ':' + key, value); } },
     sessionFor(req) {
       const current = state.principals[req.get('X-Employee') || '42'];
@@ -128,7 +130,7 @@ test('Article PDF rejects invalid selections, unapproved histories, forged conte
     assert.doesNotMatch(response.headers.get('content-type') || '', /application\/pdf/);
   }
   f.state.principals['42'] = principal('42', basicRights);
-  assert.deepEqual(await (await f.request('tools/context')).json(), { sales: false, movements: false, write: false });
+  assert.deepEqual(await (await f.request('tools/context')).json(), { sales: false, movements: false, write: false,today:'2026-10-03',sellers:false,salesLocations:[],movementLocations:[] });
   for (const section of ['sales', 'movements']) assert.equal((await f.request('sheet.pdf', pdfBody({ sections: [section] }))).status, 403);
   assert.equal(f.state.counts.sales, 0); assert.equal(f.state.counts.movements, 0);
   const result = await readPdf(await f.request('sheet.pdf', pdfBody({ sections: ['master', 'notes'] })));
@@ -184,7 +186,7 @@ test('Real local sessions without accountId or isEmployee can read preferences a
     permissions: [...basicRights], scopes: [], mustChangePassword: false };
   assert.equal(Object.hasOwn(f.state.principals['42'], 'accountId'), false);
   assert.equal(Object.hasOwn(f.state.principals['42'], 'isEmployee'), false);
-  assert.deepEqual(await (await f.request('tools/context')).json(), { sales: false, movements: false, write: false });
+  assert.deepEqual(await (await f.request('tools/context')).json(), { sales: false, movements: false, write: false,today:'2026-10-03',sellers:false,salesLocations:[],movementLocations:[] });
   assert.equal((await f.request('tools/pdf-options')).status, 200);
   const saved = { columns: ['text'], widths: { text: 420 } };
   assert.equal((await f.request('tools/table-options/article-notes', saved)).status, 200);
@@ -242,4 +244,24 @@ test('Article PDF history pages retain server identity and cap the export visibl
   assert.equal(f.state.counts.movements, 2); assert.deepEqual(f.state.requests.map(item => item.query.articleNumber), ['001234', '001234']);
   assert.equal(f.state.requests[1].query.cursor, 'trusted-cursor'); assert.match(result.text, /Auszug: 1000 Positionen/);
   assert.match(result.pages.at(-1), /Abfragedauer - Umlagerungen: 1 s/);
+});
+
+test('History context and article PDF retain submitted location/personnel filters and server-date defaults',async t=>{
+ const f=await fixture(t),context=await(await f.request('tools/context')).json();
+ assert.equal(context.today,'2026-10-03');assert.equal(context.sellers,true);assert.equal(context.salesLocations[0].id,'branch-a');
+ const defaults=await readPdf(await f.request('sheet.pdf',pdfBody({sections:['sales','movements']})));
+ assert.match(defaults.text,/03\.10\.2025.*03\.10\.2026/);
+ assert.deepEqual(f.state.requests.find(r=>r.kind==='sales').query,{articleNumber:'001234',dateFrom:'2025-10-03',dateTo:'2026-10-03',locationId:'',personnel:'',limit:100,sort:'date',direction:'desc'});
+ const movementDefault=f.state.requests.find(r=>r.kind==='movements').query;
+ assert.equal((Date.parse(movementDefault.dateTo)-Date.parse(movementDefault.dateFrom))/86400000,89);
+ f.state.requests=[];
+ const result=await readPdf(await f.request('sheet.pdf',pdfBody({sections:['sales','movements'],
+  sales:{dateFrom:'2026-09-01',dateTo:'2026-09-30',locationId:'branch-a',personnel:'007'},
+  movements:{dateFrom:'2026-09-02',dateTo:'2026-09-29',fromLocationId:'trade-source:0',toLocationId:'branch-a'}})));
+ assert.equal(f.state.requests.find(r=>r.kind==='sales').query.personnel,'007');assert.equal(f.state.requests.find(r=>r.kind==='sales').query.locationId,'branch-a');
+ assert.equal(f.state.requests.find(r=>r.kind==='movements').query.fromLocationId,'trade-source:0');assert.equal(f.state.requests.find(r=>r.kind==='movements').query.toLocationId,'branch-a');
+ assert.match(result.text,/Personalnummer: 007/);assert.match(result.text,/Von Filiale: 0.*Zentrallager/);assert.match(result.text,/Zu Filiale: 18.*Branch A/);
+ f.state.principals['42'].permissions=f.state.principals['42'].permissions.filter(p=>p!==History.SALES_HISTORY_PERMISSIONS.SELLERS);
+ const count=f.state.counts.sales;
+ assert.equal((await f.request('sheet.pdf',pdfBody({sections:['sales'],sales:{personnel:'007'}}))).status,403);assert.equal(f.state.counts.sales,count);
 });

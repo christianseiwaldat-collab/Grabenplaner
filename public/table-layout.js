@@ -40,6 +40,8 @@
       [...group.children].forEach((col, i) => { col.style.width = sizes[i] + 'px'; });
       table.style.width = sizes.reduce((sum, width) => sum + width, 0) + 'px';
       for (const handle of table.querySelectorAll(selector)) {
+        handle.classList.add('gp-column-resizer');
+        handle.title = 'Spaltenbreite ziehen; Pfeiltasten zum Anpassen';
         const index = selected.findIndex(c => c.id === handle.getAttribute(attribute));
         const width = sizes[index] || MIN;
         handle.setAttribute('aria-valuenow', String(Math.round(width)));
@@ -47,9 +49,15 @@
         handle.disabled = !options.canResize();
       }
     }
+    function scale() {
+      const cssWidth = parseFloat(table.style.width);
+      const ratio = cssWidth > 0 ? table.getBoundingClientRect().width / cssWidth : 1;
+      return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+    }
     function measured() {
       const result = widths();
-      [...table.tHead.rows[0].cells].forEach((cell, i) => { if (columns()[i].resizable !== false) result[columns()[i].id] = clamp(cell.getBoundingClientRect().width); });
+      const zoom = scale();
+      [...table.tHead.rows[0].cells].forEach((cell, i) => { if (columns()[i].resizable !== false) result[columns()[i].id] = clamp(cell.getBoundingClientRect().width / zoom); });
       return result;
     }
     function resize(id, width, baseline) {
@@ -61,12 +69,12 @@
       if (!handle || event.button !== 0 || !options.canResize()) return;
       event.preventDefault(); handle.focus();
       const baseline = measured(), id = handle.getAttribute(attribute);
-      drag = {pointer:event.pointerId, x:event.clientX, id, width:baseline[id], baseline, handle};
+      drag = {pointer:event.pointerId, x:event.clientX, id, width:baseline[id], baseline, handle, scale:scale()};
       handle.setPointerCapture(event.pointerId);
       table.classList.add('is-resizing-column');
     });
     on('pointermove', event => {
-      if (drag?.pointer === event.pointerId && options.canResize()) resize(drag.id, drag.width + event.clientX - drag.x, drag.baseline);
+      if (drag?.pointer === event.pointerId && options.canResize()) resize(drag.id, drag.width + (event.clientX - drag.x) / drag.scale, drag.baseline);
     });
     function end(event) {
       if (!drag || drag.pointer !== event.pointerId) return;

@@ -4988,7 +4988,7 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.salesAnalyticsNavButton, state.currentView === "salesAnalytics");
   setNavigationCurrent(elements.receiptSearchNavButton, state.currentView === "receiptSearch");
   setNavigationCurrent(elements.tradeInsightsNavButton, state.currentView === "tradeInsights");
-  setNavigationCurrent(elements.logisticsNavButton, state.currentView === "logistics");
+  setNavigationCurrent(elements.logisticsNavButton, false);
   const logisticsNav = document.getElementById("logisticsNav");
   logisticsNav?.classList.toggle("contains-active", state.currentView === "logistics");
   applyNavigationGroupState("logistics", !logisticsNav?.classList.contains("hidden"));
@@ -30384,15 +30384,30 @@ function changeSalesArticleColumns(id, move = 0) {
   if (sortChanged && catalog.searchStarted) void loadSalesArticleCatalog({ reset: true, preserveDetail: true });
 }
 function applySalesArticleDetailTabs() {
-  const panels = ['salesArticleOverviewPanel','salesArticlePricesSection','salesArticleNotesSection','salesArticleIdentifiersSection','salesArticleMovementsSection','salesArticleSalesSection'];
-  const active = panels.includes(state.salesArticleCatalog.detailTab) ? state.salesArticleCatalog.detailTab : panels[0];
+  const panels = ['salesArticleOverviewPanel','salesArticlePricesSection','salesArticleNotesSection','salesArticleIdentifiersSection','salesArticleMovementsSection','salesArticleSalesSection','salesArticlePriceLabelsSection'];
+  const allowed = id => id !== 'salesArticlePriceLabelsSection' || canUseSalesPriceLabels();
+  const active = panels.includes(state.salesArticleCatalog.detailTab) && allowed(state.salesArticleCatalog.detailTab) ? state.salesArticleCatalog.detailTab : panels[0];
   const nav = elements.salesArticleDetailNavigation; if (!nav) return;
   nav.setAttribute('role', 'tablist');
   [...nav.querySelectorAll('a')].forEach((a, i) => { const id = panels[i], selected = id === active;
+    a.hidden = !allowed(id); a.classList.toggle('hidden', a.hidden);
     a.id = `salesArticleDetailTab${i}`; a.href = '#' + id; a.setAttribute('role','tab'); a.setAttribute('aria-controls',id); a.setAttribute('aria-selected',String(selected)); a.tabIndex = selected ? 0 : -1;
     const panel = document.getElementById(id); if (panel) { panel.hidden = !selected; panel.setAttribute('role','tabpanel'); panel.setAttribute('aria-labelledby',a.id); if (panel.tagName === 'DETAILS' && selected) panel.open = true; }
   });
   state.salesArticleCatalog.tools?.activate(active);
+  if (active === 'salesArticlePriceLabelsSection') void state.salesArticleCatalog.priceLabels?.activate();
+  else state.salesArticleCatalog.priceLabels?.suspend();
+}
+
+function currentSalesArticlePriceLabelsAccessKey() {
+  return [currentSalesArticleCatalogDetailAccessKey(), currentSalesPriceLabelsAccessKey()].join('|');
+}
+
+function openSalesArticlePriceLabel({ articleNumber, templateId = '', copy = false }) {
+  if (state.currentView !== 'articleCatalog' || !canUseSalesPriceLabels()
+    || state.salesArticleCatalog.detail?.article.articleNumber !== articleNumber) return;
+  setView('priceLabels');
+  void salesPriceLabelsWorkspace?.openArticle(articleNumber, templateId, { copy });
 }
 
 function normalizeSalesArticleCatalogItem(article = {}) {
@@ -31871,6 +31886,7 @@ function renderSalesArticleSourceFieldValue(field) {
 function renderSalesArticleCatalogDetail() {
   const catalog = state.salesArticleCatalog;
   catalog.tools?.destroy(); catalog.tools=null;
+  catalog.priceLabels?.destroy(); catalog.priceLabels=null;
   document.getElementById("salesArticlePdfButton")?.classList.add("hidden");
   if (!elements.salesArticleDetail || !elements.salesArticleDetailBody) return;
   elements.salesArticleDetail.setAttribute("aria-busy", String(catalog.detailLoading));
@@ -31954,12 +31970,16 @@ function renderSalesArticleCatalogDetail() {
     + '<section class="sales-article-detail-card" id="salesArticleHistorySection"><header><h3>Versionsverlauf</h3></header>'
     + renderSalesArticleDetailHistory(revisions, article.currentRevision) + '</section></section>'
     + '<section id="salesArticleMovementsSection" class="sales-article-detail-tab-panel"></section>'
-    + '<section id="salesArticleSalesSection" class="sales-article-detail-tab-panel"></section></div>';
+    + '<section id="salesArticleSalesSection" class="sales-article-detail-tab-panel"></section>'
+    + '<section id="salesArticlePriceLabelsSection" class="sales-article-detail-tab-panel"></section></div>';
   window.SalesArticlePriceControls.mount(elements.salesArticleDetailBody, article.priceMatrix, formats, {
     preferenceKey: 'gp.article-price-columns.v1.' + currentSalesArticleCatalogActorKey(),
   });
   catalog.tools = window.SalesArticleTools?.mount(elements.salesArticleDetailBody, {api, rawApi, article, write:salesArticleDetailCanWrite(),
     accessKey:currentSalesArticleCatalogDetailAccessKey, onCustomer:id=>{setView("crm");void openCrmCustomer(id);}});
+  if (canUseSalesPriceLabels()) catalog.priceLabels = window.SalesArticlePriceLabels?.mount(
+    document.getElementById('salesArticlePriceLabelsSection'), { api, rawApi, article,
+      accessKey: currentSalesArticlePriceLabelsAccessKey, onOpen: openSalesArticlePriceLabel });
   document.getElementById("salesArticlePdfButton")?.classList.remove("hidden");
   if (photo) { document.getElementById('salesArticlePhotoSlot').append(photo); photo.classList.remove('hidden'); }
   applySalesArticleDetailTabs();
@@ -35388,6 +35408,9 @@ function setView(view) {
   elements.logisticsView?.classList.toggle("active", view === "logistics");
   if (["tradeInsights","logistics"].includes(view)) void activateTradeArea(view); else tradeInsightsWorkspace?.suspend();
   elements.salesArticleCatalogView?.classList.toggle("active", view === "articleCatalog");
+  if (view !== "articleCatalog") {
+    state.salesArticleCatalog.priceLabels?.destroy(); state.salesArticleCatalog.priceLabels = null;
+  }
   document.getElementById("salesPriceLabelsView")?.classList.toggle("active", view === "priceLabels");
   if (view === "priceLabels") void salesPriceLabelsWorkspace?.load(); else salesPriceLabelsWorkspace?.suspend();
   elements.crmView?.classList.toggle("active", view === "crm");
@@ -39131,6 +39154,7 @@ function updateMobileNavigationOffset() {
     .map((banner) => Math.ceil(banner.getBoundingClientRect().height)));
   document.documentElement.style.setProperty("--deployment-banner-height", `${bannerHeight}px`);
   document.documentElement.style.setProperty("--mobile-navigation-top", `${bannerHeight + 12}px`);
+  sidebarLayout?.refreshViewport();
 }
 
 function syncMobileNavigationMode() {
@@ -41801,7 +41825,7 @@ document.getElementById('salesArticleColumnOptions')?.addEventListener('change',
 document.getElementById('salesArticleColumnOptions')?.addEventListener('click', event => { const button = event.target.closest('[data-sales-article-column-move]'); if (button) changeSalesArticleColumns(button.dataset.salesArticleColumnMove, Number(button.dataset.direction)); });
 elements.salesArticleDetailNavigation?.addEventListener('click', event => { const a = event.target.closest('a'); if (!a) return; event.preventDefault(); state.salesArticleCatalog.detailTab = a.getAttribute('aria-controls'); applySalesArticleDetailTabs(); });
 elements.salesArticleDetailNavigation?.addEventListener('keydown', event => {
-  const links = [...elements.salesArticleDetailNavigation.querySelectorAll('a')], i = links.indexOf(document.activeElement);
+  const links = [...elements.salesArticleDetailNavigation.querySelectorAll('a')].filter(a => !a.hidden), i = links.indexOf(document.activeElement);
   if (i < 0 || !['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
   event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? links.length - 1 : (i + (event.key === 'ArrowRight' ? 1 : -1) + links.length) % links.length;
   links[next].click(); links[next].focus();

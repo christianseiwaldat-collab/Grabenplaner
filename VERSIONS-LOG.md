@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.92.73 Beta – Kompakte Logistik und Preisschilder in der Artikelkartei
+
+- Hauptmenü und Unterpunkte bleiben auch bei langen Seiten vollständig erreichbar. Logistik verwendet die gleiche Menüstruktur wie die bestehenden Hauptbereiche; freigegebene zentrale und historische Lieferstellen sind auswählbar.
+- Einkauf und Lieferstände zeigen eine kompakte Suche neben gespeicherten Ergebnissen. Spaltenauswahl und verstellbare Breiten verwenden die gemeinsame Tabellenbedienung und bleiben für das angemeldete Konto gespeichert.
+- Die Artikelkartei bietet einen Preisschild-Reiter mit eigenen und freigegebenen Vorlagen, direkter PDF-Ausgabe und dem Einstieg zur Gestaltung für den aktuellen Artikel. Fremde Vorlagen werden als eigene Kopie geöffnet.
+- Umlagerungen starten mit den letzten 90 Tagen, Verkäufe mit dem letzten Jahr. Zeitraum und Filialfilter sowie Personalnummern bei Verkäufen begrenzen die Suche; gespeicherte Ergebnisse und PDFs bewahren die verwendeten Filter.
+- Zeitraumgrenzen berücksichtigen den Wiener Kalendertag. PDF-Dateinamen unterstützen Umlaute und weitere Unicode-Zeichen über den Download-Header.
+- Der Produktions-, Sicherungs- und Deploy-Status wird im separaten Auslieferungsbeleg dokumentiert.
+
 ## v0.92.72 Beta – Artikelwerkzeuge, Logistik und gestaltbare Preisschilder
 
 - Logistik ist ein eigener Hauptmenüpunkt unterhalb von Verkauf. Einkauf und Lieferstände zeigen die Belieferung von Zentrallager, United Camera Wien und Großhandel; Einkauf & Bestand priorisiert Reparaturen und bündelt ergänzende Historien.

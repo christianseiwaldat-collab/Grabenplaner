@@ -1,7 +1,17 @@
 .gp-table-columns { table-layout:fixed; min-width:0; }
 .gp-table-columns th { position:relative; }
-.gp-column-resizer { position:absolute; top:0; right:0; bottom:0; width:12px; min-height:0; padding:0; border:0; border-radius:0; background:transparent; cursor:col-resize; touch-action:none; }
-.gp-column-resizer::after { content:""; position:absolute; inset:8px 4px; border-right:2px solid var(--line); }
-.gp-column-resizer:hover::after,.gp-column-resizer:focus-visible::after { border-color:var(--green); }
-.gp-column-resizer:focus-visible { outline:2px solid var(--green); outline-offset:-2px; }
+.gp-table-columns th > .gp-column-resizer { position:absolute; display:block; top:0; right:0; bottom:0; width:12px; min-width:0; min-height:0; height:auto; margin:0; padding:0; border:0; border-radius:0; background:transparent; cursor:col-resize; touch-action:none; }
+.gp-table-columns .gp-column-resizer::after { content:""; position:absolute; inset:10px 4px; border-right:2px solid var(--line); }
+.gp-table-columns .gp-column-resizer:hover::after,.gp-table-columns .gp-column-resizer:focus-visible::after { border-color:var(--green); }
+.gp-table-columns .gp-column-resizer:focus-visible { outline:2px solid var(--green); outline-offset:-2px; }
 .gp-table-columns.is-resizing-column { user-select:none; cursor:col-resize; }
+/* Shared by Trade results and article histories: keep controls in their card's flow. */
+.trade-column-chooser.gp-table-layout-controls { display:block; position:relative; min-width:0; max-width:100%; margin:6px 0 12px; padding:0; border:0; background:transparent; }
+.gp-table-layout-controls > summary { width:fit-content; padding:6px 0; color:var(--green); font-size:12px; font-weight:650; cursor:pointer; }
+.gp-table-layout-controls > summary:focus-visible { outline:2px solid var(--green); outline-offset:3px; border-radius:3px; }
+.gp-table-layout-controls > .trade-column-options { position:static; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); gap:2px 12px; width:min(680px,100%); min-width:0; max-height:240px; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; margin:4px 0; padding:8px; border:1px solid var(--line); border-radius:8px; color:var(--ink); background:var(--surface-soft); }
+.gp-table-layout-controls .trade-column-options label { display:flex; align-items:center; gap:8px; min-width:0; min-height:30px; margin:0; padding:5px; color:var(--ink); font-size:12px; line-height:1.35; overflow-wrap:break-word; cursor:pointer; }
+.gp-table-layout-controls .trade-column-options input[type="checkbox"] { flex:0 0 16px; width:16px; min-width:16px; height:16px; min-height:16px; margin:0; padding:0; accent-color:var(--green); }
+.gp-table-layout-controls .trade-column-options label:has(input:disabled) { color:var(--muted); cursor:default; }
+.gp-table-layout-controls > small { display:block; width:fit-content; color:var(--muted); font-size:11px; }
+.gp-table-layout-controls > small:empty { display:none; }

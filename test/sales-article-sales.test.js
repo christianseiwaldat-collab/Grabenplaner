@@ -108,6 +108,22 @@ test('Personal/customer/cost fields require explicit grants; reduced rights inva
   const hidden=await f.search();assert.ok(!Object.hasOwn(hidden.rows[0],'personnel'));assert.ok(!Object.hasOwn(hidden.rows[0],'actualMargin'));assert.ok(!hidden.columns.personnel);assert.ok(!hidden.columns.actualMargin);
   await assert.rejects(f.search({sort:'actualMargin'}),e=>e.status===403);f.session.permissions=f.session.permissions.filter(p=>p!=='sales:history:read');await assert.rejects(f.search(),e=>e.status===403);
 });
+test('Article sales filter exact source personnel and authorized locations before snapshot paging',async t=>{
+  const source=data();source.Umsatz_Kasse_Details[1]['Verkäuferid']='7';
+  const f=await fixture(t,{source});
+  assert.deepEqual(await f.runtime.run(f.get,w=>w.articleSales.context()),{locations:[{id:'branch-a',label:'Branch A'}]});
+  const page=await f.search({limit:1});
+  const exact=await f.search({locationId:'branch-a',personnel:'07'});assert.equal(exact.total,1);assert.equal(exact.rows[0].actualGross,'120.00');
+  assert.equal((await f.search({personnel:'7'})).rows[0].actualGross,'60.00');
+  assert.equal((await f.search({personnel:'08'})).total,0,'The receipt seller is not the position seller');
+  await assert.rejects(f.search({personnel:'07',cursor:page.next}),e=>e.code==='IMPORT_HISTORY_RESULTS_CHANGED');
+  await assert.rejects(f.search({personnel:'7',resultSet:exact.resultSet}),e=>e.code==='IMPORT_HISTORY_RESULTS_CHANGED');
+  await assert.rejects(f.search({locationId:'branch-b',personnel:'07'}),e=>e.status===403);
+  f.session.permissions=f.session.permissions.filter(p=>p!=='sales:history:sellers:read');
+  await assert.rejects(f.search({personnel:'07'}),e=>e.status===403);
+  assert.equal((await f.search({personnel:''})).total,2);
+  for(const personnel of [7,null,'07\n'])await assert.rejects(f.search({personnel}),e=>e.code==='IMPORT_ARTICLE_SALES_QUERY');
+});
 test('CRM source accounts remain anonymous for zero and unlinked accounts never fabricate a CRM link',async t=>{
   const f=await fixture(t);f.session.permissions.push('crm:access','crm:customers:read','crm:purchases:read');const result=await f.search();
   assert.equal(result.rows[0].customerAccount,'00031');assert.equal(result.rows[0].customerNumber,'00031');assert.equal(result.rows[0].customerNumberBasis,'trade_customer_account');assert.equal(result.rows[0].customerId,null);assert.equal(result.rows[0].customerName,'');assert.equal(result.rows[0].customerStatus,'unlinked');

@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="/table-layout.css" />
     <link rel="stylesheet" href="/sales-article-tools.css" />
     <link rel="stylesheet" href="/sales-price-labels.css" />
+    <link rel="stylesheet" href="/sales-article-price-labels.css" />
     <link rel="stylesheet" href="/receipt-search.css" />
     <link rel="stylesheet" href="/trade-insights.css" />
     <link rel="stylesheet" href="/trade-movements.css" />
@@ -46,7 +47,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.72 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.73 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -1589,7 +1590,7 @@
         </section>
 
         <section id="salesPriceLabelsView" class="view" aria-labelledby="salesPriceLabelsTitle"><header class="topbar"><div><span class="eyebrow">Verkauf · Präsentation</span><h1 id="salesPriceLabelsTitle">Preisschilder</h1><p class="subtitle">Artikelpreise übernehmen, Schilder gestalten und druckfertige PDFs erstellen.</p></div></header><div id="salesPriceLabelsWorkspace"></div></section>
-        <section id="logisticsView" class="view" aria-labelledby="logisticsTitle"><header class="topbar"><div><span class="eyebrow">Logistik · Anlieferung</span><h1 id="logisticsTitle">Logistik</h1><p class="subtitle">Einkauf / Lieferstände der zentral belieferten Stellen.</p></div></header><section class="card logistics-intro"><h2>Einkauf / Lieferstände</h2><p>Hier geht es um die Anlieferung an die großen Stellen: <strong>0 · Zentrallager</strong>, <strong>99 · United Camera Wien</strong> mit eigener direkter Belieferung und <strong>3 · Großhandel</strong> für den Weiterverkauf an andere Einzelhändler.</p><p>Die Lieferfiliale einer Bestellung ist die Empfangsstelle der Lieferantenware. Filialinterne Umlagerungen findest du unter Einkauf &amp; Bestand oder direkt beim Artikel.</p></section><div id="logisticsWorkspaceHost"></div></section>
+        <section id="logisticsView" class="view" aria-labelledby="logisticsTitle"><header class="topbar"><div><span class="eyebrow">Logistik · Anlieferung</span><h1 id="logisticsTitle">Logistik</h1><p class="subtitle">Einkauf / Lieferstände der zentral belieferten Stellen.</p></div></header><div id="logisticsWorkspaceHost"></div></section>
         <section id="tradeInsightsView" class="view" aria-labelledby="tradeInsightsTitle">
           <header class="topbar"><div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="tradeInsightsTitle">Einkauf &amp; Bestand</h1><p class="subtitle">Reparaturen, Bestände, Umlagerungen und Historien aus den übernommenen Quelldaten.</p></div></header>
           <section class="card trade-insights-workspace" id="tradeInsightsWorkspace" aria-label="Einkauf und Bestand auswerten" tabindex="-1"></section>
@@ -1683,6 +1684,7 @@
                 <a href="#salesArticleIdentifiersSection">Kennungen &amp; Verlauf</a>
                 <a href="#salesArticleMovementsSection">Umlagerungen</a>
                 <a href="#salesArticleSalesSection">Verkäufe</a>
+                <a href="#salesArticlePriceLabelsSection">Preisschild</a>
               </nav>
               <div class="sales-article-detail-body" id="salesArticleDetailBody">
                 <div class="sales-article-detail-empty">
@@ -3043,7 +3045,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.72 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.73 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -4423,6 +4425,7 @@
     <script src="/sales-article-image.js"></script>
     <script src="/sales-article-tools.js"></script>
     <script src="/sales-price-labels.js"></script>
+    <script src="/sales-article-price-labels.js"></script>
     <script src="/sales-article-layout.js"></script>
     <script src="/sales-article-column-widths.js"></script>
     <script src="/branch-article-calculation.js"></script>

@@ -5,7 +5,10 @@
 .article-history-card>header p,.article-notes-card>header p { margin:5px 0 0; font-size:13px; color:var(--muted); }
 .article-history-filters { display:flex; flex-wrap:wrap; gap:14px; align-items:end; padding:18px; border-bottom:1px solid var(--line); }
 .article-history-filters label,.article-history-filters>div { display:grid; gap:6px; font-size:13px; }
-.article-history-filters button,.article-history-filters select { min-height:38px; padding:8px 12px; }
+.article-history-filters button,.article-history-filters select,.article-history-filters input:not([type=hidden]) { min-height:38px; padding:8px 12px; }
+.article-history-filters select { width:220px; max-width:100%; }
+.article-history-filters input[name=personnel] { width:170px; max-width:100%; }
+.article-history-filters label[hidden] { display:none; }
 .article-history-filters button,.article-history-pagination button { border:1px solid var(--line); border-radius:9px; color:var(--green); background:var(--surface); cursor:pointer; }
 .article-history-pagination button { padding:8px 12px; }
 .article-history-pagination button:disabled { opacity:.5; cursor:default; }

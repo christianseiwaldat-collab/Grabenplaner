@@ -207,6 +207,16 @@ test('Templates survive source refresh, database copy and repository recreation;
 async function httpFixture(t) {
   const f = await fixture(t), app = express(), preferences = new Map(); app.use(express.json({ limit: '64kb' }));
   registerSalesPriceLabelsRoutes(app, { templateStore: f.store, ...f.deps,
+    catalog: { async getByArticleNumber(number) {
+      if(number==='missing')return null;
+      return {articleNumber:number,prices:[{priceType:'sales',amount:f.state.currentPrice||'123.45',priceBasis:'gross',currency:'EUR',qualityStatus:'confirmed'}]};
+    } },
+    async loadDetail(article) {
+      await f.state.detailHook?.();
+      return {article:{articleNumber:article.articleNumber,description:'Current article '+article.articleNumber,
+        priceMatrix:{vatPercent:20,sales:[{id:'sales',gross:{amount:f.state.currentPrice||'123.45'}}]},identifiers:[],sourceSections:[]}};
+    },
+    images: {content:async()=>null},
     sessionFor(req) { return structuredClone(f.state.sessions[req.get('X-Principal') || '42']); }, async assertFresh() {},
     async refreshSession(req) { await f.state.refreshHook?.(); return f.state.sessions[req.get('X-Principal') || '42']; },
     assertCsrf(req) { if (req.get('X-CSRF-Token') !== 'synthetic') throw Object.assign(Error('CSRF'), { status: 403 }); },
@@ -246,6 +256,48 @@ test('Library API keeps branch account private preferences isolated and enforces
   assert.equal(f.preferences.has('undefined:sales_price_labels_v1'), false);
   assert.equal((await f.request('library', input({ visibility: 'branch' }), { principal: 'acc18' })).status, 200);
   assert.equal((await f.request('branding')).status, 200); assert.equal((await f.request('branding?clientLogo=data:forged')).status, 422);
+});
+
+test('Direct article label PDF uses protected saved design and fresh article price without changing own or received originals',async t=>{
+ const f=await httpFixture(t),own=await f.store.create(await f.context('42'),input({title:'Own exact label'}));
+ const shared=await f.store.create(await f.context('42'),input({title:'Shared exact label',visibility:'branch'}));
+ f.state.currentPrice='456.78';
+ for(const [saved,principal]of [[own,'42'],[shared,'43']]){
+  const before=await f.store.get(await f.context(principal),saved.id),response=await f.request('library/'+saved.id+'/article.pdf',{articleNumber:'001234'},{principal});
+  assert.equal(response.status,200,await response.clone().text());assert.match(response.headers.get('content-type'),/application\/pdf/);
+  assert.match(response.headers.get('content-disposition'),/001234/);const bytes=new Uint8Array(await response.arrayBuffer());
+  const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs'),task=getDocument({data:bytes,isEvalSupported:false}),document=await task.promise;
+  try{const page=await document.getPage(1),content=await page.getTextContent(),text=content.items.map(i=>i.str).join(' ');assert.match(text,/001234/);assert.match(text,/456,78/);}finally{await task.destroy();}
+  assert.deepEqual(await f.store.get(await f.context(principal),saved.id),before,'PDF creates no template copy or edit');
+ }
+ assert.equal((await f.store.list(await f.context('42'))).templates.length,2);
+ assert.equal((await f.request('library/'+own.id+'/article.pdf',{articleNumber:'001234'},{principal:'43'})).status,404);
+ assert.equal((await f.request('library/'+own.id+'/article.pdf',{articleNumber:'001234',options:{color:'#ffffff'}})).status,422);
+ assert.equal((await f.request('library/'+own.id+'/article.pdf',{articleNumber:'001234'},{csrf:''})).status,403);
+ f.state.sessions['42'].permissions=rights.filter(r=>r!==Article.SALES_ARTICLE_CATALOG_PERMISSIONS.PRICES_READ);
+ assert.equal((await f.request('library/'+own.id+'/article.pdf',{articleNumber:'001234'})).status,403);
+});
+
+test('Direct article PDF names travel as ASCII headers with explicit UTF-8 for Latin-1 and Unicode saved titles',async t=>{
+ const f=await httpFixture(t),context=await f.context('42');
+ for(const title of ['Eigene Vorlage · Artikelvorschau','Änderung für Müller – Regal 📷']){
+  const saved=await f.store.create(context,input({title,filenameOptions:{stamp:'none',position:'after',separator:'-',suffix:''}}));
+  const response=await f.request('library/'+saved.id+'/article.pdf',{articleNumber:'001234'});
+  assert.equal(response.status,200,await response.clone().text());
+  const header=response.headers.get('content-disposition');assert.match(header,/^attachment; filename="Preisschild\.pdf"; filename\*=UTF-8''/);
+  assert.match(header,/^[\x20-\x7e]+$/u,'No Latin-1 bytes may corrupt the saved filename');
+  assert.equal(decodeURIComponent(header.split("filename*=UTF-8''")[1]),title+'-001234.pdf');
+  const bytes=Buffer.from(await response.arrayBuffer());assert.equal(bytes.subarray(0,5).toString(),'%PDF-');
+ }
+});
+
+test('Revoked template visibility or changed saved design during article PDF generation discards the result',async t=>{
+ const f=await httpFixture(t),context=await f.context('42'),shared=await f.store.create(context,input({visibility:'branch'}));
+ f.state.detailHook=async()=>{f.state.detailHook=null;await f.store.update(context,shared.id,input({version:shared.version,visibility:'private'}));};
+ assert.equal((await f.request('library/'+shared.id+'/article.pdf',{articleNumber:'001234'},{principal:'43'})).status,404);
+ const second=await f.store.create(context,input({title:'Second saved design'}));
+ f.state.detailHook=async()=>{f.state.detailHook=null;await f.store.update(context,second.id,input({version:second.version,title:'Updated design'}));};
+ assert.equal((await f.request('library/'+second.id+'/article.pdf',{articleNumber:'001234'})).status,409);
 });
 
 test('Late recipient, home-branch, identity and required-password changes block protected library work before persistence', async t => {
