@@ -130,7 +130,8 @@ function availableIds(availableGateIds) {
 
 test("Block 5: alle Portalrollen bleiben vollständig an die projizierten UI-Gates gebunden", () => {
   assert.ok(catalogApi.FUNCTION_SEARCH_CATALOG.length > 0);
-  assert.equal(ALL_GATE_IDS.size, 100);
+  // Logistik and Preisschilder each add their own projected navigation gate.
+  assert.equal(ALL_GATE_IDS.size, 102);
   assert.doesNotMatch(catalogSource, /options\?\.role|options\.role|role\s*===\s*["']/);
   assert.match(appSource, /isGateAvailable: functionSearchGateAvailable/);
 
@@ -152,6 +153,33 @@ test("Block 5: alle Portalrollen bleiben vollständig an die projizierten UI-Gat
       }
     }
   }
+});
+
+test("Block 5: Logistik und Preisschilder haben eigene reale Ziele und erhalten keinen Zugriff durch eine Portalrolle allein", () => {
+  const additions = [
+    { id: "logistics.purchasing", gateId: "logisticsNavButton", view: "logistics", focusId: "logisticsWorkspaceHost", query: "einkauf lieferstände" },
+    { id: "sales.price-labels", gateId: "salesPriceLabelsNavButton", view: "priceLabels", focusId: "salesPriceLabelsWorkspace", query: "preisschilder" },
+  ];
+  for (const { id, gateId, view, focusId, query } of additions) {
+    const entry = catalogApi.FUNCTION_SEARCH_CATALOG.find(item => item.id === id);
+    assert.ok(entry, id);
+    assert.deepEqual(entry.access.gateIds, [gateId]);
+    assert.deepEqual(entry.target, { kind: "navigation", view, focusId });
+    assert.match(indexHtml, new RegExp(`<button\\b[^>]*data-view="${view}"[^>]*id="${gateId}"`));
+    assert.match(indexHtml, new RegExp(`\\bid="${focusId}"`));
+    assert.equal(searchApi.searchAvailableFunctions(query, FULL_ACCESS, { limit: 1 })[0]?.id, id);
+    assert.equal(catalogApi.functionSearchEntryIsAvailable(entry, { authenticated: false, availableGateIds: [gateId] }), false);
+    assert.equal(catalogApi.functionSearchEntryIsAvailable(entry, { authenticated: true, availableGateIds: ["salesArticleCatalogNavButton"] }), false);
+    for (const role of [...PORTAL_ROLES, "branch"]) {
+      assert.equal(catalogApi.availableFunctionSearchEntry(id, { authenticated: true, role }), null, `${role}: ${id}`);
+      assert.equal(catalogApi.availableFunctionSearchEntry(id, { authenticated: true, role, availableGateIds: [gateId] }), entry, `${role}: ${id}`);
+      assert.equal(catalogApi.availableFunctionSearchEntry(id, { authenticated: true, role, availableGateIds: [] }), null, `${role}: ${id} nach Entzug`);
+    }
+  }
+  const withoutAddedGates = new Set([...ALL_GATE_IDS].filter(gateId => !additions.some(item => item.gateId === gateId)));
+  assert.deepEqual(catalogApi.FUNCTION_SEARCH_CATALOG.filter(item => !catalogApi.functionSearchEntryIsAvailable(item, {
+    authenticated: true, availableGateIds: withoutAddedGates,
+  })).map(item => item.id).sort(), additions.map(item => item.id).sort());
 });
 
 test("Block 5: jeder Installationsschalter entfernt exakt seine projizierten Suchziele", () => {

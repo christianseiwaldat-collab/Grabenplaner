@@ -35429,7 +35429,7 @@ function setView(view) {
 
 function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
   const parameters = new URLSearchParams(window.location.search);
-  const requestedView = parameters.get("view");
+  let requestedView = parameters.get("view");
   if (requestedView === "rightsDashboard" && parameters.get("dashboard") === "systemCenter") {
     if (canReadSystemCenter()) {
       setView("settings");
@@ -35447,8 +35447,11 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
     document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
   }
-  if (requestedView === "tradeInsights" && parameters.get("section")==="purchasing") {setView("logistics");return;}
-  if (requestedView === "tradeInsights") tradeInsightsTab = window.GrabenplanerTradeInsights.normalizeTab(parameters.get("section")||"repairs");
+  if (requestedView === "tradeInsights" && parameters.get("section") === "purchasing") requestedView = "logistics";
+  if (requestedView === "tradeInsights") {
+    const tab = window.GrabenplanerTradeInsights.normalizeTab(parameters.get("section") || "repairs");
+    tradeInsightsTab = tab === "purchasing" ? "repairs" : tab;
+  }
   if (requestedView === "salesAnalytics") {
     const requestedSection = parameters.get("section");
     if (["create", "reports", "graphics", "pdf"].includes(requestedSection)) state.salesAnalytics.tab = requestedSection;

@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.92.72 Beta – Artikelwerkzeuge, Logistik und gestaltbare Preisschilder
+
+- Logistik ist ein eigener Hauptmenüpunkt unterhalb von Verkauf. Einkauf und Lieferstände zeigen die Belieferung von Zentrallager, United Camera Wien und Großhandel; Einkauf & Bestand priorisiert Reparaturen und bündelt ergänzende Historien.
+- Die Artikelkartei zeigt Umlagerungen und Verkäufe mit Zeitraum, sortierbaren Spalten, gespeicherter Spaltenauswahl und verstellbaren Breiten. Verkaufsbelege lassen sich direkt als Beleginformation ausgeben; eigene verschlüsselte Artikelnotizen bleiben unabhängig von Trade-Aktualisierungen erhalten.
+- Artikelstammblätter lassen sich mit wählbaren Reitern, optionalem Artikelfoto und konfigurierbarem Dateinamen als PDF erstellen. Auswertungen zeigen die Abfragedauer und führen sie auch im PDF auf.
+- Preisschilder übernehmen aktuelle freigegebene Brutto-Verkaufspreise und unterstützen verschiedene Formate, Designs, Formen, Papiermaße und Druckanordnungen. Logos aus Branding-Kits erhalten wählbare Positionen, Größe und Abstand; Vorschau und PDF bewahren ihre Proportionen.
+- Preisschildvorlagen lassen sich persönlich, für die eigene Filiale oder für ausgewählte Filialkonten speichern. Freigabeempfänger sind nachträglich änderbar; empfangene Vorlagen können als eigene Kopie weiterverwendet werden. Filialkonten nutzen den Bereich im Filialportal mit gezielt begrenztem Preiszugriff.
+- Zeitraumkalender, Personalstammdaten-Dialoge, Belegsuche und Artikelbestände nutzen kompaktere, an die Ansicht angepasste Layouts. Ergänzte Abfragen und ihre Persistenzgrenzen sind in den Architektur- und Datenbankverträgen erfasst.
+- Der tatsächliche Produktions-, Sicherungs- und Deploy-Status wird im separaten Auslieferungsbeleg dokumentiert.
+
 ## v0.92.71 Beta – Importfortschritt und übersichtlichere Navigation
 
 - Die Prüfung und Übernahme großer Trade-Importe nutzt zeitlich begrenzte, an die gemessene Laufzeit angepasste Arbeitspakete. Dauerhafte Zwischenstände und der bestehende Schutz gegen doppelte Übernahme bleiben erhalten.
