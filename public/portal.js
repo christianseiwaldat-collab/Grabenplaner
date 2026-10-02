@@ -425,9 +425,18 @@ async function api(url, options = {}) {
 }
 
 const branchSalesWorkspaces = new Map();
+let branchPriceLabelsWorkspace = null;
+let branchPriceLabelsWorkspaceActive = false;
+const branchPriceLabelsOwner = (user = portalUser()) => JSON.stringify([user?.accountId, user?.accountType, user?.isEmployee,
+  user?.permissions, user?.scopes, user?.mustChangePassword, user?.sessionKind]);
+function branchPriceLabelsAllowed(user = portalUser()) {
+  return Boolean(window.GrabenplanerSalesPriceLabels && user?.accountId && !user.mustChangePassword
+    && window.GrabenplanerBranchSales?.allowed('branchArticles', user) === true);
+}
 function resetBranchSalesWorkspaces() {
   for (const workspace of branchSalesWorkspaces.values()) workspace.destroy();
   branchSalesWorkspaces.clear();
+  branchPriceLabelsWorkspace?.destroy(); branchPriceLabelsWorkspace = null; branchPriceLabelsWorkspaceActive = false;
 }
 function syncBranchSalesWorkspaces(tab = null) {
   for (const [name, kind] of [["branchArticles", "articles"], ["branchReceipts", "receipts"]]) {
@@ -442,6 +451,17 @@ function syncBranchSalesWorkspaces(tab = null) {
       void branchSalesWorkspaces.get(name).load();
     } else branchSalesWorkspaces.get(name)?.suspend();
   }
+  const permitted = branchPriceLabelsAllowed(), active = permitted && tab === 'branchPriceLabels';
+  document.getElementById('branchPriceLabelsTab')?.classList.toggle('hidden', !permitted);
+  document.getElementById('branchPriceLabelsView')?.classList.toggle('active', active);
+  if (!permitted) { branchPriceLabelsWorkspace?.destroy(); branchPriceLabelsWorkspace = null; branchPriceLabelsWorkspaceActive = false; }
+  if (active) {
+    if (!branchPriceLabelsWorkspace) branchPriceLabelsWorkspace = window.GrabenplanerSalesPriceLabels.mount(document.getElementById('branchPriceLabelsWorkspace'), {
+      api, accessKey: branchPriceLabelsOwner,
+      rawApi: async (url, options) => { const blob = await api(url, { ...options, responseType: 'blob' }); return { blob: async () => blob }; },
+    });
+    if (!branchPriceLabelsWorkspaceActive) { branchPriceLabelsWorkspaceActive = true; void branchPriceLabelsWorkspace.load(); }
+  } else if (branchPriceLabelsWorkspaceActive) { branchPriceLabelsWorkspaceActive = false; branchPriceLabelsWorkspace?.suspend(); }
 }
 
 const birthdayPresentationPaths = Object.freeze({
@@ -892,6 +912,7 @@ function mobileModuleAllowed(module, permissions = portalUser()?.permissions || 
 
 function portalTabAllowed(tab, user = portalUser()) {
   const permissions = user?.permissions || [];
+  if (tab === 'branchPriceLabels') return branchPriceLabelsAllowed(user);
   if (["branchArticles", "branchReceipts"].includes(tab)) return window.GrabenplanerBranchSales?.allowed(tab, user) === true;
   if (tab === "home") return isMobileUi();
   if (tab === "settings") return true;
@@ -1109,7 +1130,7 @@ function applyMobileLeadershipLayout() {
       button.classList.add("hidden");
       button.classList.add("mobile-navigation-hidden");
     });
-    ["home", "schedule", "timeOff", "branchArticles", "branchReceipts", "learningDashboard", "branchOrders", "loan", "branchVacation"]
+    ["home", "schedule", "timeOff", "branchArticles", "branchReceipts", "branchPriceLabels", "learningDashboard", "branchOrders", "loan", "branchVacation"]
       .filter((tab) => portalTabAllowed(tab))
       .forEach((tab, index) => {
         const button = document.querySelector(`[data-tab="${tab}"]`);
@@ -1123,7 +1144,7 @@ function applyMobileLeadershipLayout() {
     if (portalState.scheduleData) renderSchedule(portalState.scheduleData);
     return;
   }
-  const regularTabs = ["settings", "schedule", "branchArticles", "branchReceipts", "branchVacation", "timeTracking", "processTasks", "learningDashboard", "timeOff", "vacation", "history", "amu"];
+  const regularTabs = ["settings", "schedule", "branchArticles", "branchReceipts", "branchPriceLabels", "branchVacation", "timeTracking", "processTasks", "learningDashboard", "timeOff", "vacation", "history", "amu"];
   document.querySelectorAll(".leadership-tab").forEach((button) => button.classList.add("hidden"));
   if (!compactMobile) {
     document.querySelectorAll("[data-tab]").forEach((button) => button.classList.remove("mobile-navigation-hidden"));
@@ -1509,7 +1530,7 @@ function normalizedPortalTab(requested) {
   const aliases = { requests: "history", team: "leadershipTeam", approvals: "leadershipApprovals", more: "leadershipMore", time: "timeTracking" };
   const tab = aliases[requested] || requested;
   if (["leadershipTeam", "leadershipApprovals"].includes(tab) && !isLeadershipUser()) return "";
-  return ["home", "settings", "schedule", "timeTracking", "processTasks", "learningDashboard", "timeOff", "vacation", "history", "loan", "branchOrders", "branchArticles", "branchReceipts", "branchVacation", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
+  return ["home", "settings", "schedule", "timeTracking", "processTasks", "learningDashboard", "timeOff", "vacation", "history", "loan", "branchOrders", "branchArticles", "branchReceipts", "branchPriceLabels", "branchVacation", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
 }
 
 const portalTabStorageKey = "grabenplaner.portal.active-tab";
@@ -2363,7 +2384,8 @@ function populateVacationAccountYears() {
 }
 
 function showPortal(session) {
-  if (window.GrabenplanerBranchSales?.owner(portalUser()) !== window.GrabenplanerBranchSales?.owner(session?.user)) resetBranchSalesWorkspaces();
+  if (window.GrabenplanerBranchSales?.owner(portalUser()) !== window.GrabenplanerBranchSales?.owner(session?.user)
+    || branchPriceLabelsOwner() !== branchPriceLabelsOwner(session?.user)) resetBranchSalesWorkspaces();
   if (timeOffOwnerKey() !== timeOffOwnerKey(session?.user)) resetBranchTimeOffState();
   const previousProcessTaskOwner = portalState.processTasksOwnerFingerprint
     || processTaskActorFingerprint(portalUser());
@@ -3102,8 +3124,9 @@ function mobileHomeTilesForCurrentAccount() {
     const branchTiles = [
       { id: "branchArticles", tab: "branchArticles", label: "Artikelsuche", description: "Artikel, EAN und Verkaufspreise" },
       { id: "branchReceipts", tab: "branchReceipts", label: "Belegsuche", description: "Belege der Filiale und PDF-Download" },
+      { id: "branchPriceLabels", tab: "branchPriceLabels", label: "Preisschilder", description: "Verkaufspreise drucken und Vorlagen verwenden" },
     ];
-    return ["schedule", "branchArticles", "branchReceipts", "learningDashboard", "branchOrders", "loan", "branchVacation"]
+    return ["schedule", "branchArticles", "branchReceipts", "branchPriceLabels", "learningDashboard", "branchOrders", "loan", "branchVacation"]
       .map((tab) => branchTiles.find(tile => tile.tab === tab) || mobileHomeTileCatalog.find((tile) => tile.tab === tab)
         || { id: tab, tab, label: tab === "schedule" ? "Dienstplan" : tab, description: "" })
       .filter((tile) => portalTabAllowed(tile.tab, user))

@@ -223,15 +223,22 @@ test('Eigene Tabelleneinstellungen benötigen nur Leserecht, prüfen CSRF und fi
   const route = '/api/sales/articles/preferences';
   const initial = await requestJson(route); assert.equal(initial.response.status, 200);
   assert.equal(initial.payload.visibleRows, 10); assert.ok(!initial.payload.columnsAvailable.some(c => c.id === 'purchaseNet'));
-  const body = { columns: ['description','articleNumber','purchaseNet'], visibleRows: 20, sort: 'purchaseNet', direction: 'desc' };
+  const body = { columns: ['description','articleNumber','purchaseNet'], columnWidths: {description:420, articleNumber:125}, visibleRows: 20, sort: 'purchaseNet', direction: 'desc' };
   assert.equal((await requestMutationJson(route, { method: 'PUT', body, includeCsrf: false })).response.status, 403);
   assert.equal((await requestMutationJson(route, { method: 'PUT', body })).response.status, 403);
   body.columns.pop(); body.sort = 'articleNumber';
   const saved = await requestMutationJson(route, { method: 'PUT', body }); assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
   assert.deepEqual(saved.payload.columns, ['description','articleNumber']); assert.equal(saved.payload.sort, 'articleNumber');
   const reloaded = await requestJson(route); assert.equal(reloaded.payload.visibleRows, 20); assert.deepEqual(reloaded.payload.columns, saved.payload.columns);
+  assert.deepEqual(reloaded.payload.columnWidths, body.columnWidths);
+  const legacy = {...body}; delete legacy.columnWidths;
+  assert.deepEqual((await requestMutationJson(route, {method:'PUT', body:legacy})).payload.columnWidths, body.columnWidths, 'An older open GP tab must retain saved widths');
+  assert.equal((await requestMutationJson(route, {method:'PUT', body:{...body, columnWidths:{purchaseNet:150}}})).response.status, 403);
   for (const invalid of [{ ...body, visibleRows: 4 }, { ...body, visibleRows: 21 }, { ...body, employeeNumber: 'another-user' }]) {
     assert.equal((await requestMutationJson(route, { method: 'PUT', body: invalid })).response.status, 400);
+  }
+  for (const columnWidths of [null, [], {description:79}, {description:801}, {description:'300'}, {unknown:120}, {description:120.5}]) {
+    assert.equal((await requestMutationJson(route, {method:'PUT', body:{...body, columnWidths}})).response.status, 400);
   }
   assert.equal((await requestJson('/api/sales/articles?sort=purchaseNet')).response.status, 403);
 });

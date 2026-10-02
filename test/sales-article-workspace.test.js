@@ -71,3 +71,30 @@ test('Manual price revisions use their current costs instead of previous TradeFo
   const retained=require('../lib/sales-article-price-matrix').buildSalesArticlePriceMatrix(article,{MWST:1,DurchschnittEK:'999'},all);
   assert.equal(Number(retained.purchase.find(p=>p.id==='average_purchase').current.amount),160);
 });
+
+test('Supplier hover resolves a unique code despite case and spacing, without guessing missing names', async t => {
+  const f = await fixture(t), {article,master} = await seedWorkspace({access:f.app.provider,source:f});
+  await f.ingest('ARTIKEL_STAMM', [{...master, Suchname:' HAM '}], {master:true,snapshotAt:'2026-10-01T09:00:00.000Z'});
+  const load = () => loadSalesArticleDetailData({access:f.app.provider,vault:f.vault,article,projection:{read:true}});
+  const field = data => data.sourceSections.find(s => s.id === 'supplier').fields.find(f => f.id === 'Suchname');
+  assert.match(field(await load()).title, /Hama GmbH/);
+  await f.ingest('ARTIKEL_STAMM', [{...master, Suchname:'UNKNOWN'}], {master:true,snapshotAt:'2026-10-01T09:01:00.000Z'});
+  assert.match(field(await load()).title, /noch nicht hinterlegt/);
+  await f.ingest('LIEFERANTEN', [{Suchname:'unknown',Firma:'Firma A'}, {Suchname:'Unknown',Firma:'Firma B'}], {master:true,snapshotAt:'2026-10-01T09:02:00.000Z'});
+  assert.match(field(await load()).title, /nicht eindeutig/);
+});
+
+test('Supplier company labels can use a reviewed source without applying it or reading contact fields', async t => {
+  const f = await fixture(t);
+  let run;
+  const source = {ingest(table, rows, options) {
+    const supplier = table === 'LIEFERANTEN';
+    const operation = f.ingest(table, supplier ? rows.map(row => ({...row,FEMail:'private@example.com'})) : rows, {...options, apply:!supplier});
+    return operation.then(value => { if (supplier) run = value; return value; });
+  }};
+  const {article} = await seedWorkspace({access:f.app.provider,source});
+  const data = await loadSalesArticleDetailData({access:f.app.provider,vault:f.vault,article,projection:{read:true}});
+  assert.match(data.sourceSections.find(s => s.id === 'supplier').fields[0].title, /Hama GmbH/);
+  assert.doesNotMatch(JSON.stringify(data), /private@example.com/);
+  assert.equal((await f.engine.preview(run.id)).status, 'ready');
+});

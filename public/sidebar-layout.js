@@ -13,7 +13,8 @@
       return ["filialManagement", ...(["planning", "vacations"].includes(view) ? [view] : [])];
     }
     if (["personnelAdministration", "requests", "timeTracking"].includes(view)) return ["personnelAdministration"];
-    if (["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "crm"].includes(view)) return ["salesAdministration"];
+    if (view === "logistics") return ["logistics"];
+    if (["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "priceLabels", "crm"].includes(view)) return ["salesAdministration"];
     return [];
   }
 

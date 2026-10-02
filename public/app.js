@@ -1,5 +1,6 @@
 let personnelLearningAssessmentEditor=null, personnelLearningAssessmentPanel=null, personnelLearningTeam=null;
 const sidebarNavigationGroups = window.GrabenplanerSidebarLayout.createGroups();
+let salesPriceLabelsWorkspace = null;
 let sidebarLayout = null;
 (() => {
   const storageKey = "grabenplaner-bootstrap-token";
@@ -309,6 +310,8 @@ const state = {
     salesAdministration: "light",
     salesAnalytics: "light",
     tradeInsights: "light",
+    logistics: "light",
+    priceLabels: "light",
     loans: "light",
     branchOrders: "light",
     rightsDashboard: "light",
@@ -775,7 +778,7 @@ const elements = Object.fromEntries(
     "xoffiComparisonMode", "xoffiComparisonPeriod", "xoffiComparisonDescription", "xoffiComparisonRangeButton", "xoffiComparisonRangeText", "xoffiComparisonRangeLabel",
     "xoffiComparisonRangeDialog", "xoffiComparisonRangeForm", "xoffiComparisonRangeGrid", "xoffiComparisonRangeMonthLabel", "xoffiComparisonRangeMonth", "xoffiComparisonRangeStartText", "xoffiComparisonRangeEndText",
     "xoffiComparisonRangePreviousMonth", "xoffiComparisonRangeNextMonth", "xoffiComparisonRangeOpenEnd", "xoffiComparisonRangeApply", "xoffiComparisonRangeClose", "xoffiComparisonRangeCancel",
-    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "tradeInsightsView", "tradeInsightsNavButton", "tradeInsightsDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "loanManagementReturnDialog", "loanManagementReturnForm", "loanManagementReturnTitle", "loanManagementReturnSubtitle", "loanManagementReturnItems", "loanManagementReturnNote", "loanManagementReturnConfirmed", "loanManagementReturnStatus", "loanManagementReturnSubmit", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "xoffiComparisonPrevious", "xoffiComparisonNext", "xoffiComparisonLoad", "xoffiComparisonStatus", "xoffiComparisonList", "xoffiComparisonGreen", "xoffiComparisonYellow", "xoffiComparisonSave", "xoffiComparisonSettingsForm", "timeLegacyPanel", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "startDashboardView", "startDashboardNavButton", "startDashboardBrandButton", "startDashboardControlCenterButton", "startDashboardControlCenterTitle", "startDashboardControlCenterDescription", "startDashboardCustomizeButton", "startDashboardCustomizer", "startDashboardCustomizerGrid", "startDashboardCustomizerClose", "startDashboardResetButton", "startDashboardSaveButton", "startDashboardGrid", "startDashboardBranchGroup", "startDashboardPersonnelGroup", "startDashboardSalesGroup", "startDashboardLocation", "startDashboardDepartment", "startDashboardPreviousLocation", "startDashboardNextLocation", "startDashboardLocationPosition", "startDashboardSalesLocation", "startDashboardPreviousSalesLocation", "startDashboardNextSalesLocation", "startDashboardSalesLocationPosition", "startDashboardSchedulePeriod", "startDashboardScheduleSummary", "startDashboardVacationSummary", "startDashboardLoanSummary", "startDashboardBranchOrdersSummary", "startDashboardOnDuty", "startDashboardAbsences", "startDashboardPersonnelTeam", "startDashboardPersonnelRequests", "startDashboardSalesKpis", "startDashboardSalesTopGroups", "filialAdministrationView", "filialDashboardGrid", "scheduleSearchPanel", "scheduleSearchForm", "scheduleSearchEmployee", "scheduleSearchEmployeeNumber", "scheduleSearchDateFrom", "scheduleSearchDateTo", "scheduleSearchDateRangeButton", "scheduleSearchDateRangeText", "scheduleSearchLocation", "scheduleSearchDepartment", "scheduleSearchHomeLocation", "scheduleSearchAssignment", "scheduleSearchArea", "scheduleSearchReset", "scheduleSearchSubmit", "scheduleSearchStatus", "scheduleSearchResults", "scheduleSearchResultCount", "scheduleSearchResultRange", "scheduleSearchTableBody", "scheduleSearchPrevious", "scheduleSearchNext", "scheduleSearchPageStatus", "scheduleSearchDateRangeDialog", "scheduleSearchDateRangeForm", "scheduleSearchDateRangeStartText", "scheduleSearchDateRangeEndText", "scheduleSearchDateRangePreviousMonth", "scheduleSearchDateRangeMonthLabel", "scheduleSearchDateRangeNextMonth", "scheduleSearchDateRangeGrid", "scheduleSearchDateRangeOpenEnd", "scheduleSearchDateRangeClose", "scheduleSearchDateRangeCancel", "scheduleSearchDateRangeApply", "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "salesAdministrationView", "salesDashboardGrid", "salesAnalyticsView", "receiptSearchView", "receiptSearchNavButton", "receiptSearchDashboardCard", "logisticsView", "logisticsNavButton", "tradeInsightsView", "tradeInsightsNavButton", "tradeInsightsDashboardCard", "salesArticleCatalogView", "personnelView", "loansView", "branchOrdersView", "rightsDashboardView", "settingsView", "deploymentBanner", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialDashboardNavButton", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "branchOrdersManagementNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "positionManagementNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelLearningNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "salesAdministrationNav", "salesAdministrationToggle", "salesAdministrationNavChildren", "salesDashboardNavButton", "salesAnalyticsNavButton", "salesArticleCatalogNavButton", "settingsNavButton", "loanManagementRefresh", "loanOverviewSettingsButton", "branchAccountPasswordButton", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "loanManagementReturnDialog", "loanManagementReturnForm", "loanManagementReturnTitle", "loanManagementReturnSubtitle", "loanManagementReturnItems", "loanManagementReturnNote", "loanManagementReturnConfirmed", "loanManagementReturnStatus", "loanManagementReturnSubmit", "branchOrdersManagementRefresh", "branchOrdersManagementSave", "branchOrdersManagementSaveInline", "branchOrdersManagementLocation", "branchOrdersManagementEmailStatus", "branchOrdersManagementMessage", "branchOrdersManagementWorkspace", "branchOrdersManagementHistory", "loanOverviewColumnsDialog", "loanOverviewColumnsForm", "loanOverviewColumnsLocation", "loanOverviewColumnsOptions", "loanOverviewColumnsMessage", "loanOverviewColumnsSaveButton", "branchAccountPasswordDialog", "branchAccountPasswordForm", "branchAccountPasswordAccount", "branchAccountPasswordNew", "branchAccountPasswordRepeat", "branchAccountPasswordMessage", "branchAccountPasswordSaveButton", "xoffiComparisonPrevious", "xoffiComparisonNext", "xoffiComparisonLoad", "xoffiComparisonStatus", "xoffiComparisonList", "xoffiComparisonGreen", "xoffiComparisonYellow", "xoffiComparisonSave", "xoffiComparisonSettingsForm", "timeLegacyPanel", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleLastImport", "salesArticleLastImportValue", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchOrderNumber", "salesArticleSearchStatusFilter", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportDatabasePasswordField", "salesArticleImportDatabasePassword", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
@@ -1892,6 +1895,18 @@ function canReadSalesArticleCosts() {
       && state.portalSession?.user?.permissions?.includes("sales:articles:costs:read") === true);
 }
 
+function canUseSalesPriceLabels() {
+  const user = state.portalSession?.user;
+  return canReadSalesArticlePrices() || (user?.isEmployee === false && user.accountType === 'branch'
+    && user.permissions?.includes('branch_articles:read') === true);
+}
+
+function currentSalesPriceLabelsAccessKey() {
+  const user = state.portalSession?.user;
+  return JSON.stringify([user?.employeeNumber, user?.accountId, user?.isEmployee, user?.accountType,
+    user?.homeLocationId, user?.permissions, user?.scopes, canUseSalesPriceLabels()]);
+}
+
 function canWriteSalesArticles() {
   return !state.portalStatus?.portalEnabled
     || (canReadSalesArticles()
@@ -1905,7 +1920,7 @@ function canImportSalesArticles() {
 }
 
 function canOpenSalesAdministrationModule() {
-  return canAccessSalesAnalytics() || canAccessCrm() || canAccessSalesArticleCatalog() || canAccessTradeInsights();
+  return canAccessSalesAnalytics() || canAccessCrm() || canAccessSalesArticleCatalog() || canAccessTradeInsights() || canUseSalesPriceLabels();
 }
 
 function canReadVacationAccounts() {
@@ -4884,6 +4899,7 @@ function navigationGroups() {
     vacations: { toggle: document.querySelector('[data-nav-toggle="vacations"]'), children: elements.vacationNavChildren },
     personnelAdministration: { toggle: elements.personnelAdministrationToggle, children: elements.personnelAdministrationNavChildren },
     salesAdministration: { toggle: elements.salesAdministrationToggle, children: elements.salesAdministrationNavChildren },
+    logistics: { toggle: document.getElementById("logisticsToggle"), children: document.getElementById("logisticsNavChildren") },
   };
 }
 
@@ -4965,14 +4981,20 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 
   const salesAdministrationVisible = !elements.salesAdministrationNav?.classList.contains("hidden");
-  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "crm"].includes(state.currentView);
+  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "priceLabels", "crm"].includes(state.currentView);
   elements.salesAdministrationNav?.classList.toggle("contains-active", salesAdministrationActive);
   applyNavigationGroupState("salesAdministration", salesAdministrationVisible);
   setNavigationCurrent(elements.salesDashboardNavButton, state.currentView === "salesAdministration");
   setNavigationCurrent(elements.salesAnalyticsNavButton, state.currentView === "salesAnalytics");
   setNavigationCurrent(elements.receiptSearchNavButton, state.currentView === "receiptSearch");
   setNavigationCurrent(elements.tradeInsightsNavButton, state.currentView === "tradeInsights");
+  setNavigationCurrent(elements.logisticsNavButton, state.currentView === "logistics");
+  const logisticsNav = document.getElementById("logisticsNav");
+  logisticsNav?.classList.toggle("contains-active", state.currentView === "logistics");
+  applyNavigationGroupState("logistics", !logisticsNav?.classList.contains("hidden"));
+  setNavigationCurrent(document.getElementById("logisticsPurchasingNavButton"), state.currentView === "logistics");
   setNavigationCurrent(elements.salesArticleCatalogNavButton, state.currentView === "articleCatalog");
+  setNavigationCurrent(document.getElementById("salesPriceLabelsNavButton"), state.currentView === "priceLabels");
   setNavigationCurrent(elements.crmNavButton, state.currentView === "crm");
   if (routeChanged) requestAnimationFrame(() => {
     const nav = document.querySelector(".main-nav");
@@ -23979,6 +24001,8 @@ function pageViewElement(view) {
     salesAnalytics: elements.salesAnalyticsView,
     receiptSearch: elements.receiptSearchView,
     tradeInsights: elements.tradeInsightsView,
+    logistics: elements.logisticsView,
+    priceLabels: document.getElementById("salesPriceLabelsView"),
     articleCatalog: elements.salesArticleCatalogView,
     crm: elements.crmView,
     loans: elements.loansView,
@@ -24016,6 +24040,7 @@ function applyGlobalTheme(theme) {
   state.globalTheme = normalized;
   for (const view of UI_APPEARANCE_VIEWS) applyPageTheme(view, normalized);
   elements.salesArticleCatalogView?.setAttribute("data-page-theme", normalized);
+  elements.receiptSearchView?.setAttribute("data-page-theme", normalized);
   document.querySelectorAll("button[data-global-theme-choice]").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.globalThemeChoice === normalized));
   });
@@ -30286,6 +30311,7 @@ const SALES_ARTICLE_CATALOG_ROW_HEIGHT = 39;
 const SALES_ARTICLE_CATALOG_RENDER_OVERSCAN = 8;
 let salesArticlePreferencesTimer = null;
 let salesArticlePreferencesSaveChain = Promise.resolve();
+let salesArticleColumnResize = null;
 function availableSalesArticleColumns() {
   return SALES_ARTICLE_CATALOG_COLUMNS.filter(c => !c.price || (c.price === 'costs' ? canReadSalesArticleCosts() : canReadSalesArticlePrices()));
 }
@@ -30321,6 +30347,7 @@ async function loadSalesArticleTablePreferences() {
     if (request !== catalog.tablePreferencesRequest || key !== currentSalesArticleCatalogDetailAccessKey()) return;
     const available = availableSalesArticleColumns().map(c => c.id);
     catalog.tableColumns = Array.isArray(result.columns) ? result.columns.filter(id => available.includes(id)) : null;
+    catalog.columnWidths = window.SalesArticleColumnWidths?.normalize(result.columnWidths, available) || {};
     if (catalog.tableColumns && !catalog.tableColumns.includes('articleNumber')) catalog.tableColumns.unshift('articleNumber');
     catalog.visibleRows = Math.min(20, Math.max(5, Number(result.visibleRows) || 10));
     if (!catalog.searchStarted && selectedSalesArticleColumns().some(c => c.id === result.sort)) { catalog.sort = result.sort; catalog.direction = result.direction === 'desc' ? 'desc' : 'asc'; }
@@ -30328,7 +30355,7 @@ async function loadSalesArticleTablePreferences() {
   } catch (error) { if (request === catalog.tablePreferencesRequest) { catalog.tablePreferencesKey = key; renderSalesArticleColumnOptions(); setSalesArticleCatalogStatus(`Tabelleneinstellungen konnten nicht geladen werden: ${error.message}`, true); } }
   finally { if (request === catalog.tablePreferencesRequest) catalog.tablePreferencesPending = false; }
 }
-function queueSalesArticlePreferencesSave() {
+function queueSalesArticlePreferencesSave(delay = 450) {
   clearTimeout(salesArticlePreferencesTimer);
   const key = currentSalesArticleCatalogDetailAccessKey();
   const catalog = state.salesArticleCatalog;
@@ -30337,13 +30364,13 @@ function queueSalesArticlePreferencesSave() {
   catalog.tablePreferencesPending = false;
   salesArticlePreferencesTimer = setTimeout(() => {
     if (key !== currentSalesArticleCatalogDetailAccessKey() || !canReadSalesArticles()) return;
-    const body = JSON.stringify({ columns: selectedSalesArticleColumns().map(c => c.id), visibleRows: catalog.visibleRows || 10, sort: catalog.sort, direction: catalog.direction });
+    const body = JSON.stringify({ columns: selectedSalesArticleColumns().map(c => c.id), columnWidths: window.SalesArticleColumnWidths?.normalize(catalog.columnWidths, availableSalesArticleColumns().map(c => c.id)) || {}, visibleRows: catalog.visibleRows || 10, sort: catalog.sort, direction: catalog.direction });
     salesArticlePreferencesSaveChain = salesArticlePreferencesSaveChain.catch(() => {}).then(async () => {
       if (key !== currentSalesArticleCatalogDetailAccessKey() || !canReadSalesArticles()) return;
       try { await api('/api/sales/articles/preferences', { method: 'PUT', body }); }
       catch (error) { if (key === currentSalesArticleCatalogDetailAccessKey()) setSalesArticleCatalogStatus(`Tabelleneinstellungen nicht gespeichert: ${error.message}`, true); }
     });
-  }, 450);
+  }, delay);
 }
 function changeSalesArticleColumns(id, move = 0) {
   const catalog = state.salesArticleCatalog, columns = selectedSalesArticleColumns().map(c => c.id), index = columns.indexOf(id);
@@ -30357,7 +30384,7 @@ function changeSalesArticleColumns(id, move = 0) {
   if (sortChanged && catalog.searchStarted) void loadSalesArticleCatalog({ reset: true, preserveDetail: true });
 }
 function applySalesArticleDetailTabs() {
-  const panels = ['salesArticleOverviewPanel','salesArticlePricesSection','salesArticleNotesSection','salesArticleIdentifiersSection'];
+  const panels = ['salesArticleOverviewPanel','salesArticlePricesSection','salesArticleNotesSection','salesArticleIdentifiersSection','salesArticleMovementsSection','salesArticleSalesSection'];
   const active = panels.includes(state.salesArticleCatalog.detailTab) ? state.salesArticleCatalog.detailTab : panels[0];
   const nav = elements.salesArticleDetailNavigation; if (!nav) return;
   nav.setAttribute('role', 'tablist');
@@ -30365,6 +30392,7 @@ function applySalesArticleDetailTabs() {
     a.id = `salesArticleDetailTab${i}`; a.href = '#' + id; a.setAttribute('role','tab'); a.setAttribute('aria-controls',id); a.setAttribute('aria-selected',String(selected)); a.tabIndex = selected ? 0 : -1;
     const panel = document.getElementById(id); if (panel) { panel.hidden = !selected; panel.setAttribute('role','tabpanel'); panel.setAttribute('aria-labelledby',a.id); if (panel.tagName === 'DETAILS' && selected) panel.open = true; }
   });
+  state.salesArticleCatalog.tools?.activate(active);
 }
 
 function normalizeSalesArticleCatalogItem(article = {}) {
@@ -31842,6 +31870,8 @@ function renderSalesArticleSourceFieldValue(field) {
 
 function renderSalesArticleCatalogDetail() {
   const catalog = state.salesArticleCatalog;
+  catalog.tools?.destroy(); catalog.tools=null;
+  document.getElementById("salesArticlePdfButton")?.classList.add("hidden");
   if (!elements.salesArticleDetail || !elements.salesArticleDetailBody) return;
   elements.salesArticleDetail.setAttribute("aria-busy", String(catalog.detailLoading));
   elements.salesArticleDetailMeta?.classList.add("hidden");
@@ -31922,11 +31952,15 @@ function renderSalesArticleCatalogDetail() {
     + '<div><dt>Aktuelle Datenquelle</dt><dd>' + escapeHtml(salesArticleCatalogSourceLabel(provenance.currentSourceSystem || provenance.originSourceSystem)) + '</dd></div>'
     + '<div><dt>Quelle aktualisiert</dt><dd>' + escapeHtml(salesArticleCatalogTimestamp(provenance.sourceUpdatedAt)) + '</dd></div></dl></section>'
     + '<section class="sales-article-detail-card" id="salesArticleHistorySection"><header><h3>Versionsverlauf</h3></header>'
-    + renderSalesArticleDetailHistory(revisions, article.currentRevision) + '</section></section></div>';
+    + renderSalesArticleDetailHistory(revisions, article.currentRevision) + '</section></section>'
+    + '<section id="salesArticleMovementsSection" class="sales-article-detail-tab-panel"></section>'
+    + '<section id="salesArticleSalesSection" class="sales-article-detail-tab-panel"></section></div>';
   window.SalesArticlePriceControls.mount(elements.salesArticleDetailBody, article.priceMatrix, formats, {
     preferenceKey: 'gp.article-price-columns.v1.' + currentSalesArticleCatalogActorKey(),
   });
-  layout.mountNotes(elements.salesArticleDetailBody, article.notes);
+  catalog.tools = window.SalesArticleTools?.mount(elements.salesArticleDetailBody, {api, rawApi, article, write:salesArticleDetailCanWrite(),
+    accessKey:currentSalesArticleCatalogDetailAccessKey, onCustomer:id=>{setView("crm");void openCrmCustomer(id);}});
+  document.getElementById("salesArticlePdfButton")?.classList.remove("hidden");
   if (photo) { document.getElementById('salesArticlePhotoSlot').append(photo); photo.classList.remove('hidden'); }
   applySalesArticleDetailTabs();
   if (catalog.detailMoveFocus) {
@@ -32023,7 +32057,7 @@ function renderSalesArticleCatalogHead() {
   let buttons = [...elements.salesArticleTableHead.querySelectorAll("[data-sales-article-sort]")];
   if (buttons.map(b => b.dataset.salesArticleSort).join('|') !== columns.map(c => c.id).join('|')) {
     elements.salesArticleTableHead.innerHTML = `<tr>${columns.map((column) => (
-      `<th scope="col" aria-sort="none"><button type="button" class="sales-article-sort-button" data-sales-article-sort="${column.id}">${escapeHtml(column.label)}</button></th>`
+      `<th scope="col" aria-sort="none"><button type="button" class="sales-article-sort-button" data-sales-article-sort="${column.id}" title="${escapeHtmlAttribute(column.label)}">${escapeHtml(column.label)}</button><button type="button" class="sales-article-column-resizer" data-sales-article-column-resize="${column.id}" role="slider" aria-label="Spaltenbreite ${escapeHtmlAttribute(column.label)}" aria-orientation="horizontal" aria-valuemin="80" aria-valuemax="800" aria-valuenow="150" title="Spaltenbreite ziehen; Pfeiltasten zum Anpassen"></button></th>`
     )).join("")}</tr>`;
     buttons = [...elements.salesArticleTableHead.querySelectorAll("[data-sales-article-sort]")];
   }
@@ -32039,6 +32073,7 @@ function renderSalesArticleCatalogHead() {
     button.classList.toggle("descending", active && sort.direction === "desc");
     button.disabled = !canReadSalesArticles() || !state.salesArticleCatalog.searchStarted;
   });
+  salesArticleColumnResize?.render();
 }
 
 function salesArticleCatalogVisibleWindow(itemCount) {
@@ -32285,6 +32320,7 @@ function currentSalesArticleCatalogDetailAccessKey() {
     canReadSalesArticleCosts(),
     canWriteSalesArticles(),
     canImportSalesArticles(),
+    JSON.stringify([state.portalSession?.user?.permissions, state.portalSession?.user?.scopes, state.portalSession?.user?.salesHistory]),
   ].join("|");
 }
 
@@ -32298,7 +32334,7 @@ function syncSalesArticleCatalogActorState() {
   catalog.actorKey = actorKey;
   catalog.detailAccessKey = detailAccessKey;
   if (actorChanged || detailAccessChanged) {
-    catalog.tablePreferencesKey = ''; catalog.tableColumns = null; catalog.visibleRows = 10;
+    catalog.tablePreferencesKey = ''; catalog.tableColumns = null; catalog.columnWidths = {}; catalog.visibleRows = 10;
     catalog.tablePreferencesPending = false;
     catalog.tablePreferencesRequest = (catalog.tablePreferencesRequest || 0) + 1;
     if (!selectedSalesArticleColumns().some(c => c.id === catalog.sort)) { catalog.sort = 'articleNumber'; catalog.direction = 'asc'; }
@@ -32775,7 +32811,14 @@ let importMappingWorkspace = null;
 let crmPurchaseWorkspace = null;
 let receiptSearchWorkspace = null;
 let tradeInsightsWorkspace = null;
-let tradeInsightsTab = "purchasing";
+let tradeInsightsTab = "repairs";
+function activateTradeArea(view) {
+  const workspace=document.getElementById("tradeInsightsWorkspace");
+  const host=view==="logistics"?document.getElementById("logisticsWorkspaceHost"):elements.tradeInsightsView;
+  if(workspace&&host)host.append(workspace);
+  tradeInsightsWorkspace?.setArea(view==="logistics"?"logistics":"stock");
+  return tradeInsightsWorkspace?.activate(view==="logistics"?"purchasing":tradeInsightsTab);
+}
 let salesHistoryActorKey = "";
 function canReadTradeMovements() {
   const user=state.portalSession?.user;
@@ -32795,27 +32838,34 @@ document.getElementById('salesArticleHistoryButton')?.addEventListener('click', 
 });
 function syncSalesHistoryAccess() {
   const user = state.portalSession?.user;
-  const nextKey = user ? JSON.stringify([user.employeeNumber, user.salesHistory, user.dataImport, user.permissions, user.scopes]) : "";
+  const nextKey = user ? JSON.stringify([user.employeeNumber, user.accountId, user.isEmployee, user.accountType, user.homeLocationId, user.salesHistory, user.dataImport, user.permissions, user.scopes]) : "";
   if (nextKey === salesHistoryActorKey) return;
   salesHistoryActorKey = nextKey;
   tradeInsightsWorkspace?.destroy(); tradeInsightsWorkspace = null;
+  salesPriceLabelsWorkspace?.destroy?.(); salesPriceLabelsWorkspace?.suspend?.(); salesPriceLabelsWorkspace = null;
+  document.getElementById("salesPriceLabelsWorkspace")?.replaceChildren();
+  document.getElementById("salesPriceLabelsNavButton")?.classList.toggle("hidden", !canUseSalesPriceLabels());
+  if (canUseSalesPriceLabels()) salesPriceLabelsWorkspace = window.GrabenplanerSalesPriceLabels?.mount(document.getElementById("salesPriceLabelsWorkspace"), {api, rawApi, accessKey:currentSalesPriceLabelsAccessKey});
+  if (state.currentView === "priceLabels") { if (canUseSalesPriceLabels()) void salesPriceLabelsWorkspace?.load(); else setView("startDashboard"); }
   const tradeInsightsAccess = canAccessTradeInsights();
   document.getElementById('salesArticleMovementsButton')?.classList.toggle('hidden', !canReadTradeMovements());
   document.getElementById('salesArticleHistoryButton')?.classList.toggle('hidden', !(user?.salesHistory?.read && canReadSalesArticles()));
   elements.tradeInsightsNavButton?.classList.toggle("hidden", !tradeInsightsAccess);
+  elements.logisticsNavButton?.classList.toggle("hidden", !(user?.salesHistory?.read && user.permissions?.includes("sales:purchasing:read")));
+  document.getElementById("logisticsNav")?.classList.toggle("hidden", !(user?.salesHistory?.read && user.permissions?.includes("sales:purchasing:read")));
   elements.tradeInsightsDashboardCard?.classList.toggle("hidden", !tradeInsightsAccess);
   if (tradeInsightsAccess) tradeInsightsWorkspace = window.GrabenplanerTradeInsights?.mount(document.getElementById("tradeInsightsWorkspace"), {
     api,
     onTabChange(tab, { replace = false } = {}) {
       tradeInsightsTab = tab;
-      if (state.currentView === "tradeInsights") {
+      if (["tradeInsights","logistics"].includes(state.currentView)) {
         if (replace) globalThis.grabenplanerNavigation?.replace();
         else globalThis.grabenplanerNavigation?.record();
       }
     },
   });
-  if (state.currentView === "tradeInsights") {
-    if (tradeInsightsAccess) void tradeInsightsWorkspace?.activate(tradeInsightsTab);
+  if (["tradeInsights","logistics"].includes(state.currentView)) {
+    if (tradeInsightsAccess) void activateTradeArea(state.currentView);
     else setView("startDashboard");
   }
   salesReportJobUi?.reset();
@@ -35282,9 +35332,10 @@ function setView(view) {
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
     || (view === "salesAdministration" && !canOpenSalesAdministrationModule())
     || (view === "receiptSearch" && !state.portalSession?.user?.salesHistory?.read)
-    || (view === "tradeInsights" && !canAccessTradeInsights())
+    || (["tradeInsights","logistics"].includes(view) && !canAccessTradeInsights())
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "articleCatalog" && !canAccessSalesArticleCatalog())
+    || (view === "priceLabels" && !canUseSalesPriceLabels())
     || (view === "crm" && !canAccessCrm())
     || (view === "loans" && !canReadLoanManagement())
     || (view === "branchOrders" && !canManageBranchOrders())
@@ -35334,8 +35385,11 @@ function setView(view) {
   elements.receiptSearchView?.classList.toggle("active", view === "receiptSearch");
   if (view === "receiptSearch") void receiptSearchWorkspace?.load(); else receiptSearchWorkspace?.suspend();
   elements.tradeInsightsView?.classList.toggle("active", view === "tradeInsights");
-  if (view === "tradeInsights") void tradeInsightsWorkspace?.activate(tradeInsightsTab); else tradeInsightsWorkspace?.suspend();
+  elements.logisticsView?.classList.toggle("active", view === "logistics");
+  if (["tradeInsights","logistics"].includes(view)) void activateTradeArea(view); else tradeInsightsWorkspace?.suspend();
   elements.salesArticleCatalogView?.classList.toggle("active", view === "articleCatalog");
+  document.getElementById("salesPriceLabelsView")?.classList.toggle("active", view === "priceLabels");
+  if (view === "priceLabels") void salesPriceLabelsWorkspace?.load(); else salesPriceLabelsWorkspace?.suspend();
   elements.crmView?.classList.toggle("active", view === "crm");
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.loansView?.classList.toggle("active", view === "loans");
@@ -35384,7 +35438,7 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     if (fromHistory) closeMobileNavigation({ restoreFocus: false });
     return;
   }
-  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
+  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "logistics", "articleCatalog", "priceLabels", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
     setView("startDashboard");
     return;
   }
@@ -35393,7 +35447,8 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
     document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
   }
-  if (requestedView === "tradeInsights") tradeInsightsTab = window.GrabenplanerTradeInsights.normalizeTab(parameters.get("section"));
+  if (requestedView === "tradeInsights" && parameters.get("section")==="purchasing") {setView("logistics");return;}
+  if (requestedView === "tradeInsights") tradeInsightsTab = window.GrabenplanerTradeInsights.normalizeTab(parameters.get("section")||"repairs");
   if (requestedView === "salesAnalytics") {
     const requestedSection = parameters.get("section");
     if (["create", "reports", "graphics", "pdf"].includes(requestedSection)) state.salesAnalytics.tab = requestedSection;
@@ -35446,6 +35501,7 @@ function currentAdministrationRoute() {
   if (view === "personnel") route.section = state.personnelTab;
   if (view === "salesAnalytics") route.section = state.salesAnalytics.tab;
   if (view === "tradeInsights") route.section = tradeInsightsTab;
+  if (view === "logistics") route.section = "purchasing";
   if (view === "requests") route.kind = state.requestKindTab;
   if (view === "rightsDashboard") {
     route.dashboard = state.rightsDashboardMode;
@@ -36400,6 +36456,36 @@ function syncEmployeeLendingTimeFields() {
   elements.employeeLendingEndTime.required = !allDay;
   elements.employeeLendingDateTo.disabled = !allDay;
   if (!allDay) elements.employeeLendingDateTo.value = elements.employeeLendingDateFrom.value;
+  updateEmployeeLendingDateRangeLabel();
+}
+
+let employeeLendingDateRangeCalendar = null;
+function updateEmployeeLendingDateRangeLabel() {
+  const text = document.getElementById('employeeLendingDateRangeText');
+  if (text) text.textContent = window.GrabenplanerDateRangeCalendar?.rangeLabel(elements.employeeLendingDateFrom.value, elements.employeeLendingDateTo.value) || 'Zeitraum auswählen';
+  const hint = document.getElementById('employeeLendingDateRangeHint');
+  if (hint) hint.textContent = elements.employeeLendingAllDay.checked
+    ? 'Ein Tag oder mehrere Tage, auch kalenderwochenübergreifend' : 'Einzelner Tag mit Beginn- und Endzeit';
+}
+function initializeEmployeeLendingDateRangeCalendar() {
+  const factory = window.GrabenplanerDateRangeCalendar?.createDateRangeCalendar;
+  const node = suffix => document.getElementById('employeeLendingDateRange' + suffix);
+  if (!factory || !node('Dialog')) return;
+  employeeLendingDateRangeCalendar = factory({dialog:node('Dialog'), form:node('Form'), grid:node('Grid'),
+    title:node('MonthLabel'), startText:node('StartText'), endText:node('EndText'),
+    previousButton:node('PreviousMonth'), nextButton:node('NextMonth'), openEndCheckbox:node('OpenEnd'),
+    applyButton:node('Apply'), closeButtons:[node('Close'),node('Cancel')]});
+  node('Button')?.addEventListener('click', () => {
+    const allDay = elements.employeeLendingAllDay.checked;
+    employeeLendingDateRangeCalendar.open({start:elements.employeeLendingDateFrom.value || state.weekStart,
+      end:elements.employeeLendingDateTo.value || elements.employeeLendingDateFrom.value || state.weekStart,
+      allowOpenEnd:false, ...(allDay ? {} : {maxEndDays:0}),
+      onCommit(start, end) {
+        elements.employeeLendingDateFrom.value = start;
+        elements.employeeLendingDateTo.value = end;
+        syncEmployeeLendingTimeFields();
+      }});
+  });
 }
 
 function resetEmployeeLendingEditor() {
@@ -40529,7 +40615,12 @@ elements.employeeLendingAllDay?.addEventListener("change", syncEmployeeLendingTi
 elements.employeeLendingDateFrom?.addEventListener("change", () => {
   if (!elements.employeeLendingAllDay.checked) elements.employeeLendingDateTo.value = elements.employeeLendingDateFrom.value;
   else if (elements.employeeLendingDateTo.value < elements.employeeLendingDateFrom.value) elements.employeeLendingDateTo.value = elements.employeeLendingDateFrom.value;
+  updateEmployeeLendingDateRangeLabel();
 });
+elements.employeeLendingDateTo?.addEventListener('change', updateEmployeeLendingDateRangeLabel);
+elements.employeeLendingForm?.addEventListener('invalid', event => {
+  event.target.closest('.employee-lending-period-inputs')?.setAttribute('open', '');
+}, true);
 elements.employeeLendingCancelEdit?.addEventListener("click", resetEmployeeLendingEditor);
 elements.employeeLendingRefresh?.addEventListener("click", loadEmployeeLendings);
 elements.employeeLendingList?.addEventListener("click", (event) => {
@@ -41721,6 +41812,18 @@ elements.salesArticleDetailNavigation?.addEventListener('keydown', event => {
   handle?.addEventListener('pointerup', end); handle?.addEventListener('pointercancel', end); handle?.addEventListener('lostpointercapture', end);
   handle?.addEventListener('keydown', event => { if (!['ArrowUp','ArrowDown','Home','End'].includes(event.key)) return; event.preventDefault(); resize(event.key === 'Home' ? 5 : event.key === 'End' ? 20 : (state.salesArticleCatalog.visibleRows || 10) + (event.key === 'ArrowDown' ? 1 : -1)); queueSalesArticlePreferencesSave(); });
 }
+salesArticleColumnResize = window.SalesArticleColumnWidths?.attach(elements.salesArticleTable, {
+  columns:selectedSalesArticleColumns, widths:() => state.salesArticleCatalog.columnWidths,
+  change:widths => {
+    const catalog = state.salesArticleCatalog;
+    catalog.columnWidths = widths;
+    catalog.tablePreferencesRequest = (catalog.tablePreferencesRequest || 0) + 1;
+    catalog.tablePreferencesKey = currentSalesArticleCatalogDetailAccessKey();
+    catalog.tablePreferencesPending = false;
+  },
+  canResize:canReadSalesArticles, persist:() => queueSalesArticlePreferencesSave(0),
+});
+
 elements.employeePosition.addEventListener("change", () => renderEmployeeAccessProfile(employeeAccessCurrentEmployee()));
 elements.employeeForm.addEventListener("invalid", (event) => {
   event.target.closest("details")?.setAttribute("open", "");
@@ -42058,6 +42161,7 @@ elements.vacationCalendar.addEventListener("click", (event) => {
 
 initializeRequestBlackoutDateRangeCalendar();
 initializeStaffAssignmentRequestDateRangeCalendar();
+initializeEmployeeLendingDateRangeCalendar();
 initializeScheduleSearchDateRangeCalendar();
 initializeXoffiComparisonCalendar();
 initializeOptionDateRangeCalendar();
@@ -42086,3 +42190,5 @@ window.addEventListener("focus", () => {
 
 personnelLearningAssessmentEditor=GrabenplanerLearningAssessment.editor(document.getElementById("personnelLearningAssessmentEditor"));
 personnelLearningAssessmentPanel=GrabenplanerLearningAssessment.init({api});
+
+ document.getElementById("salesArticlePdfButton")?.addEventListener("click",()=>state.salesArticleCatalog.tools?.openPdf());

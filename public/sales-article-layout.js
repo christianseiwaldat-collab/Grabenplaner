@@ -60,13 +60,13 @@
       + '<div id="salesArticlePhotoSlot"></div></div>'
       + '<section class="sales-article-detail-card sales-article-source-description"><header><h3>Beschreibung &amp; Lieferumfang</h3></header>'
       + supplier + (group('description').length ? '<dl class="sales-article-detail-data">' + fields(group('description').map(f => ({...f,wide:true}))) + '</dl>' : '') + '</section>'
-      + '<section class="sales-article-detail-card sales-article-branch-stock"><header><h3>Filialbestand</h3></header>'
+      + '<div class="sales-article-stock-layout"><section class="sales-article-detail-card sales-article-branch-stock"><header><h3>Filialbestand</h3></header>'
       + (stock.rows.length ? '<div class="sales-article-detail-table-wrap"><table class="sales-article-detail-table"><thead><tr><th scope="col">Filiale</th><th scope="col">Bestand</th></tr></thead><tbody>'
         + stock.rows.map(row => '<tr><td>' + fieldValue({value:row.id,title:row.name || 'Filialname nicht hinterlegt'}) + '</td><td'
           + (row.ambiguous ? ' title="Mehrdeutige Bestandszuordnung"' : '') + '>' + esc(decimal(row.quantity)) + '</td></tr>').join('')
         + '</tbody></table></div>' : '<p class="sales-article-detail-message">Kein Filialbestand im aktuellen Import hinterlegt.</p>') + '</section>'
       + '<div class="sales-article-source-sections">' + remaining.map(s => '<section class="sales-article-detail-card"><header><h3>'
-        + esc(s.title) + '</h3></header><dl class="sales-article-detail-data">' + fields(s.fields) + '</dl></section>').join('') + '</div>';
+        + esc(s.title) + '</h3></header><dl class="sales-article-detail-data">' + fields(s.fields) + '</dl></section>').join('') + '</div></div>';
   }
   function notes(value, h) {
     const items = value?.items || [];

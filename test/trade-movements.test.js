@@ -43,8 +43,71 @@ test('date-bounded pages and cursors reject source changes instead of mixing res
  await assert.rejects(f.run('movements',{...q,movementType:'transfer',cursor:first.next}),e=>e.code==='IMPORT_BESTELL_CURSOR');
  await f.ingest('WE',[movement(999)],{sourceInstance,snapshotAt:'2026-09-15T09:00:00.000Z'});
  const updated=await f.run('movements');assert.ok(updated.sourceDates.includes('2026-09-14T09:00:00.000Z'));
- const newest=await f.run('movements',{articleNumber:'000042',query:'999'});assert.deepEqual(newest.sourceDates,['2026-09-15T09:00:00.000Z']);
+ let cursor='',newest=[];do{const page=await f.run('movements',{articleNumber:'000042',query:'999',...(cursor?{cursor}:{})});newest.push(...page.sourceDates);cursor=page.next;}while(cursor);assert.deepEqual([...new Set(newest)],['2026-09-15T09:00:00.000Z']);
  await assert.rejects(f.run('movements',{...q,cursor:first.next}),e=>e.code==='IMPORT_BESTELL_CURSOR');
+});
+
+test('article Umlagerungen use referenced keys, newest date paging, exact quantities, and scope on either endpoint',async t=>{
+ const f=await fixture(t);
+ await f.ingest('ARTIKEL_STAMM',[{EAN:'000042',Artikelbezeichnung:'Selected camera'},{EAN:'42',Artikelbezeichnung:'Different article'},{EAN:'000043',Artikelbezeichnung:'Other camera'}],{master:true});
+ const rows=Array.from({length:240},(_,i)=>movement(i+1,{We:false,Umlagerung:true,FilialID:'19',Filialid2:'18',WEDatum:i<210?'2026-09-12T00:00:00.000':'2026-08-10T00:00:00.000'}));
+ rows.push(...Array.from({length:240},(_,i)=>movement(i+500,{EAN:'000043',We:false,Umlagerung:true})),movement(999,{EAN:'42',We:false,Umlagerung:true}),movement(1000));
+ await f.ingest('WE',rows,{sourceInstance});
+ const query={articleNumber:'000042',dateFrom:'2026-08-01',dateTo:'2026-09-14'};
+ const first=await f.run('article-movements',query);assert.equal(first.rows.length,200);assert.equal(first.scanned,200);assert.ok(first.next);assert.equal(first.order,'date-desc');assert.ok(first.rows.every(r=>r.date.startsWith('2026-09-12')));
+ const second=await f.run('article-movements',{...query,cursor:first.next});assert.equal(second.rows.length,40);assert.equal(second.next,null);assert.equal(second.scanned,41,'only this article includes its one receipt candidate; other referenced articles are excluded in SQL');
+ const all=[...first.rows,...second.rows];assert.equal(new Set(all.map(r=>r.id)).size,240);assert.ok(all.every(r=>r.kind==='transfer'&&r.articleNumber==='000042'));assert.equal(second.rows.at(-1).date.slice(0,10),'2026-08-10');
+ await assert.rejects(f.run('article-movements',{...query,articleNumber:'000043',cursor:first.next}),e=>e.code==='IMPORT_BESTELL_CURSOR');
+ const base=f.state.session;f.state.session={...base,permissions:base.permissions.filter(v=>!v.includes('company')&&!v.includes('unassigned')),scopes:[{locationId:'18'}]};
+ const scoped=await f.run('article-movements',query);assert.equal(scoped.rows.length,200);assert.ok(scoped.rows.every(r=>r.endpoints.to.locationId==='18'&&r.endpoints.from.locationId===null));
+ await assert.rejects(f.run('article-movements',{...query,locationId:'19'}),e=>e.status===403);
+});
+
+test('article Umlagerungen retain unresolved legacy references without scanning other bound articles',async t=>{
+ const f=await fixture(t);await f.ingest('WE',[movement(1,{We:false,Umlagerung:true,Filialid2:'19'}),movement(2,{EAN:'missing-other',We:false,Umlagerung:true,Filialid2:'19'})],{sourceInstance});
+ await f.ingest('ARTIKEL_STAMM',[{EAN:'000042',Artikelbezeichnung:'Imported later',Anlagedatum:'2020-01-01T00:00:00.000'}],{master:true});
+ const result=await f.run('article-movements',{articleNumber:'000042'});assert.deepEqual(result.rows.map(r=>r.movementNumber),['1']);assert.equal(result.scanned,2);assert.equal(result.rows[0].label,'Imported later');
+ f.state.session={...f.state.session,permissions:f.state.session.permissions.filter(v=>v!=='sales:purchasing:read')};await assert.rejects(f.run('article-movements',{articleNumber:'000042'}),e=>e.status===403);
+});
+
+test('article display numbers resolve only explicit Trade source links, preserving different numeric identities',async t=>{
+ const f=await fixture(t),C=require('../lib/data-import-contract'),sourceKey='0000000000042';
+ const articles=[{sourceArticleKey:sourceKey,articleNumber:'000042',description:'Catalog camera',active:true,sourceUpdatedAt:null,identifiers:[],prices:[]}];
+ await require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.app.provider).importSnapshot({snapshot:{sourceSystem:'tradefoto.artikel_stamm',sourceProfileVersion:'workspace-test-v1',sourceSchemaSha256:C.fingerprint('test-schema'),sourceFileSha256:C.fingerprint(articles),contentSha256:require('../lib/sales-article-catalog').salesArticleImportContentSha256(articles),snapshotAt:'2026-09-14T09:00:00.000Z',articles},actor:'synthetic-owner',timestamp:'2026-09-14T09:00:00.000Z'});
+ await f.ingest('ARTIKEL_STAMM',[{EAN:sourceKey,Artikelbezeichnung:'Matching source',Anlagedatum:'2020-01-01T00:00:00.000'},{EAN:'42',Artikelbezeichnung:'Other exact source'}],{master:true});
+ await f.ingest('WE',[movement(1,{EAN:sourceKey,We:false,Umlagerung:true,Filialid2:'19'}),movement(2,{EAN:'42',We:false,Umlagerung:true,Filialid2:'19'})],{sourceInstance});
+ const result=await f.run('article-movements',{articleNumber:'000042'});assert.equal(result.rows.length,1);assert.equal(result.rows[0].movementNumber,'1');assert.equal(result.rows[0].articleNumber,'000042');assert.equal(result.rows[0].sourceArticleNumber,sourceKey);assert.equal(result.articleIdentity,'catalog_source_link');
+ assert.equal(result.rows[0].label,'Catalog camera');assert.equal(result.rows[0].labelSource,'catalog_current');assert.equal(result.rows[0].sourceLabel,'Matching source');
+ // The selected current catalog label does not erase uncertain historical provenance.
+ await f.ingest('WE',[movement(3,{EAN:sourceKey,We:false,Umlagerung:true,Filialid2:'19',WEDatum:'2019-09-10T00:00:00.000'})],{sourceInstance,snapshotAt:'2026-09-15T09:00:00.000Z'});
+ const old=(await f.run('article-movements',{articleNumber:'000042'})).rows.find(row=>row.movementNumber==='3');
+ assert.equal(old.label,'Catalog camera');assert.equal(old.sourceLabel,'Artikelreferenz ungeklärt');assert.equal(old.articleReference.status,'outside_period');assert.ok(old.issues.includes('Artikelreferenz prüfen'));
+ const exact=await f.run('movements',{articleNumber:'42'});assert.deepEqual(exact.rows.map(r=>r.movementNumber),['2']);
+});
+
+test('article movements keyset statements compile for PostgreSQL with literal column contracts',()=>{
+ const entries=require('../lib/persistence/postgresql/reporting/branch-article-catalog').BRANCH_ARTICLE_CATALOG.filter(e=>e.statement.id.startsWith('trade-insights.article-movements-'));assert.equal(entries.length,4);
+ for(const entry of entries){assert.match(entry.sql,/integration\s*\.\s*"?import_history_references/);assert.doesNotMatch(entry.sql,/\$(scopeId|master1|afterDate|afterId)/);assert.ok(entry.parameterOrder.includes('master14'));assert.match(entry.sql,/ORDER BY.*DESC/);}
+});
+
+test('unlinked Trade branch imports use accepted cash bindings without widening a branch grant',async t=>{
+ const f=await seed(t,[movement(1,{FilialID:'018'}),movement(2,{FilialID:'19'})]);
+ f.app.database.prepare('DELETE FROM import_master_bindings').run();
+ assert.equal((await f.run('movements',{locationId:'18'})).rows.length,0);
+ const C=require('../lib/data-import-contract'),H=require('../lib/tradefoto-history-profiles'),tables=require('../lib/persistence/statements/cash-snapshots').CASH_SNAPSHOT_TABLES,policies=require('../lib/cash-source-policies').CASH_SOURCE_POLICIES;
+ const raw=(name,extra)=>({...Object.fromEntries(H.tableFor('cash',name).columns.map(c=>[c.name,null])),...extra});
+ const head=raw('Umsatz_KASSE',{Bonnr:'1',Filialid:'18',Kassenid:'1',Bondatum:'2026-09-10T00:00:00.000',RechnungsBetrag:'12',KUND_NR:'0'});
+ const data={Umsatz_KASSE:[head],Umsatz_Kasse_Details:[raw('Umsatz_Kasse_Details',{Bonnr:'1',Filialid:'18',Kassenid:'1',Bondatum:head.Bondatum,RepID:'00000000-0000-0000-0000-000000000001',EAN:'000042',VKMenge:'1',VK_Preis:'12',MWST:'20',...policies[0].policy.statusRules[3].flags})]};
+ const actor={scopeId:'grabenplaner-main',ownerId:'synthetic-owner'},fileSha256=C.fingerprint(data),id=f.protection.digest(['source',actor,'cash',fileSha256]),store=require('../lib/persistence/repositories/cash-snapshots').createCashSnapshotStore({access:f.app.provider,protection:f.protection,actor});
+ await store.begin(id,{kind:'cash',fileSha256,bytes:4096,tables:tables.map(table=>({name:table.name,profileHash:table.profile.fingerprint,declaredRows:data[table.name]?.length||0}))});
+ for(const table of tables){const values=data[table.name]||[];await store.startTable(id,table.name,values.length);if(values.length)await store.append(id,table.name,1,values.map((row,i)=>H.prepareTradeFotoHistoryRow('cash',table.name,row,{fileSha256,rowNumber:i+1})));await store.finishTable(id,table.name);}
+ let result=await store.seal(id,{tables:tables.length,rows:2});while(result.status==='reviewing')result=await store.review(id);
+ const publish=require('../lib/persistence/repositories/cash-publication-runtime').createCashPublicationRuntime({access:f.app.provider,vault:f.vault,scopeId:actor.scopeId,enabled:true,policies:[{...policies[0],fileSha256}]});
+ const importSession={...f.state.session,permissions:[...f.state.session.permissions,'data:imports:read','data:imports:prepare','data:imports:apply','locations:write','personnel:central:read','personnel:central:write']},request={sourceId:id,expectedRevision:0,label:'Synthetic cash',policyId:policies[0].id,resolveArticles:false,mappings:[{kind:'FILIALEN',sourceId:'18',targetId:'18',historical:false}]};
+ const plan=await publish.operation(async()=>importSession,'preview',{request});await publish.operation(async()=>importSession,'activate',{request,planHash:plan.planHash});
+ const q={locationId:'18',dateFrom:'2026-09-01',dateTo:'2026-09-14'},visible=await f.run('movements',q);assert.deepEqual(visible.rows.map(r=>r.movementNumber),['1']);assert.equal(visible.rows[0].endpoints.to.locationId,'18');
+ const base=f.state.session;f.state.session={...base,permissions:base.permissions.filter(v=>!v.includes('company')&&!v.includes('unassigned')),scopes:[{locationId:'18'}]};assert.deepEqual((await f.run('movements')).rows.map(r=>r.movementNumber),['1']);
+ await assert.rejects(f.run('movements',{locationId:'19'}),e=>e.status===403);
 });
 test('saved journal and its PDF remain tied to the original rows after later imports',async t=>{
  const f=await seed(t,[movement(1,{Menge:'-2',Bestellnr:1,Lieferscheinnr:'LS-7'}),movement(2,{We:false,Umlagerung:true,FilialID:'19',Filialid2:'18',KorbId:1})]);
