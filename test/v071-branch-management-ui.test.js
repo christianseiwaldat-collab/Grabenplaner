@@ -61,7 +61,13 @@ test("v0.71 Block 7 UI: bestehende Views und View-Deep-Links bleiben kompatibel"
   const requestedView = between(app, "function applyRequestedView(", "function setSettingsTab");
   assert.match(requestedView, /new URLSearchParams\(window\.location\.search\)/);
   assert.match(requestedView, /parameters\.get\("view"\)/);
-  assert.match(requestedView, /\["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"\]\.includes\(requestedView\)/);
+  const supportedViewsMatch = requestedView.match(/if \(!(?<views>\[(?:"[^"]+"(?:,\s*)?)+\])\.includes\(requestedView\)\)\s*\{\s*setView\("startDashboard"\);\s*return;/);
+  assert.ok(supportedViewsMatch, "Unbekannte View-Deep-Links müssen weiter zum Start-Dashboard zurückkehren");
+  const supportedViews = JSON.parse(supportedViewsMatch.groups.views);
+  for (const view of ["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings", "logistics", "priceLabels"]) {
+    assert.ok(supportedViews.includes(view), `View-Deep-Link fehlt: ${view}`);
+  }
+  assert.equal(new Set(supportedViews).size, supportedViews.length);
   assert.match(requestedView, /setView\(requestedView\)/);
 });
 

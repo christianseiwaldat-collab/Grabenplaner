@@ -105,21 +105,24 @@ function functionSource(source, name) {
 }
 function element(dataset = {}) {
   const classes = new Set();
-  return { dataset, classList: { contains: value => classes.has(value), toggle(value, on) { if (on) classes.add(value); else classes.delete(value); } } };
+  return { dataset, append() {}, classList: { contains: value => classes.has(value), toggle(value, on) { if (on) classes.add(value); else classes.delete(value); } } };
 }
 
 function administration() {
   const settings = ['general', 'rights', 'schedule', 'developer', 'systemCenter'].map(settingsTab => element({ settingsTab }));
   settings[0].classList.toggle('active', true); settings[3].classList.toggle('hidden', true);
   const win = browser(), calls = [], elements = new Proxy({}, { get(target, key) { return target[key] ||= element(); } });
+  const documentElements = new Map(['salesPriceLabelsView', 'tradeInsightsWorkspace', 'logisticsWorkspaceHost'].map(id => [id, element()]));
   win.GrabenplanerTradeInsights = require('../public/trade-insights');
   const ctx = { window: win, URLSearchParams, state: { currentView: 'startDashboard', portalStatus: {}, crm: {},
     salesAnalytics: { tab: 'create' }, personnelAdministrationTab: 'dashboard', personnelTab: 'employees',
     requestKindTab: 'vacation', rightsDashboardMode: 'rights', locationId: '18', departmentId: '',
     locations: [{ id: '18', active: true, departments: [{ id: 1, active: true }] }, { id: '20', active: true, departments: [{ id: 2, active: true }] }] },
-    elements, timePresenceRefreshTimer: null, receiptSearchWorkspace: null, tradeInsightsTab: 'purchasing',
-    tradeInsightsWorkspace: { activate: tab => calls.push({ insights: tab }), suspend: () => calls.push('suspendInsights') },
-    document: { hidden: false, querySelectorAll: selector => selector.includes('data-settings-tab') ? settings : [],
+    elements, timePresenceRefreshTimer: null, receiptSearchWorkspace: null, tradeInsightsTab: 'repairs',
+    tradeInsightsWorkspace: { activate: tab => calls.push({ insights: tab }), setArea: area => calls.push({ area }), suspend: () => calls.push('suspendInsights') },
+    salesPriceLabelsWorkspace: { load: () => calls.push('loadPriceLabels'), suspend: () => calls.push('suspendPriceLabels') },
+    document: { hidden: false, getElementById: id => documentElements.get(id) || null,
+      querySelectorAll: selector => selector.includes('data-settings-tab') ? settings : [],
       querySelector: selector => settings.find(item => (!selector.includes('.active') || item.classList.contains('active')) && !item.classList.contains('hidden')) },
     setSettingsTab(tab) { settings.forEach(item => item.classList.toggle('active', item.dataset.settingsTab === tab)); },
     employeeProfileIsOpen: () => false, accessibleDashboardModes: () => ['rights', 'processes'],
@@ -133,11 +136,11 @@ function administration() {
     canReadSystemCenter: () => true,
     loadSystemCenter: () => calls.push('loadSystemCenter'),
   };
-  for (const name of ['canReadManagerRequests', 'canReadManagedTimeTracking', 'canOpenPersonnelAdministrationModule', 'canOpenSalesAdministrationModule', 'canAccessSalesAnalytics', 'canAccessSalesArticleCatalog', 'canAccessCrm', 'canAccessTradeInsights', 'canReadLoanManagement', 'canManageBranchOrders']) ctx[name] = () => true;
+  for (const name of ['canReadManagerRequests', 'canReadManagedTimeTracking', 'canOpenPersonnelAdministrationModule', 'canOpenSalesAdministrationModule', 'canAccessSalesAnalytics', 'canAccessSalesArticleCatalog', 'canUseSalesPriceLabels', 'canAccessCrm', 'canAccessTradeInsights', 'canReadLoanManagement', 'canManageBranchOrders']) ctx[name] = () => true;
   for (const name of ['clearUsbProvisioningPasswords', 'clearPersonnelLifecycleEditorState', 'clearPersonnelLifecycleAutomationState', 'renderContextNavigation', 'applyActivePageAppearance', 'loadStartDashboard', 'loadRightsDashboard', 'ensureAccessibleManagerRequestTab', 'loadManagerVacationRequests', 'loadLoanManagement', 'loadBranchOrdersManagement', 'renderSalesArticleCatalogResults', 'syncCrmCustomerWorkspace']) ctx[name] = () => {};
   for (const name of ['loadSalesArticleTablePreferences', 'loadSalesArticleLastImport', 'loadCrmPreferences']) ctx[name] = async () => {};
   vm.createContext(ctx);
-  vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
+  vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'activateTradeArea', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
   ctx.grabenplanerNavigation = create({ window: win, app: 'admin', keys: ['view', 'section', 'kind', 'dashboard', 'process', 'location', 'department'],
     read: ctx.currentAdministrationRoute, apply: () => ctx.applyRequestedView({ fromHistory: true }) });
   ctx.grabenplanerNavigation.start(); return { ctx, win, calls };
@@ -165,19 +168,25 @@ test('Administration: sales, settings and personnel subsections survive back/for
   assert.equal(ctx.currentAdministrationRoute().section, 'rights');
 });
 
-test('Administration: trade tabs share GP history and honor revoked access', () => {
+test('Administration: legacy purchasing links redirect to logistics and preserve history and access guards', () => {
   const { ctx, win, calls } = administration();
   win.history.replaceState(null, '', '?view=tradeInsights&section=purchasing');
   ctx.applyRequestedView({ fromHistory: true }); win.flush();
-  assert.equal(ctx.state.currentView, 'tradeInsights');
+  assert.equal(ctx.state.currentView, 'logistics');
   assert.equal(ctx.currentAdministrationRoute().section, 'purchasing');
-  ctx.tradeInsightsTab = 'inventory'; ctx.grabenplanerNavigation.record(); win.flush();
+  assert.equal(win.location.search, '?view=logistics&section=purchasing');
+  assert.ok(calls.includes('closeNavigation'));
+  assert.equal(calls.findLast(call => call.area).area, 'logistics');
+  assert.equal(calls.findLast(call => call.insights).insights, 'purchasing');
+  ctx.tradeInsightsTab = 'inventory'; ctx.setView('tradeInsights'); win.flush();
   ctx.setView('salesAdministration'); win.flush();
-  assert.equal(calls.at(-1), 'suspendInsights');
+  assert.ok(calls.includes('suspendInsights'));
   win.history.go(-1); win.flush();
   assert.equal(ctx.state.currentView, 'tradeInsights');
+  assert.equal(calls.findLast(call => call.area).area, 'stock');
   assert.equal(calls.findLast(call => call.insights).insights, 'inventory');
   win.history.go(-1); win.flush();
+  assert.equal(ctx.state.currentView, 'logistics');
   assert.equal(ctx.currentAdministrationRoute().section, 'purchasing');
   win.history.go(1); win.flush();
   assert.equal(ctx.currentAdministrationRoute().section, 'inventory');
@@ -186,13 +195,39 @@ test('Administration: trade tabs share GP history and honor revoked access', () 
   win.history.go(-1); win.flush();
   assert.equal(ctx.state.currentView, 'startDashboard');
   assert.equal(win.location.searchParams.get('view'), 'startDashboard');
+  win.history.replaceState(null, '', '?view=tradeInsights&section=purchasing');
+  ctx.applyRequestedView({ fromHistory: true }); ctx.grabenplanerNavigation.replace(); win.flush();
+  assert.equal(ctx.state.currentView, 'startDashboard');
+  assert.equal(win.location.search, '?view=startDashboard');
 });
 
 test('Administration: invalid trade tabs normalize to the supported default', () => {
   const { ctx, win } = administration();
   win.history.replaceState(null, '', '?view=tradeInsights&section=unknown');
   ctx.applyRequestedView(); win.flush();
-  assert.equal(ctx.currentAdministrationRoute().section, 'purchasing');
+  assert.equal(ctx.currentAdministrationRoute().section, 'repairs');
+});
+
+test('Administration: price label history loads the workspace and respects fresh access', () => {
+  const { ctx, win, calls } = administration();
+  win.history.replaceState(null, '', '?view=priceLabels&section=unknown');
+  ctx.applyRequestedView({ fromHistory: true }); win.flush();
+  assert.equal(ctx.state.currentView, 'priceLabels');
+  assert.equal(win.location.search, '?view=priceLabels');
+  assert.ok(calls.includes('loadPriceLabels'));
+  ctx.setView('salesAdministration'); win.flush();
+  assert.equal(calls.at(-1), 'suspendPriceLabels');
+  win.history.go(-1); win.flush();
+  assert.equal(ctx.state.currentView, 'priceLabels');
+  assert.equal(calls.filter(call => call === 'loadPriceLabels').length, 2);
+  win.history.go(1); win.flush();
+  ctx.canUseSalesPriceLabels = () => false;
+  win.history.go(-1); win.flush();
+  assert.equal(ctx.state.currentView, 'startDashboard');
+  assert.equal(win.location.search, '?view=startDashboard');
+  ctx.setView('priceLabels');
+  assert.equal(ctx.state.currentView, 'startDashboard');
+  assert.equal(calls.filter(call => call === 'loadPriceLabels').length, 2);
 });
 
 test('Administration: Back restores the recorded branch, not the last stored branch', () => {

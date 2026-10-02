@@ -10,7 +10,8 @@ const portalStyles = fs.readFileSync(path.join(root, "public", "portal.css"), "u
 
 function cssRule(selector) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return styles.match(new RegExp(`${escaped}\\s*\\{([^}]+)\\}`))?.[1] || "";
+  // Match the complete selector, not the suffix of a more specific rule.
+  return styles.match(new RegExp(`^\\s*${escaped}\\s*\\{([^}]+)\\}`, "m"))?.[1] || "";
 }
 
 test("Admin-Pop-ups kapseln horizontales Überlaufen am Dialog und Formular", () => {
@@ -34,12 +35,37 @@ test("Standort-Pop-up nutzt auf 4K vier, auf Full HD zwei und mobil eine Spalte"
   assert.match(styles, /@container popup \(min-width:1200px\)[\s\S]*grid-template-areas:"access networks networks variance"[\s\S]*repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(styles, /\.personnel-record-modal \.personnel-record-field-grid,[\s\S]*\.custom-process-modal \.custom-process-step-fields\s*\{\s*grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(styles, /\.personnel-record-modal \.personnel-record-span-two\s*\{\s*grid-column:span 2/);
-  assert.match(html, /class="field modal-span-2"[^>]*><span>Name<\/span>/);
+  const locationForm = html.match(/<form\b[^>]*id="locationForm"[^>]*>([\s\S]*?)<\/form>/)?.[1] || "";
+  assert.match(locationForm, /<label class="field"><span>Name<\/span><input id="locationName"/);
   assert.match(html, /class="field modal-span-3"[^>]*><span>Beschreibung<\/span><textarea id="customProcessDescription"/);
   assert.match(styles, /@media \(max-width:760px\)[\s\S]*grid-template-columns:1fr/);
 
   const actions = cssRule(".location-modal-actions");
   assert.doesNotMatch(actions, /margin-(?:left|right):\s*-/);
+});
+
+test("Personalstammdaten begrenzen die Höhe und scrollen nur den Inhalt zwischen Kopf und Aktionen", () => {
+  const employeeForm = html.match(/<form\b[^>]*id="employeeForm"[^>]*>([\s\S]*?)<\/form>/)?.[1] || "";
+  assert.match(cssRule(".modal.employee-modal"), /width:min\(920px,calc\(100vw - 32px\)\)/);
+  assert.match(cssRule(".modal.employee-modal"), /max-height:calc\(100dvh - 48px\)/);
+  assert.match(cssRule(".modal.employee-modal"), /overflow:hidden/);
+  assert.match(cssRule("#employeeForm"), /display:flex;\s*flex-direction:column/);
+  assert.match(cssRule("#employeeForm"), /max-height:calc\(100dvh - 48px\)/);
+  assert.match(cssRule("#employeeForm"), /padding:0;\s*overflow:hidden/);
+  assert.match(cssRule("#employeeForm > .modal-header"), /flex:none/);
+  const content = cssRule("#employeeForm > .employee-form-accordion");
+  assert.match(content, /flex:0 1 auto/);
+  assert.match(content, /min-height:0/);
+  assert.match(content, /grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(content, /overflow:auto/);
+  assert.match(content, /overscroll-behavior:contain/);
+  const actions = cssRule("#employeeForm > .modal-actions");
+  assert.match(actions, /position:static;\s*flex:none/);
+  assert.match(actions, /margin:0/);
+  assert.match(actions, /background:var\(--modal-surface\)/);
+  // The action row is outside the scrolling accordion and remains a form sibling.
+  assert.match(employeeForm, /<\/details>\s*<\/div>\s*<div class="modal-actions">[\s\S]*data-close="employeeModal"[\s\S]*type="submit"/);
+  assert.match(employeeForm, /<label class="field"><span>Name<\/span><input id="employeeName"/);
 });
 
 test("Öffnungszeiten werden auf schmalen Pop-ups zu Karten statt zu einer breiten Tabelle", () => {
