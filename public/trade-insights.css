@@ -91,17 +91,48 @@ html[data-active-page-theme="dark"] .trade-insights-workspace button:is(.active,
 .trade-export-dialog small, .trade-export-dialog p { font-size:12px; color:var(--muted); }
 .trade-export-dialog .trade-export-actions { display:flex; justify-content:flex-end; gap:8px; }
 .trade-export-dialog input[type="checkbox"] { width:18px; min-height:18px; }
-.trade-insights-workspace details.trade-column-chooser { display:inline-block; position:relative; margin:6px 0; padding:0; border:0; background:transparent; }
-.trade-column-chooser > summary { font-size:12px; color:var(--green); }
-.trade-column-chooser > small { display:block; font-size:11px; color:var(--muted); }
-.trade-column-options { position:absolute; top:100%; left:0; z-index:6; min-width:240px; max-height:300px; overflow:auto; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--surface); box-shadow:0 5px 18px #102b2326; }
-.trade-insights-workspace .trade-column-options label { display:flex; align-items:center; gap:8px; padding:5px; font-size:12px; color:var(--ink); }
-.trade-insights-workspace .trade-column-options input { flex:0 0 16px; width:16px; min-height:16px; height:16px; margin:0; padding:0; }
 .trade-insights-workspace .gp-table-columns th { position:sticky; padding-right:20px; }
-.trade-insights-workspace button.gp-column-resizer { display:block; padding:0; width:12px; min-height:0; border:0; border-radius:0; background:transparent; }
 .trade-insights-workspace [data-ti="snapshot"] { margin-top:22px; border-color:var(--green); }
 .trade-insights-workspace [data-ti="snapshot"] label { flex:1 1 280px; }
 .trade-insights-workspace [data-ti="snapshot-info"] { flex-basis:100%; margin:0; color:var(--muted); font-size:12px; }
+.trade-search-workbench,.trade-search-card { display:contents; }
+/* Logistik keeps search and saved runs together; result tables retain full width. */
+.trade-logistics-workspace .trade-search-workbench { display:grid; grid-template-columns:minmax(310px,.9fr) minmax(0,1.25fr); align-items:start; gap:16px; margin-bottom:16px; }
+.trade-logistics-workspace .trade-search-card { display:block; min-width:0; padding:14px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+.trade-logistics-workspace .trade-search-title { margin:0 0 12px; color:var(--ink); font-size:17px; line-height:1.3; }
+.trade-logistics-workspace [data-ti="filters"] { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 10px; align-items:end; margin:0; padding:0; border:0; border-radius:0; background:transparent; }
+.trade-logistics-workspace [data-ti="filters"] > label:first-child,.trade-logistics-workspace [data-ti="filters"] > button[type="submit"] { grid-column:1 / -1; }
+.trade-logistics-workspace [data-ti="filters"] label,.trade-logistics-workspace [data-ti="filters"] .trade-period-field { min-width:0; gap:4px; color:var(--muted); font-size:12px; }
+.trade-logistics-workspace [data-ti="filters"] :is(input,select,button) { min-width:0; min-height:36px; padding:7px 9px; font-size:12px; line-height:1.35; }
+.trade-logistics-workspace [data-ti="filters"] .trade-period-field > button { width:100%; text-align:left; }
+.trade-logistics-workspace [data-ti="filters"] > button[type="submit"] { margin-top:3px; font-weight:700; }
+.trade-logistics-workspace .trade-purchasing-info { margin-top:12px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:11px; line-height:1.5; }
+.trade-logistics-workspace .trade-purchasing-info p { margin:0 0 5px; }
+.trade-logistics-workspace .trade-purchasing-info strong { color:var(--muted); font-weight:650; }
+.trade-logistics-workspace .trade-job-hint { margin:7px 0 0; font-size:11px; line-height:1.45; }
+.trade-logistics-workspace [data-ti="archive"] { min-width:0; margin:0; padding:12px 14px; border-radius:12px; }
+.trade-logistics-workspace [data-ti="archive"] > summary { font-size:13px; line-height:1.35; }
+.trade-logistics-workspace [data-ti="job-status"] { margin:8px 0; font-size:12px; }
+.trade-logistics-workspace [data-ti="job-status"]:empty { display:none; }
+.trade-logistics-workspace [data-ti="jobs"] { min-width:0; margin-top:10px; }
+.trade-logistics-workspace [data-ti="jobs"] .table-scroll { max-height:310px; border-radius:8px; }
+.trade-logistics-workspace [data-ti="jobs"] table { font-size:12px; }
+.trade-logistics-workspace [data-ti="jobs"] :is(th,td) { padding:7px 9px; }
+.trade-logistics-workspace [data-ti="jobs"] th > button[data-job-sort] { min-height:26px; padding:2px 0; font-size:12px; }
+.trade-logistics-workspace [data-ti="jobs"] td small { margin-top:3px; font-size:10px; line-height:1.35; }
+.trade-logistics-workspace [data-ti="jobs"] > p { margin:10px 0 2px; color:var(--muted); font-size:12px; }
+.trade-logistics-workspace .trade-job-actions { min-width:0; }
+.trade-logistics-workspace .trade-job-actions > :is(button,a) { min-height:30px; margin:1px; padding:5px 8px; border-radius:6px; font-size:11px; }
+.trade-logistics-workspace .trade-job-actions > :is(button,a),.trade-logistics-workspace .trade-job-date { white-space:nowrap; }
+.trade-logistics-workspace [data-ti="jobs"] .trade-job-date small { margin-top:0; }
+.trade-logistics-workspace .trade-job-state { padding:2px 6px; font-size:11px; }
+.trade-logistics-workspace [data-ti="snapshot"] { margin-top:0; padding:12px 14px; }
+@container trade-workspace (max-width:800px) {
+  .trade-logistics-workspace .trade-search-workbench { grid-template-columns:minmax(0,1fr); gap:12px; }
+}
+@container trade-workspace (max-width:390px) {
+  .trade-logistics-workspace [data-ti="filters"] { grid-template-columns:minmax(0,1fr); }
+}
 @media(max-width:600px) {
   .trade-insights-workspace form { gap:10px; padding:12px; }
   .trade-insights-workspace label,

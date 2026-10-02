@@ -15,7 +15,7 @@
    const columns=cells[0].map((cell,i)=>{const button=cell.querySelector('[data-sort],[data-job-sort],[data-ah-sort],[data-si-sort],[data-si-position-sort]'),id=button?Object.values(button.dataset)[0]:'actions';return {id,label:button?.textContent.replace(/[↑↓↕]/g,'').trim()||cell.textContent.trim(),index:i,resizable:!!button,width:id==='actions'?190:id==='text'?420:['label','reason','article','description'].includes(id)?280:150};});
    const dataColumns=columns.filter(c=>c.resizable),allowed=dataColumns.map(c=>c.id);if(!allowed.length)return;
    let value=cached.get(key)||{columns:allowed,widths:{}},resize=null,disposed=false;
-   const doc=container.ownerDocument,chooser=doc.createElement('details');chooser.className='trade-column-chooser';chooser.innerHTML='<summary>Spaltenanzeige</summary><div class="trade-column-options"></div><small role="status"></small>';container.before(chooser);
+   const doc=container.ownerDocument,chooser=doc.createElement('details');chooser.className='trade-column-chooser gp-table-layout-controls';chooser.innerHTML='<summary>Spaltenanzeige</summary><div class="trade-column-options"></div><small role="status"></small>';container.before(chooser);
    const box=chooser.querySelector('div'),status=chooser.querySelector('small');
    const save=()=>{cached.set(key,value);const selected={columns:[...value.columns],widths:{...value.widths}};const work=(writes.get(key)||Promise.resolve()).catch(()=>{}).then(()=>api('table-options/'+key,selected)).then(()=>{if(!disposed)status.textContent='Gespeichert.';}).catch(error=>{if(!disposed&&error.name!=='AbortError')status.textContent='Speichern fehlgeschlagen. Bitte erneut versuchen.';});writes.set(key,work);};
    function apply(){
