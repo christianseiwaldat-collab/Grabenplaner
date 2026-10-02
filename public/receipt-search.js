@@ -7,6 +7,10 @@
   'use strict';
   const Lines = typeof module === 'object' && module.exports ? require('./receipt-line-format') : globalThis.GrabenplanerReceiptLineFormat;
   const ArticleHistory = typeof module === 'object' && module.exports ? require('./trade-article-history') : globalThis.GrabenplanerArticleHistory;
+  const TableLayout = typeof module === 'object' && module.exports ? require('./table-layout') : globalThis.GrabenplanerTableLayout;
+  const columnDefaults = {date:120, receipt:135, invoice:165, location:150, personnel:140, register:90, description:330, positions:100,
+    gross:170, state:140, account:120, inflow:130, outflow:130, customerNumber:150, customerAccount:180, customerSourceAccount:180,
+    customerName:200, customerAddress:290, customerPhone:170, customerEmail:240};
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const number = value => value == null ? '–' : String(value).replace(/(\.\d*?[1-9])0+$|\.0+$/u, '$1').replace('.', ',');
   const date = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value.split('-').reverse().join('.') : value || '–';
@@ -28,11 +32,11 @@
   }
   function renderTable(items, columns, labels, selected, sort) {
     const rows = sortedRows(items, sort);
-    return `<div class="receipt-table-scroll" role="region" tabindex="0" aria-label="Belegsuchergebnisse"><table><caption>${items.length} angezeigte Treffer · Spaltenüberschrift zum Sortieren aller Treffer wählen</caption>
+    return `<div class="receipt-table-scroll" role="region" tabindex="0" aria-label="Belegsuchergebnisse"><table data-r="table"><caption>${items.length} angezeigte Treffer · Spaltenüberschrift zum Sortieren aller Treffer wählen</caption>
       <thead><tr><th scope="col"><input type="checkbox" data-r-all aria-label="Geladene Treffer auswählen (höchstens 50)" ${items.length && items.every(r => selected.has(r.id)) ? 'checked' : ''}></th>
-      ${columns.map(k => `<th scope="col" aria-sort="${sort.key === k ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}"><button type="button" data-r-sort="${k}">${escape(labels[k])}${sort.key === k ? sort.direction === 1 ? ' ↑' : ' ↓' : ''}</button></th>`).join('')}<th scope="col">Beleginfo</th></tr></thead>
+      ${columns.map(k => `<th scope="col" aria-sort="${sort.key === k ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}"><button type="button" class="receipt-sort-button" data-r-sort="${k}" title="${escape(labels[k])}">${escape(labels[k])}${sort.key === k ? sort.direction === 1 ? ' ↑' : ' ↓' : ''}</button><button type="button" class="gp-column-resizer" data-gp-column-resize="${k}" role="slider" aria-label="Spaltenbreite ${escape(labels[k])}" aria-orientation="horizontal" aria-valuemin="80" aria-valuemax="800" aria-valuenow="${columnDefaults[k]}" title="Spaltenbreite ziehen; Pfeiltasten zum Anpassen"></button></th>`).join('')}<th scope="col">Beleginfo</th></tr></thead>
       <tbody>${rows.map(row => `<tr><td><input type="checkbox" data-r-select="${escape(row.id)}" aria-label="${escape('Beleg ' + row.receipt + ' vom ' + date(row.date) + ' auswählen')}" ${selected.has(row.id) ? 'checked' : ''}></td>
-      ${columns.map(k => `<td class="${['gross', 'inflow', 'outflow', 'positions'].includes(k) ? 'receipt-number' : ''}">${escape(cell(row, k))}</td>`).join('')}
+      ${columns.map(k => `<td class="${['gross', 'inflow', 'outflow', 'positions'].includes(k) ? 'receipt-number' : ''}" title="${escape(cell(row, k))}">${escape(cell(row, k))}</td>`).join('')}
       <td><button type="button" data-r-detail="${escape(row.id)}">Öffnen</button> <button type="button" data-r-pdf="${escape(row.id)}">PDF</button></td></tr>`).join('')}</tbody></table></div>`;
   }
   function renderDetail(row) {
@@ -54,6 +58,7 @@
     let disposed = false, generation = 0, controller = null, context = null, loading = null, calendar = null;
     let from, to, query = null, next = null, resultSet = null, total = null, scanned = 0, items = [], selected = new Set(), columns = [], allColumns = [], sort = { key: 'date', direction: -1 };
     let running = false, paused = false, exporting = false, detailId = null, displayKind = null;
+    let columnWidths = {}, tableResize = null, preferenceRevision = 0, preferenceSaves = Promise.resolve();
     const el = key => root.querySelector(`[data-r="${key}"]`);
     const message = text => { if (!disposed && el('message')) el('message').textContent = text; };
     function cancel() { generation++; controller?.abort(); controller = null; running = false; }
@@ -70,15 +75,36 @@
       el('count').textContent = `${items.length}${total == null ? '' : ' von ' + total} Treffer geladen · ${selected.size} ausgewählt`;
       const all = root.querySelector('[data-r-all]');
       if (all) { all.checked = items.length > 0 && sortedRows(items, sort).slice(0, 50).every(row => selected.has(row.id)); all.indeterminate = selected.size > 0 && !all.checked; }
+      tableResize?.render();
     }
     function render() {
       if (!context || disposed) return;
+      tableResize?.destroy(); tableResize = null;
       el('results').innerHTML = items.length ? renderTable(items, columns, context.columns, selected, sort) : '';
+      if (el('table')) tableResize = TableLayout.attach(el('table'), {
+        columns:() => [{id:'selection',width:44,resizable:false}, ...columns.map(id => ({id})), {id:'actions',width:140,resizable:false}],
+        allowedColumns:() => allColumns, defaults:columnDefaults, widths:() => columnWidths,
+        change:widths => { columnWidths = widths; }, canResize:() => !disposed && !running,
+        persist:savePreferences,
+      });
       actions();
+    }
+    function savePreferences() {
+      if (disposed || !context) return;
+      const revision = ++preferenceRevision, kind = displayKind;
+      const saved = {columns:[...columns], columnWidths:TableLayout.normalize(columnWidths, allColumns)};
+      context.preferencesByKind[kind] = saved;
+      el('columns-status').textContent = 'Wird gespeichert …';
+      const body = JSON.stringify({...saved, kind});
+      preferenceSaves = preferenceSaves.catch(() => {}).then(async () => {
+        if (disposed) return;
+        try { await api('/api/receipt-search/preferences', {method:'PUT', body}); if (!disposed && revision === preferenceRevision && kind === displayKind) el('columns-status').textContent = 'Für dein Konto gespeichert.'; }
+        catch (error) { if (!disposed && revision === preferenceRevision && kind === displayKind) el('columns-status').textContent = 'Nicht gespeichert: ' + error.message; }
+      });
     }
     function renderColumns() {
       const ordered = [...columns, ...allColumns.filter(k => !columns.includes(k))];
-      el('columns').innerHTML = ordered.map(k => `<div class="receipt-column"><label><input type="checkbox" data-r-column="${k}" ${columns.includes(k) ? 'checked' : ''}>${escape(context.columns[k])}</label><span>
+      el('columns').innerHTML = ordered.map(k => `<div class="receipt-column"><label><input type="checkbox" data-r-column="${k}" ${columns.includes(k) ? 'checked' : ''} ${columns.length === 1 && columns.includes(k) ? 'disabled' : ''}>${escape(context.columns[k])}</label><span>
         <button type="button" data-r-move="${k}" data-direction="-1" aria-label="${escape(context.columns[k])} nach links" ${columns.indexOf(k) <= 0 ? 'disabled' : ''}>↑</button>
         <button type="button" data-r-move="${k}" data-direction="1" aria-label="${escape(context.columns[k])} nach rechts" ${!columns.includes(k) || columns.indexOf(k) === columns.length - 1 ? 'disabled' : ''}>↓</button></span></div>`).join('');
     }
@@ -86,12 +112,13 @@
       const finance = el('kind').value !== 'receipts';
       if (displayKind !== el('kind').value) {
         context.preferencesByKind ||= { receipts: context.preferences };
-        if (displayKind) context.preferencesByKind[displayKind] = { columns: [...columns] };
+        if (displayKind) context.preferencesByKind[displayKind] = { columns: [...columns], columnWidths:{...columnWidths} };
         displayKind = el('kind').value;
         el('columns-status').textContent = '';
         allColumns = Object.keys(context.columns).filter(k => finance ? !['personnel', 'positions', 'gross', 'state', ...customerColumns].includes(k) : !['account', 'inflow', 'outflow'].includes(k) && (k !== 'personnel' || context.projection.sellers) && (!customerColumns.includes(k) || context.projection.customerPurchases));
         if (!allColumns.includes(sort.key)) sort = { key: 'date', direction: -1 };
         columns = (context.preferencesByKind[displayKind]?.columns || ['date', 'receipt', 'location', 'description', 'account', 'inflow', 'outflow']).filter(k => allColumns.includes(k));
+        columnWidths = TableLayout.normalize(context.preferencesByKind[displayKind]?.columnWidths, allColumns);
         if (!columns.length) columns = ['date', 'receipt'];
         renderColumns(); render();
       }
@@ -160,7 +187,7 @@
           context = result; to = context.today; const d = new Date(to); d.setUTCDate(d.getUTCDate() - 30); from = d.toISOString().slice(0, 10);
           allColumns = Object.keys(context.columns).filter(k => (k !== 'personnel' || context.projection.sellers) && (!['account', 'inflow', 'outflow'].includes(k) || context.projection.finance));
           columns = context.preferences.columns.filter(k => allColumns.includes(k)); if (!columns.length) columns = ['date', 'receipt'];
-          root.innerHTML = `<form data-r="form" class="receipt-filters"><label class="receipt-query">Suchbegriff<input data-r="query" type="search" maxlength="160" placeholder="z. B. Sony A7* 24-105mm" aria-describedby="receiptSearchHelp"></label>
+          root.innerHTML = `<section class="receipt-search-card" aria-label="Belege finden"><header><span class="eyebrow">Belegsuche</span><h2>Belege finden</h2></header><form data-r="form" class="receipt-filters"><label class="receipt-query">Suchbegriff<input data-r="query" type="search" maxlength="160" placeholder="z. B. Sony A7* 24-105mm" aria-describedby="receiptSearchHelp"></label>
             <label>Beleg-/Rechnungsnummer<input data-r="receipt" type="search" maxlength="80" placeholder="Nummer oder Teil mit *"></label>
             <label data-r="customer-fields" class="receipt-query">Kunde<input data-r="customer" type="search" maxlength="160" placeholder="Kundennummer, Name, Adresse, Telefon oder E-Mail" autocomplete="off"></label>
             <label>Datenart<select data-r="kind">${option('receipts', 'Belege')}${context.projection.finance ? option('daily', 'Tagesberichte · Buchungen') + option('journal', 'Kassenjournal · Buchungen') : ''}</select></label>
@@ -170,10 +197,10 @@
             <div class="receipt-actions"><button type="submit" data-r="search" class="primary-button">Suchen</button><button type="button" data-r="reset" class="secondary-button">Zurücksetzen</button><button type="button" data-r="pause" class="secondary-button" hidden>Pausieren</button></div></form>
             <p id="receiptSearchHelp" class="settings-note">Alle eingegebenen Begriffe werden gesucht, unabhängig von ihrer Reihenfolge. * steht für beliebig viele Zeichen, ? für ein Zeichen. Großschreibung, Trennzeichen und zusätzliche Leerzeichen stören nicht.</p>
             ${context.projection.customerPurchases ? '<p class="settings-note">Kunden-Kontonummern kommen aus dem Beleg. Namen, Adressen und Kontaktdaten werden über die zugehörige Kundenkartei gesucht.</p>' : ''}
-            <p data-r="scope-note" class="settings-note"></p><p data-r="message" role="status" aria-live="polite">Suche mit dem letzten Monat vorbelegt. Der Zeitraum lässt sich frei erweitern.</p>
-            <div class="receipt-toolbar"><strong data-r="count"></strong><button type="button" data-r="export" class="secondary-button" disabled>Auswahl als PDF (0)</button><button type="button" data-r="unselect" class="secondary-button">Auswahl aufheben</button></div>
-            <details class="receipt-columns"><summary>Spalten &amp; Reihenfolge</summary><p>Spalten einblenden und mit den Pfeilen ordnen. Die Auswahl gilt für dein Konto.</p><div data-r="columns" class="receipt-column-list"></div><button type="button" data-r="save-columns" class="secondary-button">Spalten speichern</button><span data-r="columns-status" role="status"></span></details>
-            <div data-r="results"></div><button type="button" data-r="more" class="secondary-button" hidden>Weitere Treffer suchen</button>
+            <p data-r="scope-note" class="settings-note"></p><p data-r="message" role="status" aria-live="polite">Suche mit dem letzten Monat vorbelegt. Der Zeitraum lässt sich frei erweitern.</p></section>
+            <section class="receipt-results-card" aria-label="Suchergebnisse"><div class="receipt-toolbar"><div><span class="eyebrow">Suchergebnisse</span><strong data-r="count"></strong></div><button type="button" data-r="export" class="secondary-button" disabled>Auswahl als PDF (0)</button><button type="button" data-r="unselect" class="secondary-button">Auswahl aufheben</button></div>
+            <div class="receipt-table-settings"><details class="receipt-columns"><summary>Spaltenanzeige</summary><div class="receipt-columns-panel"><p class="settings-note">Spalten auswählen und mit den Pfeilen anordnen. Mindestens eine Spalte bleibt sichtbar.</p><div data-r="columns" class="receipt-column-list"></div></div></details><span data-r="columns-status" role="status" class="settings-note"></span></div>
+            <div data-r="results"></div><button type="button" data-r="more" class="secondary-button" hidden>Weitere Treffer suchen</button></section>
             <dialog data-r="detail-dialog" class="modal receipt-detail" aria-label="Beleginformation"><div class="modal-header"><h2>Beleginfo</h2><button type="button" data-r="detail-close" aria-label="Beleginfo schließen">×</button></div><div data-r="detail-body"></div><div class="modal-actions"><button type="button" data-r="detail-pdf" class="primary-button">Diesen Beleg als PDF</button></div></dialog>
             <dialog data-r="dialog" class="modal date-range-dialog" aria-label="Suchzeitraum"><form data-r="range-form"><div class="modal-header"><h2>Zeitraum auswählen</h2><button type="button" data-r="range-close" aria-label="Kalender schließen">×</button></div>
               <label class="receipt-month-jump">Zu Monat / Jahr springen<input data-r="month-jump" type="month" min="1900-01" max="${context.today.slice(0, 7)}"></label>
@@ -195,12 +222,6 @@
           el('detail-close').addEventListener('click', () => { detailId = null; el('detail-dialog').close(); });
           el('detail-dialog').addEventListener('close', () => { detailId = null; el('detail-body').replaceChildren(); });
           el('detail-pdf').addEventListener('click', () => { if (detailId) void exportPdf([detailId]); });
-          el('save-columns').addEventListener('click', async () => {
-            const button = el('save-columns'), body = JSON.stringify({ columns: [...columns], kind: displayKind }); button.disabled = true;
-            const unchanged = () => !disposed && body === JSON.stringify({ columns: [...columns], kind: displayKind });
-            try { await api('/api/receipt-search/preferences', { method: 'PUT', body }); if (unchanged()) el('columns-status').textContent = 'Gespeichert.'; }
-            catch (error) { if (unchanged()) el('columns-status').textContent = error.message; } finally { if (!disposed) button.disabled = false; }
-          });
           source(); filters(); renderColumns(); render();
         } catch (error) { if (!disposed) { context = null; root.textContent = error.message || 'Kassenstand nicht verfügbar.'; } }
         finally { loading = null; }
@@ -212,17 +233,17 @@
       if (button.dataset.rSort) { if (running) return; const key = button.dataset.rSort; sort = { key, direction: sort.key === key ? -sort.direction : 1 }; void search(false, true); }
       if (button.dataset.rDetail) void detail(button.dataset.rDetail);
       if (button.dataset.rPdf) void exportPdf([button.dataset.rPdf]);
-      if (button.dataset.rMove) { const key = button.dataset.rMove, direction = button.dataset.direction, i = columns.indexOf(key), j = i + Number(direction); if (i >= 0 && j >= 0 && j < columns.length) { [columns[i], columns[j]] = [columns[j], columns[i]]; el('columns-status').textContent = 'Noch nicht gespeichert.'; renderColumns(); render(); root.querySelector(`[data-r-move="${key}"][data-direction="${direction}"]:not(:disabled)`)?.focus(); } }
+      if (button.dataset.rMove) { const key = button.dataset.rMove, direction = button.dataset.direction, i = columns.indexOf(key), j = i + Number(direction); if (i >= 0 && j >= 0 && j < columns.length) { [columns[i], columns[j]] = [columns[j], columns[i]]; renderColumns(); render(); savePreferences(); root.querySelector(`[data-r-move="${key}"][data-direction="${direction}"]:not(:disabled)`)?.focus(); } }
     }
     function change(event) {
       const target = event.target;
       if (target.dataset.rSelect) { if (target.checked && selected.size >= 50) { target.checked = false; message('Bitte höchstens 50 Belege/Buchungen je PDF auswählen.'); return; }
         if (target.checked) selected.add(target.dataset.rSelect); else selected.delete(target.dataset.rSelect); actions(); }
       if (target.hasAttribute('data-r-all')) { selected = target.checked ? new Set(sortedRows(items, sort).slice(0, 50).map(r => r.id)) : new Set(); render(); if (items.length > 50) message('Die ersten 50 Treffer der aktuellen Sortierung sind ausgewählt.'); }
-      if (target.dataset.rColumn) { const k = target.dataset.rColumn; if (target.checked) columns.push(k); else if (columns.length > 1) columns = columns.filter(c => c !== k); else target.checked = true; el('columns-status').textContent = 'Noch nicht gespeichert.'; renderColumns(); render(); root.querySelector(`[data-r-column="${k}"]`)?.focus(); }
+      if (target.dataset.rColumn) { const k = target.dataset.rColumn; if (target.checked) columns.push(k); else if (columns.length > 1) columns = columns.filter(c => c !== k); else target.checked = true; renderColumns(); render(); savePreferences(); root.querySelector(`[data-r-column="${k}"]`)?.focus(); }
     }
     root.addEventListener('click', click); root.addEventListener('change', change);
-    return { load, suspend() { paused = true; el('dialog')?.close(); el('detail-dialog')?.close(); }, destroy() { disposed = true; cancel(); el('dialog')?.close(); el('detail-dialog')?.close(); root.removeEventListener('click', click); root.removeEventListener('change', change); root.replaceChildren(); selected.clear(); items = []; context = null; } };
+    return { load, suspend() { paused = true; el('dialog')?.close(); el('detail-dialog')?.close(); }, destroy() { disposed = true; tableResize?.destroy(); cancel(); el('dialog')?.close(); el('detail-dialog')?.close(); root.removeEventListener('click', click); root.removeEventListener('change', change); root.replaceChildren(); selected.clear(); items = []; context = null; } };
   }
   return { mount, renderTable, renderDetail };
 }));

@@ -1,0 +1,7 @@
+.gp-table-columns { table-layout:fixed; min-width:0; }
+.gp-table-columns th { position:relative; }
+.gp-column-resizer { position:absolute; top:0; right:0; bottom:0; width:12px; min-height:0; padding:0; border:0; border-radius:0; background:transparent; cursor:col-resize; touch-action:none; }
+.gp-column-resizer::after { content:""; position:absolute; inset:8px 4px; border-right:2px solid var(--line); }
+.gp-column-resizer:hover::after,.gp-column-resizer:focus-visible::after { border-color:var(--green); }
+.gp-column-resizer:focus-visible { outline:2px solid var(--green); outline-offset:-2px; }
+.gp-table-columns.is-resizing-column { user-select:none; cursor:col-resize; }

@@ -27,7 +27,7 @@ async function fixture(t) {
   const app = express(); app.use(express.json());
   registerReceiptSearchRoutes(app, { requireSession() { if (!state.session) throw Object.assign(Error('login'), { code: 'PORTAL_LOGIN_REQUIRED', status: 401 }); return state.session; },
     refreshSession: async () => state.session, assertCsrf(req) { if (req.get('X-CSRF-Token') !== 'test-token') throw Object.assign(Error('csrf'), { code: 'PORTAL_CSRF_INVALID', status: 403 }); },
-    preferences: { get: async () => null, upsert: async (...args) => state.saved.push(args) },
+    preferences: { get: async (employee, key) => { const saved = state.saved.findLast(row => row[0] === employee && row[1] === key); return saved ? {value:saved[2]} : null; }, upsert: async (...args) => state.saved.push(args) },
     runtime: { async run(get, work) { await get(); return work({ context: () => ({ available: true, sources: [], projection: { sellers: true } }), receipts: {
       search: async () => { state.reads++; return { items: [] }; }, documents: async input => { state.reads++; return { items: input.ids.map(id => ({ id, kind: 'receipts', date: '2026-09-04', receipt: '123', location: 'Filiale', provenance: {}, lines: [], positions: 0 })) }; },
     } }); } },
@@ -58,6 +58,43 @@ test('personal column settings cannot target another employee account', async t 
   assert.ok(context.preferencesByKind.daily.columns.includes('inflow'));
   assert.ok(context.preferences.columns.includes('personnel'));
 });
+test('receipt preferences restore widths, hidden columns and order per account and data kind', async t => {
+  const f = await fixture(t), url = `http://127.0.0.1:${f.server.address().port}/api/receipt-search/preferences`;
+  const send = body => fetch(url, {method:'PUT', headers:{'Content-Type':'application/json','X-CSRF-Token':'test-token'}, body:JSON.stringify(body)});
+  const receiptSettings = {columns:['description','date'], columnWidths:{description:420,date:135,receipt:170}};
+  assert.equal((await send(receiptSettings)).status, 200);
+  let context = await (await f.request('context')).json();
+  assert.deepEqual(context.preferences.columns, receiptSettings.columns);
+  assert.deepEqual(context.preferences.columnWidths, receiptSettings.columnWidths);
+  assert.equal((await send({columns:['date']})).status, 200, 'Older open tabs preserve widths when saving the old contract');
+  f.state.session.permissions.push('sales:history:finance:read');
+  const financeSettings = {columns:['inflow','date'], columnWidths:{inflow:210,date:125},kind:'daily'};
+  assert.equal((await send(financeSettings)).status, 200);
+  context = await (await f.request('context')).json();
+  assert.deepEqual(context.preferences.columnWidths, receiptSettings.columnWidths);
+  assert.deepEqual(context.preferencesByKind.daily, {columns:financeSettings.columns,columnWidths:financeSettings.columnWidths});
+  assert.deepEqual(context.preferencesByKind.journal.columnWidths, {});
+  f.state.session.employeeNumber = 'other';
+  context = await (await f.request('context')).json();
+  assert.deepEqual(context.preferences.columnWidths, {}, 'No settings leak to another signed-in account');
+});
+
+test('receipt width settings reject invalid or forbidden fields and drop revoked columns on read', async t => {
+  const f = await fixture(t), url = `http://127.0.0.1:${f.server.address().port}/api/receipt-search/preferences`;
+  const send = body => fetch(url, {method:'PUT', headers:{'Content-Type':'application/json','X-CSRF-Token':'test-token'},body:JSON.stringify(body)});
+  for (const columnWidths of [null,[],{date:79},{date:801},{date:120.5},{date:'120'},{unknown:140}]) {
+    assert.equal((await send({columns:['date'],columnWidths})).status, 422);
+  }
+  assert.equal((await send({columns:['date'],columnWidths:{customerEmail:250}})).status, 403);
+  assert.equal((await send({columns:['date'],columnWidths:{inflow:150}})).status, 403);
+  assert.equal((await send({columns:['personnel'],columnWidths:{personnel:150}})).status, 200);
+  f.state.session.permissions = f.state.session.permissions.filter(p => p !== 'sales:history:sellers:read');
+  const context = await (await f.request('context')).json();
+  assert.deepEqual(context.preferences.columns, ['date','receipt']);
+  assert.deepEqual(context.preferences.columnWidths, {});
+  assert.equal((await send({columns:['date'],columnWidths:{personnel:150}})).status, 403);
+});
+
 test('receipt markup escapes source text and shows an explicit information-only notice', () => {
   const row = { id: 'id', date: '2026-09-04', kind: 'receipts', receipt: '<img src=x onerror=alert(1)>', description: '<script>x</script>', location: 'Filiale', lines: [], provenance: {}, positions: 0 };
   for (const html of [UI.renderTable([row], ['date', 'receipt'], Model.COLUMNS, new Set(), { key: 'date', direction: -1 }), UI.renderDetail(row)]) assert.doesNotMatch(html, /<img|<script/);

@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/portal.css" />
     <link rel="stylesheet" href="/learning-library.css" />
     <link rel="stylesheet" href="/mobile-refinements.css" />
+    <link rel="stylesheet" href="/sales-price-labels.css" />
   </head>
   <body>
     <div class="deployment-banner hidden" id="portalDeploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
@@ -62,6 +63,7 @@
           <button class="hidden" id="branchOrdersTab" data-tab="branchOrders" type="button" role="tab" aria-selected="false" aria-controls="branchOrdersView" tabindex="-1">Filialbestellung</button>
           <button class="hidden" id="branchArticlesTab" data-tab="branchArticles" type="button" role="tab" aria-selected="false" aria-controls="branchArticlesView" tabindex="-1">Artikelsuche</button>
           <button class="hidden" id="branchReceiptsTab" data-tab="branchReceipts" type="button" role="tab" aria-selected="false" aria-controls="branchReceiptsView" tabindex="-1">Belegsuche</button>
+          <button class="hidden" id="branchPriceLabelsTab" data-tab="branchPriceLabels" type="button" role="tab" aria-selected="false" aria-controls="branchPriceLabelsView" tabindex="-1">Preisschilder</button>
           <button class="hidden" id="branchOrderSettingsTab" data-tab="settings" data-settings-focus="branch-orders" type="button" role="tab" aria-selected="false" aria-controls="settingsView" tabindex="-1">Bestellverwaltung</button>
           <button id="amuTab" data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">Krank &amp; AUM</button>
           <button class="hidden leadership-tab" id="leadershipMoreTab" data-tab="leadershipMore" data-mobile-module="more" type="button" role="tab" aria-selected="false" aria-controls="leadershipMoreView" tabindex="-1">Mehr</button>
@@ -74,6 +76,10 @@
         <section class="portal-view" id="branchReceiptsView" role="tabpanel" aria-labelledby="branchReceiptsTab">
           <div class="view-heading"><div><span class="eyebrow">Filialkonto</span><h1>Belegsuche</h1><p>Kassenbelege suchen, ansehen und als Beleginformation herunterladen. Die eigene Filiale ist vorausgewählt; weitere freigegebene Filialen stehen in der Auswahl.</p></div></div>
           <div class="portal-card branch-sales-workspace" id="branchReceiptsWorkspace"></div>
+        </section>
+        <section class="portal-view" id="branchPriceLabelsView" role="tabpanel" aria-labelledby="branchPriceLabelsTab">
+          <div class="view-heading"><div><span class="eyebrow">Filialkonto</span><h1>Preisschilder</h1><p>Aktuelle Verkaufspreise als Preisschilder drucken. Persönliche und freigegebene Vorlagen verwenden.</p></div></div>
+          <div class="sales-price-labels-portal" id="branchPriceLabelsWorkspace"></div>
         </section>
 
         <section class="portal-view" id="settingsView" role="tabpanel">
@@ -841,6 +847,7 @@
     <script src="/article-code-scanner.js"></script>
     <script src="/branch-receipt-filters.js"></script>
     <script src="/portal-branch-sales.js"></script>
+    <script src="/sales-price-labels.js"></script>
     <script src="/portal-branch-time-off.js"></script>
     <script src="/learning-library.js"></script>
     <script src="/learning-assessment.js"></script>

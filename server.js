@@ -5883,6 +5883,11 @@ function enforceAdminApiAccess(request, _response, next) {
     const status = getPortalStatus();
     if (!status.portalEnabled || request.path.startsWith("/portal/") || request.path.startsWith("/mobile/")) return next();
     const method = String(request.method || "GET").toUpperCase();
+    if (/^\/sales\/price-labels(?:\/|$)/.test(request.path)) {
+      const session = salesPriceLabelsSession(request);
+      if (!["GET", "HEAD", "OPTIONS"].includes(method) && !isLocalSystemSession(session)) assertPortalCsrf(request);
+      return next();
+    }
     const preciseDiagnosticPermissions = request.path === "/server-status"
       ? ["system:diagnostics:read", "system:diagnostics:technical"]
       : request.path === "/server-diagnostics"
@@ -25888,6 +25893,10 @@ require("./lib/receipt-search-routes").registerReceiptSearchRoutes(app, {
   runtime: managedSalesHistoryRuntime, requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
   refreshSession: (request) => loadPortalSessionFromRequest(request, { touch: false }), preferences: uiPreferencesRepository,
 });
+require('./lib/sales-article-sales-routes').registerSalesArticleSalesRoutes(app, {
+  runtime:managedSalesHistoryRuntime, requireSession:requireEmployeePortalSession,assertCsrf:assertPortalCsrf,
+  refreshSession:request=>loadPortalSessionFromRequest(request,{touch:false}),
+});
 const tradeInsightRuntime = require('./lib/persistence/repositories/trade-insights').createTradeInsightRuntime({ access: persistenceProvider, vault: integrationSecretVault });
 const tradeInsightJobs = require('./lib/persistence/repositories/trade-insight-jobs').createTradeInsightJobs({
   access: persistenceProvider, vault: integrationSecretVault, runtime: tradeInsightRuntime, resolvePrincipal: resolveSalesReportPrincipal,
@@ -25896,6 +25905,7 @@ const tradeInsightJobs = require('./lib/persistence/repositories/trade-insight-j
 });
 require('./lib/trade-insight-job-routes').registerTradeInsightJobRoutes(app, {
   jobs: tradeInsightJobs, requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
+  preferences: uiPreferencesRepository,
   refreshSession: request => loadPortalSessionFromRequest(request, { touch: false }),
 });
 require('./lib/trade-insights-routes').registerTradeInsightRoutes(app, {
@@ -37847,15 +37857,22 @@ app.put('/api/sales/articles/preferences', async (request, response) => {
   setSalesArticleCatalogPrivateHeaders(response);
   const model = require('./lib/sales-article-table'), input = request.body;
   if (!input || !Array.isArray(input.columns) || input.columns.length > model.ARTICLE_TABLE_COLUMNS.length
-    || Object.keys(input).some(k => !['columns','visibleRows','sort','direction'].includes(k))
+    || Object.keys(input).some(k => !['columns','columnWidths','visibleRows','sort','direction'].includes(k))
+    || (Object.hasOwn(input, 'columnWidths') && !model.validColumnWidths(input.columnWidths))
     || !Number.isInteger(input.visibleRows) || input.visibleRows < 5 || input.visibleRows > 20
     || input.columns.some(id => !model.ARTICLE_TABLE_COLUMNS.some(c => c.id === id))) {
     throw httpError(400, 'Die Tabelleneinstellungen sind ungültig.', 'SALES_ARTICLE_SEARCH_INVALID');
   }
-  if (input.columns.some(id => { const c = model.ARTICLE_TABLE_COLUMNS.find(c => c.id === id); return c.permission && !projection[c.permission]; })) {
+  if ([...input.columns, ...Object.keys(input.columnWidths || {})].some(id => { const c = model.ARTICLE_TABLE_COLUMNS.find(c => c.id === id); return c.permission && !projection[c.permission]; })) {
     throw httpError(403, 'Diese Preisspalte ist nicht freigegeben.', 'SALES_ARTICLE_CATALOG_PERMISSION_DENIED');
   }
-  const value = model.articleTablePreferences(input, projection);
+  let widths = input.columnWidths;
+  // Older open GP tabs still send the original preference contract.
+  if (!Object.hasOwn(input, 'columnWidths') && !isLocalSystemSession(session)) {
+    const stored = await uiPreferencesRepository.get(session.employeeNumber, model.PREFERENCE_KEY);
+    try { widths = JSON.parse(stored?.value || 'null')?.columnWidths; } catch { /* Ignore invalid older settings. */ }
+  }
+  const value = model.articleTablePreferences({...input, columnWidths:widths}, projection);
   await assertFreshSalesArticleRead(request, session, projection);
   if (!isLocalSystemSession(session)) await uiPreferencesRepository.upsert(session.employeeNumber, model.PREFERENCE_KEY, JSON.stringify(value));
   response.json(value);
@@ -37998,6 +38015,66 @@ require('./lib/sales-article-image-routes').registerSalesArticleImageRoutes(app,
   assertFresh: (request, session) => assertFreshSalesArticleRead(request, session, salesArticleCatalogProjectionForSession(session)),
   assertCsrf: (request, session) => { if (!isLocalSystemSession(session)) assertPortalCsrf(request); },
   privateHeaders: setSalesArticleCatalogPrivateHeaders,
+});
+
+const salesArticleLocalNotesRepository = require('./lib/persistence/repositories/sales-article-local-notes').createSalesArticleLocalNotesRepository({access:persistenceProvider,vault:integrationSecretVault});
+const salesArticleToolAuth = {
+  catalog:salesArticleCatalogRepository,
+  sessionFor:(request,write)=>salesArticleCatalogSession(request,write?SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE:SALES_ARTICLE_CATALOG_PERMISSIONS.READ),
+  assertFresh:(request,session)=>assertFreshSalesArticleRead(request,session,salesArticleCatalogProjectionForSession(session)),
+  assertCsrf:(request,session)=>{if(!isLocalSystemSession(session))assertPortalCsrf(request);},
+  privateHeaders:setSalesArticleCatalogPrivateHeaders,
+};
+require('./lib/sales-article-local-notes-routes').registerSalesArticleLocalNotesRoutes(app,{...salesArticleToolAuth,notes:salesArticleLocalNotesRepository});
+require('./lib/sales-article-tools-routes').registerSalesArticleToolsRoutes(app,{
+  ...salesArticleToolAuth, preferences:uiPreferencesRepository,notes:salesArticleLocalNotesRepository,images:salesArticleImagesRepository,
+  refreshSession:(request,original)=>isLocalSystemSession(original)?Promise.resolve(original):loadPortalSessionFromRequest(request,{touch:false}),
+  loadDetail:async(article,session)=>{
+    const projection=salesArticleCatalogProjectionForSession(session),revisions=await salesArticleCatalogRepository.listRevisions(article.productId),result=await projectSalesArticleDetail(article,revisions,projection);
+    Object.assign(result.article,await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({access:persistenceProvider,vault:integrationSecretVault,article,projection}));return result;
+  },
+  loadSales:async(session,input,fresh)=>managedSalesHistoryRuntime.run(fresh,workspace=>{if(!workspace?.articleSales)require('./lib/data-import-contract').fail('IMPORT_HISTORY_NOT_ACTIVATED',503);return workspace.articleSales.search(input);}),
+  loadMovements:async(session,input,fresh)=>{
+    const started=performance.now(),result=postgresqlActive?await postgresqlReceiptWorkers.run({operation:'trade-insights',kind:'article-movements',query:input,session:{employeeNumber:session.employeeNumber}}):await tradeInsightRuntime.run(fresh,'article-movements',input);
+    return {...result,durationMs:Math.round(performance.now()-started)};
+  },
+});
+
+const salesPriceLabelsBranding = require('./lib/sales-price-labels-branding').createSalesPriceLabelsBranding({
+  listKits: listBrandingKits, kitsDirectory: brandingKitsDirectory, publicDirectory: path.join(__dirname, 'public'),
+});
+const salesPriceLabelTemplateStore = require('./lib/sales-price-label-template-store').createSalesPriceLabelTemplateStore({ access:persistenceProvider, vault:integrationSecretVault });
+const priceLabelSession = require('./lib/sales-price-labels-access').priceLabelSession;
+function salesPriceLabelsSession(request) {
+  return priceLabelSession(requirePortalAnyPermissionOrLocal(request, [SALES_ARTICLE_CATALOG_PERMISSIONS.PRICES_READ, 'branch_articles:read']));
+}
+async function refreshSalesPriceLabelsSession(request, original) {
+  return isLocalSystemSession(original) ? original : priceLabelSession(await loadPortalSessionFromRequest(request, { touch:false }));
+}
+require('./lib/sales-price-labels-routes').registerSalesPriceLabelsRoutes(app, {
+  ...salesArticleToolAuth, preferences:uiPreferencesRepository,
+  images:salesArticleImagesRepository,
+  sessionFor:salesPriceLabelsSession,
+  refreshSession:refreshSalesPriceLabelsSession,
+  assertFresh:async(request,original)=>{ await refreshSalesPriceLabelsSession(request,original); },
+  branding:salesPriceLabelsBranding, templateStore:salesPriceLabelTemplateStore,
+  listBranchAccounts:async()=>{
+    const [accounts,locations]=await Promise.all([organizationPersonnelRepository.listOrganizationAccounts(),organizationPersonnelRepository.listLocations(false)]);
+    return accounts.map(account=>{
+      let scopes=[]; try {scopes=JSON.parse(account.scopes_json || account.access_scopes || '[]');} catch {}
+      const location=locations.find(row=>String(row.id)===String(scopes[0]?.locationId));
+      return {...account,scopes,locationActive:Boolean(location),locationLabel:location?`${location.id} · ${location.name}`:''};
+    });
+  },
+  getEmployeeHomeLocation:async(employeeNumber)=>{
+    const [employee,locations]=await Promise.all([organizationPersonnelRepository.getEmployeeScopeProjection(employeeNumber),organizationPersonnelRepository.listLocations(false)]);
+    const location=locations.find(row=>String(row.id)===String(employee?.home_location_id));
+    return location?{id:String(location.id),label:`${location.id} · ${location.name}`,active:true}:null;
+  },
+  loadDetail:async(article,session)=>{
+    const projection=salesArticleCatalogProjectionForSession(session),result=await projectSalesArticleDetail(article,[],projection);
+    Object.assign(result.article,await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({access:persistenceProvider,vault:integrationSecretVault,article,projection}));return result;
+  },
 });
 
 app.get("/api/sales/articles/detail", async (request, response) => {

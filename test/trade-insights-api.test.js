@@ -26,6 +26,9 @@ test('Trade views use actual session authority, CSRF and protected read/write co
  await source.ingest('WE',[{We_ID:'1',We:true,Umlagerung:false,EAN:'000042',FilialID:'93',Menge:'-2',WEDatum:'2026-09-10T00:00:00.000'}],{sourceInstance:'tradefoto-weum'});
  assert.equal((await request('movements',{},{...auth,csrf:'wrong'})).status,403);
  res=await request('movements',{});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.rows[0].quantity,'-2');
+ await source.ingest('WE',[{We_ID:'2',We:false,Umlagerung:true,EAN:'000042',FilialID:'94',Filialid2:'93',Menge:'1',WEDatum:'2026-09-11T00:00:00.000'}],{sourceInstance:'tradefoto-weum'});
+ assert.equal((await request('article-movements',{articleNumber:'000042'},{...auth,csrf:'wrong'})).status,403);
+ res=await request('article-movements',{articleNumber:'000042',dateFrom:'2026-09-01',dateTo:'2026-09-14'});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.rows.length,1);assert.equal(res.data.rows[0].kind,'transfer');assert.equal(res.data.order,'date-desc');
  await require('../test-support/trade-stocktakes-fixture').seedStocktakes(source,{branches:['93','94']});
  for(const kind of ['stocktakes','suggestions']){assert.equal((await request(kind,{},null)).status,401);assert.equal((await request(kind,{},{...auth,csrf:'wrong'})).status,403);res=await request(kind,{});assert.equal(res.status,200,JSON.stringify(res.data));assert.ok(Array.isArray(res.data.rows));}
  const cases=await request('repairs',{});assert.equal(cases.status,200,JSON.stringify(cases.data));const r=cases.data.rows[0];assert.equal(r.gpStatus,'unassigned');

@@ -22,9 +22,9 @@ test("Navigation restores only the active path, including the planning branch", 
 
 test("Route changes open their own module and leave unrelated modules closed", () => {
   const groups = createGroups();
-  for (const [view, open] of [["requests", "personnelAdministration"], ["articleCatalog", "salesAdministration"], ["crm", "salesAdministration"], ["settings", null]]) {
+  for (const [view, open] of [["requests", "personnelAdministration"], ["articleCatalog", "salesAdministration"], ["crm", "salesAdministration"], ["logistics", "logistics"], ["settings", null]]) {
     groups.sync(view, view);
-    for (const key of ["filialManagement", "personnelAdministration", "salesAdministration", "planning", "vacations"]) {
+    for (const key of ["filialManagement", "personnelAdministration", "salesAdministration", "logistics", "planning", "vacations"]) {
       assert.equal(groups.isOpen(key), key === open, `${view}: ${key}`);
     }
   }

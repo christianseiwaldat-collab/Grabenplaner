@@ -9,6 +9,8 @@
  const column=(key,label,type='text',value=r=>r[key])=>({key,label,type,value});
  function columns(kind,projection={},result={}){
   const c=column;
+  if(kind==='article-history')return [c('articleNumber','Artikelnummer'),c('label','Bezeichnung'),c('group','Sortiment'),c('status','Status','text',r=>({current:'Artikelstamm',archived:'Archiviert',ambiguous:'Zuordnung prüfen',missing:'Keine Referenz'})[r.status]||r.status),c('sourceLabel','Herkunft','text',r=>(r.candidates||[]).map(v=>v.source).join(' · '))];
+  if(kind==='supplier-invoices')return [c('created','Anlegedatum','date'),c('booked','Buchdatum','date'),c('number','Rechnungsnummer'),c('supplier','Lieferant'),c('quantity','Menge','decimal'),...(projection.costs?[c('priceMin','EK netto von','money'),c('priceMax','EK netto bis','money')]:[])];
   if(kind==='suggestions')return [c('action','Prüfhinweis'),c('article','Artikel','text',r=>r.articleNumber+' · '+r.label),c('sourceLocation','Filiale'),c('stock','Quellbestand','decimal'),c('soldNet','Nettoabsatz','decimal'),c('coverageDays','Reichweite (Tage)','decimal'),c('donorLabel','Mögliche Gegenfilialen'),c('reason','Begründung')];
   if(kind==='stocktakes')return result.stocktake?[c('articleNumber','Artikelnr.'),c('label','Artikel','text',r=>r.label+(r.articleReference?.status==='archived'?' (Archiviert)':'')),c('oldQuantity','Vorher','decimal'),c('newQuantity','Gezählt','decimal'),c('difference','Quelldifferenz','decimal'),c('calculated','Rechnerisch','decimal'),c('stateLabel','Einordnung')]:[c('date','Inventurdatum','date'),c('number','Inventur'),c('sourceLocation','Filiale'),c('positions','Positionen','number'),c('positive','Mehrbestand','number'),c('negative','Minderbestand','number'),c('unchanged','Unverändert','number'),c('incomplete','Mengen fehlen','number'),c('quality','Datenprüfung')];
   if(kind==='movements')return [c('date','Datum','date'),c('typeLabel','Bewegungsart'),c('article','Artikel','text',r=>r.articleNumber+' · '+r.label+(r.articleReference?.status==='archived'?' (Archiviert)':'')),c('quantity','Menge','decimal'),c('from','Herkunft','text',r=>r.kind==='unclear'?'Ungeklärt':r.from),c('to','Ziel','text',r=>r.kind==='unclear'?'Ungeklärt':r.to),c('supplier','Lieferant'),c('documentRefs','Belegverweise'),c('issueLabel','Prüfhinweise')];
@@ -50,5 +52,8 @@
   }
   return result;
  }
- return {titles,columns,format,sortRows,collator,relatedArticles};
+ titles['article-history']='Artikelhistorie';titles['supplier-invoices']='Lieferantenrechnungen';
+ function duration(ms){if(!Number.isFinite(ms)||ms<0)return 'nicht erfasst';if(ms<60000)return new Intl.NumberFormat('de-AT',{maximumFractionDigits:2}).format(ms/1000)+' s';const seconds=Math.round(ms/1000);return Math.floor(seconds/60)+' min '+seconds%60+' s';}
+ function emptyReason(kind,query={},result={}){if(result.rows?.length||kind!=='purchasing')return '';return result.emptyReason||'Diese Suche betrifft Lieferantenbestellungen. Filiale und Zeitraum beziehen sich auf die Lieferfiliale der Bestellung und das Bestelldatum. Zentrale Bestellungen können dem Zentrallager zugeordnet sein. Für den Warenbestand einer Filiale bitte „Filialbestand & Warenwert“ öffnen.';}
+ return {titles,columns,format,sortRows,collator,relatedArticles,duration,emptyReason};
 });
