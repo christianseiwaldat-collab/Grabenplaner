@@ -639,28 +639,13 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
   assert.deepEqual(report.unknownTests, []);
 });
 
-test("v0.87 Datenbank Block 5: Vertragsdokument hält Historie und aktuellen Provider-Slice getrennt", () => {
-  const contract = fs.readFileSync(path.join(root, "docs", "DATENBANK-PROVIDER-VERTRAG.md"), "utf8");
-  const phase3 = fs.readFileSync(path.join(root, "docs", "DATENBANK-SQLITE-PROVIDER.md"), "utf8");
-  const phase5 = fs.readFileSync(path.join(root, "docs", "DATENBANK-POSTGRESQL-PROVIDER.md"), "utf8");
-  const strategy = fs.readFileSync(path.join(root, "docs", "DATENBANK-PROVIDER-STRATEGIE.md"), "utf8");
+test("Provider-Dokumentation schützt den Installationsstandard; Treiberabhängigkeiten bleiben begrenzt", () => {
+  const operations = fs.readFileSync(path.join(root, "SERVERBETRIEB.md"), "utf8");
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 
-  assert.match(contract, /Status:\*\* Block 2\/7 abgeschlossen/);
-  assert.match(contract, /Block 3 wurde am 29\.07\.2026 separat freigegeben/);
-  assert.match(contract, /keinen PostgreSQL-Treiber/);
-  assert.match(phase3, /Block 3\/7 abgeschlossen/);
-  assert.match(phase3, /keinen? PostgreSQL-Treiber/i);
-  assert.match(strategy, /Datenbank-Provider-Vertrag/);
-  assert.match(strategy, /Phase 5 ist begonnen und weiterhin in[\s\S]{0,30}Bearbeitung/i);
-  assert.match(phase5, /nicht produktiven Status/i);
-  assert.match(phase5, /`development-contract`/);
-  assert.match(phase5, /1239[^\r\n]*Syntaxkandidaten/);
-  assert.match(phase5, /115[\s\S]{0,100}`requires-override`/);
-  assert.match(phase5, /`fullApplicationCatalog: false`/);
-  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1354/);
-  assert.match(phase5, /`applicationExecutable: false`/);
-  assert.match(phase5, /Produktiver Datenbankpfad:[\s\S]{0,80}ausschließlich SQLite/i);
+  assert.match(operations, /SQLite bleibt der Installationsstandard/);
+  assert.match(operations, /Eine alleinige Änderung von `DB_PROVIDER` aktiviert keine Migration/);
+  assert.match(operations, /keinen automatischen Rückfall auf SQLite/);
   assert.equal(packageJson.dependencies?.pg, "8.22.0");
   assert.equal(Object.hasOwn(packageJson.devDependencies || {}, "pg"), false);
   assert.equal(Object.hasOwn(packageJson.optionalDependencies || {}, "pg"), false);

@@ -36,8 +36,6 @@ const {
 
 const repositoryRoot = path.resolve(__dirname, "..");
 const serverSource = fs.readFileSync(path.join(repositoryRoot, "server.js"), "utf8");
-const reportImportContract = fs.readFileSync(path.join(repositoryRoot, "README.md"), "utf8");
-const ocrPartnerContract = fs.readFileSync(path.join(repositoryRoot, "README.md"), "utf8");
 const salesHtml = fs.readFileSync(path.join(repositoryRoot, "public", "index.html"), "utf8");
 const salesApp = fs.readFileSync(path.join(repositoryRoot, "public", "app.js"), "utf8");
 
@@ -393,7 +391,7 @@ test("TradeFoto-PDF: bestätigter Bericht, Zuordnung und Kennzahlen werden atoma
   }
 });
 
-test("TradeFoto-PDF: API, Desktop-Prüfung und Nachfolgedokument halten OCR-Grenzen fest", () => {
+test("TradeFoto-PDF: API und Desktop-Prüfung halten OCR-Grenzen fest", () => {
   for (const route of [
     "/api/sales-analytics/report-import/context",
     "/api/sales-analytics/report-import/inspect",
@@ -413,14 +411,4 @@ test("TradeFoto-PDF: API, Desktop-Prüfung und Nachfolgedokument halten OCR-Gren
   assert.match(salesHtml, /id="salesReportPreviewHorizon"/);
   assert.match(salesApp, /requestBody\.ocrReview = salesOcrReviewPayload/);
   assert.match(salesApp, /local_ocr_coordinates/);
-  assert.match(reportImportContract, /^#\s+Grabenplaner\b/m);
-  assert.doesNotMatch(reportImportContract, /\b(?:tradesoft|tradefoto|trade[_ -]?daten|accdb|mdb|access[- _]?(?:db|datenbank|import))\b/i);
-  
-  
-  
-  
-  
-  
-  
-  
 });

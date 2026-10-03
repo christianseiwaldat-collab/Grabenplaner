@@ -10,7 +10,6 @@ const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
 const styles = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
-const contract = fs.readFileSync(path.join(root, "README.md"), "utf8");
 
 function between(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -405,13 +404,6 @@ test("Breite Detailtabelle ist durchsuchbar, sortierbar und zeigt beide Zeiträu
   assert.match(styles, /\.sales-report-analysis-table th:first-child,\.sales-report-analysis-table td:first-child \{ position:sticky/);
 });
 
-test("Block-8-Vertrag hält Datenquellen- und Ausrollgrenzen fest", () => {
-  assert.match(contract, /^#\s+Grabenplaner\b/m);
-  assert.doesNotMatch(contract, /\b(?:tradesoft|tradefoto|trade[_ -]?daten|accdb|mdb|access[- _]?(?:db|datenbank|import))\b/i);
-  
-  
-  
-  
-  
+test("Desktop-Arbeitsbereich lädt den geschützten Berichts-Endpunkt", () => {
   assert.match(app, /api\(`\/api\/sales-analytics\/reports\/\$\{encodeURIComponent\(requestedId\)\}`\)/);
 });

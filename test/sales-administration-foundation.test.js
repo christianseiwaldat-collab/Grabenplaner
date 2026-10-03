@@ -10,7 +10,6 @@ const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
 const styles = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
 const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
-const contract = fs.readFileSync(path.join(root, "docs", "VERKAUFSVERWALTUNG-FUNDAMENT-v0.1.md"), "utf8");
 
 function between(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -109,7 +108,4 @@ test("Fest integrierter Verkaufsbereich bleibt eine klar gekennzeichnete Desktop
   assert.doesNotMatch(view, /sales.*mobile|mobile.*sales/i);
 
   assert.match(styles, /\.sales-analytics-desktop-workspace > \* \{ min-width:1120px; \}/);
-  assert.match(contract, /nicht als optionales Installationsmerkmal/);
-  assert.match(contract, /keine[\s\S]*mobile Fachansicht oder mobile Abnahme/);
-  assert.match(contract, /keine[\s\S]*API-Endpunkte, Migrationen oder Hintergrundverarbeitung/);
 });

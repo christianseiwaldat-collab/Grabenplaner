@@ -25,7 +25,10 @@ const {
 } = require("../lib/sales-analytics-import");
 
 const root = path.resolve(__dirname, "..");
-const contract = fs.readFileSync(path.join(root, "README.md"), "utf8");
+const contract = fs.readFileSync(
+  path.join(root, "INTEGRATIONEN.md"),
+  "utf8",
+);
 
 function receiptMapping(overrides = {}) {
   return {
@@ -342,14 +345,8 @@ test("Block 4: Vorschaugrenze, Zeitzone und Quellmetadaten sind strikt", () => {
   );
 });
 
-test("Block-4-Dokument hält Persistenz-, Echtdaten- und OCR-Grenze fest", () => {
-  assert.match(contract, /^#\s+Grabenplaner\b/m);
-  assert.doesNotMatch(contract, /\b(?:tradesoft|tradefoto|trade[_ -]?daten|accdb|mdb|access[- _]?(?:db|datenbank|import))\b/i);
-  
-  
-  
-  
-  
-  
-  
+test("Integrationsdokumentation verlangt kontrollierte Vorschau und bestätigte Übernahme", () => {
+  assert.match(contract, /Access-DB-Importe verwenden eine kontrollierte Vorschau, Feldzuordnung, Bereichsprüfung und nachvollziehbare Übernahme/);
+  assert.match(contract, /Dateifingerabdruck, Profil und Tabellenplan binden eine Wiederaufnahme an denselben Quelldatenstand/);
+  assert.match(contract, /gespeicherte Profile ersetzen keine erneute Vorschau und Bestätigung/);
 });
