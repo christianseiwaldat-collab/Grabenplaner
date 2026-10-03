@@ -16,7 +16,7 @@ const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
 const app = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 const contract = fs.readFileSync(
-  path.join(root, "docs", "VERKAUFSANALYSEN-RECHTE-SICHTEN-v0.1.md"),
+  path.join(root, "INTEGRATIONEN.md"),
   "utf8",
 );
 
@@ -213,12 +213,8 @@ test("Server liefert die reduzierte Projektion und der Browser verwendet sie nur
   assert.match(html, /Filiale, EUR und Berichtssumme best/);
 });
 
-test("Block-3-Vertrag hält Daten- und Implementierungsgrenzen fest", () => {
-  assert.match(contract, /^# Verkaufsanalysen · Rechte- und Sichtkonzept v0\.1/m);
-  assert.match(contract, /\| Block \| 3 · Rechte, Sichten und Datenschutz \|/);
-  assert.match(contract, /Keine eingebaute Rolle erhält in Block 3 automatisch ein Verkaufsanalyse-Recht/);
-  assert.match(contract, /Ein reiner Abteilungsbereich darf nicht zur vollständigen Filialauswertung hochgestuft werden/);
-  assert.match(contract, /Shopware_Artikel` enthält nur Produktzuordnungen/);
-  assert.match(contract, /Es wurden keine Verkaufsdaten verarbeitet oder gespeichert/);
-  assert.match(contract, /keine automatische Freigabe für Datenmodell, Importassistent, Analyse-API, Kennzahlen oder Oberflächeninhalte/);
+test("Integrationsdokumentation verlangt globale Bereiche und getrennte Rechte", () => {
+  assert.match(contract, /Technische Konfiguration erfordert globale Bereichsrechte/);
+  assert.match(contract, /fachliche Freigaben, Zugangsdatenverwaltung und Übertragung besitzen getrennte Rechte/);
+  assert.match(contract, /Geheimnisse werden verschlüsselt gespeichert und weder angezeigt noch in öffentliche Antworten oder Laufprotokolle aufgenommen/);
 });

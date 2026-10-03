@@ -26,7 +26,7 @@ const {
 
 const root = path.resolve(__dirname, "..");
 const contract = fs.readFileSync(
-  path.join(root, "docs", "VERKAUFSANALYSEN-DATENMODELL-IMPORTFUNDAMENT-v0.1.md"),
+  path.join(root, "INTEGRATIONEN.md"),
   "utf8",
 );
 
@@ -345,13 +345,8 @@ test("Block 4: Vorschaugrenze, Zeitzone und Quellmetadaten sind strikt", () => {
   );
 });
 
-test("Block-4-Dokument hält Persistenz-, Echtdaten- und OCR-Grenze fest", () => {
-  assert.match(contract, /^# Verkaufsanalysen · Datenmodell und Importfundament v0\.1/m);
-  assert.match(contract, /\| Block \| 4 · Datenmodell und Importfundament \|/);
-  assert.match(contract, /keine produktive Datenbankmigration/);
-  assert.match(contract, /keinen echten Access-, CSV-, XLSX-, SQL-, API- oder OCR-Adapter/);
-  assert.match(contract, /`report_ocr`/);
-  assert.match(contract, /menschlich bestätigt/);
-  assert.match(contract, /keine Quelldatei geöffnet und keine Echtdaten übernommen/);
-  assert.match(contract, /Desktop-Fachbereich/);
+test("Integrationsdokumentation verlangt kontrollierte Vorschau und bestätigte Übernahme", () => {
+  assert.match(contract, /Access-DB-Importe verwenden eine kontrollierte Vorschau, Feldzuordnung, Bereichsprüfung und nachvollziehbare Übernahme/);
+  assert.match(contract, /Dateifingerabdruck, Profil und Tabellenplan binden eine Wiederaufnahme an denselben Quelldatenstand/);
+  assert.match(contract, /gespeicherte Profile ersetzen keine erneute Vorschau und Bestätigung/);
 });

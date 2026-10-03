@@ -36,14 +36,6 @@ const {
 
 const repositoryRoot = path.resolve(__dirname, "..");
 const serverSource = fs.readFileSync(path.join(repositoryRoot, "server.js"), "utf8");
-const reportImportContract = fs.readFileSync(
-  path.join(repositoryRoot, "docs", "VERKAUFSANALYSEN-PDF-BERICHTSIMPORT-v0.1.md"),
-  "utf8",
-);
-const ocrPartnerContract = fs.readFileSync(
-  path.join(repositoryRoot, "docs", "VERKAUFSANALYSEN-OCR-PARTNERIMPORT-v0.1.md"),
-  "utf8",
-);
 const salesHtml = fs.readFileSync(path.join(repositoryRoot, "public", "index.html"), "utf8");
 const salesApp = fs.readFileSync(path.join(repositoryRoot, "public", "app.js"), "utf8");
 
@@ -399,7 +391,7 @@ test("TradeFoto-PDF: bestätigter Bericht, Zuordnung und Kennzahlen werden atoma
   }
 });
 
-test("TradeFoto-PDF: API, Desktop-Prüfung und Nachfolgedokument halten OCR-Grenzen fest", () => {
+test("TradeFoto-PDF: API und Desktop-Prüfung halten OCR-Grenzen fest", () => {
   for (const route of [
     "/api/sales-analytics/report-import/context",
     "/api/sales-analytics/report-import/inspect",
@@ -419,13 +411,4 @@ test("TradeFoto-PDF: API, Desktop-Prüfung und Nachfolgedokument halten OCR-Gren
   assert.match(salesHtml, /id="salesReportPreviewHorizon"/);
   assert.match(salesApp, /requestBody\.ocrReview = salesOcrReviewPayload/);
   assert.match(salesApp, /local_ocr_coordinates/);
-  assert.match(reportImportContract, /kein optional installierbares Modul/i);
-  assert.match(reportImportContract, /ursprüngliche PDF-Datei[\s\S]{0,100}weder als Datei noch als Blob/i);
-  assert.match(reportImportContract, /OCR-Fallback ist mit diesem Stand noch nicht freigegeben/i);
-  assert.match(reportImportContract, /0\/979/);
-  assert.match(ocrPartnerContract, /lokal eingelesen/i);
-  assert.match(ocrPartnerContract, /rohe OCR-Text werden nicht persistiert/i);
-  assert.match(ocrPartnerContract, /ocr_human_confirmed/);
-  assert.match(ocrPartnerContract, /keine mobile Fachansicht/i);
-  assert.match(ocrPartnerContract, /kein Commit, Push, Release oder VPS-Deployment/i);
 });

@@ -10,7 +10,7 @@ const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
 const styles = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
 const documentation = fs.readFileSync(
-  path.join(root, "docs", "PERSONAL-REGELWERK-ABSCHLUSS-v0.1.md"),
+  path.join(root, "SERVERBETRIEB.md"),
   "utf8",
 );
 
@@ -138,14 +138,10 @@ test("Block 7/7: neue Flächen folgen Dark-Mode-, Fokus- und Responsive-System",
   assert.match(styles, /@media \(max-width: 700px\)[\s\S]*\.personnel-rules-read-boundary-badges/);
 });
 
-test("Block 7/7: Abschlussdokumentation hält Rechte- und Rechtsgrenze fest", () => {
-  assert.match(documentation, /benötigt ausschließlich `work_rules:read`/);
-  assert.match(documentation, /keine Schreib-, Veröffentlichungs-, Freigabe- oder Zuordnungsfunktion/);
-  assert.match(documentation, /Auch ein unauffälliges oder grünes Prüfergebnis ist keine Rechtsfreigabe/);
-  assert.match(documentation, /\| Künftig \| zeitlich noch nicht wirksame Zuordnung/);
-  assert.doesNotMatch(documentation, /\| Künftig \| aktive und freigegebene Zuordnung/);
-  assert.match(documentation, /Betriebsübernahme[\s\S]*Sicherungs-, Migrations- und Gesundheitsprüfungen/);
-  assert.match(documentation, /nicht Bestandteil dieser fachlichen Block-Abnahme[\s\S]*eigener kontrollierter Rollout/);
+test("Betriebsdokumentation trennt technische Prüfungen von fachlicher Freigabe", () => {
+  assert.match(documentation, /bestandene technische Gates und getrennte Abnahmen für Version und Prüfstand/);
+  assert.match(documentation, /Ein neuer Nachweis macht alte Abnahmen unaktuell/);
+  assert.match(documentation, /keine Verfügbarkeits-, Rechts- oder Sicherheitsgarantie/);
 });
 
 test("Block 7/7: UI-Artefakte bleiben UTF-8-sauber und HTML-IDs eindeutig", () => {

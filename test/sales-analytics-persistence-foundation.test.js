@@ -45,7 +45,7 @@ const {
 
 const root = path.resolve(__dirname, "..");
 const contract = fs.readFileSync(
-  path.join(root, "docs", "VERKAUFSANALYSEN-PERSISTENZ-REVISIONEN-v0.1.md"),
+  path.join(root, "SERVERBETRIEB.md"),
   "utf8",
 );
 const applicationSchemaSource = fs.readFileSync(
@@ -535,16 +535,8 @@ test("Block 5: PostgreSQL-Schema und Statements sind reproduzierbar, qualifizier
   }
 });
 
-test("Block-5-Dokument trennt Prüfpersistenz, Produktaktivierung und Echtdaten", () => {
-  assert.match(contract, /^# Verkaufsanalysen · Persistenz- und Revisionsfundament v0\.1/m);
-  assert.match(contract, /\| Block \| 5 · Persistenz und Revisionen \|/);
-  assert.match(contract, /nicht aktivierter Dual-Provider-Entwicklungsslice/);
-  assert.match(contract, /weder in den SQLite-Anwendungsstart noch in den vollständigen Anwendungskatalog/);
-  assert.match(contract, /Noch nicht angelegt werden produktive Beleg-, Positions-, Artikel-, Bestands-/);
-  assert.match(contract, /Für `rejected` und `duplicate`/);
-  assert.match(contract, /`applicationExecutable: false`/);
-  assert.match(contract, /21\/21 Providerstatements, 16\/16 PostgreSQL-DDL-Schritte/);
-  assert.match(contract, /geschlossener Freigabe 0\/950/);
-  assert.match(contract, /kein Importverwaltungsrecht und keinen Serverendpunkt/);
-  assert.match(contract, /keine Echtdaten verarbeitet, keine Quelldatei geöffnet/);
+test("Betriebsdokumentation verhindert unkontrollierte Provideraktivierung und Testdatenübernahme", () => {
+  assert.match(contract, /Eine alleinige Änderung von `DB_PROVIDER` aktiviert keine Migration/);
+  assert.match(contract, /Das Live-System darf niemals mit einer Testkopie oder Testdatenbank aktiviert werden/);
+  assert.match(contract, /Produktive Daten, Schlüssel und Sicherungen sind kein austauschbarer Teil des App-Pakets/);
 });

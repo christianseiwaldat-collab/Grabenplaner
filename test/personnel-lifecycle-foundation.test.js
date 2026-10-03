@@ -10,7 +10,7 @@ const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
 const styles = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
 const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
-const architecture = fs.readFileSync(path.join(root, "docs", "PERSONALMODUL-ZIELARCHITEKTUR-v0.1.md"), "utf8");
+const architecture = fs.readFileSync(path.join(root, ".github", "GITHUB-DOKUMENTATION.md"), "utf8");
 
 function between(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -101,22 +101,9 @@ test("Personalmodul-Fundament: M5- und O8-Ansichten kommunizieren ihre Wirkungsg
   assert.match(styles, /@media \(max-width:1180px\) \{[\s\S]*?\.personnel-lifecycle-foundation-grid \{ grid-template-columns:1fr; \}/);
 });
 
-test("Personalmodul-Fundament: Architekturvertrag hält Entitäten, Versionen und Schutzgrenzen fest", () => {
-  for (const statement of [
-    "Ein Bewerber und ein Mitarbeiter sind getrennte Entitäten",
-    "Ein Bewerber besitzt keine Personalnummer",
-    "Workflow-Vorlage, veröffentlichte Workflow-Version und laufende Workflow-Instanz sind getrennte Entitäten",
-    "Unternehmensweite Pflichtprozesse sind additiv",
-    "serverseitig anhand von Fachrecht, Rolle, freigegebenem Bereich und Datenklassifikation",
-    "veröffentlichter, unveränderbarer Snapshot",
-    "## 7. Datenbankmigrationen",
-    "## 8. API-Oberfläche",
-    "Offene Architekturentscheidungen",
-  ]) assert.match(architecture, new RegExp(statement));
-  assert.match(architecture, /M3-Umwandlung ist bewusst eng begrenzt:[\s\S]*kopiert keine Bewerberdokumente[\s\S]*M6 erweitert ausschließlich die bestehende verschlüsselte Mitarbeiterakte/);
-  assert.match(architecture, /v0\.89-personnel-lifecycle-candidate-foundation/);
-  assert.match(architecture, /v0\.89-personnel-workflow-instances/);
-  assert.match(architecture, /v0\.90-personnel-document-history[\s\S]*physische Löschung bleibt gesperrt/);
+test("Dokumentationsstandard bewahrt interne Planungen lokal und das Produktverhalten", () => {
+  assert.match(architecture, /Interne Planungen, Analysen, Designs, Messungen und Auslieferungsbelege werden lokal aufbewahrt/);
+  assert.match(architecture, /Dokumentationsänderungen dürfen das Produktverhalten nicht verändern/);
   const forbiddenPublicContext = new RegExp(
     `${["Mitter", "weg"].join("")}|${["Pi", "lot"].join("")}`,
     "i",

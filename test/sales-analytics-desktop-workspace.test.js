@@ -10,10 +10,6 @@ const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
 const styles = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
-const contract = fs.readFileSync(
-  path.join(root, "docs", "VERKAUFSANALYSEN-DESKTOP-ARBEITSBEREICH-v0.1.md"),
-  "utf8",
-);
 
 function between(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -408,12 +404,6 @@ test("Breite Detailtabelle ist durchsuchbar, sortierbar und zeigt beide Zeiträu
   assert.match(styles, /\.sales-report-analysis-table th:first-child,\.sales-report-analysis-table td:first-child \{ position:sticky/);
 });
 
-test("Block-8-Vertrag hält Datenquellen- und Ausrollgrenzen fest", () => {
-  assert.match(contract, /keine künstlich berechnete Unternehmenssumme/i);
-  assert.match(contract, /ohne Rohertragsrecht fehlen Rohertragswerte in der API-Antwort/i);
-  assert.match(contract, /direkte Access-Datenbankanbindung oder Hintergrundsynchronisation/i);
-  assert.match(contract, /Onlineshopumsätze ohne katalogisierte Bestell- oder Umsatzquelle/i);
-  assert.match(contract, /keine mobile Fachansicht oder mobile Abnahme/i);
-  assert.match(contract, /Commit, Push, Release oder VPS-Deployment/i);
+test("Desktop-Arbeitsbereich lädt den geschützten Berichts-Endpunkt", () => {
   assert.match(app, /api\(`\/api\/sales-analytics\/reports\/\$\{encodeURIComponent\(requestedId\)\}`\)/);
 });
