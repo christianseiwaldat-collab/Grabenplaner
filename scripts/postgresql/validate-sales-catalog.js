@@ -22,7 +22,7 @@ async function main(){
   }finally{await client.end();}
   const report={scope:'sales-development',stage,productActivation:false,total:salesSourceEntries(stage).length,prepared:passed.length,failures,entries:passed,schemaPlanSha256:createSalesSchemaPlan(stage).digest};
   fs.writeFileSync('tmp/postgresql-sales-'+stage+'-validation.json',JSON.stringify(report,null,2)+'\n');
-  if(!failures.length&&process.argv.includes('--record'))fs.writeFileSync('docs/postgresql-migration/block-'+stage+'-catalog.json',JSON.stringify(report,null,2)+'\n');
+  if(!failures.length&&process.argv.includes('--record'))fs.writeFileSync('test-support/postgresql-migration-doc-fixtures/block-'+stage+'-catalog.json',JSON.stringify(report,null,2)+'\n');
   console.log(JSON.stringify({total:report.total,prepared:report.prepared,failures:failures.map(({id,message})=>({id,message}))},null,2));
   if(failures.length)process.exitCode=1;
 }

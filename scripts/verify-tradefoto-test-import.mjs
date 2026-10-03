@@ -24,7 +24,7 @@ const [tradeFile, cashFile, reportFile] = process.argv.slice(2);
 if (!tradeFile || !cashFile || !reportFile || process.argv.length !== 5) throw new Error('Usage: verify-tradefoto-test-import.mjs TRADE.accdb CASH.accdb NEW-REPORT.json');
 const reportPath = path.resolve(reportFile), inputs = [tradeFile, cashFile].map(f => fs.realpathSync(f));
 if (fs.existsSync(reportPath) || inputs.some(f => f.toLowerCase() === reportPath.toLowerCase())) throw new Error('Report must be a new file, never a source or existing artifact.');
-const catalog = JSON.parse(fs.readFileSync(new URL('../docs/tradefoto-gesamtimport-v0.1/catalog.json', import.meta.url), 'utf8'));
+const catalog = JSON.parse(fs.readFileSync(new URL('../test-support/access-db-import/catalog.json', import.meta.url), 'utf8'));
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const started = Date.now(), time = new Date().toISOString(), batches = [], proofs = [], tables = [];
 const report = { format: 'grabenplaner.tradefoto.block6-test.v1', createdAt: time, productionWrites: false, fullProductionImport: false,

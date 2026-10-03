@@ -39,7 +39,7 @@ async function main() {
   const sourcePath = fs.realpathSync(process.argv[2]), output = path.resolve(process.argv[3]);
   assert.equal(fs.existsSync(output), false, 'REPORT_EXISTS');
   const before = fs.statSync(sourcePath), sourceSha = sha256File(sourcePath);
-  const baselineFile = path.join(root, 'docs/tradefoto-gesamtimport-v0.1/24-MONATE-QUELLENMESSUNG-2026-09-07.json');
+  const baselineFile = path.join(root, 'test-support/access-db-import/history-source-counts.json');
   const baseline = JSON.parse(fs.readFileSync(baselineFile, 'utf8')).sources.find(s => s.kind === 'cash');
   assert.equal(sourceSha, baseline.sha256); assert.equal(before.size, baseline.bytes);
   const binary = fs.realpathSync(path.join(root, 'tmp/backup-restic-tools-20260906/bin/restic_0.18.1_windows_amd64.exe'));

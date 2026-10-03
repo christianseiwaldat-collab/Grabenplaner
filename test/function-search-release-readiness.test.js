@@ -266,32 +266,9 @@ test("Block 5: alle Suchmodule sind versionsgebunden, paketfähig und persistenz
   const packageJson = JSON.parse(read("package.json"));
   assert.match(packageJson.version, /^\d+\.\d+\.\d+-beta$/);
   assert.ok(read("README.md").includes(`v${packageJson.version.replace("-beta", " Beta")}`));
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.36 Beta · Verkaufsberichte, Kassenklärung und Browsernavigation/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.34 Beta · PDF-Verkaufsanalysen und eigene Artikelbilder/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.31 Beta · Sichtbare Bewerbungsbewertungen im Mitarbeiterportal/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.30 Beta · Mobiles Mitarbeiterportal und persönliche Leihrechte/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.29 Beta · Belegsuche und flexible Kundenkartei/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.27 Beta · Geschütztes Importfundament und Verkaufs-\/Kassenhistorie/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.26 Beta · Direkter TradeFoto-Datenbankimport/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.25 Beta · Artikelstamm-Verwaltung und kontrollierter TradeFoto-Import/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.24 Beta · CRM, zentraler Artikelstamm und bearbeitbare Schnuppertermine/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.23 Beta · Persönliche Bewerbungsbewertungs-PDFs/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.22 Beta · Team-Bewerbungsbewertungen und Dienstplan-Einstellungen/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.21 Beta · Delegierbare AL-Grundrechte und optionale Positionszeile/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.20 Beta · Positionsverwaltung, Filialaufsicht und Dienstplansperre/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.19 Beta · Strukturierte Bewerberprofile und Schnuppertage/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.18 Beta · Filialbestellungen und bereichsgebundene Bewerberanlage/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.17 Beta · Sichtbare Einsätze in anderen Filialen/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.16 Beta · Präzisierte Wochenmatrix und standortübergreifende Einplanung/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.15 Beta · Anpassbare Wochenmatrix und Katalogsuche/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.14 Beta · Vollständige Bestellkatalog-Migration beim Serverstart/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.13 Beta · Konfigurierbare Startwidgets und kompakter Bestellkatalog/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.12 Beta · Dienstplan-PDFs, persönliches Startdashboard und Dienstsuche/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.11 Beta · Stabile Filialbestellungsverwaltung/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.10 Beta · Standortübergreifende Einsatzanfragen und Geburtstagsportal/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.9 Beta · Neustartsichere Schulungsbelege/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.8 Beta · Schulungsprozesse und Fähigkeitsprofile/);
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.7 Beta · Berechtigungsgefilterte Funktionssuche/);
+  assert.ok(read("VERSIONS-LOG.md").includes(`v${packageJson.version.replace("-beta", " Beta")} · Quellstand`));
+  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.72 Beta · Produktiver Serverstand/);
+  assert.match(read("VERSIONS-LOG.md"), /v0\.87\.0-beta\.legacy\.1 · Legacy/);
   assert.equal(JSON.parse(read(".devcontainer/devcontainer.json")).name, `Grabenplaner v${packageJson.version.replace('-beta', '')} Codespaces-Demo`);
 
   const runtimeFiles = [

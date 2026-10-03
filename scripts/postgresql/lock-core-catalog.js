@@ -9,5 +9,5 @@ const entries=sourceEntries().map(entry=>{
   return validated;
 });
 if(validation.failures.length||validation.total!==1125||entries.length!==1125)throw new Error('Complete Core validation required');
-fs.writeFileSync('docs/postgresql-migration/block-4-catalog.json',JSON.stringify({version:1,scope:'core-development',productActivation:false,schemaPlanSha256:createSchemaPlan().digest,entries},null,2)+'\n');
+fs.writeFileSync('test-support/postgresql-migration-doc-fixtures/block-4-catalog.json',JSON.stringify({version:1,scope:'core-development',productActivation:false,schemaPlanSha256:createSchemaPlan().digest,entries},null,2)+'\n');
 console.log(JSON.stringify({recorded:entries.length,productActivation:false}));

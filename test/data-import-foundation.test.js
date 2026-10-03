@@ -389,7 +389,7 @@ test("Block 2: every named persistence statement compiles through the PostgreSQL
 });
 
 test("Block 2: current full inventory remains diagnostic-only; differences and manifest tampering block acceptance", () => {
-  const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/tradefoto-gesamtimport-v0.1/catalog.json"), "utf8"));
+  const catalog = JSON.parse(fs.readFileSync(path.join(__dirname, "../test-support/access-db-import/catalog.json"), "utf8"));
   const result = inspectTradeFotoImportInventory(catalog);
   assert.equal(result.canImport, false); assert.equal(result.coverage.tables, 135); assert.equal(result.coverage.fields, 1363);
   assert.deepEqual(result.gates, ["BUSINESS_ADAPTERS_PENDING", "SOURCE_ROW_COUNT_MISMATCH"]);

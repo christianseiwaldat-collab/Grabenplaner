@@ -611,73 +611,13 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   }
 });
 
-test("v0.87 Datenbank Block 5: Dokumentation und CI bilden den nicht produktiven Zwischenstand ab", () => {
-  const inventory = read("docs/DATENBANK-KOPPLUNGSINVENTAR.md");
-  const phase3 = read("docs/DATENBANK-SQLITE-PROVIDER.md");
-  const phase4 = read("docs/DATENBANK-DIALEKTE-UND-MIGRATIONEN.md");
-  const phase5 = read("docs/DATENBANK-POSTGRESQL-PROVIDER.md");
-  const strategy = read("docs/DATENBANK-PROVIDER-STRATEGIE.md");
+test("Datenbank-Betriebsdokumentation bleibt neutral; CI-Verträge bleiben erhalten", () => {
+  const operations = read("SERVERBETRIEB.md");
   const ciWorkflow = read(".github/workflows/ci.yml");
   const packageJson = JSON.parse(read("package.json"));
-
-  assert.match(inventory, /Status:\*\* Block 1\/7 abgeschlossen/);
-  assert.match(inventory, /audit-persistence-coupling\.js --check/);
-  assert.match(inventory, /Nicht klassifizierte Treffer \| 0/);
-  assert.match(inventory, /Windows-Serverwerkzeuge werden vollständig als Betriebszugriffe inventarisiert/);
-  assert.match(inventory, /Portable, USB, Lokal- und LAN-Host bleiben dagegen eingefrorenes Legacy/);
-  assert.match(inventory, /SQLite backup schema 1|SQLite-Sicherungspunkt|sqlite-backup-v1/i);
-  assert.match(inventory, /Block 2 wurde am 29\.07\.2026 separat freigegeben/);
-  assert.match(inventory, /Datenbank-Provider-Vertrag/);
-  assert.match(inventory, /Block 3 wurde am 29\.07\.2026 separat freigegeben/);
-  assert.match(inventory, /unveränderte Phase-1-Ausgangsbasis/);
-  assert.match(phase3, /Status:\*\* Block 3\/7 abgeschlossen/);
-  assert.match(phase3, /UI-Präferenzen/);
-  assert.match(phase3, /lib\/persistence\/sqlite\/provider\.js/);
-  assert.match(phase3, /node:sqlite/);
-  assert.match(phase3, /Allowlist[\s\S]{0,120}genau\s+einen neuen Providerimport/i);
-  assert.match(phase3, /Vollständige SQLite-Parität[\s\S]{0,40}erreicht/i);
-  assert.match(phase3, /direkte `db\.prepare`-Aufrufe in `server\.js` \| 0/);
-  assert.match(phase3, /direkte `db\.exec`-Aufrufe in `server\.js` \| 0/);
-  assert.match(phase3, /lokal mit Node 22\.13\.0/);
-  assert.match(phase4, /Status:\*\* Block 4\/7 abgeschlossen/);
-  assert.match(phase4, /1354 Statementvertr/);
-  assert.match(phase4, /SQLite-Baseline \| 37/);
-  assert.match(phase4, /SQLite-Dialektvariante \| 1317/);
-  assert.match(phase4, /1244[\s\S]{0,100}Dollar-Parameter/i);
-  assert.match(phase4, /`contract-only`/);
-  assert.match(phase4, /Implementierungs-Fingerprint/);
-  assert.match(phase4, /`mapped-not-ledger-activated`/);
-  assert.match(phase4, /`genericAdapterCompatible: false`/);
-  assert.match(phase4, /Phase-5-Zwischenstand/);
-  assert.match(phase4, /Phase 5[\s\S]{0,80}begonnen[\s\S]{0,80}in Bearbeitung/i);
-  assert.match(phase4, /1239 Syntaxkandidaten \(`portable-generated`\)/);
-  assert.match(phase4, /115[^\r\n]*`requires-override`/);
-  assert.match(
-    phase4,
-    /PostgreSQL-Anwendungsmigrationsstand bleibt 0\/10[\s\S]{0,80}keine der zehn[\s\S]{0,40}Anwendungsmigrationen ist implementiert/i,
-  );
-  assert.match(phase5, /nicht produktiven Status/i);
-  assert.match(phase5, /`development-contract`/);
-  assert.match(phase5, /`fullApplicationCatalog: false`/);
-  assert.match(phase5, /Abdeckungen 4\/4, 2\/2, 2\/2 und 1\/1[\s\S]{0,120}0\/1354/);
-  assert.match(phase5, /`applicationExecutable: false`/);
-  assert.match(phase5, /Produktiver Datenbankpfad:[\s\S]{0,80}ausschließlich SQLite/i);
-  assert.match(strategy, /Block 3[\s\S]{0,100}abgeschlossen/i);
-  assert.match(strategy, /Block 4[\s\S]{0,100}abgeschlossen/i);
-  assert.match(strategy, /Phase 5 ist begonnen und weiterhin in[\s\S]{0,30}Bearbeitung/i);
-  assert.match(
-    strategy,
-    /weder in der Produkt- noch in der[\s\S]{0,100}Serverkonfiguration aktiviert[\s\S]{0,100}ausschließlich auf SQLite/i,
-  );
-  assert.match(
-    strategy,
-    /1354 Anwendungsstatements:[\s\S]{0,60}1239[\s\S]{0,100}`portable-generated`[\s\S]{0,60}115[\s\S]{0,100}`requires-override`[\s\S]{0,100}0 von 1354[\s\S]{0,100}Vollanwendungskatalog/i,
-  );
-  assert.match(
-    strategy,
-    /PostgreSQL-Migrationsstand bleibt 0\/10[\s\S]{0,60}keine Anwendungsmigration ist[\s\S]{0,30}implementiert/i,
-  );
-  assert.match(strategy, /Datenbank-Kopplungsinventar/);
+  assert.match(operations, /SQLite bleibt der Installationsstandard/);
+  assert.match(operations, /keinen automatischen Rückfall auf SQLite/);
+  assert.match(operations, /PostgreSQL-Paare werden gemeinsam gesichert und wiederhergestellt/);
   assert.match(ciWorkflow, /sqlite-provider-node-minimum:/);
   assert.match(ciWorkflow, /postgresql-provider-development-contract:/);
   assert.match(

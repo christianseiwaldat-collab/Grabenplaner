@@ -163,7 +163,7 @@ test("PostgreSQL product documentation requires the separately authorized manage
   assert.match(readme, /SQLite bleibt der Standard/);
   assert.match(
     readme,
-    /ausdrücklich migrierte Ubuntu-Server[\s\S]*grabenplaner_core[\s\S]*grabenplaner_sales[\s\S]*ein einzelner Umgebungsparameter aktiviert ihn nicht/,
+    /ausdrücklich migrierte Ubuntu-Server[\s\S]*grabenplaner_core[\s\S]*grabenplaner_sales[\s\S]*ein einzelner Umgebungsparameter aktiviert den PostgreSQL-Wechsel nicht/,
   );
 
   const app = read("public/app.js");
@@ -221,11 +221,10 @@ test("DB Block 6 No-Cutover: neue Betriebsdateien aktivieren weder Cutover noch 
   assert.doesNotMatch(packageCommands, /\b(?:cutover|deploy|vps)\b|postgresql.*migrat/i);
 });
 
-test("DB Block 7 Startpruefung: Installationsmigration bleibt dokumentiert auf NO-GO", () => {
-  const operationsContract = read("docs/DATENBANK-POSTGRESQL-BETRIEB-UND-RECOVERY.md");
-  assert.match(operationsContract, /Block-7-Startpr\S+fung am 30\.07\.2026/);
-  assert.match(operationsContract, /Ergebnis ist\s+\*\*NO-GO\*\*/);
-  assert.match(operationsContract, /keine konkrete Zielinstallation/);
-  assert.match(operationsContract, /keine Installation, keinen VPS, keine\s+Produktkonfiguration/);
-  assert.match(operationsContract, /SQLite der einzige unterst\S+tzte und produktive\s+Datenbankprovider/);
+test("Betriebsvertrag verlangt geprüfte Migration und verhindert Einzelrücksicherung", () => {
+  const operationsContract = read("SERVERBETRIEB.md");
+  assert.match(operationsContract, /Eine alleinige Änderung von `DB_PROVIDER` aktiviert keine Migration/);
+  assert.match(operationsContract, /Wartungssperre, vollständige Datenprüfung und den ersten gemeinsamen Sicherungspunkt/);
+  assert.match(operationsContract, /keinen automatischen Rückfall auf SQLite/);
+  assert.match(operationsContract, /Einzelrücksicherung und generischer SQLite-Recovery-Apply sind ausgeschlossen/);
 });

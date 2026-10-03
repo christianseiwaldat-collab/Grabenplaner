@@ -5,7 +5,9 @@
 lib/persistence/postgresql/contracts/*.json text eol=lf
 lib/persistence/postgresql/core/compatibility.sql text eol=lf
 test-support/postgresql-migration/source-schema-v09237.json text eol=lf
-docs/postgresql-migration/*.json text eol=lf
+test-support/postgresql-migration-doc-fixtures/*.json text eol=lf
+test-support/access-db-import/*.json text eol=lf
+test-support/access-db-import/supplier-invoices/*.cjs text eol=lf
 server-tools/linux/runtime-schema.json text eol=lf
 server-tools/linux/grabenplaner-monitor.timer.in text eol=crlf
 server-tools/linux/host-control/lib/*.js text eol=lf
