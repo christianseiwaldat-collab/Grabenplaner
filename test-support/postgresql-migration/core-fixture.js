@@ -6,7 +6,7 @@ const {createSqlitePersistenceProvider}=require('../../lib/persistence/sqlite/pr
 const {sourceEntries}=require('../../lib/persistence/postgresql/core/catalog');
 const {coreRepositories,openCoreDevelopmentApplication}=require('../../lib/persistence/postgresql/core/application');
 const {verifyEnvironment,PROFILE}=require('../../lib/persistence/postgresql/core/environment');
-const inventory=require('../../docs/postgresql-migration/block-1-inventory.json');
+const inventory=require('../postgresql-migration-doc-fixtures/block-1-inventory.json');
 const baseTableNames=[...inventory.tables.filter(t=>t.database==='core').map(t=>t.name),'article_reference_snapshots'];
 const quote=value=>value===null?'NULL':typeof value==='number'?String(value):"'"+String(value).replace(/'/g,"''")+"'";
 const fixtureId='synthetic-core-parity-v1';

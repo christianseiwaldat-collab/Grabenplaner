@@ -6,9 +6,12 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("v0.77: historischer System-Center-Block bleibt nachvollziehbar dokumentiert", () => {
+test("Versionsstatus trennt Quellstand, ausgelieferten Serverstand und Legacy", () => {
   const versionLog = read("VERSIONS-LOG.md");
-  assert.match(versionLog, /## v0\.77 Beta · System-Center und technischer Vertrauensindex/);
-  assert.match(versionLog, /signierte Recovery-Assurance-Historie erscheint als redigierte Timeline/);
-  assert.match(versionLog, /isolierte App-Smoke-Test, nächtliche Vollautomatismus, Benachrichtigungen und Langzeitdiagramme bleiben bewusst Block 3 vorbehalten/);
+  const packageJson = JSON.parse(read("package.json"));
+  assert.ok(versionLog.includes(`v${packageJson.version.replace("-beta", " Beta")} · Quellstand`));
+  assert.match(versionLog, /v0\.92\.72 Beta · Produktiver Serverstand/);
+  assert.match(versionLog, /v0\.87\.0-beta\.legacy\.1 · Legacy/);
+  assert.match(versionLog, /noch nicht als Serverrelease freigegeben/);
+  assert.equal((versionLog.match(/^## /gm) || []).length, 3);
 });

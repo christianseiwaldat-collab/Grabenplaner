@@ -10,7 +10,6 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 const html = read("public/index.html");
 const app = read("public/app.js");
 const styles = read("public/styles.css");
-const architecture = read("docs/PERSONALMODUL-ZIELARCHITEKTUR-v0.1.md");
 const persistenceAudit = read("scripts/audit-persistence-coupling.js");
 
 function between(source, start, end) {
@@ -74,10 +73,6 @@ test("M5-Aufgabenzugang nutzt nur Workflow-Leserecht und Server-Capability", () 
   assert.match(capabilities, /canRead: submitted\.canReadInstances === true/);
   assert.doesNotMatch(capabilities, /submitted\.canRead === true/);
   assert.match(app, /if \(!capabilities\.canRead\) \{[\s\S]*?clearPersonnelWorkflowInstanceState/);
-  assert.match(
-    architecture,
-    /zentrale Personal-Leseberechtigung[\s\S]{0,120}nicht als zusätzliche M5-Lesefreigabe verlangt/,
-  );
 });
 
 test("M5-Liste lädt ausschließlich den geschützten GET-Endpunkt", () => {
@@ -159,18 +154,6 @@ test("M5-Karten bleiben auf schmalen Ansichten ohne Tabellenachse lesbar", () =>
   assert.doesNotMatch(workflowStyles, /overflow-x\s*:/);
   assert.match(styles, /@media \(max-width:900px\) \{[\s\S]*?\.personnel-workflow-instance-meta \{ grid-template-columns:repeat\(2,minmax\(0,1fr\)\); \}/);
   assert.match(styles, /@media \(max-width:420px\) \{[\s\S]*?\.personnel-workflow-summary,\.personnel-workflow-instance-meta \{ grid-template-columns:1fr; \}/);
-});
-
-test("M5-Architektur dokumentiert additive Bindung, API und Automatisierungsgrenze", () => {
-  assert.match(architecture, /v0\.89-personnel-workflow-instances/);
-  assert.match(architecture, /custom_process_run_bindings/);
-  assert.match(architecture, /custom_process_run_step_assignments/);
-  assert.match(architecture, /GET `?\/workflow-instances`?/);
-  assert.match(architecture, /POST `?\/workflow-instances`?/);
-  assert.match(architecture, /\{ operationId, publicationId, subject, assignments \}/);
-  assert.match(architecture, /Idempotency-Replayed: true/);
-  assert.match(architecture, /\{ instance, replayed, capabilities \}/);
-  assert.match(architecture, /keine (?:neue )?(?:Prozess-?)?automatik/i);
 });
 
 test("M5-Audit-Inventar klassifiziert das neue SQLite-Schema und den erweiterten Dialektplan", () => {

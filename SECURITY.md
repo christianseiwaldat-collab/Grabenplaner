@@ -1,29 +1,17 @@
 # Sicherheitsrichtlinie
 
-## Unterstützte Versionen
+Die aktuelle Server-Beta erhält geprüfte Sicherheitskorrekturen.
+Legacy v0.87.0-beta.legacy.1 ist eingefroren; ältere Versionen werden nicht unterstützt.
 
-| Version | Status |
-|---|---|
-| Aktuelle Server-Beta | Sicherheitskorrekturen nach Prüfung |
-| v0.87.0-beta.legacy.1 | Eingefrorener Legacy-Endstand, keine laufende Weiterentwicklung |
-| Ältere Releases | Nicht unterstützt |
+Sicherheitsprobleme vertraulich an `christian.seiwald.at@gmail.com` melden.
+Bitte betroffene Version, Auswirkung und ein minimiertes synthetisches Beispiel nennen.
+Keine realen Personal-, Gesundheits-, Zugangs- oder Produktivdaten in Meldungen verwenden.
+Repository-Administratoren können private Security Advisories für die Bearbeitung nutzen.
 
-## Vertraulich melden
+Öffentlicher Betrieb benötigt HTTPS, einen geprüften Reverse Proxy und einen an Loopback gebundenen App-Prozess.
+Datenbanken, verschlüsselte Dokumente, Schlüssel und Sicherungen müssen gemeinsam geschützt und wiederherstellbar sein.
+Betrieb, Updates und Wiederherstellungen verantwortet die zuständige Systemadministration.
+Reale Daten, Branding-Kits, Schlüssel und unbereinigte Protokolle gehören nicht in dieses Repository.
+Die technische Umsetzung ersetzt keine Prüfung der konkreten Berechtigungs-, Datenschutz- und Betriebskonfiguration.
 
-Sicherheitsprobleme bitte nicht als GitHub-Issue veröffentlichen, sondern vertraulich an `christian.seiwald.at@gmail.com` melden. Bitte nur bereinigte Nachweise ohne echte Personal-, Gesundheits-, Zugangs- oder Produktivdaten übermitteln.
-
-Repository-Administratoren können für die interne Bearbeitung zusätzlich ein privates GitHub Security Advisory anlegen.
-
-Hilfreich sind betroffene Version, Auswirkung, reproduzierbare Schritte und gegebenenfalls ein minimiertes Testbeispiel. Eine Eingangsbestätigung wird nach Möglichkeit innerhalb von fünf Werktagen, eine erste Einschätzung innerhalb von zehn Werktagen angestrebt; dies sind Zielwerte, keine Garantie.
-
-## Betriebsgrenzen
-
-- Öffentlich erreichbare Installationen benötigen HTTPS, einen korrekt konfigurierten Reverse Proxy und einen ausschließlich an Loopback gebundenen App-Prozess.
-- Datenbank, verschlüsselte Dokumentablage, Schlüssel und Sicherungen müssen gemeinsam geschützt, gesichert und getestet wiederherstellbar sein.
-- Produktivbetrieb, Updates und Wiederherstellungen liegen in der Verantwortung einer vertrauenswürdigen Systemadministration.
-- Reale Datenbanken, Dokumente, Branding-Kits, Schlüssel und Protokolle gehören weder in dieses Repository noch in Fehlerberichte.
-- Die technischen Schutzmaßnahmen ersetzen keine Prüfung der konkreten Netzwerk-, Berechtigungs-, Datenschutz- und Backupkonfiguration.
-
-Ausführliche Betriebs- und Recovery-Anforderungen stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
-
-Für dieses Projekt besteht kein Bug-Bounty-Programm.
+[Betriebs- und Recovery-Vertrag](SERVERBETRIEB.md). Kein Bug-Bounty-Programm.

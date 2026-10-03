@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const C = require('../lib/data-import-contract');
-const catalog = require('../docs/tradefoto-gesamtimport-v0.1/catalog.json');
+const catalog = require('../test-support/access-db-import/catalog.json');
 // Candidate uniqueness was measured in the pinned inventory, not declared as an Access PK.
 const keys = {
   cash: { Umsatz_KASSE: ['Bonnr', 'Filialid', 'Kassenid', 'Bondatum'], Umsatz_Kasse_Details: ['RepID'], KassenJournal: ['Vorgang'] },

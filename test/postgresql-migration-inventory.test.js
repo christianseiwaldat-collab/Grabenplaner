@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const inventory=require('../docs/postgresql-migration/block-1-inventory.json');
+const inventory=require('../test-support/postgresql-migration-doc-fixtures/block-1-inventory.json');
 const source=require('../test-support/postgresql-migration/source-schema-v09237.json');
 const {createSqliteSource,seedCoreFixture}=require('../test-support/postgresql-migration/sqlite-source');
 test('Migration inventory covers every source object once and preserves every table',()=>{

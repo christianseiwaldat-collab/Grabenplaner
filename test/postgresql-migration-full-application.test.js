@@ -1,11 +1,12 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const ROOT=path.resolve(__dirname,'..');
+const fixtureSource=file=>file.source.startsWith('docs/postgresql-migration/')?'test-support/postgresql-migration-doc-fixtures/'+file.name:file.source;
 test('qualified PostgreSQL files retain LF bytes in Windows checkouts',()=>{
  const {spawnSync}=require('node:child_process');
  const manifest=require('../lib/persistence/postgresql/contracts/manifest.json');
  const files=['lib/persistence/postgresql/core/compatibility.sql',
-  ...manifest.files.flatMap(file=>['lib/persistence/postgresql/contracts/'+file.name,file.source])];
+  ...manifest.files.flatMap(file=>['lib/persistence/postgresql/contracts/'+file.name,fixtureSource(file)])];
  const checked=spawnSync('git',['check-attr','-z','text','eol','--',...files],{cwd:ROOT,encoding:'utf8'});
  assert.equal(checked.status,0,checked.stderr);
  const fields=checked.stdout.split('\0');assert.equal(fields.pop(),'');
@@ -20,7 +21,7 @@ test('installed PostgreSQL contracts retain the qualified source bytes without d
  assert.equal(manifest.version,1);assert.equal(manifest.files.length,9);
  for(const file of manifest.files){
   assert.match(file.name,/^[a-z0-9-]+\.json$/);
-  const packaged=fs.readFileSync(path.join(folder,file.name)),source=fs.readFileSync(path.join(ROOT,file.source));
+  const packaged=fs.readFileSync(path.join(folder,file.name)),source=fs.readFileSync(path.join(ROOT,fixtureSource(file)));
   assert.equal(crypto.createHash('sha256').update(packaged).digest('hex'),file.sha256,file.name);
   assert.deepEqual(packaged,source,file.name);
  }

@@ -4,7 +4,7 @@ const require = createRequire(import.meta.url);
 const C = require('../lib/data-import-contract');
 const { TRADEFOTO_MONETARY_PRICE_FIELD_MAPPINGS, TRADEFOTO_EXCLUDED_NON_MONETARY_FIELDS } = require('../lib/tradefoto-article-source-profile');
 const { salesArticlePriceGroup } = require('../lib/sales-article-catalog-access');
-const source = require('../docs/tradefoto-gesamtimport-v0.1/catalog.json');
+const source = require('../test-support/access-db-import/catalog.json');
 const trade = source.sources.find(item => item.id === 'trade');
 // Reviewed candidate strategies. No Access PK declaration is claimed. Other tables
 // keep snapshot + ordinal identity, including genuine duplicate note/condition rows.

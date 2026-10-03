@@ -23,7 +23,7 @@ async function main() {
   const sourcePath = fs.realpathSync(process.argv[2]), output = path.resolve(process.argv[3]);
   assert.ok(!fs.existsSync(output), 'REPORT_EXISTS');
   const sourceBefore = fs.statSync(sourcePath), sourceSha256 = sha256File(sourcePath);
-  const previous = JSON.parse(fs.readFileSync(path.join(root, 'docs/tradefoto-gesamtimport-v0.1/24-MONATE-QUELLENMESSUNG-2026-09-07.json'), 'utf8'));
+  const previous = JSON.parse(fs.readFileSync(path.join(root, 'test-support/access-db-import/history-source-counts.json'), 'utf8'));
   const baseline = previous.sources.find(source => source.kind === 'cash'); assert.equal(sourceSha256, baseline.sha256, 'SOURCE_CHANGED');
   const window = historyWindow(previous.window.asOfDay), tmpRoot = fs.realpathSync(path.join(root, 'tmp'));
   const free = () => { const st = fs.statfsSync(tmpRoot); return st.bavail * st.bsize; };
@@ -140,7 +140,7 @@ async function main() {
       for (const name of knownFiles.filter(name => name.startsWith(mode + '.'))) clean(name);
     }
     result.peakDirectoryBytes = peakDirectoryBytes; result.peakRssBytes = peakRssBytes;
-    result.evidence = { sourceCountReportSha256: sha256File(path.join(root, 'docs/tradefoto-gesamtimport-v0.1/24-MONATE-QUELLENMESSUNG-2026-09-07.json')),
+    result.evidence = { sourceCountReportSha256: sha256File(path.join(root, 'test-support/access-db-import/history-source-counts.json')),
       implementationFiles: ['scripts/measure-cash-history-snapshot.mjs', 'test-support/cash-history-snapshot-prototype.js',
         'scripts/measure-tradefoto-history-window.mjs', 'lib/data-import-protection.js', 'lib/tradefoto-history-profiles.js', 'lib/data-import-contract.js']
         .map(file => ({ file, sha256: sha256File(path.join(root, file)) })) };

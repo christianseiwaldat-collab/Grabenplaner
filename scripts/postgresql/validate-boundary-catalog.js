@@ -12,6 +12,6 @@ async function main(){const entries=[];
       }
     }finally{await client.end();}
   }
-  const report={productActivation:false,prepared:entries.length,entries};fs.writeFileSync('docs/postgresql-migration/block-7-boundary-catalog.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({prepared:entries.length}));
+  const report={productActivation:false,prepared:entries.length,entries};fs.writeFileSync('test-support/postgresql-migration-doc-fixtures/block-7-boundary-catalog.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({prepared:entries.length}));
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

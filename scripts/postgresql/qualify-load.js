@@ -69,7 +69,7 @@ async function main(){await withReportFixture(async f=>{
   }
   report.coreDegradation=report.phases.withReport.core.p95/report.phases.warm.core.p95-1;
   report.checks={firstPages:Object.values(report.phases).every(p=>p.articleFirst.p95<1000&&p.receiptFirst.p95<1000),nextPages:Object.values(report.phases).every(p=>p.articleNext.p95<500&&p.receiptNext.p95<500),accept:report.acceptMs<1000,core:report.coreDegradation<=.2,overlap:overlap>=100};
-  fs.writeFileSync('docs/postgresql-migration/block-8-load.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({checks:report.checks,acceptMs:report.acceptMs,coreDegradation:report.coreDegradation}));
+  fs.writeFileSync('test-support/postgresql-migration-doc-fixtures/block-8-load.json',JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({checks:report.checks,acceptMs:report.acceptMs,coreDegradation:report.coreDegradation}));
   assert.ok(Object.values(report.checks).every(Boolean),'Defined latency targets must all pass');
 });}
 main().catch(e=>{console.error(e);process.exitCode=1;});

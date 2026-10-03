@@ -16,7 +16,7 @@ test('Core catalog covers the complete reviewed domain and keeps Sales unavailab
   const catalog=createCoreCatalog();assert.equal(catalog.entries.length,1125);assert.equal(catalog.productActivation,false);
   assert.equal(new Set(catalog.entries.map(e=>e.statement.id)).size,1125);
   assert.ok(catalog.entries.every(e=>!e.statement.id.startsWith('cash-')));
-  const lock=structuredClone(require('../docs/postgresql-migration/block-4-catalog.json'));
+  const lock=structuredClone(require('../test-support/postgresql-migration-doc-fixtures/block-4-catalog.json'));
   lock.entries[0].sqlSha256='0'.repeat(64);
   assert.throws(()=>assertCoreCatalogLock(catalog.entries.map((providerEntry,i)=>({providerEntry,provenance:catalog.provenance[i]})),lock),/qualification/);
 });

@@ -3,8 +3,8 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {withCoreFixture}=require('../test-support/postgresql-migration/core-fixture');
 const {parameters}=require('../test-support/postgresql-migration/query-inputs');
 const {createCoreCatalog}=require('../lib/persistence/postgresql/core/catalog');
-const lock=require('../docs/postgresql-migration/block-4-catalog.json');
-const coreTables=new Set(require('../docs/postgresql-migration/block-1-inventory.json').tables.filter(t=>t.database==='core').map(t=>t.name));
+const lock=require('../test-support/postgresql-migration-doc-fixtures/block-4-catalog.json');
+const coreTables=new Set(require('../test-support/postgresql-migration-doc-fixtures/block-1-inventory.json').tables.filter(t=>t.database==='core').map(t=>t.name));
 test('Live entire Core read catalog executes with bound synthetic inputs and compares SQLite results',{skip:!process.env.GP_PG_MIGRATION_LIVE},async()=>withCoreFixture(async f=>{
   const catalog=createCoreCatalog(),reads=catalog.entries.filter(e=>e.statement.operation!=='execute');
   const failures=[],passed=[];let cursor=0;

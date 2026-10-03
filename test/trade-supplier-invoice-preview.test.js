@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {createModel,decimal}=require('../docs/prototypes/trade-supplier-invoices/model.cjs');
+const {createModel,decimal}=require('../test-support/access-db-import/supplier-invoices/model.cjs');
 const h=(n,s,id)=>({ID:id,Rechnungsnr:n,Suchname:s,BFirma:s,Anlegedatum:'2026-09-20 10:00:00',Buchdatum:'2026-09-15 00:00:00'});
 const d=(n,s,ean,qty,price)=>({ID:'detail-id-unrelated-to-head',Rechnungsnr:n,Suchname:s,EAN:ean,Artikelbezeichnung:'Historische Kamera',menge:qty,Rechnungspreis:price,NNPreis:9});
 test('supplier invoice lookup uses the compound key, retains leading zeros and sums exact quantities',()=>{
