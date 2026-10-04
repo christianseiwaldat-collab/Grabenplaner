@@ -122,9 +122,10 @@ test("v0.71 Block 7 UI: Navigation und zentrale Urlaubstabelle reagieren auf kle
   const baseStyles = styles.slice(0, styles.indexOf("@media"));
   const mobileNavigationStyles = between(styles, "@media (max-width: 820px) {", "@media (max-width: 600px) {");
   assert.match(styles, /\.nav-module \{ display:grid; min-width:0; \}/);
-  assert.match(styles, /\.nav-item\.nav-module-route \{ display:grid; grid-template-columns:14px 22px minmax\(0,1fr\) auto/);
+  assert.match(styles, /\.nav-item\.nav-module-route \{[^}]*display:grid;[^}]*grid-template-columns:22px minmax\(0,1fr\);/);
+  assert.match(styles, /\.nav-module-route > \.nav-count \{ grid-column:3; \}/);
   assert.match(styles, /\.nav-branch \{[^}]*grid-template-columns: 14px minmax\(0,1fr\)/);
-  assert.match(styles, /\.nav-module-children \{[^}]*border-left:/);
+  assert.match(styles, /\.nav-module-children \{[^}]*box-shadow:inset 1px 0/);
   assert.match(styles, /\.main-nav \{[^}]*overflow-x:clip;[^}]*overflow-y:\s*auto;/);
   assert.match(baseStyles, /\.sidebar \{[^}]*position:fixed;/, "Die Sidebar bleibt auch ohne mobile Wiederholung der Basisposition fest.");
   assert.match(mobileNavigationStyles, /\.sidebar \{[^}]*visibility:hidden;[^}]*transform:translateX\(-105%\);/);

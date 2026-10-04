@@ -224,6 +224,6 @@ test("Admin-API-Middleware verlangt für die Artikelsuche kein Dienstplanrecht",
   );
   assert.match(
     middleware,
-    /if \(salesArticleCatalogRoute\) \{\s*permission = salesArticleImportRoute\s*\? SALES_ARTICLE_CATALOG_PERMISSIONS\.IMPORT\s*: request.path === '\/sales\/articles\/preferences' \|\| \["GET", "HEAD", "OPTIONS"\]\.includes\(method\)\s*\? SALES_ARTICLE_CATALOG_PERMISSIONS\.READ\s*: SALES_ARTICLE_CATALOG_PERMISSIONS\.WRITE;/,
+    /if \(salesArticleCatalogRoute\) \{\s*permission = salesArticleImportRoute\s*\? SALES_ARTICLE_CATALOG_PERMISSIONS\.IMPORT\s*: \['\/sales\/articles\/preferences', '\/sales\/articles\/window-preferences'\]\.includes\(request.path\) \|\| \["GET", "HEAD", "OPTIONS"\]\.includes\(method\)\s*\? SALES_ARTICLE_CATALOG_PERMISSIONS\.READ\s*: SALES_ARTICLE_CATALOG_PERMISSIONS\.WRITE;/,
   );
 });

@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="/trade-supplier-invoices.css" />
     <link rel="stylesheet" href="/data-import.css" />
     <link rel="stylesheet" href="/mobile-refinements.css" />
+    <link rel="stylesheet" href="/sales-article-search-window.css" />
   </head>
   <body>
     <div class="deployment-banner hidden" id="deploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
@@ -48,7 +49,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.74 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.75 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -185,9 +186,6 @@
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="vacations" id="centralVacationsNavButton">
                 <span class="nav-symbol">☀</span><span>Urlaube (Unternehmen)</span>
               </button>
-              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="dataRequests" id="dataSubjectRequestsNavButton">
-                <span class="nav-symbol">§</span><span>Daten&shy;anfragen</span><strong class="nav-count hidden" id="dataSubjectRequestsNavCount">0</strong>
-              </button>
             </div>
           </section>
           <section class="nav-module hidden" id="salesAdministrationNav" aria-label="Verkaufsverwaltung">
@@ -216,7 +214,7 @@
               <button class="nav-item nav-module-main" type="button" data-view="logistics" id="logisticsNavButton"><span class="nav-symbol" aria-hidden="true">⇄</span><span>Logistik</span></button>
             </div>
             <div class="nav-module-children hidden" id="logisticsNavChildren">
-              <button class="nav-item nav-module-route" type="button" data-view="logistics" id="logisticsPurchasingNavButton"><span class="nav-symbol" aria-hidden="true">▦</span><span>Einkauf / Lieferstände</span></button>
+              <button class="nav-item nav-module-route" type="button" data-view="logistics" id="logisticsPurchasingNavButton"><span class="nav-symbol" aria-hidden="true">▦</span><span>Einkauf / Liefer&shy;stände</span></button>
             </div>
           </section>
           <section class="nav-module hidden" id="privacyOrganizationNav" aria-label="Datenschutz">
@@ -230,6 +228,7 @@
               <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="dpia" id="privacyOrganizationDpiaNavButton"><span>DSFA</span></button>
               <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="breaches" id="privacyOrganizationBreachesNavButton"><span>Datenpannen</span></button>
               <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="agreements" id="privacyOrganizationAgreementsNavButton"><span>Betriebliche Zustimmungen</span></button>
+              <button class="nav-item nav-module-route hidden" type="button" data-view="privacyOrganization" data-privacy-organization-tab="dataRequests" id="dataSubjectRequestsNavButton"><span class="nav-symbol" aria-hidden="true">§</span><span>Daten&shy;anfragen</span><strong class="nav-count hidden" id="dataSubjectRequestsNavCount">0</strong></button>
             </div>
           </section>
         </nav>
@@ -827,7 +826,6 @@
             <button class="settings-tab hidden" id="customWorkRulesTab" type="button" role="tab" aria-controls="customWorkRulesSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="ruleDrafts">Regelwerk</button>
             <button class="settings-tab hidden" id="collectiveAgreementsTab" type="button" role="tab" aria-controls="collectiveAgreementsSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="collectiveAgreements">Kollektivverträge</button>
             <button class="settings-tab hidden" id="centralVacationsTab" type="button" role="tab" aria-controls="centralVacationSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="vacations">Urlaube</button>
-            <button class="settings-tab hidden" id="dataSubjectRequestsTab" type="button" role="tab" aria-controls="dataSubjectRequestsSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="dataRequests">Datenanfragen <span class="tab-count hidden" id="dataSubjectRequestsTabCount">0</span></button>
           </div>
 
           <section class="personnel-administration-section active" id="personnelDirectorySection" role="tabpanel" aria-labelledby="personnelDirectoryTab">
@@ -1270,19 +1268,6 @@
             </div>
           </section>
 
-          <section class="personnel-administration-section" id="dataSubjectRequestsSection" role="tabpanel" aria-labelledby="dataSubjectRequestsTab">
-            <div class="employee-toolbar data-subject-request-toolbar">
-              <div><h2>Datenanfragen</h2><p>Betroffenenanfragen mit Status und Frist nachvollziehbar bearbeiten. Die Oberfläche unterstützt die Prüfung, ersetzt aber keine rechtliche Einzelfallbewertung.</p></div>
-              <div class="privacy-toolbar-actions"><button class="secondary-button" id="refreshDataSubjectRequestsButton" type="button">Aktualisieren</button><button class="primary-button hidden" id="addDataSubjectRequestButton" type="button">+ Anfrage erfassen</button></div>
-            </div>
-            <div class="personnel-administration-summary data-subject-request-summary" id="dataSubjectRequestSummary" aria-live="polite"></div>
-            <div class="personnel-directory-filters data-subject-request-filters">
-              <label class="field"><span>Suchen</span><input id="dataSubjectRequestSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Anfrage-ID" /></label>
-              <label class="field"><span>Status</span><select id="dataSubjectRequestStatusFilter"><option value="">Alle Status</option><option value="actionable">Zu bearbeiten</option><option value="received">Eingelangt</option><option value="identity_pending">Identität offen</option><option value="in_review">In Prüfung</option><option value="extended">Frist verlängert</option><option value="approved">Genehmigt</option><option value="partially_approved">Teilweise genehmigt</option><option value="rejected">Abgelehnt</option><option value="fulfilled">Erfüllt</option><option value="partially_fulfilled">Teilweise erfüllt</option><option value="withdrawn">Zurückgezogen</option></select></label>
-              <label class="field"><span>Art</span><select id="dataSubjectRequestTypeFilter"><option value="">Alle Arten</option></select></label>
-            </div>
-            <div class="data-subject-request-list" id="dataSubjectRequestList" aria-live="polite"><p class="settings-note">Datenanfragen werden beim Öffnen geladen.</p></div>
-          </section>
         </section>
 
         <dialog class="modal collective-agreement-modal" id="collectiveAgreementModal">
@@ -1593,6 +1578,7 @@
                 <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
               </button>
               <button class="personnel-dashboard-card hidden" id="receiptSearchDashboardCard" type="button" data-sales-dashboard-view="receiptSearch"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▤</span><span class="personnel-dashboard-card-copy"><small>Belege &amp; Kassenbuchungen</small><strong>Kassenberichte &amp; Belegsuche</strong><span>Belege suchen, Spalten anpassen und Beleginformationen als PDF speichern.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
+              <button class="personnel-dashboard-card hidden" id="salesPriceLabelsDashboardCard" type="button" data-sales-dashboard-view="priceLabels"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▱</span><span class="personnel-dashboard-card-copy"><small>Gestaltung &amp; Druck</small><strong>Preisschilder</strong><span>Artikelpreise übernehmen, Schilder gestalten und druckfertige PDFs erstellen.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
               <button class="personnel-dashboard-card hidden" id="tradeInsightsDashboardCard" type="button" data-sales-dashboard-view="tradeInsights"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▦</span><span class="personnel-dashboard-card-copy"><small>Einkauf &amp; Warenbewegungen</small><strong>Einkauf &amp; Bestand</strong><span>Lieferstände, Filialversorgung, Bestände und Gerätehistorien auswerten.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
               <button class="personnel-dashboard-card hidden" id="crmDashboardCard" type="button" data-sales-dashboard-view="crm">
                 <span class="personnel-dashboard-card-symbol" aria-hidden="true">CRM</span>
@@ -1608,6 +1594,19 @@
         <section id="privacyOrganizationView" class="view" aria-labelledby="privacyOrganizationTitle">
           <header class="topbar privacy-org-page-header"><div class="privacy-org-page-title"><span class="privacy-org-page-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.2c0 4.5 3.1 7.8 7.5 9.8 4.4-2 7.5-5.3 7.5-9.8V6L12 3Z"/><path d="m8.5 12 2.3 2.3 4.7-4.7"/></svg></span><div><span class="eyebrow">Organisation</span><h1 id="privacyOrganizationTitle">Datenschutz</h1><p class="subtitle">Verarbeitungen, Risikoprüfungen und Vorfälle nachvollziehbar organisieren.</p></div></div></header>
           <div id="privacyOrganizationWorkspaceHost" tabindex="-1"></div>
+          <section class="card privacy-data-requests-section hidden" id="dataSubjectRequestsSection" aria-labelledby="dataSubjectRequestsTitle" tabindex="-1">
+            <div class="employee-toolbar data-subject-request-toolbar">
+              <div><h2 id="dataSubjectRequestsTitle">Datenanfragen</h2><p>Betroffenenanfragen mit Status und Frist nachvollziehbar bearbeiten. Die Oberfläche unterstützt die Prüfung, ersetzt aber keine rechtliche Einzelfallbewertung.</p></div>
+              <div class="privacy-toolbar-actions"><button class="secondary-button" id="refreshDataSubjectRequestsButton" type="button">Aktualisieren</button><button class="primary-button hidden" id="addDataSubjectRequestButton" type="button">+ Anfrage erfassen</button></div>
+            </div>
+            <div class="personnel-administration-summary data-subject-request-summary" id="dataSubjectRequestSummary" aria-live="polite"></div>
+            <div class="personnel-directory-filters data-subject-request-filters">
+              <label class="field"><span>Suchen</span><input id="dataSubjectRequestSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Anfrage-ID" /></label>
+              <label class="field"><span>Status</span><select id="dataSubjectRequestStatusFilter"><option value="">Alle Status</option><option value="actionable">Zu bearbeiten</option><option value="received">Eingelangt</option><option value="identity_pending">Identität offen</option><option value="in_review">In Prüfung</option><option value="extended">Frist verlängert</option><option value="approved">Genehmigt</option><option value="partially_approved">Teilweise genehmigt</option><option value="rejected">Abgelehnt</option><option value="fulfilled">Erfüllt</option><option value="partially_fulfilled">Teilweise erfüllt</option><option value="withdrawn">Zurückgezogen</option></select></label>
+              <label class="field"><span>Art</span><select id="dataSubjectRequestTypeFilter"><option value="">Alle Arten</option></select></label>
+            </div>
+            <div class="data-subject-request-list" id="dataSubjectRequestList" aria-live="polite"><p class="settings-note">Datenanfragen werden beim Öffnen geladen.</p></div>
+          </section>
         </section>
         <section id="tradeInsightsView" class="view" aria-labelledby="tradeInsightsTitle">
           <header class="topbar"><div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="tradeInsightsTitle">Einkauf &amp; Bestand</h1><p class="subtitle">Reparaturen, Bestände, Umlagerungen und Historien aus den übernommenen Quelldaten.</p></div></header>
@@ -1635,7 +1634,16 @@
           </header>
 
           <div class="sales-article-catalog-workspace">
-            <div class="sales-article-search-column">
+            <div class="sales-article-search-column sales-article-search-window" id="salesArticleSearchWindow" role="region" aria-labelledby="salesArticleSearchWindowTitle" hidden>
+              <header class="sales-article-window-titlebar" data-article-window-title>
+                <button type="button" class="sales-article-window-move" data-article-window-move aria-describedby="salesArticleWindowMoveHint" title="Suchfenster ziehen oder mit Pfeiltasten verschieben"><span aria-hidden="true">⠿</span><strong id="salesArticleSearchWindowTitle">Artikelsuche</strong></button>
+                <button type="button" data-article-window-reset aria-label="Suchfenster zurücksetzen" title="Fensterposition und Größe zurücksetzen">↺</button>
+                <button type="button" data-article-window-toggle aria-expanded="true" aria-controls="salesArticleSearchWindowBody" aria-label="Suchfenster minimieren" title="Minimieren / wiederherstellen">−</button>
+              </header>
+              <p class="visually-hidden" id="salesArticleWindowMoveHint">Ziehen oder Pfeiltasten zum Verschieben. Mit Umschalt größere Schritte. Pos1: oben links, Ende: unten rechts. Escape bricht Ziehen ab.</p>
+              <p class="visually-hidden" id="salesArticleWindowResizeHint">Ziehen oder Pfeiltasten für Breite und Höhe. Mit Umschalt größere Schritte. Pos1: kleinste Größe, Ende: verfügbarer Platz. Escape bricht Ziehen ab.</p>
+              <p class="visually-hidden" data-article-window-status role="status" aria-live="polite"></p>
+              <div class="sales-article-window-body" id="salesArticleSearchWindowBody" data-article-window-body>
             <section class="sales-article-search-shell" aria-labelledby="salesArticleSearchTitle">
               <div class="sales-article-search-heading visually-hidden">
                 <div><span class="eyebrow">Artikelsuche</span><h2 id="salesArticleSearchTitle">Artikel finden</h2><p>Die Liste wird erst nach einer ausdrücklichen Suche geladen.</p></div>
@@ -1660,7 +1668,6 @@
               <div class="sales-article-results-heading">
                 <div><span class="eyebrow">Suchergebnisse</span><strong id="salesArticleResultCount">Noch keine Suche</strong><small id="salesArticleResultRange">Die Ergebnisliste bleibt bis zur Suche leer.</small></div>
                 <details class="sales-article-columns" id="salesArticleColumns"><summary>Spalten auswählen &amp; anordnen</summary><div id="salesArticleColumnOptions"></div></details>
-                <button class="sales-article-results-toggle" id="salesArticleResultsToggle" type="button" aria-controls="salesArticleResultsBody" aria-expanded="true"><span>Ergebnisse einklappen</span><i aria-hidden="true"></i></button>
               </div>
               <div class="sales-article-results-body" id="salesArticleResultsBody">
                 <div class="sales-article-table-scroll" id="salesArticleTableScroll" tabindex="0" role="region" aria-label="Artikel-Suchergebnisse; weitere Treffer werden beim Scrollen nachgeladen">
@@ -1670,9 +1677,11 @@
                     <tbody id="salesArticleTableBody"></tbody>
                   </table>
                 </div>
-                <div class="sales-article-results-footer"><p class="sales-article-load-status" id="salesArticleLoadStatus">Noch keine Artikel geladen.</p><span id="salesArticleVisibleRowsLabel">10 Artikel sichtbar</span><button type="button" id="salesArticleResizeHandle" class="sales-article-resize-handle" role="slider" aria-label="Höhe der Artikelliste, ziehen oder Pfeiltasten verwenden" aria-valuemin="5" aria-valuemax="20" aria-valuenow="10" aria-orientation="vertical" title="Ziehen: 5 bis 20 Artikel sichtbar">◢</button></div>
+                <div class="sales-article-results-footer"><p class="sales-article-load-status" id="salesArticleLoadStatus">Noch keine Artikel geladen.</p><span id="salesArticleVisibleRowsLabel">10 Artikel sichtbar</span></div>
               </div>
             </section>
+              </div>
+              <button type="button" class="sales-article-window-resize" data-article-window-resize aria-label="Suchfenstergröße ändern" aria-describedby="salesArticleWindowResizeHint" title="Größe ziehen oder mit Pfeiltasten ändern">◢</button>
             </div>
             <section class="sales-article-detail" id="salesArticleDetail" aria-labelledby="salesArticleDetailTitle" aria-busy="false">
               <header class="sales-article-detail-heading">
@@ -1913,12 +1922,12 @@
             <div class="settings-header-actions"><button class="display-columns-button" id="teamDisplayColumnsButton" type="button">Anzeigespalten</button><div class="page-theme-switch" role="group" aria-label="Darstellung der Filialverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
           </header>
 
-          <div class="settings-tabs personnel-tabs" role="tablist">
-            <button class="settings-tab active" id="filialTeamTab" data-personnel-tab="employees">Team</button>
-            <button class="settings-tab" id="filialLocationsTab" data-personnel-tab="locations">Standortverwaltung</button>
+          <div class="settings-tabs personnel-tabs" role="tablist" aria-label="Filialverwaltung">
+            <button class="settings-tab active" id="filialTeamTab" data-personnel-tab="employees" type="button" role="tab" aria-selected="true" aria-controls="employeeSettings" tabindex="0">Team</button>
+            <button class="settings-tab" id="filialLocationsTab" data-personnel-tab="locations" type="button" role="tab" aria-selected="false" aria-controls="locationSettings" tabindex="-1">Standortverwaltung</button>
           </div>
 
-          <section id="employeeSettings" class="personnel-section active">
+          <section id="employeeSettings" class="personnel-section active" role="tabpanel" aria-labelledby="filialTeamTab">
             <div id="teamDirectoryWorkspace">
             <div class="employee-toolbar">
               <div><h2>Team</h2><p>Personalnummer, Name, Dienstplan-Name, Kostenstelle, passende Position, Farbe, Abteilung, Wochen-Sollzeit und fixe Arbeitstage.</p></div>
@@ -1934,7 +1943,7 @@
             <div id="employeeProfileTeamMount"></div>
           </section>
 
-          <section id="locationSettings" class="personnel-section">
+          <section id="locationSettings" class="personnel-section" role="tabpanel" aria-labelledby="filialLocationsTab">
             <div class="employee-toolbar location-overview-toolbar">
               <div><h2>Standorte &amp; Abteilungen</h2><p>Bestehende Filialen, Öffnungszeiten und zugeordnete Abteilungen auf einen Blick.</p></div>
               <div class="location-overview-actions">
@@ -2238,18 +2247,18 @@
             <div class="settings-header-actions"><div class="page-theme-switch" role="group" aria-label="Darstellung der Einstellungen"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div><button class="settings-update-button" id="updateCheckButton" type="button"><span id="updateCheckIcon">↻</span><strong id="updateCheckText">Update prüfen</strong><small id="updateCheckHint">GitHub</small></button><button class="primary-button" id="saveSettingsButton">Einstellungen speichern</button></div>
           </header>
 
-          <div class="settings-tabs" role="tablist">
-            <button class="settings-tab active" id="settingsGeneralTab" data-settings-tab="general">Grundeinstellungen</button>
-            <button class="settings-tab" id="settingsScheduleTab" data-settings-tab="schedule">Dienstplanung</button>
-            <button class="settings-tab" id="settingsPersonnelTab" data-settings-tab="personnel">Personal</button>
-            <button class="settings-tab" id="settingsAccessTab" data-settings-tab="access">Zugänge</button>
-            <button class="settings-tab" id="settingsRightsTab" data-settings-tab="rights">Rechtemanagement</button>
-            <button class="settings-tab hidden" id="settingsDataProtectionTab" data-settings-tab="dataProtection">Datenschutz</button>
-            <button class="settings-tab" id="settingsBackupTab" data-settings-tab="backup">System &amp; Backups</button>
-            <button class="settings-tab hidden" id="settingsSystemCenterTab" data-settings-tab="systemCenter">System-Center</button>
+          <div class="settings-tabs" role="tablist" aria-label="Bereiche der Einstellungen">
+            <button class="settings-tab active" id="settingsGeneralTab" data-settings-tab="general" type="button" role="tab" aria-selected="true" aria-controls="generalSettings" tabindex="0">Grundeinstellungen</button>
+            <button class="settings-tab" id="settingsScheduleTab" data-settings-tab="schedule" type="button" role="tab" aria-selected="false" aria-controls="scheduleSettings" tabindex="-1">Dienstplanung</button>
+            <button class="settings-tab" id="settingsPersonnelTab" data-settings-tab="personnel" type="button" role="tab" aria-selected="false" aria-controls="personnelSettings" tabindex="-1">Personal</button>
+            <button class="settings-tab" id="settingsAccessTab" data-settings-tab="access" type="button" role="tab" aria-selected="false" aria-controls="accessSettings" tabindex="-1">Zugänge</button>
+            <button class="settings-tab" id="settingsRightsTab" data-settings-tab="rights" type="button" role="tab" aria-selected="false" aria-controls="rightsSettings" tabindex="-1">Rechtemanagement</button>
+            <button class="settings-tab hidden" id="settingsDataProtectionTab" data-settings-tab="dataProtection" type="button" role="tab" aria-selected="false" aria-controls="dataProtectionSettings" tabindex="-1">Datenschutz</button>
+            <button class="settings-tab" id="settingsBackupTab" data-settings-tab="backup" type="button" role="tab" aria-selected="false" aria-controls="backupSettings" tabindex="-1">System &amp; Backups</button>
+            <button class="settings-tab hidden" id="settingsSystemCenterTab" data-settings-tab="systemCenter" type="button" role="tab" aria-selected="false" aria-controls="systemCenterPanel" tabindex="-1">System-Center</button>
           </div>
 
-          <section id="generalSettings" class="settings-section settings-two-column active">
+          <section id="generalSettings" class="settings-section settings-two-column active" role="tabpanel" aria-labelledby="settingsGeneralTab">
             <div class="settings-card" id="viewBehaviorSettingsCard">
               <div class="card-heading"><div class="card-icon">Ansicht</div><div><h2>Ansicht &amp; Startverhalten</h2><p>Legt die Darstellung und den Wiedereinstieg in standortübergreifende Pläne fest.</p></div></div>
               <label class="switch-row"><span><strong>Letzten Dienstplan-Gesamtplan wieder öffnen</strong><small>Merkt sich den zuletzt angesehenen Standort pro angemeldetem Benutzer und Browser.</small></span><input id="rememberLastScheduleOverallPlan" type="checkbox" /></label>
@@ -2413,7 +2422,7 @@
 
           </section>
 
-          <section id="scheduleSettings" class="settings-section settings-two-column schedule-settings-section">
+          <section id="scheduleSettings" class="settings-section settings-two-column schedule-settings-section" role="tabpanel" aria-labelledby="settingsScheduleTab">
             <div class="settings-card" id="crossLocationScheduleSettingsCard">
               <div class="card-heading"><div class="card-icon">Fil</div><div><h2>Standortübergreifende Dienstplanung</h2><p>Steuert die datensparsame Fremdansicht und wer Einsatzanfragen für die eigene Filiale stellen oder prüfen darf.</p></div></div>
               <label class="switch-row"><span><strong>Fremde Dienstpläne lesend anzeigen</strong><small>Zeigt nur Planzeiten und neutrale Nichtverfügbarkeit; Wochenstunden, Zeitkonten und Regelprüfungen bleiben ausgeblendet.</small></span><input id="crossLocationScheduleEnabled" type="checkbox" /></label>
@@ -2477,7 +2486,7 @@
             </div>
           </section>
 
-          <section id="accessSettings" class="settings-section settings-two-column">
+          <section id="accessSettings" class="settings-section settings-two-column" role="tabpanel" aria-labelledby="settingsAccessTab">
             <div class="settings-card" id="amuSettingsCard">
               <div class="card-heading"><div class="card-icon">AUM</div><div><h2>AUM-Dateien</h2><p>Upload, platzsparende PDF-Aufbereitung und Zugriffsrechte für Personalakten.</p></div></div>
               <div class="settings-grid compact-policy-grid">
@@ -2614,7 +2623,7 @@
             </div>
           </section>
 
-          <section id="rightsSettings" class="settings-section settings-two-column">
+          <section id="rightsSettings" class="settings-section settings-two-column" role="tabpanel" aria-labelledby="settingsRightsTab">
             <div class="settings-card">
               <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Grundrechte persönlich einschränken und zusätzliche Rechte gezielt vergeben.</p></div></div>
               <p class="settings-note security-note">Verwaltbare Grundrechte können persönlich entzogen und später wiederhergestellt werden. Filialleitungen verwalten die persönliche Leihe ihrer Mitarbeitenden sowie Grundrechte aktiver Abteilungsleitungen im eigenen Standort. IT-Admin und Personalleitung behalten ihre getrennten Verwaltungsgrenzen. Der Developer-Zugang bleibt geschützt.</p>
@@ -2647,7 +2656,7 @@
             </div>
           </section>
 
-          <section id="personnelSettings" class="settings-section settings-two-column">
+          <section id="personnelSettings" class="settings-section settings-two-column" role="tabpanel" aria-labelledby="settingsPersonnelTab">
             <div class="settings-card" id="personnelViewSettingsCard">
               <div class="card-heading"><div class="card-icon">Team</div><div><h2>Filialteam-Ansicht</h2><p>Darstellung der Teamstammdaten in der Filialverwaltung.</p></div></div>
               <label class="switch-row"><span><strong>Inaktive Teammitglieder anzeigen</strong><small>Blendet inaktive Stammdaten in der Filialverwaltung ein.</small></span><input id="showInactivePersonnel" type="checkbox" /></label>
@@ -2791,7 +2800,7 @@
             </dialog>
           </section>
 
-          <section id="dataProtectionSettings" class="settings-section settings-two-column">
+          <section id="dataProtectionSettings" class="settings-section settings-two-column" role="tabpanel" aria-labelledby="settingsDataProtectionTab">
             <div class="settings-card full-span" id="retentionPolicyCard">
               <div class="card-heading"><div class="card-icon">DS</div><div><h2>Aufbewahrungsregeln</h2><p>Versionierte Regeln und Schutzsperren für personenbezogene Daten prüfen.</p></div></div>
               <p class="settings-note security-note">Grabenplaner unterstützt die strukturierte Prüfung und Dokumentation. Die Anzeige ist keine pauschale Datenschutz- oder Compliance-Zusage. Aufbewahrung personenbezogener Daten und technische Backup-Aufbewahrung bleiben getrennte Verfahren.</p>
@@ -2817,7 +2826,7 @@
             </div>
           </section>
 
-          <section id="backupSettings" class="settings-section settings-two-column">
+          <section id="backupSettings" class="settings-section settings-two-column" role="tabpanel" aria-labelledby="settingsBackupTab">
             <details class="settings-accordion full-settings-card hidden" id="databaseImportSettings">
               <summary><span class="card-icon">Import</span><span class="settings-accordion-copy"><strong>Datenbankimporte</strong><small>Kasse, TradeFoto-Stammdaten und Bestelldaten sicher aktualisieren.</small></span><span class="settings-accordion-chevron" aria-hidden="true">›</span></summary>
               <div class="settings-accordion-body">
@@ -2901,7 +2910,7 @@
             </div>
           </section>
 
-          <section class="settings-section settings-system-center" id="systemCenterPanel" aria-label="System-Center">
+          <section class="settings-section settings-system-center" id="systemCenterPanel" aria-label="System-Center" role="tabpanel" aria-labelledby="settingsSystemCenterTab">
             <div class="system-center-panel">
               <div class="system-center-toolbar">
                 <div><span class="eyebrow">Nachweisbarer Systemzustand</span><h2>System-Center</h2><p>Server, Sicherungen und Wiederherstellbarkeit auf Basis redigierter, serverseitig geprüfter Nachweise.</p></div>
@@ -3063,7 +3072,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.74 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.75 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -4467,10 +4476,13 @@
     <script src="/sales-report-jobs.js"></script>
     <script src="/sales-article-image.js"></script>
     <script src="/sales-article-tools.js"></script>
+    <script src="/sales-price-label-fonts.js"></script>
+    <script src="/sales-price-label-layout.js"></script>
     <script src="/sales-price-labels.js"></script>
     <script src="/sales-article-price-labels.js"></script>
     <script src="/sales-article-layout.js"></script>
     <script src="/sales-article-column-widths.js"></script>
+    <script src="/sales-article-search-window.js"></script>
     <script src="/branch-article-calculation.js"></script>
     <script src="/sales-article-price-controls.js"></script>
     <script src="/navigation-history.js"></script>

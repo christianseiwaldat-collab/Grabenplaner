@@ -149,7 +149,7 @@ test("Block 7 UI: eigener Dienstplanungs-Reiter bündelt Rechte, E-Mail und Rich
     "staffAssignmentChangePolicy",
     "staffAssignmentCancellationPolicy",
   ]) assert.equal(occurrenceCount(html, `id="${id}"`), 1, id);
-  assert.match(html, /data-settings-tab="schedule">Dienstplanung</);
+  assert.match(html, /<button(?=[^>]*id="settingsScheduleTab")(?=[^>]*data-settings-tab="schedule")(?=[^>]*aria-controls="scheduleSettings")[^>]*>Dienstplanung<\/button>/);
   assert.match(app, /permissions\.includes\("schedule:cross_location:settings:write"\)/);
   assert.match(app, /\/api\/portal\/v1\/cross-location-schedule-settings/);
   assert.match(app, /crossLocationSchedule:\s*\{/);
@@ -170,7 +170,8 @@ test("Block 7 UI: Bearbeitungssperre wurde ohne ID- oder Wertduplikat verschoben
   const vacationStart = html.indexOf('id="vacationSettings"');
   assert.ok(generalStart >= 0 && scheduleStart > generalStart);
   assert.ok(lockStart > scheduleStart && lockStart < vacationStart);
-  assert.match(app, /elements\.scheduleSettings\?\.classList\.toggle\("active", activeTab === "schedule"\)/);
+  assert.match(app, /setManagedTabPanel\(elements\.scheduleSettings, activeTab === "schedule"\)/);
+  assert.match(app, /function setManagedTabPanel\(panel, active\)[\s\S]*?panel\.classList\.toggle\("active", active\)/);
   assert.match(app, /schedule:\s*settingsAccess \|\| scheduleSettingsAccess \|\| pdfSettingsAccess/);
   assert.match(app, /scheduleLockSettingsCard\?\.classList\.toggle\("hidden", !settingsAccess\)/);
 });

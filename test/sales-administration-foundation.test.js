@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
@@ -62,9 +63,11 @@ test("Navigation und Direktaufruf bleiben ohne Zugangsrecht fail-closed", () => 
   assert.match(accessHelper, /function canAccessCrm\(\)/);
   assert.match(accessHelper, /user\?\.crm\?\.workspace === true/);
   assert.match(accessHelper, /function canOpenSalesAdministrationModule\(\)[\s\S]*canAccessSalesAnalytics\(\) \|\| canAccessCrm\(\)/);
+  const state = { portalStatus: { portalEnabled: true }, portalSession: { user: { permissions: [] } } };
+  assert.equal(vm.runInNewContext(`${accessHelper}\ncanOpenSalesAdministrationModule();`, { state }), false);
 
   const visibility = between(app, "function applyRoleVisibility()", "async function bootstrapApplication()");
-  assert.match(visibility, /salesModuleAccess = salesAnalyticsAccess \|\| crmAccess/);
+  assert.match(visibility, /salesModuleAccess = canOpenSalesAdministrationModule\(\)/);
   assert.match(visibility, /salesAdministrationNav\?\.classList\.toggle\("hidden", !salesModuleAccess\)/);
   assert.match(visibility, /salesAnalyticsNavButton\?\.classList\.toggle\("hidden", !salesAnalyticsAccess\)/);
   assert.match(visibility, /crmNavButton\?\.classList\.toggle\("hidden", !crmAccess\)/);

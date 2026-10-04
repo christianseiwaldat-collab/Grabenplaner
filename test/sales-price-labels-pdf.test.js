@@ -5,25 +5,34 @@ const article=(overrides={})=>({articleNumber:'001234',description:'Fujifilm X-T
 async function inspect(buffer){
   const {getDocument,OPS}=await import('pdfjs-dist/legacy/build/pdf.mjs'),task=getDocument({data:new Uint8Array(buffer),isEvalSupported:false}),pdf=await task.promise;
   try{const pages=[];for(let i=1;i<=pdf.numPages;i++){
-    const page=await pdf.getPage(i),content=await page.getTextContent(),operators=await page.getOperatorList(),imageRects=[],fillRects=[];
-    let matrix=[1,0,0,1,0,0],fillColor='';const stack=[];
+    const page=await pdf.getPage(i),content=await page.getTextContent(),operators=await page.getOperatorList(),imageRects=[],fillRects=[],strokeRects=[];
+    let matrix=[1,0,0,1,0,0],fillColor='',strokeColor='',lineWidth=1,dash=[];const stack=[];
     function rectFromPoints(points){const xs=points.map(point=>point[0]),ys=points.map(point=>point[1]);return{x:Math.min(...xs),y:Math.min(...ys),width:Math.max(...xs)-Math.min(...xs),height:Math.max(...ys)-Math.min(...ys)};}
     for(let index=0;index<operators.fnArray.length;index++){
       const code=operators.fnArray[index],args=operators.argsArray[index];
-      if(code===OPS.save)stack.push({matrix:matrix.slice(),fillColor});
-      else if(code===OPS.restore){const prior=stack.pop();matrix=prior?.matrix||[1,0,0,1,0,0];fillColor=prior?.fillColor||'';}
+      if(code===OPS.save)stack.push({matrix:matrix.slice(),fillColor,strokeColor,lineWidth,dash});
+      else if(code===OPS.restore){const prior=stack.pop();matrix=prior?.matrix||[1,0,0,1,0,0];fillColor=prior?.fillColor||'';strokeColor=prior?.strokeColor||'';lineWidth=prior?.lineWidth||1;dash=prior?.dash||[];}
       else if(code===OPS.transform){const[a,b,c,d,e,f]=matrix,[g,h,j,k,l,m]=args;matrix=[a*g+c*h,b*g+d*h,a*j+c*k,b*j+d*k,a*l+c*m+e,b*l+d*m+f];}
       else if(code===OPS.setFillRGBColor)fillColor=String(args[0]).toLowerCase();
+      else if(code===OPS.setStrokeRGBColor)strokeColor=String(args[0]).toLowerCase();
+      else if(code===OPS.setLineWidth)lineWidth=args[0];
+      else if(code===OPS.setDash)dash=Array.from(args[0]);
       else if(code===OPS.constructPath&&args[0]===OPS.fill&&args[2]){
         const[a,b,c,d,e,f]=matrix,[x1,y1,x2,y2]=args[2],points=[[x1,y1],[x2,y1],[x1,y2],[x2,y2]].map(([x,y])=>[a*x+c*y+e,b*x+d*y+f]);
         fillRects.push({...rectFromPoints(points),color:fillColor});
+      }
+      else if(code===OPS.constructPath&&args[0]===OPS.stroke&&args[2]){
+        const[a,b,c,d,e,f]=matrix,[x1,y1,x2,y2]=args[2],points=[[x1,y1],[x2,y1],[x1,y2],[x2,y2]].map(([x,y])=>[a*x+c*y+e,b*x+d*y+f]);
+        strokeRects.push({...rectFromPoints(points),color:strokeColor,lineWidth,dash});
       }
       else if([OPS.paintImageXObject,OPS.paintInlineImageXObject].includes(code)){
         const[a,b,c,d,e,f]=matrix,points=[[e,f],[a+e,b+f],[c+e,d+f],[a+c+e,b+d+f]];
         imageRects.push({key:args[0],...rectFromPoints(points)});
       }
     }
-    pages.push({items:content.items,text:content.items.map(item=>item.str).join(' '),width:page.view[2],height:page.view[3],images:imageRects.length,imageRects,fillRects});
+    const fontNames=[...new Set(content.items.filter(item=>item.fontName).map(item=>page.commonObjs.get(item.fontName)?.name))];
+    pages.push({items:content.items,text:content.items.map(item=>item.str).join(' '),width:page.view[2],height:page.view[3],images:imageRects.length,imageRects,fillRects,strokeRects,fontNames,
+      lastImage:Math.max(operators.fnArray.lastIndexOf(OPS.paintImageXObject),operators.fnArray.lastIndexOf(OPS.paintInlineImageXObject)),lastText:operators.fnArray.lastIndexOf(OPS.showText)});
   }return pages;}
   finally{await task.destroy();}
 }
@@ -131,4 +140,61 @@ test('Branding, long product text, photos and repeated circular labels stay insi
   if(process.env.PRICE_LABELS_PREVIEW_DIR){const fs=require('node:fs'),path=require('node:path');fs.mkdirSync(process.env.PRICE_LABELS_PREVIEW_DIR,{recursive:true});fs.writeFileSync(path.join(process.env.PRICE_LABELS_PREVIEW_DIR,'labels-logo-promo-circle-multiple.pdf'),buffer);
     for(const [design,shape,logoPosition]of [['classic','rounded','top-left'],['minimal','rectangle','bottom-right']])fs.writeFileSync(path.join(process.env.PRICE_LABELS_PREVIEW_DIR,`labels-logo-${design}-${shape}.pdf`),await createSalesPriceLabelsPdf({items:[items[0]],options:{...options,design,shape,logoPosition,copies:1,labelHeightMm:60,footer:'Beratung in unserer Filiale'},logoBuffer:logoSvg}));
   }
+});
+
+test('All twelve chosen families embed their own regular and bold fonts and retain searchable German prices/text',async()=>{
+  const Fonts=require('../public/sales-price-label-fonts'),fontkit=require('node:module').createRequire(require.resolve('pdfkit'))('fontkit'),fs=require('node:fs'),path=require('node:path');
+  for(const font of Fonts.families){
+    const [page]=await inspect(await createSalesPriceLabelsPdf({items:[article({description:'ÄÖÜ äöü ß Kamera'})],options:{fontId:font.id,design:'minimal',showArticleNumber:true}}));
+    const searchable=page.text.replace(/\s+/g,' ');
+    assert.match(searchable,/ÄÖÜ äöü ß Kamera/);assert.match(searchable,/1\.599,01 €/);assert.match(searchable,/inkl\. 20 % MwSt\./);
+    for(const asset of [font.regular,font.bold]){
+      const expected=fontkit.create(fs.readFileSync(path.join(__dirname,'../public',asset.slice(1)))).postscriptName;
+      assert.ok(page.fontNames.some(name=>name?.endsWith(expected)),font.label+' did not embed '+expected);
+    }
+  }
+});
+
+test('Free overlay uses saved millimeter geometry after text without reserving price space or painting outside its slot',async()=>{
+  const options={logoKitId:'synthetic',logoAssetKey:'logo',logoMode:'free',logoXmm:30,logoYmm:25,logoWidthMm:30,logoHeightMm:10,design:'promo'};
+  const [page]=await inspect(await createSalesPriceLabelsPdf({items:[article()],options,logoBuffer:logoSvg}));
+  const [plain]=await inspect(await createSalesPriceLabelsPdf({items:[article()],options:{design:'promo'}}));
+  assert.equal(page.images,1);assert.ok(page.lastImage>page.lastText,'The requested overlay paints after all label text');
+  const logo=page.imageRects[0];assert.ok(Math.abs(logo.x-40*MM)<.02);assert.ok(Math.abs(logo.width-30*MM)<.02);
+  assert.ok(Math.abs(logo.y-(page.height-(10+25+1.25+7.5)*MM))<.02,'Aspect-ratio fit is centered in the saved 30x10mm box');
+  assert.ok(Math.abs(logo.height-7.5*MM)<.02);
+  const price=page.items.find(item=>item.str==='1.599,01 €'),plainPrice=plain.items.find(item=>item.str==='1.599,01 €');
+  assert.equal(price.transform[5],plainPrice.transform[5]);assert.ok(overlaps(logo,textRect(price)),'Explicit free placement can overlap the price');
+  await assert.rejects(createSalesPriceLabelsPdf({items:[article()],options:{...options,logoXmm:61},logoBuffer:logoSvg}),{code:'PRICE_LABEL_OPTIONS'});
+});
+
+test('Borderless PDFs have no implicit outline; optional shape cut guides stay within page edges at margin zero',async()=>{
+ const Grid=require('../public/sales-price-label-layout');
+ for(const shape of ['rectangle','rounded','circle']){
+  const options={paper:'A4',labelWidthMm:210,labelHeightMm:297,marginMm:0,design:'minimal',shape};
+  const [plain]=await inspect(await createSalesPriceLabelsPdf({items:[article()],options}));assert.equal(plain.strokeRects.length,0,'Legacy minimal is truly borderless');
+  const [guide]=await inspect(await createSalesPriceLabelsPdf({items:[article()],options:{...options,cutMarks:true}}));
+  assert.equal(guide.strokeRects.length,1);const line=guide.strokeRects[0];assert.equal(line.color,'#79877f');assert.equal(line.dash.length,2);
+  assert.ok(Math.abs(line.dash[0]-2*MM)<.002);assert.ok(Math.abs(line.lineWidth-Grid.CUT_WIDTH_MM*MM)<.002);
+  const half=line.lineWidth/2;
+  assert.ok(line.x-half>=-.002);assert.ok(line.y-half>=-.002);assert.ok(line.x+line.width+half<=guide.width+.002);assert.ok(line.y+line.height+half<=guide.height+.002);
+  if(shape==='circle'){assert.ok(Math.abs(line.width-(210-Grid.CUT_WIDTH_MM)*MM)<.003);assert.ok(Math.abs(line.height-line.width)<.003);}
+  const [border]=await inspect(await createSalesPriceLabelsPdf({items:[article()],options:{...options,showBorder:true,cutMarks:true}}));
+  assert.equal(border.strokeRects.length,1);assert.equal(border.strokeRects[0].dash.length,0);assert.equal(border.strokeRects[0].color,'#215345');
+ }
+});
+
+test('PDF cut outlines and copy identities match the selected grid across a partially filled final page',async()=>{
+ const Grid=require('../public/sales-price-label-layout'),options=normalizeOptions({copies:3,gapMm:4,showBorder:false,cutMarks:true,design:'minimal'});
+ const items=[article({articleNumber:'ONE'}),article({articleNumber:'TWO'}),article({articleNumber:'THREE'})],grid=Grid.create(options,items.length);
+ const pages=await inspect(await createSalesPriceLabelsPdf({items,options}));assert.equal(pages.length,grid.pageCount);
+ for(const [pageIndex,page]of pages.entries()){
+  const occupied=grid.page(pageIndex).filter(cell=>cell.occupied);assert.equal(page.strokeRects.length,occupied.length);
+  for(const [index,cell]of occupied.entries()){
+   const line=page.strokeRects[index],half=line.lineWidth/2;assert.ok(Math.abs(line.x-half-cell.x*MM)<.002);
+   assert.ok(Math.abs(page.height-(line.y+line.height+half)-cell.y*MM)<.002);assert.equal(line.dash.length,2);
+  }
+ }
+ assert.match(pages[1].text,/Art\. THREE/);assert.doesNotMatch(pages[1].text,/Art\. ONE|Art\. TWO/);
+ assert.equal((pages.map(page=>page.text).join(' ').match(/Art\. THREE/g)||[]).length,3);
 });

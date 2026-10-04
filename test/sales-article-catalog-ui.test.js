@@ -71,9 +71,10 @@ test("Artikelsuche verwendet nur bestätigte Listenfelder und den serverseitigen
   assert.match(app, /"sourceSystem", label: "Quellsystem"/);
 });
 
-test("Ergebnisfeld startet mit zehn Zeilen, erlaubt 5 bis 20 und behält wählbare sortierbare Köpfe", () => {
+test("Suchfenster umfasst Suche und Ergebnisse und behält wählbare sortierbare Köpfe", () => {
   const view = between(html, '<section id="salesArticleCatalogView"', '<section id="crmView"');
-  assert.match(view, /id="salesArticleResultsToggle"[^>]*aria-controls="salesArticleResultsBody"[^>]*aria-expanded="true"/);
+  assert.match(view, /id="salesArticleSearchWindow"[^>]*role="region"[^>]*aria-labelledby="salesArticleSearchWindowTitle"/);
+  assert.match(view, /data-article-window-toggle[^>]*aria-expanded="true"[^>]*aria-controls="salesArticleSearchWindowBody"/);
   assert.match(view, /id="salesArticleTableScroll"[^>]*role="region"/);
   assert.match(view, /id="salesArticleTableHead"/);
   assert.match(view, /id="salesArticleTableBody"/);
@@ -86,12 +87,11 @@ test("Ergebnisfeld startet mit zehn Zeilen, erlaubt 5 bis 20 und behält wählba
   assert.match(styles, /\.sales-article-table th,.sales-article-table td\s*\{[^}]*white-space:nowrap/s);
   assert.match(app, /data-sales-article-sort=/);
   assert.match(app, /aria-sort=/);
-  assert.match(app, /resultsExpanded = !state\.salesArticleCatalog\.resultsExpanded/);
   const headRenderer = between(app, "function renderSalesArticleCatalogHead", "function salesArticleCatalogVisibleWindow");
   assert.match(headRenderer, /querySelectorAll\("\[data-sales-article-sort\]"\)/);
   assert.match(headRenderer, /const columns = selectedSalesArticleColumns\(\)/);
   assert.match(headRenderer, /buttons\.map\(b => b\.dataset\.salesArticleSort\)\.join/);
-  assert.match(view, /id="salesArticleResizeHandle"[^>]*aria-valuemin="5"[^>]*aria-valuemax="20"/);
+  assert.match(view, /data-article-window-resize[^>]*aria-label="Suchfenstergröße ändern"/);
   assert.match(styles, /\.sales-article-table-scroll\s*\{ min-height:0; max-height:none;/);
   assert.ok(view.indexOf('id="salesArticleSearchForm"') < view.indexOf('id="salesArticleResults"'));
   assert.match(headRenderer, /button\.closest\("th"\)\?\.setAttribute/);

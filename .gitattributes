@@ -1,5 +1,8 @@
 *.pdf binary
 *.webp binary
+# Font assets and licence/source hashes preserve exact bytes on every host.
+public/fonts/price-labels/** -text
+public/fonts/price-labels/*/*.txt -whitespace
 *.sh text eol=lf
 # Qualified PostgreSQL contracts and SQL bind exact source bytes on every host.
 lib/persistence/postgresql/contracts/*.json text eol=lf
