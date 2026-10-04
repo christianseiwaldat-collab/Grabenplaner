@@ -96,7 +96,7 @@
   function normalizeTab(value) { return TABS.some(tab => tab.id === value) ? value : "overview"; }
   function accessAllowed(user, permission = "privacy_organization:read") {
     const number = String(user?.employeeNumber ?? "").trim();
-    return ["hr", "admin"].includes(user?.role)
+    return ["hr", "admin", "developer"].includes(user?.role)
       && !!number && number.toLowerCase() !== "local"
       && user?.isEmployee === true && user?.accountType === "employee" && user?.sessionKind === "employee"
       && user?.localSystem !== true && user?.sessionKind !== "local"

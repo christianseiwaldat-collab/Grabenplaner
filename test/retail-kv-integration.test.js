@@ -86,14 +86,31 @@ test("private HR facts persist encrypted but cannot replace the still missing in
   const assessment = await plan(); privateReferencesAbsent(assessment);
   assert.ok(assessment.findings.some(f => f.employeeNumber === SUBJECT && f.ruleId.startsWith("at.retail-kv.") && f.resultState === "unknown"));
 });
-test("planner and technical accounts cannot read, delegate or directly overwrite HR KV facts", async () => {
-  for (const auth of [users.manager, users.developer]) {
+test("planner accounts cannot read, delegate or directly overwrite HR KV facts", async () => {
+  for (const auth of [users.manager]) {
     const record = await request(`/api/portal/v1/personnel-records/${SUBJECT}`, { auth });
     if (record.status === 200) { assert.equal(record.payload.access.fieldAccess[FIELD], "hidden"); assert.ok(!Object.hasOwn(record.payload.profile.sensitive?.employment || {}, "retailKv")); }
     else assert.equal(record.status, 403);
     assert.equal((await save(status(), auth)).status, 403);
     const alias = await request(`/api/portal/v1/personnel-records/${SUBJECT}`, { method: "PUT", body: { sensitive: { retailKv: status() } }, auth }); assert.equal(alias.status, 403);
   }
+});
+test("personal developer can read and edit KV facts without replacing independent applicability approval", async () => {
+  const record = await request(`/api/portal/v1/personnel-records/${SUBJECT}`, { auth: users.developer });
+  assert.equal(record.status, 200, JSON.stringify(record.payload));
+  assert.equal(record.payload.access.fieldAccess[FIELD], "write");
+  assert.equal(record.payload.profile.sensitive.employment.retailKv.periods[0].contractWeeklyMinutes, 2310);
+  assert.match(record.payload.planningStatusBasis[FIELD], /^[0-9a-f]{64}$/);
+  const changed = await save(status({ contractWeeklyMinutes: 2100 }), users.developer);
+  assert.equal(changed.status, 200, JSON.stringify(changed.payload));
+  assert.ok(changed.payload.changedFields.includes(FIELD));
+  const stale = await request(`/api/portal/v1/personnel-records/${SUBJECT}`, { method: "PUT", auth: users.developer,
+    body: { sensitive: { employment: { retailKv: status() } }, planningStatusBasis: record.payload.planningStatusBasis } });
+  assert.equal(stale.status, 409, JSON.stringify(stale.payload));
+  assert.equal(stale.payload.code, "PERSONNEL_PLANNING_STATUS_CONCURRENT_CHANGE");
+  assert.ok((await plan()).findings.some(f => f.employeeNumber === SUBJECT && f.ruleId.startsWith("at.retail-kv.") && f.resultState === "unknown"));
+  assert.equal(db.prepare("SELECT count(*) n FROM work_rule_assignments WHERE profile_version_id=?").get(`${RETAIL_KV_PROFILE.id}@${RETAIL_KV_PROFILE.version}`).n, 0);
+  assert.equal((await save(status(), users.developer)).status, 200);
 });
 test("author cannot self-approve and one review cannot activate the KV binding", async () => {
   const input = { operation: "approve_kv_assignment", subjectType: "collective_agreement_assignment", subjectId: assignmentId, payload: { effectiveOn: "2026-01-01" } };
@@ -106,9 +123,12 @@ test("author cannot self-approve and one review cannot activate the KV binding",
   const early = await request(`/api/work-rules/governance/requests/${review.id}/finalize`, { method: "POST", body: { basisSha256: review.basisSha256, reason: "Synthetic prematurely finalized operation.", sourceReference: "synthetic-review-evidence" } }); assert.equal(early.status, 409);
   assert.ok((await plan()).findings.some(f => f.employeeNumber === SUBJECT && f.ruleId.startsWith("at.retail-kv.") && f.resultState === "unknown"));
 });
-test("two real independent HR decisions connect the approved KV to actual schedule findings", async () => {
-  const second = await request(`/api/work-rules/governance/requests/${review.id}/decisions`, { method: "POST", body: { decision: "approve", reason: "Synthetic second independent professional review completed." }, auth: users.reviewer2 }); assert.equal(second.status, 200, JSON.stringify(second.payload));
-  const completed = await request(`/api/work-rules/governance/requests/${review.id}/finalize`, { method: "POST", body: { basisSha256: review.basisSha256, reason: "Synthetic reviewed KV assignment applied.", sourceReference: "synthetic-review-evidence" } }); assert.equal(completed.status, 200, JSON.stringify(completed.payload));
+test("two independent HR/Developer decisions and developer finalization connect the approved KV to actual schedule findings", async () => {
+  assert.equal(db.prepare("SELECT count(*) n FROM portal_permission_grants WHERE employee_number='kv-synthetic-developer' AND permission='collective_agreements:approve'").get().n, 0);
+  const second = await request(`/api/work-rules/governance/requests/${review.id}/decisions`, { method: "POST", body: { decision: "approve", reason: "Synthetic second independent professional review completed." }, auth: users.developer }); assert.equal(second.status, 200, JSON.stringify(second.payload));
+  assert.equal(second.payload.request.state, "approved");
+  assert.equal(second.payload.request.decisions.find(decision => decision.actorRole === "developer").qualification, "fachlich");
+  const completed = await request(`/api/work-rules/governance/requests/${review.id}/finalize`, { method: "POST", auth: users.developer, body: { basisSha256: review.basisSha256, reason: "Synthetic reviewed KV assignment applied.", sourceReference: "synthetic-review-evidence" } }); assert.equal(completed.status, 200, JSON.stringify(completed.payload));
   const assessment = await plan(); privateReferencesAbsent(assessment);
   const saturday = assessment.findings.find(f => f.employeeNumber === SUBJECT && f.ruleId.includes("at.retail-kv.") && f.ruleId.includes("saturday"));
   assert.ok(saturday, JSON.stringify(assessment.findings)); assert.equal(saturday.resultState, "fail"); assert.equal(saturday.effectiveEnforcement, "advisory");

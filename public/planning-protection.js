@@ -9,7 +9,7 @@
   const PERIOD_FIELDS = Object.freeze(["id", "phase", "confirmed", "validFrom", "validTo", "referenceId", "normalDailyMinutes"]);
 
   function accessMode(access = {}, role = "") {
-    if (!["hr", "admin"].includes(role)) return "hidden";
+    if (!["hr", "admin", "developer"].includes(role)) return "hidden";
     const mode = access.fieldAccess?.[FIELD_KEY];
     return ["read", "write"].includes(mode) ? mode : "hidden";
   }

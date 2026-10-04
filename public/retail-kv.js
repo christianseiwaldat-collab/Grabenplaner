@@ -17,7 +17,7 @@
     return { id, group: "unknown", confirmed: false, validFrom: "", validTo: "", sourceReference: "", collectiveAgreementVersionId: "", approvedAssignmentId: "", sourceVersion: SOURCE_VERSION, sourceSha256: SOURCE_SHA256, contractWeeklyMinutes: null, normalWorkModel: "unknown", agreementStatus: "unknown", agreementReference: "", agreementValidFrom: "", agreementValidTo: "", agreementConfirmedBy: "", workplaceKind: "unknown", workplaceConfirmed: false, exceptionModel: "unknown", averagingPeriod: null };
   }
   function accessMode(access, user = {}) {
-    if (!["hr", "admin"].includes(user.role) || user.localSystem === true || user.sessionKind === "local" || String(user.employeeNumber || "").toLowerCase() === "local") return "hidden";
+    if (!["hr", "admin", "developer"].includes(user.role) || user.localSystem === true || user.sessionKind === "local" || String(user.employeeNumber || "").toLowerCase() === "local") return "hidden";
     return ["read", "write"].includes(access?.fieldAccess?.[FIELD_KEY]) ? access.fieldAccess[FIELD_KEY] : "hidden";
   }
   function statusHint(value) {

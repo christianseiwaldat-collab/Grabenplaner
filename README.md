@@ -3,12 +3,12 @@
 Grabenplaner unterstützt Dienstplanung, Personalorganisation, Zeiterfassung,
 Verkaufsanalysen und ein mobiles Mitarbeiterportal.
 
-**Quellstand: v0.92.73 Beta · produktiver Serverstand: v0.92.72 Beta.**
-Der Quellstand ist noch nicht als Serverrelease freigegeben.
+**Quellstand: v0.92.74 Beta · veröffentlichter GitHub-Serverrelease: v0.92.72 Beta.**
+Der installierte Serverstand wird im GP angezeigt.
 
 ## Releases
 
-- [Aktueller Serverrelease v0.92.72 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.92.72-beta)
+- [Veröffentlichter Serverrelease v0.92.72 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.92.72-beta)
 - [Legacy v0.87.0-beta.legacy.1](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.87.0-beta.legacy.1): eingefrorene Windows-Portable-/LAN-Version.
 
 ## Betrieb
