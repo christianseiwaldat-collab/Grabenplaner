@@ -393,12 +393,23 @@ const {
   SOURCE_CATALOG: WORK_RULE_SOURCE_CATALOG,
   WORK_RULE_ENGINE_VERSION,
   canonicalSha256: workRuleSha256,
+  canonicalJson: workRuleCanonicalJson,
   evaluateCustomPlannedSchedule,
   evaluatePlannedSchedule,
   getProfile: getBuiltinWorkRuleProfile,
   getRuleCatalog,
   summarize: summarizeWorkRuleFindings,
 } = require("./lib/work-rules");
+const { normalizeVocationalSchoolDetails } = require("./lib/work-rules/vocational-school");
+const { APPRENTICESHIP_FIELD_KEYS, normalizeApprenticeshipFields } = require("./lib/personnel-apprenticeship");
+const { normalizeProtectionStatus } = require("./lib/personnel-protection-status");
+const { normalizeRetailKv, resolveRetailKvPeriod, projectRetailKvForDate } = require("./lib/personnel-retail-kv");
+const { RETAIL_KV_PROFILE, evaluateRetailKvPlanning } = require("./lib/work-rules/retail-kv");
+const { loadRetailKvBindingSnapshot, resolveRetailKvApproval } = require("./lib/work-rules/retail-kv-binding");
+const { PLANNING_PROTECTION_PROFILE_ID, projectPlanningProtection } = require("./lib/work-rules/planning-protection");
+const { recordPlanningProtectionChange } = require("./lib/work-rules/planning-protection-mutation");
+const { recordRetailKvChange } = require("./lib/work-rules/retail-kv-mutation");
+const { captureVocationalSchoolMutationGuard } = require("./lib/work-rules/vocational-school-mutation-guard");
 const {
   getWorkRuleEvaluation,
   getWorkRuleProfileVersion,
@@ -670,6 +681,9 @@ const {
   verifyPrivacyRequest,
   withdrawPrivacyRequest,
 } = require("./lib/privacy-requests");
+const { PRIVACY_ORGANIZATION_CATALOG } = require("./lib/privacy-organization");
+const { createPrivacyOrganizationStore } = require("./lib/privacy-organization-store");
+const { isPrivacyOrganizationSettingKey, publicSettingsRows } = require("./lib/privacy-organization-settings");
 const {
   OFFICIAL_LEAVE_SOURCES,
   allocateLeaveConsumption,
@@ -940,6 +954,9 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "hr:approve", label: "Verbindliche PL-Freigaben erteilen", group: "Zeit & Abwesenheit", warningLevel: "critical" },
   { id: "hr:settings", label: "Antrags- und AUM-Regeln verwalten", group: "Zeit & Abwesenheit", warningLevel: "critical" },
   { id: "retention:read", label: "Aufbewahrungsregeln und Vorschau lesen", description: "Kategoriebezogene Fristen, Prüfhinweise und Legal Holds lesen.", group: "Datenschutz", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "privacy_organization:read", label: "Datenschutzorganisation lesen", description: "Verarbeitungsverzeichnis, DSFA, Datenpannen und Zustimmungsprozesse ausschließlich über persönliche HR-/Admin-Konten lesen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin"] },
+  { id: "privacy_organization:manage", label: "Datenschutzorganisation bearbeiten", description: "Datensparsame Prozessfälle versionieren und externe Meldebelege dokumentieren.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin"] },
+  { id: "privacy_organization:approve", label: "Datenschutzorganisation unabhängig prüfen", description: "Eine fremde eingereichte Fassung fachlich prüfen; keine Behördenmeldung oder Zustimmung von Beschäftigten ersetzen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin"] },
   { id: "retention:manage", label: "Aufbewahrungsregeln versioniert verwalten", description: "Neue Regelversionen und Legal Holds anlegen; kein direkter Löschlauf.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "data_subject_requests:read", label: "Betroffenenanfragen lesen", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "data_subject_requests:manage", label: "Betroffenenanfragen bearbeiten", description: "Identitätsprüfung, Fristen, Entscheidung und Maßnahmen dokumentieren.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
@@ -1135,6 +1152,13 @@ const personnelFieldCatalog = Object.freeze([
   { key: "employment.employmentType", label: "Beschäftigungsart", group: "Beschäftigung" },
   { key: "employment.contractType", label: "Vertragsart", group: "Beschäftigung" },
   { key: "employment.employmentStatus", label: "Beschäftigungsstatus", group: "Beschäftigung" },
+  { key: "employment.apprenticeshipStatus", label: "Lehrlingsstatus", group: "Beschäftigung" },
+  { key: "employment.apprenticeshipConfirmed", label: "Lehrlingsstatus bestätigt", group: "Beschäftigung" },
+  { key: "employment.apprenticeshipValidFrom", label: "Lehrlingsstatus gültig ab", group: "Beschäftigung" },
+  { key: "employment.apprenticeshipValidTo", label: "Lehrlingsstatus gültig bis", group: "Beschäftigung" },
+  { key: "employment.apprenticeshipSourceReference", label: "Grundlage des Lehrlingsstatus", group: "Beschäftigung", sensitive: true },
+  { key: "employment.protectionStatus", label: "Vertraulicher Planungsschutzstatus", group: "Planungsschutz", sensitive: true },
+  { key: "employment.retailKv", label: "Handels-KV · datierte Planungszuordnung", group: "Kollektivvertrag", sensitive: true },
   { key: "employment.collectiveAgreement", label: "Kollektivvertrag", group: "Beschäftigung" },
   { key: "employment.classification", label: "Einstufung", group: "Beschäftigung" },
   { key: "employment.payrollGroup", label: "Lohn-/Gehaltsgruppe", group: "Beschäftigung" },
@@ -1540,6 +1564,7 @@ const portalGlobalPermissionIds = new Set([
   ...SALES_ARTICLE_CATALOG_PERMISSION_IDS,
   "vacation_accounts:read", "vacation_accounts:manage",
   "retention:read", "retention:manage",
+  "privacy_organization:read", "privacy_organization:manage", "privacy_organization:approve",
   "data_subject_requests:read", "data_subject_requests:manage", "data_subject_requests:export",
   "personnel:candidates:write", "personnel:candidates:confidential:read",
   "personnel:candidates:confidential:write", "personnel:candidates:convert", "personnel:candidates:delegate",
@@ -2000,6 +2025,9 @@ for (const roleId of ["hr", "admin", "developer"]) {
 addBuiltinRolePermissions("it_admin", [
   "time_records:read", "vacation_accounts:read", "retention:read", "data_subject_requests:read",
 ]);
+for (const roleId of ["hr", "admin"]) {
+  addBuiltinRolePermissions(roleId, ["privacy_organization:read", "privacy_organization:manage", "privacy_organization:approve"]);
+}
 for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
   addBuiltinRolePermissions(roleId, ["system:readiness:review"]);
 }
@@ -2816,6 +2844,9 @@ function emptyPersonnelSensitiveProfile() {
       employmentType: "",
       contractType: "",
       employmentStatus: "",
+      ...normalizeApprenticeshipFields(),
+      protectionStatus: null,
+      retailKv: null,
       collectiveAgreement: "",
       classification: "",
       payrollGroup: "",
@@ -2857,8 +2888,9 @@ async function evaluateUploadedAumEvidence(employeeNumber, documents) {
 async function personnelSensitiveProfile(
   employeeNumber,
   repository = organizationPersonnelRepository,
+  storedRow = undefined,
 ) {
-  const row = await repository.getPersonnelSensitiveRecord(employeeNumber);
+  const row = storedRow === undefined ? await repository.getPersonnelSensitiveRecord(employeeNumber) : storedRow;
   if (!row) return emptyPersonnelSensitiveProfile();
   const payload = parseProtectedJson(row.protected_payload, personnelSensitiveProtectionContext(row));
   const identity = payload.identity && typeof payload.identity === "object" && !Array.isArray(payload.identity)
@@ -2908,6 +2940,13 @@ async function personnelSensitiveProfile(
       employmentType: String(employment.employmentType || ""),
       contractType: String(employment.contractType || ""),
       employmentStatus: String(employment.employmentStatus || ""),
+      apprenticeshipStatus: String(employment.apprenticeshipStatus || "unknown"),
+      apprenticeshipConfirmed: employment.apprenticeshipConfirmed === true,
+      apprenticeshipValidFrom: String(employment.apprenticeshipValidFrom || ""),
+      apprenticeshipValidTo: String(employment.apprenticeshipValidTo || ""),
+      apprenticeshipSourceReference: String(employment.apprenticeshipSourceReference || ""),
+      protectionStatus: normalizeProtectionStatus(employment.protectionStatus),
+      retailKv: normalizeRetailKv(employment.retailKv),
       collectiveAgreement: String(employment.collectiveAgreement || ""),
       classification: String(employment.classification || ""),
       payrollGroup: String(employment.payrollGroup || ""),
@@ -3557,7 +3596,7 @@ async function refreshPortalScopeProjectionSnapshot() {
 function updateApplicationSettingsSnapshot(settings) {
   applicationSettingsSnapshot = Object.freeze(Object.fromEntries(
     settings
-      .filter((row) => String(row.key) !== "vacation_count_saturday")
+      .filter((row) => String(row.key) !== "vacation_count_saturday" && !isPrivacyOrganizationSettingKey(row.key))
       .map((row) => [String(row.key), String(row.value)]),
   ));
   return applicationSettingsSnapshot;
@@ -3589,7 +3628,7 @@ async function refreshPortalSettingsSnapshot() {
   const settings = await planningSettingsRepository.listPortalSettings();
   portalSettingsSnapshot = Object.freeze({
     ...defaultPortalSettings,
-    ...Object.fromEntries(settings.map((row) => [String(row.key), String(row.value)])),
+    ...Object.fromEntries(publicSettingsRows(settings).map((row) => [String(row.key), String(row.value)])),
   });
   return portalSettingsSnapshot;
 }
@@ -3731,6 +3770,7 @@ function initializeApplicationPersistence({ onProgress } = {}) {
       await ensureDefaultRetentionRules("system");
       await backfillVacationAccountsFromEntitlements("system");
       await verifyProtectedGovernanceRecords();
+      await requirePrivacyOrganizationStore().verifyIntegrity();
       await requirePersonnelLifecycleService().verifyIntegrity();
       await backfillCustomProcessRevisionSnapshots();
       await refreshLoanProtectedStorageSnapshot();
@@ -3935,6 +3975,42 @@ function personnelLifecycleSerializableTransaction(work, options = {}) {
   return runPersonnelLifecycleSerializableMutation(() => (
     organizationPersonnelRepository.transaction(work, { isolation: "serializable" })
   ), options);
+}
+
+function personnelProtectionRecordTransaction(work, options = {}) {
+  return runPersonnelLifecycleSerializableMutation(() => persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    return work(repositories.organizationPersonnel, repositories);
+  }, { isolation: "serializable" }), options);
+}
+
+async function normalizeProtectionPlanningShifts(shifts, repositories) {
+  const settings = Object.fromEntries(publicSettingsRows(await repositories.planningSettings.listSettings())
+    .map((row) => [row.key, row.value]));
+  const locations = new Map((await repositories.organizationPersonnel.listLocations(true))
+    .map((row) => [String(row.id), row]));
+  const locationSettings = new Map();
+  const clock = (minutes) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+  return Promise.all(shifts.map(async (shift) => {
+    const locationId = String(shift.location_id || "");
+    if (!locationSettings.has(locationId)) {
+      const effective = { ...settings };
+      const days = daySettingsFromStoredJson(locations.get(locationId)?.day_settings_json);
+      for (const [day, value] of Object.entries(days)) {
+        if (!value) continue;
+        Object.assign(effective, { [`${day}_lunch_enabled`]: value.lunchEnabled === true ? "1" : "0",
+          [`${day}_lunch_start`]: value.lunchStart, [`${day}_lunch_end`]: value.lunchEnd });
+      }
+      locationSettings.set(locationId, effective);
+    }
+    const { start, end, breakMinutes, lunchBreakMinutes, dayConfig } = await plannedShiftBreaks(shift, locationSettings.get(locationId));
+    return { id: String(shift.id), employeeId: String(shift.employee_number), date: shift.shift_date,
+      startTime: shift.start_time, endTime: shift.end_time, breakMinutes,
+      breakSource: lunchBreakMinutes > 0 ? "planned_window" : (breakMinutes > 0 ? "configured_assumption" : "none"),
+      breakIntervals: lunchBreakMinutes > 0 ? [{ startTime: clock(Math.max(start, timeToMinutes(dayConfig.lunchStart))),
+        endTime: clock(Math.min(end, timeToMinutes(dayConfig.lunchEnd))) }] : [],
+      locationId, departmentId: Number(shift.department_id) || null };
+  }));
 }
 
 function requireAmuStorage() {
@@ -5128,6 +5204,7 @@ function publicPortalUser(session) {
   if (!session) return null;
   if (session.sessionKind === "organization" || session.isEmployee === false) {
     return {
+      sessionKind: "organization",
       accountId: session.accountId,
       loginName: session.loginName,
       accountType: session.accountType,
@@ -5163,6 +5240,7 @@ function publicPortalUser(session) {
   }
   const recordAccess = personnelRecordAccess(session);
   return {
+    sessionKind: session.sessionKind || "local",
     accountId: null,
     loginName: session.employeeNumber,
     accountType: "employee",
@@ -5251,7 +5329,7 @@ async function auditPersonnelRecordDenied(session, employeeNumber, request, reas
     })));
 }
 
-async function assertPersonnelRecordEmployeeScope(session, employeeNumber, request = null, fieldKeys = []) {
+async function assertPersonnelRecordEmployeeScope(session, employeeNumber, request = null, fieldKeys = [], repository = organizationPersonnelRepository) {
   if (sessionHasGlobalScope(session)) return;
   try {
     const explicitScopes = Array.isArray(session.explicitScopes)
@@ -5260,7 +5338,7 @@ async function assertPersonnelRecordEmployeeScope(session, employeeNumber, reque
     if (!explicitScopes.length) {
       throw httpError(403, "Für den Personalakt ist kein ausdrücklich freigegebener Bereich hinterlegt.", "PORTAL_SCOPE_DENIED");
     }
-    const employee = await organizationPersonnelRepository
+    const employee = await repository
       .getEmployeeScopeProjection(String(employeeNumber || ""));
     if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
     if (!String(employee.home_location_id || "").trim()) {
@@ -5880,6 +5958,14 @@ async function mobileSessionRowFromRefreshToken(rawRefreshToken, now = new Date(
 function enforceAdminApiAccess(request, _response, next) {
   try {
     if (["/health", "/health/live", "/health/ready", "/service/stop", "/integrations/wifi/events"].includes(request.path)) return next();
+    if (/^\/privacy-organization(?:\/|$)/.test(request.path)) {
+      const permission = ["GET", "HEAD", "OPTIONS"].includes(request.method)
+        ? "privacy_organization:read"
+        : request.body?.action === "approve" ? "privacy_organization:approve" : "privacy_organization:manage";
+      request.portalSession = requirePrivacyOrganizationActor(request, permission);
+      assertPortalCsrf(request);
+      return next();
+    }
     const status = getPortalStatus();
     if (!status.portalEnabled || request.path.startsWith("/portal/") || request.path.startsWith("/mobile/")) return next();
     const method = String(request.method || "GET").toUpperCase();
@@ -8825,7 +8911,8 @@ function personnelFieldMatrixForRoleProjection(role, rows = []) {
   const stored = personnelFieldStoredRowsFromProjection(role, rows);
   return Object.fromEntries(personnelFieldCatalog.map((field) => [
     field.key,
-    stored.get(field.key) || personnelFieldDefaultAccess(role, field.key),
+    ["employment.protectionStatus", "employment.retailKv"].includes(field.key)
+      ? "hidden" : (stored.get(field.key) || personnelFieldDefaultAccess(role, field.key)),
   ]));
 }
 
@@ -8836,8 +8923,10 @@ async function personnelFieldMatrixForRole(role) {
   return personnelFieldMatrixForRoleProjection(role, rows);
 }
 
-function applyPersonnelFieldAccessDependencies(matrix) {
+function applyPersonnelFieldAccessDependencies(matrix, session = null) {
   const next = { ...matrix };
+  if (isLocalSystemSession(session) || !["hr", "admin"].includes(session?.role)) next["employment.protectionStatus"] = "hidden";
+  if (isLocalSystemSession(session) || !["hr", "admin"].includes(session?.role)) next["employment.retailKv"] = "hidden";
   for (const fieldKey of personnelEmploymentDateFieldKeys) {
     if (next[fieldKey] !== "write") continue;
     const relatedDateHidden = personnelEmploymentDateFieldKeys
@@ -8851,7 +8940,7 @@ function personnelFieldEffectiveAccess(session) {
   if (!session) return Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, "hidden"]));
   if (isLocalSystemSession(session)) {
     return applyPersonnelFieldAccessDependencies(
-      Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, "write"])),
+      Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, "write"])), session,
     );
   }
   if (personnelFieldPrivilegedRoles.has(session.role)) {
@@ -8863,7 +8952,7 @@ function personnelFieldEffectiveAccess(session) {
       Object.fromEntries(personnelFieldCatalog.map((field) => {
         if (field.key === "phone") return [field.key, phoneWrite ? "write" : phoneRead ? "read" : "hidden"];
         return [field.key, sensitiveWrite ? "write" : sensitiveRead ? "read" : "hidden"];
-      })),
+      })), session,
     );
   }
   if (session.role === "location_planner") {
@@ -8877,7 +8966,7 @@ function personnelFieldEffectiveAccess(session) {
         field.key === "phone"
           ? (phoneWrite ? "write" : phoneRead ? "read" : "hidden")
           : (sensitiveWrite ? "write" : sensitiveRead ? "read" : "hidden"),
-      ])),
+      ])), session,
     );
   }
   if (!personnelFieldManagedRoles.has(session.role)) {
@@ -8906,7 +8995,7 @@ function personnelFieldEffectiveAccess(session) {
       && normalizeTimeConfirmationLevel(session.timeConfirmationLevel) === "A";
     if (!trustA) matrix.phone = "read";
   }
-  return applyPersonnelFieldAccessDependencies(matrix);
+  return applyPersonnelFieldAccessDependencies(matrix, session);
 }
 
 async function personnelDisplayProfile(employeeNumber, session) {
@@ -8964,6 +9053,12 @@ function validatePersonnelFieldRightsMatrix(role, input) {
     && !personnelFieldAccessLevels.has(String(input[key] || "")));
   if (unknown.length || missing.length || invalidLevels.length || keys.length !== personnelFieldCatalog.length) {
     throw httpError(400, "Die Feldrechtematrix ist unvollständig oder enthält ungültige Werte.", "PERSONNEL_FIELD_RIGHTS_INVALID");
+  }
+  if (input["employment.protectionStatus"] !== "hidden") {
+    throw httpError(400, "Der vertrauliche Planungsschutzstatus ist für diese Rolle nicht freigebbar.", "PERSONNEL_PROTECTION_FIELD_RESTRICTED");
+  }
+  if (input["employment.retailKv"] !== "hidden") {
+    throw httpError(400, "Die fachliche KV-Zuordnung ist für diese Rolle nicht freigebbar.", "PERSONNEL_RETAIL_KV_FIELD_RESTRICTED");
   }
   return Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, String(input[field.key])]));
 }
@@ -9389,6 +9484,20 @@ function mergePersonnelSensitiveProfile(before, value = {}) {
     if (patch.supplied) next.employment[key] = normalizePersonnelField(patch.value, maximumLength);
   }
   const startDate = next.employment.startDate;
+  const apprenticeshipPatch = {};
+  for (const key of APPRENTICESHIP_FIELD_KEYS) {
+    const patch = personnelPatchValue(source, employment, key);
+    if (patch.supplied) apprenticeshipPatch[key] = patch.value;
+  }
+  Object.assign(next.employment, normalizeApprenticeshipFields(apprenticeshipPatch, next.employment));
+  const protectionPatch = personnelPatchValue(source, employment, "protectionStatus");
+  if (protectionPatch.supplied) next.employment.protectionStatus = normalizeProtectionStatus(
+    protectionPatch.value, { previous: next.employment.protectionStatus ?? null },
+  );
+  const retailKvPatch = personnelPatchValue(source, employment, "retailKv");
+  if (retailKvPatch.supplied) next.employment.retailKv = normalizeRetailKv(
+    retailKvPatch.value, { previous: next.employment.retailKv ?? null },
+  );
   for (const [key, label] of [["endDate", "Austrittsdatum"], ["fixedTermEnd", "Befristungsende"], ["probationEnd", "Ende der Probezeit"]]) {
     if (startDate && next.employment[key] && next.employment[key] < startDate) {
       throw httpError(400, `${label} darf nicht vor dem Eintrittsdatum liegen.`, "PERSONNEL_EMPLOYMENT_DATE_INVALID");
@@ -9408,6 +9517,7 @@ function personnelRecordInput(value) {
   const direct = { ...value };
   delete direct.phone;
   delete direct.sensitive;
+  delete direct.planningStatusBasis;
   return {
     hasPhone: own(value, "phone"),
     phone: value.phone,
@@ -9449,6 +9559,12 @@ function changedPersonnelProfileFields(before, after) {
     "employment.employmentType": profile.employment?.employmentType || "",
     "employment.contractType": profile.employment?.contractType || "",
     "employment.employmentStatus": profile.employment?.employmentStatus || "",
+    ...Object.fromEntries(APPRENTICESHIP_FIELD_KEYS.map((key) => [
+      `employment.${key}`, key === "apprenticeshipConfirmed"
+        ? profile.employment?.[key] === true : profile.employment?.[key] || (key === "apprenticeshipStatus" ? "unknown" : ""),
+    ])),
+    "employment.protectionStatus": JSON.stringify(profile.employment?.protectionStatus ?? null),
+    "employment.retailKv": JSON.stringify(profile.employment?.retailKv ?? null),
     "employment.collectiveAgreement": profile.employment?.collectiveAgreement || "",
     "employment.classification": profile.employment?.classification || "",
     "employment.payrollGroup": profile.employment?.payrollGroup || "",
@@ -9496,9 +9612,10 @@ function submittedPersonnelRecordFieldKeys(value) {
     startDate: "employment.startDate", endDate: "employment.endDate",
     fixedTermEnd: "employment.fixedTermEnd", probationEnd: "employment.probationEnd",
     employmentType: "employment.employmentType", contractType: "employment.contractType",
-    employmentStatus: "employment.employmentStatus", collectiveAgreement: "employment.collectiveAgreement",
+    employmentStatus: "employment.employmentStatus", protectionStatus: "employment.protectionStatus", retailKv: "employment.retailKv", collectiveAgreement: "employment.collectiveAgreement",
     classification: "employment.classification", payrollGroup: "employment.payrollGroup",
     notes: "employment.notes",
+    ...Object.fromEntries(APPRENTICESHIP_FIELD_KEYS.map((key) => [key, `employment.${key}`])),
   };
   for (const source of sources) {
     for (const field of personnelFieldCatalog) {
@@ -9524,7 +9641,9 @@ function redactPersonnelSensitiveProfile(profile, fieldAccess) {
   const redacted = {};
   for (const field of personnelFieldCatalog) {
     if (["phone", "documents"].includes(field.key) || fieldAccess[field.key] === "hidden") continue;
-    setPersonnelPathValue(redacted, field.key, personnelPathValue(profile, field.key) ?? "");
+    const value = personnelPathValue(profile, field.key);
+    setPersonnelPathValue(redacted, field.key,
+      ["employment.protectionStatus", "employment.retailKv"].includes(field.key) ? value ?? null : value ?? "");
   }
   return redacted;
 }
@@ -9573,6 +9692,48 @@ async function assertPersonnelRecordFieldsWritable(
   );
 }
 
+const PERSONNEL_PLANNING_STATUS_FIELD_KEYS = Object.freeze(["employment.protectionStatus", "employment.retailKv"]);
+
+function personnelPlanningStatusBasisValue(employeeNumber, fieldKey, value) {
+  return personnelSensitiveLookup("planning-status-basis-v1", workRuleCanonicalJson({
+    employeeNumber: String(employeeNumber), fieldKey, status: value ?? null,
+  }));
+}
+
+function personnelPlanningStatusBasisForActor(employeeNumber, profile, session, access) {
+  if (isLocalSystemSession(session) || session?.sessionKind !== "employee" || session?.isEmployee !== true
+    || session?.accountType !== "employee" || !["hr", "admin"].includes(session?.role)) return {};
+  return Object.fromEntries(PERSONNEL_PLANNING_STATUS_FIELD_KEYS
+    .filter(fieldKey => access.fieldAccess[fieldKey] !== "hidden")
+    .map(fieldKey => [fieldKey, personnelPlanningStatusBasisValue(employeeNumber, fieldKey,
+      personnelPathValue(profile, fieldKey))]));
+}
+
+function personnelPlanningStatusBasisInput(value) {
+  if (value === undefined) return {};
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some(key => !PERSONNEL_PLANNING_STATUS_FIELD_KEYS.includes(key)
+      || typeof value[key] !== "string" || !/^[0-9a-f]{64}$/i.test(value[key]))) {
+    throw httpError(400, "Die Änderungsbasis der geschützten Planungsangaben ist ungültig.", "PERSONNEL_PLANNING_STATUS_BASIS_INVALID");
+  }
+  return { ...value };
+}
+
+function assertPersonnelPlanningStatusBasis(prepared, before, storedRow) {
+  for (const fieldKey of PERSONNEL_PLANNING_STATUS_FIELD_KEYS.filter(key => prepared.submittedFields.includes(key))) {
+    const expected = prepared.planningStatusBasis[fieldKey];
+    // A new private record has no prior stored basis. If a concurrent writer
+    // creates it, the fresh bound read below requires the editor's basis.
+    if (expected === undefined && !storedRow) continue;
+    const actual = personnelPlanningStatusBasisValue(prepared.employeeNumber, fieldKey,
+      personnelPathValue(before, fieldKey));
+    if (!timingSafeLookupEqual(expected, actual)) {
+      throw httpError(409, "Die geschützten Planungsangaben wurden inzwischen geändert. Bitte den Personalakt neu laden.",
+        "PERSONNEL_PLANNING_STATUS_CONCURRENT_CHANGE");
+    }
+  }
+}
+
 async function preparePersonnelRecordMutation(
   request,
   employeeNumber,
@@ -9599,6 +9760,7 @@ async function preparePersonnelRecordMutation(
     employeeNumber: String(employeeNumber || ""),
     assumeNew: Boolean(assumeNew),
     input,
+    planningStatusBasis: personnelPlanningStatusBasisInput(value.planningStatusBasis),
     before: null,
     next: null,
     changedFields: [],
@@ -9627,11 +9789,13 @@ async function revalidatePreparedPersonnelRecordMutation(request, liveActor, pre
   prepared.session = liveActor;
 }
 
-async function persistPersonnelRecordMutationWithRepository(repository, prepared, action = "update") {
+async function persistPersonnelRecordMutationWithRepository(repository, prepared, action = "update", repositories = null) {
   if (!prepared) return [];
+  const storedRow = await repository.getPersonnelSensitiveRecord(prepared.employeeNumber);
   const before = prepared.assumeNew
     ? emptyPersonnelSensitiveProfile()
-    : await personnelSensitiveProfile(prepared.employeeNumber, repository);
+    : await personnelSensitiveProfile(prepared.employeeNumber, repository, storedRow);
+  assertPersonnelPlanningStatusBasis(prepared, before, storedRow);
   const next = mergePersonnelSensitiveProfile(
     before,
     prepared.input.hasSensitive ? prepared.input.sensitive : {},
@@ -9666,6 +9830,31 @@ async function persistPersonnelRecordMutationWithRepository(repository, prepared
     prepared.employeeNumber,
     JSON.stringify({ fields: changedFields }),
   );
+  if (changedFields.includes("employment.protectionStatus")) {
+    if (!repositories) throw new Error("Planungsschutzänderungen benötigen eine gebundene Schreibtransaktion.");
+    prepared.workRuleAssessments = await recordPlanningProtectionChange(repositories, {
+      employeeNumber: prepared.employeeNumber,
+      previousStatus: before.employment.protectionStatus ?? null,
+      status: next.employment.protectionStatus ?? null,
+      protectedPayload,
+      actor: prepared.session.employeeNumber,
+      normalizeShifts: normalizeProtectionPlanningShifts,
+    });
+  }
+  if (changedFields.includes("employment.retailKv")) {
+    if (!repositories) throw new Error("KV-Planungsänderungen benötigen eine gebundene Schreibtransaktion.");
+    const assessments = await recordRetailKvChange(repositories, {
+      employeeNumber: prepared.employeeNumber,
+      previousStatus: before.employment.retailKv ?? null,
+      status: next.employment.retailKv ?? null,
+      protectedPayload,
+      actor: prepared.session.employeeNumber,
+      normalizeShifts: normalizeProtectionPlanningShifts,
+      employee: { id: prepared.employeeNumber, birthDate: next.identity.birthDate || undefined,
+        ...Object.fromEntries(APPRENTICESHIP_FIELD_KEYS.map(key => [key, next.employment[key]])) },
+    });
+    prepared.workRuleAssessments = [...(prepared.workRuleAssessments || []), ...assessments];
+  }
   return changedFields;
 }
 
@@ -13409,14 +13598,19 @@ async function excusedTimeForEmployeeDate(
       valuationVersion: credit.valuationVersion,
     };
   }
-  const optionCreditMinutes = allDayOptions.reduce((highestCredit, option) => {
+  const allDayCreditMinutes = allDayOptions.reduce((highestCredit, option) => {
     if (!payrollOptionCreditedOnDate(option, date, locationId)) return highestCredit;
     return Math.max(highestCredit, optionMinutesPerDay(option, employee?.contracted_hours));
   }, 0);
+  const timedSchoolOptions = options.filter((option) => option.option_type === "vocational_school" && !optionIsAllDay(option));
+  const timedSchoolCreditMinutes = timedSchoolOptions.reduce((sum, option) => (
+    sum + optionMinutesPerDay(option, employee?.contracted_hours)
+  ), 0);
+  const optionCreditMinutes = Math.max(allDayCreditMinutes, timedSchoolCreditMinutes);
   if (optionCreditMinutes > 0) {
     return {
-      excused: true,
-      label: allDayOptions.map((option) => optionLabel(option.option_type)).join(", "),
+      excused: allDayOptions.length > 0,
+      label: [...allDayOptions, ...timedSchoolOptions].map((option) => optionLabel(option.option_type)).join(", "),
       options,
       creditedMinutes: optionCreditMinutes,
     };
@@ -19978,7 +20172,7 @@ async function assertShiftEmployeeAssignmentScope(session, shift, existing = nul
 }
 
 const alwaysFullDayOptionTypes = new Set(["vacation", "sick", "branch", "vocational_school", "special_leave"]);
-const timedOptionTypes = new Set(["school", "time_off", "external_appointment", "team_meeting", "other"]);
+const timedOptionTypes = new Set(["school", "vocational_school", "time_off", "external_appointment", "team_meeting", "other"]);
 const manualAllDayCreditTypes = new Set(["school", "external_appointment", "team_meeting", "other"]);
 const directlyApprovedAbsenceOptionTypes = new Set(["vacation", "time_off"]);
 const TEAM_MEETING_GROUP_PREFIX = "team-meeting:";
@@ -20079,12 +20273,19 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
   const optionType = String(body.optionType || "");
   const note = String(body.note || "").trim();
   const groupId = String(body.groupId || "").trim() || null;
-  const allDay = alwaysFullDayOptionTypes.has(optionType) || body.allDay === true;
+  let allDay = optionType === "vocational_school" ? body.allDay !== false
+    : (alwaysFullDayOptionTypes.has(optionType) || body.allDay === true);
   const startTime = String(body.startTime || "");
   const endTime = String(body.endTime || "");
   const manualHours = body.manualHours === "" || body.manualHours === undefined
     ? null
     : Number(body.manualHours);
+  let vocationalSchool = null;
+  if (optionType === "vocational_school") {
+    try { vocationalSchool = normalizeVocationalSchoolDetails(body.vocationalSchool); }
+    catch (error) { throw httpError(400, error.message, "VOCATIONAL_SCHOOL_INVALID"); }
+    if (["block", "seasonal"].includes(vocationalSchool?.kind)) allDay = true;
+  }
 
   const employee = await planningSettingsRepository.getPlanningEmployee({ employeeNumber });
   if (!employee) {
@@ -20109,6 +20310,10 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
   if (!allDay) {
     if (!isTime(startTime) || !isTime(endTime) || endTime <= startTime) {
       throw httpError(400, "Bitte eine gültige Uhrzeit für die Planungsoption eingeben.");
+    }
+    if (vocationalSchool?.startTime && vocationalSchool?.endTime
+        && (vocationalSchool.startTime < startTime || vocationalSchool.endTime > endTime)) {
+      throw httpError(400, "Das Berufsschul-Zeitfenster muss den Unterricht vollständig umfassen.", "VOCATIONAL_SCHOOL_TIME_CONFLICT");
     }
   }
   if (allDay && manualAllDayCreditTypes.has(optionType)) {
@@ -20199,11 +20404,27 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
     allDay: allDay ? 1 : 0,
     startTime: allDay ? null : startTime,
     endTime: allDay ? null : endTime,
-    creditedMinutesPerDay: allDay && manualAllDayCreditTypes.has(optionType) ? Math.round(manualHours * 60) : null,
+    creditedMinutesPerDay: optionType === "vocational_school" && !allDay
+      ? (vocationalSchool?.confirmed
+        ? timeToMinutes(vocationalSchool.endTime) - timeToMinutes(vocationalSchool.startTime) - vocationalSchool.lunchMinutes
+        : Math.max(0, timeToMinutes(endTime) - timeToMinutes(startTime)))
+      : (allDay && manualAllDayCreditTypes.has(optionType) ? Math.round(manualHours * 60) : null),
+    vocationalSchool,
+    schoolDetailsJson: vocationalSchool ? JSON.stringify(vocationalSchool) : null,
   };
 }
 
 function optionMinutesPerDay(option, contractedHours) {
+  if (option.option_type === "vocational_school" && !optionIsAllDay(option)
+      && isTime(option.start_time) && isTime(option.end_time)) {
+    if (option.credited_minutes_per_day !== null && option.credited_minutes_per_day !== undefined
+        && Number.isFinite(Number(option.credited_minutes_per_day))) return Math.max(0, Number(option.credited_minutes_per_day));
+    let details = null;
+    try { details = normalizeVocationalSchoolDetails(JSON.parse(option.school_details_json || "null")); } catch {}
+    return details?.confirmed
+      ? timeToMinutes(details.endTime) - timeToMinutes(details.startTime) - details.lunchMinutes
+      : Math.max(0, timeToMinutes(option.end_time) - timeToMinutes(option.start_time));
+  }
   if (alwaysFullDayOptionTypes.has(option.option_type)) {
     return Math.round((Number(contractedHours) * 60) / 5);
   }
@@ -20259,7 +20480,8 @@ function creditedOptionDatesInRange(
       if (vacationDayCount(date, date, locationId) === 1) dates.push(date);
       continue;
     }
-    if (new Date(`${date}T12:00:00Z`).getUTCDay() !== 0) dates.push(date);
+    if ((option.option_type === "vocational_school" && !optionIsAllDay(option))
+        || new Date(`${date}T12:00:00Z`).getUTCDay() !== 0) dates.push(date);
   }
   return optionIsAllDay(option) && alwaysFullDayOptionTypes.has(option.option_type)
     ? dates.slice(0, 5)
@@ -20470,7 +20692,7 @@ async function scheduleWorkRuleFacts(weekStart, context, employees, candidateShi
   const range = workRuleEvaluationRange(weekStart);
   const employeeNumbers = [...new Set(employees.map((employee) => String(employee.personnel_number)))];
   if (!employeeNumbers.length) {
-    return { range, employees: [], shifts: [], holidays: [], candidateShift: null };
+    return { range, employees: [], shifts: [], schoolAttendance: [], holidays: [], candidateShift: null };
   }
   const employeeNumberSet = new Set(employeeNumbers);
   let shifts = (await planningSettingsRepository.listWorkRuleShiftsForRange({
@@ -20502,7 +20724,7 @@ async function scheduleWorkRuleFacts(weekStart, context, employees, candidateShi
   const batchedPlanningShifts = Array.isArray(candidateShift?.addedShifts);
   const submittedShifts = batchedPlanningShifts
     ? candidateShift.addedShifts
-    : (candidateShift && candidateShift.deleted !== true && !replaceRange
+    : (candidateShift && !candidateShift.weekOptionChange && candidateShift.deleted !== true && !replaceRange
       ? [candidateShift]
       : []);
   for (const [index, submitted] of submittedShifts.entries()) {
@@ -20538,7 +20760,12 @@ async function scheduleWorkRuleFacts(weekStart, context, employees, candidateShi
   const normalizedShifts = await Promise.all(shifts.map(async (shift) => {
     const locationId = String(shift.location_id || context.locationId);
     if (!locationSettings.has(locationId)) locationSettings.set(locationId, settingsForLocation(locationId));
-    const { breakMinutes, lunchBreakMinutes } = await plannedShiftBreaks(shift, await locationSettings.get(locationId));
+    const { start, end, breakMinutes, lunchBreakMinutes, dayConfig } = await plannedShiftBreaks(shift, await locationSettings.get(locationId));
+    const clock = (minutes) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+    const breakIntervals = lunchBreakMinutes > 0 ? [{
+      startTime: clock(Math.max(start, timeToMinutes(dayConfig.lunchStart))),
+      endTime: clock(Math.min(end, timeToMinutes(dayConfig.lunchEnd))),
+    }] : [];
     return {
       id: String(shift.id),
       employeeId: String(shift.employee_number),
@@ -20547,6 +20774,7 @@ async function scheduleWorkRuleFacts(weekStart, context, employees, candidateShi
       endTime: shift.end_time,
       breakMinutes,
       breakSource: lunchBreakMinutes > 0 ? "planned_window" : (breakMinutes > 0 ? "configured_assumption" : "none"),
+      breakIntervals,
       locationId: String(shift.location_id || ""),
       departmentId: shift.department_id ? Number(shift.department_id) : null,
       dutyCode: String(shift.duty_code || ""),
@@ -20555,12 +20783,57 @@ async function scheduleWorkRuleFacts(weekStart, context, employees, candidateShi
   const holidays = getGlobalDayBlocksForRange(range.start, range.end, context.locationId)
     .filter((block) => block.is_public_holiday)
     .map((block) => block.block_date);
+  const additionalWorkEvents = [];
+  const kvUnquantifiedWorkTypes = new Set(["school", "branch", "external_appointment", "team_meeting", "other"]);
+  let schoolAttendance = (await Promise.all(employeeNumbers.map(async (employeeNumber) => {
+    const options = await planningSettingsRepository.listOverlappingWeekOptions({
+      employeeNumber, dateFrom: range.start, dateTo: range.end,
+      existingId: 0, excludedGroupId: null,
+    });
+    for (const option of options.filter(option => kvUnquantifiedWorkTypes.has(option.option_type))) {
+      additionalWorkEvents.push({ id: String(option.id), employeeId: employeeNumber,
+        dateFrom: option.date_from, dateTo: option.date_to, type: option.option_type });
+    }
+    return options.filter((option) => option.option_type === "vocational_school").map((option) => {
+      let details = null;
+      try { details = JSON.parse(option.school_details_json || "null"); }
+      catch { details = { invalidStoredDetails: true }; }
+      return {
+        id: String(option.id), employeeId: employeeNumber,
+        dateFrom: option.date_from, dateTo: option.date_to,
+        allDay: optionIsAllDay(option), details,
+      };
+    });
+  }))).flat();
+  const optionChange = candidateShift?.weekOptionChange;
+  if (optionChange) {
+    const removedWorkIndex = additionalWorkEvents.findIndex(row => String(row.id) === String(optionChange.existingId || ""));
+    if (removedWorkIndex >= 0) additionalWorkEvents.splice(removedWorkIndex, 1);
+    schoolAttendance = schoolAttendance.filter((row) => String(row.id) !== String(optionChange.existingId || ""));
+    const option = optionChange.option;
+    if (option && kvUnquantifiedWorkTypes.has(option.optionType) && employeeNumberSet.has(String(option.employeeNumber))
+        && option.dateFrom <= range.end && option.dateTo >= range.start) {
+      additionalWorkEvents.push({ id: `candidate-option-${optionChange.existingId || "new"}`,
+        employeeId: String(option.employeeNumber), dateFrom: option.dateFrom, dateTo: option.dateTo, type: option.optionType });
+    }
+    if (option?.optionType === "vocational_school" && employeeNumberSet.has(String(option.employeeNumber))
+        && option.dateFrom <= range.end && option.dateTo >= range.start) {
+      schoolAttendance.push({
+        id: `candidate-option-${optionChange.existingId || "new"}`,
+        employeeId: String(option.employeeNumber), dateFrom: option.dateFrom, dateTo: option.dateTo,
+        allDay: option.allDay, details: option.vocationalSchool,
+      });
+    }
+  }
   return {
     range,
     employees: employeeNumbers,
     shifts: normalizedShifts,
+    schoolAttendance,
+    additionalWorkEvents: additionalWorkEvents.sort((left, right) => left.employeeId.localeCompare(right.employeeId)
+      || left.dateFrom.localeCompare(right.dateFrom) || left.id.localeCompare(right.id)),
     holidays,
-    candidateShift: candidateShift && !batchedPlanningShifts
+    candidateShift: candidateShift && !candidateShift.weekOptionChange && !batchedPlanningShifts
       && candidateShift.deleted !== true && !replaceRange ? {
       employeeNumber: candidateShift.employeeNumber,
       date: candidateShift.shiftDate,
@@ -20635,45 +20908,55 @@ function workRuleAssignmentGroups(facts, context, employeeNumber, assignments, b
         const useAutomaticYouthProfile = age !== null
           && age < 18
           && assignedProfileId === "at-retail-adult-monitor";
-        const effectiveAssignment = useAutomaticYouthProfile
-          ? {
+        const monitorYouthAssignment = {
             ...assignment,
             profileId: youthProfile.id,
             profileVersionId: profileVersionId(youthProfile),
             applicabilityConfirmed: true,
             automaticByBirthDate: true,
-          }
-          : assignment;
-        const key = [
-          effectiveAssignment.profileVersionId,
-          effectiveAssignment.enforcementMode || "monitor",
-          effectiveAssignment.applicabilityConfirmed === true ? "confirmed" : "unconfirmed",
-        ].join("|");
-        if (!groups.has(key)) {
-          groups.set(key, {
-            assignmentIds: new Set(),
-            dates: new Set(),
-            shiftIds: new Set(),
-            profileVersionId: effectiveAssignment.profileVersionId,
-            profileId: effectiveAssignment.profileId || assignedProfileId,
-            enforcementMode: effectiveAssignment.enforcementMode || "monitor",
-            applicabilityConfirmed: effectiveAssignment.applicabilityConfirmed === true,
-            automaticByBirthDate: effectiveAssignment.automaticByBirthDate === true,
-            assignment: {
-              id: effectiveAssignment.id || "",
-              scopeType: effectiveAssignment.scopeType || "installation",
-              scopeKey: effectiveAssignment.scopeKey || "",
-              validFrom: effectiveAssignment.validFrom || facts.range.start,
-              validTo: effectiveAssignment.validTo || null,
+            enforcementMode: "monitor",
+        };
+        const effectiveAssignments = useAutomaticYouthProfile
+          ? (assignment.enforcementMode === "enforced"
+            ? [{ ...assignment, profileId: youthProfile.id, profileVersionId: `${youthProfile.id}@2026.2`, automaticByBirthDate: true, applicabilityConfirmed: true, historicalYouthBase: true }, { ...monitorYouthAssignment, pilotOverlay: true }]
+            : [monitorYouthAssignment])
+          : (assignedProfileId === youthProfile.id && assignment.profileVersionId === `${youthProfile.id}@2026.2`
+            ? [{ ...assignment, historicalYouthBase: true }, { ...monitorYouthAssignment, pilotOverlay: true }] : [assignment]);
+        for (const effectiveAssignment of effectiveAssignments) {
+          const key = [
+            effectiveAssignment.profileVersionId,
+            effectiveAssignment.enforcementMode || "monitor",
+            effectiveAssignment.applicabilityConfirmed === true ? "confirmed" : "unconfirmed",
+            effectiveAssignment.pilotOverlay ? "pilot" : "base",
+          ].join("|");
+          if (!groups.has(key)) {
+            groups.set(key, {
+              assignmentIds: new Set(),
+              dates: new Set(),
+              shiftIds: new Set(),
+              profileVersionId: effectiveAssignment.profileVersionId,
+              profileId: effectiveAssignment.profileId || assignedProfileId,
               enforcementMode: effectiveAssignment.enforcementMode || "monitor",
               applicabilityConfirmed: effectiveAssignment.applicabilityConfirmed === true,
-            },
-          });
+              automaticByBirthDate: effectiveAssignment.automaticByBirthDate === true,
+              pilotOverlay: effectiveAssignment.pilotOverlay === true,
+              historicalYouthBase: effectiveAssignment.historicalYouthBase === true,
+              assignment: {
+                id: effectiveAssignment.id || "",
+                scopeType: effectiveAssignment.scopeType || "installation",
+                scopeKey: effectiveAssignment.scopeKey || "",
+                validFrom: effectiveAssignment.validFrom || facts.range.start,
+                validTo: effectiveAssignment.validTo || null,
+                enforcementMode: effectiveAssignment.enforcementMode || "monitor",
+                applicabilityConfirmed: effectiveAssignment.applicabilityConfirmed === true,
+              },
+            });
+          }
+          const group = groups.get(key);
+          if (effectiveAssignment.id) group.assignmentIds.add(effectiveAssignment.id);
+          group.dates.add(date);
+          for (const shiftId of dateContext.shiftIds) group.shiftIds.add(shiftId);
         }
-        const group = groups.get(key);
-        if (effectiveAssignment.id) group.assignmentIds.add(effectiveAssignment.id);
-        group.dates.add(date);
-        for (const shiftId of dateContext.shiftIds) group.shiftIds.add(shiftId);
       }
     }
   }
@@ -20751,13 +21034,98 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
     ...await listGovernedWorkRuleAssignments(workRuleGovernanceRepository),
   ];
   const profileVersions = new Map();
+  facts.employeeContextHashes = {};
   const profileVersion = (id) => {
     if (!profileVersions.has(id)) profileVersions.set(id, getWorkRuleProfileVersion(workRuleStoreRepository, id));
     return profileVersions.get(id);
   };
+  let retailKvContextPromise;
+  const retailKvContext = () => {
+    if (!retailKvContextPromise) retailKvContextPromise = (async () => {
+      const version = await profileVersion(profileVersionId(RETAIL_KV_PROFILE));
+      const snapshot = await persistenceProvider.transaction(async (executor) => {
+        const repositories = createApplicationRepositories(executor);
+        return loadRetailKvBindingSnapshot({ collectiveAgreements: repositories.collectiveAgreements,
+          governance: repositories.workRuleGovernance, workRuleStore: repositories.workRules }, {
+          expectedProfileVersionId: profileVersionId(RETAIL_KV_PROFILE),
+          expectedProfileContentSha256: version?.contentSha256,
+        });
+      }, { isolation: "serializable", readOnly: true });
+      const end = addDays(weekEnd, 7);
+      const extra = (await planningSettingsRepository.listWorkRuleShiftsForRange({ dateFrom: addDays(weekEnd, 1), dateTo: end }))
+        .filter(shift => facts.employees.includes(String(shift.employee_number)));
+      const extraShifts = await normalizeProtectionPlanningShifts(extra, applicationRepositories);
+      const futureWorkEvents = [];
+      const futureSchool = (await Promise.all(facts.employees.map(async employeeNumber => {
+        const options = await planningSettingsRepository.listOverlappingWeekOptions({ employeeNumber,
+          dateFrom: addDays(weekEnd, 1), dateTo: end, existingId: 0, excludedGroupId: null });
+        for (const option of options.filter(option => ["school", "branch", "external_appointment", "team_meeting", "other"].includes(option.option_type)
+          && String(option.id) !== String(candidateShift?.weekOptionChange?.existingId || ""))) {
+          futureWorkEvents.push({ id: String(option.id), employeeId: employeeNumber,
+            dateFrom: option.date_from, dateTo: option.date_to, type: option.option_type });
+        }
+        return options.filter(option => option.option_type === "vocational_school"
+          && String(option.id) !== String(candidateShift?.weekOptionChange?.existingId || ""))
+          .map(option => { let details;
+            try { details = JSON.parse(option.school_details_json || "null"); }
+            catch { details = { invalidStoredDetails: true }; }
+            return { id: String(option.id), employeeId: employeeNumber, dateFrom: option.date_from,
+              dateTo: option.date_to, allDay: optionIsAllDay(option), details };
+          });
+      }))).flat();
+      const schoolAttendance = [...new Map([...facts.schoolAttendance, ...futureSchool].map(row => [row.id, row])).values()];
+      const optionChange = candidateShift?.weekOptionChange;
+      const workEvents = [...new Map([...facts.additionalWorkEvents, ...futureWorkEvents].map(row => [row.id, row])).values()];
+      if (optionChange?.option && ["school", "branch", "external_appointment", "team_meeting", "other"].includes(optionChange.option.optionType)
+          && optionChange.option.dateFrom <= end && optionChange.option.dateTo > weekEnd
+          && !workEvents.some(row => row.id === `candidate-option-${optionChange.existingId || "new"}`)) {
+        const option = optionChange.option;
+        workEvents.push({ id: `candidate-option-${optionChange.existingId || "new"}`, employeeId: String(option.employeeNumber),
+          dateFrom: option.dateFrom, dateTo: option.dateTo, type: option.optionType });
+      }
+      if (optionChange?.option?.optionType === "vocational_school" && optionChange.option.dateFrom <= end
+          && optionChange.option.dateTo > weekEnd && !schoolAttendance.some(row => row.id === `candidate-option-${optionChange.existingId || "new"}`)) {
+        const option = optionChange.option;
+        schoolAttendance.push({ id: `candidate-option-${optionChange.existingId || "new"}`,
+          employeeId: String(option.employeeNumber), dateFrom: option.dateFrom, dateTo: option.dateTo,
+          allDay: option.allDay, details: option.vocationalSchool });
+      }
+      facts.retailKvBindingSha256 = snapshot.inputSha256;
+      facts.retailKvAdditionalShifts = extraShifts;
+      facts.retailKvAdditionalSchoolAttendance = futureSchool;
+      facts.retailKvAdditionalWorkEvents = futureWorkEvents.sort((left, right) => left.employeeId.localeCompare(right.employeeId)
+        || left.dateFrom.localeCompare(right.dateFrom) || left.id.localeCompare(right.id));
+      return { version, snapshot, end, shifts: [...facts.shifts, ...extraShifts], schoolAttendance, workEvents };
+    })();
+    return retailKvContextPromise;
+  };
   const employeeResults = await Promise.all(evaluationEmployees.map(async (employee) => {
     const employeeNumber = String(employee.personnel_number);
-    const sensitive = await personnelSensitiveProfile(employeeNumber);
+    const encryptedRecord = await organizationPersonnelRepository.getPersonnelSensitiveRecord(employeeNumber);
+    const sensitive = await personnelSensitiveProfile(employeeNumber, organizationPersonnelRepository, encryptedRecord);
+    const protection = sensitive.employment.protectionStatus;
+    const protectionPlanningEnabled = protection?.planningEnabled === true;
+    const retailKv = sensitive.employment.retailKv;
+    const ruleEmployee = {
+      id: employeeNumber,
+      birthDate: sensitive.identity.birthDate || undefined,
+      birthDateConfirmed: Boolean(sensitive.identity.birthDate),
+      positionId: employee.position_id || undefined,
+      employmentClassification: employee.position_employment_classification || "",
+      isApprentice: employee.position_employment_classification === "apprentice",
+      ...Object.fromEntries(APPRENTICESHIP_FIELD_KEYS.map((key) => [key, sensitive.employment[key]])),
+    };
+    facts.employeeContextHashes[employeeNumber] = workRuleSha256(ruleEmployee);
+    if (protectionPlanningEnabled) {
+      facts.employeeContextHashes[employeeNumber] = workRuleSha256({
+        employee: ruleEmployee, protectedRecordSha256: workRuleSha256(encryptedRecord?.protected_payload || ""),
+      });
+    }
+    if (retailKv?.planningEnabled === true) {
+      facts.employeeContextHashes[employeeNumber] = workRuleSha256({
+        previous: facts.employeeContextHashes[employeeNumber], retailKvSha256: workRuleSha256(retailKv),
+      });
+    }
     const groups = workRuleAssignmentGroups(
       facts,
       context,
@@ -20787,12 +21155,7 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
           },
           assignment: group.assignment,
           shifts,
-          employee: {
-            id: employeeNumber,
-            birthDate: sensitive.identity.birthDate || undefined,
-            positionId: employee.position_id || undefined,
-            isApprentice: employee.position_employment_classification === "apprentice",
-          },
+          employee: ruleEmployee,
           employeeNumber,
           locationId: context.locationId,
           departmentId: context.departmentId,
@@ -20805,12 +21168,8 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
           profile,
           enforcementMode: group.enforcementMode,
           shifts,
-          employee: {
-            id: employeeNumber,
-            birthDate: sensitive.identity.birthDate || undefined,
-            positionId: employee.position_id || undefined,
-            isApprentice: employee.position_employment_classification === "apprentice",
-          },
+          schoolAttendance: group.historicalYouthBase ? [] : facts.schoolAttendance.filter((entry) => entry.employeeId === employeeNumber),
+          employee: ruleEmployee,
           rangeStart,
           rangeEnd,
           holidays: facts.holidays,
@@ -20837,9 +21196,54 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
         },
       };
     }));
+    if (protectionPlanningEnabled) {
+      const protectionProfile = getBuiltinWorkRuleProfile(PLANNING_PROTECTION_PROFILE_ID);
+      const protectionVersion = await profileVersion(profileVersionId(protectionProfile));
+      const projection = projectPlanningProtection(protection, { scopeFrom: weekStart, scopeTo: weekEnd });
+      const evaluated = evaluatePlannedSchedule({
+        basis: "planned_schedule", profileId: PLANNING_PROTECTION_PROFILE_ID,
+        profile: protectionVersion?.profile || protectionProfile,
+        planningProtection: projection, employee: { id: employeeNumber },
+        shifts: facts.shifts.filter((shift) => shift.employeeId === employeeNumber && shift.date >= addDays(weekStart, -1) && shift.date <= weekEnd),
+        schoolAttendance: facts.schoolAttendance.filter((row) => row.employeeId === employeeNumber),
+        rangeStart: weekStart, rangeEnd: weekEnd, holidays: facts.holidays,
+        enforcementMode: "monitor", applicabilityConfirmed: true, timeZone: "Europe/Vienna",
+      });
+      profileEvaluations.push({ assignmentIds: [], shiftIds: [], dates: new Set(Array.from({ length: 7 }, (_, index) => addDays(weekStart, index))),
+        profileVersionId: profileVersionId(protectionProfile), enforcementMode: "monitor",
+        applicabilityConfirmed: true, pilotOverlay: true,
+        profile: { id: protectionProfile.id, version: protectionProfile.version, title: protectionProfile.title,
+          catalogVersion: protectionProfile.catalogVersion, sourceRefs: [], limits: {} },
+        layer: "law", sources: [], result: evaluated });
+    }
+    if (retailKv?.planningEnabled === true) {
+      const kv = await retailKvContext();
+      const employeeShifts = kv.shifts.filter(shift => shift.employeeId === employeeNumber);
+      const applicability = [];
+      for (let date = facts.range.start; date <= kv.end; date = addDays(date, 1)) {
+        const resolved = resolveRetailKvPeriod(retailKv, date);
+        const contexts = employeeShifts.filter(shift => shift.date === date || (shift.endTime <= shift.startTime && addDays(shift.date, 1) === date))
+          .map(shift => ({ locationId: shift.locationId, departmentId: shift.departmentId, employeeNumber }));
+        if (!contexts.length) contexts.push({ locationId: context.locationId, departmentId: context.departmentId, employeeNumber });
+        const approval = resolveRetailKvApproval(kv.snapshot, resolved.period, date, contexts);
+        const projected = projectRetailKvForDate(retailKv, date, { assignmentVerified: approval.verified });
+        applicability.push(projected);
+      }
+      const result = evaluateRetailKvPlanning({ employee: ruleEmployee, shifts: employeeShifts,
+        applicability, calendarScope: { start: weekStart, end: weekEnd },
+        planningCoverage: { start: facts.range.start, end: kv.end, complete: true },
+        schoolAttendance: kv.schoolAttendance.filter(row => row.employeeId === employeeNumber),
+        additionalWorkEvents: kv.workEvents.filter(row => row.employeeId === employeeNumber),
+        holidays: facts.holidays, timeZone: "Europe/Vienna" });
+      profileEvaluations.push({ assignmentIds: [], shiftIds: [], dates: new Set(Array.from({ length: 7 }, (_, index) => addDays(weekStart, index))),
+        profileVersionId: profileVersionId(RETAIL_KV_PROFILE), enforcementMode: "monitor",
+        applicabilityConfirmed: applicability.filter(row => row.date >= weekStart && row.date <= weekEnd).every(row => ["confirmed", "not_applicable"].includes(row.state)),
+        pilotOverlay: true, profile: kv.version?.profile || RETAIL_KV_PROFILE,
+        layer: "collective_agreement", sources: kv.version?.sources || [], result });
+    }
     const findings = profileEvaluations.flatMap((entry) => entry.result.findings);
     const boundaryFinding = workRuleAssignmentBoundaryFinding(
-      profileEvaluations.filter((entry) => String(entry.profile?.id || "").startsWith("at-retail-")),
+      profileEvaluations.filter((entry) => !entry.pilotOverlay && String(entry.profile?.id || "").startsWith("at-retail-")),
       employeeNumber,
       facts.range,
     );
@@ -20895,11 +21299,16 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
     ));
     const profileUnconfirmed = applicability?.evidence?.reason === "profile_not_confirmed";
     const ageUnconfirmed = applicability?.evidence?.reason === "age_not_confirmed";
+    const controlledSchoolFindings = entry.result.findings.filter((finding) => (
+      finding.state !== "pass" && ["controlled_monitor_pilot", "controlled_protection_monitor", "controlled_retail_kv_monitor"].includes(finding.evidence?.enforcementBasis)
+      && workRuleFindingTouchesPeriod(finding, weekStart, weekEnd)
+    ));
     const candidates = profileUnconfirmed
-      ? [applicability]
+      ? [applicability, ...controlledSchoolFindings]
       : (ageUnconfirmed
         ? [
           applicability,
+          ...controlledSchoolFindings,
           ...entry.result.findings.filter((finding) => (
             finding !== applicability
             && workRuleFindingTouchesPeriod(finding, weekStart, weekEnd)
@@ -20957,7 +21366,8 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
         : (entry.layer === "collective_agreement"
           ? "Kollektivvertrag"
           : (builtin?.applicability?.sector ? "Branchenprofil" : "Gesetzliches Profil")),
-      sources: entry.sources.length ? entry.sources : (builtin?.sources || []),
+      sources: entry.profile.id === PLANNING_PROTECTION_PROFILE_ID ? []
+        : (entry.sources.length ? entry.sources : (builtin?.sources || [])),
     }];
   })).values()].filter((profile) => profile.id);
   const sources = [...new Map(presentationFindings.flatMap((finding) => finding.sourceRefs || [])
@@ -21048,7 +21458,7 @@ async function crossLocationSchedulePrincipal(
 }
 
 function settingsObjectFromRows(rows = []) {
-  return Object.fromEntries((Array.isArray(rows) ? rows : [])
+  return Object.fromEntries(publicSettingsRows(Array.isArray(rows) ? rows : [])
     .map((row) => [String(row?.key || ""), String(row?.value ?? "")])
     .filter(([key]) => key));
 }
@@ -25076,7 +25486,7 @@ async function payrollAbsencesForDay(employee, date, locationId, activeSickness 
     .filter((row) => !(sicknessActive && isTeamWideMeetingOption(row)))
     .map((row) => {
       const internalCode = payrollAbsenceCodeByOption[row.option_type] || "other";
-      const quantityMinutes = !row.all_day && isTime(row.start_time) && isTime(row.end_time)
+      const quantityMinutes = row.option_type !== "vocational_school" && !row.all_day && isTime(row.start_time) && isTime(row.end_time)
         ? Math.max(0, timeToMinutes(row.end_time) - timeToMinutes(row.start_time))
         : optionMinutesPerDay(row, employee.contracted_hours);
       return {
@@ -29808,6 +30218,112 @@ function governanceRouteError(error, fallbackStatus = 400) {
     error?.code || "GOVERNANCE_ACTION_FAILED");
 }
 
+let privacyOrganizationStore = null;
+
+function assertPrivacyOrganizationActor(session, permission) {
+  if (!session || isLocalSystemSession(session) || session.sessionKind !== "employee"
+    || session.isEmployee !== true || session.accountType !== "employee"
+    || !["hr", "admin"].includes(session.role) || !session.employeeNumber
+    || isReservedEmployeePrincipal(session.employeeNumber)
+    || !session.permissions?.includes(permission) || !session.permissions?.includes("privacy_organization:read")) {
+    throw httpError(403, "Der Datenschutzbereich benötigt ein persönliches HR-/Admin-Konto mit dem entsprechenden Datenschutzrecht.", "PRIVACY_ORGANIZATION_ACCESS_DENIED");
+  }
+  if (session.mustChangePassword) throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  return session;
+}
+
+function requirePrivacyOrganizationActor(request, permission = "privacy_organization:read") {
+  return assertPrivacyOrganizationActor(requirePortalSession(request), permission);
+}
+
+function privacyOrganizationInitialFacts() {
+  const value = process.env.GRABENPLANER_PRIVACY_ORGANIZATION_SEED || "";
+  if (!value) return {};
+  try {
+    if (Buffer.byteLength(value, "utf8") > 8192) throw new Error("invalid seed size");
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid seed");
+    return parsed;
+  } catch {
+    throw httpError(503, "Die vorbereiteten Datenschutz-Organisationsangaben sind ungültig.", "PRIVACY_ORGANIZATION_CONFIGURATION_INVALID");
+  }
+}
+
+function requirePrivacyOrganizationStore() {
+  if (!privacyOrganizationStore) privacyOrganizationStore = createPrivacyOrganizationStore({
+    provider: persistenceProvider,
+    protectJson,
+    parseProtectedJson(value, context) {
+      try {
+        const parsed = JSON.parse(requireAmuStorage().unprotectRecord(value, context));
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid ledger");
+        return parsed;
+      } catch {
+        throw httpError(503, "Die geschützte Datenschutz-Prüfspur konnte nicht sicher gelesen werden.", "PRIVACY_ORGANIZATION_INTEGRITY_FAILED");
+      }
+    },
+    initialOrganization: privacyOrganizationInitialFacts(),
+    async revalidateActor(request, repositories, command, ledger) {
+      const permission = command.action === "read" ? "privacy_organization:read"
+        : command.action === "approve" ? "privacy_organization:approve" : "privacy_organization:manage";
+      const session = assertPrivacyOrganizationActor(await loadPortalSessionFromRequest(request, {
+        touch: false, repository: repositories.portalAccess,
+      }), permission);
+      if (command.id === "organization" && ["update", "submit", "approve"].includes(command.action)) {
+        const facts = command.action === "update" && command.id === "organization"
+          ? command.payload : ledger?.records?.find(record => record.id === "organization")?.payload;
+        for (const employeeNumber of [facts?.dpoEmployeeNumber, facts?.privacyOwnerEmployeeNumber]
+          .filter(value => typeof value === "string" && value.trim()).map(value => value.trim())) {
+          if (isReservedEmployeePrincipal(employeeNumber)
+            || !await repositories.portalAccess.getReportPrincipal({ employeeNumber, businessDate: viennaTodayIso() })) {
+            throw httpError(409, "Eine benannte persönliche Datenschutz-Zuständigkeit ist keinem aktiven persönlichen GP-Konto zugeordnet.", "PRIVACY_ORGANIZATION_PERSONAL_REFERENCE_INVALID");
+          }
+        }
+      }
+      return { employeeNumber: session.employeeNumber, role: session.role, personal: true, permissions: [...session.permissions] };
+    },
+  });
+  return privacyOrganizationStore;
+}
+
+function privacyOrganizationResponse(value, session) {
+  return {
+    ...value,
+    catalog: PRIVACY_ORGANIZATION_CATALOG,
+    legacyAccess: {
+      dataRequests: session?.permissions?.includes("data_subject_requests:read") === true,
+      retention: session?.permissions?.includes("retention:read") === true,
+    },
+  };
+}
+
+function privacyOrganizationRouteError(error, response) {
+  const status = Number(error.status || error.statusCode || 0);
+  if (/^PRIVACY_/.test(String(error.code || "")) || [400, 403, 404, 409, 413, 428, 503].includes(status)) {
+    response.status(status >= 400 && status <= 599 ? status : 400).json({ error: error.message, code: error.code || "PRIVACY_ORGANIZATION_INVALID" });
+    return;
+  }
+  throw error;
+}
+
+app.get("/api/privacy-organization", async (request, response) => {
+  const actor = requirePrivacyOrganizationActor(request);
+  response.set("Cache-Control", "no-store");
+  try { response.json(privacyOrganizationResponse(await requirePrivacyOrganizationStore().read(request), actor)); }
+  catch (error) { privacyOrganizationRouteError(error, response); }
+});
+
+app.post("/api/privacy-organization/commands", async (request, response) => {
+  const actor = requirePrivacyOrganizationActor(request, request.body?.action === "approve"
+    ? "privacy_organization:approve" : "privacy_organization:manage");
+  assertPortalCsrf(request);
+  response.set("Cache-Control", "no-store");
+  try {
+    const value = await requirePrivacyOrganizationStore().command(request.body, request);
+    response.status(request.body?.action === "create" ? 201 : 200).json(privacyOrganizationResponse(value, actor));
+  } catch (error) { privacyOrganizationRouteError(error, response); }
+});
+
 app.get("/api/privacy-governance/retention", async (request, response) => {
   requireAdminHrOrLocal(request, "retention:read");
   try {
@@ -31414,12 +31930,34 @@ async function workRuleDashboardPayload(session) {
   };
 }
 
+function workRuleProtectionProvenanceForSession(value, session) {
+  if (!isLocalSystemSession(session) && ["hr", "admin"].includes(session?.role)) return value;
+  const privateSource = (entry) => String(typeof entry === "string" ? entry : entry?.id || "").startsWith("ris.mschg.");
+  const project = (entry) => {
+    if (Array.isArray(entry)) return entry.map(project);
+    if (!entry || typeof entry !== "object") return entry;
+    return Object.fromEntries(Object.entries(entry).map(([key, child]) => {
+      if (["sourceRefs", "sourceIds", "sources"].includes(key)) {
+        if (Array.isArray(child)) return [key, child.filter(source => !privateSource(source)).map(project)];
+        if (child && typeof child === "object") return [key, Object.fromEntries(Object.entries(child)
+          .filter(([sourceId, source]) => !privateSource(sourceId) && !privateSource(source))
+          .map(([sourceId, source]) => [sourceId, project(source)]))];
+      }
+      return [key, project(child)];
+    }));
+  };
+  return project(value);
+}
+
 app.get("/api/work-rules/dashboard", async (request, response) => {
-  response.json(await workRuleDashboardPayload(request.portalSession));
+  const payload = workRuleProtectionProvenanceForSession(
+    await workRuleDashboardPayload(request.portalSession), request.portalSession);
+  payload.summary.sources = new Set(payload.profiles.flatMap(profile => profile.sources.map(source => source.id))).size;
+  response.json(payload);
 });
 
-app.get("/api/work-rules/catalog", (_request, response) => {
-  response.json(getRuleCatalog());
+app.get("/api/work-rules/catalog", (request, response) => {
+  response.json(workRuleProtectionProvenanceForSession(getRuleCatalog(), request.portalSession));
 });
 
 function workRuleProfileVersionRulesPayload(version) {
@@ -31497,7 +32035,8 @@ function scopedWorkRuleProfile(profileRecord, versions) {
 
 app.get("/api/work-rules/profiles", async (request, response) => {
   const session = request.portalSession;
-  const profiles = await listWorkRuleProfiles(workRuleStoreRepository);
+  const profiles = workRuleProtectionProvenanceForSession(
+    await listWorkRuleProfiles(workRuleStoreRepository), session);
   if (sessionHasGlobalScope(session)) {
     response.json({
       engineVersion: WORK_RULE_ENGINE_VERSION,
@@ -32844,7 +33383,9 @@ app.post("/api/employees", async (request, response) => {
   );
   let responseProjectionActor = mutationActor;
   try {
-    await personnelLifecycleSerializableTransaction(async (organization) => {
+    const recordTransaction = personnelRecordMutation?.submittedFields.some(field => ["employment.protectionStatus", "employment.retailKv"].includes(field))
+      ? personnelProtectionRecordTransaction : personnelLifecycleSerializableTransaction;
+    await recordTransaction(async (organization, repositories = null) => {
       const liveLearningActor = await livePersonnelLearningRoleAdministrationActor(
         mutationActor,
         organization,
@@ -32903,7 +33444,7 @@ app.post("/api/employees", async (request, response) => {
       if (!employee.active) {
         await organization.deactivatePortalAccess(employee.personnelNumber);
       }
-      await persistPersonnelRecordMutationWithRepository(organization, personnelRecordMutation, "create");
+      await persistPersonnelRecordMutationWithRepository(organization, personnelRecordMutation, "create", repositories);
       await organization.insertAudit(
         liveLearningActor?.employeeNumber || "local",
         "employee.create",
@@ -33005,7 +33546,9 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
   }
   let responseProjectionActor = mutationActor;
   let employeeMutationChanged = false;
-  await personnelLifecycleSerializableTransaction(async (organization) => {
+  const recordTransaction = personnelRecordMutation?.submittedFields.some(field => ["employment.protectionStatus", "employment.retailKv"].includes(field))
+    ? personnelProtectionRecordTransaction : personnelLifecycleSerializableTransaction;
+  await recordTransaction(async (organization, repositories = null) => {
     const liveLearningActor = await livePersonnelLearningRoleAdministrationActor(
       mutationActor,
       organization,
@@ -33119,6 +33662,7 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
       organization,
       personnelRecordMutation,
       "update",
+      repositories,
     );
     if (observeLearningOrganizationScope) {
       const learningOrganizationScopeAfter = await personnelLearningEmployeeOrganizationScopeSnapshot(
@@ -50789,6 +51333,7 @@ const PERSONNEL_PROFILE_MASTER_FIELD_ALLOWLIST = Object.freeze([
   "employment.employmentType",
   "employment.contractType",
   "employment.employmentStatus",
+  ...APPRENTICESHIP_FIELD_KEYS.map((key) => `employment.${key}`),
   "employment.collectiveAgreement",
   "employment.classification",
   "employment.payrollGroup",
@@ -54844,6 +55389,7 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
             repositories.organizationPersonnel,
             personnelRecordMutation,
             "create-from-candidate",
+            repositories,
           );
           await repositories.organizationPersonnel.insertAudit(
             session.employeeNumber,
@@ -54969,6 +55515,7 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", async (request, resp
     reports: serialized,
     access,
     canOpenFiles: access.canOpenFiles,
+    planningStatusBasis: personnelPlanningStatusBasisForActor(employeeNumber, protectedProfile, session, access),
   });
 });
 
@@ -54994,35 +55541,24 @@ app.put("/api/portal/v1/personnel-records/:employeeNumber", async (request, resp
     throw httpError(400, "Es wurden keine gültigen Personalakt-Daten übermittelt.", "PERSONNEL_RECORD_INPUT_REQUIRED");
   }
   (await assertPersonnelRecordFieldsWritable(request, session, access, submittedFields, employeeNumber));
-  const before = await personnelSensitiveProfile(employeeNumber);
-  const next = mergePersonnelSensitiveProfile(before, hasSensitiveInput ? request.body.sensitive || {} : {});
-  if (hasPhoneInput) next.phone = normalizePersonnelPhone(request.body.phone);
-  const changedFields = changedPersonnelProfileFields(before, next);
-  if (!changedFields.length) {
-    return response.json({ ok: true, changedFields: [], access });
-  }
-  const socialSecurityLookup = next.socialSecurityNumber
-    ? personnelSensitiveLookup("social-security-number", next.socialSecurityNumber) : "";
-  const protectedPayload = protectJson(next, personnelSensitiveProtectionContext({ employee_number: employeeNumber }));
-  try {
-    await sicknessAmuManagementRepository.upsertPersonnelSensitiveRecord({
-      employeeNumber,
-      socialSecurityLookup,
-      protectedPayload,
-      actor: session.employeeNumber,
-    });
-  } catch (error) {
-    if (isUniquePersistenceViolation(error)) {
-      throw httpError(409, "Diese SV-Nummer ist bereits einem anderen Personalakt zugeordnet.", "PERSONNEL_SOCIAL_SECURITY_DUPLICATE");
+  const prepared = await preparePersonnelRecordMutation(request, employeeNumber, request.body);
+  // Every whole-record write merges the current private profile inside the
+  // same transaction. An unrelated phone/notes update cannot restore an older
+  // planning status that was concurrently changed by an HR editor.
+  await personnelProtectionRecordTransaction(async (organization, repositories) => {
+    const liveActor = await livePersonnelLearningRoleAdministrationActor(session, organization);
+    await revalidatePreparedPersonnelRecordMutation(request, liveActor, prepared);
+    await assertPersonnelRecordEmployeeScope(liveActor, employeeNumber, request, submittedFields, organization);
+    if (!await repositories.absenceManagement.workRuleEvaluationEmployee(employeeNumber)) {
+      throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
     }
-    throw error;
+    await persistPersonnelRecordMutationWithRepository(organization, prepared, "update", repositories);
+  });
+  if (personalNotificationMasterFieldsChanged(prepared.changedFields)) {
+    await reconcilePersonalNotificationTargets(employeeNumber, null, prepared.session.employeeNumber);
   }
-  if (personalNotificationMasterFieldsChanged(changedFields)) {
-    await reconcilePersonalNotificationTargets(employeeNumber, null, session.employeeNumber);
-  }
-  (await auditPortal(session.employeeNumber, "personnel-record.update", "employee", employeeNumber,
-    JSON.stringify({ fields: changedFields })));
-  response.json({ ok: true, changedFields, access });
+  response.json({ ok: true, changedFields: prepared.changedFields,
+    workRuleAssessments: prepared.workRuleAssessments || [], access: personnelRecordAccess(prepared.session) });
 });
 
 app.post("/api/portal/v1/personnel-records/:employeeNumber/documents", async (request, response) => {
@@ -60969,6 +61505,76 @@ async function invalidateWeekOptionReviews(options) {
   }
 }
 
+async function prepareVocationalSchoolOptionEvaluations(option, existing = null) {
+  if (option?.optionType !== "vocational_school" && existing?.option_type !== "vocational_school") return [];
+  const periods = [option, existing].filter(Boolean).map((entry) => ({
+    employeeNumber: String(entry.employeeNumber || entry.employee_number),
+    dateFrom: entry.dateFrom || entry.date_from, dateTo: entry.dateTo || entry.date_to,
+  }));
+  const guardTargets = periods.map((period) => ({
+    employeeNumber: period.employeeNumber, weekStart: getMonday(period.dateFrom),
+    throughWeekStart: addDays(getMonday(period.dateTo), 16 * 7),
+  }));
+  const guardSha256 = await captureVocationalSchoolMutationGuard(applicationRepositories, guardTargets);
+  const targets = new Map();
+  const addTarget = (employeeNumber, date, locationId, departmentId) => {
+    const weekStart = getMonday(date);
+    const key = `${employeeNumber}|${weekStart}|${locationId}|${departmentId || ""}`;
+    targets.set(key, { employeeNumber, weekStart, locationId, departmentId });
+  };
+  for (const period of periods) {
+    const employee = await planningSettingsRepository.getPlanningEmployee({ employeeNumber: period.employeeNumber });
+    if (!employee) continue;
+    for (let date = getMonday(period.dateFrom); date <= period.dateTo; date = addDays(date, 7)) {
+      addTarget(period.employeeNumber, date, employee.home_location_id, employee.preferred_department_id || null);
+    }
+    // Changed school facts also affect already planned later weeks' rolling checks.
+    const shifts = await planningSettingsRepository.listWorkRuleShiftsForRange({
+      dateFrom: period.dateFrom, dateTo: addDays(getMonday(period.dateTo), 16 * 7 + 6),
+    });
+    for (const shift of shifts.filter((row) => String(row.employee_number) === period.employeeNumber)) {
+      addTarget(period.employeeNumber, shift.shift_date, shift.location_id, shift.department_id || null);
+    }
+  }
+  const prepared = [];
+  for (const target of targets.values()) {
+    const employee = await absenceManagementRepository.workRuleEvaluationEmployee(target.employeeNumber);
+    if (!employee) continue;
+    const context = await resolvePlanningContext(target);
+    const evaluated = await evaluateScheduleWorkRules(target.weekStart, context, [employee], {
+      weekOptionChange: { existingId: existing?.id || null, option },
+    });
+    prepared.push({ context, evaluated });
+  }
+  prepared.mutationGuard = { targets: guardTargets, sha256: guardSha256 };
+  return prepared;
+}
+
+async function mutateVocationalSchoolOption(prepared, mutation, actor) {
+  try {
+    return await persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      const guard = prepared.mutationGuard;
+      if (!guard || await captureVocationalSchoolMutationGuard(repositories, guard.targets) !== guard.sha256) {
+        throw httpError(409, "Die Planungs- oder Personalgrundlage wurde inzwischen geändert. Bitte neu laden und erneut speichern.", "VOCATIONAL_SCHOOL_CONCURRENT_CHANGE");
+      }
+      const result = await mutation(repositories.planningSettings);
+      const workRuleAssessments = [];
+      for (const entry of prepared) {
+        workRuleAssessments.push(await recordEvaluatedWorkRuleEvaluation(
+          repositories.workRules, entry.evaluated, entry.context, actor || "local",
+        ));
+      }
+      return { result, workRuleAssessments };
+    }, { isolation: "serializable" });
+  } catch (error) {
+    if (["PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"].includes(error?.code)) {
+      throw httpError(409, "Die Planungs- oder Personalgrundlage wurde gleichzeitig geändert. Bitte neu laden und erneut speichern.", "VOCATIONAL_SCHOOL_CONCURRENT_CHANGE");
+    }
+    throw error;
+  }
+}
+
 async function auditTeamMeetingGroup(session, action, groupId, context, options) {
   const option = options[0] || {};
   (await auditPortal(
@@ -61022,15 +61628,21 @@ app.post("/api/week-options", async (request, response) => {
   assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
   await assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
   let result;
+  let workRuleAssessments;
+  const prepared = await prepareVocationalSchoolOptionEvaluations(option);
   try {
-    result = await planningSettingsRepository.insertWeekOption(option);
+    if (option.optionType === "vocational_school") {
+      ({ result, workRuleAssessments } = await mutateVocationalSchoolOption(
+        prepared, (repository) => repository.insertWeekOption(option), request.portalSession?.employeeNumber,
+      ));
+    } else result = await planningSettingsRepository.insertWeekOption(option);
   } catch (error) {
     throw staffAssignmentAbsenceConstraintError(error);
   }
   const id = Number(result.rows[0]?.id);
   for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) await invalidateTimeDayReview(option.employeeNumber, date);
   (await auditApprovedAbsenceEntry(request.portalSession, "approved-absence.create", id, option));
-  response.status(201).json({ id, ...option });
+  response.status(201).json({ id, ...option, ...(workRuleAssessments ? { workRuleAssessments } : {}) });
 });
 
 app.put("/api/week-options/:id", async (request, response) => {
@@ -61107,8 +61719,18 @@ app.put("/api/week-options/:id", async (request, response) => {
   assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
   await assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
   let updated;
+  let workRuleAssessments;
+  const prepared = await prepareVocationalSchoolOptionEvaluations(option, existing);
   try {
-    updated = await planningSettingsRepository.updateWeekOption({ id, ...option });
+    if (option.optionType === "vocational_school" || existing.option_type === "vocational_school") {
+      ({ result: updated, workRuleAssessments } = await mutateVocationalSchoolOption(
+        prepared, async (repository) => {
+          const result = await repository.updateWeekOption({ id, ...option });
+          if (!result.rowsAffected) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
+          return result;
+        }, request.portalSession?.employeeNumber,
+      ));
+    } else updated = await planningSettingsRepository.updateWeekOption({ id, ...option });
   } catch (error) {
     throw staffAssignmentAbsenceConstraintError(error);
   }
@@ -61116,7 +61738,7 @@ app.put("/api/week-options/:id", async (request, response) => {
   for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) await invalidateTimeDayReview(existing.employee_number, date);
   for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) await invalidateTimeDayReview(option.employeeNumber, date);
   (await auditApprovedAbsenceEntry(request.portalSession, "approved-absence.update", id, option));
-  response.json({ id, ...option });
+  response.json({ id, ...option, ...(workRuleAssessments ? { workRuleAssessments } : {}) });
 });
 
 app.delete("/api/week-options/:id", async (request, response) => {
@@ -61171,7 +61793,15 @@ app.delete("/api/week-options/:id", async (request, response) => {
     request.portalSession,
     existingLocation,
   );
-  const result = await planningSettingsRepository.deleteWeekOption({ id });
+  let result;
+  if (existing.option_type === "vocational_school") {
+    const prepared = await prepareVocationalSchoolOptionEvaluations(null, existing);
+    ({ result } = await mutateVocationalSchoolOption(prepared, async (repository) => {
+      const deleted = await repository.deleteWeekOption({ id });
+      if (!deleted.rowsAffected) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
+      return deleted;
+    }, request.portalSession?.employeeNumber));
+  } else result = await planningSettingsRepository.deleteWeekOption({ id });
   if (!result.rowsAffected) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) await invalidateTimeDayReview(existing.employee_number, date);
   (await auditApprovedAbsenceEntry(request.portalSession, "approved-absence.delete", id, existing));

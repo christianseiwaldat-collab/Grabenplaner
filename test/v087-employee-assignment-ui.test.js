@@ -45,7 +45,11 @@ test("v0.87 Block 2 UI: Mitarbeiteranlage beginnt bei der Kostenstelle", () => {
 test("v0.87 Block 2 UI: Personalaktbereiche bleiben standardmäßig eingeklappt", () => {
   const modal = between(html, '<dialog class="modal wide-modal employee-modal" id="employeeModal">', '<dialog class="modal" id="costCenterModal">');
   assert.equal((modal.match(/data-employee-form-section=/g) || []).length, 2);
-  assert.equal((modal.match(/<details class="protected-record-section(?:\s|")/g) || []).length, 4);
+  assert.equal((modal.match(/<details class="protected-record-section(?:\s|")/g) || []).length, 5);
+  const protectionSection = modal.match(/<details\b[^>]*\bid="employeeRecordProtectionStatus"[^>]*>/)?.[0];
+  assert.ok(protectionSection, "Der vertrauliche Planungsschutzbereich ist ausdrücklich vorhanden.");
+  assert.match(protectionSection, /class="[^"]*\bhidden\b[^"]*"/);
+  assert.doesNotMatch(protectionSection, /\sopen(?:\s|>)/);
   assert.match(modal, /<details class="employee-access-profile full-width" id="employeeAccessProfile">/);
   assert.doesNotMatch(modal, /<details[^>]*\sopen(?:\s|>)/);
 

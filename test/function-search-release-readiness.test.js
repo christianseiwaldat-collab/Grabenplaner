@@ -130,8 +130,8 @@ function availableIds(availableGateIds) {
 
 test("Block 5: alle Portalrollen bleiben vollständig an die projizierten UI-Gates gebunden", () => {
   assert.ok(catalogApi.FUNCTION_SEARCH_CATALOG.length > 0);
-  // Logistik and Preisschilder each add their own projected navigation gate.
-  assert.equal(ALL_GATE_IDS.size, 102);
+  // Logistics, price labels and the five privacy destinations have real gates.
+  assert.equal(ALL_GATE_IDS.size, 107);
   assert.doesNotMatch(catalogSource, /options\?\.role|options\.role|role\s*===\s*["']/);
   assert.match(appSource, /isGateAvailable: functionSearchGateAvailable/);
 

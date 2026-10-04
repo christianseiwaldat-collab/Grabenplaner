@@ -1,0 +1,218 @@
+{
+  "profile": {
+    "id": "at-retail-youth-monitor",
+    "version": "2026.2",
+    "catalogVersion": "at-work-rules-2026.2",
+    "title": "Österreich – Handel, Jugend- und Lehrlingsprofil unter 18",
+    "status": "active",
+    "assignable": false,
+    "validFrom": "2026-01-01",
+    "validTo": null,
+    "applicability": {
+      "jurisdiction": "AT",
+      "sector": "retail",
+      "maximumAgeExclusive": 18,
+      "automaticByBirthDate": true,
+      "confirmationRequired": false,
+      "note": "Das Profil wird bei bestätigtem Geburtsdatum für Beschäftigte unter 18 automatisch verwendet."
+    },
+    "defaultEnforcementMode": "monitor",
+    "limits": {
+      "normalDailyMinutes": 480,
+      "normalWeeklyMinutes": 2400,
+      "maximumDailyMinutesUnder16": 540,
+      "maximumWeeklyMinutesUnder16": 2700,
+      "maximumDailyMinutesFrom16": 570,
+      "maximumWeeklyMinutesFrom16": 2850,
+      "breakTriggerMinutes": 270,
+      "breakRequiredMinutes": 30,
+      "dailyRestMinutesUnder15": 840,
+      "dailyRestMinutes": 720,
+      "nightStartMinute": 1200,
+      "nightEndMinute": 360,
+      "saturdaySalesEndMinute": 1080
+    },
+    "ruleIds": [
+      "at.applicability.youth",
+      "at.kjbg.normal.daily",
+      "at.kjbg.normal.weekly",
+      "at.kjbg.break.after-four-half",
+      "at.kjbg.daily-rest",
+      "at.kjbg.night-work",
+      "at.kjbg.sunday-holiday-work",
+      "at.kjbg.retail.saturday-monday",
+      "at.kjbg.retail.consecutive-saturdays",
+      "at.kjbg.retail.saturday-after-18"
+    ],
+    "sourceRefs": [
+      "ris.kjbg.1",
+      "ris.kjbg.11",
+      "ris.kjbg.12",
+      "ris.kjbg.15",
+      "ris.kjbg.16",
+      "ris.kjbg.17",
+      "ris.kjbg.18",
+      "ris.kjbg.19",
+      "ris.kjbg.19a"
+    ]
+  },
+  "rules": [
+    {
+      "id": "at.applicability.youth",
+      "title": "Anwendbarkeit des Jugendprofils",
+      "severity": "warning",
+      "enforcement": "manual_review",
+      "sourceRefs": [
+        "ris.kjbg.1"
+      ]
+    },
+    {
+      "id": "at.kjbg.normal.daily",
+      "title": "Tägliche Arbeitszeit Jugendlicher",
+      "severity": "error",
+      "enforcement": "exception_required",
+      "sourceRefs": [
+        "ris.kjbg.11",
+        "ris.kjbg.12"
+      ]
+    },
+    {
+      "id": "at.kjbg.normal.weekly",
+      "title": "Wöchentliche Arbeitszeit Jugendlicher",
+      "severity": "error",
+      "enforcement": "exception_required",
+      "sourceRefs": [
+        "ris.kjbg.11",
+        "ris.kjbg.12"
+      ]
+    },
+    {
+      "id": "at.kjbg.break.after-four-half",
+      "title": "Ruhepause Jugendlicher",
+      "severity": "error",
+      "enforcement": "block",
+      "sourceRefs": [
+        "ris.kjbg.15"
+      ]
+    },
+    {
+      "id": "at.kjbg.daily-rest",
+      "title": "Tägliche Ruhezeit Jugendlicher",
+      "severity": "critical",
+      "enforcement": "block",
+      "sourceRefs": [
+        "ris.kjbg.16"
+      ]
+    },
+    {
+      "id": "at.kjbg.night-work",
+      "title": "Nachtruhe Jugendlicher",
+      "severity": "critical",
+      "enforcement": "block",
+      "sourceRefs": [
+        "ris.kjbg.17"
+      ]
+    },
+    {
+      "id": "at.kjbg.sunday-holiday-work",
+      "title": "Sonn- und Feiertagsruhe Jugendlicher",
+      "severity": "critical",
+      "enforcement": "block",
+      "sourceRefs": [
+        "ris.kjbg.18"
+      ]
+    },
+    {
+      "id": "at.kjbg.retail.saturday-monday",
+      "title": "Wochenfreizeit nach Samstagsdienst",
+      "severity": "critical",
+      "enforcement": "exception_required",
+      "sourceRefs": [
+        "ris.kjbg.19"
+      ]
+    },
+    {
+      "id": "at.kjbg.retail.consecutive-saturdays",
+      "title": "Aufeinanderfolgende Samstagnachmittage",
+      "severity": "critical",
+      "enforcement": "exception_required",
+      "sourceRefs": [
+        "ris.kjbg.19a"
+      ]
+    },
+    {
+      "id": "at.kjbg.retail.saturday-after-18",
+      "title": "Samstagsdienst Jugendlicher nach 18 Uhr",
+      "severity": "critical",
+      "enforcement": "block",
+      "sourceRefs": [
+        "ris.kjbg.19a"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "ris.kjbg.1",
+      "jurisdiction": "AT",
+      "title": "Kinder- und Jugendlichen-Beschäftigungsgesetz (KJBG) § 1 – Geltungsbereich",
+      "url": "https://www.ris.bka.gv.at/NormDokument.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10008632&Paragraf=1",
+      "retrievedOn": "2026-07-25"
+    },
+    {
+      "id": "ris.kjbg.11",
+      "jurisdiction": "AT",
+      "title": "KJBG § 11 – Arbeitszeit und Berufsschule",
+      "url": "https://www.ris.bka.gv.at/NormDokument.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10008632&Paragraf=11",
+      "retrievedOn": "2026-07-25"
+    },
+    {
+      "id": "ris.kjbg.12",
+      "jurisdiction": "AT",
+      "title": "KJBG § 12 – Überstunden",
+      "url": "https://www.ris.bka.gv.at/NormDokument.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10008632&Paragraf=12",
+      "retrievedOn": "2026-07-25"
+    },
+    {
+      "id": "ris.kjbg.15",
+      "jurisdiction": "AT",
+      "title": "KJBG § 15 – Ruhepausen",
+      "url": "https://www.ris.bka.gv.at/NormDokument.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10008632&Paragraf=15",
+      "retrievedOn": "2026-07-25"
+    },
+    {
+      "id": "ris.kjbg.16",
+      "jurisdiction": "AT",
+      "title": "KJBG § 16 – Tägliche Ruhezeit",
+      "url": "https://www.ris.bka.gv.at/NormDokument.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10008632&Paragraf=16",
+      "retrievedOn": "2026-07-25"
+    },
+    {
+      "id": "ris.kjbg.17",
+      "jurisdiction": "AT",
+      "title": "KJBG § 17 – Nachtruhe",
+      "url": "https://www.ris.bka.gv.at/NormDokument.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10008632&Paragraf=17",
+      "retrievedOn": "2026-07-25"
+    },
+    {
+      "id": "ris.kjbg.18",
+      "jurisdiction": "AT",
+      "title": "KJBG § 18 – Sonn- und Feiertagsruhe",
+      "url": "https://www.ris.bka.gv.at/NormDokument.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10008632&Paragraf=18",
+      "retrievedOn": "2026-07-25"
+    },
+    {
+      "id": "ris.kjbg.19",
+      "jurisdiction": "AT",
+      "title": "KJBG § 19 – Wochenfreizeit",
+      "url": "https://www.ris.bka.gv.at/NormDokument.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10008632&Paragraf=19",
+      "retrievedOn": "2026-07-25"
+    },
+    {
+      "id": "ris.kjbg.19a",
+      "jurisdiction": "AT",
+      "title": "KJBG § 19a – Sonderregelungen für Verkaufsstellen",
+      "url": "https://www.ris.bka.gv.at/NormDokument.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10008632&Paragraf=19a",
+      "retrievedOn": "2026-07-25"
+    }
+  ]
+}
