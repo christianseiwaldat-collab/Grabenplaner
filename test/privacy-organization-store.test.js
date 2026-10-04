@@ -114,10 +114,10 @@ test("privacy store: startup integrity verification exposes only presence/revisi
   assert.equal(f.database.prepare("SELECT total_changes() AS n").get().n, before);
 });
 
-test("privacy store: technical/shared/local principals cannot read or mutate even with copied privacy permissions", async t => {
+test("privacy store: ineligible technical/shared/local principals cannot read or mutate even with copied privacy permissions", async t => {
   const f = fixture(t);
   const principals = [
-    { ...ACTOR, role: "developer" }, { ...ACTOR, role: "it_admin" },
+    { ...ACTOR, role: "it_admin" }, { ...ACTOR, role: "manager" },
     { ...ACTOR, personal: false }, { ...ACTOR, employeeNumber: "local" },
     { ...ACTOR, employeeNumber: "system" }, { ...ACTOR, permissions: [] },
   ];
@@ -127,6 +127,24 @@ test("privacy store: technical/shared/local principals cannot read or mutate eve
   }
   assert.equal(f.encrypted(), undefined);
   assert.equal(f.audits().length, 0);
+});
+
+test("privacy store: personal developer retains protected capabilities and loses access when the live role is withdrawn", async t => {
+  const developer = { ...ACTOR, employeeNumber: "SYNTHETIC-DEVELOPER", role: "developer" };
+  let live = developer;
+  const f = fixture(t, { revalidateActor: async () => live });
+  assert.deepEqual((await f.store.read({ actor: developer })).capabilities, { read: true, manage: true, approve: true });
+  const changed = await f.store.command(create(), { actor: developer });
+  assert.equal(changed.records.find(record => record.kind === "activity").lastAuthor, developer.employeeNumber);
+  assert.match(f.encrypted(), /^enc:v2:/);
+  assert.equal(f.ledger().events.at(-1).actor.role, "developer");
+  assert.equal(f.audits()[0].actor, developer.employeeNumber);
+  const before = f.encrypted();
+  live = { ...developer, role: "it_admin" };
+  await assert.rejects(f.store.read({ actor: developer }), error => error.statusCode === 403);
+  await assert.rejects(f.store.command(updateOrganization(1), { actor: developer }), error => error.statusCode === 403);
+  assert.equal(f.encrypted(), before);
+  assert.equal(f.audits().length, 1);
 });
 
 test("privacy store: current read permission and exact capabilities come from the actor inside the transaction", async t => {

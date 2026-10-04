@@ -60,30 +60,35 @@ function context(extra = {}) {
   return ctx;
 }
 
-test("Schutzstatus: nur HR/Admin mit ausdrücklichem atomarem Feldrecht", () => {
+test("Schutzstatus: persönliche HR/Admin/Developer mit ausdrücklichem atomarem Feldrecht", () => {
   const access = { canReadSensitive: true, canWriteSensitive: true, fieldAccess: { [protection.FIELD_KEY]: "write" } };
-  for (const role of ["developer", "it_admin", "manager", "department_manager", "location_planner", "employee", "local", ""]) {
+  for (const role of ["it_admin", "manager", "department_manager", "location_planner", "employee", "local", ""]) {
     assert.equal(protection.accessMode(access, role), "hidden");
   }
-  assert.equal(protection.accessMode(access, "hr"), "write");
-  assert.equal(protection.accessMode({ fieldAccess: { [protection.FIELD_KEY]: "read" } }, "admin"), "read");
-  for (const role of ["hr", "admin"]) assert.equal(protection.accessMode({ canWriteSensitive: true }, role), "hidden");
+  for (const role of ["hr", "admin", "developer"]) {
+    assert.equal(protection.accessMode(access, role), "write", role);
+    assert.equal(protection.accessMode({ fieldAccess: { [protection.FIELD_KEY]: "read" } }, role), "read", role);
+    assert.equal(protection.accessMode({ fieldAccess: { [protection.FIELD_KEY]: "hidden" } }, role), "hidden", role);
+    assert.equal(protection.accessMode({ canWriteSensitive: true }, role), "hidden", role);
+  }
 });
 
-test("Schutzstatus: realistischer lokaler Admin erhält auch mit manipuliertem Feldrecht keine UI-Freigabe", () => {
+test("Schutzstatus: lokaler Admin oder Developer erhält auch mit manipuliertem Feldrecht keine UI-Freigabe", () => {
   const access = { canWriteSensitive: true, fieldAccess: { [protection.FIELD_KEY]: "write" } };
   const ctx = context();
-  ctx.state.portalSession.user.role = "admin";
-  ctx.state.portalStatus = { portalEnabled: false };
-  assert.equal(ctx.personnelRecordAccessMode(access, protection.FIELD_KEY), "hidden");
-  ctx.state.portalStatus.portalEnabled = true;
-  ctx.state.portalSession.user.employeeNumber = "local";
-  assert.equal(ctx.personnelRecordAccessMode(access, protection.FIELD_KEY), "hidden");
-  ctx.state.portalSession.user.employeeNumber = "synthetic-admin";
-  ctx.state.portalSession.user.localSystem = true;
-  assert.equal(ctx.personnelRecordAccessMode(access, protection.FIELD_KEY), "hidden");
-  ctx.state.portalSession.user.localSystem = false;
-  assert.equal(ctx.personnelRecordAccessMode(access, protection.FIELD_KEY), "write");
+  for (const role of ["admin", "developer"]) {
+    ctx.state.portalSession.user = { role };
+    ctx.state.portalStatus = { portalEnabled: false };
+    assert.equal(ctx.personnelRecordAccessMode(access, protection.FIELD_KEY), "hidden", role);
+    ctx.state.portalStatus.portalEnabled = true;
+    ctx.state.portalSession.user.employeeNumber = "local";
+    assert.equal(ctx.personnelRecordAccessMode(access, protection.FIELD_KEY), "hidden", role);
+    ctx.state.portalSession.user.employeeNumber = `synthetic-${role}`;
+    ctx.state.portalSession.user.localSystem = true;
+    assert.equal(ctx.personnelRecordAccessMode(access, protection.FIELD_KEY), "hidden", role);
+    ctx.state.portalSession.user.localSystem = false;
+    assert.equal(ctx.personnelRecordAccessMode(access, protection.FIELD_KEY), "write", role);
+  }
 });
 
 test("Schutzstatus: unbekannte/Legacy-Daten werden nicht automatisch aktiviert oder medizinisch ergänzt", () => {
@@ -214,19 +219,19 @@ test("Eingebettetes Formular: Hidden-/Read-Felder werden selbst bei manipulierte
     employeeRecordApprenticeshipSourceReference: { value: "synthetic-contract" } };
   const ctx = context({ document: { querySelector: () => form }, employeeRecordControl: (name) => controls[name] || null });
   vm.runInContext(between("function collectEmployeeProtectedRecord(", "async function loadEmployeeProtectedRecord("), ctx);
-  for (const role of ["hr", "developer", "it_admin", "location_planner", "local"]) {
+  for (const role of ["hr", "admin", "developer", "it_admin", "location_planner", "local"]) {
     for (const level of ["hidden", "read", "write"]) {
       ctx.state.portalSession.user.role = role;
       ctx.state.employeePersonnelRecord = { access: { fieldAccess: { [protection.FIELD_KEY]: level } } };
       const result = ctx.collectEmployeeProtectedRecord();
-      assert.equal(Object.hasOwn(result.sensitive.employment, "protectionStatus"), role === "hr" && level === "write", `${role}/${level}`);
+      assert.equal(Object.hasOwn(result.sensitive.employment, "protectionStatus"), ["hr", "admin", "developer"].includes(role) && level === "write", `${role}/${level}`);
       assert.equal(result.sensitive.employment.apprenticeshipStatus, "active");
       assert.equal(result.sensitive.employment.apprenticeshipConfirmed, true);
     }
   }
 });
 
-test("Separater Personalakt: vollständiges Objekt wird ausschließlich mit ausdrücklichem Schreibrecht gespeichert", async () => {
+test("Developer-Personalakt: vollständiges Objekt wird ausschließlich mit ausdrücklichem Schreibrecht und Änderungsbasis gespeichert", async () => {
   const form = editor(status()), calls = [], toasts = [];
   const ctx = context({ elements: { personnelRecordForm: { elements: { namedItem: () => null } },
     personnelRecordContent: { querySelector: () => form }, savePersonnelRecordButton: {}, personnelRecordMessage: { classList: { add() {}, remove() {} } } },
@@ -234,6 +239,7 @@ test("Separater Personalakt: vollständiges Objekt wird ausschließlich mit ausd
     openPersonnelRecord: async () => {}, showToast: (text) => toasts.push(text),
   });
   vm.runInContext(between("async function savePersonnelRecord(", "async function uploadPersonnelDocument("), ctx);
+  ctx.state.portalSession.user.role = "developer";
   ctx.state.personnelRecord = { employeeNumber: "synthetic-person", result: { access: { fieldAccess: { [protection.FIELD_KEY]: "write" } }, planningStatusBasis: { [protection.FIELD_KEY]: "a".repeat(64) } } };
   ctx.state.personnelRecordDirtyFields.add(protection.FIELD_KEY);
   await ctx.savePersonnelRecord({ preventDefault() {} });
@@ -252,11 +258,15 @@ test("Separater Personalakt: vollständiges Objekt wird ausschließlich mit ausd
 test("Personalaktwechsel: fehlendes Feldrecht entfernt den vorigen vertraulichen Inhalt", () => {
   const host = { innerHTML: "", classList: { toggle(name, value) { this[name] = value; } } };
   const ctx = context({ document: { querySelector: () => host } });
-  ctx.fillEmployeeProtectionEditor(status(), { fieldAccess: { [protection.FIELD_KEY]: "write" } });
-  assert.match(host.innerHTML, /HR:SYN\/1/);
-  ctx.fillEmployeeProtectionEditor(null, { canWriteSensitive: true });
-  assert.equal(host.innerHTML, "");
-  assert.equal(host.classList.hidden, true);
+  for (const role of ["hr", "admin", "developer"]) {
+    ctx.state.portalSession.user.role = role;
+    ctx.fillEmployeeProtectionEditor(status(), { fieldAccess: { [protection.FIELD_KEY]: "write" } });
+    assert.match(host.innerHTML, /HR:SYN\/1/, role);
+    assert.equal(host.classList.hidden, false, role);
+    ctx.fillEmployeeProtectionEditor(null, { canWriteSensitive: true });
+    assert.equal(host.innerHTML, "", role);
+    assert.equal(host.classList.hidden, true, role);
+  }
 });
 
 test("Leitungs-Feldrechtematrix: Schutzstatus bietet einzig hidden/disabled; andere Rechte bleiben bearbeitbar", () => {

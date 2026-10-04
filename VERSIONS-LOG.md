@@ -1,11 +1,11 @@
 # Versionsstatus
 
-## v0.92.73 Beta · Quellstand
+## v0.92.74 Beta · Quellstand
 
-Kompaktere Navigation und Logistik, erweiterte Artikelwerkzeuge und Preisschildausgabe.
-Dieser Quellstand ist noch nicht als Serverrelease freigegeben.
+Vollständiger Developer-Zugriff auf Datenschutz, Schutzstatus und Handels-KV.
+Der installierte Serverstand wird im GP angezeigt.
 
-## v0.92.72 Beta · Produktiver Serverstand
+## v0.92.72 Beta · GitHub-Serverrelease
 
 Artikelwerkzeuge, Logistik und gestaltbare Preisschilder.
 [Serverrelease](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.92.72-beta)

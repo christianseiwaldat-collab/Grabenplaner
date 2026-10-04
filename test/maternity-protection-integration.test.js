@@ -106,8 +106,8 @@ test("HR stores the atomic protected status encrypted and receives neutral plann
   const row = db.prepare("SELECT protected_payload FROM personnel_sensitive_records WHERE employee_number=?").get(SUBJECT);
   assert.match(row.protected_payload, /^enc:v2:/); assertNeutral(row);
 });
-test("planners and technical roles see restrictions but cannot read or change the private status", async () => {
-  for (const role of ["manager", "location_planner", "it_admin", "developer"]) {
+test("planners and IT-admin roles see restrictions but cannot read or change the private status", async () => {
+  for (const role of ["manager", "location_planner", "it_admin"]) {
     const record = await request(`/api/portal/v1/personnel-records/${SUBJECT}`, { auth: users[role] });
     if (record.status === 200) {
       assert.equal(record.payload.access.fieldAccess[FIELD], "hidden");
@@ -123,8 +123,26 @@ test("planners and technical roles see restrictions but cannot read or change th
   for (const receipt of receipts) assertNeutral(JSON.parse(receipt.result_json));
 });
 
+test("personal developer can read and edit protected status with a current opaque planning basis", async () => {
+  const record = await request(`/api/portal/v1/personnel-records/${SUBJECT}`, { auth: users.developer });
+  assert.equal(record.status, 200, JSON.stringify(record.payload));
+  assert.equal(record.payload.access.fieldAccess[FIELD], "write");
+  assert.deepEqual(record.payload.profile.sensitive.employment.protectionStatus, status());
+  assert.match(record.payload.planningStatusBasis[FIELD], /^[0-9a-f]{64}$/);
+  const changed = await save(status({ periods: [period({ normalDailyMinutes: 450 })] }), users.developer);
+  assert.equal(changed.status, 200, JSON.stringify(changed.payload));
+  assert.ok(changed.payload.changedFields.includes(FIELD));
+  assertNeutral(changed.payload.workRuleAssessments);
+  const stale = await save(status(), users.developer, record.payload.planningStatusBasis);
+  assert.equal(stale.status, 409, JSON.stringify(stale.payload));
+  assert.equal(stale.payload.code, "PERSONNEL_PLANNING_STATUS_CONCURRENT_CHANGE");
+  const current = await request(`/api/portal/v1/personnel-records/${SUBJECT}`, { auth: users.developer });
+  assert.equal(current.payload.profile.sensitive.employment.protectionStatus.periods[0].normalDailyMinutes, 450);
+  assert.equal((await save(status(), users.developer)).status, 200);
+});
+
 test("public catalog, profiles and dashboard cannot join neutral restrictions to the private legal source", async () => {
-  for (const role of ["manager", "location_planner", "it_admin", "developer"]) {
+  for (const role of ["manager", "location_planner", "it_admin"]) {
     for (const route of ["/api/work-rules/catalog", "/api/work-rules/profiles", "/api/work-rules/dashboard"]) {
       const value = await request(route, { auth: users[role] });
       assert.equal(value.status, 200, JSON.stringify(value.payload)); assertNeutral(value.payload, { staticCatalog: true });
@@ -134,8 +152,13 @@ test("public catalog, profiles and dashboard cannot join neutral restrictions to
       }
     }
   }
-  const privileged = await request("/api/work-rules/catalog", { auth: users.hr });
-  assert.ok(privileged.payload.sources["ris.mschg.8"]);
+  for (const role of ["hr", "developer"]) {
+    for (const route of ["/api/work-rules/catalog", "/api/work-rules/profiles", "/api/work-rules/dashboard"]) {
+      const privileged = await request(route, { auth: users[role] });
+      assert.equal(privileged.status, 200, JSON.stringify(privileged.payload));
+      assert.ok(JSON.stringify(privileged.payload).includes("ris.mschg.8"));
+    }
+  }
 });
 test("field matrix and direct aliases cannot bypass the new status boundary", async () => {
   const rights = await request("/api/portal/v1/personnel-field-rights");
@@ -323,7 +346,7 @@ test("confirmation changes invalidate the old structure basis and opaque tokens 
   const stale = await request("/api/portal/v1/personnel-records/"+SUBJECT,{method:"PUT",
     body:{sensitive:{employment:{protectionStatus:status()}},planningStatusBasis:old.payload.planningStatusBasis}});
   assert.equal(stale.status,409); assert.deepEqual(privateMutationSnapshot(),before);
-  for (const role of ["manager","developer","it_admin","location_planner"]) {
+  for (const role of ["manager","it_admin","location_planner"]) {
     const read = await request("/api/portal/v1/personnel-records/"+SUBJECT,{auth:users[role]});
     if (read.status === 200) assert.deepEqual(read.payload.planningStatusBasis,{});
   }

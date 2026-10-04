@@ -48,7 +48,7 @@ test.before(async () => {
     db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password,password_changed_at) VALUES (?,'synthetic',?,1,0,CURRENT_TIMESTAMP)").run(id,role);
     db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES (?,?,?,'2099-12-31T23:59:59.000Z')").run(crypto.randomUUID(),id,crypto.createHash("sha256").update(token).digest("hex"));
     db.prepare("INSERT INTO portal_access_scopes(employee_number,location_id,assigned_by) VALUES (?,?,'synthetic')").run(id,locationId);
-    for (const permission of ["privacy_organization:read","privacy_organization:manage","privacy_organization:approve"]) db.prepare("INSERT OR IGNORE INTO portal_permission_grants(employee_number,permission,granted_by) VALUES (?,?,'synthetic')").run(id,permission);
+    if (role !== "developer") for (const permission of ["privacy_organization:read","privacy_organization:manage","privacy_organization:approve"]) db.prepare("INSERT OR IGNORE INTO portal_permission_grants(employee_number,permission,granted_by) VALUES (?,?,'synthetic')").run(id,permission);
     users[key] = {id,cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,csrf};
   }
   server = app.listen(0,"127.0.0.1"); await new Promise(resolve => server.once("listening",resolve)); url = `http://127.0.0.1:${server.address().port}`;
@@ -70,9 +70,9 @@ test("read prepares known facts without writing or creating a DPO account", asyn
   assert.equal(db.prepare("SELECT value FROM settings WHERE key=?").get(KEY),undefined);
   assert.equal(db.prepare("SELECT count(*) n FROM portal_users WHERE employee_number='PRIVATE-SYNTHETIC-DPO'").get().n,0);
 });
-test("real personal HR/Admin access excludes anonymous, planner and technical roles even with grants", async () => {
+test("real personal HR/Admin/Developer access excludes anonymous, planner and IT-admin roles even with grants", async () => {
   assert.equal((await request(undefined,{auth:null})).status,401);
-  for (const auth of [users.manager,users.developer,users.itAdmin]) {
+  for (const auth of [users.manager,users.itAdmin]) {
     assert.equal((await request(undefined,{auth})).status,403);
     assert.equal((await command({action:"create",kind:"breach",payload:{title:"Denied"}},{auth})).status,403);
   }
@@ -80,6 +80,34 @@ test("real personal HR/Admin access excludes anonymous, planner and technical ro
   const session = await request("/api/portal/v1/session");
   assert.equal(session.payload.user.sessionKind,"employee"); assert.equal(session.payload.user.isEmployee,true);
   assert.equal(session.payload.user.accountType,"employee");
+});
+test("protected personal developer receives all privacy capabilities without individual grants", async () => {
+  assert.equal(db.prepare("SELECT count(*) n FROM portal_permission_grants WHERE employee_number=?").get(users.developer.id).n,0);
+  const session = await request("/api/portal/v1/session",{auth:users.developer});
+  assert.equal(session.status,200);
+  assert.equal(session.payload.user.role,"developer");
+  assert.equal(session.payload.user.sessionKind,"employee");
+  assert.equal(session.payload.user.isEmployee,true);
+  assert.equal(session.payload.user.accountType,"employee");
+  for (const permission of ["privacy_organization:read","privacy_organization:manage","privacy_organization:approve"]) assert.ok(session.payload.user.permissions.includes(permission));
+  const result = await request(undefined,{auth:users.developer});
+  assert.equal(result.status,200,JSON.stringify(result.payload));
+  assert.deepEqual(result.payload.capabilities,{read:true,manage:true,approve:true});
+  assert.equal(result.headers.get("cache-control"),"no-store");
+  assert.equal(db.prepare("SELECT value FROM settings WHERE key=?").get(KEY),undefined);
+});
+test("personal developer still requires CSRF and a changed initial password", async () => {
+  const before = (await request(undefined,{auth:users.developer})).payload.revision;
+  const missingCsrf = await request("/api/privacy-organization/commands",{method:"POST",auth:users.developer,csrf:false,body:{action:"create",kind:"activity",payload:{title:"Denied csrf"},expectedRevision:before}});
+  assert.equal(missingCsrf.status,403);
+  db.prepare("UPDATE portal_users SET must_change_password=1 WHERE employee_number=?").run(users.developer.id);
+  try {
+    for (const result of [await request(undefined,{auth:users.developer}),await request("/api/privacy-organization/commands",{method:"POST",auth:users.developer,body:{action:"create",kind:"activity",payload:{title:"Denied initial password"},expectedRevision:before}})]) {
+      assert.equal(result.status,428); assert.equal(result.payload.code,"PORTAL_PASSWORD_CHANGE_REQUIRED");
+    }
+  } finally {db.prepare("UPDATE portal_users SET must_change_password=0 WHERE employee_number=?").run(users.developer.id);}
+  assert.equal((await request(undefined,{auth:users.developer})).payload.revision,before);
+  assert.equal(db.prepare("SELECT value FROM settings WHERE key=?").get(KEY),undefined);
 });
 test("live permission denial overrides role defaults and grants", async () => {
   for(const permission of ["privacy_organization:manage","privacy_organization:read"]) {
@@ -105,6 +133,33 @@ test("independent organizational review persists encrypted snapshots and disallo
   const stored = db.prepare("SELECT value FROM settings WHERE key=?").get(KEY).value;
   assert.match(stored,/^enc:v2:/); absentPrivate(stored);
   assert.equal(result.organization.history.length,4);
+});
+test("developer can author and independently review VVT without bypassing self approval", async () => {
+  const payload = {title:"Synthetic developer VVT",ownerEmployeeNumber:users.developer.id,purpose:"Synthetic purpose",systemScope:"Isolated synthetic system",dataSubjects:"Employee categories",dataCategories:"Account identifiers",recipients:"None in test",processors:"None in test",storageLocations:"Test directory",transfers:"none",retention:"Synthetic retention rationale",toms:"Synthetic rights",legalBasis:"Synthetic legal review",specialCategories:"no",reviewOn:"2027-12-31"};
+  const created = await okCommand({action:"create",kind:"activity",payload},{auth:users.developer});
+  const id = created.records.find(record => record.payload.title===payload.title).id;
+  await okCommand({action:"update",id,payload:{purpose:"Synthetic developer edit"}},{auth:users.developer});
+  await okCommand({action:"submit",id},{auth:users.developer});
+  const self = await command({action:"approve",id,decision:{reason:"Self review"}},{auth:users.developer});
+  assert.equal(self.status,403); assert.equal(self.payload.code,"SELF_APPROVAL");
+  const approved = await okCommand({action:"approve",id,decision:{reason:"Synthetic independent admin review"}},{auth:users.reviewer});
+  assert.equal(approved.records.find(record=>record.id===id).approvedBy,users.reviewer.id);
+  const hrCreated = await okCommand({action:"create",kind:"activity",payload:{...payload,title:"Synthetic HR VVT",ownerEmployeeNumber:users.author.id}});
+  const hrId = hrCreated.records.find(record=>record.payload.title==="Synthetic HR VVT").id;
+  await okCommand({action:"submit",id:hrId});
+  const developerApproved = await okCommand({action:"approve",id:hrId,decision:{reason:"Synthetic independent developer review"}},{auth:users.developer});
+  assert.equal(developerApproved.records.find(record=>record.id===hrId).approvedBy,users.developer.id);
+  assert.match(db.prepare("SELECT value FROM settings WHERE key=?").get(KEY).value,/^enc:v2:/);
+  assert.equal(db.prepare("SELECT count(*) n FROM portal_permission_grants WHERE employee_number=?").get(users.developer.id).n,0);
+});
+test("a developer session loses privacy authority after the live account is deactivated", async () => {
+  const before = (await request()).payload.revision;
+  db.prepare("UPDATE portal_users SET active=0 WHERE employee_number=?").run(users.developer.id);
+  try {
+    assert.equal((await request(undefined,{auth:users.developer})).status,401);
+    assert.equal((await request("/api/privacy-organization/commands",{method:"POST",auth:users.developer,body:{action:"create",kind:"activity",payload:{title:"Inactive developer"},expectedRevision:before}})).status,401);
+  } finally {db.prepare("UPDATE portal_users SET active=1 WHERE employee_number=?").run(users.developer.id);}
+  assert.equal((await request()).payload.revision,before);
 });
 test("a stale tab cannot replace a newer encrypted ledger", async () => {
   const before = await request(); await okCommand({action:"create",kind:"activity",payload:{title:"Synthetic draft"}});

@@ -27,10 +27,15 @@ const register = (overrides = {}) => ({
   ...overrides,
 });
 
-test("Datenschutz öffnet nur für persönliche HR/Admin-Konten mit ausdrücklichem Fachrecht", () => {
-  assert.equal(UI.accessAllowed(user()), true);
-  assert.equal(UI.accessAllowed(user({ role: "admin" })), true);
-  for (const changes of [{ role: "developer" }, { role: "it_admin" }, { role: "manager" }, { role: "employee" }, { permissions: [] }, { permissions: ["privacy_organization:manage"] }, { localSystem: true }, { sessionKind: "local" }, { sessionKind: undefined }, { employeeNumber: "local" }, { employeeNumber: "" }, { isEmployee: false }, { isEmployee: undefined }, { accountType: "branch" }, { accountType: undefined }]) assert.equal(UI.accessAllowed(user(changes)), false, JSON.stringify(changes));
+test("Datenschutz öffnet für persönliche HR/Admin/Developer-Konten mit ausdrücklichem Fachrecht", () => {
+  for (const role of ["hr", "admin", "developer"]) {
+    for (const permission of ["privacy_organization:read", "privacy_organization:manage", "privacy_organization:approve"]) {
+      assert.equal(UI.accessAllowed(user({ role }), permission), true, `${role}: ${permission}`);
+      assert.equal(UI.accessAllowed(user({ role, permissions: [] }), permission), false, `${role}: missing ${permission}`);
+    }
+    for (const changes of [{ permissions: ["privacy_organization:manage"] }, { localSystem: true }, { sessionKind: "local" }, { sessionKind: undefined }, { employeeNumber: "local" }, { employeeNumber: "" }, { isEmployee: false }, { isEmployee: undefined }, { accountType: "branch" }, { accountType: undefined }]) assert.equal(UI.accessAllowed(user({ role, ...changes })), false, JSON.stringify({ role, ...changes }));
+  }
+  for (const role of ["it_admin", "manager", "employee"]) assert.equal(UI.accessAllowed(user({ role })), false, role);
 });
 
 test("History-/Tab-Normalisierung nimmt ausschließlich feste Bereiche an", () => {
@@ -163,10 +168,30 @@ function fixtureHost() {
 
 test("Unberechtigte Konten lösen weder Lesen noch persistente Steuerungen aus", async () => {
   const host = fixtureHost(); let reads = 0;
-  const workspace = UI.mount(host, { api: async () => { reads++; return register(); }, user: user({ role: "developer" }) });
+  const workspace = UI.mount(host, { api: async () => { reads++; return register(); }, user: user({ role: "it_admin" }) });
   assert.equal(await workspace.activate("breaches"), false);
   assert.equal(reads, 0);
   assert.equal(host.querySelector("[data-po-panel]"), null);
+  workspace.destroy();
+});
+
+test("Ein persönliches Developer-Konto kann alle fünf Datenschutzbereiche öffnen und Arbeitsfassungen bearbeiten", async () => {
+  const host = fixtureHost(), calls = [];
+  const workspace = UI.mount(host, { api: async (url, options = {}) => { calls.push({ url, options }); return register(); }, user: user({ role: "developer" }) });
+  for (const tab of UI.TABS) {
+    assert.equal(await workspace.activate(tab.id), true, tab.id);
+    assert.equal(workspace.getTab(), tab.id);
+    assert.ok(host.querySelector("[data-po-panel]"), tab.id);
+    assert.match(host.textContent, new RegExp(tab.id === "overview" ? "Datenschutzorganisation" : tab.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.equal(calls.length, UI.TABS.length);
+  assert.ok(calls.every(call => call.url === "/api/privacy-organization" && !call.options.method));
+  await workspace.activate("data-map");
+  const edit = host.querySelector('[data-po-action="edit"]');
+  assert.ok(edit);
+  await host.fire("click", { target: edit });
+  assert.ok(host.querySelector("[data-po-edit-form]"));
+  assert.equal(host.querySelector("[data-po-edit-form]").elements.namedItem("title").value, "Synthetische Verarbeitung");
   workspace.destroy();
 });
 

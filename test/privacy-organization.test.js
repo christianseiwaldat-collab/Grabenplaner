@@ -33,7 +33,21 @@ test("draft write leaves input unchanged and adds immutable actor/time/hash evid
 test("global revision detects stale writes without changing existing state", () => {
   const ledger = create(createPrivacyLedger(), "activity", { title: "Test" }); expectCode(() => applyPrivacyCommand(ledger, { action: "update", id: "organization", payload: {}, expectedRevision: 0 }, { actor: author, now: NOW }), "STALE_REVISION");
 });
-for (const [label, actor] of [["nonpersonal", { ...author, personal: false }], ["permission absent", { ...author, permissions: [] }], ["developer", { ...author, role: "developer" }], ["system", { ...author, role: "system" }], ["missing principal", { ...author, employeeNumber: "" }], ["empty role", { ...author, role: "" }]]) test(`trusted personal authorization: ${label}`, () => { expectCode(() => command(createPrivacyLedger(), { action: "update", id: "organization", payload: {} }, actor), "FORBIDDEN"); });
+for (const [label, actor] of [["nonpersonal", { ...author, personal: false }], ["permission absent", { ...author, permissions: [] }], ["it admin", { ...author, role: "it_admin" }], ["manager", { ...author, role: "manager" }], ["custom role", { ...author, role: "custom" }], ["system", { ...author, role: "system" }], ["missing principal", { ...author, employeeNumber: "" }], ["empty role", { ...author, role: "" }]]) test(`trusted personal authorization: ${label}`, () => { expectCode(() => command(createPrivacyLedger(), { action: "update", id: "organization", payload: {} }, actor), "FORBIDDEN"); });
+test("personal developer can author and independently approve while self approval remains forbidden", () => {
+  const developer = { ...author, employeeNumber: "SYNTHETIC-DEVELOPER", role: "developer" };
+  let ledger = command(createPrivacyLedger(), { action: "update", id: "organization", payload: ORG }, developer);
+  ledger = command(ledger, { action: "submit", id: "organization" }, developer);
+  expectCode(() => command(ledger, { action: "approve", id: "organization", decision: { reason: "Self review" } }, developer), "SELF_APPROVAL");
+  ledger = command(ledger, { action: "approve", id: "organization", decision: { reason: "Independent review" } }, reviewer);
+  assert.equal(ledger.records[0].approvedBy, reviewer.employeeNumber);
+  let authoredByHr = command(createPrivacyLedger(), { action: "update", id: "organization", payload: ORG });
+  authoredByHr = command(authoredByHr, { action: "submit", id: "organization" });
+  const independentlyReviewed = command(authoredByHr, { action: "approve", id: "organization", decision: { reason: "Independent developer review" } }, developer);
+  assert.equal(independentlyReviewed.records[0].approvedBy, developer.employeeNumber);
+  assert.equal(independentlyReviewed.events.at(-1).actor.role, "developer");
+  assert.equal(verifyPrivacyLedger(independentlyReviewed).valid, true);
+});
 for (const [key, value, code] of [["rawPeople", ["Synthetic"], "UNKNOWN_FIELD"], ["transfers", "probably_none", "INVALID_FIELD"], ["sourceRefs", "reference", "INVALID_FIELD"], ["title", "x".repeat(241), "INVALID_FIELD"], ["reviewOn", "2026-02-30", "INVALID_DATE"], ["reviewOn", "0000-01-01", "INVALID_DATE"]]) test(`strict activity payload: ${key} ${code}`, () => { expectCode(() => create(createPrivacyLedger(), "activity", { [key]: value }), code); });
 test("null payload, accessors and non-JSON data are rejected", () => {
   expectCode(() => create(createPrivacyLedger(), "activity", null), "INVALID_OBJECT"); const accessor = {}; Object.defineProperty(accessor, "title", { enumerable: true, get() { throw new Error("must not execute"); } }); expectCode(() => create(createPrivacyLedger(), "activity", accessor), "INVALID_OBJECT"); expectCode(() => createPrivacyLedger({ initialOrganization: { notes: () => "no" } }), "INVALID_FIELD");

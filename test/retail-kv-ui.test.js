@@ -36,11 +36,16 @@ test("new client periods default to unknown facts and remain compatible with str
   assert.equal(record.planningEnabled, false); assert.equal(record.periods[0].confirmed, false);
   assert.equal(record.periods[0].group, "unknown"); assert.equal(record.periods[0].agreementStatus, "unknown"); assert.equal(record.periods[0].contractWeeklyMinutes, null);
 });
-test("only personal HR/Admin accounts with the explicit field grant can use the editor", () => {
+test("personal HR/Admin/Developer accounts with the explicit field grant can use the editor", () => {
   const access = { fieldAccess: { [ui.FIELD_KEY]: "write" } };
-  for (const role of ["manager", "location_planner", "it_admin", "developer"]) assert.equal(ui.accessMode(access, { role, employeeNumber: "synthetic" }), "hidden");
-  for (const role of ["hr", "admin"]) { assert.equal(ui.accessMode(access, { role, employeeNumber: "synthetic" }), "write"); assert.equal(ui.accessMode(access, { role, employeeNumber: "local" }), "hidden"); }
-  assert.equal(ui.accessMode({ fieldAccess: { [ui.FIELD_KEY]: "hidden" } }, { role: "hr" }), "hidden");
+  for (const role of ["manager", "location_planner", "it_admin"]) assert.equal(ui.accessMode(access, { role, employeeNumber: "synthetic" }), "hidden");
+  for (const role of ["hr", "admin", "developer"]) {
+    assert.equal(ui.accessMode(access, { role, employeeNumber: "synthetic" }), "write", role);
+    assert.equal(ui.accessMode({ fieldAccess: { [ui.FIELD_KEY]: "read" } }, { role, employeeNumber: "synthetic" }), "read", role);
+    for (const changes of [{ employeeNumber: "local" }, { localSystem: true }, { sessionKind: "local" }]) assert.equal(ui.accessMode(access, { role, employeeNumber: "synthetic", ...changes }), "hidden", `${role}: ${JSON.stringify(changes)}`);
+    assert.equal(ui.accessMode({ fieldAccess: { [ui.FIELD_KEY]: "hidden" } }, { role }), "hidden", role);
+    assert.equal(ui.accessMode({}, { role }), "hidden", role);
+  }
 });
 test("rendering escapes private references, offers only the verified linked source and preserves unknown selections", () => {
   const start = code.indexOf("function renderPersonnelRetailKvEditor(");
@@ -52,6 +57,32 @@ test("rendering escapes private references, offers only the verified linked sour
   const html = context.renderPersonnelRetailKvEditor(status, "write", { agreements: [{ title: "Untrusted", versions: [{ id: "wrong", source: { sha256: "b".repeat(64) }, linkedProfileVersionId: "at-retail-kv-angestellte-2026@2026.5" }] }] });
   assert.ok(!html.includes('<script>alert("private")</script>')); assert.ok(html.includes("&lt;script&gt;")); assert.ok(!html.includes('value="wrong"'));
   assert.match(html, /value="unknown" selected/); assert.equal(context.renderPersonnelRetailKvEditor(status, "hidden"), "");
+});
+
+test("Developer personnel editor uses the actual field gate and removes KV content when access is withdrawn", () => {
+  const accessStart = code.indexOf("function personnelRecordAccessMode(");
+  const accessEnd = code.indexOf("\nfunction personnelRecordSectionMode(", accessStart);
+  const renderStart = code.indexOf("function renderPersonnelRetailKvEditor(");
+  const renderEnd = code.indexOf("\nfunction readPersonnelRetailKvEditor(", renderStart);
+  assert.ok(accessStart >= 0 && accessEnd > accessStart && renderStart >= 0 && renderEnd > renderStart);
+  const escape = value => String(value).replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
+  const context = vm.createContext({
+    window: { GPRetailKv: ui }, state: { portalSession: { user: { role: "developer", employeeNumber: "synthetic" } } },
+    escapeHtml: escape, escapeHtmlAttribute: escape,
+  });
+  vm.runInContext(code.slice(accessStart, accessEnd), context);
+  vm.runInContext(code.slice(renderStart, renderEnd), context);
+  const status = { version: 1, planningEnabled: false, periods: [{ ...ui.createPeriod("synthetic"), sourceReference: "SYNTHETIC-KV-EVIDENCE" }] };
+  for (const level of ["write", "read", "hidden"]) {
+    const mode = context.personnelRecordAccessMode({ fieldAccess: { [ui.FIELD_KEY]: level } }, ui.FIELD_KEY);
+    assert.equal(mode, level);
+    const rendered = context.renderPersonnelRetailKvEditor(status, mode);
+    if (level === "hidden") assert.equal(rendered, "");
+    else {
+      assert.match(rendered, /SYNTHETIC-KV-EVIDENCE/);
+      assert.match(rendered, new RegExp(`data-kv-access="${level}"`));
+    }
+  }
 });
 
 test("editor sends only loaded opaque bases for submitted structure fields, including deletion", () => {

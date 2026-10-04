@@ -33,25 +33,26 @@ const actor = (id, extras = {}) => ({ employeeNumber: id, role: "hr", qualificat
   permissionUsed: "collective_agreements:approve", now: "2026-10-03T08:00:00.000Z", ...extras });
 
 async function approve(fixture, assignmentId, { operation = "approve_kv_assignment", effectiveOn = "2026-01-01",
-  reviewers = [actor("REVIEW-1"), actor("REVIEW-2")], finalize = true } = {}) {
+  reviewers = [actor("REVIEW-1"), actor("REVIEW-2")], finalize = true,
+  submitter = actor("AUTHOR"), finalizer = submitter } = {}) {
   const input = { operation, subjectType: "collective_agreement_assignment", subjectId: assignmentId,
     payload: { effectiveOn } };
-  const preview = await previewWorkRuleGovernance(fixture.repositories.governance, input, actor("AUTHOR"));
+  const preview = await previewWorkRuleGovernance(fixture.repositories.governance, input, submitter);
   assert.equal(preview.outcome, "pass");
   let request = await createWorkRuleReviewRequest(fixture.repositories.governance,
     { ...input, clientRequestId: `request-${assignmentId}-${operation}`, basisSha256: preview.basisSha256,
       conflictRunId: preview.conflictRunId, reason: "Quellenstand und Betriebsteil unabhängig geprüft.",
-      sourceReference: "Dokumentierte Fachprüfung" }, actor("AUTHOR"));
+      sourceReference: "Dokumentierte Fachprüfung" }, submitter);
   for (const reviewer of reviewers) request = await recordWorkRuleReviewDecision(fixture.repositories.governance,
     request.id, { decision: "approve", reason: "Quelle und Anwendbarkeit unabhängig geprüft." }, reviewer);
   if (finalize) await finalizeWorkRuleReviewRequest(fixture.repositories.governance, request.id,
     { reason: "Getrennte Freigaben vollständig geprüft.", sourceReference: "Dokumentierte Fachprüfung",
-      basisSha256: request.basisSha256 }, actor("AUTHOR"));
+      basisSha256: request.basisSha256 }, finalizer);
   return request;
 }
 
 async function fixture({ source = {}, approved = true, scope = { scopeType: "location", scopeKey: "L1" },
-  reviewers, finalize = true, effectiveOn, profile = PROFILE, rules = [], catalog } = {}) {
+  reviewers, finalize = true, effectiveOn, submitter, finalizer, profile = PROFILE, rules = [], catalog } = {}) {
   const application = openSqliteApplicationPersistence({ databasePath: ":memory:", catalog: catalog || [
     ...SQLITE_WORK_RULE_STORE_CATALOG, ...SQLITE_CUSTOM_WORK_RULES_CATALOG,
     ...SQLITE_WORK_RULE_GOVERNANCE_CATALOG, ...SQLITE_COLLECTIVE_AGREEMENTS_CATALOG,
@@ -80,7 +81,7 @@ async function fixture({ source = {}, approved = true, scope = { scopeType: "loc
       sourceVersion: RETAIL_KV_SOURCE.id, sourceSha256: RETAIL_KV_SOURCE.sha256,
       collectiveAgreementVersionId: agreement.currentVersionId, approvedAssignmentId: assignment.id },
     close: async () => { await application.provider.close(); application.database.close(); } };
-  if (approved) result.request = await approve(result, assignment.id, { reviewers, finalize, effectiveOn });
+  if (approved) result.request = await approve(result, assignment.id, { reviewers, finalize, effectiveOn, submitter, finalizer });
   return result;
 }
 
@@ -133,13 +134,36 @@ test("missing approval and incomplete/finalization-free reviews remain unknown",
   }
 });
 
-test("technical or organisational decisions cannot substitute for two professional HR/admin approvals", async t => {
-  for (const reviewer of [actor("REVIEW-2", { role: "developer" }),
+test("ineligible accounts or nonprofessional decisions cannot substitute for two independent qualified approvals", async t => {
+  for (const reviewer of [...["it_admin", "local", "manager", "unknown"].map(role => actor("REVIEW-2", { role })),
+    actor("REVIEW-2", { role: "developer", qualification: "technical" }),
     actor("REVIEW-2", { qualification: "organisational" }),
     actor("REVIEW-2", { permissionUsed: "work_rules:review" })]) {
     const value = await fixture({ reviewers: [actor("REVIEW-1"), reviewer] }); t.after(value.close);
     assert.equal((await resolve(value)).verified, false);
   }
+});
+
+test("qualified personal developer may submit, finalize and independently review the actual KV binding", async t => {
+  for (const config of [
+    { submitter: actor("AUTHOR", { role: "developer" }) },
+    { finalizer: actor("FINALISER", { role: "developer" }) },
+    { reviewers: [actor("REVIEW-1"), actor("REVIEW-2", { role: "developer" })] },
+  ]) {
+    const value = await fixture(config); t.after(value.close);
+    assert.equal((await resolve(value)).verified, true);
+    const strict = await loadRetailKvBindingSnapshot(value.repositories, { ...OPTIONS, failOnInvalidSnapshot: true });
+    assert.equal(resolveRetailKvApproval(strict, value.period, DATE, CONTEXT).verified, true);
+  }
+});
+
+test("developer author still cannot provide their own independent KV approval", async t => {
+  const value = await fixture({ approved: false }); t.after(value.close);
+  const developerAuthor = actor("AUTHOR", { role: "developer" });
+  await assert.rejects(approve(value, value.assignment.id, {
+    submitter: developerAuthor, reviewers: [developerAuthor, actor("REVIEW-2")],
+  }), error => error.code === "WORK_RULE_GOVERNANCE_SELF_APPROVAL");
+  assert.equal((await resolve(value)).verified, false);
 });
 
 test("author and submitter cannot approve through the existing core workflow", async t => {

@@ -267,7 +267,7 @@ test("Block 5: alle Suchmodule sind versionsgebunden, paketfähig und persistenz
   assert.match(packageJson.version, /^\d+\.\d+\.\d+-beta$/);
   assert.ok(read("README.md").includes(`v${packageJson.version.replace("-beta", " Beta")}`));
   assert.ok(read("VERSIONS-LOG.md").includes(`v${packageJson.version.replace("-beta", " Beta")} · Quellstand`));
-  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.72 Beta · Produktiver Serverstand/);
+  assert.match(read("VERSIONS-LOG.md"), /v0\.92\.72 Beta · GitHub-Serverrelease/);
   assert.match(read("VERSIONS-LOG.md"), /v0\.87\.0-beta\.legacy\.1 · Legacy/);
   assert.equal(JSON.parse(read(".devcontainer/devcontainer.json")).name, `Grabenplaner v${packageJson.version.replace('-beta', '')} Codespaces-Demo`);
 

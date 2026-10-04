@@ -954,9 +954,9 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "hr:approve", label: "Verbindliche PL-Freigaben erteilen", group: "Zeit & Abwesenheit", warningLevel: "critical" },
   { id: "hr:settings", label: "Antrags- und AUM-Regeln verwalten", group: "Zeit & Abwesenheit", warningLevel: "critical" },
   { id: "retention:read", label: "Aufbewahrungsregeln und Vorschau lesen", description: "Kategoriebezogene Fristen, Prüfhinweise und Legal Holds lesen.", group: "Datenschutz", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
-  { id: "privacy_organization:read", label: "Datenschutzorganisation lesen", description: "Verarbeitungsverzeichnis, DSFA, Datenpannen und Zustimmungsprozesse ausschließlich über persönliche HR-/Admin-Konten lesen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin"] },
-  { id: "privacy_organization:manage", label: "Datenschutzorganisation bearbeiten", description: "Datensparsame Prozessfälle versionieren und externe Meldebelege dokumentieren.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin"] },
-  { id: "privacy_organization:approve", label: "Datenschutzorganisation unabhängig prüfen", description: "Eine fremde eingereichte Fassung fachlich prüfen; keine Behördenmeldung oder Zustimmung von Beschäftigten ersetzen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin"] },
+  { id: "privacy_organization:read", label: "Datenschutzorganisation lesen", description: "Verarbeitungsverzeichnis, DSFA, Datenpannen und Zustimmungsprozesse ausschließlich über persönliche HR-/Admin-/Developer-Konten lesen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "privacy_organization:manage", label: "Datenschutzorganisation bearbeiten", description: "Datensparsame Prozessfälle versionieren und externe Meldebelege dokumentieren.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "privacy_organization:approve", label: "Datenschutzorganisation unabhängig prüfen", description: "Eine fremde eingereichte Fassung fachlich prüfen; keine Behördenmeldung oder Zustimmung von Beschäftigten ersetzen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "retention:manage", label: "Aufbewahrungsregeln versioniert verwalten", description: "Neue Regelversionen und Legal Holds anlegen; kein direkter Löschlauf.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "data_subject_requests:read", label: "Betroffenenanfragen lesen", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "data_subject_requests:manage", label: "Betroffenenanfragen bearbeiten", description: "Identitätsprüfung, Fristen, Entscheidung und Maßnahmen dokumentieren.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
@@ -2025,7 +2025,7 @@ for (const roleId of ["hr", "admin", "developer"]) {
 addBuiltinRolePermissions("it_admin", [
   "time_records:read", "vacation_accounts:read", "retention:read", "data_subject_requests:read",
 ]);
-for (const roleId of ["hr", "admin"]) {
+for (const roleId of ["hr", "admin", "developer"]) {
   addBuiltinRolePermissions(roleId, ["privacy_organization:read", "privacy_organization:manage", "privacy_organization:approve"]);
 }
 for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
@@ -8925,8 +8925,8 @@ async function personnelFieldMatrixForRole(role) {
 
 function applyPersonnelFieldAccessDependencies(matrix, session = null) {
   const next = { ...matrix };
-  if (isLocalSystemSession(session) || !["hr", "admin"].includes(session?.role)) next["employment.protectionStatus"] = "hidden";
-  if (isLocalSystemSession(session) || !["hr", "admin"].includes(session?.role)) next["employment.retailKv"] = "hidden";
+  if (isLocalSystemSession(session) || !["hr", "admin", "developer"].includes(session?.role)) next["employment.protectionStatus"] = "hidden";
+  if (isLocalSystemSession(session) || !["hr", "admin", "developer"].includes(session?.role)) next["employment.retailKv"] = "hidden";
   for (const fieldKey of personnelEmploymentDateFieldKeys) {
     if (next[fieldKey] !== "write") continue;
     const relatedDateHidden = personnelEmploymentDateFieldKeys
@@ -9702,7 +9702,7 @@ function personnelPlanningStatusBasisValue(employeeNumber, fieldKey, value) {
 
 function personnelPlanningStatusBasisForActor(employeeNumber, profile, session, access) {
   if (isLocalSystemSession(session) || session?.sessionKind !== "employee" || session?.isEmployee !== true
-    || session?.accountType !== "employee" || !["hr", "admin"].includes(session?.role)) return {};
+    || session?.accountType !== "employee" || !["hr", "admin", "developer"].includes(session?.role)) return {};
   return Object.fromEntries(PERSONNEL_PLANNING_STATUS_FIELD_KEYS
     .filter(fieldKey => access.fieldAccess[fieldKey] !== "hidden")
     .map(fieldKey => [fieldKey, personnelPlanningStatusBasisValue(employeeNumber, fieldKey,
@@ -30223,10 +30223,10 @@ let privacyOrganizationStore = null;
 function assertPrivacyOrganizationActor(session, permission) {
   if (!session || isLocalSystemSession(session) || session.sessionKind !== "employee"
     || session.isEmployee !== true || session.accountType !== "employee"
-    || !["hr", "admin"].includes(session.role) || !session.employeeNumber
+    || !["hr", "admin", "developer"].includes(session.role) || !session.employeeNumber
     || isReservedEmployeePrincipal(session.employeeNumber)
     || !session.permissions?.includes(permission) || !session.permissions?.includes("privacy_organization:read")) {
-    throw httpError(403, "Der Datenschutzbereich benötigt ein persönliches HR-/Admin-Konto mit dem entsprechenden Datenschutzrecht.", "PRIVACY_ORGANIZATION_ACCESS_DENIED");
+    throw httpError(403, "Der Datenschutzbereich benötigt ein persönliches HR-/Admin-/Developer-Konto mit dem entsprechenden Datenschutzrecht.", "PRIVACY_ORGANIZATION_ACCESS_DENIED");
   }
   if (session.mustChangePassword) throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
   return session;
@@ -31931,7 +31931,7 @@ async function workRuleDashboardPayload(session) {
 }
 
 function workRuleProtectionProvenanceForSession(value, session) {
-  if (!isLocalSystemSession(session) && ["hr", "admin"].includes(session?.role)) return value;
+  if (!isLocalSystemSession(session) && ["hr", "admin", "developer"].includes(session?.role)) return value;
   const privateSource = (entry) => String(typeof entry === "string" ? entry : entry?.id || "").startsWith("ris.mschg.");
   const project = (entry) => {
     if (Array.isArray(entry)) return entry.map(project);
