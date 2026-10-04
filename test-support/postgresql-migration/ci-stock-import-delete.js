@@ -34,7 +34,7 @@ async function main(){
   }
  }finally{await client.end();}
  const commands=[['scripts/postgresql/mark-development-environment.js'],['scripts/postgresql/apply-core-schema.js'],['scripts/postgresql/apply-sales-schema.js','5'],['scripts/postgresql/apply-sales-schema.js','6'],['scripts/postgresql/apply-boundary-schema.js'],['scripts/postgresql/apply-sales-schema.js','8'],
- ['-e',"const {Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.GP_CORE_MIGRATOR_URL});await c.connect();try{await require('./lib/persistence/postgresql/core/trade-annotations').migrate(c);}finally{await c.end();}})().catch(e=>{console.error(e.code||e.message);process.exitCode=1;})"],
+ ['-e',"const {Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.GP_CORE_MIGRATOR_URL});await c.connect();try{await require('./lib/persistence/postgresql/core/trade-annotations').migrate(c);await require('./lib/persistence/postgresql/core/vocational-school').migrate(c);}finally{await c.end();}})().catch(e=>{console.error(e.code||e.message);process.exitCode=1;})"],
  ['--test','--test-concurrency=1','test/postgresql-stock-import-delete.test.js'],
  ['--test','--test-concurrency=1','test/postgresql-cash-takeover.test.js']];
  for(const args of commands){const result=spawnSync(process.execPath,args,{env,stdio:'inherit'});if(result.status!==0)throw new Error('Synthetic migration qualification failed: '+args[0]);}
