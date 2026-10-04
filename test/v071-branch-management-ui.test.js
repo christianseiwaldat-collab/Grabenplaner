@@ -119,14 +119,19 @@ test("v0.71 Block 7 UI: globale Dienstplanung behält Standort und kennt filialf
 });
 
 test("v0.71 Block 7 UI: Navigation und zentrale Urlaubstabelle reagieren auf kleinere Ansichten", () => {
+  const baseStyles = styles.slice(0, styles.indexOf("@media"));
+  const mobileNavigationStyles = between(styles, "@media (max-width: 820px) {", "@media (max-width: 600px) {");
   assert.match(styles, /\.nav-module \{ display:grid; min-width:0; \}/);
   assert.match(styles, /\.nav-item\.nav-module-route \{ display:grid; grid-template-columns:14px 22px minmax\(0,1fr\) auto/);
   assert.match(styles, /\.nav-branch \{[^}]*grid-template-columns: 14px minmax\(0,1fr\)/);
   assert.match(styles, /\.nav-module-children \{[^}]*border-left:/);
   assert.match(styles, /\.main-nav \{[^}]*overflow-x:clip;[^}]*overflow-y:\s*auto;/);
-  assert.match(styles, /@media \(max-width: 820px\) \{[\s\S]*?\.sidebar \{[^}]*position:fixed;[^}]*transform:translateX\(-105%\);[^}]*\}[\s\S]*?\.main-nav \{[^}]*display:grid;[^}]*overflow-x:clip;[^}]*overflow-y:auto;/);
+  assert.match(baseStyles, /\.sidebar \{[^}]*position:fixed;/, "Die Sidebar bleibt auch ohne mobile Wiederholung der Basisposition fest.");
+  assert.match(mobileNavigationStyles, /\.sidebar \{[^}]*visibility:hidden;[^}]*transform:translateX\(-105%\);/);
+  assert.match(mobileNavigationStyles, /body\.mobile-navigation-open \.sidebar \{[^}]*visibility:visible;[^}]*transform:translateX\(0\);/);
+  assert.match(mobileNavigationStyles, /\.main-nav \{[^}]*display:grid;[^}]*overflow-x:clip;[^}]*overflow-y:auto;/);
   assert.match(styles, /@media \(max-width: 600px\) \{[\s\S]*?\.main-nav \{ display:grid; width:100%; overflow-x:clip; \}[\s\S]*?\.nav-module \{ width:100%; \}/);
-  assert.doesNotMatch(styles, /@media \(max-width: 820px\) \{[\s\S]*?\.main-nav \{[^}]*overflow-x:auto;/);
+  assert.doesNotMatch(mobileNavigationStyles, /\.main-nav \{[^}]*overflow-x:auto;/);
   assert.match(html, /class="personnel-directory-table central-vacation-table"/);
   assert.match(styles, /@media \(max-width:1180px\) \{[\s\S]*?\.personnel-directory-table thead \{ display:none; \}[\s\S]*?\.personnel-directory-table tr \{ display:grid;/);
 });

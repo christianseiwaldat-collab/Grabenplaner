@@ -14,6 +14,7 @@
     }
     if (["personnelAdministration", "requests", "timeTracking"].includes(view)) return ["personnelAdministration"];
     if (view === "logistics") return ["logistics"];
+    if (view === "privacyOrganization") return ["privacyOrganization"];
     if (["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "priceLabels", "crm"].includes(view)) return ["salesAdministration"];
     return [];
   }

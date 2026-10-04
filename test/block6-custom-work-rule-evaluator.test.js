@@ -217,7 +217,7 @@ test("Block 6: Basis-, Custom- und U18-Profil werden additiv aufgelöst", () => 
     {
       id: "youth-base",
       profileId: "at-retail-youth-monitor",
-      profileVersionId: "at-retail-youth-monitor@2026.2",
+      profileVersionId: "at-retail-youth-monitor@2026.3",
       scopeType: "employee",
       scopeKey: "420",
       validFrom: "2026-01-01",

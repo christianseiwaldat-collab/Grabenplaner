@@ -1722,6 +1722,7 @@ function applyFunctionSearchNavigationState(target) {
   if (target.dashboardMode) state.rightsDashboardMode = target.dashboardMode;
   if (target.requestKind) state.requestKindTab = target.requestKind;
   if (target.salesAnalyticsTab) state.salesAnalytics.tab = target.salesAnalyticsTab;
+  if (target.privacyOrganizationTab) privacyOrganizationTab = window.GrabenplanerPrivacyOrganization.normalizeTab(target.privacyOrganizationTab);
 
   const contextChanged = restoreRememberedOverallContext(target.view);
   setView(target.view);
@@ -4900,6 +4901,7 @@ function navigationGroups() {
     personnelAdministration: { toggle: elements.personnelAdministrationToggle, children: elements.personnelAdministrationNavChildren },
     salesAdministration: { toggle: elements.salesAdministrationToggle, children: elements.salesAdministrationNavChildren },
     logistics: { toggle: document.getElementById("logisticsToggle"), children: document.getElementById("logisticsNavChildren") },
+    privacyOrganization: { toggle: document.getElementById("privacyOrganizationToggle"), children: document.getElementById("privacyOrganizationNavChildren") },
   };
 }
 
@@ -4993,6 +4995,14 @@ function renderContextNavigation() {
   logisticsNav?.classList.toggle("contains-active", state.currentView === "logistics");
   applyNavigationGroupState("logistics", !logisticsNav?.classList.contains("hidden"));
   setNavigationCurrent(document.getElementById("logisticsPurchasingNavButton"), state.currentView === "logistics");
+  const privacyNav = document.getElementById("privacyOrganizationNav");
+  privacyNav?.classList.toggle("contains-active", state.currentView === "privacyOrganization");
+  applyNavigationGroupState("privacyOrganization", !privacyNav?.classList.contains("hidden"));
+  for (const button of privacyNav?.querySelectorAll("[data-privacy-organization-tab]") || []) {
+    setNavigationCurrent(button, state.currentView === "privacyOrganization"
+      && button.dataset.privacyOrganizationTab === privacyOrganizationTab
+      && !button.classList.contains("nav-module-main"));
+  }
   setNavigationCurrent(elements.salesArticleCatalogNavButton, state.currentView === "articleCatalog");
   setNavigationCurrent(document.getElementById("salesPriceLabelsNavButton"), state.currentView === "priceLabels");
   setNavigationCurrent(elements.crmNavButton, state.currentView === "crm");
@@ -12756,7 +12766,7 @@ function renderCollectiveAgreementDetail(registry) {
       <div class="source-wide"><span>Dokumentierte Quelle</span><strong><a href="${escapeHtmlAttribute(displayedVersion.source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displayedVersion.source.title)}</a></strong><small>abgerufen ${escapeHtml(formatDate(displayedVersion.source.retrievedOn))} · Integritätswert ${escapeHtml(sourceHash.slice(0, 16))}…</small></div>
     </div>
     <dl class="collective-agreement-applicability">${collectiveAgreementDefinitionList(displayedVersion)}</dl>
-    ${displayedVersion.linkedProfileVersionId ? `<p class="collective-agreement-profile-link">Vorbereitete Regelprofil-Verknüpfung: <strong>${escapeHtml(displayedVersion.linkedProfileVersionId)}</strong>. Noch nicht aktiviert.</p>` : ""}
+    ${displayedVersion.linkedProfileVersionId ? `<p class="collective-agreement-profile-link">Verknüpfte Regelprofil-Fassung: <strong>${escapeHtml(displayedVersion.linkedProfileVersionId)}</strong>. Die Dienstplanung verwendet sie nur mit ausführbaren Regeln, bestätigter persönlicher Gruppe und unabhängig freigegebener KV-Zuordnung.</p>` : ""}
     <section class="collective-agreement-version-history">
       <div><span class="eyebrow">Nicht überschreibbar</span><h4>Versionshistorie</h4></div>
       ${versionHistory}
@@ -23738,8 +23748,12 @@ function renderPersonnelFieldRights() {
     <details class="personnel-field-rights-group" ${groupIndex === 0 ? "open" : ""}>
       <summary><span><strong>${escapeHtml(group)}</strong><small data-personnel-field-group-summary></small></span><span aria-hidden="true">›</span></summary>
       <div class="personnel-field-rights-list">${groupFields.map((field) => {
-        const currentLevel = ["hidden", "read", "write"].includes(roleMatrix[field.key]) ? roleMatrix[field.key] : "hidden";
-        return `<label class="personnel-field-right-row" data-field-access-level="${escapeHtmlAttribute(currentLevel)}"><span class="personnel-field-right-name"><strong>${escapeHtml(field.label || field.key)}</strong>${field.sensitive ? '<small>Besonders geschützt</small>' : ""}</span><select data-personnel-field-right="${escapeHtmlAttribute(field.key)}" aria-label="${escapeHtmlAttribute(`Zugriff auf ${field.label || field.key}`)}" ${payload.canChange === false ? "disabled" : ""}>${accessLevels.map((level) => `<option value="${escapeHtmlAttribute(level.id)}" ${level.id === currentLevel ? "selected" : ""}>${escapeHtml(level.label || personnelFieldLevelLabel(level.id, payload))}</option>`).join("")}</select></label>`;
+        const restricted = ["employment.protectionStatus", "employment.retailKv"].includes(field.key);
+        const currentLevel = !restricted && ["hidden", "read", "write"].includes(roleMatrix[field.key]) ? roleMatrix[field.key] : "hidden";
+        const levels = restricted ? [{ id: "hidden", label: personnelFieldLevelLabel("hidden", payload) }] : accessLevels;
+        const note = restricted ? '<small>Nur berechtigte HR/Admin; für diese Leitungsrolle stets verborgen.</small>'
+          : (field.sensitive ? '<small>Besonders geschützt</small>' : "");
+        return `<label class="personnel-field-right-row" data-field-access-level="${escapeHtmlAttribute(currentLevel)}"><span class="personnel-field-right-name"><strong>${escapeHtml(field.label || field.key)}</strong>${note}</span><select data-personnel-field-right="${escapeHtmlAttribute(field.key)}" aria-label="${escapeHtmlAttribute(`Zugriff auf ${field.label || field.key}`)}" ${payload.canChange === false || restricted ? "disabled" : ""}>${levels.map((level) => `<option value="${escapeHtmlAttribute(level.id)}" ${level.id === currentLevel ? "selected" : ""}>${escapeHtml(level.label || personnelFieldLevelLabel(level.id, payload))}</option>`).join("")}</select></label>`;
       }).join("")}</div>
     </details>`).join("") : '<p class="settings-note">Es sind noch keine Personalakt-Felder konfiguriert.</p>';
   elements.personnelFieldRightsMatrix.querySelectorAll(".personnel-field-rights-group").forEach(personnelFieldGroupSummary);
@@ -24002,6 +24016,7 @@ function pageViewElement(view) {
     receiptSearch: elements.receiptSearchView,
     tradeInsights: elements.tradeInsightsView,
     logistics: elements.logisticsView,
+    privacyOrganization: document.getElementById("privacyOrganizationView"),
     priceLabels: document.getElementById("salesPriceLabelsView"),
     articleCatalog: elements.salesArticleCatalogView,
     crm: elements.crmView,
@@ -24041,6 +24056,7 @@ function applyGlobalTheme(theme) {
   for (const view of UI_APPEARANCE_VIEWS) applyPageTheme(view, normalized);
   elements.salesArticleCatalogView?.setAttribute("data-page-theme", normalized);
   elements.receiptSearchView?.setAttribute("data-page-theme", normalized);
+  pageViewElement("privacyOrganization")?.setAttribute("data-page-theme", normalized);
   document.querySelectorAll("button[data-global-theme-choice]").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.globalThemeChoice === normalized));
   });
@@ -28049,6 +28065,11 @@ const PERSONNEL_RECORD_FORM_FIELDS = Object.freeze([
   ["employmentType", "employment.employmentType", ["employment", "employmentType"]],
   ["contractType", "employment.contractType", ["employment", "contractType"]],
   ["employmentStatus", "employment.employmentStatus", ["employment", "employmentStatus"]],
+  ["apprenticeshipStatus", "employment.apprenticeshipStatus", ["employment", "apprenticeshipStatus"]],
+  ["apprenticeshipConfirmed", "employment.apprenticeshipConfirmed", ["employment", "apprenticeshipConfirmed"]],
+  ["apprenticeshipValidFrom", "employment.apprenticeshipValidFrom", ["employment", "apprenticeshipValidFrom"]],
+  ["apprenticeshipValidTo", "employment.apprenticeshipValidTo", ["employment", "apprenticeshipValidTo"]],
+  ["apprenticeshipSourceReference", "employment.apprenticeshipSourceReference", ["employment", "apprenticeshipSourceReference"]],
   ["collectiveAgreement", "employment.collectiveAgreement", ["employment", "collectiveAgreement"]],
   ["classification", "employment.classification", ["employment", "classification"]],
   ["payrollGroup", "employment.payrollGroup", ["employment", "payrollGroup"]],
@@ -28056,6 +28077,13 @@ const PERSONNEL_RECORD_FORM_FIELDS = Object.freeze([
 ]);
 
 function personnelRecordAccessMode(access = {}, fieldKey) {
+  if (fieldKey === "employment.retailKv") return window.GPRetailKv.accessMode(access, state.portalSession?.user || {});
+  if (fieldKey === "employment.protectionStatus") {
+    const user = state.portalSession?.user || {};
+    const identity = String(user.employeeNumber ?? user.employee_number ?? user.personnel_number ?? "").toLowerCase();
+    if (state.portalStatus?.portalEnabled === false || user.localSystem === true || identity === "local") return "hidden";
+    return window.GPPlanningProtection.accessMode(access, user.role || "");
+  }
   const explicit = access.fieldAccess?.[fieldKey];
   if (["hidden", "read", "write"].includes(explicit)) return explicit;
   if (fieldKey === "phone") return access.canWritePhone ? "write" : access.canReadPhone ? "read" : "hidden";
@@ -28080,6 +28108,254 @@ function personnelRecordArea(name, fieldKey, label, value, accessMode) {
   if (accessMode === "hidden") return "";
   const editable = accessMode === "write";
   return `<label class="field personnel-record-span-two${editable ? "" : " personnel-record-field-readonly"}" data-personnel-field-key="${escapeHtmlAttribute(fieldKey)}"><span>${escapeHtml(label)}</span><textarea name="${escapeHtmlAttribute(name)}" rows="3" maxlength="2000" autocomplete="off" data-1p-ignore="true" data-lpignore="true" ${editable ? "" : "disabled"}>${escapeHtml(value || "")}</textarea></label>`;
+}
+
+function personnelRecordSelect(name, fieldKey, label, value, accessMode, options) {
+  if (accessMode === "hidden") return "";
+  const editable = accessMode === "write";
+  const choices = Object.entries(options).map(([key, text]) => `<option value="${escapeHtmlAttribute(key)}"${key === String(value || "unknown") ? " selected" : ""}>${escapeHtml(text)}</option>`).join("");
+  return `<label class="field${editable ? "" : " personnel-record-field-readonly"}" data-personnel-field-key="${escapeHtmlAttribute(fieldKey)}"><span>${escapeHtml(label)}</span><select name="${escapeHtmlAttribute(name)}" ${editable ? "" : "disabled"}>${choices}</select></label>`;
+}
+
+function personnelRecordCheckbox(name, fieldKey, label, checked, accessMode) {
+  if (accessMode === "hidden") return "";
+  return `<label class="field" data-personnel-field-key="${escapeHtmlAttribute(fieldKey)}"><span>Fachliche Prüfung</span><span class="checkbox-line"><input name="${escapeHtmlAttribute(name)}" type="checkbox"${checked === true ? " checked" : ""} ${accessMode === "write" ? "" : "disabled"} /> ${escapeHtml(label)}</span></label>`;
+}
+
+function renderPersonnelProtectionEditor(value, mode, prefix) {
+  if (mode === "hidden") return "";
+  const status = window.GPPlanningProtection.copyStatus(value);
+  const disabled = mode === "write" ? "" : "disabled";
+  const periods = (status?.periods || []).map((period, index) => {
+    const input = (property, label, attributes = "", hint = "") => `<label class="field"><span>${escapeHtml(label)}</span><input name="${prefix}Protection${index}${property}" data-protection-property="${property}" value="${escapeHtmlAttribute(period[property] ?? "")}" autocomplete="off" data-1p-ignore="true" data-lpignore="true" ${attributes} ${disabled} />${hint ? `<small>${escapeHtml(hint)}</small>` : ""}</label>`;
+    const choices = Object.entries(window.GPPlanningProtection.PHASES).map(([key, label]) => `<option value="${key}"${period.phase === key ? " selected" : ""}>${escapeHtml(label)}</option>`).join("");
+    return `<fieldset class="personnel-protection-period" data-protection-period="${escapeHtmlAttribute(period.id)}"><legend>Zeitraum ${index + 1}</legend><div class="personnel-record-field-grid">
+      <label class="field"><span>Vertraulicher Schutzstatus</span><select name="${prefix}Protection${index}phase" data-protection-property="phase" ${disabled}>${choices}</select></label>
+      <label class="field"><span>Fachliche Prüfung</span><span class="checkbox-line"><input name="${prefix}Protection${index}confirmed" data-protection-property="confirmed" type="checkbox"${period.confirmed === true ? " checked" : ""} ${disabled} /> Angaben bestätigt</span></label>
+      ${input("validFrom", "Gültig ab", 'type="date" required')}${input("validTo", "Letzter Gültigkeitstag (einschließlich)", 'type="date"')}
+      ${input("referenceId", "Interne Belegkennung", 'maxlength="80" pattern="[A-Za-z0-9._:/-]+" placeholder="Nur interne Kennung"')}
+      ${input("normalDailyMinutes", "Zulässige tägliche Normalarbeitszeit · Minuten", 'type="number" min="1" max="540" step="1" placeholder="Ungeklärt"', "Fachlich bestätigte Gesetz/KV-Grenze. Leer bleibt ungeklärt; vertragliche Teilzeit-Sollstunden werden gesondert geplant.")}
+      ${mode === "write" ? '<button type="button" class="secondary-button compact-button" data-protection-remove>Zeitraum entfernen</button>' : ""}
+    </div></fieldset>`;
+  }).join("");
+  return `<div class="personnel-protection-editor" data-protection-editor="${prefix}" data-protection-access="${mode}" data-protection-null="${status ? "false" : "true"}" data-personnel-field-key="employment.protectionStatus">
+    <p class="settings-note">Vertrauliche Angaben für berechtigte Personalverantwortliche. Keine medizinischen Texte, Geburtstermine oder Personennamen in die Belegkennung eintragen.</p>
+    <label class="checkbox-line"><input name="${prefix}ProtectionEnabled" data-protection-property="planningEnabled" type="checkbox"${status?.planningEnabled === true ? " checked" : ""} ${disabled} /> Auflagen für Planung verwenden (Monitor)</label>
+    <div class="personnel-protection-periods">${periods}</div>
+    ${mode === "write" ? `<button type="button" class="secondary-button compact-button" data-protection-add${(status?.periods.length || 0) >= 32 ? " disabled" : ""}>Zeitraum hinzufügen</button>` : ""}
+    <p class="calculation-note" data-protection-hint role="status">${escapeHtml(window.GPPlanningProtection.statusHint(status))}</p>
+  </div>`;
+}
+
+function readPersonnelProtectionEditor(editor) {
+  if (!editor || !["read", "write"].includes(editor.dataset.protectionAccess)) return null;
+  const planningEnabled = editor.querySelector('[data-protection-property="planningEnabled"]')?.checked === true;
+  const periods = [...editor.querySelectorAll("[data-protection-period]")].map((row) => {
+    const value = (property) => String(row.querySelector(`[data-protection-property="${property}"]`)?.value || "").trim();
+    const minutes = value("normalDailyMinutes");
+    return { id: row.dataset.protectionPeriod, phase: value("phase"),
+      confirmed: row.querySelector('[data-protection-property="confirmed"]')?.checked === true,
+      validFrom: value("validFrom"), validTo: value("validTo"), referenceId: value("referenceId"),
+      normalDailyMinutes: minutes === "" ? null : Number(minutes) };
+  });
+  return editor.dataset.protectionNull === "true" && !planningEnabled && !periods.length
+    ? null : { version: 1, planningEnabled, periods };
+}
+
+function updatePersonnelProtectionHint(editor) {
+  const hint = editor?.querySelector("[data-protection-hint]");
+  if (hint) hint.textContent = window.GPPlanningProtection.statusHint(readPersonnelProtectionEditor(editor));
+}
+
+function handlePersonnelProtectionInput(event) {
+  const editor = event.target.closest("[data-protection-editor]");
+  if (!editor || editor.dataset.protectionAccess !== "write" || event.target.disabled) return;
+  const property = event.target.dataset.protectionProperty;
+  if (!property) return;
+  editor.dataset.protectionNull = "false";
+  if (!["confirmed", "planningEnabled"].includes(property)) {
+    const confirmation = event.target.closest("[data-protection-period]")?.querySelector('[data-protection-property="confirmed"]');
+    if (confirmation) confirmation.checked = false;
+  }
+  if (editor.dataset.protectionEditor === "personnelRecord") state.personnelRecordDirtyFields.add("employment.protectionStatus");
+  updatePersonnelProtectionHint(editor);
+}
+
+function handlePersonnelProtectionClick(event) {
+  const button = event.target.closest("[data-protection-add], [data-protection-remove]");
+  const editor = button?.closest("[data-protection-editor]");
+  if (!editor || editor.dataset.protectionAccess !== "write" || button.disabled) return false;
+  const status = readPersonnelProtectionEditor(editor) || { version: 1, planningEnabled: false, periods: [] };
+  if (button.hasAttribute("data-protection-add")) {
+    if (status.periods.length >= 32) return true;
+    const id = `p-${window.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`;
+    status.periods.push(window.GPPlanningProtection.createPeriod(id));
+  } else {
+    const id = button.closest("[data-protection-period]")?.dataset.protectionPeriod;
+    status.periods = status.periods.filter((period) => period.id !== id);
+  }
+  const prefix = editor.dataset.protectionEditor;
+  editor.outerHTML = renderPersonnelProtectionEditor(status, "write", prefix);
+  const nextEditor = document.querySelector(`[data-protection-editor="${prefix}"]`);
+  const focusTarget = button.hasAttribute("data-protection-add")
+    ? nextEditor?.querySelector("[data-protection-period]:last-child [data-protection-property=phase]")
+    : nextEditor?.querySelector("[data-protection-add]");
+  focusTarget?.focus();
+  if (prefix === "personnelRecord") state.personnelRecordDirtyFields.add("employment.protectionStatus");
+  return true;
+}
+
+function fillEmployeeProtectionEditor(value = null, access = {}) {
+  const host = document.querySelector("#employeeRecordProtectionStatus");
+  if (!host) return;
+  const mode = personnelRecordAccessMode(access, "employment.protectionStatus");
+  host.classList.toggle("hidden", mode === "hidden");
+  host.innerHTML = mode === "hidden" ? "" : `<summary>Planungsschutz · vertraulich</summary>${renderPersonnelProtectionEditor(value, mode, "employeeRecord")}`;
+}
+
+function renderPersonnelRetailKvEditor(value, mode, registry = {}) {
+  if (mode === "hidden") return "";
+  const kv = window.GPRetailKv;
+  const status = kv.copyStatus(value);
+  const disabled = mode === "write" ? "" : "disabled";
+  const versions = (registry.agreements || []).flatMap(agreement => (agreement.versions || [])
+    .filter(version => version.source?.sha256 === kv.SOURCE_SHA256 && version.linkedProfileVersionId === "at-retail-kv-angestellte-2026@2026.5")
+    .map(version => [version.id, `${agreement.shortTitle || agreement.title} · ${version.versionLabel}`]));
+  const select = (label, key, current, options) => {
+    const entries = options.some(([id]) => id === "unknown") ? [...options] : [["", "Noch ungeklärt"], ...options];
+    if (current && !entries.some(([id]) => id === current)) entries.push([current, "Gespeicherte Zuordnung · erneut prüfen"]);
+    return `<label class="field"><span>${escapeHtml(label)}</span><select data-kv-property="${key}" ${disabled}>${entries.map(([id, title]) => `<option value="${escapeHtmlAttribute(id)}"${id === current ? " selected" : ""}>${escapeHtml(title)}</option>`).join("")}</select></label>`;
+  };
+  const field = (label, key, current, type = "text", attributes = 'maxlength="80"') => `<label class="field"><span>${escapeHtml(label)}</span><input data-kv-property="${key}" type="${type}" value="${escapeHtmlAttribute(current ?? "")}" ${attributes} ${disabled} autocomplete="off" /></label>`;
+  const checkbox = (label, key, current) => `<label class="checkbox-line"><input type="checkbox" data-kv-property="${key}"${current === true ? " checked" : ""} ${disabled} /> ${escapeHtml(label)}</label>`;
+  const periods = (status?.periods || []).map((period, index) => {
+    const assignments = (registry.assignments || []).filter(assignment => assignment.agreementVersionId === period.collectiveAgreementVersionId)
+      .map(assignment => [assignment.id, `${assignment.businessUnitName || "Betriebsteil"} · ${assignment.governanceState === "approved" ? "freigegeben" : "Freigabe prüfen"}`]);
+    return `<details data-kv-period="${escapeHtmlAttribute(period.id)}" data-kv-source-version="${escapeHtmlAttribute(period.sourceVersion || "")}" data-kv-source-sha256="${escapeHtmlAttribute(period.sourceSha256 || "")}" class="personnel-protection-period"${index === 0 ? " open" : ""}><summary>KV-Zeitraum ${index + 1} · ${escapeHtml(kv.GROUPS[period.group] || "Ungeklärt")}</summary><div class="personnel-record-field-grid">
+      ${select("Beschäftigtengruppe", "group", period.group, Object.entries(kv.GROUPS))}
+      ${checkbox("Gruppe und Grundlage fachlich bestätigt", "confirmed", period.confirmed)}
+      ${field("Gültig ab", "validFrom", period.validFrom, "date", "")}${field("Gültig bis", "validTo", period.validTo, "date", "")}
+      ${field("Interne Belegkennung", "sourceReference", period.sourceReference)}
+      ${field("Vertragliche Wochenarbeitszeit in Minuten", "contractWeeklyMinutes", period.contractWeeklyMinutes, "number", 'min="1" max="2310" step="1" placeholder="Ungeklärt"')}
+      ${select("KV-Fassung im Register", "collectiveAgreementVersionId", period.collectiveAgreementVersionId, versions)}
+      ${select("Zuordnung zum Betriebsteil", "approvedAssignmentId", period.approvedAssignmentId, assignments)}
+      ${select("Arbeitszeitmodell", "normalWorkModel", period.normalWorkModel, Object.entries(kv.MODELS))}
+      ${select("Betriebliche Vereinbarungen", "agreementStatus", period.agreementStatus, Object.entries(kv.AGREEMENTS))}
+      ${field("Beleg der Vereinbarung oder der bestätigten Standardregelung", "agreementReference", period.agreementReference)}
+      ${field("Bestätigt durch · persönliche Kennung", "agreementConfirmedBy", period.agreementConfirmedBy)}
+      ${field("Vereinbarung gilt ab", "agreementValidFrom", period.agreementValidFrom, "date", "")}${field("Vereinbarung gilt bis", "agreementValidTo", period.agreementValidTo, "date", "")}
+      ${select("Tätigkeitsbereich", "workplaceKind", period.workplaceKind || "unknown", Object.entries(kv.WORKPLACES))}
+      ${checkbox("Tätigkeitsbereich bestätigt", "workplaceConfirmed", period.workplaceConfirmed)}
+      ${select("Besondere Samstags-/Ausgleichsregelung", "exceptionModel", period.exceptionModel || "unknown", Object.entries(kv.EXCEPTIONS))}
+      <details class="personnel-record-span-two"><summary>Durchrechnungszeitraum · falls vereinbart</summary><div class="personnel-record-field-grid">
+        ${field("Beginn", "averagingStart", period.averagingPeriod?.start, "date", "")}${field("Ende", "averagingEnd", period.averagingPeriod?.end, "date", "")}
+        ${field("Belegter Übertrag in Minuten", "averagingCarry", period.averagingPeriod?.carryMinutes, "number", 'step="1" placeholder="Ungeklärt"')}
+        ${checkbox("Durchrechnungszeitraum belegt", "averagingConfirmed", period.averagingPeriod?.confirmed)}
+      </div></details>
+      ${mode === "write" ? '<button type="button" class="secondary-button compact-button" data-kv-remove>Zeitraum entfernen</button>' : ""}
+    </div></details>`;
+  }).join("");
+  return `<div data-kv-editor data-kv-access="${mode}" data-kv-null="${status ? "false" : "true"}" data-personnel-field-key="employment.retailKv">
+    <p class="settings-note">Handelsangestellte einschließlich Lehrlinge. Ein bestätigter Personalakt-Eintrag ersetzt die unabhängige Freigabe der KV-Zuordnung nicht. Ungeklärte Vereinbarungen bleiben offen.</p>
+    ${checkbox("KV-Planprüfung verwenden · Monitor", "planningEnabled", status?.planningEnabled)}
+    ${!versions.length ? '<p class="settings-note">Für die Planprüfung ist zuerst eine KV-Fassung mit geprüfter Quelle und verknüpftem Regelprofil im KV-Register erforderlich.</p>' : ""}
+    ${periods}${mode === "write" ? `<button type="button" class="secondary-button compact-button" data-kv-add${(status?.periods.length || 0) >= 32 ? " disabled" : ""}>Zeitraum hinzufügen</button>` : ""}
+    <p class="calculation-note" data-kv-hint role="status">${escapeHtml(kv.statusHint(status))}</p>
+  </div>`;
+}
+
+function readPersonnelRetailKvEditor(editor) {
+  if (!editor || !["read", "write"].includes(editor.dataset.kvAccess)) return null;
+  const enabled = editor.querySelector('[data-kv-property="planningEnabled"]')?.checked === true;
+  const periods = [...editor.querySelectorAll("[data-kv-period]")].map(row => {
+    const period = window.GPRetailKv.createPeriod(row.dataset.kvPeriod);
+    period.sourceVersion = row.dataset.kvSourceVersion || "";
+    period.sourceSha256 = row.dataset.kvSourceSha256 || "";
+    for (const key of window.GPRetailKv.PERIOD_FIELDS) {
+      if (["id", "sourceVersion", "sourceSha256", "averagingPeriod"].includes(key)) continue;
+      const control = row.querySelector(`[data-kv-property="${key}"]`);
+      if (!control) continue;
+      period[key] = control.type === "checkbox" ? control.checked === true : control.type === "number" ? (control.value === "" ? null : Number(control.value)) : control.value.trim();
+    }
+    const value = key => row.querySelector(`[data-kv-property="${key}"]`)?.value || "";
+    if (value("averagingStart") || value("averagingEnd") || value("averagingCarry") || row.querySelector('[data-kv-property="averagingConfirmed"]')?.checked) {
+      period.averagingPeriod = { start: value("averagingStart"), end: value("averagingEnd"), carryMinutes: value("averagingCarry") === "" ? null : Number(value("averagingCarry")), confirmed: row.querySelector('[data-kv-property="averagingConfirmed"]')?.checked === true };
+    }
+    return period;
+  });
+  return editor.dataset.kvNull === "true" && !enabled && !periods.length ? null : { version: 1, planningEnabled: enabled, periods };
+}
+
+function handlePersonnelRetailKvInput(event) {
+  const editor = event.target.closest("[data-kv-editor]");
+  if (!editor || editor.dataset.kvAccess !== "write" || event.target.disabled) return;
+  editor.dataset.kvNull = "false";
+  const key = event.target.dataset.kvProperty;
+  const row = event.target.closest("[data-kv-period]");
+  if (row) for (const field of window.GPRetailKv.confirmationResets(key)) {
+    const checkbox = row.querySelector(`[data-kv-property="${field}"]`);
+    if (checkbox) checkbox.checked = false;
+  }
+  if (key === "collectiveAgreementVersionId") {
+    const selected = (state.personnelRecord?.kvRegistry?.agreements || []).flatMap(agreement => agreement.versions || [])
+      .find(version => version.id === event.target.value && version.source?.sha256 === window.GPRetailKv.SOURCE_SHA256);
+    row.dataset.kvSourceVersion = selected ? window.GPRetailKv.SOURCE_VERSION : "";
+    row.dataset.kvSourceSha256 = selected?.source?.sha256 || "";
+    row.querySelector('[data-kv-property="approvedAssignmentId"]').value = "";
+    const status = readPersonnelRetailKvEditor(editor);
+    editor.outerHTML = renderPersonnelRetailKvEditor(status, "write", state.personnelRecord?.kvRegistry || {});
+  } else {
+    const hint = editor.querySelector("[data-kv-hint]");
+    if (hint) hint.textContent = window.GPRetailKv.statusHint(readPersonnelRetailKvEditor(editor));
+  }
+  state.personnelRecordDirtyFields.add("employment.retailKv");
+}
+
+function handlePersonnelRetailKvClick(event) {
+  const button = event.target.closest("[data-kv-add], [data-kv-remove]");
+  const editor = button?.closest("[data-kv-editor]");
+  if (!editor || editor.dataset.kvAccess !== "write" || button.disabled) return false;
+  const status = readPersonnelRetailKvEditor(editor) || { version: 1, planningEnabled: false, periods: [] };
+  if (button.hasAttribute("data-kv-add")) {
+    if (status.periods.length >= 32) return true;
+    status.periods.push(window.GPRetailKv.createPeriod(`kv-${window.crypto.randomUUID()}`));
+  } else status.periods = status.periods.filter(period => period.id !== button.closest("[data-kv-period]")?.dataset.kvPeriod);
+  editor.outerHTML = renderPersonnelRetailKvEditor(status, "write", state.personnelRecord?.kvRegistry || {});
+  const next = elements.personnelRecordContent.querySelector("[data-kv-editor]");
+  if (button.hasAttribute("data-kv-add")) {
+    const added = [...(next?.querySelectorAll("[data-kv-period]") || [])].at(-1);
+    if (added) added.open = true;
+    added?.querySelector('[data-kv-property="group"]')?.focus();
+  } else next?.querySelector("[data-kv-add]")?.focus();
+  state.personnelRecordDirtyFields.add("employment.retailKv");
+  return true;
+}
+
+function updateApprenticeshipHint(form, prefix, hint) {
+  const name = (field) => prefix ? `${prefix}${field[0].toUpperCase()}${field.slice(1)}` : field;
+  const status = form?.elements?.namedItem(name("apprenticeshipStatus"))?.value || "unknown";
+  const confirmed = form?.elements?.namedItem(name("apprenticeshipConfirmed"))?.checked === true;
+  const validFrom = form?.elements?.namedItem(name("apprenticeshipValidFrom"));
+  const validTo = form?.elements?.namedItem(name("apprenticeshipValidTo"));
+  const source = form?.elements?.namedItem(name("apprenticeshipSourceReference"));
+  const datedApprenticeship = ["active", "completed"].includes(status);
+  const fromLabel = validFrom?.closest?.("label.field")?.querySelector("span");
+  const toLabel = validTo?.closest?.("label.field")?.querySelector("span");
+  if (fromLabel) fromLabel.textContent = datedApprenticeship ? "Belegter Lehrbeginn" : "Gültig ab";
+  if (toLabel) toLabel.textContent = datedApprenticeship ? "Letzter Lehrtag (einschließlich)" : "Gültig bis";
+  if (validFrom) validFrom.required = confirmed;
+  if (source) source.required = confirmed;
+  if (validTo) {
+    validTo.required = confirmed && status === "completed";
+    validTo.setCustomValidity(validTo.value && validFrom?.value && validTo.value < validFrom.value ? "Gültig bis darf nicht vor gültig ab liegen." : "");
+  }
+  const confirmation = form?.elements?.namedItem(name("apprenticeshipConfirmed"));
+  confirmation?.setCustomValidity(confirmed && status === "unknown" ? "Bitte einen konkreten Lehrlingsstatus auswählen." : "");
+  if (hint) hint.textContent = window.GPVocationalSchool.apprenticeshipHint(status, confirmed, {
+    validFrom: validFrom?.value || "", validTo: validTo?.value || "", sourceReference: source?.value || "",
+    confirmationRestricted: !confirmation,
+    basisRestricted: !validFrom || !source || (status === "completed" && !validTo),
+  });
 }
 
 function personnelRecordDetails(title, eyebrow, accessMode, content, className = "") {
@@ -28149,6 +28425,12 @@ async function openPersonnelRecord(employeeNumber) {
     const record = normalizeProtectedPersonnelRecord(result.profile || {});
     const sensitive = record.sensitive;
     const mode = (key) => personnelRecordAccessMode(access, key);
+    const retailKvMode = mode("employment.retailKv");
+    if (retailKvMode !== "hidden" && canReadCollectiveAgreements()) {
+      try { state.personnelRecord.kvRegistry = await api("/api/collective-agreements/registry"); }
+      catch { state.personnelRecord.kvRegistry = {}; }
+      if (!elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
+    }
     elements.personnelRecordTitle.textContent = `${employee.personnel_number || employeeNumber} · ${employee.nickname || employee.full_name || "Personalakt"}`;
 
     const contactKeys = ["phone", "alternatePhone", "privateEmail"];
@@ -28195,7 +28477,7 @@ async function openPersonnelRecord(employeeNumber) {
         ${personnelRecordField("country", "address.country", "Land", sensitive.address.country, mode("address.country"), 'maxlength="80" autocomplete="country-name"')}
       </div><p class="calculation-note">Diese Werte werden verschlüsselt gespeichert und niemals in Teamlisten ausgegeben.</p>`, "sensitive-personnel-section");
 
-    const employmentKeys = ["employment.startDate", "employment.endDate", "employment.fixedTermEnd", "employment.probationEnd", "employment.employmentType", "employment.contractType", "employment.employmentStatus", "employment.collectiveAgreement", "employment.classification", "employment.payrollGroup", "employment.notes"];
+    const employmentKeys = ["employment.startDate", "employment.endDate", "employment.fixedTermEnd", "employment.probationEnd", "employment.employmentType", "employment.contractType", "employment.employmentStatus", "employment.apprenticeshipStatus", "employment.apprenticeshipConfirmed", "employment.apprenticeshipValidFrom", "employment.apprenticeshipValidTo", "employment.apprenticeshipSourceReference", "employment.collectiveAgreement", "employment.classification", "employment.payrollGroup", "employment.notes"];
     const employmentSection = personnelRecordDetails("Beschäftigung & Vertrag", "Vertragsdaten", personnelRecordSectionMode(access, employmentKeys), `
       <div class="personnel-record-field-grid">
         ${personnelRecordField("employmentStartDate", "employment.startDate", "Eintrittsdatum", sensitive.employment.startDate, mode("employment.startDate"), 'type="date"')}
@@ -28205,6 +28487,12 @@ async function openPersonnelRecord(employeeNumber) {
         ${personnelRecordField("employmentType", "employment.employmentType", "Beschäftigungsart", sensitive.employment.employmentType, mode("employment.employmentType"), 'maxlength="100"')}
         ${personnelRecordField("contractType", "employment.contractType", "Vertragsart", sensitive.employment.contractType, mode("employment.contractType"), 'maxlength="100"')}
         ${personnelRecordField("employmentStatus", "employment.employmentStatus", "Beschäftigungsstatus", sensitive.employment.employmentStatus, mode("employment.employmentStatus"), 'maxlength="80"')}
+        ${personnelRecordSelect("apprenticeshipStatus", "employment.apprenticeshipStatus", "Lehrlingsstatus", sensitive.employment.apprenticeshipStatus, mode("employment.apprenticeshipStatus"), window.GPVocationalSchool.APPRENTICESHIP_STATUSES)}
+        ${personnelRecordCheckbox("apprenticeshipConfirmed", "employment.apprenticeshipConfirmed", "Lehrlingsstatus bestätigt", sensitive.employment.apprenticeshipConfirmed, mode("employment.apprenticeshipConfirmed"))}
+        ${personnelRecordField("apprenticeshipValidFrom", "employment.apprenticeshipValidFrom", "Lehrlingsstatus gültig ab", sensitive.employment.apprenticeshipValidFrom, mode("employment.apprenticeshipValidFrom"), 'type="date"')}
+        ${personnelRecordField("apprenticeshipValidTo", "employment.apprenticeshipValidTo", "Lehrlingsstatus gültig bis", sensitive.employment.apprenticeshipValidTo, mode("employment.apprenticeshipValidTo"), 'type="date"')}
+        ${personnelRecordField("apprenticeshipSourceReference", "employment.apprenticeshipSourceReference", "Grundlage des Lehrlingsstatus", sensitive.employment.apprenticeshipSourceReference, mode("employment.apprenticeshipSourceReference"), 'maxlength="240"', true)}
+        ${mode("employment.apprenticeshipStatus") !== "hidden" ? '<p class="calculation-note personnel-record-span-two" id="personnelRecordApprenticeshipHint" role="status"></p>' : ""}
         ${personnelRecordField("collectiveAgreement", "employment.collectiveAgreement", "Kollektivvertrag", sensitive.employment.collectiveAgreement, mode("employment.collectiveAgreement"), 'maxlength="160"')}
         ${personnelRecordField("classification", "employment.classification", "Einstufung", sensitive.employment.classification, mode("employment.classification"), 'maxlength="120"')}
         ${personnelRecordField("payrollGroup", "employment.payrollGroup", "Lohnverrechnungsgruppe", sensitive.employment.payrollGroup, mode("employment.payrollGroup"), 'maxlength="120"')}
@@ -28219,11 +28507,17 @@ async function openPersonnelRecord(employeeNumber) {
     }).join("");
     const amuSection = access.canReadAmu ? personnelRecordDetails("Arbeitsunfähigkeitsmeldungen", "AUM · Dokumente & Verlauf", false,
       `<div class="personnel-record-report-list">${reportEntries || '<p class="settings-note">Noch keine Arbeitsunfähigkeitsmeldungen im Personalakt.</p>'}</div>`) : "";
+    const protectionMode = mode("employment.protectionStatus");
+    const protectionSection = personnelRecordDetails("Planungsschutz · vertraulich", "Fachlich freigegebene Auflagen", protectionMode,
+      renderPersonnelProtectionEditor(sensitive.employment.protectionStatus, protectionMode, "personnelRecord"), "sensitive-personnel-section");
     const documentSection = renderPersonnelDocuments(employeeNumber, result, access);
-    elements.personnelRecordContent.innerHTML = `${contactSection}${identitySection}${emergencySection}${protectedSection}${employmentSection}${documentSection}${amuSection}`
+    const retailKvSection = personnelRecordDetails("Handels-KV · Planungszuordnung", "Gruppe, Vereinbarung und freigegebene Fassung", retailKvMode,
+      renderPersonnelRetailKvEditor(sensitive.employment.retailKv, retailKvMode, state.personnelRecord?.kvRegistry || {}));
+    elements.personnelRecordContent.innerHTML = `${contactSection}${identitySection}${emergencySection}${protectedSection}${employmentSection}${retailKvSection}${protectionSection}${documentSection}${amuSection}`
       || '<p class="settings-note">Für diesen Personalakt sind keine Bereiche freigegeben.</p>';
     state.personnelRecordDirtyFields.clear();
-    const canWriteFormField = mode("phone") === "write" || PERSONNEL_RECORD_FORM_FIELDS.some(([, fieldKey]) => mode(fieldKey) === "write");
+    updateApprenticeshipHint(elements.personnelRecordForm, "", document.querySelector("#personnelRecordApprenticeshipHint"));
+    const canWriteFormField = mode("phone") === "write" || protectionMode === "write" || retailKvMode === "write" || PERSONNEL_RECORD_FORM_FIELDS.some(([, fieldKey]) => mode(fieldKey) === "write");
     elements.savePersonnelRecordButton.classList.toggle("hidden", !canWriteFormField);
   } catch (error) {
     if (!elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
@@ -28252,15 +28546,33 @@ async function savePersonnelRecord(event) {
   const sensitivePatch = {};
   PERSONNEL_RECORD_FORM_FIELDS.forEach(([inputName, fieldKey, path]) => {
     if (state.personnelRecordDirtyFields.has(fieldKey) && mode(fieldKey) === "write" && fields.namedItem(inputName)) {
-      setNestedValue(sensitivePatch, path, value(inputName));
+      const control = fields.namedItem(inputName);
+      setNestedValue(sensitivePatch, path, control.type === "checkbox" ? control.checked === true : value(inputName));
     }
   });
+  if (state.personnelRecordDirtyFields.has("employment.protectionStatus") && mode("employment.protectionStatus") === "write") {
+    const editor = elements.personnelRecordContent.querySelector('[data-protection-editor="personnelRecord"]');
+    if (editor?.dataset.protectionAccess === "write") {
+      const status = readPersonnelProtectionEditor(editor);
+      const error = window.GPPlanningProtection.statusError(status);
+      if (error) return showToast(error, true);
+      setNestedValue(sensitivePatch, ["employment", "protectionStatus"], status);
+    }
+  }
   if (Object.keys(sensitivePatch).length) body.sensitive = sensitivePatch;
+  if (state.personnelRecordDirtyFields.has("employment.retailKv") && mode("employment.retailKv") === "write") {
+    const editor = elements.personnelRecordContent.querySelector("[data-kv-editor]");
+    if (editor?.dataset.kvAccess === "write") {
+      setNestedValue(sensitivePatch, ["employment", "retailKv"], readPersonnelRetailKvEditor(editor));
+      body.sensitive = sensitivePatch;
+    }
+  }
   if (!Object.keys(body).length) return showToast("Es wurden keine bearbeitbaren Felder geändert.");
   elements.savePersonnelRecordButton.disabled = true;
   elements.personnelRecordMessage.classList.add("hidden");
   try {
-    const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}`, { method: "PUT", body: JSON.stringify(body) });
+    const submittedBody = withPersonnelPlanningStatusBasis(body, current.result?.planningStatusBasis || {});
+    const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}`, { method: "PUT", body: JSON.stringify(submittedBody) });
     showToast(result.changedFields?.length ? "Der Personalakt wurde verschlüsselt gespeichert." : "Es waren keine Änderungen zu speichern.");
     await openPersonnelRecord(current.employeeNumber);
   } catch (error) {
@@ -32831,6 +33143,54 @@ let importMappingWorkspace = null;
 let crmPurchaseWorkspace = null;
 let receiptSearchWorkspace = null;
 let tradeInsightsWorkspace = null;
+let privacyOrganizationWorkspace = null;
+let privacyOrganizationActorKey = "";
+let privacyOrganizationTab = "overview";
+
+function canAccessPrivacyOrganization() {
+  return window.GrabenplanerPrivacyOrganization?.accessAllowed(state.portalSession?.user) === true;
+}
+
+function privacyOrganizationAccessKey() {
+  const user = state.portalSession?.user;
+  return user ? JSON.stringify([user.employeeNumber, user.accountId, user.sessionKind, user.accountType,
+    user.isEmployee, user.role, user.permissions]) : "";
+}
+
+function syncPrivacyOrganizationAccess() {
+  const key = privacyOrganizationAccessKey();
+  const allowed = canAccessPrivacyOrganization();
+  const nav = document.getElementById("privacyOrganizationNav");
+  nav?.classList.toggle("hidden", !allowed);
+  if (key === privacyOrganizationActorKey) return;
+  privacyOrganizationActorKey = key;
+  privacyOrganizationWorkspace?.destroy();
+  privacyOrganizationWorkspace = null;
+  const host = document.getElementById("privacyOrganizationWorkspaceHost");
+  host?.replaceChildren();
+  if (allowed) privacyOrganizationWorkspace = window.GrabenplanerPrivacyOrganization.mount(host, {
+    api, user: () => state.portalSession?.user, accessKey: privacyOrganizationAccessKey,
+    onTabChange(tab) {
+      privacyOrganizationTab = window.GrabenplanerPrivacyOrganization.normalizeTab(tab);
+      if (state.currentView === "privacyOrganization") {
+        renderContextNavigation();
+        globalThis.grabenplanerNavigation?.record();
+      }
+    },
+    onLegacyNavigate(target) {
+      if (target === "requests" && canReadDataSubjectRequests()) {
+        state.personnelAdministrationTab = "dataRequests";
+        setView("personnelAdministration");
+      } else if (target === "retention" && hasGovernancePermission("retention:read")) {
+        setView("settings"); setSettingsTab("dataProtection");
+      }
+    },
+  });
+  if (state.currentView === "privacyOrganization") {
+    if (allowed) void privacyOrganizationWorkspace?.activate(privacyOrganizationTab, { notify: false });
+    else setView("startDashboard");
+  }
+}
 let tradeInsightsTab = "repairs";
 function activateTradeArea(view) {
   const workspace=document.getElementById("tradeInsightsWorkspace");
@@ -32857,6 +33217,7 @@ document.getElementById('salesArticleHistoryButton')?.addEventListener('click', 
   void tradeInsightsWorkspace?.openArticleHistory((elements.salesArticleSearchQuery?.value || '').slice(0,150));
 });
 function syncSalesHistoryAccess() {
+  syncPrivacyOrganizationAccess();
   const user = state.portalSession?.user;
   const nextKey = user ? JSON.stringify([user.employeeNumber, user.accountId, user.isEmployee, user.accountType, user.homeLocationId, user.salesHistory, user.dataImport, user.permissions, user.scopes]) : "";
   if (nextKey === salesHistoryActorKey) return;
@@ -35353,6 +35714,7 @@ function setView(view) {
     || (view === "salesAdministration" && !canOpenSalesAdministrationModule())
     || (view === "receiptSearch" && !state.portalSession?.user?.salesHistory?.read)
     || (["tradeInsights","logistics"].includes(view) && !canAccessTradeInsights())
+    || (view === "privacyOrganization" && !canAccessPrivacyOrganization())
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "articleCatalog" && !canAccessSalesArticleCatalog())
     || (view === "priceLabels" && !canUseSalesPriceLabels())
@@ -35388,8 +35750,10 @@ function setView(view) {
   timePresenceRefreshTimer = null;
   document.querySelectorAll(".nav-item").forEach((button) => {
     const personnelRoute = button.dataset.personnelAdministrationRoute;
+    const privacyRoute = button.dataset.privacyOrganizationTab;
     const active = button.dataset.view === view
-      && (!personnelRoute || personnelRoute === state.personnelAdministrationTab);
+      && (!personnelRoute || personnelRoute === state.personnelAdministrationTab)
+      && (!privacyRoute || privacyRoute === privacyOrganizationTab);
     button.classList.toggle("active", active);
   });
   renderContextNavigation();
@@ -35406,6 +35770,9 @@ function setView(view) {
   if (view === "receiptSearch") void receiptSearchWorkspace?.load(); else receiptSearchWorkspace?.suspend();
   elements.tradeInsightsView?.classList.toggle("active", view === "tradeInsights");
   elements.logisticsView?.classList.toggle("active", view === "logistics");
+  document.getElementById("privacyOrganizationView")?.classList.toggle("active", view === "privacyOrganization");
+  if (view === "privacyOrganization") void privacyOrganizationWorkspace?.activate(privacyOrganizationTab, { notify: false });
+  else privacyOrganizationWorkspace?.suspend();
   if (["tradeInsights","logistics"].includes(view)) void activateTradeArea(view); else tradeInsightsWorkspace?.suspend();
   elements.salesArticleCatalogView?.classList.toggle("active", view === "articleCatalog");
   if (view !== "articleCatalog") {
@@ -35461,7 +35828,7 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     if (fromHistory) closeMobileNavigation({ restoreFocus: false });
     return;
   }
-  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "logistics", "articleCatalog", "priceLabels", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
+  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "logistics", "privacyOrganization", "articleCatalog", "priceLabels", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
     setView("startDashboard");
     return;
   }
@@ -35478,6 +35845,9 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
   if (requestedView === "salesAnalytics") {
     const requestedSection = parameters.get("section");
     if (["create", "reports", "graphics", "pdf"].includes(requestedSection)) state.salesAnalytics.tab = requestedSection;
+  }
+  if (requestedView === "privacyOrganization") {
+    privacyOrganizationTab = window.GrabenplanerPrivacyOrganization.normalizeTab(parameters.get("section"));
   }
   if (requestedView === "personnelAdministration") {
     const requestedSection = parameters.get("section");
@@ -35528,6 +35898,7 @@ function currentAdministrationRoute() {
   if (view === "salesAnalytics") route.section = state.salesAnalytics.tab;
   if (view === "tradeInsights") route.section = tradeInsightsTab;
   if (view === "logistics") route.section = "purchasing";
+  if (view === "privacyOrganization") route.section = privacyOrganizationTab;
   if (view === "requests") route.kind = state.requestKindTab;
   if (view === "rightsDashboard") {
     route.dashboard = state.rightsDashboardMode;
@@ -35959,6 +36330,13 @@ function normalizeProtectedPersonnelRecord(profile = {}, { defaultCountry = fals
         employmentType: String(employment.employmentType || ""),
         contractType: String(employment.contractType || ""),
         employmentStatus: String(employment.employmentStatus || ""),
+        apprenticeshipStatus: Object.hasOwn(window.GPVocationalSchool.APPRENTICESHIP_STATUSES, employment.apprenticeshipStatus) ? employment.apprenticeshipStatus : "unknown",
+        apprenticeshipConfirmed: employment.apprenticeshipConfirmed === true,
+        apprenticeshipValidFrom: String(employment.apprenticeshipValidFrom || ""),
+        apprenticeshipValidTo: String(employment.apprenticeshipValidTo || ""),
+        apprenticeshipSourceReference: String(employment.apprenticeshipSourceReference || ""),
+        protectionStatus: window.GPPlanningProtection?.copyStatus(employment.protectionStatus) ?? null,
+        retailKv: window.GPRetailKv?.copyStatus(employment.retailKv) ?? null,
         collectiveAgreement: String(employment.collectiveAgreement || ""),
         classification: String(employment.classification || ""),
         payrollGroup: String(employment.payrollGroup || ""),
@@ -36007,6 +36385,11 @@ function fillEmployeeProtectedRecord(profile = {}) {
     employeeRecordEmploymentType: sensitive.employment.employmentType,
     employeeRecordContractType: sensitive.employment.contractType,
     employeeRecordEmploymentStatus: sensitive.employment.employmentStatus,
+    employeeRecordApprenticeshipStatus: sensitive.employment.apprenticeshipStatus,
+    employeeRecordApprenticeshipConfirmed: sensitive.employment.apprenticeshipConfirmed,
+    employeeRecordApprenticeshipValidFrom: sensitive.employment.apprenticeshipValidFrom,
+    employeeRecordApprenticeshipValidTo: sensitive.employment.apprenticeshipValidTo,
+    employeeRecordApprenticeshipSourceReference: sensitive.employment.apprenticeshipSourceReference,
     employeeRecordCollectiveAgreement: sensitive.employment.collectiveAgreement,
     employeeRecordClassification: sensitive.employment.classification,
     employeeRecordPayrollGroup: sensitive.employment.payrollGroup,
@@ -36014,15 +36397,30 @@ function fillEmployeeProtectedRecord(profile = {}) {
   };
   for (const [name, value] of Object.entries(values)) {
     const control = employeeRecordControl(name);
-    if (control) control.value = value;
+    if (control?.type === "checkbox") control.checked = value === true;
+    else if (control) control.value = value;
   }
+  updateApprenticeshipHint(elements.employeeForm, "employeeRecord", document.querySelector("#employeeRecordApprenticeshipHint"));
+}
+
+function withPersonnelPlanningStatusBasis(record, loadedBasis = {}) {
+  const employment = record?.sensitive?.employment || {};
+  const fields = ["protectionStatus", "retailKv"]
+    .filter(key => Object.prototype.hasOwnProperty.call(employment, key));
+  if (!fields.length) return record;
+  const planningStatusBasis = Object.fromEntries(fields
+    .map(key => ["employment." + key, loadedBasis["employment." + key]])
+    .filter(([, value]) => typeof value === "string"));
+  return { ...record, planningStatusBasis };
 }
 
 function personnelRecordPatch(before = {}, after = {}) {
   const patch = {};
   for (const [key, nextValue] of Object.entries(after)) {
     const previousValue = before?.[key];
-    if (nextValue && typeof nextValue === "object" && !Array.isArray(nextValue)) {
+    if (key === "protectionStatus") {
+      if (!window.GPPlanningProtection.sameStatus(previousValue, nextValue)) patch[key] = window.GPPlanningProtection.copyStatus(nextValue);
+    } else if (nextValue && typeof nextValue === "object" && !Array.isArray(nextValue)) {
       const nested = personnelRecordPatch(previousValue && typeof previousValue === "object" ? previousValue : {}, nextValue);
       if (Object.keys(nested).length) patch[key] = nested;
     } else if (String(nextValue ?? "") !== String(previousValue ?? "")) {
@@ -36034,8 +36432,12 @@ function personnelRecordPatch(before = {}, after = {}) {
 
 function clearEmployeeProtectedRecord() {
   state.employeePersonnelRecord = null;
-  elements.employeeProtectedRecord?.querySelectorAll("input,textarea").forEach((control) => { control.value = ""; });
+  elements.employeeProtectedRecord?.querySelectorAll("input,select,textarea").forEach((control) => {
+    if (control.type === "checkbox") control.checked = false;
+    else control.value = control.name === "employeeRecordApprenticeshipStatus" ? "unknown" : "";
+  });
   if (elements.employeeProtectedRecord) elements.employeeProtectedRecord.open = false;
+  fillEmployeeProtectionEditor();
 }
 
 function clearPersonnelRecordDialog() {
@@ -36048,7 +36450,13 @@ function clearPersonnelRecordDialog() {
 
 function setEmployeeProtectedRecordDisabled(disabled) {
   elements.employeeProtectedRecord?.querySelectorAll("input,select,textarea").forEach((control) => {
-    control.disabled = disabled;
+    const editor = control.closest("[data-protection-editor]");
+    control.disabled = disabled || Boolean(editor && editor.dataset.protectionAccess !== "write");
+  });
+  elements.employeeProtectedRecord?.querySelectorAll("[data-protection-add], [data-protection-remove]").forEach((control) => {
+    const editor = control.closest("[data-protection-editor]");
+    control.disabled = disabled || editor?.dataset.protectionAccess !== "write"
+      || (control.hasAttribute("data-protection-add") && editor.querySelectorAll("[data-protection-period]").length >= 32);
   });
 }
 
@@ -36094,6 +36502,14 @@ function collectEmployeeProtectedRecord() {
         employmentType: value("employeeRecordEmploymentType"),
         contractType: value("employeeRecordContractType"),
         employmentStatus: value("employeeRecordEmploymentStatus"),
+        apprenticeshipStatus: value("employeeRecordApprenticeshipStatus") || "unknown",
+        apprenticeshipConfirmed: employeeRecordControl("employeeRecordApprenticeshipConfirmed")?.checked === true,
+        apprenticeshipValidFrom: value("employeeRecordApprenticeshipValidFrom"),
+        apprenticeshipValidTo: value("employeeRecordApprenticeshipValidTo"),
+        apprenticeshipSourceReference: value("employeeRecordApprenticeshipSourceReference"),
+        ...(personnelRecordAccessMode(state.employeePersonnelRecord?.access || {}, "employment.protectionStatus") === "write"
+          && document.querySelector('#employeeRecordProtectionStatus [data-protection-editor="employeeRecord"]')?.dataset.protectionAccess === "write"
+          ? { protectionStatus: readPersonnelProtectionEditor(document.querySelector('#employeeRecordProtectionStatus [data-protection-editor="employeeRecord"]')) } : {}),
         collectiveAgreement: value("employeeRecordCollectiveAgreement"),
         classification: value("employeeRecordClassification"),
         payrollGroup: value("employeeRecordPayrollGroup"),
@@ -36113,7 +36529,8 @@ async function loadEmployeeProtectedRecord(employeeNumber) {
     if (String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
     const initial = normalizeProtectedPersonnelRecord(result.profile || {});
     fillEmployeeProtectedRecord(initial);
-    state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: true, initial };
+    fillEmployeeProtectionEditor(initial.sensitive.employment.protectionStatus, result.access || {});
+    state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: true, initial, access: result.access || {}, planningStatusBasis: result.planningStatusBasis || {} };
     if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = "Die Angaben werden verschlüsselt im Personalakt gespeichert.";
     setEmployeeProtectedRecordDisabled(false);
   } catch (error) {
@@ -36206,7 +36623,9 @@ function openEmployeeModal(employee = null) {
     else {
       const initial = normalizeProtectedPersonnelRecord({ sensitive: { address: { country: "Österreich" } } });
       fillEmployeeProtectedRecord(initial);
-      state.employeePersonnelRecord = { employeeNumber: "", loaded: true, initial };
+      const access = state.portalSession?.user?.personnelRecordAccess || {};
+      fillEmployeeProtectionEditor(null, access);
+      state.employeePersonnelRecord = { employeeNumber: "", loaded: true, initial, access };
       setEmployeeProtectedRecordDisabled(false);
       if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = "Die Angaben werden verschlüsselt gemeinsam mit dem neuen Teammitglied gespeichert.";
     }
@@ -36774,6 +37193,7 @@ function openOptionsModal() {
   document.querySelector("#optionEndTime").value = defaultHours?.end || "18:00";
   document.querySelector("#optionHours").value = "";
   document.querySelector("#optionNote").value = "";
+  fillOptionSchoolDetails(null);
   elements.globalBlockDate.value = state.weekStart;
   elements.globalBlockReason.value = publicHolidayForDate(state.weekStart)?.name || "";
   elements.globalBlockHoliday.checked = Boolean(publicHolidayForDate(state.weekStart));
@@ -36899,6 +37319,8 @@ function resetOptionEditor() {
   document.querySelector("#optionTeamWide").checked = true;
   elements.optionSubmitButton.textContent = "Hinzufügen";
   elements.cancelOptionEditButton.classList.add("hidden");
+  fillOptionSchoolDetails(null);
+  updateOptionCreditFields();
   updateOptionDateRangeLabel();
 }
 
@@ -36921,16 +37343,52 @@ function fillOptionForm(option) {
   document.querySelector("#optionEndTime").value = option.end_time || "18:00";
   document.querySelector("#optionHours").value = option.credited_minutes_per_day ? Number(option.credited_minutes_per_day) / 60 : "";
   document.querySelector("#optionNote").value = option.note || "";
+  fillOptionSchoolDetails(window.GPVocationalSchool.readDetails(option));
   updateOptionCreditFields();
   elements.optionSubmitButton.textContent = "Änderung speichern";
   elements.cancelOptionEditButton.classList.remove("hidden");
   elements.optionForm.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function fillOptionSchoolDetails(details) {
+  document.querySelector("#optionSchoolKind").value = details?.kind || "regular";
+  document.querySelector("#optionSchoolSpecialCase").value = details?.specialCase || "none";
+  document.querySelector("#optionSchoolStartTime").value = details?.startTime || "";
+  document.querySelector("#optionSchoolEndTime").value = details?.endTime || "";
+  document.querySelector("#optionSchoolLunchMinutes").value = details?.lunchMinutes ?? "";
+  document.querySelector("#optionSchoolTravelMinutes").value = details?.travelMinutes ?? "";
+  document.querySelector("#optionSchoolSourceReference").value = details?.sourceReference || "";
+  document.querySelector("#optionSchoolConfirmed").checked = details?.confirmed === true;
+  updateOptionSchoolHint();
+}
+
+function collectOptionSchoolDetails() {
+  return window.GPVocationalSchool.createDetails({
+    kind: document.querySelector("#optionSchoolKind").value,
+    specialCase: document.querySelector("#optionSchoolSpecialCase").value,
+    startTime: document.querySelector("#optionSchoolStartTime").value,
+    endTime: document.querySelector("#optionSchoolEndTime").value,
+    lunchMinutes: document.querySelector("#optionSchoolLunchMinutes").value,
+    travelMinutes: document.querySelector("#optionSchoolTravelMinutes").value,
+    sourceReference: document.querySelector("#optionSchoolSourceReference").value,
+    confirmed: document.querySelector("#optionSchoolConfirmed").checked,
+  });
+}
+
+function updateOptionSchoolHint() {
+  const details = collectOptionSchoolDetails();
+  for (const id of ["optionSchoolStartTime", "optionSchoolEndTime", "optionSchoolLunchMinutes", "optionSchoolSourceReference"]) {
+    document.querySelector(`#${id}`).required = details?.confirmed === true;
+  }
+  document.querySelector("#optionSchoolHint").textContent = window.GPVocationalSchool.detailHint(details);
+}
+
 function updateOptionCreditFields() {
   const type = document.querySelector("#optionType").value;
-  const alwaysAllDay = ["vacation", "sick", "branch", "vocational_school", "special_leave"].includes(type);
-  const supportsTime = ["school", "time_off", "external_appointment", "team_meeting", "other"].includes(type);
+  const vocationalSchool = type === "vocational_school";
+  const wholeDaySchool = vocationalSchool && ["block", "seasonal"].includes(document.querySelector("#optionSchoolKind").value);
+  const alwaysAllDay = wholeDaySchool || ["vacation", "sick", "branch", "special_leave"].includes(type);
+  const supportsTime = ["vocational_school", "school", "time_off", "external_appointment", "team_meeting", "other"].includes(type);
   const manualAllDay = ["school", "external_appointment", "team_meeting", "other"].includes(type);
   const teamMeeting = type === "team_meeting";
   const teamWide = teamMeeting && document.querySelector("#optionTeamWide").checked;
@@ -36948,12 +37406,19 @@ function updateOptionCreditFields() {
   document.querySelector("#optionEmployee").required = !teamWide;
   allDayInput.disabled = alwaysAllDay;
   document.querySelector("#optionTimeFields").classList.toggle("hidden", allDay || !supportsTime);
+  document.querySelector("#optionStartTimeLabel").textContent = vocationalSchool ? "Nicht verfügbar ab · inkl. Weg" : "Beginn";
+  document.querySelector("#optionEndTimeLabel").textContent = vocationalSchool ? "Nicht verfügbar bis · inkl. Weg" : "Ende";
+  const schoolFields = document.querySelector("#optionSchoolDetails");
+  schoolFields.classList.toggle("hidden", !vocationalSchool);
+  schoolFields.disabled = !vocationalSchool;
   document.querySelector("#optionHoursField").classList.toggle("hidden", !manual);
   document.querySelector("#optionHours").required = manual;
   const start = document.querySelector("#optionStartTime").value;
   const end = document.querySelector("#optionEndTime").value;
   const timedHours = start && end && end > start ? (timeToMinutes(end) - timeToMinutes(start)) / 60 : 0;
-  document.querySelector("#optionCreditHint").textContent = teamWide && !allDay
+  document.querySelector("#optionCreditHint").textContent = vocationalSchool
+    ? "Die bisherige Stundenanrechnung ersetzt keine bestätigten Unterrichtszeiten. Die Jugendprüfung verwendet die Berufsschulangaben; ungeklärte Angaben bleiben sichtbar."
+    : teamWide && !allDay
     ? `Teamsitzung für das gesamte sichtbare Team: ${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 2 }).format(timedHours)} Stunden je anwesendem Teammitglied. Krankmeldungen haben Vorrang und erzeugen keinen Konflikt.`
     : manual
     ? "Ganztägig: Die eingetragenen Stunden werden für jeden ausgewählten Tag angerechnet."
@@ -37008,7 +37473,7 @@ function renderOptionList() {
     <div class="option-item ${isTeamWideMeetingOption(option) ? "team-meeting-option-item" : ""}">
       <span class="option-item-color" style="background:${isTeamWideMeetingOption(option) ? "#76529a" : option.color}"></span>
       <div><strong>${isTeamWideMeetingOption(option) ? `Ganzes Team (${option.team_member_count})` : `${escapeHtml(option.employee_number)} ${escapeHtml(option.nickname)}`} · ${optionLabels[option.option_type]}</strong>
-      <small>${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` · ${escapeHtml(option.note)}` : ""}${isTeamWideMeetingOption(option) ? " · Krankmeldungen bleiben vorrangig" : ` · gerechnet ${formatHours(option.credited_minutes || 0)}`}</small></div>
+      <small>${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` · ${escapeHtml(option.note)}` : ""}${isTeamWideMeetingOption(option) ? " · Krankmeldungen bleiben vorrangig" : ` · gerechnet ${formatHours(option.credited_minutes || 0)}`}</small>${option.option_type === "vocational_school" ? `<small>${escapeHtml(window.GPVocationalSchool.detailHint(window.GPVocationalSchool.readDetails(option)))}</small>` : ""}</div>
       <div class="option-actions ${isLocationPlannerSession() && !["vacation", "time_off"].includes(option.option_type) ? "hidden" : ""}">
         <button type="button" class="edit-option" data-edit-option="${option.id}">Bearbeiten</button>
         <button type="button" class="delete-option" data-delete-option="${option.id}">Entfernen</button>
@@ -37136,8 +37601,14 @@ async function saveEmployee(event) {
   }
   if (canWriteSensitivePersonnelRecord() && state.employeeEditMode === "full" && state.employeePersonnelRecord?.loaded) {
     const currentPersonnelRecord = collectEmployeeProtectedRecord();
+    if (Object.hasOwn(currentPersonnelRecord.sensitive.employment, "protectionStatus")) {
+      const error = window.GPPlanningProtection.statusError(currentPersonnelRecord.sensitive.employment.protectionStatus);
+      if (error) return showToast(error, true);
+    }
     const recordPatch = personnelRecordPatch(state.employeePersonnelRecord.initial || {}, currentPersonnelRecord);
     if (!isEdit || Object.keys(recordPatch).length) body.personnelRecord = isEdit ? recordPatch : currentPersonnelRecord;
+    if (body.personnelRecord) body.personnelRecord = withPersonnelPlanningStatusBasis(
+      body.personnelRecord, state.employeePersonnelRecord.planningStatusBasis || {});
   }
   const editedEmployee = state.allEmployees.find((employee) => employee.personnel_number === number)
     || state.personnelDirectory.find((employee) => employee.personnel_number === number)
@@ -37531,6 +38002,15 @@ async function saveOption(event) {
     note: document.querySelector("#optionNote").value,
     groupId: state.editingOptionGroupId,
   };
+  if (selectedType === "vocational_school") {
+    body.vocationalSchool = collectOptionSchoolDetails();
+    const error = window.GPVocationalSchool.detailError(body.vocationalSchool);
+    if (error) return showToast(error, true);
+    if (!body.allDay && body.vocationalSchool?.startTime && body.vocationalSchool?.endTime
+      && (body.startTime > body.vocationalSchool.startTime || body.endTime < body.vocationalSchool.endTime)) {
+      return showToast("Die Nichtverfügbarkeit muss den gesamten Unterrichtszeitraum umfassen; benötigte Wege können zusätzlich eingetragen werden.", true);
+    }
+  }
   try {
     await api(isEdit ? `/api/week-options/${state.editingOptionId}` : "/api/week-options", {
       method: isEdit ? "PUT" : "POST",
@@ -39171,6 +39651,9 @@ document.querySelectorAll(".nav-item").forEach((button) => button.addEventListen
   if (button.dataset.personnelAdministrationRoute) {
     setPersonnelAdministrationTab(button.dataset.personnelAdministrationRoute);
   }
+  if (button.dataset.privacyOrganizationTab) {
+    privacyOrganizationTab = window.GrabenplanerPrivacyOrganization.normalizeTab(button.dataset.privacyOrganizationTab);
+  }
   const contextChanged = restoreRememberedOverallContext(view);
   setView(view);
   if (contextChanged || planningContextNeedsReload(view)) loadPlanningView(view);
@@ -39828,6 +40311,12 @@ elements.personnelFieldRightsRole?.addEventListener("change", (event) => {
 elements.personnelFieldRightsMatrix?.addEventListener("change", (event) => {
   const select = event.target.closest("select[data-personnel-field-right]");
   if (!select) return;
+  if (select.dataset.personnelFieldRight === "employment.protectionStatus") {
+    select.value = "hidden";
+    select.disabled = true;
+    return;
+  }
+  if (select.disabled) return;
   const role = state.selectedPersonnelFieldRightsRole;
   const matrix = state.personnelFieldRightsDrafts[role]
     ||= { ...(state.personnelFieldRights?.matrix?.[role] || {}) };
@@ -41906,6 +42395,15 @@ document.querySelector("#importBackupButton").addEventListener("click", importBa
   document.querySelector(`#${id}`).addEventListener("input", updateOptionCreditFields);
   document.querySelector(`#${id}`).addEventListener("change", updateOptionCreditFields);
 });
+document.querySelector("#optionSchoolDetails")?.addEventListener("input", (event) => {
+  if (event.target.id !== "optionSchoolConfirmed") document.querySelector("#optionSchoolConfirmed").checked = false;
+  if (event.target.id === "optionSchoolKind") updateOptionCreditFields();
+  updateOptionSchoolHint();
+});
+document.querySelector("#optionSchoolDetails")?.addEventListener("change", (event) => {
+  if (event.target.id === "optionSchoolKind") updateOptionCreditFields();
+  updateOptionSchoolHint();
+});
 document.querySelector("#optionDateFrom").addEventListener("change", () => {
   const from = document.querySelector("#optionDateFrom").value;
   const to = document.querySelector("#optionDateTo").value;
@@ -41919,9 +42417,21 @@ document.querySelector("#optionDateTo").addEventListener("change", () => {
   updateOptionDateRangeLabel();
 });
 elements.employeeForm.addEventListener("submit", saveEmployee);
+elements.employeeProtectedRecord?.addEventListener("input", (event) => {
+  handlePersonnelProtectionInput(event);
+  if (!event.target.name?.startsWith("employeeRecordApprenticeship")) return;
+  if (event.target.name !== "employeeRecordApprenticeshipConfirmed") {
+    employeeRecordControl("employeeRecordApprenticeshipConfirmed").checked = false;
+  }
+  updateApprenticeshipHint(elements.employeeForm, "employeeRecord", document.querySelector("#employeeRecordApprenticeshipHint"));
+});
+elements.employeeProtectedRecord?.addEventListener("click", handlePersonnelProtectionClick);
 document.querySelector('#employeeSalesSave')?.addEventListener('click', () => saveEmployeeSaturdayCredit());
 document.querySelector('#employeeSaturdayCutoverSave')?.addEventListener('click', () => saveEmployeeSaturdayCredit(true));
 elements.personnelRecordForm?.addEventListener("submit", savePersonnelRecord);
+elements.personnelRecordForm?.addEventListener("invalid", (event) => {
+  event.target.closest("details")?.setAttribute("open", "");
+}, true);
 elements.personnelRecordContent?.addEventListener("toggle", (event) => {
   const section = event.target.closest("details[data-personnel-record-section]");
   if (!section) return;
@@ -41929,10 +42439,22 @@ elements.personnelRecordContent?.addEventListener("toggle", (event) => {
   else state.personnelRecordOpenSections.delete(section.dataset.personnelRecordSection);
 }, true);
 elements.personnelRecordContent?.addEventListener("input", (event) => {
+  handlePersonnelProtectionInput(event);
+  handlePersonnelRetailKvInput(event);
   const field = event.target.closest("[data-personnel-field-key]");
   if (field && !event.target.disabled) state.personnelRecordDirtyFields.add(field.dataset.personnelFieldKey);
+  if (field?.dataset.personnelFieldKey?.startsWith("employment.apprenticeship")) {
+    const confirmation = elements.personnelRecordForm.elements.namedItem("apprenticeshipConfirmed");
+    if (event.target.name !== "apprenticeshipConfirmed" && confirmation && !confirmation.disabled && confirmation.checked) {
+      confirmation.checked = false;
+      state.personnelRecordDirtyFields.add("employment.apprenticeshipConfirmed");
+    }
+    updateApprenticeshipHint(elements.personnelRecordForm, "", document.querySelector("#personnelRecordApprenticeshipHint"));
+  }
 });
 elements.personnelRecordContent?.addEventListener("click", (event) => {
+  if (handlePersonnelProtectionClick(event)) return;
+  if (handlePersonnelRetailKvClick(event)) return;
   const uploadButton = event.target.closest("[data-upload-personnel-document]");
   if (uploadButton) {
     uploadPersonnelDocument();

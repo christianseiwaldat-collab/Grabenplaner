@@ -658,6 +658,46 @@ test("Provider-Dokumentation schützt den Installationsstandard; Treiberabhängi
   }
 });
 
+test("School migration inventory permits only the named CLI driver and keeps domain modules provider-neutral", () => {
+  const migrationCli = "server-tools/linux/lib/vocational-school-migrate.js";
+  const migrationCore = "lib/persistence/postgresql/core/vocational-school.js";
+  const domainGuard = "lib/work-rules/vocational-school-mutation-guard.js";
+  for (const file of [migrationCli, migrationCore, domainGuard]) {
+    assert.deepEqual(architectureBoundaryViolationsForText(file, fs.readFileSync(path.join(root, file), "utf8")), [], file);
+    assert.equal(architectureBoundaryViolationsForText(file, "const driver = require('node:" + "sqlite');")
+      .some(entry => entry.kind === "sqlite-driver-import-outside-boundary"), true, file);
+  }
+  for (const file of [
+    migrationCli,
+    migrationCore,
+    domainGuard,
+    "server-tools/linux/lib/vocational-school-other-migrate.js",
+    "lib/persistence/postgresql/core/vocational-school-other.js",
+  ]) {
+    assert.equal(architectureBoundaryViolationsForText(file, "const driver = require('pg');")
+      .some(entry => entry.kind === "postgresql-driver-import"), file !== migrationCli, file);
+  }
+  for (const file of ["test/youth-profile-integration.test.js", "test/vocational-school-mutation-guard.test.js"]) {
+    assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.filter(entry => entry === file).length, 1, file);
+  }
+});
+
+test("Planning protection qualifies only its synthetic integration tests and grants no domain drivers", () => {
+  for (const file of ["test/maternity-protection-integration.test.js", "test/planning-protection-mutation.test.js"]) {
+    assert.ok(PHASE_3_SQLITE_PROVIDER_TEST_FILES.includes(file), file);
+  }
+  for (const file of ["test/maternity-protection-other-integration.test.js", "test/planning-protection-other-mutation.test.js"]) {
+    assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.includes(file), false, file);
+  }
+  for (const file of ["lib/personnel-protection-status.js", "lib/work-rules/planning-protection.js", "lib/work-rules/planning-protection-mutation.js"]) {
+    for (const text of ["const db = require('node:" + "sqlite');", "const db = await import('node:" + "sqlite');",
+      "const db = require('pg');", "const db = await import('pg');"]) {
+      const kind = text.includes("sqlite") ? "sqlite-driver-import-outside-boundary" : "postgresql-driver-import";
+      assert.equal(architectureBoundaryViolationsForText(file, text).some(entry => entry.kind === kind), true, `${file}: ${text}`);
+    }
+  }
+});
+
 test("Article tools classify exact persistence modules without granting drivers or unrelated statement declarations", () => {
   const namedSlices = [
     "lib/persistence/repositories/sales-article-local-notes.js",

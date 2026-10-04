@@ -13,7 +13,7 @@ function extract(name) {
 const plain = value => JSON.parse(JSON.stringify(value));
 const addDays = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 function breaksFixture() {
-  const state = { reads: [], shifts: [], settings: { break_rule_enabled: "1", break_after_minutes: "360", break_duration_minutes: "30" } };
+  const state = { reads: [], shifts: [], options: [], optionReads: [], settings: { break_rule_enabled: "1", break_after_minutes: "360", break_duration_minutes: "30" } };
   const context = vm.createContext({
     defaultSettings: { break_after_minutes: "360", break_duration_minutes: "30" },
     dayKeyForDate: date => ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][new Date(date + "T12:00:00Z").getUTCDay()],
@@ -22,10 +22,14 @@ function breaksFixture() {
     isTime: value => /^\d{2}:\d{2}$/.test(value || ""),
     overlapMinutes: (a, b, c, d) => Math.max(0, Math.min(b, d) - Math.max(a, c)),
     workRuleEvaluationRange: week => ({ start: addDays(week, -112), end: addDays(week, 6) }),
+    optionIsAllDay: option => option.all_day === 1,
     getGlobalDayBlocksForRange: () => [{ block_date: "2032-07-08", is_public_holiday: true }],
     settingsForLocation: async id => { state.reads.push(id); return { ...state.settings }; },
     shiftMetrics: () => { throw new Error("Payroll valuation is unnecessary for rule facts"); },
-    planningSettingsRepository: { listWorkRuleShiftsForRange: async () => state.shifts },
+    planningSettingsRepository: {
+      listWorkRuleShiftsForRange: async () => state.shifts,
+      listOverlappingWeekOptions: async input => { state.optionReads.push(input); return state.options.filter(row => row.employee_number === input.employeeNumber); },
+    },
   });
   vm.runInContext(["finiteNumberInRange", "dayConfiguration", "plannedShiftBreaks", "scheduleWorkRuleFacts"].map(extract).join("\n"), context);
   return { state, context };
@@ -52,13 +56,37 @@ test("hundreds of historical rule shifts share location reads without retaining 
   assert.deepEqual(state.reads.sort(), ["05", "18"]);
   assert.equal(facts.shifts.every(row => row.breakMinutes === 30 && row.breakSource === "configured_assumption"), true);
   assert.deepEqual(plain(facts.shifts[0]), { id: "1", employeeId: "E1", date: "2032-03-15", startTime: "09:00", endTime: "18:00", breakMinutes: 30,
-    breakSource: "configured_assumption", locationId: "05", departmentId: null, dutyCode: "general" });
+    breakSource: "configured_assumption", breakIntervals: [], locationId: "05", departmentId: null, dutyCode: "general" });
   assert.deepEqual(plain(facts.holidays), ["2032-07-08"]);
   state.reads.length = 0;
   state.settings.break_duration_minutes = "45";
   const fresh = await c.scheduleWorkRuleFacts(...args);
   assert.deepEqual(state.reads.sort(), ["05", "18"]);
   assert.equal(fresh.shifts.every(row => row.breakMinutes === 45), true);
+});
+
+test("school facts stay employee-scoped, fresh and reflect an option candidate without fabricating a shift", async () => {
+  const { context: c, state } = breaksFixture();
+  state.options = [
+    { id: 1, employee_number: "E1", option_type: "vocational_school", date_from: "2032-07-06", date_to: "2032-07-06", all_day: 1, school_details_json: null },
+    { id: 2, employee_number: "foreign", option_type: "vocational_school", date_from: "2032-07-06", date_to: "2032-07-06", all_day: 1, school_details_json: '{"secret":"foreign"}' },
+  ];
+  const args = ["2032-07-05", { locationId: "18" }, [{ personnel_number: "E1" }]];
+  const before = await c.scheduleWorkRuleFacts(...args);
+  assert.deepEqual(plain(before.schoolAttendance), [{ id: "1", employeeId: "E1", dateFrom: "2032-07-06", dateTo: "2032-07-06", allDay: true, details: null }]);
+  const details = { version: 1, kind: "regular", confirmed: false };
+  const change = { weekOptionChange: { existingId: 1, option: { employeeNumber: "E1", optionType: "vocational_school", dateFrom: "2032-07-07", dateTo: "2032-07-07", allDay: 0, vocationalSchool: details } } };
+  const candidate = await c.scheduleWorkRuleFacts(...args, change);
+  assert.equal(candidate.schoolAttendance.length, 1);
+  assert.equal(candidate.schoolAttendance[0].dateFrom, "2032-07-07");
+  assert.deepEqual(plain(candidate.schoolAttendance[0].details), details);
+  assert.equal(candidate.shifts.length, 0);
+  assert.equal(candidate.candidateShift, null);
+  assert.equal((await c.scheduleWorkRuleFacts(...args, { weekOptionChange: { existingId: 1, option: null } })).schoolAttendance.length, 0);
+  state.options[0].school_details_json = '{"version":1}';
+  assert.deepEqual(plain((await c.scheduleWorkRuleFacts(...args)).schoolAttendance[0].details), { version: 1 });
+  assert.equal(state.optionReads.length, 4);
+  assert.ok(state.optionReads.every(input => input.employeeNumber === "E1"));
 });
 
 test("rule facts retain deletions, replacement scopes, added shifts and foreign-employee exclusion", async () => {

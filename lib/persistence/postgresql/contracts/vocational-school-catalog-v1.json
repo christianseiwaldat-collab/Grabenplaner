@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "scope": "vocational-school-application-extension",
+  "baseCatalog": "block-4-catalog.json",
+  "baseSchemaPlanSha256": "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e",
+  "productActivation": false,
+  "entries": [
+    {
+      "statementId": "planning-settings.validation.overlapping-week-options",
+      "sourceContract": "2b3a481e09b069a850bf439b6d908ca500b3cdc9fd15f53494e46d437de214e7",
+      "sqlSha256": "c21f60adb178651e9e1244f5f99aa65416b222c0971b45f95d51df2b02478335",
+      "baseSourceContract": "bc3440619f0a98a799b78eab4eb831ba46f69a7d28599f9949533d20838589ea",
+      "baseSqlSha256": "e02191e63e1075abc2360581b77f5641f62bea319b1658e607205290745f1206"
+    },
+    {
+      "statementId": "planning-settings.schedule.week-options",
+      "sourceContract": "3ac20f111a17a3b2f4f703e53f32fabd8c6ae695d69915b41a1d03eb0a97f060",
+      "sqlSha256": "3f3d7b0469f42e8e0e59b38ae9dbe9923dec3bc3c80b46616e26f2e0fc7a0c43",
+      "baseSourceContract": "7f1dcea34aae9c65b097d8e6f1f0f8d0f3472518a37b59de840d8cc94af6db9e",
+      "baseSqlSha256": "062d5d15507ac96f593a42e34bc7f02c516ed803af935e1db934d364650484cb"
+    },
+    {
+      "statementId": "planning-settings.week-option.insert",
+      "sourceContract": "4b2f9943e30c0709aae1846306f4c5c967969d33aaacb0fae726776ceb1a53bc",
+      "sqlSha256": "b99ec59c9397d6c604c8c3d83eabe5c9db9bbe39b885d7d622558a4e3de2e911",
+      "baseSourceContract": "15499596acfadebbc402f42dc80966684f04d691968f21ee8ee57d28a5f83868",
+      "baseSqlSha256": "96fe258de9a0064104f31b96cdab5bc9c56a1cb6ece7215c131b1e74a414ec01"
+    },
+    {
+      "statementId": "planning-settings.week-option.get",
+      "sourceContract": "94ad1801bc23762aa4e49ec23d1a4e1b429911642ed1a59b9bdcd9eb9f734525",
+      "sqlSha256": "b8149ec0398fcd8426583400a84c546d45c3b205dfb0e7f668af54121cd3cbfa",
+      "baseSourceContract": "bc673f9583d82474d7f92bef9451a9686fe6d583ec06e6f5704a73252e8cdb0f",
+      "baseSqlSha256": "d8616b015a4851da5dd51b3d0d6307d7f82779f071b62b75903d72baf5b4bf83"
+    },
+    {
+      "statementId": "planning-settings.week-option.update",
+      "sourceContract": "4adc70e309905cab64d5473643772dda3c715f92917189241727b557d641ab41",
+      "sqlSha256": "93b3ab3a9e6bd87805f20afee5fa23394521bef83370d03bcb2727efd11655b7",
+      "baseSourceContract": "73f8509f3444aedef741561242325426ff04d919f8f02d820d9c4acc9d252d5a",
+      "baseSqlSha256": "6a69fd68c94228aa3118c6111e28eb0b02d71815faf2d7d83a2b8b272e8435db"
+    }
+  ]
+}

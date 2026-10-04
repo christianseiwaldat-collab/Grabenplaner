@@ -13,8 +13,20 @@ const {
 } = require("../lib/work-rules");
 
 function shift(id, date, startTime, endTime, breakMinutes = 0) {
-  return { id, employeeId: "252", date, startTime, endTime, breakMinutes };
+  const [hours, minutes] = startTime.split(":").map(Number);
+  const pauseStart = hours * 60 + minutes + 180;
+  const format = value => `${String(Math.floor(value / 60) % 24).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
+  return {
+    id, employeeId: "252", date, startTime, endTime, breakMinutes,
+    breakIntervals: breakMinutes > 0 ? [{ startTime: format(pauseStart), endTime: format(pauseStart + breakMinutes) }] : [],
+  };
 }
+
+const confirmedApprenticeship = {
+  apprenticeshipStatus: "active", apprenticeshipConfirmed: true,
+  apprenticeshipValidFrom: "2025-01-01", apprenticeshipValidTo: null,
+  apprenticeshipSourceReference: "Synthetischer Lehrvertrag",
+};
 
 function evaluate(overrides = {}) {
   return evaluatePlannedSchedule({
@@ -52,7 +64,7 @@ test("Arbeitszeitregeln: Katalog ist versioniert, quellenbelegt und trennt aktiv
   assert.equal(catalog.sources["ris.azg.11"].jurisdiction, "AT");
   assert.match(catalog.sources["ris.azg.11"].url, /ris\.bka\.gv\.at/i);
   assert.ok(catalog.profiles["at-retail-adult-monitor"].ruleIds.includes("at.trade.saturday-after-18"));
-  assert.equal(BUILTIN_WORK_RULE_PROFILES["at-retail-youth-monitor"].profile.version, "2026.2");
+  assert.equal(BUILTIN_WORK_RULE_PROFILES["at-retail-youth-monitor"].profile.version, "2026.3");
   assert.equal(BUILTIN_WORK_RULE_PROFILES["at-retail-youth-monitor"].assignable, false);
   assert.ok(catalog.profiles["at-retail-youth-monitor"].ruleIds.includes("at.kjbg.retail.saturday-monday"));
   assert.match(catalog.sources["ris.kjbg.19a"].url, /ris\.bka\.gv\.at/i);
@@ -317,6 +329,7 @@ test("Arbeitszeitregeln: Jugendprofil warnt direkt bei Samstags- und folgendem M
       birthDate: "2009-07-22",
       positionId: "lehrling",
       isApprentice: true,
+      ...confirmedApprenticeship,
     },
     rangeStart: "2026-11-23",
     rangeEnd: "2026-11-30",
@@ -342,6 +355,7 @@ test("Arbeitszeitregeln: zulässige Jugendwoche bleibt ohne Dauerwarnung", () =>
       birthDate: "2009-07-22",
       positionId: "lehrling",
       isApprentice: true,
+      ...confirmedApprenticeship,
     },
     rangeStart: "2026-07-13",
     rangeEnd: "2026-07-19",
@@ -359,6 +373,7 @@ test("Arbeitszeitregeln: Vorweihnachtsausnahme erlaubt die letzten vier aufeinan
     birthDate: "2009-07-22",
     positionId: "lehrling",
     isApprentice: true,
+    ...confirmedApprenticeship,
   };
   const christmas = evaluatePlannedSchedule({
     profileId: "at-retail-youth-monitor",
@@ -401,6 +416,7 @@ test("Arbeitszeitregeln: Jugendprofil prüft Pause, Nachtruhe und zwölf Stunden
       birthDate: "2009-07-22",
       positionId: "lehrling",
       isApprentice: true,
+      ...confirmedApprenticeship,
     },
     rangeStart: "2026-07-13",
     rangeEnd: "2026-07-14",
@@ -422,6 +438,7 @@ test("Arbeitszeitregeln: unter 15 Jahren werden vierzehn Stunden Ruhezeit verlan
       birthDate: "2012-07-22",
       positionId: "lehrling",
       isApprentice: true,
+      ...confirmedApprenticeship,
     },
     rangeStart: "2026-07-13",
     rangeEnd: "2026-07-14",
@@ -431,7 +448,8 @@ test("Arbeitszeitregeln: unter 15 Jahren werden vierzehn Stunden Ruhezeit verlan
     ],
   });
   const rest = finding(result, "at.kjbg.daily-rest");
-  assert.equal(rest.state, "fail");
+  assert.equal(rest.state, "unknown");
+  assert.equal(rest.evidence.conditionalResult, "fail");
   assert.equal(rest.evidence.threshold, 14 * 60);
 });
 

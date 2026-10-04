@@ -139,7 +139,7 @@ test("Logistik opens its child path and marks only Einkauf / Lieferstände as th
     if (!nodes.has(id)) {
       const classes = new Set(), attributes = {};
       nodes.set(id, {
-        classes, attributes,
+        classes, attributes, dataset: {}, querySelectorAll: () => [],
         classList: { contains: name => classes.has(name), toggle(name, enabled) { enabled ? classes.add(name) : classes.delete(name); } },
         setAttribute(name, value) { attributes[name] = value; }, removeAttribute(name) { delete attributes[name]; },
       });
@@ -148,7 +148,7 @@ test("Logistik opens its child path and marks only Einkauf / Lieferstände as th
   }
   const context = {
     elements: new Proxy({}, { get: (_, id) => node(id) }),
-    state: { currentView: "logistics", portalSession: null },
+    state: { currentView: "logistics", portalSession: null }, privacyOrganizationTab: "overview",
     sidebarNavigationGroups: createGroups(), activeLocations: () => [],
     currentAdministrationRoute: () => ({ view: "logistics", section: "purchasing" }),
     document: { getElementById: node, querySelector: selector => selector === ".main-nav" ? null : node(selector) },

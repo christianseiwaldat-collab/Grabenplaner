@@ -3916,6 +3916,17 @@ html[data-active-page-theme="dark"] .personnel-lifecycle-editor-step-actions .da
 .option-add { align-self: end; }
 .option-cancel { align-self: end; }
 .option-credit-hint { grid-column: 1 / -1; }
+.option-school-details { grid-column:1 / -1; min-width:0; margin:0; padding:10px 12px; border:1px solid var(--line); border-radius:9px; color:var(--ink); background:var(--modal-surface); }
+.option-school-details legend { padding:2px 5px; border-radius:4px; color:var(--ink); background:var(--modal-surface); font-size:10px; font-weight:800; }
+.option-school-details .field > span { color:var(--muted); }
+.option-school-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px 10px; }
+.option-school-source { grid-column:span 2; }
+.option-school-confirmation { grid-column:1 / -1; height:auto; min-height:34px; white-space:normal; }
+.option-school-details .calculation-note { margin:7px 0 0; padding:7px 9px; }
+html[data-active-page-theme="dark"] .option-school-details { --ink:#edf4f1; --muted:#a5b2ad; --line:#40524b; }
+@media (max-width:680px) {
+  .option-school-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
 .option-week-switch { display: inline-flex; align-items: center; gap: 8px; margin-top: 7px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: white; }
 .option-week-switch .nav-button { width: 27px; height: 27px; }
 .option-week-switch span { min-width: 150px; color: var(--muted); font-size: 8.5px; font-weight: 800; text-align: center; }
@@ -4156,6 +4167,13 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 .personnel-record-section-heading .status-badge { flex:0 0 auto; }
 .personnel-record-field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px 13px; }
 .personnel-record-span-two { grid-column:1 / -1; }
+.personnel-protection-editor { display:grid; gap:10px; min-width:0; padding:12px; }
+.personnel-protection-editor > .settings-note,
+.personnel-protection-editor > .calculation-note { margin:0; }
+.personnel-protection-periods { display:grid; gap:10px; min-width:0; }
+.personnel-protection-period { margin:0; min-width:0; border:1px solid var(--line); border-radius:10px; padding:10px; }
+.personnel-protection-period legend { padding:0 5px; font-size:13px; font-weight:600; }
+.personnel-protection-editor > button { justify-self:start; }
 .personnel-record-report-list { display:grid; gap:10px; min-width:0; }
 .sensitive-personnel-section { border-color:#e5cf91; background:#fffaf0; }
 .employee-protected-record { min-width:0; margin-top:4px; border:1px solid #dccb92; border-radius:16px; background:var(--surface-muted); overflow:hidden; }

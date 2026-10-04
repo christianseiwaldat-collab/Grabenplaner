@@ -112,13 +112,16 @@ function administration() {
   const settings = ['general', 'rights', 'schedule', 'developer', 'systemCenter'].map(settingsTab => element({ settingsTab }));
   settings[0].classList.toggle('active', true); settings[3].classList.toggle('hidden', true);
   const win = browser(), calls = [], elements = new Proxy({}, { get(target, key) { return target[key] ||= element(); } });
-  const documentElements = new Map(['salesPriceLabelsView', 'tradeInsightsWorkspace', 'logisticsWorkspaceHost'].map(id => [id, element()]));
+  const documentElements = new Map(['salesPriceLabelsView', 'tradeInsightsWorkspace', 'logisticsWorkspaceHost', 'privacyOrganizationView'].map(id => [id, element()]));
   win.GrabenplanerTradeInsights = require('../public/trade-insights');
-  const ctx = { window: win, URLSearchParams, state: { currentView: 'startDashboard', portalStatus: {}, crm: {},
+  win.GrabenplanerPrivacyOrganization = require('../public/privacy-organization');
+  const ctx = { window: win, URLSearchParams, state: { currentView: 'startDashboard', portalStatus: {}, crm: {}, salesArticleCatalog: {},
     salesAnalytics: { tab: 'create' }, personnelAdministrationTab: 'dashboard', personnelTab: 'employees',
     requestKindTab: 'vacation', rightsDashboardMode: 'rights', locationId: '18', departmentId: '',
     locations: [{ id: '18', active: true, departments: [{ id: 1, active: true }] }, { id: '20', active: true, departments: [{ id: 2, active: true }] }] },
     elements, timePresenceRefreshTimer: null, receiptSearchWorkspace: null, tradeInsightsTab: 'repairs',
+    privacyOrganizationTab: 'overview',
+    privacyOrganizationWorkspace: {activate: tab => calls.push({privacy: tab}), suspend: () => calls.push('suspendPrivacy')},
     tradeInsightsWorkspace: { activate: tab => calls.push({ insights: tab }), setArea: area => calls.push({ area }), suspend: () => calls.push('suspendInsights') },
     salesPriceLabelsWorkspace: { load: () => calls.push('loadPriceLabels'), suspend: () => calls.push('suspendPriceLabels') },
     document: { hidden: false, getElementById: id => documentElements.get(id) || null,
@@ -136,7 +139,7 @@ function administration() {
     canReadSystemCenter: () => true,
     loadSystemCenter: () => calls.push('loadSystemCenter'),
   };
-  for (const name of ['canReadManagerRequests', 'canReadManagedTimeTracking', 'canOpenPersonnelAdministrationModule', 'canOpenSalesAdministrationModule', 'canAccessSalesAnalytics', 'canAccessSalesArticleCatalog', 'canUseSalesPriceLabels', 'canAccessCrm', 'canAccessTradeInsights', 'canReadLoanManagement', 'canManageBranchOrders']) ctx[name] = () => true;
+  for (const name of ['canReadManagerRequests', 'canReadManagedTimeTracking', 'canOpenPersonnelAdministrationModule', 'canOpenSalesAdministrationModule', 'canAccessSalesAnalytics', 'canAccessSalesArticleCatalog', 'canUseSalesPriceLabels', 'canAccessCrm', 'canAccessTradeInsights', 'canReadLoanManagement', 'canManageBranchOrders', 'canAccessPrivacyOrganization']) ctx[name] = () => true;
   for (const name of ['clearUsbProvisioningPasswords', 'clearPersonnelLifecycleEditorState', 'clearPersonnelLifecycleAutomationState', 'renderContextNavigation', 'applyActivePageAppearance', 'loadStartDashboard', 'loadRightsDashboard', 'ensureAccessibleManagerRequestTab', 'loadManagerVacationRequests', 'loadLoanManagement', 'loadBranchOrdersManagement', 'renderSalesArticleCatalogResults', 'syncCrmCustomerWorkspace']) ctx[name] = () => {};
   for (const name of ['loadSalesArticleTablePreferences', 'loadSalesArticleLastImport', 'loadCrmPreferences']) ctx[name] = async () => {};
   vm.createContext(ctx);
@@ -145,6 +148,28 @@ function administration() {
     read: ctx.currentAdministrationRoute, apply: () => ctx.applyRequestedView({ fromHistory: true }) });
   ctx.grabenplanerNavigation.start(); return { ctx, win, calls };
 }
+
+test('Administration: privacy sections survive Back/Forward and serialize no record identifiers', () => {
+  const {ctx,win,calls} = administration();
+  win.history.replaceState(null,'','?view=privacyOrganization&section=breaches&record=private-record');
+  ctx.applyRequestedView({fromHistory:true}); win.flush();
+  assert.equal(ctx.currentAdministrationRoute().section,'breaches');
+  assert.equal(win.location.search,'?record=private-record&view=privacyOrganization&section=breaches');
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.currentAdministrationRoute())),{view:'privacyOrganization',section:'breaches'});
+  ctx.privacyOrganizationTab='data-map'; ctx.setView('privacyOrganization'); win.flush();
+  ctx.setView('settings'); win.flush();
+  win.history.go(-1); win.flush(); assert.equal(ctx.currentAdministrationRoute().section,'data-map');
+  assert.ok(calls.some(call=>call.privacy==='data-map'));
+  ctx.canAccessPrivacyOrganization=()=>false;
+  win.history.go(-1); win.flush(); assert.equal(ctx.state.currentView,'startDashboard');
+});
+
+test('Administration: unknown privacy sections normalize to overview', () => {
+  const {ctx,win} = administration();
+  win.history.replaceState(null,'','?view=privacyOrganization&section=not-a-section');
+  ctx.applyRequestedView({fromHistory:true}); win.flush();
+  assert.equal(ctx.currentAdministrationRoute().section,'overview');
+});
 
 test('Administration: all main views include CRM and maintain existing access guards', () => {
   const { ctx, win } = administration();

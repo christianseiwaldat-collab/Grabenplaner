@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/vendor/quill/quill.snow.css" />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/learning-library.css" />
+    <link rel="stylesheet" href="/privacy-organization.css" />
     <link rel="stylesheet" href="/sales-history.css" />
     <link rel="stylesheet" href="/table-layout.css" />
     <link rel="stylesheet" href="/sales-article-tools.css" />
@@ -216,6 +217,19 @@
             </div>
             <div class="nav-module-children hidden" id="logisticsNavChildren">
               <button class="nav-item nav-module-route" type="button" data-view="logistics" id="logisticsPurchasingNavButton"><span class="nav-symbol" aria-hidden="true">▦</span><span>Einkauf / Lieferstände</span></button>
+            </div>
+          </section>
+          <section class="nav-module hidden" id="privacyOrganizationNav" aria-label="Datenschutz">
+            <div class="nav-branch nav-module-heading">
+              <button type="button" class="nav-disclosure" id="privacyOrganizationToggle" data-nav-toggle="privacyOrganization" aria-controls="privacyOrganizationNavChildren" aria-label="Unterpunkte des Datenschutzes ein- oder ausklappen" aria-expanded="false"><span aria-hidden="true"></span></button>
+              <button class="nav-item nav-module-main" type="button" data-view="privacyOrganization" data-privacy-organization-tab="overview" id="privacyOrganizationNavButton"><span class="nav-symbol" aria-hidden="true">◈</span><span>Datenschutz</span></button>
+            </div>
+            <div class="nav-module-children hidden" id="privacyOrganizationNavChildren">
+              <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="overview" id="privacyOrganizationOverviewNavButton"><span>Überblick &amp; Zuständigkeiten</span></button>
+              <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="data-map" id="privacyOrganizationDataMapNavButton"><span>Datenlandkarte / VVT</span></button>
+              <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="dpia" id="privacyOrganizationDpiaNavButton"><span>DSFA</span></button>
+              <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="breaches" id="privacyOrganizationBreachesNavButton"><span>Datenpannen</span></button>
+              <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="agreements" id="privacyOrganizationAgreementsNavButton"><span>Betriebliche Zustimmungen</span></button>
             </div>
           </section>
         </nav>
@@ -1591,6 +1605,10 @@
 
         <section id="salesPriceLabelsView" class="view" aria-labelledby="salesPriceLabelsTitle"><header class="topbar"><div><span class="eyebrow">Verkauf · Präsentation</span><h1 id="salesPriceLabelsTitle">Preisschilder</h1><p class="subtitle">Artikelpreise übernehmen, Schilder gestalten und druckfertige PDFs erstellen.</p></div></header><div id="salesPriceLabelsWorkspace"></div></section>
         <section id="logisticsView" class="view" aria-labelledby="logisticsTitle"><header class="topbar"><div><span class="eyebrow">Logistik · Anlieferung</span><h1 id="logisticsTitle">Logistik</h1><p class="subtitle">Einkauf / Lieferstände der zentral belieferten Stellen.</p></div></header><div id="logisticsWorkspaceHost"></div></section>
+        <section id="privacyOrganizationView" class="view" aria-labelledby="privacyOrganizationTitle">
+          <header class="topbar privacy-org-page-header"><div class="privacy-org-page-title"><span class="privacy-org-page-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.2c0 4.5 3.1 7.8 7.5 9.8 4.4-2 7.5-5.3 7.5-9.8V6L12 3Z"/><path d="m8.5 12 2.3 2.3 4.7-4.7"/></svg></span><div><span class="eyebrow">Organisation</span><h1 id="privacyOrganizationTitle">Datenschutz</h1><p class="subtitle">Verarbeitungen, Risikoprüfungen und Vorfälle nachvollziehbar organisieren.</p></div></div></header>
+          <div id="privacyOrganizationWorkspaceHost" tabindex="-1"></div>
+        </section>
         <section id="tradeInsightsView" class="view" aria-labelledby="tradeInsightsTitle">
           <header class="topbar"><div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="tradeInsightsTitle">Einkauf &amp; Bestand</h1><p class="subtitle">Reparaturen, Bestände, Umlagerungen und Historien aus den übernommenen Quelldaten.</p></div></header>
           <section class="card trade-insights-workspace" id="tradeInsightsWorkspace" aria-label="Einkauf und Bestand auswerten" tabindex="-1"></section>
@@ -3340,12 +3358,19 @@
                   <label class="field"><span>Beschäftigungsart</span><input name="employeeRecordEmploymentType" maxlength="100" placeholder="z. B. Teilzeit" /></label>
                   <label class="field"><span>Vertragsart</span><input name="employeeRecordContractType" maxlength="100" placeholder="z. B. unbefristet" /></label>
                   <label class="field"><span>Beschäftigungsstatus</span><input name="employeeRecordEmploymentStatus" maxlength="80" placeholder="z. B. aktiv" /></label>
+                  <label class="field"><span>Lehrlingsstatus</span><select name="employeeRecordApprenticeshipStatus"><option value="unknown">Ungeklärt</option><option value="active">Aktive Lehre</option><option value="completed">Lehre abgeschlossen</option><option value="not_apprentice">Kein Lehrverhältnis</option></select></label>
+                  <label class="field"><span>Fachliche Prüfung</span><span class="checkbox-line"><input name="employeeRecordApprenticeshipConfirmed" type="checkbox" /> Lehrlingsstatus bestätigt</span></label>
+                  <label class="field"><span>Lehrlingsstatus gültig ab</span><input name="employeeRecordApprenticeshipValidFrom" type="date" /></label>
+                  <label class="field"><span>Lehrlingsstatus gültig bis</span><input name="employeeRecordApprenticeshipValidTo" type="date" /></label>
+                  <label class="field personnel-record-span-two"><span>Grundlage des Lehrlingsstatus</span><input name="employeeRecordApprenticeshipSourceReference" maxlength="240" placeholder="z. B. geprüfter Lehrvertrag" /></label>
+                  <p class="calculation-note personnel-record-span-two" id="employeeRecordApprenticeshipHint" role="status">Lehrlingsstatus ungeklärt; die Position allein bestätigt kein Lehrverhältnis.</p>
                   <label class="field"><span>Kollektivvertrag</span><input name="employeeRecordCollectiveAgreement" maxlength="160" /></label>
                   <label class="field"><span>Einstufung</span><input name="employeeRecordClassification" maxlength="120" /></label>
                   <label class="field"><span>Lohnverrechnungsgruppe</span><input name="employeeRecordPayrollGroup" maxlength="120" /></label>
                   <label class="field personnel-record-span-two"><span>Interne Hinweise</span><textarea name="employeeRecordNotes" rows="3" maxlength="2000"></textarea></label>
                 </div>
               </details>
+              <details class="protected-record-section hidden" id="employeeRecordProtectionStatus"></details>
             </div>
           </details>
           <details class="employee-access-profile full-width" id="employeeAccessProfile">
@@ -3597,9 +3622,24 @@
           <div class="field option-date-range"><span>Zeitraum</span><input id="optionDateFrom" type="hidden" /><input id="optionDateTo" type="hidden" /><button class="date-range-trigger" id="optionDateRangeButton" type="button" aria-haspopup="dialog"><span><strong id="optionDateRangeText">Zeitraum auswählen</strong><small>Ein Tag oder mehrere Tage der ausgewählten Woche</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 11h18"></path></svg></button></div>
           <div class="field option-all-day" id="optionAllDayField"><span>Umfang</span><label class="checkbox-line"><input id="optionAllDay" type="checkbox" /> ganztägig</label></div>
           <div class="inline-fields option-time-fields" id="optionTimeFields">
-            <label class="field"><span>Beginn</span><input id="optionStartTime" type="time" /></label>
-            <label class="field"><span>Ende</span><input id="optionEndTime" type="time" /></label>
+            <label class="field"><span id="optionStartTimeLabel">Beginn</span><input id="optionStartTime" type="time" /></label>
+            <label class="field"><span id="optionEndTimeLabel">Ende</span><input id="optionEndTime" type="time" /></label>
           </div>
+          <fieldset class="option-school-details hidden" id="optionSchoolDetails" disabled>
+            <legend>Berufsschule · Angaben zur Jugendprüfung</legend>
+            <div class="option-school-grid">
+              <label class="field"><span>Unterrichtsform</span><select id="optionSchoolKind"><option value="regular">Regulär</option><option value="block">Blockunterricht</option><option value="seasonal">Saisonunterricht</option></select></label>
+              <label class="field"><span>Spezialfall</span><select id="optionSchoolSpecialCase"><option value="none">Kein Spezialfall</option><option value="cancelled_lessons">Unterrichtsausfall</option><option value="elective">Freifach</option><option value="school_event">Schulveranstaltung</option><option value="support_course">Förderkurs</option></select></label>
+              <label class="field"><span>Unterricht ab</span><input id="optionSchoolStartTime" type="time" /></label>
+              <label class="field"><span>Unterricht bis</span><input id="optionSchoolEndTime" type="time" /></label>
+              <label class="field"><span>Mittagspause · Minuten</span><input id="optionSchoolLunchMinutes" type="number" min="0" max="1440" step="1" placeholder="Ungeklärt" /></label>
+              <label class="field"><span>Weg Schule–Betrieb · Minuten</span><input id="optionSchoolTravelMinutes" type="number" min="0" max="1440" step="1" placeholder="Ungeklärt" /></label>
+              <label class="field option-school-source"><span>Quelle / bestätigter Stundenplan</span><input id="optionSchoolSourceReference" maxlength="300" placeholder="z. B. Stundenplan vom 01.10.2026" /></label>
+              <label class="checkbox-line option-school-confirmation"><input id="optionSchoolConfirmed" type="checkbox" /> Zeiten, Mittagspause und Quelle fachlich bestätigt</label>
+            </div>
+            <p class="calculation-note" id="optionSchoolHint" role="status"></p>
+            <p class="calculation-note">Gilt für jeden ausgewählten Tag. Kurzpausen zählen mit; die Mittagspause wird abgezogen. Leer bedeutet ungeklärt. Die Nichtverfügbarkeit kann zusätzlich den benötigten Weg abdecken.</p>
+          </fieldset>
           <label class="field option-hours hidden" id="optionHoursField"><span>Anrechenbare Stunden pro Tag</span><div class="unit-input"><input id="optionHours" type="number" min="0" max="24" step="0.1" /><em>Stunden</em></div></label>
           <label class="field option-note"><span>Bemerkung / Grund</span><input id="optionNote" placeholder="z. B. Filiale 11/13 aushelfen" /></label>
           <button type="submit" class="primary-button option-add" id="optionSubmitButton">Hinzufügen</button>
@@ -4418,6 +4458,9 @@
     <script src="/function-search-navigation.js"></script>
     <script src="/credential-boundaries.js"></script>
     <script src="/schedule-duty.js"></script>
+    <script src="/vocational-school.js"></script>
+  <script src="/planning-protection.js"></script>
+  <script src="/retail-kv.js"></script>
     <script src="/permission-defaults.js"></script>
     <script src="/sales-report-controls.js"></script>
     <script src="/sales-dashboard-metrics.js"></script>
@@ -4432,6 +4475,7 @@
     <script src="/sales-article-price-controls.js"></script>
     <script src="/navigation-history.js"></script>
     <script src="/sidebar-layout.js"></script>
+    <script src="/privacy-organization.js"></script>
     <script src="/learning-library.js"></script>
     <script src="/learning-assessment.js"></script>
     <script src="/learning-team.js"></script>

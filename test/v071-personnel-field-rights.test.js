@@ -1195,7 +1195,12 @@ test("v0.71 Block 5: Alle vier Beschäftigungsdaten sind symmetrisch gekoppelt, 
 
   assert.equal(db.prepare("SELECT nickname FROM employees WHERE personnel_number = ?").get(TARGET_A).nickname, `T${TARGET_A}`);
   const unchanged = await request(`/api/portal/v1/personnel-records/${TARGET_A}`, { auth: hr });
-  assert.deepEqual(unchanged.payload.profile.sensitive.employment, original.sensitive.employment);
+  assert.deepEqual(unchanged.payload.profile.sensitive.employment, {
+    ...original.sensitive.employment,
+    apprenticeshipStatus: "unknown", apprenticeshipConfirmed: false,
+    apprenticeshipValidFrom: "", apprenticeshipValidTo: "", apprenticeshipSourceReference: "",
+    protectionStatus: null, retailKv: null,
+  });
 });
 
 test("v0.71 Block 5: Alt-PUT sowie Multipart- und Lösch-Ablehnungen protokollieren keine Nutzwerte", async () => {

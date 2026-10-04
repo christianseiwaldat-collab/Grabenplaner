@@ -73,6 +73,13 @@ const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemaile
 const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresql/transfer/history.js']);
 // User-authorized 2026 migration blocks; isolated environment, never product activation.
 const MIGRATION_DEVELOPMENT_FILES = new Set([
+  // The school extension qualifies these exact artifacts; this classification
+  // alone does not permit a PostgreSQL driver import or product activation.
+  'lib/persistence/postgresql/contracts/vocational-school-catalog-v1.json',
+  'lib/persistence/postgresql/core/vocational-school.js',
+  'server-tools/linux/lib/vocational-school-migrate.js',
+  'test/postgresql-vocational-school-migration.test.js',
+  'test/vocational-school-catalog-qualification.test.js',
   'lib/persistence/postgresql/core/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete.js',
@@ -265,6 +272,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-migration-queries.test.js',
 ]);
 const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
+  // Only the installed maintenance-lease migration CLI opens the driver.
+  'server-tools/linux/lib/vocational-school-migrate.js',
   'server-tools/linux/lib/import-delete-migrate.js',
   'lib/persistence/postgresql/application-operations/system-health.js',
   'test-support/postgresql-recovery-performance-probe.js',
@@ -374,6 +383,10 @@ const PHASE_2_CLASSIFICATION = Object.freeze({
   laterPhase: "2-5",
 });
 const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
+  // Encrypted privacy metadata uses existing transaction-bound repositories.
+  // The contract import validates the provider and its retry errors only;
+  // this classification never permits driver imports or direct SQL access.
+  "lib/privacy-organization-store.js",
   "lib/persistence/statements/branch-article-stock.js",
   "lib/persistence/statements/branch-receipt.js",
   "lib/persistence/statements/trade-insights.js",
@@ -593,6 +606,17 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  // These synthetic tests qualify encrypted status writes and neutral receipts
+  // through the existing provider repositories; no product driver is added.
+  "test/maternity-protection-integration.test.js",
+  "test/privacy-organization-integration.test.js",
+  "test/privacy-organization-store.test.js",
+  "test/planning-protection-mutation.test.js",
+  "test/retail-kv-binding.test.js",
+  "test/retail-kv-integration.test.js",
+  "test/retail-kv-mutation.test.js",
+  "test/youth-profile-integration.test.js",
+  "test/vocational-school-mutation-guard.test.js",
   'test/sales-article-performance.test.js',
   "test-support/session-touch-race.js",
   "test-support/personnel-learning/fixture.js",

@@ -151,6 +151,8 @@ test("Block 3/7: Personal-Regelwerk liefert versionierte Profile, Quellen und de
   assert.equal(result.payload.capabilities.canManageAssignments, false);
   assert.deepEqual(result.payload.locations.map((location) => String(location.id)), [localLocationId]);
   assert.deepEqual(result.payload.profiles.map((profile) => profile.id), [
+    "at-retail-kv-angestellte-2026",
+    "at-planning-protection-monitor",
     "at-general-adult",
     "at-retail-adult-monitor",
     "at-retail-youth-monitor",
@@ -160,6 +162,20 @@ test("Block 3/7: Personal-Regelwerk liefert versionierte Profile, Quellen und de
   const adult = result.payload.profiles.find((profile) => profile.id === "at-retail-adult-monitor");
   const youth = result.payload.profiles.find((profile) => profile.id === "at-retail-youth-monitor");
   const draft = result.payload.profiles.find((profile) => profile.id === "at-retail-kv-2026-draft");
+  const protection = result.payload.profiles.find((profile) => profile.id === "at-planning-protection-monitor");
+  const retailKv = result.payload.profiles.find((profile) => profile.id === "at-retail-kv-angestellte-2026");
+  assert.equal(retailKv.assignable, false);
+  assert.equal(retailKv.defaultEnforcementMode, "monitor");
+  assert.equal(retailKv.applicability.confirmationRequired, true);
+  assert.equal(retailKv.contentSha256, "7114c6a831e1dd58d650324a3684d4ab7b8ca38659f893157bf8167e8fa21bab");
+  assert.ok(retailKv.rules.length > 0);
+  assert.ok(retailKv.sources.length > 0);
+  assert.equal(protection.assignable, false);
+  assert.equal(protection.defaultEnforcementMode, "monitor");
+  assert.equal(protection.automaticByBirthDate, false);
+  assert.deepEqual(protection.sources, []);
+  assert.ok(protection.rules.length > 0);
+  assert.ok(protection.rules.every(rule => rule.sourceIds.length === 0));
   assert.equal(adult.status, "published");
   assert.ok(adult.contentSha256);
   assert.ok(adult.rules.length > 0);

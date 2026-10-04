@@ -91,12 +91,16 @@ test("UI Block 1: Präferenz nutzt den bestehenden UI-Pfad ohne neue Datenbankko
 });
 
 test("UI Block 1: schmale Ansichten verwenden einen vertikalen, zugänglichen Drawer", () => {
+  const baseStyles = styles.slice(0, styles.indexOf("@media"));
+  const mobileNavigationStyles = between(styles, "@media (max-width: 820px) {", "@media (max-width: 600px) {");
   assert.match(html, /id="mobileNavigationToggle"[^>]*aria-controls="mainSidebar"[^>]*aria-expanded="false"/);
   assert.match(html, /id="mainSidebar"/);
   assert.match(html, /id="mobileNavigationBackdrop"/);
-  assert.match(styles, /@media \(max-width: 820px\) \{[\s\S]*?\.sidebar \{[^}]*position:fixed;[^}]*transform:translateX\(-105%\);/);
-  assert.match(styles, /@media \(max-width: 820px\) \{[\s\S]*?\.main-nav \{[^}]*display:grid;[^}]*overflow-x:clip;[^}]*overflow-y:auto;/);
-  assert.doesNotMatch(styles, /@media \(max-width: 820px\) \{[\s\S]*?\.main-nav \{[^}]*overflow-x:auto;/);
+  assert.match(baseStyles, /\.sidebar \{[^}]*position:fixed;/, "Der mobile Drawer erbt die feste Position der Sidebar-Basisregel.");
+  assert.match(mobileNavigationStyles, /\.sidebar \{[^}]*visibility:hidden;[^}]*transform:translateX\(-105%\);/);
+  assert.match(mobileNavigationStyles, /body\.mobile-navigation-open \.sidebar \{[^}]*visibility:visible;[^}]*transform:translateX\(0\);/);
+  assert.match(mobileNavigationStyles, /\.main-nav \{[^}]*display:grid;[^}]*overflow-x:clip;[^}]*overflow-y:auto;/);
+  assert.doesNotMatch(mobileNavigationStyles, /\.main-nav \{[^}]*overflow-x:auto;/);
   assert.match(app, /function openMobileNavigation\(\)/);
   assert.match(app, /function closeMobileNavigation\(\{ restoreFocus = true \} = \{\}\)/);
   assert.match(app, /event\.key === "Escape"/);

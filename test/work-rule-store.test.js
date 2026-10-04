@@ -2,11 +2,13 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const HISTORICAL_YOUTH_2026_2 = require("../lib/work-rules/historical/at-retail-youth-monitor-2026.2.json");
 
 const {
   BUILTIN_WORK_RULE_PROFILES,
   SOURCE_CATALOG,
   canonicalSha256,
+  evaluatePlannedSchedule,
 } = require("../lib/work-rules");
 const {
   SQLITE_WORK_RULE_STORE_CATALOG,
@@ -104,12 +106,13 @@ test("Arbeitszeitregel-Store: Seed verarbeitet Profil-Bundles vollständig und i
   const fixture = createFixture();
   const { database, repository } = fixture;
   try {
+    await seedBuiltinWorkRuleProfiles(repository, [HISTORICAL_YOUTH_2026_2], SOURCE_CATALOG);
     await seed(repository);
     await seed(repository);
 
     const profiles = await listWorkRuleProfiles(repository);
-    assert.equal(profiles.length, 4);
-    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM work_rule_profile_versions").get().count, 4);
+    assert.equal(profiles.length, 6);
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM work_rule_profile_versions").get().count, 7);
     const profileHashes = Object.fromEntries(database.prepare(`
       SELECT id, content_sha256 FROM work_rule_profile_versions ORDER BY id
     `).all().map((row) => [row.id, row.content_sha256]));
@@ -126,6 +129,10 @@ test("Arbeitszeitregel-Store: Seed verarbeitet Profil-Bundles vollständig und i
       profileHashes["at-retail-youth-monitor@2026.2"],
       "50019077b97f4050e65c24bbdd4481317aad09bfea3035b5a6fb5f60125fc4aa",
     );
+    assert.equal(profileHashes["at-retail-youth-monitor@2026.3"], "e4eb8e762964924a70c32468a31988d64341de84ad760926700dcfccefc18251");
+    assert.ok(profileHashes["at-planning-protection-monitor@2026.4"]);
+    assert.notEqual(profileHashes["at-retail-youth-monitor@2026.3"], profileHashes["at-retail-youth-monitor@2026.2"]);
+    assert.equal(profiles.find(({ id }) => id === "at-retail-youth-monitor").currentVersionId, "at-retail-youth-monitor@2026.3");
     const retail = profiles.find(({ id }) => id === "at-retail-adult-monitor");
     assert.equal(retail.status, "active");
     assert.equal(retail.versionStatus, "published");
@@ -142,12 +149,13 @@ test("Arbeitszeitregel-Store: Seed verarbeitet Profil-Bundles vollständig und i
 
     const youthVersion = await getWorkRuleProfileVersion(
       repository,
-      "at-retail-youth-monitor@2026.2",
+      "at-retail-youth-monitor@2026.3",
     );
     assert.equal(youthVersion.schemaVersion, 2);
     assert.equal(youthVersion.profile.assignable, false);
     assert.equal(youthVersion.profile.applicability.automaticByBirthDate, true);
     assert.ok(youthVersion.rules.some(({ id }) => id === "at.kjbg.retail.saturday-monday"));
+    assert.ok(youthVersion.rules.some(({ id }) => id === "at.kjbg.school.weekly-credit"));
 
     const draft = profiles.find(({ id }) => id === "at-retail-kv-2026-draft");
     assert.equal(draft.status, "draft");
@@ -168,6 +176,77 @@ test("Arbeitszeitregel-Store: Seed verarbeitet Profil-Bundles vollständig und i
       enforcementMode: "monitor",
       applicabilityConfirmed: false,
     });
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Arbeitszeitregel-Store: frische Datenbank erhält Original-Jugendprofil und aktuellen Pilot parallel", async () => {
+  const fixture = createFixture();
+  try {
+    await seed(fixture.repository);
+    await seed(fixture.repository);
+    const legacy = await getWorkRuleProfileVersion(fixture.repository, "at-retail-youth-monitor@2026.2");
+    const current = await getWorkRuleProfileVersion(fixture.repository, "at-retail-youth-monitor@2026.3");
+    assert.equal(legacy.contentSha256, "50019077b97f4050e65c24bbdd4481317aad09bfea3035b5a6fb5f60125fc4aa");
+    assert.deepEqual(legacy.rules, HISTORICAL_YOUTH_2026_2.rules);
+    assert.deepEqual(legacy.sources, HISTORICAL_YOUTH_2026_2.sources);
+    assert.ok(!legacy.rules.some(rule => rule.id.startsWith("at.kjbg.school.")));
+    assert.ok(current.rules.some(rule => rule.id === "at.kjbg.school.pause"));
+    const profiles = await listWorkRuleProfiles(fixture.repository);
+    assert.equal(profiles.find(profile => profile.id === current.profileId).currentVersionId, current.id);
+    assert.equal(fixture.database.prepare("SELECT COUNT(*) AS count FROM work_rule_profile_versions").get().count, 7);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Arbeitszeitregel-Store: originale historische Quelle wird unabhängig von Eingabereihenfolge zuerst gesät", async () => {
+  const fixture = createFixture();
+  try {
+    await seedBuiltinWorkRuleProfiles(fixture.repository, [BUILTIN_WORK_RULE_PROFILES["at-retail-youth-monitor"], HISTORICAL_YOUTH_2026_2], SOURCE_CATALOG);
+    const profiles = await listWorkRuleProfiles(fixture.repository);
+    assert.equal(profiles[0].currentVersionId, "at-retail-youth-monitor@2026.3");
+    assert.equal((await getWorkRuleProfileVersion(fixture.repository, "at-retail-youth-monitor@2026.2")).contentSha256,
+      "50019077b97f4050e65c24bbdd4481317aad09bfea3035b5a6fb5f60125fc4aa");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Arbeitszeitregel-Store: geladenes Original-Jugendprofil erhält bestehende Nacht- und Sonntagsblocks neben dem Monitorpiloten", async () => {
+  const fixture = createFixture();
+  try {
+    await seed(fixture.repository);
+    const input = {
+      employee: { id: "synthetic-youth", birthDate: "2009-01-01", birthDateConfirmed: true },
+      shifts: [{ id: "night-sunday", date: "2026-11-08", startTime: "19:00", endTime: "21:00", breakMinutes: 0 }],
+      rangeStart: "2026-11-02", rangeEnd: "2026-11-08",
+    };
+    for (const [version, enforcementMode, expectedEnforcement] of [["2026.2", "enforced", "block"], ["2026.3", "monitor", "advisory"]]) {
+      const bundle = await getWorkRuleProfileVersion(fixture.repository, `at-retail-youth-monitor@${version}`);
+      const result = evaluatePlannedSchedule({ ...input, profile: bundle.profile, ruleDefinitions: bundle.rules, sourceCatalog: bundle.sources, enforcementMode });
+      for (const ruleId of ["at.kjbg.night-work", "at.kjbg.sunday-holiday-work"]) {
+        const finding = result.findings.find(finding => finding.ruleId === ruleId);
+        assert.equal(finding.state, "fail");
+        assert.equal(finding.effectiveEnforcement, expectedEnforcement);
+      }
+      assert.equal(result.profile.version, version);
+    }
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Arbeitszeitregel-Store: rekonstruierte oder veränderte historische Definitionen werden vor Schreibbeginn zurückgewiesen", async () => {
+  const fixture = createFixture();
+  try {
+    const changed = JSON.parse(JSON.stringify(HISTORICAL_YOUTH_2026_2));
+    changed.rules[0].title = "Veränderte Definition";
+    await assert.rejects(seedBuiltinWorkRuleProfiles(fixture.repository, [changed, BUILTIN_WORK_RULE_PROFILES["at-retail-youth-monitor"]], SOURCE_CATALOG),
+      /Original-Prüfsumme/);
+    assert.equal(fixture.database.prepare("SELECT COUNT(*) AS count FROM work_rule_profile_versions").get().count, 0);
+    assert.equal(fixture.database.prepare("SELECT COUNT(*) AS count FROM work_rule_profiles").get().count, 0);
   } finally {
     await fixture.close();
   }
@@ -372,7 +451,7 @@ test("Arbeitszeitregel-Store: Zuordnungen beachten Gültigkeit und employee > de
       applicabilityConfirmed: false,
     }, "252"), /nicht bestätigtes Regelprofil/i);
     await assert.rejects(saveWorkRuleAssignment(repository, {
-      profileVersionId: "at-retail-youth-monitor@2026.2",
+      profileVersionId: "at-retail-youth-monitor@2026.3",
       scopeType: "employee",
       scopeKey: "420",
       validFrom: "2026-07-01",
