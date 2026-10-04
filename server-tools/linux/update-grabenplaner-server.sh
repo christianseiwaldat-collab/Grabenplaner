@@ -368,6 +368,7 @@ rollback_public_ok=1
 rollback_app_ok=1
 rollback_stop_ok=1
 schema_migration_result="$maintenance_root/schema-migration.json"
+school_migration_result="$maintenance_root/vocational-school-migration.json"
 declare -a deploy_timer_units=(
   apt-daily.timer
   apt-daily-upgrade.timer
@@ -410,12 +411,16 @@ write_receipt() {
   local receipt="$history_dir/update-$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N').json"
   "$node" - "$receipt" "$status" "$old_version" "$candidate_version" "$(basename -- "$package")" "$actual_package_sha256" \
     "$backup_database" "$error_text" "$rollback_stop_ok" "$rollback_app_ok" "$rollback_data_ok" "$rollback_public_ok" \
-    "$deploy_started_at" "$deploy_decision" "$deploy_phases_file" "$schema_migration_result" <<'NODE'
+    "$deploy_started_at" "$deploy_decision" "$deploy_phases_file" "$schema_migration_result" "$school_migration_result" <<'NODE'
 const fs = require("node:fs");
-const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop, rollbackApp, rollbackData, rollbackPublic, startedAt, decision, phasesFile, migrationFile] = process.argv.slice(2);
+const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop, rollbackApp, rollbackData, rollbackPublic, startedAt, decision, phasesFile, migrationFile, schoolMigrationFile] = process.argv.slice(2);
 let schemaMigration = null;
 if (fs.existsSync(migrationFile) && fs.statSync(migrationFile).size) {
   try { schemaMigration = JSON.parse(fs.readFileSync(migrationFile, "utf8")); } catch { schemaMigration = { verified: false }; }
+}
+let schoolSchemaMigration = null;
+if (fs.existsSync(schoolMigrationFile) && fs.statSync(schoolMigrationFile).size) {
+  try { schoolSchemaMigration = JSON.parse(fs.readFileSync(schoolMigrationFile, "utf8")); } catch { schoolSchemaMigration = { verified: false }; }
 }
 const phases = fs.readFileSync(phasesFile, "utf8").trim().split("\n").filter(Boolean).map(line => {
   const [phase, seconds] = line.split("\t");
@@ -428,6 +433,7 @@ fs.writeFileSync(file, `${JSON.stringify({
   verification: JSON.parse(decision),
   phases,
   schemaMigration,
+  schoolSchemaMigration,
   completedAt: new Date().toISOString(),
   previousVersion,
   requestedVersion: requestedVersion || null,
@@ -1129,6 +1135,12 @@ installed_manifest_sha256="$(gp_sha256 "$app_dir/grabenplaner-server-manifest.js
   || gp_die "Die Erweiterung zum Loeschen nicht uebernommener Importe ist fehlgeschlagen; die neue App wird nicht gestartet."
 "$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.coreUnchanged!==true)process.exit(1)' "$schema_migration_result" \
   || gp_die "Der Import-Loeschnachweis ist unvollstaendig."
+begin_deploy_phase vocational-school-schema-migration
+"$node" "$app_dir/server-tools/linux/lib/vocational-school-migrate.js" \
+  "$installed_manifest_sha256" --maintenance-lock-held >"$school_migration_result" \
+  || gp_die "Die Berufsschul-Erweiterung ist fehlgeschlagen; die neue App wird nicht gestartet."
+"$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$school_migration_result" \
+  || gp_die "Der Berufsschul-Migrationsnachweis ist unvollstaendig."
 fi
 begin_deploy_phase application-start
 gp_start_service "$service"
