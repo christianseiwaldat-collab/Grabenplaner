@@ -729,9 +729,21 @@ test("Article tools classify exact persistence modules without granting drivers 
   }
   for (const file of [
     "test/sales-article-local-notes.test.js",
+    "test/sales-article-catalog-local-route.test.js",
     "test/sales-article-sales.test.js",
     "test/sales-price-label-template-store.test.js",
     "test/sales-price-labels-server-access.test.js",
     "test/trade-movements.test.js",
   ]) assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.filter(entry => entry === file).length, 1, file);
+  const localRouteFixture = "test/sales-article-catalog-local-route.test.js";
+  assert.deepEqual(architectureBoundaryViolationsForText(localRouteFixture,
+    fs.readFileSync(path.join(root, localRouteFixture), "utf8")), []);
+  for (const [source, kind] of [
+    ["const driver = require('node:" + "sqlite');", "sqlite-driver-import-outside-boundary"],
+    ["const driver = require('pg');", "postgresql-driver-import"],
+    ["const statement = definePersistenceStatement({});", "provider-statement-outside-boundary"],
+  ]) assert.equal(architectureBoundaryViolationsForText(localRouteFixture, source).some(entry => entry.kind === kind), true, kind);
+  assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.includes("test/sales-article-catalog-other-local-route.test.js"), false);
+  assert.equal(PHASE_3_SQLITE_PROVIDER_FILES.includes("lib/sales-article-search-window-preferences.js"), false,
+    "The pure preference normalizer needs no production persistence exception");
 });

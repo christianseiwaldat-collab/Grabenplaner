@@ -43,7 +43,6 @@
     "ruleDrafts",
     "collectiveAgreements",
     "vacations",
-    "dataRequests",
   ]);
   const SUPPORTED_PERSONNEL_TABS = new Set(["employees", "locations"]);
   const SUPPORTED_SALES_ANALYTICS_TABS = new Set(["create", "reports", "graphics", "pdf"]);
@@ -63,7 +62,7 @@
   ]);
   const SUPPORTED_DASHBOARD_MODES = new Set(["locations", "rights", "personnelRules", "processes"]);
   const SUPPORTED_REQUEST_KINDS = new Set(["vacation", "time_off", "amu"]);
-  const SUPPORTED_PRIVACY_ORGANIZATION_TABS = new Set(["overview", "data-map", "dpia", "breaches", "agreements"]);
+  const SUPPORTED_PRIVACY_ORGANIZATION_TABS = new Set(["overview", "data-map", "dpia", "breaches", "agreements", "dataRequests"]);
   const ALLOWED_ENTRY_KEYS = new Set(["id", "label", "path", "description", "synonyms", "access", "target"]);
   const ALLOWED_TARGET_KEYS = new Set([
     "kind",
@@ -532,11 +531,11 @@
     entry(
       "personnel.data-requests",
       "Datenschutzanfragen anzeigen",
-      ["Personalverwaltung", "Datenanfragen"],
+      ["Datenschutz", "Datenanfragen"],
       "Öffnet die freigegebene Bearbeitung von Auskunfts- und Betroffenenanfragen.",
       ["datenanfrage", "datenauskunft", "betroffenenrecht", "dsgvo anfrage", "auskunftsersuchen", "löschanfrage", "privacy request"],
       ["dataSubjectRequestsNavButton"],
-      { view: "personnelAdministration", personnelAdministrationTab: "dataRequests", focusId: "dataSubjectRequestsSection" },
+      { view: "privacyOrganization", privacyOrganizationTab: "dataRequests", focusId: "dataSubjectRequestsSection" },
     ),
 
     entry(
@@ -814,11 +813,11 @@
     entry(
       "settings.pdf",
       "PDF-Ausgabe konfigurieren",
-      ["Einstellungen", "Grundeinstellungen", "PDF-Ausgabe"],
+      ["Einstellungen", "Dienstplanung", "PDF-Ausgabe"],
       "Öffnet Titel, Dateinamen und Vorschau für Dienstplan- und Urlaubs-PDFs.",
       ["pdf einstellungen", "pdf titel", "dateiname", "druckausgabe", "pdf vorschau", "urlaubs pdf", "dienstplan pdf"],
-      ["settingsGeneralTab", "pdfSettings"],
-      { view: "settings", settingsTab: "general", revealIds: ["pdfSettings"], focusId: "pdfSettings" },
+      ["settingsScheduleTab", "pdfSettings"],
+      { view: "settings", settingsTab: "schedule", revealIds: ["pdfSettings"], focusId: "pdfSettings" },
     ),
     entry(
       "settings.personnel-view",

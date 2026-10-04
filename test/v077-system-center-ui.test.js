@@ -28,7 +28,9 @@ test("System-Center steht in den Einstellungen rechts neben System & Backups", (
   assert.ok(rightsTab < personnelRulesTab);
   assert.ok(personnelRulesTab < processesTab);
   assert.ok(backupTab >= 0 && backupTab < systemTab);
-  const settingsTabStrip = html.slice(html.indexOf('<div class="settings-tabs" role="tablist">'), html.indexOf('<section id="generalSettings"'));
+  const tabStripStart = html.search(/<div(?=[^>]*class="settings-tabs")(?=[^>]*role="tablist")[^>]*>/);
+  assert.ok(tabStripStart >= 0, "Die Einstellungsreiter bleiben eine eigene Tablist.");
+  const settingsTabStrip = html.slice(tabStripStart, html.indexOf('<section id="generalSettings"'));
   assert.equal([...settingsTabStrip.matchAll(/data-settings-tab="([^"]+)"/g)].at(-1)[1], "systemCenter");
   assert.doesNotMatch(html, /data-rights-dashboard-mode="systemCenter"/);
   const startDashboard = html.slice(html.indexOf('<section id="startDashboardView"'), html.indexOf('<section id="filialAdministrationView"'));
@@ -77,10 +79,12 @@ test("v0.77: Manueller Recovery-Test benötigt Bestätigung und explizites API-T
 function settingsFixture(permissions) {
   function element(dataset = {}) {
     const classes = new Set();
-    return { dataset, classList: {
+    const attributes = new Map();
+    return { dataset, hidden: false, disabled: false, classList: {
       contains: value => classes.has(value),
       toggle: (value, enabled) => enabled ? classes.add(value) : classes.delete(value),
-    }, scrollIntoView() {} };
+    }, setAttribute(name, value) { attributes.set(name, String(value)); },
+    getAttribute: name => attributes.get(name) ?? null, scrollIntoView() {} };
   }
   const tabs = ["general", "backup", "systemCenter"].map(settingsTab => element({ settingsTab }));
   tabs[0].classList.toggle("active", true);
@@ -99,17 +103,20 @@ function settingsFixture(permissions) {
   };
   vm.createContext(context);
   vm.runInContext(functionSource("canReadSystemCenter", "canReadPersonnelRulesDashboard")
+    + functionSource("visibleManagedTabButtons", "reconcileManagedTabs")
     + functionSource("setSettingsTab", "setPersonnelTab"), context);
   return { context, elements, tabs, calls };
 }
 
 test("System-Center settings load only diagnostics, switch panels and hide the unrelated save action", () => {
   for (const permission of ["system:diagnostics:read", "system:diagnostics:technical"]) {
-    const { context, elements, calls } = settingsFixture([permission, "settings:write"]);
+    const { context, elements, calls, tabs } = settingsFixture([permission, "settings:write"]);
     context.setSettingsTab("systemCenter");
     assert.equal(elements.systemCenterPanel.classList.contains("active"), true);
     assert.equal(elements.generalSettings.classList.contains("active"), false);
     assert.equal(elements.saveSettingsButton.classList.contains("hidden"), true);
+    assert.equal(tabs[2].getAttribute("aria-selected"), "true");
+    assert.equal(tabs[2].tabIndex, 0);
     assert.deepEqual(calls, ["systemCenter"]);
     context.setSettingsTab("backup");
     assert.equal(elements.systemCenterPanel.classList.contains("active"), false);

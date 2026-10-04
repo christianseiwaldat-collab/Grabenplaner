@@ -533,6 +533,7 @@ const state = {
   personnelWorkflowInstanceStatusFilter: "all",
   personnelWorkflowInstanceLoadError: "",
   personnelLearningCatalog: null,
+  personnelLearningAccessSnapshot: null,
   personnelLearningLoading: false,
   personnelLearningLoadError: "",
   personnelLearningSearch: "",
@@ -789,7 +790,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutDateRangeButton", "requestBlackoutDateRangeText", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList", "requestBlackoutDateRangeDialog", "requestBlackoutDateRangeForm", "requestBlackoutDateRangeStartText", "requestBlackoutDateRangeEndText", "requestBlackoutDateRangePreviousMonth", "requestBlackoutDateRangeMonthLabel", "requestBlackoutDateRangeNextMonth", "requestBlackoutDateRangeGrid", "requestBlackoutDateRangeOpenEnd", "requestBlackoutDateRangeClose", "requestBlackoutDateRangeCancel", "requestBlackoutDateRangeApply",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "positionManagementTab", "positionManagementSection", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "addPersonnelCandidateButton", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "personnelCandidateCreateModal", "personnelCandidateCreateForm", "personnelCandidateCreateApplication", "personnelCandidateCreateLocation", "personnelCandidateCreateDepartment", "personnelCandidateAuthorizationCheck", "personnelCandidateAuthorizationConfirmed", "personnelCandidateAuthorizationState", "personnelCandidateCreateMessage", "personnelCandidateCreateSubmit", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "positionManagementTab", "positionManagementSection", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "addPersonnelCandidateButton", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "personnelCandidateCreateModal", "personnelCandidateCreateForm", "personnelCandidateCreateApplication", "personnelCandidateCreateLocation", "personnelCandidateCreateDepartment", "personnelCandidateAuthorizationCheck", "personnelCandidateAuthorizationConfirmed", "personnelCandidateAuthorizationState", "personnelCandidateCreateMessage", "personnelCandidateCreateSubmit", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "personnelCandidateCreatePhotoField", "personnelCandidateCreatePhoto", "personnelCandidateCreatePhotoPreview", "personnelCandidateCreateTargetAreas", "personnelCandidateCreateAddTargetArea", "personnelCandidateCreateTrialAppointments", "personnelCandidateCreateAddTrialAppointment", "personnelCandidateCreateCompetencyRatings", "personnelCandidateCreateAddCompetencyRating", "personnelCandidateTrialDateRangeDialog", "personnelCandidateTrialDateRangeForm", "personnelCandidateTrialDateRangeStartText", "personnelCandidateTrialDateRangeEndText", "personnelCandidateTrialDateRangePreviousMonth", "personnelCandidateTrialDateRangeMonthLabel", "personnelCandidateTrialDateRangeNextMonth", "personnelCandidateTrialDateRangeGrid", "personnelCandidateTrialDateRangeOpenEnd", "personnelCandidateTrialDateRangeClose", "personnelCandidateTrialDateRangeCancel", "personnelCandidateTrialDateRangeApply",
     "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelLearningTab", "personnelLearningSection", "personnelLearningDashboardPanel", "refreshPersonnelLearningDashboardButton", "personnelLearningDashboardStatus", "personnelLearningDashboardSummary", "personnelLearningDashboardScope", "personnelLearningDashboardAssignments", "personnelLearningDashboardEmployee", "personnelLearningSkillTree", "personnelLearningProcessesPanel", "personnelLearningSummary", "personnelLearningSearch", "personnelLearningTypeFilter", "personnelLearningStatusFilter", "refreshPersonnelLearningButton", "personnelLearningStatus", "personnelLearningList", "addPersonnelLearningModuleButton", "personnelLearningModal", "personnelLearningForm", "personnelLearningModalTitle", "personnelLearningModuleId", "personnelLearningExpectedReceipt", "personnelLearningModuleCode", "personnelLearningModuleType", "personnelLearningScope", "personnelLearningTitle", "personnelLearningSummaryInput", "personnelLearningObjective", "personnelLearningEstimatedMinutes", "personnelLearningVerificationMode", "personnelLearningTags", "personnelLearningVersionNote", "personnelLearningSteps", "addPersonnelLearningStepButton", "personnelLearningMessage", "savePersonnelLearningButton", "personnelLearningSkillsPanel", "personnelLearningSkillSummary", "personnelLearningSkillSearch", "personnelLearningSkillStatusFilter", "refreshPersonnelLearningSkillsButton", "personnelLearningSkillStatus", "personnelLearningSkillList", "addPersonnelLearningSkillButton", "personnelLearningSkillModal", "personnelLearningSkillForm", "personnelLearningSkillModalTitle", "personnelLearningSkillId", "personnelLearningSkillExpectedReceipt", "personnelLearningSkillCode", "personnelLearningSkillCategory", "personnelLearningSkillScope", "personnelLearningSkillTitle", "personnelLearningSkillSummaryInput", "personnelLearningSkillTags", "personnelLearningSkillVersionNote", "personnelLearningSkillLevels", "personnelLearningSkillMessage", "savePersonnelLearningSkillButton", "personnelLearningCompetenciesPanel", "personnelLearningCompetencySummary", "personnelLearningCompetencySearch", "personnelLearningCompetencyEmployee", "personnelLearningCompetencyStatusFilter", "refreshPersonnelLearningCompetenciesButton", "addPersonnelLearningCompetencyButton", "personnelLearningCompetencyStatus", "personnelLearningCompetencyEmployeeSummary", "personnelLearningCompetencyList", "personnelLearningCompetencyModal", "personnelLearningCompetencyForm", "personnelLearningCompetencyModalTitle", "personnelLearningCompetencyId", "personnelLearningCompetencyExpectedReceipt", "personnelLearningCompetencyEmployeeNumber", "personnelLearningCompetencyPerson", "personnelLearningCompetencySkill", "personnelLearningCompetencyLevel", "personnelLearningCompetencyTrainer", "personnelLearningCompetencyLevelPreview", "personnelLearningCompetencyMessage", "savePersonnelLearningCompetencyButton", "personnelLearningAssignmentsPanel", "personnelLearningAssignmentSummary", "personnelLearningAssignmentSearch", "personnelLearningAssignmentLearnerFilter", "personnelLearningAssignmentStatusFilter", "refreshPersonnelLearningAssignmentsButton", "addPersonnelLearningAssignmentButton", "personnelLearningAssignmentStatus", "personnelLearningAssignmentList", "personnelLearningAssignmentModal", "personnelLearningAssignmentForm", "personnelLearningAssignmentModalTitle", "personnelLearningAssignmentId", "personnelLearningAssignmentExpectedReceipt", "personnelLearningAssignmentProcess", "personnelLearningAssignmentLearner", "personnelLearningAssignmentTrainerSearch", "personnelLearningAssignmentTrainerCount", "personnelLearningAssignmentTrainerList", "personnelLearningAssignmentBindingPreview", "personnelLearningAssignmentMessage", "savePersonnelLearningAssignmentButton", "personnelLearningProgressModal", "personnelLearningProgressForm", "personnelLearningProgressModalTitle", "personnelLearningProgressAssignmentId", "personnelLearningProgressAssignmentReceipt", "personnelLearningProgressExpectedReceipt", "personnelLearningProgressSummary", "personnelLearningProgressCount", "personnelLearningProgressStepList", "personnelLearningProgressFinalized", "personnelLearningProgressResult", "personnelLearningProgressAssessmentNote", "personnelLearningProgressCorrectionReasonField", "personnelLearningProgressCorrectionReason", "personnelLearningProgressHistoryDetails", "personnelLearningProgressHistory", "personnelLearningProgressMessage", "savePersonnelLearningProgressButton", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList", "personnelLifecycleInterfacesSection", "personnelLifecycleInterfacesStatus", "personnelLifecycleInterfacesList", "personnelLifecycleAutomationSection", "personnelLifecycleAutomationStatus", "personnelLifecycleAutomationCatalog", "personnelLifecycleAutomationSummary", "personnelLifecycleAutomationList",
     "personnelWorkflowInstanceWorkspace", "personnelLifecycleEditorSection", "personnelLifecycleEditorEntryTitle", "openPersonnelLifecycleEditorButton", "personnelLifecycleEditorEntryStatus", "personnelLifecycleEditorDialog", "personnelLifecycleEditorTitle", "closePersonnelLifecycleEditorButton", "personnelLifecycleEditorStatus", "personnelLifecycleEditorWorkspace", "personnelLifecycleEditorWorkflowType", "personnelLifecycleEditorCatalogHint", "personnelLifecycleEditorWorkflowCode", "personnelLifecycleEditorDraftTitle", "personnelLifecycleEditorDraftDescription", "personnelLifecycleEditorScopeType", "personnelLifecycleEditorRequirementKind", "addPersonnelLifecycleEditorStepButton", "personnelLifecycleEditorFlow", "personnelLifecycleEditorInspectorForm", "personnelLifecycleEditorInspectorFields", "personnelLifecycleEditorStepType", "personnelLifecycleEditorStepTitle", "personnelLifecycleEditorStepDescription", "personnelLifecycleEditorResponsibilityClass", "personnelLifecycleEditorStepRequired", "movePersonnelLifecycleEditorStepUpButton", "movePersonnelLifecycleEditorStepDownButton", "removePersonnelLifecycleEditorStepButton", "personnelLifecycleEditorValidation", "personnelLifecycleEditorValidationTitle", "personnelLifecycleEditorValidationResult", "resetPersonnelLifecycleEditorButton", "validatePersonnelLifecycleEditorButton",
@@ -1342,6 +1343,7 @@ function showLoginGate(message = "") {
   clearUsbProvisioningPasswords();
   resetAdminPersonalActionsState("");
   state.portalSession = null;
+  syncPersonnelLearningAccessState();
   syncSalesHistoryAccess();
   state.salesArticleCatalog.actorKey = "";
   state.salesArticleCatalog.detailAccessKey = "";
@@ -1722,7 +1724,7 @@ function applyFunctionSearchNavigationState(target) {
   if (target.dashboardMode) state.rightsDashboardMode = target.dashboardMode;
   if (target.requestKind) state.requestKindTab = target.requestKind;
   if (target.salesAnalyticsTab) state.salesAnalytics.tab = target.salesAnalyticsTab;
-  if (target.privacyOrganizationTab) privacyOrganizationTab = window.GrabenplanerPrivacyOrganization.normalizeTab(target.privacyOrganizationTab);
+  if (target.privacyOrganizationTab) privacyOrganizationTab = normalizePrivacyOrganizationTab(target.privacyOrganizationTab);
 
   const contextChanged = restoreRememberedOverallContext(target.view);
   setView(target.view);
@@ -1773,6 +1775,8 @@ async function navigateToFunctionSearchEntry(entryId) {
   }
 
   closeMobileNavigation({ restoreFocus: false });
+  await revealSalesArticleSearchWindowTarget(entry.target, () => sequence === functionSearchNavigationSequence);
+  if (sequence !== functionSearchNavigationSequence) return false;
   await waitForFunctionSearchTargetLayout();
   if (sequence !== functionSearchNavigationSequence) return false;
   const currentEntry = availableFunctionSearchNavigationEntry(entry.id);
@@ -1840,10 +1844,18 @@ function canManagePositions() {
 }
 
 function canReadCentralVacations() {
-  return canReadCentralPersonnel() && (
+  return state.portalStatus?.installationFeatures?.vacation !== false
+    && canReadCentralPersonnel() && (
     !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("vacation:read") === true
   );
+}
+
+function canAccessTeamManagement() {
+  if (state.portalStatus?.portalEnabled !== true) return true;
+  const permissions = state.portalSession?.user?.permissions || [];
+  return ["employees:read", "employees:display:write", "employees:write"]
+    .some(permission => permissions.includes(permission));
 }
 
 function hasGovernancePermission(permission) {
@@ -1906,6 +1918,13 @@ function currentSalesPriceLabelsAccessKey() {
   const user = state.portalSession?.user;
   return JSON.stringify([user?.employeeNumber, user?.accountId, user?.isEmployee, user?.accountType,
     user?.homeLocationId, user?.permissions, user?.scopes, canUseSalesPriceLabels()]);
+}
+
+function syncSalesPriceLabelsNavigation() {
+  const allowed = canUseSalesPriceLabels();
+  for (const id of ["salesPriceLabelsNavButton", "salesPriceLabelsDashboardCard"]) {
+    document.getElementById(id)?.classList.toggle("hidden", !allowed);
+  }
 }
 
 function canWriteSalesArticles() {
@@ -2258,6 +2277,48 @@ function canWritePersonnelLearningCompetencies() {
     && hasGovernancePermission("personnel:learning:assignments:write");
 }
 
+function currentPersonnelLearningAccessSnapshot() {
+  const local = state.portalStatus?.portalEnabled !== true;
+  const user = state.portalSession?.user;
+  const actor = local ? "local" : String(user?.employeeNumber || user?.id || user?.accountId || "anonymous");
+  const preferredDepartmentId = Number(user?.preferredDepartmentId || 0);
+  const organizationContext = [String(user?.role || "").trim().toLowerCase(),
+    String(user?.homeLocationId || "").trim(),
+    Number.isSafeInteger(preferredDepartmentId) && preferredDepartmentId > 0 ? preferredDepartmentId : 0];
+  const sessionAllowed = local || (state.portalSession?.authenticated === true
+    && Boolean(user) && user.isEmployee !== false && user.mustChangePassword !== true);
+  const readable = sessionAllowed && canReadPersonnelLearningCatalog();
+  const teamReadable = readable && canWritePersonnelLearningCompetencies();
+  const catalogPermissions = ["personnel:learning:catalog:read", "personnel:learning:catalog:manage", "personnel:learning:catalog:publish"];
+  const teamPermissions = [...catalogPermissions, "personnel:learning:assignments:write", "personnel:learning:cross_location:assign"];
+  const scopeRows = Array.isArray(user?.scopes) ? user.scopes : [];
+  const permissionScopeRows = Array.isArray(user?.permissionScopes) ? user.permissionScopes : [];
+  const scopeKey = scope => [String(scope?.locationId || ""), Number(scope?.departmentId || 0)];
+  const sortedRows = rows => [...new Set(rows.map(row => JSON.stringify(row)))].sort();
+  const scopes = sortedRows(scopeRows.map(scopeKey));
+  const permissionScopes = permissions => sortedRows(permissionScopeRows
+    .filter(scope => permissions.includes(scope.permission))
+    .map(scope => [scope.permission, ...scopeKey(scope)]));
+  const catalogRights = catalogPermissions
+    .map(permission => hasGovernancePermission(permission));
+  return {
+    catalog: readable ? JSON.stringify([actor, organizationContext, scopes, permissionScopes(catalogPermissions), catalogRights]) : "",
+    team: teamReadable ? JSON.stringify([actor, organizationContext, scopes, permissionScopes(teamPermissions), catalogRights,
+      hasGovernancePermission("personnel:learning:cross_location:assign")]) : "",
+  };
+}
+
+function syncPersonnelLearningAccessState() {
+  const next = currentPersonnelLearningAccessSnapshot();
+  const previous = state.personnelLearningAccessSnapshot;
+  state.personnelLearningAccessSnapshot = next;
+  if (!previous || previous.catalog !== next.catalog) {
+    personnelKnowledgeLibrary?.clear();
+    personnelLearningAssessmentPanel?.clear();
+  }
+  if (!previous || previous.team !== next.team) personnelLearningTeam?.clear();
+}
+
 function canAccessAssignedPersonnelLifecycleTasks() {
   if (!personnelLifecycleFoundationEnabled()) return false;
   if (!state.portalStatus?.portalEnabled) return true;
@@ -2487,7 +2548,7 @@ function personnelLifecycleEditorActorAccessKey() {
 
 function canOpenPersonnelAdministrationView() {
   return canReadCentralPersonnel() || canManagePositions() || canReadCostCenters() || canAccessCustomWorkRuleGovernance() || canReadCollectiveAgreements()
-    || canReadCentralVacations() || canReadDataSubjectRequests() || canReadCandidatePreboarding()
+    || canReadCentralVacations() || canReadCandidatePreboarding()
     || canOpenWorkflowCenter() || canReadPersonnelLearningCatalog() || canReadPersonnelTasks();
 }
 
@@ -2510,7 +2571,6 @@ function firstAccessiblePersonnelAdministrationTab() {
   if (canAccessCustomWorkRuleGovernance()) return "ruleDrafts";
   if (canReadCollectiveAgreements()) return "collectiveAgreements";
   if (canReadCentralVacations()) return "vacations";
-  if (canReadDataSubjectRequests()) return "dataRequests";
   return "";
 }
 
@@ -2525,8 +2585,7 @@ function canOpenPersonnelAdministrationTab(tab) {
     || (tab === "costCenters" && canReadCostCenters())
     || (tab === "ruleDrafts" && canAccessCustomWorkRuleGovernance())
     || (tab === "collectiveAgreements" && canReadCollectiveAgreements())
-    || (tab === "vacations" && canReadCentralVacations())
-    || (tab === "dataRequests" && canReadDataSubjectRequests());
+    || (tab === "vacations" && canReadCentralVacations());
 }
 
 function canReadGovernanceDashboards() {
@@ -2564,6 +2623,7 @@ function applyRoleVisibility() {
   syncCrmActorState();
   syncSalesArticleCatalogActorState();
   syncSalesAnalyticsActorState();
+  syncPersonnelLearningAccessState();
   elements.salesReportImportPanel?.classList.toggle("hidden", !canManageSalesReportImports());
   syncAdminPersonalActionsActorState();
   const serverActive = state.portalStatus?.operationMode === "server";
@@ -2585,7 +2645,7 @@ function applyRoleVisibility() {
   const locationWriteAccess = locationBaseWriteAccess || departmentWriteAccess;
   const positionWriteAccess = !lanActive || permissions.includes("positions:write");
   const scopeAccess = permissions.includes("scopes:write");
-  const employeeReadAccess = employeeWriteAccess || employeeDisplayWriteAccess || permissions.includes("employees:read");
+  const employeeReadAccess = canAccessTeamManagement();
   const timeReadAccess = canReadManagedTimeTracking() && features.timeTracking !== false;
   const wifiSettingsAccess = !lanActive || permissions.includes("wifi:settings");
   const greetingSettingsAccess = !lanActive || (globalAdministration && permissions.includes("hr:settings"));
@@ -2621,7 +2681,7 @@ function applyRoleVisibility() {
   const centralPersonnelWriteAccess = canWriteCentralPersonnel();
   const costCenterReadAccess = canReadCostCenters();
   const costCenterWriteAccess = canWriteCostCenters();
-  const centralVacationReadAccess = canReadCentralVacations() && features.vacation !== false;
+  const centralVacationReadAccess = canReadCentralVacations();
   const approvedAbsenceWriteAccess = canWriteApprovedAbsenceEntries() && features.vacation !== false;
   const vacationAccountsReadAccess = canReadVacationAccounts() && features.vacation !== false;
   const timeRecordsReadAccess = canReadMonthlyTimeRecords() && features.timeTracking !== false;
@@ -2662,10 +2722,10 @@ function applyRoleVisibility() {
   const salesArticleCatalogReadAccess = canReadSalesArticles();
   const salesArticleCatalogWriteAccess = canWriteSalesArticles();
   const salesArticleCatalogImportAccess = canImportSalesArticles();
-  const salesModuleAccess = salesAnalyticsAccess || crmAccess || salesArticleCatalogAccess || canAccessTradeInsights();
+  const salesModuleAccess = canOpenSalesAdministrationModule();
   syncSalesHistoryAccess();
   const personnelAdministrationViewAccess = centralPersonnelReadAccess || positionWriteAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
-    || centralVacationReadAccess || dataSubjectRequestsReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelLearningAccess || personnelTasksAccess;
+    || centralVacationReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelLearningAccess || personnelTasksAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
   elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
   elements.salesAdministrationNav?.classList.toggle("hidden", !salesModuleAccess);
@@ -2744,6 +2804,7 @@ function applyRoleVisibility() {
     systemCenter: systemCenterAccess,
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
+  reconcileManagedTabs("settings");
   document.querySelectorAll("[data-personnel-settings-group]").forEach(group => {
     const allowed = settingsTabs[group.dataset.personnelSettingsGroup] === true;
     group.classList.toggle("hidden", !allowed);
@@ -2774,6 +2835,7 @@ function applyRoleVisibility() {
   if (elements.systemExitButton) elements.systemExitButton.querySelector("span").textContent = serverActive ? "Logout" : "Beenden";
   elements.updateCheckButton?.classList.toggle("hidden", !updateAccess);
   document.querySelector('[data-personnel-tab="locations"]')?.classList.toggle("hidden", !locationWriteAccess);
+  reconcileManagedTabs("personnel");
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !(employeeWriteAccess && centralPersonnelWriteAccess));
   elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
   document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
@@ -2781,11 +2843,7 @@ function applyRoleVisibility() {
   elements.candidatePreboardingTab?.classList.toggle("hidden", !candidatePreboardingAccess);
   elements.workflowCenterTab?.classList.toggle("hidden", !workflowCenterAccess);
   elements.personnelLearningTab?.classList.toggle("hidden", !personnelLearningAccess);
-  if (!personnelLearningAccess) personnelKnowledgeLibrary?.clear();
-    personnelLearningAssessmentPanel?.clear();
-    personnelLearningTeam?.clear();
   document.querySelector('[data-learning-area="team"]')?.classList.toggle("hidden", !personnelLearningCompetencyAccess);
-  if (!personnelLearningCompetencyAccess) personnelLearningTeam?.clear();
   elements.addPersonnelLearningModuleButton?.classList.toggle(
     "hidden",
     !canManagePersonnelLearningCatalog()
@@ -2825,7 +2883,6 @@ function applyRoleVisibility() {
   elements.customWorkRulesTab?.classList.toggle("hidden", !customWorkRulesAccess);
   elements.collectiveAgreementsTab?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
   elements.centralVacationsTab?.classList.toggle("hidden", !centralVacationReadAccess);
-  elements.dataSubjectRequestsTab?.classList.toggle("hidden", !dataSubjectRequestsReadAccess);
   elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
   elements.addCostCenterTypeButton?.classList.toggle("hidden", !costCenterWriteAccess);
   elements.addCustomWorkRuleButton?.classList.toggle("hidden", !canDraftCustomWorkRules());
@@ -3054,6 +3111,8 @@ function applyRoleVisibility() {
   }
   if (personnelModuleAccess) renderPersonnelDashboard();
   if (!personnelModuleAccess && state.currentView === "personnelAdministration") setView("startDashboard");
+  if (!employeeReadAccess && state.currentView === "personnel") setView("startDashboard");
+  if (!visibleManagedTabButtons("settings").length && state.currentView === "settings") setView("startDashboard");
   if (!requestReadAccess && state.currentView === "requests") setView("startDashboard");
   if (!timeReadAccess && state.currentView === "timeTracking") setView("startDashboard");
   if (!loanManagementAccess && state.currentView === "loans") setView("startDashboard");
@@ -3075,6 +3134,7 @@ function applyRoleVisibility() {
     clearCrmState("CRM-Daten wurden wegen geänderter Rechte aus der Ansicht entfernt.");
   }
   renderStartDashboard();
+  if (state.currentView === "filialAdministration") renderFilialDashboard();
   renderSidebarSession();
   refreshFunctionSearchAccess();
 }
@@ -4977,8 +5037,6 @@ function renderContextNavigation() {
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "collectiveAgreements");
   setNavigationCurrent(elements.centralVacationsNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "vacations");
-  setNavigationCurrent(elements.dataSubjectRequestsNavButton,
-    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "dataRequests");
   setNavigationCurrent(elements.requestsNavButton, state.currentView === "requests");
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 
@@ -10644,7 +10702,7 @@ function dataSubjectRequestActionLabel(action) {
 
 function updateDataSubjectRequestCounts() {
   const actionable = (state.dataSubjectRequests || []).filter(dataSubjectRequestIsActionable).length;
-  for (const counter of [elements.dataSubjectRequestsNavCount, elements.dataSubjectRequestsTabCount]) {
+  for (const counter of [elements.dataSubjectRequestsNavCount]) {
     if (!counter) continue;
     counter.textContent = String(actionable);
     counter.classList.toggle("hidden", actionable === 0);
@@ -21178,7 +21236,6 @@ const PERSONNEL_DASHBOARD_ITEM_IDS = Object.freeze([
   "ruleDrafts",
   "collectiveAgreements",
   "vacations",
-  "dataRequests",
 ]);
 
 function defaultPersonnelDashboardLayout() {
@@ -21200,7 +21257,7 @@ function normalizePersonnelDashboardLayout(value) {
 function filialDashboardCatalog() {
   const features = state.portalStatus?.installationFeatures || {};
   return [
-    { id: "team", symbol: "◎", eyebrow: "Organisation", label: "Teams & Standorte", description: "Team, Farben, Spitznamen und operative Filialdaten verwalten.", view: "personnel", available: true },
+    { id: "team", symbol: "◎", eyebrow: "Organisation", label: "Teams & Standorte", description: "Team, Farben, Spitznamen und operative Filialdaten verwalten.", view: "personnel", available: canAccessTeamManagement() },
     { id: "loans", symbol: "▣", eyebrow: "Leihe", label: "Leihverwaltung", description: "Leihvorgänge und Rücknahmen im freigegebenen Bereich bearbeiten.", view: "loans", available: canReadLoanManagement() },
     { id: "branchOrders", symbol: "▤", eyebrow: "Beschaffung", label: "Filialbestellungen", description: "Bestellgruppen, Ziele und Nachweise im erlaubten Bereich verwalten.", view: "branchOrders", available: canManageBranchOrders() },
     { id: "planning", symbol: "▦", eyebrow: "Einsatzplanung", label: "Dienstplanung", description: "Wochenpläne, Filialeinsätze und Stundenübersicht öffnen.", view: "planning", available: true },
@@ -21631,16 +21688,6 @@ function personnelDashboardCatalog() {
       route: "vacations",
       available: canReadCentralVacations(),
     },
-    {
-      id: "dataRequests",
-      symbol: "§",
-      eyebrow: "Datenschutz",
-      label: "Datenanfragen",
-      description: "Betroffenenanfragen, Fristen und Bearbeitungsstände geschützt verwalten.",
-      view: "personnelAdministration",
-      route: "dataRequests",
-      available: canReadDataSubjectRequests(),
-    },
   ];
 }
 
@@ -21748,6 +21795,11 @@ async function loadPersonnelLearningArea(area) {
 }
 
 function setPersonnelAdministrationTab(tab) {
+  if (tab === "dataRequests") {
+    privacyOrganizationTab = "dataRequests";
+    setView("privacyOrganization");
+    return;
+  }
   const normalized = canOpenPersonnelAdministrationTab(tab)
     ? tab
     : firstAccessiblePersonnelAdministrationTab();
@@ -21788,7 +21840,6 @@ function setPersonnelAdministrationTab(tab) {
   elements.customWorkRulesSection?.classList.toggle("active", normalized === "ruleDrafts");
   elements.collectiveAgreementsSection?.classList.toggle("active", normalized === "collectiveAgreements");
   elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
-  elements.dataSubjectRequestsSection?.classList.toggle("active", normalized === "dataRequests");
   elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees" || employeeProfileIsOpen());
   if (normalized === "dashboard") renderPersonnelDashboard();
   if (normalized === "positions") renderPositions();
@@ -21820,7 +21871,6 @@ function setPersonnelAdministrationTab(tab) {
   if (normalized === "ruleDrafts") loadCustomWorkRuleRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "collectiveAgreements") loadCollectiveAgreementRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
-  if (normalized === "dataRequests") loadDataSubjectRequests().catch((error) => showToast(error.message, true));
   globalThis.grabenplanerNavigation?.record();
 }
 
@@ -24054,9 +24104,7 @@ function applyGlobalTheme(theme) {
   const normalized = theme === "dark" ? "dark" : "light";
   state.globalTheme = normalized;
   for (const view of UI_APPEARANCE_VIEWS) applyPageTheme(view, normalized);
-  elements.salesArticleCatalogView?.setAttribute("data-page-theme", normalized);
-  elements.receiptSearchView?.setAttribute("data-page-theme", normalized);
-  pageViewElement("privacyOrganization")?.setAttribute("data-page-theme", normalized);
+  document.querySelectorAll(".main-content > .view").forEach(view => view.setAttribute("data-page-theme", normalized));
   document.querySelectorAll("button[data-global-theme-choice]").forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.globalThemeChoice === normalized));
   });
@@ -24291,6 +24339,7 @@ function applyAppFontScalePercent(value) {
   document.documentElement.style.setProperty("--app-font-scale", String(scale));
   document.documentElement.style.setProperty("--app-font-scale-inverse", String(1 / scale));
   sidebarLayout?.refresh();
+  salesArticleSearchWindow?.refresh();
   if (elements.appFontScalePercent) elements.appFontScalePercent.value = String(normalized);
   if (elements.decreaseAppFontScale) elements.decreaseAppFontScale.disabled = normalized <= APP_FONT_SCALE_MIN;
   if (elements.increaseAppFontScale) elements.increaseAppFontScale.disabled = normalized >= APP_FONT_SCALE_MAX;
@@ -30624,6 +30673,45 @@ const SALES_ARTICLE_CATALOG_RENDER_OVERSCAN = 8;
 let salesArticlePreferencesTimer = null;
 let salesArticlePreferencesSaveChain = Promise.resolve();
 let salesArticleColumnResize = null;
+let salesArticleSearchWindow = null;
+let salesArticleWindowPreferences = null;
+let salesArticleWindowRenderFrame = null;
+function salesArticleSearchWindowScale() {
+  const scale = Number.parseFloat(window.getComputedStyle(document.body).zoom);
+  return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+function salesArticleSearchWindowBounds() {
+  const view = elements.salesArticleCatalogView;
+  const workspace = view?.querySelector('.sales-article-catalog-workspace');
+  const header = view?.querySelector('.topbar');
+  const viewport = window.visualViewport;
+  return window.SalesArticleSearchWindow.contentBounds(
+    workspace?.getBoundingClientRect(), header?.getBoundingClientRect(),
+    {width:viewport?.width || window.innerWidth,height:viewport?.height || window.innerHeight,
+      left:viewport?.offsetLeft || 0,top:viewport?.offsetTop || 0}, salesArticleSearchWindowScale(),
+  );
+}
+function syncSalesArticleSearchWindow() {
+  if (!salesArticleSearchWindow || !salesArticleWindowPreferences) return;
+  if (state.currentView === 'articleCatalog' && canReadSalesArticles()) {
+    salesArticleSearchWindow.activate();
+    void salesArticleWindowPreferences.activate();
+  } else {
+    salesArticleWindowPreferences.suspend();
+    salesArticleSearchWindow.suspend();
+  }
+}
+async function revealSalesArticleSearchWindowTarget(target, isCurrent = () => true) {
+  if (target?.view !== 'articleCatalog' || !canReadSalesArticles()) return;
+  const host = document.getElementById('salesArticleSearchWindow');
+  if ([target.focusId,...(target.revealIds || [])].some(id => id && host?.contains(document.getElementById(id)))) {
+    const key = currentSalesArticleCatalogDetailAccessKey();
+    await salesArticleWindowPreferences?.activate();
+    if (!isCurrent() || key !== currentSalesArticleCatalogDetailAccessKey()
+      || state.currentView !== 'articleCatalog' || !canReadSalesArticles()) return;
+    salesArticleSearchWindow?.restore();
+  }
+}
 function availableSalesArticleColumns() {
   return SALES_ARTICLE_CATALOG_COLUMNS.filter(c => !c.price || (c.price === 'costs' ? canReadSalesArticleCosts() : canReadSalesArticlePrices()));
 }
@@ -30636,9 +30724,15 @@ function applySalesArticleTableHeight() {
   const scroll = elements.salesArticleTableScroll; if (!scroll) return;
   const rows = Math.min(20, Math.max(5, Number(state.salesArticleCatalog.visibleRows) || 10));
   const header = elements.salesArticleTableHead?.getBoundingClientRect().height || SALES_ARTICLE_CATALOG_HEADER_HEIGHT;
+  if (salesArticleSearchWindow) {
+    scroll.style.removeProperty('height');
+    const visible = Math.max(0, Math.floor((scroll.clientHeight - header) / SALES_ARTICLE_CATALOG_ROW_HEIGHT));
+    const label = document.getElementById('salesArticleVisibleRowsLabel');
+    if (label) label.textContent = `${visible} Artikel sichtbar`;
+    return;
+  }
   const bar = Math.max(1, scroll.offsetHeight - scroll.clientHeight);
   scroll.style.height = `${header + rows * SALES_ARTICLE_CATALOG_ROW_HEIGHT + bar}px`;
-  const handle = document.getElementById('salesArticleResizeHandle'); handle?.setAttribute('aria-valuenow', String(rows)); handle?.setAttribute('aria-valuetext', `${rows} Artikel sichtbar`);
   const label = document.getElementById('salesArticleVisibleRowsLabel'); if (label) label.textContent = `${rows} Artikel sichtbar`;
 }
 function renderSalesArticleColumnOptions() {
@@ -32467,14 +32561,6 @@ function renderSalesArticleCatalogResults({ detail = true } = {}) {
   applySalesArticleTableHeight();
   elements.salesArticleResults.setAttribute("aria-busy", String(catalog.loading));
   elements.salesArticleTable?.setAttribute("aria-rowcount", String(catalog.searchStarted ? catalog.total + 1 : 1));
-  elements.salesArticleResultsBody?.classList.toggle("hidden", !catalog.resultsExpanded);
-  if (elements.salesArticleResultsBody) elements.salesArticleResultsBody.hidden = !catalog.resultsExpanded;
-  elements.salesArticleResultsToggle?.setAttribute("aria-expanded", String(catalog.resultsExpanded));
-  if (elements.salesArticleResultsToggle) {
-    elements.salesArticleResultsToggle.querySelector("span").textContent = catalog.resultsExpanded
-      ? "Ergebnisse einklappen"
-      : "Ergebnisse ausklappen";
-  }
 
   const formatter = new Intl.NumberFormat("de-AT");
   elements.salesArticleLoadStatus?.classList.toggle("error", Boolean(catalog.error));
@@ -32666,6 +32752,8 @@ function syncSalesArticleCatalogActorState() {
   catalog.actorKey = actorKey;
   catalog.detailAccessKey = detailAccessKey;
   if (actorChanged || detailAccessChanged) {
+    salesArticleWindowPreferences?.invalidate();
+    syncSalesArticleSearchWindow();
     catalog.tablePreferencesKey = ''; catalog.tableColumns = null; catalog.columnWidths = {}; catalog.visibleRows = 10;
     catalog.tablePreferencesPending = false;
     catalog.tablePreferencesRequest = (catalog.tablePreferencesRequest || 0) + 1;
@@ -32701,6 +32789,9 @@ function syncSalesArticleCatalogActorState() {
 }
 
 function clearSalesArticleCatalogState(message = "") {
+  salesArticleWindowPreferences?.invalidate();
+  salesArticleWindowPreferences?.suspend();
+  salesArticleSearchWindow?.suspend();
   closeSalesArticleManagementDialogs({ restoreFocus: false });
   resetSalesArticleLastImportState();
   resetSalesArticleCatalogSearch(
@@ -32710,6 +32801,7 @@ function clearSalesArticleCatalogState(message = "") {
 }
 
 function applySalesArticleCatalogReadState(canRead = canReadSalesArticles()) {
+  syncSalesArticleSearchWindow();
   [
     elements.salesArticleSearchQuery,
     elements.salesArticleSearchReset,
@@ -33147,8 +33239,35 @@ let privacyOrganizationWorkspace = null;
 let privacyOrganizationActorKey = "";
 let privacyOrganizationTab = "overview";
 
-function canAccessPrivacyOrganization() {
+function canReadPrivacyOrganizationWorkspace() {
   return window.GrabenplanerPrivacyOrganization?.accessAllowed(state.portalSession?.user) === true;
+}
+
+function canAccessPrivacyOrganization() {
+  return canReadPrivacyOrganizationWorkspace() || canReadDataSubjectRequests();
+}
+
+function normalizePrivacyOrganizationTab(tab) {
+  return tab === "dataRequests" ? tab : window.GrabenplanerPrivacyOrganization.normalizeTab(tab);
+}
+
+function firstAccessiblePrivacyOrganizationTab() {
+  return canReadPrivacyOrganizationWorkspace() ? "overview" : "dataRequests";
+}
+
+function canOpenPrivacyOrganizationTab(tab) {
+  return tab === "dataRequests" ? canReadDataSubjectRequests() : canReadPrivacyOrganizationWorkspace();
+}
+
+function activatePrivacyOrganizationView() {
+  const active = state.currentView === "privacyOrganization";
+  const dataRequestsActive = active && privacyOrganizationTab === "dataRequests" && canReadDataSubjectRequests();
+  document.getElementById("privacyOrganizationWorkspaceHost")?.classList.toggle("hidden", dataRequestsActive);
+  elements.dataSubjectRequestsSection?.classList.toggle("hidden", !dataRequestsActive);
+  if (active && !dataRequestsActive && canReadPrivacyOrganizationWorkspace()) {
+    void privacyOrganizationWorkspace?.activate(privacyOrganizationTab, { notify: false });
+  } else privacyOrganizationWorkspace?.suspend();
+  if (dataRequestsActive) loadDataSubjectRequests().catch((error) => showToast(error.message, true));
 }
 
 function privacyOrganizationAccessKey() {
@@ -33159,9 +33278,14 @@ function privacyOrganizationAccessKey() {
 
 function syncPrivacyOrganizationAccess() {
   const key = privacyOrganizationAccessKey();
-  const allowed = canAccessPrivacyOrganization();
+  const allowed = canReadPrivacyOrganizationWorkspace();
   const nav = document.getElementById("privacyOrganizationNav");
-  nav?.classList.toggle("hidden", !allowed);
+  nav?.classList.toggle("hidden", !canAccessPrivacyOrganization());
+  const mainButton = document.getElementById("privacyOrganizationNavButton");
+  if (mainButton) mainButton.dataset.privacyOrganizationTab = firstAccessiblePrivacyOrganizationTab();
+  for (const button of nav?.querySelectorAll(".nav-module-route[data-privacy-organization-tab]") || []) {
+    button.classList.toggle("hidden", !canOpenPrivacyOrganizationTab(button.dataset.privacyOrganizationTab));
+  }
   if (key === privacyOrganizationActorKey) return;
   privacyOrganizationActorKey = key;
   privacyOrganizationWorkspace?.destroy();
@@ -33171,7 +33295,7 @@ function syncPrivacyOrganizationAccess() {
   if (allowed) privacyOrganizationWorkspace = window.GrabenplanerPrivacyOrganization.mount(host, {
     api, user: () => state.portalSession?.user, accessKey: privacyOrganizationAccessKey,
     onTabChange(tab) {
-      privacyOrganizationTab = window.GrabenplanerPrivacyOrganization.normalizeTab(tab);
+      privacyOrganizationTab = normalizePrivacyOrganizationTab(tab);
       if (state.currentView === "privacyOrganization") {
         renderContextNavigation();
         globalThis.grabenplanerNavigation?.record();
@@ -33179,15 +33303,15 @@ function syncPrivacyOrganizationAccess() {
     },
     onLegacyNavigate(target) {
       if (target === "requests" && canReadDataSubjectRequests()) {
-        state.personnelAdministrationTab = "dataRequests";
-        setView("personnelAdministration");
+        privacyOrganizationTab = "dataRequests";
+        setView("privacyOrganization");
       } else if (target === "retention" && hasGovernancePermission("retention:read")) {
         setView("settings"); setSettingsTab("dataProtection");
       }
     },
   });
   if (state.currentView === "privacyOrganization") {
-    if (allowed) void privacyOrganizationWorkspace?.activate(privacyOrganizationTab, { notify: false });
+    if (canAccessPrivacyOrganization() && canOpenPrivacyOrganizationTab(privacyOrganizationTab)) activatePrivacyOrganizationView();
     else setView("startDashboard");
   }
 }
@@ -33218,14 +33342,16 @@ document.getElementById('salesArticleHistoryButton')?.addEventListener('click', 
 });
 function syncSalesHistoryAccess() {
   syncPrivacyOrganizationAccess();
+  syncSalesPriceLabelsNavigation();
   const user = state.portalSession?.user;
   const nextKey = user ? JSON.stringify([user.employeeNumber, user.accountId, user.isEmployee, user.accountType, user.homeLocationId, user.salesHistory, user.dataImport, user.permissions, user.scopes]) : "";
   if (nextKey === salesHistoryActorKey) return;
   salesHistoryActorKey = nextKey;
   tradeInsightsWorkspace?.destroy(); tradeInsightsWorkspace = null;
-  salesPriceLabelsWorkspace?.destroy?.(); salesPriceLabelsWorkspace?.suspend?.(); salesPriceLabelsWorkspace = null;
+  if (typeof salesPriceLabelsWorkspace?.destroy === "function") salesPriceLabelsWorkspace.destroy();
+  else salesPriceLabelsWorkspace?.suspend?.();
+  salesPriceLabelsWorkspace = null;
   document.getElementById("salesPriceLabelsWorkspace")?.replaceChildren();
-  document.getElementById("salesPriceLabelsNavButton")?.classList.toggle("hidden", !canUseSalesPriceLabels());
   if (canUseSalesPriceLabels()) salesPriceLabelsWorkspace = window.GrabenplanerSalesPriceLabels?.mount(document.getElementById("salesPriceLabelsWorkspace"), {api, rawApi, accessKey:currentSalesPriceLabelsAccessKey});
   if (state.currentView === "priceLabels") { if (canUseSalesPriceLabels()) void salesPriceLabelsWorkspace?.load(); else setView("startDashboard"); }
   const tradeInsightsAccess = canAccessTradeInsights();
@@ -33309,7 +33435,7 @@ function renderCrmCustomerReadView(customer) {
       </div></section>
     </div>
     <section class="crm-customer-section crm-customer-custom-fields"><div class="crm-section-heading"><span>03</span><div><h3>Eigene Textfelder</h3><p>Individuelle Informationen mit frei gewähltem Titel</p></div></div>${customFields}</section>
-    ${state.portalSession?.user?.salesHistory?.customerPurchases ? '<details id="crmPurchaseHistory" class="sales-history-panel"><summary>Kundenkäufe</summary><div data-history-body>Nur bestätigte Kundenverknüpfungen in freigegebenen Filialen.</div></details>' : ''}`;
+    ${state.portalSession?.user?.salesHistory?.customerPurchases ? '<details id="crmPurchaseHistory" class="sales-history-panel" open><summary>Kundenkäufe</summary><div data-history-body>Nur bestätigte Kundenverknüpfungen in freigegebenen Filialen.</div></details>' : ''}`;
 }
 
 function crmCustomFieldEditorRow(field = {}, index = 0) {
@@ -35705,16 +35831,22 @@ async function submitSalesAnalyticsPdfOptions(event) {
 }
 
 function setView(view) {
+  if (view === "personnelAdministration" && state.personnelAdministrationTab === "dataRequests") {
+    view = "privacyOrganization";
+    privacyOrganizationTab = "dataRequests";
+    state.personnelAdministrationTab = "dashboard";
+  }
   if (!pageViewElement(view)) view = "startDashboard";
   const features = state.portalStatus?.installationFeatures || {};
   if ((view === "vacations" && features.vacation === false)
     || (view === "requests" && (features.requests === false || !canReadManagerRequests()))
     || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
+    || (view === "personnel" && !canAccessTeamManagement())
     || (view === "salesAdministration" && !canOpenSalesAdministrationModule())
     || (view === "receiptSearch" && !state.portalSession?.user?.salesHistory?.read)
     || (["tradeInsights","logistics"].includes(view) && !canAccessTradeInsights())
-    || (view === "privacyOrganization" && !canAccessPrivacyOrganization())
+    || (view === "privacyOrganization" && (!canAccessPrivacyOrganization() || !canOpenPrivacyOrganizationTab(privacyOrganizationTab)))
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "articleCatalog" && !canAccessSalesArticleCatalog())
     || (view === "priceLabels" && !canUseSalesPriceLabels())
@@ -35771,8 +35903,7 @@ function setView(view) {
   elements.tradeInsightsView?.classList.toggle("active", view === "tradeInsights");
   elements.logisticsView?.classList.toggle("active", view === "logistics");
   document.getElementById("privacyOrganizationView")?.classList.toggle("active", view === "privacyOrganization");
-  if (view === "privacyOrganization") void privacyOrganizationWorkspace?.activate(privacyOrganizationTab, { notify: false });
-  else privacyOrganizationWorkspace?.suspend();
+  activatePrivacyOrganizationView();
   if (["tradeInsights","logistics"].includes(view)) void activateTradeArea(view); else tradeInsightsWorkspace?.suspend();
   elements.salesArticleCatalogView?.classList.toggle("active", view === "articleCatalog");
   if (view !== "articleCatalog") {
@@ -35787,6 +35918,7 @@ function setView(view) {
   elements.rightsDashboardView?.classList.toggle("active", view === "rightsDashboard");
   elements.settingsView.classList.toggle("active", view === "settings");
   applyActivePageAppearance();
+  syncSalesArticleSearchWindow();
   if (view === "settings") {
     const activeSettingsTab = document.querySelector("[data-settings-tab].active:not(.hidden)");
     const firstAllowedSettingsTab = document.querySelector("[data-settings-tab]:not(.hidden)");
@@ -35847,12 +35979,16 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     if (["create", "reports", "graphics", "pdf"].includes(requestedSection)) state.salesAnalytics.tab = requestedSection;
   }
   if (requestedView === "privacyOrganization") {
-    privacyOrganizationTab = window.GrabenplanerPrivacyOrganization.normalizeTab(parameters.get("section"));
+    privacyOrganizationTab = parameters.has("section")
+      ? normalizePrivacyOrganizationTab(parameters.get("section")) : firstAccessiblePrivacyOrganizationTab();
   }
   if (requestedView === "personnelAdministration") {
     const requestedSection = parameters.get("section");
     const establishedSection = ["dashboard", "employees", "positions", "applications", "workflows", "learning", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"].includes(requestedSection);
-    if (establishedSection || requestedSection === "dataRequests") {
+    if (requestedSection === "dataRequests") {
+      requestedView = "privacyOrganization";
+      privacyOrganizationTab = "dataRequests";
+    } else if (establishedSection) {
       state.personnelAdministrationTab = requestedSection;
     }
   }
@@ -35908,26 +36044,75 @@ function currentAdministrationRoute() {
   return route;
 }
 
+function visibleManagedTabButtons(kind) {
+  const selector = kind === "settings" ? "[data-settings-tab]" : "[data-personnel-tab]";
+  return [...document.querySelectorAll(selector)]
+    .filter(button => !button.hidden && !button.disabled && !button.classList.contains("hidden"));
+}
+
+function syncManagedTabSelection(kind, selected) {
+  const key = kind === "settings" ? "settingsTab" : "personnelTab";
+  const visible = new Set(visibleManagedTabButtons(kind));
+  document.querySelectorAll(kind === "settings" ? "[data-settings-tab]" : "[data-personnel-tab]").forEach(button => {
+    const active = button.dataset[key] === selected && visible.has(button);
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+}
+
+function setManagedTabPanel(panel, active) {
+  if (!panel) return;
+  panel.classList.toggle("active", active);
+}
+
+function reconcileManagedTabs(kind) {
+  const buttons = visibleManagedTabButtons(kind);
+  const active = buttons.find(button => button.classList.contains("active"));
+  const key = kind === "settings" ? "settingsTab" : "personnelTab";
+  if (active) return syncManagedTabSelection(kind, active.dataset[key]);
+  if (kind === "settings") setSettingsTab(buttons[0]?.dataset[key] || "");
+  else if (canAccessTeamManagement()) setPersonnelTab(buttons[0]?.dataset[key] || "");
+  else syncManagedTabSelection(kind, "");
+}
+
+function handleManagedTabKeydown(event, kind) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const key = kind === "settings" ? "settingsTab" : "personnelTab";
+  const selector = kind === "settings" ? "[data-settings-tab]" : "[data-personnel-tab]";
+  const buttons = visibleManagedTabButtons(kind), index = buttons.indexOf(event.target.closest?.(selector));
+  if (index < 0) return;
+  const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1
+    : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+  event.preventDefault();
+  if (kind === "settings") setSettingsTab(buttons[next].dataset[key]);
+  else setPersonnelTab(buttons[next].dataset[key]);
+  buttons[next].focus();
+}
+
 function setSettingsTab(tab) {
   if (tab === "systemCenter" && !canReadSystemCenter()) return;
   if (tab === "usbProvisioning") tab = "backup";
   const personnelTarget = ["vacation", "timeTracking", "integrations"].includes(tab) ? tab : "";
   const databaseTarget = tab === "databaseImports";
   const integratedTarget = ["branding", "pdf"].includes(tab) ? tab : "";
-  const activeTab = personnelTarget ? "personnel" : databaseTarget ? "backup" : integratedTarget === "pdf" ? "schedule" : integratedTarget ? "general" : tab;
+  const requestedTab = personnelTarget ? "personnel" : databaseTarget ? "backup" : integratedTarget === "pdf" ? "schedule" : integratedTarget ? "general" : tab;
+  const buttons = visibleManagedTabButtons("settings");
+  const activeTab = buttons.some(button => button.dataset.settingsTab === requestedTab)
+    ? requestedTab : buttons[0]?.dataset.settingsTab || "";
   if (elements.backupSettings.classList.contains("active") && activeTab !== "backup") {
     clearUsbProvisioningPasswords();
   }
-  document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("active", button.dataset.settingsTab === activeTab));
+  syncManagedTabSelection("settings", activeTab);
   document.querySelector(`[data-settings-tab="${activeTab}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-  elements.generalSettings.classList.toggle("active", activeTab === "general");
-  elements.scheduleSettings?.classList.toggle("active", activeTab === "schedule");
-  elements.personnelSettings.classList.toggle("active", activeTab === "personnel");
-  elements.dataProtectionSettings?.classList.toggle("active", activeTab === "dataProtection");
-  elements.accessSettings.classList.toggle("active", activeTab === "access");
-  elements.rightsSettings?.classList.toggle("active", activeTab === "rights");
-  elements.backupSettings.classList.toggle("active", activeTab === "backup");
-  elements.systemCenterPanel?.classList.toggle("active", activeTab === "systemCenter");
+  setManagedTabPanel(elements.generalSettings, activeTab === "general");
+  setManagedTabPanel(elements.scheduleSettings, activeTab === "schedule");
+  setManagedTabPanel(elements.personnelSettings, activeTab === "personnel");
+  setManagedTabPanel(elements.dataProtectionSettings, activeTab === "dataProtection");
+  setManagedTabPanel(elements.accessSettings, activeTab === "access");
+  setManagedTabPanel(elements.rightsSettings, activeTab === "rights");
+  setManagedTabPanel(elements.backupSettings, activeTab === "backup");
+  setManagedTabPanel(elements.systemCenterPanel, activeTab === "systemCenter");
   if (activeTab === "general" && canManageLoanSettings()) {
     loadLoanSettings();
   }
@@ -35999,13 +36184,16 @@ function setSettingsTab(tab) {
 }
 
 function setPersonnelTab(tab) {
+  if (!canAccessTeamManagement()) return;
+  const buttons = visibleManagedTabButtons("personnel");
+  tab = buttons.some(button => button.dataset.personnelTab === tab) ? tab : buttons[0]?.dataset.personnelTab || "";
   if (tab !== "employees" && employeeProfileIsOpen() && state.employeeProfileHost === "team") {
     closeEmployeeProfile({ restoreFocus: false });
   }
   state.personnelTab = tab;
-  document.querySelectorAll("[data-personnel-tab]").forEach((button) => button.classList.toggle("active", button.dataset.personnelTab === tab));
-  elements.employeeSettings.classList.toggle("active", tab === "employees");
-  elements.locationSettings.classList.toggle("active", tab === "locations");
+  syncManagedTabSelection("personnel", tab);
+  setManagedTabPanel(elements.employeeSettings, tab === "employees");
+  setManagedTabPanel(elements.locationSettings, tab === "locations");
   elements.teamDisplayColumnsButton?.classList.toggle("hidden", tab !== "employees");
   globalThis.grabenplanerNavigation?.record();
 }
@@ -39652,7 +39840,7 @@ document.querySelectorAll(".nav-item").forEach((button) => button.addEventListen
     setPersonnelAdministrationTab(button.dataset.personnelAdministrationRoute);
   }
   if (button.dataset.privacyOrganizationTab) {
-    privacyOrganizationTab = window.GrabenplanerPrivacyOrganization.normalizeTab(button.dataset.privacyOrganizationTab);
+    privacyOrganizationTab = normalizePrivacyOrganizationTab(button.dataset.privacyOrganizationTab);
   }
   const contextChanged = restoreRememberedOverallContext(view);
   setView(view);
@@ -40963,6 +41151,7 @@ elements.payrollHandoffList?.addEventListener("click", (event) => {
 });
 elements.payrollHandoffProtocolForm?.addEventListener("submit", savePayrollHandoffProtocol);
 document.querySelectorAll("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab)));
+document.querySelector('#settingsView [role="tablist"]')?.addEventListener("keydown", event => handleManagedTabKeydown(event, "settings"));
 elements.refreshRetentionPoliciesButton?.addEventListener("click", () => loadRetentionGovernance({ force: true }));
 elements.addRetentionRuleButton?.addEventListener("click", () => openRetentionRuleDialog());
 elements.addRetentionHoldButton?.addEventListener("click", () => openRetentionHoldDialog());
@@ -40993,6 +41182,7 @@ elements.wifiConfirmationLevelList?.addEventListener("change", (event) => {
 });
 [elements.wifiMinimumPresenceMinutes, elements.wifiAbsenceGraceMinutes].forEach((input) => input?.addEventListener("input", updateWifiAutomationRuleHint));
 document.querySelectorAll("[data-personnel-tab]").forEach((button) => button.addEventListener("click", () => setPersonnelTab(button.dataset.personnelTab)));
+document.querySelector(".personnel-tabs")?.addEventListener("keydown", event => handleManagedTabKeydown(event, "personnel"));
 document.querySelector(".main-nav").addEventListener("click", (event) => {
   const toggle = event.target.closest("[data-nav-toggle]");
   if (toggle) {
@@ -41393,10 +41583,6 @@ elements.salesArticleSearchForm?.addEventListener("submit", (event) => {
 elements.salesArticleSearchReset?.addEventListener("click", () => {
   resetSalesArticleCatalogSearch();
   elements.salesArticleSearchQuery?.focus();
-});
-elements.salesArticleResultsToggle?.addEventListener("click", () => {
-  state.salesArticleCatalog.resultsExpanded = !state.salesArticleCatalog.resultsExpanded;
-  renderSalesArticleCatalogResults({ detail: false });
 });
 elements.salesArticleResults?.addEventListener("click", (event) => {
   const sortButton = event.target.closest("[data-sales-article-sort]");
@@ -42320,13 +42506,32 @@ elements.salesArticleDetailNavigation?.addEventListener('keydown', event => {
   links[next].click(); links[next].focus();
 });
 {
-  const handle = document.getElementById('salesArticleResizeHandle'); let drag = null;
-  const resize = rows => { state.salesArticleCatalog.visibleRows = Math.min(20, Math.max(5, Math.round(rows))); applySalesArticleTableHeight(); renderSalesArticleCatalogRows(); };
-  handle?.addEventListener('pointerdown', event => { if (event.button !== 0 || !canReadSalesArticles()) return; event.preventDefault(); drag = { id: event.pointerId, y: event.clientY, rows: state.salesArticleCatalog.visibleRows || 10 }; handle.setPointerCapture(event.pointerId); });
-  handle?.addEventListener('pointermove', event => { if (drag?.id === event.pointerId) resize(drag.rows + (event.clientY - drag.y) / SALES_ARTICLE_CATALOG_ROW_HEIGHT); });
-  const end = () => { if (drag) { drag = null; queueSalesArticlePreferencesSave(); } };
-  handle?.addEventListener('pointerup', end); handle?.addEventListener('pointercancel', end); handle?.addEventListener('lostpointercapture', end);
-  handle?.addEventListener('keydown', event => { if (!['ArrowUp','ArrowDown','Home','End'].includes(event.key)) return; event.preventDefault(); resize(event.key === 'Home' ? 5 : event.key === 'End' ? 20 : (state.salesArticleCatalog.visibleRows || 10) + (event.key === 'ArrowDown' ? 1 : -1)); queueSalesArticlePreferencesSave(); });
+  const host = document.getElementById('salesArticleSearchWindow');
+  if (host && window.SalesArticleSearchWindow) {
+    const canUse = () => state.currentView === 'articleCatalog' && canReadSalesArticles();
+    salesArticleSearchWindow = window.SalesArticleSearchWindow.attach(host, {
+      bounds:salesArticleSearchWindowBounds, scale:salesArticleSearchWindowScale, canUse,
+      observe:[document.querySelector('.main-content'),elements.salesArticleCatalogView?.querySelector('.topbar')],
+      change:value => { void salesArticleWindowPreferences?.change(value); },
+      resize:() => {
+        if (salesArticleWindowRenderFrame !== null) cancelAnimationFrame(salesArticleWindowRenderFrame);
+        salesArticleWindowRenderFrame = requestAnimationFrame(() => {
+          salesArticleWindowRenderFrame = null;
+          if (canUse()) { applySalesArticleTableHeight(); renderSalesArticleCatalogRows(); }
+        });
+      },
+    });
+    salesArticleWindowPreferences = window.SalesArticleSearchWindow.createPreferences({
+      api, key:currentSalesArticleCatalogDetailAccessKey, canUse:canReadSalesArticles,
+      apply:value => salesArticleSearchWindow.set(value),
+      error:error => setSalesArticleCatalogStatus(`Fenstereinstellungen konnten nicht gespeichert oder geladen werden: ${error.message}`,true),
+    });
+    syncSalesArticleSearchWindow();
+    window.addEventListener('pagehide',() => {
+      salesArticleWindowPreferences.suspend({abortWrites:true}); salesArticleSearchWindow.suspend();
+    });
+    window.addEventListener('pageshow',syncSalesArticleSearchWindow);
+  }
 }
 salesArticleColumnResize = window.SalesArticleColumnWidths?.attach(elements.salesArticleTable, {
   columns:selectedSalesArticleColumns, widths:() => state.salesArticleCatalog.columnWidths,

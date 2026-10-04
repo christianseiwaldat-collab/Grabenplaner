@@ -36,6 +36,29 @@ test('Block 5: filters default to year-to-report-end and reject open, invalid, f
   for (const change of [{ dateFrom: '2026-02-30' }, { dateTo: '2026-09-06' }, { dateFrom: '2025-01-01' }, { dateFrom: '2026-09-05', dateTo: '2026-09-04' }, { limit: 101 }, { limit: 'NaN' }, { kind: 'everything' }, { sellerRole: 'auto' }, { scopeId: 'other' }])
     assert.throws(() => normalizeSalesHistoryQuery({ sourceId: 'cash', ...change }, options));
 });
+test('CRM purchases default to exactly 365 calendar days including today and allow older multi-year periods only in their customer scope', () => {
+  const session = base(); session.permissions.push(H.CUSTOMER_PURCHASES, C.ACCESS, C.CUSTOMERS_READ);
+  const projection = buildSalesHistoryProjection(session), customerId = 'synthetic-customer';
+  for (const [today, expectedStart] of [['2026-10-04', '2025-10-05'], ['2024-03-01', '2023-03-03'], ['2025-03-01', '2024-03-02']]) {
+    const query = normalizeSalesHistoryQuery({ sourceId: 'cash' }, { today, projection, customerId });
+    assert.equal(query.dateFrom, expectedStart); assert.equal(query.dateTo, today);
+    assert.deepEqual(UI.defaultPeriod(today, customerId), { from: expectedStart, to: today });
+    assert.equal((Date.parse(query.dateTo) - Date.parse(query.dateFrom)) / 86400000 + 1, 365);
+  }
+  const options = { today: '2026-10-04', projection, customerId }, savedQuery = { sourceId: 'cash', dateFrom: '2010-01-01', dateTo: '2026-10-04' };
+  assert.equal(normalizeSalesHistoryQuery(JSON.parse(JSON.stringify(savedQuery)), options).dateFrom, '2010-01-01');
+  assert.throws(() => normalizeSalesHistoryQuery(savedQuery, { ...options, customerId: null }), { code: 'IMPORT_HISTORY_DATE_RANGE' });
+  assert.throws(() => normalizeSalesHistoryQuery({ ...savedQuery, customerId }, { ...options, customerId: null }), { code: 'IMPORT_SHAPE_INVALID' });
+  for (const change of [{ dateFrom: '2026-02-30' }, { dateTo: '2026-10-05' }, { dateFrom: '2026-10-04', dateTo: '2026-10-03' }, { kind: 'daily', snapshot: 'a'.repeat(64) }])
+    assert.throws(() => normalizeSalesHistoryQuery({ ...savedQuery, ...change }, options));
+  assert.throws(() => normalizeSalesHistoryQuery(savedQuery, { ...options, projection: buildSalesHistoryProjection(base()) }), { code: 'IMPORT_FORBIDDEN' });
+  assert.equal(normalizeSalesHistoryQuery({ sourceId: 'cash', dateFrom: '0000-01-01', dateTo: '9999-12-31' }, { ...options, today: '9999-12-31' }).dateTo, '9999-12-31');
+  assert.equal(normalizeSalesHistoryQuery({ ...savedQuery, dateFrom: '2024-02-29' }, options).dateFrom, '2024-02-29');
+  for (const day of ['2025-02-29', '2026-2-03', '10000-01-01', '2026-10-04T00:00:00Z'])
+    assert.throws(() => normalizeSalesHistoryQuery({ ...savedQuery, dateFrom: day }, options), { code: 'IMPORT_DATE_INVALID' });
+  const general = normalizeSalesHistoryQuery({ sourceId: 'cash' }, { today: options.today, projection });
+  assert.equal(general.dateFrom, '2026-01-01'); assert.deepEqual(UI.defaultPeriod(options.today), { from: '2026-01-01', to: options.today });
+});
 async function apiFixture(t) {
   const app = express(); app.use(express.json({ limit: '16kb' })); const state = { session: base(), workspace: null, calls: 0, exists: true };
   registerSalesHistoryRoutes(app, { requireSession() { if (!state.session) throw Object.assign(new Error('secret diagnostic'), { status: 401, code: 'PORTAL_LOGIN_REQUIRED' }); return state.session; },
@@ -93,11 +116,12 @@ test('Block 5: UI escapes imported text, labels page sorting and separates raw p
   assert.doesNotMatch(html, /<script>|<img/); assert.match(html, /&lt;script&gt;/); assert.match(html, /Sortierung der angezeigten Seite/);
   assert.match(html, /Quellpreis \(ungeprüft\)/); assert.match(html, /Prüfung offen/); assert.doesNotMatch(html, /Positionsverkäufer/);
 });
-test('Block 5: UI reuses calendar/theme, keeps search explicit and clears outstanding reads when accounts change', () => {
+test('Block 5: UI reuses calendar/theme, limits direct date entry to CRM and clears outstanding reads when accounts change', () => {
   const ui = fs.readFileSync(path.join(__dirname, '../public/sales-history.js'), 'utf8'), app = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
-  assert.match(ui, /GrabenplanerDateRangeCalendar\?\.createDateRangeCalendar/); assert.doesNotMatch(ui, /type="date"|localStorage|sessionStorage|innerHTML\s*=\s*error/);
+  assert.match(ui, /GrabenplanerDateRangeCalendar\?\.createDateRangeCalendar/); assert.doesNotMatch(ui, /localStorage|sessionStorage|innerHTML\s*=\s*error/);
   assert.match(ui, /ticket !== generation/); assert.match(ui, /controller\?\.abort\(\)/); assert.match(ui, /body\.replaceChildren\(\)/);
-  assert.match(app, /state\.portalSession = null;\s+syncSalesHistoryAccess\(\)/);
+  const logout = app.slice(app.indexOf('function showLoginGate('), app.indexOf('function hideLoginGate('));
+  assert.match(logout, /state\.portalSession = null;[\s\S]*?syncSalesHistoryAccess\(\)/);
   const css = fs.readFileSync(path.join(__dirname, '../public/sales-history.css'), 'utf8'); assert.match(css, /position:sticky/); assert.match(css, /max-height:400px/);
   assert.match(css, /var\(--surface\)/); assert.doesNotMatch(css, /--paper/);
 });

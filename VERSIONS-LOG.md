@@ -1,8 +1,8 @@
 # Versionsstatus
 
-## v0.92.74 Beta · Quellstand
+## v0.92.75 Beta · Quellstand
 
-Vollständiger Developer-Zugriff auf Datenschutz, Schutzstatus und Handels-KV.
+Verbesserte Navigation, Kundenzeiträume, Artikelansicht und Preisschildgestaltung.
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease

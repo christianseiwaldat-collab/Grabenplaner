@@ -29,51 +29,81 @@ const PRODUCT_ID = "11111111-1111-4111-8111-111111111111";
 const SNAPSHOT_ID = "a".repeat(64);
 const ARTICLE_NUMBER = "DETAIL-100";
 const TIMESTAMP = "2026-09-03T12:00:00.000Z";
+const WINDOW_READER_A = "article-window-reader-a";
+const WINDOW_READER_B = "article-window-reader-b";
+const WINDOW_ACCESS_ONLY = "article-window-access-only";
+const WINDOW_READ_WITHOUT_ACCESS = "article-window-read-without-access";
 let httpServer;
 let baseUrl;
 
-function createSession() {
+function createSession(employeeNumber = EMPLOYEE_NUMBER) {
   const token = crypto.randomBytes(32).toString("hex");
   db.prepare(`
     INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
     VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
   `).run(
     crypto.randomUUID(),
-    EMPLOYEE_NUMBER,
+    employeeNumber,
     crypto.createHash("sha256").update(token).digest("hex"),
   );
   return `grabenplaner_session=${encodeURIComponent(token)}`;
 }
 
-function grant(permission) {
+function grant(permission, employeeNumber = EMPLOYEE_NUMBER) {
   db.prepare(`
     INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
     VALUES (?, ?, ?)
-  `).run(EMPLOYEE_NUMBER, permission, EMPLOYEE_NUMBER);
+  `).run(employeeNumber, permission, EMPLOYEE_NUMBER);
 }
 
-async function requestJson(route) {
+function seedPreferenceEmployee(employeeNumber, permissions) {
+  db.prepare(`
+    INSERT INTO employees (
+      personnel_number, full_name, nickname, color, contracted_hours,
+      target_workdays_per_week, fixed_workdays, home_location_id,
+      preferred_department_id, position_id, active
+    )
+    SELECT ?, 'Synthetisches Suchfensterkonto', 'Fenster', '#26785f', 38.5, 5, '',
+      home_location_id, preferred_department_id, position_id, 1
+    FROM employees WHERE personnel_number = ?
+  `).run(employeeNumber, EMPLOYEE_NUMBER);
+  db.prepare(`
+    INSERT INTO portal_users (
+      employee_number, password_hash, role, active, must_change_password,
+      password_changed_at, updated_at
+    ) VALUES (?, 'test-only', 'employee', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `).run(employeeNumber);
+  db.prepare(`
+    INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+    SELECT ?, location_id, department_id, ? FROM portal_access_scopes WHERE employee_number = ?
+  `).run(employeeNumber, EMPLOYEE_NUMBER, EMPLOYEE_NUMBER);
+  for (const permission of permissions) grant(permission, employeeNumber);
+}
+
+async function requestJson(route, employeeNumber = EMPLOYEE_NUMBER) {
   const response = await fetch(`${baseUrl}${route}`, {
-    headers: { Accept: "application/json", Cookie: createSession() },
+    headers: { Accept: "application/json", Cookie: createSession(employeeNumber) },
   });
   const text = await response.text();
   let payload = null;
   try { payload = text ? JSON.parse(text) : null; } catch { payload = { raw: text }; }
-  return { response, payload };
+  return { response, payload, text };
 }
 
 async function requestMutationJson(route, {
   method = "GET",
   body,
   includeCsrf = true,
+  employeeNumber = EMPLOYEE_NUMBER,
+  csrfHeader,
 } = {}) {
   const csrf = crypto.randomBytes(24).toString("hex");
   const headers = {
     Accept: "application/json",
-    Cookie: `${createSession()}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
+    Cookie: `${createSession(employeeNumber)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
   };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (includeCsrf && !["GET", "HEAD"].includes(method)) headers["X-CSRF-Token"] = csrf;
+  if (includeCsrf && !["GET", "HEAD"].includes(method)) headers["X-CSRF-Token"] = csrfHeader === undefined ? csrf : csrfHeader;
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers,
@@ -196,6 +226,11 @@ test.before(async () => {
   `).run(EMPLOYEE_NUMBER, location.id, EMPLOYEE_NUMBER);
   grant(SALES_ARTICLE_CATALOG_PERMISSIONS.ACCESS);
   grant(SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  for (const employeeNumber of [WINDOW_READER_A, WINDOW_READER_B]) {
+    seedPreferenceEmployee(employeeNumber, [SALES_ARTICLE_CATALOG_PERMISSIONS.ACCESS, SALES_ARTICLE_CATALOG_PERMISSIONS.READ]);
+  }
+  seedPreferenceEmployee(WINDOW_ACCESS_ONLY, [SALES_ARTICLE_CATALOG_PERMISSIONS.ACCESS]);
+  seedPreferenceEmployee(WINDOW_READ_WITHOUT_ACCESS, [SALES_ARTICLE_CATALOG_PERMISSIONS.READ]);
   const denyPermission = db.prepare(`
     INSERT INTO portal_permission_denials (employee_number, permission, denied_by)
     VALUES (?, ?, ?)
@@ -241,6 +276,112 @@ test('Eigene Tabelleneinstellungen benötigen nur Leserecht, prüfen CSRF und fi
     assert.equal((await requestMutationJson(route, {method:'PUT', body:{...body, columnWidths}})).response.status, 400);
   }
   assert.equal((await requestJson('/api/sales/articles?sort=purchaseNet')).response.status, 403);
+});
+
+test('Suchfenster speichern Geometrie und Minimierung mit echtem ACCESS+READ ohne WRITE oder IMPORT', async () => {
+  const model = require('../lib/sales-article-search-window-preferences');
+  const route = '/api/sales/articles/window-preferences';
+  const owner = WINDOW_READER_A;
+  const detail = await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}`, owner);
+  assert.equal(detail.response.status, 200, detail.text);
+  assert.deepEqual(detail.payload.capabilities, { pricesRead: false, costsRead: false, write: false, import: false });
+  const grants = db.prepare('SELECT permission FROM portal_permission_grants WHERE employee_number = ? ORDER BY permission').all(owner);
+  assert.deepEqual(grants.map(entry => entry.permission), [SALES_ARTICLE_CATALOG_PERMISSIONS.ACCESS, SALES_ARTICLE_CATALOG_PERMISSIONS.READ].sort());
+
+  const initial = await requestJson(route, owner);
+  assert.equal(initial.response.status, 200, initial.text);
+  assert.deepEqual(initial.payload, { ...model.DEFAULT_PREFERENCES, configured: false });
+  assert.match(initial.response.headers.get('cache-control'), /private.*no-store/);
+  assert.equal(initial.response.headers.get('x-content-type-options'), 'nosniff');
+  const tableBody = { columns: ['description', 'articleNumber'], columnWidths: { description: 420, articleNumber: 125 }, visibleRows: 20, sort: 'articleNumber', direction: 'desc' };
+  const tableSaved = await requestMutationJson('/api/sales/articles/preferences', { method: 'PUT', body: tableBody, employeeNumber: owner });
+  assert.equal(tableSaved.response.status, 200, tableSaved.text);
+  const tableBefore = await requestJson('/api/sales/articles/preferences', owner);
+  const storedTableBefore = db.prepare('SELECT value FROM portal_user_preferences WHERE employee_number = ? AND preference_key = ?').get(owner, 'sales_article_table_v1').value;
+
+  const body = { version: 1, x: 355, y: 48, width: 720, height: 810, minimized: true };
+  for (const csrfOptions of [{ includeCsrf: false }, { csrfHeader: 'wrong-csrf-token' }]) {
+    const denied = await requestMutationJson(route, { method: 'PUT', body, employeeNumber: owner, ...csrfOptions });
+    assert.equal(denied.response.status, 403, denied.text);
+  }
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM portal_user_preferences WHERE employee_number = ? AND preference_key = ?').get(owner, model.PREFERENCE_KEY).count, 0);
+  const saved = await requestMutationJson(route, { method: 'PUT', body, employeeNumber: owner });
+  assert.equal(saved.response.status, 200, saved.text);
+  assert.deepEqual(saved.payload, { ...body, configured: true });
+  assert.match(saved.response.headers.get('cache-control'), /private.*no-store/);
+  const reloaded = await requestJson(route, owner);
+  assert.deepEqual(reloaded.payload, saved.payload);
+  assert.deepEqual(JSON.parse(db.prepare('SELECT value FROM portal_user_preferences WHERE employee_number = ? AND preference_key = ?').get(owner, model.PREFERENCE_KEY).value), body);
+  assert.deepEqual((await requestJson('/api/sales/articles/preferences', owner)).payload, tableBefore.payload);
+  assert.equal(db.prepare('SELECT value FROM portal_user_preferences WHERE employee_number = ? AND preference_key = ?').get(owner, 'sales_article_table_v1').value, storedTableBefore);
+
+  const articleMutation = await requestMutationJson('/api/sales/articles', { method: 'POST', body: { articleNumber: 'WINDOW-FORBIDDEN', description: 'Darf nicht angelegt werden', identifiers: [] }, employeeNumber: owner });
+  assert.equal(articleMutation.response.status, 403, articleMutation.text);
+  const importMutation = await requestMutationJson('/api/sales/articles/import/previews/nonexistent', { method: 'DELETE', employeeNumber: owner });
+  assert.equal(importMutation.response.status, 403, importMutation.text);
+  for (const otherPath of [route + '/other', route + '-other']) {
+    const exactGuard = await requestMutationJson(otherPath, { method: 'PUT', body, employeeNumber: owner });
+    assert.equal(exactGuard.response.status, 403, exactGuard.text);
+  }
+});
+
+test('Suchfensterpräferenzen bleiben kontogebunden und weisen fremde Inhaber sowie ungültige Eingaben ab', async () => {
+  const model = require('../lib/sales-article-search-window-preferences');
+  const route = '/api/sales/articles/window-preferences';
+  const first = await requestJson(route, WINDOW_READER_A);
+  const secondInitial = await requestJson(route, WINDOW_READER_B);
+  assert.deepEqual(secondInitial.payload, { ...model.DEFAULT_PREFERENCES, configured: false });
+  const body = { version: 1, x: 10, y: 20, width: 480, height: 390, minimized: false };
+  const secondSaved = await requestMutationJson(route, { method: 'PUT', body, employeeNumber: WINDOW_READER_B });
+  assert.equal(secondSaved.response.status, 200, secondSaved.text);
+  assert.deepEqual((await requestJson(route, WINDOW_READER_A)).payload, first.payload);
+  assert.deepEqual((await requestJson(route, WINDOW_READER_B)).payload, { ...body, configured: true });
+  for (const invalid of [{ ...body, employeeNumber: WINDOW_READER_A }, { ...body, owner: WINDOW_READER_A },
+    { ...body, configured: true }, { ...body, width: '480' }, { ...body, minimized: 0 }, { ...body, x: -1 },
+    { ...body, y: 16385 }, { ...body, width: 279 }, { ...body, height: 4097 }, { ...body, x: 1.5 },
+    { ...body, version: 2 }, {}, [], null]) {
+    const rejected = await requestMutationJson(route, { method: 'PUT', body: invalid, employeeNumber: WINDOW_READER_B });
+    assert.equal(rejected.response.status, 400, rejected.text);
+    // Express rejects a JSON null body before the route's schema validator.
+    if (invalid !== null) assert.equal(rejected.payload.code, 'SALES_ARTICLE_WINDOW_PREFERENCES_INVALID', rejected.text);
+  }
+  assert.deepEqual((await requestJson(route, WINDOW_READER_B)).payload, secondSaved.payload);
+  assert.deepEqual((await requestJson(route, WINDOW_READER_A)).payload, first.payload);
+});
+
+test('Suchfensterpräferenzen prüfen aktuelle Artikelrechte und fallen bei kaputten gespeicherten Werten zurück', async () => {
+  const model = require('../lib/sales-article-search-window-preferences');
+  const route = '/api/sales/articles/window-preferences';
+  for (const employeeNumber of [WINDOW_ACCESS_ONLY, WINDOW_READ_WITHOUT_ACCESS]) {
+    const get = await requestJson(route, employeeNumber);
+    assert.equal(get.response.status, 403, get.text);
+    const put = await requestMutationJson(route, { method: 'PUT', body: model.DEFAULT_PREFERENCES, employeeNumber });
+    assert.equal(put.response.status, 403, put.text);
+  }
+  const unauthenticated = await fetch(baseUrl + route);
+  assert.equal(unauthenticated.status, 401);
+  const sessionCookie = createSession(WINDOW_READER_B);
+  db.prepare('INSERT INTO portal_permission_denials (employee_number, permission, denied_by) VALUES (?, ?, ?)')
+    .run(WINDOW_READER_B, SALES_ARTICLE_CATALOG_PERMISSIONS.READ, EMPLOYEE_NUMBER);
+  try {
+    const existingSession = await fetch(baseUrl + route, { headers: { Cookie: sessionCookie } });
+    assert.equal(existingSession.status, 403);
+    const denied = await requestMutationJson(route, { method: 'PUT', body: model.DEFAULT_PREFERENCES, employeeNumber: WINDOW_READER_B });
+    assert.equal(denied.response.status, 403, denied.text);
+  } finally {
+    db.prepare('DELETE FROM portal_permission_denials WHERE employee_number = ? AND permission = ?')
+      .run(WINDOW_READER_B, SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  }
+  for (const invalidStored of ['{broken-json', JSON.stringify({ ...model.DEFAULT_PREFERENCES, width: 279 }), JSON.stringify({ ...model.DEFAULT_PREFERENCES, employeeNumber: WINDOW_READER_A })]) {
+    db.prepare(`
+      INSERT INTO portal_user_preferences (employee_number, preference_key, value)
+      VALUES (?, ?, ?)
+      ON CONFLICT(employee_number, preference_key) DO UPDATE SET value = excluded.value
+    `).run(WINDOW_READER_B, model.PREFERENCE_KEY, invalidStored);
+    const fallback = await requestJson(route, WINDOW_READER_B);
+    assert.equal(fallback.response.status, 200, fallback.text);
+    assert.deepEqual(fallback.payload, { ...model.DEFAULT_PREFERENCES, configured: false });
+  }
 });
 
 test("Mitarbeitende mit Artikel-Leserecht erhalten die Kartei einschließlich Notizen ohne Preis- oder Schreibrechte", async () => {

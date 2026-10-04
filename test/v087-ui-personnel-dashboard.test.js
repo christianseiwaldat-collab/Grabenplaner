@@ -49,7 +49,7 @@ test("UI Block 1: Dashboard ist persönlich anpassbar und zeigt nur erlaubte Arb
   assert.doesNotMatch(section, /Onboarding|Offboarding|Eintritt|Austritt/i);
 
   const catalog = between(app, "function personnelDashboardCatalog()", "function orderedPersonnelDashboardItems");
-  for (const id of ["employees", "positions", "applications", "workflows", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"]) {
+  for (const id of ["employees", "positions", "applications", "workflows", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"]) {
     assert.match(catalog, new RegExp(`id:\\s*"${id}"`));
   }
   for (const helper of [
@@ -63,8 +63,8 @@ test("UI Block 1: Dashboard ist persönlich anpassbar und zeigt nur erlaubte Arb
     "canAccessCustomWorkRuleGovernance",
     "canReadCollectiveAgreements",
     "canReadCentralVacations",
-    "canReadDataSubjectRequests",
   ]) assert.match(catalog, new RegExp(`${helper}\\(\\)`));
+  assert.doesNotMatch(catalog, /dataRequests|canReadDataSubjectRequests/);
   assert.match(app, /filter\(\(item\) => item\?\.available\)/);
   assert.match(app, /persistPersonnelDashboardLayout/);
   assert.match(app, /personnel-dashboard-layout-v1/);

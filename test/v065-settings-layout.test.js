@@ -69,7 +69,7 @@ test("Block 7: Leihe und Branding bleiben in den Grundeinstellungen, PDF wechsel
   const pdfTag = detailsTag("pdfSettings");
   assert.match(pdfTag, /class="[^"]*\bsettings-accordion\b[^"]*\bfull-settings-card\b[^"]*"/);
   assert.doesNotMatch(pdfTag, /\sopen(?:\s|=|>)/);
-  assert.match(html, /data-settings-tab="schedule">Dienstplanung</);
+  assert.match(html, /<button(?=[^>]*id="settingsScheduleTab")(?=[^>]*data-settings-tab="schedule")(?=[^>]*aria-controls="scheduleSettings")[^>]*>Dienstplanung<\/button>/);
   assert.match(html, /id="pdfTitleSetting"/);
   assert.match(html, /id="vacationPdfTitleSetting"/);
   assert.equal(

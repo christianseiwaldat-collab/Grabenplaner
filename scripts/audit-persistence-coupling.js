@@ -683,6 +683,9 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/personal-action-log-persistence.test.js",
   "test/sales-article-catalog-persistence.test.js",
   "test/sales-article-catalog-detail-route.test.js",
+  // This exact local-route fixture counts preference rows to prove that the
+  // search window never persists an invented account; no driver grant follows.
+  "test/sales-article-catalog-local-route.test.js",
   "test/sales-article-catalog-import-api.test.js",
   "test/sales-article-catalog-route.test.js",
   "test/sales-article-catalog-schema.test.js",

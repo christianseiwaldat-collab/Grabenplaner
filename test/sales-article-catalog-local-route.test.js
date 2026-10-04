@@ -55,6 +55,21 @@ test('Lokale Tabellendarstellung lässt sich ohne Portal-CSRF anpassen', async (
   assert.equal(response.status, 200, await response.text());
 });
 
+test('Lokales Suchfenster braucht kein Portal-CSRF und legt keine Präferenzen für ein künstliches Konto an', async () => {
+  const model = require('../lib/sales-article-search-window-preferences');
+  const route = `${baseUrl}/api/sales/articles/window-preferences`;
+  const beforeCount = db.prepare('SELECT COUNT(*) AS count FROM portal_user_preferences').get().count;
+  const saved = { version: 1, x: 200, y: 25, width: 640, height: 520, minimized: true };
+  const response = await fetch(route, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saved) });
+  const payload = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(payload));
+  assert.deepEqual(payload, { ...saved, configured: false });
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM portal_user_preferences').get().count, beforeCount);
+  const reloaded = await fetch(route);
+  assert.equal(reloaded.status, 200);
+  assert.deepEqual(await reloaded.json(), { ...model.DEFAULT_PREFERENCES, configured: false });
+});
+
 test("Lokaler Einzelplatz erreicht auch die Detailroute ohne künstliches Mitarbeiterkonto", async () => {
   const response = await fetch(
     `${baseUrl}/api/sales/articles/detail?articleNumber=NICHT-VORHANDEN`,

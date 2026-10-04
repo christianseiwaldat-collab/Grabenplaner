@@ -6076,7 +6076,7 @@ function enforceAdminApiAccess(request, _response, next) {
     if (salesArticleCatalogRoute) {
       permission = salesArticleImportRoute
         ? SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT
-        : request.path === '/sales/articles/preferences' || ["GET", "HEAD", "OPTIONS"].includes(method)
+        : ['/sales/articles/preferences', '/sales/articles/window-preferences'].includes(request.path) || ["GET", "HEAD", "OPTIONS"].includes(method)
           ? SALES_ARTICLE_CATALOG_PERMISSIONS.READ
           : SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE;
     } else if (offsiteFolderRoute) {
@@ -38420,6 +38420,41 @@ app.put('/api/sales/articles/preferences', async (request, response) => {
   await assertFreshSalesArticleRead(request, session, projection);
   if (!isLocalSystemSession(session)) await uiPreferencesRepository.upsert(session.employeeNumber, model.PREFERENCE_KEY, JSON.stringify(value));
   response.json(value);
+});
+app.get('/api/sales/articles/window-preferences', async (request, response) => {
+  const session = salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  const projection = salesArticleCatalogProjectionForSession(session);
+  setSalesArticleCatalogPrivateHeaders(response);
+  const model = require('./lib/sales-article-search-window-preferences');
+  const stored = isLocalSystemSession(session)
+    ? null
+    : await uiPreferencesRepository.get(session.employeeNumber, model.PREFERENCE_KEY);
+  let value = model.defaultSalesArticleSearchWindowPreferences();
+  let configured = false;
+  try {
+    value = model.normalizeSalesArticleSearchWindowPreferences(JSON.parse(stored?.value || 'null'));
+    configured = true;
+  } catch { /* Fall back to defaults for missing or invalid saved settings. */ }
+  await assertFreshSalesArticleRead(request, session, projection);
+  response.json({ ...value, configured });
+});
+app.put('/api/sales/articles/window-preferences', async (request, response) => {
+  const session = salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  const projection = salesArticleCatalogProjectionForSession(session);
+  if (!isLocalSystemSession(session)) assertPortalCsrf(request);
+  setSalesArticleCatalogPrivateHeaders(response);
+  const model = require('./lib/sales-article-search-window-preferences');
+  let value;
+  try {
+    value = model.normalizeSalesArticleSearchWindowPreferences(request.body);
+  } catch {
+    throw httpError(400, 'Die Artikeleinstellungen für das Suchfenster sind ungültig.', 'SALES_ARTICLE_WINDOW_PREFERENCES_INVALID');
+  }
+  await assertFreshSalesArticleRead(request, session, projection);
+  if (!isLocalSystemSession(session)) {
+    await uiPreferencesRepository.upsert(session.employeeNumber, model.PREFERENCE_KEY, JSON.stringify(value));
+  }
+  response.json({ ...value, configured: !isLocalSystemSession(session) });
 });
 const SALES_ARTICLE_PRICE_DISPLAY_LABELS_BY_SOURCE_FIELD = new Map([
   ["UPE", "UVP"],

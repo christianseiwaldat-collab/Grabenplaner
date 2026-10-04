@@ -119,6 +119,28 @@ test('Named private templates are encrypted, isolated by creator and preserve de
   await assert.rejects(f.store.create({ owner: own.owner }, input()), { status: 403 }, 'Caller cannot forge a trusted context');
 });
 
+test('Named/default templates round-trip font identity and free millimeter geometry through protected normalization',async t=>{
+ const f=await fixture(t),owner=await f.context('42'),branchContext=await f.context('acc18');
+ const options={fontId:'fira-mono',logoKitId:'synthetic',logoAssetKey:'logo',logoMode:'free',logoXmm:20.5,logoYmm:25.5,logoWidthMm:35.5,logoHeightMm:15.5};
+ const saved=await f.store.create(owner,input({options})),restored=await f.store.get(owner,saved.id);
+ for(const [key,value]of Object.entries(options))assert.equal(restored.options[key],value);
+ const defaults={options,filenameOptions:{stamp:'none',position:'before',separator:'-',suffix:''}};
+ await f.store.setDefault(branchContext,defaults);const current=await f.store.getDefault(branchContext);
+ for(const [key,value]of Object.entries(options))assert.equal(current.options[key],value);
+ await assert.rejects(f.store.create(owner,input({options:{...options,fontId:'untrusted-font'}})),{code:'PRICE_LABEL_OPTIONS'});
+ await assert.rejects(f.store.create(owner,input({options:{...options,logoXmm:80}})),{code:'PRICE_LABEL_OPTIONS'});
+});
+
+test('Border and inactive cut-mark choices round-trip through protected templates and reject non-boolean HTTP options',async t=>{
+ const f=await fixture(t),owner=await f.context('42'),branchContext=await f.context('acc18');
+ const options={design:'minimal',showBorder:true,cutMarks:true,borderMode:'manual'};
+ const saved=await f.store.create(owner,input({options}));assert.equal((await f.store.get(owner,saved.id)).options.cutMarks,true);assert.equal(saved.options.showBorder,true);assert.equal(saved.options.borderMode,'manual');
+ await f.store.setDefault(branchContext,{options:{showBorder:false,cutMarks:true},filenameOptions:input().filenameOptions});
+ const current=await f.store.getDefault(branchContext);assert.equal(current.options.showBorder,false);assert.equal(current.options.cutMarks,true);
+ const recreated=Store.createSalesPriceLabelTemplateStore({access:f.p.app.provider,vault:f.p.vault});assert.deepEqual(await recreated.getDefault(branchContext),current);
+ for(const key of ['showBorder','cutMarks'])await assert.rejects(f.store.create(owner,input({options:{[key]:'true'}})),{code:'PRICE_LABEL_OPTIONS'});
+});
+
 test('Own-branch templates are readable by normal colleagues, editable by creator or branch account, and can be revoked by creator', async t => {
   const f = await fixture(t), owner = await f.context('42'), colleague = await f.context('43'), ownAccount = await f.context('acc18');
   const saved = await f.store.create(owner, input({ visibility: 'branch' }));

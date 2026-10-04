@@ -34,6 +34,8 @@ const { createSalesHistoryWorkspace } = require('../lib/persistence/repositories
 const { SALES_HISTORY_PERMISSIONS: HP } = require('../lib/sales-history-access');
 const { SALES_ANALYTICS_PERMISSIONS: AP } = require('../lib/sales-analytics-access');
 const { CRM_PERMISSIONS: CP } = require('../lib/crm-access');
+const express = require('express');
+const { registerSalesHistoryRoutes } = require('../lib/sales-history-routes');
 const TIME = '2026-09-05T11:00:00.000Z', DAY = '2026-09-04T00:00:00.000', SHA = 'a'.repeat(64);
 const code = expected => error => error?.code === expected;
 const raw = (source, name, extra = {}) => Object.assign(Object.fromEntries(H.tableFor(source, name).columns.map(f => [f.name, null])), extra);
@@ -180,6 +182,46 @@ test('Block 5: CRM purchases need both rights and confirmed target binding; cust
   assert.equal(result.items.length, 1); assert.equal(result.items[0].receipt, '001');
   assert.equal((await f.workspace.search({ sourceId: 'cash' }, { customerId: '0' })).items.length, 0);
   assert.doesNotMatch(JSON.stringify(result.items), /000419|KUND_NR|Synthetic|Customer/);
+});
+
+test('CRM HTTP routes keep multi-year saved queries, keyset pages and analysis continuation bound to the URL customer and branch scope', async t => {
+  const f = await workspaceFixture(t, { analysisLimit: 1 });
+  f.session.permissions.push(HP.CUSTOMER_PURCHASES, CP.ACCESS, CP.CUSTOMERS_READ);
+  for (const [index, Bondatum, extra] of [
+    [1, '2010-01-01T00:00:00.000', {}], [2, '2014-02-28T00:00:00.000', {}], [3, DAY, {}],
+    [4, DAY, { Filialid: '2' }], [5, DAY, { KUND_NR: '0' }],
+  ]) {
+    const Bonnr = String(index).padStart(3, '0');
+    await f.receipt(head({ Bonnr, Bondatum, ...extra }), [line({ Bonnr, Bondatum, Filialid: extra.Filialid || '1', RepID: '00000000-0000-0000-0000-' + String(index).padStart(12, '0') })]);
+  }
+  f.approve();
+  const app = express(); app.use(express.json());
+  registerSalesHistoryRoutes(app, { requireSession: () => f.session, assertCsrf(request) { if (request.get('X-CSRF-Token') !== 'synthetic') C.fail('IMPORT_FORBIDDEN', 403); },
+    getWorkspace: () => f.workspace, customerExists: async id => id === f.customer.targetId || id === 'other-customer' });
+  const listener = app.listen(0, '127.0.0.1'); await new Promise(resolve => listener.once('listening', resolve));
+  t.after(() => new Promise(resolve => listener.close(resolve)));
+  const post = async (url, body) => {
+    const response = await fetch(`http://127.0.0.1:${listener.address().port}${url}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'synthetic' }, body: JSON.stringify(body) });
+    return { status: response.status, body: await response.json() };
+  };
+  const prefix = `/api/crm/customers/${f.customer.targetId}/purchases`, savedQuery = JSON.parse(JSON.stringify({ sourceId: 'cash', dateFrom: '2010-01-01', dateTo: '2026-09-05', limit: 1 }));
+  let first = await post(`${prefix}/search`, savedQuery); assert.equal(first.status, 200); assert.equal(first.body.items[0].receipt, '003');
+  assert.equal(first.body.coverage.complete, false); assert.equal(first.body.totals, null);
+  const continuation = { query: savedQuery, cursor: first.body.analysis.cursor };
+  const changedCustomer = await post('/api/crm/customers/other-customer/purchases/analyze', continuation); assert.equal(changedCustomer.body.code, 'IMPORT_HISTORY_CURSOR');
+  assert.equal((await post(`${prefix}/search`, { ...savedQuery, customerId: 'other-customer' })).body.code, 'IMPORT_SHAPE_INVALID');
+  assert.equal((await post('/api/sales-history/search', savedQuery)).body.code, 'IMPORT_HISTORY_DATE_RANGE');
+  const page = await post(`${prefix}/search`, { ...savedQuery, cursor: first.body.next }); assert.equal(page.status, 200); assert.equal(page.body.items[0].receipt, '002');
+  let analysis = first.body;
+  let steps = 0;
+  while (analysis.analysis.cursor) { assert.ok(++steps <= 3); const next = await post(`${prefix}/analyze`, { query: savedQuery, cursor: analysis.analysis.cursor }); assert.equal(next.status, 200); analysis = next.body; }
+  assert.equal(analysis.coverage.counts.records, 3); assert.equal(analysis.totals.gross, '36.00');
+  assert.deepEqual(analysis.days.map(day => day.date), ['2010-01-01', '2014-02-28', '2026-09-04']);
+  const lastPage = await post(`${prefix}/search`, { ...savedQuery, cursor: page.body.next }); assert.equal(lastPage.body.items[0].receipt, '001'); assert.equal(lastPage.body.next, null);
+  assert.equal(lastPage.body.totals.gross, '36.00');
+  const defaultQuery = await post(`${prefix}/search`, { sourceId: 'cash' }); assert.equal(defaultQuery.body.query.dateFrom, '2025-09-06'); assert.equal(defaultQuery.body.items.length, 1);
+  f.session.permissions = f.session.permissions.filter(permission => permission !== HP.CUSTOMER_PURCHASES);
+  assert.equal((await post(`${prefix}/analyze`, continuation)).status, 403);
 });
 
 test('Block 5: opaque cursors bind account, permissions, filters and revisions; no hidden cross-account continuation', async t => {

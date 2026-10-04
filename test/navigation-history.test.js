@@ -137,16 +137,28 @@ function administration() {
     setPersonnelTab: tab => { ctx.state.personnelTab = tab; },
     setRightsDashboardMode: mode => { ctx.state.rightsDashboardMode = mode; },
     canReadSystemCenter: () => true,
+    canReadPrivacyOrganizationWorkspace: () => true,
+    canReadDataSubjectRequests: () => true,
+    loadDataSubjectRequests: async () => { calls.push('loadDataRequests'); },
+    showToast: () => {},
     loadSystemCenter: () => calls.push('loadSystemCenter'),
   };
-  for (const name of ['canReadManagerRequests', 'canReadManagedTimeTracking', 'canOpenPersonnelAdministrationModule', 'canOpenSalesAdministrationModule', 'canAccessSalesAnalytics', 'canAccessSalesArticleCatalog', 'canUseSalesPriceLabels', 'canAccessCrm', 'canAccessTradeInsights', 'canReadLoanManagement', 'canManageBranchOrders', 'canAccessPrivacyOrganization']) ctx[name] = () => true;
-  for (const name of ['clearUsbProvisioningPasswords', 'clearPersonnelLifecycleEditorState', 'clearPersonnelLifecycleAutomationState', 'renderContextNavigation', 'applyActivePageAppearance', 'loadStartDashboard', 'loadRightsDashboard', 'ensureAccessibleManagerRequestTab', 'loadManagerVacationRequests', 'loadLoanManagement', 'loadBranchOrdersManagement', 'renderSalesArticleCatalogResults', 'syncCrmCustomerWorkspace']) ctx[name] = () => {};
+  for (const name of ['canReadManagerRequests', 'canReadManagedTimeTracking', 'canOpenPersonnelAdministrationModule', 'canAccessTeamManagement', 'canOpenSalesAdministrationModule', 'canAccessSalesAnalytics', 'canAccessSalesArticleCatalog', 'canUseSalesPriceLabels', 'canAccessCrm', 'canAccessTradeInsights', 'canReadLoanManagement', 'canManageBranchOrders', 'canAccessPrivacyOrganization']) ctx[name] = () => true;
+  for (const name of ['clearUsbProvisioningPasswords', 'clearPersonnelLifecycleEditorState', 'clearPersonnelLifecycleAutomationState', 'renderContextNavigation', 'applyActivePageAppearance', 'syncSalesArticleSearchWindow', 'loadStartDashboard', 'loadRightsDashboard', 'ensureAccessibleManagerRequestTab', 'loadManagerVacationRequests', 'loadLoanManagement', 'loadBranchOrdersManagement', 'renderSalesArticleCatalogResults', 'syncCrmCustomerWorkspace']) ctx[name] = () => {};
   for (const name of ['loadSalesArticleTablePreferences', 'loadSalesArticleLastImport', 'loadCrmPreferences']) ctx[name] = async () => {};
   vm.createContext(ctx);
-  vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'activateTradeArea', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
+  vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'activateTradeArea', 'canAccessPrivacyOrganization', 'normalizePrivacyOrganizationTab', 'firstAccessiblePrivacyOrganizationTab', 'canOpenPrivacyOrganizationTab', 'activatePrivacyOrganizationView', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
   ctx.grabenplanerNavigation = create({ window: win, app: 'admin', keys: ['view', 'section', 'kind', 'dashboard', 'process', 'location', 'department'],
     read: ctx.currentAdministrationRoute, apply: () => ctx.applyRequestedView({ fromHistory: true }) });
   ctx.grabenplanerNavigation.start(); return { ctx, win, calls };
+}
+
+function installPrivacyPrincipal(ctx, permissions) {
+  ctx.state.portalStatus.portalEnabled = true;
+  ctx.state.portalSession = { user: { employeeNumber: 'SYNTHETIC-DSAR', accountId: 'synthetic',
+    role: 'hr', isEmployee: true, accountType: 'employee', sessionKind: 'employee', permissions } };
+  vm.runInContext(['hasGovernancePermission', 'canReadDataSubjectRequests', 'canReadPrivacyOrganizationWorkspace']
+    .map(name => functionSource(appSource, name)).join('\n'), ctx);
 }
 
 test('Administration: privacy sections survive Back/Forward and serialize no record identifiers', () => {
@@ -169,6 +181,63 @@ test('Administration: unknown privacy sections normalize to overview', () => {
   win.history.replaceState(null,'','?view=privacyOrganization&section=not-a-section');
   ctx.applyRequestedView({fromHistory:true}); win.flush();
   assert.equal(ctx.currentAdministrationRoute().section,'overview');
+});
+
+test('Administration: legacy data requests move to privacy, retain DSAR-only access and restore Back/Forward', () => {
+  const { ctx, win, calls } = administration();
+  installPrivacyPrincipal(ctx, ['data_subject_requests:read']);
+  ctx.canOpenPersonnelAdministrationModule = () => false;
+  assert.equal(ctx.canReadPrivacyOrganizationWorkspace(), false);
+  assert.equal(ctx.canReadDataSubjectRequests(), true);
+  win.history.replaceState(null, '', '?view=personnelAdministration&section=dataRequests');
+  ctx.applyRequestedView({ fromHistory: true }); win.flush();
+  assert.equal(ctx.state.currentView, 'privacyOrganization');
+  assert.equal(ctx.currentAdministrationRoute().section, 'dataRequests');
+  assert.equal(win.location.search, '?view=privacyOrganization&section=dataRequests');
+  assert.ok(calls.includes('loadDataRequests'));
+  assert.equal(calls.some(call => call.privacy), false, 'DSAR-only access must never activate the organization workspace');
+  assert.equal(ctx.elements.dataSubjectRequestsSection.classList.contains('hidden'), false);
+  ctx.setView('salesAdministration'); win.flush();
+  assert.equal(ctx.elements.dataSubjectRequestsSection.classList.contains('hidden'), true);
+  win.history.go(-1); win.flush();
+  assert.equal(ctx.currentAdministrationRoute().section, 'dataRequests');
+  win.history.go(1); win.flush();
+  assert.equal(ctx.state.currentView, 'salesAdministration');
+  ctx.state.portalSession.user.permissions = [];
+  win.history.go(-1); win.flush();
+  assert.equal(ctx.state.currentView, 'startDashboard');
+  assert.equal(win.location.search, '?view=startDashboard');
+});
+
+test('Administration: privacy entry and stored legacy tab support DSAR-only accounts', () => {
+  const { ctx, win } = administration();
+  installPrivacyPrincipal(ctx, ['data_subject_requests:read']);
+  ctx.canOpenPersonnelAdministrationModule = () => false;
+  win.history.replaceState(null, '', '?view=privacyOrganization');
+  ctx.applyRequestedView({ fromHistory: true }); win.flush();
+  assert.equal(ctx.currentAdministrationRoute().section, 'dataRequests');
+  ctx.state.personnelAdministrationTab = 'dataRequests';
+  ctx.setView('personnelAdministration'); win.flush();
+  assert.equal(ctx.state.currentView, 'privacyOrganization');
+  assert.equal(ctx.state.personnelAdministrationTab, 'dashboard');
+  assert.equal(win.location.search, '?view=privacyOrganization&section=dataRequests');
+  win.history.replaceState(null, '', '?view=privacyOrganization&section=breaches');
+  ctx.applyRequestedView({ fromHistory: true }); win.flush();
+  assert.equal(ctx.state.currentView, 'startDashboard');
+});
+
+test('Administration: organization access alone cannot open data requests through direct or legacy URLs', () => {
+  const { ctx, win, calls } = administration();
+  installPrivacyPrincipal(ctx, ['privacy_organization:read']);
+  assert.equal(ctx.canReadPrivacyOrganizationWorkspace(), true);
+  assert.equal(ctx.canReadDataSubjectRequests(), false);
+  for (const url of ['?view=privacyOrganization&section=dataRequests', '?view=personnelAdministration&section=dataRequests']) {
+    win.history.replaceState(null, '', url);
+    ctx.applyRequestedView({ fromHistory: true }); ctx.grabenplanerNavigation.replace(); win.flush();
+    assert.equal(ctx.state.currentView, 'startDashboard');
+    assert.equal(win.location.search, '?view=startDashboard');
+  }
+  assert.equal(calls.includes('loadDataRequests'), false);
 });
 
 test('Administration: all main views include CRM and maintain existing access guards', () => {
