@@ -81,7 +81,8 @@ printf '%s\\n' "$trusted_package_verifier" "$installed_runtime_verifier" "$verif
   });
 }
 
-for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", "xoffi", "failed-xoffi", "invalid-xoffi", "import-delete", "failed-import-delete", "invalid-import-delete"]) {
+for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", "xoffi", "failed-xoffi", "invalid-xoffi", "import-delete", "failed-import-delete", "invalid-import-delete",
+  "school-short", "school-full", "school-already-applied", "failed-school", "invalid-school", "changed-school-sales", "malformed-school", "missing-school-helper"]) {
   test(`actual updater orchestration: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
     assert.ok(source.indexOf(entry) > 0);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-deploy-shell-"));
@@ -92,12 +93,20 @@ for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", 
     write("app/old.txt", "old application");
     write("candidate/server-tools/linux/test-grabenplaner-server.sh", '#!/usr/bin/env bash\nprintf "short-checks\\n" >> "$EVENTS_FILE"\n');
     const xoffi = scenario.includes("xoffi");
-    const importDelete = scenario.includes("import-delete");
+    const school = scenario.includes("school");
+    const importDelete = scenario.includes("import-delete") || school || xoffi;
+    const full = scenario === "full" || scenario === "school-full";
     if (importDelete) write("candidate/server-tools/linux/lib/import-delete-migrate.js", `
 const fs=require('node:fs');
 fs.appendFileSync(process.env.EVENTS_FILE, 'import-migration\\n');
 require('node:assert/strict').deepEqual(process.argv.slice(2), ['${"a".repeat(64)}','--maintenance-lock-held']);
 ${scenario === "failed-import-delete" ? "process.exit(42);" : `console.log(JSON.stringify({verified:${scenario !== "invalid-import-delete"},coreUnchanged:true}));`}
+`);
+    if (importDelete && scenario !== "missing-school-helper") write("candidate/server-tools/linux/lib/vocational-school-migrate.js", `
+const fs=require('node:fs');
+fs.appendFileSync(process.env.EVENTS_FILE, 'school-migration\\n');
+require('node:assert/strict').deepEqual(process.argv.slice(2), ['${"a".repeat(64)}','--maintenance-lock-held']);
+${scenario === "failed-school" ? "process.exit(42);" : scenario === "malformed-school" ? "console.log('invalid JSON');" : `console.log(JSON.stringify({verified:${scenario !== "invalid-school"},salesUnchanged:${scenario !== "changed-school-sales"},applied:${scenario !== "school-already-applied"}}));`}
 `);
     if (xoffi) write("candidate/server-tools/linux/lib/xoffi-snapshots-migrate.js", `
 const fs=require('node:fs');
@@ -139,9 +148,12 @@ actual_package_sha256=synthetic
 runtime_v5_transition=""
 GRABENPLANER_OFFSITE_CONFIGURED=1
 GRABENPLANER_OFFSITE_STATUS_FILE=/var/lib/grabenplaner-offsite/status.json
-deploy_mode=${scenario === "full" ? "full" : "short"}
+deploy_mode=${full ? "full" : "short"}
 xoffi_snapshots_migration=${xoffi ? 1 : 0}
 schema_migration_result="$PWD/migration.json"
+school_migration_result="$PWD/school-migration.json"
+new_service_started=0
+trap 'printf "rollback-guard:%s\\n" "$new_service_started" >> "$EVENTS_FILE"' EXIT
 backup_count=0
 gp_info() { :; }
 gp_warn() { printf 'warning\\n' >> "$EVENTS_FILE"; }
@@ -173,16 +185,23 @@ ${workflow}
     write("run.sh", script);
     const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: root, encoding: "utf8", timeout: 15000 });
     const events = fs.readFileSync(path.join(root, "events"), "utf8").trim().split("\n");
-    if (["failed-readiness", "failed-schedule", "failed-xoffi", "invalid-xoffi", "failed-import-delete", "invalid-import-delete"].includes(scenario)) {
+    if (["failed-readiness", "failed-schedule", "failed-xoffi", "invalid-xoffi", "failed-import-delete", "invalid-import-delete",
+      "failed-school", "invalid-school", "changed-school-sales", "malformed-school", "missing-school-helper"].includes(scenario)) {
       assert.notEqual(result.status, 0); assert.ok(events.includes("failed")); assert.ok(!events.includes("commit")); assert.ok(!events.includes("queue-assurance"));
       if (xoffi) { assert.ok(events.includes("schema-migration")); assert.ok(!events.includes("start")); }
-      if (importDelete) { assert.ok(events.includes("import-migration")); assert.ok(!events.includes("start")); }
+      if (importDelete && !xoffi) { assert.ok(events.includes("import-migration")); assert.ok(!events.includes("start")); }
+      if (school) {
+        assert.ok(events.includes("phase:vocational-school-schema-migration"));
+        assert.equal(events.includes("school-migration"), scenario !== "missing-school-helper");
+        assert.ok(!events.includes("phase:application-start"));
+        assert.ok(events.includes("rollback-guard:1"), "migration failures retain the PostgreSQL schema rollback guard");
+      }
     } else {
       assert.equal(result.status, 0, result.stderr);
-      assert.equal(events.filter(event => event === "verified-backup").length, scenario === "full" ? 2 : 1);
-      assert.equal(events.filter(event => event === "start").length, scenario === "full" ? 2 : 1);
-      assert.equal(events.includes("offsite-transfer"), scenario === "full");
-      assert.equal(events.includes("start-assurance"), scenario === "full");
+      assert.equal(events.filter(event => event === "verified-backup").length, full ? 2 : 1);
+      assert.equal(events.filter(event => event === "start").length, full ? 2 : 1);
+      assert.equal(events.includes("offsite-transfer"), full);
+      assert.equal(events.includes("start-assurance"), full);
       assert.ok(events.indexOf("owner") < events.indexOf("stop"));
       assert.ok(events.indexOf("schedule-converged") > events.indexOf("start"));
       assert.ok(events.indexOf("schedule-converged") < events.indexOf("short-checks"));
@@ -192,7 +211,18 @@ ${workflow}
       assert.equal(events.includes("import-migration"), importDelete);
       if (importDelete) {
         assert.ok(events.indexOf("import-migration") > events.indexOf("verified-backup"));
-        assert.ok(events.indexOf("import-migration") < events.indexOf("start"));
+        assert.ok(events.indexOf("import-migration") < events.lastIndexOf("start"));
+        assert.ok(events.indexOf("school-migration") > events.indexOf("import-migration"));
+        assert.ok(events.indexOf("school-migration") < events.indexOf("phase:application-start"));
+        assert.ok(events.indexOf("school-migration") < events.lastIndexOf("start"));
+        assert.equal(JSON.parse(fs.readFileSync(path.join(root,"migration.json"),"utf8")).coreUnchanged,true);
+        const schoolReceipt = JSON.parse(fs.readFileSync(path.join(root,"school-migration.json"),"utf8"));
+        assert.equal(schoolReceipt.verified,true);
+        assert.equal(schoolReceipt.salesUnchanged,true);
+        assert.equal(schoolReceipt.applied,scenario !== "school-already-applied");
+      } else {
+        assert.ok(!events.includes("school-migration"), "SQLite updates must never invoke the PostgreSQL migration");
+        assert.equal(fs.existsSync(path.join(root,"school-migration.json")),false);
       }
       if (xoffi) {
         assert.ok(events.indexOf("schema-migration") > events.indexOf("database-lock"));
@@ -202,3 +232,35 @@ ${workflow}
     }
   });
 }
+
+test("update history retains separate import and school evidence after temporary files are removed", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-migration-receipt-"));
+  t.after(() => { assert.equal(path.dirname(fs.realpathSync(root)), fs.realpathSync(os.tmpdir())); fs.rmSync(root, { recursive: true, force: true }); });
+  const start = source.indexOf('const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop');
+  assert.ok(start > 0);
+  const code = 'const fs=require("node:fs");\n' + source.slice(start, source.indexOf("\nNODE", start));
+  const phases = path.join(root,"phases.tsv"), importFile = path.join(root,"import.json"), schoolFile = path.join(root,"school.json");
+  fs.writeFileSync(phases,"import-deletion-schema-migration\t1\nvocational-school-schema-migration\t2\n");
+  const importProof = { verified:true, coreUnchanged:true, applied:false };
+  const schoolProof = { verified:true, salesUnchanged:true, applied:true, sourceCommit:"9c780eb1df690c2e31245e7fd8ff324c4798efc8" };
+  fs.writeFileSync(importFile,JSON.stringify(importProof));
+  const invoke = (name,status) => {
+    const receiptFile = path.join(root,name);
+    const result = spawnSync(process.execPath,["-",receiptFile,status,"0.92.72-beta","0.92.73-beta","package.zip","a".repeat(64),"backup.db","","1","1","1","1","2026-10-04T00:00:00.000Z",'{}',phases,importFile,schoolFile],
+      { input:code,encoding:"utf8",timeout:10000 });
+    assert.equal(result.status,0,result.stderr);
+    return JSON.parse(fs.readFileSync(receiptFile,"utf8"));
+  };
+  fs.writeFileSync(schoolFile,JSON.stringify(schoolProof));
+  const saved = invoke("success.json","success");
+  fs.unlinkSync(schoolFile);
+  assert.deepEqual(saved.schemaMigration,importProof);
+  assert.deepEqual(saved.schoolSchemaMigration,schoolProof);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root,"success.json"),"utf8")).schoolSchemaMigration,schoolProof);
+  assert.deepEqual(saved.phases.map(item => item.phase),["import-deletion-schema-migration","vocational-school-schema-migration"]);
+  assert.equal(invoke("no-school.json","rolled-back").schoolSchemaMigration,null);
+  fs.writeFileSync(schoolFile,"invalid JSON");
+  const failed = invoke("invalid-school.json","rollback-incomplete");
+  assert.deepEqual(failed.schoolSchemaMigration,{verified:false});
+  assert.deepEqual(failed.schemaMigration,importProof);
+});
