@@ -283,7 +283,7 @@ function teardownContext(workspace, priceRoot) {
 test('Actor teardown destroys the real price workspace once, aborts pending reads and never suspends removed DOM',async() => {
   const Editor=require('../public/sales-price-labels');
   const fixtureSource=fs.readFileSync(path.join(__dirname,'sales-article-price-labels.test.js'),'utf8');
-  const fixture=new Function('Editor',source('editorFixture',fixtureSource)+'\nreturn editorFixture;')(Editor);
+  const fixture=new Function('Editor','require',source('editorFixture',fixtureSource)+'\nreturn editorFixture;')(Editor,require);
   let pending, signal;
   const f=fixture(async (url,options) => {
     if(url.endsWith('/templates')) {signal=options.signal;return new Promise(resolve => {pending=resolve;});}

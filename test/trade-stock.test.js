@@ -35,7 +35,11 @@ test('Slow mover and reach require confirmed goods, full coverage and reconciled
  assert.equal(inventoryMetrics('0',kind,sales,period).eligible,false);assert.equal(inventoryMetrics('2',kind,sales,{...period,company:false}).eligible,false);
 });
 test('Annotation Core SQL has a separate owner and parameterized compare-and-set',()=>{
- const entries=require('../lib/persistence/postgresql/core/trade-annotations').CATALOG;assert.equal(entries.length,4);
+ const entries=require('../lib/persistence/postgresql/core/trade-annotations').CATALOG;
+ assert.deepEqual(entries.map(e=>e.statement.id).sort(),[
+  'trade-annotations.epoch','trade-annotations.get','trade-annotations.insert',
+  'trade-annotations.protected-images','trade-annotations.update',
+ ].sort());
  for(const e of entries){assert.match(e.sql,/gp\.trade_annotations/);assert.doesNotMatch(e.sql,/gp\.gp\./);}
  assert.match(entries.find(e=>e.statement.id.endsWith('update')).sql,/revision\s*=\s*\(\s*\$/);
 });

@@ -149,7 +149,9 @@
       try {model.validate({version:1,fields:{[selected.id]:next}});modify(next);}
       catch(error) {dialog.querySelector('[data-field-error]').textContent=error.message;}
     });
-    on(dialog,'close',()=>{selected?.menu.focus({preventScroll:true});selected=null;});
+    // Native closing restores focus synchronously. Its queued event must not
+    // steal later focus or clear the selection of an already reopened dialog.
+    on(dialog,'close',()=>{if(!dialog.open)selected=null;});
     const unsubscribe=store.subscribe(apply);
     function sync() {
       const key=String(options.key() || '');
