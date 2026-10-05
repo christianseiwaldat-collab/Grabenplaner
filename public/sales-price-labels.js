@@ -172,7 +172,7 @@
         <section class="spl-card spl-export"><h2>PDF exportieren</h2><form data-pl="export"><label>Dateiname<input name="name" maxlength="110" value="Preisschilder" required></label><div class="spl-fields"><label>Zeitblock<select name="stamp"><option value="date-time">JJMMTT-HHMM</option><option value="date">JJMMTT</option><option value="date-suffix">JJMMTT-xxx</option><option value="none">Ohne Zeitblock</option></select></label><label>Anordnung<select name="position"><option value="before">Vorne</option><option value="after">Hinten</option></select></label><label>Ergänzung (xxx)<input name="suffix" maxlength="40" placeholder="z. B. Aktion"></label><label>Trennzeichen<select name="separator"><option value="-">Bindestrich (-)</option><option value="_">Unterstrich (_)</option><option value=" ">Leerzeichen</option></select></label></div><p class="spl-filename" data-pl="filename"></p><button type="submit" class="spl-primary" data-pl="download" disabled>PDF herunterladen</button></form><p class="spl-status" data-pl="status" role="status" aria-live="polite">Artikelnummern eingeben und die aktuellen Preise laden.</p></section>
       </div></div>`;
     const q = key => root.querySelector('[data-pl="' + key + '"]'), form = q('settings'), exportForm = q('export');
-    let active = false, owner = '', generation = 0, items = [], updatedAt = null, loadedKey = '', busy = false, saving = false, timer = null;
+    let active = false, owner = '', generation = 0, items = [], updatedAt = null, loadedKey = '', busy = false, saving = false, timer = null, articleReloadPending = false;
     let logoSelected = false, logoDrag = null, lastRenderedOptions = null, paperPage = 0;
     let brandingKits = [], brandingLoaded = false, brandingMessage = '', library = { templates: [], ownBranch: null, recipients: [], capabilities: { create: false, ownBranch: false } },
       libraryMode = 'defaults', selectedTemplate = null, libraryLoading = false, libraryReady = false,
@@ -380,15 +380,23 @@
       q('filename').textContent = filename(exportForm.elements.name.value, fileOptions());
       renderLibrary(valid && layout.capacity > 0);
     }
+    function finishBusy(ticket) {
+      if (!permitted(ticket)) return;
+      busy = false; render();
+      if (articleReloadPending) void loadArticles();
+    }
     async function loadArticles() {
-      if (!permitted() || busy) return; clearTimeout(timer);
+      if (!permitted()) return;
+      if (busy) { articleReloadPending = true; return; }
+      articleReloadPending = false; clearTimeout(timer); timer = null;
       let articleNumbers; try { articleNumbers = numbers(); if (!articleNumbers.length) throw new Error('Bitte mindestens eine Artikelnummer eingeben.'); }
       catch (error) { status(error.message, true); return; }
       const ticket = generation, signature = key(), priceType = form.elements.priceType.value;
+      const selectionCurrent = () => { try { return signature === key(); } catch { return false; } };
       busy = true; status('Aktuelle Artikelpreise werden geladen …'); render();
       try {
         const result = await request('/api/sales/price-labels/articles', { articleNumbers, priceType });
-        if (!permitted(ticket) || signature !== key()) return;
+        if (!permitted(ticket) || !selectionCurrent()) return;
         const found = new Map((Array.isArray(result.items) ? result.items : []).filter(item => articleNumbers.includes(item.articleNumber)).map(item => [item.articleNumber, item]));
         items = articleNumbers.map(articleNumber => found.get(articleNumber) || { articleNumber, description: 'Artikel nicht gefunden', priceGross: null });
         loadedKey = signature; updatedAt = result.updatedAt;
@@ -397,8 +405,8 @@
         status(missing ? missing + ' Artikel ohne bestätigten Bruttopreis. Bitte Preisart oder Artikelauswahl prüfen.' : items.length + ' Artikel mit aktuellen Bruttopreisen geladen.', Boolean(missing));
         const timestamp = updatedAt && Number.isFinite(Date.parse(updatedAt)) ? new Intl.DateTimeFormat('de-AT', { timeZone: 'Europe/Vienna', dateStyle: 'short', timeStyle: 'short' }).format(new Date(updatedAt)) : '';
         q('updated').textContent = (timestamp ? 'Preise geladen: ' + timestamp + ' · ' : '') + (result.note || 'Der PDF-Export liest die aktuellen freigegebenen Artikelpreise erneut.');
-      } catch (error) { if (permitted(ticket) && error.name !== 'AbortError') { items = []; loadedKey = ''; status(error.message, true); } }
-      finally { if (permitted(ticket)) { busy = false; render(); } }
+      } catch (error) { if (permitted(ticket) && selectionCurrent() && error.name !== 'AbortError') { items = []; loadedKey = ''; status(error.message, true); } }
+      finally { finishBusy(ticket); }
     }
     on(form, 'submit', event => { event.preventDefault(); void loadArticles(); });
     on(q('refresh'), 'click', () => { void loadArticles(); });
@@ -522,7 +530,10 @@
         const id = form.elements.logoKitId.value, kit = brandingKits.find(item => item.id === id);
         fillLogoChoices(id, kit?.logos?.[0]?.key || '');
       }
-      if (event.target === form.elements.priceType) { loadedKey = ''; clearTimeout(timer); timer = setTimeout(() => { void loadArticles(); }, 200); }
+      if (event.target === form.elements.priceType) {
+        loadedKey = ''; status('Preisart geändert. Aktuelle Artikelpreise werden nachgeladen …');
+        clearTimeout(timer); timer = setTimeout(() => { timer = null; void loadArticles(); }, 200);
+      }
       q('saved').textContent = ''; render();
     });
     const changePage = value => {
@@ -614,12 +625,12 @@
         const href = URL.createObjectURL(blob), link = root.ownerDocument.createElement('a'); link.href = href; link.download = filename(body.name, Object.fromEntries(Object.keys(fileDefaults).map(field => [field, body[field]]))); root.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(href), 60000);
         status('PDF-Download gestartet. Beim Drucken 100 % beziehungsweise „Tatsächliche Größe“ wählen.');
       } catch (error) { if (permitted(ticket) && error.name !== 'AbortError') status(error.message, true); }
-      finally { controllers.delete(controller); if (permitted(ticket)) { busy = false; render(); } }
+      finally { controllers.delete(controller); finishBusy(ticket); }
     });
     setOptions(defaults); setFileOptions(fileDefaults); render();
     function suspend() {
       finishLogoDrag(null); logoSelected = false; logoDrag = null; q('logo-live').textContent = '';
-      active = false; generation++; clearTimeout(timer); timer = null; for (const controller of controllers) controller.abort(); controllers.clear();
+      active = false; generation++; clearTimeout(timer); timer = null; articleReloadPending = false; for (const controller of controllers) controller.abort(); controllers.clear();
       items = []; loadedKey = ''; updatedAt = null; busy = false; saving = false; paperPage = 0; q('picker').replaceChildren(); q('updated').textContent = 'Noch keine Artikel geladen.';
       brandingKits = []; brandingLoaded = false; brandingMessage = ''; library = { templates: [], ownBranch: null, recipients: [], capabilities: {} };
       fillLogoChoices(form.elements.logoKitId.value, form.elements.logoAssetKey.value);

@@ -60,25 +60,25 @@ test("failed report differentiates preparation, upload and unexecuted phases", (
   assert.match(report, /Isolierter Daten-Restore: Nicht ausgeführt/);
 });
 
-test("report route requires technical permission, a valid identifier and a verified matching run", () => {
+test("report route requires technical permission, a valid identifier and an asynchronously verified matching run", async () => {
   const server = fs.readFileSync(path.join(__dirname, "../server.js"), "utf8");
   const start = server.indexOf('app.get("/api/portal/v1/system-center/recovery-assurance/reports/:filename"');
   const end = server.indexOf('\napp.post(', start);
   let handler, permitted = false, history = { statusAvailable: false, integrityVerified: false };
   const context = vm.createContext({ app: { get: (_route, fn) => { handler = fn; } }, serverModeActive: true,
     requirePortalAnyPermission: (_request, permissions) => { assert.deepEqual([...permissions], ["system:diagnostics:technical"]); if (!permitted) throw new Error("403"); },
-    readRecoveryAssuranceStatus: () => history, httpError: status => new Error(String(status)),
+    readRecoveryAssuranceStatus: async () => history, httpError: status => new Error(String(status)),
     contentDispositionHeader: name => name, require: () => ({ markdownReport: () => "verified report" }),
   });
   vm.runInContext(server.slice(start, end), context);
   const id = "a".repeat(64), request = { params: { filename: id + ".md" } };
   const response = { headers: {}, setHeader(k, v) { this.headers[k] = v; }, type() { return this; }, send(value) { this.value = value; } };
-  assert.throws(() => handler(request, response), /403/); permitted = true;
-  assert.throws(() => handler({ params: { filename: "../secrets.md" } }, response), /400/);
-  assert.throws(() => handler(request, response), /503/);
+  await assert.rejects(handler(request, response), /403/); permitted = true;
+  await assert.rejects(handler({ params: { filename: "../secrets.md" } }, response), /400/);
+  await assert.rejects(handler(request, response), /503/);
   history = { statusAvailable: true, integrityVerified: true, recentRuns: [] };
-  assert.throws(() => handler(request, response), /404/);
-  history.recentRuns = [{ reportId: id, runIdPrefix: "12345678" }]; handler(request, response);
+  await assert.rejects(handler(request, response), /404/);
+  history.recentRuns = [{ reportId: id, runIdPrefix: "12345678" }]; await handler(request, response);
   assert.equal(response.value, "verified report"); assert.equal(response.headers["Cache-Control"], "private, no-store");
 });
 

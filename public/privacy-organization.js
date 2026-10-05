@@ -317,7 +317,7 @@
       for (const field of fields) if (!Object.hasOwn(value, field.key)) value[field.key] = Object.hasOwn(field, "default") ? field.default : field.type === "boolean" ? false : ["number", "instant"].includes(field.type) ? null : ["list", "listrefs"].includes(field.type) ? [] : "";
       const activities = (payload.records || []).filter(item => item.kind === "activity" && item.status === "approved" && item.readiness?.releaseReady === true);
       if (!target || !fields.length) { status("Die Felddefinition für diesen Bereich ist derzeit nicht verfügbar."); return; }
-      editor = { record, kind: recordKind, payload: value, expectedRevision: payload.revision, fields, readOnly };
+      editor = { record, kind: recordKind, payload: value, expectedRevision: payload.revision, fields, readOnly, editRevision: 0 };
       editorOrigin = origin;
       target.hidden = false;
       const heading = `<header class="privacy-org-editor-heading"><div><span class="privacy-org-kicker">${escape(definition.label)}${record ? ` · Fassung ${escape(record.revision)}` : ""}</span><h2>${readOnly ? "Fassung ansehen" : record ? "Neue Arbeitsfassung" : "Eintrag erfassen"}</h2>${value.title || record?.title ? `<p class="privacy-org-editor-title">${escape(value.title || record.title)}</p>` : ""}</div><button type="button" class="privacy-org-close" data-po-close-editor aria-label="Arbeitsfassung schließen">${icon("close")}</button></header>`;
@@ -355,18 +355,43 @@
       if (!current() || busy) return false;
       busy = true;
       const ticket = generation, requestKey = key();
+      const submittedEditor = closeAfter ? editor : null, submittedEditRevision = submittedEditor?.editRevision;
+      const existingIds = new Set((payload?.records || []).map(record => record.id));
+      const submittedDecision = form && !closeAfter ? decision : null;
+      // A decision records a completed action, so editing its submitted values
+      // while it is in flight could invite an accidental duplicate submission.
+      const decisionFields = submittedDecision ? [...form.querySelectorAll("input,textarea,select")].map(field => ({ field, disabled: field.disabled })) : [];
+      decisionFields.forEach(({ field }) => { field.disabled = true; });
       const buttons = [...host.querySelectorAll("button[type='submit']")]; buttons.forEach(button => { button.disabled = true; });
       const message = text => { const node = form?.querySelector("[data-po-form-status]"); if (node) node.textContent = text; else status(text); };
       message("Vorgang wird gespeichert …");
       try {
         const result = await options.api(ENDPOINT + "/commands", { method: "POST", body: JSON.stringify(body) });
         if (!current() || ticket !== generation || requestKey !== key()) return false;
-        if (closeAfter) closeEditor({ force: true });
-        el("[data-po-decision]")?.close?.(); decision = null; decisionDirty = false;
+        const laterEdits = submittedEditor && editor === submittedEditor && editor.editRevision !== submittedEditRevision;
+        if (submittedEditor && editor === submittedEditor && !laterEdits) closeEditor({ force: true });
+        if (submittedDecision && decision === submittedDecision) {
+          el("[data-po-decision]")?.close?.(); decision = null; decisionDirty = false;
+        }
+        if (laterEdits) {
+          // Only the response to this exact write may advance the draft's base.
+          // A fresh GET could already contain another person's subsequent edit.
+          const matches = (result?.records || []).filter(record => body.id ? record.id === body.id
+            : record.kind === submittedEditor.kind && !existingIds.has(record.id));
+          if (result?.revision === body.expectedRevision + 1 && matches.length === 1) {
+            editor.record = matches[0]; editor.expectedRevision = result.revision;
+            editor.payload = clone(matches[0].payload);
+          }
+          dirty = true;
+        }
         if (result && Array.isArray(result.records)) { payload = result; render(); }
         else await load();
-        status("Vorgang dokumentiert. Fachliche und externe Voraussetzungen bleiben im Prüfstand sichtbar.");
-        if (current()) host.focus?.({ preventScroll: true });
+        if (!current() || ticket !== generation || requestKey !== key()) return false;
+        const notice = laterEdits ? "Arbeitsfassung gespeichert. Deine späteren Änderungen bleiben geöffnet und sind noch nicht gespeichert."
+          : "Vorgang dokumentiert. Fachliche und externe Voraussetzungen bleiben im Prüfstand sichtbar.";
+        status(notice);
+        if (laterEdits && editor === submittedEditor) message(notice);
+        else if (!editor && !decision) host.focus?.({ preventScroll: true });
         return true;
       } catch (error) {
         if (!current() || ticket !== generation) return false;
@@ -375,7 +400,13 @@
         message(stale ? "Der Registerstand hat sich geändert. Deine Eingaben bleiben erhalten. Register aktualisieren und die Arbeitsfassung mit dem neuen Stand abgleichen; anschließend bewusst neu öffnen." : [error?.message || "Der Vorgang konnte nicht gespeichert werden.", issues].filter(Boolean).join(" "));
         if (!stale) revealProblemFields(form, error?.details, String(error?.message || ""));
         return false;
-      } finally { busy = false; if (current()) buttons.forEach(button => { if (button.isConnected !== false) button.disabled = false; }); }
+      } finally {
+        busy = false;
+        if (current()) {
+          buttons.forEach(button => { if (button.isConnected !== false) button.disabled = false; });
+          decisionFields.forEach(({ field, disabled }) => { if (field.isConnected !== false) field.disabled = disabled; });
+        }
+      }
     }
     function openDecision(record, action) {
       if (!current() || !recordActions(record, recordCapabilities(record)).some(item => item.id === action)) return;
@@ -431,7 +462,7 @@
       } catch (error) { const message = form.querySelector("[data-po-form-status]"); if (message) message.textContent = error.message; revealProblemFields(form, error?.details, String(error?.message || "")); }
     }
     function changed(event) {
-      if (editor && !editor.readOnly && event.target.closest?.("[data-po-edit-form]")) dirty = true;
+      if (editor && !editor.readOnly && event.target.closest?.("[data-po-edit-form]")) { dirty = true; editor.editRevision++; }
       if (decision && event.target.closest?.("[data-po-decision-form]")) decisionDirty = true;
       if (editor && event.target.matches?.("[data-po-linked-activity]")) {
         const activity = payload?.records?.find(record => record.kind === "activity" && record.status === "approved" && record.readiness?.releaseReady === true && record.id === event.target.value);

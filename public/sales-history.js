@@ -37,9 +37,25 @@
       <dt>Quellstand</dt><dd>${escape(row.provenance?.snapshotAt || '–')}</dd><dt>Importiert</dt><dd>${escape(row.provenance?.importedAt || '–')}</dd>
       <dt>Prüfung</dt><dd>${escape(row.metric ? ({ sale: 'Verkauf', return: 'Rückgabe', adjustment: 'Rabatt / Gegenbuchung', deposit: 'Anzahlung / Verrechnung · ohne Rohertrag', payment: 'Zahlungsmittel', voucher_issue: 'Gutscheinausgabe · kein Warenumsatz', uid_clearing: 'UID-Zwischenbuchung · kein Warenumsatz', excluded: 'Ausgeschlossen' }[row.metric.status] || 'Geprüft') : (row.issues || []).map(issueText).join(' · '))}</dd></dl></details></td></tr>`).join('') || '<tr><td colspan="6">Keine zugeordneten Datensätze im gewählten Bereich. Das beweist keinen Umsatz von null.</td></tr>'}</tbody></table></div>`;
   }
+  function renderCustomerAssignment(result) {
+    const assignment = result.customerAssignment;
+    if (!assignment) return '';
+    const confirmed = assignment.status === 'linked' || assignment.status === 'historical_mapping';
+    if (!confirmed) {
+      const unusable = assignment.status === 'target_missing' || assignment.status === 'target_inactive';
+      return `<p class="sales-history-customer-assignment"><strong>${unusable ? 'Kundenzuordnung derzeit nicht nutzbar.' : 'Kundenzuordnung offen.'}</strong> ${unusable ? 'Die Verbindung zu dieser Kundenkartei muss geprüft werden.' : 'Eine bestätigte Verbindung dieser Kundenkartei zu den importierten Kassenbelegen fehlt.'} Die Kaufhistorie kann deshalb noch nicht vollständig zugeordnet werden. Eine leere Liste bestätigt nicht, dass keine Käufe vorliegen.</p>`;
+    }
+    const label = assignment.status === 'historical_mapping' ? 'Historische Kundenzuordnung bestätigt.' : 'Kundenzuordnung bestätigt.';
+    const detail = assignment.method === 'master' ? 'Die Kundenkartei ist mit dem importierten Kundenstamm verbunden.'
+      : assignment.method === 'publication' ? 'Die Kundenkartei ist mit den Kassenbelegen des ausgewählten Datenstands verbunden.' : 'Die Verbindung dieser Kundenkartei zu den importierten Kassenbelegen wurde bestätigt.';
+    const empty = result.coverage.complete && result.coverage.counts.records === 0
+      ? ' In den freigegebenen Filialen und im gewählten Zeitraum wurden keine zugeordneten Käufe im ausgewählten Datenstand gefunden. Die Vollständigkeit der Quelldaten ist damit nicht bestätigt.' : '';
+    return `<p class="sales-history-customer-assignment"><strong>${label}</strong> ${detail}${empty}</p>`;
+  }
   function renderSummary(result) {
     const c = result.coverage, unresolved = { article: 'Artikelreferenzen', location: 'Filialreferenzen', lineSeller: 'Positionsverkäufer', headerSeller: 'Belegverkäufer' };
     return `<section class="sales-history-summary"><h3>${result.totals ? 'Geprüfte importierte Positionen' : 'Datenabdeckung und offene Prüfungen'}</h3>
+      ${renderCustomerAssignment(result)}
       <p>${escape(c.label)}</p><p>${c.complete ? `${c.counts.records} passende importierte Datensätze` : `${c.counts.records} Datensätze verarbeitet – Zeitraumsauswertung noch nicht vollständig`} · ${c.counts.checked} geprüft · ${c.counts.review} offen</p>
       ${result.totals ? `<p class="sales-history-total">Brutto ${escape(number(result.totals.gross))} ${escape(result.totals.currency)} · Netto ${escape(number(result.totals.net))} ${escape(result.totals.currency)}</p>` : '<p class="sales-history-review">Keine freigegebene Umsatzsumme.</p>'}
       <p>Offene Zuordnungen innerhalb dieser Auswahl: ${Object.entries(c.unresolved).map(([key, value]) => `${escape(unresolved[key] || key)} ${value}`).join(' · ')}.</p>
@@ -81,7 +97,8 @@
           const query = { ...lastQuery }; delete query.cursor;
           const result = await api(endpoint('analyze'), { method: 'POST', body: JSON.stringify({ query, cursor: lastResult.analysis.cursor }), signal: controller.signal });
           if (disposed || ticket !== generation) return;
-          lastResult = { ...lastResult, coverage: result.coverage, totals: result.totals, days: result.days, analysis: result.analysis };
+          lastResult = { ...lastResult, coverage: result.coverage, totals: result.totals, days: result.days, analysis: result.analysis,
+            ...(Object.prototype.hasOwnProperty.call(result, 'customerAssignment') ? { customerAssignment: result.customerAssignment } : {}) };
           renderResults(); el('message').textContent = result.analysis.complete ? 'Der gewählte Zeitraum ist vollständig verarbeitet.' : `${result.analysis.processed} Datensätze verarbeitet …`;
         }
         if (paused && ticket === generation && lastResult?.analysis?.cursor) el('message').textContent = 'Auswertung pausiert. Du kannst sie fortsetzen; eine Gesamtsumme bleibt bis zum Abschluss ausgeblendet.';

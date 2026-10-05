@@ -7,9 +7,13 @@ const test = require("node:test");
 
 const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
 
-test("v0.76 integrates the read-only assurance reader without blocking main readiness", () => {
+test("assurance diagnostics await the isolated reader without changing the main readiness decision", () => {
   assert.match(server, /require\("\.\/lib\/recovery-assurance-status"\)/);
-  assert.match(server, /readRecoveryAssuranceStatus\(\{ configured: offsiteConfigured \}\)/);
+  assert.match(server, /require\("\.\/lib\/recovery-assurance-status-reader"\)/);
+  assert.match(server, /recoveryAssuranceStatusReader\.read\(options\)/);
+  assert.match(server, /await readRecoveryAssuranceStatus\(\{ configured: offsiteConfigured \}\)/);
+  assert.match(server, /await readRecoveryAssuranceStatus\(\{ configured: serverModeActive, reportId: match\[1\] \}\)/);
+  assert.match(server, /await recoveryAssuranceStatusReader\.close\(\)/);
   assert.match(server, /id: "recovery-assurance"/);
   const readyFormula = server.match(/ready: startupIntegrity[\s\S]*?mode: portal\.operationMode/)?.[0] || "";
   assert.doesNotMatch(readyFormula, /recoveryAssurance/);

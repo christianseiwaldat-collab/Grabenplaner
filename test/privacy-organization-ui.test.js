@@ -482,3 +482,113 @@ test("Fachfehler ohne Feldkennung machen zugeklappte Angaben erreichbar und erha
     } finally { workspace.destroy(); }
   }
 });
+
+test("Spätere Eingaben bleiben nach create/update geöffnet und werden anschließend als neue Fassung desselben Eintrags gespeichert", async () => {
+  for (const create of [false, true]) {
+    const host = fixtureHost(), writes = []; let resolveFirst, latest = register();
+    const workspace = UI.mount(host, { user: user(), api: async (_url, options = {}) => {
+      if (!options.method) return latest;
+      const body = JSON.parse(options.body); writes.push(body);
+      const original = latest.records.find(record => record.id === body.id);
+      const saved = { ...(original || latest.records[0]), id: original?.id || "SYNTHETIC-NEW", revision: (original?.revision || 0) + 1, title: body.payload.title, payload: body.payload };
+      latest = register({ revision: body.expectedRevision + 1, records: [...latest.records.filter(record => record.id !== saved.id), saved] });
+      return writes.length === 1 ? new Promise(resolve => { resolveFirst = () => resolve(latest); }) : latest;
+    } });
+    try {
+      await workspace.activate("data-map");
+      await host.fire("click", { target: host.querySelector(create ? '[data-po-action="new"]' : '[data-po-action="edit"]') });
+      const form = host.querySelector("[data-po-edit-form]"), title = form.elements.namedItem("title");
+      title.value = "Erster Stand"; await host.fire("input", { target: title });
+      const saving = host.fire("submit", { target: form, preventDefault() {} });
+      title.value = "Weiter bearbeitet"; await host.fire("input", { target: title });
+      title.value = "Letzter neuer Stand"; await host.fire("input", { target: title });
+      assert.equal(writes[0].payload.title, "Erster Stand");
+      resolveFirst(); await saving;
+      assert.equal(host.querySelector("[data-po-edit-form]"), form); assert.equal(host.querySelector("[data-po-editor]").open, true);
+      assert.equal(title.value, "Letzter neuer Stand"); assert.equal(workspace.hasUnsavedChanges(), true);
+      assert.match(form.querySelector("[data-po-form-status]").textContent, /späteren Änderungen.*noch nicht gespeichert/);
+      await host.fire("submit", { target: form, preventDefault() {} });
+      assert.equal(writes.length, 2); assert.equal(writes[1].expectedRevision, 2); assert.equal(writes[1].action, "update");
+      assert.equal(writes[1].id, create ? "SYNTHETIC-NEW" : "SYNTHETIC-ACTIVITY"); assert.equal(writes[1].payload.title, "Letzter neuer Stand");
+      assert.equal(latest.records.length, create ? 2 : 1, "Weiteres Speichern erzeugt keinen doppelten Eintrag");
+      assert.equal(host.querySelector("[data-po-edit-form]"), null); assert.equal(workspace.hasUnsavedChanges(), false);
+    } finally { workspace.destroy(); }
+  }
+});
+
+test("Fehler beim Speichern bewahren auch während des Requests geänderte Eingaben und die ursprüngliche Revision", async () => {
+  for (const status of [400, 409, 503]) {
+    const host = fixtureHost(), writes = []; let rejectSave;
+    const workspace = UI.mount(host, { user: user(), api: async (_url, options = {}) => {
+      if (!options.method) return register();
+      writes.push(JSON.parse(options.body)); return new Promise((_resolve, reject) => { rejectSave = reject; });
+    } });
+    try {
+      await workspace.activate("data-map"); await host.fire("click", { target: host.querySelector('[data-po-action="edit"]') });
+      const form = host.querySelector("[data-po-edit-form]"), title = form.elements.namedItem("title");
+      const saving = host.fire("submit", { target: form, preventDefault() {} });
+      title.value = "Während Fehlerantwort bearbeitet"; await host.fire("input", { target: title });
+      rejectSave(Object.assign(new Error(status === 409 ? "stale revision" : "Speicherung fehlgeschlagen"), { status })); await saving;
+      assert.equal(host.querySelector("[data-po-edit-form]"), form); assert.equal(title.value, "Während Fehlerantwort bearbeitet");
+      assert.equal(workspace.hasUnsavedChanges(), true); assert.equal(form.querySelector('button[type="submit"]').disabled, false);
+      const retry = host.fire("submit", { target: form, preventDefault() {} });
+      assert.equal(writes[1].expectedRevision, 1); assert.equal(writes[1].payload.title, "Während Fehlerantwort bearbeitet");
+      rejectSave(Error("Erneuter Fehler")); await retry;
+    } finally { workspace.destroy(); }
+  }
+});
+
+test("Eine alte Speicherantwort darf eine zwischenzeitlich neu geöffnete Arbeitsfassung nicht schließen", async () => {
+  const host = fixtureHost(), previousConfirm = globalThis.confirm; let resolveSave;
+  const workspace = UI.mount(host, { user: user(), api: async (_url, options = {}) => options.method
+    ? new Promise(resolve => { resolveSave = resolve; }) : register() });
+  globalThis.confirm = () => true;
+  try {
+    await workspace.activate("data-map"); await host.fire("click", { target: host.querySelector('[data-po-action="edit"]') });
+    const original = host.querySelector("[data-po-edit-form]");
+    const saving = host.fire("submit", { target: original, preventDefault() {} });
+    await host.fire("click", { target: host.querySelector("[data-po-close-editor]") });
+    await host.fire("click", { target: host.querySelector("[data-po-template]") });
+    const replacement = host.querySelector("[data-po-edit-form]"), title = replacement.elements.namedItem("title");
+    title.value = "Anderer offener Entwurf"; await host.fire("input", { target: title });
+    resolveSave(register({ revision: 2 })); await saving;
+    assert.notEqual(replacement, original); assert.equal(host.querySelector("[data-po-edit-form]"), replacement);
+    assert.equal(title.value, "Anderer offener Entwurf"); assert.equal(workspace.hasUnsavedChanges(), true);
+  } finally { workspace.destroy(); if (previousConfirm === undefined) delete globalThis.confirm; else globalThis.confirm = previousConfirm; }
+});
+
+test("Spätere Draft-Eingaben werden nur auf die unmittelbare Antwort des eigenen Schreibens umgebunden", async () => {
+  const host = fixtureHost(), writes = []; let resolveSave;
+  const workspace = UI.mount(host, { user: user(), api: async (_url, options = {}) => {
+    if (!options.method) return register(); writes.push(JSON.parse(options.body));
+    return new Promise(resolve => { resolveSave = resolve; });
+  } });
+  try {
+    await workspace.activate("data-map"); await host.fire("click", { target: host.querySelector('[data-po-action="edit"]') });
+    const form = host.querySelector("[data-po-edit-form]"), title = form.elements.namedItem("title");
+    const saving = host.fire("submit", { target: form, preventDefault() {} });
+    title.value = "Noch offener Stand"; await host.fire("input", { target: title });
+    resolveSave(register({ revision: 3 })); await saving;
+    assert.equal(title.value, "Noch offener Stand"); assert.equal(workspace.hasUnsavedChanges(), true);
+    const retry = host.fire("submit", { target: form, preventDefault() {} });
+    assert.equal(writes[1].expectedRevision, 1, "Eine fremde Folgerevision darf nicht still zur Schreibbasis werden");
+    resolveSave(register({ revision: 2 })); await retry;
+  } finally { workspace.destroy(); }
+});
+
+test("Fachentscheidungsfelder sind während des Schreibens gesperrt und nach einem Fehler wieder bedienbar", async () => {
+  const host = fixtureHost(); let rejectSave;
+  const result = register({ records: [{ ...register().records[0], kind: "breach", status: "draft" }] });
+  const workspace = UI.mount(host, { user: user(), api: async (_url, options = {}) => options.method
+    ? new Promise((_resolve, reject) => { rejectSave = reject; }) : result });
+  try {
+    await workspace.activate("breaches"); await host.fire("click", { target: host.querySelector('[data-po-action="record_notification"]') });
+    const form = host.querySelector("[data-po-decision-form]");
+    form.elements.namedItem("sentAt").value = "2026-10-05T10:00:00+02:00"; form.elements.namedItem("evidenceReference").value = "SYNTHETIC-RECEIPT";
+    const fields = form.querySelectorAll("input,textarea,select"), saving = host.fire("submit", { target: form, preventDefault() {} });
+    assert.ok(fields.length > 0); assert.ok(fields.every(field => field.disabled === true));
+    rejectSave(Error("Entscheidung nicht gespeichert")); await saving;
+    assert.ok(fields.every(field => !field.disabled)); assert.equal(form.elements.namedItem("evidenceReference").value, "SYNTHETIC-RECEIPT");
+    assert.equal(host.querySelector("[data-po-decision]").open, true);
+  } finally { workspace.destroy(); }
+});

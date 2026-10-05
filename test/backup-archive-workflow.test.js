@@ -154,8 +154,11 @@ test("server forwards existing recovery keys and the shared deadline only to the
 test("shutdown shares one deadline with drain and does not release the instance when child termination is unverified", async () => {
   for (const code of [null, "BACKGROUND_BACKUP_TREE_UNVERIFIED", "BACKGROUND_BACKUP_ARCHIVE_RECOVERY_REQUIRED"]) {
     const events = [], deadlines = [];
+    let finishAssurance;
+    const assuranceDrain = new Promise(resolve => { finishAssurance = () => { events.push("assurance-drained"); resolve(); }; });
     const dependencies = { postgresqlActive: false, shutdownStarted: false, server: null, databaseClosed: false, maintenanceOwnsLifecycleBackup: () => false,
       dataImportJobs: { stop: async () => {} }, dataImportRoutes: { stop: async () => {} },
+      recoveryAssuranceStatusReader: { close: () => { events.push("assurance-close"); return assuranceDrain; } },
       tradeInsightJobs: { stop: async () => {} },
       salesReportJobs: { stop: async () => {} },
       postgresqlReceiptWorkers: null,
@@ -174,8 +177,12 @@ test("shutdown shares one deadline with drain and does not release the instance 
     const stop = serverFunction("shutdown", "if (require.main === module)", dependencies);
     stop();
     await new Promise(setImmediate);
+    assert.deepEqual(events, ["assurance-close"], "shutdown must await the assurance worker before backup, persistence close or instance release");
+    assert.equal(dependencies.databaseClosed, false);
+    finishAssurance();
+    await new Promise(setImmediate);
     if (code === "BACKGROUND_BACKUP_TREE_UNVERIFIED") {
-      assert.deepEqual(events, ["drain", "recovery-wait"]);
+      assert.deepEqual(events, ["assurance-close", "assurance-drained", "drain", "recovery-wait"]);
       assert.equal(dependencies.databaseClosed, false);
     } else {
       assert.equal(events.at(-1), code ? "exit-1" : "exit-0");

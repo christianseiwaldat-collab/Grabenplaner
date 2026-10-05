@@ -17,7 +17,7 @@ test('legacy zero-location reads qualify for PostgreSQL beside unchanged migrati
   const pinned=JSON.stringify(createSalesCatalog(8).entries);
   const catalog=require('../lib/persistence/postgresql/sales/cash-location-reads').CATALOG;
   const provider=createPostgresqlPersistenceProvider({pool:{connect:async()=>{throw new Error('Unexpected connection');},end:async()=>{},on(){},removeListener(){}},catalog});
-  assert.equal(catalog.length,15);
+  assert.equal(catalog.length,17);
   assert.equal(new Set(catalog.map(e=>e.statement.id)).size,catalog.length);
   assert.ok(catalog.every(e=>e.statement.operation==='queryAll'&&e.sql.includes('kassa.')&&!e.sql.includes('INDEXED BY')));
   assert.equal(JSON.stringify(createSalesCatalog(8).entries),pinned);

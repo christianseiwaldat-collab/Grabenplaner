@@ -1084,6 +1084,113 @@ test('explicit CRM binding enables customer purchases, while another personal re
   f.session.scopes = [{ locationId: 'branch-b' }];
   const hidden = await f.history().run(f.get, w => w.search(f.query())); assert.equal(hidden.items.length, 0); assert.equal(hidden.totals, null);
 });
+async function customerMaster(f, sourceId = '00031', options = {}) {
+  require('../lib/persistence/sqlite/operations/crm-schema').ensureSqliteCrmSchema(f.app.database);
+  f.app.database.exec('CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY,actor TEXT,action TEXT,entity_type TEXT,entity_id TEXT,detail TEXT,created_at TEXT)');
+  for (const permission of ['crm:access', 'crm:customers:read', 'crm:customers:write', 'crm:purchases:read'])
+    if (!f.session.permissions.includes(permission)) f.session.permissions.push(permission);
+  const source = await require('../test-support/trade-insights-fixture').insightFixture({
+    access: f.app.provider, protection: f.protection, ...f.actor, seedBase: false });
+  await source.ingest('KUNDEN', [{ KUND_NR: sourceId, VORNAME: 'Synthetic', NACHNAME: 'Customer' }], { master: true, ...options });
+  const record = (await source.masters.mappings({ table: 'KUNDEN', sourceInstance: options.sourceInstance || 'tradefoto-trade', key: sourceId })).items[0];
+  const input = { recordId: record.id, expectedSourceRevision: record.revision };
+  const synced = await source.masters.syncCustomer(input, (await source.masters.previewCustomer(input)).planHash);
+  return { source, record, synced, customerId: synced.targetId };
+}
+test('confirmed customer master links existing and subsequent cash publications without rewriting their sealed bindings', async t => {
+  const f = await fixture(t); await f.activate();
+  const before = f.app.database.prepare('SELECT * FROM cash_publications').all();
+  const { customerId } = await customerMaster(f), runtime = f.history();
+  let result = await runtime.run(f.get, w => w.search(f.query(), { customerId }));
+  assert.equal(result.items.length, 1); assert.equal(result.totals.gross, '12.00');
+  assert.deepEqual(result.customerAssignment, { status: 'linked', method: 'master' });
+  assert.doesNotMatch(JSON.stringify(result.customerAssignment), /00031|Synthetic|sourceId|customerKey/);
+  assert.deepEqual(f.app.database.prepare('SELECT * FROM cash_publications').all(), before);
+  assert.equal(f.app.database.prepare("SELECT COUNT(*) n FROM cash_publication_bindings WHERE kind='KUNDEN'").get().n, 0);
+  const nextId = await f.build(rows({ count: 2 })); await f.activate(f.request(nextId, 1));
+  result = await runtime.run(f.get, w => w.search(f.query(), { customerId }));
+  assert.equal(result.items.length, 2); assert.equal(result.totals.gross, '24.00');
+  assert.equal(f.app.database.prepare("SELECT COUNT(*) n FROM cash_publication_bindings WHERE kind='KUNDEN'").get().n, 0);
+  const empty = await runtime.run(f.get, w => w.search(f.query({ dateFrom: '2011-01-01', dateTo: '2011-12-31' }), { customerId }));
+  assert.equal(empty.items.length, 0); assert.deepEqual(empty.customerAssignment, { status: 'linked', method: 'master' });
+});
+test('customer purchase bridge preserves exact original keys, source identity and cumulative access rights', async t => {
+  const f = await fixture(t); await f.activate();
+  const exact = await customerMaster(f), other = await customerMaster(f, '31');
+  f.app.database.prepare('UPDATE crm_customers SET account_number=?,revision=revision+1 WHERE id=?').run('MANUAL-OTHER', exact.customerId);
+  const foreign = await customerMaster(f, '00031', { sourceInstance: 'other-ledger' });
+  const runtime = f.history();
+  assert.equal((await runtime.run(f.get, w => w.search(f.query(), { customerId: other.customerId }))).items.length, 0);
+  const unavailable = await runtime.run(f.get, w => w.search(f.query(), { customerId: foreign.customerId }));
+  assert.equal(unavailable.items.length, 0); assert.deepEqual(unavailable.customerAssignment, { status: 'unlinked', method: null });
+  // Changing an editable card number cannot redirect its proven source identity.
+  assert.equal((await runtime.run(f.get, w => w.search(f.query(), { customerId: exact.customerId }))).items.length, 1);
+  f.session = { ...f.session, permissions: f.session.permissions.filter(p => !['sales:analytics:company:read', 'sales:history:unassigned:read'].includes(p)), scopes: [{ locationId: 'branch-b' }] };
+  f.session.permissions.push('sales:analytics:location:read');
+  assert.equal((await runtime.run(f.get, w => w.search(f.query(), { customerId: exact.customerId }))).items.length, 0);
+  f.session.scopes = [{ locationId: 'branch-a' }];
+  assert.equal((await runtime.run(f.get, w => w.search(f.query({ sellerId: 'person-a' }), { customerId: exact.customerId }))).items.length, 1);
+  assert.equal((await runtime.run(f.get, w => w.search(f.query({ sellerId: 'person-b' }), { customerId: exact.customerId }))).items.length, 0);
+  f.session.permissions = f.session.permissions.filter(p => p !== 'crm:purchases:read');
+  await assert.rejects(runtime.run(f.get, w => w.search(f.query(), { customerId: exact.customerId })), code('IMPORT_FORBIDDEN'));
+  const ordinary = await runtime.run(f.get, w => w.search(f.query())); assert.equal(ordinary.customerAssignment, undefined);
+});
+test('explicit cash customer mapping overrides a conflicting confirmed master identity', async t => {
+  const f = await fixture(t), master = await customerMaster(f), other = await customerMaster(f, 'another-key');
+  const request = f.request(); request.mappings.push({ kind: 'KUNDEN', sourceId: '00031', targetId: other.customerId, historical: true }); await f.activate(request);
+  const runtime = f.history();
+  const excluded = await runtime.run(f.get, w => w.search(f.query(), { customerId: master.customerId }));
+  assert.equal(excluded.items.length, 0); assert.deepEqual(excluded.customerAssignment, { status: 'unlinked', method: null });
+  const included = await runtime.run(f.get, w => w.search(f.query(), { customerId: other.customerId }));
+  assert.equal(included.items.length, 1); assert.equal(included.totals.gross, '12.00');
+});
+test('customer purchases authenticate branch zero across candidate pages and keep anonymous customers excluded from both branch views', async t => {
+  const f = await fixture(t), { customerId } = await customerMaster(f);
+  const data = { Umsatz_KASSE: [], Umsatz_Kasse_Details: [] };
+  for (let i = 0; i < 207; i++) {
+    const part = rows({ location: '0' });
+    const number = String(i + 1).padStart(6, '0');
+    part.Umsatz_KASSE[0].Bonnr = number;
+    if (i === 206) part.Umsatz_KASSE[0].KUND_NR = '0';
+    for (const line of part.Umsatz_Kasse_Details) {
+      line.Bonnr = number; line.RepID = '00000000-0000-0000-0000-' + String(i + 1).padStart(12, '0');
+    }
+    for (const table of Object.keys(data)) data[table].push(...part[table]);
+  }
+  const id = await f.build(data); await f.publish.operation(f.get, 'apply', { sourceId: id, expectedRevision: 0 });
+  const setup = (await f.publish.operation(f.get, 'context', { sourceId: id })).mappingSetup;
+  const locationId = setup.locations.find(location => location.sourceId === '0').targetId;
+  const runtime = f.history();
+  let zero = await runtime.run(f.get, w => w.search(f.query({ locationId }), { customerId }));
+  assert.ok(zero.items.every(item => item.receipt !== '000207')); assert.ok(!zero.analysis.complete);
+  while (!zero.analysis.complete) zero = await runtime.run(f.get, w => w.analyze({
+    query: f.query({ locationId }), cursor: zero.analysis.cursor }, { customerId }));
+  assert.equal(zero.analysis.processed, 206); assert.equal(zero.totals.gross, '2472.00');
+  const missing = await runtime.run(f.get, w => w.search(f.query({ locationId: 'unassigned' }), { customerId }));
+  assert.equal(missing.items.length, 0); assert.equal(missing.analysis.complete, true); assert.equal(missing.analysis.processed, 0);
+});
+test('changed customer source or undone master binding invalidates purchase continuations', async t => {
+  const f = await fixture(t, { count: 205 }); await f.activate();
+  const { customerId, source, synced } = await customerMaster(f), runtime = f.history();
+  const first = await runtime.run(f.get, w => w.search(f.query({ limit: 50 }), { customerId }));
+  assert.equal(first.items.length, 50); assert.ok(first.next); assert.ok(first.analysis.cursor);
+  await source.ingest('KUNDEN', [{ KUND_NR: '00031', VORNAME: 'Synthetic', NACHNAME: 'Updated' }], { master: true });
+  await assert.rejects(runtime.run(f.get, w => w.search(f.query({ limit: 50, cursor: first.next }), { customerId })), code('IMPORT_HISTORY_RESULTS_CHANGED'));
+  await assert.rejects(runtime.run(f.get, w => w.analyze({ query: f.query({ limit: 50 }), cursor: first.analysis.cursor }, { customerId })), code('IMPORT_HISTORY_RESULTS_CHANGED'));
+  const fresh = await runtime.run(f.get, w => w.search(f.query({ limit: 50 }), { customerId }));
+  assert.equal(fresh.items.length, 50, 'immutable original customer key remains linked after contact-source updates');
+  // Undo changes mapping authority even though the immutable cash publication is unchanged.
+  await source.masters.undo(synced.eventId);
+  await assert.rejects(runtime.run(f.get, w => w.search(f.query({ limit: 50, cursor: fresh.next }), { customerId })), code('IMPORT_HISTORY_RESULTS_CHANGED'));
+});
+test('tampered customer filter key cannot turn a different authenticated cash customer into the requested customer', async t => {
+  const f = await fixture(t); await f.activate();
+  const master = await customerMaster(f, 'another-key'), runtime = f.history();
+  const head = TABLES.find(table => table.name === 'Umsatz_KASSE');
+  const key = Buffer.from(f.protection.digest(['cash-compact-v1', 'source-reference', f.actor.scopeId, 'customerKey', 'another-key']), 'hex');
+  f.app.database.prepare(`UPDATE ${head.sqlName} SET customer_key=?`).run(key);
+  await assert.rejects(runtime.run(f.get, w => w.search(f.query(), { customerId: master.customerId })), code('IMPORT_HISTORY_INTEGRITY'));
+});
 test('daily reports and cash journal use the compact source and remain separate from revenue totals', async t => {
   const f = await fixture(t), data = rows();
   data.KassenJournal = [raw('KassenJournal', { Vorgang: '7', Filiale: '018', Datum: '2010-01-02T00:00:00.000' })];
