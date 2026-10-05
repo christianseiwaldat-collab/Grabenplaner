@@ -174,6 +174,48 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    await page.evaluate(()=>{controller.geometry.canvas.style.width='';controller.sync();});
    assert.equal(await page.locator('[data-dashboard-floating="card:loans"]').evaluate(node=>node.style.width),'1000px');
   });
+  await check('queued_dialog_close_preserves_new_resize_focus_after_geometry_reset',async()=>{
+   const resize=page.locator('[data-dashboard-field-resize="group:personnel"]');
+   await resize.focus();await page.keyboard.press('ArrowRight');
+   await page.waitForFunction(()=>persisted.B.fields['group:personnel']?.geometry);
+   await page.locator('[data-dashboard-field-menu="group:personnel"]').click();
+   const focus=await page.evaluate(async()=>{
+    const handle=document.querySelector('[data-dashboard-field-resize="group:personnel"]');
+    const closed=new Promise(resolve=>controller.dialog.addEventListener('close',resolve,{once:true}));
+    // Keep reset and the user's next focus change in one task, before the
+    // browser dispatches the native queued close event. No timing delay needed.
+    document.querySelector('[data-field-geometry-default]').click();handle.focus();
+    const immediate=document.activeElement===handle;
+    await closed;
+    return {immediate,afterClose:document.activeElement===handle,open:controller.dialog.open};
+   });
+   assert.deepEqual(focus,{immediate:true,afterClose:true,open:false});
+   await page.keyboard.press('ArrowRight');
+   await page.waitForFunction(()=>persisted.B.fields['group:personnel']?.geometry);
+   assert.equal(await page.locator('[data-dashboard-floating="group:personnel"]').count(),1);
+   await page.evaluate(async()=>{const next=controller.store.value;delete next.fields['group:personnel'];await controller.store.change(next);});
+  });
+  await check('queued_old_close_preserves_the_selection_of_an_immediately_reopened_dialog',async()=>{
+   const previous=await page.evaluate(()=>controller.store.value);
+   await page.locator('[data-dashboard-field-menu="card:loans"]').click();
+   const state=await page.evaluate(async()=>{
+    const closed=new Promise(resolve=>controller.dialog.addEventListener('close',resolve,{once:true}));
+    controller.dialog.close();
+    document.querySelector('[data-dashboard-field-menu="group:personnel"]').click();
+    await closed;
+    document.querySelector('[data-field-edit]').click();
+    return {open:controller.dialog.open,editing:!document.querySelector('[data-field-editor]').hidden,
+     title:document.querySelector('[data-field-editor] input').value};
+   });
+   assert.equal(state.open,true);assert.equal(state.editing,true);
+   assert.equal(state.title,await page.locator('[data-start-dashboard-group="personnel"] > .start-dashboard-group-link strong').textContent());
+   await page.locator('[data-field-editor] input').fill('Reopened personnel field');
+   await page.locator('[data-field-editor] button[type=submit]').click();
+   await page.waitForFunction(()=>persisted.B.fields['group:personnel']?.title==='Reopened personnel field');
+   const expected={...previous,fields:{...previous.fields,'group:personnel':{title:'Reopened personnel field',description:await page.evaluate(()=>controller.fields.get('group:personnel').description?.textContent || '')}}};
+   assert.deepEqual(await page.evaluate(()=>persisted.B),expected,'the late close cannot redirect the edit into the previously selected field');
+   await page.evaluate(value=>controller.store.change(value),previous);
+  });
   await check('keyboard_move_and_resize_from_standard_layout_survive_focus_reparenting_and_single_reset',async()=>{
    const menu=page.locator('[data-dashboard-field-menu="group:personnel"]');
    const resize=page.locator('[data-dashboard-field-resize="group:personnel"]');
