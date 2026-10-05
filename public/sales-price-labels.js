@@ -1,16 +1,18 @@
 (function(host, factory) {
   'use strict'; const common = typeof module === 'object' && module.exports;
   const api = factory(common ? require('./sales-price-label-fonts') : host.GrabenplanerPriceLabelFonts,
-    common ? require('./sales-price-label-layout') : host.GrabenplanerPriceLabelLayout);
+    common ? require('./sales-price-label-layout') : host.GrabenplanerPriceLabelLayout,
+    common ? require('./sales-price-label-design') : host.GrabenplanerPriceLabelDesign,
+    common ? require('./sales-price-label-editor') : host.GrabenplanerPriceLabelEditor);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (host) { host.GrabenplanerSalesPriceLabels = api; host.SalesPriceLabels = api; }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function(Fonts, PaperGrid) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function(Fonts, PaperGrid, Design, Editor) {
   'use strict';
   const defaults = Object.freeze({ paper: 'A4', paperWidthMm: 210, paperHeightMm: 297, orientation: 'portrait', labelWidthMm: 90,
     labelHeightMm: 60, marginMm: 10, gapMm: 3, copies: 1, design: 'classic', shape: 'rectangle', color: '#225247',
     showArticleNumber: true, showEan: false, showTax: true, showPhoto: false, headline: '', footer: '',
     logoKitId: '', logoAssetKey: '', logoPosition: 'top-left', logoWidthMm: 20, logoHeightMm: 10, logoSpacingMm: 2,
-    logoMode: 'reserved', logoXmm: 4, logoYmm: 4, fontId: 'roboto', showBorder: true, cutMarks: false, borderMode: 'design' });
+    logoMode: 'reserved', logoXmm: 4, logoYmm: 4, fontId: 'roboto', showBorder: true, cutMarks: false, borderMode: 'design', textBoxes: Object.freeze({}), imageBoxes: Object.freeze([]) });
   const fileDefaults = Object.freeze({ stamp: 'date-time', position: 'before', separator: '-', suffix: '' });
   let instanceCounter = 0;
   const labelFormats = Object.freeze([
@@ -35,6 +37,8 @@
     const next = {...value,labelWidthMm:width,labelHeightMm:height,...(id === 'shelf' ? {design:'minimal'} : {})};
     if (next.logoMode === 'free') Object.assign(next,boundedLogo(next,
       {x:value.logoXmm,y:value.logoYmm,width:value.logoWidthMm,height:value.logoHeightMm}));
+    next.textBoxes = Object.fromEntries(Object.entries(value.textBoxes || {}).map(([id,box])=>[id,{...box,...Design.boundedBox(next,box)}]));
+    next.imageBoxes = (value.imageBoxes || []).map(box=>({...box,...Design.boundedBox(next,box)}));
     return normalizeOptions(next);
   }
   function paperAdjustment(value) {
@@ -89,6 +93,8 @@
     for (const field of ['logoXmm', 'logoYmm']) if (!Number.isFinite(options[field]) || options[field] < 0 || options[field] > 500) throw new Error('Bitte die Logoposition in Millimetern prüfen.');
     if (options.logoMode === 'free' && (options.logoXmm + options.logoWidthMm > options.labelWidthMm + .001
       || options.logoYmm + options.logoHeightMm > options.labelHeightMm + .001)) throw new Error('Das Logo muss innerhalb der Schildfläche liegen. Bitte Position oder Größe anpassen.');
+    options.textBoxes = Design.normalizeTextBoxes(options.textBoxes,options);
+    options.imageBoxes = Design.normalizeImageBoxes(options.imageBoxes,options);
     return Object.fromEntries(Object.keys(defaults).map(key => [key, options[key]]));
   }
   function boundedLogo(value, geometry) {
@@ -168,12 +174,13 @@
           <label data-pl-custom>Papierbreite (mm)<input type="number" name="paperWidthMm" min="10" max="500" step="0.5" required></label><label data-pl-custom>Papierhöhe (mm)<input type="number" name="paperHeightMm" min="10" max="500" step="0.5" required></label>
           <label>Rand (mm)<input type="number" name="marginMm" min="0" max="50" step="0.5" required></label><label>Abstand (mm)<input type="number" name="gapMm" min="0" max="50" step="0.5" required></label><label>Kopien je Artikel<input type="number" name="copies" min="1" max="50" step="1" required></label></div><div class="spl-checks"><label class="spl-wide"><input name="cutMarks" type="checkbox"> Umrandungsschnittmarken</label></div><p class="spl-hint" data-pl="cut-hint"></p><p class="spl-hint spl-fit-hint" data-pl="paper-fit-hint" role="status" aria-live="polite" hidden></p><button type="button" data-pl="paper-fit" hidden>Papier passend einstellen</button>
           <section class="spl-paper-layout" aria-label="Papierseiten-Belegung"><header><strong>Seitenbelegung</strong><span>Schilderanordnung</span></header><div class="spl-paper-navigation"><button type="button" data-pl="paper-prev" aria-label="Vorherige Papierseite">‹</button><label>Seite<input type="number" data-pl="paper-page-number" min="1" step="1" value="1" aria-label="Papierseite wählen"></label><span data-pl="paper-page-count"></span><button type="button" data-pl="paper-next" aria-label="Nächste Papierseite">›</button></div><div class="spl-paper-stage" data-pl="paper-preview"></div><p class="spl-hint" data-pl="paper-occupancy" role="status" aria-live="polite"></p><p class="spl-hint">Nummern zeigen die Druckreihenfolge. Grün: belegt · Hell: frei.</p></section><p class="spl-hint">PDF ohne Druckskalierung bei 100 % ausdrucken.</p></details>
-      </form><div class="spl-output"><section class="spl-card spl-preview-card"><header><div><h2>Vorschau</h2><p data-pl="dimensions"></p></div><span class="spl-preview-badge">Preisschild</span></header><label class="spl-preview-font">Schriftart direkt wählen<select data-pl="preview-font" aria-label="Schriftart in der Schildvorschau">${Fonts.families.map(font => '<option value="' + font.id + '">' + font.label + '</option>').join('')}</select></label><label class="spl-picker" data-pl="picker-label">Artikel in der Vorschau<select data-pl="picker" aria-label="Artikel in der Vorschau"><option>Artikel laden</option></select></label><div class="spl-preview-stage" data-pl="stage"><div data-pl="preview"></div></div><p class="spl-hint spl-logo-editor-hint" data-pl="logo-editor-hint" hidden>Logo auswählen und ziehen; der Griff rechts unten ändert die Größe. Pfeiltasten verschieben, am Griff ändern sie die Größe (Umschalt: 5 mm). Freie Anordnung kann Text und Preis überdecken.</p><p class="spl-logo-live" data-pl="logo-live" role="status" aria-live="polite"></p><p class="spl-layout-info" data-pl="layout"></p><p class="spl-hint" data-pl="updated">Noch keine Artikel geladen.</p></section>
+      </form><div class="spl-output"><section class="spl-card spl-preview-card"><header><div><h2>Vorschau</h2><p data-pl="dimensions"></p></div><span class="spl-preview-badge">Preisschild</span></header><div class="spl-preview-branding" data-pl="branding-preview"></div><div data-pl="element-toolbar"></div><section class="spl-image-tools" data-pl="image-tools"></section><label class="spl-preview-font" hidden>Standardschriftart<select data-pl="preview-font" aria-label="Schriftart in der Schildvorschau">${Fonts.families.map(font => '<option value="' + font.id + '">' + font.label + '</option>').join('')}</select></label><label class="spl-picker" data-pl="picker-label">Artikel in der Vorschau<select data-pl="picker" aria-label="Artikel in der Vorschau"><option>Artikel laden</option></select></label><div class="spl-preview-stage" data-pl="stage"><div data-pl="preview"></div></div><p class="spl-hint spl-logo-editor-hint" data-pl="logo-editor-hint" hidden>Logo auswählen und ziehen; der Griff rechts unten ändert die Größe. Pfeiltasten verschieben, am Griff ändern sie die Größe (Umschalt: 5 mm). Freie Anordnung kann Text und Preis überdecken.</p><p class="spl-logo-live" data-pl="logo-live" role="status" aria-live="polite"></p><p class="spl-layout-info" data-pl="layout"></p><p class="spl-hint" data-pl="updated">Noch keine Artikel geladen.</p></section>
         <section class="spl-card spl-export"><h2>PDF exportieren</h2><form data-pl="export"><label>Dateiname<input name="name" maxlength="110" value="Preisschilder" required></label><div class="spl-fields"><label>Zeitblock<select name="stamp"><option value="date-time">JJMMTT-HHMM</option><option value="date">JJMMTT</option><option value="date-suffix">JJMMTT-xxx</option><option value="none">Ohne Zeitblock</option></select></label><label>Anordnung<select name="position"><option value="before">Vorne</option><option value="after">Hinten</option></select></label><label>Ergänzung (xxx)<input name="suffix" maxlength="40" placeholder="z. B. Aktion"></label><label>Trennzeichen<select name="separator"><option value="-">Bindestrich (-)</option><option value="_">Unterstrich (_)</option><option value=" ">Leerzeichen</option></select></label></div><p class="spl-filename" data-pl="filename"></p><button type="submit" class="spl-primary" data-pl="download" disabled>PDF herunterladen</button></form><p class="spl-status" data-pl="status" role="status" aria-live="polite">Artikelnummern eingeben und die aktuellen Preise laden.</p></section>
       </div></div>`;
     const q = key => root.querySelector('[data-pl="' + key + '"]'), form = q('settings'), exportForm = q('export');
     let active = false, owner = '', generation = 0, items = [], updatedAt = null, loadedKey = '', busy = false, saving = false, timer = null, articleReloadPending = false;
     let logoSelected = false, logoDrag = null, lastRenderedOptions = null, paperPage = 0;
+    let designBoxes = {textBoxes:{},imageBoxes:[]}, draftEpoch = 0, imageUploading = false;
     let brandingKits = [], brandingLoaded = false, brandingMessage = '', library = { templates: [], ownBranch: null, recipients: [], capabilities: { create: false, ownBranch: false } },
       libraryMode = 'defaults', selectedTemplate = null, libraryLoading = false, libraryReady = false,
       personalDefaults = { options: { ...defaults }, filenameOptions: { ...fileDefaults } };
@@ -185,16 +192,37 @@
       try { return await api(url, { signal: controller.signal, ...(body === undefined ? {} : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) }); }
       finally { controllers.delete(controller); }
     };
+    // Branding controls remain part of the settings form for one source of truth,
+    // but are placed visibly next to the design rather than behind a left-hand detail.
+    const logoOptions = root.querySelector('.spl-logo-options');
+    logoOptions.open = false;
+    const brandingChoices = root.ownerDocument.createElement('div'); brandingChoices.className='spl-branding-choices';
+    [...logoOptions.querySelector('.spl-fields').children].slice(0,2).forEach(label=>brandingChoices.append(label));
+    logoOptions.querySelector('summary').firstChild.textContent='Logo-Position & Abstand ';
+    [...logoOptions.querySelectorAll('input,select'),...brandingChoices.querySelectorAll('input,select')].forEach(input => { input.setAttribute('form',form.id || (form.id='sales-price-label-settings-'+instanceCounter)); });
+    q('branding-preview').append(brandingChoices,logoOptions);
+    const onSettings=(type,handler)=>{on(form,type,handler);on(q('branding-preview'),type,handler);};
     const numbers = () => parseArticleNumbers(form.elements.articleNumbers.value);
     const key = () => JSON.stringify([numbers(), form.elements.priceType.value]);
     function rawOptions() {
       const value = {};
       for (const [field, fallback] of Object.entries(defaults)) {
+        if (['textBoxes','imageBoxes'].includes(field)) { value[field] = designBoxes[field]; continue; }
         const input = form.elements[field]; value[field] = typeof fallback === 'boolean' ? input.checked : typeof fallback === 'number' ? input.value === '' ? NaN : Number(input.value) : input.value;
       }
       return value;
     }
     const options = () => normalizeOptions(rawOptions());
+    const elementEditor = Editor.mount({preview:q('preview'),toolbar:q('element-toolbar'),images:q('image-tools'),live:q('logo-live'),
+      read:options,write:value=>{setOptions(value);q('saved').textContent='';render();},
+      canEdit:()=>permitted() && !readOnlyTemplate() && !saving && !libraryLoading,
+      context:()=>JSON.stringify([owner,generation,draftEpoch,libraryMode,selectedTemplate?.id]),
+      onUploadState:value=>{imageUploading=value;render();},
+      upload:async file=>{
+        const controller=new AbortController();controllers.add(controller);
+        try {const body=new FormData();body.append('image',file);const response=await rawApi('/api/sales/price-labels/images',{method:'POST',body,signal:controller.signal});return (await response.json()).image;}
+        finally{controllers.delete(controller);}
+      }});
     const fileOptions = () => Object.fromEntries(Object.keys(fileDefaults).map(field => [field, exportForm.elements[field].value]));
     const readOnlyTemplate = () => libraryMode === 'template' && selectedTemplate?.canEdit !== true;
     const branchTemplateLocked = () => libraryMode === 'template' && selectedTemplate?.received === true && selectedTemplate?.canEdit === true;
@@ -213,8 +241,9 @@
     }
     function setOptions(value) {
       const saved = normalizeOptions(value);
+      designBoxes = {textBoxes:saved.textBoxes,imageBoxes:saved.imageBoxes};
       fillLogoChoices(saved.logoKitId, saved.logoAssetKey);
-      for (const [field, value] of Object.entries(saved)) { const input = form.elements[field]; if (typeof value === 'boolean') input.checked = value; else input.value = value; }
+      for (const [field, value] of Object.entries(saved)) { const input = form.elements[field]; if (!input) continue; if (typeof value === 'boolean') input.checked = value; else input.value = value; }
       q('color-text').value = saved.color.toUpperCase();
     }
     function setFileOptions(value) {
@@ -249,22 +278,23 @@
       scope.querySelector('[value="branch"]').textContent = library.ownBranch ? 'Eigene Filiale · ' + library.ownBranch.label : 'Eigene Filiale';
       for (const value of ['private', 'selected']) scope.querySelector('[value="' + value + '"]').disabled = branchLocked;
       scope.disabled = readonly || branchLocked || saving || libraryLoading;
-      q('library-select').disabled = saving || libraryLoading;
-      q('library-new').disabled = !permitted() || !libraryReady || !canCreate || saving || libraryLoading;
-      q('library-copy').disabled = !permitted() || !libraryReady || !canCreate || libraryMode !== 'template' || saving || libraryLoading;
+      q('library-select').disabled = saving || libraryLoading || imageUploading;
+      q('library-new').disabled = !permitted() || !libraryReady || !canCreate || saving || libraryLoading || imageUploading;
+      q('library-copy').disabled = !permitted() || !libraryReady || !canCreate || libraryMode !== 'template' || saving || libraryLoading || imageUploading;
       q('library-recipients-panel').hidden = libraryMode === 'defaults' || scope.value !== 'selected';
       q('library-recipients').querySelectorAll('input').forEach(input => { input.disabled = readonly || saving || libraryLoading; });
       const count = recipientIds().length; q('library-recipient-count').textContent = count ? '· ' + count + ' ausgewählt' : '';
       q('library-summary').textContent = libraryReady ? library.templates.length + ' gespeicherte Vorlage' + (library.templates.length === 1 ? '' : 'n') : libraryLoading ? 'Wird geladen …' : '';
       q('save').textContent = libraryMode === 'defaults' ? 'Standardeinstellung speichern' : libraryMode === 'new' ? 'Neue Vorlage speichern' : 'Änderungen speichern';
-      q('save').disabled = !permitted() || busy || saving || libraryLoading || readonly || !printable || libraryMode === 'new' && !canCreate;
+      q('save').disabled = !permitted() || busy || saving || libraryLoading || imageUploading || readonly || !printable || libraryMode === 'new' && !canCreate;
+      q('library-reload').disabled = imageUploading || saving || libraryLoading;
       const hint = readonly ? 'Freigegebene Vorlage von ' + (selectedTemplate?.creator?.label || 'einem anderen Konto') + '. Für eigene Änderungen eine Kopie anlegen.'
         : branchLocked ? 'Filialvorlage · Änderungen gelten für die eigene Filiale. Mit einer Kopie kannst du eine eigene Vorlage anlegen.'
           : scope.value === 'branch' ? 'Diese Vorlage steht den berechtigten Konten der eigenen Filiale zur Verfügung.'
             : scope.value === 'selected' ? 'Ausgewählte Filialkonten können die Vorlage verwenden und als eigene Kopie speichern. Empfänger kannst du später ändern.'
               : 'Diese Vorlage ist nur für dein Konto sichtbar.';
       q('library-hint').textContent = hint + (selectedTemplate?.unavailableRecipientCount ? ' Frühere Empfänger sind nicht mehr verfügbar; beim Speichern werden diese Freigaben entfernt.' : '');
-      for (const field of Object.keys(defaults)) form.elements[field].disabled = readonly;
+      for (const field of Object.keys(defaults)) if (form.elements[field]) form.elements[field].disabled = readonly;
       for (const field of Object.keys(fileDefaults)) exportForm.elements[field].disabled = readonly;
       q('color-text').disabled = readonly;
       q('preview-font').disabled = readonly;
@@ -282,6 +312,8 @@
       q('library-select').value = libraryMode === 'template' ? selectedTemplate?.id || '' : libraryMode === 'new' ? '__new' : '';
     }
     function chooseTemplate(id) {
+      if (imageUploading || saving) return;
+      draftEpoch++; elementEditor.clear();
       const template = library.templates.find(item => item.id === id);
       if (!id) {
         libraryMode = 'defaults'; selectedTemplate = null; setOptions(personalDefaults.options); setFileOptions(personalDefaults.filenameOptions);
@@ -347,34 +379,10 @@
       q('logo-summary').textContent = logo ? logo.label : value.logoKitId ? 'Nicht verfügbar' : 'Ohne Logo';
       if (brandingLoaded) q('branding-status').textContent = logoUnavailable ? 'Das gespeicherte Logo ist nicht verfügbar. Bitte ein anderes wählen oder ohne Logo fortfahren.'
         : brandingMessage || (brandingKits.length ? 'Das Logo behält seine Proportionen innerhalb der gewählten Größe.' : 'Derzeit sind keine freigegebenen Logos verfügbar.');
-      const color = value.color, contrast = (parseInt(color.slice(1, 3), 16) * 299 + parseInt(color.slice(3, 5), 16) * 587 + parseInt(color.slice(5), 16) * 114) / 1000 > 155 ? '#172331' : '#ffffff';
-      const label = root.ownerDocument.createElement('article'); label.className = 'spl-label spl-design-' + value.design + ' spl-shape-' + value.shape + (freeLogo ? ' spl-logo-free' : '') + (value.showBorder ? ' spl-border-on' : ' spl-border-off');
-      label.style.setProperty('font-family', '"' + Fonts.get(value.fontId).cssFamily + '"');
-      label.style.setProperty('font-synthesis', 'none');
-      label.style.setProperty('--spl-accent', color); label.style.setProperty('--spl-contrast', contrast);
-      label.style.setProperty('--spl-aspect', circle && !freeLogo ? '1' : String(value.labelWidthMm / value.labelHeightMm));
-      label.style.setProperty('--spl-circle-width', (diameter / value.labelWidthMm * 100) + '%');
-      label.style.setProperty('--spl-circle-height', (diameter / value.labelHeightMm * 100) + '%');
-      label.style.setProperty('--spl-price-size', Math.max(7, Math.min(18, 100 / Math.max(6, (shownPrice || '').length))) + 'cqi');
-      label.style.setProperty('--spl-logo-width', (value.logoWidthMm / value.labelWidthMm * 100) + 'cqi');
-      label.style.setProperty('--spl-logo-height', (value.logoHeightMm / value.labelWidthMm * 100) + 'cqi');
-      label.style.setProperty('--spl-logo-spacing', (value.logoSpacingMm / value.labelWidthMm * 100) + 'cqi');
-      const logoStyle = freeLogo ? ' style="left:' + (value.logoXmm / value.labelWidthMm * 100) + '%;top:' + (value.logoYmm / value.labelHeightMm * 100) + '%;width:' + (value.logoWidthMm / value.labelWidthMm * 100) + '%;height:' + (value.logoHeightMm / value.labelHeightMm * 100) + '%"' : '';
-      const logoEditor = logo ? '<div data-pl-logo class="spl-logo-editor' + (freeLogo ? ' spl-logo-overlay' : '') + (editableLogo ? ' spl-logo-editable' : '') + (logoSelected ? ' is-selected' : '') + '" role="group" tabindex="' + (editableLogo ? '0' : '-1') + '" aria-label="Logo ' + escape(logo.label) + (editableLogo ? ' verschieben. Pfeiltasten oder ziehen.' : '') + '"' + logoStyle + '><img class="spl-label-logo" draggable="false" alt="' + escape(logo.label) + '" src="' + escape(logo.url) + '">' + (editableLogo ? '<button type="button" class="spl-logo-resize" data-pl-logo-resize aria-label="Logo am Griff vergrößern oder verkleinern. Pfeiltasten ändern Breite und Höhe."></button>' : '') + '</div>' : '';
-      const logoRow = !freeLogo && logo ? '<div class="spl-label-logo-row spl-logo-' + escape(value.logoPosition.split('-')[1]) + '">' + logoEditor + '</div>' : '';
-      label.innerHTML = (value.logoPosition.startsWith('top-') ? logoRow : '') + (value.headline ? '<div class="spl-label-headline">' + escape(value.headline) + '</div>' : '') +
-        '<div class="spl-label-product">' + (article?.brand ? '<small class="spl-brand">' + escape(article.brand) + '</small>' : '') + '<h3>' + escape(article?.description || 'Artikel auswählen und aktuellen Preis laden') + '</h3></div>' +
-        (photo ? '<img class="spl-label-photo" alt="' + escape(article?.description || 'Artikelfoto') + '" src="' + escape(photo) + '">' : '') +
-        '<div class="spl-label-price' + (shownPrice === null ? ' spl-price-missing' : '') + '"><strong>' + escape(shownPrice === null ? 'Preis prüfen' : shownPrice) + '</strong>' + (shownPrice === null ? '' : '<span>€</span>') + '</div>' +
-        '<div class="spl-label-meta">' + (value.showArticleNumber ? '<span>Art. ' + escape(article?.articleNumber || '-') + '</span>' : '') +
-        (value.showEan ? '<span>EAN ' + escape(article?.ean || '- nicht hinterlegt') + '</span>' : '') +
-        (value.showTax ? '<span>' + (article?.taxRate !== null && article?.taxRate !== undefined && /^\d+(?:\.\d+)?$/.test(String(article.taxRate)) ? 'inkl. ' + escape(String(article.taxRate).replace('.', ',')) + ' % MwSt.' : 'MwSt. prüfen') + '</span>' : '') + '</div>' +
-        (value.footer ? '<p class="spl-label-footer">' + escape(value.footer) + '</p>' : '') + (value.logoPosition.startsWith('bottom-') ? logoRow : '') + (freeLogo ? logoEditor : '');
-      q('preview').replaceChildren(label);
+      elementEditor.render({value,article,price:shownPrice,photo,logo,editable:valid && permitted() && !readOnlyTemplate() && !saving && !libraryLoading});
       lastRenderedOptions = value;
-      label.querySelectorAll('img').forEach(image => image.addEventListener('error', event => { event.target.remove(); }, { once: true }));
       q('picker-label').hidden = items.length < 2;
-      q('download').disabled = !permitted() || busy || !current || !valid || !layout.capacity || exceedsLimit || logoUnavailable || !items.length || items.some(item => price(item.priceGross) === null);
+      q('download').disabled = !permitted() || busy || saving || libraryLoading || imageUploading || !current || !valid || !layout.capacity || exceedsLimit || logoUnavailable || !items.length || items.some(item => price(item.priceGross) === null);
       q('refresh').disabled = busy;
       exportForm.elements.suffix.disabled = exportForm.elements.stamp.value !== 'date-suffix';
       q('filename').textContent = filename(exportForm.elements.name.value, fileOptions());
@@ -440,69 +448,11 @@
       }
       q('preview').querySelector(drag.resize ? '[data-pl-logo-resize]' : '[data-pl-logo]')?.focus?.({ preventScroll: true });
     }
-    on(q('preview'), 'pointerdown', event => {
-      const editor = event.target.closest?.('[data-pl-logo]');
-      if (!editor || logoDrag || event.isPrimary === false || !canEditLogo() || event.button !== undefined && event.button !== 0) return;
-      let value; try { value = options(); } catch { return; }
-      const label = editor.closest('.spl-label'), frame = logoFrame(label);
-      if (!frame.width || !frame.height) return;
-      const geometry = logoGeometry(value), resize = Boolean(event.target.closest('[data-pl-logo-resize]'));
-      logoDrag = { options: value, geometry, resize, pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY,
-        width: frame.width, height: frame.height, ticket: generation, moved: false };
-      event.preventDefault();
-      try { q('preview').setPointerCapture?.(event.pointerId); } catch { /* Pointer capture is unavailable in some embedded views. */ }
-      // Selecting an anchored logo must not change the saved layout. Only an
-      // actual move/resize (or an arrow key) switches to free geometry.
-      logoSelected = true; editor.classList.add('is-selected');
-      (resize ? event.target.closest('[data-pl-logo-resize]') : editor).focus?.({ preventScroll: true });
-    });
-    on(q('preview'), 'pointermove', event => {
-      const drag = logoDrag; if (!drag || event.pointerId !== drag.pointerId || !permitted(drag.ticket) || !canEditLogo()) return;
-      event.preventDefault();
-      const currentLabel = q('preview').querySelector('.spl-label');
-      const frame = currentLabel?.getBoundingClientRect ? logoFrame(currentLabel) : drag;
-      const dx = (event.clientX - drag.clientX) / (frame.width || drag.width) * drag.options.labelWidthMm;
-      const dy = (event.clientY - drag.clientY) / (frame.height || drag.height) * drag.options.labelHeightMm;
-      if (!drag.moved && Math.abs(dx) + Math.abs(dy) < .0001) return;
-      drag.moved = true;
-      const geometry = { ...drag.geometry };
-      if (drag.resize) {
-        geometry.width = Math.min(drag.options.labelWidthMm - geometry.x, geometry.width + dx);
-        geometry.height = Math.min(drag.options.labelHeightMm - geometry.y, geometry.height + dy);
-      } else { geometry.x += dx; geometry.y += dy; }
-      writeLogo(drag.options, geometry, drag.resize ? '[data-pl-logo-resize]' : '[data-pl-logo]');
-    });
-    on(q('preview'), 'pointerup', event => finishLogoDrag(event));
-    on(q('preview'), 'pointercancel', event => finishLogoDrag(event, true));
-    on(q('preview'), 'lostpointercapture', event => finishLogoDrag(event));
-    on(q('preview'), 'focusin', event => {
-      const editor = event.target.closest?.('[data-pl-logo]'); if (!editor || !canEditLogo()) return;
-      logoSelected = true; editor.classList.add('is-selected');
-    });
-    on(q('preview'), 'keydown', event => {
-      if (event.key === 'Escape') { if (logoDrag) { event.preventDefault(); finishLogoDrag(null, true); } return; }
-      const editor = event.target.closest?.('[data-pl-logo]');
-      if (!editor || !canEditLogo() || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
-      let value; try { value = options(); } catch { return; }
-      event.preventDefault(); const geometry = logoGeometry(value), amount = event.shiftKey ? 5 : .5;
-      const dx = event.key === 'ArrowRight' ? amount : event.key === 'ArrowLeft' ? -amount : 0;
-      const dy = event.key === 'ArrowDown' ? amount : event.key === 'ArrowUp' ? -amount : 0;
-      const resize = Boolean(event.target.closest('[data-pl-logo-resize]'));
-      if (resize) {
-        geometry.width = Math.min(value.labelWidthMm - geometry.x, geometry.width + dx);
-        geometry.height = Math.min(value.labelHeightMm - geometry.y, geometry.height + dy);
-      } else { geometry.x += dx; geometry.y += dy; }
-      writeLogo(value, geometry, resize ? '[data-pl-logo-resize]' : '[data-pl-logo]');
-    });
-    on(q('preview-font'), 'change', () => {
-      if (!permitted() || readOnlyTemplate()) return;
-      form.elements.fontId.value = q('preview-font').value; q('saved').textContent = ''; render();
-    });
     const borderInput = event => {
       if (event.target === form.elements.showBorder) form.elements.borderMode.value = 'manual';
       if (event.target === form.elements.design && form.elements.borderMode.value === 'design') form.elements.showBorder.checked = form.elements.design.value !== 'minimal';
     };
-    on(form, 'input', event => {
+    onSettings('input', event => {
       if ([q('label-orientation'),q('paper-page-number')].includes(event.target)) return;
       if (!permitted() || readOnlyTemplate() && ![form.elements.articleNumbers,form.elements.priceType].includes(event.target)) return;
       borderInput(event);
@@ -517,12 +467,19 @@
           for (const [field, next] of Object.entries(changed)) form.elements[field].value = next;
         }
       }
+      if ([form.elements.labelWidthMm,form.elements.labelHeightMm].includes(event.target)) {
+        const dimensions={labelWidthMm:Number(form.elements.labelWidthMm.value),labelHeightMm:Number(form.elements.labelHeightMm.value)};
+        if(Object.values(dimensions).every(n=>Number.isFinite(n) && n>=10 && n<=500)) {
+          designBoxes={textBoxes:Object.fromEntries(Object.entries(designBoxes.textBoxes).map(([id,box])=>[id,{...box,...Design.boundedBox(dimensions,box)}])),
+            imageBoxes:designBoxes.imageBoxes.map(box=>({...box,...Design.boundedBox(dimensions,box)}))};
+        }
+      }
       if (event.target === q('color-text')) { if (/^#[a-f0-9]{6}$/i.test(event.target.value)) form.elements.color.value = event.target.value; }
       else if (event.target === form.elements.color) q('color-text').value = event.target.value.toUpperCase();
       if (event.target === form.elements.articleNumbers) { loadedKey = ''; status('Artikelauswahl geändert. Bitte die aktuellen Preise laden.'); }
       q('saved').textContent = ''; render();
     });
-    on(form, 'change', event => {
+    onSettings('change', event => {
       if ([q('label-orientation'),q('paper-page-number')].includes(event.target)) return;
       if (!permitted() || readOnlyTemplate() && ![form.elements.articleNumbers,form.elements.priceType].includes(event.target)) return;
       borderInput(event);
@@ -548,7 +505,8 @@
       try { chooseTemplate(q('library-select').value); } catch (error) { q('saved').textContent = error.message; }
     });
     const newTemplate = copy => {
-      if (!permitted() || !libraryReady || library.capabilities.create !== true || saving) return;
+      if (!permitted() || !libraryReady || library.capabilities.create !== true || saving || imageUploading) return;
+      draftEpoch++; elementEditor.clear();
       const title = copy ? (q('library-title').value || selectedTemplate?.title || 'Vorlage') + ' (Kopie)' : 'Neue Vorlage';
       libraryMode = 'new'; selectedTemplate = null; fillLibrarySelect(); q('library-title').value = title.slice(0, 80);
       q('library-scope').value = library.ownBranch && library.capabilities.ownBranch === true ? 'branch' : 'private'; renderRecipients(); q('saved').textContent = ''; q('library-reload').hidden = true;
@@ -558,7 +516,7 @@
     for (const field of ['library-title', 'library-scope', 'library-recipients']) on(q(field), 'change', () => { q('saved').textContent = ''; render(); });
     on(q('library-title'), 'input', () => { q('saved').textContent = ''; });
     on(q('library-reload'), 'click', async () => {
-      if (!permitted() || saving || libraryLoading) return; const ticket = generation, id = selectedTemplate?.id;
+      if (!permitted() || saving || libraryLoading || imageUploading) return; const ticket = generation, id = selectedTemplate?.id;
       libraryLoading = true; render(); q('saved').textContent = 'Vorlagen werden aktualisiert …';
       try { if (await loadLibrary(ticket)) { chooseTemplate(library.templates.some(template => template.id === id) ? id : ''); q('saved').textContent = 'Aktueller Stand geladen.'; } }
       catch (error) { if (permitted(ticket) && error.name !== 'AbortError') q('saved').textContent = error.message; }
@@ -583,7 +541,7 @@
       catch (error) { q('saved').textContent = error.message; }
     });
     on(q('save'), 'click', async () => {
-      if (!permitted() || busy || saving || readOnlyTemplate() || libraryLoading) return; const ticket = generation;
+      if (!permitted() || busy || saving || readOnlyTemplate() || libraryLoading || imageUploading) return; const ticket = generation;
       try {
         const body = { options: options(), filenameOptions: fileOptions() }, mode = libraryMode;
         if (!paperLayout(body.options).capacity) throw new Error('Das Schild passt noch nicht auf das Papier. Bitte Papier oder Rand passend einstellen.');
@@ -629,7 +587,7 @@
     });
     setOptions(defaults); setFileOptions(fileDefaults); render();
     function suspend() {
-      finishLogoDrag(null); logoSelected = false; logoDrag = null; q('logo-live').textContent = '';
+      finishLogoDrag(null); elementEditor.clear(); draftEpoch++; logoSelected = false; logoDrag = null; q('logo-live').textContent = '';
       active = false; generation++; clearTimeout(timer); timer = null; articleReloadPending = false; for (const controller of controllers) controller.abort(); controllers.clear();
       items = []; loadedKey = ''; updatedAt = null; busy = false; saving = false; paperPage = 0; q('picker').replaceChildren(); q('updated').textContent = 'Noch keine Artikel geladen.';
       brandingKits = []; brandingLoaded = false; brandingMessage = ''; library = { templates: [], ownBranch: null, recipients: [], capabilities: {} };
@@ -686,7 +644,7 @@
           return false;
         }
       }, suspend,
-      destroy() { suspend(); for (const off of listeners) off(); root.replaceChildren(); },
+      destroy() { suspend(); for (const off of listeners) off(); elementEditor.destroy(); root.replaceChildren(); },
     };
     return workspace;
   }

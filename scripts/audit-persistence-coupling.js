@@ -421,6 +421,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/sales-article-branch-orders.js",
   "lib/sales-article-sales-routes.js",
   "lib/sales-price-label-template-store.js",
+  "lib/sales-price-label-image-store.js",
   "lib/persistence/sqlite/xoffi-snapshots-catalog.js",
   "lib/persistence/sqlite/operations/xoffi-snapshots-schema.js",
   "lib/persistence/statements/cash-publication-batches.js",
@@ -649,6 +650,10 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/sales-article-sales.test.js",
   "test/sales-article-branch-orders-sql.test.js",
   "test/sales-price-label-template-store.test.js",
+  "test/sales-price-label-image-store.test.js",
+  "test/price-label-image-recovery.test.js",
+  "test/sales-price-label-design.test.js",
+  "test/sidebar-notepad-api.test.js",
   "test/sales-price-labels-server-access.test.js",
   "test/login-resilience-api.test.js",
 
@@ -841,8 +846,8 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1480;
-const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 44;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1481;
+const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 45;
 const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1436;
 const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1363;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
@@ -970,7 +975,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1344;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1345;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 136;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
@@ -1530,6 +1535,7 @@ const PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES = Object.freeze([
   "scripts/cleanup-branch-order-test-data.js",
 ]);
 const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
+  "test/price-label-image-recovery.test.js",
   'test/sales-article-performance.test.js',
   'test/sales-article-branch-orders.test.js',
   "scripts/benchmark-cash-assigned-search.js",

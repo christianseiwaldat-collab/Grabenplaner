@@ -172,35 +172,10 @@ function protectedStorageReferencesFromDatabase(database) {
     keys.push(...connection.prepare("SELECT storage_key FROM loan_photo_attachments").all()
       .map((row) => String(row.storage_key || "").toLowerCase()));
   }
-  if (tableExistsInDatabase(connection, "trade_annotations")) {
-    const imageKeys = connection.prepare("SELECT scope_id AS storage_key FROM trade_annotations WHERE kind = 'price-label-image-storage-v1'").all()
-      .map(row => row.storage_key);
-    const pattern = require('../../../sales-price-label-image-references').STORAGE_KEY;
-    if (imageKeys.some(key => typeof key !== 'string' || !pattern.test(key))) throw new Error('PRICE_LABEL_IMAGE_INTEGRITY');
-    keys.push(...imageKeys);
-  }
   if (keys.some((key) => !key) || new Set(keys).size !== keys.length) {
     throw new Error("Die Datenbank enthält ungültige oder doppelte Verweise auf geschützte Dokumente.");
   }
   return keys;
-}
-
-function verifyPriceLabelImageFilesFromDatabase(database, options) {
-  const connection = assertLegacyDatabase(database, 'protected-image-inspection');
-  if (!tableExistsInDatabase(connection, 'trade_annotations')) return { verified: true, fileCount: 0 };
-  const rows = connection.prepare("SELECT id,scope_id AS scopeId,kind,revision,payload FROM trade_annotations WHERE kind IN ('price-label-image','price-label-image-storage-v1') ORDER BY id").all();
-  if (!rows.length) return { verified: true, fileCount: 0 };
-  if (typeof options === 'function') options = options();
-  const keyPayload = tableExistsInDatabase(connection, 'data_import_runtime_keys')
-    ? connection.prepare("SELECT payload FROM data_import_runtime_keys WHERE id='data-import-v1'").get()?.payload : null;
-  const requiredFiles = require('../../../sales-price-label-image-references').verifyPriceLabelImageRowsSync({ rows, keyPayload, vault: options?.vault });
-  return require('../../../amu-storage').verifyProtectedFileReferences({ ...options, requiredFiles });
-}
-
-function verifyPriceLabelImageFilesFromFile(filePath, options) {
-  const snapshot = openSqliteLegacyDatabase(filePath, { readOnly: true });
-  try { return verifyPriceLabelImageFilesFromDatabase(snapshot, options); }
-  finally { snapshot.close(); }
 }
 
 function protectedLoanStorageSnapshotFromDatabase(database) {
@@ -400,8 +375,6 @@ module.exports = {
   protectedLoanStorageSnapshotFromDatabase,
   protectedSicknessAmuStorageSnapshotFromDatabase,
   protectedStorageReferencesFromDatabase,
-  verifyPriceLabelImageFilesFromDatabase,
-  verifyPriceLabelImageFilesFromFile,
   protectedStorageReferencesFromFile,
   verifySqliteDatabaseFile,
 };

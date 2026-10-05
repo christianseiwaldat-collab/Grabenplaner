@@ -12,6 +12,7 @@ const updateRequestLifecycle = require("./lib/update-request-lifecycle").createU
 const { executeUpdateCommand } = require("./lib/update-command");
 const { completeProcessShutdown } = require("./lib/complete-process-shutdown");
 const startDashboardWorkspaceModel = require("./public/start-dashboard-workspace-preferences");
+const sidebarNotepadModel = require("./public/sidebar-notepad-preferences");
 const { resolveScheduleDuty, defaultScheduleDutyCode, manualPlanningHours, PLANNING_DAY_COUNT,
   DEFAULT_DUTY_COLORS, normalizeScheduleDutyColors, scheduleDutyColor, scheduleDutyTextColor } = require("./public/schedule-duty");
 const {
@@ -202,6 +203,7 @@ const {
   protectedSicknessAmuStorageSnapshotFromDatabase,
   protectedStorageReferencesFromDatabase,
   protectedStorageReferencesFromFile,
+  verifyPriceLabelImageFilesFromFile,
   verifySqliteDatabaseFile,
 } = require("./lib/persistence/sqlite/operations/maintenance");
 const {
@@ -2581,6 +2583,12 @@ function fileSha256(filePath) {
 function verifyProtectedBackupPair(databaseFile, backupDirectory, expectedDatabase = {}) {
   const requiredStorageKeys = protectedStorageReferencesFromFile(databaseFile);
   const verified = verifyBackupReferences({ backupDirectory, requiredStorageKeys });
+  verifyPriceLabelImageFilesFromFile(databaseFile, () => ({
+    vault: integrationSecretVault,
+    sourceDirectory: backupDirectory,
+    encryptionKeys: amuEncryptionConfiguration ? { [amuEncryptionConfiguration.keyId]: amuEncryptionConfiguration.key } : {},
+    activeKeyId: amuEncryptionConfiguration?.keyId,
+  }));
   const manifestDatabase = verified.manifest?.database || {};
   if (expectedDatabase.fileName && manifestDatabase.fileName !== expectedDatabase.fileName) {
     throw new Error("Datenbank und private Dateisicherung gehören nicht zum selben Sicherungspunkt.");
@@ -17371,10 +17379,17 @@ async function purgeExpiredAmuDocuments(today = viennaTodayIso()) {
 
 async function reconcileOrphanAmuBlobs() {
   if (!amuStorage || amuMutationInProgress > 0) return { removed: 0 };
+  // Only inspect the immutable files present before asynchronous reference reads.
+  // A new upload cannot become an orphan in an older reconciliation snapshot.
+  const candidates = amuStorage.listStorageKeys();
   const personnelFinalization = await finalizeDeletedPersonnelRecordDocuments();
   const referenced = new Set(await protectedStorageReferencesForApplication());
+  // Authenticate references here; large image files are verified when read and
+  // in the separate backup/recovery checks, not during routine orphan cleanup.
+  for (const key of await salesPriceLabelImageStore.verifyStoredImages({verifyFiles:false})) referenced.add(key);
+  if (amuMutationInProgress > 0) return {removed:0,personnelFinalization,deferred:true};
   let removed = 0;
-  for (const storageKey of amuStorage.listStorageKeys()) {
+  for (const storageKey of candidates) {
     if (referenced.has(storageKey)) continue;
     if (amuStorage.deleteBlob(storageKey)) {
       (await auditPortal("system", "amu.document.orphan.purge", "amu_document", storageKey));
@@ -35025,6 +35040,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
   let startDashboardPreferences = defaultStartDashboardPreferences();
   let startDashboardWorkspace = startDashboardWorkspaceModel.empty();
+  let sidebarNotepad = sidebarNotepadModel.isPersonalActor(actor) ? sidebarNotepadModel.empty() : null;
   let mobilePortalNavigation = defaultMobilePortalNavigation();
   let mobilePortalAppearance = defaultMobilePortalAppearance();
   let mobilePortalHome = defaultMobilePortalHome();
@@ -35035,6 +35051,14 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   if (actor?.employeeNumber && !isLocalSystemSession(actor)) {
     const rows = await uiPreferencesRepository.list(actor.employeeNumber);
     const lookup = new Map(rows.map((row) => [row.preferenceKey, row.value]));
+    if (sidebarNotepadModel.isPersonalActor(actor) && lookup.has(sidebarNotepadModel.KEY)) {
+      const stored = lookup.get(sidebarNotepadModel.KEY);
+      try {
+        await integrationSecretVault.useSecret(stored, {namespace:"sidebar-notepad",connectorId:actor.employeeNumber,field:"note",purpose:"personal-ui-preference"}, bytes => {
+          sidebarNotepad = sidebarNotepadModel.parseStored(bytes.toString("utf8"));
+        });
+      } catch { sidebarNotepad = null; } // Keep a damaged note unavailable; do not replace it with editable empty text.
+    }
     for (const view of UI_PREFERENCE_VIEWS) {
       const stored = lookup.get(`page_theme_${view}`)
         || (view === "rightsDashboard" ? lookup.get("rights_dashboard_theme") : "");
@@ -35130,6 +35154,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   if (overrides.startDashboardWorkspace && !actor?.mustChangePassword) {
     startDashboardWorkspace = startDashboardWorkspaceModel.normalize(overrides.startDashboardWorkspace);
   }
+  if (overrides.sidebarNotepad && sidebarNotepadModel.isPersonalActor(actor)) sidebarNotepad = sidebarNotepadModel.validate(overrides.sidebarNotepad);
   if (overrides.mobilePortalNavigation) {
     mobilePortalNavigation = normalizeMobilePortalNavigation(overrides.mobilePortalNavigation);
     mobilePortalNavigationCustomized = true;
@@ -35159,6 +35184,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     personnelDashboardLayout,
     startDashboardPreferences,
     startDashboardWorkspace,
+    sidebarNotepad,
     mobilePortalNavigation,
     mobilePortalAppearance,
     mobilePortalHome,
@@ -35244,6 +35270,12 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     try { startDashboardWorkspace = startDashboardWorkspaceModel.validate(input.startDashboardWorkspace); }
     catch (error) { throw httpError(400, error.message, "UI_PREFERENCES_INVALID"); }
   }
+  let sidebarNotepad;
+  if (input.sidebarNotepad !== undefined) {
+    if (!sidebarNotepadModel.isPersonalActor(actor)) throw httpError(403,"Der Notizblock benötigt ein persönliches Mitarbeiterkonto.","PORTAL_EMPLOYEE_ACCOUNT_REQUIRED");
+    try { sidebarNotepad = sidebarNotepadModel.validate(input.sidebarNotepad); }
+    catch(error) { throw httpError(400,error.message,"UI_PREFERENCES_INVALID"); }
+  }
   const mobilePortalNavigation = input.mobilePortalNavigation === undefined
     ? undefined
     : validateMobilePortalNavigation(input.mobilePortalNavigation);
@@ -35265,7 +35297,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     && allowPastWeekEditing === undefined
     && vacationCalendarView === undefined
     && personnelDashboardLayout === undefined && startDashboardPreferences === undefined
-    && startDashboardWorkspace === undefined
+    && startDashboardWorkspace === undefined && sidebarNotepad === undefined
     && mobilePortalNavigation === undefined
     && mobilePortalAppearance === undefined && mobilePortalHome === undefined
     && candidateEvaluationPdfPreferences === undefined) {
@@ -35329,6 +35361,10 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     }
     if (startDashboardWorkspace !== undefined) {
       upserts.push({preferenceKey: startDashboardWorkspaceModel.KEY, value: JSON.stringify(startDashboardWorkspace)});
+    }
+    if (sidebarNotepad !== undefined) {
+      upserts.push({preferenceKey:sidebarNotepadModel.KEY,value:integrationSecretVault.seal(JSON.stringify(sidebarNotepad),
+        {namespace:"sidebar-notepad",connectorId:actor.employeeNumber,field:"note",purpose:"personal-ui-preference"})});
     }
     if (mobilePortalNavigation !== undefined) {
       upserts.push({
@@ -35397,6 +35433,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     personnelDashboardLayout,
     startDashboardPreferences,
     startDashboardWorkspace,
+    sidebarNotepad,
     mobilePortalNavigation,
     mobilePortalAppearance,
     mobilePortalHome,
@@ -38700,7 +38737,12 @@ require('./lib/sales-article-tools-routes').registerSalesArticleToolsRoutes(app,
 const salesPriceLabelsBranding = require('./lib/sales-price-labels-branding').createSalesPriceLabelsBranding({
   listKits: listBrandingKits, kitsDirectory: brandingKitsDirectory, publicDirectory: path.join(__dirname, 'public'),
 });
-const salesPriceLabelTemplateStore = require('./lib/sales-price-label-template-store').createSalesPriceLabelTemplateStore({ access:persistenceProvider, vault:integrationSecretVault });
+const salesPriceLabelTemplateStore = require('./lib/sales-price-label-template-store').createSalesPriceLabelTemplateStore({ access:persistenceProvider, vault:integrationSecretVault,
+  validateImages:(context,options,controls)=>salesPriceLabelImageStore.validateOptions(context,options,controls) });
+const salesPriceLabelImageStore = require('./lib/sales-price-label-image-store').createSalesPriceLabelImageStore({
+  access:persistenceProvider,vault:integrationSecretVault,storage:requireAmuStorage,
+  canReadAsset:(context,id)=>salesPriceLabelTemplateStore.canReadImage(context,id),
+});
 const priceLabelSession = require('./lib/sales-price-labels-access').priceLabelSession;
 function salesPriceLabelsSession(request) {
   return priceLabelSession(requirePortalAnyPermissionOrLocal(request, [SALES_ARTICLE_CATALOG_PERMISSIONS.PRICES_READ, 'branch_articles:read']));
@@ -38715,6 +38757,8 @@ require('./lib/sales-price-labels-routes').registerSalesPriceLabelsRoutes(app, {
   refreshSession:refreshSalesPriceLabelsSession,
   assertFresh:async(request,original)=>{ await refreshSalesPriceLabelsSession(request,original); },
   branding:salesPriceLabelsBranding, templateStore:salesPriceLabelTemplateStore,
+  imageStore:salesPriceLabelImageStore,draftVault:integrationSecretVault,
+  withImageWrite:async work=>{amuMutationInProgress++;try{return await work();}finally{amuMutationInProgress=Math.max(0,amuMutationInProgress-1);}},
   listBranchAccounts:async()=>{
     const [accounts,locations]=await Promise.all([organizationPersonnelRepository.listOrganizationAccounts(),organizationPersonnelRepository.listLocations(false)]);
     return accounts.map(account=>{

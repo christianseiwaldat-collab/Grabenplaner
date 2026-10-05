@@ -402,44 +402,6 @@ function decryptDocument(encrypted, keys, { aad = null } = {}) {
   }
 }
 
-// Recovery must inspect a frozen tree without creating directories/key checks or
-// purging temporary files. Only the authenticated, explicitly required files are
-// opened; plaintext is discarded after verifying its reference metadata.
-function verifyProtectedFileReferences({ sourceDirectory, encryptionKeys, activeKeyId, requiredFiles, checkBudget = () => {} } = {}) {
-  if (!Array.isArray(requiredFiles) || typeof checkBudget !== 'function') throw storageError('Die geschützten Dateiverweise sind ungültig.', 'AMU_DOCUMENT_INTEGRITY_FAILED');
-  if (!requiredFiles.length) return { verified: true, fileCount: 0 };
-  const keys = normalizeEncryptionKeys(encryptionKeys);
-  if (!keys.has(String(activeKeyId || ''))) throw storageError('Der aktive AMU-Schlüssel fehlt.', 'AMU_ACTIVE_KEY_UNAVAILABLE');
-  const root = path.resolve(String(sourceDirectory || ''));
-  const seen = new Set();
-  for (const metadata of requiredFiles) {
-    checkBudget();
-    const key = validateStorageKey(metadata?.storageKey);
-    if (key !== metadata.storageKey || seen.has(key) || !Number.isSafeInteger(metadata.byteSize) || metadata.byteSize < 1
-      || metadata.byteSize > MAX_DOCUMENT_BYTES || !/^[a-f0-9]{64}$/.test(metadata.sha256) || metadata.detectedMime !== 'image/png') {
-      throw storageError('Die geschützten Dateiverweise sind ungültig.', 'AMU_DOCUMENT_INTEGRITY_FAILED');
-    }
-    seen.add(key);
-    const parts = [root, path.join(root, 'blobs'), path.join(root, 'blobs', key.slice(0, 2))];
-    for (const directory of parts) {
-      const info = fs.lstatSync(directory);
-      if (!info.isDirectory() || info.isSymbolicLink() || fs.realpathSync(directory) !== directory) throw storageError('Der geschützte Speicherpfad ist ungültig.', 'AMU_STORAGE_KEY_INVALID');
-    }
-    const file = path.join(root, 'blobs', ...key.split('/'));
-    const info = fs.lstatSync(file);
-    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > MAX_DOCUMENT_BYTES + 512 || fs.realpathSync(file) !== file) throw storageError('Die geschützte Datei ist ungültig.', 'AMU_DOCUMENT_INTEGRITY_FAILED');
-    const encrypted = fs.readFileSync(file);
-    if (encryptedFileVersion(encrypted) !== 2) throw storageError('Die geschützte Datei besitzt keine Kontextbindung.', 'AMU_DOCUMENT_INTEGRITY_FAILED');
-    const { buffer } = decryptDocument(encrypted, keys, { aad: protectedBlobAad(key) });
-    try {
-      if (buffer.length !== metadata.byteSize || sha256(buffer) !== metadata.sha256
-        || detectDocumentType(buffer, 'Preisschild-Bild.png').mimeType !== metadata.detectedMime) throw storageError('Die geschützte Bilddatei stimmt nicht mit der Datenbank überein.', 'AMU_DOCUMENT_INTEGRITY_FAILED');
-    } finally { buffer.fill(0); }
-    checkBudget();
-  }
-  return { verified: true, fileCount: seen.size };
-}
-
 function createAmuStorage({
   rootDirectory,
   encryptionKeys,
@@ -964,5 +926,4 @@ module.exports = {
   validateEncryptionKeyForStorage,
   readAndVerifyBackup,
   verifyBackupReferences,
-  verifyProtectedFileReferences,
 };

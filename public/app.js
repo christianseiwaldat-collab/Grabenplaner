@@ -2,6 +2,7 @@ let personnelLearningAssessmentEditor=null, personnelLearningAssessmentPanel=nul
 const sidebarNavigationGroups = window.GrabenplanerSidebarLayout.createGroups();
 let salesPriceLabelsWorkspace = null;
 let sidebarLayout = null;
+let sidebarNotepad = null;
 (() => {
   const storageKey = "grabenplaner-bootstrap-token";
   const parameters = new URLSearchParams(window.location.search);
@@ -3238,6 +3239,10 @@ async function loginToAdministration(event) {
 }
 
 async function logoutPortal() {
+  if (sidebarNotepad && !await sidebarNotepad.prepareLogout()) {
+    showToast("Deine Notizen konnten noch nicht gespeichert werden. Bitte im Notizblock erneut versuchen und danach abmelden.",true);
+    return;
+  }
   clearEmployeeOnboardingStartState();
   clearPersonnelLifecycleInterfacesState();
   clearPersonnelLifecycleAutomationState();
@@ -20585,6 +20590,7 @@ function startDashboardWorkspaceFieldAllowed(id) {
 }
 
 function syncStartDashboardWorkspace() {
+  syncSidebarNotepad();
   const actorKey = startDashboardWorkspaceActorKey();
   if (actorKey !== startDashboardPreferenceActorKey) {
     startDashboardPreferenceActorKey = actorKey;
@@ -20601,6 +20607,18 @@ function syncStartDashboardWorkspace() {
       error: error => showToast(`Dashboard-Einstellungen konnten nicht gespeichert oder geladen werden: ${error.message}`, true),
     });
   } else startDashboardWorkspace.sync();
+}
+
+function syncSidebarNotepad() {
+  if (!window.SidebarNotepad || !elements.mainSidebar) return;
+  if (!sidebarNotepad) sidebarNotepad = window.SidebarNotepad.mount(document.getElementById("sidebarNotepad"), {
+    sidebar:elements.mainSidebar,menu:elements.mainSidebar.querySelector(".main-nav"),api,
+    key:startDashboardWorkspaceActorKey,
+    identity:()=>JSON.stringify([state.portalSession?.user?.employeeNumber,state.portalSession?.user?.accountId]),
+    canUse:()=>state.portalSession?.authenticated === true && window.SidebarNotepadPreferences.isPersonalActor(state.portalSession.user),
+    error:error=>showToast(`Notizblock: ${error.message}`,true),
+  });
+  else void sidebarNotepad.sync();
 }
 
 function defaultStartDashboardPreferences() {

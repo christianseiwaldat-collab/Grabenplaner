@@ -12,7 +12,7 @@ const { pruneCommittedBackups, verifyCommittedBackup, writeBackupCommitMarker } 
 const { prepareLocalBackupArchive, archivePublishedBackup } = require("./lib/backup-archive-workflow");
 const { protectedStorageReferencesFromFile, verifySqliteDatabaseFile } = require("./lib/persistence/sqlite/operations/maintenance");
 const { localBackupArchiveEnabled } = require("./lib/local-backup-environment");
-const { verifyBackupRecoveryKeys } = require("./lib/backup-recovery-keys");
+const { verifyBackupRecoveryKeys, verifyBackupPriceLabelImages } = require("./lib/backup-recovery-keys");
 const { acquireBackupWorkspace } = require("./lib/backup-workspace");
 const { parseBackupKeep } = require('./lib/server-runtime');
 const packageMetadata = require("./package.json");
@@ -40,6 +40,8 @@ function verifyStandaloneBackupPair(paths, _marker = null, { environment = proce
   if (!verifySqliteDatabaseFile(paths.databasePath).ok) throw new Error("BACKUP_DATABASE_INTEGRITY_FAILED");
   const requiredStorageKeys = protectedStorageReferencesFromFile(paths.databasePath);
   verifyBackupReferences({ backupDirectory: paths.protectedDirectory, requiredStorageKeys });
+  verifyBackupPriceLabelImages({ databasePath: paths.databasePath, protectedDirectory: paths.protectedDirectory, environment,
+    privateKeyDirectory: path.dirname(protectedDocumentsDirectory) });
   if (localBackupArchiveEnabled(environment)) verifyBackupRecoveryKeys({
     databasePath: paths.databasePath, protectedDirectory: paths.protectedDirectory, environment,
   });
@@ -69,6 +71,7 @@ function createPairedBackup(database, backupDirectory, timestamp, label, expecte
       targetDirectory: temporaryProtected,
       manifestMetadata: { database: { fileName: path.basename(target), sha256: databaseHash } },
     });
+    verifyStandaloneBackupPair({ databasePath: temporaryDatabase, protectedDirectory: temporaryProtected });
     fs.renameSync(temporaryProtected, protectedTarget);
     fs.renameSync(temporaryDatabase, target);
     writeBackupCommitMarker({

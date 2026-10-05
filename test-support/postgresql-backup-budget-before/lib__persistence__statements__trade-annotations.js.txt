@@ -4,7 +4,6 @@ const identity={id:'text',scopeId:'text',kind:'text'},columns={...identity,revis
 const A=Object.freeze({
  epoch:d({id:'trade-annotations.epoch',operation:'queryOne',parameters:{scopeId:'text'},columns:{revision:'safe_integer'}}),
  get:d({id:'trade-annotations.get',operation:'queryOne',parameters:identity,columns}),
- protectedImages:d({id:'trade-annotations.protected-images',operation:'queryAll',parameters:{},columns}),
  insert:d({id:'trade-annotations.insert',operation:'execute',parameters:columns}),
  update:d({id:'trade-annotations.update',operation:'execute',parameters:{...columns,expectedRevision:'safe_integer'}}),
 });

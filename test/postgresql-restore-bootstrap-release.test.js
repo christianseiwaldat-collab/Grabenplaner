@@ -5,7 +5,7 @@ const file=path.resolve(__dirname,'../lib/persistence/postgresql/operations/pair
 const source=fs.readFileSync(file,'utf8'),localRequire=createRequire(file);
 // Exercise the complete unchanged restore orchestration with synthetic native,
 // filesystem and PostgreSQL adapters; never launch a cluster or access user data.
-function fixture({adminEndFails=false,stopFails=false}={}){
+function fixture({adminEndFails=false,stopFails=false,imageVerificationError=null}={}){
  const events=[],clients=[],accounts=Object.fromEntries(['gp_migration_admin','gp_operations_monitor',...['core','sales'].flatMap(d=>['app','reader','migrator'].map(p=>'gp_'+d+'_'+p))].map(name=>[name,'x'.repeat(24)]));
  const config={format:'grabenplaner-postgresql-operations-v1',recoveryAccounts:accounts,domains:['core','sales'].map(domain=>({domain,database:'grabenplaner_'+domain,environmentId:'synthetic',profile:'synthetic'}))};
  const verified={manifestSha256:'synthetic',manifest:{
@@ -14,10 +14,11 @@ function fixture({adminEndFails=false,stopFails=false}={}){
  }};
  const closeError=new Error('synthetic bootstrap close failure'),stopError=new Error('synthetic cluster stop failure');
  class Client{
-  constructor(options){this.options=options;this.bootstrap=options.database==='postgres';this.closed=false;clients.push(this);}
+  constructor(options){this.options=options;this.bootstrap=options.database==='postgres';this.closed=false;this.queries=[];clients.push(this);}
   async connect(){events.push(this.bootstrap?'admin-connected':'client-connected');}
   async query(sql){
    assert.equal(this.closed,false,'a closed client cannot be used');
+   this.queries.push(sql);
    if(sql.startsWith('SELECT format'))return {rows:[{sql:'synthetic role password update'}]};
    if(sql.includes('FROM gp.environment_contract')){const d=config.domains.find(d=>d.database===this.options.database);return {rows:[{domain:d.domain,environment_id:d.environmentId,profile:d.profile}]};}
    if(sql.includes('FROM gp.data_import_runtime_keys'))return {rows:[{payload:'synthetic-key'}]};
@@ -42,6 +43,14 @@ function fixture({adminEndFails=false,stopFails=false}={}){
   'node:child_process':{spawn(binary,args){const stop=binary.endsWith('/pg_ctl')&&args.at(-1)==='stop';if(stop)events.push('cluster-stop');return {once(){},stop};}},
   './paired-bundle':{safeRoot(){},async verifyPairBundle(){events.push('verify-bundle');return verified;}},
   './paired-checkpoint':{async verifyCheckpoint(_client,domain){events.push('verify-'+domain);return {verified:true};}},
+  './runtime':{async verifyPriceLabelImageFiles(client,options){
+   events.push('verify-image-references');
+   assert.equal(client.options.database,'grabenplaner_core');assert.equal(client.options.user,'gp_core_reader');
+   assert.ok(client.queries.includes('BEGIN READ ONLY'));assert.ok(!client.queries.includes('COMMIT'));
+   assert.equal(options.sourceDirectory,'/synthetic/bundle/private/amu');assert.equal(options.keyPayload,'synthetic-key');
+   if(imageVerificationError)throw imageVerificationError;
+   return 2;
+  }},
   './restore-privileges':{async materializeDefaultPrivileges(){}},'../sales/layout':{SCHEMAS:['synthetic']},
   '../../../../server-tools/linux/recovery/lib/recovery-verify':{protectedRecordChecks:function*(){return 0;}},
   '../../../../server-tools/linux/recovery/lib/postgresql-recovery-activity':{
@@ -59,6 +68,7 @@ function fixture({adminEndFails=false,stopFails=false}={}){
 test('bootstrap connection is closed before the real onRestored callback and never reacquired',async()=>{
  const f=fixture();
  const result=await f.run(async()=>{f.events.push('callback');assert.ok(f.clients.every(c=>c.closed));return {passed:true};});
+ assert.equal(result.protectedPriceLabelImages,2);assert.ok(f.events.indexOf('verify-image-references')<f.events.indexOf('callback'));
  assert.equal(result.application.passed,true);assert.equal(f.events.filter(e=>e==='admin-end').length,1);
  assert.ok(f.events.indexOf('admin-end')<f.events.indexOf('callback'));
  assert.deepEqual(f.events.slice(-3),['verify-bundle','cluster-stop','socket-removed']);
@@ -67,6 +77,13 @@ test('callback failure preserves its error and still stops the cluster and remov
  const f=fixture(),failure=new Error('synthetic callback failure');
  await assert.rejects(f.run(async()=>{assert.ok(f.clients.find(c=>c.bootstrap).closed);throw failure;}),e=>e===failure);
  assert.equal(f.events.filter(e=>e==='admin-end').length,1);assert.deepEqual(f.events.slice(-2),['cluster-stop','socket-removed']);
+});
+test('invalid protected image references prevent restore success and application startup while still closing the disposable cluster',async()=>{
+ const failure=Object.assign(new Error('synthetic corrupt image'),{code:'PRICE_LABEL_IMAGE_INTEGRITY'}),f=fixture({imageVerificationError:failure});
+ let called=false;await assert.rejects(f.run(async()=>{called=true;}),error=>error===failure);
+ assert.equal(called,false);assert.ok(f.clients.every(client=>client.closed));
+ assert.equal(f.events.filter(event=>event==='verify-bundle').length,1,'no final success verification after the failed image check');
+ assert.deepEqual(f.events.slice(-2),['cluster-stop','socket-removed']);
 });
 test('bootstrap close failure prevents the callback but cannot bypass cluster shutdown',async()=>{
  const f=fixture({adminEndFails:true});let called=false;

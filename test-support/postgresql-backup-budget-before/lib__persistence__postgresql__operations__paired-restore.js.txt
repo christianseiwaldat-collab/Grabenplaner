@@ -119,7 +119,7 @@ async function restorePair({bundle,commitMarker,workRoot,onRestored,onProgress=(
   const id=environment.GRABENPLANER_AMU_KEY_ID,amu=require('../../../amu-storage');
   const documents=amu.validateEncryptionKeyForStorage({sourceDirectory:bundle+'/private/amu',encryptionKeys:{[id]:environment.GRABENPLANER_AMU_KEY},activeKeyId:id});
   const storage=amu.createAmuStorage({rootDirectory:workRoot+'/key-check',encryptionKeys:{[id]:environment.GRABENPLANER_AMU_KEY},activeKeyId:id});
-  const core=connect(config.domains[0].database,'gp_core_reader');let records,integrationCredentials=0,managedImportKey=false,protectedPriceLabelImages=0;
+  const core=connect(config.domains[0].database,'gp_core_reader');let records,integrationCredentials=0,managedImportKey=false;
   try{
    await core.connect();await core.query('BEGIN READ ONLY');await core.query('SET LOCAL search_path=pg_catalog,gp');records=await protectedRecords(core,storage);
    const vaultId=environment.GRABENPLANER_INTEGRATION_KEY_ID,keys=environment.GRABENPLANER_INTEGRATION_KEYS?JSON.parse(environment.GRABENPLANER_INTEGRATION_KEYS):{};keys[vaultId]=environment.GRABENPLANER_INTEGRATION_KEY;
@@ -130,13 +130,12 @@ async function restorePair({bundle,commitMarker,workRoot,onRestored,onProgress=(
    const archiveKey=(await core.query("SELECT payload FROM gp.data_import_runtime_keys WHERE id='data-import-v1'")).rows;
    if(archiveKey.length!==1)throw new Error('PG_PAIR_ARCHIVE_KEY');
    await vault.useSecret(archiveKey[0].payload,{namespace:'data-import',connectorId:'data-import-v1',field:'data-and-index-keys',purpose:'source-archive-and-recovery'},async bytes=>{if(bytes.length!==64)throw new Error('PG_PAIR_ARCHIVE_KEY');managedImportKey=true;});
-   protectedPriceLabelImages=await require('./runtime').verifyPriceLabelImageFiles(core,{sourceDirectory:bundle+'/private/amu',environment,keyPayload:archiveKey[0].payload});
    await core.query('COMMIT');
   }finally{await core.end();}
   // Bootstrap is complete. Release its reserved-slot pressure before the full
   // application and its bounded reader pools share this small test cluster.
   await admin.end();admin=undefined;
-  const result={providerId:'postgresql-pair',verified:true,checkedAt:new Date().toISOString(),manifestSha256:verified.manifestSha256,databases,protectedDocuments:documents.fileCount,protectedRecords:records,protectedPriceLabelImages,integrationCredentials,managedImportKey,recoveryAccounts:8,timings,milliseconds:Math.round(performance.now()-started)};
+  const result={providerId:'postgresql-pair',verified:true,checkedAt:new Date().toISOString(),manifestSha256:verified.manifestSha256,databases,protectedDocuments:documents.fileCount,protectedRecords:records,integrationCredentials,managedImportKey,recoveryAccounts:8,timings,milliseconds:Math.round(performance.now()-started)};
   result.performance={profile:performanceProfile,...tuning};
   result.capacity=capacityPlan;
   if(onRestored){onProgress('application-smoke');result.application=await onRestored({config,connect,socket,workRoot,bundle});}

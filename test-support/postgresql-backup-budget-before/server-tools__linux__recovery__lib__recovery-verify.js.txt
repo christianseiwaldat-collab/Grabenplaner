@@ -401,21 +401,6 @@ async function verifyIntegrationCredentials(database, integrationModule, configu
   return rows.length;
 }
 
-async function verifyPriceLabelImageFiles(database, {sourceDirectory, amuModule, integrationModule, configuration}) {
-  const rows = rowsIf(database, "trade_annotations", ["id", "scope_id", "kind", "revision", "payload"],
-    "SELECT id, scope_id AS scopeId, kind, revision, payload FROM trade_annotations WHERE kind IN ('price-label-image','price-label-image-storage-v1') ORDER BY id");
-  if (!rows.length) return 0;
-  const keys = rowsIf(database, "data_import_runtime_keys", ["id", "payload"],
-    "SELECT payload FROM data_import_runtime_keys WHERE id='data-import-v1'");
-  const vault = require(integrationModule).createIntegrationSecretVault({activeKeyId:configuration.integrationKeyId,keys:configuration.integrationKeys});
-  const requiredFiles = await require("../../../../lib/sales-price-label-image-references").verifyPriceLabelImageRows({
-    rows, keyPayload:keys.length === 1 ? keys[0].payload : null, vault,
-  });
-  require(amuModule).verifyProtectedFileReferences({sourceDirectory,
-    encryptionKeys:{[configuration.amuKeyId]:configuration.amuKey},activeKeyId:configuration.amuKeyId,requiredFiles});
-  return requiredFiles.length;
-}
-
 function assertCompatibility(database, sourcePackage, targetPackage, sourceRuntime, targetRuntime) {
   const sourceVersion = String(sourcePackage.version || "");
   const targetVersion = String(targetPackage.version || "");
@@ -497,8 +482,6 @@ async function verifyRecovery(options, internalPolicy) {
     const compatibility = assertCompatibility(database, sourcePackage, targetPackage, sourceRuntime, targetRuntime);
     const protectedRecords = verifyProtectedRecords(database, storage);
     const integrationCredentials = await verifyIntegrationCredentials(database, path.resolve(options.integrationModule), environment);
-    const protectedPriceLabelImages = await verifyPriceLabelImageFiles(database, {sourceDirectory:stageOutput.documents,
-      amuModule:path.resolve(options.amuModule),integrationModule:path.resolve(options.integrationModule),configuration:environment});
     const manifestPath = path.join(stage, "offsite-stage-manifest.json");
     const result = {
       ok: true,
@@ -509,7 +492,6 @@ async function verifyRecovery(options, internalPolicy) {
       deploymentSchemaVersion: compatibility.deploymentSchemaVersion,
       protectedDocuments: Number(backupResult.protectedFiles || 0),
       protectedRecords,
-      protectedPriceLabelImages,
       integrationCredentials,
       frozenFiles: frozenFiles.length,
       verifiedAt: new Date().toISOString(),
@@ -569,7 +551,6 @@ module.exports = {
   compareSemver,
   readEnvironment,
   verifyProtectedRecords,
-  verifyPriceLabelImageFiles,
   protectedRecordChecks,
   encryptionConfiguration,
   verifyRecovery,

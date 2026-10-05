@@ -45,6 +45,7 @@ function main() {
       manifestMetadata: { database: { fileName: finalDatabaseName, sha256: databaseSha256 } },
     });
     verifyBackupReferences({ backupDirectory: amuTarget, requiredStorageKeys: requiredKeys });
+    require('../../../lib/backup-recovery-keys').verifyBackupPriceLabelImages({ databasePath: targetDatabase, protectedDirectory: amuTarget });
     fs.chmodSync(targetDatabase, 0o640);
     process.stdout.write(`${JSON.stringify({
       ok: true,
