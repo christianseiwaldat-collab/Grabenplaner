@@ -421,7 +421,7 @@ async function api(url, options = {}) {
     if (response.status === 401) showLogin("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
-  return response.status === 204 ? null : responseType === "blob" ? response.blob() : response.json();
+  return responseType === "response" ? response : response.status === 204 ? null : responseType === "blob" ? response.blob() : response.json();
 }
 
 const branchSalesWorkspaces = new Map();
@@ -458,7 +458,7 @@ function syncBranchSalesWorkspaces(tab = null) {
   if (active) {
     if (!branchPriceLabelsWorkspace) branchPriceLabelsWorkspace = window.GrabenplanerSalesPriceLabels.mount(document.getElementById('branchPriceLabelsWorkspace'), {
       api, accessKey: branchPriceLabelsOwner,
-      rawApi: async (url, options) => { const blob = await api(url, { ...options, responseType: 'blob' }); return { blob: async () => blob }; },
+      rawApi: (url, options) => api(url, { ...options, responseType: 'response' }),
     });
     if (!branchPriceLabelsWorkspaceActive) { branchPriceLabelsWorkspaceActive = true; void branchPriceLabelsWorkspace.load(); }
   } else if (branchPriceLabelsWorkspaceActive) { branchPriceLabelsWorkspaceActive = false; branchPriceLabelsWorkspace?.suspend(); }

@@ -40,6 +40,30 @@ test('bridge rejects other versions, changed dependencies, missing modules and m
  fs.unlinkSync(target);assert.throws(()=>verifyBackupBudgetCompatibility(f.installed,f.candidate));
  assert.throws(()=>verifyBackupBudgetCompatibility(f.installed,f.installed),/ROOT/);
 });
+test('both pinned backup trees contain the complete recursive local module dependency closure',t=>{
+ const f=fixture(t);
+ for(const tree of [f.installed,f.candidate])for(const relative of Object.keys(contract.files)){
+  const file=path.join(tree,relative);if(!relative.endsWith('.js')||!fs.existsSync(file))continue;
+  for(const match of fs.readFileSync(file,'utf8').matchAll(/\brequire\s*\(\s*(['"])(\.[^'"]+)\1\s*\)/g)){
+   const base=path.resolve(path.dirname(file),match[2]);
+   assert.ok(base.startsWith(tree+path.sep),'local module stays in its own reviewed tree: '+relative);
+   const dependency=[base,base+'.js',base+'.json',path.join(base,'index.js')].find(value=>fs.existsSync(value)&&fs.statSync(value).isFile());
+   assert.ok(dependency,'missing pinned dependency: '+relative+' -> '+match[2]);
+   const name=path.relative(tree,dependency).split(path.sep).join('/');
+   assert.ok(Object.hasOwn(contract.files,name),'unreviewed dependency: '+name);
+  }
+ }
+});
+test('image integrity dependencies are pinned and a new helper cannot appear in the historical installation',t=>{
+ const f=fixture(t),helper='lib/sales-price-label-image-references.js';
+ assert.equal(contract.files[helper].before,null);
+ for(const relative of [helper,'lib/amu-storage.js','lib/integration-secret-vault.js','lib/data-import-protection.js','server-tools/linux/recovery/lib/recovery-verify.js']){
+  const target=path.join(f.candidate,relative),original=fs.readFileSync(target);fs.appendFileSync(target,'\n// unreviewed');
+  assert.throws(()=>verifyBackupBudgetCompatibility(f.installed,f.candidate),/PG_BACKUP_BUDGET_BRIDGE_UNREVIEWED/);fs.writeFileSync(target,original);
+ }
+ fs.copyFileSync(path.join(f.candidate,helper),path.join(f.installed,helper));
+ assert.throws(()=>verifyBackupBudgetCompatibility(f.installed,f.candidate),/PG_BACKUP_BUDGET_BRIDGE_UNREVIEWED/);
+});
 test('new budget bundle remains completely verifiable by the pinned installed verifier',async t=>{
  const f=fixture(t);verifyBackupBudgetCompatibility(f.installed,f.candidate);
  const bundle=path.join(f.root,'snapshot.pair');fs.mkdirSync(bundle,{mode:0o700});fs.chmodSync(bundle,0o700);

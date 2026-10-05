@@ -17,6 +17,7 @@ async function fixture(t) {
   const photo = await sharp({ create: { width: 220, height: 160, channels: 3, background: '#26725f' } }).webp().toBuffer();
   app.use(express.json({ limit: '1mb' }));
   registerSalesPriceLabelsRoutes(app, {
+    draftVault: require('../lib/integration-secret-vault').createIntegrationSecretVault({ activeKeyId: 'synthetic', keys: { synthetic: Buffer.alloc(32, 17) } }),
     catalog: { async getByArticleNumber(number) {
       state.counts.catalog++; state.loaded.push(number);
       if (!/^\d{6}$/.test(number) || number === '999999') return null;

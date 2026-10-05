@@ -60,21 +60,69 @@ test('Revoked account and out-of-order library responses cannot repaint the arti
 });
 
 function editorFixture(api,{rawApi=async()=>{}}={}){
- const elements=new Map(),node=(tagName='')=>({tagName,value:'',checked:false,disabled:false,hidden:false,textContent:'',children:[],handlers:new Map(),
-  classList:{add(){},toggle(){}},style:{setProperty(){}},addEventListener(type,fn){this.handlers.set(type,fn);},removeEventListener(type){this.handlers.delete(type);},
-  replaceChildren(...children){this.children=children;},append(...children){this.children.push(...children);},focus(){},select(){},
-  querySelector(selector){if(!this.matches)this.matches=new Map();if(!this.matches.has(selector))this.matches.set(selector,node());return this.matches.get(selector);},querySelectorAll(selector){
-   if(!['input','input:checked'].includes(selector))return[];
-   const inputs=[],visit=parent=>{for(const child of parent.children||[]){if(child.tagName==='input'&&(selector!=='input:checked'||child.checked))inputs.push(child);visit(child);}};visit(this);return inputs;
-  }});
- const q=key=>{if(!elements.has(key))elements.set(key,node());return elements.get(key);};
- const settings=q('settings');settings.elements=Object.fromEntries([...Object.keys(Editor.defaults),'articleNumbers','priceType'].map(key=>[key,node()]));settings.elements.priceType.value='sales';
- q('export').elements=Object.fromEntries(['name','stamp','position','separator','suffix'].map(key=>[key,node()]));q('export').elements.name.value='Preisschilder';
+ // Parse the mounted markup and keep real parent/form relationships: the editor
+ // moves branding controls out of the form and builds its preview with DOM calls.
+ // Unknown selectors return null so missing UI cannot silently pass a test.
+ const {Parser}=require('htmlparser2'),escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const dataKey=name=>name.slice(5).replace(/-([a-z])/g,(_match,c)=>c.toUpperCase());
+ const doc={activeElement:null,defaultView:{crypto:globalThis.crypto}},voidTags=new Set(['input','img','br','hr','meta','link']);
+ let root;
+ const node=(tagName='',text='')=>{
+  const attrs={},element={tagName,ownerDocument:doc,parentNode:null,childNodes:[],dataset:{},handlers:new Map(),checked:false,disabled:false,hidden:false,
+   style:{setProperty(key,value){this[key]=value;}},_text:text,
+   get children(){return this.childNodes.filter(child=>child.tagName);},get firstChild(){return this.childNodes[0]||null;},
+   get isConnected(){return this===root||Boolean(this.parentNode?.isConnected);},
+   get textContent(){return tagName?this.childNodes.map(child=>child.textContent).join(''):this._text;},
+   set textContent(value){if(tagName)this.replaceChildren(node('',String(value)));else this._text=String(value);},
+   get innerHTML(){return this.childNodes.map(serialize).join('');},set innerHTML(html){
+    this.replaceChildren();const stack=[this];new Parser({
+     onopentag(name,values){const child=node(name);Object.entries(values).forEach(([key,value])=>child.setAttribute(key,value));stack.at(-1).append(child);stack.push(child);},
+     ontext(value){stack.at(-1).append(node('',value));},onclosetag(){stack.pop();}
+    }).end(String(html));
+   },
+   get value(){if(this._value!==undefined)return this._value;return tagName==='select'?this.querySelector('option')?.value||'':tagName==='option'?this.textContent:'';},
+   set value(value){this._value=String(value);},
+   get elements(){return this._elements ||= Object.fromEntries(root.querySelectorAll('input,select,textarea').filter(input=>input.name&&(input.closest('form')===this||this.id&&input.getAttribute('form')===this.id)).map(input=>[input.name,input]));},
+   setAttribute(name,value){attrs[name]=String(value);if(name.startsWith('data-'))this.dataset[dataKey(name)]=String(value);if(name==='value')this.value=value;if(['checked','disabled','hidden','open'].includes(name))this[name]=true;},
+   getAttribute(name){return name.startsWith('data-')?(this.dataset[dataKey(name)]??null):(attrs[name]??null);},
+   hasAttribute(name){return this.getAttribute(name)!==null;},
+   addEventListener(type,fn){this.handlers.set(type,fn);},removeEventListener(type,fn){if(this.handlers.get(type)===fn)this.handlers.delete(type);},
+   replaceChildren(...children){this.childNodes.forEach(child=>child.parentNode=null);this.childNodes=[];this.append(...children);},
+   append(...children){for(let child of children){if(typeof child==='string')child=node('',child);child.remove();child.parentNode=this;this.childNodes.push(child);}},
+   prepend(...children){const prior=[...this.childNodes];this.replaceChildren(...children,...prior);},
+   remove(){if(this.parentNode){this.parentNode.childNodes=this.parentNode.childNodes.filter(child=>child!==this);this.parentNode=null;}},
+   contains(child){return Boolean(child&&(child===this||this.childNodes.some(node=>node.contains(child))));},
+   matches(selector){return selector.split(',').some(part=>{
+    let remaining=part.trim();if(remaining.endsWith(':checked')){if(!this.checked)return false;remaining=remaining.slice(0,-8);}
+    const tag=/^[a-z][\w-]*/i.exec(remaining);if(tag){if(tag[0].toLowerCase()!==tagName)return false;remaining=remaining.slice(tag[0].length);}
+    remaining=remaining.replace(/\.([\w-]+)|\[([^=\]]+)(?:="([^"]*)")?\]/g,(match,cls,attr,value)=>{
+     if(cls?!this.className.split(/\s+/).includes(cls):!this.hasAttribute(attr)||value!==undefined&&this.getAttribute(attr)!==value)return '!';return '';
+    });return Boolean(tagName)&&remaining==='';
+   });},
+   closest(selector){return this.matches(selector)?this:this.parentNode?.closest(selector)||null;},
+   querySelectorAll(selector){const found=[];const visit=parent=>{for(const child of parent.childNodes){if(child.matches(selector))found.push(child);visit(child);}};visit(this);return found;},
+   querySelector(selector){for(const child of this.childNodes){if(child.matches(selector))return child;const found=child.querySelector(selector);if(found)return found;}return null;},
+   focus(){doc.activeElement=this;},select(){},click(){this.handlers.get('click')?.({target:this});},
+   getBoundingClientRect(){return this.classList.contains('spl-label')?{left:10,top:20,width:675,height:450}:{left:0,top:0,width:100,height:100};},
+   getContext(){return{font:'',measureText(text){return{width:String(text).length*(parseFloat(/([\d.]+)px/.exec(this.font)?.[1])||12)*.5};}};},
+   _attributes:attrs
+  };
+  for(const property of ['id','name','type','src','alt','className'])Object.defineProperty(element,property,{get:()=>attrs[property==='className'?'class':property]||'',set:value=>element.setAttribute(property==='className'?'class':property,value)});
+  element.classList={contains:cls=>element.className.split(/\s+/).includes(cls),add(...names){element.className=[...new Set([...element.className.split(/\s+/).filter(Boolean),...names])].join(' ');},toggle(cls,force){const add=force===undefined?!this.contains(cls):force;const names=element.className.split(/\s+/).filter(name=>name&&name!==cls);if(add)names.push(cls);element.className=names.join(' ');return add;}};
+  return element;
+ };
+ const serialize=element=>{
+  if(!element.tagName)return escape(element.textContent);
+  const attrs={...element._attributes,...Object.fromEntries(Object.entries(element.dataset).map(([key,value])=>['data-'+key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase()),value]))};
+  const start='<'+element.tagName+Object.entries(attrs).map(([key,value])=>' '+key+'="'+escape(value)+'"').join('')+'>';
+  return start+(voidTags.has(element.tagName)?'':element.innerHTML+'</'+element.tagName+'>');
+ };
+ doc.createElement=node;
+ root=node('div');
+ const q=key=>root.querySelector(key.startsWith('.')?key:'[data-pl="'+key+'"]');
  let account='account-one';
- const root={isConnected:true,classList:{add(){}},querySelector(selector){const match=/\[data-pl="([^"]+)"\]/.exec(selector);return q(match?.[1]||selector);},querySelectorAll(){return [];},replaceChildren(){},
-  ownerDocument:{createElement:node}};
  const workspace=Editor.mount(root,{api,rawApi,accessKey:()=>account});
- return {workspace,settings,q,root,changeAccount(){account='account-two';}};
+ return {workspace,settings:q('settings'),q,root,changeAccount(){account='account-two';}};
 }
 function editorApi(calls,{delayFirstDefaults}={}){
  let defaultReads=0;
@@ -151,14 +199,10 @@ function logoFixture(t, {readonly=false}={}) {
   if(path==='/api/sales/price-labels/library')return{templates:readonly?[shared]:[],capabilities:{create:true,ownBranch:false},recipients:[]};
   return base(path,request);
  });
- const preview=f.q('preview'),label=preview.querySelector('.spl-label'),editor=preview.querySelector('[data-pl-logo]'),grip=preview.querySelector('[data-pl-logo-resize]');
- Object.assign(label,{offsetWidth:450,clientWidth:450,offsetHeight:300,clientHeight:300,clientLeft:0,clientTop:0,getBoundingClientRect:()=>({left:10,top:20,width:675,height:450})});
- editor.getBoundingClientRect=()=>({left:40,top:50,width:150,height:75});
- editor.closest=selector=>selector==='[data-pl-logo]'?editor:selector==='.spl-label'?label:null;
- grip.closest=selector=>selector==='[data-pl-logo-resize]'?grip:selector==='[data-pl-logo]'?editor:null;
+ const preview=f.q('preview');
  let capture=null;preview.setPointerCapture=id=>{capture=id;};preview.hasPointerCapture=id=>capture===id;preview.releasePointerCapture=()=>{capture=null;};
  const event=(target,extra={})=>({target,pointerId:7,button:0,clientX:100,clientY:100,preventDefault(){this.prevented=true;},...extra});
- return {...f,editor,grip,calls,event,dispatch:(type,e)=>preview.handlers.get(type)(e),capture:()=>capture};
+ return {...f,get editor(){return preview.querySelector('[data-pl-element="logo"]');},get grip(){return this.editor?.querySelector('[data-pl-element-resize]');},calls,event,dispatch:(type,e)=>preview.handlers.get(type)(e),capture:()=>capture};
 }
 
 test('Logo drag converts visual coordinates at 150% zoom, keeps stable capture, and Escape restores reserved geometry',async t=>{
@@ -173,28 +217,33 @@ test('Logo drag converts visual coordinates at 150% zoom, keeps stable capture, 
  f.dispatch('pointermove',f.event(f.editor,{clientX:175,clientY:175}));
  f.dispatch('keydown',f.event(f.editor,{key:'Escape'}));
  assert.equal(f.capture(),null);assert.equal(f.settings.elements.logoMode.value,'reserved');assert.equal(Number(f.settings.elements.logoXmm.value),4);
- assert.equal(f.q('logo-live').textContent,'Logoänderung verworfen.');f.workspace.destroy();
+ assert.equal(f.q('logo-live').textContent,'Elementänderung verworfen.');f.workspace.destroy();
 });
 
-test('Corner resize and keyboard arrows preserve bounded millimeters, direct font choice and smaller presets',async t=>{
+test('Corner resize and keyboard arrows preserve bounded millimeters, default font choice and smaller presets',async t=>{
  const f=logoFixture(t);await f.workspace.load();
  f.dispatch('pointerdown',f.event(f.grip));f.dispatch('pointermove',f.event(f.grip,{clientX:175,clientY:175}));f.dispatch('pointerup',f.event(f.grip));
  assert.equal(Number(f.settings.elements.logoWidthMm.value),30);assert.equal(Number(f.settings.elements.logoHeightMm.value),20);
  f.dispatch('keydown',f.event(f.editor,{key:'ArrowRight',shiftKey:true}));assert.equal(Number(f.settings.elements.logoXmm.value),9);
  f.dispatch('keydown',f.event(f.grip,{key:'ArrowDown'}));assert.equal(Number(f.settings.elements.logoHeightMm.value),20.5);
- f.q('preview-font').value='spectral';f.q('preview-font').handlers.get('change')();assert.equal(f.settings.elements.fontId.value,'spectral');
+ f.settings.elements.fontId.value='spectral';f.settings.handlers.get('change')({target:f.settings.elements.fontId});assert.equal(f.settings.elements.fontId.value,'spectral');
  f.settings.elements.logoXmm.value=60;f.settings.elements.logoWidthMm.value=20;
  f.q('.spl-presets').handlers.get('click')({target:{closest:()=>({dataset:{plPreset:'shelf'}})}});
  assert.equal(Number(f.settings.elements.labelWidthMm.value),70);assert.equal(Number(f.settings.elements.logoXmm.value),50);
  assert.equal(f.settings.elements.fontId.value,'spectral');f.workspace.destroy();
 });
 
-test('Read-only templates and switched accounts cannot mutate logo or direct font controls',async t=>{
+test('Read-only templates and switched accounts cannot mutate logo or text font controls',async t=>{
  const f=logoFixture(t,{readonly:true});await f.workspace.load();
  f.q('library-select').value='readonly';f.q('library-select').handlers.get('change')();
- assert.equal(f.q('preview-font').disabled,true);
+ assert.equal(f.settings.elements.fontId.disabled,true);
  f.dispatch('pointerdown',f.event(f.editor));f.dispatch('keydown',f.event(f.editor,{key:'ArrowRight'}));
- f.q('preview-font').value='spectral';f.q('preview-font').handlers.get('change')();
+ const toolbar=f.q('element-toolbar'),picker=toolbar.querySelector('[data-pl-edit="element"]');picker.value='description';toolbar.handlers.get('change')({target:picker});
+ const font=toolbar.querySelector('[data-pl-edit="font"]');
+ // Selection is available in a received design; changing its font remains blocked.
+ const beforeFont=f.q('preview').querySelector('[data-pl-element="description"]').querySelector('.spl-element-text').style.fontFamily;
+ assert.equal(font.disabled,true);font.value='spectral';toolbar.handlers.get('change')({target:font});
+ assert.equal(f.q('preview').querySelector('[data-pl-element="description"]').querySelector('.spl-element-text').style.fontFamily,beforeFont);
  assert.equal(f.settings.elements.logoMode.value,'reserved');assert.equal(f.settings.elements.fontId.value,'roboto');
  f.q('library-select').value='';f.q('library-select').handlers.get('change')();
  f.dispatch('pointerdown',f.event(f.editor));const before=f.settings.elements.logoXmm.value;f.changeAccount();
@@ -202,7 +251,7 @@ test('Read-only templates and switched accounts cannot mutate logo or direct fon
  f.workspace.suspend();assert.equal(f.capture(),null);f.workspace.destroy();
 });
 
-function formatFixture({ownBranch=true,branchCapability=true,create=true,templates=[],saveHook}={}){
+function formatFixture({ownBranch=true,branchCapability=true,create=true,templates=[],saveHook,rawApi}={}){
  const calls=[],base=editorApi(calls),api=async(path,options={})=>{
   if(path==='/api/sales/price-labels/library'&&!options.body){calls.push({path,options});return {templates,
    ownBranch:ownBranch?{id:'93',label:'Filiale 93'}:null,capabilities:{create,ownBranch:branchCapability},
@@ -212,12 +261,12 @@ function formatFixture({ownBranch=true,branchCapability=true,create=true,templat
    return {...body,id:'created',version:body.version?body.version+1:1,canEdit:true,received:false,creator:{label:'Synthetisch'}};}
   return base(path,options);
  };
- return {...editorFixture(api),calls};
+ return {...editorFixture(api,{rawApi}),calls};
 }
 function preset(f,id){f.q('.spl-presets').handlers.get('click')({target:{closest:()=>({dataset:{plPreset:id}})}});}
 function orient(f,value){const target=f.q('label-orientation');target.value=value;
  f.settings.handlers.get('input')({target});target.handlers.get('change')({target});f.settings.handlers.get('change')({target});}
-const fieldSnapshot=f=>Object.fromEntries(Object.keys(Editor.defaults).map(key=>[key,f.settings.elements[key].value]));
+const fieldSnapshot=f=>Object.fromEntries(Object.keys(Editor.defaults).filter(key=>f.settings.elements[key]).map(key=>[key,f.settings.elements[key].value]));
 const libraryWrites=f=>f.calls.filter(call=>call.options?.body&&/\/library(?:\/|$)/.test(call.path));
 
 test('Five presets preserve their default dimensions; native orientation input/change affects only the shield and manual sizes remain reversible',async()=>{
@@ -330,7 +379,45 @@ test('Concurrent editor instances describe their orientation with unique local h
  const help=fixture=>{const id=/id="(sales-price-label-format-hint-\d+)"/.exec(fixture.root.innerHTML)?.[1];
   assert.ok(id);assert.ok(fixture.root.innerHTML.includes('aria-describedby="'+id+'"'));return id;};
  assert.notEqual(help(first),help(second));
+ const branding=first.q('branding-preview');assert.equal(branding.querySelector('summary').firstChild.textContent,'Logo-Position & Abstand ');
+ for(const name of ['logoKitId','logoAssetKey','logoMode','logoXmm','logoYmm']){
+  const moved=branding.querySelector('[name="'+name+'"]');assert.equal(moved,first.settings.elements[name]);assert.equal(moved.getAttribute('form'),first.settings.id);
+ }
  assert.equal([...first.root.innerHTML.matchAll(/data-pl-preset="/g)].length,5);first.workspace.destroy();second.workspace.destroy();
+});
+
+test('An outstanding image upload blocks saving, PDF export and template replacement until the image belongs to the current draft',async()=>{
+ const assetId='069911db-60a3-4f73-9c40-e4614d4ae7bd',rawCalls=[];let finishUpload;
+ const own={...template('own'),version:1,visibility:'private',recipients:[],options:{...Editor.defaults},filenameOptions:{stamp:'none'}};
+ const other={...own,id:'other',title:'Andere Vorlage',options:{...Editor.defaults,labelWidthMm:70,labelHeightMm:40}};
+ const f=formatFixture({templates:[own,other],rawApi:(path,options)=>{
+  rawCalls.push({path,options});if(path==='/api/sales/price-labels/images')return new Promise(resolve=>{finishUpload=resolve;});
+  throw Error('Synthetic PDF capture complete');
+ }});
+ try {
+  await f.workspace.openArticle('001234','own');assert.equal(f.q('save').disabled,false);assert.equal(f.q('download').disabled,false);
+  const imageInput=f.q('image-tools').querySelector('[data-pl-image-input]');
+  imageInput.files=[new File([Buffer.from('synthetic PNG upload')],'synthetic.png',{type:'image/png'})];
+  const uploading=imageInput.handlers.get('change')();
+  assert.equal(rawCalls.length,1);assert.equal(rawCalls[0].path,'/api/sales/price-labels/images');assert.equal(rawCalls[0].options.method,'POST');
+  assert.equal(rawCalls[0].options.body.get('image').name,'synthetic.png');
+  const readsBefore=f.calls.length;
+  for(const key of ['save','download','library-select','library-new','library-copy','library-reload'])assert.equal(f.q(key).disabled,true,key+' is visibly disabled during upload');
+  await f.q('save').handlers.get('click')();await f.q('export').handlers.get('submit')({preventDefault(){}});
+  f.q('library-select').value='other';f.q('library-select').handlers.get('change')();
+  f.q('library-new').handlers.get('click')();f.q('library-copy').handlers.get('click')();await f.q('library-reload').handlers.get('click')();
+  assert.equal(libraryWrites(f).length,0);assert.equal(rawCalls.length,1,'No PDF request can omit the pending image');assert.equal(f.calls.length,readsBefore,'No reload replaces a draft with an outstanding upload');
+  assert.equal(f.q('library-title').value,'Regal own');assert.equal(Number(f.settings.elements.labelWidthMm.value),90);
+  finishUpload({json:async()=>({image:{assetId,width:200,height:100,mime:'image/png'}})});await uploading;
+  assert.equal(f.q('save').disabled,false);assert.equal(f.q('download').disabled,false);assert.equal(imageInput.disabled,false);
+  assert.equal(f.q('image-tools').querySelector('[data-pl-image-count]').textContent,'1 / 3');
+  assert.equal(f.q('preview').querySelector('[data-pl-element="image:'+assetId+'"]').querySelector('img').src.startsWith('/api/sales/price-labels/images/'+assetId+'?preview='),true);
+  await f.q('save').handlers.get('click')();const saved=libraryWrites(f).at(-1);
+  assert.equal(saved.path,'/api/sales/price-labels/library/own');assert.equal(saved.options.method,'PATCH');assert.equal(saved.body.options.imageBoxes.length,1);assert.equal(saved.body.options.imageBoxes[0].assetId,assetId);
+  await f.q('export').handlers.get('submit')({preventDefault(){}});assert.equal(rawCalls.length,2);assert.equal(rawCalls[1].path,'/api/sales/price-labels/export.pdf');
+  assert.deepEqual(JSON.parse(rawCalls[1].options.body).options.imageBoxes,saved.body.options.imageBoxes);
+  f.q('library-select').value='other';f.q('library-select').handlers.get('change')();assert.equal(f.q('library-title').value,'Andere Vorlage');assert.equal(Number(f.settings.elements.labelWidthMm.value),70);
+ } finally {f.workspace.destroy();}
 });
 
 function delayedArticleFixture(extra={}){

@@ -1,0 +1,27 @@
+.sidebar.has-personal-notepad > .main-nav { flex:1 1 auto; min-height:100px; overflow-y:auto; }
+.sidebar.sidebar-notepad-scroll { overflow-y:auto; }
+.sidebar-notepad { flex:none; min-width:0; margin-top:8px; }
+.sidebar-notepad[hidden],.sidebar-notepad [hidden] { display:none !important; }
+.sidebar-notepad-toolbar { display:flex; align-items:center; justify-content:flex-start; min-height:32px; padding-top:4px; }
+.sidebar-notepad-toolbar > button { position:relative; display:grid; place-items:center; width:30px; height:28px; padding:5px; border:1px solid rgba(255,255,255,.25); border-radius:6px; color:#ffeb7c; background:rgba(0,0,0,.1); cursor:pointer; }
+.sidebar-notepad-toolbar svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.sidebar-notepad-toolbar i { position:absolute; top:3px; right:3px; width:5px; height:5px; border-radius:50%; background:#ffb66d; }
+.sidebar-notepad-paper { display:flex; flex-direction:column; width:100%; min-height:120px; min-width:0; margin-bottom:4px; overflow:hidden; border:1px solid #d8b746; border-radius:5px 5px 12px 5px; color:#3d351b; background:#fff09b; box-shadow:0 4px 12px rgba(0,0,0,.16); }
+.sidebar-notepad-resize { display:grid; flex:none; place-items:center; height:18px; cursor:ns-resize; touch-action:none; }
+.sidebar-notepad-resize i { width:34px; height:3px; border-radius:3px; background:#9b842f; opacity:.65; }
+.sidebar-notepad-resize[aria-disabled=true] { cursor:default; }
+.sidebar-notepad-paper > header { display:flex; flex:none; justify-content:space-between; align-items:center; gap:8px; padding:0 8px 5px 10px; }
+.sidebar-notepad-paper strong { font-size:10px; font-weight:800; }
+.sidebar-notepad-paper button { border:0; border-radius:4px; color:inherit; background:transparent; cursor:pointer; }
+.sidebar-notepad-paper [data-notepad-close] { display:grid; place-items:center; width:24px; height:24px; padding:0; font-size:20px; }
+.sidebar-notepad-paper textarea { display:block; flex:1 1 auto; width:100%; min-width:0; min-height:28px; margin:0; padding:6px 10px; resize:none; overflow:auto; border:0; border-radius:0; color:#3d351b; background:transparent; box-shadow:none; font:400 11px/1.55 Inter,"Segoe UI",sans-serif; }
+.sidebar-notepad-paper textarea::placeholder { color:#7a6a33; }
+.sidebar-notepad-paper textarea:disabled { opacity:.7; }
+.sidebar-notepad-paper > footer { display:flex; flex:none; flex-wrap:wrap; align-items:center; gap:4px 7px; padding:5px 9px 7px; border-top:1px solid rgba(130,108,30,.18); color:#6e5d27; font-size:8px; }
+.sidebar-notepad-paper > footer button { padding:3px 0; font:inherit; text-decoration:underline; text-underline-offset:2px; }
+.sidebar-notepad-paper [data-notepad-count] { margin-left:auto; font-size:8px; white-space:nowrap; }
+.sidebar-notepad-paper button:disabled { opacity:.45; cursor:default; }
+.sidebar-notepad :is(button,[role=separator],textarea):focus-visible { outline:2px solid #705719; outline-offset:-2px; }
+.sidebar-notepad-toolbar > button:focus-visible { outline:2px solid #ffeb7c; outline-offset:2px; }
+.sidebar-notepad-paper button:hover:not(:disabled) { background:rgba(112,87,25,.1); }
+@media(pointer:coarse) { .sidebar-notepad-resize { height:26px; }.sidebar-notepad-toolbar > button { width:36px; height:36px; }.sidebar-notepad-paper [data-notepad-close] { width:30px; height:30px; } }
