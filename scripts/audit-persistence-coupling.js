@@ -73,6 +73,14 @@ const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemaile
 const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresql/transfer/history.js']);
 // User-authorized 2026 migration blocks; isolated environment, never product activation.
 const MIGRATION_DEVELOPMENT_FILES = new Set([
+  // Named CRM reads, article qualifications and protected administrative statistics.
+  // Registration grants no driver import, statement declaration or activation.
+  'lib/persistence/postgresql/core/import-master-customer-reference.js',
+  'lib/persistence/postgresql/sales/cash-customer-search.js',
+  'lib/persistence/postgresql/operations/sql-runtime-statistics.js',
+  'test/cash-customer-search-sql.test.js',
+  'test/import-master-customer-reference.test.js',
+  'test/postgresql-article-search-optimization.test.js',
   // The school extension qualifies these exact artifacts; this classification
   // alone does not permit a PostgreSQL driver import or product activation.
   'lib/persistence/postgresql/contracts/vocational-school-catalog-v1.json',
@@ -820,10 +828,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1471;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1478;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 44;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1427;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1354;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1434;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1361;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -949,8 +957,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1338;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 133;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1343;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 135;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",

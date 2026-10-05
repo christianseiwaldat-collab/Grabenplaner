@@ -55,13 +55,16 @@ test("forged, writable, linked, replaced or malformed owner evidence never disab
 test("updater-owned shutdown still drains work and closes persistence before releasing the instance", async () => {
   const source = fs.readFileSync(path.join(__dirname, "../server.js"), "utf8");
   const start = source.indexOf("function shutdown("), end = source.indexOf("if (require.main === module)", start);
+  for (const assuranceFirst of [false, true]) {
   const events = [];
-  let finishScanner;
+  let finishScanner, finishAssurance;
   const amuScannerProbe = new Promise(resolve => { finishScanner = resolve; });
+  const assuranceDrain = new Promise(resolve => { finishAssurance = resolve; });
   const dependencies = { postgresqlActive: false, shutdownStarted: false, server: null, databaseClosed: false,
     amuScannerProbe,
     dataImportJobs: { stop: async () => events.push("imports-stop") },
     dataImportRoutes: { stop: async () => events.push("import-routes-stop") },
+    recoveryAssuranceStatusReader: { close: () => { events.push("assurance-stop"); return assuranceDrain; } },
     tradeInsightJobs: { stop: async () => events.push("trade-insights-stop") },
     salesReportJobs: { stop: async () => events.push("reports-stop") },
     postgresqlReceiptWorkers: {close:async()=>events.push('receipt-workers-stop')},
@@ -75,7 +78,12 @@ test("updater-owned shutdown still drains work and closes persistence before rel
     releaseInstanceLock: () => events.push("release"), process: { exit: code => events.push(`exit-${code}`) }, console };
   const stop = vm.runInNewContext(`${source.slice(start, end)}; shutdown`, dependencies);
   stop(); await new Promise(setImmediate);
-  assert.deepEqual(events, ["imports-stop", "import-routes-stop"], "shutdown must wait for the active scanner before backup and persistence cleanup");
-  finishScanner(); await new Promise(setImmediate);
-  assert.deepEqual(events, ["imports-stop", "import-routes-stop", "trade-insights-stop", "reports-stop", "receipt-workers-stop", "drain", "persistence-close", "checkpoint", "database-close", "release", "exit-0"]);
+  const stoppedReaders = ["imports-stop", "import-routes-stop", "assurance-stop"];
+  assert.deepEqual(events, stoppedReaders, "shutdown must wait for its active readers before backup and persistence cleanup");
+  (assuranceFirst ? finishAssurance : finishScanner)(); await new Promise(setImmediate);
+  assert.deepEqual(events, stoppedReaders, assuranceFirst ? "the scanner still owns work" : "the assurance worker still owns work");
+  assert.equal(dependencies.databaseClosed, false);
+  (assuranceFirst ? finishScanner : finishAssurance)(); await new Promise(setImmediate);
+  assert.deepEqual(events, [...stoppedReaders, "trade-insights-stop", "reports-stop", "receipt-workers-stop", "drain", "persistence-close", "checkpoint", "database-close", "release", "exit-0"]);
+  }
 });

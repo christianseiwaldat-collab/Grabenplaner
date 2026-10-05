@@ -59,7 +59,7 @@ test('Revoked account and out-of-order library responses cannot repaint the arti
  const third=f.view.activate();f.changeAccount();pending[2]({templates:[template('other-account')]});await third;assert.doesNotMatch(f.results.innerHTML,/other-account/);f.view.destroy();
 });
 
-function editorFixture(api){
+function editorFixture(api,{rawApi=async()=>{}}={}){
  const elements=new Map(),node=(tagName='')=>({tagName,value:'',checked:false,disabled:false,hidden:false,textContent:'',children:[],handlers:new Map(),
   classList:{add(){},toggle(){}},style:{setProperty(){}},addEventListener(type,fn){this.handlers.set(type,fn);},removeEventListener(type){this.handlers.delete(type);},
   replaceChildren(...children){this.children=children;},append(...children){this.children.push(...children);},focus(){},select(){},
@@ -73,7 +73,7 @@ function editorFixture(api){
  let account='account-one';
  const root={isConnected:true,classList:{add(){}},querySelector(selector){const match=/\[data-pl="([^"]+)"\]/.exec(selector);return q(match?.[1]||selector);},querySelectorAll(){return [];},replaceChildren(){},
   ownerDocument:{createElement:node}};
- const workspace=Editor.mount(root,{api,rawApi:async()=>{},accessKey:()=>account});
+ const workspace=Editor.mount(root,{api,rawApi,accessKey:()=>account});
  return {workspace,settings,q,root,changeAccount(){account='account-two';}};
 }
 function editorApi(calls,{delayFirstDefaults}={}){
@@ -331,4 +331,64 @@ test('Concurrent editor instances describe their orientation with unique local h
   assert.ok(id);assert.ok(fixture.root.innerHTML.includes('aria-describedby="'+id+'"'));return id;};
  assert.notEqual(help(first),help(second));
  assert.equal([...first.root.innerHTML.matchAll(/data-pl-preset="/g)].length,5);first.workspace.destroy();second.workspace.destroy();
+});
+
+function delayedArticleFixture(extra={}){
+ const calls=[],base=editorApi(calls),reads=[];
+ const f=editorFixture((path,options)=>{
+  if(path!=='/api/sales/price-labels/articles')return base(path,options);
+  return new Promise((resolve,reject)=>reads.push({selection:JSON.parse(options.body),signal:options.signal,resolve,reject}));
+ },extra);
+ const complete=(index,price='123.45')=>reads[index].resolve({items:reads[index].selection.articleNumbers.map(articleNumber=>({articleNumber,description:'Current '+articleNumber,priceGross:price})),updatedAt:'2026-10-05T10:00:00Z'});
+ const choose=priceType=>{f.settings.elements.priceType.value=priceType;for(const event of ['input','change'])f.settings.handlers.get(event)({target:f.settings.elements.priceType});};
+ return {...f,reads,complete,choose};
+}
+const settlePriceDebounce=()=>new Promise(resolve=>setTimeout(resolve,230));
+
+test('Rapid price-type changes coalesce to the latest selection after a slow success or failure',async()=>{
+ for(const fails of [false,true]){
+  const f=delayedArticleFixture();await f.workspace.load();f.settings.elements.articleNumbers.value='001234';f.q('refresh').handlers.get('click')();
+  f.choose('internet_1');await settlePriceDebounce();f.choose('internet_3');await settlePriceDebounce();
+  assert.equal(f.reads.length,1,'No overlapping article reads while the first selection is outstanding');
+  if(fails)f.reads[0].reject(Error('Obsolete sales failure'));else f.complete(0,'9999.99');
+  await turn();assert.equal(f.reads.length,2);assert.equal(f.reads[1].selection.priceType,'internet_3');
+  assert.equal(f.q('download').disabled,true);assert.doesNotMatch(f.q('status').textContent,/Obsolete/);
+  f.complete(1,'12.34');await turn();assert.equal(f.q('download').disabled,false);assert.equal(f.q('refresh').disabled,false);
+  assert.match(f.q('status').textContent,/aktuellen Bruttopreisen geladen/);assert.match(f.q('preview').children[0].innerHTML,/12,34/);assert.doesNotMatch(f.q('preview').children[0].innerHTML,/9\.999,99/);
+  f.workspace.destroy();
+ }
+});
+
+test('The latest price request may fail and be manually retried without stale prices or a stuck busy state',async()=>{
+ const f=delayedArticleFixture();await f.workspace.load();f.settings.elements.articleNumbers.value='001234';f.q('refresh').handlers.get('click')();
+ f.choose('internet_1');await settlePriceDebounce();f.complete(0);await turn();
+ f.reads[1].reject(Error('Current request unavailable'));await turn();
+ assert.equal(f.q('status').textContent,'Current request unavailable');assert.equal(f.q('refresh').disabled,false);assert.equal(f.q('download').disabled,true);
+ f.q('refresh').handlers.get('click')();assert.equal(f.reads.length,3);assert.equal(f.reads[2].selection.priceType,'internet_1');
+ f.complete(2);await turn();assert.equal(f.q('download').disabled,false);f.workspace.destroy();
+});
+
+test('Queued price reloads cannot survive navigation or an account switch',async()=>{
+ for(const switchAccount of [false,true]){
+  const f=delayedArticleFixture();await f.workspace.load();f.settings.elements.articleNumbers.value='001234';f.q('refresh').handlers.get('click')();
+  f.choose('internet_1');await settlePriceDebounce();if(switchAccount)f.changeAccount();f.workspace.suspend();
+  assert.equal(f.reads[0].signal.aborted,true);f.complete(0);await turn();await f.workspace.load();await turn();
+  assert.equal(f.reads.length,1);assert.equal(f.q('download').disabled,true);assert.equal(f.q('refresh').disabled,false);f.workspace.destroy();
+ }
+});
+
+test('A queued price reload validates the latest article input instead of reusing the old selection',async()=>{
+ const f=delayedArticleFixture();await f.workspace.load();f.settings.elements.articleNumbers.value='001234';f.q('refresh').handlers.get('click')();
+ f.choose('internet_1');await settlePriceDebounce();f.settings.elements.articleNumbers.value='';f.settings.handlers.get('input')({target:f.settings.elements.articleNumbers});
+ f.complete(0);await turn();assert.equal(f.reads.length,1);assert.match(f.q('status').textContent,/mindestens eine Artikelnummer/);
+ assert.equal(f.q('download').disabled,true);assert.equal(f.q('refresh').disabled,false);f.workspace.destroy();
+});
+
+test('Changing price type during PDF creation also starts the queued article read after an export failure',async()=>{
+ let rejectExport;const f=delayedArticleFixture({rawApi:()=>new Promise((_resolve,reject)=>{rejectExport=reject;})});
+ await f.workspace.load();f.settings.elements.articleNumbers.value='001234';f.q('refresh').handlers.get('click')();f.complete(0);await turn();
+ const exporting=f.q('export').handlers.get('submit')({preventDefault(){}});
+ f.choose('internet_3');await settlePriceDebounce();assert.equal(f.reads.length,1);
+ rejectExport(Error('PDF unavailable'));await exporting;assert.equal(f.reads.length,2);assert.equal(f.reads[1].selection.priceType,'internet_3');
+ f.complete(1);await turn();assert.equal(f.q('download').disabled,false);f.workspace.destroy();
 });

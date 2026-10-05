@@ -338,9 +338,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // reads only the configured database path, not business records.
   // The named deploy preflight only reads the installed provider and paths.
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 19);
-  // Session fixtures and the deferred PostgreSQL startup regression are
-  // explicitly classified test adapters; no new production access is allowed.
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 17);
+  // Session fixtures, deferred PostgreSQL startup and the three named CRM/
+  // article qualifications are classified; no new production access is allowed.
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 20);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
   assert.equal(report.summary.productionJavaScriptDriverFiles, 15);
@@ -453,7 +453,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1471);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1478);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -470,7 +470,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1471,
+    requiredReceiptCount: 1478,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {

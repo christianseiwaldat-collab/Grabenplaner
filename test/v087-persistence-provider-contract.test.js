@@ -508,7 +508,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     report.phase5Progress.compilerVersion,
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1471);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1478);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -526,7 +526,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1471,
+    requiredReceiptCount: 1478,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -637,6 +637,28 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
   assert.deepEqual(report.phaseBoundaryViolations, []);
   assert.deepEqual(report.unknownProduction, []);
   assert.deepEqual(report.unknownTests, []);
+});
+
+test("CRM, article and statistics registration grants no additional provider capabilities", () => {
+  const modules = [
+    "lib/persistence/postgresql/core/import-master-customer-reference.js",
+    "lib/persistence/postgresql/sales/cash-customer-search.js",
+    "lib/persistence/postgresql/operations/sql-runtime-statistics.js",
+  ];
+  for (const file of modules) {
+    assert.deepEqual(architectureBoundaryViolationsForText(file, fs.readFileSync(path.join(root, file), "utf8")), [], file);
+  }
+  for (const file of [...modules, ...modules.map(file => file.replace(/\.js$/, "-other.js")),
+    "test/cash-customer-search-sql.test.js", "test/import-master-customer-reference.test.js",
+    "test/postgresql-article-search-optimization.test.js"]) {
+    for (const [source, kind] of [
+      ["const driver = require('node:" + "sqlite');", "sqlite-driver-import-outside-boundary"],
+      ["const driver = require('pg');", "postgresql-driver-import"],
+      ["const provider = createPersistenceProviderFacade(adapter);", "provider-facade-outside-boundary"],
+      ["const statement = definePersistenceStatement({});", "provider-statement-outside-boundary"],
+      ["const config = process.env.DB_PROVIDER;", "provider-runtime-config-outside-boundary"],
+    ]) assert.equal(architectureBoundaryViolationsForText(file, source).some(entry => entry.kind === kind), true, `${file}: ${kind}`);
+  }
 });
 
 test("Provider-Dokumentation schützt den Installationsstandard; Treiberabhängigkeiten bleiben begrenzt", () => {

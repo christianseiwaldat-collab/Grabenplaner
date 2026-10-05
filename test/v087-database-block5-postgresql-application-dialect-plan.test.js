@@ -25,7 +25,7 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1471 Statements genau einmal ab", () => {
+test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1478 Statements genau einmal ab", () => {
   const plan = POSTGRESQL_APPLICATION_DIALECT_PLAN;
   const sqliteEntries = SQLITE_APPLICATION_DIALECT_MANIFEST.entries;
 
@@ -34,8 +34,8 @@ test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1471 Statemen
   assert.equal(plan.status, "implementation-in-progress");
   assert.equal(plan.executable, false);
   assert.match(plan.fingerprint, /^[a-f0-9]{64}$/);
-  assert.equal(plan.entries.length, 1471);
-  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1471);
+  assert.equal(plan.entries.length, 1478);
+  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1478);
 
   for (let index = 0; index < sqliteEntries.length; index += 1) {
     const source = sqliteEntries[index];
@@ -62,9 +62,9 @@ test("Block 5/7: nur portable Einträge enthalten kompiliertes PostgreSQL-SQL", 
   const portable = entries.filter((entry) => entry.strategy === "portable-generated");
   const blocked = entries.filter((entry) => entry.strategy === "requires-override");
 
-  assert.equal(summary.statementCount, 1471);
-  assert.equal(summary.portableGeneratedCount, 1338);
-  assert.equal(summary.requiresOverrideCount, 133);
+  assert.equal(summary.statementCount, 1478);
+  assert.equal(summary.portableGeneratedCount, 1343);
+  assert.equal(summary.requiresOverrideCount, 135);
   assert.equal(portable.length, summary.portableGeneratedCount);
   assert.equal(blocked.length, summary.requiresOverrideCount);
 
@@ -135,13 +135,67 @@ test("Trade-Artikeldetails: alle sechs neuen Abfragen sind einmal registriert un
   assert.equal(POSTGRESQL_APPLICATION_DIALECT_PLAN.executable, false);
 });
 
+test("CRM and article extensions register exactly seven reads without opening the application gate", () => {
+  const { IMPORT_MASTER_STATEMENTS: master } = require("../lib/persistence/statements/import-master-data");
+  const { CASH_PUBLICATION_STATEMENTS: cash } = require("../lib/persistence/statements/cash-publications");
+  const { CASH_LOCATION_READS: locations } = require("../lib/persistence/statements/cash-location-reads");
+  const articles = require("../lib/persistence/statements/sales-article-workspace");
+  const additions = [master.getBindingByTarget, ...Object.values(cash.searchCustomer),
+    ...Object.values(cash.searchCustomerAssigned), ...Object.values(locations.nullCustomerSearch),
+    ...Object.values(locations.nonNullCustomerSearch), articles.searchWithoutText, articles.countWithoutText];
+  const cashParameters = ["afterDate", "afterRow", "customerId", "customerKey", "datasetSlot", "dateFrom", "dateTo",
+    "limit", "locationId", "publicationId", "sellerId", "sellerMode", "sellerRole", "unassigned"];
+  const articleFilter = ["active", "identifierLike", "orderKeys", ...Array.from({ length: 10 }, (_, index) => `query${index}`), "sourceSystem"];
+  const expected = {
+    "import-master.binding.by-target": ["queryOne", ["scopeId", "sourceInstance", "sourceTable", "targetId", "targetKind"], []],
+    "cash-publications.search-customer.6": ["queryAll", cashParameters, []],
+    "cash-publications.search-customer-assigned.6": ["queryAll", cashParameters, []],
+    "cash-location-reads.non-null-customer-search.umsatz-kasse-details": ["queryAll", cashParameters, []],
+    "cash-location-reads.null-customer-search.umsatz-kasse-details": ["queryAll",
+      cashParameters.filter(name => name !== "locationId" && name !== "unassigned"), []],
+    "sales-article-workspace.search-without-text": ["queryAll", [...articleFilter, "direction", "limit", "offset", "sort"].sort(),
+      ["sqlite.json-functions", "sqlite.like-operator"]],
+    "sales-article-workspace.count-without-text": ["queryOne", articleFilter,
+      ["sqlite.json-functions", "sqlite.like-operator"]],
+  };
+  assert.equal(additions.length, 7);
+  assert.deepEqual(additions.map(statement => statement.id).sort(), Object.keys(expected).sort());
+  for (const statement of additions) {
+    const [operation, parameters, blockers] = expected[statement.id];
+    const sources = SQLITE_APPLICATION_DIALECT_MANIFEST.entries.filter(entry => entry.statement.id === statement.id);
+    const plans = POSTGRESQL_APPLICATION_DIALECT_PLAN.entries.filter(entry => entry.statementId === statement.id);
+    assert.equal(sources.length, 1, statement.id);
+    assert.equal(plans.length, 1, statement.id);
+    const [source] = sources, [plan] = plans;
+    assert.equal(source.statement, statement, statement.id);
+    assert.equal(statement.operation, operation, statement.id);
+    assert.deepEqual(plan.parameterOrder, parameters, statement.id);
+    assert.deepEqual(Object.keys(statement.parameters).sort(), parameters, statement.id);
+    assert.deepEqual(source.features, blockers.length
+      ? ["sqlite.json-functions", "sqlite.named-dollar-parameters"] : ["sqlite.named-dollar-parameters"], statement.id);
+    assert.deepEqual(plan.blockingFeatures, blockers, statement.id);
+    assert.equal(plan.strategy, blockers.length ? "requires-override" : "portable-generated", statement.id);
+    assert.equal(plan.returning, false, statement.id);
+    assert.equal(plan.sourceSqlFingerprint, sha256(source.sql), statement.id);
+    if (blockers.length) {
+      assert.equal(Object.hasOwn(plan, "sql"), false, statement.id);
+      assert.equal(Object.hasOwn(plan, "compiledSqlFingerprint"), false, statement.id);
+    } else {
+      assert.equal(plan.compiledSqlFingerprint, sha256(plan.sql), statement.id);
+      assert.deepEqual(plan.parameterBindings, parameters.map(parameter => ({ parameter, source: "value", path: [] })), statement.id);
+      assert.doesNotMatch(plan.sql, /\$[A-Za-z_]/, statement.id);
+    }
+  }
+  assert.equal(POSTGRESQL_APPLICATION_DIALECT_PLAN.executable, false);
+});
+
 test("Block 5/7: Summary erfasst die bekannten Override-Grenzen stabil", () => {
   const counts = POSTGRESQL_APPLICATION_DIALECT_PLAN.summary.blockingFeatureCounts;
 
-  assert.equal(counts["sqlite.json-functions"], 46);
+  assert.equal(counts["sqlite.json-functions"], 48);
   assert.equal(counts["sqlite.insert-or-ignore"], 18);
   assert.equal(counts["sqlite.collate-nocase"], 27);
-  assert.equal(counts["sqlite.like-operator"], 11);
+  assert.equal(counts["sqlite.like-operator"], 13);
   assert.equal(counts["sqlite.rowid-pseudocolumn"], 3);
   assert.equal(counts["sqlite.cast-integer"], 27);
   assert.equal(counts["sqlite.julianday-function"], 8);
@@ -184,7 +238,7 @@ test("Block 5/7: die Block-4-Plan-Fixture bleibt unverändert nicht ausführbar"
 
   assert.equal(fixture.status, "contract-only");
   assert.equal(fixture.executable, false);
-  assert.equal(fixture.entries.length, 1471);
+  assert.equal(fixture.entries.length, 1478);
   assert.equal(fixture.sourceFingerprint, SQLITE_APPLICATION_DIALECT_MANIFEST.fingerprint);
   for (const entry of fixture.entries) {
     assert.equal(entry.status, "contract-only");

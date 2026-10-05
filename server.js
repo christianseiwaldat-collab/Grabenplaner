@@ -134,8 +134,10 @@ const {
 } = require("./lib/controlled-host-reboot");
 const {
   DEFAULT_HEAD_PATH: DEFAULT_ASSURANCE_HEAD_PATH,
-  readRecoveryAssuranceStatus,
 } = require("./lib/recovery-assurance-status");
+const recoveryAssuranceStatusReader = require("./lib/recovery-assurance-status-reader")
+  .createRecoveryAssuranceStatusReader();
+const readRecoveryAssuranceStatus = options => recoveryAssuranceStatusReader.read(options);
 const { buildSystemTrustIndex } = require("./lib/system-trust-index");
 const {
   buildSystemCenterTrendPayload,
@@ -23133,7 +23135,7 @@ async function getVacationPlan(yearValue, contextInput = {}, session = null) {
   const year = validateYear(yearValue);
   const yearStart = `${year}-01-01`;
   const yearEnd = `${year}-12-31`;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = viennaTodayIso();
   const consumedEnd = today < yearStart ? null : today > yearEnd ? yearEnd : today;
   const context = await resolvePlanningContext(contextInput);
   assertSessionContextScope(session, context);
@@ -23952,7 +23954,7 @@ async function serverDiagnostics() {
         : undefined,
   });
   const offsiteApplicable = serverModeActive || offsiteConfigured || offsiteStatus.statusAvailable;
-  const recoveryAssurance = readRecoveryAssuranceStatus({ configured: offsiteConfigured });
+  const recoveryAssurance = await readRecoveryAssuranceStatus({ configured: offsiteConfigured });
   const configuredOffsiteProviderId = String(
     process.env.GRABENPLANER_OFFSITE_PROVIDER || "",
   ).trim();
@@ -39371,7 +39373,7 @@ const systemCenterTechnicalCache = createSystemCenterTechnicalCache({
       systemCenterUpdateStatus(),
       systemCenterControlCache.read(),
     ]);
-    diagnostics.recoveryAssurance.scheduler = control.scheduler;
+    diagnostics.recoveryAssurance = { ...diagnostics.recoveryAssurance, scheduler: control.scheduler };
     const automation = deriveAutomationStatus(diagnostics.recoveryAssurance, { now: new Date() });
     const resources = systemCenterResourceSummary(diagnostics);
     let databaseHistoryWriteFailed = false;
@@ -39678,11 +39680,11 @@ app.get("/api/portal/v1/system-center", async (request, response) => {
   response.json(await systemCenterPayload(actor));
 });
 
-app.get("/api/portal/v1/system-center/recovery-assurance/reports/:filename", (request, response) => {
+app.get("/api/portal/v1/system-center/recovery-assurance/reports/:filename", async (request, response) => {
   requirePortalAnyPermission(request, ["system:diagnostics:technical"]);
   const match = String(request.params.filename).match(/^([a-f0-9]{64})\.(pdf|md)$/);
   if (!match) throw httpError(400, "Ungültiger Prüfbericht.", "ASSURANCE_REPORT_INVALID");
-  const history = readRecoveryAssuranceStatus({ configured: serverModeActive, reportId: match[1] });
+  const history = await readRecoveryAssuranceStatus({ configured: serverModeActive, reportId: match[1] });
   if (!history.statusAvailable || !history.integrityVerified) {
     throw httpError(503, "Die Signaturkette ist derzeit nicht verifizierbar.", "ASSURANCE_REPORT_UNVERIFIED");
   }
@@ -65032,6 +65034,7 @@ async function closePersistenceForTests() {
   if (process.env.NODE_ENV !== "test") {
     throw new Error("Die Test-Persistence darf nur im Testbetrieb geschlossen werden.");
   }
+  await recoveryAssuranceStatusReader.close();
   if (!databaseClosed) {
     await tradeInsightJobs.stop();
     await salesReportJobs.stop();
@@ -65175,6 +65178,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
   // HTTP 202 uploads outlive their response. Stop admission/reading now, then
   // persist the last acknowledged checkpoint before closing PostgreSQL pools.
   const importDrain=Promise.all([dataImportJobs.stop(),dataImportRoutes.stop()]);
+  const assuranceDrain = recoveryAssuranceStatusReader.close();
   const deadlineMs = Date.now() + 1400000;
   let finished = false;
   let serverClosed = !server;
@@ -65182,6 +65186,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
     if (finished) return;
     finished = true;
     await importDrain;
+    await assuranceDrain;
     await amuScannerProbe.catch(() => {});
     await tradeInsightJobs.stop().catch(() => {});
     await salesReportJobs.stop().catch(() => {});

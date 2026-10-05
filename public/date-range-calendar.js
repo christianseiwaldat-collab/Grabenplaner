@@ -139,7 +139,8 @@
         max: String(config.max || ""),
         maxStart: String(config.maxStart || ""),
         maxEnd: String(config.maxEnd || ""),
-        maxEndDays: Number.isFinite(Number(config.maxEndDays)) ? Math.max(0, Number(config.maxEndDays)) : null,
+        maxEndDays: config.maxEndDays != null && Number.isFinite(Number(config.maxEndDays))
+          ? Math.max(0, Number(config.maxEndDays)) : null,
         allowOpenEnd,
         openEndSelected: Boolean(allowOpenEnd && config.start && !config.end),
         openLabel: String(config.openLabel || "Ende offen"),
