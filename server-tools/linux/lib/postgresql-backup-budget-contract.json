@@ -1,0 +1,739 @@
+{
+  "format": "grabenplaner-backup-budget-bridge-v1",
+  "predecessorVersion": "0.92.75-beta",
+  "predecessorCommit": "503106fa24da31b8194f96b98b4f05fcab269a5a",
+  "files": {
+    "lib/backup-maintenance.js": {
+      "before": "0f4a5df8c77a7ee42faec735f42791fa7feae804af5da9ba3cb6af108e886228",
+      "after": "0f4a5df8c77a7ee42faec735f42791fa7feae804af5da9ba3cb6af108e886228"
+    },
+    "lib/backup-workspace.js": {
+      "before": "4e547f5dd4b805f63ce6024dca8c97c79b269ef10af5683f63927ba97dfcd175",
+      "after": "4e547f5dd4b805f63ce6024dca8c97c79b269ef10af5683f63927ba97dfcd175"
+    },
+    "lib/data-import-contract.js": {
+      "before": "b9379939c517c64f42a6c9209b95c345e43da0ae500014350abab79f12d0fa67",
+      "after": "b9379939c517c64f42a6c9209b95c345e43da0ae500014350abab79f12d0fa67"
+    },
+    "lib/data-import-source-catalog.js": {
+      "before": "32e607b7f20630d31351ebda7b956cc459ef7503d47de9dc800baca6f27760ae",
+      "after": "32e607b7f20630d31351ebda7b956cc459ef7503d47de9dc800baca6f27760ae"
+    },
+    "lib/database-lock.js": {
+      "before": "6ac1ba6ddfb0b0f67388d287a3ff8d3e3890b43b9bde463474eee711d546a483",
+      "after": "6ac1ba6ddfb0b0f67388d287a3ff8d3e3890b43b9bde463474eee711d546a483"
+    },
+    "lib/file-integrity.js": {
+      "before": "599e3cd627ae50f6834b7dd2e835b3b032941bc153d062e4ac5affbee86a0e21",
+      "after": "599e3cd627ae50f6834b7dd2e835b3b032941bc153d062e4ac5affbee86a0e21"
+    },
+    "lib/flexible-search.js": {
+      "before": "bf72f45636c21a119bc73d5c1f8a172ad36dff92441e3fc2888d3a7f691dcf78",
+      "after": "bf72f45636c21a119bc73d5c1f8a172ad36dff92441e3fc2888d3a7f691dcf78"
+    },
+    "lib/persistence/contract.js": {
+      "before": "8bc7b3e111f477152fddf65040ebe4e99da96b6ce02d0b7be36683ef4983bf3c",
+      "after": "8bc7b3e111f477152fddf65040ebe4e99da96b6ce02d0b7be36683ef4983bf3c"
+    },
+    "lib/persistence/errors.js": {
+      "before": "9edf826f96c319010adc2f846f67c516edaa724dc6329839f2d7e5d156d165ae",
+      "after": "9edf826f96c319010adc2f846f67c516edaa724dc6329839f2d7e5d156d165ae"
+    },
+    "lib/persistence/postgresql/boundary/migrate.js": {
+      "before": "be9f9d4b8fae39709ed1e399d486766da23a87b1866cd123dcc03f2dc26f552d",
+      "after": "be9f9d4b8fae39709ed1e399d486766da23a87b1866cd123dcc03f2dc26f552d"
+    },
+    "lib/persistence/postgresql/boundary/schema.js": {
+      "before": "2a878f80d892528a964bd7377c7fa4c3ca26a9dc9a51529df1103e8129c3282b",
+      "after": "2a878f80d892528a964bd7377c7fa4c3ca26a9dc9a51529df1103e8129c3282b"
+    },
+    "lib/persistence/postgresql/contracts/block-1-inventory.json": {
+      "before": "62543b129900cd7de94be5461227512cdb93673d60e797dda94a69cf930d67fd",
+      "after": "62543b129900cd7de94be5461227512cdb93673d60e797dda94a69cf930d67fd"
+    },
+    "lib/persistence/postgresql/contracts/block-4-catalog.json": {
+      "before": "3b2e1d374883a86f4f371e82dc638ec2c405b88f620c6695853346e44bf52805",
+      "after": "3b2e1d374883a86f4f371e82dc638ec2c405b88f620c6695853346e44bf52805"
+    },
+    "lib/persistence/postgresql/contracts/source-schema-v09237.json": {
+      "before": "f74d87df15f830ede19f2cacdd986ff543ca64a77e08a1213308fc1fdeebb622",
+      "after": "f74d87df15f830ede19f2cacdd986ff543ca64a77e08a1213308fc1fdeebb622"
+    },
+    "lib/persistence/postgresql/contracts/vocational-school-catalog-v1.json": {
+      "before": "9af34995c627efadbd3956b90e9465a40c83f0255176e5cc455a285abcfc7664",
+      "after": "9af34995c627efadbd3956b90e9465a40c83f0255176e5cc455a285abcfc7664"
+    },
+    "lib/persistence/postgresql/core/catalog.js": {
+      "before": "04ef5e97b7197002d065ac6036190f9f46dd68b232fc4717ec997b3995d23232",
+      "after": "04ef5e97b7197002d065ac6036190f9f46dd68b232fc4717ec997b3995d23232"
+    },
+    "lib/persistence/postgresql/core/environment.js": {
+      "before": "b0922d38c8890a1ba8f2b0e09039ceae8696faff019af737f90192171451aa67",
+      "after": "b0922d38c8890a1ba8f2b0e09039ceae8696faff019af737f90192171451aa67"
+    },
+    "lib/persistence/postgresql/core/fingerprint.js": {
+      "before": "2233663ae3bb8943f8840d3b921cdde2ff00bbc4c73d841a3207fa413796d77b",
+      "after": "2233663ae3bb8943f8840d3b921cdde2ff00bbc4c73d841a3207fa413796d77b"
+    },
+    "lib/persistence/postgresql/core/personnel-learning-runs.js": {
+      "before": "09cab5f2470174a0ccfaabfdeb5d78df909b60970dce5bf5400a77468db94435",
+      "after": "09cab5f2470174a0ccfaabfdeb5d78df909b60970dce5bf5400a77468db94435"
+    },
+    "lib/persistence/postgresql/core/schema.js": {
+      "before": "eb11b14222ac5433277eb68ddf0755f31e00bb2e82f4774dfd248f17e96f67db",
+      "after": "eb11b14222ac5433277eb68ddf0755f31e00bb2e82f4774dfd248f17e96f67db"
+    },
+    "lib/persistence/postgresql/core/sql.js": {
+      "before": "2dafea9215ceaefb63fcf549a079847c64ec98035ffd2900b7b8592a4357f140",
+      "after": "2dafea9215ceaefb63fcf549a079847c64ec98035ffd2900b7b8592a4357f140"
+    },
+    "lib/persistence/postgresql/core/trade-annotations.js": {
+      "before": "3c63ab53c70b01397a83988161a7204567422f38d832b1ae2c1b278ce5f32f7b",
+      "after": "3c63ab53c70b01397a83988161a7204567422f38d832b1ae2c1b278ce5f32f7b"
+    },
+    "lib/persistence/postgresql/core/vocational-school.js": {
+      "before": "127e1f093f2aa05647190735850e662e1aa16af1509091c51efefbaf38c6adaa",
+      "after": "127e1f093f2aa05647190735850e662e1aa16af1509091c51efefbaf38c6adaa"
+    },
+    "lib/persistence/postgresql/core/xoffi-snapshots.js": {
+      "before": "fffa43d150f2cd1a75d8dc24a478edea9a4dc284efb65f87c1c12ab5bf8f6a0a",
+      "after": "fffa43d150f2cd1a75d8dc24a478edea9a4dc284efb65f87c1c12ab5bf8f6a0a"
+    },
+    "lib/persistence/postgresql/dialect-compiler.js": {
+      "before": "54223989b5fc203c49d8900c1cf01a978f81cd2897067308d6bf74abaa2b866c",
+      "after": "54223989b5fc203c49d8900c1cf01a978f81cd2897067308d6bf74abaa2b866c"
+    },
+    "lib/persistence/postgresql/operations/backup-budget.js": {
+      "before": null,
+      "after": "74c9cbab0f6d5d13a6b24a868ef0599701fcd0207149d1f613593ff82f4a5d36"
+    },
+    "lib/persistence/postgresql/operations/paired-backup.js": {
+      "before": "706ced3cd48f71dfe0500bbd959b077b9393062e8051539199ba20f18a3712ee",
+      "after": "a75868cc45567801d63af57ac9e35edeb67eaedb416f74745a28f66ac1248470"
+    },
+    "lib/persistence/postgresql/operations/paired-bundle.js": {
+      "before": "78205aa8608d61c6b79b51c9bb535fd714ac4b5bb67e5e46a0b10fbc45662df2",
+      "after": "f5734297365a6f68c40625deb135138a91f1c8565ff62c2056dc4a0630ea9872"
+    },
+    "lib/persistence/postgresql/operations/paired-checkpoint.js": {
+      "before": "1d2bd832e540a3dcb7b38dac8c3b5e0303e225cd6ee2ed2acfc57078cd5aceff",
+      "after": "1d2bd832e540a3dcb7b38dac8c3b5e0303e225cd6ee2ed2acfc57078cd5aceff"
+    },
+    "lib/persistence/postgresql/operations/paired-monitor.js": {
+      "before": "d39c728cccba10c182ef48dd75d6e9a3e0879392501d07ab5bfa0f4a29615b1e",
+      "after": "d39c728cccba10c182ef48dd75d6e9a3e0879392501d07ab5bfa0f4a29615b1e"
+    },
+    "lib/persistence/postgresql/operations/paired-restore.js": {
+      "before": "158ef4eacd4f728e8d6b155781e542d5658a9a39da30f85a3c4cc5d3ba14ed90",
+      "after": "158ef4eacd4f728e8d6b155781e542d5658a9a39da30f85a3c4cc5d3ba14ed90"
+    },
+    "lib/persistence/postgresql/operations/paired-retention.js": {
+      "before": "3a8871c5d7a11f82df102e2bee60125b6b457fa12519c7eeb0f5b8390646bd53",
+      "after": "3a8871c5d7a11f82df102e2bee60125b6b457fa12519c7eeb0f5b8390646bd53"
+    },
+    "lib/persistence/postgresql/operations/phase-timing.js": {
+      "before": "b94822b69ba99800d4eec593bf601e1be648177f91d895b41ea22a725f798b40",
+      "after": "b94822b69ba99800d4eec593bf601e1be648177f91d895b41ea22a725f798b40"
+    },
+    "lib/persistence/postgresql/operations/runtime.js": {
+      "before": "fc891765f63b06641f6e7b448f2c9e273103deb757f551133eb73b0887e6dd0b",
+      "after": "e8d9f55dd80d765163e0d233ba857072f87e293de9038d34e52ce38256cadb58"
+    },
+    "lib/persistence/postgresql/operations/status.js": {
+      "before": "473327f5d0aa89aa136e2b06b3385f10e7cf2a0ff17c17dff1d6d69a6a2c1248",
+      "after": "473327f5d0aa89aa136e2b06b3385f10e7cf2a0ff17c17dff1d6d69a6a2c1248"
+    },
+    "lib/persistence/postgresql/policy.js": {
+      "before": "e14969fc1ad2cc14407b9974776a8c2dd60281344fbbc5f731b05616a3c46f11",
+      "after": "e14969fc1ad2cc14407b9974776a8c2dd60281344fbbc5f731b05616a3c46f11"
+    },
+    "lib/persistence/postgresql/productive-configuration.js": {
+      "before": "efd054895f85bc193fe1ec00eaba600535609d24c640bd22a34f9788a0d5f0e6",
+      "after": "efd054895f85bc193fe1ec00eaba600535609d24c640bd22a34f9788a0d5f0e6"
+    },
+    "lib/persistence/postgresql/runtime-binding.js": {
+      "before": "0c45681ea241d8d485cf8febc28f6ce8eaef3e3ade868158aa9f1b83812cfed7",
+      "after": "0c45681ea241d8d485cf8febc28f6ce8eaef3e3ade868158aa9f1b83812cfed7"
+    },
+    "lib/persistence/postgresql/sales/import-delete-performance.js": {
+      "before": "f2804f3ceacf59e754a197809d5cb3d844f412696c5d88d349428760271932f9",
+      "after": "f2804f3ceacf59e754a197809d5cb3d844f412696c5d88d349428760271932f9"
+    },
+    "lib/persistence/postgresql/sales/import-delete.js": {
+      "before": "d4cc14814b45785068d6b1140cf9b965c7ef0c57cf841df875bfb1ac4b02ee49",
+      "after": "d4cc14814b45785068d6b1140cf9b965c7ef0c57cf841df875bfb1ac4b02ee49"
+    },
+    "lib/persistence/postgresql/sales/layout.js": {
+      "before": "881193092bb467bed9a7978226825047ff02faf64bbabcec3a8ada3685820af2",
+      "after": "881193092bb467bed9a7978226825047ff02faf64bbabcec3a8ada3685820af2"
+    },
+    "lib/persistence/postgresql/sales/schema.js": {
+      "before": "fb6bccaf98ba66e51c4eefd9ac89f7b8e356828d65c405a0c03a9916843b7df2",
+      "after": "fb6bccaf98ba66e51c4eefd9ac89f7b8e356828d65c405a0c03a9916843b7df2"
+    },
+    "lib/persistence/sqlite/absence-management-catalog.js": {
+      "before": "34313d88dd8ce85f1046dcdab383b4d700c53ccd0feaaee0ad58966dde17f67e",
+      "after": "34313d88dd8ce85f1046dcdab383b4d700c53ccd0feaaee0ad58966dde17f67e"
+    },
+    "lib/persistence/sqlite/application-catalog.js": {
+      "before": "802938e73410ef90127ac8319baebc1c26ed5b0648c56eabdd4ba45c97532def",
+      "after": "497f5fe0f4a7413cbbf4051d683f85a1be994244102d705b58cb8dda5555ebb9"
+    },
+    "lib/persistence/sqlite/branch-article-stock-catalog.js": {
+      "before": "ffb18fdf81fe3d7a2276cb863b5a3ac275c3544a97d4fda3bbf3151edede0529",
+      "after": "ffb18fdf81fe3d7a2276cb863b5a3ac275c3544a97d4fda3bbf3151edede0529"
+    },
+    "lib/persistence/sqlite/branch-receipt-catalog.js": {
+      "before": "2547353a3bfbde0443bc668d0e7751881b3903361205691b3cb63209ba0c4f6b",
+      "after": "2547353a3bfbde0443bc668d0e7751881b3903361205691b3cb63209ba0c4f6b"
+    },
+    "lib/persistence/sqlite/branding-snapshot-catalog.js": {
+      "before": "c5d31db0f65d54855e18fb440f60bf3096f51de70cb17741b3acd2bb8bfe705e",
+      "after": "c5d31db0f65d54855e18fb440f60bf3096f51de70cb17741b3acd2bb8bfe705e"
+    },
+    "lib/persistence/sqlite/cash-location-reads-catalog.js": {
+      "before": "97d371d2bb7d7695d91f77b65617c5d6f9abffc891d561a808d317a9e6307d11",
+      "after": "0970da4807a36227f58817f78a3b73adc57e8fd35d21d810e23be4f996e93db5"
+    },
+    "lib/persistence/sqlite/cash-publications-catalog.js": {
+      "before": "6f5e306d4db4c98172298763bef0d7a3c840d8627176f5753d097a5d081d4f12",
+      "after": "ed782ee718243da02d8afdedd1249a5aca8b27e5d8290687ac8172474252a629"
+    },
+    "lib/persistence/sqlite/cash-snapshots-catalog.js": {
+      "before": "5ab2b0b4b4ee70ddcd9f1a4f944164f6bfcea5845daf66f4a0139a94b5d8747d",
+      "after": "5ab2b0b4b4ee70ddcd9f1a4f944164f6bfcea5845daf66f4a0139a94b5d8747d"
+    },
+    "lib/persistence/sqlite/collective-agreements-catalog.js": {
+      "before": "e1b198ab37a84c9f0d86c59e0982fba16ecc49f8dc719b403058199f10e12bfb",
+      "after": "e1b198ab37a84c9f0d86c59e0982fba16ecc49f8dc719b403058199f10e12bfb"
+    },
+    "lib/persistence/sqlite/crm-customers-catalog.js": {
+      "before": "ed94914646a38729d953a2243eba719168197e8721ebe8ec65fc738450b0ed51",
+      "after": "ed94914646a38729d953a2243eba719168197e8721ebe8ec65fc738450b0ed51"
+    },
+    "lib/persistence/sqlite/custom-process-management-catalog.js": {
+      "before": "c9b3c8748c9fcdfabf1a9e00165702bfda05d4bb2895eee497698978b86791f1",
+      "after": "c9b3c8748c9fcdfabf1a9e00165702bfda05d4bb2895eee497698978b86791f1"
+    },
+    "lib/persistence/sqlite/custom-work-rules-catalog.js": {
+      "before": "beb87b1972c97f5256d35fdb31668bafd8376b540f241bcd0937c87830ee9b22",
+      "after": "beb87b1972c97f5256d35fdb31668bafd8376b540f241bcd0937c87830ee9b22"
+    },
+    "lib/persistence/sqlite/data-import-catalog.js": {
+      "before": "f389eac40d8b6f36ee45f2bacf2f44d188fa5bf7d2c52e8aa9227f1b76613143",
+      "after": "f389eac40d8b6f36ee45f2bacf2f44d188fa5bf7d2c52e8aa9227f1b76613143"
+    },
+    "lib/persistence/sqlite/data-import-delete-catalog.js": {
+      "before": "dfef0487eef2aaee19ba4065975c80d7786eeb31aefed13816ced3bb6cc57b3e",
+      "after": "dfef0487eef2aaee19ba4065975c80d7786eeb31aefed13816ced3bb6cc57b3e"
+    },
+    "lib/persistence/sqlite/data-import-recheck-catalog.js": {
+      "before": "279732f37dc0f70e2094e2c163098db7616807434b37e442fdce7ea4479e6348",
+      "after": "279732f37dc0f70e2094e2c163098db7616807434b37e442fdce7ea4479e6348"
+    },
+    "lib/persistence/sqlite/data-import-runtime-catalog.js": {
+      "before": "c1f0d83e9eff2d351b85efc28b3f758725f25dea1f7ba3de68446768e44a1442",
+      "after": "c1f0d83e9eff2d351b85efc28b3f758725f25dea1f7ba3de68446768e44a1442"
+    },
+    "lib/persistence/sqlite/governance-store-catalog.js": {
+      "before": "5540d7547d381a0bf854e65a1d54c7d49669ad37fd4c5930005d98da501190d1",
+      "after": "5540d7547d381a0bf854e65a1d54c7d49669ad37fd4c5930005d98da501190d1"
+    },
+    "lib/persistence/sqlite/import-history-catalog.js": {
+      "before": "739cd1427e5174f22329ce5d72f01158260dc2fdd028a3d47579142b15536456",
+      "after": "739cd1427e5174f22329ce5d72f01158260dc2fdd028a3d47579142b15536456"
+    },
+    "lib/persistence/sqlite/import-master-catalog.js": {
+      "before": "5761ec92113b842e5f7635bde48c69c4b1d92aebf5090a628c93a726957fccfe",
+      "after": "0ef0ebefbd05327718de5441e2e7eb5fdc1269fe1675d12c4f61cf28b3010a9f"
+    },
+    "lib/persistence/sqlite/integration-runtime-catalog.js": {
+      "before": "3d29a43f5502cdb034b38d2f9e5f1acfde86522795b589ee1f9e9e08c5a7d91f",
+      "after": "3d29a43f5502cdb034b38d2f9e5f1acfde86522795b589ee1f9e9e08c5a7d91f"
+    },
+    "lib/persistence/sqlite/loan-module-catalog.js": {
+      "before": "111ff0dabb4e1e80acc62295c9ac73c628af1f2d1a49a4c19f691345a87ac6ee",
+      "after": "111ff0dabb4e1e80acc62295c9ac73c628af1f2d1a49a4c19f691345a87ac6ee"
+    },
+    "lib/persistence/sqlite/mobile-auth-catalog.js": {
+      "before": "8de76d3a666b61cd895afdce4891420445a68f8668f8728a7e7c65b90e23e899",
+      "after": "8de76d3a666b61cd895afdce4891420445a68f8668f8728a7e7c65b90e23e899"
+    },
+    "lib/persistence/sqlite/operations/maintenance.js": {
+      "before": "b5400feab6c1641cb5fdc664863a6937240ad28b7e3cc77383ba05e4ac4f26fa",
+      "after": "b5400feab6c1641cb5fdc664863a6937240ad28b7e3cc77383ba05e4ac4f26fa"
+    },
+    "lib/persistence/sqlite/operations/personnel-learning-assignment-schema.js": {
+      "before": "9091cda6cf58e87f94e7a3da5c7b141bf57e3fd96303629e94349e5636e6ad3c",
+      "after": "9091cda6cf58e87f94e7a3da5c7b141bf57e3fd96303629e94349e5636e6ad3c"
+    },
+    "lib/persistence/sqlite/operations/personnel-learning-progress-schema.js": {
+      "before": "a3ee3fa687fbce7848b6f89fb069dbbe68cf2f30af8e6c68b5c6d7276f193570",
+      "after": "a3ee3fa687fbce7848b6f89fb069dbbe68cf2f30af8e6c68b5c6d7276f193570"
+    },
+    "lib/persistence/sqlite/operations/personnel-learning-runs-schema.js": {
+      "before": "b01611f7c2dff7b3eede76a6d89d620eb0e5a116f0155080999a9f90351dbbe2",
+      "after": "b01611f7c2dff7b3eede76a6d89d620eb0e5a116f0155080999a9f90351dbbe2"
+    },
+    "lib/persistence/sqlite/operations/personnel-lifecycle-schema.js": {
+      "before": "5f1502569b88d778b5672d4618df6f18f7ca6264bfcc066065fff43815dcdb05",
+      "after": "5f1502569b88d778b5672d4618df6f18f7ca6264bfcc066065fff43815dcdb05"
+    },
+    "lib/persistence/sqlite/operations/xoffi-snapshots-schema.js": {
+      "before": "f06a7a81af74031f1ff8ce16849d128893bc35b7df2294ee8d7231ebfec3695e",
+      "after": "f06a7a81af74031f1ff8ce16849d128893bc35b7df2294ee8d7231ebfec3695e"
+    },
+    "lib/persistence/sqlite/organization-personnel-catalog.js": {
+      "before": "c0e8b1684590725e96f5c50fb7e5e4e96faf86b0ca07ee4812e687573038b391",
+      "after": "c0e8b1684590725e96f5c50fb7e5e4e96faf86b0ca07ee4812e687573038b391"
+    },
+    "lib/persistence/sqlite/personal-action-log-catalog.js": {
+      "before": "c2389c5db3eacc005829587f7cc576dc54e0dbdbb098b7c32017074fc7ebcaf9",
+      "after": "c2389c5db3eacc005829587f7cc576dc54e0dbdbb098b7c32017074fc7ebcaf9"
+    },
+    "lib/persistence/sqlite/personal-notification-contacts-catalog.js": {
+      "before": "e6183045c160da82ac464996750747f4ab2a135a24cf050d0eacc133dce643c5",
+      "after": "e6183045c160da82ac464996750747f4ab2a135a24cf050d0eacc133dce643c5"
+    },
+    "lib/persistence/sqlite/personnel-learning-catalog.js": {
+      "before": "834af215f11567e95bc3639f1d401e7ed4ad57391024a4f21e3631cb37fd1c26",
+      "after": "834af215f11567e95bc3639f1d401e7ed4ad57391024a4f21e3631cb37fd1c26"
+    },
+    "lib/persistence/sqlite/personnel-learning-runs-catalog.js": {
+      "before": "cc4d9e6a7679e19417658a49fdad04586030d246c8bb2d6f29fc9d564d80534e",
+      "after": "cc4d9e6a7679e19417658a49fdad04586030d246c8bb2d6f29fc9d564d80534e"
+    },
+    "lib/persistence/sqlite/personnel-lifecycle-catalog.js": {
+      "before": "1bd440e1912c1c5688f7007f42bb365f1a6eb54966022e4958ca6a1ea0d53d7a",
+      "after": "1bd440e1912c1c5688f7007f42bb365f1a6eb54966022e4958ca6a1ea0d53d7a"
+    },
+    "lib/persistence/sqlite/planning-settings-catalog.js": {
+      "before": "db2c2b6e94d04c9814cc9bb9513578562497a289668e5fc4e293f41b12068f1c",
+      "after": "db2c2b6e94d04c9814cc9bb9513578562497a289668e5fc4e293f41b12068f1c"
+    },
+    "lib/persistence/sqlite/portal-access-catalog.js": {
+      "before": "e75b611fbe78fcee5443ffc76703e4982c2df4ce5cf63e3abd0e6c7aa93c188e",
+      "after": "e75b611fbe78fcee5443ffc76703e4982c2df4ce5cf63e3abd0e6c7aa93c188e"
+    },
+    "lib/persistence/sqlite/portal-birthday-presentations.js": {
+      "before": "f87fc0558c6b3fb4f418a2af084aa99536c43c83fa0147161fa805359816b9ee",
+      "after": "f87fc0558c6b3fb4f418a2af084aa99536c43c83fa0147161fa805359816b9ee"
+    },
+    "lib/persistence/sqlite/provider.js": {
+      "before": "3f183e54f0a4c1323241d0f480067e0d216c8bf9f7a6cb15b47eb37be21fdb5b",
+      "after": "3f183e54f0a4c1323241d0f480067e0d216c8bf9f7a6cb15b47eb37be21fdb5b"
+    },
+    "lib/persistence/sqlite/runtime-recovery-catalog.js": {
+      "before": "20f90446a039536333b6b17e53689e92d1cff9acf73694db5dfee44597afbadc",
+      "after": "20f90446a039536333b6b17e53689e92d1cff9acf73694db5dfee44597afbadc"
+    },
+    "lib/persistence/sqlite/sales-analytics-catalog.js": {
+      "before": "2e4e8a8371fa860eb7c04f4d043d011303c4dd260950bb6ddf72051701c302ac",
+      "after": "2e4e8a8371fa860eb7c04f4d043d011303c4dd260950bb6ddf72051701c302ac"
+    },
+    "lib/persistence/sqlite/sales-article-branch-orders-catalog.js": {
+      "before": null,
+      "after": "a067166be1901e179b8316919eb3812d023041d70b02aaaf69981e1de11af311"
+    },
+    "lib/persistence/sqlite/sales-article-catalog-catalog.js": {
+      "before": "70e8312b1b806b56b350f276b9ce9e528e27ccc942b6ebc082317d182c7ac9c0",
+      "after": "70e8312b1b806b56b350f276b9ce9e528e27ccc942b6ebc082317d182c7ac9c0"
+    },
+    "lib/persistence/sqlite/sales-article-images-catalog.js": {
+      "before": "9d7cd4767feebb3a709b09b8bccaf8153e7fbf84db1251b18a86c1e615de28db",
+      "after": "9d7cd4767feebb3a709b09b8bccaf8153e7fbf84db1251b18a86c1e615de28db"
+    },
+    "lib/persistence/sqlite/sales-article-search-projection-sql.js": {
+      "before": "f40bca5f727767084bdcbd562824c16c54bd3f74236ef5d9745c733ff23f4a90",
+      "after": "f40bca5f727767084bdcbd562824c16c54bd3f74236ef5d9745c733ff23f4a90"
+    },
+    "lib/persistence/sqlite/sales-article-workspace-catalog.js": {
+      "before": "d1d28316addd2b00dd35be2b024d085d7c0ab32cc5cb7f691a7eb6067b54030e",
+      "after": "642fc5b7e47ae7f7f9d538be902b2c5581606f4133895cb14550c617da01b257"
+    },
+    "lib/persistence/sqlite/sales-report-jobs-catalog.js": {
+      "before": "7c717b6233d0d56906787a298cb1faf11c5e3baf028ce672e9e4f3d32f4ce6f9",
+      "after": "7c717b6233d0d56906787a298cb1faf11c5e3baf028ce672e9e4f3d32f4ce6f9"
+    },
+    "lib/persistence/sqlite/saturday-credit-catalog.js": {
+      "before": "439aee25f8d4ffbccebf024a81de6996957f45af6ec7f771c87db9bd62db1b2e",
+      "after": "439aee25f8d4ffbccebf024a81de6996957f45af6ec7f771c87db9bd62db1b2e"
+    },
+    "lib/persistence/sqlite/sickness-amu-management-catalog.js": {
+      "before": "674b2395359af0c73e54cceae9c2dfd160ecb842f012dd7d94918edff5521582",
+      "after": "674b2395359af0c73e54cceae9c2dfd160ecb842f012dd7d94918edff5521582"
+    },
+    "lib/persistence/sqlite/staff-assignment-request-catalog.js": {
+      "before": "a73c362ddba2b8749b1f31126a857748bf26612491056e5f8f145fc78b62ac95",
+      "after": "a73c362ddba2b8749b1f31126a857748bf26612491056e5f8f145fc78b62ac95"
+    },
+    "lib/persistence/sqlite/system-center-metrics-catalog.js": {
+      "before": "6d1e7b17b70c4449478f56347605327d56ad87246fe26c21f725be3d39c6c1ed",
+      "after": "6d1e7b17b70c4449478f56347605327d56ad87246fe26c21f725be3d39c6c1ed"
+    },
+    "lib/persistence/sqlite/time-tracking-catalog.js": {
+      "before": "b5c9c772ef2a06cdd000d0a0c1d636e2c133dc0cdf062420d967493bf0a70302",
+      "after": "b5c9c772ef2a06cdd000d0a0c1d636e2c133dc0cdf062420d967493bf0a70302"
+    },
+    "lib/persistence/sqlite/trade-annotations-catalog.js": {
+      "before": "52f93c9ff78d259ffde43a5b33a12cc0f71759b072bb6233ceac1569ab3d8811",
+      "after": "52f93c9ff78d259ffde43a5b33a12cc0f71759b072bb6233ceac1569ab3d8811"
+    },
+    "lib/persistence/sqlite/trade-insights-catalog.js": {
+      "before": "166318194969d7df99588e9544dc240014cc8c1f026fd01a022e15765ee6cbba",
+      "after": "166318194969d7df99588e9544dc240014cc8c1f026fd01a022e15765ee6cbba"
+    },
+    "lib/persistence/sqlite/ui-preferences-catalog.js": {
+      "before": "5779fe041164aeaf54f10db8fbafa8396f33ae1bcd4bc2eeb68b1209585f996d",
+      "after": "5779fe041164aeaf54f10db8fbafa8396f33ae1bcd4bc2eeb68b1209585f996d"
+    },
+    "lib/persistence/sqlite/wifi-automation-catalog.js": {
+      "before": "986e312e4142da95cf74093fe340c0fc15df4d9d0e32f29e4dc0f050ba55b89e",
+      "after": "986e312e4142da95cf74093fe340c0fc15df4d9d0e32f29e4dc0f050ba55b89e"
+    },
+    "lib/persistence/sqlite/work-rule-governance-catalog.js": {
+      "before": "052ae57a20caa2b6b293d0ec274e1c515b3eb4aa95c71c5b336d59aa7ce46b2e",
+      "after": "052ae57a20caa2b6b293d0ec274e1c515b3eb4aa95c71c5b336d59aa7ce46b2e"
+    },
+    "lib/persistence/sqlite/work-rule-store-catalog.js": {
+      "before": "844932f0b4d47b4ffaf8ecda4cec8121787a80b20dbbae10bab2a20b7d468b56",
+      "after": "844932f0b4d47b4ffaf8ecda4cec8121787a80b20dbbae10bab2a20b7d468b56"
+    },
+    "lib/persistence/sqlite/xoffi-snapshots-catalog.js": {
+      "before": "16ae9bf15f3fc78cee2edc533fa7e44731e862cde924fee3e5bcd4a574e2d44a",
+      "after": "16ae9bf15f3fc78cee2edc533fa7e44731e862cde924fee3e5bcd4a574e2d44a"
+    },
+    "lib/persistence/statements/absence-management.js": {
+      "before": "4993213299aa2ad60d724786e3bb2c105bd34584080740336fa5c962172c3343",
+      "after": "4993213299aa2ad60d724786e3bb2c105bd34584080740336fa5c962172c3343"
+    },
+    "lib/persistence/statements/branch-article-stock.js": {
+      "before": "2fa63d7d3023e29ec3cdc7706c28276dcb86385718294163abbc0aa24bd73d3e",
+      "after": "2fa63d7d3023e29ec3cdc7706c28276dcb86385718294163abbc0aa24bd73d3e"
+    },
+    "lib/persistence/statements/branch-receipt.js": {
+      "before": "2e4e54af89e7b7ac1104cdc6498036c525c9e9227baeb50038e34b8d1a30d49f",
+      "after": "2e4e54af89e7b7ac1104cdc6498036c525c9e9227baeb50038e34b8d1a30d49f"
+    },
+    "lib/persistence/statements/branding-snapshot.js": {
+      "before": "c33ad7b8443ad55836638f979642f773035d632e03adde2ecdc9c29b30e4154e",
+      "after": "c33ad7b8443ad55836638f979642f773035d632e03adde2ecdc9c29b30e4154e"
+    },
+    "lib/persistence/statements/cash-location-reads.js": {
+      "before": "75b34703d42274da3e84d89c0ded8799f359e5d6ab8b62022f845e95cffea173",
+      "after": "bd78bd06965c478dcadbca94245671f7f3e0808d9606a3f6f016bb1935631725"
+    },
+    "lib/persistence/statements/cash-publications.js": {
+      "before": "01829ff8a619534384ca4c3384f8ea5c686b9664ea77b98ff88cfe6d40a040c5",
+      "after": "9eb83db15c15e46afa8b29762f1a00450ae2c47b70b6a0754f89dd7302453d4b"
+    },
+    "lib/persistence/statements/cash-snapshots.js": {
+      "before": "8902af2a05fa8544c0a92a1c477dec29a9170f4b8af1ab011aa1d313b7b8e93b",
+      "after": "8902af2a05fa8544c0a92a1c477dec29a9170f4b8af1ab011aa1d313b7b8e93b"
+    },
+    "lib/persistence/statements/collective-agreements.js": {
+      "before": "723d29bb35a05924130ab0ac6c1646272c055367743a402d6dbe086a91bdec5f",
+      "after": "723d29bb35a05924130ab0ac6c1646272c055367743a402d6dbe086a91bdec5f"
+    },
+    "lib/persistence/statements/crm-customers.js": {
+      "before": "ea1eda5cee191f79d7500120fa14ddbd031477935d397f0e3a7f79ad1cc4610e",
+      "after": "ea1eda5cee191f79d7500120fa14ddbd031477935d397f0e3a7f79ad1cc4610e"
+    },
+    "lib/persistence/statements/custom-process-management.js": {
+      "before": "2895bf1df1755833f4f8b33ad3bfb41e367c6f60caec1b1d4fb8e87eb8bc5a31",
+      "after": "2895bf1df1755833f4f8b33ad3bfb41e367c6f60caec1b1d4fb8e87eb8bc5a31"
+    },
+    "lib/persistence/statements/custom-work-rules.js": {
+      "before": "51f22152e4a7047b7b566c6eaa04dffa92d1aa365d23d560c661746752d93e87",
+      "after": "51f22152e4a7047b7b566c6eaa04dffa92d1aa365d23d560c661746752d93e87"
+    },
+    "lib/persistence/statements/data-import-recheck.js": {
+      "before": "3f308906d49bdeb8c0efb0e0310050e240687b295aabdc5323839d81649c31ba",
+      "after": "3f308906d49bdeb8c0efb0e0310050e240687b295aabdc5323839d81649c31ba"
+    },
+    "lib/persistence/statements/data-import-runtime.js": {
+      "before": "c76163699403dc2628d315e5930b935f687bb627c7316acabd0d8936096e167a",
+      "after": "c76163699403dc2628d315e5930b935f687bb627c7316acabd0d8936096e167a"
+    },
+    "lib/persistence/statements/data-import.js": {
+      "before": "11a895fc6e5d6fb13ae4b487ab232d5ccf259572d684a0437e8053f3a869037c",
+      "after": "11a895fc6e5d6fb13ae4b487ab232d5ccf259572d684a0437e8053f3a869037c"
+    },
+    "lib/persistence/statements/governance-store.js": {
+      "before": "673a3d0e38e6170390c3a81e5518ac1c16b647b5ce4d0799cabf350aad954749",
+      "after": "673a3d0e38e6170390c3a81e5518ac1c16b647b5ce4d0799cabf350aad954749"
+    },
+    "lib/persistence/statements/import-history.js": {
+      "before": "5e9bebf7b7079682b08571814c265b9177419019d658a115c021a395c78af2ab",
+      "after": "5e9bebf7b7079682b08571814c265b9177419019d658a115c021a395c78af2ab"
+    },
+    "lib/persistence/statements/import-master-data.js": {
+      "before": "b0d6ceb2d670bd3024ca0231f302ff396369dc2b21d4753961a988101e051aea",
+      "after": "cc5c499ba3317404527014fc204de2aa13e5d2b0b3f62548bafa475c8f382d59"
+    },
+    "lib/persistence/statements/integration-runtime.js": {
+      "before": "73ed3705334919550bbbc55e1d06a72d601706bcc19b6cdf743c2a3da3cf17b2",
+      "after": "73ed3705334919550bbbc55e1d06a72d601706bcc19b6cdf743c2a3da3cf17b2"
+    },
+    "lib/persistence/statements/loan-module.js": {
+      "before": "165cf35bbbe8743e82da5d00b244403f66984a2a3f07cef4e6e3e170274863cc",
+      "after": "165cf35bbbe8743e82da5d00b244403f66984a2a3f07cef4e6e3e170274863cc"
+    },
+    "lib/persistence/statements/mobile-auth.js": {
+      "before": "b3137b7242752bf15a8df22cc45de4f5fe66e167f9d34ae5a0e62944af0b403e",
+      "after": "b3137b7242752bf15a8df22cc45de4f5fe66e167f9d34ae5a0e62944af0b403e"
+    },
+    "lib/persistence/statements/organization-personnel.js": {
+      "before": "c516c9e2787c75fcbea01137ae398e6e8f3e03095b467d2e335caa2d42e82043",
+      "after": "c516c9e2787c75fcbea01137ae398e6e8f3e03095b467d2e335caa2d42e82043"
+    },
+    "lib/persistence/statements/personal-action-log.js": {
+      "before": "725273f1424b83cd7a285ec35eddc61334cff2a7b52bc950435c1cb78edee848",
+      "after": "725273f1424b83cd7a285ec35eddc61334cff2a7b52bc950435c1cb78edee848"
+    },
+    "lib/persistence/statements/personal-notification-contacts.js": {
+      "before": "841a1e2a33ddf7eb5ae83ba6e9938855aa6c1aed92bfb82d2bb5cf2d373703da",
+      "after": "841a1e2a33ddf7eb5ae83ba6e9938855aa6c1aed92bfb82d2bb5cf2d373703da"
+    },
+    "lib/persistence/statements/personnel-learning-runs.js": {
+      "before": "a23a1d2b1ba4654b2c3c7db5b9c8c2488b8ce99419854a780f520635a30d993c",
+      "after": "a23a1d2b1ba4654b2c3c7db5b9c8c2488b8ce99419854a780f520635a30d993c"
+    },
+    "lib/persistence/statements/personnel-learning.js": {
+      "before": "edf51330d0c3d2213f1be7e823d68c72622166e7b5ee6348a82057840bea28a9",
+      "after": "edf51330d0c3d2213f1be7e823d68c72622166e7b5ee6348a82057840bea28a9"
+    },
+    "lib/persistence/statements/personnel-lifecycle.js": {
+      "before": "3cbf1f39e7f4d704d1ee8333d7bff649f1ae33373131f7a6737a6f5cd33be354",
+      "after": "3cbf1f39e7f4d704d1ee8333d7bff649f1ae33373131f7a6737a6f5cd33be354"
+    },
+    "lib/persistence/statements/planning-settings.js": {
+      "before": "d9b0f345663d011cda0503568e6b9a107db3923d461b0369eab39c161c8ec8d8",
+      "after": "d9b0f345663d011cda0503568e6b9a107db3923d461b0369eab39c161c8ec8d8"
+    },
+    "lib/persistence/statements/portal-access.js": {
+      "before": "3c125d1ba31eda95e4b44790249d4b94ae902b19fd80a2a4989e6c66dbfe03d7",
+      "after": "3c125d1ba31eda95e4b44790249d4b94ae902b19fd80a2a4989e6c66dbfe03d7"
+    },
+    "lib/persistence/statements/portal-birthday-presentations.js": {
+      "before": "1a3a71b82c696f7384ca1acefc01e8bdc00b3e61ba8648f8e5d7b69182a1b69e",
+      "after": "1a3a71b82c696f7384ca1acefc01e8bdc00b3e61ba8648f8e5d7b69182a1b69e"
+    },
+    "lib/persistence/statements/runtime-recovery.js": {
+      "before": "572e2e354f0f8771b2692a5a849b1f0f61c34f359471871a0397565a3f96a017",
+      "after": "572e2e354f0f8771b2692a5a849b1f0f61c34f359471871a0397565a3f96a017"
+    },
+    "lib/persistence/statements/sales-analytics.js": {
+      "before": "51e3ae211de189403df769729c43aeebc2bb5c5f350bbe3d25cbf582b3a4e3e6",
+      "after": "51e3ae211de189403df769729c43aeebc2bb5c5f350bbe3d25cbf582b3a4e3e6"
+    },
+    "lib/persistence/statements/sales-article-branch-orders.js": {
+      "before": null,
+      "after": "afdd246ca83166abdd3f237080c84ee2c6d553e4979fedd197a309b2de01a0e6"
+    },
+    "lib/persistence/statements/sales-article-catalog.js": {
+      "before": "d9fc108e409cb08aac2e6033bd37ff0e9c645049d58c0adeb24b76909a13695d",
+      "after": "d9fc108e409cb08aac2e6033bd37ff0e9c645049d58c0adeb24b76909a13695d"
+    },
+    "lib/persistence/statements/sales-article-images.js": {
+      "before": "d2ac7141ba8b800e4700b7114a18cb11244a7d19aae49fdb07b8e97ca489b70a",
+      "after": "d2ac7141ba8b800e4700b7114a18cb11244a7d19aae49fdb07b8e97ca489b70a"
+    },
+    "lib/persistence/statements/sales-article-workspace.js": {
+      "before": "8a882064360d62bfd6539b79a964f92192b0b015cf351c3a39e5be1923770be7",
+      "after": "ad36eb9b1b3ee5329034317648122018568f006cdbda28fda7c8663cf83dd1b6"
+    },
+    "lib/persistence/statements/sales-report-jobs.js": {
+      "before": "884f469f6489a1a4d915374e7dc3972e24ef930ba2a01394c2531be9da217292",
+      "after": "884f469f6489a1a4d915374e7dc3972e24ef930ba2a01394c2531be9da217292"
+    },
+    "lib/persistence/statements/saturday-credit.js": {
+      "before": "1ef57442b2ce63fe1f46f6f44d2a6959192003c4e0a5c1a06ea0d51e53cdd692",
+      "after": "1ef57442b2ce63fe1f46f6f44d2a6959192003c4e0a5c1a06ea0d51e53cdd692"
+    },
+    "lib/persistence/statements/sickness-amu-management.js": {
+      "before": "21eb101f7a7888a77d968689e3f360388c21506f4bf9482ae19e55d0cff2f7d0",
+      "after": "21eb101f7a7888a77d968689e3f360388c21506f4bf9482ae19e55d0cff2f7d0"
+    },
+    "lib/persistence/statements/staff-assignment-requests.js": {
+      "before": "30c81a2d7022e4b65969ed2d66f5d8d22e650a219deac6201bca4290c3a45329",
+      "after": "30c81a2d7022e4b65969ed2d66f5d8d22e650a219deac6201bca4290c3a45329"
+    },
+    "lib/persistence/statements/system-center-metrics.js": {
+      "before": "c244a61867985dffde4e84c83902998866380e2d4867bea20c5a3ec7612ad1e5",
+      "after": "c244a61867985dffde4e84c83902998866380e2d4867bea20c5a3ec7612ad1e5"
+    },
+    "lib/persistence/statements/time-tracking.js": {
+      "before": "626238ea3d3d9fe66dcf5e1bc692d791efd48169cb0b7b1bb3dfb5dc2dfbbafe",
+      "after": "626238ea3d3d9fe66dcf5e1bc692d791efd48169cb0b7b1bb3dfb5dc2dfbbafe"
+    },
+    "lib/persistence/statements/trade-annotations.js": {
+      "before": "125a165fb4734e09985c99ea4022f71bacc9b574eb85bacbc988bbcb66d546d4",
+      "after": "125a165fb4734e09985c99ea4022f71bacc9b574eb85bacbc988bbcb66d546d4"
+    },
+    "lib/persistence/statements/trade-insights.js": {
+      "before": "b91c4d779d0696ed97d2533988293de7199c424205563b2a181ff280525a6568",
+      "after": "b91c4d779d0696ed97d2533988293de7199c424205563b2a181ff280525a6568"
+    },
+    "lib/persistence/statements/ui-preferences.js": {
+      "before": "94edc88bdb07431d93a4f1864d986c0c94557e137974650fc2f95f2a5ab8eb34",
+      "after": "94edc88bdb07431d93a4f1864d986c0c94557e137974650fc2f95f2a5ab8eb34"
+    },
+    "lib/persistence/statements/wifi-automation.js": {
+      "before": "6eeddc1466093ba4c4920c6edb28b8817b2e2bcc76f0e5dd15b20188e4015efe",
+      "after": "6eeddc1466093ba4c4920c6edb28b8817b2e2bcc76f0e5dd15b20188e4015efe"
+    },
+    "lib/persistence/statements/work-rule-governance.js": {
+      "before": "8c60158a7ca39567b679300ce0f1d3009391de0548751fa9b1501e4963667e0a",
+      "after": "8c60158a7ca39567b679300ce0f1d3009391de0548751fa9b1501e4963667e0a"
+    },
+    "lib/persistence/statements/work-rule-store.js": {
+      "before": "6b08e53838bd868703f68937b2994b8aa1db7702d35e29320f3d90bb8c257e25",
+      "after": "6b08e53838bd868703f68937b2994b8aa1db7702d35e29320f3d90bb8c257e25"
+    },
+    "lib/persistence/statements/xoffi-snapshots.js": {
+      "before": "b6009a1750e880e0358dd16b1b56edb106a760e8b62e0817932e96e0e0e0b3e4",
+      "after": "b6009a1750e880e0358dd16b1b56edb106a760e8b62e0817932e96e0e0e0b3e4"
+    },
+    "lib/personnel-learning-assessment.js": {
+      "before": "131691490a8240ad7f847d0e0892d6a0c514f8ea971dcc8aee7a7896d4031c14",
+      "after": "131691490a8240ad7f847d0e0892d6a0c514f8ea971dcc8aee7a7896d4031c14"
+    },
+    "lib/personnel-learning-assignments.js": {
+      "before": "c9e607843e496235bce050c893a12cc24953525d8be58ca3b22d99111494e87f",
+      "after": "c9e607843e496235bce050c893a12cc24953525d8be58ca3b22d99111494e87f"
+    },
+    "lib/personnel-learning-catalog.js": {
+      "before": "b049965a76285ec448f23226d0dacca67d3dc84c0182f1f3589ed75833dd987d",
+      "after": "b049965a76285ec448f23226d0dacca67d3dc84c0182f1f3589ed75833dd987d"
+    },
+    "lib/personnel-learning-knowledge.js": {
+      "before": "e5d0aea6d538b409b68874361d667e0754ca9e95bba9b186097188402d805ec0",
+      "after": "e5d0aea6d538b409b68874361d667e0754ca9e95bba9b186097188402d805ec0"
+    },
+    "lib/personnel-learning-progress.js": {
+      "before": "be64666714a56ac4568ff5dc4cc4452993903661033120772e85abe59b936a20",
+      "after": "be64666714a56ac4568ff5dc4cc4452993903661033120772e85abe59b936a20"
+    },
+    "lib/personnel-learning-skills.js": {
+      "before": "65eb137f0c31f885df8c50e38ee0fdfb674cfd9888625ad994035656c4368b4b",
+      "after": "65eb137f0c31f885df8c50e38ee0fdfb674cfd9888625ad994035656c4368b4b"
+    },
+    "lib/personnel-learning-targets.js": {
+      "before": "d62bf4885ca887712aea3ca85a9d3023734ceee7471142207ba03d078d34f152",
+      "after": "d62bf4885ca887712aea3ca85a9d3023734ceee7471142207ba03d078d34f152"
+    },
+    "lib/sales-article-sales-catalog.js": {
+      "before": "4a9c1ab82edda74109d0b51f9577a88ffb0a38065c308aa02430d24c6ed151a3",
+      "after": "4a9c1ab82edda74109d0b51f9577a88ffb0a38065c308aa02430d24c6ed151a3"
+    },
+    "lib/sales-article-sales-statements.js": {
+      "before": "31e93f25e2f219b73c913f0b22ea568f19b4cab838b9c721ecd00cf8af4b5fa5",
+      "after": "31e93f25e2f219b73c913f0b22ea568f19b4cab838b9c721ecd00cf8af4b5fa5"
+    },
+    "lib/sales-article-table.js": {
+      "before": "0748c7fb18d18b3daf042215ecdcd869fc4c1008c59205867c6054d1f2dd2e7c",
+      "after": "0748c7fb18d18b3daf042215ecdcd869fc4c1008c59205867c6054d1f2dd2e7c"
+    },
+    "lib/tradefoto-bestell/metadata.json": {
+      "before": "585cd5fe9d71188e6b415a9e70425aa0f9bf430b5b6a97b1291d478009a91775",
+      "after": "585cd5fe9d71188e6b415a9e70425aa0f9bf430b5b6a97b1291d478009a91775"
+    },
+    "lib/tradefoto-bestell/profiles.js": {
+      "before": "84f667da5614b8a7608fee520bccddd6678927903695c641307bbe1d0fba2405",
+      "after": "84f667da5614b8a7608fee520bccddd6678927903695c641307bbe1d0fba2405"
+    },
+    "lib/tradefoto-full-import-source.js": {
+      "before": "e1df998a2e0644c0360d33f7f60d1de2eea52611ec6dbe5cf2bd1ce40d7e2a8d",
+      "after": "e1df998a2e0644c0360d33f7f60d1de2eea52611ec6dbe5cf2bd1ce40d7e2a8d"
+    },
+    "lib/tradefoto-history-metadata.json": {
+      "before": "98770faacac73038c8e97e0cdb7770db78975d07d67b98f51e6d4d7186ef04b1",
+      "after": "98770faacac73038c8e97e0cdb7770db78975d07d67b98f51e6d4d7186ef04b1"
+    },
+    "lib/tradefoto-history-profiles.js": {
+      "before": "8594a1158945589dac2b203dfee236e62f8ea6a937d16d5917e876ed0b6f6453",
+      "after": "8594a1158945589dac2b203dfee236e62f8ea6a937d16d5917e876ed0b6f6453"
+    },
+    "lib/tradefoto-master-metadata.json": {
+      "before": "91a71f9eed6c4986e18724d84d3a5ad0c967f2b4acb57c73c03a72efcb968f2c",
+      "after": "91a71f9eed6c4986e18724d84d3a5ad0c967f2b4acb57c73c03a72efcb968f2c"
+    },
+    "lib/tradefoto-master-profiles.js": {
+      "before": "5c92927c99ee6083dcbbf0bf847b46cd615e5e057e2bba8503fe0c36ed3ae19f",
+      "after": "5c92927c99ee6083dcbbf0bf847b46cd615e5e057e2bba8503fe0c36ed3ae19f"
+    },
+    "lib/tradefoto-supplement-profiles.js": {
+      "before": "b1b105311ff6b259dd5de5779d60736920a808e4223e1af939ef1aca7cd87c12",
+      "after": "b1b105311ff6b259dd5de5779d60736920a808e4223e1af939ef1aca7cd87c12"
+    },
+    "lib/tradefoto-supplement-reader.js": {
+      "before": "81ecdf0b5f52a69d103a2ab37f01c23f62b6a069a80f069103a1c955f931e265",
+      "after": "81ecdf0b5f52a69d103a2ab37f01c23f62b6a069a80f069103a1c955f931e265"
+    },
+    "lib/tradefoto-supplement-schema.json": {
+      "before": "d98a93bdff7edf53a356ce22d67e65710a0155d4496b458539791eb5fa5447aa",
+      "after": "d98a93bdff7edf53a356ce22d67e65710a0155d4496b458539791eb5fa5447aa"
+    },
+    "pnpm-lock.yaml": {
+      "before": "3c58567950ef654051371f40b8c1248ca7b07b8db0681ce58e0360b690e76e66",
+      "after": "3c58567950ef654051371f40b8c1248ca7b07b8db0681ce58e0360b690e76e66"
+    },
+    "pnpm-workspace.yaml": {
+      "before": "eef3319877380de6dc8153ff06824cf502196422cc44985ce693f70d48b60d3a",
+      "after": "eef3319877380de6dc8153ff06824cf502196422cc44985ce693f70d48b60d3a"
+    },
+    "public/sales-article-column-widths.js": {
+      "before": "173f8c056a3eebc833a5967ab55100ad6f4a818b8427ba6d30d34a6df68a2f8d",
+      "after": "173f8c056a3eebc833a5967ab55100ad6f4a818b8427ba6d30d34a6df68a2f8d"
+    },
+    "public/table-layout.js": {
+      "before": "96bb609b3bacb75f93f4348fc5fc4d68930277d950ffbe1f2a56e0fcc517a7eb",
+      "after": "96bb609b3bacb75f93f4348fc5fc4d68930277d950ffbe1f2a56e0fcc517a7eb"
+    },
+    "server-tools/linux/backup-grabenplaner.sh": {
+      "before": "10f425dcf9904777a46f77adb40eeedb924ef7c51ace6bde0dab6e57aaa22233",
+      "after": "10f425dcf9904777a46f77adb40eeedb924ef7c51ace6bde0dab6e57aaa22233"
+    },
+    "server-tools/linux/lib/common.sh": {
+      "before": "71d6e0c309d31c5e4b08de39f43e8710886894def092937dca3548de4541d9c1",
+      "after": "71d6e0c309d31c5e4b08de39f43e8710886894def092937dca3548de4541d9c1"
+    },
+    "server-tools/linux/lib/deploy-policy.js": {
+      "before": "389eb4b95bc4e50b4b5820479583b1b3b8c0f9bea6a71c1e661b68bcc668d665",
+      "after": "389eb4b95bc4e50b4b5820479583b1b3b8c0f9bea6a71c1e661b68bcc668d665"
+    },
+    "server-tools/linux/lib/postgresql-maintenance.sh": {
+      "before": "cdc79b96dad9fe4274ccc36622160edc278cd7372b24d6af0fb3f81d4e8498b0",
+      "after": "cdc79b96dad9fe4274ccc36622160edc278cd7372b24d6af0fb3f81d4e8498b0"
+    },
+    "server-tools/linux/lib/postgresql-operations.js": {
+      "before": "a0699ec58917ae64fe3e5d36894ccf8eed7bc88d7fd438be4d3e16972d552006",
+      "after": "a0699ec58917ae64fe3e5d36894ccf8eed7bc88d7fd438be4d3e16972d552006"
+    },
+    "server-tools/linux/postgresql/grabenplaner-application.conf.in": {
+      "before": "0bce38477a2baa8c92012e619a42d2f7d9096c7b2c54c9abf8fc4824ef9606f7",
+      "after": "0bce38477a2baa8c92012e619a42d2f7d9096c7b2c54c9abf8fc4824ef9606f7"
+    },
+    "server-tools/linux/postgresql/grabenplaner-postgresql-control.socket.in": {
+      "before": "102d7a94462de9cb4c9629ee496d3699c774840f12dd7dbc49842d395204e089",
+      "after": "102d7a94462de9cb4c9629ee496d3699c774840f12dd7dbc49842d395204e089"
+    },
+    "server-tools/linux/postgresql/grabenplaner-postgresql-control@.service.in": {
+      "before": "93f60cd8c8f14b5ab6cc815bc2718f91682294c4d91a65422c0a23cef63febfc",
+      "after": "93f60cd8c8f14b5ab6cc815bc2718f91682294c4d91a65422c0a23cef63febfc"
+    },
+    "server-tools/linux/postgresql/grabenplaner-postgresql-maintenance-recover.service.in": {
+      "before": "c7bd4776d2cc731ec18dcd26f6656a3bcd11d1a29b42faaed79bf8634c45ddd6",
+      "after": "c7bd4776d2cc731ec18dcd26f6656a3bcd11d1a29b42faaed79bf8634c45ddd6"
+    },
+    "server-tools/linux/postgresql/grabenplaner-postgresql.service.in": {
+      "before": "2a703535f1ff2a49051707abc3423bba4955ed952ab26e17939bfdd96fc19b64",
+      "after": "2a703535f1ff2a49051707abc3423bba4955ed952ab26e17939bfdd96fc19b64"
+    },
+    "server-tools/linux/postgresql/managed-contract.js": {
+      "before": "07c5af8571c8c9ddb900c536a466c1966573668f7d1926408af7075150f09976",
+      "after": "07c5af8571c8c9ddb900c536a466c1966573668f7d1926408af7075150f09976"
+    }
+  }
+}

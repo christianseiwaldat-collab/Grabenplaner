@@ -644,7 +644,7 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
       {
         method: "PUT",
         route: "/api/portal/v1/ui-preferences",
-        body: { workRuleAssessmentExpanded: true },
+        body: { workRuleAssessmentExpanded: true, startDashboardWorkspace: {version: 1, fields: {}} },
       },
     ];
     for (const entry of employeeOnlyRequests) {

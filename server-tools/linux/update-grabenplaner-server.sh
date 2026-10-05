@@ -45,6 +45,9 @@ Ein frischer, vollstaendig gepruefter Rueckkehrpunkt bleibt immer erforderlich.
   --xoffi-snapshots-migration    Freigegebene PostgreSQL-Xoffi-Erweiterung nach
                                  dem App-Tausch und vor dem App-Start; verlangt
                                  eine uebernommene Wartungssperre und full.
+  --postgresql-backup-budget-repair
+                                 Gepruefter einmaliger Backup-Budget-Uebergang
+                                 von 0.92.75; frisches Kandidaten-Paarbackup.
 EOF
 }
 
@@ -77,6 +80,7 @@ verification_policy="auto"
 package_verifier_sha256=""
 xoffi_snapshots_migration=0
 postgresql_backup_repair=0
+postgresql_backup_budget_repair=0
 preflight_only=0
 minimum_free_bytes=5368709120
 deploy_mode="full"
@@ -118,6 +122,7 @@ while (($#)); do
     --verification) verification_policy="${2:?Wert fuer --verification fehlt}"; shift 2 ;;
     --package-verifier-sha256) package_verifier_sha256="${2:?Wert fuer --package-verifier-sha256 fehlt}"; shift 2 ;;
     --xoffi-snapshots-migration) xoffi_snapshots_migration=1; shift ;;
+    --postgresql-backup-budget-repair) postgresql_backup_budget_repair=1; shift ;;
     --preflight-only) preflight_only=1; shift ;;
     --minimum-free-bytes) minimum_free_bytes="${2:?Wert fuer --minimum-free-bytes fehlt}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -129,7 +134,7 @@ gp_require_root
 if (( preflight_only == 1 )); then
   [[ -z "$package_arg" && -z "$sha256_arg" && -z "$sha256_file_arg" && -z "$commit_marker_arg" \
     && -z "$runtime_v5_transition" && -z "$package_verifier_sha256" && "$xoffi_snapshots_migration" -eq 0 \
-    && "$lock_already_held" -eq 0 && "$allow_downgrade" -eq 0 ]] \
+    && "$postgresql_backup_budget_repair" -eq 0 && "$lock_already_held" -eq 0 && "$allow_downgrade" -eq 0 ]] \
     || gp_die "Der Deploy-Vorabcheck akzeptiert keine Paket-, Migrations- oder Freigabeoptionen."
   preflight_script="$SCRIPT_DIR/preflight-grabenplaner-deploy.sh"
   [[ -f "$preflight_script" && ! -L "$preflight_script" ]] || gp_die "Der Deploy-Vorabcheck fehlt."
@@ -161,6 +166,10 @@ gp_load_env_file "$env_file"
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
 data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"
 database_provider="${DB_PROVIDER:-sqlite}"
+if (( postgresql_backup_budget_repair == 1 )); then
+  [[ "$database_provider" == postgresql && -z "$runtime_v5_transition" && "$xoffi_snapshots_migration" -eq 0 ]] \
+    || gp_die 'Der Backup-Budget-Uebergang verlangt PostgreSQL ohne weitere Migrationsbruecke.'
+fi
 if (( xoffi_snapshots_migration == 1 )); then
   [[ "$database_provider" == postgresql && "$lock_already_held" -eq 1 ]] \
     || gp_die "Die Xoffi-Erweiterung verlangt PostgreSQL und die uebernommene Wartungssperre."
@@ -729,7 +738,7 @@ create_exact_local_backup() {
   local backup_script="$app_dir/server-tools/linux/backup-grabenplaner.sh"
   local backup_app_dir="$app_dir"
   local -a retention_args=()
-  if [[ -n "$runtime_v5_transition" ]] || (( ${xoffi_snapshots_migration:-0} == 1 || ${postgresql_backup_repair:-0} == 1 )); then
+  if [[ -n "$runtime_v5_transition" ]] || (( ${xoffi_snapshots_migration:-0} == 1 || ${postgresql_backup_repair:-0} == 1 || ${postgresql_backup_budget_repair:-0} == 1 )); then
     # This complete candidate tree has already passed manifest, dependency,
     # ClamAV and permission checks. The Xoffi release also carries the bounded
     # backup query budget needed by large existing pairs. The probe repair is
@@ -737,6 +746,12 @@ create_exact_local_backup() {
     # Never mix its helpers with old libraries.
     backup_app_dir="$extract_root"
     backup_script="$backup_app_dir/server-tools/linux/backup-grabenplaner.sh"
+    if (( ${postgresql_backup_budget_repair:-0} == 1 )); then
+      # Recheck before each fresh pre-swap backup, including the full path's
+      # second point. A previous point is never accepted as a replacement.
+      "$node" "$backup_app_dir/server-tools/linux/lib/postgresql-backup-budget-compat.js" "$app_dir" "$backup_app_dir" >/dev/null \
+        || gp_die 'Der gepruefte Backup-Budget-Vertrag hat sich geaendert.'
+    fi
     if [[ -n "$runtime_v5_transition" ]]; then retention_args=(--preserve-existing-backups); fi
   elif [[ "$deploy_mode" == short ]]; then
     retention_args=(--defer-archive)
@@ -829,6 +844,10 @@ actual_expanded_bytes="$(du --bytes --summarize "$extract_root" | awk '{print $1
 if [[ "$database_provider" == postgresql ]]; then
   "$node" "$app_dir/server-tools/linux/postgresql/managed-contract.js" "$extract_root" >/dev/null \
     || gp_die 'Der PostgreSQL-Dienstvertrag stimmt nicht mit dem Paket ueberein; eine explizite Modulwartung ist erforderlich.'
+  if (( postgresql_backup_budget_repair == 1 )); then
+    "$node" "$extract_root/server-tools/linux/lib/postgresql-backup-budget-compat.js" "$app_dir" "$extract_root" >/dev/null \
+      || gp_die 'Der Backup-Budget-Uebergang ist nicht fuer den installierten und den geprueften Kandidatenbaum freigegeben.'
+  fi
   # Only the installed v0.92.58 repair needs this bridge. Later releases keep
   # using their already repaired installed engine even when candidate code changes.
   if [[ "$old_version" == 0.92.58-beta && -z "$runtime_v5_transition" && "$xoffi_snapshots_migration" == 0 ]]; then

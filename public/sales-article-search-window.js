@@ -5,12 +5,12 @@
   else root.SalesArticleSearchWindow = api;
 })(typeof window === 'object' ? window : this, function () {
   'use strict';
-  const DEFAULTS = Object.freeze({version:1, x:0, y:0, width:560, height:620, minimized:false});
+  const DEFAULTS = Object.freeze({version:2, x:0, y:0, width:560, height:620, minimized:false});
   const clamp = (value, min, max) => Math.min(max, Math.max(min, Math.round(value)));
   function normalize(value) {
     const number = (key, min, max) => typeof value?.[key] === 'number' && Number.isFinite(value[key])
       ? clamp(value[key], min, max) : DEFAULTS[key];
-    return {version:1, x:number('x',0,16384), y:number('y',0,16384), width:number('width',280,4096),
+    return {version:2, x:number('x',0,16384), y:number('y',0,16384), width:number('width',280,4096),
       height:number('height',200,4096), minimized:value?.minimized === true};
   }
   function defaultGeometry(bounds) {
@@ -24,6 +24,20 @@
     const left = Math.min(right - 1, Math.max(viewportLeft + 8, content?.left || viewportLeft + 8));
     const top = Math.max(viewportTop + 8, (header?.bottom || viewportTop) + 8);
     return {left:left/zoom,top:top/zoom,width:Math.max(1,(right-left)/zoom),height:Math.max(1,(bottom-top)/zoom)};
+  }
+  function viewportBounds(viewport, scale = 1) {
+    const zoom = Number.isFinite(scale) && scale > 0 ? scale : 1;
+    return {left:(viewport.left || 0)/zoom,top:(viewport.top || 0)/zoom,
+      width:Math.max(1,viewport.width/zoom),height:Math.max(1,viewport.height/zoom)};
+  }
+  function migrateGeometry(value, legacyBounds, bounds) {
+    if (value && value.version !== 1) return normalize(value);
+    // V1 positions were relative to the article workspace below its header.
+    // Preserve their visible position and preferred size when moving to V2.
+    const preferred = value ? normalize(value) : defaultGeometry(legacyBounds);
+    const visible = fit(preferred,legacyBounds);
+    return normalize({...preferred,x:legacyBounds.left+visible.x-bounds.left,
+      y:legacyBounds.top+visible.y-bounds.top});
   }
   function fit(preferred, bounds, titleHeight = 44) {
     const value = normalize(preferred), width = Math.min(value.width, Math.max(1, bounds.width));
@@ -55,7 +69,10 @@
         try {
           const value = await options.api('/api/sales/articles/window-preferences', {signal:controller.signal});
           if (controller.signal.aborted || !active || !current(key,ticket) || version !== revision) return;
-          loaded = true; options.apply(value?.configured === true ? normalize(value) : null);
+          const preferred = value?.configured === true
+            ? normalize(options.migrate ? options.migrate(value) : value) : null;
+          loaded = true; options.apply(preferred);
+          if (preferred && value.version === 1 && options.migrate) void change(preferred);
         } catch (error) {
           if (!controller.signal.aborted && active && current(key,ticket) && version === revision) options.error(error);
         } finally { if (read === request) read = null; }
@@ -97,7 +114,8 @@
     const resize = element.querySelector('[data-article-window-resize]');
     const status = element.querySelector('[data-article-window-status]');
     const removers = [], on = (target,type,fn) => { target?.addEventListener(type,fn); removers.push(() => target?.removeEventListener(type,fn)); };
-    let preferred = defaultGeometry(options.bounds()), fitted = null, active = false, drag = null, last = '', destroyed = false;
+    const initialGeometry = () => options.initialGeometry ? normalize(options.initialGeometry()) : defaultGeometry(options.bounds());
+    let preferred = initialGeometry(), fitted = null, active = false, drag = null, last = '', destroyed = false;
     const canUse = () => !destroyed && active && options.canUse();
     function announce() {
       if (status) status.textContent = preferred.minimized ? 'Suchfenster minimiert.'
@@ -177,19 +195,19 @@
     for (const type of ['pointercancel','lostpointercapture']) on(element,type,event => { if (drag?.id === event.pointerId) finish(true); });
     on(element,'keydown',keydown); on(doc,'keydown',event => { if (event.key === 'Escape' && drag) keydown(event); });
     on(toggle,'click',() => minimize(!preferred.minimized));
-    on(reset,'click',() => { if (canUse()) { finish(true); preferred = defaultGeometry(options.bounds()); commit(); } });
+    on(reset,'click',() => { if (canUse()) { finish(true); preferred = initialGeometry(); commit(); } });
     on(win,'resize',refresh); on(win,'scroll',refresh); on(win,'blur',() => finish(true));
     on(win.visualViewport,'resize',refresh); on(win.visualViewport,'scroll',refresh);
     const observer = typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(refresh) : null;
     for (const target of options.observe || []) if (target) observer?.observe(target);
     render();
     return {refresh, get preferred() {return {...preferred};}, get fitted() {return fitted && {...fitted};},
-      set(value) { finish(true); preferred = value ? normalize(value) : defaultGeometry(options.bounds()); render(); },
+      set(value) { finish(true); preferred = value ? normalize(value) : initialGeometry(); render(); },
       restore() { minimize(false); },
       activate() { active = true; render(); },
       suspend() { finish(true); active = false; element.hidden = true; },
       destroy() { finish(true); destroyed = true; observer?.disconnect(); for (const remove of removers) remove(); element.hidden = true; }
     };
   }
-  return Object.freeze({DEFAULTS, normalize, defaultGeometry, contentBounds, fit, createPreferences, attach});
+  return Object.freeze({DEFAULTS, normalize, defaultGeometry, contentBounds, viewportBounds, migrateGeometry, fit, createPreferences, attach});
 });

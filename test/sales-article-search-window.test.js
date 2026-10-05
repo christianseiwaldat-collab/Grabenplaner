@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const {DEFAULTS,contentBounds,fit,defaultGeometry,attach,createPreferences} = require('../public/sales-article-search-window');
+const {DEFAULTS,contentBounds,viewportBounds,migrateGeometry,fit,defaultGeometry,attach,createPreferences} = require('../public/sales-article-search-window');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve,reject; const promise = new Promise((a,b) => {resolve=a;reject=b;}); return {promise,resolve,reject}; };
 
@@ -16,7 +16,7 @@ function surface() {
       preventDefault() {this.prevented=true;},stopPropagation() {this.stopped=true;},...options};
       for (const fn of listeners.get(type) || []) fn(event); return event; }};
 }
-function domFixture(onChange) {
+function domFixture(onChange, extra = {}) {
   const win = surface(), doc = {...surface(),defaultView:win,activeElement:null}; win.visualViewport = surface();
   function element(attributes = {},parent = null) {
     const classes = new Set(), attrs = {...attributes}, captures = new Set();
@@ -37,18 +37,53 @@ function domFixture(onChange) {
   const nodes=[host,title,move,toggle,reset,body,input,resize,status], saved=[], layouts=[];
   let bounds={left:250,top:130,width:1200,height:800}, permitted=true, scale=1.25;
   const controller=attach(host,{window:win,bounds:() => bounds,scale:() => scale,canUse:() => permitted,
-    change:value => {saved.push(value);onChange?.(value);},resize:value => layouts.push(value)});
+    change:value => {saved.push(value);onChange?.(value);},resize:value => layouts.push(value),...extra});
   controller.activate();
   return {win,doc,host,title,move,toggle,reset,body,input,resize,status,saved,layouts,controller,
     bounds(value) {bounds=value;},permit(value) {permitted=value;},scale(value) {scale=value;}};
 }
 
-test('Visible content bounds exclude sidebar/header and convert GP zoom once', () => {
+test('Legacy content bounds remain available for migration and convert GP zoom once', () => {
   assert.deepEqual(contentBounds({left:300,right:1500},{bottom:160},{width:1600,height:900},1.25),
     {left:240,top:134.4,width:960,height:579.2});
   const small=contentBounds({left:0,right:400},{bottom:160},{left:0,top:40,width:400,height:480},1);
   assert.deepEqual(small,{left:8,top:168,width:384,height:344});
   assert.equal(defaultGeometry({width:1200}).x,640);
+});
+
+test('Viewport geometry reaches the complete top-left corner and accounts for zoom and a visual viewport', () => {
+  assert.deepEqual(viewportBounds({width:1600,height:900},1.25),{left:0,top:0,width:1280,height:720});
+  assert.deepEqual(viewportBounds({left:20,top:60,width:400,height:480},1.25),{left:16,top:48,width:320,height:384});
+  const f=domFixture(); f.bounds(viewportBounds({width:1600,height:900},1.25));
+  f.controller.set({...DEFAULTS,x:350,y:130,width:500,height:400});
+  f.host.emit('pointerdown',{target:f.move,clientX:300,clientY:150});
+  f.host.emit('pointermove',{target:f.move,clientX:-999,clientY:-999});
+  f.host.emit('pointerup',{target:f.move});
+  assert.equal(f.host.style.left,'0px'); assert.equal(f.host.style.top,'0px');
+  assert.equal(f.saved[0].x,0); assert.equal(f.saved[0].y,0);
+  f.host.emit('keydown',{target:f.move,key:'End'});
+  f.host.emit('keydown',{target:f.move,key:'Home'});
+  assert.equal(f.host.style.left,'0px'); assert.equal(f.host.style.top,'0px');
+  f.permit(false); f.controller.refresh(); assert.equal(f.host.hidden,true);
+  f.controller.destroy();
+});
+
+test('V1 migration preserves visible placement and preferred size; V2 is never translated again', () => {
+  const legacy={left:240,top:134,width:960,height:579}, bounds={left:0,top:0,width:1280,height:720};
+  const old={...DEFAULTS,version:1,x:85,y:35,width:790,height:540,minimized:true};
+  const upgraded=migrateGeometry(old,legacy,bounds);
+  assert.deepEqual(upgraded,{...old,version:2,x:325,y:169});
+  assert.deepEqual(migrateGeometry(upgraded,{...legacy,left:400,top:200},bounds),upgraded);
+  assert.deepEqual(migrateGeometry({...upgraded,x:0,y:0},legacy,bounds),{...upgraded,x:0,y:0});
+  const oversized=migrateGeometry({...old,width:1400,height:1000,minimized:false},legacy,bounds);
+  assert.equal(oversized.x,240); assert.equal(oversized.y,134);
+  assert.equal(oversized.width,1400); assert.equal(oversized.height,1000);
+  const initial=migrateGeometry(null,legacy,bounds);
+  assert.equal(initial.x,640); assert.equal(initial.y,134);
+  const f=domFixture(undefined,{initialGeometry:() => initial});
+  f.controller.set({...DEFAULTS,x:0,y:0}); f.reset.emit('click');
+  assert.deepEqual(f.controller.preferred,initial);
+  f.controller.destroy();
 });
 
 test('Responsive fitting never replaces the account preference and minimized height remains restorable', () => {
@@ -105,10 +140,10 @@ test('Keyboard move and corner resize are constrained; minimization preserves si
   assert.match(f.status.textContent,/Suchfenster:/);
 });
 
-function preferencesFixture() {
+function preferencesFixture(extra = {}) {
   let key='A|read', allowed=true; const applied=[],errors=[],requests=[];
   const controller=createPreferences({key:() => key,canUse:() => allowed,apply:value => applied.push(value),error:error => errors.push(error),
-    api(url,options = {}) { const pending=deferred(); requests.push({url,options,...pending}); return pending.promise; }});
+    api(url,options = {}) { const pending=deferred(); requests.push({url,options,...pending}); return pending.promise; },...extra});
   return {controller,applied,errors,requests,key(value) {key=value;},permit(value) {allowed=value;}};
 }
 
@@ -119,6 +154,54 @@ test('A late GET cannot override manual movement', async () => {
   f.requests[0].resolve({...DEFAULTS,x:5,minimized:true,configured:true}); await loading;
   assert.deepEqual(f.applied,[null]);
   f.requests[1].resolve({configured:true}); await save; assert.equal(f.errors.length,0);
+});
+
+test('V1 upgrade is saved once in the same queue and never overwrites a newer viewport movement', async () => {
+  const migrate=value => migrateGeometry(value,{left:250,top:130,width:1200,height:800},{left:0,top:0,width:1600,height:1000});
+  const f=preferencesFixture({migrate}), loading=f.controller.activate();
+  f.requests[0].resolve({...DEFAULTS,version:1,x:20,y:30,configured:true}); await loading; await tick();
+  const migrated={...DEFAULTS,x:270,y:160};
+  assert.deepEqual(f.applied.at(-1),migrated);
+  assert.deepEqual(JSON.parse(f.requests[1].options.body),migrated);
+  const latest=f.controller.change({...DEFAULTS,x:0,y:0,width:900});
+  f.controller.suspend(); await f.controller.activate();
+  assert.equal(f.requests.length,2,'re-entry must not fetch coordinates older than the queued movement');
+  f.requests[1].resolve({configured:true}); await tick();
+  assert.deepEqual(JSON.parse(f.requests[2].options.body),{...DEFAULTS,x:0,y:0,width:900});
+  f.requests[2].resolve({configured:true}); await latest;
+  assert.equal(f.errors.length,0);
+});
+
+test('An invalidated or stale legacy read cannot migrate across movement, account, rights or navigation', async () => {
+  for (const reason of ['movement','account','rights','navigation']) {
+    let migrations=0;
+    const f=preferencesFixture({migrate:value => {migrations++;return {...value,x:300};}}), loading=f.controller.activate();
+    let save;
+    if (reason==='movement') save=f.controller.change({...DEFAULTS,x:0,y:0});
+    if (reason==='account') {f.key('B|read');f.controller.invalidate();}
+    if (reason==='rights') {f.permit(false);f.controller.invalidate();}
+    if (reason==='navigation') f.controller.suspend();
+    f.requests[0].resolve({...DEFAULTS,version:1,configured:true}); await loading; await tick();
+    assert.equal(migrations,0,reason);
+    assert.equal(f.requests.length,reason==='movement' ? 2 : 1,reason);
+    if (save) {f.requests[1].resolve({configured:true});await save;}
+  }
+});
+
+test('A failed migration retries from V1 without double translation and cannot discard a newer queued edit', async () => {
+  const migrate=value => migrateGeometry(value,{left:250,top:130,width:1200,height:800},{left:0,top:0,width:1600,height:1000});
+  const f=preferencesFixture({migrate}), stored={...DEFAULTS,version:1,x:20,y:30,configured:true};
+  const first=f.controller.activate(); f.requests[0].resolve(stored); await first; await tick();
+  f.requests[1].reject(new Error('save failed')); await tick();
+  f.controller.suspend(); const reload=f.controller.activate(); f.requests[2].resolve(stored); await reload; await tick();
+  assert.equal(f.applied.at(-1).x,270); assert.equal(f.applied.at(-1).y,160);
+  const latest=f.controller.change({...DEFAULTS,x:0,y:0});
+  f.requests[3].reject(new Error('migration failed again')); await tick();
+  f.controller.suspend(); await f.controller.activate();
+  assert.equal(f.requests.length,5,'newer queued edit remains authoritative after a failed migration');
+  assert.equal(JSON.parse(f.requests[4].options.body).x,0);
+  f.requests[4].resolve({configured:true}); await latest;
+  assert.equal(f.errors.length,2);
 });
 
 test('Navigation keeps all same-account keyboard saves and re-entry cannot reload older geometry over the latest edit', async () => {

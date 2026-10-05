@@ -542,6 +542,61 @@ test("v0.71: Ungültige Darstellungswerte und anonyme Zugriffe werden abgewiesen
   assert.equal(anonymous.response.status, 401, JSON.stringify(anonymous.payload));
 });
 
+test("Dashboard-Feldbeschriftungen sind persönlich, privat und unabhängig vom V3-Layout", async () => {
+  const admin = createPortalSession("v071-admin", "admin");
+  const manager = createPortalSession("v071-manager", "manager");
+  const route = "/api/portal/v1/ui-preferences";
+  const initial = await requestJson(route, {session: admin});
+  assert.equal(initial.response.status, 200);
+  assert.match(initial.response.headers.get("cache-control"), /private.*no-store/);
+  assert.deepEqual(initial.payload.startDashboardWorkspace, {version: 1, fields: {}});
+  const startDashboardWorkspace = {version: 1, fields: {"card:schedule": {title: "<b>Mein Plan</b>", description: "Persönlicher Überblick"}}};
+  const saved = await requestJson(route, {method: "PUT", session: admin, body: {startDashboardWorkspace}});
+  assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+  assert.deepEqual(saved.payload.startDashboardWorkspace, startDashboardWorkspace);
+  assert.deepEqual(saved.payload.startDashboardPreferences, initial.payload.startDashboardPreferences);
+  assert.deepEqual((await requestJson(route, {session: manager})).payload.startDashboardWorkspace, {version: 1, fields: {}});
+  await requestJson(route, {method: "PUT", session: admin, body: {pageThemes: {startDashboard: "dark"}}});
+  const reloaded = await requestJson(route, {session: admin});
+  assert.deepEqual(reloaded.payload.startDashboardWorkspace, startDashboardWorkspace);
+  assert.equal(reloaded.payload.pageThemes.startDashboard, "dark");
+  const noCsrf = await fetch(`${baseUrl}${route}`, {method: "PUT", headers: {Cookie: admin.cookie, "Content-Type": "application/json"}, body: JSON.stringify({startDashboardWorkspace: {version: 1, fields: {}}})});
+  assert.equal(noCsrf.status, 403);
+  await noCsrf.arrayBuffer();
+  assert.deepEqual((await requestJson(route, {session: admin})).payload.startDashboardWorkspace, startDashboardWorkspace);
+  for (const invalid of [null, {version: 1, fields: {unknown: {title: "X"}}}, {version: 1, fields: {"card:schedule": {title: " "}}},
+    {version: 1, fields: {"card:schedule": {description: "x".repeat(401)}}},
+    {version: 1, fields: {}, employeeNumber: "v071-manager"}]) {
+    const rejected = await requestJson(route, {method: "PUT", session: admin, body: {startDashboardWorkspace: invalid, pageThemes: {startDashboard: "light"}}});
+    assert.equal(rejected.response.status, 400, JSON.stringify(rejected.payload));
+  }
+  const unchanged = await requestJson(route, {session: admin});
+  assert.equal(unchanged.payload.pageThemes.startDashboard, "dark");
+  assert.deepEqual(unchanged.payload.startDashboardWorkspace, startDashboardWorkspace);
+  const cleared = await requestJson(route, {method: "PUT", session: admin, body: {startDashboardWorkspace: {version: 1, fields: {}}}});
+  assert.deepEqual(cleared.payload.startDashboardWorkspace, {version: 1, fields: {}});
+});
+
+test("Dashboard-Workspace sperrt Passwortpflicht, anonyme und deaktivierte Sitzungen", async () => {
+  const session = createPortalSession("v071-admin", "admin");
+  const route = "/api/portal/v1/ui-preferences";
+  const startDashboardWorkspace = {version: 1, fields: {"group:branch": {title: "Private Beschriftung"}}};
+  assert.equal((await requestJson(route, {method: "PUT", session, body: {startDashboardWorkspace}})).response.status, 200);
+  db.prepare("UPDATE portal_users SET must_change_password = 1 WHERE employee_number = ?").run("v071-admin");
+  const restricted = await requestJson(route, {session});
+  assert.equal(restricted.response.status, 200);
+  assert.deepEqual(restricted.payload.startDashboardWorkspace, {version: 1, fields: {}});
+  assert.equal((await requestJson(route, {method: "PUT", session, body: {startDashboardWorkspace}})).response.status, 428);
+  assert.equal((await requestJson(route, {method: "PUT", session, body: {pageThemes: {startDashboard: "dark"}}})).response.status, 200);
+  db.prepare("UPDATE portal_users SET must_change_password = 0 WHERE employee_number = ?").run("v071-admin");
+  assert.deepEqual((await requestJson(route, {session})).payload.startDashboardWorkspace, startDashboardWorkspace);
+  db.prepare("UPDATE employees SET active = 0 WHERE personnel_number = ?").run("v071-admin");
+  assert.equal((await requestJson(route, {session})).response.status, 401);
+  assert.equal((await requestJson(route, {method: "PUT", session, body: {startDashboardWorkspace}})).response.status, 401);
+  assert.equal((await requestJson(route)).response.status, 401);
+  assert.equal((await requestJson(route, {method: "PUT", body: {startDashboardWorkspace}})).response.status, 401);
+});
+
 test("Verkaufsanalyse: Grafikexport erzeugt aus der Rechteprojektion eine dreiseitige PDF", async () => {
   const session = createPortalSession("v071-admin", "admin");
   for (const permission of ["sales:analytics:access", "sales:analytics:company:read"]) {

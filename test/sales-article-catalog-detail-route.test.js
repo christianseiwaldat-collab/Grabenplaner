@@ -312,6 +312,12 @@ test('Suchfenster speichern Geometrie und Minimierung mit echtem ACCESS+READ ohn
   const reloaded = await requestJson(route, owner);
   assert.deepEqual(reloaded.payload, saved.payload);
   assert.deepEqual(JSON.parse(db.prepare('SELECT value FROM portal_user_preferences WHERE employee_number = ? AND preference_key = ?').get(owner, model.PREFERENCE_KEY).value), body);
+  const upgraded = { ...body, version: 2, x: 0, y: 0 };
+  const migrated = await requestMutationJson(route, { method: 'PUT', body: upgraded, employeeNumber: owner });
+  assert.equal(migrated.response.status, 200, migrated.text);
+  assert.deepEqual((await requestJson(route, owner)).payload, { ...upgraded, configured: true });
+  assert.deepEqual(JSON.parse(db.prepare('SELECT value FROM portal_user_preferences WHERE employee_number = ? AND preference_key = ?').get(owner, model.PREFERENCE_KEY).value), upgraded);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM portal_user_preferences WHERE employee_number = ? AND preference_key = ?').get(owner, model.PREFERENCE_KEY).count, 1);
   assert.deepEqual((await requestJson('/api/sales/articles/preferences', owner)).payload, tableBefore.payload);
   assert.equal(db.prepare('SELECT value FROM portal_user_preferences WHERE employee_number = ? AND preference_key = ?').get(owner, 'sales_article_table_v1').value, storedTableBefore);
 
@@ -331,7 +337,7 @@ test('Suchfensterpräferenzen bleiben kontogebunden und weisen fremde Inhaber so
   const first = await requestJson(route, WINDOW_READER_A);
   const secondInitial = await requestJson(route, WINDOW_READER_B);
   assert.deepEqual(secondInitial.payload, { ...model.DEFAULT_PREFERENCES, configured: false });
-  const body = { version: 1, x: 10, y: 20, width: 480, height: 390, minimized: false };
+  const body = { version: 2, x: 10, y: 20, width: 480, height: 390, minimized: false };
   const secondSaved = await requestMutationJson(route, { method: 'PUT', body, employeeNumber: WINDOW_READER_B });
   assert.equal(secondSaved.response.status, 200, secondSaved.text);
   assert.deepEqual((await requestJson(route, WINDOW_READER_A)).payload, first.payload);
@@ -339,7 +345,7 @@ test('Suchfensterpräferenzen bleiben kontogebunden und weisen fremde Inhaber so
   for (const invalid of [{ ...body, employeeNumber: WINDOW_READER_A }, { ...body, owner: WINDOW_READER_A },
     { ...body, configured: true }, { ...body, width: '480' }, { ...body, minimized: 0 }, { ...body, x: -1 },
     { ...body, y: 16385 }, { ...body, width: 279 }, { ...body, height: 4097 }, { ...body, x: 1.5 },
-    { ...body, version: 2 }, {}, [], null]) {
+    { ...body, version: 3 }, {}, [], null]) {
     const rejected = await requestMutationJson(route, { method: 'PUT', body: invalid, employeeNumber: WINDOW_READER_B });
     assert.equal(rejected.response.status, 400, rejected.text);
     // Express rejects a JSON null body before the route's schema validator.
@@ -381,6 +387,64 @@ test('Suchfensterpräferenzen prüfen aktuelle Artikelrechte und fallen bei kapu
     const fallback = await requestJson(route, WINDOW_READER_B);
     assert.equal(fallback.response.status, 200, fallback.text);
     assert.deepEqual(fallback.payload, { ...model.DEFAULT_PREFERENCES, configured: false });
+  }
+});
+
+test('Filialansicht speichert pro persönlichem Lesekonto und hält andere Präferenzen und Konten getrennt', async () => {
+  const model=require('../public/sales-article-detail-preferences'),route='/api/sales/articles/detail-preferences';
+  const owner=WINDOW_READER_A, other=WINDOW_READER_B;
+  const before=db.prepare('SELECT preference_key, value FROM portal_user_preferences WHERE employee_number = ? ORDER BY preference_key').all(owner);
+  assert.deepEqual((await requestJson(route,owner)).payload,{...model.defaults(),configured:false});
+  const value={...model.defaults(),hiddenBranchIds:['18','00'],columns:['branch','ordered'],columnWidths:{branch:145,quantity:90,ordered:120},sort:'ordered',direction:'desc'};
+  for(const csrfOptions of [{includeCsrf:false},{csrfHeader:'wrong'}]) {
+    const denied=await requestMutationJson(route,{method:'PUT',body:value,employeeNumber:owner,...csrfOptions});assert.equal(denied.response.status,403,denied.text);
+  }
+  const saved=await requestMutationJson(route,{method:'PUT',body:value,employeeNumber:owner});
+  assert.equal(saved.response.status,200,saved.text);assert.deepEqual(saved.payload,{...value,configured:true});
+  assert.match(saved.response.headers.get('cache-control'),/private.*no-store/);
+  const reload=await requestJson(route,owner);assert.equal(reload.response.headers.get('x-content-type-options'),'nosniff');assert.deepEqual(reload.payload,saved.payload);
+  assert.deepEqual((await requestJson(route,other)).payload,{...model.defaults(),configured:false});
+  const stored=db.prepare('SELECT preference_key, value FROM portal_user_preferences WHERE employee_number = ? ORDER BY preference_key').all(owner);
+  assert.deepEqual(stored.filter(row=>row.preference_key!==model.PREFERENCE_KEY),before);
+  assert.deepEqual(JSON.parse(stored.find(row=>row.preference_key===model.PREFERENCE_KEY).value),value);
+  for(const body of [{...value,employeeNumber:other},{...value,columns:[]},{...value,columns:['secret']},
+    {...value,columnWidths:{branch:801}},{...value,hiddenBranchIds:['18','18']},{...value,version:2}]) {
+    const invalid=await requestMutationJson(route,{method:'PUT',body,employeeNumber:owner});assert.equal(invalid.response.status,400,invalid.text);
+    assert.equal(invalid.payload.code,'SALES_ARTICLE_DETAIL_PREFERENCES_INVALID');
+  }
+  assert.deepEqual((await requestJson(route,owner)).payload,saved.payload);
+  for(const suffix of ['/other','-other']) assert.equal((await requestMutationJson(route+suffix,{method:'PUT',body:value,employeeNumber:owner})).response.status,403);
+});
+
+test('Filialpräferenzen sperren fehlende, widerrufene und eingeschränkte Sitzungen und behandeln beschädigte Werte',async()=>{
+  const model=require('../public/sales-article-detail-preferences'),route='/api/sales/articles/detail-preferences';
+  assert.equal((await fetch(baseUrl+route)).status,401);
+  const accountId=crypto.randomUUID(),token=crypto.randomBytes(32).toString('hex'),csrf=crypto.randomBytes(24).toString('hex');
+  db.prepare(`INSERT INTO portal_organization_accounts (id, login_name, display_name, account_type, password_hash, active,
+    must_change_password, created_by, updated_by) VALUES (?, ?, 'Synthetic branch preferences', 'branch', 'test-only', 1, 0, 'test', 'test')`)
+    .run(accountId,'stock-pref-'+accountId.slice(0,8));
+  db.prepare("INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')")
+    .run(crypto.randomUUID(),accountId,crypto.createHash('sha256').update(token).digest('hex'));
+  const organizationHeaders={Cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,'X-CSRF-Token':csrf,'Content-Type':'application/json'};
+  assert.equal((await fetch(baseUrl+route,{headers:organizationHeaders})).status,403);
+  assert.equal((await fetch(baseUrl+route,{method:'PUT',headers:organizationHeaders,body:JSON.stringify(model.defaults())})).status,403);
+  for(const employeeNumber of [WINDOW_ACCESS_ONLY,WINDOW_READ_WITHOUT_ACCESS]) {
+    assert.equal((await requestJson(route,employeeNumber)).response.status,403);
+    assert.equal((await requestMutationJson(route,{method:'PUT',body:model.defaults(),employeeNumber})).response.status,403);
+  }
+  const cookie=createSession(WINDOW_READER_B);
+  db.prepare('UPDATE portal_users SET must_change_password = 1 WHERE employee_number = ?').run(WINDOW_READER_B);
+  try {
+    assert.equal((await fetch(baseUrl+route,{headers:{Cookie:cookie}})).status,428);
+    assert.equal((await requestMutationJson(route,{method:'PUT',body:model.defaults(),employeeNumber:WINDOW_READER_B})).response.status,428);
+  } finally {db.prepare('UPDATE portal_users SET must_change_password = 0 WHERE employee_number = ?').run(WINDOW_READER_B);}
+  db.prepare('INSERT INTO portal_permission_denials (employee_number, permission, denied_by) VALUES (?, ?, ?)').run(WINDOW_READER_B,SALES_ARTICLE_CATALOG_PERMISSIONS.READ,EMPLOYEE_NUMBER);
+  try {assert.equal((await fetch(baseUrl+route,{headers:{Cookie:cookie}})).status,403);}
+  finally {db.prepare('DELETE FROM portal_permission_denials WHERE employee_number = ? AND permission = ?').run(WINDOW_READER_B,SALES_ARTICLE_CATALOG_PERMISSIONS.READ);}
+  for(const stored of ['bad-json',JSON.stringify({...model.defaults(),columns:[]})]) {
+    db.prepare('INSERT INTO portal_user_preferences (employee_number, preference_key, value) VALUES (?, ?, ?) ON CONFLICT(employee_number, preference_key) DO UPDATE SET value = excluded.value')
+      .run(WINDOW_READER_B,model.PREFERENCE_KEY,stored);
+    assert.deepEqual((await requestJson(route,WINDOW_READER_B)).payload,{...model.defaults(),configured:false});
   }
 });
 

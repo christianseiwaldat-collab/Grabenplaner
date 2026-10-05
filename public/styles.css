@@ -720,7 +720,7 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .sales-article-detail-navigation a[aria-selected="true"] { border-color:var(--green); color:var(--surface); background:var(--green); }
 .sales-article-detail-tab-panel { display:grid; gap:10px; }
 .sales-article-detail-content > [hidden],.sales-analytics-request-form [hidden] { display:none; }
-.sales-article-detail-overview { grid-template-columns:minmax(0,3fr) minmax(0,1fr); align-items:start; gap:10px; }
+.sales-article-detail-overview { grid-template-columns:minmax(0,1fr) minmax(240px,300px) minmax(180px,25%); align-items:start; gap:10px; }
 .sales-article-source-sections { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:10px; }
 .sales-article-source-description { grid-column:1 / -1; }
 .sales-article-master-update { margin-left:auto; color:var(--muted); font-size:10px; text-align:right; }
@@ -730,20 +730,35 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .sales-article-photo-card .sales-article-image-button { width:100%; height:auto; aspect-ratio:1; display:grid; place-items:center; margin:0; }
 .sales-article-photo-card .sales-article-image-button img { position:absolute; inset:4px; width:calc(100% - 8px); height:calc(100% - 8px); }
 .sales-article-photo-card .sales-article-image-edit { width:25px; height:25px; font-size:21px; }
-.sales-article-branch-stock { width:min(100%,300px); }
-.sales-article-stock-layout { display:grid; grid-template-columns:minmax(180px,.75fr) minmax(0,2fr); align-items:start; gap:12px; min-width:0; }
-.sales-article-stock-layout > .sales-article-branch-stock { width:100%; }
-.sales-article-stock-layout .sales-article-source-sections { min-width:0; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr)); }
-@media(max-width:1100px) {
-  .sales-article-stock-layout { grid-template-columns:minmax(160px,.7fr) minmax(0,1.3fr); }
-  .sales-article-stock-layout .sales-article-source-sections { grid-template-columns:1fr; }
-}
-@media(max-width:620px) {
-  .sales-article-stock-layout { grid-template-columns:1fr; }
+.sales-article-branch-stock { width:100%; min-width:0; }
+.sales-article-stock-count { margin-left:auto; color:var(--muted); font-size:11px; white-space:nowrap; }
+.sales-article-stock-settings { margin:8px 10px; min-width:0; font-size:12px; }
+.sales-article-stock-settings > summary { width:fit-content; color:var(--green); cursor:pointer; }
+.sales-article-stock-settings summary:focus-visible,.sales-article-stock-settings button:focus-visible { outline:2px solid var(--green); outline-offset:2px; }
+.sales-article-stock-options { display:grid; gap:8px; margin-top:8px; max-height:310px; overflow:auto; }
+.sales-article-stock-options fieldset { min-width:0; margin:0; padding:8px; border:1px solid var(--line); border-radius:7px; }
+.sales-article-stock-options legend { padding:0 4px; font-weight:700; }
+.sales-article-stock-options label { display:flex; align-items:center; gap:7px; min-height:30px; margin:0; font-size:12px; overflow-wrap:anywhere; }
+.sales-article-stock-options input[type="checkbox"] { flex:0 0 16px; width:16px; height:16px; min-height:16px; padding:0; margin:0; accent-color:var(--green); }
+.sales-article-stock-options small { display:block; margin-top:6px; color:var(--muted); font-size:10px; }
+.sales-article-stock-options button { padding:4px 0; border:0; background:transparent; color:var(--green); font:inherit; text-decoration:underline; cursor:pointer; }
+.sales-article-stock-branches { max-height:150px; overflow:auto; }
+@media(max-width:1200px) {
+  .sales-article-detail-overview { grid-template-columns:minmax(0,1fr) minmax(220px,300px); }
+  #salesArticlePhotoSlot { grid-column:1 / -1; width:min(260px,100%); }
 }
 .sales-article-branch-stock .sales-article-detail-table { min-width:0; width:100%; table-layout:fixed; }
 .sales-article-branch-stock th,.sales-article-branch-stock td { padding:8px 10px; font-size:12px; }
-.sales-article-branch-stock th:last-child,.sales-article-branch-stock td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+.sales-article-branch-stock [data-stock-cell="quantity"],.sales-article-branch-stock [data-stock-cell="ordered"] { text-align:right; font-variant-numeric:tabular-nums; }
+.sales-article-branch-stock th > button[data-stock-sort] { border:0; padding:0 5px 0 0; background:transparent; color:var(--ink); font:inherit; font-weight:700; cursor:pointer; }
+.sales-article-branch-stock .sales-article-detail-table-wrap { min-width:0; max-width:100%; overflow:auto; }
+.sales-article-branch-orders { position:relative; }
+.sales-article-branch-orders summary { cursor:pointer; list-style:none; text-decoration:underline dotted; text-underline-offset:3px; }
+.sales-article-branch-orders summary::-webkit-details-marker { display:none; }
+.sales-article-branch-orders summary:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.sales-article-branch-orders-note { position:fixed; z-index:70; width:min(320px,80vw); max-height:260px; overflow:auto; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); box-shadow:0 8px 24px #0003; text-align:left; font-size:12px; line-height:1.45; }
+.sales-article-branch-orders-note p { margin:0 0 7px; overflow-wrap:anywhere; }
+.sales-article-branch-orders-note p:last-child { margin-bottom:0; }
 .sales-article-named-code { text-decoration:underline dotted; text-underline-offset:3px; cursor:help; }
 .sales-article-price-matrices { display:grid; gap:12px; min-width:0; }
 .sales-article-price-matrix { width:100%; border-collapse:collapse; font-size:11px; font-variant-numeric:tabular-nums; }
@@ -5115,6 +5130,7 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 .system-center-card-checks li.warning i { color:var(--rd-warning); background:var(--rd-warning-soft); }
 .system-center-card-checks li.critical i { color:var(--rd-critical); background:var(--rd-critical-soft); }
 .system-center-card-checks li > a { grid-column:2; justify-self:start; color:var(--rd-text); text-decoration:underline; }
+.system-center-card-checks li > [data-notification-receipt-confirm] { grid-column:2; justify-self:start; min-width:0; max-width:100%; white-space:normal; }
 .system-center-card-checks li small { display:block; margin-top:3px; line-height:1.4; }
 .system-center-factor { scroll-margin-top:100px; }
 .system-center-factor > footer { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:7px; margin-top:auto; padding-top:10px; border-top:1px solid var(--rd-line); }
@@ -7640,3 +7656,20 @@ html[data-active-page-theme="dark"] .custom-work-rule-sticky-actions {
   .xoffi-comparison-table { margin:0 10px; }
   .xoffi-comparison-source { padding:12px; }
 }
+
+/* Scoped article description previews. */
+.sales-article-description-field { min-width:0; }
+.sales-article-description-field [hidden] { display:none!important; }
+.sales-article-description-modes { display:flex; gap:4px; margin:0 0 7px; }
+.sales-article-description-modes button { border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); padding:3px 8px; font:inherit; font-size:11px; cursor:pointer; }
+.sales-article-description-modes button[aria-pressed="true"] { background:var(--green-soft); border-color:var(--green); }
+.sales-article-description-modes button:focus-visible { outline:2px solid var(--green); outline-offset:2px; }
+.sales-article-description-text { white-space:pre-wrap; overflow-wrap:anywhere; }
+.sales-article-description-html { min-width:0; overflow:auto; overflow-wrap:anywhere; }
+.sales-article-description-html p { margin:.4em 0; }
+.sales-article-description-html :is(ul,ol) { padding-left:1.4em; }
+.sales-article-description-html table { border-collapse:collapse; max-width:100%; }
+.sales-article-description-html :is(td,th) { border:1px solid var(--line); padding:4px 6px; text-align:left; }
+.sales-article-description-html pre { max-width:100%; overflow:auto; white-space:pre; }
+.sales-article-description-limit { margin:.5em 0 0; color:var(--muted); font-size:11px; }
+.sales-article-description-empty { margin:0; color:var(--muted); }

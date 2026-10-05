@@ -159,6 +159,7 @@ test("shutdown shares one deadline with drain and does not release the instance 
     const dependencies = { postgresqlActive: false, shutdownStarted: false, server: null, databaseClosed: false, maintenanceOwnsLifecycleBackup: () => false,
       dataImportJobs: { stop: async () => {} }, dataImportRoutes: { stop: async () => {} },
       recoveryAssuranceStatusReader: { close: () => { events.push("assurance-close"); return assuranceDrain; } },
+      updateRequestLifecycle: { close: async () => {} }, systemCenterHealthSyncInFlight: null,
       tradeInsightJobs: { stop: async () => {} },
       salesReportJobs: { stop: async () => {} },
       postgresqlReceiptWorkers: null,
@@ -173,7 +174,7 @@ test("shutdown shares one deadline with drain and does not release the instance 
         assert.equal(reason, "shutdown-signal"); events.push("backup"); deadlines.push(options.deadlineMs);
       }, persistenceProvider: { close: async () => events.push("provider-close") },
       sqliteMaintenanceOperations: { checkpointWal: () => events.push("checkpoint") }, db: { close: () => events.push("db-close") },
-      releaseInstanceLock: () => events.push("release"), process: { exit: value => events.push(`exit-${value}`) } };
+      releaseInstanceLock: () => events.push("release"), completeProcessShutdown: value => events.push(`exit-${value}`) };
     const stop = serverFunction("shutdown", "if (require.main === module)", dependencies);
     stop();
     await new Promise(setImmediate);

@@ -1,7 +1,9 @@
 /* A nonmodal search workspace; article details retain the full content width. */
 #salesArticleCatalogView .sales-article-catalog-workspace { display:block; min-width:0; }
 #salesArticleCatalogView .sales-article-detail { width:100%; }
-.sales-article-search-window { position:fixed; z-index:24; display:flex; flex-direction:column; gap:0; min-width:0; overflow:hidden; border:1px solid var(--line-strong,var(--line)); border-radius:12px; color:var(--ink); background:var(--surface); box-shadow:0 14px 42px rgba(18,39,30,.24); }
+/* Above the header and desktop/mobile navigation; below the login gate and
+   native modal dialogs. Geometry is fitted to the entire visible viewport. */
+.sales-article-search-window { position:fixed; z-index:970; display:flex; flex-direction:column; gap:0; min-width:0; overflow:hidden; border:1px solid var(--line-strong,var(--line)); border-radius:12px; color:var(--ink); background:var(--surface); box-shadow:0 14px 42px rgba(18,39,30,.24); }
 .sales-article-search-window[hidden],.sales-article-search-window [hidden] { display:none !important; }
 .sales-article-window-titlebar { display:flex; flex:0 0 auto; align-items:center; min-height:44px; gap:3px; padding:3px 7px; border-bottom:1px solid var(--line); background:var(--surface-soft); }
 .sales-article-window-titlebar > button { display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; min-width:38px; min-height:38px; padding:6px; border:0; border-radius:7px; color:var(--ink); background:transparent; cursor:pointer; }

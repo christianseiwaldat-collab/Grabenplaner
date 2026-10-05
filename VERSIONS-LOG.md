@@ -1,8 +1,8 @@
 # Versionsstatus
 
-## v0.92.75 Beta · Quellstand
+## v0.92.76 Beta · Quellstand
 
-Verbesserte Navigation, Kundenzeiträume, Artikelansicht und Preisschildgestaltung.
+Persönliche Arbeitsansichten, erweiterte Artikelinformationen und verbesserte Betriebsabläufe.
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease
