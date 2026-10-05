@@ -8,6 +8,10 @@ const crypto = require("node:crypto");
 const net = require("node:net");
 const zlib = require("node:zlib");
 const { promisify } = require("node:util");
+const updateRequestLifecycle = require("./lib/update-request-lifecycle").createUpdateRequestLifecycle();
+const { executeUpdateCommand } = require("./lib/update-command");
+const { completeProcessShutdown } = require("./lib/complete-process-shutdown");
+const startDashboardWorkspaceModel = require("./public/start-dashboard-workspace-preferences");
 const { resolveScheduleDuty, defaultScheduleDutyCode, manualPlanningHours, PLANNING_DAY_COUNT,
   DEFAULT_DUTY_COLORS, normalizeScheduleDutyColors, scheduleDutyColor, scheduleDutyTextColor } = require("./public/schedule-duty");
 const {
@@ -686,6 +690,8 @@ const {
 const { PRIVACY_ORGANIZATION_CATALOG } = require("./lib/privacy-organization");
 const { createPrivacyOrganizationStore } = require("./lib/privacy-organization-store");
 const { isPrivacyOrganizationSettingKey, publicSettingsRows } = require("./lib/privacy-organization-settings");
+const { isSystemNotificationReceiptSettingKey } = require("./lib/system-notification-receipt-settings");
+const notificationReceiptModule = require("./lib/system-notification-receipt-store");
 const {
   OFFICIAL_LEAVE_SOURCES,
   allocateLeaveConsumption,
@@ -3597,8 +3603,8 @@ async function refreshPortalScopeProjectionSnapshot() {
 
 function updateApplicationSettingsSnapshot(settings) {
   applicationSettingsSnapshot = Object.freeze(Object.fromEntries(
-    settings
-      .filter((row) => String(row.key) !== "vacation_count_saturday" && !isPrivacyOrganizationSettingKey(row.key))
+    publicSettingsRows(settings)
+      .filter((row) => String(row.key) !== "vacation_count_saturday")
       .map((row) => [String(row.key), String(row.value)]),
   ));
   return applicationSettingsSnapshot;
@@ -6078,7 +6084,7 @@ function enforceAdminApiAccess(request, _response, next) {
     if (salesArticleCatalogRoute) {
       permission = salesArticleImportRoute
         ? SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT
-        : ['/sales/articles/preferences', '/sales/articles/window-preferences'].includes(request.path) || ["GET", "HEAD", "OPTIONS"].includes(method)
+        : ['/sales/articles/preferences', '/sales/articles/window-preferences', '/sales/articles/detail-preferences'].includes(request.path) || ["GET", "HEAD", "OPTIONS"].includes(method)
           ? SALES_ARTICLE_CATALOG_PERMISSIONS.READ
           : SALES_ARTICLE_CATALOG_PERMISSIONS.WRITE;
     } else if (offsiteFolderRoute) {
@@ -28364,99 +28370,108 @@ function runtimeDriveInfo() {
 
 const GITHUB_REPO = "christianseiwaldat-collab/Grabenplaner";
 
-function findGhExecutable() {
+async function findGhExecutable(signal) {
+  let discovered = [];
+  try {
+    const output = await executeUpdateCommand("where.exe", ["gh"], {signal, timeout: 3000});
+    discovered = output.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+  } catch {
+    signal.throwIfAborted();
+  }
   const candidates = [
     "C:\\Program Files\\GitHub CLI\\gh.exe",
     path.join(os.homedir(), "AppData", "Local", "Programs", "GitHub CLI", "gh.exe"),
-    ...(() => {
-      try {
-        return childProcess.execFileSync("where.exe", ["gh"], { encoding: "utf8", timeout: 3000 })
-          .split(/\r?\n/)
-          .map((item) => item.trim())
-          .filter(Boolean);
-      } catch {
-        return [];
-      }
-    })(),
+    ...discovered,
     "gh",
   ];
-  return [...new Set(candidates)].find((candidate) => {
+  for (const candidate of new Set(candidates)) {
     try {
-      childProcess.execFileSync(candidate, ["--version"], { stdio: "ignore", timeout: 3000 });
-      return true;
+      await executeUpdateCommand(candidate, ["--version"], {signal, timeout: 3000});
+      return candidate;
     } catch {
-      return false;
+      signal.throwIfAborted();
     }
-  }) || null;
+  }
+  return null;
 }
 
 async function latestReleaseViaFetch() {
-  configureSystemCertificateAuthorities();
-  const headers = {
-    "Accept": "application/vnd.github+json",
-    "User-Agent": `${APP_NAME}/${packageMetadata.version}`,
-  };
-  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=20`, { headers });
-  if (response.status === 404) throw new Error("GitHub release not found");
-  if (!response.ok) throw new Error(`GitHub HTTP ${response.status}`);
-  const release = selectLatestRelease(await response.json());
-  if (!release) throw new Error("GitHub release not found");
-  return {
-    source: token ? "github-token" : "github-public",
-    tagName: release.tag_name,
-    name: release.name || "",
-    url: release.html_url,
-    assets: (release.assets || []).map((asset) => ({
-      name: asset.name,
-      url: asset.browser_download_url,
-      size: asset.size,
-      digest: asset.digest || "",
-    })),
-  };
+  return updateRequestLifecycle.run(async (signal) => {
+    configureSystemCertificateAuthorities();
+    const headers = {
+      "Accept": "application/vnd.github+json",
+      "User-Agent": `${APP_NAME}/${packageMetadata.version}`,
+    };
+    const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=20`, { headers, signal });
+    if (!response.ok) {
+      await response.body?.cancel();
+      if (response.status === 404) throw new Error("GitHub release not found");
+      throw new Error(`GitHub HTTP ${response.status}`);
+    }
+    const release = selectLatestRelease(await response.json());
+    if (!release) throw new Error("GitHub release not found");
+    return {
+      source: token ? "github-token" : "github-public",
+      tagName: release.tag_name,
+      name: release.name || "",
+      url: release.html_url,
+      assets: (release.assets || []).map((asset) => ({
+        name: asset.name,
+        url: asset.browser_download_url,
+        size: asset.size,
+        digest: asset.digest || "",
+      })),
+    };
+  });
 }
 
-function latestReleaseViaGh() {
-  const gh = findGhExecutable();
-  if (!gh) throw new Error("GitHub CLI nicht gefunden oder nicht angemeldet.");
-  const listOutput = childProcess.execFileSync(
-    gh,
-    ["release", "list", "--repo", GITHUB_REPO, "--limit", "20", "--json", "tagName,isDraft,isPrerelease,createdAt,publishedAt"],
-    { encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "pipe"] },
-  );
-  const selected = selectLatestRelease(JSON.parse(listOutput));
-  if (!selected) throw new Error("release not found");
-  const output = childProcess.execFileSync(
-    gh,
-    ["release", "view", selected.tagName, "--repo", GITHUB_REPO, "--json", "tagName,name,url,assets"],
-    { encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "pipe"] },
-  );
-  const release = JSON.parse(output);
-  return {
-    source: "gh",
-    tagName: release.tagName,
-    name: release.name || "",
-    url: release.url,
-    assets: (release.assets || []).map((asset) => ({
-      name: asset.name,
-      url: asset.url,
-      size: asset.size,
-      digest: asset.digest || "",
-    })),
-  };
+async function latestReleaseViaGh() {
+  return updateRequestLifecycle.run(async (signal) => {
+    const gh = await findGhExecutable(signal);
+    if (!gh) throw new Error("GitHub CLI nicht gefunden oder nicht angemeldet.");
+    const listOutput = await executeUpdateCommand(
+      gh,
+      ["release", "list", "--repo", GITHUB_REPO, "--limit", "20", "--json", "tagName,isDraft,isPrerelease,createdAt,publishedAt"],
+      {signal},
+    );
+    const selected = selectLatestRelease(JSON.parse(listOutput));
+    if (!selected) throw new Error("release not found");
+    const output = await executeUpdateCommand(
+      gh,
+      ["release", "view", selected.tagName, "--repo", GITHUB_REPO, "--json", "tagName,name,url,assets"],
+      {signal},
+    );
+    const release = JSON.parse(output);
+    return {
+      source: "gh",
+      tagName: release.tagName,
+      name: release.name || "",
+      url: release.url,
+      assets: (release.assets || []).map((asset) => ({
+        name: asset.name,
+        url: asset.url,
+        size: asset.size,
+        digest: asset.digest || "",
+      })),
+    };
+  });
 }
 
 async function getLatestReleaseInfo() {
+  if (updateRequestLifecycle.closed) throw new Error("Update-Abfragen sind während des Dienststopps gesperrt.");
   const errors = [];
   try {
     return await latestReleaseViaFetch();
   } catch (error) {
+    if (updateRequestLifecycle.closed) throw error;
     errors.push(error.message);
   }
   try {
-    return latestReleaseViaGh();
+    return await latestReleaseViaGh();
   } catch (error) {
+    if (updateRequestLifecycle.closed) throw error;
     errors.push(error.message);
   }
   if (errors.some((message) => /release not found|GitHub release not found|HTTP 404/i.test(message))) {
@@ -35009,6 +35024,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let vacationCalendarView = defaultVacationCalendarView();
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
   let startDashboardPreferences = defaultStartDashboardPreferences();
+  let startDashboardWorkspace = startDashboardWorkspaceModel.empty();
   let mobilePortalNavigation = defaultMobilePortalNavigation();
   let mobilePortalAppearance = defaultMobilePortalAppearance();
   let mobilePortalHome = defaultMobilePortalHome();
@@ -35059,6 +35075,13 @@ async function uiPreferencesForActor(actor, overrides = {}) {
       );
     } catch {}
     try {
+      if (!actor.mustChangePassword) {
+        startDashboardWorkspace = startDashboardWorkspaceModel.normalize(
+          JSON.parse(lookup.get(startDashboardWorkspaceModel.KEY) || "null"),
+        );
+      }
+    } catch {}
+    try {
       mobilePortalNavigation = normalizeMobilePortalNavigation(
         JSON.parse(lookup.get("mobile_portal_navigation_v1") || "null"),
       );
@@ -35104,6 +35127,9 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   if (overrides.startDashboardPreferences) {
     startDashboardPreferences = normalizeStartDashboardPreferences(overrides.startDashboardPreferences);
   }
+  if (overrides.startDashboardWorkspace && !actor?.mustChangePassword) {
+    startDashboardWorkspace = startDashboardWorkspaceModel.normalize(overrides.startDashboardWorkspace);
+  }
   if (overrides.mobilePortalNavigation) {
     mobilePortalNavigation = normalizeMobilePortalNavigation(overrides.mobilePortalNavigation);
     mobilePortalNavigationCustomized = true;
@@ -35132,6 +35158,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     vacationCalendarView,
     personnelDashboardLayout,
     startDashboardPreferences,
+    startDashboardWorkspace,
     mobilePortalNavigation,
     mobilePortalAppearance,
     mobilePortalHome,
@@ -35209,6 +35236,14 @@ async function saveUiPreferencesForActor(actor, input = {}) {
   const startDashboardPreferences = input.startDashboardPreferences === undefined
     ? undefined
     : validateStartDashboardPreferences(input.startDashboardPreferences);
+  let startDashboardWorkspace;
+  if (input.startDashboardWorkspace !== undefined) {
+    if (actor?.mustChangePassword) {
+      throw httpError(428, "Bitte zuerst das persönliche Passwort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+    }
+    try { startDashboardWorkspace = startDashboardWorkspaceModel.validate(input.startDashboardWorkspace); }
+    catch (error) { throw httpError(400, error.message, "UI_PREFERENCES_INVALID"); }
+  }
   const mobilePortalNavigation = input.mobilePortalNavigation === undefined
     ? undefined
     : validateMobilePortalNavigation(input.mobilePortalNavigation);
@@ -35230,6 +35265,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     && allowPastWeekEditing === undefined
     && vacationCalendarView === undefined
     && personnelDashboardLayout === undefined && startDashboardPreferences === undefined
+    && startDashboardWorkspace === undefined
     && mobilePortalNavigation === undefined
     && mobilePortalAppearance === undefined && mobilePortalHome === undefined
     && candidateEvaluationPdfPreferences === undefined) {
@@ -35290,6 +35326,9 @@ async function saveUiPreferencesForActor(actor, input = {}) {
         preferenceKey: "start_dashboard_preferences_v3",
         value: JSON.stringify(startDashboardPreferences),
       });
+    }
+    if (startDashboardWorkspace !== undefined) {
+      upserts.push({preferenceKey: startDashboardWorkspaceModel.KEY, value: JSON.stringify(startDashboardWorkspace)});
     }
     if (mobilePortalNavigation !== undefined) {
       upserts.push({
@@ -35357,6 +35396,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     vacationCalendarView,
     personnelDashboardLayout,
     startDashboardPreferences,
+    startDashboardWorkspace,
     mobilePortalNavigation,
     mobilePortalAppearance,
     mobilePortalHome,
@@ -37573,11 +37613,13 @@ app.put("/api/portal/v1/personnel-field-rights/:role", async (request, response)
 });
 
 app.get("/api/portal/v1/ui-preferences", async (request, response) => {
+  response.set({"Cache-Control": "private, no-store, max-age=0", "Pragma": "no-cache"});
   const actor = uiPreferenceActor(request);
   response.json(await uiPreferencesForActor(actor));
 });
 
 app.put("/api/portal/v1/ui-preferences", async (request, response) => {
+  response.set({"Cache-Control": "private, no-store, max-age=0", "Pragma": "no-cache"});
   const actor = uiPreferenceActor(request, { write: true });
   response.json(await saveUiPreferencesForActor(actor, request.body || {}));
 });
@@ -38384,7 +38426,8 @@ async function assertFreshSalesArticleRead(request, session, projection) {
   if (isLocalSystemSession(session)) return;
   const fresh = await loadPortalSessionFromRequest(request, { touch: false });
   if (!fresh || fresh.employeeNumber !== session.employeeNumber || fresh.accountId !== session.accountId
-    || JSON.stringify(salesArticleCatalogProjectionForSession(fresh)) !== JSON.stringify(projection)) {
+    || JSON.stringify(salesArticleCatalogProjectionForSession(fresh)) !== JSON.stringify(projection)
+    || JSON.stringify(require('./lib/tradefoto-bestell/access').projectionFor(fresh)) !== JSON.stringify(require('./lib/tradefoto-bestell/access').projectionFor(session))) {
     throw httpError(403, 'Die Artikelberechtigung hat sich geändert. Bitte erneut laden.', 'SALES_ARTICLE_CATALOG_PERMISSION_DENIED');
   }
 }
@@ -38456,6 +38499,31 @@ app.put('/api/sales/articles/window-preferences', async (request, response) => {
   if (!isLocalSystemSession(session)) {
     await uiPreferencesRepository.upsert(session.employeeNumber, model.PREFERENCE_KEY, JSON.stringify(value));
   }
+  response.json({ ...value, configured: !isLocalSystemSession(session) });
+});
+app.get('/api/sales/articles/detail-preferences', async (request, response) => {
+  const session = salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  const projection = salesArticleCatalogProjectionForSession(session);
+  setSalesArticleCatalogPrivateHeaders(response);
+  const model = require('./public/sales-article-detail-preferences');
+  const stored = isLocalSystemSession(session) ? null : await uiPreferencesRepository.get(session.employeeNumber, model.PREFERENCE_KEY);
+  let value = model.defaults(), configured = false;
+  try { value = model.normalize(JSON.parse(stored?.value || 'null')); configured = true; }
+  catch { /* Missing or damaged private preferences use the safe defaults. */ }
+  await assertFreshSalesArticleRead(request, session, projection);
+  response.json({ ...value, configured });
+});
+app.put('/api/sales/articles/detail-preferences', async (request, response) => {
+  const session = salesArticleCatalogSession(request, SALES_ARTICLE_CATALOG_PERMISSIONS.READ);
+  const projection = salesArticleCatalogProjectionForSession(session);
+  if (!isLocalSystemSession(session)) assertPortalCsrf(request);
+  setSalesArticleCatalogPrivateHeaders(response);
+  const model = require('./public/sales-article-detail-preferences');
+  let value;
+  try { value = model.normalize(request.body); }
+  catch { throw httpError(400, 'Die Einstellungen für den Filialbestand sind ungültig.', 'SALES_ARTICLE_DETAIL_PREFERENCES_INVALID'); }
+  await assertFreshSalesArticleRead(request, session, projection);
+  if (!isLocalSystemSession(session)) await uiPreferencesRepository.upsert(session.employeeNumber, model.PREFERENCE_KEY, JSON.stringify(value));
   response.json({ ...value, configured: !isLocalSystemSession(session) });
 });
 const SALES_ARTICLE_PRICE_DISPLAY_LABELS_BY_SOURCE_FIELD = new Map([
@@ -38620,7 +38688,7 @@ require('./lib/sales-article-tools-routes').registerSalesArticleToolsRoutes(app,
   },
   loadDetail:async(article,session)=>{
     const projection=salesArticleCatalogProjectionForSession(session),revisions=await salesArticleCatalogRepository.listRevisions(article.productId),result=await projectSalesArticleDetail(article,revisions,projection);
-    Object.assign(result.article,await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({access:persistenceProvider,vault:integrationSecretVault,article,projection}));return result;
+    Object.assign(result.article,await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({access:persistenceProvider,vault:integrationSecretVault,article,projection,session}));return result;
   },
   loadSales:async(session,input,fresh)=>managedSalesHistoryRuntime.run(fresh,workspace=>{if(!workspace?.articleSales)require('./lib/data-import-contract').fail('IMPORT_HISTORY_NOT_ACTIVATED',503);return workspace.articleSales.search(input);}),
   loadMovements:async(session,input,fresh)=>{
@@ -38662,7 +38730,7 @@ require('./lib/sales-price-labels-routes').registerSalesPriceLabelsRoutes(app, {
   },
   loadDetail:async(article,session)=>{
     const projection=salesArticleCatalogProjectionForSession(session),result=await projectSalesArticleDetail(article,[],projection);
-    Object.assign(result.article,await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({access:persistenceProvider,vault:integrationSecretVault,article,projection}));return result;
+    Object.assign(result.article,await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({access:persistenceProvider,vault:integrationSecretVault,article,projection,session}));return result;
   },
 });
 
@@ -38688,7 +38756,7 @@ app.get("/api/sales/articles/detail", async (request, response) => {
     const revisions = await salesArticleCatalogRepository.listRevisions(article.productId);
     const projection = salesArticleCatalogProjectionForSession(session);
     const result = await projectSalesArticleDetail(article, revisions, projection);
-    Object.assign(result.article, await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({ access: persistenceProvider, vault: integrationSecretVault, article, projection }));
+    Object.assign(result.article, await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({ access: persistenceProvider, vault: integrationSecretVault, article, projection, session }));
     await assertFreshSalesArticleRead(request, session, projection);
     response.json(result);
   } catch (error) {
@@ -39276,6 +39344,7 @@ function redactedSystemCenterUpdateFailure(checkedAt = new Date().toISOString())
 }
 
 async function systemCenterUpdateStatus() {
+  if (updateRequestLifecycle.closed) return redactedSystemCenterUpdateFailure();
   const now = Date.now();
   if (systemCenterUpdateCache.value && systemCenterUpdateCache.expiresAt > now) {
     return systemCenterUpdateCache.value;
@@ -39292,9 +39361,10 @@ async function systemCenterUpdateStatus() {
       checkedAt,
     }))
     .catch(() => redactedSystemCenterUpdateFailure(checkedAt));
+  let statusTimer;
   const timeout = new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(redactedSystemCenterUpdateFailure(checkedAt)), SYSTEM_CENTER_UPDATE_TIMEOUT_MS);
-    if (typeof timer.unref === "function") timer.unref();
+    statusTimer = setTimeout(() => resolve(redactedSystemCenterUpdateFailure(checkedAt)), SYSTEM_CENTER_UPDATE_TIMEOUT_MS);
+    if (typeof statusTimer.unref === "function") statusTimer.unref();
   });
   systemCenterUpdateCache.inFlight = Promise.race([check, timeout]);
   try {
@@ -39306,6 +39376,7 @@ async function systemCenterUpdateStatus() {
     };
     return value;
   } finally {
+    clearTimeout(statusTimer);
     if (systemCenterUpdateCache.inFlight) systemCenterUpdateCache.inFlight = null;
   }
 }
@@ -39353,7 +39424,8 @@ function systemCenterTechnicalFingerprint() {
     process.env.GRABENPLANER_HOST_SECURITY_STATUS_FILE || DEFAULT_HOST_SECURITY_STATUS_PATH,
     DEFAULT_ASSURANCE_HEAD_PATH,
   ];
-  return watched.map((candidate) => `${candidate}:${systemCenterFileStamp(candidate)}`).join("|");
+  return watched.map((candidate) => `${candidate}:${systemCenterFileStamp(candidate)}`).join("|")
+    + `|email:${externalNotificationAdapter.getEmailConfigurationFingerprint()}`;
 }
 
 const systemCenterControlCache = createSystemCenterTechnicalCache({
@@ -39368,7 +39440,8 @@ const systemCenterTechnicalCache = createSystemCenterTechnicalCache({
   load: async () => {
     const diagnostics = (await serverDiagnostics());
     const status = (await serverStatusSummary(diagnostics));
-    const notificationStatus = externalNotificationProviderStatus();
+    const notificationStatus = {providers: externalNotificationProviderStatus(),
+      deliveries: {email: await requireSystemNotificationReceiptStore().read()}};
     const [updateStatus, control] = await Promise.all([
       systemCenterUpdateStatus(),
       systemCenterControlCache.read(),
@@ -39608,7 +39681,7 @@ async function readSystemCenterOperationalState(technical) {
 
 let systemCenterHealthSyncInFlight = null;
 async function synchronizeSystemCenterHealth() {
-  if (!serverModeActive) return null;
+  if (!serverModeActive || shutdownStarted) return null;
   if (systemCenterHealthSyncInFlight) return systemCenterHealthSyncInFlight;
   systemCenterHealthSyncInFlight = systemCenterTechnicalCache.read()
     .then((technical) => updateSystemCenterOperationalState(technical))
@@ -39660,8 +39733,11 @@ async function systemCenterPayload(actor) {
       lastNotifiedAt: null,
       recipientsCount: null,
     },
+    notificationReceipt: {...technical.notificationStatus.deliveries.email,
+      configurationToken: await requireSystemNotificationReceiptStore().challenge(actor)},
     capabilities: {
       technicalDiagnostics,
+      canConfirmNotificationReceipt: notificationReceiptModule.canConfirmReceipt(actor),
       canRunRecoveryAssurance: permissionAllowed && serverEligible && configured,
     },
     manualRun: {
@@ -39677,7 +39753,34 @@ async function systemCenterPayload(actor) {
 
 app.get("/api/portal/v1/system-center", async (request, response) => {
   const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
+  response.setHeader("Cache-Control", "private, no-store");
   response.json(await systemCenterPayload(actor));
+});
+
+let systemNotificationReceiptStore;
+function requireSystemNotificationReceiptStore() {
+  if (!systemNotificationReceiptStore) systemNotificationReceiptStore = notificationReceiptModule.createSystemNotificationReceiptStore({
+    provider: persistenceProvider, protectJson,
+    parseProtectedJson: (value, context) => JSON.parse(requireAmuStorage().unprotectRecord(value, context)),
+    configuration: () => ({available: externalNotificationProviderStatus().email?.available === true,
+      fingerprint: externalNotificationAdapter.getEmailConfigurationFingerprint()}),
+    revalidateActor: async (request, repositories) => {
+      const fresh = await loadPortalSessionFromRequest(request, {touch: false, repository: repositories.portalAccess});
+      if (!fresh || fresh.employeeNumber !== request.portalSession?.employeeNumber
+        || fresh.accountId !== request.portalSession?.accountId) throw httpError(403, "Das persönliche Konto hat sich geändert.", "NOTIFICATION_RECEIPT_ACCESS_DENIED");
+      return fresh;
+    },
+  });
+  return systemNotificationReceiptStore;
+}
+
+app.post("/api/portal/v1/system-center/notifications/email/confirm-receipt", async (request, response) => {
+  notificationReceiptModule.requireActor(requirePortalSession(request));
+  assertPortalCsrf(request);
+  response.setHeader("Cache-Control", "private, no-store");
+  const result = await requireSystemNotificationReceiptStore().confirm(request.body, request);
+  systemCenterTechnicalCache.invalidate();
+  response.status(201).json(result);
 });
 
 app.get("/api/portal/v1/system-center/recovery-assurance/reports/:filename", async (request, response) => {
@@ -60900,6 +61003,9 @@ function assertRequestPermission(request, permission) {
 }
 
 app.put("/api/settings", async (request, response) => {
+  if (Object.keys(request.body || {}).some(isSystemNotificationReceiptSettingKey)) {
+    throw httpError(400, "Empfangsbestätigungen werden ausschließlich im System-Center erfasst.", "NOTIFICATION_RECEIPT_PROTECTED_SETTING");
+  }
   const body = request.body;
   const currentSettings = getSettings();
   const branchSupervisionSettingsSubmitted = body.branchSupervision !== undefined;
@@ -65035,6 +65141,8 @@ async function closePersistenceForTests() {
     throw new Error("Die Test-Persistence darf nur im Testbetrieb geschlossen werden.");
   }
   await recoveryAssuranceStatusReader.close();
+  await updateRequestLifecycle.close();
+  await systemCenterHealthSyncInFlight?.catch(() => {});
   if (!databaseClosed) {
     await tradeInsightJobs.stop();
     await salesReportJobs.stop();
@@ -65179,6 +65287,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
   // persist the last acknowledged checkpoint before closing PostgreSQL pools.
   const importDrain=Promise.all([dataImportJobs.stop(),dataImportRoutes.stop()]);
   const assuranceDrain = recoveryAssuranceStatusReader.close();
+  const updateDrain = updateRequestLifecycle.close();
   const deadlineMs = Date.now() + 1400000;
   let finished = false;
   let serverClosed = !server;
@@ -65187,6 +65296,8 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
     finished = true;
     await importDrain;
     await assuranceDrain;
+    await updateDrain;
+    await systemCenterHealthSyncInFlight?.catch(() => {});
     await amuScannerProbe.catch(() => {});
     await tradeInsightJobs.stop().catch(() => {});
     await salesReportJobs.stop().catch(() => {});
@@ -65219,7 +65330,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
       try { db?.close(); } finally { databaseClosed = true; }
     }
     releaseInstanceLock();
-    process.exit(exitCode);
+    completeProcessShutdown(exitCode);
   };
   if (backupInterval) clearInterval(backupInterval);
   if (retentionInterval) clearInterval(retentionInterval);
@@ -65239,6 +65350,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
   waitForUploads.unref();
   const forceExit = setTimeout(() => {
     clearInterval(waitForUploads);
+    server.closeAllConnections?.();
     if (amuMutationInProgress > 0) console.error("Dienststopp: Wartephase nach 45 Sekunden beendet; ein AUM-Vorgang war noch aktiv. Sicherung und Prozessabschluss stehen noch aus.");
     void finish();
   }, 45000);

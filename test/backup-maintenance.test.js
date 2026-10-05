@@ -57,14 +57,18 @@ test("updater-owned shutdown still drains work and closes persistence before rel
   const start = source.indexOf("function shutdown("), end = source.indexOf("if (require.main === module)", start);
   for (const assuranceFirst of [false, true]) {
   const events = [];
-  let finishScanner, finishAssurance;
+  let finishScanner, finishAssurance, finishUpdates, finishHealth;
   const amuScannerProbe = new Promise(resolve => { finishScanner = resolve; });
   const assuranceDrain = new Promise(resolve => { finishAssurance = resolve; });
+  const updateDrain = new Promise(resolve => { finishUpdates = resolve; });
+  const healthDrain = new Promise(resolve => { finishHealth = resolve; });
   const dependencies = { postgresqlActive: false, shutdownStarted: false, server: null, databaseClosed: false,
     amuScannerProbe,
     dataImportJobs: { stop: async () => events.push("imports-stop") },
     dataImportRoutes: { stop: async () => events.push("import-routes-stop") },
     recoveryAssuranceStatusReader: { close: () => { events.push("assurance-stop"); return assuranceDrain; } },
+    updateRequestLifecycle: { close: () => { events.push("updates-stop"); return updateDrain; } },
+    systemCenterHealthSyncInFlight: healthDrain,
     tradeInsightJobs: { stop: async () => events.push("trade-insights-stop") },
     salesReportJobs: { stop: async () => events.push("reports-stop") },
     postgresqlReceiptWorkers: {close:async()=>events.push('receipt-workers-stop')},
@@ -75,15 +79,20 @@ test("updater-owned shutdown still drains work and closes persistence before rel
     createDatabaseBackup: async () => events.push("duplicate-backup"),
     persistenceProvider: { close: async () => events.push("persistence-close") },
     sqliteMaintenanceOperations: { checkpointWal: () => events.push("checkpoint") }, db: { close: () => events.push("database-close") },
-    releaseInstanceLock: () => events.push("release"), process: { exit: code => events.push(`exit-${code}`) }, console };
+    releaseInstanceLock: () => events.push("release"), completeProcessShutdown: code => events.push(`exit-${code}`), console };
   const stop = vm.runInNewContext(`${source.slice(start, end)}; shutdown`, dependencies);
   stop(); await new Promise(setImmediate);
-  const stoppedReaders = ["imports-stop", "import-routes-stop", "assurance-stop"];
+  const stoppedReaders = ["imports-stop", "import-routes-stop", "assurance-stop", "updates-stop"];
   assert.deepEqual(events, stoppedReaders, "shutdown must wait for its active readers before backup and persistence cleanup");
   (assuranceFirst ? finishAssurance : finishScanner)(); await new Promise(setImmediate);
   assert.deepEqual(events, stoppedReaders, assuranceFirst ? "the scanner still owns work" : "the assurance worker still owns work");
   assert.equal(dependencies.databaseClosed, false);
   (assuranceFirst ? finishScanner : finishAssurance)(); await new Promise(setImmediate);
+  assert.deepEqual(events, stoppedReaders, "an update request still owns work");
+  finishUpdates(); await new Promise(setImmediate);
+  assert.deepEqual(events, stoppedReaders, "System-Center may still write its completed health state");
+  assert.equal(dependencies.databaseClosed, false);
+  finishHealth(); await new Promise(setImmediate);
   assert.deepEqual(events, [...stoppedReaders, "trade-insights-stop", "reports-stop", "receipt-workers-stop", "drain", "persistence-close", "checkpoint", "database-close", "release", "exit-0"]);
   }
 });

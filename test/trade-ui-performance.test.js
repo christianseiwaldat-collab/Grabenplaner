@@ -72,8 +72,8 @@ function catalogFixture() {
   return { context, catalog, renders, pending, resets: () => resets };
 }
 
-test('Paging and sorting keep the open article DOM and trial values; a new search clears it once', async () => {
-  for (const [options, expected, resetCount] of [[{}, [false, false], 0], [{ reset: true, preserveDetail: true }, [false, false], 0], [{ reset: true }, [true, false], 1]]) {
+test('Paging, sorting and new searches keep the open article DOM; an explicit invalidation clears it once', async () => {
+  for (const [options, expected, resetCount] of [[{}, [false, false], 0], [{ reset: true, preserveDetail: true }, [false, false], 0], [{ reset: true }, [false, false], 0], [{ reset: true, preserveDetail: false }, [true, false], 1]]) {
     const f = catalogFixture(), work = f.context.loadSalesArticleCatalog(options);
     f.pending[0].resolve({ items: [{ productId: 'two' }], total: 2 });
     await work;

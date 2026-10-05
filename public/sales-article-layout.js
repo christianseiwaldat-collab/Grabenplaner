@@ -1,8 +1,8 @@
 (function(root, factory) {
-  const value = factory();
+  const value = factory(typeof module === 'object' && module.exports ? require('./sales-article-detail-preferences') : root.SalesArticleDetailPreferences);
   if (typeof module === 'object' && module.exports) module.exports = value;
   else root.SalesArticleLayout = value;
-})(typeof window === 'object' ? window : this, function() {
+})(typeof window === 'object' ? window : this, function(preferences) {
   'use strict';
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function link(href, label) {
@@ -13,7 +13,39 @@
     } catch {}
     return esc(label);
   }
+  const DESCRIPTION_FIELDS=new Set(['AKurzbeschreibung','ALieferumfang','ShopText','Meldungstext']);
+  function descriptionField(field) {
+    const rich=field?.richText;
+    if(!DESCRIPTION_FIELDS.has(field?.id) || !rich || rich.format!=='gp-article-description-v1'
+      || typeof rich.html!=='string' || typeof rich.text!=='string')return null;
+    const limit=rich.truncated?'<p class="sales-article-description-limit">Gekürzte Vorschau; der vollständige Quelltext bleibt erhalten.</p>':'';
+    if(!rich.text.trim())return '<div class="sales-article-description-field" data-description-field><p class="sales-article-description-empty">Kein darstellbarer Inhalt</p>'+limit+'</div>';
+    if(rich.hasMarkup!==true)return '<div class="sales-article-description-field" data-description-field><div class="sales-article-description-text" data-description-view="text">'+esc(rich.text)+'</div>'+limit+'</div>';
+    // rich.html is produced only by the server's fixed sanitizer. Raw field.value
+    // remains escaped in the existing fallback and is never inserted as markup.
+    return '<div class="sales-article-description-field" data-description-field>'
+      + '<div class="sales-article-description-modes" role="group" aria-label="'+esc(field.label)+': Darstellung">'
+      + ['html','text'].map(value=>'<button type="button" data-description-mode="'+value+'" aria-pressed="'+String(value==='html')+'">'+(value==='html'?'HTML':'Text')+'</button>').join('')
+      + '</div><div class="sales-article-description-html" data-description-view="html">'+rich.html+'</div>'
+      + '<div class="sales-article-description-text" data-description-view="text" hidden>'+esc(rich.text)+'</div>'+limit+'</div>';
+  }
+  function mountDescriptions(root) {
+    for(const field of root.querySelectorAll('[data-description-field]')) {
+      if(field.dataset.descriptionMounted==='true')continue;
+      field.dataset.descriptionMounted='true';
+      field.addEventListener('click',event=>{
+        const button=event.target.closest('[data-description-mode]');
+        if(!button || button.closest('[data-description-field]')!==field)return;
+        const mode=button.dataset.descriptionMode;
+        if(!['html','text'].includes(mode))return;
+        for(const view of field.querySelectorAll('[data-description-view]'))view.hidden=view.dataset.descriptionView!==mode;
+        for(const control of field.querySelectorAll('[data-description-mode]'))control.setAttribute('aria-pressed',String(control.dataset.descriptionMode===mode));
+      });
+    }
+  }
   function fieldValue(field) {
+    const rich = descriptionField(field);
+    if (rich !== null) return rich;
     if (field.href) return link(field.href, field.value);
     return field.title ? '<span class="sales-article-named-code" tabindex="0" title="' + esc(field.title)
       + '" aria-label="' + esc(field.value + ': ' + field.title) + '">' + esc(field.value) + '</span>' : esc(field.value);
@@ -24,6 +56,48 @@
   }
   const decimal = value => value === null || value === undefined ? '–'
     : Number(value).toLocaleString('de-AT', { maximumFractionDigits: 2 });
+  function branchOrders(row, h) {
+    const orders = row.orders;
+    if (!orders || orders.state === 'restricted') return '<span title="Einkaufsrecht für diese Filiale erforderlich">–</span>';
+    const lines = ['Bestellt laut Bestandsimport: ' + decimal(row.ordered), 'Zuletzt belegte BE-Zuordnung; kein gesicherter aktueller Offenstand.'];
+    for (const item of orders.items || []) lines.push('BE ' + item.number + ' · Rest ' + decimal(item.remaining)
+      + (item.state === 'review' ? ' · prüfen' : '') + ' · Stand ' + h.timestamp(item.sourceAt));
+    if (!orders.items?.length) lines.push('Keine belastbare BE-Zuordnung verfügbar.');
+    if (orders.state === 'review') lines.push('Abgleich / Prüfbedarf: Mengen, Status oder Zuordnung sind nicht vollständig bestätigt.');
+    if (orders.truncated) lines.push('Begrenzte Anzeige; weitere historische Positionen können vorhanden sein.');
+    if (orders.matched === true) lines.push('Die belegten Restmengen stimmen mit dem importierten Bestellt-Wert überein.');
+    return '<details class="sales-article-branch-orders"><summary title="' + esc(lines.join('\n')) + '" aria-label="Bestellt '
+      + esc(decimal(row.ordered)) + ' · BE-Zuordnung anzeigen">' + esc(decimal(row.ordered))
+      + ' <span aria-hidden="true">ⓘ</span></summary><div class="sales-article-branch-orders-note">'
+      + lines.map(line => '<p>' + esc(line) + '</p>').join('') + '</div></details>';
+  }
+  function branchStock(stock, h, value = preferences.defaults()) {
+    const rows=stock?.rows || [], hidden=new Set(value.hiddenBranchIds), columns=value.columns.map(id=>preferences.COLUMNS.find(column=>column.id===id));
+    const visible=rows.filter(row=>!hidden.has(row.id)), direction=value.direction==='desc'?-1:1;
+    const number=(row,id)=>id==='ordered' && (!row.orders || row.orders.state==='restricted') ? null : row[id];
+    visible.sort((a,b)=>{
+      if(value.sort==='branch') return direction*a.id.localeCompare(b.id,'de',{numeric:true});
+      const av=number(a,value.sort),bv=number(b,value.sort);
+      if(av==null || bv==null) return av==null && bv==null ? a.id.localeCompare(b.id,'de',{numeric:true}) : av==null?1:-1;
+      return direction*(Number(av)-Number(bv)) || a.id.localeCompare(b.id,'de',{numeric:true});
+    });
+    const chooser='<details class="sales-article-stock-settings" data-stock-settings><summary>Anzeige anpassen</summary><div class="sales-article-stock-options">'
+      + '<fieldset><legend>Filialen</legend><button type="button" data-stock-all>Alle Filialen anzeigen</button><div class="sales-article-stock-branches">'
+      + rows.map(row=>'<label><input type="checkbox" data-stock-branch="'+esc(row.id)+'" '+(!hidden.has(row.id)?'checked':'')+'><span>'+esc(row.id)+(row.name?' · '+esc(row.name):'')+'</span></label>').join('')
+      + (!rows.length?'<p>Keine Filialen zum Artikel vorhanden.</p>':'')+'</div><small>Neue Filialen werden automatisch angezeigt.</small></fieldset>'
+      + '<fieldset><legend>Spalten</legend>'+preferences.COLUMNS.map(column=>'<label><input type="checkbox" data-stock-column="'+column.id+'" '
+        +(value.columns.includes(column.id)?'checked ':'')+(value.columns.length===1 && value.columns[0]===column.id?'disabled':'')+'><span>'+column.label+'</span></label>').join('')
+      + '<small>Mindestens eine Spalte bleibt sichtbar.</small></fieldset></div></details>';
+    const table='<div class="sales-article-detail-table-wrap"><table class="sales-article-detail-table" aria-label="Filialbestand"><thead><tr>'
+      + columns.map(column=>'<th scope="col" data-stock-cell="'+column.id+'" aria-sort="'+(column.id===value.sort?(direction===1?'ascending':'descending'):'none')+'">'
+        + '<button type="button" data-stock-sort="'+column.id+'">'+column.label+' <span aria-hidden="true">'+(column.id===value.sort?(direction===1?'↑':'↓'):'↕')+'</span></button>'
+        + '<button type="button" data-gp-column-resize="'+column.id+'" role="separator" aria-orientation="vertical" aria-label="Spaltenbreite '+column.label+'" aria-valuemin="80" aria-valuemax="800"></button></th>').join('')
+      + '</tr></thead><tbody>'+visible.map(row=>'<tr>'+columns.map(column=>'<td data-stock-cell="'+column.id+'"'
+        +(column.id==='quantity' && row.ambiguous?' title="Mehrdeutige Bestandszuordnung"':'')+'>'
+        +(column.id==='branch'?fieldValue({value:row.id,title:row.name || 'Filialname nicht hinterlegt'}):column.id==='ordered'?branchOrders(row,h):esc(decimal(row.quantity)))+'</td>').join('')+'</tr>').join('')
+      + (!visible.length?'<tr><td colspan="'+columns.length+'">'+(rows.length?'Alle Filialen sind ausgeblendet.':'Kein Filialbestand im aktuellen Import hinterlegt.')+'</td></tr>':'')+'</tbody></table></div>';
+    return '<header><h3>Filialbestand</h3><span class="sales-article-stock-count">'+visible.length+' / '+rows.length+'</span></header>'+chooser+table;
+  }
   function overview(article, h) {
     const source = article.sourceSections || [], group = id => source.find(g => g.id === id)?.fields || [];
     const find = (section, id, label, fallback = '–') => ({ ...(group(section).find(f => f.id === id || f.label === label) || {value:fallback}), label });
@@ -57,16 +131,12 @@
     return '<div class="sales-article-detail-overview"><section class="sales-article-detail-card" id="salesArticleMasterDataSection" aria-labelledby="salesArticleMasterDataTitle">'
       + '<header><h3 id="salesArticleMasterDataTitle">Stammdaten</h3><div class="sales-article-master-update">im GP aktualisiert:'
       + '<time>' + esc(h.timestamp(article.provenance.updatedAt)) + '</time></div></header><dl class="sales-article-detail-data sales-article-master-data">' + fields(base) + '</dl></section>'
+      + '<section class="sales-article-detail-card sales-article-branch-stock" id="salesArticleBranchStock">'+branchStock(stock,h)+'</section>'
       + '<div id="salesArticlePhotoSlot"></div></div>'
       + '<section class="sales-article-detail-card sales-article-source-description"><header><h3>Beschreibung &amp; Lieferumfang</h3></header>'
       + supplier + (group('description').length ? '<dl class="sales-article-detail-data">' + fields(group('description').map(f => ({...f,wide:true}))) + '</dl>' : '') + '</section>'
-      + '<div class="sales-article-stock-layout"><section class="sales-article-detail-card sales-article-branch-stock"><header><h3>Filialbestand</h3></header>'
-      + (stock.rows.length ? '<div class="sales-article-detail-table-wrap"><table class="sales-article-detail-table"><thead><tr><th scope="col">Filiale</th><th scope="col">Bestand</th></tr></thead><tbody>'
-        + stock.rows.map(row => '<tr><td>' + fieldValue({value:row.id,title:row.name || 'Filialname nicht hinterlegt'}) + '</td><td'
-          + (row.ambiguous ? ' title="Mehrdeutige Bestandszuordnung"' : '') + '>' + esc(decimal(row.quantity)) + '</td></tr>').join('')
-        + '</tbody></table></div>' : '<p class="sales-article-detail-message">Kein Filialbestand im aktuellen Import hinterlegt.</p>') + '</section>'
       + '<div class="sales-article-source-sections">' + remaining.map(s => '<section class="sales-article-detail-card"><header><h3>'
-        + esc(s.title) + '</h3></header><dl class="sales-article-detail-data">' + fields(s.fields) + '</dl></section>').join('') + '</div></div>';
+        + esc(s.title) + '</h3></header><dl class="sales-article-detail-data">' + fields(s.fields) + '</dl></section>').join('') + '</div>';
   }
   function notes(value, h) {
     const items = value?.items || [];
@@ -160,5 +230,5 @@
       wkzType: capabilities.costsRead ? matrix.wkzType : null,
       purchaseDate: capabilities.costsRead ? matrix.purchaseDate : null, futurePurchaseDate: capabilities.costsRead ? matrix.futurePurchaseDate : null };
   }
-  return { overview, prices, notes, mountNotes, fieldValue, link, restrictPrices };
+  return { mountDescriptions, overview, branchStock, prices, notes, mountNotes, fieldValue, link, restrictPrices };
 });

@@ -59,7 +59,7 @@ test('Lokales Suchfenster braucht kein Portal-CSRF und legt keine Präferenzen f
   const model = require('../lib/sales-article-search-window-preferences');
   const route = `${baseUrl}/api/sales/articles/window-preferences`;
   const beforeCount = db.prepare('SELECT COUNT(*) AS count FROM portal_user_preferences').get().count;
-  const saved = { version: 1, x: 200, y: 25, width: 640, height: 520, minimized: true };
+  const saved = { version: 2, x: 200, y: 25, width: 640, height: 520, minimized: true };
   const response = await fetch(route, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(saved) });
   const payload = await response.json();
   assert.equal(response.status, 200, JSON.stringify(payload));
@@ -68,6 +68,16 @@ test('Lokales Suchfenster braucht kein Portal-CSRF und legt keine Präferenzen f
   const reloaded = await fetch(route);
   assert.equal(reloaded.status, 200);
   assert.deepEqual(await reloaded.json(), { ...model.DEFAULT_PREFERENCES, configured: false });
+});
+
+test('Lokale Filialanzeige braucht kein CSRF und speichert keine künstlichen Kontopräferenzen',async()=>{
+  const model=require('../public/sales-article-detail-preferences'),route=baseUrl+'/api/sales/articles/detail-preferences';
+  const before=db.prepare('SELECT COUNT(*) AS count FROM portal_user_preferences').get().count;
+  const value={...model.defaults(),hiddenBranchIds:['18'],columns:['quantity'],sort:'quantity'};
+  const response=await fetch(route,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
+  assert.equal(response.status,200);assert.deepEqual(await response.json(),{...value,configured:false});
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM portal_user_preferences').get().count,before);
+  assert.deepEqual(await (await fetch(route)).json(),{...model.defaults(),configured:false});
 });
 
 test("Lokaler Einzelplatz erreicht auch die Detailroute ohne künstliches Mitarbeiterkonto", async () => {

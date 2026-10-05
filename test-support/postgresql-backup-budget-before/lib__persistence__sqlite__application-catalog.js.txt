@@ -1,0 +1,201 @@
+"use strict";
+const { SQLITE_SALES_ARTICLE_IMAGES_CATALOG } = require('./sales-article-images-catalog');
+const { SQLITE_SALES_REPORT_JOBS_CATALOG } = require('./sales-report-jobs-catalog');
+const { SQLITE_DATA_IMPORT_CATALOG } = require("./data-import-catalog");
+const { SQLITE_IMPORT_MASTER_CATALOG } = require("./import-master-catalog");
+const { SQLITE_IMPORT_HISTORY_CATALOG } = require("./import-history-catalog");
+const { SQLITE_DATA_IMPORT_RUNTIME_CATALOG } = require("./data-import-runtime-catalog");
+const { SQLITE_CASH_SNAPSHOTS_CATALOG } = require("./cash-snapshots-catalog");
+const { SQLITE_CASH_PUBLICATIONS_CATALOG } = require("./cash-publications-catalog");
+const { SQLITE_SATURDAY_CREDIT_CATALOG } = require("./saturday-credit-catalog");
+
+const {
+  SQLITE_ABSENCE_MANAGEMENT_CATALOG,
+} = require("./absence-management-catalog");
+const {
+  SQLITE_UI_PREFERENCES_CATALOG,
+} = require("./ui-preferences-catalog");
+const {
+  SQLITE_WORK_RULE_STORE_CATALOG,
+} = require("./work-rule-store-catalog");
+const {
+  SQLITE_WORK_RULE_GOVERNANCE_CATALOG,
+} = require("./work-rule-governance-catalog");
+const {
+  SQLITE_BRANDING_SNAPSHOT_CATALOG,
+} = require("./branding-snapshot-catalog");
+const {
+  SQLITE_COLLECTIVE_AGREEMENTS_CATALOG,
+} = require("./collective-agreements-catalog");
+const {
+  SQLITE_CUSTOM_WORK_RULES_CATALOG,
+} = require("./custom-work-rules-catalog");
+const {
+  SQLITE_CUSTOM_PROCESS_MANAGEMENT_CATALOG,
+} = require("./custom-process-management-catalog");
+const {
+  SQLITE_GOVERNANCE_STORE_CATALOG,
+} = require("./governance-store-catalog");
+const {
+  SQLITE_INTEGRATION_RUNTIME_CATALOG,
+} = require("./integration-runtime-catalog");
+const {
+  SQLITE_ORGANIZATION_PERSONNEL_CATALOG,
+} = require("./organization-personnel-catalog");
+const {
+  SQLITE_PERSONAL_NOTIFICATION_CONTACTS_CATALOG,
+} = require("./personal-notification-contacts-catalog");
+const {
+  SQLITE_PERSONNEL_LIFECYCLE_CATALOG,
+} = require("./personnel-lifecycle-catalog");
+const {
+  SQLITE_PERSONNEL_LEARNING_CATALOG,
+} = require("./personnel-learning-catalog");
+const {
+  SQLITE_PORTAL_BIRTHDAY_PRESENTATION_CATALOG,
+} = require("./portal-birthday-presentations");
+const {
+  SQLITE_STAFF_ASSIGNMENT_REQUEST_CATALOG,
+} = require("./staff-assignment-request-catalog");
+const {
+  SQLITE_PLANNING_SETTINGS_CATALOG,
+} = require("./planning-settings-catalog");
+const {
+  SQLITE_LOAN_MODULE_CATALOG,
+} = require("./loan-module-catalog");
+const {
+  SQLITE_MOBILE_AUTH_CATALOG,
+} = require("./mobile-auth-catalog");
+const {
+  SQLITE_PORTAL_ACCESS_CATALOG,
+} = require("./portal-access-catalog");
+const {
+  SQLITE_SYSTEM_CENTER_METRICS_CATALOG,
+} = require("./system-center-metrics-catalog");
+const {
+  SQLITE_RUNTIME_RECOVERY_CATALOG,
+} = require("./runtime-recovery-catalog");
+const {
+  SQLITE_SICKNESS_AMU_MANAGEMENT_CATALOG,
+} = require("./sickness-amu-management-catalog");
+const {
+  SQLITE_SALES_ANALYTICS_CATALOG,
+} = require("./sales-analytics-catalog");
+const {
+  SQLITE_SALES_ARTICLE_CATALOG,
+} = require("./sales-article-catalog-catalog");
+const {
+  SQLITE_CRM_CUSTOMERS_CATALOG,
+} = require("./crm-customers-catalog");
+const {
+  SQLITE_PERSONAL_ACTION_LOG_CATALOG,
+} = require("./personal-action-log-catalog");
+const {
+  SQLITE_TIME_TRACKING_CATALOG,
+} = require("./time-tracking-catalog");
+const {
+  SQLITE_WIFI_AUTOMATION_CATALOG,
+} = require("./wifi-automation-catalog");
+
+function isDeepFrozen(value, visited = new Set()) {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) return true;
+  if (visited.has(value)) return true;
+  if (!Object.isFrozen(value)) return false;
+  visited.add(value);
+  return Reflect.ownKeys(value)
+    .every((key) => isDeepFrozen(value[key], visited));
+}
+
+function invalidCatalog() {
+  return new TypeError("Der SQLite-Anwendungskatalog ist ungültig.");
+}
+
+const createSqliteApplicationCatalog = Object.freeze(function createSqliteApplicationCatalog(
+  ...domainCatalogs
+) {
+  const statementIds = new Set();
+  const statements = new Set();
+  const entries = [];
+
+  for (const catalog of domainCatalogs) {
+    if (!Array.isArray(catalog)) throw invalidCatalog();
+    for (const entry of catalog) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)
+        || Object.keys(entry).some((key) => !["statement", "sql", "returning"].includes(key))
+        || !entry.statement || typeof entry.statement !== "object"
+        || typeof entry.statement.id !== "string" || !entry.statement.id
+        || typeof entry.sql !== "string" || !entry.sql.trim()
+        || typeof entry.returning !== "boolean"
+        || !isDeepFrozen(entry.statement)
+        || statements.has(entry.statement)
+        || statementIds.has(entry.statement.id)) {
+        throw invalidCatalog();
+      }
+      statements.add(entry.statement);
+      statementIds.add(entry.statement.id);
+      entries.push(Object.freeze({
+        statement: entry.statement,
+        sql: entry.sql,
+        returning: entry.returning,
+      }));
+    }
+  }
+
+  return Object.freeze(entries);
+});
+
+const SQLITE_APPLICATION_CATALOG = createSqliteApplicationCatalog(
+  require('./cash-location-reads-catalog').CATALOG,
+  require('./data-import-delete-catalog').CATALOG,
+  require('./sales-article-workspace-catalog').CATALOG,
+  require('../../sales-article-sales-catalog').CATALOG,
+  require('./xoffi-snapshots-catalog').CATALOG,
+  require('./personnel-learning-runs-catalog').CATALOG,
+  require('./branch-article-stock-catalog').BRANCH_ARTICLE_STOCK_CATALOG,
+  require('./branch-receipt-catalog').BRANCH_RECEIPT_CATALOG,
+  require('./trade-insights-catalog').TRADE_INSIGHTS_CATALOG,
+  require('./trade-annotations-catalog').TRADE_ANNOTATIONS_CATALOG,
+  SQLITE_DATA_IMPORT_CATALOG,
+  SQLITE_IMPORT_MASTER_CATALOG,
+  SQLITE_IMPORT_HISTORY_CATALOG,
+  SQLITE_DATA_IMPORT_RUNTIME_CATALOG,
+  SQLITE_CASH_SNAPSHOTS_CATALOG,
+  SQLITE_CASH_PUBLICATIONS_CATALOG,
+  SQLITE_SALES_REPORT_JOBS_CATALOG,
+  SQLITE_SATURDAY_CREDIT_CATALOG,
+  SQLITE_ABSENCE_MANAGEMENT_CATALOG,
+  SQLITE_BRANDING_SNAPSHOT_CATALOG,
+  SQLITE_COLLECTIVE_AGREEMENTS_CATALOG,
+  SQLITE_CRM_CUSTOMERS_CATALOG,
+  SQLITE_CUSTOM_PROCESS_MANAGEMENT_CATALOG,
+  SQLITE_CUSTOM_WORK_RULES_CATALOG,
+  SQLITE_GOVERNANCE_STORE_CATALOG,
+  SQLITE_INTEGRATION_RUNTIME_CATALOG,
+  SQLITE_LOAN_MODULE_CATALOG,
+  SQLITE_MOBILE_AUTH_CATALOG,
+  SQLITE_ORGANIZATION_PERSONNEL_CATALOG,
+  SQLITE_PERSONAL_ACTION_LOG_CATALOG,
+  SQLITE_PERSONAL_NOTIFICATION_CONTACTS_CATALOG,
+  SQLITE_PERSONNEL_LIFECYCLE_CATALOG,
+  SQLITE_PERSONNEL_LEARNING_CATALOG,
+  SQLITE_PORTAL_BIRTHDAY_PRESENTATION_CATALOG,
+  SQLITE_STAFF_ASSIGNMENT_REQUEST_CATALOG,
+  SQLITE_PLANNING_SETTINGS_CATALOG,
+  SQLITE_PORTAL_ACCESS_CATALOG,
+  SQLITE_RUNTIME_RECOVERY_CATALOG,
+  SQLITE_SALES_ARTICLE_CATALOG,
+  SQLITE_SALES_ARTICLE_IMAGES_CATALOG,
+  SQLITE_SALES_ANALYTICS_CATALOG,
+  SQLITE_SICKNESS_AMU_MANAGEMENT_CATALOG,
+  SQLITE_SYSTEM_CENTER_METRICS_CATALOG,
+  SQLITE_TIME_TRACKING_CATALOG,
+  SQLITE_UI_PREFERENCES_CATALOG,
+  SQLITE_WIFI_AUTOMATION_CATALOG,
+  SQLITE_WORK_RULE_GOVERNANCE_CATALOG,
+  SQLITE_WORK_RULE_STORE_CATALOG,
+);
+
+module.exports = {
+  SQLITE_APPLICATION_CATALOG,
+  createSqliteApplicationCatalog,
+};

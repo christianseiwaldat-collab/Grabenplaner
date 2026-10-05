@@ -1344,6 +1344,7 @@ function showLoginGate(message = "") {
   resetAdminPersonalActionsState("");
   state.portalSession = null;
   syncPersonnelLearningAccessState();
+  syncStartDashboardWorkspace();
   syncSalesHistoryAccess();
   state.salesArticleCatalog.actorKey = "";
   state.salesArticleCatalog.detailAccessKey = "";
@@ -20543,6 +20544,64 @@ const START_DASHBOARD_CARDS = Object.freeze([
 ]);
 const START_DASHBOARD_CARD_IDS = START_DASHBOARD_CARDS.map((card) => card.id);
 const START_DASHBOARD_CARD_ID_SET = new Set(START_DASHBOARD_CARD_IDS);
+let startDashboardWorkspace = null;
+let startDashboardPreferenceSaveRevision = 0;
+let startDashboardPreferenceSaveQueue = Promise.resolve();
+let startDashboardPreferenceActorKey = "";
+let startDashboardPreferenceActorEpoch = 0;
+
+function isLocalStartDashboardWorkspace() {
+  return state.portalStatus?.portalEnabled === false && state.portalStatus?.localOnly === true;
+}
+
+function canUseStartDashboardWorkspace() {
+  if (isLocalStartDashboardWorkspace()) return true;
+  const user = state.portalSession?.user;
+  return state.portalStatus?.portalEnabled === true && state.portalSession?.authenticated === true
+    && user?.sessionKind === "employee" && user?.isEmployee === true
+    && Boolean(String(user.employeeNumber || "").trim()) && user.employeeNumber !== "local"
+    && user.active !== false && user.mustChangePassword !== true;
+}
+
+function startDashboardWorkspaceActorKey() {
+  if (isLocalStartDashboardWorkspace()) return "local";
+  const user = state.portalSession?.user;
+  return JSON.stringify([state.portalSession?.authenticated === true, user?.employeeNumber, user?.accountId,
+    user?.sessionKind, user?.isEmployee, user?.role, user?.mustChangePassword, user?.active,
+    user?.permissions, user?.scopes, user?.salesAnalytics, user?.salesHistory]);
+}
+
+function startDashboardWorkspaceFieldAllowed(id) {
+  if (!canUseStartDashboardWorkspace()) return false;
+  if (id === "control:center") return accessibleDashboardModes().length > 0;
+  const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
+  const visibleCard = cardId => startDashboardCardAccessible(cardId) && !preferences.hidden.includes(cardId);
+  if (id.startsWith("card:")) return visibleCard(id.slice(5));
+  if (id.startsWith("group:")) {
+    return START_DASHBOARD_GROUPS.find(group => group.id === id.slice(6))?.cardIds.some(visibleCard) === true;
+  }
+  const widget = START_DASHBOARD_WIDGETS.find(entry => `widget:${entry.id}` === id);
+  return Boolean(widget && visibleCard(widget.cardId) && !preferences.hiddenWidgets.includes(widget.id));
+}
+
+function syncStartDashboardWorkspace() {
+  const actorKey = startDashboardWorkspaceActorKey();
+  if (actorKey !== startDashboardPreferenceActorKey) {
+    startDashboardPreferenceActorKey = actorKey;
+    startDashboardPreferenceActorEpoch++;
+  }
+  if (!elements.startDashboardView || !window.StartDashboardWorkspace) return;
+  if (!startDashboardWorkspace) {
+    startDashboardWorkspace = window.StartDashboardWorkspace.create({
+      root: elements.startDashboardView, key: startDashboardWorkspaceActorKey,
+      canUse: canUseStartDashboardWorkspace, allowed: startDashboardWorkspaceFieldAllowed,
+      localOnly: isLocalStartDashboardWorkspace,
+      storage: {getItem: key => window.localStorage.getItem(key), setItem: (key, value) => window.localStorage.setItem(key, value)}, api,
+      onApply: ({store}) => {if (elements.startDashboardResetButton) elements.startDashboardResetButton.disabled = !store.ready;},
+      error: error => showToast(`Dashboard-Einstellungen konnten nicht gespeichert oder geladen werden: ${error.message}`, true),
+    });
+  } else startDashboardWorkspace.sync();
+}
 
 function defaultStartDashboardPreferences() {
   return {
@@ -21040,6 +21099,7 @@ function renderStartDashboard() {
   renderStartDashboardOperationalCards();
   if (startDashboardCardAccessible("sales")) renderStartDashboardSalesWidgets();
   renderStartDashboardCustomizer();
+  syncStartDashboardWorkspace();
 }
 
 async function loadStartDashboardSchedule() {
@@ -21166,28 +21226,33 @@ function loadStartDashboard() {
 }
 
 async function persistStartDashboardPreferences(preferences, { silent = false } = {}) {
-  const previous = normalizeStartDashboardPreferences(state.startDashboardPreferences);
+  if (!canUseStartDashboardWorkspace()) return false;
+  const actorKey = startDashboardWorkspaceActorKey();
+  const actorEpoch = startDashboardPreferenceActorEpoch;
+  const revision = ++startDashboardPreferenceSaveRevision;
   const normalized = normalizeStartDashboardPreferences(preferences);
+  const body = JSON.stringify({ startDashboardPreferences: normalized });
+  const current = () => canUseStartDashboardWorkspace() && actorKey === startDashboardWorkspaceActorKey()
+    && actorEpoch === startDashboardPreferenceActorEpoch && revision === startDashboardPreferenceSaveRevision;
   state.startDashboardPreferences = normalized;
-  localStorage.setItem(startDashboardPreferencesStorageKey(), JSON.stringify(normalized));
+  try { localStorage.setItem(startDashboardPreferencesStorageKey(), JSON.stringify(normalized)); } catch {}
   renderStartDashboard();
-  try {
-    const result = await api("/api/portal/v1/ui-preferences", {
-      method: "PUT",
-      body: JSON.stringify({ startDashboardPreferences: normalized }),
-    });
-    state.startDashboardPreferences = normalizeStartDashboardPreferences(result.startDashboardPreferences || normalized);
-    localStorage.setItem(startDashboardPreferencesStorageKey(), JSON.stringify(state.startDashboardPreferences));
-    renderStartDashboard();
-    if (!silent) showToast("Das Startdashboard wurde gespeichert.");
-    return true;
-  } catch (error) {
-    state.startDashboardPreferences = previous;
-    localStorage.setItem(startDashboardPreferencesStorageKey(), JSON.stringify(previous));
-    renderStartDashboard();
-    if (!silent) showToast(error.message, true);
-    return false;
-  }
+  const saving = startDashboardPreferenceSaveQueue.catch(() => {}).then(async () => {
+    if (!canUseStartDashboardWorkspace() || actorKey !== startDashboardWorkspaceActorKey()
+      || actorEpoch !== startDashboardPreferenceActorEpoch) return false;
+    try {
+      await api("/api/portal/v1/ui-preferences", {method: "PUT", body});
+      if (!current()) return false;
+      if (!silent) showToast("Das Startdashboard wurde gespeichert.");
+      return true;
+    } catch (error) {
+      // Keep the latest visible input; a failed or late response must never restore older settings.
+      if (current()) showToast(error.message, true);
+      return false;
+    }
+  });
+  startDashboardPreferenceSaveQueue = saving;
+  return saving;
 }
 
 async function navigateFromStartDashboardCard(button) {
@@ -24348,12 +24413,16 @@ function applyAppFontScalePercent(value) {
 }
 
 async function loadUiPreferences() {
+  const actorKey = startDashboardWorkspaceActorKey();
+  const actorEpoch = startDashboardPreferenceActorEpoch;
+  const dashboardRevision = startDashboardPreferenceSaveRevision;
   let preferences = null;
   try {
     preferences = await api("/api/portal/v1/ui-preferences");
   } catch (error) {
     if (![401, 403, 404].includes(error.status)) throw error;
   }
+  if (actorKey !== startDashboardWorkspaceActorKey() || actorEpoch !== startDashboardPreferenceActorEpoch) return;
   const localOnly = preferences?.actor === "local"
     || state.portalStatus?.portalEnabled !== true;
   state.candidateEvaluationPdfPreferences = normalizeCandidateEvaluationPdfPreferences(
@@ -24416,8 +24485,10 @@ async function loadUiPreferences() {
       );
     } catch {}
   }
-  state.startDashboardPreferences = normalizeStartDashboardPreferences(storedStartDashboardPreferences);
-  localStorage.setItem(startDashboardPreferencesStorageKey(), JSON.stringify(state.startDashboardPreferences));
+  if (dashboardRevision === startDashboardPreferenceSaveRevision) {
+    state.startDashboardPreferences = normalizeStartDashboardPreferences(storedStartDashboardPreferences);
+    try { localStorage.setItem(startDashboardPreferencesStorageKey(), JSON.stringify(state.startDashboardPreferences)); } catch {}
+  }
   renderStartDashboard();
   let storedColumns = preferences?.employeeDisplayColumns;
   let storedSort = preferences?.employeeDisplaySort;
@@ -25458,7 +25529,15 @@ function renderSystemCenter(payload) {
           const explanation = notApplicable ? (check?.id === "backup_external"
             ? "Nicht erforderlich im Serverbetrieb; lokale Serversicherung und Offsite werden separat geprüft."
             : "Für diese Betriebsart nicht erforderlich.") : "";
-          return `<li class="${checkState}"><i aria-hidden="true">${checkCopy.icon}</i><span>${escapeHtml(checkLabel)}${explanation ? `<small>${escapeHtml(explanation)}</small>` : ""}</span>${checkState !== "ok" && !notApplicable ? `<a href="/?view=settings&amp;section=backup" aria-label="${escapeHtml(checkLabel)}: Beheben">Beheben</a>` : ""}</li>`;
+          const receipt = check?.id === "notifications_delivery" ? payload?.notificationReceipt : null;
+          const receiptNote = receipt?.source === "human-receipt-confirmation" && receipt.state === "pass"
+            ? `Empfang persönlich bestätigt · ${diagnosticTimestamp(receipt.checkedAt)}`
+            : receipt?.reason === "configuration_changed" ? "Die Versandkonfiguration hat sich geändert. Empfang erneut prüfen." : "";
+          const remedy = check?.id === "notifications_delivery"
+            ? (payload?.capabilities?.canConfirmNotificationReceipt && receipt?.configurationToken
+              ? '<button type="button" class="secondary-button compact-button" data-notification-receipt-confirm>Empfang bestätigen</button>' : "")
+            : checkState !== "ok" && !notApplicable ? `<a href="/?view=settings&amp;section=backup" aria-label="${escapeHtml(checkLabel)}: Beheben">Beheben</a>` : "";
+          return `<li class="${checkState}"><i aria-hidden="true">${checkCopy.icon}</i><span>${escapeHtml(checkLabel)}${explanation || receiptNote ? `<small>${escapeHtml(receiptNote || explanation)}</small>` : ""}</span>${remedy}</li>`;
         }).join("")}</ul>`
         : "";
       return `<article id="system-center-factor-${escapeHtml(factor.id)}" class="system-center-factor ${factor.state}"><header><span aria-hidden="true">${copy.icon}</span><small>${escapeHtml(points)}</small></header><strong>${escapeHtml(factor.label)}</strong><p>${escapeHtml(factor.detail)}</p>${coverage}${checks}<footer><span class="system-center-state ${factor.state}">${escapeHtml(copy.label)}</span><small>${escapeHtml(evidence)}</small></footer></article>`;
@@ -25522,6 +25601,24 @@ async function startRecoveryAssurance() {
     showToast(error.message, true);
     applySystemCenterControls(state.systemCenter);
   }
+}
+
+async function confirmSystemNotificationReceipt(button) {
+  const configurationToken = state.systemCenter?.notificationReceipt?.configurationToken;
+  if (!state.systemCenter?.capabilities?.canConfirmNotificationReceipt || !configurationToken || button.disabled) return;
+  if (!confirm("Ich bestätige, dass eine reale E-Mail aus dem GP am vorgesehenen Ziel tatsächlich angekommen ist. Diese Aktion dokumentiert den Empfang und sendet keine neue E-Mail.")) return;
+  const actor = state.portalSession;
+  button.disabled = true;
+  try {
+    await api("/api/portal/v1/system-center/notifications/email/confirm-receipt", {
+      method: "POST", body: JSON.stringify({confirmed: true, configurationToken}),
+    });
+    if (state.portalSession !== actor) return;
+    showToast("Der tatsächliche Empfang wurde mit Prüfspur bestätigt.");
+    await loadSystemCenter();
+  } catch (error) {
+    if (state.portalSession === actor) showToast(error.message, true);
+  } finally { if (button.isConnected) button.disabled = false; }
 }
 
 function productReadinessEnvironment() {
@@ -30675,21 +30772,29 @@ let salesArticlePreferencesSaveChain = Promise.resolve();
 let salesArticleColumnResize = null;
 let salesArticleSearchWindow = null;
 let salesArticleWindowPreferences = null;
+let salesArticleDetailPreferences = null;
 let salesArticleWindowRenderFrame = null;
 function salesArticleSearchWindowScale() {
   const scale = Number.parseFloat(window.getComputedStyle(document.body).zoom);
   return Number.isFinite(scale) && scale > 0 ? scale : 1;
 }
+function salesArticleSearchWindowViewport() {
+  const viewport = window.visualViewport;
+  return {width:viewport?.width || window.innerWidth,height:viewport?.height || window.innerHeight,
+    left:viewport?.offsetLeft || 0,top:viewport?.offsetTop || 0};
+}
 function salesArticleSearchWindowBounds() {
+  return window.SalesArticleSearchWindow.viewportBounds(salesArticleSearchWindowViewport(),salesArticleSearchWindowScale());
+}
+function salesArticleSearchWindowInitialGeometry(value = null) {
   const view = elements.salesArticleCatalogView;
   const workspace = view?.querySelector('.sales-article-catalog-workspace');
   const header = view?.querySelector('.topbar');
-  const viewport = window.visualViewport;
-  return window.SalesArticleSearchWindow.contentBounds(
+  const legacyBounds = window.SalesArticleSearchWindow.contentBounds(
     workspace?.getBoundingClientRect(), header?.getBoundingClientRect(),
-    {width:viewport?.width || window.innerWidth,height:viewport?.height || window.innerHeight,
-      left:viewport?.offsetLeft || 0,top:viewport?.offsetTop || 0}, salesArticleSearchWindowScale(),
+    salesArticleSearchWindowViewport(), salesArticleSearchWindowScale(),
   );
+  return window.SalesArticleSearchWindow.migrateGeometry(value,legacyBounds,salesArticleSearchWindowBounds());
 }
 function syncSalesArticleSearchWindow() {
   if (!salesArticleSearchWindow || !salesArticleWindowPreferences) return;
@@ -32291,6 +32396,7 @@ function renderSalesArticleSourceFieldValue(field) {
 
 function renderSalesArticleCatalogDetail() {
   const catalog = state.salesArticleCatalog;
+  catalog.stockPanel?.destroy(); catalog.stockPanel=null;
   catalog.tools?.destroy(); catalog.tools=null;
   catalog.priceLabels?.destroy(); catalog.priceLabels=null;
   document.getElementById("salesArticlePdfButton")?.classList.add("hidden");
@@ -32378,6 +32484,21 @@ function renderSalesArticleCatalogDetail() {
     + '<section id="salesArticleMovementsSection" class="sales-article-detail-tab-panel"></section>'
     + '<section id="salesArticleSalesSection" class="sales-article-detail-tab-panel"></section>'
     + '<section id="salesArticlePriceLabelsSection" class="sales-article-detail-tab-panel"></section></div>';
+  if (window.SalesArticleDetailPreferences && window.SalesArticleStockPanel) {
+    salesArticleDetailPreferences ||= window.SalesArticleDetailPreferences.createStore({
+      api, key:currentSalesArticleCatalogDetailAccessKey, canUse:canReadSalesArticles,
+      error:error => {if(!salesArticleDetailPreferences?.failed) setSalesArticleCatalogDetailStatus(`Ansichtseinstellungen konnten nicht gespeichert werden: ${error.message}`);},
+    });
+    void salesArticleDetailPreferences.activate();
+    const accessKey=currentSalesArticleCatalogDetailAccessKey();
+    catalog.stockPanel=window.SalesArticleStockPanel.mount(document.getElementById('salesArticleBranchStock'), {
+      store:salesArticleDetailPreferences, stock:article.branchStock, formats, layout,
+      tableLayout:window.GrabenplanerTableLayout, columns:window.SalesArticleDetailPreferences.COLUMNS,
+      canUse:() => canReadSalesArticles() && currentSalesArticleCatalogDetailAccessKey()===accessKey
+        && catalog.detail?.article===article && !catalog.detailLoading,
+    });
+  }
+  layout.mountDescriptions(elements.salesArticleDetailBody);
   window.SalesArticlePriceControls.mount(elements.salesArticleDetailBody, article.priceMatrix, formats, {
     preferenceKey: 'gp.article-price-columns.v1.' + currentSalesArticleCatalogActorKey(),
   });
@@ -32621,7 +32742,7 @@ function salesArticleCatalogSearchParameters(offset) {
   return parameters;
 }
 
-async function loadSalesArticleCatalog({ reset = false, preserveDetail = false } = {}) {
+async function loadSalesArticleCatalog({ reset = false, preserveDetail = true } = {}) {
   if (!canReadSalesArticles()) {
     applySalesArticleCatalogReadState(false);
     return;
@@ -32646,7 +32767,7 @@ async function loadSalesArticleCatalog({ reset = false, preserveDetail = false }
   catalog.loading = true;
   catalog.error = "";
   setSalesArticleCatalogStatus(reset ? "Artikel werden gesucht …" : "Weitere Artikel werden geladen …");
-  // List paging and sorting do not change the selected article or its local trial values.
+  // Searches, paging and sorting retain the selected article and its local trial values.
   renderSalesArticleCatalogResults({ detail: reset && !preserveDetail });
   try {
     const payload = await api(`/api/sales/articles?${salesArticleCatalogSearchParameters(offset)}`);
@@ -32696,10 +32817,10 @@ function changeSalesArticleCatalogSort(sort) {
 
 function resetSalesArticleCatalogSearch(
   message = "Suchbegriff eingeben oder die erweiterte Suche verwenden.",
-  { error = false } = {},
+  { error = false, preserveDetail = false } = {},
 ) {
   const catalog = state.salesArticleCatalog;
-  resetSalesArticleCatalogDetailState();
+  if (!preserveDetail) resetSalesArticleCatalogDetailState();
   elements.salesArticleSearchForm?.reset();
   Object.assign(catalog, {
     items: [],
@@ -32721,7 +32842,7 @@ function resetSalesArticleCatalogSearch(
   if (elements.salesArticleAdvancedSearch) elements.salesArticleAdvancedSearch.open = false;
   if (elements.salesArticleTableScroll) elements.salesArticleTableScroll.scrollTop = 0;
   setSalesArticleCatalogStatus(message, error);
-  renderSalesArticleCatalogResults();
+  renderSalesArticleCatalogResults({ detail: !preserveDetail });
 }
 
 function currentSalesArticleCatalogActorKey() {
@@ -32738,7 +32859,10 @@ function currentSalesArticleCatalogDetailAccessKey() {
     canReadSalesArticleCosts(),
     canWriteSalesArticles(),
     canImportSalesArticles(),
-    JSON.stringify([state.portalSession?.user?.permissions, state.portalSession?.user?.scopes, state.portalSession?.user?.salesHistory]),
+    JSON.stringify([state.portalSession?.user?.permissions, state.portalSession?.user?.scopes, state.portalSession?.user?.salesHistory,
+      state.portalSession?.user?.salesAnalytics, state.portalSession?.user?.role, state.portalSession?.user?.isEmployee,
+      state.portalSession?.user?.sessionKind, state.portalSession?.user?.accountType, state.portalSession?.user?.accountId,
+      state.portalSession?.user?.mustChangePassword]),
   ].join("|");
 }
 
@@ -32753,6 +32877,7 @@ function syncSalesArticleCatalogActorState() {
   catalog.detailAccessKey = detailAccessKey;
   if (actorChanged || detailAccessChanged) {
     salesArticleWindowPreferences?.invalidate();
+    salesArticleDetailPreferences?.invalidate();
     syncSalesArticleSearchWindow();
     catalog.tablePreferencesKey = ''; catalog.tableColumns = null; catalog.columnWidths = {}; catalog.visibleRows = 10;
     catalog.tablePreferencesPending = false;
@@ -32790,6 +32915,7 @@ function syncSalesArticleCatalogActorState() {
 
 function clearSalesArticleCatalogState(message = "") {
   salesArticleWindowPreferences?.invalidate();
+  salesArticleDetailPreferences?.invalidate();
   salesArticleWindowPreferences?.suspend();
   salesArticleSearchWindow?.suspend();
   closeSalesArticleManagementDialogs({ restoreFocus: false });
@@ -40685,6 +40811,8 @@ elements.systemCenterContent?.addEventListener("change", event => {
 });
 elements.systemCenterContent?.addEventListener("click", (event) => {
   inspectSystemCenterTrend(event);
+  const receipt = event.target.closest("[data-notification-receipt-confirm]");
+  if (receipt) { void confirmSystemNotificationReceipt(receipt); return; }
   const evidence = event.target.closest("[data-readiness-evidence]");
   if (evidence) {
     saveProductReadinessEvidence(evidence.dataset.readinessEvidence, evidence.dataset.readinessOutcome);
@@ -41392,7 +41520,7 @@ elements.startDashboardControlCenterButton?.addEventListener("click", () => {
   setView("rightsDashboard");
   if (state.currentView === "rightsDashboard") setRightsDashboardMode(mode);
 });
-elements.startDashboardGrid?.addEventListener("click", (event) => {
+elements.startDashboardView?.addEventListener("click", (event) => {
   const cardButton = event.target.closest("[data-start-dashboard-card-view]");
   if (cardButton) {
     navigateFromStartDashboardCard(cardButton).catch((error) => showToast(error.message, true));
@@ -41470,7 +41598,8 @@ elements.startDashboardCustomizerGrid?.addEventListener("click", (event) => {
   state.startDashboardDraftPreferences = preferences;
   renderStartDashboardCustomizer();
 });
-elements.startDashboardResetButton?.addEventListener("click", () => {
+elements.startDashboardResetButton?.addEventListener("click", async () => {
+  if (!startDashboardWorkspace?.store.ready || !canUseStartDashboardWorkspace()) return;
   const current = normalizeStartDashboardPreferences(state.startDashboardPreferences);
   state.startDashboardDraftPreferences = {
     ...defaultStartDashboardPreferences(),
@@ -41479,6 +41608,10 @@ elements.startDashboardResetButton?.addEventListener("click", () => {
     salesLocationId: current.salesLocationId,
   };
   renderStartDashboardCustomizer();
+  await Promise.all([
+    startDashboardWorkspace.resetAll(),
+    persistStartDashboardPreferences(state.startDashboardDraftPreferences),
+  ]);
 });
 elements.startDashboardSaveButton?.addEventListener("click", async () => {
   const preferences = normalizeStartDashboardPreferences(
@@ -41581,7 +41714,7 @@ elements.salesArticleSearchForm?.addEventListener("submit", (event) => {
   loadSalesArticleCatalog({ reset: true });
 });
 elements.salesArticleSearchReset?.addEventListener("click", () => {
-  resetSalesArticleCatalogSearch();
+  resetSalesArticleCatalogSearch(undefined, { preserveDetail: true });
   elements.salesArticleSearchQuery?.focus();
 });
 elements.salesArticleResults?.addEventListener("click", (event) => {
@@ -42511,6 +42644,7 @@ elements.salesArticleDetailNavigation?.addEventListener('keydown', event => {
     const canUse = () => state.currentView === 'articleCatalog' && canReadSalesArticles();
     salesArticleSearchWindow = window.SalesArticleSearchWindow.attach(host, {
       bounds:salesArticleSearchWindowBounds, scale:salesArticleSearchWindowScale, canUse,
+      initialGeometry:salesArticleSearchWindowInitialGeometry,
       observe:[document.querySelector('.main-content'),elements.salesArticleCatalogView?.querySelector('.topbar')],
       change:value => { void salesArticleWindowPreferences?.change(value); },
       resize:() => {
@@ -42523,6 +42657,7 @@ elements.salesArticleDetailNavigation?.addEventListener('keydown', event => {
     });
     salesArticleWindowPreferences = window.SalesArticleSearchWindow.createPreferences({
       api, key:currentSalesArticleCatalogDetailAccessKey, canUse:canReadSalesArticles,
+      migrate:salesArticleSearchWindowInitialGeometry,
       apply:value => salesArticleSearchWindow.set(value),
       error:error => setSalesArticleCatalogStatus(`Fenstereinstellungen konnten nicht gespeichert oder geladen werden: ${error.message}`,true),
     });

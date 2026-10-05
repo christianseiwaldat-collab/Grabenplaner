@@ -95,3 +95,43 @@ test("v0.78: echte numerische Nullwerte und positive Messwerte bleiben erhalten"
   assert.equal(points[0].backupDurationSeconds, 0);
   assert.equal(points[0].recoveryDurationSeconds, 12.5);
 });
+
+test("notification card distinguishes human confirmation and offers only its authorized receipt action", () => {
+  const content = {innerHTML: "", setAttribute() {}}, checks = [{id: "notifications_delivery", label: "Reale Testzustellung", state: "unknown"}];
+  const helpers = {elements: {systemCenterContent: content}, escapeHtml: String, diagnosticTimestamp: String,
+    systemCenterVisualState: value => value === "pass" ? "ok" : "neutral", systemCenterStateCopy: () => ({icon: "-", label: "Prüfen"}),
+    normalizedSystemCenterFactors: () => [{id: "notifications", label: "Benachrichtigung", state: "neutral", weight: null, earned: null, coverage: null, detail: "", checks}],
+    renderSystemCenterOffsiteProvider: () => "", systemCenterResourceCards: () => "", renderSystemCenterOperations: () => "", renderSystemCenterTrends: () => "", renderProductReadiness: () => ""};
+  const render = loadFunction("renderSystemCenter", "applySystemCenterControls", helpers);
+  render({notificationReceipt: {state: "unknown", configurationToken: "private-token"}, capabilities: {canConfirmNotificationReceipt: true}});
+  assert.match(content.innerHTML, /data-notification-receipt-confirm/);
+  assert.doesNotMatch(content.innerHTML, /section=backup|private-token/);
+  render({notificationReceipt: {state: "pass", source: "human-receipt-confirmation", checkedAt: "2026-10-05T18:00:00Z"}, capabilities: {canConfirmNotificationReceipt: false}});
+  assert.match(content.innerHTML, /Empfang persönlich bestätigt/);
+  assert.doesNotMatch(content.innerHTML, /data-notification-receipt-confirm/);
+  render({notificationReceipt: {state: "unknown", reason: "configuration_changed"}});
+  assert.match(content.innerHTML, /Versandkonfiguration hat sich geändert/);
+});
+
+test("receipt click cancellation sends nothing; confirmed click posts only its proof and ignores a later account switch", async () => {
+  let approved = false, calls = 0, reloads = 0, finish;
+  const state = {portalSession: {user: {employeeNumber: "synthetic"}}, systemCenter: {capabilities: {canConfirmNotificationReceipt: true}, notificationReceipt: {configurationToken: "protected-token"}}};
+  const helpers = {state, confirm: () => approved, showToast() {}, loadSystemCenter: async () => {reloads++;},
+    api: async (route, options) => {
+      calls++; assert.equal(route, "/api/portal/v1/system-center/notifications/email/confirm-receipt");
+      assert.deepEqual(JSON.parse(options.body), {confirmed: true, configurationToken: "protected-token"});
+      await new Promise(resolve => {finish = resolve;});
+    }};
+  const start = script.indexOf("async function confirmSystemNotificationReceipt("), end = script.indexOf("function productReadinessEnvironment(", start);
+  const action = vm.runInNewContext(`${script.slice(start, end)}; confirmSystemNotificationReceipt`, helpers);
+  const button = {disabled: false, isConnected: true};
+  await action(button); assert.equal(calls, 0);
+  approved = true;
+  const pending = action(button); assert.equal(button.disabled, true); assert.equal(calls, 1);
+  await action(button); assert.equal(calls, 1);
+  state.portalSession = {user: {employeeNumber: "other"}};
+  finish(); await pending;
+  assert.equal(reloads, 0); assert.equal(button.disabled, false);
+  const next = action(button); finish(); await next;
+  assert.equal(reloads, 1);
+});
