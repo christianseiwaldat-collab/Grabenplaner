@@ -73,8 +73,13 @@ test("Block 11: Initialisierung, Pflichtpasswort, Actorwechsel, Login und Logout
   assert.match(script, /if \(!actor \|\| portalUser\(\)\?\.mustChangePassword === true\) \{\s*neutralizeBirthdayPresentationTheme\(\)/);
   assert.match(script, /function showLogin\([^)]*\) \{[\s\S]{0,450}neutralizeBirthdayPresentationTheme\(\)/);
   assert.match(script, /if \(birthdayPresentationActor\(\) !== birthdayPresentationActor\(session\?\.user\)\) \{\s*neutralizeBirthdayPresentation\(\);\s*neutralizeBirthdayPresentationTheme\(\)/);
-  assert.match(script, /async function logout\(\)[\s\S]{0,500}neutralizeBirthdayPresentationTheme\(\)/);
-  assert.match(script, /Die Abmeldung konnte nicht bestätigt werden:[\s\S]{0,180}refreshBirthdayPresentationTheme\(\)/);
+  const logout = between(script, "async function logout()", "function setTab(");
+  assert.match(logout, /neutralizeBirthdayPresentationTheme\(\)/);
+  assert.ok(logout.indexOf("neutralizeBirthdayPresentationTheme()") < logout.indexOf('await api("/api/portal/v1/auth/logout"'),
+    "Theme neutralizes before the logout request after an optional draft flush");
+  const logoutFailure = between(logout, "} catch (error) {", "} finally {");
+  assert.match(logoutFailure, /Die Abmeldung konnte nicht bestätigt werden:/);
+  assert.match(logoutFailure, /refreshBirthdayPresentationTheme\(\)/);
   assert.match(script, /catch \{[\s\S]*?delete document\.documentElement\.dataset\.portalBirthdayTheme/);
 });
 

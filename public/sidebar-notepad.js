@@ -5,7 +5,7 @@
   else root.SidebarNotepad=api;
 })(typeof window==='object'?window:this,function(model){
   'use strict';
-  const URL='/api/portal/v1/ui-preferences',FIELDS=['text','height','open'];
+  const URL='/api/portal/v1/ui-preferences',FIELDS=['text','width','height','open'];
   const same=(a,b)=>FIELDS.every(key=>a[key]===b[key]);
   function createStore(options){
     let actor='',identity='',epoch=0,loaded=false,destroyed=false,read=null,write=null,timer=null;
@@ -84,45 +84,39 @@
   function mount(host,options){
     const doc=host.ownerDocument,win=doc.defaultView,sidebar=options.sidebar||host.parentElement,menu=options.menu||sidebar.querySelector('.main-nav');
     const store=createStore(options),removers=[];
-    let destroyed=false,forcedOpen=null,gesture=null,frame=null,preferredHeight=null,invalid=null,leaving=false,seenKey=String(options.key()||'');
+    const geometry=options.geometry||win.GpWindow;
+    let destroyed=false,forcedOpen=null,gesture=null,frame=null,preferredSize=null,invalid=null,leaving=false,seenKey=String(options.key()||'');
     const on=(node,type,fn,config)=>{node?.addEventListener(type,fn,config);removers.push(()=>node?.removeEventListener(type,fn,config));};
     host.classList.add('sidebar-notepad');
     host.innerHTML='<section class="sidebar-notepad-paper" data-notepad-panel hidden aria-label="Persönlicher Notizblock"><div class="sidebar-notepad-resize" data-notepad-resize role="separator" tabindex="0" aria-label="Höhe des Notizblocks" aria-orientation="horizontal" title="Höhe ziehen · Pfeil nach oben/unten zum Anpassen"><i aria-hidden="true"></i></div><header><strong>Meine Notizen</strong><button type="button" data-notepad-close aria-label="Notizblock schließen" title="Notizblock schließen">×</button></header><textarea data-notepad-text aria-label="Persönliche Notizen" placeholder="Hier ist Platz für deine Notizen …" spellcheck="true"></textarea><footer><span data-notepad-status role="status" aria-live="polite"></span><button type="button" data-notepad-retry hidden>Erneut versuchen</button><button type="button" data-notepad-clear title="Alle eigenen Notizen leeren">Leeren</button><small data-notepad-count></small></footer></section><div class="sidebar-notepad-toolbar"><button type="button" data-notepad-toggle aria-label="Notizblock öffnen" title="Persönlicher Notizblock" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 3h14v13l-5 5H5zM14 21v-5h5M8 8h8M8 12h6"/></svg><i data-notepad-pending hidden aria-hidden="true"></i></button></div>';
-    const query=selector=>host.querySelector(selector),panel=query('[data-notepad-panel]'),text=query('[data-notepad-text]'),handle=query('[data-notepad-resize]');
+    const query=selector=>host.querySelector(selector)||panel.querySelector(selector),panel=query('[data-notepad-panel]'),text=query('[data-notepad-text]'),handle=query('[data-notepad-resize]');
     const toggle=query('[data-notepad-toggle]'),close=query('[data-notepad-close]'),clear=query('[data-notepad-clear]'),retry=query('[data-notepad-retry]'),status=query('[data-notepad-status]');
     text.maxLength=model.MAX_TEXT;
     panel.id=(host.id||'sidebar-personal-notepad')+'-panel';toggle.setAttribute('aria-controls',panel.id);
+    // A body-level overlay can extend across the application without changing
+    // menu height or being clipped by the sidebar's scroll container.
+    doc.body.append(panel);
+    const handles=[handle];handle.className='gp-window-edge';handle.dataset.gpWindowEdge='n';handle.setAttribute('aria-label','Notizblock oben vergrößern: ziehen oder Pfeiltasten verwenden');handle.replaceChildren();
+    for(const edge of ['e','ne']){const node=doc.createElement('button');node.type='button';node.className='gp-window-edge';node.dataset.gpWindowEdge=edge;node.setAttribute('aria-label',edge==='e'?'Notizblock rechts vergrößern: ziehen oder Pfeiltasten verwenden':'Notizblock oben rechts vergrößern: ziehen oder Pfeiltasten verwenden');panel.append(node);handles.push(node);}
     const scale=()=>sidebar.offsetWidth?sidebar.getBoundingClientRect().width/sidebar.offsetWidth:1;
-    function availableHeight(){
-      const zoom=scale()||1,style=win.getComputedStyle(sidebar);
-      let used=parseFloat(style.paddingTop)||0;used+=parseFloat(style.paddingBottom)||0;
-      for(const element of sidebar.children){
-        if(element===host||element===menu)continue;
-        const css=win.getComputedStyle(element);
-        if(css.display==='none'||['absolute','fixed'].includes(css.position))continue;
-        used+=element.getBoundingClientRect().height/zoom+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);
-      }
-      const toolbar=query('.sidebar-notepad-toolbar');
-      used+=(toolbar.getBoundingClientRect().height/zoom)+12+Math.min(100,menu?.scrollHeight||100);
-      return Math.max(0,Math.min(model.MAX_HEIGHT,sidebar.clientHeight-used));
-    }
+    const bounds=()=>geometry.viewportBounds(win.visualViewport||{width:win.innerWidth,height:win.innerHeight},scale()||1);
+    function fitted(){const area=bounds(),size=preferredSize||store.value;
+      const value=geometry.fit({x:0,y:0,width:size.width,height:size.height,minimized:false},area,{minWidth:model.MIN_WIDTH,minHeight:model.MIN_HEIGHT});
+      return {...value,x:0,y:Math.max(0,area.height-value.height)};}
     function fit(){
       frame=null;if(destroyed||host.hidden)return;
-      if(panel.hidden){sidebar.classList.remove('sidebar-notepad-scroll');return;}
-      const maximum=availableHeight(),height=Math.min(preferredHeight??store.value.height,Math.max(model.MIN_HEIGHT,maximum));
-      sidebar.classList.toggle('sidebar-notepad-scroll',maximum<model.MIN_HEIGHT);
-      panel.style.height=Math.round(height)+'px';
-      handle.setAttribute('aria-valuemin',String(model.MIN_HEIGHT));handle.setAttribute('aria-valuemax',String(Math.max(model.MIN_HEIGHT,Math.floor(maximum))));
-      handle.setAttribute('aria-valuenow',String(Math.round(height)));handle.setAttribute('aria-valuetext',Math.round(height)+' Pixel hoch');
+      if(panel.hidden||!geometry)return;
+      const area=bounds(),value=fitted();panel.style.left=area.left+'px';panel.style.top=(area.top+value.y)+'px';panel.style.width=value.width+'px';panel.style.height=value.height+'px';
+      for(const node of handles){const horizontal=node.dataset.gpWindowEdge==='e';node.setAttribute('aria-valuemin',String(horizontal?model.MIN_WIDTH:model.MIN_HEIGHT));node.setAttribute('aria-valuemax',String(Math.floor(horizontal?area.width:area.height)));node.setAttribute('aria-valuenow',String(horizontal?value.width:value.height));node.setAttribute('aria-valuetext',`${value.width} × ${value.height} Pixel`);}
     }
     function scheduleFit(){if(frame===null)frame=win.requestAnimationFrame(fit);}
     function render(){
-      const key=String(options.key()||'');if(key!==seenKey){seenKey=key;invalid=null;leaving=false;forcedOpen=null;preferredHeight=null;cancelGesture();}
+      const key=String(options.key()||'');if(key!==seenKey){seenKey=key;invalid=null;leaving=false;forcedOpen=null;preferredSize=null;cancelGesture();}
       const allowed=!destroyed&&options.canUse();host.hidden=!allowed;sidebar.classList.toggle('has-personal-notepad',allowed);
       const value=store.value,open=allowed&&(forcedOpen??(store.ready&&value.open));
       panel.hidden=!open;toggle.setAttribute('aria-expanded',String(open));toggle.setAttribute('aria-label',open?'Notizblock schließen':'Notizblock öffnen');
       toggle.title=open?'Persönlichen Notizblock schließen':'Persönlichen Notizblock öffnen';
-      text.disabled=!store.ready||leaving;handle.setAttribute('aria-disabled',String(!store.ready||leaving));handle.tabIndex=store.ready&&!leaving?0:-1;clear.disabled=!store.ready||leaving||!(invalid?text.value:value.text);
+      text.disabled=!store.ready||leaving;for(const node of handles){node.setAttribute('aria-disabled',String(!store.ready||leaving));node.tabIndex=store.ready&&!leaving?0:-1;}clear.disabled=!store.ready||leaving||!(invalid?text.value:value.text);
       toggle.disabled=leaving;close.disabled=leaving;retry.disabled=leaving;
       if(!store.ready)invalid=null;
       if(!invalid&&text.value!==value.text)text.value=value.text;
@@ -131,7 +125,7 @@
       const messages={loading:'Notizen werden geladen …',saved:'Gespeichert',pending:'Noch nicht gespeichert',saving:'Wird gespeichert …','load-error':'Laden fehlgeschlagen.','save-error':'Speichern fehlgeschlagen.','unavailable':''};
       status.textContent=invalid||messages[store.status]||'';retry.hidden=!['load-error','save-error'].includes(store.status);
       query('[data-notepad-pending]').hidden=!['pending','saving','save-error','load-error'].includes(store.status);
-      if(!allowed){cancelGesture();forcedOpen=null;preferredHeight=null;sidebar.classList.remove('sidebar-notepad-scroll');}
+      if(!allowed){cancelGesture();forcedOpen=null;preferredSize=null;}
       scheduleFit();
     }
     function setOpen(open){
@@ -139,32 +133,33 @@
       if(store.ready){forcedOpen=null;store.change({...store.value,open});if(!invalid)void store.flush();}else{forcedOpen=open;render();}
       if(open&&store.ready)text.focus({preventScroll:true});else if(!open)toggle.focus({preventScroll:true});
     }
-    function cancelGesture(){if(!gesture)return;const old=gesture;gesture=null;preferredHeight=null;if(handle.hasPointerCapture?.(old.id))handle.releasePointerCapture(old.id);scheduleFit();}
-    function finish(){if(!gesture)return;const next=preferredHeight;cancelGesture();if(store.ready&&next!==null){store.change({...store.value,height:Math.round(next)});void store.flush();}}
+    function cancelGesture(){if(!gesture)return;const old=gesture;gesture=null;preferredSize=null;if(old.handle.hasPointerCapture?.(old.id))old.handle.releasePointerCapture(old.id);scheduleFit();}
+    function finish(){if(!gesture)return;const next=preferredSize;cancelGesture();if(store.ready&&next!==null){store.change({...store.value,width:Math.max(model.MIN_WIDTH,Math.min(model.MAX_WIDTH,Math.round(next.width))),height:Math.max(model.MIN_HEIGHT,Math.min(model.MAX_HEIGHT,Math.round(next.height)))});void store.flush();}}
     on(toggle,'click',()=>setOpen(panel.hidden));on(close,'click',()=>setOpen(false));
     on(text,'input',()=>{if(leaving){render();return;}try{invalid=null;if(!store.change({...store.value,text:text.value}))render();}catch(error){invalid=error.message;render();}});
     on(text,'blur',()=>{if(store.ready&&!invalid)void store.flush();});
     on(clear,'click',()=>{if(store.ready&&!leaving&&text.value&&win.confirm('Alle persönlichen Notizen unwiderruflich leeren?')){invalid=null;store.change({...store.value,text:''});void store.flush();text.focus({preventScroll:true});}});
     function applyOpenIntent(){if(store.ready&&forcedOpen!==null){const open=forcedOpen;forcedOpen=null;store.change({...store.value,open});void store.flush();}}
     on(retry,'click',()=>{void store.retry().then(applyOpenIntent);});
-    on(handle,'pointerdown',event=>{
-      if(event.button!==0||!store.ready||leaving||gesture)return;
-      event.preventDefault();handle.focus({preventScroll:true});fit();gesture={id:event.pointerId,y:event.clientY,height:panel.offsetHeight,scale:scale()||1};
-      preferredHeight=panel.offsetHeight;handle.setPointerCapture(event.pointerId);
-    });
-    on(handle,'pointermove',event=>{if(!gesture||event.pointerId!==gesture.id)return;if(!store.ready){cancelGesture();return;}
-      preferredHeight=Math.max(model.MIN_HEIGHT,Math.min(Math.max(model.MIN_HEIGHT,availableHeight()),gesture.height+(gesture.y-event.clientY)/gesture.scale));fit();});
-    on(handle,'pointerup',event=>{if(gesture&&event.pointerId===gesture.id)finish();});
-    on(handle,'pointercancel',cancelGesture);on(handle,'lostpointercapture',cancelGesture);
-    on(handle,'keydown',event=>{
-      if(event.key==='Escape'&&gesture){event.preventDefault();cancelGesture();return;}
-      if(!store.ready||leaving||!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;
-      event.preventDefault();const max=Math.max(model.MIN_HEIGHT,Math.floor(availableHeight())),step=event.shiftKey?50:10;
-      const height=event.key==='Home'?model.MIN_HEIGHT:event.key==='End'?max:Math.max(model.MIN_HEIGHT,Math.min(max,panel.offsetHeight+(event.key==='ArrowUp'?step:-step)));
-      store.change({...store.value,height});void store.flush();
-    });
+    for(const node of handles){
+      on(node,'pointerdown',event=>{if(event.button!==0||!store.ready||leaving||gesture||!geometry)return;
+        event.preventDefault();node.focus({preventScroll:true});fit();gesture={id:event.pointerId,x:event.clientX,y:event.clientY,base:fitted(),preferred:store.value,edge:node.dataset.gpWindowEdge,handle:node,scale:scale()||1};node.setPointerCapture(event.pointerId);});
+      on(node,'lostpointercapture',cancelGesture);
+      on(node,'keydown',event=>{if(event.key==='Escape'&&gesture){event.preventDefault();cancelGesture();return;}
+        const vector={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[event.key];
+        if(!store.ready||leaving||!geometry||!vector&&!['Home','End'].includes(event.key))return;
+        event.preventDefault();const area=bounds(),start=fitted(),edge=node.dataset.gpWindowEdge,step=event.shiftKey?1:10;
+        let dx=(vector?.[0]||0)*step,dy=(vector?.[1]||0)*step;
+        if(event.key==='Home'||event.key==='End'){const max=event.key==='End';if(edge.includes('e'))dx=max?area.width-start.width:model.MIN_WIDTH-start.width;if(edge.includes('n'))dy=max?-start.y:start.height-model.MIN_HEIGHT;}
+        const changed=geometry.adjust(start,edge,dx,dy,area,{minWidth:model.MIN_WIDTH,minHeight:model.MIN_HEIGHT}),next=geometry.persistedGeometry(store.value,start,changed,edge);
+        store.change({...store.value,width:Math.max(model.MIN_WIDTH,Math.min(model.MAX_WIDTH,next.width)),height:Math.max(model.MIN_HEIGHT,Math.min(model.MAX_HEIGHT,next.height))});void store.flush();});
+    }
+    on(win,'pointermove',event=>{if(!gesture||event.pointerId!==gesture.id)return;if(!store.ready){cancelGesture();return;}
+      const value=geometry.adjust(gesture.base,gesture.edge,(event.clientX-gesture.x)/gesture.scale,(event.clientY-gesture.y)/gesture.scale,bounds(),{minWidth:model.MIN_WIDTH,minHeight:model.MIN_HEIGHT});
+      preferredSize=geometry.persistedGeometry(gesture.preferred,gesture.base,value,gesture.edge);fit();});
+    on(win,'pointerup',event=>{if(gesture&&event.pointerId===gesture.id)finish();});on(win,'pointercancel',cancelGesture);
     on(panel,'keydown',event=>{if(event.key==='Escape'&&!gesture){event.preventDefault();event.stopPropagation();setOpen(false);}});
-    on(win,'resize',scheduleFit);on(win.visualViewport,'resize',scheduleFit);
+    on(win,'resize',()=>{cancelGesture();scheduleFit();});on(win,'blur',cancelGesture);on(win.visualViewport,'resize',()=>{cancelGesture();scheduleFit();});on(win.visualViewport,'scroll',scheduleFit);
     on(win,'beforeunload',event=>{if(invalid||store.hasPendingDrafts){event.preventDefault();event.returnValue='';}});
     const observer=typeof win.ResizeObserver==='function'?new win.ResizeObserver(scheduleFit):null;
     observer?.observe(sidebar);if(menu)observer?.observe(menu);
@@ -181,7 +176,7 @@
     }
     void sync();
     return {sync,prepareLogout,flush:()=>invalid?Promise.resolve(false):store.flush(),get hasUnsaved(){return Boolean(invalid)||store.hasUnsaved;},store,
-      destroy(){destroyed=true;cancelGesture();unsubscribe();store.destroy();observer?.disconnect();for(const remove of removers)remove();if(frame!==null)win.cancelAnimationFrame(frame);host.replaceChildren();host.classList.remove('sidebar-notepad');sidebar.classList.remove('has-personal-notepad','sidebar-notepad-scroll');}};
+      destroy(){destroyed=true;cancelGesture();unsubscribe();store.destroy();observer?.disconnect();for(const remove of removers)remove();if(frame!==null)win.cancelAnimationFrame(frame);panel.remove();host.replaceChildren();host.classList.remove('sidebar-notepad');sidebar.classList.remove('has-personal-notepad','sidebar-notepad-scroll');}};
   }
   return Object.freeze({createStore,mount});
 });

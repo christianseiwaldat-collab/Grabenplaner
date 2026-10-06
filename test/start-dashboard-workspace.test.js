@@ -72,6 +72,13 @@ test('strict bounded schema prevents unknown fields and preserves plain labels',
   {version:1,fields:{'group:personnel':{geometry:{x:0,y:0,width:200,height:100,z:1}}}},
   {version:1,fields:JSON.parse('{"__proto__":{"title":"x"}}')}]) assert.throws(()=>model.validate(invalid));
 });
+
+test('the two control cards can independently be hidden while legacy workspace values remain valid',()=>{
+ const hidden={version:1,fields:{'control:center':{hidden:true},'control:vps':{hidden:false,title:'VPS'}}};
+ assert.deepEqual(model.validate(hidden),hidden);assert.ok(model.IDS.includes('control:vps'));
+ assert.deepEqual(model.validate(value('Personal')),value('Personal'));
+ for(const invalid of [{version:1,fields:{'card:schedule':{hidden:true}}},{version:1,fields:{'control:center':{hidden:1}}},{version:1,fields:{'control:vps':{hidden:'true'}}}])assert.throws(()=>model.validate(invalid));
+});
 test('initial slow GET gates changes so another saved field cannot be overwritten',async()=>{
  const get=deferred(),requests=[],errors=[];
  const store=createStore({canUse:()=>true,key:()=> 'employee:A',api:(url,options={})=>{requests.push(options);return options.method==='PUT'?Promise.resolve({}):get.promise;},error:e=>errors.push(e)});

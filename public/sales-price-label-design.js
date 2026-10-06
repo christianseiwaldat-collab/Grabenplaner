@@ -13,6 +13,7 @@
   const fieldIds = Object.freeze(fields.map(field => field.id));
   const geometryKeys = ['xMm', 'yMm', 'widthMm', 'heightMm'];
   const textKeys = ['fontId', 'fontSizePt', ...geometryKeys];
+  const styleKeys=['bold','color','align'];
   const imageKeys = ['assetId', ...geometryKeys];
   const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
   const plain = value => value && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -36,12 +37,28 @@
     for (const id of fieldIds) {
       if (!Object.hasOwn(value, id)) continue;
       const box = value[id];
-      if (!plain(box) || Object.keys(box).length !== textKeys.length || Object.keys(box).some(key => !textKeys.includes(key))
+      if (!plain(box) || textKeys.some(key=>!Object.hasOwn(box,key)) || Object.keys(box).some(key => ![...textKeys,...styleKeys].includes(key))
         || !Fonts.get(box.fontId) || typeof box.fontSizePt !== 'number' || !Number.isFinite(box.fontSizePt)
         || box.fontSizePt < MIN_FONT_SIZE_PT || box.fontSizePt > MAX_FONT_SIZE_PT) fail();
-      result[id] = Object.freeze({fontId:box.fontId, fontSizePt:box.fontSizePt, ...geometry(box, options)});
+      result[id] = Object.freeze({fontId:box.fontId, fontSizePt:box.fontSizePt, ...geometry(box, options),...normalizeStyle(box)});
     }
     return Object.freeze(result);
+  }
+  function normalizeStyle(box){const result={};
+    if(Object.hasOwn(box,'bold')){if(typeof box.bold!=='boolean')fail();result.bold=box.bold;}
+    if(Object.hasOwn(box,'color')){if(typeof box.color!=='string'||!/^#[a-f0-9]{6}$/i.test(box.color))fail();result.color=box.color;}
+    if(Object.hasOwn(box,'align')){if(!['left','center','right'].includes(box.align))fail();result.align=box.align;}
+    return result;
+  }
+  function normalizeFreeTextBoxes(value=[],options){
+    if(!Array.isArray(value)||value.length>20)fail();const ids=new Set();
+    return Object.freeze(value.map(box=>{
+      const keys=['id','text',...textKeys,...styleKeys];
+      if(!plain(box)||keys.some(key=>!Object.hasOwn(box,key))||Object.keys(box).some(key=>!keys.includes(key))||!UUID.test(box.id)||ids.has(box.id)
+        ||typeof box.text!=='string'||box.text.length>1000||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(box.text)||!Fonts.get(box.fontId)
+        ||typeof box.fontSizePt!=='number'||!Number.isFinite(box.fontSizePt)||box.fontSizePt<MIN_FONT_SIZE_PT||box.fontSizePt>MAX_FONT_SIZE_PT)fail();
+      ids.add(box.id);return Object.freeze({id:box.id,text:box.text,fontId:box.fontId,fontSizePt:box.fontSizePt,...geometry(box,options),...normalizeStyle(box)});
+    }));
   }
   function normalizeImageBoxes(value = [], options) {
     if (!Array.isArray(value) || value.length > 3) fail();
@@ -144,7 +161,8 @@
     const measure = (text, size) => measureText(text, box.fontId, size, Boolean(box.bold));
     function wrapped(size) {
       const lines = []; let line = '';
-      for (const word of value.split(/ +/)) {
+      for (const word of value.replace(/\r\n?/g,'\n').split(/(\n)| +/).filter(word=>word!==undefined)) {
+        if(word==='\n'){lines.push(line);line='';continue;}
         if (!word) continue;
         const candidate = line ? line + ' ' + word : word;
         if (measure(candidate, size) <= width) { line = candidate; continue; }
@@ -175,6 +193,6 @@
     }
     return result(size, [], true);
   }
-  return Object.freeze({fields, fieldIds, normalizeTextBoxes, normalizeImageBoxes, boundedBox, getContentGeometry, taxText, create, layoutText,
+  return Object.freeze({fields, fieldIds, normalizeTextBoxes, normalizeFreeTextBoxes, normalizeImageBoxes, boundedBox, getContentGeometry, taxText, create, layoutText,
     MIN_FONT_SIZE_PT, MAX_FONT_SIZE_PT, MIN_BOX_MM, MM});
 });

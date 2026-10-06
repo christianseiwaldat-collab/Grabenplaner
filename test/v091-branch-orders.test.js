@@ -1555,4 +1555,46 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
       entity_id: failed.payload.order.id,
     });
   });
+
+  await t.test("Filialbestellungs-API schützt gespeicherte Konfiguration und Historie mit Versionstoken", async () => {
+    const route = "/api/portal/v1/branch-orders/settings";
+    const before = await requestJson(route, { session: hrSession });
+    assert.equal(before.response.status, 200, JSON.stringify(before.payload));
+    assert.match(before.payload.configurationVersion, /^[a-f0-9]{64}$/u);
+    const original = structuredClone(before.payload.configuration);
+    const history = await requestJson("/api/portal/v1/branch-orders/history?limit=10", { session: hrSession });
+    assert.equal(history.response.status, 200, JSON.stringify(history.payload));
+    assert.ok(history.payload.orders.length, "The fixture has actual saved order snapshots");
+
+    const changed = structuredClone(original);
+    changed.groups[0].hint = "Synthetische parallele Konfigurationsänderung";
+    const saved = await requestJson(route, { method: "PUT", session: hrSession,
+      body: { configuration: changed, expectedVersion: before.payload.configurationVersion } });
+    assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+    assert.match(saved.payload.configurationVersion, /^[a-f0-9]{64}$/u);
+    assert.notEqual(saved.payload.configurationVersion, before.payload.configurationVersion);
+    assert.equal(saved.payload.configuration.groups[0].hint, changed.groups[0].hint);
+
+    const stale = await requestJson(route, { method: "PUT", session: hrSession,
+      body: { configuration: original, expectedVersion: before.payload.configurationVersion } });
+    assert.equal(stale.response.status, 409, JSON.stringify(stale.payload));
+    assert.equal(stale.payload.code, "BRANCH_ORDER_CONFIGURATION_CONFLICT");
+    const malformed = await requestJson(route, { method: "PUT", session: hrSession,
+      body: { configuration: original, expectedVersion: "ungültig" } });
+    assert.equal(malformed.response.status, 400, JSON.stringify(malformed.payload));
+    assert.equal(malformed.payload.code, "BRANCH_ORDER_CONFIGURATION_VERSION_INVALID");
+
+    const afterConflict = await requestJson(route, { session: hrSession });
+    assert.equal(afterConflict.response.status, 200, JSON.stringify(afterConflict.payload));
+    assert.equal(afterConflict.payload.configurationVersion, saved.payload.configurationVersion);
+    assert.deepEqual(afterConflict.payload.configuration, saved.payload.configuration);
+    const afterHistory = await requestJson("/api/portal/v1/branch-orders/history?limit=10", { session: hrSession });
+    assert.equal(afterHistory.response.status, 200, JSON.stringify(afterHistory.payload));
+    assert.deepEqual(afterHistory.payload.orders, history.payload.orders, "Config saves and conflicts cannot rewrite order history");
+
+    const restored = await requestJson(route, { method: "PUT", session: hrSession,
+      body: { configuration: original, expectedVersion: saved.payload.configurationVersion } });
+    assert.equal(restored.response.status, 200, JSON.stringify(restored.payload));
+    assert.equal(restored.payload.configurationVersion, before.payload.configurationVersion);
+  });
 });

@@ -7,7 +7,7 @@
   'use strict';
   const KEY = 'start_dashboard_workspace_v1';
   const IDS = Object.freeze([
-    'control:center', 'group:branch', 'group:personnel', 'group:sales',
+    'control:center', 'control:vps', 'group:branch', 'group:personnel', 'group:sales',
     'card:schedule', 'card:vacation', 'card:loans', 'card:branchOrders', 'card:personnel', 'card:sales',
     'widget:branchOnDuty', 'widget:branchAbsences', 'widget:personnelTeam', 'widget:personnelRequests', 'widget:salesKpis', 'widget:salesTopGroups',
   ]);
@@ -22,8 +22,12 @@
     const fields = {};
     for (const [id, source] of Object.entries(value.fields)) {
       if (!IDS.includes(id) || !object(source)
-        || Object.keys(source).some(key => !['title','description','geometry'].includes(key))) invalid();
+        || Object.keys(source).some(key => !['title','description','geometry','hidden'].includes(key))) invalid();
       const field = {};
+      if (Object.hasOwn(source,'hidden')) {
+        if (!['control:center','control:vps'].includes(id) || typeof source.hidden !== 'boolean') invalid();
+        field.hidden = source.hidden;
+      }
       if (Object.hasOwn(source,'title')) {
         if (typeof source.title !== 'string' || !source.title.trim() || source.title.trim().length > 120
           || /[\u0000-\u001f\u007f]/.test(source.title)) invalid();

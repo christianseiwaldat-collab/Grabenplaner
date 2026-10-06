@@ -568,7 +568,35 @@ test("M7 löscht vertrauliche Tabdaten bei Wechsel, Zugriffsfehler, Profilwechse
 
   const viewSwitch = between(app, "function setView(view)", "function applyRequestedView");
   assert.match(viewSwitch, /employeeProfileIsOpen\(\) && view !== profileView/);
-  assert.match(viewSwitch, /closeEmployeeProfile\(\{ restoreFocus: false \}\)/);
+  assert.match(viewSwitch, /employeeProfileIsOpen\(\) && view !== profileView\) pauseEmployeeProfile\(\)/);
+  const pause = between(app, "function pauseEmployeeProfile()", "function resumeEmployeeProfile(");
+  const close = between(app, "function closeEmployeeProfile(", "function renderCostCenterTypes(");
+  const reset = between(app, "function resetEmployeeProfileData(", "function invalidateEmployeeProfileData(");
+  assert.match(pause, /closeEmployeeProfile\(\{\s*restoreFocus: false\s*\}\)/);
+  assert.match(close, /resetEmployeeProfileData\(\)/);
+  assert.match(reset, /clearEmployeeOnboardingStartState\(\)/);
+  assert.match(reset, /clearEmployeeOffboardingState\(\)/);
+  for (const tab of ["masterData", "documents", "onboarding", "offboarding"]) assert.match(reset, new RegExp(`${tab}: null`));
+
+  // Follow the real navigation-close-reset chain: only safe navigation metadata
+  // is bookmarked, while cached personal payloads and pending reads are cleared.
+  const state = { employeeProfileOpen: true, employeeProfileEmployeeNumber: "synthetic-1", employeeProfileTab: "documents",
+    employeeProfileHost: "team", employeeProfileRequestToken: "old-read", employeeProfile: { confidential: "must-clear" },
+    employeeProfileTabData: Object.fromEntries(["masterData", "documents", "onboarding", "offboarding"].map(tab => [tab, { confidential: "must-clear" }])) };
+  const cleared = [];
+  const context = { state, employeeProfileIsOpen: () => state.employeeProfileOpen, currentAdminPersonalActionsActorKey: () => "actor-A",
+    clearEmployeeOnboardingStartState: () => cleared.push("onboarding"), clearEmployeeOffboardingState: () => cleared.push("offboarding"),
+    renderEmployeeProfile() {}, syncEmployeeProfileWorkspace() {} };
+  vm.createContext(context); vm.runInContext("let employeeProfileBookmark = null;\n" + reset + close + pause, context);
+  context.pauseEmployeeProfile();
+  assert.equal(state.employeeProfileOpen, false); assert.equal(state.employeeProfileEmployeeNumber, "");
+  assert.equal(state.employeeProfile, null); assert.notEqual(state.employeeProfileRequestToken, "old-read");
+  for (const value of Object.values(state.employeeProfileTabData)) assert.equal(value, null);
+  for (const key of ["employeeProfileTabErrors", "employeeProfileTabRequestTokens", "employeeProfileTabAccessFingerprints"]) assert.equal(Object.keys(state[key]).length, 0);
+  assert.equal(state.employeeProfileLoadingTabs.size, 0); assert.deepEqual(cleared, ["onboarding", "offboarding"]);
+  const bookmark = vm.runInContext("employeeProfileBookmark", context);
+  assert.deepEqual(Object.keys(bookmark).sort(), ["actor", "host", "number", "tab"]);
+  assert.equal(bookmark.number, "synthetic-1"); assert.equal(bookmark.tab, "documents"); assert.equal(bookmark.actor, "actor-A");
   const loginGate = between(app, "function showLoginGate", "function hideLoginGate");
   assert.match(loginGate, /employeeProfileIsOpen\(\).*closeEmployeeProfile/);
 });

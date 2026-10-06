@@ -12,10 +12,13 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
  const browser=await chromium.launch({headless:true,...(process.env.GP_BROWSER_EXECUTABLE?{executablePath:process.env.GP_BROWSER_EXECUTABLE}:{}),args:['--no-first-run']});
  try {
   const page=await browser.newPage({viewport:{width:1600,height:1000}});page.on('pageerror',error=>results.pageErrors.push(error.message));
-  await page.setContent('<style>'+fs.readFileSync(path.join(repo,'public/styles.css'),'utf8')+'\n'+fs.readFileSync(path.join(repo,'public','start-dashboard-workspace.css'),'utf8')+'</style>'+html.slice(start,end));
+  await page.setContent('<style>'+fs.readFileSync(path.join(repo,'public/styles.css'),'utf8')+'\n'+fs.readFileSync(path.join(repo,'public','gp-window.css'),'utf8')+'\n'+fs.readFileSync(path.join(repo,'public','start-dashboard-workspace.css'),'utf8')+'</style>'+html.slice(start,end));
+  await page.addScriptTag({path:path.join(repo,'public','gp-window-preferences.js')});
+  await page.addScriptTag({path:path.join(repo,'public','gp-window.js')});
   await page.addScriptTag({path:path.join(repo,'public','start-dashboard-workspace-preferences.js')});
   await page.addScriptTag({path:path.join(repo,'public','start-dashboard-workspace-geometry.js')});
   await page.addScriptTag({path:path.join(repo,'public','start-dashboard-workspace.js')});
+  await page.addScriptTag({path:path.join(repo,'public','start-dashboard-vps.js')});
   await page.evaluate(()=>{
    window.actor='A';window.allowedIds=new Set(StartDashboardWorkspacePreferences.IDS);window.persisted={};window.requests=[];
    const root=document.querySelector('#startDashboardView');
@@ -27,8 +30,10 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    window.controller=StartDashboardWorkspace.create(options);
   });
   async function check(name,fn){await fn();results.checks.push(name);process.stdout.write('PASS '+name+'\n');}
-  await check('sixteen_menus_and_native_dialog_editor_hides_menu',async()=>{
-   assert.equal(await page.locator('[data-dashboard-field-menu]').count(),16);
+  await check('seventeen_menus_and_native_dialog_editor_hides_menu',async()=>{
+   assert.equal(await page.locator('[data-dashboard-field-menu]').count(),17);
+   assert.equal(await page.locator('[data-dashboard-field-edge]').count(),17*8);
+   assert.equal(await page.locator('[data-dashboard-field-edge]').evaluateAll(nodes=>nodes.every(node=>node.textContent==='')),true);
    await page.locator('[data-dashboard-field-menu="card:schedule"]').click();
    assert.equal(await page.locator('.start-dashboard-field-dialog').evaluate(dialog=>dialog.open),true);
    await page.locator('[data-field-edit]').click();
@@ -67,14 +72,14 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
     assert.deepEqual(await page.locator('#startDashboardControlCenterButton').evaluate(element=>({parent:element.parentElement.id,next:element.nextElementSibling.id})),{parent:'startDashboardView',next:'startDashboardCustomizer'});
     await page.evaluate(()=>{controller=StartDashboardWorkspace.create(options);});
     assert.equal(await page.locator('.start-dashboard-control-workspace').count(),1);
-    assert.equal(await page.locator('[data-dashboard-field-menu]').count(),16);
+    assert.equal(await page.locator('[data-dashboard-field-menu]').count(),17);
    }
   });
   await check('escape_returns_keyboard_focus_to_originating_field_menu',async()=>{
    await page.locator('[data-dashboard-field-menu="card:schedule"]').click();await page.keyboard.press('Escape');
    await page.waitForFunction(()=>document.activeElement?.dataset.dashboardFieldMenu==='card:schedule');
   });
-  await check('each_of_the_sixteen_fields_edits_independently_and_restores_its_default',async()=>{
+  await check('each_of_the_seventeen_fields_edits_independently_and_restores_its_default',async()=>{
    const ids=await page.evaluate(()=>StartDashboardWorkspacePreferences.IDS);
    for(const id of ids) {
     const button=page.locator(`[data-dashboard-field-menu="${id}"]`);
@@ -109,6 +114,18 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    await page.waitForFunction(()=>persisted.B.fields['card:loans'].geometry.x===230 && persisted.B.fields['card:loans'].geometry.y===141);
    await resize.focus();await page.keyboard.press('ArrowDown');
    await page.waitForFunction(()=>persisted.B.fields['card:loans'].geometry.height===220);
+  });
+  await check('all_eight_invisible_resize_edges_preserve_the_opposite_anchor',async()=>{
+   const previous=await page.evaluate(()=>controller.store.value);
+   const cases={n:{x:300,y:310,width:300,height:170},ne:{x:300,y:310,width:310,height:170},e:{x:300,y:300,width:310,height:180},se:{x:300,y:300,width:310,height:190},s:{x:300,y:300,width:300,height:190},sw:{x:310,y:300,width:290,height:190},w:{x:310,y:300,width:290,height:180},nw:{x:310,y:310,width:290,height:170}};
+   for(const [edge,expected]of Object.entries(cases)){
+    await page.evaluate(async()=>{const value=controller.store.value;value.fields['card:loans']={geometry:{x:300,y:300,width:300,height:180}};await controller.store.change(value);});
+    const handle=page.locator(`[data-dashboard-field-edge="card:loans"][data-gp-window-edge="${edge}"]`);
+    await handle.press('ArrowRight');await handle.press('ArrowDown');
+    await page.waitForFunction(expected=>JSON.stringify(persisted.B.fields['card:loans'].geometry)===JSON.stringify(expected),expected);
+    assert.deepEqual(await page.evaluate(()=>persisted.B.fields['card:loans'].geometry),expected);
+   }
+   await page.evaluate(value=>controller.store.change(value),previous);
   });
   await check('pointer_cancel_preserves_saved_geometry_and_mobile_fallback_never_rewrites_it',async()=>{
    const saved=await page.evaluate(()=>structuredClone(persisted.B.fields['card:loans']));
@@ -160,6 +177,27 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    await page.waitForFunction(()=>Object.keys(persisted.B.fields).length===0);
    assert.equal(await page.locator('[data-dashboard-floating]').count(),0);
    assert.equal(await page.locator('[data-start-dashboard-widget="branchOnDuty"]').evaluate(node=>node.parentElement.dataset.startDashboardCard),'schedule');
+  });
+  await check('both_control_cards_hide_independently_persist_and_can_be_restored_without_changing_business_scope',async()=>{
+   await page.locator('[data-dashboard-field-menu="control:center"]').click();await page.locator('[data-field-hide]').click();
+   await page.waitForFunction(()=>persisted.B?.fields['control:center']?.hidden===true);
+   assert.equal(await page.locator('#startDashboardControlCenterButton').isVisible(),false);assert.equal(await page.locator('#startDashboardVpsCard').isVisible(),true);
+   await page.locator('[data-dashboard-field-menu="control:vps"]').click();await page.locator('[data-field-hide]').click();
+   await page.waitForFunction(()=>persisted.B.fields['control:vps'].hidden===true);assert.equal(await page.locator('#startDashboardVpsCard').isVisible(),false);
+   await page.evaluate(()=>{controller.destroy();controller=StartDashboardWorkspace.create(options);});await page.waitForFunction(()=>controller.store.ready);
+   assert.equal(await page.locator('#startDashboardControlCenterButton').isVisible(),false);assert.equal(await page.locator('#startDashboardVpsCard').isVisible(),false);
+   await page.evaluate(()=>controller.setVisible('control:vps',true));assert.equal(await page.locator('#startDashboardVpsCard').isVisible(),true);assert.equal(await page.locator('#startDashboardControlCenterButton').isVisible(),false);
+   await page.evaluate(()=>controller.resetAll());assert.equal(await page.locator('#startDashboardControlCenterButton').isVisible(),true);assert.equal(await page.locator('#startDashboardVpsCard').isVisible(),true);
+  });
+  await check('vps_values_use_read_only_native_resources_and_refresh_without_replacing_editor_buttons',async()=>{
+   await page.evaluate(()=>{window.vpsClock=Date.now();window.vpsAllowed=true;window.vpsReads=[];window.vps=StartDashboardVps.mount(document.querySelector('#startDashboardVpsCard'),{
+    key:()=>actor,canUse:()=>vpsAllowed,active:()=>controller.isVisible('control:vps'),now:()=>vpsClock,api:async(url,options)=>{vpsReads.push({url,method:options.method||'GET'});return {generatedAt:new Date(vpsClock).toISOString(),capabilities:{technicalDiagnostics:true},resources:{uptimeSeconds:3600,cpu:{loadAverageOneMinute:.5,logicalProcessors:4},memory:{usedPercent:40,availableBytes:1024,totalBytes:4096},storage:{freeBytes:8192,databaseBytes:2048}},status:{checkedAt:new Date(vpsClock).toISOString(),alerts:[]},recoveryAssurance:{integrityVerified:true,statusAvailable:true,recentRuns:[{trigger:'scheduled-nightly',status:'passed',startedAt:new Date(vpsClock-3600000).toISOString(),completedAt:new Date(vpsClock-1800000).toISOString(),phases:Array.from({length:5},()=>({status:'passed'}))}]}};}});});
+   await page.waitForFunction(()=>document.querySelector('[data-vps-metric="nightly"] dd').textContent.includes('Erfolgreich'));
+   assert.match(await page.locator('[data-vps-metric="warnings"]').textContent(),/Keine gemeldet/);assert.equal(await page.locator('[data-dashboard-field-menu="control:vps"]').count(),1);
+   await page.locator('[data-vps-refresh]').click();assert.equal(await page.evaluate(()=>vpsReads.length),1);
+   await page.evaluate(()=>{vpsClock+=60000;});await page.locator('[data-vps-refresh]').click();await page.waitForFunction(()=>vpsReads.length===2);
+   assert.equal(await page.evaluate(()=>vpsReads.every(r=>r.url==='/api/portal/v1/system-center'&&r.method==='GET')),true);
+   await page.evaluate(()=>{vpsAllowed=false;vps.sync();});assert.equal(await page.locator('[data-vps-metric]').count(),0);await page.evaluate(()=>vps.destroy());
   });
   await check('narrow_desktop_move_and_vertical_resize_preserve_preferred_width',async()=>{
    await page.evaluate(async()=>{
@@ -240,20 +278,20 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    await page.waitForFunction(()=>persisted.B.fields['group:personnel']?.geometry);
    assert.deepEqual(results.pageErrors,[]);
   });
-  await check('all_sixteen_fields_float_independently_and_hidden_view_measurements_never_persist',async()=>{
+  await check('all_seventeen_fields_float_independently_and_hidden_view_measurements_never_persist',async()=>{
    await page.evaluate(async()=>{
     const fields=Object.fromEntries(StartDashboardWorkspacePreferences.IDS.map((id,index)=>[id,{geometry:{x:(index%4)*260,y:Math.floor(index/4)*170,width:250,height:150}}]));
     await controller.store.change({version:1,fields});window.beforeHidden=JSON.stringify(persisted.B);
    });
-   assert.equal(await page.locator('[data-dashboard-floating]').count(),16);
+   assert.equal(await page.locator('[data-dashboard-floating]').count(),17);
    await page.evaluate(()=>{document.getElementById('startDashboardView').classList.remove('active');controller.sync();});
    assert.equal(await page.locator('[data-dashboard-floating]').count(),0);
    assert.equal(await page.evaluate(()=>JSON.stringify(persisted.B)===beforeHidden),true);
    await page.evaluate(()=>{document.getElementById('startDashboardView').classList.add('active');controller.sync();});
-   assert.equal(await page.locator('[data-dashboard-floating]').count(),16);
+   assert.equal(await page.locator('[data-dashboard-floating]').count(),17);
    await page.evaluate(()=>controller.resetAll());
    assert.equal(await page.locator('[data-dashboard-floating]').count(),0);
-   assert.equal(await page.locator('[data-dashboard-field-menu]').count(),16);
+   assert.equal(await page.locator('[data-dashboard-field-menu]').count(),17);
    assert.equal(await page.evaluate(()=>retainedLoan===document.querySelector('#startDashboardLoanSummary')),true);
   });
   await check('slow_initial_read_and_read_error_gate_all_edit_actions_until_retry_preserves_baseline',async()=>{
@@ -287,6 +325,18 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    assert.equal(await page.evaluate(()=>controller.store.value.fields['card:sales'].title),'Existing sales');
    assert.equal(await page.evaluate(()=>initialReadAttempts),2);
    assert.deepEqual(await page.evaluate(()=>readErrors),['initial read failed']);
+  });
+  await check('compact_control_checkboxes_and_shared_native_dialog_adapter_keep_layout_and_focus',async()=>{
+   assert.equal(await page.locator('#startDashboardCenterVisible').evaluate(node=>getComputedStyle(node).width),'16px');
+   await page.evaluate(()=>{window.dialogPrefs=GpWindowPreferences.empty();window.dialogManager=GpWindow.installDocument(document,{actorKey:()=>actor,canUse:()=>true,readPreferences:async()=>({gpWindows:dialogPrefs}),writePreferences:async value=>{dialogPrefs=value;}});});
+   await page.locator('[data-dashboard-field-menu="card:loans"]').click();
+   await page.waitForFunction(()=>controller.dialog.classList.contains('gp-window'));
+   await page.locator('[data-field-edit]').click();
+   assert.equal(await page.locator('.start-dashboard-field-dialog').evaluate(node=>getComputedStyle(node).transform),'none');
+   const box=await page.locator('.start-dashboard-field-dialog').boundingBox();assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<=1601&&box.y+box.height<=1001);
+   await page.locator('[data-field-editor] input').fill('Adapter-Test');await page.locator('[data-field-editor] button[type=submit]').click();
+   await page.waitForFunction(()=>controller.dialog.open===false);
+   assert.equal(await page.evaluate(()=>document.activeElement?.dataset.dashboardFieldMenu),'card:loans');await page.evaluate(()=>dialogManager.destroy());
   });
   assert.deepEqual(results.pageErrors,[]);
  } finally {await browser.close();}

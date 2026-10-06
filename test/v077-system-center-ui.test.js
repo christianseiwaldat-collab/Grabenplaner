@@ -34,7 +34,16 @@ test("System-Center steht in den Einstellungen rechts neben System & Backups", (
   assert.equal([...settingsTabStrip.matchAll(/data-settings-tab="([^"]+)"/g)].at(-1)[1], "systemCenter");
   assert.doesNotMatch(html, /data-rights-dashboard-mode="systemCenter"/);
   const startDashboard = html.slice(html.indexOf('<section id="startDashboardView"'), html.indexOf('<section id="filialAdministrationView"'));
-  assert.doesNotMatch(startDashboard, /System-Center/);
+  assert.match(startDashboard, /<section[^>]*id="startDashboardVpsCard"[^>]*aria-label="VPS-Übersicht"/);
+  const vpsCard = startDashboard.slice(startDashboard.indexOf('id="startDashboardVpsCard"'), startDashboard.indexOf('</section>', startDashboard.indexOf('id="startDashboardVpsCard"')));
+  assert.match(vpsCard, /System-Center/);
+  assert.match(vpsCard, /data-vps-title>VPS-Übersicht/);
+  assert.match(vpsCard, /data-vps-description>Ressourcen, Nachtlauf und Warnungen/);
+  assert.match(vpsCard, /data-vps-metrics/);
+  assert.match(vpsCard, /data-vps-refresh/);
+  assert.doesNotMatch(vpsCard, /startRecoveryAssurance|data-settings-tab/);
+  assert.match(startDashboard, /id="startDashboardCenterVisible"/);
+  assert.match(startDashboard, /id="startDashboardVpsVisible"/);
   const settingsPanel = html.indexOf('class="settings-section settings-system-center" id="systemCenterPanel"');
   assert.ok(settingsPanel > html.indexOf('<section id="settingsView"'));
   assert.ok(settingsPanel < html.indexOf('<section id="usbProvisioningSettings"'));
@@ -50,6 +59,38 @@ test("System-Center steht in den Einstellungen rechts neben System & Backups", (
   assert.match(script, /system:diagnostics:technical/);
   assert.match(script, /rightsDashboardMode: "locations"/);
   assert.match(script, /systemCenter: systemCenterAccess/);
+});
+
+test("zusätzliche VPS-Kachel bleibt persönlich, technisch berechtigt und unabhängig vom System-Center-Reiter", () => {
+  const state = {portalStatus:{portalEnabled:true, operationMode:'server'}, portalSession:{authenticated:true,
+    user:{employeeNumber:'252', sessionKind:'employee', isEmployee:true, active:true, mustChangePassword:false,
+      permissions:['system:diagnostics:technical']}}};
+  const context = {state}; vm.createContext(context);
+  vm.runInContext(functionSource('canReadSystemCenter', 'canReadPersonnelRulesDashboard')
+    + functionSource('isLocalStartDashboardWorkspace', 'startDashboardWorkspaceActorKey')
+    + functionSource('canReadStartDashboardVps', 'syncStartDashboardControlChoices'), context);
+  assert.equal(context.canReadStartDashboardVps(), true);
+  const original = structuredClone(state);
+  for (const change of [
+    value => {value.portalSession.user.permissions=['system:diagnostics:read'];},
+    value => {value.portalSession.user.permissions=['settings:write','backup:write'];},
+    value => {value.portalSession.authenticated=false;},
+    value => {value.portalSession.user.mustChangePassword=true;},
+    value => {value.portalSession.user.active=false;},
+    value => {value.portalSession.user.sessionKind='organization';value.portalSession.user.isEmployee=false;},
+    value => {value.portalStatus.operationMode='local';},
+    value => {value.portalStatus.portalEnabled=false;value.portalStatus.localOnly=true;},
+  ]) {
+    Object.assign(state, structuredClone(original));change(state);
+    assert.equal(context.canReadStartDashboardVps(), false);
+  }
+  const sync = functionSource('syncStartDashboardVps', 'syncGpWindows');
+  assert.match(sync, /classList\.toggle\('hidden',!canReadStartDashboardVps\(\)\)/);
+  assert.match(sync, /canUse:canReadStartDashboardVps/);
+  assert.match(sync, /state\.currentView==='startDashboard'/);
+  assert.match(sync, /isVisible\('control:vps'\)!==false/);
+  const navigation = functionSource('applyRequestedView', 'currentAdministrationRoute');
+  assert.match(navigation, /parameters\.get\("dashboard"\) === "systemCenter"[\s\S]*if \(canReadSystemCenter\(\)\) \{[\s\S]*setView\("settings"\);[\s\S]*setSettingsTab\("systemCenter"\);[\s\S]*else setView\("startDashboard"\);/);
 });
 
 test("v0.77: System-Center lädt nur seinen Diagnose-Endpunkt", () => {

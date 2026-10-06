@@ -176,7 +176,7 @@ test('Price label templates persist by account owner, validate options and recov
     filenameOptions: { stamp: 'date-suffix', position: 'after', separator: '_', suffix: 'Fil18' } };
   const response = await f.request('templates', saved); assert.equal(response.status, 200);
   const normalized = await response.json(); assert.deepEqual(normalized.options, Pdf.normalizeOptions(saved.options));
-  assert.deepEqual(await (await f.request('templates')).json(), normalized);
+  assert.deepEqual(await (await f.request('templates')).json(), {...normalized,hasSavedDefaults:true});
   assert.deepEqual(await (await f.request('templates', undefined, { employee: '43' })).json(), initial);
   for (const invalid of [{ options: { copies: 0 }, filenameOptions: {} }, { options: { showPhoto: 'true' }, filenameOptions: {} },
     { options: { labelWidthMm: 500 }, filenameOptions: {} }, { options: {}, filenameOptions: { position: 'middle' } },

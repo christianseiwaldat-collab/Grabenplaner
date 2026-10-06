@@ -101,6 +101,12 @@ test("Artikelsuche und Belegsuche im echten Filialportal", async t => {
     const second = (await request("/api/portal/v1/branch-articles?offset=20")).data;
     assert.equal(first.total, 42); assert.equal(first.items.length, 20); assert.equal(second.items.length, 20);
     assert.ok(second.items.every(item => !first.items.some(other => other.articleNumber === item.articleNumber)));
+    const flexible=await request('/api/portal/v1/branch-articles?limit=25&sort=description&direction=desc');
+    assert.equal(flexible.status,200);assert.equal(flexible.data.items.length,25);
+    const next=(await request('/api/portal/v1/branch-articles?limit=25&sort=description&direction=desc&offset=25')).data;
+    assert.equal(next.items.length,17);assert.equal(new Set([...flexible.data.items,...next.items].map(item=>item.articleNumber)).size,42);
+    for(const sort of ['purchaseNet','purchaseGross','sourceSystem'])assert.equal((await request('/api/portal/v1/branch-articles?sort='+sort)).status,400);
+    assert.equal((await request('/api/portal/v1/branch-articles?limit=101')).status,400);
     const archive = await request("/api/portal/v1/branch-articles?status=inactive"); assert.equal(archive.data.total, 1); assert.equal(archive.data.items[0].active, false);
     assert.equal((await request("/api/portal/v1/branch-articles?query=not-existing")).data.total, 0);
   });

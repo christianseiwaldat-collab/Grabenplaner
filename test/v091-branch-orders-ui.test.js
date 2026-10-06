@@ -156,7 +156,12 @@ test("v0.91 UI: Filialbestellung trennt Erfassung und Filialleitungs-Konfigurati
 
   assert.match(server, /attachmentsAvailable: Boolean\(available && email\.transport === "smtp"\)/);
   assert.match(server, /recipientDeliveryChanges: branchOrderRecipientDeliveryAuditChanges/);
-  assert.match(server, /\{ pdfDeliveryAvailable: emailDelivery\.attachmentsAvailable \}/);
+  const configurationStart = server.indexOf('sqliteBranchOrderOperations.replaceConfiguration(');
+  assert.ok(configurationStart >= 0, "Konfigurationsschreibvorgang fehlt");
+  const configurationEnd = server.indexOf('));', configurationStart);
+  assert.ok(configurationEnd > configurationStart, "Konfigurationsschreibvorgang muss begrenzt sein");
+  const configurationWrite = server.slice(configurationStart, configurationEnd);
+  assert.match(configurationWrite, /\{ pdfDeliveryAvailable: emailDelivery\.attachmentsAvailable, expectedVersion: request\.body\?\.expectedVersion \}/);
   const pdfCapabilityCheck = server.indexOf("if (branchOrderConfigurationRequiresPdf(configuration) && !emailDelivery.attachmentsAvailable)");
   const orderCreation = server.indexOf("sqliteBranchOrderOperations.createOrder", pdfCapabilityCheck);
   assert.ok(pdfCapabilityCheck >= 0, "PDF-Fähigkeitsprüfung fehlt");

@@ -55,6 +55,29 @@ test('scanned encrypted blobs and protected metadata survive store reconstructio
  f.restoreStorage(restored); assert.deepEqual((await f.images.content(context, image.assetId)).buffer, original);
 });
 
+test('owner-bound upload receipts recover an acknowledged image without a duplicate scan or quota allocation', async t => {
+ const f=await fixture(t),owner=await f.context(),other=await f.context('43'),bytes=await png(),uploadId=require('node:crypto').randomUUID();
+ const first=await f.images.create(owner,bytes,{uploadId}),again=await f.images.create(owner,bytes,{uploadId});
+ assert.deepEqual(again,first);assert.equal(f.state.scans,1);assert.deepEqual((await f.images.listOwned(owner)).map(row=>row.assetId),[first.assetId]);assert.deepEqual(await f.images.listOwned(other),[]);
+ const changed=await sharp({create:{width:120,height:80,channels:4,background:'#990000'}}).png().toBuffer();await assert.rejects(f.images.create(owner,changed,{uploadId}),{status:409});assert.equal(f.state.scans,1);
+ const otherImage=await f.images.create(other,bytes,{uploadId});assert.notEqual(otherImage.assetId,first.assetId);assert.equal(f.state.scans,2);assert.deepEqual((await f.images.listOwned(owner)).map(row=>row.assetId),[first.assetId]);
+ await assert.rejects(f.images.listOwned(owner,{assertFresh:async()=>{throw Object.assign(Error('revoked'),{status:403});}}),{status:403});
+});
+
+test('nested project/draft saves recheck a foreign image share inside the same database snapshot before persistence', async t => {
+ const f=await fixture(t),owner=await f.context(),branch=await f.context('acc19'),asset=await f.images.create(owner,await png()),crypto=require('node:crypto'),Ui=require('../public/sales-price-labels');
+ let shared=await f.templates.create(owner,input(asset.assetId,{visibility:'selected',recipients:['acc19']})),revoke=false;
+ const validateImages=async(ctx,value,opts)=>{const proof=await f.images.validateOptions(ctx,value,opts);if(revoke){revoke=false;shared=await f.templates.update(owner,shared.id,{...input(asset.assetId),version:shared.version});}return proof;};
+ const stores={access:f.p.app.provider,vault:f.p.vault,validateImages},projects=require('../lib/sales-price-label-project-store').createSalesPriceLabelProjectStore(stores),drafts=require('../lib/sales-price-label-draft-store').createSalesPriceLabelDraftStore(stores);
+ const options=Ui.normalizeOptions({imageBoxes:[box(asset.assetId)]}),label={id:crypto.randomUUID(),articleNumber:'107506',priceType:'sales',options};
+ const project={schemaVersion:1,name:'Shared image copy',labels:[label],selectedLabelId:label.id,paper:{paper:'A4',paperWidthMm:210,paperHeightMm:297,orientation:'portrait',marginMm:10,gapMm:3},filenameOptions:{stamp:'none',position:'before',separator:'-',suffix:''}};
+ const saved=await projects.create(branch,{project});assert.equal(saved.version,1);
+ revoke=true;await assert.rejects(projects.update(branch,saved.id,{version:1,project}),{status:403});assert.equal((await projects.get(branch,saved.id)).version,1);
+ shared=await f.templates.update(owner,shared.id,{...input(asset.assetId,{visibility:'selected',recipients:['acc19']}),version:shared.version});
+ const draft={schemaVersion:1,draftId:crypto.randomUUID(),articleNumbers:'107506',priceType:'sales',options:Ui.normalizeOptions({}),rawSettings:{},filenameOptions:project.filenameOptions,name:'Draft',library:{mode:'new',templateId:'',templateVersion:null,title:'',visibility:'private',recipients:[]},selectedArticleNumber:'107506',paperPage:0,project:{id:'',version:null,data:project}};
+ revoke=true;await assert.rejects(drafts.save(branch,{revision:0,mutationId:crypto.randomUUID(),draft}),{status:403});assert.equal((await drafts.get(branch)).revision,0);
+});
+
 test('authenticated opaque markers retain only committed images through orphan collection and require complete offline backup files', async t => {
  const f = await fixture(t), context = await f.context(), image = await f.images.create(context, await png());
  const { protectedStorageReferencesFromDatabase } = require('../lib/persistence/sqlite/operations/maintenance');

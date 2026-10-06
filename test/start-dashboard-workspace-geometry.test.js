@@ -20,6 +20,14 @@ test('pointer and keyboard movement stay within bounded coordinates and sizes',(
  assert.deepEqual(adjust(value,'resize',-999,-999,900),{x:20,y:20,width:200,height:80});
  assert.deepEqual(adjust(value,'resize',99999,99999,900),{x:20,y:20,width:880,height:4096});
 });
+
+test('all eight dashboard edges keep the opposite side fixed and north/west changes persist their position',()=>{
+ const original={x:300,y:300,width:300,height:180},cases={n:{x:300,y:310,width:300,height:170},ne:{x:300,y:310,width:310,height:170},e:{x:300,y:300,width:310,height:180},se:{x:300,y:300,width:310,height:190},s:{x:300,y:300,width:300,height:190},sw:{x:310,y:300,width:290,height:190},w:{x:310,y:300,width:290,height:180},nw:{x:310,y:310,width:290,height:170}};
+ for(const [edge,expected]of Object.entries(cases)){const next=adjust(original,edge,10,10,1200);assert.deepEqual(next,expected,edge);assert.deepEqual(persistedGeometry(original,original,next,edge),expected,edge);}
+ assert.deepEqual(adjust(original,'nw',99999,99999,1200),{x:400,y:400,width:200,height:80});
+ assert.deepEqual(adjust({x:4500,y:4500,width:300,height:180},'nw',-9999,-9999,12000),{x:704,y:584,width:4096,height:4096});
+ assert.deepEqual(adjust({x:16384,y:16384,width:4096,height:4096},'nw',99999,99999,22000),{x:16384,y:16384,width:4096,height:4096});
+});
 function fixture() {
  const source=fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8'),requests=[],messages=[],cache=[];
  let actor='A';

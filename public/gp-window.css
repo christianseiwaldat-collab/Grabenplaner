@@ -1,0 +1,48 @@
+/* Shared internal GP windows. Geometry is viewport based, including the sidebar. */
+.gp-window { position:fixed; box-sizing:border-box; min-width:0; min-height:0; z-index:980; }
+.gp-window[hidden] { display:none !important; }
+.gp-window-title { cursor:move; touch-action:none; user-select:none; }
+.gp-window.is-moving,.gp-window.is-resizing { user-select:none; }
+.gp-window.is-moving { cursor:move; }
+.gp-window-edge { position:absolute; z-index:20; padding:0 !important; margin:0; min-width:0 !important; min-height:0 !important; border:0 !important; border-radius:0 !important; background:transparent !important; color:transparent; box-shadow:none !important; touch-action:none; opacity:0; }
+.gp-window-edge:focus-visible { opacity:1; outline:2px solid var(--green,#215345); outline-offset:-2px; background:color-mix(in srgb,var(--green,#215345) 15%,transparent) !important; }
+.gp-window-edge[data-gp-window-edge="n"],.gp-window-edge[data-gp-window-edge="s"] { left:12px; right:12px; height:7px; cursor:ns-resize; }
+.gp-window-edge[data-gp-window-edge="n"] { top:0; }
+.gp-window-edge[data-gp-window-edge="s"] { bottom:0; }
+.gp-window-edge[data-gp-window-edge="w"],.gp-window-edge[data-gp-window-edge="e"] { top:12px; bottom:12px; width:7px; cursor:ew-resize; }
+.gp-window-edge[data-gp-window-edge="w"] { left:0; }
+.gp-window-edge[data-gp-window-edge="e"] { right:0; }
+.gp-window-edge:is([data-gp-window-edge="nw"],[data-gp-window-edge="ne"],[data-gp-window-edge="sw"],[data-gp-window-edge="se"]) { width:14px; height:14px; }
+.gp-window-edge[data-gp-window-edge="nw"] { top:0; left:0; cursor:nwse-resize; }
+.gp-window-edge[data-gp-window-edge="ne"] { top:0; right:0; cursor:nesw-resize; }
+.gp-window-edge[data-gp-window-edge="sw"] { bottom:0; left:0; cursor:nesw-resize; }
+.gp-window-edge[data-gp-window-edge="se"] { bottom:0; right:0; cursor:nwse-resize; }
+.gp-window.is-minimized .gp-window-edge { display:none; }
+/* Native dialogs also use the stored viewport geometry when attached manually. */
+dialog.gp-window[open] { inset:auto; margin:0; max-width:none; max-height:none; }
+dialog.gp-window.gp-dialog[open] { inset:auto; margin:0; max-width:none; max-height:none; overflow:auto; transform:none; }
+.gp-window.gp-dialog > form { width:auto; max-width:100%; height:auto; max-height:100%; overflow:auto; }
+.gp-window.gp-dialog > .modal-header { padding:18px 20px 0; }
+.gp-dialog-window-title { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 18px; border-bottom:1px solid var(--line,#d7e0db); }
+.gp-dialog-window-title strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gp-window-control { display:inline-flex; align-items:center; justify-content:center; width:30px; height:28px; padding:0; border:0; border-radius:7px; background:transparent; color:inherit; font-size:18px; }
+.gp-window-control:hover { background:var(--surface-soft,#eef3f0); }
+/* Article windows dock in their own workspace, beside the navigation. The
+   sidebar width and application zoom already drive the shell's coordinates. */
+.article-window-dock { --article-dock-width:68px; position:fixed; bottom:10px; left:clamp(14px,calc(var(--sidebar-width,240px) + 14px),calc(100vw * var(--app-font-scale-inverse,1) - var(--article-dock-width) - 14px)); display:flex; align-items:center; gap:8px; width:max-content; max-width:calc(100vw * var(--app-font-scale-inverse,1) - 28px); z-index:990; }
+.article-window-dock > button { flex:none; width:30px; height:28px; min-width:0; min-height:0; padding:4px; display:grid; place-items:center; border:1px solid #6c857b; border-radius:6px; background:var(--green-dark,#173b31); color:#fff2a2; font-size:17px; cursor:pointer; }
+.article-window-dock > button:hover { background:var(--green,#215345); }
+.article-window-dock > button:focus-visible { outline:2px solid var(--green,#215345); outline-offset:2px; }
+.article-window-dock[hidden],.article-window-dock > button[hidden],.view:not(.active) > .article-window-dock { display:none !important; }
+@media (max-width:820px), (max-width:1100px) and (pointer:coarse) {
+  .article-window-dock { left:14px; }
+  body.mobile-navigation-open .article-window-dock { left:clamp(14px,calc(var(--sidebar-mobile-width,min(320px,calc((100vw - 24px) * var(--app-font-scale-inverse,1)))) + 14px),calc(100vw * var(--app-font-scale-inverse,1) - var(--article-dock-width) - 14px)); }
+}
+@media (pointer:coarse) {
+  .article-window-dock { --article-dock-width:80px; }
+  .article-window-dock > button { width:36px; height:36px; }
+  .gp-window-edge[data-gp-window-edge="n"],.gp-window-edge[data-gp-window-edge="s"] { height:12px; }
+  .gp-window-edge[data-gp-window-edge="w"],.gp-window-edge[data-gp-window-edge="e"] { width:12px; }
+  .gp-window-edge:is([data-gp-window-edge="nw"],[data-gp-window-edge="ne"],[data-gp-window-edge="sw"],[data-gp-window-edge="se"]) { width:22px; height:22px; }
+}
+@media (prefers-reduced-motion:reduce) { .gp-window { animation:none !important; transition:none !important; } }

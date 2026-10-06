@@ -1,9 +1,9 @@
 (function(root, factory) {
   'use strict';
-  const api = factory();
+  const api = factory(typeof module === 'object' && module.exports ? require('./gp-window') : root.GpWindow);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.StartDashboardWorkspaceGeometry = api;
-})(typeof window === 'object' ? window : this, function() {
+})(typeof window === 'object' ? window : this, function(windowApi) {
   'use strict';
   function bounded(value, min, max) { return Math.min(Math.max(min, max), Math.max(min, Math.round(value))); }
   // Render to the available canvas; a narrower viewport never rewrites saved coordinates.
@@ -14,26 +14,27 @@
     return result;
   }
   function adjust(value, action, dx, dy, width) {
-    return project(action === 'move'
-      ? {...value, x: value.x + dx, y: value.y + dy}
-      : {...value, width: Math.min(width - value.x, value.width + dx), height: value.height + dy}, width);
+    const edge=action==='resize'?'se':action;
+    const result=windowApi.adjust(value,edge,dx,dy,{width,height:20480},{minWidth:200,minHeight:80});
+    // The dashboard is a vertically scrolling canvas, with the same bounded
+    // preferred geometry schema as before.
+    if(edge!=='move'&&edge.includes('n')&&result.height>4096){result.height=4096;result.y=value.y+value.height-result.height;}
+    if(edge!=='move'&&edge.includes('w')&&result.width>4096){result.width=4096;result.x=value.x+value.width-result.width;}
+    if(edge!=='move'&&edge.includes('n')&&result.y>16384){result.y=16384;result.height=value.y+value.height-result.y;}
+    if(edge!=='move'&&edge.includes('w')&&result.x>16384){result.x=16384;result.width=value.x+value.width-result.x;}
+    return project(result,width);
   }
   function persistedGeometry(saved, start, current, action) {
     if (!saved) return {...current};
-    const result = {...saved};
-    for (const axis of action === 'move' ? ['x', 'y'] : ['width', 'height']) {
-      if (current[axis] !== start[axis]) result[axis] = current[axis];
-    }
-    return result;
+    return windowApi.persistedGeometry(saved,start,current,action==='resize'?'se':action);
   }
   function create(options) {
     const {root, fields} = options, doc = root.ownerDocument, win = doc.defaultView;
-    const grid = root.querySelector('#startDashboardGrid'), control = fields.get('control:center')?.element;
+    const grid = root.querySelector('#startDashboardGrid'),controls=['control:center','control:vps'].map(id=>fields.get(id)?.element).filter(Boolean);
     const canvas = doc.createElement('div'); canvas.className = 'start-dashboard-workspace-canvas';
     canvas.dataset.dashboardCanvas = '';
     const gridAnchor = doc.createComment('dashboard-grid-original'); grid.before(gridAnchor, canvas);
-    const controlAnchor = control ? doc.createComment('dashboard-control-canvas-original') : null;
-    if (control) {control.before(controlAnchor); canvas.append(control);}
+    const controlAnchors=new Map();for(const control of controls){const anchor=doc.createComment('dashboard-control-canvas-original');control.before(anchor);controlAnchors.set(control,anchor);canvas.append(control);}
     canvas.append(grid);
     const live = doc.createElement('span'); live.className = 'visually-hidden'; live.setAttribute('aria-live', 'polite'); canvas.append(live);
     const records = new Map(), removers = [];
@@ -49,7 +50,7 @@
     function restore(record) {
       if (!record.frame) return;
       record.anchor.after(record.field.element);
-      record.field.element.append(record.field.menu, record.move, record.resize);
+      record.field.element.append(record.field.menu, record.move, ...record.resizes);
       record.frame.remove(); record.frame = null;
     }
     function promote(record) {
@@ -57,7 +58,7 @@
       record.frame = doc.createElement('div'); record.frame.className = 'start-dashboard-workspace-floating';
       record.frame.dataset.dashboardFloating = record.field.id;
       canvas.append(record.frame);
-      record.frame.append(record.field.element, record.field.menu, record.move, record.resize);
+      record.frame.append(record.field.element, record.field.menu, record.move, ...record.resizes);
     }
     function paint(record, value) {
       promote(record);
@@ -80,9 +81,8 @@
       if (gesture && (gesture.key !== options.key() || !canEdit(gesture.record.field))) cancel();
       const preferences = options.value(), editable = visible() && !compact() && options.usable();
       for (const record of records.values()) {
-        const allowed = !options.usable() || options.allowed(record.field), value = preferences.fields[record.field.id]?.geometry;
-        record.move.hidden = record.resize.hidden = !editable || !allowed;
-        record.move.disabled = record.resize.disabled = !options.ready();
+        const allowed = (!options.usable() || options.allowed(record.field)) && preferences.fields[record.field.id]?.hidden!==true, value = preferences.fields[record.field.id]?.geometry;
+        for(const handle of [record.move,...record.resizes]){handle.hidden=!editable||!allowed;handle.disabled=!options.ready();}
         // Detached children must still obey their original parent card's rights and V3 visibility.
         record.field.element.classList.toggle('start-dashboard-workspace-denied', !allowed);
         if (gesture?.record === record) continue;
@@ -135,16 +135,13 @@
     }
     for (const field of fields.values()) {
       const anchor = doc.createComment('dashboard-field-original:' + field.id); field.element.before(anchor);
-      const move = doc.createElement('button'), resize = doc.createElement('button');
-      move.type = resize.type = 'button'; move.className = 'start-dashboard-field-move'; resize.className = 'start-dashboard-field-resize';
-      move.dataset.dashboardFieldMove = resize.dataset.dashboardFieldResize = field.id;
-      move.textContent = '✥'; resize.textContent = '◢';
+      const move = doc.createElement('button');move.type='button';move.className='start-dashboard-field-move';move.dataset.dashboardFieldMove=field.id;move.textContent='✥';
       move.setAttribute('aria-label', 'Feld verschieben: Pfeiltasten, Umschalt für Feinschritte, Escape zum Abbrechen');
-      resize.setAttribute('aria-label', 'Feldgröße ändern: Pfeiltasten, Umschalt für Feinschritte, Escape zum Abbrechen');
-      move.title = 'Verschieben · Pfeiltasten oder ziehen'; resize.title = 'Größe ändern · Pfeiltasten oder ziehen';
-      field.element.append(move, resize);
-      const record = {field, anchor, move, resize, frame: null}; records.set(field.id, record);
-      for (const [action, handle] of [['move', move], ['resize', resize]]) {
+      move.title='Verschieben · Pfeiltasten oder ziehen';
+      const resizes=windowApi.EDGES.map(edge=>{const handle=doc.createElement('button');handle.type='button';handle.className='gp-window-edge start-dashboard-field-resize';handle.dataset.gpWindowEdge=edge;handle.dataset.dashboardFieldEdge=field.id;if(edge==='se')handle.dataset.dashboardFieldResize=field.id;handle.setAttribute('aria-label','Feldgröße '+({n:'oben',ne:'oben rechts',e:'rechts',se:'unten rechts',s:'unten',sw:'unten links',w:'links',nw:'oben links'}[edge])+': ziehen oder Pfeiltasten verwenden');handle.title='Größe ändern';return handle;});
+      field.element.append(move,...resizes);
+      const record={field,anchor,move,resizes,frame:null};records.set(field.id,record);
+      for(const [action,handle] of [['move',move],...resizes.map(handle=>[handle.dataset.gpWindowEdge,handle])]) {
         on(handle, 'click', event => event.stopPropagation());
         on(handle, 'pointerdown', event => {
           if (event.button !== 0 || event.isPrimary === false || !begin(record, action, handle, event.pointerId)) return;
@@ -191,9 +188,9 @@
       cancel(); destroyed = true; observer?.disconnect(); if (frameRequest !== null) win.cancelAnimationFrame(frameRequest);
       for (const remove of removers) remove();
       for (const record of records.values()) {
-        restore(record); record.anchor.remove(); record.move.remove(); record.resize.remove(); record.field.element.classList.remove('start-dashboard-workspace-denied');
+        restore(record); record.anchor.remove(); record.move.remove();for(const handle of record.resizes)handle.remove();record.field.element.classList.remove('start-dashboard-workspace-denied');
       }
-      if (controlAnchor?.parentNode) controlAnchor.replaceWith(control);
+      for(const [control,anchor] of controlAnchors)if(anchor.parentNode)anchor.replaceWith(control);
       gridAnchor.replaceWith(grid); canvas.remove();
     }};
   }

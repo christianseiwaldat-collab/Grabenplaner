@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="/sales-article-tools.css" />
     <link rel="stylesheet" href="/sales-price-labels.css" />
     <link rel="stylesheet" href="/sales-price-label-editor.css" />
+    <link rel="stylesheet" href="/sales-price-label-search-window.css" />
     <link rel="stylesheet" href="/sales-article-price-labels.css" />
     <link rel="stylesheet" href="/receipt-search.css" />
     <link rel="stylesheet" href="/trade-insights.css" />
@@ -26,6 +27,8 @@
     <link rel="stylesheet" href="/data-import.css" />
     <link rel="stylesheet" href="/mobile-refinements.css" />
     <link rel="stylesheet" href="/sidebar-notepad.css" />
+    <link rel="stylesheet" href="/gp-window.css" />
+    <link rel="stylesheet" href="/sales-recent-articles.css" />
     <link rel="stylesheet" href="/sales-article-search-window.css" />
     <link rel="stylesheet" href="/start-dashboard-workspace.css" />
   </head>
@@ -237,6 +240,9 @@
         </nav>
 
         <div id="sidebarNotepad" hidden></div>
+        <div class="sidebar-window-dock" aria-label="Persönliche Fenster">
+          <button type="button" id="sidebarPriceLabelSearchButton" hidden title="Artikel zu Preisschildern hinzufügen" aria-label="Artikelsuche für Preisschilder öffnen">⌕</button>
+        </div>
 
         <div class="sidebar-resize-handle" id="sidebarResizeHandle" role="separator" tabindex="0" aria-label="Breite des Hauptmenüs" aria-orientation="vertical" aria-controls="mainSidebar" aria-valuemin="200" aria-valuemax="380" aria-valuenow="240" title="Menübreite ziehen · Pfeiltasten zum Anpassen · Doppelklick für Standardbreite"></div>
       </aside>
@@ -264,7 +270,12 @@
               <button class="close-button" id="startDashboardCustomizerClose" type="button" aria-label="Dashboard-Anpassung schließen">×</button>
             </div>
             <div class="start-dashboard-customizer-grid" id="startDashboardCustomizerGrid" aria-live="polite"></div>
+            <div class="start-dashboard-control-choices"><label><input type="checkbox" id="startDashboardCenterVisible" checked /> Steuerungscenter anzeigen</label><label><input type="checkbox" id="startDashboardVpsVisible" checked /> VPS / System-Center anzeigen</label></div>
             <div class="modal-actions"><button class="secondary-button" id="startDashboardResetButton" type="button">Standard wiederherstellen</button><span></span><button class="primary-button" id="startDashboardSaveButton" type="button">Dashboard speichern</button></div>
+          </section>
+          <section class="start-dashboard-vps-card hidden" id="startDashboardVpsCard" aria-label="VPS-Übersicht">
+            <header><span class="eyebrow">System-Center</span><h2 data-vps-title>VPS-Übersicht</h2><p data-vps-description>Ressourcen, Nachtlauf und Warnungen</p></header>
+            <dl class="start-dashboard-vps-metrics" data-vps-metrics></dl><p data-vps-status role="status" aria-live="polite">Noch nicht geladen.</p><button type="button" data-vps-refresh>Aktualisieren</button>
           </section>
           <div class="start-dashboard-grid" id="startDashboardGrid" aria-live="polite">
             <article class="start-dashboard-group" id="startDashboardBranchGroup" data-start-dashboard-group="branch" data-start-dashboard-size="standard">
@@ -1628,6 +1639,10 @@
         </section>
 
         <section id="salesArticleCatalogView" class="view sales-article-catalog-view" aria-labelledby="salesArticleCatalogTitle">
+          <div class="article-window-dock" id="salesArticleWindowDock" role="group" aria-label="Artikelstamm-Fenster">
+            <button type="button" id="sidebarArticleSearchButton" hidden title="Frische Artikelsuche öffnen" aria-label="Frische Artikelsuche öffnen">⌕</button>
+            <button type="button" id="sidebarRecentArticlesButton" hidden title="Letzte Artikel öffnen" aria-label="Letzte Artikel öffnen">◷</button>
+          </div>
           <header class="topbar sales-article-catalog-topbar">
             <div class="sales-article-catalog-heading"><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesArticleCatalogTitle">Artikelstamm</h1><p class="subtitle">Zentrale Artikeldaten schnell und übersichtlich finden.</p><p class="sales-article-last-import" id="salesArticleLastImport" aria-live="polite"><span>Letzter TradeFoto-Import</span><time id="salesArticleLastImportValue">Wird geladen …</time></p></div>
             <div class="topbar-actions sales-article-topbar-actions">
@@ -1642,11 +1657,11 @@
             <div class="sales-article-search-column sales-article-search-window" id="salesArticleSearchWindow" role="region" aria-labelledby="salesArticleSearchWindowTitle" hidden>
               <header class="sales-article-window-titlebar" data-article-window-title>
                 <button type="button" class="sales-article-window-move" data-article-window-move aria-describedby="salesArticleWindowMoveHint" title="Suchfenster ziehen oder mit Pfeiltasten verschieben"><span aria-hidden="true">⠿</span><strong id="salesArticleSearchWindowTitle">Artikelsuche</strong></button>
-                <button type="button" data-article-window-reset aria-label="Suchfenster zurücksetzen" title="Fensterposition und Größe zurücksetzen">↺</button>
-                <button type="button" data-article-window-toggle aria-expanded="true" aria-controls="salesArticleSearchWindowBody" aria-label="Suchfenster minimieren" title="Minimieren / wiederherstellen">−</button>
+                <button type="button" data-article-window-minimize aria-expanded="true" aria-controls="salesArticleSearchWindowBody" aria-label="Suchfenster minimieren" title="Minimieren / wiederherstellen">−</button>
+                <button type="button" data-article-window-close aria-label="Artikelsuche schließen" title="Schließen">×</button>
               </header>
-              <p class="visually-hidden" id="salesArticleWindowMoveHint">Ziehen oder Pfeiltasten zum Verschieben. Mit Umschalt größere Schritte. Pos1: oben links, Ende: unten rechts. Escape bricht Ziehen ab.</p>
-              <p class="visually-hidden" id="salesArticleWindowResizeHint">Ziehen oder Pfeiltasten für Breite und Höhe. Mit Umschalt größere Schritte. Pos1: kleinste Größe, Ende: verfügbarer Platz. Escape bricht Ziehen ab.</p>
+              <p class="visually-hidden" id="salesArticleWindowMoveHint">Ziehen oder Pfeiltasten zum Verschieben. Mit Umschalt Feinschritte. Pos1: oben links, Ende: unten rechts. Escape bricht Ziehen ab.</p>
+              <p class="visually-hidden" id="salesArticleWindowResizeHint">Ziehen oder Pfeiltasten für Breite und Höhe. Mit Umschalt Feinschritte. Pos1: kleinste Größe, Ende: verfügbarer Platz. Escape bricht Ziehen ab.</p>
               <p class="visually-hidden" data-article-window-status role="status" aria-live="polite"></p>
               <div class="sales-article-window-body" id="salesArticleSearchWindowBody" data-article-window-body>
             <section class="sales-article-search-shell" aria-labelledby="salesArticleSearchTitle">
@@ -4426,21 +4441,24 @@
       </form>
     </dialog>
 
-    <dialog class="modal personal-actions-admin-dialog" id="personalActionsAdminDialog" aria-labelledby="personalActionsAdminTitle">
+    <dialog class="modal personal-actions-admin-dialog" id="personalActionsAdminDialog" data-gp-window-manual aria-labelledby="personalActionsAdminTitle">
       <div class="modal-header">
         <div>
           <span class="eyebrow">Persönliches Protokoll</span>
           <h2 id="personalActionsAdminTitle">Meine letzten Aktionen</h2>
-          <p>Hier erscheinen ausschließlich deine eigenen protokollierten Aktionen. Rückgängig ist nur verfügbar, wenn eine sichere Gegenaktion möglich und der aktuelle Stand unverändert ist.</p>
         </div>
+        <button type="button" data-personal-actions-minimize aria-label="Meine Aktionen minimieren" title="Minimieren">−</button>
         <button class="close-button" type="button" data-close-personal-actions-admin aria-label="Persönliches Aktionslog schließen">×</button>
       </div>
+      <div data-personal-actions-body>
+      <p class="personal-actions-intro">Hier erscheinen ausschließlich deine eigenen protokollierten Aktionen. Rückgängig ist nur verfügbar, wenn eine sichere Gegenaktion möglich und der aktuelle Stand unverändert ist.</p>
       <p class="message hidden" id="personalActionsAdminMessage" role="status" aria-live="polite"></p>
       <div class="admin-personal-actions-list" id="personalActionsAdminList" role="list" aria-live="polite"></div>
       <div class="modal-actions">
         <button class="secondary-button hidden" id="personalActionsAdminLoadMore" type="button">Weitere laden</button>
         <span></span>
         <button class="secondary-button" type="button" data-close-personal-actions-admin>Schließen</button>
+      </div>
       </div>
     </dialog>
 
@@ -4485,6 +4503,11 @@
     <script src="/sales-price-label-layout.js"></script>
     <script src="/sales-price-label-design.js"></script>
     <script src="/sales-price-label-editor.js"></script>
+    <script src="/gp-window-preferences.js"></script>
+    <script src="/gp-window.js"></script>
+    <script src="/sales-price-label-project.js"></script>
+    <script src="/sales-price-label-working-draft.js"></script>
+    <script src="/sales-price-label-search-window.js"></script>
     <script src="/sales-price-labels.js"></script>
     <script src="/sales-article-price-labels.js"></script>
     <script src="/sales-article-detail-preferences.js"></script>
@@ -4505,6 +4528,9 @@
     <script src="/start-dashboard-workspace-preferences.js"></script>
     <script src="/start-dashboard-workspace-geometry.js"></script>
     <script src="/start-dashboard-workspace.js"></script>
+    <script src="/start-dashboard-vps.js"></script>
+    <script src="/form-draft-guard.js"></script>
+    <script src="/sales-recent-articles.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

@@ -5,6 +5,8 @@
 .sales-price-labels .spl-element-picker { display:grid; grid-template-columns:auto minmax(140px,260px); gap:8px; align-items:center; font-size:12px; margin:8px 0; }
 .sales-price-labels .spl-element-picker select { min-height:32px; padding:5px 8px; font-size:12px; }
 .spl-element-toolbar { border:1px solid var(--accent,#315c44); padding:10px; border-radius:10px; margin-bottom:10px; background:var(--surface-soft); }
+.sales-price-labels .spl-element-toolbar.is-context {position:fixed;z-index:1800;width:min(420px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;box-shadow:0 15px 45px #0004;background:var(--surface,#fff);}
+.spl-element-fields .spl-edit-text {grid-column:1 / -1;}
 .spl-element-toolbar header { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; }
 .spl-element-toolbar header strong { margin-right:auto; font-size:13px; }
 .sales-price-labels .spl-element-toolbar button { min-height:30px; padding:4px 9px; font-size:12px; }

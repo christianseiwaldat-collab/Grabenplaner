@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
@@ -74,7 +75,9 @@ test("Artikelsuche verwendet nur bestätigte Listenfelder und den serverseitigen
 test("Suchfenster umfasst Suche und Ergebnisse und behält wählbare sortierbare Köpfe", () => {
   const view = between(html, '<section id="salesArticleCatalogView"', '<section id="crmView"');
   assert.match(view, /id="salesArticleSearchWindow"[^>]*role="region"[^>]*aria-labelledby="salesArticleSearchWindowTitle"/);
-  assert.match(view, /data-article-window-toggle[^>]*aria-expanded="true"[^>]*aria-controls="salesArticleSearchWindowBody"/);
+  assert.match(view, /<button[^>]*type="button"[^>]*data-article-window-minimize[^>]*aria-expanded="true"[^>]*aria-controls="salesArticleSearchWindowBody"[^>]*aria-label="Suchfenster minimieren"/);
+  assert.match(view, /<button[^>]*type="button"[^>]*data-article-window-close[^>]*aria-label="Artikelsuche schließen"/);
+  assert.doesNotMatch(view, /data-article-window-reset|data-article-window-toggle|Position zurücksetzen/);
   assert.match(view, /id="salesArticleTableScroll"[^>]*role="region"/);
   assert.match(view, /id="salesArticleTableHead"/);
   assert.match(view, /id="salesArticleTableBody"/);
@@ -181,7 +184,7 @@ test("Rechts von der Suche öffnet sich die Artikelkartei mit vier Tabs einschli
   assert.doesNotMatch(renderer, /Lieferant|Filialwerte|Taxonomie|Warengruppe|Zubehör/);
 });
 
-test("Artikel werden ausschließlich nach einer ausdrücklichen Trefferauswahl geladen", () => {
+test("Artikelauswahl lädt Details; Navigation aktualisiert bereits ausgewählte Details im Hintergrund", () => {
   const rows = between(
     app,
     "function renderSalesArticleCatalogRows()",
@@ -201,8 +204,11 @@ test("Artikel werden ausschließlich nach einer ausdrücklichen Trefferauswahl g
   assert.match(loader, /catalog\.detailRequestId \+= 1/);
   assert.match(loader, /requestId !== catalog\.detailRequestId/);
   assert.match(loader, /normalizedArticleNumber !== catalog\.selectedArticleNumber/);
-  assert.match(loader, /catalog\.detailLoading = true/);
-  assert.match(loader, /catalog\.detailError = error\.message/);
+  assert.match(loader, /refresh = false/);
+  assert.match(loader, /const retained=refresh && catalog\.selectedArticleNumber===normalizedArticleNumber \? catalog\.detail : null/);
+  assert.match(loader, /catalog\.detail = retained/);
+  assert.match(loader, /catalog\.detailLoading = !retained/);
+  assert.match(loader, /catalog\.detailError = retained \? '' : error\.message/);
   assert.match(app, /event\.detail === 0/);
   assert.match(app, /data-sales-article-detail-retry/);
   const detailRenderer = between(
@@ -227,6 +233,58 @@ test("Artikel werden ausschließlich nach einer ausdrücklichen Trefferauswahl g
     "function currentSalesArticleCatalogActorKey",
   );
   assert.match(reset, /resetSalesArticleCatalogDetailState\(\)/);
+});
+
+test("Explizite Artikelauswahl zeigt Ladezustand; gleiche Artikelansicht bleibt bei Navigation sichtbar", async () => {
+  const loader = between(app, "async function loadSalesArticleCatalogDetail", "function salesArticleCatalogCell");
+  const requests = [], recorded = [];
+  const previous = { article: { articleNumber: "000001", description: "Previous synthetic article" } };
+  const catalog = { selectedArticleNumber: "000001", detail: previous, detailRequestId: 0 };
+  const context = {
+    URLSearchParams, state: { salesArticleCatalog: catalog },
+    canReadSalesArticles: () => true, currentSalesArticleCatalogDetailAccessKey: () => "synthetic-account:read",
+    applySalesArticleCatalogReadState: () => {}, setSalesArticleCatalogDetailStatus: () => {},
+    renderSalesArticleCatalogRows: () => {}, renderSalesArticleCatalogDetail: () => {},
+    normalizeSalesArticleDetailPayload: (payload) => payload,
+    recentArticlesWindow: { record: (articleNumber) => { recorded.push(articleNumber); } },
+    api: (url) => new Promise((resolve, reject) => requests.push({ url, resolve, reject })),
+  };
+  vm.runInNewContext(`${loader}\nglobalThis.loadDetail = loadSalesArticleCatalogDetail;`, context);
+
+  const selection = context.loadDetail("000002", { moveFocus: true });
+  assert.equal(catalog.detail, null, "an explicit different article must not show the previous article's data");
+  assert.equal(catalog.detailLoading, true);
+  assert.equal(catalog.detailMoveFocus, true);
+  const selected = { article: { articleNumber: "000002", description: "Selected synthetic article" } };
+  requests.shift().resolve(selected);
+  await selection;
+  assert.equal(catalog.detail, selected);
+  assert.equal(catalog.detailLoading, false);
+  assert.deepEqual(recorded, ["000002"]);
+
+  const refresh = context.loadDetail("000002", { refresh: true });
+  assert.equal(catalog.detail, selected, "navigation must keep the last detail visible until fresh data arrives");
+  assert.equal(catalog.detailLoading, false);
+  assert.equal(catalog.detailMoveFocus, false);
+  const refreshed = { article: { articleNumber: "000002", description: "Fresh synthetic article" } };
+  requests.shift().resolve(refreshed);
+  await refresh;
+  assert.equal(catalog.detail, refreshed);
+  assert.deepEqual(recorded, ["000002"], "background refresh must not create another recent-article visit");
+
+  const failedRefresh = context.loadDetail("000002", { refresh: true });
+  requests.shift().reject(new Error("Synthetic temporary network error"));
+  await failedRefresh;
+  assert.equal(catalog.detail, refreshed, "a transient refresh error must preserve the previously displayed article");
+  assert.equal(catalog.detailError, "");
+  assert.equal(catalog.detailLoading, false);
+
+  const differentRefresh = context.loadDetail("000003", { refresh: true });
+  assert.equal(catalog.detail, null, "retention is allowed only for the identical selected article");
+  assert.equal(catalog.detailLoading, true);
+  requests.shift().resolve({ article: { articleNumber: "000003" } });
+  await differentRefresh;
+  assert.equal(catalog.detail.article.articleNumber, "000003");
 });
 
 test("Preisgruppen unterscheiden serverseitig gesperrt von freigegeben aber leer", () => {

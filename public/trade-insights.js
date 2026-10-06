@@ -65,6 +65,22 @@
  let resultMeta={};
  let kind='purchasing',generation=0,rows=[],scanned=0,context=null,summary=null;
  let jobTimer=null,jobRefresh=null,currentJob=null,opening=null,openGeneration=0,sortKey='',sortDirection='asc',jobRows=[],jobSort='created',jobDirection='desc';
+  // Only interaction state is kept between pages. Results, permissions and
+  // mutable detail records are fetched again before they become visible.
+  const viewStates=new Map(),filterNames=['query','articleNumber','movementType','review','days','dateFrom','dateTo','customer','serial','supplier','locationId','group','wgr','resultTitle','stocktakeId','stocktakeVersion','stocktakeSource','difference','suggestionType'];
+  const fieldRevisions={locationId:0,group:0,wgr:0};
+  for(const name of Object.keys(fieldRevisions))on(form.elements[name],'change',()=>fieldRevisions[name]++);
+  const viewKey=()=>area+':'+kind;
+  function readViewState(){return {filters:Object.fromEntries(filterNames.map(name=>[name,form.elements[name]?.value||''])),currentJob,snapshotVisible:!q('snapshot').hidden,sortKey,sortDirection,jobSort,jobDirection,
+   filterHidden:form.hidden,archiveOpen:q('archive').open,snapshotTitle:q('snapshot').elements.title.value,
+   classification:{level:classForm.elements.level.value,articleKey:classForm.elements.articleKey.value,groupKey:classForm.elements.groupKey.value,kind:classSave.elements.kind.value,
+    selected:classificationSelection?{level:classificationSelection.level,key:classificationSelection.key,revision:classificationSelection.revision}:null,open:q('classification').open},
+   repair:repairSelection&&repairDialog.open?{id:repairSelection.id,revision:repairSelection.revision,state:repairForm.elements.state.value}:null};}
+  function rememberView(){if(selected)viewStates.set(viewKey(),readViewState());}
+  function restoreFields(saved){for(const name of filterNames)if(form.elements[name])form.elements[name].value=saved?.filters?.[name]??(name==='days'?'180':'');period.sync();}
+  function restorePresentation(saved){if(!saved)return;sortKey=saved.sortKey;sortDirection=saved.sortDirection;jobSort=saved.jobSort;jobDirection=saved.jobDirection;
+   form.hidden=saved.filterHidden;q('movement-filter-toggle').hidden=!saved.filterHidden;q('movement-filter-toggle').textContent=saved.filterHidden?'Suchfilter anzeigen':'Suchfilter ausblenden';
+   q('archive').open=saved.archiveOpen;q('snapshot').elements.title.value=saved.snapshotTitle;restoreFields(saved);if(currentJob)render();}
  const e=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const number=v=>model.format(v,'number');
  const money=v=>model.format(v,'money');
@@ -109,10 +125,11 @@
   q('jobs').innerHTML=jobRows.length?'<div class="table-scroll"><table><thead><tr>'+jobColumns.map(c=>'<th aria-sort="'+(jobSort===c.key?(jobDirection==='asc'?'ascending':'descending'):'none')+'"><button type="button" data-job-sort="'+c.key+'">'+c.label+' '+(jobSort===c.key?(jobDirection==='asc'?'↑':'↓'):'↕')+'</button></th>').join('')+'<th>Aktionen</th></tr></thead><tbody>'+model.sortRows(jobRows,jobColumns,jobSort,jobDirection).map(r=>'<tr><td><strong>'+e(r.title)+'</strong></td><td title="'+e(model.titles[r.kind])+'">'+e(compact?'Einkauf':model.titles[r.kind])+'</td><td>'+queriedAt(r.created)+'</td><td><span class="trade-job-state" data-state="'+e(r.status)+'">'+e(jobStates[r.status])+'</span>'+(r.status==='completed'?'<small title="Abfragedauer">'+(compact?'':'Abfragedauer: ')+e(model.duration(r.durationMs))+'</small>':'')+(['running','queued'].includes(r.status)?'<small>'+number(r.processed)+' Positionen geprüft</small>':r.status==='failed'?'<small>'+e(r.error==='IMPORT_HISTORY_ANALYSIS_CHANGED'||r.error==='IMPORT_BESTELL_CURSOR'?'Datenstand geändert. Bitte neu suchen.':r.error==='IMPORT_FORBIDDEN'?'Berechtigung geändert.':r.error==='IMPORT_REPORT_DATA_LIMIT'?'Zu viele Ergebnisse. Bitte Auswahl eingrenzen.':'Suche konnte nicht abgeschlossen werden. Bitte erneut starten.')+'</small>':'')+'</td><td>'+number(r.count)+'</td><td class="trade-job-actions">'+(r.status==='completed'&&r.accessible?(['article-history','supplier-invoices'].includes(r.kind)?'':'<button type="button" data-job-open="'+e(r.id)+'">Öffnen</button>')+'<a class="trade-pdf-link" href="/api/trade-insights/jobs/'+encodeURIComponent(r.id)+'/pdf">PDF</a>':'')+(['queued','running'].includes(r.status)?'<button type="button" data-job-action="cancel" data-job-id="'+e(r.id)+'">Abbrechen</button>':'<button type="button" data-job-action="remove" data-job-id="'+e(r.id)+'">Entfernen</button>')+'</td></tr>').join('')+'</tbody></table></div>':'<p>Noch keine gespeicherten Ergebnisse. Starte eine Suche, um den ersten Ergebnisstand abzulegen.</p>';
   tableLayout?.attach(q('jobs'),'jobs');
  }
- async function openJob(id){
+  async function openJob(id,{preserveView=false}={}){
   let ticket=++openGeneration;opening=id;
   try{
    const data=await api('jobs/'+encodeURIComponent(id));if(ticket!==openGeneration)return;
+    const retained=preserveView?readViewState():null;
    if(kind!==data.kind){const button=[...root.querySelectorAll('[data-kind]')].find(b=>b.dataset.kind===data.kind&&!b.disabled);if(!button)return;const choosing=choose(button),selection=generation;ticket=++openGeneration;await choosing;if(!active||selection!==generation||ticket!==openGeneration)return;}
    if(['movements','stocktakes','suggestions'].includes(kind)){form.hidden=true;q('movement-filter-toggle').hidden=false;q('movement-filter-toggle').textContent='Suchfilter anzeigen';q('archive').open=false;}
    currentJob=id;opening=null;rows=data.result.rows||[];resultMeta=data.result;summary=data.result.totals||null;scanned=data.processed;sortKey=['movements','stocktakes','suggestions'].includes(kind)?(model.columns(kind,context.projection,data.result).find(c=>c.key==='date')?.key||model.columns(kind,context.projection,data.result)[0]?.key||''):'';sortDirection=['movements','stocktakes','suggestions'].includes(kind)?'desc':'asc';
@@ -125,7 +142,7 @@
    q('snapshot-info').textContent='Abfrage '+timestamp(data.created)+' · gespeichert '+timestamp(data.completedAt)+' · damaliger Ergebnisstand'+(kind==='movements'?' · '+[data.query.articleNumber?'Artikel '+data.query.articleNumber:null,data.query.query?'Suche: '+data.query.query:null,data.query.dateFrom?'Ab '+date(data.query.dateFrom):null,data.query.dateTo?'Bis '+date(data.query.dateTo):null,data.query.movementType?({receipt:'Wareneingänge',transfer:'Umlagerungen',unclear:'Art ungeklärt'})[data.query.movementType]:null,data.query.review?({issues:'Mit Prüfhinweis',negative:'Negative Mengen',missing_date:'Ohne Buchungsdatum'})[data.query.review]:null,data.query.supplier?'Lieferant: '+data.query.supplier:null,data.query.locationId?'Filiale '+data.query.locationId:null].filter(Boolean).join(' · '):'');
    if(kind==='movements'&&!Object.values(data.query).some(Boolean))q('snapshot-info').textContent+='Alle Buchungen im freigegebenen Bereich';
    status.textContent=rows.length+' '+(kind==='stock-summary'?'Sortimentsgruppen':'Treffer')+' · '+number(scanned)+' Quellenpositionen geprüft · Ergebnis gespeichert · Abfragedauer: '+model.duration(data.durationMs);
-   q('note').textContent=(model.emptyReason(data.kind,data.query,data.result)?model.emptyReason(data.kind,data.query,data.result)+' ':'')+(data.result.note||'')+' Quellstand: '+date(data.result.sourceDate)+'.';render();
+    q('note').textContent=(model.emptyReason(data.kind,data.query,data.result)?model.emptyReason(data.kind,data.query,data.result)+' ':'')+(data.result.note||'')+' Quellstand: '+date(data.result.sourceDate)+'.';render();restorePresentation(retained);
   }catch(err){if(err.name!=='AbortError')status.textContent=err.message;}finally{if(ticket===openGeneration)opening=null;}
  }
  async function refreshJobs(){
@@ -173,7 +190,8 @@
  function classChanged(){classGeneration++;classificationSelection=null;classSave.hidden=true;const level=classForm.elements.level.value;
   classForm.elements.articleKey.hidden=level!=='article';classForm.elements.groupKey.hidden=level==='article';options(classForm.elements.groupKey,level==='wgr'?metadata?.wgr||[]:metadata?.groups||[],false);classStatus.textContent='';}
  async function choose(button,{replace=false}={}){
-  cancelPending();reset();for(const key of ['stocktakeId','stocktakeVersion','stocktakeSource','difference'])if(form.elements[key])form.elements[key].value='';resultMeta={};form.hidden=false;q('movement-filter-toggle').hidden=true;selected=true;kind=button.dataset.kind;
+   rememberView();cancelPending();reset();metadata=null;resultMeta={};form.hidden=false;q('movement-filter-toggle').hidden=true;selected=true;kind=button.dataset.kind;
+   const saved=viewStates.get(viewKey()),fieldBaseline={...fieldRevisions};restoreFields(saved);restorePresentation(saved);
   for(const b of root.querySelectorAll('[data-kind]')){const chosen=b===button;b.classList.toggle('active',chosen);b.setAttribute('aria-selected',String(chosen));b.tabIndex=chosen?0:-1;}
   if(browserDom)for(const group of root.querySelectorAll('.trade-navigation-group')){const selected=!!group.querySelector('[data-kind="'+kind+'"]');group.dataset.selected=String(selected);group.open=false;const label=group===q('history-nav')?'Historien':'Bestand & Warenfluss';group.querySelector('summary').textContent=label+(selected?' · '+button.textContent:'');if(selected&&button===root.ownerDocument.activeElement)group.querySelector('summary').focus();}
   q('main-panel').setAttribute('aria-labelledby',button.id);
@@ -186,7 +204,7 @@
    root.querySelector('[data-supplier]').hidden=!['purchasing','movements'].includes(kind);
    root.querySelectorAll('[data-article-exact]').forEach(n=>n.hidden=!['movements','suggestions'].includes(kind));
    root.querySelectorAll('[data-movement]').forEach(n=>n.hidden=kind!=='movements');q('movement-intro').hidden=kind!=='movements';
-   if(kind==='movements'){q('movement-source').textContent=context.sources?.movements?'Übernommener WEUM-Stand: '+date(context.sources.movements.date):'Noch keine WEUM-Daten übernommen. Import unter Einstellungen → Datenbankimporte.';if(!movementVisited){movementVisited=true;const day=new Date(context.today+'T00:00:00Z');day.setUTCDate(day.getUTCDate()-29);form.elements.dateFrom.value=day.toISOString().slice(0,10);form.elements.dateTo.value=context.today;}}const stock=['inventory','stock-summary'].includes(kind);form.elements.locationId.required=false;
+    if(kind==='movements'){q('movement-source').textContent=context.sources?.movements?'Übernommener WEUM-Stand: '+date(context.sources.movements.date):'Noch keine WEUM-Daten übernommen. Import unter Einstellungen → Datenbankimporte.';if(!saved){movementVisited=true;const day=new Date(context.today+'T00:00:00Z');day.setUTCDate(day.getUTCDate()-29);form.elements.dateFrom.value=day.toISOString().slice(0,10);form.elements.dateTo.value=context.today;}}const stock=['inventory','stock-summary'].includes(kind);form.elements.locationId.required=false;
    function locationOptions(){const select=form.elements.locationId,previous=select.value,items=kind==='stock-summary'?(metadata?.stockLocations||[]):kind==='purchasing'?(context.purchasingLocations||context.locations||[]):context.locations||[];
     select.replaceChildren(option(kind==='stock-summary'?'Alle Filial-IDs zusammen':kind==='purchasing'?'Alle freigegebenen Lieferstellen':'Alle freigegebenen Filialen',''));for(const l of [...items].sort((a,b)=>model.collator.compare(a.label,b.label)))select.add(option(l.label,l.id));select.value=items.some(l=>l.id===previous)?previous:'';}
    locationOptions();q('purchasing-location-hint').hidden=kind!=='purchasing';
@@ -195,10 +213,19 @@
   q('query-label').textContent=kind==='stocktakes'?'Inventurnummer':['inventory','stock-summary','suggestions'].includes(kind)?'Artikelnr. oder Bezeichnung':kind==='purchasing'?'Artikel oder Bestellnummer':'Artikel oder Vorgangsnummer';form.elements.query.required=false;
   period.sync();
   status.textContent='Suchangaben wählen und Suche starten.';q('note').textContent='';
-  void refreshJobs();
-  if(stock&&!metadata){const ticket=generation;try{const data=await api(kind==='stock-summary'?'stock-summary-metadata':'stock-metadata',{});if(ticket!==generation)return;metadata=data;
-   options(form.elements.group,data.groups);options(form.elements.wgr,data.wgr);locationOptions();classChanged();if(!form.elements.dateTo.value)form.elements.dateTo.value=data.cashPeriod?.dateTo||context.today;
+   void refreshJobs();
+   const ticket=generation;
+   if(stock&&!metadata){try{const data=await api(kind==='stock-summary'?'stock-summary-metadata':'stock-metadata',{});if(ticket!==generation)return;metadata=data;
+    const group=saved&&fieldRevisions.group===fieldBaseline.group?saved.filters.group:form.elements.group.value,wgr=saved&&fieldRevisions.wgr===fieldBaseline.wgr?saved.filters.wgr:form.elements.wgr.value;options(form.elements.group,data.groups);options(form.elements.wgr,data.wgr);
+    form.elements.group.value=data.groups.some(row=>String(row.id)===group)?group:'';form.elements.wgr.value=data.wgr.some(row=>String(row.id)===wgr)?wgr:'';
+    if(saved&&fieldRevisions.locationId===fieldBaseline.locationId)form.elements.locationId.value=saved.filters.locationId||'';locationOptions();classChanged();if(!saved&&!form.elements.dateTo.value)form.elements.dateTo.value=data.cashPeriod?.dateTo||context.today;
   }catch(err){if(ticket===generation&&err.name!=='AbortError')status.textContent=err.message;}}
+   if(ticket!==generation)return;
+   // Restored dropdown values remain constrained by the fresh authorized lists.
+   locationOptions();if(metadata){for(const name of ['group','wgr'])if(!metadata[name==='group'?'groups':'wgr'].some(row=>String(row.id)===form.elements[name].value))form.elements[name].value='';}
+   if(saved?.currentJob){currentJob=saved.currentJob;if(saved.snapshotVisible)await openJob(saved.currentJob,{preserveView:true});else{await jobRefresh;await refreshJobs();}}
+   if(ticket!==generation)return;
+   await restoreWorkingDrafts(saved,ticket);
  }
  on(q('tabs'),'click',event=>{const group=event.target.closest?.('.trade-navigation-group');if(group&&browserDom)for(const other of root.querySelectorAll('.trade-navigation-group'))if(other!==group)other.open=false;const button=event.target.closest('[data-kind]');if(button&&!button.disabled&&active&&context)void choose(button);});
  on(classForm.elements.level,'change',classChanged);on(classForm,'input',()=>{classGeneration++;classificationSelection=null;classSave.hidden=true;});
@@ -206,29 +233,44 @@
   classSave.hidden=true;try{const data=await api('classification',{level,key});if(ticket!==classGeneration)return;classificationSelection=data;classSave.elements.kind.value=data.value?.kind||'inherit';q('class-label').textContent=data.key+' · '+data.label;classSave.hidden=false;classStatus.textContent='';}catch(err){if(ticket===classGeneration&&err.name!=='AbortError')classStatus.textContent=err.message;}});
  on(classSave,'submit',async event=>{event.preventDefault();if(!classificationSelection)return;const selected=classificationSelection,ticket=++classGeneration;const button=classSave.querySelector('button');button.disabled=true;
   try{const data=await api('classification-save',{level:selected.level,key:selected.key,expectedRevision:selected.revision,kind:classSave.elements.kind.value});if(ticket!==classGeneration)return;classificationSelection=data;classStatus.textContent='Einstufung gespeichert. Eine neue Suche berücksichtigt die Änderung.';reset();}catch(err){if(ticket===classGeneration&&err.name!=='AbortError')classStatus.textContent=err.message;}finally{button.disabled=false;}});
- const repairDialog=q('repair-dialog'),repairForm=q('repair-status-form'),repairStatus=q('repair-status');let repairSelection=null,repairGeneration=0;
+  const repairDialog=q('repair-dialog'),repairForm=q('repair-status-form'),repairStatus=q('repair-status');let repairSelection=null,repairGeneration=0,pausedRepairCloses=0;
  function renderRepair(r){q('repair-content').innerHTML=`<h2>Reparatur ${e(r.documentNumber)}</h2><div class="facts"><div><small>Filiale / Kunde</small>${e(r.sourceLocation)} / ${e(r.customerNumber||'–')}</div><div><small>Gerät / Seriennr.</small>${e(r.label)} · ${e(r.serialNumber||'–')}</div><div><small>TradeRepair</small>${r.sourceStatus==='ready'?'Abholbereit':'In Bearbeitung'}</div><div><small>Eigener GP-Status</small>${e(({unassigned:'Noch nicht gesetzt',ready:'Abholbereit',collected:'Abgeholt'})[r.gpStatus])}</div></div><h3>Fehlerbeschreibung</h3><p class="long-text">${e(r.description||'–')}</p><h3>Durchgeführte Arbeiten</h3><p class="long-text">${e(r.work||'–')}</p><h3>Bemerkung</h3><p class="long-text">${e(r.note||'–')}</p><p>${e(r.noteStatus)}</p><p>Datenstand: ${date(r.sourceDate)}</p>`;
   repairForm.hidden=!context.projection.repairWrite;repairForm.elements.state.value=r.gpStatus;}
  on(results,'click',async event=>{const button=event.target.closest('[data-repair]');if(!button)return;const ticket=++repairGeneration;repairSelection=null;repairForm.hidden=true;repairStatus.textContent='Reparatur wird geladen …';q('repair-content').replaceChildren();repairDialog.showModal();
   try{const data=await api('repair-detail',{id:button.dataset.repair});if(ticket!==repairGeneration)return;repairSelection=data;renderRepair(data);repairStatus.textContent='';}catch(err){if(ticket===repairGeneration&&err.name!=='AbortError')repairStatus.textContent=err.message;}});
- on(repairDialog,'close',()=>{repairGeneration++;repairSelection=null;});
+  on(repairDialog,'close',()=>{if(pausedRepairCloses){pausedRepairCloses--;return;}repairGeneration++;repairSelection=null;const saved=viewStates.get(viewKey());if(saved)saved.repair=null;});
  on(repairForm,'submit',async event=>{event.preventDefault();if(!repairSelection)return;const selected=repairSelection,ticket=++repairGeneration,button=repairForm.querySelector('button');button.disabled=true;
   try{const data=await api('repair-save',{id:selected.id,state:repairForm.elements.state.value,expectedRevision:selected.revision});if(ticket!==repairGeneration)return;repairSelection=data;renderRepair(data);repairStatus.textContent='GP-Status gespeichert.';repairStatus.textContent+=' Der gespeicherte Ergebnisstand bleibt unverändert.';}catch(err){if(ticket===repairGeneration&&err.name!=='AbortError')repairStatus.textContent=err.message;}finally{button.disabled=false;}});
 
- function cancelPending(){
+  async function restoreWorkingDrafts(saved,ticket){
+   const draft=saved?.classification;
+   if(kind==='inventory'&&context.projection.classify&&draft){
+    classForm.elements.level.value=draft.level;classChanged();classForm.elements.articleKey.value=draft.articleKey;classForm.elements.groupKey.value=draft.groupKey;q('classification').open=draft.open;
+    const selectionTicket=classGeneration;
+    if(draft.selected)try{const fresh=await api('classification',{level:draft.selected.level,key:draft.selected.key});if(ticket!==generation||selectionTicket!==classGeneration)return;
+     classificationSelection={...fresh,revision:draft.selected.revision};classSave.elements.kind.value=draft.kind;classSave.hidden=false;q('class-label').textContent=fresh.key+' · '+fresh.label;
+     classStatus.textContent=String(fresh.revision)!==String(draft.selected.revision)?'Die Einstufung wurde inzwischen geändert. Deine Auswahl bleibt erhalten; vor dem Speichern den aktuellen Stand prüfen.':'';
+    }catch(err){if(ticket===generation&&selectionTicket===classGeneration&&err.name!=='AbortError')classStatus.textContent=err.message;}
+   }
+   if(kind==='repairs'&&saved?.repair){const draft=saved.repair,selectionTicket=++repairGeneration;try{const fresh=await api('repair-detail',{id:draft.id});if(ticket!==generation||selectionTicket!==repairGeneration)return;
+    repairSelection={...fresh,revision:draft.revision};renderRepair(fresh);if(context.projection.repairWrite)repairForm.elements.state.value=draft.state;
+    repairStatus.textContent=String(fresh.revision)!==String(draft.revision)?'Die Reparatur wurde inzwischen geändert. Deine Auswahl bleibt erhalten; vor dem Speichern den aktuellen Stand prüfen.':'';repairDialog.showModal();
+   }catch(err){if(ticket===generation&&selectionTicket===repairGeneration&&err.name!=='AbortError')repairStatus.textContent=err.message;}}
+  }
+  function cancelPending(){
   articleHistory?.suspend();supplierInvoices?.suspend();period.close();
   openGeneration++;opening=null;clearTimeout(jobTimer);jobTimer=null;jobRefresh=null;
   lifecycle++;generation++;classGeneration++;repairGeneration++;
   for(const pending of requests)pending.abort();requests.clear();
   contextPromise=null;
   classificationSelection=null;classSave.hidden=true;repairSelection=null;
-  if(repairDialog.open)repairDialog.close();if(q('movement-dialog').open)q('movement-dialog').close();movementSelection=null;
+   if(repairDialog.open){pausedRepairCloses++;repairDialog.close();}if(q('movement-dialog').open)q('movement-dialog').close();movementSelection=null;
  }
  function suspend(){
   if(!active)return;
   pdfExport?.close();if(browserDom)for(const group of root.querySelectorAll('.trade-navigation-group'))group.open=false;
   tableLayout?.suspend();
-  active=false;cancelPending();
+   rememberView();active=false;cancelPending();reset();context=null;metadata=null;selected=false;jobRows=[];q('jobs').replaceChildren();
  }
  async function activate(tab=requestedTab){
   tableLayout?.activate();
@@ -241,6 +283,7 @@
     context=data;
     for(const b of root.querySelectorAll('[data-kind]')){
      b.disabled=!data.projection?.[b.dataset.kind==='supplier-invoices'?'supplierInvoices':b.dataset.kind==='article-history'?'articleHistory':['inventory','stock-summary','stocktakes','suggestions'].includes(b.dataset.kind)?'inventory':b.dataset.kind==='repairs'?'repairs':['customer-history','device-history'].includes(b.dataset.kind)?'customers':'purchasing'];
+      if(b.disabled){viewStates.delete('stock:'+b.dataset.kind);viewStates.delete('logistics:'+b.dataset.kind);}
     }
     form.elements.locationId.replaceChildren(option('Alle freigegebenen Filialen',''));
     for(const l of [...(data.locations||[])].sort((a,b)=>model.collator.compare(a.label,b.label)))form.elements.locationId.add(option(l.label,l.id));
@@ -294,7 +337,7 @@
   const index=event.key==='Home'?0:event.key==='End'?allowed.length-1:(current+(event.key==='ArrowRight'?1:-1)+allowed.length)%allowed.length;
   const button=allowed[index];void choose(button);const targetGroup=button.closest?.('.trade-navigation-group');if(targetGroup)targetGroup.open=true;button.focus();
  });
- return {setArea(value){const next=value==='logistics'?'logistics':'stock';if(next!==area){suspend();selected=false;area=next;}q('search-title').hidden=area!=='logistics';q('purchasing-info').hidden=area!=='logistics';q('purchasing-location-hint').textContent=area==='logistics'?'Die Auswahl zeigt ausschließlich für dein Konto freigegebene Lieferstellen.':'Die Auswahl enthält auch importierte zentrale und historische Lieferstellen. Angezeigt werden nur für dein Konto freigegebene Stellen.';q('server-hint').textContent=area==='logistics'?'Suchen laufen im Hintergrund weiter und werden automatisch gespeichert.':'Die Suche läuft am Server weiter, während du im GP weiterarbeitest. Fertige Ergebnisse werden automatisch gespeichert.';if(browserDom){root.classList.toggle('trade-logistics-workspace',area==='logistics');form.querySelector('[type="submit"]').textContent=area==='logistics'?'Suche starten & speichern':'Suche starten & Ergebnis speichern';q('tabs').hidden=area==='logistics';for(const b of root.querySelectorAll('[data-kind]'))b.hidden=area==='logistics'?b.dataset.kind!=='purchasing':b.dataset.kind==='purchasing';}},activate,suspend,openMovements,async openArticleHistory(query=''){await activate('article-history');if(active&&kind==='article-history')articleHistory.activate(query);},getTab:()=>kind,destroy(){if(disposed)return;suspend();disposed=true;pdfExport?.destroy();tableLayout?.destroy();articleHistory?.destroy();supplierInvoices?.destroy();for(const remove of listeners)remove();root.replaceChildren();}};
+ return {setArea(value){const next=value==='logistics'?'logistics':'stock';if(next!==area){suspend();selected=false;area=next;}q('search-title').hidden=area!=='logistics';q('purchasing-info').hidden=area!=='logistics';q('purchasing-location-hint').textContent=area==='logistics'?'Die Auswahl zeigt ausschließlich für dein Konto freigegebene Lieferstellen.':'Die Auswahl enthält auch importierte zentrale und historische Lieferstellen. Angezeigt werden nur für dein Konto freigegebene Stellen.';q('server-hint').textContent=area==='logistics'?'Suchen laufen im Hintergrund weiter und werden automatisch gespeichert.':'Die Suche läuft am Server weiter, während du im GP weiterarbeitest. Fertige Ergebnisse werden automatisch gespeichert.';if(browserDom){root.classList.toggle('trade-logistics-workspace',area==='logistics');form.querySelector('[type="submit"]').textContent=area==='logistics'?'Suche starten & speichern':'Suche starten & Ergebnis speichern';q('tabs').hidden=area==='logistics';for(const b of root.querySelectorAll('[data-kind]'))b.hidden=area==='logistics'?b.dataset.kind!=='purchasing':b.dataset.kind==='purchasing';}},activate,suspend,openMovements,async openArticleHistory(query=''){await activate('article-history');if(active&&kind==='article-history')articleHistory.activate(query);},getTab:()=>kind,destroy(){if(disposed)return;suspend();disposed=true;viewStates.clear();pdfExport?.destroy();tableLayout?.destroy();articleHistory?.destroy();supplierInvoices?.destroy();for(const remove of listeners)remove();root.replaceChildren();}};
  }
  return {mount,normalizeTab,legacyUrl,tabs};
 });
