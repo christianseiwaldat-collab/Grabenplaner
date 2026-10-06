@@ -348,7 +348,7 @@ test('Loopback localSystem defaults round-trip in protected annotations without 
   const chosen = { options: { color: '#765432', labelWidthMm: 91.5, gapMm: 3.5 }, filenameOptions: { stamp: 'date', position: 'after', separator: '_' } };
   const savedResponse = await f.request('templates', chosen, { principal: 'local' }); assert.equal(savedResponse.status, 200); const saved = await savedResponse.json();
   assert.equal(saved.options.labelWidthMm, 91.5); assert.equal(saved.options.color, '#765432');
-  assert.deepEqual(await (await f.request('templates', undefined, { principal: 'local' })).json(), saved);
+  assert.deepEqual(await (await f.request('templates', undefined, { principal: 'local' })).json(), {...saved,hasSavedDefaults:true});
   assert.equal(f.preferences.size, 0, 'No FK-backed portal_user_preferences write for local');
   const restoredStore = Store.createSalesPriceLabelTemplateStore({ access: f.p.app.provider, vault: f.p.vault });
   assert.deepEqual(await restoredStore.getDefault(await f.context('local')), saved);

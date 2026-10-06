@@ -1,4 +1,9 @@
 .start-dashboard-workspace-field { position:relative; }
+.start-dashboard-field-user-hidden { display:none !important; }
+.start-dashboard-control-choices { display:flex; flex-wrap:wrap; gap:8px 12px; margin:12px 0; }
+.start-dashboard-control-choices label { display:inline-flex; align-items:center; gap:6px; min-height:24px; padding:3px 0; margin:0; color:var(--ink); font-size:10px; cursor:pointer; }
+.start-dashboard-control-choices input[type="checkbox"] { flex:0 0 16px; width:16px; height:16px; min-height:16px; min-width:16px; padding:0; margin:0; accent-color:var(--green); }
+.start-dashboard-control-choices input[type="checkbox"]:focus-visible { outline:2px solid var(--green); outline-offset:3px; }
 .start-dashboard-field-menu-button { position:absolute; top:9px; right:9px; z-index:2; display:grid; place-items:center; width:28px; height:26px; padding:0; border:1px solid transparent; border-radius:8px; background:color-mix(in srgb,var(--surface) 86%,transparent); color:var(--muted); font-size:23px; line-height:1; cursor:pointer; }
 .start-dashboard-field-menu-button:hover { color:var(--green); border-color:var(--line); background:var(--surface); }
 .start-dashboard-field-menu-button:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
@@ -35,15 +40,32 @@
 .start-dashboard-workspace-floating > .start-dashboard-control-workspace { padding:0; border:1px solid var(--line); border-radius:15px; }
 .start-dashboard-workspace-floating .start-dashboard-control-center { min-height:100%; }
 .start-dashboard-workspace-denied,.start-dashboard-field-move[hidden],.start-dashboard-field-resize[hidden] { display:none !important; }
-.start-dashboard-field-move,.start-dashboard-field-resize { position:absolute; z-index:2; display:grid; place-items:center; width:26px; height:26px; padding:0; border:1px solid transparent; border-radius:7px; color:var(--muted); background:color-mix(in srgb,var(--surface) 90%,transparent); touch-action:none; user-select:none; font-size:17px; }
+.start-dashboard-field-move { position:absolute; z-index:2; display:grid; place-items:center; width:26px; height:26px; padding:0; border:1px solid transparent; border-radius:7px; color:var(--muted); background:color-mix(in srgb,var(--surface) 90%,transparent); touch-action:none; user-select:none; font-size:17px; }
 .start-dashboard-field-move { top:9px; right:40px; cursor:move; }
-.start-dashboard-field-resize { right:2px; bottom:2px; width:22px; height:22px; cursor:nwse-resize; font-size:13px; }
-.start-dashboard-field-move:hover,.start-dashboard-field-resize:hover { border-color:var(--line); color:var(--green); }
-.start-dashboard-field-move:focus-visible,.start-dashboard-field-resize:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
+.start-dashboard-field-move:hover { border-color:var(--line); color:var(--green); }
+.start-dashboard-field-move:focus-visible { outline:3px solid var(--green); outline-offset:2px; }
 .start-dashboard-workspace-field > .start-dashboard-group-link > b,
 .start-dashboard-workspace-field > .start-dashboard-card-link > b,
 .start-dashboard-control-workspace > .start-dashboard-control-center > b { margin-right:48px; }
 .start-dashboard-widget.start-dashboard-workspace-field > span { padding-right:60px; }
+.start-dashboard-workspace-field > .start-dashboard-group-link { min-height:62px; gap:9px; padding:10px 12px; grid-template-columns:32px minmax(0,1fr) auto; }
+.start-dashboard-workspace-field .start-dashboard-group-symbol { width:32px; height:32px; border-radius:10px; font-size:17px; }
+.start-dashboard-workspace-field > .start-dashboard-group-link strong { margin-top:1px; font-size:14px; }
+.start-dashboard-workspace-field > .start-dashboard-card-link { padding:9px 12px; }
+.start-dashboard-vps-card { width:min(100%,560px); margin:0 0 16px auto; padding:12px; border:1px solid var(--line); border-radius:15px; background:var(--surface); box-shadow:var(--shadow); color:var(--ink); }
+.start-dashboard-vps-card > header { padding-right:66px; }
+.start-dashboard-vps-card [data-vps-title] { display:block; margin:0; font-size:13px; font-weight:800; }
+.start-dashboard-vps-card [data-vps-description] { display:block; margin-top:3px; color:var(--muted); font-size:10px; font-style:normal; }
+.start-dashboard-vps-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:10px; }
+.start-dashboard-vps-metrics > div { display:grid; gap:3px; min-width:0; padding:8px; border:1px solid var(--line); border-radius:9px; background:var(--surface-soft); }
+.start-dashboard-vps-metrics dt { color:var(--muted); font-size:10px; }
+.start-dashboard-vps-metrics dd { display:grid; gap:3px; margin:0; font-size:13px; font-weight:750; overflow-wrap:anywhere; }
+.start-dashboard-vps-metrics dd small { color:var(--muted); font-size:9px; font-weight:400; }
+.start-dashboard-vps-metrics [data-vps-metric="nightly"],.start-dashboard-vps-metrics [data-vps-metric="warnings"] { grid-column:1/-1; }
+.start-dashboard-vps-metrics [data-vps-state="failed"],.start-dashboard-vps-metrics [data-vps-state="warning"] { border-color:var(--coral); }
+.start-dashboard-vps-card [data-vps-status] { margin:7px 0 0; font-size:9px; color:var(--muted); }
+.start-dashboard-vps-card [data-vps-refresh] { min-height:26px; margin-top:7px; padding:4px 8px; border:1px solid var(--line); border-radius:7px; background:var(--surface-soft); color:var(--ink); font:inherit; font-size:8px; cursor:pointer; }
+.start-dashboard-workspace-floating > .start-dashboard-vps-card { height:100%; overflow:auto; }
 @media (max-width:699px) {
   .start-dashboard-workspace-field > .start-dashboard-group-link > b,
   .start-dashboard-workspace-field > .start-dashboard-card-link > b,

@@ -14,6 +14,7 @@ class Element {
   add(child) { this.children.push(child); }
   insertAdjacentHTML(where, html) { this.innerHTML=html+this.innerHTML; }
   close() { this.open = false; this.emit('close'); }
+  showModal() { this.open = true; }
   focus() { this.focused = true; }
 }
 function fixture() {
@@ -105,7 +106,7 @@ test('Logistics uses authorized imported receiving choices while other views ret
  assert.deepEqual(form.elements.locationId.children.map(n=>n.value),['','trade-source:0','3','99']);
  assert.equal(form.elements.locationId.children[0].textContent,'Alle freigegebenen Lieferstellen');
  assert.equal(f.node('purchasing-location-hint').hidden,false);
- f.workspace.setArea('stock');await f.workspace.activate('repairs');
+ f.workspace.setArea('stock');const returning=f.workspace.activate('repairs');f.requests.at(-1).resolve(context);await returning;
  assert.deepEqual(form.elements.locationId.children.map(n=>n.value),['','93']);
  assert.equal(f.node('purchasing-location-hint').hidden,true);
  f.workspace.destroy();
@@ -126,7 +127,9 @@ test('stock summary offers all IDs and submits a durable server job that survive
  assert.equal(body.query.locationId,'');assert.equal(body.query.dateFrom,undefined);assert.equal(body.query.days,undefined);
  first.resolve({id:'saved-job',status:'queued'});await tick();assert.match(f.node('status').textContent,/Server gestartet/);
  f.workspace.suspend();assert.ok(!f.requests.some(r=>r.url.endsWith('/cancel')));
- await f.workspace.activate('stock-summary');assert.equal(f.workspace.getTab(),'stock-summary');f.workspace.destroy();
+ const returning=f.workspace.activate('stock-summary');f.requests.at(-1).resolve(context);await tick();
+ f.requests.at(-1).resolve({groups:[{id:'10',label:'Zehn'},{id:'2',label:'Zwei'}],wgr:[],stockLocations:[{id:'trade-source:19',label:'Filiale 19'},{id:'trade-source:2',label:'Filiale 2'}]});await returning;
+ assert.equal(f.workspace.getTab(),'stock-summary');f.workspace.destroy();
 });
 
 test('opening a saved result while metadata loads preserves the dropdowns and later selection',async()=>{

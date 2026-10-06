@@ -65,7 +65,8 @@ function editorFixture(api,{rawApi=async()=>{}}={}){
  // Unknown selectors return null so missing UI cannot silently pass a test.
  const {Parser}=require('htmlparser2'),escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const dataKey=name=>name.slice(5).replace(/-([a-z])/g,(_match,c)=>c.toUpperCase());
- const doc={activeElement:null,defaultView:{crypto:globalThis.crypto}},voidTags=new Set(['input','img','br','hr','meta','link']);
+ const events=()=>({handlers:new Map(),addEventListener(type,fn){this.handlers.set(type,fn);},removeEventListener(type){this.handlers.delete(type);}});
+ const doc={activeElement:null,...events(),defaultView:{crypto:globalThis.crypto,innerWidth:1400,innerHeight:1000,...events()}},voidTags=new Set(['input','img','br','hr','meta','link']);
  let root;
  const node=(tagName='',text='')=>{
   const attrs={},element={tagName,ownerDocument:doc,parentNode:null,childNodes:[],dataset:{},handlers:new Map(),checked:false,disabled:false,hidden:false,
@@ -108,7 +109,7 @@ function editorFixture(api,{rawApi=async()=>{}}={}){
    _attributes:attrs
   };
   for(const property of ['id','name','type','src','alt','className'])Object.defineProperty(element,property,{get:()=>attrs[property==='className'?'class':property]||'',set:value=>element.setAttribute(property==='className'?'class':property,value)});
-  element.classList={contains:cls=>element.className.split(/\s+/).includes(cls),add(...names){element.className=[...new Set([...element.className.split(/\s+/).filter(Boolean),...names])].join(' ');},toggle(cls,force){const add=force===undefined?!this.contains(cls):force;const names=element.className.split(/\s+/).filter(name=>name&&name!==cls);if(add)names.push(cls);element.className=names.join(' ');return add;}};
+  element.classList={contains:cls=>element.className.split(/\s+/).includes(cls),add(...names){element.className=[...new Set([...element.className.split(/\s+/).filter(Boolean),...names])].join(' ');},remove(...names){element.className=element.className.split(/\s+/).filter(name=>!names.includes(name)).join(' ');},toggle(cls,force){const add=force===undefined?!this.contains(cls):force;const names=element.className.split(/\s+/).filter(name=>name&&name!==cls);if(add)names.push(cls);element.className=names.join(' ');return add;}};
   return element;
  };
  const serialize=element=>{
@@ -125,9 +126,10 @@ function editorFixture(api,{rawApi=async()=>{}}={}){
  return {workspace,settings:q('settings'),q,root,changeAccount(){account='account-two';}};
 }
 function editorApi(calls,{delayFirstDefaults}={}){
- let defaultReads=0;
+ let defaultReads=0,draft={revision:0,draft:null,lastMutationId:null};
  return async(path,options)=>{
   calls.push({path,options});
+  if(path==='/api/sales/price-labels/draft'){if(options?.method==='PUT'){const input=JSON.parse(options.body);draft={revision:draft.revision+1,draft:input.draft,lastMutationId:input.mutationId};}return draft;}
   if(path==='/api/sales/price-labels/templates'){defaultReads++;if(defaultReads===1&&delayFirstDefaults)return delayFirstDefaults;return {options:{...Editor.defaults},filenameOptions:{stamp:'none',position:'before',separator:'-',suffix:''}};}
   if(path==='/api/sales/price-labels/branding')return {kits:[]};
   if(path==='/api/sales/price-labels/library')return {templates:[],capabilities:{create:true,ownBranch:false},recipients:[]};
@@ -414,8 +416,8 @@ test('An outstanding image upload blocks saving, PDF export and template replace
   assert.equal(f.q('preview').querySelector('[data-pl-element="image:'+assetId+'"]').querySelector('img').src.startsWith('/api/sales/price-labels/images/'+assetId+'?preview='),true);
   await f.q('save').handlers.get('click')();const saved=libraryWrites(f).at(-1);
   assert.equal(saved.path,'/api/sales/price-labels/library/own');assert.equal(saved.options.method,'PATCH');assert.equal(saved.body.options.imageBoxes.length,1);assert.equal(saved.body.options.imageBoxes[0].assetId,assetId);
-  await f.q('export').handlers.get('submit')({preventDefault(){}});assert.equal(rawCalls.length,2);assert.equal(rawCalls[1].path,'/api/sales/price-labels/export.pdf');
-  assert.deepEqual(JSON.parse(rawCalls[1].options.body).options.imageBoxes,saved.body.options.imageBoxes);
+  await f.q('export').handlers.get('submit')({preventDefault(){}});assert.equal(rawCalls.length,2);assert.equal(rawCalls[1].path,'/api/sales/price-labels/projects/export.pdf');
+  assert.deepEqual(JSON.parse(rawCalls[1].options.body).project.labels[0].options.imageBoxes,saved.body.options.imageBoxes);
   f.q('library-select').value='other';f.q('library-select').handlers.get('change')();assert.equal(f.q('library-title').value,'Andere Vorlage');assert.equal(Number(f.settings.elements.labelWidthMm.value),70);
  } finally {f.workspace.destroy();}
 });
@@ -455,12 +457,13 @@ test('The latest price request may fail and be manually retried without stale pr
  f.complete(2);await turn();assert.equal(f.q('download').disabled,false);f.workspace.destroy();
 });
 
-test('Queued price reloads cannot survive navigation or an account switch',async()=>{
+test('Navigation aborts stale prices and resumes retained selection freshly; an account switch purges it',async()=>{
  for(const switchAccount of [false,true]){
   const f=delayedArticleFixture();await f.workspace.load();f.settings.elements.articleNumbers.value='001234';f.q('refresh').handlers.get('click')();
   f.choose('internet_1');await settlePriceDebounce();if(switchAccount)f.changeAccount();f.workspace.suspend();
   assert.equal(f.reads[0].signal.aborted,true);f.complete(0);await turn();await f.workspace.load();await turn();
-  assert.equal(f.reads.length,1);assert.equal(f.q('download').disabled,true);assert.equal(f.q('refresh').disabled,false);f.workspace.destroy();
+  assert.equal(f.reads.length,switchAccount?1:2);assert.equal(f.q('download').disabled,true);
+  if(!switchAccount){assert.equal(f.reads[1].selection.priceType,'internet_1');f.complete(1);await turn();}assert.equal(f.q('refresh').disabled,false);f.workspace.destroy();
  }
 });
 

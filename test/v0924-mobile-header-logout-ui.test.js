@@ -37,9 +37,12 @@ test("v0.92.5: Logout ist doppelklickfest, begrenzt und wechselt nach Bestätigu
   assert.doesNotMatch(logout, /location\.reload\(|location\.replace\(/);
 });
 
-function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout) {
+const tick = () => new Promise(resolve => setImmediate(resolve));
+function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout, workspace = null) {
   const logoutSource = script.slice(script.indexOf("let logoutInProgress = false;"), script.indexOf("function setTab("));
-  const calls = { api: 0, clearTab: 0, showLogin: 0, processClear: 0, autosaveStop: 0, themeNeutralize: 0, themeRefresh: 0 };
+  const actorStart = script.indexOf('function processTaskActorFingerprint(');
+  const actorSource = script.slice(actorStart, script.indexOf('\n}', actorStart) + 2);
+  const calls = { api: 0, clearTab: 0, showLogin: 0, processClear: 0, autosaveStop: 0, themeNeutralize: 0, themeRefresh: 0, windowSync: 0 };
   const status = {};
   const button = {
     textContent: "Abmelden",
@@ -50,6 +53,8 @@ function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout
   };
   const context = {
     AbortController,
+    branchPriceLabelsWorkspace: workspace,
+    syncPortalWindows: () => { calls.windowSync += 1; },
     portalState: { session: { user: { employeeNumber: "252" } }, processTasksOwnerFingerprint: "252" },
     el: {
       logoutButton: button,
@@ -63,8 +68,7 @@ function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout
       return apiImplementation(...args);
     },
     message: (node, text, error = false) => Object.assign(node, { text, error }),
-    portalUser: () => ({ employeeNumber: "252" }),
-    processTaskActorFingerprint: () => "252",
+    portalUser: () => context.portalState.session?.user,
     stopBranchOrderAutosave: () => { calls.autosaveStop += 1; },
     clearProcessTaskState: () => { calls.processClear += 1; },
     clearRememberedPortalTab: () => { calls.clearTab += 1; },
@@ -73,7 +77,7 @@ function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout
     refreshBirthdayPresentationTheme: async () => { calls.themeRefresh += 1; },
   };
   vm.createContext(context);
-  vm.runInContext(`${logoutSource}\nthis.runLogout = logout;`, context);
+  vm.runInContext(`${actorSource}\n${logoutSource}\nthis.runLogout = logout;`, context);
   return { context, calls, status, button };
 }
 
@@ -83,10 +87,11 @@ test("v0.92.5: Logout zeigt sofort Fortschritt, ignoriert Doppelklick und render
   const first = runtime.context.runLogout();
   const second = runtime.context.runLogout();
 
-  assert.equal(runtime.calls.api, 1);
   assert.equal(runtime.button.disabled, true);
   assert.equal(runtime.button.attributes.get("aria-busy"), "true");
   assert.equal(runtime.button.textContent, "Abmelden…");
+  await tick();
+  assert.equal(runtime.calls.api, 1);
 
   finishRequest({ ok: true });
   await Promise.all([first, second]);
@@ -97,6 +102,7 @@ test("v0.92.5: Logout zeigt sofort Fortschritt, ignoriert Doppelklick und render
   assert.equal(runtime.calls.autosaveStop, 1);
   assert.equal(runtime.calls.themeNeutralize, 1);
   assert.equal(runtime.calls.themeRefresh, 0);
+  assert.equal(runtime.calls.windowSync, 1);
   assert.equal(runtime.context.portalState.session, null);
   assert.equal(runtime.context.el.loginPassword.value, "");
   assert.equal(runtime.context.el.loginPersonnelNumber.focused, true);
@@ -119,6 +125,8 @@ test("v0.92.5: Logout-Timeout bestätigt keinen Erfolg und bietet einen erneuten
   );
 
   const pending = runtime.context.runLogout();
+  await tick();
+  assert.equal(runtime.calls.api, 1);
   triggerTimeout();
   await pending;
 
@@ -129,4 +137,55 @@ test("v0.92.5: Logout-Timeout bestätigt keinen Erfolg und bietet einen erneuten
   assert.equal(runtime.calls.themeNeutralize, 1);
   assert.equal(runtime.calls.themeRefresh, 1);
   assert.equal(runtime.button.disabled, false);
+});
+
+test('Portal logout saves a pending price draft before logout and ignores double clicks throughout the flush', async () => {
+  let finishSave,finishLogout,flushes=0;
+  const workspace={hasUnsaved:true,flush:()=>{flushes++;return new Promise(resolve=>{finishSave=()=>{workspace.hasUnsaved=false;resolve();};});}};
+  const runtime=createLogoutRuntime(()=>new Promise(resolve=>{finishLogout=resolve;}),setTimeout,workspace);
+  const first=runtime.context.runLogout(),second=runtime.context.runLogout();
+  assert.equal(flushes,1);assert.equal(runtime.calls.api,0);
+  assert.equal(runtime.button.disabled,true);assert.equal(runtime.button.attributes.get('aria-busy'),'true');
+  finishSave();await tick();assert.equal(runtime.calls.api,1);
+  finishLogout({ok:true});await Promise.all([first,second]);
+  assert.equal(runtime.calls.showLogin,1);assert.equal(runtime.button.disabled,false);
+});
+
+test('Portal logout keeps the account and draft when saving fails or an upload is still pending', async t => {
+  for(const failing of [true,false])await t.test(failing?'draft save failed':'image upload pending',async()=>{
+    const workspace={hasUnsaved:true,flush:async()=>{if(failing)throw new Error('Synthetic save error');}};
+    const runtime=createLogoutRuntime(async()=>({ok:true}),setTimeout,workspace);
+    await runtime.context.runLogout();
+    assert.equal(runtime.calls.api,0);assert.equal(runtime.calls.showLogin,0);assert.notEqual(runtime.context.portalState.session,null);
+    assert.equal(workspace.hasUnsaved,true);assert.equal(runtime.status.error,true);
+    assert.match(runtime.status.text,failing?/Entwurf|entwurf/:/Bild|bild/);
+    assert.equal(runtime.button.disabled,false);assert.equal(runtime.button.attributes.has('aria-busy'),false);
+  });
+});
+
+test('Portal logout starts its authentication timeout only after the price draft flush', async () => {
+  let finishSave,finishLogout;const timers=[];
+  const workspace={hasUnsaved:true,flush:()=>new Promise(resolve=>{finishSave=()=>{workspace.hasUnsaved=false;resolve();};})};
+  const runtime=createLogoutRuntime(()=>new Promise(resolve=>{finishLogout=resolve;}),(callback,delay)=>{timers.push({callback,delay});return 1;},workspace);
+  const pending=runtime.context.runLogout();await tick();
+  assert.equal(timers.length,0);assert.equal(runtime.calls.api,0);assert.equal(runtime.button.disabled,true);
+  finishSave();await tick();assert.equal(timers.length,1);assert.equal(timers[0].delay,15000);assert.equal(runtime.calls.api,1);
+  finishLogout({ok:true});await pending;
+});
+
+test('Portal logout does not send an old-account request after the actor changes during draft flush', async () => {
+  let finishSave;const workspace={hasUnsaved:true,flush:()=>new Promise(resolve=>{finishSave=()=>{workspace.hasUnsaved=false;resolve();};})};
+  const runtime=createLogoutRuntime(async()=>({ok:true}),setTimeout,workspace),pending=runtime.context.runLogout();
+  runtime.context.portalState.session={user:{employeeNumber:'253'}};
+  finishSave();await pending;
+  assert.equal(runtime.calls.api,0);assert.equal(runtime.calls.showLogin,0);assert.equal(runtime.context.portalState.session.user.employeeNumber,'253');
+  assert.equal(runtime.button.disabled,false);
+});
+
+test('Portal logout ignores a late old-account acknowledgement after another actor entered', async () => {
+  let finishLogout;const runtime=createLogoutRuntime(()=>new Promise(resolve=>{finishLogout=resolve;})),pending=runtime.context.runLogout();await tick();
+  assert.equal(runtime.calls.api,1);runtime.context.portalState.session={user:{employeeNumber:'253'}};
+  finishLogout({ok:true});await pending;
+  assert.equal(runtime.calls.showLogin,0);assert.equal(runtime.calls.windowSync,0);assert.equal(runtime.context.portalState.session.user.employeeNumber,'253');
+  assert.equal(runtime.button.disabled,false);
 });

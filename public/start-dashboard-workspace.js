@@ -59,7 +59,7 @@
     const usable=()=>!destroyed && options.canUse();
     const store=createStore({...options,error:error=>options.error(error)});
     const dialog=doc.createElement('dialog');dialog.className='start-dashboard-field-dialog';dialog.setAttribute('aria-label','Dashboard-Feld anpassen');
-    dialog.innerHTML='<div data-field-menu><h3 data-menu-title>Feld anpassen</h3><button type="button" data-field-edit>Beschriftung ändern</button><button type="button" data-field-default>Standardbeschriftung</button><button type="button" data-field-geometry-default>Standardposition und -größe</button><button type="button" data-field-retry>Erneut speichern</button><button type="button" data-field-close>Schließen</button></div>'
+    dialog.innerHTML='<div data-field-menu><h3 data-menu-title>Feld anpassen</h3><button type="button" data-field-edit>Beschriftung ändern</button><button type="button" data-field-default>Standardbeschriftung</button><button type="button" data-field-geometry-default>Standardposition und -größe</button><button type="button" data-field-hide hidden>Kachel ausblenden</button><button type="button" data-field-retry>Erneut speichern</button><button type="button" data-field-close>Schließen</button></div>'
       +'<form data-field-editor hidden><h3>Beschriftung ändern</h3><label>Feldtitel<input name="title" maxlength="120" required></label><label>Beschreibung<textarea name="description" maxlength="400" rows="3"></textarea></label><p data-field-error role="alert"></p><div class="modal-actions"><button type="button" data-field-back>Zurück</button><button type="submit" class="primary-button">Übernehmen</button></div></form>';
     doc.body.append(dialog);
     const menu=dialog.querySelector('[data-field-menu]'),editor=dialog.querySelector('[data-field-editor]');
@@ -80,6 +80,7 @@
       for(const field of fields.values()) {
         rememberDefaults(field);
         const custom=preferences.fields[field.id];
+        field.element.classList.toggle('start-dashboard-field-user-hidden',custom?.hidden===true);
         field.title.textContent=custom?.title ?? field.defaultTitle;
         field.appliedTitle=field.title.textContent;
         if(field.description) {
@@ -91,7 +92,7 @@
         field.menu.hidden=!allowed(field);field.menu.setAttribute('aria-label','Feldmenü: '+field.title.textContent);
         field.menu.disabled=!store.ready && !store.failed;
       }
-      for(const button of dialog.querySelectorAll('[data-field-edit],[data-field-default],[data-field-geometry-default]')) button.disabled=!store.ready;
+      for(const button of dialog.querySelectorAll('[data-field-edit],[data-field-default],[data-field-geometry-default],[data-field-hide]')) button.disabled=!store.ready;
       dialog.querySelector('[data-field-retry]').textContent=store.ready ? 'Erneut speichern' : 'Erneut laden';
       if(selected && !allowed(selected)) dialog.close();
       geometry?.sync();
@@ -104,6 +105,7 @@
       const field={id,element,title,description,defaultTitle:title.textContent,defaultDescription:description?.textContent || '',appliedTitle:null,appliedDescription:null,menu:button};
       element.classList.add('start-dashboard-workspace-field');element.append(button);fields.set(id,field);
       on(button,'click',event=>{event.stopPropagation();if(!allowed(field)) return;selected=field;menu.hidden=false;editor.hidden=true;dialog.querySelector('[data-menu-title]').textContent=field.title.textContent;
+        dialog.querySelector('[data-field-hide]').hidden=!['control:center','control:vps'].includes(field.id);
         dialog.style.removeProperty('left');dialog.style.removeProperty('top');dialog.showModal();
         const rect=button.getBoundingClientRect(),scale=dialog.getBoundingClientRect().width/dialog.offsetWidth || 1;
         const width=dialog.getBoundingClientRect().width,height=dialog.getBoundingClientRect().height;
@@ -128,6 +130,8 @@
         controlWrapper=wrapper;
         add('control:center',wrapper,control.querySelector('strong'),control.querySelector('em'));
       }
+      const vps=root.querySelector('#startDashboardVpsCard');
+      if(vps)add('control:vps',vps,vps.querySelector('[data-vps-title]'),vps.querySelector('[data-vps-description]'));
     }
     function modify(next) {if(!selected || !allowed(selected) || !store.ready) return;const preferences=store.value;
       if(next===null) {const old=preferences.fields[selected.id] || {};delete old.title;delete old.description;if(Object.keys(old).length) preferences.fields[selected.id]=old;else delete preferences.fields[selected.id];}
@@ -140,6 +144,7 @@
         menu.hidden=true;editor.hidden=false;editor.elements.title.value=selected.title.textContent;editor.elements.description.value=selected.description?.textContent || selected.extraDescription?.textContent || '';
         dialog.querySelector('[data-field-error]').textContent='';dialog.style.removeProperty('left');dialog.style.removeProperty('top');editor.elements.title.focus();
       } else if(event.target.closest('[data-field-default]')) modify(null);
+      else if(event.target.closest('[data-field-hide]')) {if(selected && ['control:center','control:vps'].includes(selected.id)) modify({hidden:true});}
       else if(event.target.closest('[data-field-geometry-default]') && selected && allowed(selected) && store.ready) {geometry?.reset(selected.id);dialog.close();}
       else if(event.target.closest('[data-field-retry]')) {if(store.ready) void store.change(store.value);else void store.activate({retry:true});dialog.close();}
       else if(event.target.closest('[data-field-back]')) {menu.hidden=false;editor.hidden=true;}
@@ -161,7 +166,7 @@
       apply();if(usable()) void store.activate();
     }
     sync();
-    return {sync,fields,store,get geometry(){return geometry;},resetAll(){geometry?.cancel();if(dialog.open) dialog.close();return store.change(model.empty());},destroy(){geometry?.destroy();destroyed=true;unsubscribe();store.invalidate();for(const remove of removers) remove();dialog.remove();for(const field of fields.values()) {restore(field);field.menu.remove();field.element.classList.remove('start-dashboard-workspace-field');}
+    return {sync,fields,store,get geometry(){return geometry;},setVisible(id,visible){if(!['control:center','control:vps'].includes(id)||!store.ready||!options.allowed(id))return Promise.resolve(false);const value=store.value;value.fields[id]={...value.fields[id],hidden:visible!==true};return store.change(value);},isVisible(id){return store.value.fields[id]?.hidden!==true;},resetAll(){geometry?.cancel();if(dialog.open) dialog.close();return store.change(model.empty());},destroy(){geometry?.destroy();destroyed=true;unsubscribe();store.invalidate();for(const remove of removers) remove();dialog.remove();for(const field of fields.values()) {restore(field);field.menu.remove();field.element.classList.remove('start-dashboard-workspace-field','start-dashboard-field-user-hidden');}
       if(controlAnchor?.parentNode) controlAnchor.replaceWith(controlButton);else if(controlWrapper?.parentNode) controlWrapper.before(controlButton);
       controlWrapper?.remove();controlAnchor?.remove();},dialog};
   }

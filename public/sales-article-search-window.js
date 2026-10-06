@@ -1,9 +1,10 @@
 (function (root, factory) {
   'use strict';
-  const api = factory();
+  const windows = typeof module === 'object' && module.exports ? require('./gp-window') : root.GpWindow;
+  const api = factory(windows);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.SalesArticleSearchWindow = api;
-})(typeof window === 'object' ? window : this, function () {
+})(typeof window === 'object' ? window : this, function (windows) {
   'use strict';
   const DEFAULTS = Object.freeze({version:2, x:0, y:0, width:560, height:620, minimized:false});
   const clamp = (value, min, max) => Math.min(max, Math.max(min, Math.round(value)));
@@ -40,7 +41,7 @@
       y:legacyBounds.top+visible.y-bounds.top});
   }
   function fit(preferred, bounds, titleHeight = 44) {
-    const value = normalize(preferred), width = Math.min(value.width, Math.max(1, bounds.width));
+    const value = normalize(preferred), width = Math.min(value.minimized ? 260 : value.width, Math.max(1, bounds.width));
     const height = Math.min(value.minimized ? titleHeight : value.height, Math.max(1, bounds.height));
     return {...value, width, height, x:clamp(value.x,0,Math.max(0,bounds.width-width)),
       y:clamp(value.y,0,Math.max(0,bounds.height-height))};
@@ -106,108 +107,25 @@
   }
 
   function attach(element, options) {
-    const doc = element.ownerDocument, win = options.window || doc.defaultView;
-    const title = element.querySelector('[data-article-window-title]');
-    const body = element.querySelector('[data-article-window-body]');
-    const toggle = element.querySelector('[data-article-window-toggle]');
-    const reset = element.querySelector('[data-article-window-reset]');
-    const resize = element.querySelector('[data-article-window-resize]');
-    const status = element.querySelector('[data-article-window-status]');
-    const removers = [], on = (target,type,fn) => { target?.addEventListener(type,fn); removers.push(() => target?.removeEventListener(type,fn)); };
-    const initialGeometry = () => options.initialGeometry ? normalize(options.initialGeometry()) : defaultGeometry(options.bounds());
-    let preferred = initialGeometry(), fitted = null, active = false, drag = null, last = '', destroyed = false;
-    const canUse = () => !destroyed && active && options.canUse();
-    function announce() {
-      if (status) status.textContent = preferred.minimized ? 'Suchfenster minimiert.'
-        : `Suchfenster: ${Math.round(fitted.width)} × ${Math.round(fitted.height)} Pixel, Position ${fitted.x}, ${fitted.y}.`;
-    }
-    function render() {
-      element.hidden = !canUse();
-      if (!canUse()) return;
-      const bounds = options.bounds();
-      fitted = fit(preferred,bounds,Math.max(44,title?.offsetHeight || 44));
-      element.style.left = `${bounds.left + fitted.x}px`; element.style.top = `${bounds.top + fitted.y}px`;
-      element.style.width = `${fitted.width}px`; element.style.height = `${fitted.height}px`;
-      element.classList.toggle('is-minimized',preferred.minimized);
-      if (preferred.minimized && body.contains(doc.activeElement)) toggle.focus({preventScroll:true});
-      body.hidden = preferred.minimized;
-      toggle.setAttribute('aria-expanded',String(!preferred.minimized));
-      toggle.setAttribute('aria-label',preferred.minimized ? 'Suchfenster wiederherstellen' : 'Suchfenster minimieren');
-      toggle.textContent = preferred.minimized ? '▢' : '−';
-      resize.hidden = preferred.minimized;
-      const dimensions = `${fitted.width}|${fitted.height}|${preferred.minimized}`;
-      if (last !== dimensions) { last = dimensions; options.resize?.(fitted); }
-    }
-    function commit() { render(); announce(); options.change({...preferred}); }
-    function finish(cancel = false) {
-      if (!drag) return;
-      const previous = drag; drag = null; element.classList.remove('is-moving','is-resizing');
-      if (cancel) { preferred = previous.original; render(); }
-      else commit();
-      if (previous.handle.hasPointerCapture?.(previous.id)) previous.handle.releasePointerCapture(previous.id);
-    }
-    function begin(event) {
-      const handle = event.target.closest('[data-article-window-move],[data-article-window-resize]');
-      if (!handle || !element.contains(handle) || event.button !== 0 || !canUse() || drag) return;
-      const kind = handle.hasAttribute('data-article-window-resize') ? 'resize' : 'move';
-      if (kind === 'resize' && preferred.minimized) return;
-      event.preventDefault(); handle.focus({preventScroll:true}); render();
-      drag = {id:event.pointerId,handle,kind,x:event.clientX,y:event.clientY,scale:options.scale(),
-        original:{...preferred},base:{...fitted}};
-      element.classList.add(kind === 'move' ? 'is-moving' : 'is-resizing'); handle.setPointerCapture(event.pointerId);
-    }
-    function move(event) {
-      if (!drag || event.pointerId !== drag.id) return;
-      if (!canUse()) { finish(true); return; }
-      const dx = (event.clientX-drag.x)/drag.scale, dy = (event.clientY-drag.y)/drag.scale, bounds = options.bounds();
-      preferred = normalize(drag.kind === 'move'
-        ? {...drag.original,x:clamp(drag.base.x+dx,0,Math.max(0,bounds.width-drag.base.width)),y:clamp(drag.base.y+dy,0,Math.max(0,bounds.height-drag.base.height))}
-        : {...drag.original,x:drag.base.x,y:drag.base.y,width:Math.max(280,Math.min(bounds.width-drag.base.x,drag.base.width+dx)),height:Math.max(200,Math.min(bounds.height-drag.base.y,drag.base.height+dy))});
-      render();
-    }
-    function keydown(event) {
-      if (event.key === 'Escape' && drag) { event.preventDefault(); event.stopPropagation(); finish(true); return; }
-      const handle = event.target.closest?.('[data-article-window-move],[data-article-window-resize]');
-      if (!handle || !element.contains(handle) || !canUse() || !['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key)) return;
-      event.preventDefault(); event.stopPropagation(); finish(true); render();
-      const bounds = options.bounds(), step = event.shiftKey ? 40 : 10, resizeHandle = handle.hasAttribute('data-article-window-resize');
-      if (resizeHandle && preferred.minimized) return;
-      if (resizeHandle) {
-        const width = event.key === 'Home' ? 280 : event.key === 'End' ? bounds.width-fitted.x : fitted.width + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0);
-        const height = event.key === 'Home' ? 200 : event.key === 'End' ? bounds.height-fitted.y : fitted.height + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0);
-        preferred = normalize({...preferred,width:Math.max(280,Math.min(bounds.width-fitted.x,width)),height:Math.max(200,Math.min(bounds.height-fitted.y,height))});
-      } else {
-        preferred = normalize({...preferred,x:event.key === 'Home' ? 0 : event.key === 'End' ? Math.max(0,bounds.width-fitted.width) : clamp(fitted.x + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0),0,Math.max(0,bounds.width-fitted.width)),
-          y:event.key === 'Home' ? 0 : event.key === 'End' ? Math.max(0,bounds.height-fitted.height) : clamp(fitted.y + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0),0,Math.max(0,bounds.height-fitted.height))});
-      }
-      commit();
-    }
-    function minimize(value, persist = true) {
-      if (!canUse()) return;
-      finish(true);
-      if (preferred.minimized === value) return;
-      if (value && body.contains(doc.activeElement)) toggle.focus({preventScroll:true});
-      preferred = {...preferred,minimized:value}; render(); announce(); if (persist) options.change({...preferred});
-    }
-    function refresh() { if (drag) finish(true); render(); }
-    on(element,'pointerdown',begin); on(element,'pointermove',move);
-    on(element,'pointerup',event => { if (drag?.id === event.pointerId) finish(); });
-    for (const type of ['pointercancel','lostpointercapture']) on(element,type,event => { if (drag?.id === event.pointerId) finish(true); });
-    on(element,'keydown',keydown); on(doc,'keydown',event => { if (event.key === 'Escape' && drag) keydown(event); });
-    on(toggle,'click',() => minimize(!preferred.minimized));
-    on(reset,'click',() => { if (canUse()) { finish(true); preferred = initialGeometry(); commit(); } });
-    on(win,'resize',refresh); on(win,'scroll',refresh); on(win,'blur',() => finish(true));
-    on(win.visualViewport,'resize',refresh); on(win.visualViewport,'scroll',refresh);
-    const observer = typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(refresh) : null;
-    for (const target of options.observe || []) if (target) observer?.observe(target);
-    render();
-    return {refresh, get preferred() {return {...preferred};}, get fitted() {return fitted && {...fitted};},
-      set(value) { finish(true); preferred = value ? normalize(value) : initialGeometry(); render(); },
-      restore() { minimize(false); },
-      activate() { active = true; render(); },
-      suspend() { finish(true); active = false; element.hidden = true; },
-      destroy() { finish(true); destroyed = true; observer?.disconnect(); for (const remove of removers) remove(); element.hidden = true; }
-    };
+    const title=element.querySelector('[data-article-window-title]');
+    const body=element.querySelector('[data-article-window-body]');
+    const move=element.querySelector('[data-article-window-move]');
+    const toggle=element.querySelector('[data-article-window-minimize]') || element.querySelector('[data-article-window-reset]');
+    const closeButton=element.querySelector('[data-article-window-close]') || element.querySelector('[data-article-window-toggle]');
+    const resize=element.querySelector('[data-article-window-resize]');
+    const status=element.querySelector('[data-article-window-status]');
+    let docked=false;
+    const initialGeometry=()=>options.initialGeometry ? normalize(options.initialGeometry()) : defaultGeometry(options.bounds());
+    const controller=windows.attach(element,{...options,title,body,move,toggle,closeButton,status,
+      edgeHandles:resize ? {se:resize} : undefined,minWidth:280,minHeight:200,compactWidth:options.compactWidth || 260,
+      initialGeometry,canUse:()=>!docked && options.canUse(),
+      change:value=>options.change({...value,version:2}),
+      onClose(){docked=true;options.onClose?.();}});
+    return {refresh:()=>controller.refresh(),set(value){if(!value) docked=false;controller.set(value ? normalize(value) : initialGeometry());},
+      restore:()=>controller.restore(),suspend:()=>controller.suspend(),destroy:()=>controller.destroy(),
+      activate(){if(!docked) controller.activate();},close:()=>controller.close(),
+      reopenFresh(){docked=false;options.onFreshSearch?.();controller.activate();controller.restore();},
+      get docked(){return docked;},get preferred(){return {...controller.preferred,version:2};},get fitted(){return controller.fitted;}};
   }
   return Object.freeze({DEFAULTS, normalize, defaultGeometry, contentBounds, viewportBounds, migrateGeometry, fit, createPreferences, attach});
 });

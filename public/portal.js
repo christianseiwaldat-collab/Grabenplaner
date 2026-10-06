@@ -425,6 +425,33 @@ async function api(url, options = {}) {
 }
 
 const branchSalesWorkspaces = new Map();
+let portalWindowManager=null,portalWindowActor='';
+function syncPortalWindows(){
+  if(!window.GpWindow)return;
+  const user=portalUser();
+  const key=portalState.session?.authenticated ? JSON.stringify([user?.employeeNumber,user?.accountId,user?.sessionKind,user?.accountType,user?.permissions,user?.scopes,user?.mustChangePassword]) : '';
+  if(!portalWindowManager){
+    let branchRevisionActor='',branchRevision=0;
+    const branchActor=()=>portalUser()?.sessionKind==='organization' && portalUser()?.accountType==='branch' && portalUser()?.isEmployee===false;
+    portalWindowManager=window.GpWindow.installDocument(document,{actorKey:()=>portalWindowActor,
+      canUse:()=>Boolean(portalState.session?.authenticated && !portalUser()?.mustChangePassword),api,
+      readPreferences:async signal=>{
+        const actor=portalWindowActor,branch=branchActor();
+        const value=await api(branch?'/api/portal/v1/branch-window-preferences':'/api/portal/v1/ui-preferences',{signal});
+        if(branch && !signal.aborted && portalWindowActor===actor){branchRevisionActor=actor;branchRevision=value.revision;}
+        return value;
+      },
+      writePreferences:async (gpWindows,signal)=>{
+        const actor=portalWindowActor,branch=branchActor();
+        if(branch && branchRevisionActor!==actor)throw new Error('Die Fenstereinstellungen werden noch geladen.');
+        const value=await api(branch?'/api/portal/v1/branch-window-preferences':'/api/portal/v1/ui-preferences',{
+          method:'PUT',body:JSON.stringify(branch?{revision:branchRevision,gpWindows}:{gpWindows}),signal});
+        if(branch && !signal.aborted && portalWindowActor===actor)branchRevision=value.revision;
+      },
+      error:error=>message(el.portalLogoutStatus,error.message,true)});
+  }
+  if(key!==portalWindowActor){portalWindowActor=key;portalWindowManager.synchronize();}
+}
 let branchPriceLabelsWorkspace = null;
 let branchPriceLabelsWorkspaceActive = false;
 const branchPriceLabelsOwner = (user = portalUser()) => JSON.stringify([user?.accountId, user?.accountType, user?.isEmployee,
@@ -458,6 +485,8 @@ function syncBranchSalesWorkspaces(tab = null) {
   if (active) {
     if (!branchPriceLabelsWorkspace) branchPriceLabelsWorkspace = window.GrabenplanerSalesPriceLabels.mount(document.getElementById('branchPriceLabelsWorkspace'), {
       api, accessKey: branchPriceLabelsOwner,
+      accountIdentity:()=>portalUser()?.accountId || portalUser()?.employeeNumber || '',windowPreferences:portalWindowManager?.preferences,
+      searchArticles:({query,offset=0,limit=50,sort='description',direction='asc',signal})=>api('/api/portal/v1/branch-articles?'+new URLSearchParams({query,status:'active',offset:String(offset),limit:String(limit),sort,direction}),{signal}),
       rawApi: (url, options) => api(url, { ...options, responseType: 'response' }),
     });
     if (!branchPriceLabelsWorkspaceActive) { branchPriceLabelsWorkspaceActive = true; void branchPriceLabelsWorkspace.load(); }
@@ -2288,6 +2317,7 @@ function showLogin(error = "") {
   neutralizeBirthdayPresentationTheme();
   resetPersonalActionsState("");
   portalState.session = null;
+  syncPortalWindows();
   resetBranchSalesWorkspaces();
   resetBranchTimeOffState();
   clearCandidateEvaluationState();
@@ -2398,6 +2428,7 @@ function showPortal(session) {
     neutralizeBirthdayPresentationTheme();
   }
   portalState.session = session;
+  syncPortalWindows();
   clearCandidateEvaluationState();
   document.body.classList.toggle(
     "branch-organization-account",
@@ -2579,24 +2610,41 @@ async function logout() {
   if (logoutInProgress) return;
   logoutInProgress = true;
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  let timeout = null;
+  let savingDraft = false;
+  let logoutRequestStarted = false;
   const originalLabel = el.logoutButton.textContent;
+  const logoutActor = processTaskActorFingerprint(portalUser());
   const hadProcessTaskOwner = Boolean(
-    portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
+    portalState.processTasksOwnerFingerprint || logoutActor,
   );
-  neutralizeBirthdayPresentationTheme();
   el.logoutButton.disabled = true;
   el.logoutButton.setAttribute("aria-busy", "true");
   el.logoutButton.textContent = "Abmelden…";
   message(el.portalLogoutStatus, "");
   try {
+    if (branchPriceLabelsWorkspace?.hasUnsaved) {
+      savingDraft = true;
+      await branchPriceLabelsWorkspace.flush();
+      savingDraft = false;
+      if (branchPriceLabelsWorkspace?.hasUnsaved) {
+        message(el.portalLogoutStatus, "Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden.", true);
+        return;
+      }
+    }
+    if (!portalState.session || processTaskActorFingerprint(portalUser()) !== logoutActor) return;
+    logoutRequestStarted = true;
+    neutralizeBirthdayPresentationTheme();
+    timeout = window.setTimeout(() => controller.abort(), 15000);
     await api("/api/portal/v1/auth/logout", {
       method: "POST",
       body: "{}",
       keepalive: true,
       signal: controller.signal,
     });
+    if (!portalState.session || processTaskActorFingerprint(portalUser()) !== logoutActor) return;
     portalState.session = null;
+    syncPortalWindows();
     stopBranchOrderAutosave();
     clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
     portalState.processTasksOwnerFingerprint = "";
@@ -2605,13 +2653,16 @@ async function logout() {
     el.loginPassword.value = "";
     el.loginPersonnelNumber.focus();
   } catch (error) {
-    const detail = controller.signal.aborted
+    if (!portalState.session || processTaskActorFingerprint(portalUser()) !== logoutActor) return;
+    const detail = savingDraft
+      ? `Der Preisschildentwurf konnte noch nicht gespeichert werden: ${error.message}`
+      : controller.signal.aborted
       ? "Die Abmeldung wurde nicht rechtzeitig bestätigt. Bitte erneut versuchen."
       : `Die Abmeldung konnte nicht bestätigt werden: ${error.message}`;
     message(el.portalLogoutStatus, detail, true);
-    refreshBirthdayPresentationTheme();
+    if (logoutRequestStarted) refreshBirthdayPresentationTheme();
   } finally {
-    window.clearTimeout(timeout);
+    if (timeout !== null) window.clearTimeout(timeout);
     logoutInProgress = false;
     el.logoutButton.disabled = false;
     el.logoutButton.removeAttribute("aria-busy");

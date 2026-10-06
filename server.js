@@ -13,6 +13,7 @@ const { executeUpdateCommand } = require("./lib/update-command");
 const { completeProcessShutdown } = require("./lib/complete-process-shutdown");
 const startDashboardWorkspaceModel = require("./public/start-dashboard-workspace-preferences");
 const sidebarNotepadModel = require("./public/sidebar-notepad-preferences");
+const gpWindowsModel = require('./public/gp-window-preferences');
 const { resolveScheduleDuty, defaultScheduleDutyCode, manualPlanningHours, PLANNING_DAY_COUNT,
   DEFAULT_DUTY_COLORS, normalizeScheduleDutyColors, scheduleDutyColor, scheduleDutyTextColor } = require("./public/schedule-duty");
 const {
@@ -35040,6 +35041,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
   let startDashboardPreferences = defaultStartDashboardPreferences();
   let startDashboardWorkspace = startDashboardWorkspaceModel.empty();
+  let gpWindows = gpWindowsModel.empty();
   let sidebarNotepad = sidebarNotepadModel.isPersonalActor(actor) ? sidebarNotepadModel.empty() : null;
   let mobilePortalNavigation = defaultMobilePortalNavigation();
   let mobilePortalAppearance = defaultMobilePortalAppearance();
@@ -35051,6 +35053,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   if (actor?.employeeNumber && !isLocalSystemSession(actor)) {
     const rows = await uiPreferencesRepository.list(actor.employeeNumber);
     const lookup = new Map(rows.map((row) => [row.preferenceKey, row.value]));
+    try { gpWindows = gpWindowsModel.normalize(JSON.parse(lookup.get(gpWindowsModel.KEY) || 'null')); } catch {}
     if (sidebarNotepadModel.isPersonalActor(actor) && lookup.has(sidebarNotepadModel.KEY)) {
       const stored = lookup.get(sidebarNotepadModel.KEY);
       try {
@@ -35155,6 +35158,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     startDashboardWorkspace = startDashboardWorkspaceModel.normalize(overrides.startDashboardWorkspace);
   }
   if (overrides.sidebarNotepad && sidebarNotepadModel.isPersonalActor(actor)) sidebarNotepad = sidebarNotepadModel.validate(overrides.sidebarNotepad);
+  if (overrides.gpWindows && !actor?.mustChangePassword) gpWindows = gpWindowsModel.validate(overrides.gpWindows);
   if (overrides.mobilePortalNavigation) {
     mobilePortalNavigation = normalizeMobilePortalNavigation(overrides.mobilePortalNavigation);
     mobilePortalNavigationCustomized = true;
@@ -35184,6 +35188,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     personnelDashboardLayout,
     startDashboardPreferences,
     startDashboardWorkspace,
+    gpWindows,
     sidebarNotepad,
     mobilePortalNavigation,
     mobilePortalAppearance,
@@ -35270,6 +35275,12 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     try { startDashboardWorkspace = startDashboardWorkspaceModel.validate(input.startDashboardWorkspace); }
     catch (error) { throw httpError(400, error.message, "UI_PREFERENCES_INVALID"); }
   }
+  let gpWindows;
+  if (input.gpWindows !== undefined) {
+    if (actor?.mustChangePassword) throw httpError(428,'Bitte zuerst das persönliche Passwort ändern.','PORTAL_PASSWORD_CHANGE_REQUIRED');
+    try { gpWindows = gpWindowsModel.validate(input.gpWindows); }
+    catch(error) { throw httpError(400,error.message,'UI_PREFERENCES_INVALID'); }
+  }
   let sidebarNotepad;
   if (input.sidebarNotepad !== undefined) {
     if (!sidebarNotepadModel.isPersonalActor(actor)) throw httpError(403,"Der Notizblock benötigt ein persönliches Mitarbeiterkonto.","PORTAL_EMPLOYEE_ACCOUNT_REQUIRED");
@@ -35297,7 +35308,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     && allowPastWeekEditing === undefined
     && vacationCalendarView === undefined
     && personnelDashboardLayout === undefined && startDashboardPreferences === undefined
-    && startDashboardWorkspace === undefined && sidebarNotepad === undefined
+    && startDashboardWorkspace === undefined && sidebarNotepad === undefined && gpWindows === undefined
     && mobilePortalNavigation === undefined
     && mobilePortalAppearance === undefined && mobilePortalHome === undefined
     && candidateEvaluationPdfPreferences === undefined) {
@@ -35362,6 +35373,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     if (startDashboardWorkspace !== undefined) {
       upserts.push({preferenceKey: startDashboardWorkspaceModel.KEY, value: JSON.stringify(startDashboardWorkspace)});
     }
+    if (gpWindows !== undefined) upserts.push({preferenceKey:gpWindowsModel.KEY,value:JSON.stringify(gpWindows)});
     if (sidebarNotepad !== undefined) {
       upserts.push({preferenceKey:sidebarNotepadModel.KEY,value:integrationSecretVault.seal(JSON.stringify(sidebarNotepad),
         {namespace:"sidebar-notepad",connectorId:actor.employeeNumber,field:"note",purpose:"personal-ui-preference"})});
@@ -35433,6 +35445,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     personnelDashboardLayout,
     startDashboardPreferences,
     startDashboardWorkspace,
+    gpWindows,
     sidebarNotepad,
     mobilePortalNavigation,
     mobilePortalAppearance,
@@ -37661,6 +37674,17 @@ app.put("/api/portal/v1/ui-preferences", async (request, response) => {
   response.json(await saveUiPreferencesForActor(actor, request.body || {}));
 });
 
+require("./lib/branch-window-preferences-routes").registerBranchWindowPreferencesRoutes(app, {
+  access: persistenceProvider,
+  vault: integrationSecretVault,
+  requireSession: requirePortalSession,
+  assertCsrf: assertPortalCsrf,
+  refreshSession: (request, executor) => loadPortalSessionFromRequest(request, {
+    touch: false,
+    ...(executor ? { repository: require("./lib/persistence/repositories/portal-access").createPortalAccessRepository(executor) } : {}),
+  }),
+});
+
 function setSalesArticleCatalogPrivateHeaders(response) {
   response.set({
     "Cache-Control": "private, no-store, max-age=0",
@@ -38712,6 +38736,8 @@ const salesArticleToolAuth = {
   privateHeaders:setSalesArticleCatalogPrivateHeaders,
 };
 require('./lib/sales-article-local-notes-routes').registerSalesArticleLocalNotesRoutes(app,{...salesArticleToolAuth,notes:salesArticleLocalNotesRepository});
+require('./lib/sales-recent-articles').register(app,{...salesArticleToolAuth,preferences:uiPreferencesRepository,
+  vault:integrationSecretVault,projectionFor:salesArticleCatalogProjectionForSession});
 require('./lib/sales-article-tools-routes').registerSalesArticleToolsRoutes(app,{
   ...salesArticleToolAuth, preferences:uiPreferencesRepository,notes:salesArticleLocalNotesRepository,images:salesArticleImagesRepository,
   refreshSession:(request,original)=>isLocalSystemSession(original)?Promise.resolve(original):loadPortalSessionFromRequest(request,{touch:false}),
@@ -38739,6 +38765,10 @@ const salesPriceLabelsBranding = require('./lib/sales-price-labels-branding').cr
 });
 const salesPriceLabelTemplateStore = require('./lib/sales-price-label-template-store').createSalesPriceLabelTemplateStore({ access:persistenceProvider, vault:integrationSecretVault,
   validateImages:(context,options,controls)=>salesPriceLabelImageStore.validateOptions(context,options,controls) });
+const salesPriceLabelDraftStore = require('./lib/sales-price-label-draft-store').createSalesPriceLabelDraftStore({access:persistenceProvider,vault:integrationSecretVault,
+  validateImages:(context,options,controls)=>salesPriceLabelImageStore.validateOptions(context,options,controls)});
+const salesPriceLabelProjectStore = require('./lib/sales-price-label-project-store').createSalesPriceLabelProjectStore({access:persistenceProvider,vault:integrationSecretVault,
+  validateImages:(context,options,controls)=>salesPriceLabelImageStore.validateOptions(context,options,controls)});
 const salesPriceLabelImageStore = require('./lib/sales-price-label-image-store').createSalesPriceLabelImageStore({
   access:persistenceProvider,vault:integrationSecretVault,storage:requireAmuStorage,
   canReadAsset:(context,id)=>salesPriceLabelTemplateStore.canReadImage(context,id),
@@ -38756,7 +38786,14 @@ require('./lib/sales-price-labels-routes').registerSalesPriceLabelsRoutes(app, {
   sessionFor:salesPriceLabelsSession,
   refreshSession:refreshSalesPriceLabelsSession,
   assertFresh:async(request,original)=>{ await refreshSalesPriceLabelsSession(request,original); },
-  branding:salesPriceLabelsBranding, templateStore:salesPriceLabelTemplateStore,
+  branding:salesPriceLabelsBranding, templateStore:salesPriceLabelTemplateStore,draftStore:salesPriceLabelDraftStore,projectStore:salesPriceLabelProjectStore,
+  defaultBranding:async session=>{
+    const locationId=session.homeLocationId || session.scopes?.[0]?.locationId;
+    const assignment=locationBrandingRow(locationId),kitId=String(assignment?.kit_id || '');
+    const kits=(await salesPriceLabelsBranding.list()).kits;
+    const kit=kits.find(row=>row.id===kitId) || (assignment?.logo_url ? kits.find(row=>row.logos.some(logo=>logo.key==='logo'&&logo.url===assignment.logo_url)) : null);
+    return kit?.logos.some(logo=>logo.key==='logo') ? {logoKitId:kit.id,logoAssetKey:'logo'} : null;
+  },
   imageStore:salesPriceLabelImageStore,draftVault:integrationSecretVault,
   withImageWrite:async work=>{amuMutationInProgress++;try{return await work();}finally{amuMutationInProgress=Math.max(0,amuMutationInProgress-1);}},
   listBranchAccounts:async()=>{
@@ -44080,9 +44117,11 @@ app.get("/api/portal/v1/branch-orders/settings", async (request, response) => {
   const session = requirePortalSession(request, BRANCH_ORDER_MANAGE_PERMISSION);
   const locationId = await branchOrderManagementLocation(session, request.query || {});
   try {
+    const configuration = await sqliteBranchOrderOperations.settingsSnapshot(locationId);
     response.json({
       locationId,
-      configuration: (await sqliteBranchOrderOperations.settingsSnapshot(locationId)),
+      configuration,
+      configurationVersion: require('./lib/branch-order-configuration-version').configurationVersion(configuration),
       emailDelivery: branchOrderEmailStatus(),
     });
   } catch (error) {
@@ -44101,7 +44140,7 @@ app.put("/api/portal/v1/branch-orders/settings", async (request, response) => {
       locationId,
       request.body?.configuration,
       portalActorId(session),
-      { pdfDeliveryAvailable: emailDelivery.attachmentsAvailable },
+      { pdfDeliveryAvailable: emailDelivery.attachmentsAvailable, expectedVersion: request.body?.expectedVersion },
     ));
     (await auditPortal(portalActorId(session), "branch-order.settings.update", "branch_order_location", locationId, JSON.stringify({
       recipientCount: configuration.recipients.length,
@@ -44112,6 +44151,7 @@ app.put("/api/portal/v1/branch-orders/settings", async (request, response) => {
     response.json({
       locationId,
       configuration,
+      configurationVersion: require('./lib/branch-order-configuration-version').configurationVersion(configuration),
       emailDelivery,
     });
   } catch (error) {

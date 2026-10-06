@@ -3,16 +3,18 @@
   const api = factory(common ? require('./sales-price-label-fonts') : host.GrabenplanerPriceLabelFonts,
     common ? require('./sales-price-label-layout') : host.GrabenplanerPriceLabelLayout,
     common ? require('./sales-price-label-design') : host.GrabenplanerPriceLabelDesign,
-    common ? require('./sales-price-label-editor') : host.GrabenplanerPriceLabelEditor);
+    common ? require('./sales-price-label-editor') : host.GrabenplanerPriceLabelEditor,
+    common ? require('./sales-price-label-working-draft') : host.GrabenplanerPriceLabelWorkingDraft,
+    common ? require('./sales-price-label-project') : host.GrabenplanerPriceLabelProject);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (host) { host.GrabenplanerSalesPriceLabels = api; host.SalesPriceLabels = api; }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function(Fonts, PaperGrid, Design, Editor) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function(Fonts, PaperGrid, Design, Editor, Draft, Project) {
   'use strict';
   const defaults = Object.freeze({ paper: 'A4', paperWidthMm: 210, paperHeightMm: 297, orientation: 'portrait', labelWidthMm: 90,
     labelHeightMm: 60, marginMm: 10, gapMm: 3, copies: 1, design: 'classic', shape: 'rectangle', color: '#225247',
     showArticleNumber: true, showEan: false, showTax: true, showPhoto: false, headline: '', footer: '',
     logoKitId: '', logoAssetKey: '', logoPosition: 'top-left', logoWidthMm: 20, logoHeightMm: 10, logoSpacingMm: 2,
-    logoMode: 'reserved', logoXmm: 4, logoYmm: 4, fontId: 'roboto', showBorder: true, cutMarks: false, borderMode: 'design', textBoxes: Object.freeze({}), imageBoxes: Object.freeze([]) });
+    logoMode: 'reserved', logoXmm: 4, logoYmm: 4, fontId: 'roboto', showBorder: true, cutMarks: false, borderMode: 'design', textBoxes: Object.freeze({}), freeTextBoxes:Object.freeze([]), imageBoxes: Object.freeze([]) });
   const fileDefaults = Object.freeze({ stamp: 'date-time', position: 'before', separator: '-', suffix: '' });
   let instanceCounter = 0;
   const labelFormats = Object.freeze([
@@ -39,6 +41,7 @@
       {x:value.logoXmm,y:value.logoYmm,width:value.logoWidthMm,height:value.logoHeightMm}));
     next.textBoxes = Object.fromEntries(Object.entries(value.textBoxes || {}).map(([id,box])=>[id,{...box,...Design.boundedBox(next,box)}]));
     next.imageBoxes = (value.imageBoxes || []).map(box=>({...box,...Design.boundedBox(next,box)}));
+    next.freeTextBoxes=(value.freeTextBoxes||[]).map(box=>({...box,...Design.boundedBox(next,box)}));
     return normalizeOptions(next);
   }
   function paperAdjustment(value) {
@@ -94,6 +97,7 @@
     if (options.logoMode === 'free' && (options.logoXmm + options.logoWidthMm > options.labelWidthMm + .001
       || options.logoYmm + options.logoHeightMm > options.labelHeightMm + .001)) throw new Error('Das Logo muss innerhalb der Schildfläche liegen. Bitte Position oder Größe anpassen.');
     options.textBoxes = Design.normalizeTextBoxes(options.textBoxes,options);
+    options.freeTextBoxes=Design.normalizeFreeTextBoxes(options.freeTextBoxes,options);
     options.imageBoxes = Design.normalizeImageBoxes(options.imageBoxes,options);
     return Object.fromEntries(Object.keys(defaults).map(key => [key, options[key]]));
   }
@@ -142,6 +146,8 @@
     const whole = String(cents / 100n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     return whole + ',' + String(cents % 100n).padStart(2, '0');
   }
+  function projectPagePreview(project,plan,page){const labels=new Map(project.labels.map(label=>[label.id,label]));return '<svg class="spl-paper-page" viewBox="0 0 '+plan.width+' '+plan.height+'" role="img" aria-label="Papierbelegung des Projekts, Seite '+(page+1)+'"><rect width="'+plan.width+'" height="'+plan.height+'" fill="white"/>'+plan.cells.filter(cell=>cell.page===page).map(cell=>{
+    const label=labels.get(cell.labelId),o=label.options,cut=PaperGrid.cutsVisible(o),b=PaperGrid.shapeBounds(o.shape,cell.x,cell.y,cell.width,cell.height,o.showBorder?.18:cut?.12:0),shape=b.kind==='circle'?'<circle cx="'+(b.x+b.radius)+'" cy="'+(b.y+b.radius)+'" r="'+b.radius+'"':'<rect x="'+b.x+'" y="'+b.y+'" width="'+b.width+'" height="'+b.height+'" rx="'+b.radius+'"';return '<g><title>'+escape(label.articleNumber+' · Kopie '+(cell.copyIndex+1))+'</title>'+shape+' fill="#DFECE4" stroke="'+(o.showBorder?o.color:cut?'#79877F':'none')+'" stroke-width="'+(o.showBorder?.18:cut?.12:0)+'"'+(cut?' stroke-dasharray="2 1"':'')+'/></g>';}).join('')+'</svg>';}
   function filename(name, options) {
     const model = globalThis.GrabenplanerTradeExportOptions || globalThis.GrabenplanerTradeExport;
     if (model?.filename) return model.filename(name, options);
@@ -151,7 +157,7 @@
     const block = options.stamp === 'none' ? '' : options.stamp === 'date-time' ? date + '-' + get('hour') + get('minute') : options.stamp === 'date-suffix' ? date + (options.suffix.trim() ? '-' + clean(options.suffix) : '') : date;
     return (options.position === 'after' ? [clean(name), block] : [block, clean(name)]).filter(Boolean).join(options.separator) + '.pdf';
   }
-  function mount(root, { api, rawApi, accessKey = () => '' }) {
+  function mount(root, { api, rawApi, accessKey = () => '',searchArticles,accountIdentity=accessKey,windowPreferences,dockSearch }) {
     const formatHintId = 'sales-price-label-format-hint-' + (++instanceCounter);
     root.classList.add('sales-price-labels');
     root.innerHTML = `<style>${Fonts.css()}</style><section class="spl-card spl-library"><header><h2>Vorlagen</h2><span data-pl="library-summary"></span></header><div class="spl-library-picker"><label>Gespeicherte Vorlage<select data-pl="library-select"><option value="">Persönliche Standardeinstellung</option></select></label><button type="button" data-pl="library-new">Neue Vorlage</button><button type="button" data-pl="library-copy" disabled>Kopie anlegen</button></div>
@@ -177,14 +183,18 @@
       </form><div class="spl-output"><section class="spl-card spl-preview-card"><header><div><h2>Vorschau</h2><p data-pl="dimensions"></p></div><span class="spl-preview-badge">Preisschild</span></header><div class="spl-preview-branding" data-pl="branding-preview"></div><div data-pl="element-toolbar"></div><section class="spl-image-tools" data-pl="image-tools"></section><label class="spl-preview-font" hidden>Standardschriftart<select data-pl="preview-font" aria-label="Schriftart in der Schildvorschau">${Fonts.families.map(font => '<option value="' + font.id + '">' + font.label + '</option>').join('')}</select></label><label class="spl-picker" data-pl="picker-label">Artikel in der Vorschau<select data-pl="picker" aria-label="Artikel in der Vorschau"><option>Artikel laden</option></select></label><div class="spl-preview-stage" data-pl="stage"><div data-pl="preview"></div></div><p class="spl-hint spl-logo-editor-hint" data-pl="logo-editor-hint" hidden>Logo auswählen und ziehen; der Griff rechts unten ändert die Größe. Pfeiltasten verschieben, am Griff ändern sie die Größe (Umschalt: 5 mm). Freie Anordnung kann Text und Preis überdecken.</p><p class="spl-logo-live" data-pl="logo-live" role="status" aria-live="polite"></p><p class="spl-layout-info" data-pl="layout"></p><p class="spl-hint" data-pl="updated">Noch keine Artikel geladen.</p></section>
         <section class="spl-card spl-export"><h2>PDF exportieren</h2><form data-pl="export"><label>Dateiname<input name="name" maxlength="110" value="Preisschilder" required></label><div class="spl-fields"><label>Zeitblock<select name="stamp"><option value="date-time">JJMMTT-HHMM</option><option value="date">JJMMTT</option><option value="date-suffix">JJMMTT-xxx</option><option value="none">Ohne Zeitblock</option></select></label><label>Anordnung<select name="position"><option value="before">Vorne</option><option value="after">Hinten</option></select></label><label>Ergänzung (xxx)<input name="suffix" maxlength="40" placeholder="z. B. Aktion"></label><label>Trennzeichen<select name="separator"><option value="-">Bindestrich (-)</option><option value="_">Unterstrich (_)</option><option value=" ">Leerzeichen</option></select></label></div><p class="spl-filename" data-pl="filename"></p><button type="submit" class="spl-primary" data-pl="download" disabled>PDF herunterladen</button></form><p class="spl-status" data-pl="status" role="status" aria-live="polite">Artikelnummern eingeben und die aktuellen Preise laden.</p></section>
       </div></div>`;
+    const draftBar=root.ownerDocument.createElement('div');draftBar.className='spl-draft-status';draftBar.innerHTML='<span data-pl="draft-status" role="status"></span><button type="button" data-pl="draft-retry" hidden>Speichern erneut versuchen</button><button type="button" data-pl="recover-images">Hochgeladene Bilder</button><div data-pl="recovered-images" hidden></div>';root.querySelector('.spl-library').append(draftBar);
+    const projectCard=root.ownerDocument.createElement('section');projectCard.className='spl-card spl-project';projectCard.innerHTML='<header><h2>Preisschildprojekt</h2><small>Nur für dein Konto</small></header><div class="spl-fields"><label>Projektname<input data-pl="project-name" maxlength="110" placeholder="z. B. Schaufenster Oktober"></label><label>Projekt öffnen<select data-pl="project-open"><option value="">Gespeichertes Projekt wählen</option></select></label></div><div class="spl-project-actions"><button type="button" data-pl="project-new">Neues Projekt</button><button type="button" data-pl="project-save">Projekt speichern</button><button type="button" data-pl="project-copy">Als Kopie speichern</button><button type="button" data-pl="project-remove">Gespeichertes Projekt löschen</button><button type="button" data-pl="search">Artikel suchen</button></div><label>Einzelnes Schild<select data-pl="project-label"><option value="">Noch kein Schild</option></select></label><div class="spl-project-actions"><button type="button" data-pl="label-copy">Schild kopieren</button><button type="button" data-pl="label-delete">Schild entfernen</button></div><p data-pl="project-status" class="spl-hint" role="status"></p>';root.prepend(projectCard);
     const q = key => root.querySelector('[data-pl="' + key + '"]'), form = q('settings'), exportForm = q('export');
     let active = false, owner = '', generation = 0, items = [], updatedAt = null, loadedKey = '', busy = false, saving = false, timer = null, articleReloadPending = false;
     let logoSelected = false, logoDrag = null, lastRenderedOptions = null, paperPage = 0;
-    let designBoxes = {textBoxes:{},imageBoxes:[]}, draftEpoch = 0, imageUploading = false;
+    let designBoxes = {textBoxes:{},freeTextBoxes:[],imageBoxes:[]}, draftEpoch = 0, imageUploading = false;
     let brandingKits = [], brandingLoaded = false, brandingMessage = '', library = { templates: [], ownBranch: null, recipients: [], capabilities: { create: false, ownBranch: false } },
       libraryMode = 'defaults', selectedTemplate = null, libraryLoading = false, libraryReady = false,
       personalDefaults = { options: { ...defaults }, filenameOptions: { ...fileDefaults } };
-    const controllers = new Set(), listeners = [];
+    const controllers = new Set(), uploadControllers = new Set(), listeners = [];
+    let initialized=false,workingDraftId=globalThis.crypto.randomUUID(),pendingArticleSelection='',destroyed=false;
+    let projectData=null,projectId='',projectVersion=null,projectRows=[],projectBusy=false,defaultLogo=null;
     const permitted = ticket => active && root.isConnected && accessKey() === owner && (ticket === undefined || ticket === generation);
     const on = (node, type, handler) => { node.addEventListener(type, handler); listeners.push(() => node.removeEventListener(type, handler)); };
     const request = async (url, body, method = 'POST') => {
@@ -201,29 +211,74 @@
     logoOptions.querySelector('summary').firstChild.textContent='Logo-Position & Abstand ';
     [...logoOptions.querySelectorAll('input,select'),...brandingChoices.querySelectorAll('input,select')].forEach(input => { input.setAttribute('form',form.id || (form.id='sales-price-label-settings-'+instanceCounter)); });
     q('branding-preview').append(brandingChoices,logoOptions);
-    const onSettings=(type,handler)=>{on(form,type,handler);on(q('branding-preview'),type,handler);};
+    const brandingCard=root.ownerDocument.createElement('section');brandingCard.className='spl-card spl-branding-card';brandingCard.innerHTML='<h2>Filiallogo</h2>';brandingCard.append(q('branding-preview'));form.prepend(brandingCard);
+    const onSettings=(type,handler)=>{on(form,type,handler);};
     const numbers = () => parseArticleNumbers(form.elements.articleNumbers.value);
     const key = () => JSON.stringify([numbers(), form.elements.priceType.value]);
     function rawOptions() {
       const value = {};
       for (const [field, fallback] of Object.entries(defaults)) {
-        if (['textBoxes','imageBoxes'].includes(field)) { value[field] = designBoxes[field]; continue; }
+        if (['textBoxes','freeTextBoxes','imageBoxes'].includes(field)) { value[field] = designBoxes[field]; continue; }
         const input = form.elements[field]; value[field] = typeof fallback === 'boolean' ? input.checked : typeof fallback === 'number' ? input.value === '' ? NaN : Number(input.value) : input.value;
       }
       return value;
     }
     const options = () => normalizeOptions(rawOptions());
+    const draftStore=Draft.createStore({api,key:accessKey,canUse:()=>!destroyed&&root.isConnected&&Boolean(accessKey()),normalizeOptions,
+      onError:error=>{if(!destroyed)q('draft-status').textContent='Arbeitsentwurf nicht gespeichert: '+error.message;}});
+    function recordDraft(){
+      if(!initialized||!draftStore.ready||destroyed||accessKey()!==owner)return;
+      try{
+        let value;try{value=options();}catch{value=lastRenderedOptions||personalDefaults.options;}
+        updateProjectSelection(value);
+        const rawSettings={};for(const [key,fallback] of Object.entries(defaults)){if(['textBoxes','freeTextBoxes','imageBoxes'].includes(key))continue;const input=form.elements[key];if(input)rawSettings[key]=typeof fallback==='boolean'?input.checked:input.value;}
+        draftStore.change({schemaVersion:1,draftId:workingDraftId,articleNumbers:form.elements.articleNumbers.value,priceType:form.elements.priceType.value,
+          options:value,rawSettings,filenameOptions:fileOptions(),name:exportForm.elements.name.value,
+          library:{mode:libraryMode,templateId:selectedTemplate?.id||'',templateVersion:selectedTemplate?.version||null,title:q('library-title').value,visibility:q('library-scope').value,recipients:recipientIds()},
+          selectedArticleNumber:q('picker').value||pendingArticleSelection||'',paperPage,project:projectData?{id:projectId,version:projectVersion,data:projectData}:null});
+      }catch(error){q('draft-status').textContent='Noch nicht gesichert: '+error.message;}
+    }
+    function draftStatus(){if(destroyed)return;const status=draftStore.status;q('draft-status').textContent=({loading:'Arbeitsentwurf wird geladen …',saving:'Arbeitsentwurf wird gesichert …',pending:'Ungespeicherte Änderungen …',saved:'Arbeitsentwurf automatisch gesichert.',conflict:'Ein anderes Fenster hat den Entwurf geändert. Deine Eingaben bleiben erhalten.',error:'Arbeitsentwurf nicht gesichert. '+(draftStore.error?.message||'Bitte erneut versuchen.')})[status];q('draft-retry').hidden=!['error','conflict'].includes(status);}
+    const stopDraftSubscription=draftStore.subscribe(draftStatus);
     const elementEditor = Editor.mount({preview:q('preview'),toolbar:q('element-toolbar'),images:q('image-tools'),live:q('logo-live'),
-      read:options,write:value=>{setOptions(value);q('saved').textContent='';render();},
-      canEdit:()=>permitted() && !readOnlyTemplate() && !saving && !libraryLoading,
+      read:options,write:value=>{setOptions(value);q('saved').textContent='';render();recordDraft();},
+      canEdit:()=>permitted() && draftStore.ready && !readOnlyTemplate() && !saving && !libraryLoading&&!projectBusy,
       context:()=>JSON.stringify([owner,generation,draftEpoch,libraryMode,selectedTemplate?.id]),
       onUploadState:value=>{imageUploading=value;render();},
       upload:async file=>{
-        const controller=new AbortController();controllers.add(controller);
-        try {const body=new FormData();body.append('image',file);const response=await rawApi('/api/sales/price-labels/images',{method:'POST',body,signal:controller.signal});return (await response.json()).image;}
-        finally{controllers.delete(controller);}
+        const controller=new AbortController();uploadControllers.add(controller);const target={owner,draftId:workingDraftId,labelId:projectData?.selectedLabelId||''};
+        try {const body=new FormData();body.append('image',file);const response=await rawApi('/api/sales/price-labels/images',{method:'POST',body,signal:controller.signal,headers:{'X-Price-Label-Upload-Id':globalThis.crypto.randomUUID()}});const asset=(await response.json()).image;Object.defineProperty(asset,'draftTarget',{value:target});return asset;}
+        finally{uploadControllers.delete(controller);}
+      },commitUpload:asset=>{
+        if(destroyed||accessKey()!==asset.draftTarget?.owner||owner!==asset.draftTarget.owner)return false;
+        if(asset.draftTarget.draftId!==workingDraftId){q('draft-status').textContent='Bild fertig hochgeladen. Unter „Hochgeladene Bilder“ kannst du es wieder einfügen.';return false;}
+        return insertRecoveredImage(asset,asset.draftTarget.labelId);
       }});
     const fileOptions = () => Object.fromEntries(Object.keys(fileDefaults).map(field => [field, exportForm.elements[field].value]));
+    function insertRecoveredImage(asset,targetLabelId=''){
+      if(destroyed||accessKey()!==owner||readOnlyTemplate()||projectBusy||!draftStore.ready)return false;
+      const target=targetLabelId?projectData?.labels.find(label=>label.id===targetLabelId):null;
+      if(targetLabelId&&!target){q('draft-status').textContent='Das Ziel-Schild wurde entfernt. Das Bild bleibt unter „Hochgeladene Bilder“ verfügbar.';return false;}
+      const base=target&&target.id!==projectData.selectedLabelId?target.options:options();if(base.imageBoxes.some(row=>row.assetId===asset.assetId))return true;
+      if(base.imageBoxes.length>=3)throw new Error('Bild ist hochgeladen. Entferne ein Bild oder verwende einen anderen Entwurf; höchstens drei Bilder je Schild sind möglich.');
+      const width=Math.min(base.labelWidthMm/3,30),height=Math.min(base.labelHeightMm/3,width/(asset.width/asset.height));
+      const next={...base,imageBoxes:[...base.imageBoxes,{assetId:asset.assetId,...Design.boundedBox(base,{xMm:4,yMm:4,widthMm:width,heightMm:height})}]};
+      if(target&&target.id!==projectData.selectedLabelId)projectData={...projectData,labels:projectData.labels.map(label=>label.id===target.id?{...label,options:next}:label)};else setOptions(next);render();recordDraft();void draftStore.flush();return true;
+    }
+    on(root,'input',recordDraft);on(root,'change',recordDraft);
+    on(q('draft-retry'),'click',async()=>{const hydrated=draftStore.ready;await draftStore.retry();if(!hydrated&&draftStore.ready){restoreWorkingDraft(draftStore.value);recordDraft();render();if(form.elements.articleNumbers.value.trim())void loadArticles();}draftStatus();});
+    on(q('recover-images'),'click',async()=>{
+      if(!permitted())return;const ticket=generation;q('recovered-images').hidden=false;q('recovered-images').textContent='Bilder werden geladen …';
+      try{const result=await request('/api/sales/price-labels/images');if(!permitted(ticket))return;
+        q('recovered-images').replaceChildren(...result.images.map(asset=>{const button=root.ownerDocument.createElement('button');button.type='button';button.textContent='Bild '+new Intl.DateTimeFormat('de-AT',{dateStyle:'short',timeStyle:'short'}).format(new Date(asset.createdAt));button.addEventListener('click',()=>{try{insertRecoveredImage(asset);}catch(error){q('draft-status').textContent=error.message;}});return button;}));
+        if(!result.images.length)q('recovered-images').textContent='Noch keine eigenen Bilder hochgeladen.';
+      }catch(error){if(permitted(ticket))q('recovered-images').textContent=error.message;}
+    });
+    const searchWindow=typeof searchArticles==='function'&&globalThis.GrabenplanerPriceLabelSearchWindow?globalThis.GrabenplanerPriceLabelSearchWindow.mount({root,api,searchArticles,addArticle:number=>{
+      if(!permitted()||!draftStore.ready||projectBusy)throw new Error('Bitte warten, bis der Arbeitsentwurf verfügbar ist.');recordDraft();if(projectData.labels.length>=100)throw new Error('Höchstens 100 Schilder je Projekt.');
+      const id=globalThis.crypto.randomUUID();projectData={...projectData,labels:[...projectData.labels,{id,articleNumber:number,priceType:form.elements.priceType.value,options:options()}],selectedLabelId:id};form.elements.articleNumbers.value=[...new Set(projectData.labels.map(label=>label.articleNumber))].join('\n');pendingArticleSelection=number;loadedKey='';recordDraft();render();void loadArticles();
+    },key:accountIdentity,canUse:()=>!destroyed&&accessKey()===owner&&root.isConnected,active:()=>active,windowPreferences,dock:dockSearch}):null;
+    on(q('search'),'click',()=>{void searchWindow?.show();});
     const readOnlyTemplate = () => libraryMode === 'template' && selectedTemplate?.canEdit !== true;
     const branchTemplateLocked = () => libraryMode === 'template' && selectedTemplate?.received === true && selectedTemplate?.canEdit === true;
     const createOption = (value, label, disabled = false) => {
@@ -241,7 +296,7 @@
     }
     function setOptions(value) {
       const saved = normalizeOptions(value);
-      designBoxes = {textBoxes:saved.textBoxes,imageBoxes:saved.imageBoxes};
+      designBoxes = {textBoxes:saved.textBoxes,freeTextBoxes:saved.freeTextBoxes,imageBoxes:saved.imageBoxes};
       fillLogoChoices(saved.logoKitId, saved.logoAssetKey);
       for (const [field, value] of Object.entries(saved)) { const input = form.elements[field]; if (!input) continue; if (typeof value === 'boolean') input.checked = value; else input.value = value; }
       q('color-text').value = saved.color.toUpperCase();
@@ -271,23 +326,23 @@
       if (!library.recipients.length) { const empty = root.ownerDocument.createElement('p'); empty.className = 'spl-hint'; empty.textContent = 'Derzeit sind keine weiteren freigegebenen Filialkonten verfügbar.'; q('library-recipients').append(empty); }
     }
     function renderLibrary(printable = true) {
-      const readonly = readOnlyTemplate(), branchLocked = branchTemplateLocked(), scope = q('library-scope'), canCreate = library.capabilities.create === true;
+      const readonly = readOnlyTemplate()||!draftStore.ready||projectBusy, branchLocked = branchTemplateLocked(), scope = q('library-scope'), canCreate = library.capabilities.create === true;
       q('library-editor').hidden = libraryMode === 'defaults';
       q('library-title').disabled = readonly || saving || libraryLoading;
       scope.querySelector('[value="branch"]').disabled = !library.ownBranch || library.capabilities.ownBranch !== true;
       scope.querySelector('[value="branch"]').textContent = library.ownBranch ? 'Eigene Filiale · ' + library.ownBranch.label : 'Eigene Filiale';
       for (const value of ['private', 'selected']) scope.querySelector('[value="' + value + '"]').disabled = branchLocked;
       scope.disabled = readonly || branchLocked || saving || libraryLoading;
-      q('library-select').disabled = saving || libraryLoading || imageUploading;
-      q('library-new').disabled = !permitted() || !libraryReady || !canCreate || saving || libraryLoading || imageUploading;
-      q('library-copy').disabled = !permitted() || !libraryReady || !canCreate || libraryMode !== 'template' || saving || libraryLoading || imageUploading;
+      q('library-select').disabled = projectBusy || !draftStore.ready || saving || libraryLoading || imageUploading;
+      q('library-new').disabled = projectBusy || !draftStore.ready || !permitted() || !libraryReady || !canCreate || saving || libraryLoading || imageUploading;
+      q('library-copy').disabled = projectBusy || !draftStore.ready || !permitted() || !libraryReady || !canCreate || libraryMode !== 'template' || saving || libraryLoading || imageUploading;
       q('library-recipients-panel').hidden = libraryMode === 'defaults' || scope.value !== 'selected';
       q('library-recipients').querySelectorAll('input').forEach(input => { input.disabled = readonly || saving || libraryLoading; });
       const count = recipientIds().length; q('library-recipient-count').textContent = count ? '· ' + count + ' ausgewählt' : '';
       q('library-summary').textContent = libraryReady ? library.templates.length + ' gespeicherte Vorlage' + (library.templates.length === 1 ? '' : 'n') : libraryLoading ? 'Wird geladen …' : '';
       q('save').textContent = libraryMode === 'defaults' ? 'Standardeinstellung speichern' : libraryMode === 'new' ? 'Neue Vorlage speichern' : 'Änderungen speichern';
       q('save').disabled = !permitted() || busy || saving || libraryLoading || imageUploading || readonly || !printable || libraryMode === 'new' && !canCreate;
-      q('library-reload').disabled = imageUploading || saving || libraryLoading;
+      q('library-reload').disabled = projectBusy || !draftStore.ready || imageUploading || saving || libraryLoading;
       const hint = readonly ? 'Freigegebene Vorlage von ' + (selectedTemplate?.creator?.label || 'einem anderen Konto') + '. Für eigene Änderungen eine Kopie anlegen.'
         : branchLocked ? 'Filialvorlage · Änderungen gelten für die eigene Filiale. Mit einer Kopie kannst du eine eigene Vorlage anlegen.'
           : scope.value === 'branch' ? 'Diese Vorlage steht den berechtigten Konten der eigenen Filiale zur Verfügung.'
@@ -295,6 +350,7 @@
               : 'Diese Vorlage ist nur für dein Konto sichtbar.';
       q('library-hint').textContent = hint + (selectedTemplate?.unavailableRecipientCount ? ' Frühere Empfänger sind nicht mehr verfügbar; beim Speichern werden diese Freigaben entfernt.' : '');
       for (const field of Object.keys(defaults)) if (form.elements[field]) form.elements[field].disabled = readonly;
+      form.elements.articleNumbers.disabled=form.elements.priceType.disabled=!draftStore.ready||projectBusy;
       for (const field of Object.keys(fileDefaults)) exportForm.elements[field].disabled = readonly;
       q('color-text').disabled = readonly;
       q('preview-font').disabled = readonly;
@@ -312,7 +368,7 @@
       q('library-select').value = libraryMode === 'template' ? selectedTemplate?.id || '' : libraryMode === 'new' ? '__new' : '';
     }
     function chooseTemplate(id) {
-      if (imageUploading || saving) return;
+      if (projectBusy || !draftStore.ready || imageUploading || saving) return;
       draftEpoch++; elementEditor.clear();
       const template = library.templates.find(item => item.id === id);
       if (!id) {
@@ -323,6 +379,7 @@
         q('library-title').value = template.title; q('library-scope').value = template.visibility; renderRecipients(template.recipients);
       }
       q('saved').textContent = ''; q('library-reload').hidden = true; render();
+      recordDraft();
     }
     async function loadLibrary(ticket = generation) {
       const result = await request('/api/sales/price-labels/library');
@@ -336,14 +393,64 @@
       try { const url = new URL(value, globalThis.location.origin); return url.origin === globalThis.location.origin && ['https:', 'http:'].includes(url.protocol) && url.pathname === '/api/sales/price-labels/image' ? url.href : ''; }
       catch { return ''; }
     }
+    function updateProjectSelection(value=options()){
+      if(!projectData)projectData={schemaVersion:1,name:'',labels:[],selectedLabelId:'',paper:Object.fromEntries(Project.PAPER_KEYS.map(key=>[key,value[key]])),filenameOptions:fileOptions()};
+      const selected=projectData.selectedLabelId;
+      projectData=Project.normalize({...projectData,name:q('project-name').value,paper:Object.fromEntries(Project.PAPER_KEYS.map(key=>[key,value[key]])),filenameOptions:fileOptions(),
+        labels:projectData.labels.map(label=>label.id===selected?{...label,priceType:form.elements.priceType.value,options:value}:label)},normalizeOptions);
+    }
+    function renderProject(){
+      const labels=projectData?.labels||[];
+      q('project-label').replaceChildren(...(labels.length?labels.map((label,index)=>createOption(label.id,(index+1)+'. '+label.articleNumber+' · '+(items.find(item=>item.articleNumber===label.articleNumber)?.description||'Schild'))):[createOption('','Noch kein Schild')]));q('project-label').value=projectData?.selectedLabelId||'';
+      q('project-open').replaceChildren(createOption('','Gespeichertes Projekt wählen'),...projectRows.map(row=>createOption(row.id,row.name+' · '+row.labelCount+' Schilder')));q('project-open').value=projectId;
+      for(const id of ['project-new','project-save','project-copy','project-remove','project-open','project-label','project-name','label-copy','label-delete','search'])q(id).disabled=!permitted()||!draftStore.ready||projectBusy;
+      for(const id of ['project-new','project-save','project-copy','project-remove','project-open'])q(id).disabled||=imageUploading;
+      q('project-remove').disabled||=!projectId;q('project-save').disabled||=!labels.length;q('project-copy').disabled||=!labels.length;q('label-copy').disabled||=!labels.length||labels.length>=100;q('label-delete').disabled||=!labels.length;q('search').hidden=typeof searchArticles!=='function';
+    }
+    function selectProjectLabel(id){
+      if(!permitted()||!projectData)return;recordDraft();const label=projectData.labels.find(row=>row.id===id);if(!label)return;
+      const previousType=form.elements.priceType.value;projectData={...projectData,selectedLabelId:id};draftEpoch++;elementEditor.clear();setOptions(label.options);form.elements.priceType.value=label.priceType;
+      q('picker').value=label.articleNumber;pendingArticleSelection=label.articleNumber;
+      if(previousType!==label.priceType){loadedKey='';void loadArticles();}render();recordDraft();
+    }
+    function reconcileProjectLabels(){
+      updateProjectSelection();const selected=numbers(),existing=projectData.labels.filter(label=>selected.includes(label.articleNumber));
+      const labels=[...existing,...selected.filter(number=>!existing.some(label=>label.articleNumber===number)).map(articleNumber=>({id:globalThis.crypto.randomUUID(),articleNumber,priceType:form.elements.priceType.value,options:options()}))];
+      projectData=Project.normalize({...projectData,labels,selectedLabelId:labels.some(label=>label.id===projectData.selectedLabelId)?projectData.selectedLabelId:labels[0]?.id||''},normalizeOptions);
+    }
+    async function refreshProjects(){const ticket=generation;try{const result=await request('/api/sales/price-labels/projects');if(permitted(ticket)){projectRows=result.projects||[];renderProject();}}catch(error){if(permitted(ticket)&&error.name!=='AbortError')q('project-status').textContent='Projektliste nicht erreichbar: '+error.message;}}
+    async function saveProject(copy=false){
+      if(!permitted()||projectBusy||!draftStore.ready)return;recordDraft();if(!projectData.labels.length||!projectData.name.trim()){q('project-status').textContent='Bitte Artikel hinzufügen und einen Projektnamen eingeben.';q('project-name').focus();return;}
+      const snapshot=JSON.parse(JSON.stringify(projectData)),ticket=generation,id=copy?'':projectId,version=projectVersion;projectBusy=true;renderProject();
+      try{const saved=await request('/api/sales/price-labels/projects'+(id?'/'+encodeURIComponent(id):''),{...(id?{version}:{}),project:snapshot},id?'PATCH':'POST');
+        if(!permitted(ticket))return;projectId=saved.id;projectVersion=saved.version;q('project-status').textContent='Projekt gespeichert. '+(JSON.stringify(projectData)!==JSON.stringify(snapshot)?'Spätere Eingaben bleiben im Arbeitsentwurf.':'');recordDraft();void draftStore.flush();await refreshProjects();
+      }catch(error){if(permitted(ticket)&&error.name!=='AbortError')q('project-status').textContent=error.message+' Dein Arbeitsentwurf bleibt erhalten.';}finally{if(ticket===generation){projectBusy=false;if(permitted(ticket))render();}}
+    }
+    async function openProject(id){if(!id||!permitted()||projectBusy||imageUploading)return;const ticket=generation,operationOwner=owner;recordDraft();projectBusy=true;render();try{
+        const flushed=await draftStore.flush();if(!permitted(ticket)||owner!==operationOwner)return;if(!flushed){q('project-status').textContent='Bitte zuerst den aktuellen Arbeitsentwurf sichern.';return;}
+        const saved=await request('/api/sales/price-labels/projects/'+encodeURIComponent(id));if(!permitted(ticket))return;
+        projectData=Project.normalize(saved.project,normalizeOptions);projectId=saved.id;projectVersion=saved.version;workingDraftId=globalThis.crypto.randomUUID();draftEpoch++;libraryMode='new';selectedTemplate=null;q('project-name').value=projectData.name;form.elements.articleNumbers.value=[...new Set(projectData.labels.map(label=>label.articleNumber))].join('\n');setFileOptions(projectData.filenameOptions);
+        const label=projectData.labels.find(row=>row.id===projectData.selectedLabelId);if(label){setOptions(label.options);form.elements.priceType.value=label.priceType;pendingArticleSelection=label.articleNumber;}loadedKey='';items=[];recordDraft();render();await loadArticles();if(permitted(ticket))q('project-status').textContent='Projekt geöffnet.';
+      }catch(error){if(permitted(ticket)&&error.name!=='AbortError')q('project-status').textContent=error.message;}finally{if(ticket===generation&&owner===operationOwner){projectBusy=false;if(permitted(ticket))render();}}}
+    on(q('project-save'),'click',()=>{void saveProject();});on(q('project-copy'),'click',()=>{void saveProject(true);});on(q('project-open'),'change',()=>{void openProject(q('project-open').value);});on(q('project-label'),'change',()=>selectProjectLabel(q('project-label').value));
+    on(q('project-new'),'click',()=>{if(!permitted()||imageUploading)return;recordDraft();projectData=null;projectId='';projectVersion=null;workingDraftId=globalThis.crypto.randomUUID();q('project-name').value='';form.elements.articleNumbers.value='';items=[];loadedKey='';libraryMode='new';selectedTemplate=null;setOptions({...defaults,...(defaultLogo||{})});setFileOptions(fileDefaults);recordDraft();render();void draftStore.flush();});
+    on(q('project-remove'),'click',async()=>{if(!permitted()||!projectId||projectBusy||!root.ownerDocument.defaultView.confirm('Gespeichertes Projekt löschen? Dein aktueller Arbeitsentwurf bleibt erhalten.'))return;const ticket=generation,id=projectId,version=projectVersion;projectBusy=true;renderProject();try{await request('/api/sales/price-labels/projects/'+encodeURIComponent(id),{version},'DELETE');if(permitted(ticket)){projectId='';projectVersion=null;recordDraft();await refreshProjects();if(permitted(ticket))q('project-status').textContent='Gespeichertes Projekt gelöscht. Arbeitsentwurf erhalten.';}}catch(error){if(permitted(ticket))q('project-status').textContent=error.message;}finally{if(ticket===generation){projectBusy=false;if(permitted(ticket))renderProject();}}});
+    on(q('label-copy'),'click',()=>{if(!permitted()||!projectData||projectData.labels.length>=100)return;recordDraft();const source=projectData.labels.find(label=>label.id===projectData.selectedLabelId),id=globalThis.crypto.randomUUID();if(!source)return;projectData={...projectData,labels:[...projectData.labels,{...JSON.parse(JSON.stringify(source)),id}],selectedLabelId:id};render();recordDraft();});
+    on(q('label-delete'),'click',()=>{if(!permitted()||!projectData)return;recordDraft();const labels=projectData.labels.filter(label=>label.id!==projectData.selectedLabelId),selected=labels[0];projectData={...projectData,labels,selectedLabelId:selected?.id||''};form.elements.articleNumbers.value=[...new Set(labels.map(label=>label.articleNumber))].join('\n');if(selected){draftEpoch++;elementEditor.clear();setOptions(selected.options);form.elements.priceType.value=selected.priceType;pendingArticleSelection=selected.articleNumber;}else{items=[];}loadedKey='';render();recordDraft();if(selected)void loadArticles();});
     function render() {
       let value, valid = true;
+      renderProject();
       try { value = options(); } catch (error) { value = { ...defaults }; valid = false; q('layout').textContent = error.message; }
       root.querySelectorAll('[data-pl-custom]').forEach(node => { node.hidden = value.paper !== 'custom'; });
       try { q('count').textContent = numbers().length + ' / 100'; } catch { q('count').textContent = 'Bitte Auswahl prüfen'; }
       let current = false, placementCurrent = false;
       try { placementCurrent = Boolean(loadedKey && loadedKey === key()); current = placementCurrent && !busy; } catch { /* Invalid input has no trusted current preview. */ }
-      const layout = PaperGrid.create(value,placementCurrent ? items.length : 0), circle = value.shape === 'circle', diameter = Math.min(value.labelWidthMm, value.labelHeightMm);
+      let layout = PaperGrid.create(value,placementCurrent ? items.length : 0),projectPlan=null,previewProject=null;
+      if(placementCurrent&&projectData?.labels.length){try{previewProject=Project.normalize({...projectData,paper:Object.fromEntries(Project.PAPER_KEYS.map(k=>[k,value[k]])),labels:projectData.labels.map(label=>label.id===projectData.selectedLabelId?{...label,options:value}:label)},normalizeOptions);
+        const mixed=previewProject.labels.length!==items.length||previewProject.labels.some(label=>JSON.stringify(label.options)!==JSON.stringify(value));
+        if(mixed){projectPlan=Project.paperLayout(previewProject);const pageCells=page=>projectPlan.cells.filter(cell=>cell.page===page).map((cell,index)=>({...cell,occupied:true,index,position:index})),capacity=Math.max(1,...Array.from({length:projectPlan.pageCount},(_,page)=>pageCells(page).length));layout={width:projectPlan.width,height:projectPlan.height,labelCount:projectPlan.cells.length,pageCount:projectPlan.pageCount,capacity,columns:0,rows:0,exceedsLimits:false,page:pageCells};}
+      }catch(error){valid=false;q('layout').textContent=error.message;}}
+      const circle = value.shape === 'circle', diameter = Math.min(value.labelWidthMm, value.labelHeightMm);
       const format = labelFormat(value); q('label-orientation').value = format.orientation;
       root.querySelectorAll('[data-pl-preset]').forEach(button => button.setAttribute('aria-pressed',String(valid && button.dataset.plPreset === format.id)));
       const adjustment = valid ? paperAdjustment(value) : null;
@@ -355,7 +462,7 @@
       }
       q('dimensions').textContent = circle ? 'Kreis Ø ' + diameter + ' mm · Schildfläche ' + value.labelWidthMm + ' × ' + value.labelHeightMm + ' mm' : value.labelWidthMm + ' × ' + value.labelHeightMm + ' mm';
       const {labelCount,pageCount,exceedsLimits:exceedsLimit} = layout;
-      if (valid) q('layout').textContent = !layout.capacity ? 'Das Schild passt mit diesen Rändern nicht auf das gewählte Papier. Bitte Maße oder Rand ändern.' : exceedsLimit ? 'Bitte höchstens 1000 Schilder und 200 PDF-Seiten wählen. Kopienzahl oder Artikelauswahl verringern.' : layout.columns + ' × ' + layout.rows + (layout.capacity === 1 ? ' Schild pro Seite · ' : ' Schilder pro Seite · ') + layout.capacity + (layout.capacity === 1 ? ' Platz auf ' : ' Plätze auf ') + (value.paper === 'custom' ? layout.width + ' × ' + layout.height + ' mm' : value.paper) + (labelCount ? ' · ' + labelCount + (labelCount === 1 ? ' Schild · ' : ' Schilder · ') + pageCount + ' PDF-Seite' + (pageCount !== 1 ? 'n' : '') : '');
+      if (valid) q('layout').textContent = projectPlan?labelCount+' individuelle Schilder · '+pageCount+' PDF-Seiten · '+layout.width+' × '+layout.height+' mm':!layout.capacity ? 'Das Schild passt mit diesen Rändern nicht auf das gewählte Papier. Bitte Maße oder Rand ändern.' : exceedsLimit ? 'Bitte höchstens 1000 Schilder und 200 PDF-Seiten wählen. Kopienzahl oder Artikelauswahl verringern.' : layout.columns + ' × ' + layout.rows + (layout.capacity === 1 ? ' Schild pro Seite · ' : ' Schilder pro Seite · ') + layout.capacity + (layout.capacity === 1 ? ' Platz auf ' : ' Plätze auf ') + (value.paper === 'custom' ? layout.width + ' × ' + layout.height + ' mm' : value.paper) + (labelCount ? ' · ' + labelCount + (labelCount === 1 ? ' Schild · ' : ' Schilder · ') + pageCount + ' PDF-Seite' + (pageCount !== 1 ? 'n' : '') : '');
       q('layout').classList.toggle('is-warning', !valid || !layout.capacity || exceedsLimit);
       paperPage = Math.max(0,Math.min(paperPage,Math.min(PaperGrid.MAX_PAGES,pageCount)-1));
       q('paper-page-number').value = String(paperPage+1); q('paper-page-number').max = String(Math.max(1,Math.min(PaperGrid.MAX_PAGES,pageCount)));
@@ -363,14 +470,14 @@
       q('paper-prev').disabled = !permitted() || !valid || paperPage < 1;
       q('paper-next').disabled = !permitted() || !valid || paperPage+1 >= Math.min(PaperGrid.MAX_PAGES,pageCount);
       q('paper-page-count').textContent = pageCount ? 'von ' + pageCount : 'von 0';
-      q('paper-preview').innerHTML = valid && layout.capacity ? pagePreview(value,layout,paperPage,items) : '';
+      q('paper-preview').innerHTML = valid && layout.capacity ? projectPlan?projectPagePreview(previewProject,projectPlan,paperPage):pagePreview(value,layout,paperPage,items) : '';
       const occupied = layout.page(paperPage).filter(cell=>cell.occupied).length;
-      q('paper-occupancy').textContent = !valid ? 'Bitte die Druckeinstellungen prüfen.' : !layout.capacity ? 'Für diese Maße ist kein Schildplatz verfügbar.' : !labelCount ? 'Noch keine aktuellen Artikel geladen · ' + layout.capacity + (layout.capacity === 1 ? ' freier Platz.' : ' freie Plätze.') : 'Seite ' + (paperPage+1) + ': ' + occupied + ' belegt · ' + (layout.capacity-occupied) + ' frei · Schilder ' + (paperPage*layout.capacity+1) + '–' + (paperPage*layout.capacity+occupied);
+      q('paper-occupancy').textContent = projectPlan?'Seite '+(paperPage+1)+': '+occupied+' Schilder · individuelle Größen':!valid ? 'Bitte die Druckeinstellungen prüfen.' : !layout.capacity ? 'Für diese Maße ist kein Schildplatz verfügbar.' : !labelCount ? 'Noch keine aktuellen Artikel geladen · ' + layout.capacity + (layout.capacity === 1 ? ' freier Platz.' : ' freie Plätze.') : 'Seite ' + (paperPage+1) + ': ' + occupied + ' belegt · ' + (layout.capacity-occupied) + ' frei · Schilder ' + (paperPage*layout.capacity+1) + '–' + (paperPage*layout.capacity+occupied);
       q('cut-hint').textContent = value.showBorder ? 'Schnittmarken sind bei eingeschalteter Schildumrandung inaktiv.' : value.cutMarks ? 'Dünne gestrichelte Linien folgen der Schildform und bleiben innerhalb der Schildkante.' : 'Optional für randlose Schilder: gestrichelte Linien entlang der Schildform.';
       const article = current ? items.find(item => item.articleNumber === q('picker').value) || items[0] : null;
       const shownPrice = article ? price(article.priceGross) : null, photo = value.showPhoto ? imageUrl(article?.imageUrl) : '';
       const logo = selectedLogo(value), logoUnavailable = Boolean(value.logoKitId && !logo);
-      const freeLogo = value.logoMode === 'free', editableLogo = valid && permitted() && !readOnlyTemplate();
+      const freeLogo = value.logoMode === 'free', editableLogo = valid && permitted() && draftStore.ready && !projectBusy && !saving && !libraryLoading && !readOnlyTemplate();
       form.elements.logoWidthMm.max = freeLogo ? '500' : '100'; form.elements.logoHeightMm.max = freeLogo ? '500' : '60';
       root.querySelectorAll('[data-pl-free]').forEach(node => { node.hidden = !freeLogo; });
       root.querySelectorAll('[data-pl-reserved]').forEach(node => { node.hidden = freeLogo; });
@@ -379,11 +486,11 @@
       q('logo-summary').textContent = logo ? logo.label : value.logoKitId ? 'Nicht verfügbar' : 'Ohne Logo';
       if (brandingLoaded) q('branding-status').textContent = logoUnavailable ? 'Das gespeicherte Logo ist nicht verfügbar. Bitte ein anderes wählen oder ohne Logo fortfahren.'
         : brandingMessage || (brandingKits.length ? 'Das Logo behält seine Proportionen innerhalb der gewählten Größe.' : 'Derzeit sind keine freigegebenen Logos verfügbar.');
-      elementEditor.render({value,article,price:shownPrice,photo,logo,editable:valid && permitted() && !readOnlyTemplate() && !saving && !libraryLoading});
+      elementEditor.render({value,article,price:shownPrice,photo,logo,editable:valid && permitted() && draftStore.ready && !readOnlyTemplate() && !saving && !libraryLoading&&!projectBusy});
       lastRenderedOptions = value;
       q('picker-label').hidden = items.length < 2;
-      q('download').disabled = !permitted() || busy || saving || libraryLoading || imageUploading || !current || !valid || !layout.capacity || exceedsLimit || logoUnavailable || !items.length || items.some(item => price(item.priceGross) === null);
-      q('refresh').disabled = busy;
+      q('download').disabled = projectBusy || !permitted() || busy || saving || libraryLoading || imageUploading || !current || !valid || !layout.capacity || exceedsLimit || logoUnavailable || !items.length || items.some(item => price(item.priceGross) === null);
+      q('refresh').disabled = busy||projectBusy||!draftStore.ready;
       exportForm.elements.suffix.disabled = exportForm.elements.stamp.value !== 'date-suffix';
       q('filename').textContent = filename(exportForm.elements.name.value, fileOptions());
       renderLibrary(valid && layout.capacity > 0);
@@ -408,7 +515,10 @@
         const found = new Map((Array.isArray(result.items) ? result.items : []).filter(item => articleNumbers.includes(item.articleNumber)).map(item => [item.articleNumber, item]));
         items = articleNumbers.map(articleNumber => found.get(articleNumber) || { articleNumber, description: 'Artikel nicht gefunden', priceGross: null });
         loadedKey = signature; updatedAt = result.updatedAt;
+        reconcileProjectLabels();recordDraft();
         q('picker').replaceChildren(...items.map(item => { const option = root.ownerDocument.createElement('option'); option.value = item.articleNumber; option.textContent = item.articleNumber + ' · ' + item.description; return option; }));
+        if(pendingArticleSelection&&items.some(item=>item.articleNumber===pendingArticleSelection))q('picker').value=pendingArticleSelection;
+        pendingArticleSelection='';
         const missing = items.filter(item => price(item.priceGross) === null).length;
         status(missing ? missing + ' Artikel ohne bestätigten Bruttopreis. Bitte Preisart oder Artikelauswahl prüfen.' : items.length + ' Artikel mit aktuellen Bruttopreisen geladen.', Boolean(missing));
         const timestamp = updatedAt && Number.isFinite(Date.parse(updatedAt)) ? new Intl.DateTimeFormat('de-AT', { timeZone: 'Europe/Vienna', dateStyle: 'short', timeStyle: 'short' }).format(new Date(updatedAt)) : '';
@@ -435,7 +545,7 @@
       q('logo-live').textContent = 'Logo: X ' + changed.logoXmm + ', Y ' + changed.logoYmm + ' mm · ' + changed.logoWidthMm + ' × ' + changed.logoHeightMm + ' mm.';
       if (focus) q('preview').querySelector(focus)?.focus?.({ preventScroll: true });
     }
-    const canEditLogo = () => permitted() && !readOnlyTemplate() && !saving && Boolean(form.elements.logoKitId.value);
+    const canEditLogo = () => permitted() && draftStore.ready && !projectBusy && !libraryLoading && !readOnlyTemplate() && !saving && Boolean(form.elements.logoKitId.value);
     function finishLogoDrag(event, cancel = false) {
       const drag = logoDrag;
       if (!drag || event && event.pointerId !== undefined && event.pointerId !== drag.pointerId) return;
@@ -471,7 +581,7 @@
         const dimensions={labelWidthMm:Number(form.elements.labelWidthMm.value),labelHeightMm:Number(form.elements.labelHeightMm.value)};
         if(Object.values(dimensions).every(n=>Number.isFinite(n) && n>=10 && n<=500)) {
           designBoxes={textBoxes:Object.fromEntries(Object.entries(designBoxes.textBoxes).map(([id,box])=>[id,{...box,...Design.boundedBox(dimensions,box)}])),
-            imageBoxes:designBoxes.imageBoxes.map(box=>({...box,...Design.boundedBox(dimensions,box)}))};
+            freeTextBoxes:designBoxes.freeTextBoxes.map(box=>({...box,...Design.boundedBox(dimensions,box)})),imageBoxes:designBoxes.imageBoxes.map(box=>({...box,...Design.boundedBox(dimensions,box)}))};
         }
       }
       if (event.target === q('color-text')) { if (/^#[a-f0-9]{6}$/i.test(event.target.value)) form.elements.color.value = event.target.value; }
@@ -500,23 +610,24 @@
     on(q('paper-prev'),'click',() => { if (!q('paper-prev').disabled) changePage(paperPage-1); });
     on(q('paper-next'),'click',() => { if (!q('paper-next').disabled) changePage(paperPage+1); });
     on(q('paper-page-number'),'change',() => { if (!q('paper-page-number').disabled) changePage(Number(q('paper-page-number').value)-1); });
-    on(q('picker'), 'change', render); on(exportForm, 'input', render); on(exportForm, 'change', render);
+    on(q('picker'), 'change', ()=>{const label=projectData?.labels.find(row=>row.articleNumber===q('picker').value);if(label)selectProjectLabel(label.id);else render();}); on(exportForm, 'input', render); on(exportForm, 'change', render);
     on(q('library-select'), 'change', () => {
       try { chooseTemplate(q('library-select').value); } catch (error) { q('saved').textContent = error.message; }
     });
     const newTemplate = copy => {
-      if (!permitted() || !libraryReady || library.capabilities.create !== true || saving || imageUploading) return;
+      if (!permitted() || projectBusy || !draftStore.ready || !libraryReady || library.capabilities.create !== true || saving || imageUploading) return;
       draftEpoch++; elementEditor.clear();
       const title = copy ? (q('library-title').value || selectedTemplate?.title || 'Vorlage') + ' (Kopie)' : 'Neue Vorlage';
       libraryMode = 'new'; selectedTemplate = null; fillLibrarySelect(); q('library-title').value = title.slice(0, 80);
       q('library-scope').value = library.ownBranch && library.capabilities.ownBranch === true ? 'branch' : 'private'; renderRecipients(); q('saved').textContent = ''; q('library-reload').hidden = true;
       render(); q('library-title').focus(); q('library-title').select();
+      workingDraftId=globalThis.crypto.randomUUID();recordDraft();
     };
     on(q('library-new'), 'click', () => newTemplate(false)); on(q('library-copy'), 'click', () => newTemplate(true));
     for (const field of ['library-title', 'library-scope', 'library-recipients']) on(q(field), 'change', () => { q('saved').textContent = ''; render(); });
     on(q('library-title'), 'input', () => { q('saved').textContent = ''; });
     on(q('library-reload'), 'click', async () => {
-      if (!permitted() || saving || libraryLoading || imageUploading) return; const ticket = generation, id = selectedTemplate?.id;
+      if (!permitted() || projectBusy || !draftStore.ready || saving || libraryLoading || imageUploading) return; const ticket = generation, id = selectedTemplate?.id;
       libraryLoading = true; render(); q('saved').textContent = 'Vorlagen werden aktualisiert …';
       try { if (await loadLibrary(ticket)) { chooseTemplate(library.templates.some(template => template.id === id) ? id : ''); q('saved').textContent = 'Aktueller Stand geladen.'; } }
       catch (error) { if (permitted(ticket) && error.name !== 'AbortError') q('saved').textContent = error.message; }
@@ -565,6 +676,7 @@
           }
           q('library-reload').hidden = true;
           q('saved').textContent = unchanged ? mode === 'defaults' ? 'Standardeinstellung für dein Konto gespeichert.' : 'Vorlage gespeichert.' : 'Vorlage gespeichert. Deine späteren Änderungen sind noch nicht gespeichert.';
+          recordDraft();
         }
       }
       catch (error) { if (permitted(ticket) && error.name !== 'AbortError') {
@@ -578,7 +690,8 @@
       const ticket = generation, controller = new AbortController(); controllers.add(controller); busy = true; render(); status('Preisschilder werden mit den aktuellen Artikelpreisen erstellt …');
       try {
         const body = { articleNumbers: numbers(), priceType: form.elements.priceType.value, options: options(), name: exportForm.elements.name.value, ...fileOptions() };
-        const response = await rawApi('/api/sales/price-labels/export.pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
+        recordDraft();const projectExport=projectData?.labels.length?{project:projectData,name:body.name}:null;
+        const response = await rawApi(projectExport?'/api/sales/price-labels/projects/export.pdf':'/api/sales/price-labels/export.pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(projectExport||body), signal: controller.signal });
         if (!permitted(ticket)) return; const blob = await response.blob(); if (!permitted(ticket)) return;
         const href = URL.createObjectURL(blob), link = root.ownerDocument.createElement('a'); link.href = href; link.download = filename(body.name, Object.fromEntries(Object.keys(fileDefaults).map(field => [field, body[field]]))); root.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(href), 60000);
         status('PDF-Download gestartet. Beim Drucken 100 % beziehungsweise „Tatsächliche Größe“ wählen.');
@@ -587,32 +700,46 @@
     });
     setOptions(defaults); setFileOptions(fileDefaults); render();
     function suspend() {
-      finishLogoDrag(null); elementEditor.clear(); draftEpoch++; logoSelected = false; logoDrag = null; q('logo-live').textContent = '';
+      searchWindow?.suspend();
+      recordDraft();void draftStore.flush();finishLogoDrag(null); elementEditor.clear(); logoSelected = false; logoDrag = null; q('logo-live').textContent = '';
       active = false; generation++; clearTimeout(timer); timer = null; articleReloadPending = false; for (const controller of controllers) controller.abort(); controllers.clear();
-      items = []; loadedKey = ''; updatedAt = null; busy = false; saving = false; paperPage = 0; q('picker').replaceChildren(); q('updated').textContent = 'Noch keine Artikel geladen.';
-      brandingKits = []; brandingLoaded = false; brandingMessage = ''; library = { templates: [], ownBranch: null, recipients: [], capabilities: {} };
-      fillLogoChoices(form.elements.logoKitId.value, form.elements.logoAssetKey.value);
-      libraryMode = 'defaults'; selectedTemplate = null; libraryReady = false; libraryLoading = false; fillLibrarySelect(); renderRecipients();
-      q('library-title').value = ''; q('library-scope').value = 'private'; q('library-reload').hidden = true; q('saved').textContent = ''; render();
+      busy=false;saving=false;libraryLoading=false;projectBusy=false;render();
+    }
+    function restoreWorkingDraft(savedDraft){
+      if(!savedDraft)return;
+      workingDraftId=savedDraft.draftId;setOptions(savedDraft.options);setFileOptions(savedDraft.filenameOptions);exportForm.elements.name.value=savedDraft.name;
+      if(savedDraft.project){projectData=Project.normalize(savedDraft.project.data,normalizeOptions);projectId=savedDraft.project.id;projectVersion=savedDraft.project.version;q('project-name').value=projectData.name;}
+      form.elements.articleNumbers.value=savedDraft.articleNumbers;form.elements.priceType.value=savedDraft.priceType;pendingArticleSelection=savedDraft.selectedArticleNumber;paperPage=savedDraft.paperPage;
+      libraryMode=savedDraft.library.mode;selectedTemplate=library.templates.find(row=>row.id===savedDraft.library.templateId)||null;
+      if(selectedTemplate&&savedDraft.library.templateVersion!==selectedTemplate.version){selectedTemplate={...selectedTemplate,version:savedDraft.library.templateVersion};q('saved').textContent='Die Vorlage wurde zwischenzeitlich geändert. Dein Arbeitsentwurf bleibt erhalten; zum Speichern eine Kopie anlegen oder den aktuellen Vorlagenstand laden.';}
+      if(libraryMode==='template'&&!selectedTemplate)libraryMode='new';q('library-title').value=savedDraft.library.title;q('library-scope').value=savedDraft.library.visibility;renderRecipients(savedDraft.library.recipients);fillLibrarySelect();
+      for(const [key,input] of Object.entries(savedDraft.rawSettings)){const field=form.elements[key];if(field){if(typeof input==='boolean')field.checked=input;else field.value=input;}}
     }
     const workspace = {
       async load() {
-        const nextOwner = accessKey(); if (owner !== nextOwner) { suspend(); form.elements.articleNumbers.value = ''; setOptions(defaults); setFileOptions(fileDefaults); }
+        const nextOwner = accessKey(); if (owner !== nextOwner) { suspend();searchWindow?.invalidate();for(const controller of uploadControllers)controller.abort();uploadControllers.clear();draftStore.invalidate();initialized=false;items=[];loadedKey='';libraryMode='defaults';selectedTemplate=null;projectData=null;projectId='';projectVersion=null;projectRows=[];defaultLogo=null;q('project-name').value='';form.elements.articleNumbers.value = ''; setOptions(defaults); setFileOptions(fileDefaults); }
+        if(initialized&&owner===nextOwner){active=true;generation++;searchWindow?.activate();loadedKey='';render();draftStatus();if(form.elements.articleNumbers.value.trim())void loadArticles();return;}
         active = true; owner = nextOwner; const ticket = ++generation; libraryLoading = true; status('Gespeicherte Einstellungen werden geladen …'); render();
-        const results = await Promise.allSettled([request('/api/sales/price-labels/templates'), request('/api/sales/price-labels/branding'), loadLibrary(ticket)]);
+        const results = await Promise.allSettled([request('/api/sales/price-labels/templates'), request('/api/sales/price-labels/branding'), loadLibrary(ticket),draftStore.activate()]);
         if (!permitted(ticket)) return;
         libraryLoading = false;
         if (results[1].status === 'fulfilled') {
-          brandingKits = Array.isArray(results[1].value.kits) ? results[1].value.kits : []; brandingMessage = '';
+          brandingKits = Array.isArray(results[1].value.kits) ? results[1].value.kits : []; brandingMessage = '';defaultLogo=results[1].value.defaultLogo||null;
         } else brandingMessage = 'Branding-Kits sind gerade nicht erreichbar. Du kannst ohne Logo fortfahren.';
         brandingLoaded = true;
         if (results[0].status === 'fulfilled') {
           try { const saved = results[0].value; personalDefaults = { options: normalizeOptions(saved.options || defaults), filenameOptions: saved.filenameOptions || fileDefaults };
+            if(!draftStore.value&&saved.hasSavedDefaults===false&&defaultLogo)personalDefaults.options=normalizeOptions({...personalDefaults.options,...defaultLogo});
             setOptions(personalDefaults.options); setFileOptions(personalDefaults.filenameOptions); status('Artikelnummern eingeben und die aktuellen Preise laden.');
           } catch (error) { status(error.message, true); }
         } else if (results[0].reason?.name !== 'AbortError') status(results[0].reason.message, true);
         if (results[2].status === 'rejected' && results[2].reason?.name !== 'AbortError') q('saved').textContent = 'Die Vorlagenbibliothek ist gerade nicht erreichbar. Deine Standardeinstellung kannst du weiterhin speichern.';
+        restoreWorkingDraft(draftStore.value);
+        initialized=true;recordDraft();draftStatus();
+        searchWindow?.activate();
+        void refreshProjects();
         render();
+        if(form.elements.articleNumbers.value.trim())void loadArticles();
       },
       async openArticle(article, templateId = '', {copy = false} = {}) {
         let ticket = generation;
@@ -644,8 +771,11 @@
           return false;
         }
       }, suspend,
-      destroy() { suspend(); for (const off of listeners) off(); elementEditor.destroy(); root.replaceChildren(); },
+      async flush(){recordDraft();return draftStore.flush();},
+      get hasUnsaved(){return draftStore.hasUnsaved||imageUploading;},
+      destroy() { suspend();destroyed=true;searchWindow?.destroy();for(const controller of uploadControllers)controller.abort();uploadControllers.clear();draftStore.invalidate();stopDraftSubscription();for (const off of listeners) off(); elementEditor.destroy(); root.replaceChildren(); },
     };
+    on(root.ownerDocument.defaultView,'beforeunload',event=>{if(workspace.hasUnsaved){recordDraft();void draftStore.flush();event.preventDefault();event.returnValue='';}});
     return workspace;
   }
   return { mount, defaults, labelFormats, labelFormat, applyLabelFormat, paperAdjustment, parseArticleNumbers, articleTemplateIntent, normalizeOptions, boundedLogo, logoFrame, paperLayout, pagePreview, price };

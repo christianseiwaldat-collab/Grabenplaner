@@ -8,39 +8,19 @@ const {DEFAULTS,contentBounds,viewportBounds,migrateGeometry,fit,defaultGeometry
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve,reject; const promise = new Promise((a,b) => {resolve=a;reject=b;}); return {promise,resolve,reject}; };
 
-function surface() {
-  const listeners = new Map();
-  return {addEventListener(type,fn) { if (!listeners.has(type)) listeners.set(type,new Set()); listeners.get(type).add(fn); },
-    removeEventListener(type,fn) { listeners.get(type)?.delete(fn); },
-    emit(type,options = {}) { const event = {type,target:this,button:0,pointerId:1,clientX:0,clientY:0,
-      preventDefault() {this.prevented=true;},stopPropagation() {this.stopped=true;},...options};
-      for (const fn of listeners.get(type) || []) fn(event); return event; }};
-}
+const {documentFixture}=require('./helpers/gp-window-dom');
 function domFixture(onChange, extra = {}) {
-  const win = surface(), doc = {...surface(),defaultView:win,activeElement:null}; win.visualViewport = surface();
-  function element(attributes = {},parent = null) {
-    const classes = new Set(), attrs = {...attributes}, captures = new Set();
-    const node = {...surface(),ownerDocument:doc,parent,style:{},hidden:false,offsetHeight:44,textContent:'',
-      classList:{add(...values) {values.forEach(v => classes.add(v));},remove(...values) {values.forEach(v => classes.delete(v));},
-        contains:value => classes.has(value),toggle(value,on) { if (on) classes.add(value); else classes.delete(value); }},
-      hasAttribute:key => Object.hasOwn(attrs,key),setAttribute(key,value) {attrs[key]=value;},getAttribute:key => attrs[key],
-      closest(selector) { for (let p=this;p;p=p.parent) if (selector.split(',').some(s => p.hasAttribute(s.slice(1,-1)))) return p; return null; },
-      contains(candidate) { for (let p=candidate;p;p=p.parent) if (p===this) return true; return false; },
-      focus() {doc.activeElement=this;},setPointerCapture(id) {captures.add(id);},hasPointerCapture:id => captures.has(id),
-      releasePointerCapture(id) {captures.delete(id);},querySelector(selector) {return nodes.find(n => n!==this && this.contains(n) && n.hasAttribute(selector.slice(1,-1))) || null;}};
-    return node;
-  }
-  const host=element(), title=element({'data-article-window-title':''},host), move=element({'data-article-window-move':''},title);
-  const toggle=element({'data-article-window-toggle':''},title), reset=element({'data-article-window-reset':''},title);
-  const body=element({'data-article-window-body':''},host), input=element({},body);
-  const resize=element({'data-article-window-resize':''},host), status=element({'data-article-window-status':''},host);
-  const nodes=[host,title,move,toggle,reset,body,input,resize,status], saved=[], layouts=[];
-  let bounds={left:250,top:130,width:1200,height:800}, permitted=true, scale=1.25;
-  const controller=attach(host,{window:win,bounds:() => bounds,scale:() => scale,canUse:() => permitted,
-    change:value => {saved.push(value);onChange?.(value);},resize:value => layouts.push(value),...extra});
+  const {win,doc,element}=documentFixture();
+  const host=element('section',{},doc.body),title=element('header',{'data-article-window-title':''},host),move=element('button',{'data-article-window-move':''},title);
+  const toggle=element('button',{'data-article-window-minimize':''},title),close=element('button',{'data-article-window-close':''},title);
+  const body=element('div',{'data-article-window-body':''},host),input=element('input',{},body);
+  const resize=element('button',{'data-article-window-resize':''},host),status=element('span',{'data-article-window-status':''},host);
+  const saved=[],layouts=[];let bounds={left:250,top:130,width:1200,height:800},permitted=true,scale=1.25;
+  const controller=attach(host,{window:win,bounds:()=>bounds,scale:()=>scale,canUse:()=>permitted,
+    change:value=>{saved.push(value);onChange?.(value);},resize:value=>layouts.push(value),...extra});
   controller.activate();
-  return {win,doc,host,title,move,toggle,reset,body,input,resize,status,saved,layouts,controller,
-    bounds(value) {bounds=value;},permit(value) {permitted=value;},scale(value) {scale=value;}};
+  return {win,doc,host,title,move,toggle,close,body,input,resize,status,saved,layouts,controller,
+    bounds(value){bounds=value;},permit(value){permitted=value;},scale(value){scale=value;}};
 }
 
 test('Legacy content bounds remain available for migration and convert GP zoom once', () => {
@@ -81,7 +61,7 @@ test('V1 migration preserves visible placement and preferred size; V2 is never t
   const initial=migrateGeometry(null,legacy,bounds);
   assert.equal(initial.x,640); assert.equal(initial.y,134);
   const f=domFixture(undefined,{initialGeometry:() => initial});
-  f.controller.set({...DEFAULTS,x:0,y:0}); f.reset.emit('click');
+  f.controller.set({...DEFAULTS,x:0,y:0}); f.controller.set(null);
   assert.deepEqual(f.controller.preferred,initial);
   f.controller.destroy();
 });
@@ -128,16 +108,28 @@ test('Keyboard move and corner resize are constrained; minimization preserves si
   const f=domFixture(); f.controller.set({...DEFAULTS,x:100,y:40,width:500,height:400});
   assert.equal(f.host.emit('keydown',{target:f.move,key:'ArrowRight',shiftKey:true}).prevented,true);
   f.host.emit('keydown',{target:f.resize,key:'ArrowDown'});
-  assert.equal(f.controller.preferred.x,140); assert.equal(f.controller.preferred.height,410);
+  assert.equal(f.controller.preferred.x,101); assert.equal(f.controller.preferred.height,410);
   f.host.emit('keydown',{target:f.resize,key:'End'});
-  assert.equal(f.controller.fitted.width,1060); assert.equal(f.controller.fitted.height,760);
+  assert.equal(f.controller.fitted.width,1099); assert.equal(f.controller.fitted.height,760);
   f.input.focus(); f.toggle.emit('click');
   assert.equal(f.doc.activeElement,f.toggle); assert.equal(f.body.hidden,true); assert.equal(f.resize.hidden,true);
   assert.equal(f.toggle.getAttribute('aria-expanded'),'false'); assert.equal(f.controller.fitted.height,44);
   assert.equal(f.controller.preferred.height,760);
   f.controller.restore(); assert.equal(f.body.hidden,false); assert.equal(f.controller.fitted.height,760);
-  f.reset.emit('click'); assert.deepEqual(f.controller.preferred,defaultGeometry({width:1200}));
-  assert.match(f.status.textContent,/Suchfenster:/);
+  f.controller.set(null); assert.deepEqual(f.controller.preferred,defaultGeometry({width:1200}));
+  assert.match(f.status.textContent,/Fenster:/);
+});
+
+test('Close docks search without erasing selected work; navigation preserves dock and reopening is explicitly fresh',async()=>{
+  let closed=0,fresh=0;
+  const f=domFixture(undefined,{onClose(){closed++;},onFreshSearch(){fresh++;f.input.value='';}});
+  f.input.value='Sony';f.controller.set({...DEFAULTS,width:900,height:700});
+  await f.controller.close();assert.equal(closed,1);assert.equal(f.controller.docked,true);assert.equal(f.host.hidden,true);
+  f.controller.suspend();f.controller.activate();assert.equal(f.host.hidden,true);assert.equal(f.input.value,'Sony');
+  f.controller.reopenFresh();assert.equal(fresh,1);assert.equal(f.controller.docked,false);assert.equal(f.input.value,'');
+  assert.equal(f.host.hidden,false);assert.equal(f.controller.preferred.width,900);assert.equal(f.controller.preferred.height,700);
+  f.toggle.emit('click');assert.equal(f.controller.fitted.width,260);f.controller.restore();assert.equal(f.controller.fitted.width,900);
+  f.controller.destroy();
 });
 
 function preferencesFixture(extra = {}) {

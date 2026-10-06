@@ -438,7 +438,7 @@ test("O8 verdrahtet Auswahl, Reihenfolge, Quellwechsel und Verwerfbestätigung",
   assert.match(mutations, /maximumSteps/);
 });
 
-test("O8 entfernt Entwurf und DOM bei Navigation, Logout sowie Identitäts- oder Rechtewechsel", () => {
+test("O8 pausiert bei Navigation und entfernt Entwurf bei Logout sowie Identitäts- oder Rechtewechsel", () => {
   const visibility = between(app, "function applyRoleVisibility()", "async function bootstrapApplication()");
   assert.match(visibility, /lifecycleEditorActorAccessChanged/);
   assert.match(visibility, /personnelLifecycleEditorActorAccessKey\(\)/);
@@ -448,9 +448,9 @@ test("O8 entfernt Entwurf und DOM bei Navigation, Logout sowie Identitäts- oder
   const logout = between(app, "async function logoutPortal()", "function openAdminSetup()");
   assert.match(logout, /clearPersonnelLifecycleEditorState/);
   const navigation = between(app, "function setPersonnelAdministrationTab(tab)", "function populateCostCenterTypeSelect");
-  assert.match(navigation, /normalized !== "workflows"[\s\S]*?clearPersonnelLifecycleEditorState/);
+  assert.match(navigation, /normalized !== "workflows"[\s\S]*?pausePersonnelLifecycleEditor/);
   const view = between(app, "function setView(view)", "function applyRequestedView(");
-  assert.match(view, /view !== "personnelAdministration"[\s\S]*?clearPersonnelLifecycleEditorState/);
+  assert.match(view, /view !== "personnelAdministration"[\s\S]*?pausePersonnelLifecycleEditor/);
   const purge = between(
     app,
     "function purgePersonnelLifecycleEditorDom",
@@ -461,6 +461,21 @@ test("O8 entfernt Entwurf und DOM bei Navigation, Logout sowie Identitäts- oder
   assert.match(purge, /personnelLifecycleEditorFlow\.innerHTML = ""/);
   assert.match(purge, /personnelLifecycleEditorRequestToken = null/);
   assert.match(purge, /personnelLifecycleEditorDialog\.close\(\)/);
+});
+
+test('O8 pause retains user work and invalidates validation responses; different actor purges', () => {
+  const draft = {title:'Meine Arbeit',steps:[{id:'one'}]}; let actor='employee:one';
+  const sandbox = {state:{personnelLifecycleEditorActorAccessKey:actor,personnelLifecycleEditorDraft:draft,
+    personnelLifecycleEditorDirty:true,personnelLifecycleEditorSelectedStepId:'one',personnelLifecycleEditorValidating:true},
+    elements:{personnelLifecycleEditorDialog:{open:true,close(){this.open=false;}}},
+    personnelLifecycleEditorActorAccessKey:()=>actor,clearPersonnelLifecycleEditorState(){sandbox.state.personnelLifecycleEditorDraft=null;}};
+  vm.createContext(sandbox);
+  vm.runInContext(between(app,'function pausePersonnelLifecycleEditor()', 'function setPersonnelLifecycleEditorDraftField'),sandbox);
+  vm.runInContext('pausePersonnelLifecycleEditor()',sandbox);
+  assert.equal(sandbox.state.personnelLifecycleEditorDraft,draft); assert.equal(sandbox.state.personnelLifecycleEditorDirty,true);
+  assert.equal(sandbox.state.personnelLifecycleEditorSelectedStepId,'one'); assert.equal(sandbox.state.personnelLifecycleEditorValidating,false);
+  assert.equal(sandbox.elements.personnelLifecycleEditorDialog.open,false);
+  actor='employee:two'; vm.runInContext('pausePersonnelLifecycleEditor()',sandbox); assert.equal(sandbox.state.personnelLifecycleEditorDraft,null);
 });
 
 test("O8-only öffnet den Editorbereich, aber weder Legacy-Instanzen noch Personalaufgaben", () => {

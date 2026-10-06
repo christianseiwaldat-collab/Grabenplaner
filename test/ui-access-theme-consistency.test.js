@@ -96,7 +96,7 @@ function navigationContext(permissions, options = {}) {
     "canAccessCrm", "canAccessTradeInsights", "canReadLoanManagement", "canManageBranchOrders",
     "canAccessPrivacyOrganization", "canOpenPrivacyOrganizationTab"]) context[name] = () => true;
   for (const name of ["clearUsbProvisioningPasswords", "clearPersonnelLifecycleEditorState", "clearPersonnelLifecycleAutomationState",
-    "renderContextNavigation", "applyActivePageAppearance", "syncSalesArticleSearchWindow", "loadStartDashboard",
+    "renderContextNavigation", "applyActivePageAppearance", "syncSalesArticleSearchWindow", "syncGpWindows", "syncStartDashboardVps", "loadStartDashboard",
     "loadRightsDashboard", "ensureAccessibleManagerRequestTab", "loadManagerVacationRequests", "loadLoanManagement",
     "loadBranchOrdersManagement", "renderSalesArticleCatalogResults", "syncCrmCustomerWorkspace", "loadSystemCenter"]) {
     context[name] = () => { calls.push(name); };

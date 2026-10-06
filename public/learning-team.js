@@ -4,8 +4,8 @@
   const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]));
   const labels = {fulfilled:"Erfüllt", dueSoon:"Bald fällig", expired:"Abgelaufen", missing:"Fehlt", lowerLevel:"Stufe fehlt", otherVersion:"Andere Fassung", notPassed:"Nachschulung", inProgress:"In Durchführung", notApplicable:"Nicht erforderlich"};
   function mount(host, {api}) {
-    let options, current, generation = 0, offset = 0, dialog = null;
-    function clear() { generation++; dialog?.close(); dialog?.remove(); dialog = null; options = current = null; host.replaceChildren(); }
+    let options, current, generation = 0, offset = 0, dialog = null, editingId = null;
+    function clear() { generation++; dialog?.close(); dialog?.remove(); dialog = null; editingId = null; offset = 0; options = current = null; host.replaceChildren(); }
     const query = () => { const p = new URLSearchParams(new FormData(host.querySelector("form[data-filters]"))); p.set("offset", String(offset)); return p; };
     const choices = (rows, empty) => `<option value="">${empty}</option>` + rows.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join("");
     function error(message) { const target = host.querySelector("[data-error]"); if (target) target.textContent = message; }
@@ -28,6 +28,10 @@
     }
     async function edit(id) {
       const old = options.rules.find(r => r.id === id), value = old?.payload;
+      // An open draft keeps the scope mapping and revision it was started with.
+      // A refreshed options list must never silently rebase an unsaved requirement.
+      const editorOptions = options;
+      editingId = id || "";
       dialog?.remove(); dialog = document.createElement("dialog"); dialog.className = "learning-team-dialog";
       dialog.setAttribute("aria-labelledby", "learningTeamRuleTitle");
       dialog.innerHTML = `<form><h3 id="learningTeamRuleTitle">${old ? "Anforderung bearbeiten" : "Anforderung festlegen"}</h3><div class="learning-team-fields">
@@ -45,29 +49,29 @@
       document.body.append(dialog); const form = dialog.querySelector("form");
       for (const name of ["type", "positionId", "roleId", "active"]) if (value) form.elements[name].value = String(value[name]);
       function modules() {
-        form.elements.moduleId.innerHTML = options.modules.filter(m => m.type === form.elements.type.value).map(m => `<option value="${esc(m.id)}">${esc(m.title)} · Fassung ${m.version}</option>`).join("");
-        if (value && !options.modules.some(m => m.id === value.moduleId)) form.elements.moduleId.add(new Option("Bisherige Fassung (nur archivieren)", value.moduleId));
+        form.elements.moduleId.innerHTML = editorOptions.modules.filter(m => m.type === form.elements.type.value).map(m => `<option value="${esc(m.id)}">${esc(m.title)} · Fassung ${m.version}</option>`).join("");
+        if (value && !editorOptions.modules.some(m => m.id === value.moduleId)) form.elements.moduleId.add(new Option("Bisherige Fassung (nur archivieren)", value.moduleId));
         if (value && [...form.elements.moduleId.options].some(o=>o.value===value.moduleId)) form.elements.moduleId.value = value.moduleId;
         dialog.querySelector("[data-level]").hidden = form.elements.type.value !== "skill";
       }
       function scopesForModule() {
-        const module = options.modules.find(m=>m.id===form.elements.moduleId.value), previousScope=form.elements.scope.value;
+        const module = editorOptions.modules.find(m=>m.id===form.elements.moduleId.value), previousScope=form.elements.scope.value;
         const compatible=s=>!module || module.scope.type==="organization" || module.scope.locationId===s.locationId && (module.scope.type==="location" || s.type==="department" && Number(module.scope.departmentId)===Number(s.departmentId));
-        form.elements.scope.innerHTML=options.scopes.map((s,i)=>({s,i})).filter(({s})=>compatible(s)).map(({s,i})=>`<option value="${i}">${esc(s.label)}</option>`).join("");
+        form.elements.scope.innerHTML=editorOptions.scopes.map((s,i)=>({s,i})).filter(({s})=>compatible(s)).map(({s,i})=>`<option value="${i}">${esc(s.label)}</option>`).join("");
         if([...form.elements.scope.options].some(o=>o.value===previousScope))form.elements.scope.value=previousScope;
         dialog.querySelector('[data-module-caption]').textContent=module?`${module.title} · Fassung ${module.version}`:'Bisherige Fassung bleibt beim Archivieren erhalten.';
       }
       modules(); scopesForModule(); form.elements.type.addEventListener("change", ()=>{modules();scopesForModule();});
       form.elements.moduleId.addEventListener("change",scopesForModule);
-      if (value) form.elements.scope.value = String(options.scopes.findIndex(s => s.type === value.scope.type && String(s.locationId || "") === String(value.scope.locationId || "") && Number(s.departmentId || 0) === Number(value.scope.departmentId || 0)));
+      if (value) form.elements.scope.value = String(editorOptions.scopes.findIndex(s => s.type === value.scope.type && String(s.locationId || "") === String(value.scope.locationId || "") && Number(s.departmentId || 0) === Number(value.scope.departmentId || 0)));
       dialog.querySelector("[data-close]").onclick = () => dialog.close();
       form.onsubmit = async event => {
         event.preventDefault(); const ticket = generation, target = dialog; const button = form.querySelector('[type="submit"]'); button.disabled = true;
         try {
-          const body = Object.fromEntries(new FormData(form)); body.scope = options.scopes[Number(body.scope)]; body.active = body.active === "true"; body.expectedReceipt = old?.receiptSha256 || "";
+          const body = Object.fromEntries(new FormData(form)); body.scope = editorOptions.scopes[Number(body.scope)]; body.active = body.active === "true"; body.expectedReceipt = old?.receiptSha256 || "";
           await api(base + "/requirements" + (old ? "/" + encodeURIComponent(old.id) : ""), {method:old ? "PUT" : "POST", body:JSON.stringify(body)});
           if (ticket !== generation) return;
-          target.close(); const loaded = await api(base + "/team/options"); if (ticket !== generation) return; options = loaded; ruleList(); await results();
+          target.close(); editingId = null; const loaded = await api(base + "/team/options"); if (ticket !== generation) return; options = loaded; ruleList(); await results();
         } catch (e) { if (ticket === generation) target.querySelector("[data-dialog-error]").textContent = e.message; }
         finally { button.disabled = false; }
       };
@@ -77,17 +81,29 @@
       const ticket = ++generation;
       try {
         const loaded = await api(base + "/team/options"); if (ticket !== generation) return; options = loaded;
-        host.innerHTML = `<h3>Team · Soll und Ist</h3><p>Dokumentierte Kompetenzen und Pflichtschulungen. Jede Anforderung gilt für ihre festgelegte Fassung.</p><form data-filters class="learning-team-filters">
+        const existingFilters = host.querySelector("form[data-filters]");
+        if (!existingFilters) host.innerHTML = `<h3>Team · Soll und Ist</h3><p>Dokumentierte Kompetenzen und Pflichtschulungen. Jede Anforderung gilt für ihre festgelegte Fassung.</p><form data-filters class="learning-team-filters">
           <label>Name oder Personalnummer<input name="search" maxlength="150" type="search"></label>
           <label>Filiale<select name="locationId">${choices(options.locations, "Alle freigegebenen Filialen")}</select></label>
           <label>Position<select name="positionId">${choices(options.positions, "Alle Positionen")}</select></label>
           <label>Rolle<select name="roleId">${choices(options.roles, "Alle Rollen")}</select></label>
           <label>Ansicht<select name="kind"><option value="">Alle Anforderungen</option><option value="skill">Kompetenzen</option><option value="training">Pflichtschulungen</option></select></label>
           <label>Personen pro Seite<select name="pageSize"><option>10</option><option selected>25</option><option>50</option></select></label><button type="submit">Anzeigen</button></form>
-          <p role="alert" data-error></p><div data-result></div><details class="learning-team-requirements"><summary><strong>Anforderungen verwalten</strong></summary>${options.canManage ? '<button type="button" data-new>Anforderung festlegen</button>' : ""}<div data-rules></div></details>`;
+          <p role="alert" data-error></p><div data-result></div><details class="learning-team-requirements"><summary><strong>Anforderungen verwalten</strong></summary><span data-create-rule></span><div data-rules></div></details>`;
+        const filters = host.querySelector("form[data-filters]");
+        if (existingFilters) for (const [name, rows, label] of [["locationId", options.locations, "Alle freigegebenen Filialen"], ["positionId", options.positions, "Alle Positionen"], ["roleId", options.roles, "Alle Rollen"]]) {
+          const field = filters.elements[name], previous = field.value;
+          field.innerHTML = choices(rows, label);
+          field.value = rows.some(row => String(row.id) === previous) ? previous : "";
+          if (field.value !== previous) offset = 0;
+        }
+        host.querySelector("[data-create-rule]").innerHTML = options.canManage ? '<button type="button" data-new>Anforderung festlegen</button>' : "";
+        if (dialog?.open && (!options.canManage || editingId && !options.rules.some(rule => rule.id === editingId && rule.canManage))) {
+          dialog.close(); dialog.remove(); dialog = null; editingId = null;
+        }
         host.querySelector("[data-filters]").onsubmit = event => { event.preventDefault(); offset = 0; results(); };
-        offset = 0; ruleList(); await results();
-      } catch (e) { if (ticket === generation) host.textContent = e.message; }
+        ruleList(); await results();
+      } catch (e) { if (ticket === generation) { if (host.querySelector("form[data-filters]")) error(e.message); else host.textContent = e.message; } }
     }
     host.addEventListener("click", event => {
       const button = event.target.closest("button"); if (!button || button.disabled) return;

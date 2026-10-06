@@ -330,7 +330,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // The explicit Xoffi snapshot migration is an additional classified adapter.
   // The article-sales route adds an HTTP cache header that the lexical scanner
   // counts as a direct signal; its exact classification grants no raw SQL access.
-  assert.equal(report.summary.productionDirectFiles, 95);
+  // The branch-window route likewise supplies only HTTP cache metadata;
+  // its named classification grants no driver, statement or raw SQL access.
+  assert.equal(report.summary.productionDirectFiles, 96);
   // Five archive/child operating adapters and one read-only recovery-key
   // verifier and isolated full-source measurement extend the existing indirect
   // inventory; no raw business access or productive import activation.

@@ -63,6 +63,7 @@ function tabsFixture() {
     canReadSystemCenter:() => true, canAccessTeamManagement:() => true, canManageLoanSettings:() => false,
     canManageMaintenanceSchedules:() => false, canManageOffsiteFolders:() => false, employeeProfileIsOpen:() => false,
     closeEmployeeProfile:() => {profileClosed++;}, window:{setTimeout:callback => callback()},
+    pauseEmployeeProfile:() => {profileClosed++;}, resumeEmployeeProfile:() => {},
     document:{
       body,activeElement:null, getElementById:id => elements[id] || [...settings,...team].find(button => button.id === id) || null,
       querySelectorAll:selector => selector === '[data-settings-tab]' ? settings : selector === '[data-personnel-tab]' ? team : [],

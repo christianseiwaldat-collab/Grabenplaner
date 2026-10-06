@@ -19,6 +19,7 @@ const {
 const {
   PHASE_3_SQLITE_PROVIDER_FILES,
   PHASE_3_SQLITE_PROVIDER_TEST_FILES,
+  PHASE_3_SQLITE_RAW_ACCESS_FILES,
   PHASE_5_EXPECTED_COMPILER_VERSION,
   PHASE_5_EXPECTED_DEVELOPMENT_SLICE_STATEMENT_COUNT,
   PHASE_5_EXPECTED_ORGANIZATION_DEPARTMENTS_STATEMENT_COUNT,
@@ -768,4 +769,50 @@ test("Article tools classify exact persistence modules without granting drivers 
   assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.includes("test/sales-article-catalog-other-local-route.test.js"), false);
   assert.equal(PHASE_3_SQLITE_PROVIDER_FILES.includes("lib/sales-article-search-window-preferences.js"), false,
     "The pure preference normalizer needs no production persistence exception");
+});
+
+test("Encrypted window and price-label workspace registration grants no drivers, raw SQL, facade or statements", () => {
+  const modules = [
+    "lib/sales-price-label-template-store.js",
+    "lib/sales-price-label-image-store.js",
+    "lib/sales-price-label-draft-store.js",
+    "lib/sales-price-label-project-store.js",
+    "lib/branch-window-preferences-store.js",
+    "lib/branch-window-preferences-routes.js",
+  ];
+  const fixtures = [
+    "test/sales-price-label-draft-store.test.js",
+    "test/sales-price-label-project.test.js",
+    "test/branch-window-preferences-store.test.js",
+    "test/branch-window-preferences-api.test.js",
+  ];
+  for (const file of modules) {
+    assert.equal(PHASE_3_SQLITE_PROVIDER_FILES.filter(entry => entry === file).length, 1, file);
+    assert.equal(PHASE_3_SQLITE_RAW_ACCESS_FILES.includes(file), false, `${file}: no raw SQL grant`);
+    assert.deepEqual(architectureBoundaryViolationsForText(file, fs.readFileSync(path.join(root, file), "utf8")), [], file);
+  }
+  for (const file of fixtures) {
+    assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.filter(entry => entry === file).length, 1, file);
+  }
+  for (const file of [...modules, ...fixtures]) {
+    for (const [source, kind] of [
+      ["const driver = require('node:" + "sqlite');", "sqlite-driver-import-outside-boundary"],
+      ["const driver = require('pg');", "postgresql-driver-import"],
+      ["const provider = createPersistenceProviderFacade(adapter);", "provider-facade-outside-boundary"],
+      ["const statement = definePersistenceStatement({});", "provider-statement-outside-boundary"],
+      ["const configured = process.env.DB_PROVIDER;", "provider-runtime-config-outside-boundary"],
+    ]) assert.equal(architectureBoundaryViolationsForText(file, source).some(entry => entry.kind === kind), true, `${file}: ${kind}`);
+  }
+  for (const file of [
+    "lib/sales-price-label-other-draft-store.js", "lib/sales-price-label-other-project-store.js",
+    "lib/branch-other-window-preferences-store.js", "lib/branch-other-window-preferences-routes.js",
+  ]) {
+    assert.equal(PHASE_3_SQLITE_PROVIDER_FILES.includes(file), false, file);
+    assert.equal(architectureBoundaryViolationsForText(file, "const contract = require('./persistence/contract');")
+      .some(entry => entry.kind === "provider-contract-runtime-import"), true, file);
+  }
+  assert.equal(PHASE_3_SQLITE_PROVIDER_FILES.includes("lib/gp-window-preferences.js"), false,
+    "The pure shared geometry schema needs no persistence exception");
+  assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.includes("test/branch-window-preferences-portal.test.js"), false,
+    "The pure browser adapter fixture grants no database capability");
 });

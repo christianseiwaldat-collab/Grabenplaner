@@ -3,6 +3,11 @@ const sidebarNavigationGroups = window.GrabenplanerSidebarLayout.createGroups();
 let salesPriceLabelsWorkspace = null;
 let sidebarLayout = null;
 let sidebarNotepad = null;
+let gpWindowManager = null, gpWindowActor = '', recentArticlesWindow = null;
+let startDashboardVps = null;
+const branchOrderViewStates = new Map();
+let branchOrderViewActor = '';
+let personalActionsWindow = null, personalActionsOpener = null;
 (() => {
   const storageKey = "grabenplaner-bootstrap-token";
   const parameters = new URLSearchParams(window.location.search);
@@ -251,13 +256,18 @@ const state = {
   loanManagementLoading: false,
   loanManagementRequestId: 0,
   loanManagementReturnLoanId: "",
+  loanManagementReturnContext: null,
+  loanManagementReturnSavingContext: null,
   loanManagementReturnSaving: false,
   branchOrdersManagement: null,
   branchOrdersManagementDraft: null,
+  branchOrdersManagementDraftLocationId: "",
+  branchOrdersManagementBaseline: "",
   branchOrdersManagementHistory: [],
   branchOrdersManagementLocationId: "",
   branchOrdersManagementLoading: false,
   branchOrdersManagementSaving: false,
+  branchOrdersManagementSaveContext: null,
   branchOrdersManagementRequestId: 0,
   branchOrdersManagementError: "",
   branchOrdersManagementCatalogSort: { key: "position", direction: "asc" },
@@ -354,6 +364,7 @@ const state = {
   trustLevelSettings: null,
   greetingSettings: null,
   birthdayPresentationSettings: null,
+  birthdayPresentationSettingsSavingContext: null,
   selectedRequest: null,
   selectedSicknessCase: null,
   selectedAmuReport: null,
@@ -1338,6 +1349,10 @@ function closeAdminCredentialDialogsForLogin() {
 }
 
 function showLoginGate(message = "") {
+  gpWindowManager?.synchronize();
+  recentArticlesWindow?.sync();
+  settingsDraftGuard?.clear();
+  employeeProfileBookmark = null;
   globalThis.grabenplanerNavigation?.stop();
   sidebarNavigationGroups.reset();
   loadAllGeneration++;
@@ -1534,15 +1549,34 @@ async function loadAdminPersonalActions({ append = false } = {}) {
   }
 }
 
-async function openAdminPersonalActions() {
+async function openAdminPersonalActions(event) {
   if (!elements.personalActionsAdminDialog) return;
+  const actorKey=startDashboardWorkspaceActorKey();
+  personalActionsOpener = event?.currentTarget || elements.salesArticleActionsLogButton || elements.personalActionsAdminButton;
+  syncGpWindows();
+  await gpWindowManager?.preferences.activate();
+  if (!state.portalSession?.authenticated || state.portalSession?.user?.mustChangePassword || state.portalSession?.user?.isEmployee===false || actorKey!==startDashboardWorkspaceActorKey()) return;
   elements.personalActionsAdminButton?.setAttribute("aria-expanded", "true");
-  elements.personalActionsAdminDialog.showModal();
+  if (!elements.personalActionsAdminDialog.open) elements.personalActionsAdminDialog.show();
+  if (!personalActionsWindow && window.GpWindow) {
+    const dialog=elements.personalActionsAdminDialog;
+    personalActionsWindow=window.GpWindow.attach(dialog,{nativeDialog:true,
+      title:dialog.querySelector('.modal-header'),body:dialog.querySelector('[data-personal-actions-body]'),toggle:dialog.querySelector('[data-personal-actions-minimize]'),
+      bounds:salesArticleSearchWindowBounds,scale:salesArticleSearchWindowScale,
+      geometry:gpWindowManager?.preferences.value.windows['actions:personal'] || {x:Math.max(0,(window.innerWidth-700)/2),y:100,width:700,height:480,minimized:false},
+      canUse:()=>Boolean(state.portalSession?.authenticated && !state.portalSession?.user?.mustChangePassword && state.portalSession?.user?.isEmployee!==false && dialog.open),
+      change:g=>gpWindowManager?.preferences.change('actions:personal',g),closeTarget:()=>personalActionsOpener,
+      onClose(){dialog.close();personalActionsOpener?.focus?.({preventScroll:true});}});
+    dialog.addEventListener('close',()=>personalActionsWindow?.suspend());
+  }
+  personalActionsWindow?.activate();
+  if (personalActionsWindow?.preferred.minimized) personalActionsWindow.restore();
   await loadAdminPersonalActions();
 }
 
 function closeAdminPersonalActions() {
-  if (elements.personalActionsAdminDialog?.open) elements.personalActionsAdminDialog.close();
+  if (personalActionsWindow && elements.personalActionsAdminDialog?.open) void personalActionsWindow.close();
+  else if (elements.personalActionsAdminDialog?.open) elements.personalActionsAdminDialog.close();
 }
 
 function applyCurrentManualScheduleLockResult(manualScheduleLock) {
@@ -3239,6 +3273,10 @@ async function loginToAdministration(event) {
 }
 
 async function logoutPortal() {
+  if (salesPriceLabelsWorkspace?.hasUnsaved) {
+    try {await salesPriceLabelsWorkspace.flush();} catch(error) {showToast('Der Preisschildentwurf konnte noch nicht gespeichert werden: '+error.message,true);return;}
+    if(salesPriceLabelsWorkspace.hasUnsaved){showToast('Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden.',true);return;}
+  }
   if (sidebarNotepad && !await sidebarNotepad.prepareLogout()) {
     showToast("Deine Notizen konnten noch nicht gespeichert werden. Bitte im Notizblock erneut versuchen und danach abmelden.",true);
     return;
@@ -3814,6 +3852,7 @@ function openLoanManagementReturn(loanId) {
     return;
   }
   state.loanManagementReturnLoanId = loan.id;
+  state.loanManagementReturnContext={id:loan.id,revision:Number(loan.revision),actor:startDashboardWorkspaceActorKey()};
   elements.loanManagementReturnTitle.textContent = `${loan.borrower?.employeeNumber || ""} · ${loan.borrower?.name || "Leihe"}`;
   elements.loanManagementReturnSubtitle.textContent = `${loan.location?.id || ""} · ${loan.location?.name || ""} · Revision ${Number(loan.revision || 1)}`;
   elements.loanManagementReturnItems.innerHTML = (loan.items || []).map((item) => `
@@ -3838,6 +3877,8 @@ function openLoanManagementReturn(loanId) {
 async function submitLoanManagementReturn(event) {
   event.preventDefault();
   if (!canDirectlyReturnManagedLoan() || state.loanManagementReturnSaving) return;
+  const returnContext=state.loanManagementReturnContext;
+  if(!returnContext || returnContext.actor!==startDashboardWorkspaceActorKey() || returnContext.id!==state.loanManagementReturnLoanId)return;
   const loan = (state.loanManagement?.loans || []).find((entry) => entry.id === state.loanManagementReturnLoanId);
   if (!loan || loan.status !== "issued") {
     elements.loanManagementReturnStatus.textContent = "Diese Leihe ist nicht mehr offen. Bitte die Übersicht aktualisieren.";
@@ -3854,30 +3895,37 @@ async function submitLoanManagementReturn(event) {
     note: row.querySelector("[data-loan-return-note]").value,
   }));
   state.loanManagementReturnSaving = true;
+  state.loanManagementReturnSavingContext = returnContext;
   elements.loanManagementReturnSubmit.disabled = true;
   elements.loanManagementReturnStatus.textContent = "Rücknahmebeleg wird erstellt und die Leihe abgeschlossen.";
   try {
     const result = await api(`/api/portal/v1/loans/${encodeURIComponent(loan.id)}/return`, {
       method: "POST",
       body: JSON.stringify({
-        expectedRevision: Number(loan.revision),
+        expectedRevision: returnContext.revision,
         items,
         note: elements.loanManagementReturnNote.value,
       }),
     });
+    if(returnContext.actor!==startDashboardWorkspaceActorKey() || state.loanManagementReturnContext!==returnContext)return;
     if (result?.direct !== true || result?.loan?.status !== "returned") {
       throw new Error("Die direkte Rücknahme wurde nicht bestätigt. Bitte die Übersicht aktualisieren.");
     }
     elements.loanManagementReturnDialog.close();
     state.loanManagementReturnLoanId = "";
+    state.loanManagementReturnContext=null;
     showToast("Leihe wurde durch die Filialleitung direkt zurückgenommen.");
     await loadLoanManagement();
   } catch (error) {
+    if(returnContext.actor!==startDashboardWorkspaceActorKey() || state.loanManagementReturnSavingContext!==returnContext)return;
     elements.loanManagementReturnStatus.textContent = error.message;
     showToast(error.message, true);
   } finally {
-    state.loanManagementReturnSaving = false;
-    elements.loanManagementReturnSubmit.disabled = false;
+    if(returnContext.actor===startDashboardWorkspaceActorKey() && state.loanManagementReturnSavingContext===returnContext){
+      state.loanManagementReturnSavingContext=null;
+      state.loanManagementReturnSaving = false;
+      elements.loanManagementReturnSubmit.disabled = false;
+    }
   }
 }
 
@@ -4347,13 +4395,34 @@ function renderBranchOrdersManagement() {
   renderBranchOrdersManagementHistory();
 }
 
-async function loadBranchOrdersManagement(locationId = selectedBranchOrdersManagementLocationId()) {
+function rememberBranchOrderView(){
+  const actor=startDashboardWorkspaceActorKey();
+  if(actor!==branchOrderViewActor){branchOrderViewStates.clear();branchOrderViewActor=actor;return;}
+  const location=state.branchOrdersManagementDraftLocationId;
+  if(!location || !state.branchOrdersManagementDraft)return;
+  captureBranchOrdersManagementDraft();
+  branchOrderViewStates.set(location,{settings:state.branchOrdersManagement,draft:state.branchOrdersManagementDraft,baseline:state.branchOrdersManagementBaseline,
+    history:state.branchOrdersManagementHistory,editing:state.branchOrdersManagementCatalogEditingId,search:state.branchOrdersManagementCatalogSearch,
+    unitEditing:state.branchOrdersManagementUnitEditingId,sort:state.branchOrdersManagementCatalogSort,unitSort:state.branchOrdersManagementUnitSort});
+}
+async function loadBranchOrdersManagement(locationId = selectedBranchOrdersManagementLocationId(),{discardDraft=false}={}) {
   if (!canManageBranchOrders()) return;
+  rememberBranchOrderView();
+  const actor=startDashboardWorkspaceActorKey();
   const normalizedLocationId = String(locationId || "").trim();
+  let retained=branchOrderViewStates.get(normalizedLocationId);
+  if(discardDraft && retained && JSON.stringify(retained.draft)!==retained.baseline){
+    if(!window.confirm('Ungespeicherte Änderungen dieser Filialbestellung verwerfen und den aktuellen Stand laden?'))return;
+    branchOrderViewStates.delete(normalizedLocationId);retained=null;
+  }
   state.branchOrdersManagementLocationId = normalizedLocationId;
-  state.branchOrdersManagementCatalogEditingId = "";
-  state.branchOrdersManagementCatalogSearch = "";
-  state.branchOrdersManagementUnitEditingId = "";
+  state.branchOrdersManagementDraftLocationId=normalizedLocationId;
+  state.branchOrdersManagement=retained?.settings || null;state.branchOrdersManagementDraft=retained?.draft || null;
+  state.branchOrdersManagementBaseline=retained?.baseline || '';state.branchOrdersManagementHistory=retained?.history || [];
+  state.branchOrdersManagementCatalogEditingId = retained?.editing || "";
+  state.branchOrdersManagementCatalogSearch = retained?.search || "";
+  state.branchOrdersManagementUnitEditingId = retained?.unitEditing || "";
+  if(retained){state.branchOrdersManagementCatalogSort=retained.sort;state.branchOrdersManagementUnitSort=retained.unitSort;}
   if (!normalizedLocationId) {
     state.branchOrdersManagement = null;
     state.branchOrdersManagementDraft = null;
@@ -4372,20 +4441,26 @@ async function loadBranchOrdersManagement(locationId = selectedBranchOrdersManag
       api(`/api/portal/v1/branch-orders/settings?${query}`),
       api(`/api/portal/v1/branch-orders/history?${query}&limit=50`),
     ]);
-    if (requestId !== state.branchOrdersManagementRequestId) return;
-    state.branchOrdersManagement = settings;
-    state.branchOrdersManagementDraft = clonedBranchOrdersManagementConfiguration(settings.configuration);
+    if (actor!==startDashboardWorkspaceActorKey() || !canManageBranchOrders() || requestId !== state.branchOrdersManagementRequestId) return;
+    const dirty=state.branchOrdersManagementDraft && JSON.stringify(state.branchOrdersManagementDraft)!==state.branchOrdersManagementBaseline;
+    if(dirty){
+      if(JSON.stringify(state.branchOrdersManagement?.configuration)!==JSON.stringify(settings.configuration))setBranchOrdersManagementMessage('Die Konfiguration wurde parallel geändert. Dein Entwurf bleibt erhalten; vor dem Speichern bitte neu abgleichen.',true);
+      state.branchOrdersManagement={...settings,configuration:state.branchOrdersManagement.configuration,configurationVersion:state.branchOrdersManagement.configurationVersion};
+    }else{
+      state.branchOrdersManagement = settings;
+      state.branchOrdersManagementDraft = clonedBranchOrdersManagementConfiguration(settings.configuration);
+      state.branchOrdersManagementBaseline=JSON.stringify(state.branchOrdersManagementDraft);
+    }
     state.branchOrdersManagementHistory = history.orders || [];
   } catch (error) {
-    if (requestId !== state.branchOrdersManagementRequestId) return;
-    state.branchOrdersManagement = null;
-    state.branchOrdersManagementDraft = null;
-    state.branchOrdersManagementHistory = [];
+    if (actor!==startDashboardWorkspaceActorKey() || requestId !== state.branchOrdersManagementRequestId) return;
+    if([401,403].includes(error.status)){state.branchOrdersManagement=null;state.branchOrdersManagementDraft=null;state.branchOrdersManagementHistory=[];branchOrderViewStates.clear();}
     state.branchOrdersManagementError = error.message;
   } finally {
     if (requestId === state.branchOrdersManagementRequestId) {
       state.branchOrdersManagementLoading = false;
       renderBranchOrdersManagement();
+      rememberBranchOrderView();
     }
   }
 }
@@ -4441,6 +4516,8 @@ async function saveBranchOrdersManagement() {
   const locationId = selectedBranchOrdersManagementLocationId();
   const draft = captureBranchOrdersManagementDraft();
   if (!locationId || !draft || state.branchOrdersManagementSaving) return;
+  const actor=startDashboardWorkspaceActorKey(),submitted=JSON.stringify(draft),expectedVersion=state.branchOrdersManagement?.configurationVersion;
+  const saveContext={actor,locationId};
   const requiresPdfDelivery = draft.recipients.some((recipient) => (
     recipient.primaryDeliveryMode !== "message"
     || (recipient.ccEmail && recipient.ccDeliveryMode !== "message")
@@ -4453,27 +4530,44 @@ async function saveBranchOrdersManagement() {
     return;
   }
   state.branchOrdersManagementSaving = true;
+  state.branchOrdersManagementSaveContext = saveContext;
   setBranchOrdersManagementMessage("Bestellkonfiguration wird gespeichert …");
   renderBranchOrdersManagement();
   try {
     const result = await api("/api/portal/v1/branch-orders/settings", {
       method: "PUT",
-      body: JSON.stringify({ locationId, configuration: draft }),
+      body: JSON.stringify({ locationId, configuration: JSON.parse(submitted),...(expectedVersion?{expectedVersion}:{}) }),
     });
+    if(actor!==startDashboardWorkspaceActorKey() || !canManageBranchOrders() || state.branchOrdersManagementSaveContext!==saveContext)return;
+    const savedDraft=clonedBranchOrdersManagementConfiguration(result.configuration),baseline=JSON.stringify(savedDraft);
+    if(state.branchOrdersManagementDraftLocationId!==locationId){
+      const cached=branchOrderViewStates.get(locationId),laterChanges=cached?.draft && JSON.stringify(cached.draft)!==submitted;
+      branchOrderViewStates.set(locationId,{...cached,settings:result,draft:laterChanges?cached.draft:savedDraft,baseline,
+        history:cached?.history||[],editing:laterChanges?cached.editing:'',search:cached?.search||'',unitEditing:laterChanges?cached.unitEditing:'',
+        sort:cached?.sort||{key:'position',direction:'asc'},unitSort:cached?.unitSort||{key:'position',direction:'asc'}});
+      return;
+    }
+    const laterChanges=JSON.stringify(state.branchOrdersManagementDraft)!==submitted;
     state.branchOrdersManagement = result;
-    state.branchOrdersManagementDraft = clonedBranchOrdersManagementConfiguration(result.configuration);
-    state.branchOrdersManagementCatalogEditingId = "";
-    state.branchOrdersManagementUnitEditingId = "";
+    if(!laterChanges)state.branchOrdersManagementDraft = savedDraft;
+    state.branchOrdersManagementBaseline=baseline;
+    if(!laterChanges){state.branchOrdersManagementCatalogEditingId = "";state.branchOrdersManagementUnitEditingId = "";}
     const history = await api(`/api/portal/v1/branch-orders/history?locationId=${encodeURIComponent(locationId)}&limit=50`);
+    if(actor!==startDashboardWorkspaceActorKey() || state.branchOrdersManagementDraftLocationId!==locationId)return;
     state.branchOrdersManagementHistory = history.orders || [];
-    setBranchOrdersManagementMessage("Bestellkonfiguration wurde gespeichert.");
+    setBranchOrdersManagementMessage(laterChanges?'Bestellkonfiguration gespeichert. Neuere Eingaben sind weiterhin ungespeichert.':"Bestellkonfiguration wurde gespeichert.");
     showToast("Filialbestellkonfiguration wurde gespeichert.");
   } catch (error) {
+    if(actor!==startDashboardWorkspaceActorKey() || state.branchOrdersManagementSaveContext!==saveContext)return;
     setBranchOrdersManagementMessage(error.message, true);
     showToast(error.message, true);
   } finally {
-    state.branchOrdersManagementSaving = false;
-    renderBranchOrdersManagement();
+    if(actor===startDashboardWorkspaceActorKey() && state.branchOrdersManagementSaveContext===saveContext){
+      state.branchOrdersManagementSaveContext=null;
+      state.branchOrdersManagementSaving = false;
+      renderBranchOrdersManagement();
+      rememberBranchOrderView();
+    }
   }
 }
 
@@ -6912,6 +7006,9 @@ function renderMaintenanceSchedules() {
 
 async function loadMaintenanceSchedules({ announce = false } = {}) {
   if (!canManageMaintenanceSchedules() || state.maintenanceSchedulesLoadState === "loading" || state.maintenanceSchedulesPending) return false;
+  if (state.maintenanceSchedulesLoadState === 'changed') {
+    if (!announce || !confirm('Ungespeicherte Zeitplanänderungen verwerfen und neu laden?')) return false;
+  }
   state.maintenanceSchedulesLoadState = "loading";
   state.maintenanceSchedulesMessage = "Zeitpläne werden geladen …";
   renderMaintenanceSchedules();
@@ -10173,7 +10270,29 @@ function openEmployeeProfile(employeeNumber, trigger = null) {
   loadEmployeeProfileTab(initialTab, normalizedEmployeeNumber);
 }
 
+let employeeProfileBookmark = null;
+function pauseEmployeeProfile() {
+  if (!employeeProfileIsOpen()) return;
+  const bookmark = {number: state.employeeProfileEmployeeNumber, tab: state.employeeProfileTab,
+    host: state.employeeProfileHost, actor: currentAdminPersonalActionsActorKey()};
+  closeEmployeeProfile({restoreFocus: false});
+  employeeProfileBookmark = bookmark;
+}
+function resumeEmployeeProfile(host) {
+  const saved = employeeProfileBookmark;
+  if (!saved || saved.host !== host || saved.actor !== currentAdminPersonalActionsActorKey()) return;
+  if (host === 'team' && !canOpenTeamEmployeeProfileFoundation(saved.number)) return;
+  if (host === 'administration' && !canOpenEmployeeProfileFoundation()) return;
+  employeeProfileBookmark = null;
+  const opener = host === 'team' ? {dataset: {teamEmployeeProfileAccess: 'true'}} : null;
+  openEmployeeProfile(saved.number, opener);
+  if (saved.tab !== state.employeeProfileTab) {
+    state.employeeProfileTab = saved.tab;
+    loadEmployeeProfileTab(saved.tab, saved.number);
+  }
+}
 function closeEmployeeProfile({ restoreFocus = true } = {}) {
+  employeeProfileBookmark = null;
   const returnFocus = state.employeeProfileReturnFocus;
   state.employeeProfileRequestToken = Symbol("employee-profile-closed");
   state.employeeProfileOpen = false;
@@ -17904,13 +18023,16 @@ async function loadPersonnelLifecycleEditorCatalog() {
     }
     const catalog = normalizePersonnelLifecycleEditorCatalog(result);
     const workflowType = catalog.workflowTypes[0];
-    const draft = createPersonnelLifecycleEditorDraft(workflowType);
+    const retained = state.personnelLifecycleEditorDraft;
+    const draft = retained || createPersonnelLifecycleEditorDraft(workflowType);
     state.personnelLifecycleEditorCatalog = catalog;
     state.personnelLifecycleEditorCatalogLoaded = true;
     state.personnelLifecycleEditorDraft = draft;
-    state.personnelLifecycleEditorPristineDraft = clonePersonnelLifecycleEditorDraft(draft);
-    state.personnelLifecycleEditorSelectedStepId = draft.steps[0].id;
-    state.personnelLifecycleEditorDirty = false;
+    if (!retained) {
+      state.personnelLifecycleEditorPristineDraft = clonePersonnelLifecycleEditorDraft(draft);
+      state.personnelLifecycleEditorSelectedStepId = draft.steps[0].id;
+      state.personnelLifecycleEditorDirty = false;
+    }
     state.personnelLifecycleEditorValidation = null;
     setPersonnelLifecycleEditorStatus(
       canWritePersonnelLifecycleEditorDraft()
@@ -17920,13 +18042,13 @@ async function loadPersonnelLifecycleEditorCatalog() {
   } catch (error) {
     if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
     const denied = [401, 403].includes(error.status);
-    clearPersonnelLifecycleEditorState(
-      denied
-        ? "Der O8-Editorzugriff ist nicht mehr verfügbar."
-        : "Der O8-Katalog konnte nicht sicher geladen werden.",
-      { closeDialog: denied, restoreFocus: false },
-    );
-    if (denied) applyRoleVisibility();
+    if(denied){
+      clearPersonnelLifecycleEditorState("Der O8-Editorzugriff ist nicht mehr verfügbar.",{closeDialog:true,restoreFocus:false});
+      applyRoleVisibility();
+    }else{
+      state.personnelLifecycleEditorError=error.message || "Der O8-Katalog konnte nicht geladen werden. Der Arbeitsentwurf bleibt erhalten.";
+      setPersonnelLifecycleEditorStatus(state.personnelLifecycleEditorError,true);
+    }
     return;
   } finally {
     if (state.personnelLifecycleEditorRequestToken === requestToken) {
@@ -17943,11 +18065,28 @@ async function loadPersonnelLifecycleEditorCatalog() {
 
 function openPersonnelLifecycleEditor(opener) {
   if (!canReadPersonnelLifecycleEditorCatalog() || !elements.personnelLifecycleEditorDialog) return;
-  clearPersonnelLifecycleEditorState("", { closeDialog: false });
+  const retained = state.personnelLifecycleEditorDraft
+    && state.personnelLifecycleEditorActorAccessKey === personnelLifecycleEditorActorAccessKey();
+  if (!retained) clearPersonnelLifecycleEditorState("", { closeDialog: false });
   state.personnelLifecycleEditorReturnFocus = opener || null;
   elements.personnelLifecycleEditorDialog.showModal();
   renderPersonnelLifecycleEditor();
   loadPersonnelLifecycleEditorCatalog().catch(() => {});
+}
+
+function pausePersonnelLifecycleEditor() {
+  if (state.personnelLifecycleEditorActorAccessKey
+    && state.personnelLifecycleEditorActorAccessKey !== personnelLifecycleEditorActorAccessKey()) {
+    clearPersonnelLifecycleEditorState('', {closeDialog: true, restoreFocus: false}); return;
+  }
+  state.personnelLifecycleEditorRequestToken = null;
+  state.personnelLifecycleEditorLoading = false;
+  state.personnelLifecycleEditorValidating = false;
+  state.personnelLifecycleEditorValidation = null;
+  if (elements.personnelLifecycleEditorDialog?.open) {
+    state.personnelLifecycleEditorDiscardBypass = true;
+    elements.personnelLifecycleEditorDialog.close();
+  }
 }
 
 function setPersonnelLifecycleEditorDraftField(field, value) {
@@ -20579,6 +20718,7 @@ function startDashboardWorkspaceActorKey() {
 function startDashboardWorkspaceFieldAllowed(id) {
   if (!canUseStartDashboardWorkspace()) return false;
   if (id === "control:center") return accessibleDashboardModes().length > 0;
+  if (id === "control:vps") return canReadStartDashboardVps();
   const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
   const visibleCard = cardId => startDashboardCardAccessible(cardId) && !preferences.hidden.includes(cardId);
   if (id.startsWith("card:")) return visibleCard(id.slice(5));
@@ -20590,6 +20730,7 @@ function startDashboardWorkspaceFieldAllowed(id) {
 }
 
 function syncStartDashboardWorkspace() {
+  syncGpWindows();
   syncSidebarNotepad();
   const actorKey = startDashboardWorkspaceActorKey();
   if (actorKey !== startDashboardPreferenceActorKey) {
@@ -20603,10 +20744,55 @@ function syncStartDashboardWorkspace() {
       canUse: canUseStartDashboardWorkspace, allowed: startDashboardWorkspaceFieldAllowed,
       localOnly: isLocalStartDashboardWorkspace,
       storage: {getItem: key => window.localStorage.getItem(key), setItem: (key, value) => window.localStorage.setItem(key, value)}, api,
-      onApply: ({store}) => {if (elements.startDashboardResetButton) elements.startDashboardResetButton.disabled = !store.ready;},
+      onApply: ({store}) => {if (elements.startDashboardResetButton) elements.startDashboardResetButton.disabled = !store.ready;syncStartDashboardControlChoices();startDashboardVps?.sync();},
       error: error => showToast(`Dashboard-Einstellungen konnten nicht gespeichert oder geladen werden: ${error.message}`, true),
     });
   } else startDashboardWorkspace.sync();
+  syncStartDashboardControlChoices();syncStartDashboardVps();
+}
+
+function canReadStartDashboardVps(){return canUseStartDashboardWorkspace() && !isLocalStartDashboardWorkspace() && state.portalStatus?.operationMode==='server' && canReadSystemCenter() && (state.portalSession?.user?.permissions || []).includes('system:diagnostics:technical');}
+function syncStartDashboardControlChoices(){
+  for(const [id,control] of [['control:center','startDashboardCenterVisible'],['control:vps','startDashboardVpsVisible']]){
+    const input=document.getElementById(control);if(!input)continue;
+    input.checked=startDashboardWorkspace?.isVisible(id)!==false;input.disabled=!startDashboardWorkspace?.store.ready || !startDashboardWorkspaceFieldAllowed(id);
+    input.closest('label')?.classList.toggle('hidden',!startDashboardWorkspaceFieldAllowed(id));
+  }
+}
+function syncStartDashboardVps(){
+  const card=document.getElementById('startDashboardVpsCard');if(!card)return;
+  card.classList.toggle('hidden',!canReadStartDashboardVps());
+  if(!startDashboardVps && window.StartDashboardVps)startDashboardVps=window.StartDashboardVps.mount(card,{api,key:startDashboardWorkspaceActorKey,
+    canUse:canReadStartDashboardVps,active:()=>state.currentView==='startDashboard' && startDashboardWorkspace?.isVisible('control:vps')!==false});
+  startDashboardVps?.sync();
+}
+
+function syncGpWindows() {
+  if (!window.GpWindow) return;
+  const key = state.portalSession?.authenticated ? startDashboardWorkspaceActorKey() : '';
+  const canUse=()=>Boolean(state.portalSession?.authenticated && !state.portalSession?.user?.mustChangePassword);
+  if (!gpWindowManager) gpWindowManager=window.GpWindow.installDocument(document,{actorKey:()=>gpWindowActor,canUse,api,
+    scale:salesArticleSearchWindowScale,error:error=>showToast('Fenstereinstellungen: '+error.message,true)});
+  if (key !== gpWindowActor) {
+    gpWindowActor=key;gpWindowManager.synchronize();personalActionsWindow?.destroy();personalActionsWindow=null;
+    branchOrderViewStates.clear();branchOrderViewActor=startDashboardWorkspaceActorKey();
+    state.branchOrdersManagementRequestId++;state.branchOrdersManagement=null;state.branchOrdersManagementDraft=null;state.branchOrdersManagementBaseline='';state.branchOrdersManagementDraftLocationId='';state.branchOrdersManagementHistory=[];state.branchOrdersManagementLoading=false;state.branchOrdersManagementSaving=false;state.branchOrdersManagementSaveContext=null;
+    state.loanManagementReturnContext=null;state.loanManagementReturnLoanId='';state.loanManagementReturnSaving=false;state.loanManagementReturnSavingContext=null;
+    if (elements.personalActionsAdminDialog?.open) elements.personalActionsAdminDialog.close();
+    settingsDraftGuard?.clear();employeeProfileBookmark=null;state.birthdayPresentationSettingsSavingContext=null;
+  }
+  if (!recentArticlesWindow && window.SalesRecentArticles) recentArticlesWindow=window.SalesRecentArticles.mount({
+    dock:document.getElementById('sidebarRecentArticlesButton'),key:currentSalesArticleCatalogDetailAccessKey,
+    canUse:()=>canReadSalesArticles() && state.portalSession?.user?.isEmployee !== false,
+    active:()=>state.currentView==='articleCatalog',api,
+    columns:availableSalesArticleColumns,bounds:salesArticleSearchWindowBounds,scale:salesArticleSearchWindowScale,
+    windowPreferences:gpWindowManager.preferences,openArticle:number=>void loadSalesArticleCatalogDetail(number,{moveFocus:true}),
+    cell:(row,id)=>SALES_ARTICLE_CATALOG_COLUMNS.find(c=>c.id===id)?.price?row[id]==null?'–':salesArticleCatalogMoney(row[id],'EUR'):row[id],
+    error:error=>showToast('Artikelverlauf: '+error.message,true)});
+  recentArticlesWindow?.sync();
+  const articleDock=document.getElementById('sidebarArticleSearchButton'), priceDock=document.getElementById('sidebarPriceLabelSearchButton');
+  if(articleDock)articleDock.hidden=state.currentView!=='articleCatalog'||!canReadSalesArticles();
+  if(priceDock)priceDock.hidden=state.currentView!=='priceLabels'||!canUseSalesPriceLabels();
 }
 
 function syncSidebarNotepad() {
@@ -21894,7 +22080,7 @@ function setPersonnelAdministrationTab(tab) {
     || state.personnelLifecycleEditorValidation
     || state.personnelLifecycleEditorError
     || elements.personnelLifecycleEditorDialog?.open
-  )) clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus: false });
+  )) pausePersonnelLifecycleEditor();
   if (normalized !== "tasks" && (
     state.personnelLifecycleAutomationCatalog
     || state.personnelLifecycleAutomationPreview
@@ -21903,7 +22089,8 @@ function setPersonnelAdministrationTab(tab) {
     || state.personnelLifecycleAutomationLoading
     || state.personnelLifecycleAutomationError
   )) clearPersonnelLifecycleAutomationState();
-  if (normalized !== "employees" && employeeProfileIsOpen()) closeEmployeeProfile({ restoreFocus: false });
+  if (normalized !== "employees" && employeeProfileIsOpen()) pauseEmployeeProfile();
+  if (normalized === "employees" && state.currentView === 'personnelAdministration') resumeEmployeeProfile('administration');
   state.personnelAdministrationTab = normalized;
   document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => {
     const active = button.dataset.personnelAdministrationTab === normalized;
@@ -22479,6 +22666,7 @@ async function saveScheduleDutyColors({ silent = false } = {}) {
   if (!silent) showToast("Unternehmensweite Dienstfarben wurden gespeichert.");
 }
 
+const settingsDraftGuard = globalThis.GrabenplanerFormDraftGuard?.create(elements.settingsView);
 function renderSettings() {
   const settings = state.data.settings;
   const vacationSettings = state.vacationData?.settings || settings;
@@ -22579,6 +22767,7 @@ function renderSettings() {
   localStorage.setItem(rememberContextCacheKey("vacations"), elements.rememberLastVacationOverallPlan.checked ? "1" : "0");
   renderPortalAccessState();
   renderMaintenanceSchedules();
+  settingsDraftGuard?.restore();
   updatePdfPreview();
 }
 
@@ -26864,8 +27053,12 @@ async function saveMobileLeadershipSettings() {
 
 async function loadAmuSettings() {
   if (!elements.amuSettingsCard) return;
+  if(state.amuPolicy && settingsDraftGuard?.hasDraft(elements.amuSettingsCard))return;
+  const actor=startDashboardWorkspaceActorKey();
   try {
     const result = await api("/api/portal/v1/amu-settings");
+    if(actor!==startDashboardWorkspaceActorKey())return;
+    if(state.amuPolicy && settingsDraftGuard?.hasDraft(elements.amuSettingsCard))return;
     const policy = result.policy || {};
     state.amuPolicy = policy;
     elements.amuUploadMaxMb.value = Number(policy.uploadMaxMb || 10);
@@ -26882,13 +27075,17 @@ async function loadAmuSettings() {
     [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuOcrEnabled, elements.sicknessLocalWarningDays, elements.sicknessHrWarningDays, elements.sicknessAumAllowanceEnabled, elements.sicknessAumAllowanceMaxCases, elements.sicknessAumAllowanceMaxDays, elements.amuAutoReviewTrustA, elements.saveAmuSettingsButton]
       .forEach((control) => { if (control) control.disabled = !result.canChange; });
     elements.amuSettingsHint.textContent = result.canChange ? "Änderbar durch Admin oder Personalleitung." : "Nur Admin oder Personalleitung kann diese Werte ändern.";
+    settingsDraftGuard?.restore();
   } catch (error) {
+    if(actor!==startDashboardWorkspaceActorKey())return;
     elements.amuSettingsCard.classList.toggle("hidden", error.status === 403);
     elements.amuSettingsHint.textContent = error.message;
   }
 }
 
 async function saveAmuSettings() {
+  const actor=startDashboardWorkspaceActorKey();
+  const sent=new Map([...(settingsDraftGuard?.snapshot(elements.amuSettingsCard)||[])].filter(([id])=>id!=='amuManagerDefaultAccess'&&!id.startsWith('amu-manager-access-')));
   try {
     const result = await api("/api/portal/v1/amu-settings", {
       method: "PUT",
@@ -26908,10 +27105,12 @@ async function saveAmuSettings() {
         autoReviewTrustA: elements.amuAutoReviewTrustA.checked,
       }),
     });
+    if(actor!==startDashboardWorkspaceActorKey())return;
+    settingsDraftGuard?.acknowledge(sent||new Map());
     state.amuPolicy = result.policy;
     showToast("AUM-Einstellungen wurden gespeichert.");
     await loadAmuSettings();
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { if(actor===startDashboardWorkspaceActorKey())showToast(error.message, true); }
 }
 
 function renderAmuAccessPolicy(result = state.amuAccessPolicy) {
@@ -26929,7 +27128,7 @@ function renderAmuAccessPolicy(result = state.amuAccessPolicy) {
     const effectiveLabel = manager.routingEligible ? "Filialleitung zuständig" : "Personalleitung zuständig";
     return `<article class="amu-manager-access-row">
       <div class="amu-manager-access-person"><strong>${escapeHtml(manager.employeeNumber)} · ${escapeHtml(manager.nickname || manager.fullName || "Filialleitung")}</strong><small>${escapeHtml(locations)}${manager.active ? (manager.passwordConfigured ? "" : " · noch kein Passwort") : " · Zugang inaktiv"}</small></div>
-      <label class="field"><span>Persönliche Regel</span><select data-amu-manager-access="${escapeHtml(manager.employeeNumber)}" ${canChange ? "" : "disabled"}>
+      <label class="field"><span>Persönliche Regel</span><select id="amu-manager-access-${escapeHtml(manager.employeeNumber)}" data-amu-manager-access="${escapeHtml(manager.employeeNumber)}" ${canChange ? "" : "disabled"}>
         <option value="inherit" ${manager.accessMode === "inherit" ? "selected" : ""}>${escapeHtml(inheritedLabel)}</option>
         <option value="allow" ${manager.accessMode === "allow" ? "selected" : ""}>Persönlich erlaubt</option>
         <option value="deny" ${manager.accessMode === "deny" ? "selected" : ""}>Entzogen · PL übernimmt</option>
@@ -26945,18 +27144,25 @@ function renderAmuAccessPolicy(result = state.amuAccessPolicy) {
 async function loadAmuAccessPolicy() {
   const section = elements.amuManagerDefaultAccess?.closest(".amu-access-policy");
   if (!section) return;
+  if(state.amuAccessPolicy && settingsDraftGuard?.hasDraft(section))return;
+  const actor=startDashboardWorkspaceActorKey();
   try {
     const result = await api("/api/portal/v1/amu-access-policy");
+    if(actor!==startDashboardWorkspaceActorKey())return;
+    if(state.amuAccessPolicy && settingsDraftGuard?.hasDraft(section))return;
     state.amuAccessPolicy = result;
     section.classList.remove("hidden");
     renderAmuAccessPolicy(result);
+    settingsDraftGuard?.restore();
   } catch (error) {
+    if(actor!==startDashboardWorkspaceActorKey())return;
     section.classList.toggle("hidden", error.status === 403);
     if (error.status !== 403) elements.amuAccessPolicyHint.textContent = error.message;
   }
 }
 
 async function saveAmuAccessPolicy() {
+  const actor=startDashboardWorkspaceActorKey(),sent=settingsDraftGuard?.snapshot(elements.amuManagerDefaultAccess?.closest('.amu-access-policy'));
   const overrides = [...elements.amuManagerAccessList.querySelectorAll("[data-amu-manager-access]")].map((select) => ({
     employeeNumber: select.dataset.amuManagerAccess,
     accessMode: select.value,
@@ -26970,13 +27176,16 @@ async function saveAmuAccessPolicy() {
         overrides,
       }),
     });
+    if(actor!==startDashboardWorkspaceActorKey())return;
+    settingsDraftGuard?.acknowledge(sent||new Map());
     state.amuAccessPolicy = result;
     renderAmuAccessPolicy(result);
+    settingsDraftGuard?.restore();
     showToast("AUM-Zugriff und Zuständigkeit wurden gespeichert.");
   } catch (error) {
-    showToast(error.message, true);
+    if(actor===startDashboardWorkspaceActorKey())showToast(error.message, true);
   } finally {
-    if (state.amuAccessPolicy?.canChange) elements.saveAmuAccessPolicyButton.disabled = false;
+    if (actor===startDashboardWorkspaceActorKey() && state.amuAccessPolicy?.canChange) elements.saveAmuAccessPolicyButton.disabled = false;
   }
 }
 
@@ -27014,15 +27223,21 @@ function renderGreetingSettings(result) {
 
 async function loadGreetingSettings() {
   if (!elements.greetingSettingsCard || elements.greetingSettingsCard.classList.contains("hidden")) return;
+  if(state.greetingSettings && settingsDraftGuard?.hasDraft(elements.greetingSettingsCard))return;
+  const actor=startDashboardWorkspaceActorKey();
   try {
-    renderGreetingSettings(await api("/api/portal/v1/greeting-settings"));
+    const result=await api("/api/portal/v1/greeting-settings");if(actor!==startDashboardWorkspaceActorKey())return;
+    if(state.greetingSettings && settingsDraftGuard?.hasDraft(elements.greetingSettingsCard))return;
+    renderGreetingSettings(result);settingsDraftGuard?.restore();
   } catch (error) {
+    if(actor!==startDashboardWorkspaceActorKey())return;
     elements.greetingSettingsCard.classList.toggle("hidden", error.status === 403);
     elements.greetingSettingsHint.textContent = error.message;
   }
 }
 
 async function saveGreetingSettings() {
+  const actor=startDashboardWorkspaceActorKey(),sent=settingsDraftGuard?.snapshot(elements.greetingSettingsCard);
   try {
     const result = await api("/api/portal/v1/greeting-settings", {
       method: "PUT",
@@ -27041,9 +27256,11 @@ async function saveGreetingSettings() {
         },
       }),
     });
-    renderGreetingSettings(result);
+    if(actor!==startDashboardWorkspaceActorKey())return;
+    settingsDraftGuard?.acknowledge(sent||new Map());
+    renderGreetingSettings(result);settingsDraftGuard?.restore();
     showToast("Persönliche Begrüßungen wurden gespeichert.");
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { if(actor===startDashboardWorkspaceActorKey())showToast(error.message, true); }
 }
 
 function birthdayPresentationCatalog(result = state.birthdayPresentationSettings) {
@@ -27138,7 +27355,7 @@ function updateBirthdayPresentationSettingsState() {
   if (!elements.saveBirthdayPresentationSettingsButton || !state.birthdayPresentationSettings) return;
   const changes = birthdayPresentationChanges();
   const count = Number(Boolean(changes.global)) + changes.employees.length + changes.delegates.length;
-  elements.saveBirthdayPresentationSettingsButton.disabled = count === 0;
+  elements.saveBirthdayPresentationSettingsButton.disabled = Boolean(state.birthdayPresentationSettingsSavingContext) || count === 0;
   if (count > 0) {
     elements.birthdayPresentationSettingsHint.textContent = `${count} ${count === 1 ? "Änderung ist" : "Änderungen sind"} noch nicht gespeichert.`;
     return;
@@ -27163,17 +27380,20 @@ function renderBirthdayPresentationSettings(result) {
     developerPreview.available !== true,
   );
   if (developerPreview.available === true) {
+    const previewDraft=settingsDraftGuard?.snapshot(elements.birthdayPresentationDeveloperPreviewSection);
+    const previewEnabled=previewDraft?.has('birthdayPresentationDeveloperPreviewEnabled')
+      ? previewDraft.get('birthdayPresentationDeveloperPreviewEnabled') : developerPreview.enabled === true;
     const catalog = birthdayPresentationCatalog();
     const selectedId = catalog.some((presentation) => presentation.id === developerPreview.presentationId)
       ? developerPreview.presentationId : (catalog[0]?.id || "standard");
     if (elements.birthdayPresentationDeveloperPreviewEnabled) {
-      elements.birthdayPresentationDeveloperPreviewEnabled.checked = developerPreview.enabled === true;
+      elements.birthdayPresentationDeveloperPreviewEnabled.checked = previewEnabled;
     }
     if (elements.birthdayPresentationDeveloperPreviewDesign) {
       elements.birthdayPresentationDeveloperPreviewDesign.innerHTML = catalog.map((presentation) => (
         `<option value="${escapeHtml(presentation.id)}" ${presentation.id === selectedId ? "selected" : ""}>${escapeHtml(presentation.label)}</option>`
       )).join("");
-      elements.birthdayPresentationDeveloperPreviewDesign.disabled = developerPreview.enabled !== true;
+      elements.birthdayPresentationDeveloperPreviewDesign.disabled = !previewEnabled;
     }
     if (elements.birthdayPresentationDeveloperPreviewHint) {
       elements.birthdayPresentationDeveloperPreviewHint.textContent = developerPreview.enabled === true
@@ -27213,7 +27433,7 @@ function renderBirthdayPresentationSettings(result) {
         .join(" ").toLocaleLowerCase("de");
       return `<article class="birthday-presentation-row" data-birthday-presentation-employee-row data-birthday-search-text="${escapeHtml(searchText)}" data-birthday-location-name="${escapeHtml(locationName)}">
         <div><strong>${escapeHtml(employeeNumber)} · ${escapeHtml(displayName)}</strong><small>${escapeHtml(detail)}</small></div>
-        <label><span>Darstellung</span><select aria-label="Geburtstagsdarstellung für ${escapeHtml(employeeNumber)} · ${escapeHtml(displayName)}" data-birthday-presentation-employee="${escapeHtml(employeeNumber)}" data-birthday-presentation-original="${escapeHtml(presentationId)}" data-birthday-presentation-revision="${escapeHtml(String(employee?.revision ?? ""))}">${birthdayPresentationOptions(presentationId)}</select></label>
+        <label><span>Darstellung</span><select id="birthday-employee-${escapeHtml(employeeNumber)}" aria-label="Geburtstagsdarstellung für ${escapeHtml(employeeNumber)} · ${escapeHtml(displayName)}" data-birthday-presentation-employee="${escapeHtml(employeeNumber)}" data-birthday-presentation-original="${escapeHtml(presentationId)}" data-birthday-presentation-revision="${escapeHtml(String(employee?.revision ?? ""))}">${birthdayPresentationOptions(presentationId)}</select></label>
       </article>`;
     }).join("") + '<p class="settings-note hidden" data-birthday-presentation-empty>Keine passenden Teammitglieder gefunden.</p>';
   }
@@ -27237,7 +27457,7 @@ function renderBirthdayPresentationSettings(result) {
       const switchLabel = denied && canOverrideDeniedDelegation ? "Sperre aufheben" : "Delegiert";
       return `<article class="birthday-presentation-row ${denied ? "denied" : ""}">
         <div><strong>${escapeHtml(employeeNumber)} · ${escapeHtml(displayName)}</strong><small>${escapeHtml(departmentName)}${denialExplanation ? ` · ${escapeHtml(denialExplanation)}` : ""}</small></div>
-        <label class="birthday-presentation-delegate-switch"><span>${escapeHtml(switchLabel)}</span><input type="checkbox" data-birthday-presentation-delegate="${escapeHtml(employeeNumber)}" data-birthday-presentation-original="${delegate?.enabled === true ? "1" : "0"}" ${delegate?.enabled === true ? "checked" : ""} ${delegationLocked ? "disabled" : ""} /></label>
+        <label class="birthday-presentation-delegate-switch"><span>${escapeHtml(switchLabel)}</span><input id="birthday-delegate-${escapeHtml(employeeNumber)}" type="checkbox" data-birthday-presentation-delegate="${escapeHtml(employeeNumber)}" data-birthday-presentation-original="${delegate?.enabled === true ? "1" : "0"}" ${delegate?.enabled === true ? "checked" : ""} ${delegationLocked ? "disabled" : ""} /></label>
       </article>`;
     }).join("") : '<p class="settings-note">Keine delegierbaren Abteilungsleitungen im berechtigten Bereich.</p>';
   }
@@ -27247,53 +27467,89 @@ function renderBirthdayPresentationSettings(result) {
 
 async function loadBirthdayPresentationSettings() {
   if (!elements.birthdayPresentationSettingsCard || elements.birthdayPresentationSettingsCard.classList.contains("hidden")) return;
+  if(state.birthdayPresentationSettings && settingsDraftGuard?.hasDraft(elements.birthdayPresentationSettingsCard))return;
+  const actor=startDashboardWorkspaceActorKey();
   try {
-    renderBirthdayPresentationSettings(await api("/api/portal/v1/birthday-presentation-settings"));
+    const result=await api("/api/portal/v1/birthday-presentation-settings");if(actor!==startDashboardWorkspaceActorKey())return;
+    if(state.birthdayPresentationSettings && settingsDraftGuard?.hasDraft(elements.birthdayPresentationSettingsCard))return;
+    renderBirthdayPresentationSettings(result);settingsDraftGuard?.restore();
   } catch (error) {
-    state.birthdayPresentationSettings = null;
+    if(actor!==startDashboardWorkspaceActorKey())return;
+    if([401,403].includes(error.status))state.birthdayPresentationSettings = null;
     elements.birthdayPresentationSettingsCard.classList.toggle("hidden", error.status === 403);
     elements.birthdayPresentationSettingsHint.textContent = error.message;
-    elements.saveBirthdayPresentationSettingsButton.disabled = true;
+    if(!state.birthdayPresentationSettings)elements.saveBirthdayPresentationSettingsButton.disabled = true;
   }
 }
 
 async function saveBirthdayPresentationSettings() {
+  if(state.birthdayPresentationSettingsSavingContext)return;
   const changes = birthdayPresentationChanges();
   const count = Number(Boolean(changes.global)) + changes.employees.length + changes.delegates.length;
   if (!count) return;
+  const actor=startDashboardWorkspaceActorKey(),sent=settingsDraftGuard?.snapshot(elements.birthdayPresentationSettingsCard)||new Map();
+  const savingContext={actor};state.birthdayPresentationSettingsSavingContext=savingContext;
+  const applySaved=(result,{global=false,employeeNumber='',delegateNumber=''}={})=>{
+    if(actor!==startDashboardWorkspaceActorKey())return false;
+    const previous=state.birthdayPresentationSettings||{};
+    // Update only the written row's revision. Other drafts keep the revision on which they were started.
+    const mergeRows=(rows,oldRows,key,fields)=>rows.map(row=>{
+      const old=oldRows?.find(item=>item.employeeNumber===row.employeeNumber);
+      if(row.employeeNumber===key||!old)return row;
+      return {...row,...Object.fromEntries(fields.map(field=>[field,old[field]]))};
+    });
+    const merged={...result,policy:global?result.policy:previous.policy,
+      employees:mergeRows(result.employees||[],previous.employees,employeeNumber,['presentationId','revision']),
+      delegates:mergeRows(result.delegates||[],previous.delegates,delegateNumber,['enabled'])};
+    const ids=global?['birthdayPresentationEnabled']:employeeNumber?['birthday-employee-'+employeeNumber]:['birthday-delegate-'+delegateNumber];
+    settingsDraftGuard?.acknowledge(new Map([...sent].filter(([id])=>ids.includes(id))));
+    renderBirthdayPresentationSettings(merged);settingsDraftGuard?.restore();filterBirthdayPresentationEmployees();updateBirthdayPresentationSettingsState();
+    return true;
+  };
   elements.saveBirthdayPresentationSettingsButton.disabled = true;
   try {
     if (changes.global) {
-      await api("/api/portal/v1/birthday-presentation-settings/global", {
+      const result=await api("/api/portal/v1/birthday-presentation-settings/global", {
         method: "PUT",
         body: JSON.stringify(changes.global),
       });
+      if(!applySaved(result,{global:true}))return;
     }
     for (const employee of changes.employees) {
-      await api(`/api/portal/v1/birthday-presentation-settings/employees/${encodeURIComponent(employee.employeeNumber)}`, {
+      if(actor!==startDashboardWorkspaceActorKey())return;
+      const result=await api(`/api/portal/v1/birthday-presentation-settings/employees/${encodeURIComponent(employee.employeeNumber)}`, {
         method: "PUT",
         body: JSON.stringify({
           presentationId: employee.presentationId,
           expectedRevision: employee.expectedRevision,
         }),
       });
+      if(!applySaved(result,{employeeNumber:employee.employeeNumber}))return;
     }
     for (const delegate of changes.delegates) {
-      await api(`/api/portal/v1/birthday-presentation-settings/delegates/${encodeURIComponent(delegate.employeeNumber)}`, {
+      if(actor!==startDashboardWorkspaceActorKey())return;
+      const result=await api(`/api/portal/v1/birthday-presentation-settings/delegates/${encodeURIComponent(delegate.employeeNumber)}`, {
         method: "PUT",
         body: JSON.stringify({ enabled: delegate.enabled }),
       });
+      if(!applySaved(result,{delegateNumber:delegate.employeeNumber}))return;
     }
-    await loadBirthdayPresentationSettings();
+    if(actor!==startDashboardWorkspaceActorKey())return;
     showToast(`${count} ${count === 1 ? "Geburtstagseinstellung wurde" : "Geburtstagseinstellungen wurden"} gespeichert.`);
   } catch (error) {
+    if(actor!==startDashboardWorkspaceActorKey())return;
     showToast(error.message, true);
-    await loadBirthdayPresentationSettings().catch(() => {});
+    updateBirthdayPresentationSettingsState();
+  } finally {
+    if(actor===startDashboardWorkspaceActorKey() && state.birthdayPresentationSettingsSavingContext===savingContext){
+      state.birthdayPresentationSettingsSavingContext=null;updateBirthdayPresentationSettingsState();
+    }
   }
 }
 
 async function saveBirthdayPresentationDeveloperPreview() {
   if (!state.birthdayPresentationSettings?.developerPreview?.available) return;
+  const actor=startDashboardWorkspaceActorKey(),sent=settingsDraftGuard?.snapshot(elements.birthdayPresentationDeveloperPreviewSection)||new Map();
   const enabled = elements.birthdayPresentationDeveloperPreviewEnabled?.checked === true;
   const presentationId = String(elements.birthdayPresentationDeveloperPreviewDesign?.value || "");
   if (enabled && !presentationId) {
@@ -27306,15 +27562,18 @@ async function saveBirthdayPresentationDeveloperPreview() {
       method: "PUT",
       body: JSON.stringify({ enabled, presentationId: enabled ? presentationId : null }),
     });
-    renderBirthdayPresentationSettings(result);
+    if(actor!==startDashboardWorkspaceActorKey())return;
+    settingsDraftGuard?.acknowledge(sent);
+    renderBirthdayPresentationSettings({...state.birthdayPresentationSettings,developerPreview:result.developerPreview});
+    settingsDraftGuard?.restore();updateBirthdayPresentationSettingsState();
     showToast(enabled
       ? "Der persönliche Geburtstags-Testmodus ist aktiv. Das Mitarbeiterportal kann jetzt geöffnet werden."
       : "Der persönliche Geburtstags-Testmodus wurde deaktiviert.");
   } catch (error) {
+    if(actor!==startDashboardWorkspaceActorKey())return;
     showToast(error.message, true);
-    await loadBirthdayPresentationSettings().catch(() => {});
   } finally {
-    elements.saveBirthdayPresentationDeveloperPreviewButton.disabled = false;
+    if(actor===startDashboardWorkspaceActorKey())elements.saveBirthdayPresentationDeveloperPreviewButton.disabled = false;
   }
 }
 
@@ -32534,7 +32793,7 @@ function renderSalesArticleCatalogDetail() {
   }
 }
 
-async function loadSalesArticleCatalogDetail(articleNumber, { moveFocus = false } = {}) {
+async function loadSalesArticleCatalogDetail(articleNumber, { moveFocus = false, refresh = false } = {}) {
   if (!canReadSalesArticles()) {
     applySalesArticleCatalogReadState(false);
     return;
@@ -32542,11 +32801,13 @@ async function loadSalesArticleCatalogDetail(articleNumber, { moveFocus = false 
   const normalizedArticleNumber = String(articleNumber || "").trim();
   if (!normalizedArticleNumber) return;
   const catalog = state.salesArticleCatalog;
+  const retained=refresh && catalog.selectedArticleNumber===normalizedArticleNumber ? catalog.detail : null;
+  const actorKey=currentSalesArticleCatalogDetailAccessKey();
   catalog.detailRequestId += 1;
   const requestId = catalog.detailRequestId;
   catalog.selectedArticleNumber = normalizedArticleNumber;
-  catalog.detail = null;
-  catalog.detailLoading = true;
+  catalog.detail = retained;
+  catalog.detailLoading = !retained;
   catalog.detailError = "";
   catalog.detailMoveFocus = moveFocus;
   setSalesArticleCatalogDetailStatus(`Artikel ${normalizedArticleNumber} wird geladen.`);
@@ -32555,19 +32816,21 @@ async function loadSalesArticleCatalogDetail(articleNumber, { moveFocus = false 
   try {
     const parameters = new URLSearchParams({ articleNumber: normalizedArticleNumber });
     const payload = await api(`/api/sales/articles/detail?${parameters}`);
-    if (requestId !== catalog.detailRequestId
+    if (actorKey!==currentSalesArticleCatalogDetailAccessKey() || !canReadSalesArticles() || requestId !== catalog.detailRequestId
       || normalizedArticleNumber !== catalog.selectedArticleNumber) return;
     const detail = normalizeSalesArticleDetailPayload(payload);
     if (detail.article.articleNumber !== normalizedArticleNumber) {
       throw new Error("Die geladene Artikelnummer stimmt nicht mit der Auswahl überein.");
     }
     catalog.detail = detail;
+    if(!refresh)void recentArticlesWindow?.record(detail.article.articleNumber);
     setSalesArticleCatalogDetailStatus(`Artikel ${normalizedArticleNumber} wurde geöffnet.`);
   } catch (error) {
-    if (requestId !== catalog.detailRequestId
+    if (actorKey!==currentSalesArticleCatalogDetailAccessKey() || requestId !== catalog.detailRequestId
       || normalizedArticleNumber !== catalog.selectedArticleNumber) return;
-    catalog.detailError = error.message || "Die Artikelansicht konnte nicht geladen werden.";
-    setSalesArticleCatalogDetailStatus(catalog.detailError);
+    if([401,403].includes(error.status)){applySalesArticleCatalogReadState(false);return;}
+    catalog.detailError = retained ? '' : error.message || "Die Artikelansicht konnte nicht geladen werden.";
+    setSalesArticleCatalogDetailStatus(retained ? 'Die Aktualisierung ist fehlgeschlagen. Angezeigt wird der zuletzt geladene Artikelstand.' : catalog.detailError);
   } finally {
     if (requestId === catalog.detailRequestId
       && normalizedArticleNumber === catalog.selectedArticleNumber) {
@@ -32946,6 +33209,7 @@ function clearSalesArticleCatalogState(message = "") {
 
 function applySalesArticleCatalogReadState(canRead = canReadSalesArticles()) {
   syncSalesArticleSearchWindow();
+  syncGpWindows();
   [
     elements.salesArticleSearchQuery,
     elements.salesArticleSearchReset,
@@ -33496,7 +33760,10 @@ function syncSalesHistoryAccess() {
   else salesPriceLabelsWorkspace?.suspend?.();
   salesPriceLabelsWorkspace = null;
   document.getElementById("salesPriceLabelsWorkspace")?.replaceChildren();
-  if (canUseSalesPriceLabels()) salesPriceLabelsWorkspace = window.GrabenplanerSalesPriceLabels?.mount(document.getElementById("salesPriceLabelsWorkspace"), {api, rawApi, accessKey:currentSalesPriceLabelsAccessKey});
+  if (canUseSalesPriceLabels()) {syncGpWindows();salesPriceLabelsWorkspace = window.GrabenplanerSalesPriceLabels?.mount(document.getElementById("salesPriceLabelsWorkspace"), {api, rawApi, accessKey:currentSalesPriceLabelsAccessKey,
+    accountIdentity:()=>state.portalSession?.user?.employeeNumber || state.portalSession?.user?.accountId || '',
+    windowPreferences:gpWindowManager?.preferences,dockSearch:document.getElementById('sidebarPriceLabelSearchButton'),
+    searchArticles:({query,offset=0,limit=20,sort='articleNumber',direction='asc',signal})=>api('/api/sales/articles?'+new URLSearchParams({query,status:'active',offset:String(offset),limit:String(limit),sort,direction}),{signal})});}
   if (state.currentView === "priceLabels") { if (canUseSalesPriceLabels()) void salesPriceLabelsWorkspace?.load(); else setView("startDashboard"); }
   const tradeInsightsAccess = canAccessTradeInsights();
   document.getElementById('salesArticleMovementsButton')?.classList.toggle('hidden', !canReadTradeMovements());
@@ -36000,7 +36267,7 @@ function setView(view) {
     || (view === "settings" && !document.querySelector('[data-settings-tab]:not(.hidden)'))
     || (view === "rightsDashboard" && accessibleDashboardModes().length === 0)) view = "startDashboard";
   const profileView = state.employeeProfileHost === "team" ? "personnel" : "personnelAdministration";
-  if (employeeProfileIsOpen() && view !== profileView) closeEmployeeProfile({ restoreFocus: false });
+  if (employeeProfileIsOpen() && view !== profileView) pauseEmployeeProfile();
   if (view !== "personnelAdministration" && (
     state.personnelLifecycleEditorCatalog
     || state.personnelLifecycleEditorCatalogLoaded
@@ -36009,7 +36276,7 @@ function setView(view) {
     || state.personnelLifecycleEditorValidation
     || state.personnelLifecycleEditorError
     || elements.personnelLifecycleEditorDialog?.open
-  )) clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus: false });
+  )) pausePersonnelLifecycleEditor();
   if (view !== "personnelAdministration" && (
     state.personnelLifecycleAutomationCatalog
     || state.personnelLifecycleAutomationPreview
@@ -36020,6 +36287,7 @@ function setView(view) {
   )) clearPersonnelLifecycleAutomationState();
   if (state.currentView === "settings" && view !== "settings") clearUsbProvisioningPasswords();
   state.currentView = view;
+  if (view === 'personnel' && state.personnelTab === 'employees') resumeEmployeeProfile('team');
   if (view === "requests") ensureAccessibleManagerRequestTab();
   if (view === "personnelAdministration") setPersonnelAdministrationTab(state.personnelAdministrationTab);
   if (timePresenceRefreshTimer) clearInterval(timePresenceRefreshTimer);
@@ -36063,6 +36331,8 @@ function setView(view) {
   elements.settingsView.classList.toggle("active", view === "settings");
   applyActivePageAppearance();
   syncSalesArticleSearchWindow();
+  syncGpWindows();
+  syncStartDashboardVps();
   if (view === "settings") {
     const activeSettingsTab = document.querySelector("[data-settings-tab].active:not(.hidden)");
     const firstAllowedSettingsTab = document.querySelector("[data-settings-tab]:not(.hidden)");
@@ -36078,6 +36348,7 @@ function setView(view) {
     renderSalesArticleCatalogResults();
     void loadSalesArticleTablePreferences();
     void loadSalesArticleLastImport({ force: true });
+    if(state.salesArticleCatalog.selectedArticleNumber && state.salesArticleCatalog.detail)void loadSalesArticleCatalogDetail(state.salesArticleCatalog.selectedArticleNumber,{refresh:true});
   }
   if (view === "crm") {
     syncCrmCustomerWorkspace(Boolean(state.crm.selectedCustomer || state.crm.detailLoading));
@@ -36332,9 +36603,10 @@ function setPersonnelTab(tab) {
   const buttons = visibleManagedTabButtons("personnel");
   tab = buttons.some(button => button.dataset.personnelTab === tab) ? tab : buttons[0]?.dataset.personnelTab || "";
   if (tab !== "employees" && employeeProfileIsOpen() && state.employeeProfileHost === "team") {
-    closeEmployeeProfile({ restoreFocus: false });
+    pauseEmployeeProfile();
   }
   state.personnelTab = tab;
+  if (tab === 'employees' && state.currentView === 'personnel') resumeEmployeeProfile('team');
   syncManagedTabSelection("personnel", tab);
   setManagedTabPanel(elements.employeeSettings, tab === "employees");
   setManagedTabPanel(elements.locationSettings, tab === "locations");
@@ -39687,6 +39959,8 @@ async function saveBackupSettings() {
 }
 
 async function saveSettings(silent = false) {
+  const actor=startDashboardWorkspaceActorKey();
+  const submittedSettingsDraft = settingsDraftGuard?.snapshot();
   try {
     const permissions = state.portalSession?.user?.permissions || [];
     const portalEnabled = state.portalStatus?.portalEnabled === true;
@@ -39766,18 +40040,21 @@ async function saveSettings(silent = false) {
           },
         } : {}),
     };
+    if(actor!==startDashboardWorkspaceActorKey())return false;
     if (canSaveGeneralSettings) {
       await api("/api/settings", {
         method: "PUT",
         body: JSON.stringify(payload),
       });
     }
+    if(actor!==startDashboardWorkspaceActorKey())return false;
     if (canSaveSchedulePdfSettings && !canSaveGeneralSettings) {
       await api("/api/portal/v1/schedule-pdf-settings", {
         method: "PUT",
         body: JSON.stringify(schedulePdfPayload),
       });
     }
+    if(actor!==startDashboardWorkspaceActorKey())return false;
     if (activeSettingsTab === "schedule" && canSaveScheduleSettings && !canSaveGeneralSettings) {
       await api("/api/portal/v1/cross-location-schedule-settings", {
         method: "PUT",
@@ -39794,24 +40071,43 @@ async function saveSettings(silent = false) {
         }),
       });
     }
+    if(actor!==startDashboardWorkspaceActorKey())return false;
     if (portalEnabled && canSavePastWeekPreference) {
       const preferences = await api("/api/portal/v1/ui-preferences", {
         method: "PUT",
         body: JSON.stringify({ allowPastWeekEditing }),
       });
+      if(actor!==startDashboardWorkspaceActorKey())return false;
       state.allowPastWeekEditing = preferences.allowPastWeekEditing === true;
     }
+    if(actor!==startDashboardWorkspaceActorKey())return false;
     if (!silent && canSaveGeneralSettings && elements.appFontScalePercent) {
       await saveAppFontScalePercent(elements.appFontScalePercent.valueAsNumber, { silent: true });
     }
+    if(actor!==startDashboardWorkspaceActorKey())return false;
     if (!silent && canSaveBranding && state.brandingFormDirty) {
       await saveCustomManagementBranding();
     }
+    if(actor!==startDashboardWorkspaceActorKey())return false;
     if (!silent && state.scheduleDutyColorsDirty && canManageScheduleDutyColors()) await saveScheduleDutyColors({ silent: true });
+    if(actor!==startDashboardWorkspaceActorKey())return false;
     if (!silent) showToast("Einstellungen wurden gespeichert.");
+    if (submittedSettingsDraft) {
+      const savedIds=new Set(canSaveGeneralSettings ? Object.keys(payload) : canSaveSchedulePdfSettings ? Object.keys(schedulePdfPayload) : []);
+      if(canSaveGeneralSettings || canSaveSchedulePdfSettings)savedIds.add('pdfTitleSetting');
+      if(canSaveGeneralSettings){
+        for(const id of ['vacationPdfTitleSetting','breakAfterHours','breakDuration','branchSupervisionMode','branchSupervisionIntensity','branchSupervisionPrimaryCoveragePercent','branchSupervisionDepartmentGapMinutes'])savedIds.add(id);
+      }
+      if(activeSettingsTab==='schedule'&&canSaveScheduleSettings)for(const id of ['crossLocationScheduleEnabled','crossLocationScheduleHorizonWeeks','staffAssignmentManagerCreateEnabled','staffAssignmentDepartmentManagerCreateEnabled','staffAssignmentDepartmentManagerReviewEnabled','staffAssignmentEmailSubmittedEnabled','staffAssignmentEmailDecisionEnabled','staffAssignmentChangePolicy','staffAssignmentCancellationPolicy'])savedIds.add(id);
+      if(canSavePastWeekPreference)savedIds.add('allowPastWeekEditing');
+      if(!silent&&canSaveGeneralSettings)savedIds.add('appFontScalePercent');
+      settingsDraftGuard?.acknowledge(new Map([...submittedSettingsDraft].filter(([id])=>savedIds.has(id))));
+    }
+    if(actor!==startDashboardWorkspaceActorKey())return false;
     await loadAll();
     return true;
   } catch (error) {
+    if(actor!==startDashboardWorkspaceActorKey())return false;
     showToast(error.message, true);
     return false;
   }
@@ -40663,7 +40959,7 @@ elements.personnelFieldRightsMatrix?.addEventListener("change", (event) => {
 });
 elements.savePersonnelFieldRightsButton?.addEventListener("click", savePersonnelFieldRights);
 elements.loanManagementRefresh?.addEventListener("click", loadLoanManagement);
-elements.branchOrdersManagementRefresh?.addEventListener("click", () => loadBranchOrdersManagement());
+elements.branchOrdersManagementRefresh?.addEventListener("click", () => loadBranchOrdersManagement(undefined,{discardDraft:true}));
 elements.branchOrdersManagementSave?.addEventListener("click", saveBranchOrdersManagement);
 elements.branchOrdersManagementSaveInline?.addEventListener("click", saveBranchOrdersManagement);
 elements.branchOrdersManagementLocation?.addEventListener("change", () => {
@@ -40734,7 +41030,7 @@ elements.loanManagementList?.addEventListener("click", (event) => {
 });
 elements.loanManagementReturnForm?.addEventListener("submit", submitLoanManagementReturn);
 elements.loanManagementReturnDialog?.addEventListener("close", () => {
-  if (!state.loanManagementReturnSaving) state.loanManagementReturnLoanId = "";
+  if (!state.loanManagementReturnSaving) {state.loanManagementReturnLoanId = "";state.loanManagementReturnContext=null;}
 });
 elements.refreshLoanSettingsButton?.addEventListener("click", loadLoanSettings);
 elements.loanSettingsList?.addEventListener("submit", (event) => {
@@ -41555,6 +41851,10 @@ elements.startDashboardView?.addEventListener("click", (event) => {
 elements.startDashboardCustomizeButton?.addEventListener("click", () => {
   if (elements.startDashboardCustomizer?.classList.contains("hidden")) openStartDashboardCustomizer();
   else closeStartDashboardCustomizer();
+});
+for(const [id,control] of [['control:center','startDashboardCenterVisible'],['control:vps','startDashboardVpsVisible']])document.getElementById(control)?.addEventListener('change',async event=>{
+  try{await startDashboardWorkspace?.setVisible(id,event.target.checked);}catch(error){showToast('Die Kachelanzeige konnte nicht gespeichert werden: '+error.message,true);}
+  syncStartDashboardControlChoices();syncStartDashboardVps();
 });
 elements.startDashboardCustomizerClose?.addEventListener("click", () => closeStartDashboardCustomizer());
 elements.startDashboardCustomizer?.addEventListener("change", (event) => {
@@ -42663,6 +42963,8 @@ elements.salesArticleDetailNavigation?.addEventListener('keydown', event => {
     salesArticleSearchWindow = window.SalesArticleSearchWindow.attach(host, {
       bounds:salesArticleSearchWindowBounds, scale:salesArticleSearchWindowScale, canUse,
       initialGeometry:salesArticleSearchWindowInitialGeometry,
+      closeTarget:()=>document.getElementById('sidebarArticleSearchButton'),
+      onFreshSearch:()=>resetSalesArticleCatalogSearch('',{preserveDetail:true}),
       observe:[document.querySelector('.main-content'),elements.salesArticleCatalogView?.querySelector('.topbar')],
       change:value => { void salesArticleWindowPreferences?.change(value); },
       resize:() => {
@@ -42680,6 +42982,9 @@ elements.salesArticleDetailNavigation?.addEventListener('keydown', event => {
       error:error => setSalesArticleCatalogStatus(`Fenstereinstellungen konnten nicht gespeichert oder geladen werden: ${error.message}`,true),
     });
     syncSalesArticleSearchWindow();
+    document.getElementById('sidebarArticleSearchButton')?.addEventListener('click',()=>{
+      if(canUse()){salesArticleSearchWindow.reopenFresh();elements.salesArticleSearchQuery?.focus();}
+    });
     window.addEventListener('pagehide',() => {
       salesArticleWindowPreferences.suspend({abortWrites:true}); salesArticleSearchWindow.suspend();
     });

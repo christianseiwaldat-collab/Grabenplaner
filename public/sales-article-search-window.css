@@ -19,8 +19,7 @@
 .sales-article-search-window .sales-article-table-scroll { flex:1 1 auto; height:0; min-height:80px; max-height:none; }
 .sales-article-search-window .sales-article-results-footer { flex:0 0 auto; min-height:42px; padding-right:42px; }
 .sales-article-search-window #salesArticleVisibleRowsLabel { margin-right:7px; font-size:9px; }
-.sales-article-window-resize { position:absolute; right:0; bottom:0; z-index:5; display:grid; place-items:center; width:42px; height:42px; padding:0; border:0; border-top-left-radius:9px; color:var(--green); background:var(--surface-soft); cursor:nwse-resize; touch-action:none; font-size:19px; }
-.sales-article-search-window :is([data-article-window-move],[data-article-window-toggle],[data-article-window-reset],[data-article-window-resize]):focus-visible { outline:2px solid var(--green); outline-offset:-3px; }
+.sales-article-search-window :is([data-article-window-move],[data-article-window-toggle],[data-article-window-reset],[data-article-window-minimize],[data-article-window-close],[data-article-window-resize]):focus-visible { outline:2px solid var(--green); outline-offset:-3px; }
 .sales-article-search-window.is-minimized .sales-article-window-titlebar { border-bottom:0; }
 .sales-article-search-window:is(.is-moving,.is-resizing) { user-select:none; }
 .sales-article-search-window .sales-article-advanced-search > summary { flex-direction:row; }
@@ -32,3 +31,12 @@
   .sales-article-search-window #salesArticleVisibleRowsLabel { display:none; }
   .sales-article-search-window .sales-article-results-footer .sales-article-load-status { padding:8px; }
 }
+/* A minimized internal search window is a compact title strip; expanded
+   width remains in its account preference and returns on restoration. */
+.sales-article-search-window.gp-window.is-minimized { min-width:0; }
+.sales-article-search-window.gp-window .sales-article-window-titlebar { flex:0 0 auto; gap:6px; }
+.sales-article-search-window.gp-window.is-minimized .sales-article-window-move { min-width:0; flex:1; overflow:hidden; }
+.sales-article-search-window.gp-window.is-minimized .sales-article-window-move strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sales-article-search-window.gp-window .sales-article-window-resize { opacity:0; }
+.sales-article-search-window.gp-window .gp-window-edge[data-gp-window-edge="se"] { opacity:0; }
+.sales-article-search-window.gp-window .gp-window-edge:focus-visible { opacity:1; }

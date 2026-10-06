@@ -16,8 +16,15 @@ test('strict notes schema preserves exact text and rejects oversized, corrupt or
   assert.deepEqual(model.validate(original),original);assert.notEqual(model.validate(original),original);
   assert.deepEqual(model.parseStored(undefined),model.empty());assert.deepEqual(model.parseStored(JSON.stringify(original)),original);
   assert.equal(model.validate(note('x'.repeat(20000))).text.length,20000);
-  for(const invalid of [null,{},[],{...original,actor:'B'},{...original,open:1},{...original,height:119},{...original,height:1201},{...original,height:200.5},{...original,text:'x'.repeat(20001)},{...original,text:'A\0B'}])assert.throws(()=>model.validate(invalid));
+  for(const invalid of [null,{},[],{...original,actor:'B'},{...original,open:1},{...original,height:119},{...original,height:model.MAX_HEIGHT+1},{...original,height:200.5},{...original,width:199},{...original,width:model.MAX_WIDTH+1},{...original,text:'x'.repeat(20001)},{...original,text:'A\0B'}])assert.throws(()=>model.validate(invalid));
   for(const invalid of [null,'null','{damaged'])assert.throws(()=>model.parseStored(invalid));
+});
+
+test('legacy encrypted note values migrate without losing text, height or open state',()=>{
+ const legacy={version:1,text:'Exact\nlegacy text  ',height:777,open:true};
+ assert.deepEqual(model.parseStored(JSON.stringify(legacy)),{version:2,text:legacy.text,width:240,height:777,open:true});
+ assert.deepEqual(model.validate(legacy),model.parseStored(legacy));
+ assert.throws(()=>model.validate({...legacy,width:240}));
 });
 test('all genuine personal accounts including developer have access, shared/local and password-change sessions do not',()=>{
   const actor={sessionKind:'employee',accountType:'employee',isEmployee:true,employeeNumber:'A',active:true,role:'developer',permissions:[]};
