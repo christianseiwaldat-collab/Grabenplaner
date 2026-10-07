@@ -3,7 +3,7 @@
 Grabenplaner unterstützt Dienstplanung, Personalorganisation, Zeiterfassung,
 Verkaufsanalysen und ein mobiles Mitarbeiterportal.
 
-**Quellstand: v0.92.76 Beta · veröffentlichter GitHub-Serverrelease: v0.92.72 Beta.**
+**Quellstand: v0.92.77 Beta · veröffentlichter GitHub-Serverrelease: v0.92.72 Beta.**
 Der installierte Serverstand wird im GP angezeigt.
 
 ## Releases
