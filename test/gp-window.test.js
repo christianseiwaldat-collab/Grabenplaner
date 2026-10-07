@@ -52,6 +52,19 @@ test('minimize shifts body focus to title control; close animation targets opene
   await second.close();assert.equal(closed,1);assert.equal(f.doc.activeElement,opener);second.activate();assert.equal(second.preferred.minimized,false);
   second.destroy();f.controller.destroy();
 });
+test('restore, pointer and keyboard focus bring one window forward without unbounded stacking or stale ownership',async()=>{
+  const f=fixture(),other=f.element('section',{},f.doc.body),title=f.element('header',{},other);
+  const second=attach(other,{title,active:true});
+  f.controller.activate();assert.equal(f.host.classList.contains('is-active-window'),true);
+  second.activate();assert.equal(f.host.classList.contains('is-active-window'),false);assert.equal(other.classList.contains('is-active-window'),true);
+  f.controller.minimize(true);f.controller.restore();assert.equal(f.host.classList.contains('is-active-window'),true);assert.equal(other.classList.contains('is-active-window'),false);
+  other.emit('pointerdown');assert.equal(other.classList.contains('is-active-window'),true);
+  f.host.emit('focusin');assert.equal(f.host.classList.contains('is-active-window'),true);
+  f.controller.suspend();assert.equal(f.host.classList.contains('is-active-window'),false);
+  second.activate();await second.close();assert.equal(other.classList.contains('is-active-window'),false);
+  second.destroy();f.controller.destroy();
+});
+
 test('account preferences merge early movement with delayed server windows and retain changes through navigation',async()=>{
   const requests=[],applied=[];let actor='A';
   const prefs=createPreferences({actorKey:()=>actor,canUse:()=>true,api:(url,options)=>{const request=deferred();requests.push({url,options,...request});return request.promise;},apply:value=>applied.push(value)});

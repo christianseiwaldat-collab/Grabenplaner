@@ -8,13 +8,13 @@ const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
 const styles = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
 
-test("UI-Block 2: alle Einstellungshauptbereiche verwenden das globale adaptive Raster", () => {
+test("UI-Block 2: Einstellungsbereiche verwenden das adaptive Raster, Rechte starten eigene Fenster", () => {
   const settingsSections = [...html.matchAll(
-    /<section id="[^"]+Settings" class="settings-section ([^"]+)"/g,
+    /<section id="([^"]+Settings)" class="settings-section ([^"]+)"/g,
   )];
   assert.ok(settingsSections.length >= 9, "die Einstellungsbereiche müssen im Markup auffindbar sein");
   for (const section of settingsSections) {
-    assert.match(section[1], /\bsettings-two-column\b/);
+    assert.match(section[2], section[1] === "rightsSettings" ? /\brights-window-entry\b/ : /\bsettings-two-column\b/);
   }
 
   assert.match(

@@ -140,7 +140,7 @@ function settingsFixture(permissions) {
     loadSystemCenter: () => calls.push("systemCenter"),
     refreshServerDiagnostics: () => calls.push("backup"),
     canManageMaintenanceSchedules: () => false, canManageOffsiteFolders: () => false,
-    clearUsbProvisioningPasswords() {}, scheduleAllSettingsPackedGrids() {},
+    clearUsbProvisioningPasswords() {}, scheduleAllSettingsPackedGrids() {}, syncRightsWorkspace() {},
   };
   vm.createContext(context);
   vm.runInContext(functionSource("canReadSystemCenter", "canReadPersonnelRulesDashboard")

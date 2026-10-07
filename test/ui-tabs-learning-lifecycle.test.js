@@ -60,6 +60,8 @@ function tabsFixture() {
     state:{portalStatus:{portalEnabled:true},portalSession:{user:{permissions:['settings:write','employees:read']}},
       currentView:'settings',personnelTab:'employees',employeeProfileHost:'team'},
     elements, schedulePdfSettingsWritePermission:'schedule:pdf:settings:write',
+    rightsWorkspace:null, rightsSettingsWindows:null,
+    rightsWindowEntryGeometry:() => ({}), syncGpWindows:() => {}, syncRightsWorkspace:() => {},
     canReadSystemCenter:() => true, canAccessTeamManagement:() => true, canManageLoanSettings:() => false,
     canManageMaintenanceSchedules:() => false, canManageOffsiteFolders:() => false, employeeProfileIsOpen:() => false,
     closeEmployeeProfile:() => {profileClosed++;}, window:{setTimeout:callback => callback()},
