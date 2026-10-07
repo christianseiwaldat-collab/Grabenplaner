@@ -211,6 +211,7 @@ getent group "$service_group" >/dev/null || gp_die "Dienstgruppe fehlt: $service
 getent passwd "$build_user" >/dev/null || gp_die "Isolierter Build-Benutzer fehlt: $build_user"
 getent group "$build_group" >/dev/null || gp_die "Isolierte Build-Gruppe fehlt: $build_group"
 [[ "$(id -gn "$build_user")" == "$build_group" ]] || gp_die "Der Build-Benutzer verwendet eine unerwartete Hauptgruppe."
+gp_assert_shared_tmp "$service_user" "$build_user"
 build_cache="$(gp_existing_directory "${build_cache_arg:-$GP_DEFAULT_BUILD_CACHE}" "Build-Cache")"
 
 package="$(gp_existing_file "$package_arg" "Updatepaket")"

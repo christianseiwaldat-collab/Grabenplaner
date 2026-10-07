@@ -46,6 +46,19 @@ test("updater reserves the maintenance window before copying or scanning a packa
   assert.match(updater, /Der Sicherheits-Rollback .* ist aktiv/);
 });
 
+test("both deploy entry points reject unsafe shared /tmp before expensive work", () => {
+  const check = preflight.indexOf('gp_assert_shared_tmp "$GP_DEFAULT_SERVICE_USER" "$GP_DEFAULT_BUILD_USER"');
+  const updateCheck = updater.indexOf('gp_assert_shared_tmp "$service_user" "$build_user"');
+  assert.ok(check > preflight.indexOf('gp_load_env_file "$env_file"'));
+  for (const operation of ['actual_pnpm="', 'clamscan --no-summary']) assert.ok(preflight.indexOf(operation) > check, operation);
+  assert.ok(updateCheck > updater.indexOf('gp_load_env_file "$env_file"'));
+  for (const operation of ['package="$(gp_existing_file', 'install -m 0600 -o root -g root -- "$package"',
+    'begin_deploy_phase dependencies', 'begin_deploy_phase package-scan', 'gp_begin_update_backup_ownership "$database"']) {
+    assert.ok(updater.indexOf(operation) > updateCheck, operation);
+  }
+  assert.ok(updater.indexOf('exec bash "$preflight_script"') < updateCheck, "--preflight-only delegates to the protected standalone check");
+});
+
 for (const timer of ["grabenplaner-offsite-assurance.timer", "apt-daily.timer", "apt-daily-upgrade.timer"])
 for (const active of [0, 1]) for (const enabled of [0, 1]) {
   test(`deploy uses and restores ${timer} before its own pause: active=${active}, enabled=${enabled}`,

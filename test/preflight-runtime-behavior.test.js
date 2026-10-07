@@ -39,6 +39,87 @@ function fixture(t) {
   };
 }
 
+const common = fs.readFileSync(path.join(__dirname, "../server-tools/linux/lib/common.sh"), "utf8").replace(/\r\n/g, "\n");
+const sharedTmpCheck = common.match(/^gp_assert_shared_tmp\(\) \{\n[\s\S]*?^\}/m)?.[0];
+assert.ok(sharedTmpCheck, "shared /tmp check exists");
+
+for (const scenario of ["mode-0700", "mode-0777", "mode-3777", "wrong-owner", "wrong-group", "file", "link",
+  "green", "installed-offsite", "configured-offsite", "missing-offsite-account", "app-write-denied", "app-search-denied",
+  "build-write-denied", "build-search-denied", "offsite-write-denied", "offsite-search-denied"]) {
+  test("shared /tmp shell preflight: " + scenario, { skip: !fs.existsSync(bash) }, t => {
+    const f = fixture(t), directory = path.join(f.root, "shared tmp");
+    fs.mkdirSync(directory);
+    let probe = directory;
+    if (scenario === "file") { probe = path.join(f.root, "tmp file"); fs.writeFileSync(probe, "not a directory"); }
+    if (scenario === "link") {
+      probe = path.join(f.root, "tmp link");
+      fs.symlinkSync(directory, probe, process.platform === "win32" ? "junction" : "dir");
+    }
+    const hasOffsite = scenario.includes("offsite"), installed = scenario === "installed-offsite";
+    if (installed) f.write("installed-contract.json", "{}");
+    const metadata = scenario === "mode-0700" ? "0:0:700" : scenario === "mode-0777" ? "0:0:777"
+      : scenario === "mode-3777" ? "0:0:3777" : scenario === "wrong-owner" ? "1000:0:1777"
+        : scenario === "wrong-group" ? "0:1000:1777" : "0:0:1777";
+    const deniedAccount = scenario.startsWith("app-") ? "app-fixture" : scenario.startsWith("build-") ? "build-fixture"
+      : scenario.startsWith("offsite-") ? "grabenplaner-offsite" : "";
+    const deniedAccess = scenario.endsWith("write-denied") ? "-w" : scenario.endsWith("search-denied") ? "-x" : "";
+    const checks = sharedTmpCheck.replaceAll('"/tmp"', '"$TMP_FIXTURE"')
+      .replaceAll('"/etc/grabenplaner/offsite/installed-contract.json"', '"$OFFSITE_CONTRACT_FIXTURE"');
+    const result = f.run([
+      "TMP_FIXTURE=" + quote(probe.replaceAll("\\", "/")),
+      'OFFSITE_CONTRACT_FIXTURE="$PWD/installed-contract.json"',
+      "GRABENPLANER_OFFSITE_CONFIGURED=" + (hasOffsite && !installed ? "1" : "0"),
+      'stat() { [[ "$1" == --format=%u:%g:%a && "$2" == -- && "$3" == "$TMP_FIXTURE" ]] || exit 90; printf "%s\\n" ' + quote(metadata) + '; }',
+      'getent() { [[ "$1" == passwd ]] || exit 91; printf "%s\\n" "$2" >> accounts; [[ "$2" != ' + quote(scenario === "missing-offsite-account" ? "grabenplaner-offsite" : "") + ' ]]; }',
+      // Execute native permission-test syntax; model the account switch and an
+      // effective ACL denial, which Unix ownership cannot express on Windows.
+      'runuser() {',
+      ' [[ "$1" == --user && "$3" == -- && "$4" == test && "$6" == "$TMP_FIXTURE" ]] || exit 92;',
+      ' printf "%s:%s\\n" "$2" "$5" >> access;',
+      ' test "$5" "$6" || return "$?";',
+      ' [[ "$2:$5" != ' + quote(deniedAccount + ":" + deniedAccess) + ' ]]',
+      '}',
+      'chmod() { printf "chmod\\n" >> mutations; exit 93; }',
+      'chown() { printf "chown\\n" >> mutations; exit 94; }',
+      checks,
+      'gp_assert_shared_tmp app-fixture build-fixture',
+      'printf "next-deploy-phase\\n"',
+    ].join("\n"));
+    assert.ifError(result.error);
+    const readLines = name => fs.existsSync(path.join(f.root, name)) ? fs.readFileSync(path.join(f.root, name), "utf8").trim().split("\n") : [];
+    assert.equal(fs.existsSync(path.join(f.root, "mutations")), false, "preflight never repairs /tmp");
+    const structuralFailure = ["mode-0700", "mode-0777", "mode-3777", "wrong-owner", "wrong-group", "file", "link"].includes(scenario);
+    if (structuralFailure) {
+      assert.equal(result.status, 42, result.stderr);
+      assert.deepEqual(readLines("accounts"), []);
+      assert.deepEqual(readLines("access"), []);
+      assert.equal(result.stdout, "");
+    } else {
+      const accounts = ["app-fixture", "build-fixture", ...(hasOffsite ? ["grabenplaner-offsite"] : [])];
+      const reachedAccounts = deniedAccount ? accounts.slice(0, accounts.indexOf(deniedAccount) + 1) : accounts;
+      assert.deepEqual(readLines("accounts"), reachedAccounts);
+      const expectedAccess = [];
+      for (const account of accounts) {
+        if (scenario === "missing-offsite-account" && account === "grabenplaner-offsite") break;
+        for (const access of ["-w", "-x"]) {
+          expectedAccess.push(account + ":" + access);
+          if (account === deniedAccount && access === deniedAccess) break;
+        }
+        if (account === deniedAccount) break;
+      }
+      assert.deepEqual(readLines("access"), expectedAccess);
+      if (scenario.endsWith("denied") || scenario === "missing-offsite-account") {
+        assert.equal(result.status, 42, result.stderr);
+        assert.match(result.stderr, scenario === "missing-offsite-account" ? /Konto fehlt/ : /nicht schreiben oder durchsuchen/);
+        assert.equal(result.stdout, "");
+      } else {
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stdout, "next-deploy-phase\n");
+      }
+    }
+  });
+}
+
 for (const scenario of ["enough", "low", "invalid"]) {
   test("preflight shell parses filesystem blocks with restricted IFS: " + scenario, { skip: !fs.existsSync(bash) }, t => {
     const f = fixture(t);

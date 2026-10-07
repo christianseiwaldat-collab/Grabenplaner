@@ -39,27 +39,6 @@ gp_require_command() {
   command -v "$1" >/dev/null 2>&1 || gp_die "Erforderliches Programm fehlt: $1"
 }
 
-gp_assert_shared_tmp() {
-  local app_user="${1:-$GP_DEFAULT_SERVICE_USER}" build_user="${2:-$GP_DEFAULT_BUILD_USER}" account access
-  local -a accounts=("$app_user" "$build_user")
-  [[ -d "/tmp" && ! -L "/tmp" ]] \
-    || gp_die "/tmp muss ein echtes Verzeichnis sein und darf kein Link sein."
-  [[ "$(stat --format='%u:%g:%a' -- "/tmp")" == "0:0:1777" ]] \
-    || gp_die "/tmp muss root:root gehoeren und exakt Modus 1777 mit Stickybit verwenden."
-  if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 \
-    || -e "/etc/grabenplaner/offsite/installed-contract.json" \
-    || -L "/etc/grabenplaner/offsite/installed-contract.json" ]]; then
-    accounts+=(grabenplaner-offsite)
-  fi
-  for account in "${accounts[@]}"; do
-    getent passwd "$account" >/dev/null || gp_die "Ein fuer /tmp benoetigtes Konto fehlt: $account"
-    for access in -w -x; do
-      runuser --user "$account" -- test "$access" "/tmp" \
-        || gp_die "Das Konto $account kann /tmp nicht schreiben oder durchsuchen."
-    done
-  done
-}
-
 gp_resolve_path() {
   local value="${1:-}"
   [[ -n "$value" && "$value" == /* ]] || return 1
