@@ -60,6 +60,41 @@ function context(extra = {}) {
   return ctx;
 }
 
+function personnelFieldRightsTableFixture() {
+  let mounted;
+  const matrix = { innerHTML: "" };
+  const ctx = context({ elements: { personnelFieldRightsMatrix: matrix, personnelFieldRightsRole: {},
+    savePersonnelFieldRightsButton: {}, personnelFieldRightsHint: {} },
+    window: { GPPlanningProtection: protection, GPVocationalSchool: school,
+      RightsSettingsTable: { mount(options) { mounted = options; return { setRows(rows) { mounted.rows = rows; } }; } } },
+    canUseRightsSettingsCards: () => true, rightsWorkspaceActorKey: () => "synthetic-hr",
+    rightsSettingsTableIdentity: () => "synthetic-hr",
+  });
+  ctx.state.personnelFieldRights = { canChange: true, roles: [{ id: "manager", label: "Leitung" }],
+    fields: [{ key: protection.FIELD_KEY, label: "Vertraulicher Planungsschutzstatus", group: "Planungsschutz", sensitive: true },
+      { key: "identity.firstName", label: "Vorname", group: "Identität" }],
+    matrix: { manager: { [protection.FIELD_KEY]: "write", "identity.firstName": "read" } },
+  };
+  ctx.state.personnelFieldRightsDrafts = {};
+  ctx.state.personnelFieldRightsDirtyRoles = new Set();
+  ctx.state.selectedPersonnelFieldRightsRole = "manager";
+  vm.runInContext("let personnelFieldRightsTable = null, personnelFieldRightsTableActor = '';", ctx);
+  vm.runInContext(between("function personnelFieldLevelLabel(", "async function loadRightsManagement("), ctx);
+  ctx.renderPersonnelFieldRights();
+  const doc = { createElement(tagName) {
+    return { tagName, dataset: {}, children: [], listeners: {},
+      setAttribute(name, value) { this[name] = value; },
+      append(child) { this.children.push(child); },
+      addEventListener(name, handler) { this.listeners[name] = handler; },
+    };
+  } };
+  return { ctx, matrix, table: mounted, field(key) {
+    const row = mounted.rows.find(item => item.key === key);
+    assert.ok(row, key);
+    return mounted.columns.find(column => column.id === "access").cell(row, doc);
+  } };
+}
+
 test("Schutzstatus: persönliche HR/Admin/Developer mit ausdrücklichem atomarem Feldrecht", () => {
   const access = { canReadSensitive: true, canWriteSensitive: true, fieldAccess: { [protection.FIELD_KEY]: "write" } };
   for (const role of ["it_admin", "manager", "department_manager", "location_planner", "employee", "local", ""]) {
@@ -270,47 +305,46 @@ test("Personalaktwechsel: fehlendes Feldrecht entfernt den vorigen vertraulichen
 });
 
 test("Leitungs-Feldrechtematrix: Schutzstatus bietet einzig hidden/disabled; andere Rechte bleiben bearbeitbar", () => {
-  const matrix = { innerHTML: "", querySelectorAll: () => [] };
-  const ctx = context({ elements: { personnelFieldRightsMatrix: matrix, personnelFieldRightsRole: {},
-    savePersonnelFieldRightsButton: {}, personnelFieldRightsHint: {} },
-    personnelFieldLevelLabel: (value) => value, personnelFieldGroupSummary: () => {},
-  });
-  ctx.state.personnelFieldRights = { canChange: true, roles: [{ id: "manager", label: "Leitung" }],
-    fields: [{ key: protection.FIELD_KEY, label: "Vertraulicher Planungsschutzstatus", group: "Planungsschutz", sensitive: true },
-      { key: "identity.firstName", label: "Vorname", group: "Identität" }],
-    matrix: { manager: { [protection.FIELD_KEY]: "write", "identity.firstName": "read" } },
-  };
-  ctx.state.personnelFieldRightsDrafts = {};
-  ctx.state.personnelFieldRightsDirtyRoles = new Set();
-  ctx.state.selectedPersonnelFieldRightsRole = "manager";
-  vm.runInContext(between("function renderPersonnelFieldRights(", "async function loadRightsManagement("), ctx);
-  ctx.renderPersonnelFieldRights();
-  const restricted = /<select data-personnel-field-right="employment\.protectionStatus"[\s\S]*?<\/select>/.exec(matrix.innerHTML)?.[0];
-  assert.ok(restricted);
-  assert.match(restricted, /disabled/);
-  assert.match(restricted, /option value="hidden" selected/);
-  assert.doesNotMatch(restricted, /option value="read"|option value="write"/);
-  const ordinary = /<select data-personnel-field-right="identity\.firstName"[\s\S]*?<\/select>/.exec(matrix.innerHTML)?.[0];
-  assert.doesNotMatch(ordinary, /disabled/);
-  assert.match(ordinary, /option value="read" selected/);
-  assert.match(ordinary, /option value="write"/);
-  assert.match(matrix.innerHTML, /Nur berechtigte HR\/Admin/);
-  assert.doesNotMatch(matrix.innerHTML, /MSchG|Schwangerschaft|Stillzeit/);
+  const f = personnelFieldRightsTableFixture();
+  assert.equal(f.table.host, f.matrix);
+  assert.equal(f.table.tableId, "rights:personnel-fields");
+  const restricted = f.field(protection.FIELD_KEY);
+  assert.equal(restricted.tagName, "select");
+  assert.equal(restricted.dataset.personnelFieldRight, protection.FIELD_KEY);
+  assert.equal(restricted.dataset.personnelFieldRole, "manager");
+  assert.equal(restricted.disabled, true);
+  assert.equal(restricted.value, "hidden");
+  assert.deepEqual(restricted.children.map(option => ({ value: option.value, selected: option.selected })),
+    [{ value: "hidden", selected: true }]);
+  const ordinary = f.field("identity.firstName");
+  assert.equal(ordinary.disabled, false);
+  assert.equal(ordinary.value, "read");
+  assert.deepEqual(ordinary.children.map(option => option.value), ["hidden", "read", "write"]);
+  assert.equal(ordinary.children.find(option => option.value === "read").selected, true);
+  const protectionColumn = f.table.columns.find(column => column.id === "protection");
+  const renderedText = f.table.rows.flatMap(row => [row.label, row.group, protectionColumn.cell(row)]).join(" ");
+  assert.match(renderedText, /Nur berechtigte HR\/Admin/);
+  assert.doesNotMatch(renderedText, /MSchG|Schwangerschaft|Stillzeit/);
+  ordinary.value = "write";
+  ordinary.listeners.change();
+  assert.equal(f.ctx.state.personnelFieldRightsDrafts.manager["identity.firstName"], "write");
+  assert.equal(f.ctx.state.personnelFieldRightsDrafts.manager[protection.FIELD_KEY], "hidden");
+  assert.equal(f.ctx.state.personnelFieldRightsDirtyRoles.has("manager"), true);
 });
 
 test("Leitungs-Feldrechtematrix: manipuliertes Schutzstatus-Change stellt hidden wieder her", () => {
-  let callback;
-  const ctx = context({ elements: { personnelFieldRightsMatrix: { addEventListener: (name, handler) => { callback = handler; } } } });
-  ctx.state.personnelFieldRightsDrafts = {};
-  ctx.state.personnelFieldRightsDirtyRoles = new Set();
-  ctx.state.selectedPersonnelFieldRightsRole = "manager";
-  vm.runInContext(between('elements.personnelFieldRightsMatrix?.addEventListener("change",', 'elements.savePersonnelFieldRightsButton?.addEventListener('), ctx);
-  const select = { dataset: { personnelFieldRight: protection.FIELD_KEY }, value: "write", disabled: false };
-  callback({ target: { closest: () => select } });
-  assert.equal(select.value, "hidden");
-  assert.equal(select.disabled, true);
-  assert.equal(ctx.state.personnelFieldRightsDirtyRoles.size, 0);
-  assert.equal(Object.keys(ctx.state.personnelFieldRightsDrafts).length, 0);
+  const f = personnelFieldRightsTableFixture();
+  const select = f.field(protection.FIELD_KEY);
+  for (const value of ["read", "write"]) {
+    select.value = value;
+    select.disabled = false;
+    select.listeners.change();
+    assert.equal(select.value, "hidden", value);
+    assert.equal(select.disabled, true, value);
+    assert.equal(f.ctx.state.personnelFieldRightsDirtyRoles.size, 0, value);
+    assert.equal(Object.keys(f.ctx.state.personnelFieldRightsDrafts).length, 0, value);
+    assert.equal(f.ctx.personnelFieldRightsForSave("manager")[protection.FIELD_KEY], "hidden", value);
+  }
 });
 
 test("editor sends only loaded opaque bases for submitted structure fields, including deletion", () => {

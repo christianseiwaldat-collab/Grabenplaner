@@ -140,13 +140,13 @@ test("Urlaubsanzeige zieht österreichische Feiertage im gewählten Zeitraum imm
   assert.equal(countVacationDays("2026-08-10", "2026-08-23"), 9);
 });
 
-test("v0.65: Zugänge und Rechtemanagement bleiben echte Zweispalten-Bereiche", () => {
+test("Zugänge bleiben zweispaltig; Rechtemanagement startet direkt mit Fenstern", () => {
   const access = section("accessSettings");
   const rights = section("rightsSettings");
   assert.match(access, /settings-section settings-two-column/);
-  assert.match(rights, /settings-section settings-two-column/);
+  assert.match(rights, /settings-section rights-window-entry/);
   assert.doesNotMatch(access, /settings-card full-span/);
-  assert.doesNotMatch(rights, /settings-card full-span/);
+  assert.doesNotMatch(rights, /class="[^\"]*settings-card/);
   assert.match(styles, /#accessSettings \.greeting-template-grid \{ grid-template-columns:minmax\(0,1fr\); \}/);
 });
 

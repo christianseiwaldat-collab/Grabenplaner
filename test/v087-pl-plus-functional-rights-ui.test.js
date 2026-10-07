@@ -51,8 +51,9 @@ test("v0.87 Block 3 UI: fachliche Ansichten folgen den wirksamen Einzelrechten",
   assert.doesNotMatch(rulesAccess, /location_planner/);
 
   const mobileSettings = between(app, "function renderMobileLeadershipSettings()", "function personnelFieldLevelLabel(");
-  assert.match(mobileSettings, /\["schedule", "approvals", "more"\]/);
-  assert.match(mobileSettings, /Die Laufzeit pr.ft weiterhin die wirksamen Rechte/);
+  assert.match(mobileSettings, /\[['"]schedule['"], ['"]approvals['"], ['"]more['"]\]/);
+  assert.match(mobileSettings, /input\.disabled = state\.mobileLeadershipSettings\?\.canChange === false \|\| required \|\| unavailable \|\| !canUseRightsSettingsCards\(\)/);
+  assert.match(mobileSettings, /Pers.nliche Men.anpassungen und wirksame Rechte bleiben ma.geblich/);
 });
 
 test("v0.87 Block 3 UI: Telefonansicht wird nur bei reinem Telefonzugriff bezeichnet", () => {

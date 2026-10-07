@@ -8,6 +8,9 @@ let startDashboardVps = null;
 const branchOrderViewStates = new Map();
 let branchOrderViewActor = '';
 let personalActionsWindow = null, personalActionsOpener = null;
+let rightsWorkspace = null, rightsWorkspaceActor = '', rightsLoadController = null, rightsLoadGeneration = 0;
+let rightsSettingsWindows = null, permissionDefaultsUI = null;
+let rightsEditorGeneration = 0, rightsEditorSaveContext = null, rightsEditorSnapshot = null;
 (() => {
   const storageKey = "grabenplaner-bootstrap-token";
   const parameters = new URLSearchParams(window.location.search);
@@ -351,7 +354,10 @@ const state = {
   brandingPreference: null,
   brandingFormDirty: false,
   mobileLeadershipSettings: null,
+  mobileLeadershipSettingsDraft: null,
+  mobileLeadershipSettingsSavingContext: null,
   personnelFieldRights: null,
+  personnelFieldRightsSavingContext: null,
   selectedPersonnelFieldRightsRole: "manager",
   personnelFieldRightsDirtyRoles: new Set(),
   personnelFieldRightsDrafts: {},
@@ -1812,6 +1818,7 @@ async function navigateToFunctionSearchEntry(entryId) {
 
   closeMobileNavigation({ restoreFocus: false });
   await revealSalesArticleSearchWindowTarget(entry.target, () => sequence === functionSearchNavigationSequence);
+  await revealRightsWorkspaceTarget(entry.target, () => sequence === functionSearchNavigationSequence);
   if (sequence !== functionSearchNavigationSequence) return false;
   await waitForFunctionSearchTargetLayout();
   if (sequence !== functionSearchNavigationSequence) return false;
@@ -20793,6 +20800,7 @@ function syncGpWindows() {
   const articleDock=document.getElementById('sidebarArticleSearchButton'), priceDock=document.getElementById('sidebarPriceLabelSearchButton');
   if(articleDock)articleDock.hidden=state.currentView!=='articleCatalog'||!canReadSalesArticles();
   if(priceDock)priceDock.hidden=state.currentView!=='priceLabels'||!canUseSalesPriceLabels();
+  syncRightsWorkspace();
 }
 
 function syncSidebarNotepad() {
@@ -23723,31 +23731,92 @@ async function unlockOrganizationAccount(accountId) {
   }
 }
 
+function canUseRightsWorkspace() {
+  if (!state.portalStatus) return false;
+  if (!state.portalStatus.portalEnabled) return true;
+  const user = state.portalSession?.user;
+  return state.portalSession?.authenticated === true && user?.active !== false
+    && user?.mustChangePassword !== true && user?.isEmployee !== false
+    && ["developer", "it_admin", "admin", "hr", "manager"].includes(user?.role)
+    && (user.permissions || []).includes("rights:read");
+}
+
+function rightsWorkspaceActorKey() {
+  return state.portalStatus?.portalEnabled ? startDashboardWorkspaceActorKey() : 'local';
+}
+
+function rightsSettingsTableIdentity() {
+  return state.portalStatus?.portalEnabled
+    ? JSON.stringify([state.portalSession?.user?.employeeNumber, state.portalSession?.user?.accountId]) : 'local';
+}
+
+function rightsWindowEntryGeometry(index, width, height) {
+  const scale = salesArticleSearchWindowScale(), bounds = salesArticleSearchWindowBounds();
+  const rect = elements.rightsSettings.getBoundingClientRect();
+  const left = Math.max(0, rect.left / scale), top = Math.max(0, rect.top / scale);
+  const columns = Math.max(1, Math.floor((rect.width / scale + 12) / 312));
+  const count = state.portalSession?.user?.role === 'developer' ? 4 : state.portalSession?.user?.role === 'manager' ? 1 : 3;
+  elements.rightsSettings.style.minHeight = `${Math.ceil(count / columns) * 60 + 8}px`;
+  return {x:left + (index % columns) * 312, y:top + Math.floor(index / columns) * 60 + 8,
+    width:Math.min(width, bounds.width), height:Math.min(height, bounds.height), minimized:true};
+}
+
+async function revealRightsWorkspaceTarget(target, isCurrent = () => true) {
+  if (target?.view !== 'settings' || target.settingsTab !== 'rights' || !isCurrent() || !canUseRightsWorkspace()) return;
+  const id = target.focusId;
+  if (id === 'rightsManagementWindow') await rightsWorkspace?.show();
+  else {
+    const windowId = {permissionDefaultsWindow:'rights:defaults',personnelFieldRightsWindow:'rights:personnel-fields',mobileLeadershipWindow:'rights:mobile-leadership'}[id];
+    if (windowId) await rightsSettingsWindows?.show(windowId);
+  }
+}
+
+function syncRightsWorkspace() {
+  const key = rightsWorkspaceActorKey();
+  if (rightsWorkspaceActor && (key !== rightsWorkspaceActor || !canUseRightsWorkspace())) {
+    rightsLoadGeneration++; rightsLoadController?.abort(); rightsLoadController = null;
+    rightsEditorGeneration++; rightsEditorSaveContext?.controller.abort(); rightsEditorSaveContext = null;
+    rightsEditorSnapshot = null; state.selectedRightsEmployeeNumber = null; state.rightsManagement = null;
+    resetRightsSettingsCardState();
+    void permissionDefaultsUI?.load(false);
+  }
+  rightsWorkspaceActor = key;
+  if (!window.RightsManagementWorkspace || !gpWindowManager) return;
+  if (!rightsWorkspace) rightsWorkspace = window.RightsManagementWorkspace.mount({
+    root: document.getElementById('rightsManagementWindow'), editor: elements.rightsEditorModal,
+    opener: document.getElementById('openRightsManagementButton'),
+    initialGeometry: () => rightsWindowEntryGeometry(0,1000,500),
+    closeTarget: () => document.getElementById('settingsRightsTab'),
+    key: rightsWorkspaceActorKey,
+    identity: rightsSettingsTableIdentity,
+    canUse: canUseRightsWorkspace,
+    active: () => state.currentView === 'settings' && elements.rightsSettings?.classList.contains('active'),
+    windowPreferences: gpWindowManager.preferences, bounds: salesArticleSearchWindowBounds, scale: salesArticleSearchWindowScale,
+    openProfile: number => openRightsEditor(number),
+    error: error => showToast('Rechtemanagement: ' + error.message, true),
+  });
+  rightsWorkspace.sync();
+  if (!rightsSettingsWindows && window.RightsSettingsWindows) rightsSettingsWindows = window.RightsSettingsWindows.mount({
+    windows: [
+      {id:'rights:defaults', root:document.getElementById('permissionDefaultsWindow'), opener:document.getElementById('openPermissionDefaultsWindowButton'), width:1080, height:650,
+        initialGeometry:() => rightsWindowEntryGeometry(1,1080,650),
+        canUse:() => canUseRightsWorkspace() && state.portalSession?.user?.role === 'developer'},
+      {id:'rights:personnel-fields', root:document.getElementById('personnelFieldRightsWindow'), opener:document.getElementById('openPersonnelFieldRightsWindowButton'), width:1000, height:650,
+        initialGeometry:() => rightsWindowEntryGeometry(state.portalSession?.user?.role === 'developer' ? 2 : 1,1000,650), canUse:canUseRightsSettingsCards},
+      {id:'rights:mobile-leadership', root:document.getElementById('mobileLeadershipWindow'), opener:document.getElementById('openMobileLeadershipWindowButton'), width:1080, height:560,
+        initialGeometry:() => rightsWindowEntryGeometry(state.portalSession?.user?.role === 'developer' ? 3 : 2,1080,560), canUse:canUseRightsSettingsCards},
+    ], key:rightsWorkspaceActorKey,
+    active:() => state.currentView === 'settings' && elements.rightsSettings?.classList.contains('active'),
+    windowPreferences:gpWindowManager.preferences, bounds:salesArticleSearchWindowBounds, scale:salesArticleSearchWindowScale,
+    closeTarget:() => document.getElementById('settingsRightsTab'),
+  });
+  rightsSettingsWindows?.sync();
+}
+
 function renderRightsManagement() {
-  if (!elements.rightsUserList) return;
-  const result = state.rightsManagement || {};
-  const users = result.users || [];
-  const query = String(elements.rightsEmployeeSearch?.value || "").trim().toLocaleLowerCase("de-AT");
-  const filtered = users.filter((user) => !query || [user.employeeNumber, user.fullName, user.nickname, user.roleName]
-    .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(query)));
-  const managerDenialOnly = state.portalSession?.user?.role === "manager";
-  elements.rightsManagementHint.textContent = users.length
-    ? managerDenialOnly
-      ? `${filtered.length} von ${users.length} Teammitgliedern im eigenen Standort angezeigt. FL verwaltet die persönliche Leihe sowie Grundrechte der Abteilungsleitungen.`
-      : `${filtered.length} von ${users.length} Teammitgliedern angezeigt. Grundrechte können persönlich eingeschränkt und zusätzliche Rechte gezielt vergeben werden.`
-    : "Es sind noch keine aktiven Teammitglieder vorhanden.";
-  elements.rightsUserList.innerHTML = filtered.length ? filtered.map((user) => {
-    const additionalCount = (user.grantedPermissions || []).length;
-    const revokedCount = (user.deniedPermissions || []).length;
-    const personnelLevels = Object.values(user.personnelFieldAccess || {});
-    const personnelSummary = ["location_planner", "manager", "department_manager"].includes(user.role) && personnelLevels.length
-      ? `<small>Personalakt effektiv · ${personnelLevels.filter((level) => level === "read").length} lesen · ${personnelLevels.filter((level) => level === "write").length} bearbeiten</small>` : "";
-    const location = state.locations.find((item) => item.id === user.homeLocationId);
-    const status = !user.configured ? "Portal-Zugang noch nicht eingerichtet" : !user.active ? "Portal-Zugang inaktiv" : user.manageable ? "Persönliche Rechte können bearbeitet werden" : "Rechte nur zur Ansicht";
-    return `<article class="rights-user-card" data-rights-user="${escapeHtml(user.employeeNumber)}">
-      <div class="rights-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${escapeHtml(user.roleName || user.role)} · ${escapeHtml(location?.name || user.homeLocationId || "Kein Standort")} · ${additionalCount} hinzugefügt · ${revokedCount} entzogen</small>${personnelSummary}<small>${escapeHtml(status)}</small></div><button class="secondary-button" type="button" data-edit-user-rights>${user.manageable ? "Rechte bearbeiten" : "Rechte ansehen"}</button></div>
-    </article>`;
-  }).join("") : '<p class="settings-note rights-empty-search">Kein Teammitglied entspricht dieser Suche.</p>';
+  syncGpWindows();
+  rightsWorkspace?.render({users: state.rightsManagement?.users || [], locations: state.locations || [],
+    managerDenialOnly: state.portalSession?.user?.role === 'manager'});
 }
 
 const rightsEditorOrganizationalPermissionIds = new Set([
@@ -23767,6 +23836,7 @@ const rightsEditorOrganizationalPermissionIds = new Set([
 ]);
 
 function selectedRightsEditorUser() {
+  if (rightsEditorSnapshot?.user.employeeNumber === state.selectedRightsEmployeeNumber) return rightsEditorSnapshot.user;
   return (state.rightsManagement?.users || []).find((entry) => entry.employeeNumber === state.selectedRightsEmployeeNumber) || null;
 }
 
@@ -23778,7 +23848,7 @@ function rightsEditorEffectivePermissionSet(user) {
 }
 
 function rightsEditorPermissionIsOrganizational(permissionId) {
-  const permission = (state.rightsManagement?.catalog || []).find((entry) => entry.id === permissionId);
+  const permission = (rightsEditorSnapshot?.catalog || state.rightsManagement?.catalog || []).find((entry) => entry.id === permissionId);
   return permission?.scopeBehavior === "organizational"
     || (permission?.scopeBehavior !== "global" && rightsEditorOrganizationalPermissionIds.has(permissionId));
 }
@@ -23869,7 +23939,7 @@ function rightsEditorSelectedScope() {
 function refreshRightsEditorSaveState() {
   const user = selectedRightsEditorUser();
   if (!elements.saveRightsEditorButton) return;
-  elements.saveRightsEditorButton.disabled = !user?.manageable || rightsEditorSelectedScope() === null;
+  elements.saveRightsEditorButton.disabled = Boolean(rightsEditorSaveContext) || !user?.manageable || rightsEditorSelectedScope() === null;
 }
 
 function refreshRightsEditorScope() {
@@ -23957,7 +24027,9 @@ function enforceRightsEditorPermissionDependencies(changedInput = null, announce
 function openRightsEditor(employeeNumber) {
   const result = state.rightsManagement || {};
   const user = (result.users || []).find((entry) => entry.employeeNumber === employeeNumber);
-  if (!user || !elements.rightsEditorModal) return;
+  if (!user || !elements.rightsEditorModal || !canUseRightsWorkspace()) return;
+  const generation = ++rightsEditorGeneration, actor = rightsWorkspaceActorKey();
+  rightsEditorSnapshot = JSON.parse(JSON.stringify({user, catalog: result.catalog || []}));
   const personalLoanOnly = state.portalSession?.user?.role === "manager" && user.role === "employee";
   elements.rightsEditorModal.classList.toggle("compact-rights-editor", personalLoanOnly);
   state.rightsEditorReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -24009,26 +24081,107 @@ function openRightsEditor(employeeNumber) {
           : "Als Filialleitung können Sie Grundrechte dieser Abteilungsleitung entziehen oder wiederherstellen. Zusatzrechte, Rollen und Geltungsbereiche bleiben unverändert."
       : "Aktivierte Rollenrechte bleiben wirksam; abgewählte Rollenrechte werden persönlich entzogen. Änderungen gelten sofort.";
   refreshRightsEditorScope();
-  elements.rightsEditorModal.showModal();
-  window.requestAnimationFrame(() => elements.rightsEditorTitle?.focus());
+  void rightsWorkspace?.showProfile(state.rightsEditorReturnFocus).then(() => {
+    if (generation !== rightsEditorGeneration || actor !== rightsWorkspaceActorKey() || !elements.rightsEditorModal.open) return;
+    window.requestAnimationFrame(() => elements.rightsEditorTitle?.focus());
+  });
+}
+
+let mobileLeadershipSettingsTable = null, personnelFieldRightsTable = null;
+let mobileLeadershipSettingsTableActor = '', personnelFieldRightsTableActor = '', mobileLeadershipSettingsTableShape = '';
+const mobileLeadershipRoleLabels = Object.freeze({ location_planner: "Planungsverantwortung", department_manager: "Abteilungsleitung", manager: "Filialleitung", hr: "Personalleitung", admin: "Admin", it_admin: "IT-Admin", developer: "Developer" });
+
+function canUseRightsSettingsCards() {
+  return canUseRightsWorkspace() && (!state.portalStatus?.portalEnabled
+    || ["developer", "it_admin", "admin", "hr"].includes(state.portalSession?.user?.role));
+}
+
+function resetRightsSettingsCardState() {
+  state.mobileLeadershipSettingsSavingContext?.controller.abort();
+  state.personnelFieldRightsSavingContext?.controller.abort();
+  state.mobileLeadershipSettingsSavingContext = null;
+  state.personnelFieldRightsSavingContext = null;
+  state.mobileLeadershipSettings = null;
+  state.mobileLeadershipSettingsDraft = null;
+  state.personnelFieldRights = null;
+  state.personnelFieldRightsDrafts = {};
+  state.personnelFieldRightsDirtyRoles.clear();
+  mobileLeadershipSettingsTable?.destroy(); personnelFieldRightsTable?.destroy();
+  mobileLeadershipSettingsTable = null; personnelFieldRightsTable = null;
+  mobileLeadershipSettingsTableActor = ''; personnelFieldRightsTableActor = '';
+  mobileLeadershipSettingsTableShape = '';
+  elements.mobileLeadershipModuleSettings?.replaceChildren();
+  elements.personnelFieldRightsMatrix?.replaceChildren();
+}
+
+function mobileLeadershipLayoutsForSave() {
+  const source = state.mobileLeadershipSettingsDraft || state.mobileLeadershipSettings?.layouts || {};
+  return Object.fromEntries(Object.keys(mobileLeadershipRoleLabels).map(role => {
+    const chosen = [...new Set((Array.isArray(source[role]) ? source[role] : []).map(String))];
+    const modules = role === 'location_planner'
+      ? chosen.filter(id => ['schedule', 'approvals', 'more'].includes(id))
+      : ['timeTracking', ...chosen.filter(id => id !== 'timeTracking')];
+    return [role, modules];
+  }));
+}
+
+function updateMobileLeadershipSetting(row, module, input) {
+  if (!canUseRightsSettingsCards() || state.mobileLeadershipSettings?.canChange === false || input.disabled) return;
+  const required = row.role !== 'location_planner' && module.id === 'timeTracking';
+  const unavailable = row.role === 'location_planner' && !['schedule', 'approvals', 'more'].includes(module.id);
+  if (required || unavailable) return;
+  const layouts = mobileLeadershipLayoutsForSave(), next = new Set(layouts[row.role]);
+  if (input.checked) next.add(module.id); else next.delete(module.id);
+  if (next.size > 6) {
+    input.checked = false;
+    showToast('Je Rolle können höchstens sechs Elemente der Mobilnavigation gewählt werden.', true);
+    return;
+  }
+  layouts[row.role] = [...next];
+  state.mobileLeadershipSettingsDraft = layouts;
+  row.enabled = new Set(layouts[row.role]);
+  elements.mobileLeadershipSettingsHint.textContent = 'Ungespeicherte Änderungen der Mobilnavigation. Persönliche Menüanpassungen und wirksame Rechte bleiben maßgeblich.';
 }
 
 function renderMobileLeadershipSettings() {
-  if (!elements.mobileLeadershipModuleSettings) return;
-  const result = state.mobileLeadershipSettings || {};
-  const modules = result.availableModules || [];
-  const layouts = result.layouts || {};
-  const roleLabels = { location_planner: "Planungsverantwortung", department_manager: "Abteilungsleitung", manager: "Filialleitung", hr: "Personalleitung", admin: "Admin", it_admin: "IT-Admin", developer: "Developer" };
-  elements.mobileLeadershipModuleSettings.innerHTML = Object.entries(roleLabels).map(([role, label]) => {
-    const enabled = new Set(layouts[role] || []);
-    return `<article class="mobile-role-card" data-mobile-layout-role="${role}"><strong>${label}</strong><div class="mobile-module-grid">${modules.map((module) => {
-      const required = role !== "location_planner" && module.id === "timeTracking";
-      const unavailable = role === "location_planner" && !["schedule", "approvals", "more"].includes(module.id);
-      return `<label><input type="checkbox" value="${escapeHtml(module.id)}" ${(!unavailable && enabled.has(module.id)) || required ? "checked" : ""} ${required || unavailable ? "disabled" : ""} /><span>${escapeHtml(module.label || module.id)}</span></label>`;
-    }).join("")}</div></article>`;
-  }).join("");
-  elements.saveMobileLeadershipSettingsButton.disabled = result.canChange === false;
-  elements.mobileLeadershipSettingsHint.textContent = result.canChange === false ? "Nur Developer, IT-Admin, Admin oder Personalleitung kann diese Auswahl ändern." : "Zeiterfassung bleibt bei Leitungsrollen der erste Punkt; für die Planungsverantwortung können Dienstplan, Freigaben und Mehr angeordnet werden. Die Laufzeit prüft weiterhin die wirksamen Rechte.";
+  if (!elements.mobileLeadershipModuleSettings || !window.RightsSettingsTable) return;
+  const result = state.mobileLeadershipSettings || {}, modules = result.availableModules || [];
+  const actor = rightsWorkspaceActorKey(), layouts = mobileLeadershipLayoutsForSave();
+  const rows = canUseRightsSettingsCards() ? Object.entries(mobileLeadershipRoleLabels).map(([role, label]) => ({ role, label, enabled: new Set(layouts[role]) })) : [];
+  const shape = JSON.stringify(modules.map(module => [module.id, module.label]));
+  if (mobileLeadershipSettingsTable && (actor !== mobileLeadershipSettingsTableActor || shape !== mobileLeadershipSettingsTableShape)) {
+    mobileLeadershipSettingsTable.destroy(); mobileLeadershipSettingsTable = null;
+  }
+  if (!mobileLeadershipSettingsTable) {
+    mobileLeadershipSettingsTableActor = actor;
+    mobileLeadershipSettingsTableShape = shape;
+    mobileLeadershipSettingsTable = window.RightsSettingsTable.mount({
+      host: elements.mobileLeadershipModuleSettings, tableId: 'rights:mobile-leadership', identity: rightsSettingsTableIdentity,
+      canUse: canUseRightsSettingsCards, rows, emptyText: 'Die Mobilnavigation ist für diesen Zugang nicht verfügbar.', searchLabel: 'Leitungsrolle suchen',
+      columns: [{ id: 'role', label: 'Leitungsrolle', width: 190, mandatory: true, cell: row => row.label, sortValue: row => row.label },
+        ...modules.map(module => ({ id: module.id, label: module.label || module.id, width: 105, numeric: true,
+          sortValue: row => Number(row.enabled.has(module.id)),
+          cell(row, doc) {
+            const input = doc.createElement('input'); input.type = 'checkbox';
+            input.dataset.mobileLayoutRole = row.role; input.dataset.mobileLayoutModule = module.id;
+            const required = row.role !== 'location_planner' && module.id === 'timeTracking';
+            const unavailable = row.role === 'location_planner' && !['schedule', 'approvals', 'more'].includes(module.id);
+            input.checked = !unavailable && (required || row.enabled.has(module.id));
+            input.disabled = state.mobileLeadershipSettings?.canChange === false || required || unavailable || !canUseRightsSettingsCards();
+            input.setAttribute('aria-label', `${module.label || module.id} für ${row.label}`);
+            input.title = required ? 'Zeiterfassung bleibt für diese Leitungsrolle verpflichtend.' : unavailable ? 'Für die Planungsverantwortung nicht verfügbar.' : `${module.label || module.id} für ${row.label}`;
+            input.addEventListener('change', () => updateMobileLeadershipSetting(row, module, input));
+            return input;
+          } })),
+      ],
+    });
+  } else mobileLeadershipSettingsTable.setRows(rows);
+  elements.saveMobileLeadershipSettingsButton.disabled = !canUseRightsSettingsCards() || result.canChange === false || !modules.length || Boolean(state.mobileLeadershipSettingsSavingContext);
+  elements.mobileLeadershipSettingsHint.textContent = state.mobileLeadershipSettingsDraft
+    ? 'Ungespeicherte Änderungen der Mobilnavigation. Persönliche Menüanpassungen und wirksame Rechte bleiben maßgeblich.'
+    : result.canChange === false
+      ? 'Diese Standardnavigation kann mit diesem Zugang nur angesehen werden.'
+      : 'Standardnavigation für Leitungsrollen im Mitarbeiterportal. Persönliche Menüanpassungen und wirksame Rechte bleiben maßgeblich; Zeiterfassung bleibt verpflichtend.';
 }
 
 function personnelFieldLevelLabel(level, payload = state.personnelFieldRights || {}) {
@@ -24046,110 +24199,183 @@ function personnelFieldGroupSummary(groupElement) {
   if (summary) summary.textContent = `${counts.hidden} verborgen · ${counts.read} lesen · ${counts.write} bearbeiten`;
 }
 
+function personnelFieldRightsForSave(role) {
+  const payload = state.personnelFieldRights || {}, matrix = state.personnelFieldRightsDrafts[role] || payload.matrix?.[role] || {};
+  return Object.fromEntries((payload.fields || []).map(field => [field.key,
+    ['employment.protectionStatus', 'employment.retailKv'].includes(field.key)
+      ? 'hidden' : ['hidden', 'read', 'write'].includes(matrix[field.key]) ? matrix[field.key] : 'hidden']));
+}
+
+function updatePersonnelFieldRight(row, select) {
+  const role = select.dataset.personnelFieldRole;
+  if (row.restricted) { select.value = 'hidden'; select.disabled = true; return; }
+  if (!canUseRightsSettingsCards() || state.personnelFieldRights?.canChange === false || select.disabled
+    || !['hidden', 'read', 'write'].includes(select.value) || role !== state.selectedPersonnelFieldRightsRole) return;
+  const matrix = state.personnelFieldRightsDrafts[role] ||= personnelFieldRightsForSave(role);
+  matrix[row.key] = select.value;
+  row.level = select.value;
+  state.personnelFieldRightsDirtyRoles.add(role);
+  const roleLabel = state.personnelFieldRights?.roles?.find(entry => entry.id === role)?.label || 'diese Leitungsebene';
+  elements.personnelFieldRightsHint.textContent = `Ungespeicherte Änderungen für ${roleLabel}. Andere Leitungsebenen können trotzdem angesehen werden.`;
+  const option = elements.personnelFieldRightsRole?.selectedOptions?.[0];
+  if (option && !option.textContent.includes('nicht gespeichert')) option.textContent += ' · nicht gespeichert';
+}
+
 function renderPersonnelFieldRights() {
-  if (!elements.personnelFieldRightsMatrix || !elements.personnelFieldRightsRole) return;
-  const payload = state.personnelFieldRights || {};
-  const roles = Array.isArray(payload.roles) ? payload.roles : [];
+  if (!elements.personnelFieldRightsMatrix || !elements.personnelFieldRightsRole || !window.RightsSettingsTable) return;
+  const payload = state.personnelFieldRights || {}, roles = Array.isArray(payload.roles) ? payload.roles : [];
   const fields = Array.isArray(payload.fields) ? payload.fields : [];
-  const accessLevels = Array.isArray(payload.accessLevels) && payload.accessLevels.length
-    ? payload.accessLevels : [{ id: "hidden", label: "Verborgen" }, { id: "read", label: "Nur lesen" }, { id: "write", label: "Bearbeiten" }];
-  if (!roles.some((role) => role.id === state.selectedPersonnelFieldRightsRole)) {
-    state.selectedPersonnelFieldRightsRole = roles[0]?.id || "manager";
-  }
-  elements.personnelFieldRightsRole.innerHTML = roles.map((role) => `<option value="${escapeHtmlAttribute(role.id)}" ${role.id === state.selectedPersonnelFieldRightsRole ? "selected" : ""}>${escapeHtml(role.label || role.id)}${state.personnelFieldRightsDirtyRoles.has(role.id) ? " · nicht gespeichert" : ""}</option>`).join("");
+  if (!roles.some(role => role.id === state.selectedPersonnelFieldRightsRole)) state.selectedPersonnelFieldRightsRole = roles[0]?.id || 'manager';
+  elements.personnelFieldRightsRole.innerHTML = roles.map(role => `<option value="${escapeHtmlAttribute(role.id)}" ${role.id === state.selectedPersonnelFieldRightsRole ? 'selected' : ''}>${escapeHtml(role.label || role.id)}${state.personnelFieldRightsDirtyRoles.has(role.id) ? ' · nicht gespeichert' : ''}</option>`).join('');
   elements.personnelFieldRightsRole.disabled = roles.length < 2;
-  const roleMatrix = state.personnelFieldRightsDrafts[state.selectedPersonnelFieldRightsRole]
-    || payload.matrix?.[state.selectedPersonnelFieldRightsRole] || {};
-  const groups = new Map();
-  for (const field of fields) {
-    const group = field.group || "Weitere Daten";
-    if (!groups.has(group)) groups.set(group, []);
-    groups.get(group).push(field);
-  }
-  elements.personnelFieldRightsMatrix.innerHTML = groups.size ? [...groups.entries()].map(([group, groupFields], groupIndex) => `
-    <details class="personnel-field-rights-group" ${groupIndex === 0 ? "open" : ""}>
-      <summary><span><strong>${escapeHtml(group)}</strong><small data-personnel-field-group-summary></small></span><span aria-hidden="true">›</span></summary>
-      <div class="personnel-field-rights-list">${groupFields.map((field) => {
-        const restricted = ["employment.protectionStatus", "employment.retailKv"].includes(field.key);
-        const currentLevel = !restricted && ["hidden", "read", "write"].includes(roleMatrix[field.key]) ? roleMatrix[field.key] : "hidden";
-        const levels = restricted ? [{ id: "hidden", label: personnelFieldLevelLabel("hidden", payload) }] : accessLevels;
-        const note = restricted ? '<small>Nur berechtigte HR/Admin; für diese Leitungsrolle stets verborgen.</small>'
-          : (field.sensitive ? '<small>Besonders geschützt</small>' : "");
-        return `<label class="personnel-field-right-row" data-field-access-level="${escapeHtmlAttribute(currentLevel)}"><span class="personnel-field-right-name"><strong>${escapeHtml(field.label || field.key)}</strong>${note}</span><select data-personnel-field-right="${escapeHtmlAttribute(field.key)}" aria-label="${escapeHtmlAttribute(`Zugriff auf ${field.label || field.key}`)}" ${payload.canChange === false || restricted ? "disabled" : ""}>${levels.map((level) => `<option value="${escapeHtmlAttribute(level.id)}" ${level.id === currentLevel ? "selected" : ""}>${escapeHtml(level.label || personnelFieldLevelLabel(level.id, payload))}</option>`).join("")}</select></label>`;
-      }).join("")}</div>
-    </details>`).join("") : '<p class="settings-note">Es sind noch keine Personalakt-Felder konfiguriert.</p>';
-  elements.personnelFieldRightsMatrix.querySelectorAll(".personnel-field-rights-group").forEach(personnelFieldGroupSummary);
-  elements.savePersonnelFieldRightsButton.disabled = payload.canChange === false || !fields.length;
-  const roleLabel = roles.find((role) => role.id === state.selectedPersonnelFieldRightsRole)?.label || "diese Leitungsebene";
+  const matrix = personnelFieldRightsForSave(state.selectedPersonnelFieldRightsRole), actor = rightsWorkspaceActorKey();
+  const rows = canUseRightsSettingsCards() ? fields.map(field => ({...field, label: field.label || field.key,
+    group: field.group || 'Weitere Daten', restricted: ['employment.protectionStatus', 'employment.retailKv'].includes(field.key), level: matrix[field.key] })) : [];
+  if (personnelFieldRightsTable && actor !== personnelFieldRightsTableActor) { personnelFieldRightsTable.destroy(); personnelFieldRightsTable = null; }
+  if (!personnelFieldRightsTable) {
+    personnelFieldRightsTableActor = actor;
+    personnelFieldRightsTable = window.RightsSettingsTable.mount({
+      host: elements.personnelFieldRightsMatrix, tableId: 'rights:personnel-fields', identity: rightsSettingsTableIdentity,
+      canUse: canUseRightsSettingsCards, rows, emptyText: 'Es sind noch keine Personalakt-Felder konfiguriert.', searchLabel: 'Personalakt-Feld suchen',
+      columns: [
+        {id: 'label', label: 'Personalakt-Feld', width: 260, mandatory: true, cell: row => row.label, sortValue: row => row.label},
+        {id: 'group', label: 'Bereich', width: 160, cell: row => row.group, sortValue: row => row.group},
+        {id: 'protection', label: 'Schutz', width: 170, cell: row => row.restricted ? 'Nur berechtigte HR/Admin' : row.sensitive ? 'Besonders geschützt' : 'Standard', sortValue: row => Number(row.restricted) * 2 + Number(Boolean(row.sensitive)), numeric: true},
+        {id: 'access', label: 'Zugriff', width: 150, numeric: true, sortValue: row => ['hidden', 'read', 'write'].indexOf(row.level),
+          cell(row, doc) {
+            const select = doc.createElement('select'), current = state.personnelFieldRights || {};
+            select.dataset.personnelFieldRight = row.key; select.dataset.personnelFieldRole = state.selectedPersonnelFieldRightsRole;
+            select.setAttribute('aria-label', `Zugriff auf ${row.label}`);
+            select.disabled = row.restricted || current.canChange === false || !canUseRightsSettingsCards();
+            select.title = row.restricted ? 'Für diese Leitungsrolle stets verborgen; nur berechtigte HR/Admin.' : `Zugriff auf ${row.label}`;
+            const levels = row.restricted ? [{id: 'hidden', label: personnelFieldLevelLabel('hidden', current)}]
+              : Array.isArray(current.accessLevels) && current.accessLevels.length ? current.accessLevels : [{id: 'hidden', label: 'Verborgen'}, {id: 'read', label: 'Nur lesen'}, {id: 'write', label: 'Bearbeiten'}];
+            for (const level of levels) {
+              const option = doc.createElement('option'); option.value = level.id; option.textContent = level.label || personnelFieldLevelLabel(level.id, current);
+              option.selected = level.id === row.level; select.append(option);
+            }
+            select.value = row.level;
+            select.addEventListener('change', () => updatePersonnelFieldRight(row, select));
+            return select;
+          }},
+      ],
+    });
+  } else personnelFieldRightsTable.setRows(rows);
+  elements.savePersonnelFieldRightsButton.disabled = !canUseRightsSettingsCards() || payload.canChange === false || !fields.length || Boolean(state.personnelFieldRightsSavingContext);
+  const roleLabel = roles.find(role => role.id === state.selectedPersonnelFieldRightsRole)?.label || 'diese Leitungsebene';
   elements.personnelFieldRightsHint.textContent = state.personnelFieldRightsDirtyRoles.has(state.selectedPersonnelFieldRightsRole)
     ? `Ungespeicherte Änderungen für ${roleLabel}. Andere Leitungsebenen können trotzdem angesehen werden.`
-    : payload.canChange === false
-    ? "Die Personalakt-Feldrechte können mit diesem Zugang nur angesehen werden."
-    : `Änderungen gelten für alle Zugänge der Rolle ${roleLabel} und werden serverseitig durchgesetzt.`;
+    : payload.canChange === false ? 'Die Personalakt-Feldrechte können mit diesem Zugang nur angesehen werden.'
+      : `Änderungen gelten für alle Zugänge der Rolle ${roleLabel} und werden serverseitig durchgesetzt.`;
 }
 
 async function loadRightsManagement() {
   if (!elements.rightsSettings) return;
+  syncGpWindows();
+  if (!canUseRightsWorkspace()) return;
+  const actor = rightsWorkspaceActorKey(), generation = ++rightsLoadGeneration;
+  const priorRights = state.rightsManagement;
+  const priorMobile = state.mobileLeadershipSettings, priorPersonnel = state.personnelFieldRights;
+  rightsLoadController?.abort();
+  const controller = new AbortController(); rightsLoadController = controller;
+  const current = () => !controller.signal.aborted && generation === rightsLoadGeneration
+    && actor === rightsWorkspaceActorKey() && canUseRightsWorkspace();
   try {
     const managerDenialOnly = state.portalSession?.user?.role === "manager";
-    [...elements.rightsSettings.children].forEach((card, index) => {
-      card.classList.toggle("hidden", managerDenialOnly && index > 0);
-    });
+    for (const id of ['personnelFieldRightsSettingsAccess','mobileLeadershipSettingsCard']) {
+      document.getElementById(id)?.classList.toggle('hidden', managerDenialOnly);
+    }
     const [rights, mobile, personnelFieldRights] = managerDenialOnly
-      ? [await api("/api/portal/v1/rights"), { availableModules: [], layouts: {}, canChange: false }, { roles: [], fields: [], canChange: false }]
+      ? [await api("/api/portal/v1/rights", {signal: controller.signal}), { availableModules: [], layouts: {}, canChange: false }, { roles: [], fields: [], canChange: false }]
       : await Promise.all([
-        api("/api/portal/v1/rights"),
-        api("/api/portal/v1/mobile-layout"),
-        api("/api/portal/v1/personnel-field-rights"),
+        api("/api/portal/v1/rights", {signal: controller.signal}),
+        api("/api/portal/v1/mobile-layout", {signal: controller.signal}),
+        api("/api/portal/v1/personnel-field-rights", {signal: controller.signal}),
       ]);
-    state.rightsManagement = rights;
-    state.mobileLeadershipSettings = mobile;
-    state.personnelFieldRights = personnelFieldRights;
-    state.personnelFieldRightsDirtyRoles.clear();
-    state.personnelFieldRightsDrafts = {};
+    if (!current()) return;
+    if (state.rightsManagement === priorRights) state.rightsManagement = rights;
+    if (!state.mobileLeadershipSettingsSavingContext && state.mobileLeadershipSettings === priorMobile) state.mobileLeadershipSettings = mobile;
+    if (!state.personnelFieldRightsSavingContext && state.personnelFieldRights === priorPersonnel) state.personnelFieldRights = personnelFieldRights;
     renderRightsManagement();
     renderMobileLeadershipSettings();
     renderPersonnelFieldRights();
     await permissionDefaultsUI.load(state.portalSession?.user?.role === "developer");
   } catch (error) {
+    if (!current()) return;
+    if (error.status === 401 || error.status === 403) {
+      state.rightsManagement = null;
+      rightsEditorSnapshot = null;
+      state.selectedRightsEmployeeNumber = null;
+      if (elements.rightsEditorModal.open) elements.rightsEditorModal.close();
+      elements.rightsEditorPermissions.replaceChildren();
+      elements.rightsEditorTitle.textContent = 'Rechte bearbeiten';
+      elements.rightsEditorSummary.textContent = '';
+      elements.saveRightsEditorButton.disabled = true;
+      resetRightsSettingsCardState();
+      await permissionDefaultsUI?.load(false);
+      rightsSettingsWindows?.destroy(); rightsSettingsWindows = null;
+    }
+    rightsWorkspace?.render({users: [], locations: state.locations || [], managerDenialOnly: state.portalSession?.user?.role === 'manager'});
     elements.rightsManagementHint.textContent = error.status === 403 ? "Rechtemanagement ist für diesen Zugang nicht verfügbar." : error.message;
-    elements.rightsUserList.innerHTML = "";
-    elements.mobileLeadershipModuleSettings.innerHTML = "";
-    elements.personnelFieldRightsMatrix.innerHTML = "";
+  } finally {
+    if (rightsLoadController === controller) rightsLoadController = null;
   }
 }
 
 async function savePersonnelFieldRights() {
+  if (state.personnelFieldRightsSavingContext || !canUseRightsSettingsCards() || !state.personnelFieldRights
+    || state.personnelFieldRights.canChange === false) return;
   const role = state.selectedPersonnelFieldRightsRole;
-  const fields = Object.fromEntries([...elements.personnelFieldRightsMatrix.querySelectorAll("select[data-personnel-field-right]")]
-    .map((select) => [select.dataset.personnelFieldRight, select.value]));
+  const fields = personnelFieldRightsForSave(role);
   const expectedCount = state.personnelFieldRights?.fields?.length || 0;
-  if (!role || Object.keys(fields).length !== expectedCount) return showToast("Die Feldrechte konnten nicht vollständig gelesen werden.", true);
+  if (!role || !state.personnelFieldRights.roles?.some(entry => entry.id === role) || !expectedCount
+    || Object.keys(fields).length !== expectedCount) return showToast("Die Feldrechte konnten nicht vollständig gelesen werden.", true);
+  const context = { actor: rightsWorkspaceActorKey(), role, fields, signature: JSON.stringify(fields), controller: new AbortController() };
+  state.personnelFieldRightsSavingContext = context;
+  const current = () => !context.controller.signal.aborted && context.actor === rightsWorkspaceActorKey() && canUseRightsSettingsCards();
   elements.savePersonnelFieldRightsButton.disabled = true;
   try {
-    state.personnelFieldRights = await api(`/api/portal/v1/personnel-field-rights/${encodeURIComponent(role)}`, {
+    const result = await api(`/api/portal/v1/personnel-field-rights/${encodeURIComponent(role)}`, {
       method: "PUT",
       body: JSON.stringify({ fields }),
+      signal: context.controller.signal,
     });
-    state.personnelFieldRightsDirtyRoles.delete(role);
-    delete state.personnelFieldRightsDrafts[role];
+    if (!current()) return;
+    const changed = JSON.stringify(personnelFieldRightsForSave(role)) !== context.signature;
+    state.personnelFieldRights = result;
+    if (!changed) {
+      state.personnelFieldRightsDirtyRoles.delete(role);
+      delete state.personnelFieldRightsDrafts[role];
+    }
     renderPersonnelFieldRights();
     const roleLabel = state.personnelFieldRights.roles?.find((entry) => entry.id === role)?.label || role;
-    showToast(`Personalakt-Feldrechte für ${roleLabel} wurden gespeichert.`);
+    showToast(changed ? `Personalakt-Feldrechte für ${roleLabel} wurden gespeichert. Nachträgliche Änderungen bleiben ungespeichert erhalten.`
+      : `Personalakt-Feldrechte für ${roleLabel} wurden gespeichert.`);
   } catch (error) {
-    showToast(error.message, true);
+    if (current()) showToast(error.message, true);
   } finally {
-    if (elements.savePersonnelFieldRightsButton) elements.savePersonnelFieldRightsButton.disabled = state.personnelFieldRights?.canChange === false;
+    if (state.personnelFieldRightsSavingContext === context) {
+      state.personnelFieldRightsSavingContext = null;
+      if (current()) renderPersonnelFieldRights();
+    }
   }
+}
+
+function rightsEditorDraftSignature() {
+  return JSON.stringify([
+    [...elements.rightsEditorPermissions.querySelectorAll('input[data-rights-permission]')].map(input => [input.value, input.checked]),
+    [...elements.rightsEditorForm.querySelectorAll('input[name="rightsEditorScopeMode"]')].map(input => [input.value, input.checked]),
+  ]);
 }
 
 async function saveUserRights(event) {
   event.preventDefault();
+  if (rightsEditorSaveContext || !canUseRightsWorkspace()) return;
   const employeeNumber = state.selectedRightsEmployeeNumber;
   const user = selectedRightsEditorUser();
-  if (!employeeNumber || !user) return;
+  if (!employeeNumber || !user?.manageable) return;
   enforceRightsEditorPermissionDependencies(null, false);
-  const catalogById = new Map((state.rightsManagement?.catalog || []).map((permission) => [permission.id, permission]));
+  const catalogById = new Map((rightsEditorSnapshot?.catalog || state.rightsManagement?.catalog || []).map((permission) => [permission.id, permission]));
   const inputs = [...elements.rightsEditorPermissions.querySelectorAll('input[data-rights-permission]:not(:disabled)')]
     .filter((input) => permissionEligibleForRole(catalogById.get(input.value), user.role));
   const grantedPermissions = inputs
@@ -24171,19 +24397,34 @@ async function saveUserRights(event) {
     return;
   }
   elements.saveRightsEditorButton.disabled = true;
+  const context = {actor: rightsWorkspaceActorKey(), generation: rightsEditorGeneration,
+    employeeNumber, signature: rightsEditorDraftSignature(), controller: new AbortController()};
+  rightsEditorSaveContext = context;
+  const current = () => !context.controller.signal.aborted && context.actor === rightsWorkspaceActorKey()
+    && context.generation === rightsEditorGeneration && employeeNumber === state.selectedRightsEmployeeNumber && canUseRightsWorkspace();
   try {
-    state.rightsManagement = await api(`/api/portal/v1/rights/${encodeURIComponent(employeeNumber)}`, {
+    const saved = await api(`/api/portal/v1/rights/${encodeURIComponent(employeeNumber)}`, {
       method: "PUT",
+      signal: context.controller.signal,
       body: managerDenialOnly
         ? JSON.stringify({ grantedPermissions, deniedPermissions })
         : JSON.stringify({ grantedPermissions, deniedPermissions, scopes }),
     });
-    elements.rightsEditorModal.close();
+    if (!current()) return;
+    state.rightsManagement = saved;
+    if (rightsEditorDraftSignature() === context.signature) elements.rightsEditorModal.close();
     renderRightsManagement();
-    showToast(`Persönliche Rechte für ${employeeNumber} wurden gespeichert.`);
+    showToast(elements.rightsEditorModal.open
+      ? `Rechte für ${employeeNumber} gespeichert. Nachträgliche Eingaben sind noch nicht gespeichert.`
+      : `Persönliche Rechte für ${employeeNumber} wurden gespeichert.`);
   } catch (error) {
+    if (!current()) return;
     showToast(error.message, true);
-    refreshRightsEditorSaveState();
+  } finally {
+    if (rightsEditorSaveContext === context) {
+      rightsEditorSaveContext = null;
+      refreshRightsEditorSaveState();
+    }
   }
 }
 
@@ -24612,6 +24853,8 @@ function applyAppFontScalePercent(value) {
   document.documentElement.style.setProperty("--app-font-scale-inverse", String(1 / scale));
   sidebarLayout?.refresh();
   salesArticleSearchWindow?.refresh();
+  rightsWorkspace?.sync();
+  rightsSettingsWindows?.sync();
   if (elements.appFontScalePercent) elements.appFontScalePercent.value = String(normalized);
   if (elements.decreaseAppFontScale) elements.decreaseAppFontScale.disabled = normalized <= APP_FONT_SCALE_MIN;
   if (elements.increaseAppFontScale) elements.increaseAppFontScale.disabled = normalized >= APP_FONT_SCALE_MAX;
@@ -27037,18 +27280,33 @@ async function loadRightsDashboard() {
 }
 
 async function saveMobileLeadershipSettings() {
-  const layouts = {};
-  elements.mobileLeadershipModuleSettings.querySelectorAll("[data-mobile-layout-role]").forEach((card) => {
-    layouts[card.dataset.mobileLayoutRole] = [...card.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value).slice(0, 6);
-  });
+  if (state.mobileLeadershipSettingsSavingContext || !canUseRightsSettingsCards() || !state.mobileLeadershipSettings
+    || state.mobileLeadershipSettings.canChange === false) return;
+  const layouts = mobileLeadershipLayoutsForSave();
+  if (Object.values(layouts).some(modules => modules.length > 6)) return showToast('Je Rolle sind höchstens sechs Elemente der Mobilnavigation zulässig.', true);
+  const context = { actor: rightsWorkspaceActorKey(), signature: JSON.stringify(layouts), controller: new AbortController() };
+  state.mobileLeadershipSettingsSavingContext = context;
+  const current = () => !context.controller.signal.aborted && context.actor === rightsWorkspaceActorKey() && canUseRightsSettingsCards();
+  elements.saveMobileLeadershipSettingsButton.disabled = true;
   try {
-    state.mobileLeadershipSettings = await api("/api/portal/v1/mobile-layout", {
+    const result = await api("/api/portal/v1/mobile-layout", {
       method: "PUT",
       body: JSON.stringify({ layouts }),
+      signal: context.controller.signal,
     });
+    if (!current()) return;
+    const changed = JSON.stringify(mobileLeadershipLayoutsForSave()) !== context.signature;
+    state.mobileLeadershipSettings = result;
+    if (!changed) state.mobileLeadershipSettingsDraft = null;
     renderMobileLeadershipSettings();
-    showToast("Die mobile Leitungsansicht wurde gespeichert.");
-  } catch (error) { showToast(error.message, true); }
+    showToast(changed ? 'Die Mobilnavigation wurde gespeichert. Nachträgliche Änderungen bleiben ungespeichert erhalten.' : 'Die mobile Leitungsansicht wurde gespeichert.');
+  } catch (error) { if (current()) showToast(error.message, true); }
+  finally {
+    if (state.mobileLeadershipSettingsSavingContext === context) {
+      state.mobileLeadershipSettingsSavingContext = null;
+      if (current()) renderMobileLeadershipSettings();
+    }
+  }
 }
 
 async function loadAmuSettings() {
@@ -36562,7 +36820,13 @@ function setSettingsTab(tab) {
     loadWorkflowSettings();
     loadApprovalDelegations();
   }
-  if (activeTab === "rights") loadRightsManagement();
+  if (activeTab === "rights") {
+    rightsWindowEntryGeometry(0,1000,500);
+    syncGpWindows();
+    void rightsWorkspace?.show({minimized:true});
+    for (const id of ['rights:defaults','rights:personnel-fields','rights:mobile-leadership']) void rightsSettingsWindows?.show(id,{minimized:true});
+    loadRightsManagement();
+  } else syncRightsWorkspace();
   if (activeTab === "systemCenter") loadSystemCenter();
   if (activeTab === "integrations") loadIntegrations().catch((error) => showToast(error.message, true));
   if (activeTab === "dataProtection") {
@@ -40485,10 +40749,14 @@ document.addEventListener("keydown", (event) => {
 syncMobileNavigationMode();
 integratePersonnelSettings();
 integrateSchedulePdfSettings();
-const permissionDefaultsUI = initializePermissionDefaults({
+permissionDefaultsUI = initializePermissionDefaults({
   api, toast: showToast, dependencyRules: permissionDependencyRules,
+  identity:rightsSettingsTableIdentity, actorKey:rightsWorkspaceActorKey,
+  canUse:() => state.portalSession?.user?.role === 'developer' && canUseRightsWorkspace(),
   refreshRights: async () => {
+    const actor = rightsWorkspaceActorKey();
     const [rights, roleData] = await Promise.all([api("/api/portal/v1/rights"), api("/api/portal/v1/roles")]);
+    if (actor !== rightsWorkspaceActorKey() || !canUseRightsWorkspace()) return;
     state.rightsManagement = rights;
     state.portalRoles = roleData.roles || [];
     state.portalPositionPermissionDefaults = roleData.positionDefaults || [];
@@ -40906,11 +41174,6 @@ document.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeSchedulePdfDesignMenu();
 });
-elements.rightsEmployeeSearch?.addEventListener("input", renderRightsManagement);
-elements.rightsUserList?.addEventListener("click", (event) => {
-  const card = event.target.closest("[data-rights-user]");
-  if (card && event.target.closest("[data-edit-user-rights]")) openRightsEditor(card.dataset.rightsUser);
-});
 elements.rightsEditorPermissions?.addEventListener("change", (event) => {
   const input = event.target.closest('input[data-rights-permission]');
   if (!input) return;
@@ -40927,6 +41190,8 @@ elements.rightsEditorScope?.addEventListener("change", (event) => {
     : "Verantwortungsbereich auf die gesamte Filiale erweitert.");
 });
 elements.rightsEditorModal?.addEventListener("close", () => {
+  rightsEditorGeneration++;
+  rightsEditorSnapshot = null;
   const returnFocus = state.rightsEditorReturnFocus;
   state.rightsEditorReturnFocus = null;
   if (returnFocus?.isConnected) returnFocus.focus();
@@ -40935,27 +41200,6 @@ elements.rightsEditorForm?.addEventListener("submit", saveUserRights);
 elements.personnelFieldRightsRole?.addEventListener("change", (event) => {
   state.selectedPersonnelFieldRightsRole = event.target.value;
   renderPersonnelFieldRights();
-});
-elements.personnelFieldRightsMatrix?.addEventListener("change", (event) => {
-  const select = event.target.closest("select[data-personnel-field-right]");
-  if (!select) return;
-  if (select.dataset.personnelFieldRight === "employment.protectionStatus") {
-    select.value = "hidden";
-    select.disabled = true;
-    return;
-  }
-  if (select.disabled) return;
-  const role = state.selectedPersonnelFieldRightsRole;
-  const matrix = state.personnelFieldRightsDrafts[role]
-    ||= { ...(state.personnelFieldRights?.matrix?.[role] || {}) };
-  matrix[select.dataset.personnelFieldRight] = select.value;
-  state.personnelFieldRightsDirtyRoles.add(state.selectedPersonnelFieldRightsRole);
-  const roleLabel = state.personnelFieldRights?.roles?.find((role) => role.id === state.selectedPersonnelFieldRightsRole)?.label || "diese Leitungsebene";
-  if (elements.personnelFieldRightsHint) elements.personnelFieldRightsHint.textContent = `Ungespeicherte Änderungen für ${roleLabel}. Andere Leitungsebenen können trotzdem angesehen werden.`;
-  const selectedOption = elements.personnelFieldRightsRole?.selectedOptions?.[0];
-  if (selectedOption && !selectedOption.textContent.includes("nicht gespeichert")) selectedOption.textContent += " · nicht gespeichert";
-  select.closest(".personnel-field-right-row")?.setAttribute("data-field-access-level", select.value);
-  personnelFieldGroupSummary(select.closest(".personnel-field-rights-group"));
 });
 elements.savePersonnelFieldRightsButton?.addEventListener("click", savePersonnelFieldRights);
 elements.loanManagementRefresh?.addEventListener("click", loadLoanManagement);

@@ -30,6 +30,10 @@ const PORTAL_ROLES = Object.freeze([
 ]);
 const ALL_GATE_IDS = new Set(catalogApi.FUNCTION_SEARCH_CATALOG.flatMap((item) => item.access.gateIds));
 const FULL_ACCESS = Object.freeze({ authenticated: true, availableGateIds: ALL_GATE_IDS });
+const RIGHTS_WINDOW_CASES = Object.freeze([
+  { id: "settings.mobile-leadership", gateId: "openMobileLeadershipWindowButton", focusId: "mobileLeadershipWindow" },
+  { id: "settings.personnel-field-rights", gateId: "openPersonnelFieldRightsWindowButton", focusId: "personnelFieldRightsWindow" },
+]);
 
 const FEATURE_CASES = Object.freeze([
   {
@@ -130,8 +134,8 @@ function availableIds(availableGateIds) {
 
 test("Block 5: alle Portalrollen bleiben vollständig an die projizierten UI-Gates gebunden", () => {
   assert.ok(catalogApi.FUNCTION_SEARCH_CATALOG.length > 0);
-  // Logistics, price labels and the five privacy destinations have real gates.
-  assert.equal(ALL_GATE_IDS.size, 107);
+  // The existing 107 gates plus two independently protected rights-window openers.
+  assert.equal(ALL_GATE_IDS.size, 107 + RIGHTS_WINDOW_CASES.length);
   assert.doesNotMatch(catalogSource, /options\?\.role|options\.role|role\s*===\s*["']/);
   assert.match(appSource, /isGateAvailable: functionSearchGateAvailable/);
 
@@ -153,6 +157,33 @@ test("Block 5: alle Portalrollen bleiben vollständig an die projizierten UI-Gat
       }
     }
   }
+});
+
+test("Block 5: zusätzliche Rechtefenster verlangen ihr eigenes Gate neben dem Rechtemanagement-Tab", () => {
+  for (const { id, gateId, focusId } of RIGHTS_WINDOW_CASES) {
+    const entry = catalogApi.FUNCTION_SEARCH_CATALOG.find(item => item.id === id);
+    assert.ok(entry, id);
+    assert.deepEqual(entry.access.gateIds, ["settingsRightsTab", gateId]);
+    assert.deepEqual(entry.target, { kind: "navigation", view: "settings", settingsTab: "rights", focusId });
+    assert.match(indexHtml, new RegExp(`\\bid="${gateId}"[^>]*aria-controls="${focusId}"`));
+    assert.match(indexHtml, new RegExp(`\\bid="${focusId}"`));
+    for (const role of PORTAL_ROLES) {
+      assert.equal(catalogApi.availableFunctionSearchEntry(id, {
+        authenticated: true, role, availableGateIds: ["settingsRightsTab"],
+      }), null, `${role}: ${id} ohne eigenes Gate`);
+      assert.equal(catalogApi.availableFunctionSearchEntry(id, {
+        authenticated: true, role, availableGateIds: [gateId],
+      }), null, `${role}: ${id} ohne Rechtemanagement-Tab`);
+      assert.equal(catalogApi.availableFunctionSearchEntry(id, {
+        authenticated: true, role, availableGateIds: ["settingsRightsTab", gateId],
+      }), entry, `${role}: ${id} mit beiden Gates`);
+    }
+  }
+  const withoutWindowGates = new Set([...ALL_GATE_IDS]
+    .filter(gateId => !RIGHTS_WINDOW_CASES.some(item => item.gateId === gateId)));
+  assert.deepEqual(catalogApi.FUNCTION_SEARCH_CATALOG.filter(item => !catalogApi.functionSearchEntryIsAvailable(item, {
+    authenticated: true, availableGateIds: withoutWindowGates,
+  })).map(item => item.id).sort(), RIGHTS_WINDOW_CASES.map(item => item.id).sort());
 });
 
 test("Block 5: Logistik und Preisschilder haben eigene reale Ziele und erhalten keinen Zugriff durch eine Portalrolle allein", () => {

@@ -1024,7 +1024,7 @@
       "Öffnet die berechtigte Verwaltung persönlicher Grund-, Zusatz- und Bereichsrechte.",
       ["rechte", "berechtigung", "permission", "rolle", "zusatzrecht", "recht entziehen", "rechte vergeben", "zugriff"],
       ["settingsRightsTab"],
-      { view: "settings", settingsTab: "rights", focusId: "rightsUserList" },
+      { view: "settings", settingsTab: "rights", focusId: "rightsManagementWindow" },
     ),
     entry(
       "settings.mobile-leadership",
@@ -1032,8 +1032,8 @@
       ["Einstellungen", "Rechtemanagement", "Mobile Leitungsansicht"],
       "Öffnet die Modulauswahl für berechtigte Leitungsrollen im Mitarbeiterportal.",
       ["mobile leitung", "filialleitung handy", "leitungsportal", "mobile module", "management mobil", "leiteransicht"],
-      ["settingsRightsTab"],
-      { view: "settings", settingsTab: "rights", focusId: "mobileLeadershipModuleSettings" },
+      ["settingsRightsTab", "openMobileLeadershipWindowButton"],
+      { view: "settings", settingsTab: "rights", focusId: "mobileLeadershipWindow" },
     ),
     entry(
       "settings.personnel-field-rights",
@@ -1041,8 +1041,8 @@
       ["Einstellungen", "Rechtemanagement", "Personalakt-Feldrechte"],
       "Öffnet die berechtigte Matrix für verborgene, lesbare und bearbeitbare Personalaktfelder.",
       ["feldrechte", "personalakt", "felder verbergen", "nur lesen", "filialleitung rechte", "datenminimierung"],
-      ["settingsRightsTab"],
-      { view: "settings", settingsTab: "rights", focusId: "personnelFieldRightsMatrix" },
+      ["settingsRightsTab", "openPersonnelFieldRightsWindowButton"],
+      { view: "settings", settingsTab: "rights", focusId: "personnelFieldRightsWindow" },
     ),
     entry(
       "settings.retention-policies",

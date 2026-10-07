@@ -31,6 +31,7 @@
     <link rel="stylesheet" href="/sales-recent-articles.css" />
     <link rel="stylesheet" href="/sales-article-search-window.css" />
     <link rel="stylesheet" href="/start-dashboard-workspace.css" />
+    <link rel="stylesheet" href="/rights-management-workspace.css" />
   </head>
   <body>
     <div class="deployment-banner hidden" id="deploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
@@ -2643,36 +2644,12 @@
             </div>
           </section>
 
-          <section id="rightsSettings" class="settings-section settings-two-column" role="tabpanel" aria-labelledby="settingsRightsTab">
-            <div class="settings-card">
-              <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Grundrechte persönlich einschränken und zusätzliche Rechte gezielt vergeben.</p></div></div>
-              <p class="settings-note security-note">Verwaltbare Grundrechte können persönlich entzogen und später wiederhergestellt werden. Filialleitungen verwalten die persönliche Leihe ihrer Mitarbeitenden sowie Grundrechte aktiver Abteilungsleitungen im eigenen Standort. IT-Admin und Personalleitung behalten ihre getrennten Verwaltungsgrenzen. Der Developer-Zugang bleibt geschützt.</p>
-              <label class="field rights-search-field"><span>Teammitglied suchen</span><input id="rightsEmployeeSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Name" /></label>
-              <p class="settings-note" id="rightsManagementHint">Rechte werden geladen.</p>
-              <div class="rights-user-list" id="rightsUserList"></div>
-            </div>
-            <div class="settings-card hidden" id="permissionDefaultsCard">
-              <div class="card-heading"><div class="card-icon">Rolle</div><div><h2>Standardrechte je Rolle und Position</h2><p>Rollenstandards und abweichende Positionsstandards durch den Developer festlegen.</p></div></div>
-              <p class="settings-note">Ohne Positionsstandard gelten die Rechte der App-Rolle. Ein eigener Positionsstandard ersetzt diese Grundrechte für alle zugeordneten Zugänge. Persönliche Zusatzrechte und Entzüge bleiben erhalten. Der Developer behält immer Vollzugriff.</p>
-              <label class="field"><span>Rolle oder Position</span><select id="permissionDefaultsTarget"></select></label>
-              <label class="switch-row hidden" id="permissionDefaultsInheritanceRow"><span><strong>Standard der jeweiligen App-Rolle verwenden</strong><small>Deaktivieren legt einen eigenen Standard für diese Position fest.</small></span><input type="checkbox" id="permissionDefaultsInheritance" /></label>
-              <label class="field"><span>Recht suchen</span><input type="search" id="permissionDefaultsSearch" placeholder="Bezeichnung oder Berechtigung" /></label>
-              <div id="permissionDefaultsPermissions" class="permission-defaults-list"></div>
-              <p class="settings-note" id="permissionDefaultsHint" role="status" aria-live="polite"></p>
-              <div class="form-actions-inline"><button class="secondary-button" id="permissionDefaultsReset" type="button">Eingebauten Standard laden</button><button class="primary-button" id="permissionDefaultsSave" type="button">Standardrechte speichern</button></div>
-            </div>
-            <div class="settings-card">
-              <div class="card-heading"><div class="card-icon">Mobil</div><div><h2>Mobile Leitungsansicht</h2><p>Legt fest, welche kompakten Funktionen Leitungen unterwegs im Mitarbeiterportal sehen.</p></div></div>
-              <div class="mobile-module-settings" id="mobileLeadershipModuleSettings"></div>
-              <div class="form-actions-inline"><span class="settings-note" id="mobileLeadershipSettingsHint">Maximal sechs Elemente je Rolle.</span><button class="primary-button" id="saveMobileLeadershipSettingsButton" type="button">Mobile Ansicht speichern</button></div>
-            </div>
-            <div class="settings-card personnel-field-rights-card">
-              <div class="card-heading"><div class="card-icon">Akt</div><div><h2>Personalakt-Feldrechte</h2><p>Für Filial- und Abteilungsleitungen je Feld festlegen, ob es verborgen, lesbar oder bearbeitbar ist.</p></div></div>
-              <label class="field personnel-field-role"><span>Leitungsebene</span><select id="personnelFieldRightsRole" aria-label="Leitungsebene auswählen"></select></label>
-              <div class="personnel-field-rights-legend" aria-label="Bedeutung der Zugriffsstufen"><span class="hidden-level">Verborgen</span><span class="read-level">Nur lesen</span><span class="write-level">Bearbeiten</span></div>
-              <p class="settings-note security-note">Verborgene Werte werden nicht an den Browser übertragen. „Nur lesen“ zeigt sie grau und unveränderbar; „Bearbeiten“ erlaubt Änderungen innerhalb der zugewiesenen Filiale beziehungsweise Abteilung.</p>
-              <div class="personnel-field-rights-matrix" id="personnelFieldRightsMatrix"><p class="settings-note">Feldrechte werden geladen.</p></div>
-              <div class="form-actions-inline"><span class="settings-note" id="personnelFieldRightsHint">Die Rollenmatrix gilt für alle Zugänge dieser Leitungsebene.</span><button class="primary-button" id="savePersonnelFieldRightsButton" type="button">Feldrechte speichern</button></div>
+          <section id="rightsSettings" class="settings-section rights-window-entry" role="tabpanel" aria-labelledby="settingsRightsTab">
+            <div class="visually-hidden rights-window-shortcuts" aria-label="Rechtefenster direkt öffnen">
+              <button type="button" class="secondary-button" id="openRightsManagementButton" tabindex="-1" aria-controls="rightsManagementWindow" aria-expanded="false">Rechtemanagement öffnen</button>
+              <span id="permissionDefaultsCard" class="hidden"><button type="button" class="secondary-button" id="openPermissionDefaultsWindowButton" tabindex="-1" aria-controls="permissionDefaultsWindow" aria-expanded="false">Standardrechte öffnen</button></span>
+              <span id="personnelFieldRightsSettingsAccess"><button type="button" class="secondary-button" id="openPersonnelFieldRightsWindowButton" tabindex="-1" aria-controls="personnelFieldRightsWindow" aria-expanded="false">Personalakt-Feldrechte öffnen</button></span>
+              <span id="mobileLeadershipSettingsCard"><button type="button" class="secondary-button" id="openMobileLeadershipWindowButton" tabindex="-1" aria-controls="mobileLeadershipWindow" aria-expanded="false">Mobile Leitungsansicht öffnen</button></span>
             </div>
           </section>
 
@@ -3989,10 +3966,54 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal rights-editor-modal" id="rightsEditorModal">
+    <section class="rights-workspace-window" id="rightsManagementWindow" data-gp-window-manual hidden role="region" aria-labelledby="rightsManagementWindowTitle">
+      <header data-rights-window-title><strong id="rightsManagementWindowTitle">Rechtemanagement</strong><div class="rights-window-controls"><button type="button" data-rights-window-toggle aria-label="Rechtemanagement minimieren">−</button><button type="button" data-rights-window-close aria-label="Rechtemanagement schließen">×</button></div></header>
+      <div data-rights-window-body>
+        <div class="rights-management-toolbar"><label class="field rights-search-field"><span>Teammitglied suchen</span><input id="rightsEmployeeSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer, Name, Rolle oder Filiale" /></label><details class="gp-table-layout-controls" data-rights-columns><summary>Spaltenanzeige</summary><div data-rights-column-options></div></details></div>
+        <p class="settings-note" id="rightsManagementHint" role="status" aria-live="polite">Rechte werden geladen.</p>
+        <div class="rights-user-list" id="rightsUserList"></div>
+        <details class="rights-management-boundaries"><summary>Verwaltungsgrenzen</summary><p>Verwaltbare Grundrechte können persönlich entzogen und später wiederhergestellt werden. Filialleitungen verwalten die persönliche Leihe ihrer Mitarbeitenden sowie Grundrechte aktiver Abteilungsleitungen im eigenen Standort. IT-Admin und Personalleitung behalten ihre getrennten Verwaltungsgrenzen. Der Developer-Zugang bleibt geschützt.</p></details>
+      </div>
+    </section>
+
+    <section class="rights-settings-window" id="permissionDefaultsWindow" data-gp-window-manual hidden role="region" aria-labelledby="permissionDefaultsWindowTitle">
+      <header data-rights-settings-window-title><strong id="permissionDefaultsWindowTitle">Standardrechte je Rolle und Position</strong><div class="rights-window-controls"><button type="button" data-rights-settings-window-toggle aria-label="Standardrechte minimieren">−</button><button type="button" data-rights-settings-window-close aria-label="Standardrechte schließen">×</button></div></header>
+      <div data-rights-settings-window-body>
+        <div class="rights-settings-controls"><label class="field"><span>Rolle oder Position</span><select id="permissionDefaultsTarget"></select></label><label class="field"><span>Recht suchen</span><input type="search" id="permissionDefaultsSearch" placeholder="Bezeichnung oder Berechtigung" /></label></div>
+        <label class="switch-row hidden" id="permissionDefaultsInheritanceRow"><span><strong>Standard der jeweiligen App-Rolle verwenden</strong><small>Deaktivieren legt einen eigenen Standard für diese Position fest.</small></span><input type="checkbox" id="permissionDefaultsInheritance" /></label>
+        <div id="permissionDefaultsPermissions" class="permission-defaults-list"></div>
+        <details class="rights-settings-explanation"><summary>Wirkung der Standardrechte</summary><p>Ohne Positionsstandard gelten die Rechte der App-Rolle. Ein eigener Positionsstandard ersetzt diese Grundrechte für alle zugeordneten Zugänge. Persönliche Zusatzrechte und Entzüge bleiben erhalten. Der Developer behält immer Vollzugriff.</p></details>
+        <div class="rights-settings-footer"><p class="settings-note" id="permissionDefaultsHint" role="status" aria-live="polite"></p><div class="form-actions-inline"><button class="secondary-button" id="permissionDefaultsReset" type="button">Eingebauten Standard laden</button><button class="primary-button" id="permissionDefaultsSave" type="button">Standardrechte speichern</button></div></div>
+      </div>
+    </section>
+
+    <section class="rights-settings-window" id="personnelFieldRightsWindow" data-gp-window-manual hidden role="region" aria-labelledby="personnelFieldRightsWindowTitle">
+      <header data-rights-settings-window-title><strong id="personnelFieldRightsWindowTitle">Personalakt-Feldrechte</strong><div class="rights-window-controls"><button type="button" data-rights-settings-window-toggle aria-label="Personalakt-Feldrechte minimieren">−</button><button type="button" data-rights-settings-window-close aria-label="Personalakt-Feldrechte schließen">×</button></div></header>
+      <div data-rights-settings-window-body>
+        <div class="rights-settings-controls"><label class="field personnel-field-role"><span>Leitungsebene</span><select id="personnelFieldRightsRole" aria-label="Leitungsebene auswählen"></select></label><div class="personnel-field-rights-legend" aria-label="Bedeutung der Zugriffsstufen"><span class="hidden-level">Verborgen</span><span class="read-level">Nur lesen</span><span class="write-level">Bearbeiten</span></div></div>
+        <div class="personnel-field-rights-matrix" id="personnelFieldRightsMatrix"><p class="settings-note">Feldrechte werden geladen.</p></div>
+        <details class="rights-settings-explanation"><summary>Schutz der Personalakt-Daten</summary><p>Verborgene Werte werden nicht an den Browser übertragen. „Nur lesen“ zeigt sie grau und unveränderbar; „Bearbeiten“ erlaubt Änderungen innerhalb der zugewiesenen Filiale beziehungsweise Abteilung. Besonders geschützte Daten bleiben für diese Leitungsrollen verborgen.</p></details>
+        <div class="rights-settings-footer"><span class="settings-note" id="personnelFieldRightsHint">Die Rollenmatrix gilt für alle Zugänge dieser Leitungsebene.</span><button class="primary-button" id="savePersonnelFieldRightsButton" type="button">Feldrechte speichern</button></div>
+      </div>
+    </section>
+
+    <section class="rights-settings-window" id="mobileLeadershipWindow" data-gp-window-manual hidden role="region" aria-labelledby="mobileLeadershipWindowTitle">
+      <header data-rights-settings-window-title><strong id="mobileLeadershipWindowTitle">Mobile Leitungsansicht</strong><div class="rights-window-controls"><button type="button" data-rights-settings-window-toggle aria-label="Mobile Leitungsansicht minimieren">−</button><button type="button" data-rights-settings-window-close aria-label="Mobile Leitungsansicht schließen">×</button></div></header>
+      <div data-rights-settings-window-body>
+        <p class="settings-note">Standardnavigation im Mitarbeiterportal. Persönliche Menüanpassungen haben Vorrang; die Auswahl vergibt keine Zugriffsrechte.</p>
+        <div class="mobile-module-settings" id="mobileLeadershipModuleSettings"></div>
+        <details class="rights-settings-explanation"><summary>Vorgaben für das Mobilmenü</summary><p>Je Rolle sind höchstens sechs Elemente wählbar. Die Zeiterfassung bleibt für Leitungsrollen verpflichtend; für die Planungsverantwortung sind Dienstplan, Freigaben und Mehr verfügbar. Das Mitarbeiterportal prüft zusätzlich die wirksamen Rechte und die Filialanzeige.</p></details>
+        <div class="rights-settings-footer"><span class="settings-note" id="mobileLeadershipSettingsHint">Maximal sechs Elemente je Rolle.</span><button class="primary-button" id="saveMobileLeadershipSettingsButton" type="button">Mobile Ansicht speichern</button></div>
+      </div>
+    </section>
+
+    <dialog class="modal wide-modal rights-editor-modal" id="rightsEditorModal" data-gp-window-manual aria-labelledby="rightsEditorTitle">
+      <header data-rights-profile-window-title><strong>Persönliches Rechteprofil</strong><div class="rights-window-controls"><button type="button" data-rights-profile-window-toggle aria-label="Rechteprofil minimieren">−</button><button type="button" data-rights-profile-window-close aria-label="Rechteeditor schließen">×</button></div></header>
       <form method="dialog" id="rightsEditorForm">
-        <div class="modal-header"><div><span class="eyebrow">Persönliches Rechteprofil</span><h2 id="rightsEditorTitle" tabindex="-1">Rechte bearbeiten</h2><p id="rightsEditorSummary"></p></div><button type="button" class="close-button" data-close="rightsEditorModal" aria-label="Rechteeditor schließen">×</button></div>
+        <div class="rights-profile-context">
+        <div class="rights-profile-summary"><h2 id="rightsEditorTitle" tabindex="-1">Rechte bearbeiten</h2><p id="rightsEditorSummary"></p></div>
         <div class="rights-editor-legend" aria-label="Bedeutung der Rechtezustände"><span><i class="role-right-dot"></i> Grundrecht der Rolle</span><span><i class="additional-right-dot"></i> Individuell hinzugefügt</span><span><i class="revoked-right-dot"></i> Individuell entzogen</span><span><i class="unassigned-right-dot"></i> Nicht vergeben</span><span><i class="locked-right-dot"></i> Für diesen Zugang nicht änderbar</span></div>
+        </div>
         <div class="rights-editor-permissions" id="rightsEditorPermissions"></div>
         <fieldset class="rights-editor-scope hidden" id="rightsEditorScope">
           <legend>Verantwortungsbereich</legend>
@@ -4493,6 +4514,7 @@
     <script src="/vocational-school.js"></script>
   <script src="/planning-protection.js"></script>
   <script src="/retail-kv.js"></script>
+    <script src="/rights-settings-table.js"></script>
     <script src="/permission-defaults.js"></script>
     <script src="/sales-report-controls.js"></script>
     <script src="/sales-dashboard-metrics.js"></script>
@@ -4531,6 +4553,8 @@
     <script src="/start-dashboard-vps.js"></script>
     <script src="/form-draft-guard.js"></script>
     <script src="/sales-recent-articles.js"></script>
+    <script src="/rights-management-workspace.js"></script>
+    <script src="/rights-settings-windows.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

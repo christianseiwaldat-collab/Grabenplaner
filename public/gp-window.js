@@ -12,6 +12,7 @@
   'use strict';
   const EDGES = Object.freeze(['n','ne','e','se','s','sw','w','nw']);
   const DEFAULTS = Object.freeze({x:0,y:0,width:560,height:420,minimized:false});
+  const activeWindows = new WeakMap();
   const clamp = (value,min,max) => Math.min(Math.max(min,max),Math.max(min,Math.round(value)));
   function normalize(value = {}, options = {}) {
     const minWidth = options.minWidth || 200, minHeight = options.minHeight || 80;
@@ -119,6 +120,16 @@
     let preferred=normalize(options.initialGeometry?.() || options.geometry || DEFAULTS,dimensions),fitted=null;
     let active=options.active===true, destroyed=false, gesture=null, closing=null, animation=null,last='', closeTicket=0;
     const usable=()=>!destroyed && active && (options.canUse?.() ?? true);
+    function foreground() {
+      if (!usable()) return;
+      const previous = activeWindows.get(doc);
+      if (previous !== element) previous?.classList.remove('is-active-window');
+      activeWindows.set(doc,element);element.classList.add('is-active-window');
+    }
+    function releaseForeground() {
+      if (activeWindows.get(doc) === element) activeWindows.delete(doc);
+      element.classList.remove('is-active-window');
+    }
     const status=resolve(options.status,'[data-gp-window-status]');
     element.classList.add('gp-window'); title?.classList.add('gp-window-title');
     if(moveHandle && !moveHandle.hasAttribute('tabindex') && moveHandle.tagName !== 'BUTTON') moveHandle.setAttribute('tabindex','0');
@@ -209,7 +220,7 @@
     on(element,'lostpointercapture',event=>{if(gesture?.id===event.pointerId) finish(true);});
     on(doc,'keydown',event=>{if(event.key==='Escape' && gesture) keydown(event,'move');});
     function minimize(value,persist=true) {
-      if(!usable()) return;finish(true);if(preferred.minimized === (value===true)) return;
+      if(!usable()) return;if(value!==true)foreground();finish(true);if(preferred.minimized === (value===true)) return;
       preferred={...preferred,minimized:value===true};render();announce();
       if(persist) options.change?.({...preferred});
     }
@@ -226,12 +237,13 @@
           animation=currentAnimation;try {await currentAnimation.finished;} catch {}finally{if(animation===currentAnimation)animation=null;}
         }
         if(ticket!==closeTicket || destroyed) return;
-        active=false;if(!options.nativeDialog) element.hidden=true;
+        active=false;releaseForeground();if(!options.nativeDialog) element.hidden=true;
         options.onClose?.();target?.focus?.({preventScroll:true});
       })();
       try {await closing;} finally {if(ticket===closeTicket) closing=null;}
     }
     on(closeButton,'click',()=>void close());
+    on(element,'pointerdown',foreground);on(element,'focusin',foreground);
     on(win,'resize',refresh);on(win,'blur',()=>finish(true));
     on(win.visualViewport,'resize',refresh);on(win.visualViewport,'scroll',refresh);
     const observer=typeof win.ResizeObserver==='function'?new win.ResizeObserver(refresh):null;
@@ -240,9 +252,9 @@
     return {refresh,minimize,restore(){minimize(false);},close,
       get preferred(){return {...preferred};},get fitted(){return fitted && {...fitted};},
       set(value){finish(true);preferred=normalize(value || options.initialGeometry?.() || DEFAULTS,dimensions);render();},
-      activate(){closeTicket++;animation?.cancel();animation=null;closing=null;active=true;render();},
-      suspend(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);active=false;if(!options.nativeDialog) element.hidden=true;},
-      destroy(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);destroyed=true;observer?.disconnect();for(const remove of removers) remove();for(const handle of ownedHandles) handle.remove();element.classList.remove('gp-window');if(!options.nativeDialog) element.hidden=true;}
+      activate(){closeTicket++;animation?.cancel();animation=null;closing=null;active=true;render();foreground();},
+      suspend(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);active=false;releaseForeground();if(!options.nativeDialog) element.hidden=true;},
+      destroy(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);destroyed=true;releaseForeground();observer?.disconnect();for(const remove of removers) remove();for(const handle of ownedHandles) handle.remove();element.classList.remove('gp-window');if(!options.nativeDialog) element.hidden=true;}
     };
   }
   function installDocument(doc,options={}) {

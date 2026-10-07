@@ -1,5 +1,6 @@
 /* Shared internal GP windows. Geometry is viewport based, including the sidebar. */
 .gp-window { position:fixed; box-sizing:border-box; min-width:0; min-height:0; z-index:980; }
+.gp-window.is-active-window { z-index:985; }
 .gp-window[hidden] { display:none !important; }
 .gp-window-title { cursor:move; touch-action:none; user-select:none; }
 .gp-window.is-moving,.gp-window.is-resizing { user-select:none; }
