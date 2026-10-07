@@ -1,8 +1,8 @@
 # Versionsstatus
 
-## v0.92.76 Beta · Quellstand
+## v0.92.77 Beta · Quellstand
 
-Persönliche Arbeitsansichten, erweiterte Artikelinformationen und verbesserte Betriebsabläufe.
+Kompakte Rechteverwaltung und verbesserte persönliche Arbeitsfenster.
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease
