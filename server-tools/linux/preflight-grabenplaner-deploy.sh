@@ -107,6 +107,7 @@ getent passwd "$GP_DEFAULT_BUILD_USER" >/dev/null || gp_die "Isolierter Build-Be
 getent group "$GP_DEFAULT_BUILD_GROUP" >/dev/null || gp_die "Isolierte Build-Gruppe fehlt: $GP_DEFAULT_BUILD_GROUP"
 [[ "$(id -gn "$GP_DEFAULT_BUILD_USER")" == "$GP_DEFAULT_BUILD_GROUP" ]] \
   || gp_die "Der Build-Benutzer verwendet eine unerwartete Hauptgruppe."
+gp_assert_shared_tmp "$GP_DEFAULT_SERVICE_USER" "$GP_DEFAULT_BUILD_USER"
 for cache_access in -r -w -x; do
   runuser --user "$GP_DEFAULT_BUILD_USER" -- test "$cache_access" "$build_cache" \
     || gp_die "Der isolierte Build-Benutzer kann den Build-Cache nicht verwenden."

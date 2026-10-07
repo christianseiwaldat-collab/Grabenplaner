@@ -33,10 +33,13 @@ for (const [scenario, denied, mode, expectedChecks] of [
     });
     fs.writeFileSync(path.join(root, "run.sh"), [
       "set -Eeuo pipefail", "IFS=$'\\n\\t'",
+      "GP_DEFAULT_SERVICE_USER=gp-service-fixture",
       "GP_DEFAULT_SERVICE_GROUP=gp-service-fixture",
       "GP_DEFAULT_BUILD_USER=gp-build-fixture", "GP_DEFAULT_BUILD_GROUP=gp-build-fixture",
       'build_cache="$PWD/cache with spaces"',
       'gp_die() { printf "%s\\n" "$*" >&2; exit 42; }',
+      // The shared temporary-directory gate has its own shell behavior coverage.
+      'gp_assert_shared_tmp() { :; }',
       "getent() { return 0; }", 'id() { printf "%s\\n" "$GP_DEFAULT_BUILD_GROUP"; }',
       // Only the identity switch is simulated; execute the real extracted shell commands.
       'runuser() { [[ "$1" == --user && "$2" == "$GP_DEFAULT_BUILD_USER" && "$3" == -- ]] || exit 88; shift 3; "$@"; }',

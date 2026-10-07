@@ -1,0 +1,431 @@
+#!/usr/bin/env bash
+
+# Gemeinsame, absichtlich kleine Sicherheitsbasis fuer die Ubuntu-Wartungswerkzeuge.
+# Die aufrufenden Skripte aktivieren selbst `set -Eeuo pipefail`, damit dieses
+# Modul auch gefahrlos aus einer interaktiven Shell geladen werden kann.
+
+GP_DEFAULT_APP_DIR="/opt/grabenplaner/app"
+GP_DEFAULT_DATA_DIR="/var/lib/grabenplaner"
+GP_DEFAULT_BACKUP_DIR="/var/backups/grabenplaner"
+GP_DEFAULT_ENV_FILE="/etc/grabenplaner/grabenplaner.env"
+GP_DEFAULT_SERVICE="grabenplaner.service"
+GP_DEFAULT_CADDY_SERVICE="caddy.service"
+GP_DEFAULT_SERVICE_USER="grabenplaner"
+GP_DEFAULT_SERVICE_GROUP="grabenplaner"
+GP_DEFAULT_BUILD_USER="grabenplaner-build"
+GP_DEFAULT_BUILD_GROUP="grabenplaner-build"
+GP_DEFAULT_BUILD_CACHE="/var/cache/grabenplaner"
+GP_DEFAULT_RUNTIME_DIR="/run/grabenplaner"
+GP_DEFAULT_MAINTENANCE_LOCK="/run/grabenplaner/maintenance.lock"
+
+gp_log() {
+  local level="$1"
+  shift
+  printf '%s [%s] %s\n' "$(date --utc '+%Y-%m-%dT%H:%M:%SZ')" "$level" "$*" >&2
+}
+
+gp_info() { gp_log INFO "$@"; }
+gp_warn() { gp_log WARN "$@"; }
+gp_die() {
+  gp_log ERROR "$*"
+  exit 1
+}
+
+gp_require_root() {
+  [[ "${EUID:-$(id -u)}" -eq 0 ]] || gp_die "Dieser Vorgang muss als root ausgefuehrt werden (z. B. mit sudo)."
+}
+
+gp_require_command() {
+  command -v "$1" >/dev/null 2>&1 || gp_die "Erforderliches Programm fehlt: $1"
+}
+
+gp_resolve_path() {
+  local value="${1:-}"
+  [[ -n "$value" && "$value" == /* ]] || return 1
+  realpath --canonicalize-missing -- "$value"
+}
+
+gp_safe_absolute_path() {
+  local value="${1:-}"
+  local label="${2:-Pfad}"
+  local resolved
+  resolved="$(gp_resolve_path "$value")" || gp_die "$label muss ein absoluter lokaler Linux-Pfad sein."
+  [[ "$resolved" != "/" ]] || gp_die "$label darf nicht das Dateisystem-Stammverzeichnis sein."
+  [[ "$resolved" != *$'\n'* && "$resolved" != *$'\r'* ]] || gp_die "$label enthaelt unzulaessige Steuerzeichen."
+  printf '%s\n' "$resolved"
+}
+
+gp_existing_file() {
+  local resolved
+  resolved="$(gp_safe_absolute_path "$1" "$2")"
+  [[ -f "$resolved" && ! -L "$resolved" ]] || gp_die "$2 wurde nicht als regulaere Datei gefunden: $resolved"
+  printf '%s\n' "$resolved"
+}
+
+gp_existing_directory() {
+  local resolved
+  resolved="$(gp_safe_absolute_path "$1" "$2")"
+  [[ -d "$resolved" && ! -L "$resolved" ]] || gp_die "$2 wurde nicht als regulaerer Ordner gefunden: $resolved"
+  printf '%s\n' "$resolved"
+}
+
+gp_path_is_same_or_child() {
+  local candidate parent
+  candidate="$(gp_resolve_path "$1")" || return 1
+  parent="$(gp_resolve_path "$2")" || return 1
+  [[ "$candidate" == "$parent" || "$candidate" == "$parent/"* ]]
+}
+
+gp_assert_separate_trees() {
+  local first second label
+  first="$(gp_safe_absolute_path "$1" "Erster Pfad")"
+  second="$(gp_safe_absolute_path "$2" "Zweiter Pfad")"
+  label="$3"
+  if gp_path_is_same_or_child "$first" "$second" || gp_path_is_same_or_child "$second" "$first"; then
+    gp_die "$label muessen vollstaendig getrennte Ordnerbaeume sein."
+  fi
+}
+
+gp_assert_secure_env_file() {
+  local requested file owner group mode links
+  requested="${1:-}"
+  [[ -n "$requested" && "$requested" == /* ]] || gp_die "Die Umgebungsdatei muss ein absoluter lokaler Linux-Pfad sein."
+  [[ -f "$requested" && ! -L "$requested" ]] || gp_die "Die Umgebungsdatei muss eine regulaere Datei sein und darf kein Link sein: $requested"
+  file="$(gp_existing_file "$requested" "Umgebungsdatei")"
+  owner="$(stat --format='%u' -- "$file")"
+  group="$(stat --format='%g' -- "$file")"
+  mode="$(stat --format='%a' -- "$file")"
+  links="$(stat --format='%h' -- "$file")"
+  [[ "$owner" == "0" && "$group" == "0" ]] || gp_die "Die Umgebungsdatei muss root:root gehoeren: $file"
+  [[ "$mode" == "600" ]] || gp_die "Die geheime Umgebungsdatei muss exakt Modus 0600 verwenden: $file"
+  [[ "$links" == "1" ]] || gp_die "Die geheime Umgebungsdatei darf keine zusaetzlichen Hardlinks besitzen: $file"
+}
+
+gp_load_env_file() {
+  local file="${1:-$GP_DEFAULT_ENV_FILE}" line key value line_number=0
+  local -A seen_keys=()
+  gp_assert_secure_env_file "$file"
+
+  # Die root-only Datei wird absichtlich nicht als Shellcode ausgewertet.
+  # Erlaubt sind nur Kommentare, Leerzeilen und einfache KEY=VALUE-Zeilen;
+  # der komplette Teil hinter dem ersten Gleichheitszeichen bleibt literal.
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line_number=$((line_number + 1))
+    line="${line%$'\r'}"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] \
+      || gp_die "Ungueltige Zeile ${line_number} in der Umgebungsdatei; erwartet wird KEY=VALUE."
+    key="${BASH_REMATCH[1]}"
+    value="${BASH_REMATCH[2]}"
+    [[ ! ${seen_keys[$key]+vorhanden} ]] \
+      || gp_die "Der Schluessel $key ist in der Umgebungsdatei doppelt vorhanden."
+    seen_keys["$key"]=1
+    # -g schreibt bewusst in die aufrufende Shell-Umgebung, ohne gleichnamige
+    # lokale Parservariablen (z. B. line_number) zu ueberschreiben.
+    declare -gx -- "$key=$value" \
+      || gp_die "Der Schluessel $key konnte nicht sicher uebernommen werden."
+  done < "$file"
+}
+
+gp_prepare_runtime_directory() {
+  local runtime_directory owner group mode
+  runtime_directory="$(gp_safe_absolute_path "${1:-$GP_DEFAULT_RUNTIME_DIR}" "Laufzeitverzeichnis")"
+  if [[ -e "$runtime_directory" || -L "$runtime_directory" ]]; then
+    [[ -d "$runtime_directory" && ! -L "$runtime_directory" ]] || gp_die "Das Laufzeitverzeichnis ist unzulaessig."
+  else
+    install -d -m 0755 -o root -g root -- "$runtime_directory"
+  fi
+  owner="$(stat --format='%u' -- "$runtime_directory")"
+  group="$(stat --format='%g' -- "$runtime_directory")"
+  mode="$(stat --format='%a' -- "$runtime_directory")"
+  [[ "$owner" == "0" && "$group" == "0" ]] || gp_die "Das Laufzeitverzeichnis muss root:root gehoeren."
+  (( (8#$mode & 022) == 0 )) || gp_die "Das Laufzeitverzeichnis darf fuer Gruppe oder andere Benutzer nicht beschreibbar sein."
+  printf '%s\n' "$runtime_directory"
+}
+
+gp_acquire_maintenance_lock() {
+  local lock_path lock_directory lock_owner lock_group
+  gp_require_command flock
+  lock_path="$(gp_safe_absolute_path "${1:-$GP_DEFAULT_MAINTENANCE_LOCK}" "Wartungssperre")"
+  lock_directory="$(gp_prepare_runtime_directory "$(dirname -- "$lock_path")")"
+  if [[ -e "$lock_path" || -L "$lock_path" ]]; then
+    [[ -f "$lock_path" && ! -L "$lock_path" ]] || gp_die "Die Wartungssperre ist keine regulaere Datei."
+    lock_owner="$(stat --format='%u' -- "$lock_path")"
+    lock_group="$(stat --format='%g' -- "$lock_path")"
+    [[ "$lock_owner" == "0" && "$lock_group" == "0" ]] || gp_die "Die Wartungssperre muss root:root gehoeren."
+    chmod 0600 -- "$lock_path"
+  else
+    install -m 0600 -o root -g root /dev/null "$lock_path"
+  fi
+  exec 9<>"$lock_path"
+  flock --nonblock 9 || gp_die "Eine andere Grabenplaner-Wartung (Backup, Restore oder Update) ist bereits aktiv."
+}
+
+gp_systemd_unit_exists() {
+  systemctl show --property=LoadState --value "$1" 2>/dev/null | grep -qxv 'not-found'
+}
+
+gp_require_systemd_unit() {
+  gp_systemd_unit_exists "$1" || gp_die "systemd-Unit nicht gefunden: $1"
+}
+
+gp_acquire_backup_workspace_lock() {
+  local database="$1" node="$2" helper="$3" workspace_file opened named
+  [[ -f "$helper" && ! -L "$helper" ]] || gp_die "Das Modul fuer den gemeinsamen Backup-Arbeitsbereich fehlt."
+  workspace_file="$("$node" "$helper" prepare-linux-file "$database")" \
+    || gp_die "Der gemeinsame Backup-Arbeitsbereich konnte nicht vorbereitet werden."
+  [[ "$workspace_file" == "$database.backup-workspace.lock" && -f "$workspace_file" && ! -L "$workspace_file" ]] \
+    || gp_die "Die Backup-Arbeitsbereichssperre ist ungueltig."
+  exec 5<"$workspace_file"
+  flock --exclusive --timeout 1400 5 || gp_die "Ein laufender Backup- oder Wiederherstellungsvorgang wurde nicht rechtzeitig abgeschlossen."
+  opened="$(stat -L --format='%d:%i:%h' -- "/proc/${BASHPID:-$$}/fd/5")"
+  named="$(stat --format='%d:%i:%h' -- "$workspace_file")"
+  [[ "$opened" == "$named" && "$named" == *:1 && ! -L "$workspace_file" ]] \
+    || gp_die "Die Backup-Arbeitsbereichssperre wurde waehrend des Wartens veraendert."
+}
+
+gp_release_backup_workspace_lock() {
+  exec 5<&-
+}
+
+gp_begin_update_backup_ownership() {
+  gp_begin_backup_ownership "$1" "$2" "$3" 9 8
+}
+
+gp_begin_backup_ownership() {
+  local database="$1" node="$2" helper="$3" maintenance_fd="$4" owner_fd="$5" owner_file
+  gp_require_root
+  [[ "$maintenance_fd" == 6 || "$maintenance_fd" == 9 ]] && [[ "$owner_fd" == 4 || "$owner_fd" == 8 ]] \
+    || gp_die "Die Sicherungsverantwortung hat ungueltige Sperrdeskriptoren."
+  [[ -f "$helper" && ! -L "$helper" ]] || gp_die "Das Modul fuer die Sicherungsverantwortung fehlt."
+  owner_file="$("$node" "$helper" prepare "$maintenance_fd")" || gp_die "Die Sicherungsverantwortung konnte nicht vorbereitet werden."
+  [[ "$owner_file" == "/run/grabenplaner/update-backup-owner.json" && ! -L "$owner_file" ]] \
+    || gp_die "Die Sicherungsverantwortung hat keinen gueltigen Pfad."
+  if [[ "$owner_fd" == 4 ]]; then exec 4<>"$owner_file"; else exec 8<>"$owner_file"; fi
+  flock --exclusive --nonblock "$owner_fd" || gp_die "Ein anderer Wartungsprozess besitzt bereits den Sicherungsauftrag."
+  "$node" "$helper" publish "$database" "$maintenance_fd" "$owner_fd" || gp_die "Die Sicherungsverantwortung konnte nicht uebernommen werden."
+}
+
+gp_stop_service() {
+  local service="$1"
+  local timeout_seconds="${2:-120}" initial_pid current_pid state
+  gp_require_systemd_unit "$service"
+  if systemctl is-active --quiet "$service"; then
+    initial_pid="$(systemctl show --property=MainPID --value "$service")"
+    [[ "$initial_pid" =~ ^[1-9][0-9]*$ ]] || gp_die "$service hat keinen eindeutigen Hauptprozess."
+    gp_info "Beende $service kontrolliert; laufende Sicherungsprozesse duerfen zuerst abschliessen."
+    # A direct stop with KillMode=control-group also terminates the archive
+    # workers the application is trying to drain. Signal only the main process
+    # first; the existing shutdown owns and verifies its children until exit.
+    systemctl kill --kill-whom=main --signal=SIGTERM "$service" \
+      || gp_die "$service konnte nicht zum kontrollierten Dienststopp aufgefordert werden."
+    local drain_deadline=$((SECONDS + 1500))
+    while :; do
+      current_pid="$(systemctl show --property=MainPID --value "$service")"
+      [[ "$current_pid" == "0" ]] && break
+      [[ "$current_pid" == "$initial_pid" ]] || gp_die "$service wurde waehrend des Dienststopps unerwartet neu gestartet."
+      (( SECONDS < drain_deadline )) || gp_die "Die laufende Sicherung von $service wurde nicht rechtzeitig beendet; keine Prozesse werden zwangsweise abgebrochen."
+      sleep 1
+    done
+  fi
+  # Main has exited and drained its children. Cancel a queued failure restart
+  # and let systemd finish the unit without sending SIGTERM to live backups.
+  systemctl stop "$service"
+  local deadline=$((SECONDS + timeout_seconds))
+  while systemctl is-active --quiet "$service"; do
+    (( SECONDS < deadline )) || gp_die "$service wurde nicht innerhalb von ${timeout_seconds}s beendet."
+    sleep 1
+  done
+  state="$(systemctl is-active "$service" 2>/dev/null || true)"
+  [[ "$state" == "inactive" || "$state" == "failed" ]] || gp_die "$service meldet nach dem Stopp den unerwarteten Zustand: $state"
+}
+
+gp_start_service() {
+  local service="$1"
+  gp_require_systemd_unit "$service"
+  systemctl start "$service"
+  systemctl is-active --quiet "$service" || gp_die "$service konnte nicht gestartet werden."
+}
+
+gp_url_reports_ready() {
+  local url="$1"
+  local timeout_seconds="${2:-8}"
+  local response
+  response="$(curl --fail --silent --show-error --max-time "$timeout_seconds" -- "$url" 2>/dev/null)" || return 1
+  grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' <<<"$response"
+}
+
+gp_wait_ready() {
+  local url="$1"
+  local timeout_seconds="$2"
+  local deadline=$((SECONDS + timeout_seconds))
+  while (( SECONDS < deadline )); do
+    if gp_url_reports_ready "$url" 8; then return 0; fi
+    sleep 2
+  done
+  return 1
+}
+
+gp_sha256() {
+  sha256sum --binary -- "$1" | awk '{print tolower($1)}'
+}
+
+gp_validate_sha256() {
+  [[ "$1" =~ ^[0-9A-Fa-f]{64}$ ]] || gp_die "Die freigegebene SHA256-Pruefsumme ist ungueltig."
+}
+
+gp_validate_https_url() {
+  "$1" - "$2" <<'NODE'
+const value = process.argv[2];
+let url;
+try { url = new URL(value); } catch { process.exit(1); }
+if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash || !url.hostname) process.exit(1);
+NODE
+}
+
+gp_compare_semver() {
+  "$1" - "$2" "$3" <<'NODE'
+const [current, candidate] = process.argv.slice(2);
+const pattern = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
+function parse(value) {
+  const match = String(value || "").match(pattern);
+  if (!match) throw new Error(`Nicht vergleichbare Version: ${value}`);
+  return { core: match.slice(1, 4).map(BigInt), pre: match[4] ? match[4].split(".") : null };
+}
+function compareIdentifier(left, right) {
+  const leftNumeric = /^\d+$/.test(left);
+  const rightNumeric = /^\d+$/.test(right);
+  if (leftNumeric && rightNumeric) return BigInt(left) < BigInt(right) ? -1 : BigInt(left) > BigInt(right) ? 1 : 0;
+  if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+function compare(left, right) {
+  for (let index = 0; index < 3; index += 1) {
+    if (left.core[index] !== right.core[index]) return left.core[index] < right.core[index] ? -1 : 1;
+  }
+  if (!left.pre && !right.pre) return 0;
+  if (!left.pre) return 1;
+  if (!right.pre) return -1;
+  for (let index = 0; index < Math.max(left.pre.length, right.pre.length); index += 1) {
+    if (left.pre[index] === undefined) return -1;
+    if (right.pre[index] === undefined) return 1;
+    const result = compareIdentifier(left.pre[index], right.pre[index]);
+    if (result) return result;
+  }
+  return 0;
+}
+process.stdout.write(String(compare(parse(current), parse(candidate))));
+NODE
+}
+
+# Module setup can precede the application swap. Only the matching pair uses
+# one nightly run. A rollback to the predecessor restores its expected timers.
+gp_nightly_schedule_mode() {
+  local app="${1:?App-Verzeichnis fehlt}" node="${2:?Node-Laufzeit fehlt}"
+  "$node" - "$app" <<'NODE'
+const fs=require('node:fs'),path=require('node:path');
+try {
+  const installed='/etc/grabenplaner/offsite/installed-contract.json';
+  if(!fs.existsSync(installed)){process.stdout.write('none');process.exit(0);}
+  function read(file){const s=fs.lstatSync(file);if(!s.isFile()||s.isSymbolicLink()||s.uid!==0||s.nlink!==1||(s.mode&0o022)||s.size>131072||fs.realpathSync(file)!==file)throw Error();return JSON.parse(fs.readFileSync(file,'utf8'));}
+  const core=read(path.join(process.argv[2],'server-tools/linux/offsite/module-schema.json')),module=read(installed);
+  if(core.format!=='grabenplaner-linux-offsite-module-contract'||core.schemaVersion!==1||module.format!=='grabenplaner-linux-offsite-installed-contract'||module.schemaVersion!==1||![7,8,9,10,11].includes(core.moduleVersion)||![7,8,9,10,11].includes(module.moduleVersion))throw Error();
+  process.stdout.write(core.moduleVersion>=10&&module.moduleVersion>=10?'single':'legacy');
+}catch{process.stderr.write('Der Sicherungszeitplan konnte nicht verifiziert werden.\n');process.exitCode=1;}
+NODE
+}
+
+# Read the protected matrix receipt through its real schema/revision validator.
+# An absent receipt is distinct from an invalid one: invalid state never falls
+# back to installation defaults.
+gp_maintenance_schedule_state() {
+  local app="${1:?App-Verzeichnis fehlt}" node="${2:?Node-Laufzeit fehlt}"
+  "$node" - "$app" <<'NODE'
+const fs=require('node:fs'),path=require('node:path');
+try {
+  const root='/var/lib/grabenplaner-maintenance-schedules';
+  let directory;try{directory=fs.lstatSync(root);}catch(e){if(e.code!=='ENOENT')throw e;process.stdout.write('none');process.exit(0);}
+  if(!directory.isDirectory()||directory.isSymbolicLink()||directory.uid!==0||directory.gid!==0||directory.nlink<2||(directory.mode&0o7777)!==0o700||fs.realpathSync(root)!==root)throw Error();
+  const file=path.join(root,'schedules.json');
+  try{fs.lstatSync(file);}catch(e){if(e.code!=='ENOENT')throw e;process.stdout.write('none');process.exit(0);}
+  let helper=path.join(process.argv[2],'server-tools/linux/offsite/lib/maintenance-schedule-broker.js');
+  if(!fs.existsSync(helper))helper='/opt/grabenplaner-offsite/module/lib/maintenance-schedule-broker.js';
+  const info=fs.lstatSync(helper);
+  if(!info.isFile()||info.isSymbolicLink()||info.uid!==0||info.nlink!==1||(info.mode&0o022)||info.size>262144||fs.realpathSync(helper)!==helper)throw Error();
+  const broker=require(helper),state=broker.readState({stateRoot:root});
+  if(!state)throw Error();
+  const rows=broker.TASKS.map(task=>{
+    const value=state.schedules.find(row=>row.id===task.id);if(!value||typeof value.enabled!=='boolean')throw Error();
+    return task.timer+'='+(value.enabled?'1':'0');
+  });
+  process.stdout.write(rows.join('\n'));
+}catch{process.stderr.write('Der gespeicherte Wartungszeitplan konnte nicht verifiziert werden.\n');process.exitCode=1;}
+NODE
+}
+
+gp_maintenance_timer_expected() {
+  local state="${1:?Zeitplanstand fehlt}" timer="${2:?Timer fehlt}" unit enabled
+  if [[ "$state" == none ]]; then printf '1'; return 0; fi
+  while IFS='=' read -r unit enabled; do
+    if [[ "$unit" == "$timer" && ( "$enabled" == 0 || "$enabled" == 1 ) ]]; then printf '%s' "$enabled"; return 0; fi
+  done <<< "$state"
+  return 1
+}
+
+gp_maintenance_timer_matches() {
+  local timer="${1:?Timer fehlt}" expected="${2:?Aktivierung fehlt}" paused="${3:-0}" enabled active
+  enabled="$(systemctl is-enabled "$timer" 2>/dev/null)" || [[ "$enabled" == disabled ]] || return 1
+  active="$(systemctl is-active "$timer" 2>/dev/null)" || [[ "$active" == inactive ]] || return 1
+  if [[ "$expected" == 0 ]]; then [[ "$enabled" == disabled && "$active" == inactive ]];
+  elif [[ "$expected" == 1 ]]; then [[ "$enabled" == enabled && ( "$active" == active || ( "$paused" == 1 && "$active" == inactive ) ) ]];
+  else return 1; fi
+}
+
+gp_configure_nightly_backups() {
+  local mode saved_schedule
+  mode="$(gp_nightly_schedule_mode "$1" "$2")" || return 1
+  [[ "$mode" != none ]] || return 0
+  saved_schedule="$(gp_maintenance_schedule_state "$1" "$2")" || return 1
+  # Matrix-managed timers keep their existing configuration and deploy pause.
+  # The updater separately restores the exact previously active timers.
+  [[ "$saved_schedule" == none ]] || return 0
+  # Verify the complete replacement BEFORE removing the standalone daily run.
+  systemctl enable --now grabenplaner-offsite-assurance.timer >/dev/null || return 1
+  systemctl is-enabled --quiet grabenplaner-offsite-assurance.timer \
+    && systemctl is-active --quiet grabenplaner-offsite-assurance.timer || return 1
+  if [[ "$mode" == single ]]; then
+    systemctl disable --now grabenplaner-offsite-upload.timer >/dev/null || return 1
+  else
+    systemctl enable --now grabenplaner-offsite-upload.timer >/dev/null || return 1
+  fi
+}
+
+gp_apply_app_permissions() {
+  local path="$1"
+  local group="${2:-$GP_DEFAULT_SERVICE_GROUP}"
+  local linux_root=""
+  [[ -d "$path" && ! -L "$path" ]] || {
+    gp_log ERROR "Der App-Baum fuer die Rechtevergabe ist ungueltig."
+    return 1
+  }
+  if [[ -d "$path/server-tools" && ! -L "$path/server-tools" \
+    && -d "$path/server-tools/linux" && ! -L "$path/server-tools/linux" ]]; then
+    linux_root="$path/server-tools/linux"
+  elif [[ -f "$path/update-grabenplaner-server.sh" && ! -L "$path/update-grabenplaner-server.sh" \
+    && -f "$path/lib/common.sh" && ! -L "$path/lib/common.sh" ]]; then
+    linux_root="$path"
+  else
+    gp_log ERROR "Der App-Baum enthaelt keinen eindeutig vertrauenswuerdigen Linux-Werkzeugordner."
+    return 1
+  fi
+  [[ -f "$linux_root/update-grabenplaner-server.sh" && ! -L "$linux_root/update-grabenplaner-server.sh" \
+    && -f "$linux_root/lib/common.sh" && ! -L "$linux_root/lib/common.sh" ]] || {
+    gp_log ERROR "Der Linux-Werkzeugordner besitzt keinen gueltigen Wartungsvertrag."
+    return 1
+  }
+  chown -R "root:$group" -- "$path"
+  find "$path" -type d -exec chmod 0750 -- {} +
+  find "$path" -type f ! -perm /111 -exec chmod 0640 -- {} +
+  find "$path" -type f -perm /111 -exec chmod 0750 -- {} +
+  find "$linux_root" -type f -name '*.sh' -exec chmod 0750 -- {} +
+}

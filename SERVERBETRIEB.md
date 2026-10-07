@@ -19,6 +19,14 @@ Nach Veröffentlichung des PostgreSQL-Bestands gibt es keinen automatischen Rüc
 
 ## Installation und Pakete
 
+Vor Paketbau und Upload ist ein gesonderter, rein lesender VPS-Preflight Pflicht. Er prüft `/tmp` als echtes Verzeichnis ohne Symlink,
+mit Eigentümer `root:root` und exakt `1777` einschließlich Sticky-Bit sowie wirksamen Schreib- und Suchrechten (`-w`/`-x`) für App-/Buildkonto und das installierte Offsite-Dienstkonto.
+Fehlt das Dienstkonto eines installierten Offsite-Moduls, scheitert die Prüfung. Nach VPS-Tests ist der Preflight erneut vollständig grün erforderlich.
+Solange das installierte Wartungswerkzeug diesen Check noch nicht enthält, wird derselbe Check aus dem geprüften aktuellen Quellstand
+separat und rein lesend am VPS ausgeführt, bevor der installierte Preflight startet.
+Es erfolgt kein automatisches `chmod` oder `chown`. Als root ausgeführte VPS-Tests verwenden ausschließlich ein eigenes privates `TMPDIR`;
+Rechte gemeinsamer Elternverzeichnisse werden niemals verändert.
+
 `server-tools/package/New-GrabenplanerLinuxServerPackage.ps1` akzeptiert nur einen sauberen Git-Checkout und freigegebene Laufzeitdateien.
 Das deterministische Linux-Quellpaket enthält Manifest, Quellcommit und SHA-256-Prüfsummen sowie weder produktive Daten noch Geheimnisse.
 ZIP und veröffentlichte Prüfsumme werden vor Entpacken und Installation verglichen. Produktionsabhängigkeiten werden auf dem Zielsystem installiert:
