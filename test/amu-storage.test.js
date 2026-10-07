@@ -209,6 +209,54 @@ test("Backup und Restore prüfen Ciphertext-Hashes und tauschen das Ziel atomar"
   assert.deepEqual(restoredStorage.readBuffer(metadata), pdfBuffer("Backup"));
 });
 
+for (const parentMode of [0o1777, 0o755]) {
+  test(`Backup und Restore erhalten bestehende Elternrechte ${parentMode.toString(8)}`, async (t) => {
+    const root = temporaryDirectory("parent-permissions");
+    const parent = path.join(root, "shared-parent");
+    fs.mkdirSync(parent);
+    fs.chmodSync(parent, parentMode);
+    const originalParentMode = fs.statSync(parent).mode & 0o7777;
+    const source = path.join(root, "source");
+    const backupDirectory = path.join(parent, "snapshot");
+    const target = path.join(parent, "restored");
+    const storage = createAmuStorage({
+      rootDirectory: source,
+      encryptionKeys: { primary: key() },
+      activeKeyId: "primary",
+      scanner: async () => true,
+    });
+    const metadata = await storage.saveBuffer({ buffer: pdfBuffer("Elternrechte"), originalName: "amu.pdf" });
+    const parentChmods = [];
+    const originalChmod = fs.chmodSync;
+    // Windows does not implement POSIX directory modes; still reject any attempt
+    // to change the shared parent's permissions on every supported platform.
+    t.mock.method(fs, "chmodSync", (directory, mode) => {
+      if (path.resolve(directory) === parent) parentChmods.push(mode);
+      return originalChmod(directory, mode);
+    });
+    const assertParentUnchanged = () => {
+      assert.deepEqual(parentChmods, []);
+      assert.equal(fs.statSync(parent).mode & 0o7777, originalParentMode);
+    };
+    syncEncryptedFilesBackup({ sourceDirectory: source, targetDirectory: backupDirectory });
+    assertParentUnchanged();
+    fs.mkdirSync(target, { mode: 0o700 });
+    fs.writeFileSync(path.join(target, "previous.txt"), "vorher");
+    restoreEncryptedFilesBackup({ backupDirectory, targetDirectory: target });
+    assertParentUnchanged();
+    assert.equal(fs.existsSync(path.join(target, "previous.txt")), false);
+    if (process.platform !== "win32") {
+      assert.equal(originalParentMode, parentMode);
+      for (const directory of [backupDirectory, target]) {
+        assert.equal(fs.statSync(directory).mode & 0o7777, 0o700);
+        assert.equal(fs.statSync(path.join(directory, "blobs")).mode & 0o7777, 0o700);
+      }
+    }
+    const restoredStorage = createAmuStorage({ rootDirectory: target, encryptionKeys: { primary: key() }, activeKeyId: "primary" });
+    assert.deepEqual(restoredStorage.readBuffer(metadata), pdfBuffer("Elternrechte"));
+  });
+}
+
 test("Beschädigtes Backup wird vor dem Austausch abgelehnt und lässt das Ziel unverändert", async () => {
   const source = temporaryDirectory("bad-backup-source");
   const backup = path.join(temporaryDirectory("bad-backup-parent"), "snapshot");
