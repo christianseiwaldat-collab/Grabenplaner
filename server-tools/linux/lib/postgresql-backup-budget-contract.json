@@ -5,7 +5,7 @@
   "files": {
     "lib/amu-storage.js": {
       "before": "7b6a80875f84355122eb284ce05519d867947956736f5ba50d6ec95509feac02",
-      "after": "5e93fdaa06bbefb3c8ee839a62d40cbc67aeb36294380bc553c2c866e843e202"
+      "after": "ea6443775bb5688156e47c714922e627b7da1315440fbf6a9275a2431158bc21"
     },
     "lib/backup-maintenance.js": {
       "before": "0f4a5df8c77a7ee42faec735f42791fa7feae804af5da9ba3cb6af108e886228",
