@@ -77,7 +77,8 @@ test('Personal actions retain a compact one-line title, reachable controls and s
             const controls = [...node.querySelector('.modal-header').querySelectorAll('button')].map(button => {const bounds = button.getBoundingClientRect();return {width: bounds.width, height: bounds.height, inside: bounds.left >= header.left && bounds.right <= header.right + 1 && bounds.top >= header.top && bounds.bottom <= header.bottom + 1};});
             return {x: box.x, y: box.y, height: box.height, width: box.width, titleHeight: title.getBoundingClientRect().height, whiteSpace: getComputedStyle(title).whiteSpace,
               overflow: getComputedStyle(title).textOverflow, bodyHidden: node.querySelector('[data-personal-actions-body]').hidden,
-              bodyDisplay: getComputedStyle(node.querySelector('[data-personal-actions-body]')).display, controls, edges: node.querySelectorAll('[data-gp-window-edge]:not([hidden])').length};
+              bodyDisplay: getComputedStyle(node.querySelector('[data-personal-actions-body]')).display, controls, edges: node.querySelectorAll('[data-gp-window-edge]:not([hidden])').length,
+              gripCount: node.querySelectorAll('.gp-window-titlebar .gp-window-grip').length, titleFontSize: getComputedStyle(title).fontSize, radius: getComputedStyle(node).borderTopLeftRadius};
           });
           assert.equal(minimized.whiteSpace, 'nowrap');assert.equal(minimized.overflow, 'ellipsis');assert.equal(minimized.bodyHidden, true);assert.equal(minimized.bodyDisplay, 'none');assert.equal(minimized.edges, 0);
           assert.ok(minimized.height <= 46 * scenario.zoom);assert.ok(minimized.titleHeight <= 20 * scenario.zoom + 1);assert.ok(minimized.controls.every(control => control.inside));
@@ -88,7 +89,8 @@ test('Personal actions retain a compact one-line title, reachable controls and s
           });
           if (fit.expanded.x === fit.minimized.x) assert.equal(minimized.x, expanded.x, 'Minimizing keeps x unless viewport fit needs a correction');
           if (fit.expanded.y === fit.minimized.y) assert.equal(minimized.y, expanded.y, 'Minimizing keeps y unless viewport fit needs a correction');
-          assert.ok(minimized.controls.every(control => control.width <= (scenario.touch ? 34 : 28) * scenario.zoom + 1));
+          assert.ok(minimized.controls.every(control => Math.abs(control.width - 38 * scenario.zoom) <= 1 && Math.abs(control.height - 38 * scenario.zoom) <= 1), 'Every title control uses the shared ArticleSearch 38 px target');
+          assert.equal(minimized.gripCount, 1);assert.equal(minimized.titleFontSize, '12px');assert.equal(minimized.radius, '12px');
           if (process.env.GP_PERSONAL_ACTIONS_QA_OUTPUT) {fs.mkdirSync(process.env.GP_PERSONAL_ACTIONS_QA_OUTPUT, {recursive: true});await page.screenshot({path: path.join(process.env.GP_PERSONAL_ACTIONS_QA_OUTPUT, `personal-actions-${scenario.id}-minimized.png`)});}
           await toggle.click();assert.equal(await dialog.evaluate(node => node.classList.contains('is-minimized')), false);
           assert.equal(await dialog.locator('[data-personal-actions-body]').isVisible(), true);

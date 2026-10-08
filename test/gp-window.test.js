@@ -65,6 +65,20 @@ test('restore, pointer and keyboard focus bring one window forward without unbou
   second.destroy();f.controller.destroy();
 });
 
+test('shared title bars stay 44px tall and profile identity changes do not replace the expanded title',()=>{
+  const f=documentFixture(),host=f.element('section',{},f.doc.body),title=f.element('header',{},host);
+  const text=f.element('strong',{},title),toggle=f.element('button',{},title),close=f.element('button',{},title),body=f.element('div',{},host);
+  text.textContent='Persönliches Rechteprofil';title.offsetHeight=180;let profile='001 · Anna';
+  const controller=attach(host,{title,body,toggle,closeButton:close,active:true,bounds:()=>({left:0,top:0,width:1600,height:1000}),
+    geometry:{x:20,y:30,width:700,height:600,minimized:false},minimizedTitle:()=>profile});
+  assert.equal(title.querySelectorAll('.gp-window-grip').length,1);assert.equal(close.classList.contains('gp-window-control'),true);
+  controller.minimize(true);assert.equal(controller.fitted.width,260);assert.equal(controller.fitted.height,44);
+  assert.equal(text.textContent,'001 · Anna');assert.equal(controller.preferred.width,700);assert.equal(controller.preferred.height,600);
+  profile='002 · Bernd';controller.refresh();assert.equal(text.textContent,'002 · Bernd');
+  controller.restore();assert.equal(text.textContent,'Persönliches Rechteprofil');assert.equal(controller.fitted.width,700);
+  controller.destroy();assert.equal(title.querySelectorAll('.gp-window-grip').length,0);assert.equal(text.textContent,'Persönliches Rechteprofil');
+});
+
 test('account preferences merge early movement with delayed server windows and retain changes through navigation',async()=>{
   const requests=[],applied=[];let actor='A';
   const prefs=createPreferences({actorKey:()=>actor,canUse:()=>true,api:(url,options)=>{const request=deferred();requests.push({url,options,...request});return request.promise;},apply:value=>applied.push(value)});

@@ -1,8 +1,8 @@
 # Versionsstatus
 
-## v0.92.77 Beta · Quellstand
+## v0.92.78 Beta · Quellstand
 
-Kompakte Rechteverwaltung und verbesserte persönliche Arbeitsfenster.
+Verbesserte persönliche Anträge, Leihen und Filialbestellungen sowie kompakte Arbeitsfenster.
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease

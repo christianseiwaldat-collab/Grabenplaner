@@ -28,6 +28,7 @@
     <link rel="stylesheet" href="/mobile-refinements.css" />
     <link rel="stylesheet" href="/sidebar-notepad.css" />
     <link rel="stylesheet" href="/gp-window.css" />
+    <link rel="stylesheet" href="/loan-location-settings.css" />
     <link rel="stylesheet" href="/sales-recent-articles.css" />
     <link rel="stylesheet" href="/sales-article-search-window.css" />
     <link rel="stylesheet" href="/start-dashboard-workspace.css" />
@@ -56,7 +57,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.77 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.78 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -1670,12 +1671,12 @@
                 <div><span class="eyebrow">Artikelsuche</span><h2 id="salesArticleSearchTitle">Artikel finden</h2><p>Die Liste wird erst nach einer ausdrücklichen Suche geladen.</p></div>
               </div>
               <form class="sales-article-search-form sales-article-header-search" id="salesArticleSearchForm">
-                <label class="field sales-article-search-query"><span>Artikelnr., Bezeichnung oder EAN</span><input id="salesArticleSearchQuery" type="search" maxlength="160" autocomplete="off" aria-describedby="salesArticleSearchStatus" placeholder="Artikel suchen …" /></label>
+                <label class="field sales-article-search-query"><span class="visually-hidden">Artikelnr., Bezeichnung oder EAN</span><input id="salesArticleSearchQuery" type="search" maxlength="160" autocomplete="off" aria-describedby="salesArticleSearchStatus" placeholder="Artikelnr., Bezeichnung oder EAN" /></label>
                 <button class="primary-button" id="salesArticleSearchSubmit" type="submit">Suchen</button>
                 <button class="text-button" id="salesArticleSearchReset" type="button" title="Suche zurücksetzen" aria-label="Suche zurücksetzen">↺</button>
               </form>
               <details class="sales-article-advanced-search" id="salesArticleAdvancedSearch">
-                <summary><span>Erweiterte Suche</span><small>Bestellnummer und Status</small></summary>
+                <summary>Erweiterte Suche</summary>
                 <p class="settings-note">Alle Begriffe werden unabhängig von der Reihenfolge gesucht. * ist ein Joker, ? steht für ein Zeichen. Leerzeichen und Trennzeichen werden tolerant behandelt.</p>
                 <div class="sales-article-advanced-fields">
                   <label class="field"><span>Bestellnummer</span><input id="salesArticleSearchOrderNumber" form="salesArticleSearchForm" type="search" maxlength="160" autocomplete="off" placeholder="Hersteller oder Lieferant" /></label>
@@ -1688,7 +1689,7 @@
             <section class="sales-article-results" id="salesArticleResults" aria-labelledby="salesArticleResultCount" aria-busy="false">
               <div class="sales-article-results-heading">
                 <div><span class="eyebrow">Suchergebnisse</span><strong id="salesArticleResultCount">Noch keine Suche</strong><small id="salesArticleResultRange">Die Ergebnisliste bleibt bis zur Suche leer.</small></div>
-                <details class="sales-article-columns" id="salesArticleColumns"><summary>Spalten auswählen &amp; anordnen</summary><div id="salesArticleColumnOptions"></div></details>
+                <details class="sales-article-columns" id="salesArticleColumns"><summary>Spaltenansicht</summary><div id="salesArticleColumnOptions"></div></details>
               </div>
               <div class="sales-article-results-body" id="salesArticleResultsBody">
                 <div class="sales-article-table-scroll" id="salesArticleTableScroll" tabindex="0" role="region" aria-label="Artikel-Suchergebnisse; weitere Treffer werden beim Scrollen nachgeladen">
@@ -2305,7 +2306,7 @@
             <details class="settings-accordion hidden" id="loanSettingsCard">
               <summary>
                 <span class="card-icon">Leihe</span>
-                <span class="settings-accordion-copy"><strong>Leihe je Standort</strong><small>Artikelquelle, Foto-PDFs, Originalaufbewahrung und Belegzustellung festlegen.</small></span>
+                <span class="settings-accordion-copy"><strong>Leihe je Standort</strong><small>Rücknahmeregel, Artikelsuche, Fotos und Belegzustellung je Filiale festlegen.</small></span>
                 <span class="settings-accordion-chevron" aria-hidden="true">›</span>
               </summary>
               <div class="settings-accordion-body">
@@ -3069,7 +3070,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.77 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.78 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -3969,7 +3970,7 @@
     <section class="rights-workspace-window" id="rightsManagementWindow" data-gp-window-manual hidden role="region" aria-labelledby="rightsManagementWindowTitle">
       <header data-rights-window-title><strong id="rightsManagementWindowTitle">Rechtemanagement</strong><div class="rights-window-controls"><button type="button" data-rights-window-toggle aria-label="Rechtemanagement minimieren">−</button><button type="button" data-rights-window-close aria-label="Rechtemanagement schließen">×</button></div></header>
       <div data-rights-window-body>
-        <div class="rights-management-toolbar"><label class="field rights-search-field"><span>Teammitglied suchen</span><input id="rightsEmployeeSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer, Name, Rolle oder Filiale" /></label><details class="gp-table-layout-controls" data-rights-columns><summary>Spaltenanzeige</summary><div data-rights-column-options></div></details></div>
+        <div class="rights-management-toolbar"><label class="field rights-search-field"><span>Teammitglied suchen</span><input id="rightsEmployeeSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer, Name, Rolle oder Filiale" /></label><details class="gp-table-layout-controls" data-rights-columns><summary>Spaltenansicht</summary><div data-rights-column-options></div></details></div>
         <p class="settings-note" id="rightsManagementHint" role="status" aria-live="polite">Rechte werden geladen.</p>
         <div class="rights-user-list" id="rightsUserList"></div>
         <details class="rights-management-boundaries"><summary>Verwaltungsgrenzen</summary><p>Verwaltbare Grundrechte können persönlich entzogen und später wiederhergestellt werden. Filialleitungen verwalten die persönliche Leihe ihrer Mitarbeitenden sowie Grundrechte aktiver Abteilungsleitungen im eigenen Standort. IT-Admin und Personalleitung behalten ihre getrennten Verwaltungsgrenzen. Der Developer-Zugang bleibt geschützt.</p></details>
@@ -4555,6 +4556,7 @@
     <script src="/sales-recent-articles.js"></script>
     <script src="/rights-management-workspace.js"></script>
     <script src="/rights-settings-windows.js"></script>
+    <script src="/loan-location-settings.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

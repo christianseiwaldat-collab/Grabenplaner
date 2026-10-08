@@ -15,6 +15,7 @@ process.env.GRABENPLANER_HOST = "127.0.0.1";
 process.env.GRABENPLANER_FORCE_PORTAL = "1";
 process.env.GRABENPLANER_SEED_DEMO = "1";
 process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
+process.env.GRABENPLANER_TEST_TODAY = "2035-03-01";
 process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 

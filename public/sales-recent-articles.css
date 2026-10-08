@@ -1,7 +1,7 @@
 .sidebar-window-dock{position:fixed;bottom:10px;left:58px;display:flex;gap:8px;z-index:990}
 .sidebar-window-dock button{width:30px;height:28px;padding:4px;display:grid;place-items:center;border:1px solid #6c857b;border-radius:6px;background:#173b31;color:#fff2a2;font-size:17px}
 .sidebar-window-dock button[hidden]{display:none}
-.sales-recent-articles{position:fixed;z-index:980;background:var(--surface,#fff);color:var(--ink,#1c2a36);font-size:11px;border:1px solid #d5dfdb;border-radius:16px;box-shadow:0 18px 45px #0003;display:flex;flex-direction:column;overflow:hidden}
+.sales-recent-articles{position:fixed;z-index:980;background:var(--surface,#fff);color:var(--ink,#1c2a36);font-size:11px;border:1px solid #d5dfdb;border-radius:12px;box-shadow:0 18px 45px #0003;display:flex;flex-direction:column;overflow:hidden}
 .sales-recent-articles[hidden]{display:none}
 .sales-recent-articles>header{display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--surface-soft,#f8f7f2);border-bottom:1px solid #d5dfdb;flex-shrink:0}
 .sales-recent-articles>header strong{flex:1;font-size:12px;cursor:move}

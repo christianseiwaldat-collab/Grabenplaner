@@ -12,6 +12,7 @@ Object.assign(process.env, {
   DB_PATH: path.join(testRoot, "dienstplan.db"), BACKUP_DIR: path.join(testRoot, "backups"),
   GRABENPLANER_DATA_DIR: path.join(testRoot, "app-data"), GRABENPLANER_HOST: "127.0.0.1",
   GRABENPLANER_FORCE_PORTAL: "1", GRABENPLANER_SEED_DEMO: "1", NODE_ENV: "test",
+  GRABENPLANER_TEST_TODAY: "2031-09-01",
 });
 const { app, db, releaseInstanceLockForTests, installationFeaturesForApiPath } = require("../server");
 const permission = "branch_time_off:submit";

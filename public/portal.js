@@ -5,6 +5,8 @@ const portalState = {
   timeOffCheck: null,
   timeOffSubmitting: false,
   vacationCheck: null,
+  vacationCheckFingerprint: "",
+  vacationSubmitting: false,
   vacationChange: null,
   timeOffChange: null,
   absenceHistory: [],
@@ -273,6 +275,14 @@ function mondayOf(value) {
 
 function iso(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function absenceTodayIso() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type) => parts.find((part) => part.type === type).value;
+  return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
 function addDays(value, amount) {
@@ -932,7 +942,7 @@ function mobileModuleAllowed(module, permissions = portalUser()?.permissions || 
   if (module === "team") return permissions.includes("time:read");
   if (module === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review", "amu:local:manage", "sickness:read", "sickness:manage"].includes(permission));
   if (module === "schedule") return permissions.includes("own_schedule:read");
-  if (module === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request"].includes(permission));
+  if (module === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:write"].includes(permission));
   if (module === "loan") return loanCapabilityEnabled();
   if (module === "sickness") return portalTabAllowed("amu");
   if (module === "learning") return portalTabAllowed("learningDashboard");
@@ -958,11 +968,11 @@ function portalTabAllowed(tab, user = portalUser()) {
   if (tab === "timeTracking") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
   if (tab === "timeOff") return isOrganizationAccount(user)
     ? user.accountType === "branch" && permissions.includes("branch_time_off:submit")
-    : permissions.includes("own_vacation:request");
+    : permissions.some((permission) => ["own_time:read", "own_time:write"].includes(permission));
   if (tab === "vacation") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request"].includes(permission));
   if (tab === "history") {
     return permissions.some((permission) => [
-      "own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request",
+      "own_vacation:read", "own_vacation:request", "own_time:read", "own_time:write",
     ].includes(permission));
   }
   if (tab === "amu") {
@@ -1133,7 +1143,7 @@ function applyMobileLeadershipLayout() {
   }
   document.querySelectorAll("[data-request-tab]").forEach((button) => {
     const tab = button.dataset.requestTab;
-    const canRequest = tab === "history" || (portalUser()?.permissions || []).includes("own_vacation:request");
+    const canRequest = tab === "history" || hasPortalPermission(tab === "timeOff" ? "own_time:write" : "own_vacation:request");
     button.classList.toggle("hidden", !canRequest || !portalTabAllowed(tab));
   });
   document.querySelectorAll(".portal-request-shortcuts").forEach((group) => {
@@ -1743,8 +1753,12 @@ async function redirectToPendingCandidateEvaluation(user = portalUser()) {
 
 async function initialize() {
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    [el.timeOffDate, el.timeOffDateTo, el.vacationDateFrom, el.vacationDateTo].forEach((input) => { if (input) input.min = today; });
+    const today = absenceTodayIso();
+    const requestHorizon = addDays(today, 365);
+    [el.timeOffDate, el.timeOffDateTo, el.vacationDateFrom, el.vacationDateTo,
+      el.timeOffChangeFrom, el.timeOffChangeTo, el.vacationChangeFrom, el.vacationChangeTo].forEach((input) => {
+      if (input) { input.min = today; input.max = requestHorizon; }
+    });
     if (el.sicknessStartDate) { el.sicknessStartDate.min = addDays(today, -5); el.sicknessStartDate.max = today; el.sicknessStartDate.value = today; }
     if (el.amuIncapacityFrom) el.amuIncapacityFrom.min = addDays(today, -3650);
     if (el.amuIncapacityTo) el.amuIncapacityTo.min = addDays(today, -3650);
@@ -4552,12 +4566,20 @@ async function decideLeadershipRequest(action) {
   }
 }
 
+function requestSubmissionAllowed(result) {
+  return result?.allowed === true || result?.submissionAllowed === true;
+}
+
 function updateTraffic(node, result, emptyText) {
   const traffic = result?.trafficLight || "neutral";
   node.classList.remove("neutral", "green", "yellow", "red");
   node.classList.add(traffic);
-  node.querySelector("strong").textContent = ({ green: "Nach aktuellem Stand möglich", yellow: "Manuelle Prüfung erforderlich", red: "Derzeit nicht möglich" })[traffic] || "Zeitraum eingeben";
-  node.querySelector("small").textContent = result?.reason || emptyText;
+  const staffingSubmission = traffic === "red" && result?.submissionAllowed === true;
+  node.querySelector("strong").textContent = staffingSubmission ? "Derzeit knapp · Antrag möglich"
+    : ({ green: "Nach aktuellem Stand möglich", yellow: "Manuelle Prüfung erforderlich", red: "Derzeit nicht möglich" })[traffic] || "Zeitraum eingeben";
+  node.querySelector("small").textContent = staffingSubmission
+    ? `${result?.reason || ""} Du kannst den Antrag trotzdem zur Prüfung einreichen; die Genehmigung wird erneut geprüft.`.trim()
+    : result?.reason || emptyText;
 }
 
 let timeOffCheckTimer;
@@ -4610,7 +4632,7 @@ function updateTimeOffMode() {
   });
   el.timeOffDateToField.classList.toggle("hidden", mode !== "range");
   el.timeOffDateTo.required = mode === "range";
-  el.timeOffDateTo.min = el.timeOffDate.value || new Date().toISOString().slice(0, 10);
+  el.timeOffDateTo.min = el.timeOffDate.value || absenceTodayIso();
   if (mode === "range" && (!el.timeOffDateTo.value || el.timeOffDateTo.value < el.timeOffDate.value)) el.timeOffDateTo.value = el.timeOffDate.value;
   checkTimeOff();
   renderBranchTimeOffSchedule();
@@ -4638,7 +4660,8 @@ async function checkTimeOff() {
       if (generation !== timeOffCheckGeneration || fingerprint !== timeOffFormFingerprint()) return;
       portalState.timeOffCheck = result;
       portalState.timeOffCheckFingerprint = fingerprint;
-      el.timeOffSubmitButton.disabled = !result.allowed || portalState.timeOffSubmitting;
+      el.timeOffSubmitButton.disabled = !requestSubmissionAllowed(result) || portalState.timeOffSubmitting
+        || !hasPortalPermission(isBranchTimeOffAccount() ? "branch_time_off:submit" : "own_time:write");
       updateTraffic(el.timeOffCheck, result, "");
     } catch (error) {
       if (generation !== timeOffCheckGeneration || fingerprint !== timeOffFormFingerprint()) return;
@@ -4727,7 +4750,8 @@ async function loadTimeOffRequests() {
     Number(item.original_request_id ?? item.time_off_request_id ?? item.request_id),
     item,
   ]));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = absenceTodayIso();
+  const canEditRequests = hasPortalPermission("own_time:write");
   const requests = portalState.timeOffRequests.filter((item) => portalState.timeOffArchive ? (item.date_to || item.request_date) < today : (item.date_to || item.request_date) >= today || ["pending","pending_local","preliminary_local","pending_hr"].includes(item.status));
   el.timeOffArchiveToggle.textContent = portalState.timeOffArchive ? "Aktuelle Anträge" : "Archiv";
   el.timeOffRequestList.innerHTML = requests.length ? requests.map((item) => {
@@ -4743,12 +4767,13 @@ async function loadTimeOffRequests() {
       ${pendingChange ? `<span class="pending-change">${pendingLabel}</span>` : ""}
       ${["pending","pending_local","preliminary_local","pending_hr"].includes(item.status) ? `<span>${esc(item.check_reason)}</span>` : ""}
       ${item.local_approved_by ? `<span>Filiale: ${esc(item.local_approved_by)}</span>` : ""}${item.hr_approved_by ? `<span>Personalleitung: ${esc(item.hr_approved_by)}</span>` : ""}
-    </div>${["pending","pending_local","preliminary_local","pending_hr"].includes(item.status) ? '<div class="request-actions"><button class="text-button edit-request" type="button">Bearbeiten</button><button class="cancel-request" type="button">Zurückziehen</button></div>' : approvedFuture ? `<div class="request-actions approved-time-off-actions"><button class="text-button" data-time-off-action="change" type="button" ${pendingChange ? "disabled" : ""}>Änderung beantragen</button><button class="cancel-request" data-time-off-action="cancel" type="button" ${pendingChange ? "disabled" : ""}>Stornierung beantragen</button></div>` : ""}</article>
+    </div>${canEditRequests && ["pending","pending_local","preliminary_local","pending_hr"].includes(item.status) ? '<div class="request-actions"><button class="text-button edit-request" type="button">Bearbeiten</button><button class="cancel-request" type="button">Zurückziehen</button></div>' : canEditRequests && approvedFuture ? `<div class="request-actions approved-time-off-actions"><button class="text-button" data-time-off-action="change" type="button" ${pendingChange ? "disabled" : ""}>Änderung beantragen</button><button class="cancel-request" data-time-off-action="cancel" type="button" ${pendingChange ? "disabled" : ""}>Stornierung beantragen</button></div>` : ""}</article>
   `;
   }).join("") : "<p>Noch keine ZA-Anträge vorhanden.</p>";
 }
 
 async function editTimeOff(id) {
+  if (!hasPortalPermission("own_time:write")) return;
   const item = portalState.timeOffRequests.find((request) => Number(request.id) === Number(id));
   if (!item) return;
   portalState.editingTimeOffId = Number(id);
@@ -4787,8 +4812,9 @@ function resetTimeOffForm() {
 
 async function submitTimeOff(event) {
   event.preventDefault();
-  if (portalState.timeOffSubmitting || !portalState.timeOffCheck?.allowed
-    || portalState.timeOffCheckFingerprint !== timeOffFormFingerprint()) return;
+  if (portalState.timeOffSubmitting || !requestSubmissionAllowed(portalState.timeOffCheck)
+    || portalState.timeOffCheckFingerprint !== timeOffFormFingerprint()
+    || !hasPortalPermission(isBranchTimeOffAccount() ? "branch_time_off:submit" : "own_time:write")) return;
   const owner = timeOffOwnerKey();
   const branch = isBranchTimeOffAccount();
   const payload = timeOffPayload();
@@ -4828,6 +4854,7 @@ async function submitTimeOff(event) {
 }
 
 async function cancelTimeOff(id) {
+  if (!hasPortalPermission("own_time:write")) return;
   if (!confirm("Offenen ZA-Antrag wirklich zurückziehen?")) return;
   try {
     await api(`/api/portal/v1/me/time-off-requests/${id}`, { method: "DELETE", body: "{}" });
@@ -4850,7 +4877,7 @@ function updateTimeOffChangeMode() {
   el.timeOffChangeTo.required = editingPeriod && mode === "range";
   el.timeOffChangeStart.required = editingPeriod && mode === "hours";
   el.timeOffChangeEnd.required = editingPeriod && mode === "hours";
-  el.timeOffChangeTo.min = el.timeOffChangeFrom.value || new Date().toISOString().slice(0, 10);
+  el.timeOffChangeTo.min = el.timeOffChangeFrom.value || absenceTodayIso();
   if (mode === "range" && (!el.timeOffChangeTo.value || el.timeOffChangeTo.value < el.timeOffChangeFrom.value)) {
     el.timeOffChangeTo.value = el.timeOffChangeFrom.value;
   }
@@ -4863,6 +4890,7 @@ function timeOffPeriodText(item) {
 }
 
 function openTimeOffChange(requestId, requestType) {
+  if (!hasPortalPermission("own_time:write")) return;
   const item = portalState.timeOffRequests.find((request) => Number(request.id) === Number(requestId) && request.status === "approved");
   if (!item) return;
   const from = item.date_from || item.request_date;
@@ -4884,6 +4912,7 @@ function openTimeOffChange(requestId, requestType) {
 
 async function submitTimeOffChange(event) {
   event.preventDefault();
+  if (!hasPortalPermission("own_time:write")) return;
   const change = portalState.timeOffChange;
   if (!change) return;
   const mode = timeOffChangeMode();
@@ -4917,24 +4946,46 @@ async function submitTimeOffChange(event) {
 }
 
 let vacationCheckTimer;
-async function checkVacation() {
+let vacationCheckGeneration = 0;
+
+function vacationFormFingerprint() {
+  return JSON.stringify([portalUser()?.employeeNumber || "", el.vacationDateFrom.value,
+    el.vacationDateTo.value, portalState.editingVacationId]);
+}
+
+function invalidateVacationCheck() {
   clearTimeout(vacationCheckTimer);
+  vacationCheckGeneration += 1;
+  portalState.vacationCheck = null;
+  portalState.vacationCheckFingerprint = "";
+  el.vacationSubmitButton.disabled = true;
+}
+
+async function checkVacation() {
+  invalidateVacationCheck();
+  const generation = vacationCheckGeneration;
+  const fingerprint = vacationFormFingerprint();
+  const payload = { dateFrom: el.vacationDateFrom.value, dateTo: el.vacationDateTo.value };
   if (!el.vacationDateFrom.value || !el.vacationDateTo.value) {
-    portalState.vacationCheck = null;
-    el.vacationSubmitButton.disabled = true;
     updateTraffic(el.vacationCheck, null, "Antragssperren werden sofort geprüft.");
     return;
   }
+  updateTraffic(el.vacationCheck, null, "Zeitraum wird geprüft …");
   vacationCheckTimer = setTimeout(async () => {
+    if (generation !== vacationCheckGeneration || fingerprint !== vacationFormFingerprint()) return;
     try {
       const result = await api("/api/portal/v1/me/vacation-check", {
         method: "POST",
-        body: JSON.stringify({ dateFrom: el.vacationDateFrom.value, dateTo: el.vacationDateTo.value }),
+        body: JSON.stringify(payload),
       });
+      if (generation !== vacationCheckGeneration || fingerprint !== vacationFormFingerprint()) return;
       portalState.vacationCheck = result;
-      el.vacationSubmitButton.disabled = !result.allowed;
+      portalState.vacationCheckFingerprint = fingerprint;
+      el.vacationSubmitButton.disabled = !requestSubmissionAllowed(result) || portalState.vacationSubmitting
+        || !hasPortalPermission("own_vacation:request");
       updateTraffic(el.vacationCheck, result, "");
     } catch (error) {
+      if (generation !== vacationCheckGeneration || fingerprint !== vacationFormFingerprint()) return;
       portalState.vacationCheck = { trafficLight: "red", allowed: false, reason: error.message };
       el.vacationSubmitButton.disabled = true;
       updateTraffic(el.vacationCheck, portalState.vacationCheck, "");
@@ -5010,15 +5061,17 @@ async function loadVacationAccount() {
 async function loadVacationRequests() {
   const data = await api("/api/portal/v1/me/vacation-requests");
   portalState.vacationRequests = data.requests || [];
+  const canEditRequests = hasPortalPermission("own_vacation:request");
   el.vacationRequestList.innerHTML = data.requests.length ? data.requests.map((item) => `
     <article class="request-item" data-request-id="${item.id}"><div><strong>${dateText(item.date_from)} – ${dateText(item.date_to)}</strong>
       ${item.note ? `<span>${esc(item.note)}</span>` : ""}<span class="status ${item.status}">${statusLabels[item.status] || esc(item.status)}</span>
       ${item.local_approved_by ? `<span>Filiale: ${esc(item.local_approved_by)}</span>` : ""}${item.hr_approved_by ? `<span>Personalleitung: ${esc(item.hr_approved_by)}</span>` : ""}
-    </div>${["pending","pending_local","preliminary_local","pending_hr"].includes(item.status) ? '<div class="request-actions"><button class="text-button edit-request" type="button">Bearbeiten</button><button class="cancel-request" type="button">Zurückziehen</button></div>' : ""}</article>
+    </div>${canEditRequests && ["pending","pending_local","preliminary_local","pending_hr"].includes(item.status) ? '<div class="request-actions"><button class="text-button edit-request" type="button">Bearbeiten</button><button class="cancel-request" type="button">Zurückziehen</button></div>' : ""}</article>
   `).join("") : "<p>Noch keine Urlaubsanträge vorhanden.</p>";
 }
 
 function editVacation(id) {
+  if (!hasPortalPermission("own_vacation:request")) return;
   const item = portalState.vacationRequests.find((request) => Number(request.id) === Number(id));
   if (!item) return;
   portalState.editingVacationId = Number(id);
@@ -5034,6 +5087,7 @@ function editVacation(id) {
 }
 
 function resetVacationForm() {
+  invalidateVacationCheck();
   portalState.editingVacationId = null;
   el.vacationRequestForm.reset();
   el.vacationFormTitle.textContent = "Neuer Antrag";
@@ -5044,7 +5098,11 @@ function resetVacationForm() {
 
 async function submitVacation(event) {
   event.preventDefault();
-  if (!portalState.vacationCheck?.allowed) return;
+  if (portalState.vacationSubmitting || !requestSubmissionAllowed(portalState.vacationCheck)
+    || portalState.vacationCheckFingerprint !== vacationFormFingerprint()
+    || !hasPortalPermission("own_vacation:request")) return;
+  portalState.vacationSubmitting = true;
+  el.vacationSubmitButton.disabled = true;
   try {
     await api(portalState.editingVacationId ? `/api/portal/v1/me/vacation-requests/${portalState.editingVacationId}` : "/api/portal/v1/me/vacation-requests", {
       method: portalState.editingVacationId ? "PUT" : "POST",
@@ -5059,10 +5117,13 @@ async function submitVacation(event) {
   } catch (error) {
     message(el.vacationMessage, error.message, true);
     await checkVacation();
+  } finally {
+    portalState.vacationSubmitting = false;
   }
 }
 
 async function cancelVacation(id) {
+  if (!hasPortalPermission("own_vacation:request")) return;
   if (!confirm("Offenen Urlaubsantrag wirklich zurückziehen?")) return;
   try {
     await api(`/api/portal/v1/me/vacation-requests/${id}`, { method: "DELETE", body: "{}" });
@@ -5072,14 +5133,15 @@ async function cancelVacation(id) {
 
 async function loadApprovedVacations() {
   const data = await api("/api/portal/v1/me/approved-vacations");
+  const canEditRequests = hasPortalPermission("own_vacation:request");
   const pendingByGroup = Object.fromEntries((data.pendingChanges || []).map((item) => [item.vacation_group_id, item]));
   el.approvedVacationList.innerHTML = data.vacations.length ? data.vacations.map((vacation) => {
     const pending = pendingByGroup[vacation.groupId];
     const pendingLabel = pending ? (pending.request_type === "cancel" ? "Storno beantragt" : "Änderung beantragt") : "";
     return `<article class="approved-vacation-item" data-vacation-group="${esc(vacation.groupId)}">
       <div><strong>${dateText(vacation.dateFrom)} – ${dateText(vacation.dateTo)}</strong>${vacation.note ? `<span>${esc(vacation.note)}</span>` : ""}${pending ? `<span class="pending-change">${pendingLabel}</span>` : ""}</div>
-      <button data-vacation-action="change" type="button" ${pending ? "disabled" : ""}>Änderung beantragen</button>
-      <button class="vacation-cancel" data-vacation-action="cancel" type="button" ${pending ? "disabled" : ""}>Stornierung beantragen</button>
+      ${canEditRequests ? `<button data-vacation-action="change" type="button" ${pending ? "disabled" : ""}>Änderung beantragen</button>
+      <button class="vacation-cancel" data-vacation-action="cancel" type="button" ${pending ? "disabled" : ""}>Stornierung beantragen</button>` : ""}
     </article>`;
   }).join("") : "<p>Derzeit ist kein genehmigter Urlaub eingetragen.</p>";
 }
@@ -5134,12 +5196,48 @@ function renderAbsenceHistory() {
   const items = portalState.absenceHistory.filter(requestMatchesHistoryFilters);
   el.absenceHistoryList.innerHTML = items.length ? items.map((item) => {
     const approvals = [item.local_approved_by ? `Filiale: ${esc(item.local_approved_by)}` : "", item.hr_approved_by ? `PL: ${esc(item.hr_approved_by)}` : ""].filter(Boolean).join(" · ");
+    const canChange = openRequestStatuses.has(item.status)
+      && hasPortalPermission(item.kind.startsWith("time_off") ? "own_time:write" : "own_vacation:request");
+    const canEdit = canChange && ["time_off", "vacation"].includes(item.kind);
     return `<article class="history-item" data-history-id="${Number(item.id)}" data-history-kind="${esc(item.kind)}">
       <div><strong>${esc(requestKindText(item))}</strong><span>${requestPeriodText(item)}</span>${item.note ? `<span>${esc(item.note)}</span>` : ""}<small>${esc(new Date(item.created_at).toLocaleString("de-AT"))}</small></div>
       <div class="history-item-status"><span class="status ${esc(item.status)}">${esc(statusLabels[item.status] || item.status)}</span>${approvals ? `<small>${approvals}</small>` : ""}</div>
       <button class="text-button" data-open-history type="button">Verlauf</button>
+      ${canEdit ? '<button class="text-button" data-history-action="edit" type="button">Bearbeiten</button>' : ""}
+      ${canChange ? '<button class="cancel-request" data-history-action="withdraw" type="button">Zurückziehen</button>' : ""}
     </article>`;
   }).join("") : '<p class="empty-state">Für diesen Filter gibt es keine Anträge.</p>';
+}
+
+async function runAbsenceHistoryAction(button) {
+  const row = button.closest("[data-history-id]");
+  const item = portalState.absenceHistory.find((entry) => Number(entry.id) === Number(row?.dataset.historyId)
+    && entry.kind === row?.dataset.historyKind);
+  if (!item || !openRequestStatuses.has(item.status)
+    || !hasPortalPermission(item.kind.startsWith("time_off") ? "own_time:write" : "own_vacation:request")) return;
+  button.disabled = true;
+  try {
+    if (button.dataset.historyAction === "edit" && ["time_off", "vacation"].includes(item.kind)) {
+      setTab(item.kind === "time_off" ? "timeOff" : "vacation");
+      if (item.kind === "time_off") { await loadTimeOffRequests(); await editTimeOff(item.id); }
+      else { await loadVacationRequests(); editVacation(item.id); }
+      return;
+    }
+    if (button.dataset.historyAction !== "withdraw" || !confirm("Diesen offenen Antrag wirklich zurückziehen?")) return;
+    const route = ({ time_off: "time-off-requests", vacation: "vacation-requests",
+      time_off_change: "time-off-change-requests", time_off_cancel: "time-off-change-requests",
+      vacation_change: "vacation-change-requests", vacation_cancel: "vacation-change-requests" })[item.kind];
+    if (!route) return;
+    await api(`/api/portal/v1/me/${route}/${encodeURIComponent(String(item.id))}`, { method: "DELETE", body: "{}" });
+    await loadAbsenceHistory();
+  } catch (error) {
+    const notice = document.createElement("p");
+    notice.className = "message error";
+    notice.textContent = error.message;
+    row?.append(notice);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function loadAbsenceHistory() {
@@ -6579,6 +6677,7 @@ async function withdrawAmuReport(id) {
 }
 
 function openVacationChange(groupId, requestType) {
+  if (!hasPortalPermission("own_vacation:request")) return;
   const item = el.approvedVacationList.querySelector(`[data-vacation-group="${CSS.escape(groupId)}"]`);
   if (!item) return;
   const dateMatch = item.querySelector("strong").textContent.match(/(\d{2}\.\d{2}\.\d{4}) – (\d{2}\.\d{2}\.\d{4})/);
@@ -6598,6 +6697,7 @@ function openVacationChange(groupId, requestType) {
 
 async function submitVacationChange(event) {
   event.preventDefault();
+  if (!hasPortalPermission("own_vacation:request")) return;
   const change = portalState.vacationChange;
   if (!change) return;
   try {
@@ -6844,12 +6944,12 @@ function renderLoanDraftItems() {
     const manual = item.needsManual ? `<div class="loan-manual-mapping">
       <label><span>Interne Artikelnummer</span><input data-loan-field="manualArticleNumber" data-loan-index="${index}" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" value="${esc(item.manualArticleNumber)}" placeholder="6-stellig" /></label>
       <label><span>Artikelbezeichnung</span><input data-loan-field="manualDescription" data-loan-index="${index}" maxlength="300" value="${esc(item.manualDescription)}" placeholder="Einmalig ergänzen" /></label>
-      <small>Diese bestätigte Verbindung wird beim nächsten Scan automatisch verwendet.</small>
+      <small>Fehlt der Artikel im GP-Artikelstamm, kannst du seine Bezeichnung ergänzen. Diese bestätigte Verbindung wird beim nächsten Scan automatisch verwendet.</small>
     </div>` : "";
     return `<article class="loan-item-row" data-loan-item="${index}">
       <header><strong>Position ${index + 1}</strong>${portalState.loanDraftItems.length > 1 ? `<button type="button" data-loan-remove="${index}" aria-label="Position entfernen">×</button>` : ""}</header>
       <div class="loan-item-fields">
-        <label class="loan-identifier-field"><span>Artikelnummer oder EAN</span><div><input data-loan-field="identifier" data-loan-index="${index}" inputmode="numeric" maxlength="14" pattern="[0-9]*" autocomplete="off" value="${esc(item.identifier)}" placeholder="6, 8, 12, 13 oder 14 Ziffern" /><button class="text-button" data-loan-resolve="${index}" type="button" ${item.busy ? "disabled" : ""}>${item.busy ? "Suche …" : "Zuordnen"}</button></div></label>
+        <label class="loan-identifier-field"><span>Artikelnummer oder EAN im GP-Artikelstamm</span><div><input data-loan-field="identifier" data-loan-index="${index}" inputmode="numeric" maxlength="14" pattern="[0-9]*" autocomplete="off" value="${esc(item.identifier)}" placeholder="6, 8, 12, 13 oder 14 Ziffern" ${item.busy ? "disabled" : ""} /><button class="text-button" data-loan-resolve="${index}" type="button" ${item.busy ? "disabled" : ""}>${item.busy ? "Suche …" : "Zuordnen"}</button></div></label>
         <label><span>Seriennummer</span><input data-loan-field="serialNumber" data-loan-index="${index}" maxlength="100" value="${esc(item.serialNumber)}" placeholder="Optional" /></label>
         <label><span>Zustand</span><select data-loan-field="conditionOut" data-loan-index="${index}">${loanConditionOptions(item.conditionOut)}</select></label>
         <label><span>Bemerkung</span><input data-loan-field="note" data-loan-index="${index}" maxlength="500" value="${esc(item.note)}" placeholder="Optional" /></label>
@@ -6884,10 +6984,17 @@ async function resolveLoanDraftItem(index) {
   } catch (error) {
     item.resolved = null;
     item.error = error.message;
-    item.needsManual = ![
-      "ARTICLE_IDENTIFIER_INVALID",
-      "ARTICLE_IDENTIFIER_CHECKSUM_INVALID",
-      "ARTICLE_NUMBER_INVALID",
+    item.needsManual = [
+      "ARTICLE_DESCRIPTION_REQUIRED",
+      "ARTICLE_LOOKUP_NOT_FOUND",
+      "ARTICLE_LOOKUP_NOT_CONFIGURED",
+      "ARTICLE_LOOKUP_FAILED",
+      "ARTICLE_LOOKUP_HTTP_ERROR",
+      "ARTICLE_LOOKUP_TIMEOUT",
+      "ARTICLE_LOOKUP_NETWORK_ERROR",
+      "ARTICLE_LOOKUP_DNS_FAILED",
+      "ARTICLE_LOOKUP_CONTENT_TYPE_INVALID",
+      "ARTICLE_LOOKUP_RESPONSE_TOO_LARGE",
     ].includes(error.code);
   } finally {
     item.busy = false;
@@ -7159,17 +7266,18 @@ async function openLoanReturn(loanId) {
     <label><span>Bemerkung</span><input data-loan-return-note="${item.position}" maxlength="500" placeholder="Optional" value="${esc(prepared?.returnNote || "")}" /></label>
   </article>`;
   }).join("");
-  const canManage = portalState.loanStatus?.permissions?.locationManage === true;
-  el.loanReturnWitness.innerHTML = `<option value="">${canManage ? "Ohne zweite Person direkt abschließen" : "Jetzt speichern – Gegenprüfung später anfordern"}</option>` + portalState.loanTeamMembers
+  const requiresWitness = portalState.loanStatus?.location?.returnPolicy?.requiresWitness === true;
+  el.loanReturnWitness.required = requiresWitness;
+  el.loanReturnWitness.innerHTML = `<option value="">${requiresWitness ? "Zweites Teammitglied auswählen" : "Ohne zweite Person direkt abschließen"}</option>` + portalState.loanTeamMembers
     .filter((member) => member.employeeNumber !== loan.borrower?.employeeNumber
       && member.employeeNumber !== portalUser()?.employeeNumber)
     .map((member) => `<option value="${esc(member.employeeNumber)}">${esc(member.employeeNumber)} · ${esc(member.name)}</option>`)
     .join("");
   el.loanReturnNote.value = preparation?.note || "";
-  el.loanReturnWitnessHint.textContent = canManage
-    ? "Ohne Auswahl schließt die zuständige Leitung direkt ab. Mit Auswahl kann ein zweites Teammitglied bis 23:59 Uhr gegenprüfen."
-    : "Ohne Auswahl wird die Rücknahme gespeichert. Ein zweites Teammitglied kann auch später ausgewählt werden und bis 23:59 Uhr gegenprüfen.";
-  el.loanReturnSubmit.textContent = canManage ? "Rücknahme abschließen" : "Rücknahme speichern";
+  el.loanReturnWitnessHint.textContent = requiresWitness
+    ? "Für diese Filiale ist die Gegenprüfung verpflichtend. Die Leihe bleibt offen, bis das ausgewählte Teammitglied die Rücknahme bestätigt."
+    : "Du kannst die Rücknahme alleine abschließen. Bei Auswahl einer zweiten Person bleibt die Leihe bis zu ihrer Gegenbestätigung offen.";
+  el.loanReturnSubmit.textContent = requiresWitness ? "Gegenbestätigung anfordern" : "Rücknahme abschließen";
   setLoanPhotoFiles("return", []);
   el.loanReturnPhotos.value = "";
   el.loanReturnCamera.value = "";
@@ -7207,7 +7315,7 @@ async function submitLoanReturn(event) {
     el.loanReturnDialog.close();
     portalState.selectedLoan = null;
     const completionCopy = result.direct
-      ? "Die Rücknahme wurde durch die zuständige Leitung abgeschlossen."
+      ? "Die Rücknahme wurde abgeschlossen."
       : result.confirmation
         ? `Bestätigung bei ${result.confirmation.witness.employeeNumber} · ${result.confirmation.witness.name} bis heute 23:59 Uhr angefordert. Die Leihe bleibt bis dahin offen.`
         : "Die Rücknahme wurde gespeichert und kann später fortgesetzt oder zur Gegenprüfung weitergegeben werden.";
@@ -8011,10 +8119,9 @@ el.loanList?.addEventListener("click", (event) => {
 });
 el.loanReturnForm?.addEventListener("submit", submitLoanReturn);
 el.loanReturnWitness?.addEventListener("change", () => {
-  const canManage = portalState.loanStatus?.permissions?.locationManage === true;
   el.loanReturnSubmit.textContent = el.loanReturnWitness.value
-    ? "Gegenprüfung anfordern"
-    : (canManage ? "Rücknahme abschließen" : "Rücknahme speichern");
+    || portalState.loanStatus?.location?.returnPolicy?.requiresWitness === true
+    ? "Gegenbestätigung anfordern" : "Rücknahme abschließen";
 });
 el.loanManageForm?.addEventListener("submit", submitLoanManagement);
 el.loanManageClose?.addEventListener("click", () => runLoanManagementAction("close"));
@@ -8093,6 +8200,8 @@ document.querySelectorAll("[data-history-kind]").forEach((button) => button.addE
 }));
 el.historyStatusFilter.addEventListener("change", renderAbsenceHistory);
 el.absenceHistoryList.addEventListener("click", (event) => {
+  const action = event.target.closest("[data-history-action]");
+  if (action && !action.disabled) { runAbsenceHistoryAction(action); return; }
   const button = event.target.closest("[data-open-history]");
   const item = button?.closest("[data-history-id]");
   if (item) openHistoryDetail(item.dataset.historyId, item.dataset.historyKind);

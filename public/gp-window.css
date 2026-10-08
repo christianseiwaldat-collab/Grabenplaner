@@ -3,6 +3,44 @@
 .gp-window.is-active-window { z-index:985; }
 .gp-window[hidden] { display:none !important; }
 .gp-window-title { cursor:move; touch-action:none; user-select:none; }
+/* One title-bar contract, based on the article-search window. These properties
+   deliberately override older per-dialog styles; content and form styling stay
+   owned by the respective workspace. Expanded dimensions are never rewritten. */
+.gp-window.gp-window-standard { border-radius:12px !important; }
+.gp-window.gp-window-standard .gp-window-titlebar {
+  display:flex !important; flex:0 0 44px !important; align-items:center !important;
+  box-sizing:border-box !important; height:44px !important; min-height:44px !important;
+  gap:6px !important; margin:0 !important; padding:3px 7px !important;
+  border-bottom:1px solid var(--line,#d7e0db) !important; background:var(--surface-soft,var(--surface-muted,#f8f7f2)) !important;
+  overflow:hidden;
+}
+.gp-window.gp-window-standard.is-minimized .gp-window-titlebar { border-bottom:0 !important; }
+.gp-window.gp-window-standard .gp-window-title-text {
+  min-width:0; margin:0 !important; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:12px !important; font-weight:700 !important; line-height:16px !important; letter-spacing:0 !important;
+}
+.gp-window.gp-window-standard .gp-window-titlebar > .gp-window-title-text { flex:1 1 auto; }
+.gp-window.gp-window-standard .gp-window-grip {
+  display:inline-block; flex:0 0 12px !important; width:12px; min-width:12px !important;
+  margin:0 !important; color:var(--muted,#76837c); font-size:16px; line-height:1; pointer-events:none;
+}
+.gp-window.gp-window-standard .gp-window-titlebar > .gp-window-grip { margin-left:6px !important; margin-right:2px !important; }
+.gp-window.gp-window-standard button.gp-window-move-handle {
+  display:flex; flex:1 1 auto !important; align-items:center; justify-content:flex-start !important;
+  min-width:0 !important; min-height:38px !important; gap:8px !important; margin:0 !important;
+  padding:6px !important; border:0 !important; border-radius:7px !important;
+  background:transparent !important; color:inherit; text-align:left; cursor:move;
+}
+.gp-window.gp-window-standard .gp-window-controls { display:flex; flex:none; align-items:center; gap:6px !important; }
+.gp-window.gp-window-standard .gp-window-titlebar button.gp-window-control {
+  display:inline-flex !important; flex:0 0 38px !important; align-items:center !important; justify-content:center !important;
+  width:38px !important; height:38px !important; min-width:38px !important; min-height:38px !important;
+  margin:0 !important; padding:6px !important; border:0 !important; border-radius:7px !important;
+  background:transparent !important; color:inherit; font-size:18px !important; line-height:1 !important; box-shadow:none !important;
+}
+.gp-window.gp-window-standard .gp-window-titlebar button.gp-window-control:hover { background:var(--surface,#fff) !important; }
+.gp-window.gp-window-standard :is(.gp-window-control,.gp-window-move-handle):focus-visible { outline:2px solid var(--green,#215345); outline-offset:-3px; }
+.gp-window-sr-only { position:absolute !important; width:1px !important; height:1px !important; padding:0 !important; margin:-1px !important; overflow:hidden !important; clip-path:inset(50%); white-space:nowrap; border:0 !important; }
 .gp-window.is-moving,.gp-window.is-resizing { user-select:none; }
 .gp-window.is-moving { cursor:move; }
 .gp-window-edge { position:absolute; z-index:20; padding:0 !important; margin:0; min-width:0 !important; min-height:0 !important; border:0 !important; border-radius:0 !important; background:transparent !important; color:transparent; box-shadow:none !important; touch-action:none; opacity:0; }

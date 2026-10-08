@@ -733,6 +733,11 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/v087-organization-personnel-persistence.test.js",
   "test/v09220-manager-department-rights.test.js",
   "test/personal-loan-standard-right.test.js",
+  // Named synthetic API fixtures inspect their isolated SQLite database to
+  // verify own-request rights, loan return policy and account-bound orders.
+  // This test classification grants no additional production driver access.
+  "test/personal-absence-workflow.test.js",
+  "test/portal-loan-order-defaults.test.js",
   "test/v09220-branch-supervision-api.test.js",
   "test/v09220-manual-schedule-lock-api.test.js",
   "test/v09220-position-catalog-governance.test.js",

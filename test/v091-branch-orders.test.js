@@ -1103,10 +1103,11 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(updated.payload.draft.revision, 2);
     organizationOrderDraft = updated.payload.draft;
 
-    const managerDenied = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
+    const managerPersonalDraft = await requestJson(`/api/portal/v1/branch-orders/draft?employeeNumber=${EMPLOYEE}`, {
       session: managerSession,
     });
-    assert.equal(managerDenied.response.status, 403, JSON.stringify(managerDenied.payload));
+    assert.equal(managerPersonalDraft.response.status, 200, JSON.stringify(managerPersonalDraft.payload));
+    assert.equal(managerPersonalDraft.payload.draft, null);
   });
 
   await t.test("Bestellung ignoriert eine übermittelte KW, speichert Momentaufnahmen und versendet über den freigegebenen Absender", async () => {
@@ -1410,17 +1411,28 @@ test("v0.91: Filialkonto sieht Leihen und Wochen, PL+ verwaltet Bestellungen", a
     assert.equal(restored.response.status, 200, JSON.stringify(restored.payload));
   });
 
-  await t.test("PL+ kann Marie-Theres (275) für persönliche Filialbestellungen freischalten", async () => {
+  await t.test("Persönliche Filialbestellungen sind Standard; PL+ kann sie individuell entziehen und wiederherstellen", async () => {
     const beforeGrant = await requestJson("/api/portal/v1/branch-orders/catalog", {
       session: createEmployeeSession(EMPLOYEE),
     });
-    assert.equal(beforeGrant.response.status, 403, JSON.stringify(beforeGrant.payload));
+    assert.equal(beforeGrant.response.status, 200, JSON.stringify(beforeGrant.payload));
+
+    const denied = await requestJson(`/api/portal/v1/rights/${encodeURIComponent(EMPLOYEE)}`, {
+      method: "PUT",
+      session: hrSession,
+      body: { grantedPermissions: [], deniedPermissions: ["branch_orders:submit"], scopes: [] },
+    });
+    assert.equal(denied.response.status, 200, JSON.stringify(denied.payload));
+    const deniedCatalog = await requestJson("/api/portal/v1/branch-orders/catalog", {
+      session: createEmployeeSession(EMPLOYEE),
+    });
+    assert.equal(deniedCatalog.response.status, 403, JSON.stringify(deniedCatalog.payload));
 
     const granted = await requestJson(`/api/portal/v1/rights/${encodeURIComponent(EMPLOYEE)}`, {
       method: "PUT",
       session: hrSession,
       body: {
-        grantedPermissions: ["branch_orders:submit"],
+        grantedPermissions: [],
         deniedPermissions: [],
         scopes: [],
       },

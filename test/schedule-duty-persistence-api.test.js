@@ -10,6 +10,7 @@ Object.assign(process.env, {
   DB_PATH: path.join(fixtureRoot, "fixture.db"), BACKUP_DIR: path.join(fixtureRoot, "backups"),
   GRABENPLANER_DATA_DIR: path.join(fixtureRoot, "app-data"), GRABENPLANER_HOST: "127.0.0.1",
   GRABENPLANER_FORCE_PORTAL: "1", GRABENPLANER_SEED_DEMO: "1", GRABENPLANER_TEST_AMU_SCANNER: "clean",
+  GRABENPLANER_TEST_TODAY: "2099-01-01",
   GRABENPLANER_AMU_KEY_ID: "schedule-duty-test-v1", GRABENPLANER_AMU_KEY: Buffer.alloc(32, 0x42).toString("base64"),
   NODE_ENV: "test", TZ: "Europe/Vienna",
 });

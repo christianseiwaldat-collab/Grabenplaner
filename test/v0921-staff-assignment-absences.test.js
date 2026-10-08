@@ -313,6 +313,54 @@ test("temporäre Filialeinsätze koppeln Urlaub, ZA-Slots, Zuständigkeit und Kr
     assert.deepEqual(JSON.parse(changeAudit.detail), changed.payload.check);
   });
 
+  await t.test("ganztägiger ZA im Filialeinsatz prüft Sperren ausschließlich im verantwortlichen Zielkontext", async () => {
+    const date = "2031-04-18";
+    insertAssignment("v0921-absence-target-blackout", { date });
+    const insertBlackout = locationId => Number(db.prepare(`
+      INSERT INTO request_blackouts (
+        location_id, date_from, date_to, block_vacation, block_time_off,
+        reason, active, created_by
+      ) VALUES (?, ?, ?, 0, 1, 'BEISPIEL standortbezogene ZA-Sperre', 1, 'v0921-absence-test')
+    `).run(locationId, date, date).lastInsertRowid);
+    const homeBlackout = insertBlackout(HOME);
+    let targetBlackout;
+    try {
+      const body = { dateFrom: date, dateTo: date, allDay: true, note: "" };
+      const homeOnly = await requestJson("/api/portal/v1/me/time-off-check", {
+        method: "POST", session: employeeSession, body,
+      });
+      assert.equal(homeOnly.response.status, 200, homeOnly.text);
+      assert.equal(homeOnly.payload.allowed, true, homeOnly.text);
+      assert.equal(homeOnly.payload.submissionAllowed, true);
+      assert.equal(homeOnly.payload.contexts[0].locationId, DESTINATION);
+      const created = await requestJson("/api/portal/v1/me/time-off-requests", {
+        method: "POST", session: employeeSession, body,
+      });
+      assert.equal(created.response.status, 201, created.text);
+      const withdrawn = await requestJson(`/api/portal/v1/me/time-off-requests/${created.payload.id}`, {
+        method: "DELETE", session: employeeSession, body: {},
+      });
+      assert.equal(withdrawn.response.status, 204, withdrawn.text);
+
+      targetBlackout = insertBlackout(DESTINATION);
+      const targetBlocked = await requestJson("/api/portal/v1/me/time-off-check", {
+        method: "POST", session: employeeSession, body,
+      });
+      assert.equal(targetBlocked.response.status, 200, targetBlocked.text);
+      assert.equal(targetBlocked.payload.allowed, false);
+      assert.equal(Boolean(targetBlocked.payload.submissionAllowed), false);
+      assert.match(targetBlocked.payload.reason, /Zielfiliale/);
+      const blockedCreate = await requestJson("/api/portal/v1/me/time-off-requests", {
+        method: "POST", session: employeeSession, body,
+      });
+      assert.equal(blockedCreate.response.status, 409, blockedCreate.text);
+    } finally {
+      for (const id of [homeBlackout, targetBlackout].filter(Boolean)) {
+        db.prepare("DELETE FROM request_blackouts WHERE id = ?").run(id);
+      }
+    }
+  });
+
   await t.test("stundenweise Ziel-Slots werden markiert; gemischter ZA wird fail-closed abgewiesen", async () => {
     const date = "2031-04-16";
     insertAssignment("v0921-absence-hours", {

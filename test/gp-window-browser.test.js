@@ -69,6 +69,14 @@ test('actual article workspace keeps full-width details and viewport window geom
       const workBox=await workspace.boundingBox(),detailBox=await detail.boundingBox();assert.ok(Math.abs(workBox.x-detailBox.x)<2&&Math.abs(workBox.width-detailBox.width)<2);
       assert.equal(await workspace.evaluate(node=>getComputedStyle(node).display),'block');assert.equal(await search.evaluate(node=>getComputedStyle(node).display),'flex');
       assert.equal(await page.locator('[data-article-window-title]').evaluate(node=>getComputedStyle(node).display),'flex');assert.equal(await page.locator('[data-article-window-close]').evaluate(node=>getComputedStyle(node).borderTopWidth),'0px');
+      await page.getByRole('searchbox',{name:'Artikelnr., Bezeichnung oder EAN',exact:true}).waitFor();
+      assert.equal(await page.locator('#salesArticleSearchQuery').getAttribute('placeholder'),'Artikelnr., Bezeichnung oder EAN');
+      assert.equal(await page.locator('#salesArticleSearchQuery').evaluate(node=>node.closest('label').querySelector('span').getBoundingClientRect().height),1);
+      assert.equal(await page.locator('#salesArticleColumns > summary').textContent(),'Spaltenansicht');
+      for(const id of ['salesArticleAdvancedSearch','salesArticleColumns']) {
+        const disclosure=await page.locator('#'+id+' > summary').evaluate(node=>({display:getComputedStyle(node).display,height:node.getBoundingClientRect().height,width:node.getBoundingClientRect().width,parentWidth:node.parentElement.getBoundingClientRect().width}));
+        assert.equal(disclosure.display,'list-item');assert.ok(disclosure.height<23);assert.ok(disclosure.width<170,'Disclosure remains a compact text action');
+      }
       await page.evaluate(()=>articleSearch.set({version:2,x:0,y:0,width:560,height:620,minimized:false}));const left=await search.boundingBox();assert.ok(Math.abs(left.x)<1&&Math.abs(left.y)<1);
       await page.evaluate(()=>{document.documentElement.style.setProperty('--app-font-scale','1.25');articleSearch.refresh();});const zoomed=await search.boundingBox();assert.ok(Math.abs(zoomed.width-700)<2);
       await page.locator('[data-article-window-minimize]').click();const small=await search.boundingBox();assert.ok(Math.abs(small.width-325)<2);await page.locator('[data-article-window-minimize]').click();assert.ok(Math.abs((await search.boundingBox()).width-700)<2);

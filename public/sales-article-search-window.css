@@ -23,6 +23,16 @@
 .sales-article-search-window.is-minimized .sales-article-window-titlebar { border-bottom:0; }
 .sales-article-search-window:is(.is-moving,.is-resizing) { user-select:none; }
 .sales-article-search-window .sales-article-advanced-search > summary { flex-direction:row; }
+.sales-article-search-window .sales-article-advanced-search { margin-top:8px; border:0; border-radius:0; background:transparent; }
+.sales-article-search-window :is(.sales-article-advanced-search,.sales-article-columns) > summary {
+  display:list-item; width:fit-content; min-height:0; padding:2px 0; list-style:disclosure-closed inside;
+  color:var(--green); font-size:11px; font-weight:650; line-height:1.4;
+}
+.sales-article-search-window :is(.sales-article-advanced-search,.sales-article-columns)[open] > summary { list-style-type:disclosure-open; }
+.sales-article-search-window .sales-article-advanced-search > summary::-webkit-details-marker { display:revert; }
+.sales-article-search-window .sales-article-advanced-search > summary::after { display:none; }
+.sales-article-search-window .sales-article-advanced-search > summary small { display:none; }
+.sales-article-search-window .sales-article-advanced-search[open] > summary { margin-bottom:8px; }
 @media(max-width:520px) {
   .sales-article-window-titlebar { padding:2px 4px; }
   .sales-article-window-titlebar > button { min-width:36px; }

@@ -1252,6 +1252,7 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   const prepared = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
     method: "POST",
     body: {
+      prepareOnly: true,
       expectedRevision: 1,
       borrowerConfirmed: true,
       note: "vollständig",

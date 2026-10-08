@@ -286,6 +286,9 @@ const state = {
   branchAccountPasswordLoading: false,
   loanSettings: null,
   loanSettingsLoading: false,
+  loanSettingsLoadingKey: "",
+  loanSettingsActor: "",
+  loanSettingsRequest: 0,
   locationDashboard: null,
   locationDashboardFilter: "all",
   locationDashboardDraggingId: "",
@@ -2144,12 +2147,27 @@ function canDirectlyReturnManagedLoan() {
   return state.portalSession?.user?.permissions?.includes("loans:location:manage") === true;
 }
 
-function canManageLoanSettings() {
+function canManageFullLoanSettings() {
   if (state.portalStatus?.installationFeatures?.loans === false) return false;
   if (!state.portalStatus?.portalEnabled) return true;
   const permissions = state.portalSession?.user?.permissions || [];
   return permissions.includes("loans:settings")
     && ["developer", "it_admin", "admin", "hr"].includes(state.portalSession?.user?.role || "");
+}
+
+function canManageLoanSettings() {
+  if (canManageFullLoanSettings()) return true;
+  if (state.portalStatus?.installationFeatures?.loans === false || !state.portalStatus?.portalEnabled) return false;
+  const user = state.portalSession?.user;
+  return ["manager", "department_manager"].includes(user?.role)
+    && user.permissions?.includes("loans:return-policy:manage") === true;
+}
+
+function loanSettingsActorKey() {
+  if (!canManageLoanSettings()) return "";
+  const user = state.portalSession?.user;
+  return JSON.stringify([state.portalStatus?.portalEnabled === true, user?.employeeNumber || "local",
+    user?.role || "", user?.permissions || [], user?.scopes || []]);
 }
 
 function canManageBranchLoanOverview() {
@@ -4969,92 +4987,79 @@ function renderLoanSettings() {
     && employee.portal_access?.active
     && employee.portal_access?.effectivePermissions?.includes("loans:documents:read")
   );
-  elements.loanSettingsList.innerHTML = settings.length ? settings.map((location) => {
-    const provider = location.emailDelivery?.provider || {};
-    const selectedRecipient = location.documentRecipient?.employeeNumber || "";
-    const loanDocumentEmailAvailable = provider.loanDocumentAvailable === true;
-    const providerHint = provider.configured === false
-      ? "SMTP ist noch nicht eingerichtet."
-      : !loanDocumentEmailAvailable
-        ? "Der Server muss das E-Mail-Ereignis „loan_document“ noch freischalten."
-        : "PDF-Belege werden an die bestätigte persönliche Adresse und die zusätzliche Belegadresse versendet.";
-    const internalRecipientEmailHint = !location.documentRecipient
-      ? "Die automatisch zuständige Leitung erhält jedenfalls eine interne Mitteilung."
-      : location.documentRecipient.emailDelivery?.available
-        ? "Die bestätigte persönliche E-Mail-Adresse erhält bei aktiviertem Versand ebenfalls den PDF-Beleg."
-        : "Interne Mitteilung aktiv; für den E-Mail-Beleg fehlt noch eine aktuell bestätigte persönliche Adresse.";
-    const photoOutputMode = location.photoPdf?.outputMode === "blackwhite" ? "blackwhite" : "grayscale";
-    const photoOriginalRetention = location.photoPdf?.originalRetention === "delete" ? "delete" : "retain";
-    return `<form class="loan-location-setting" data-loan-setting-location="${escapeHtml(location.locationId)}">
-      <header><div><span class="eyebrow">${escapeHtml(location.locationId)}</span><h3>${escapeHtml(location.locationName)}</h3></div><span class="status-badge ${location.enabled ? "active" : "inactive"}">${location.enabled ? "Aktiv" : "Inaktiv"}</span></header>
-      <label class="switch-row"><span><strong>Leihe aktiv</strong><small>Schaltet Ausgabe und Rücknahme für diesen Standort frei.</small></span><input name="enabled" type="checkbox" ${location.enabled ? "checked" : ""} /></label>
-      <label class="switch-row"><span><strong>Artikelbezeichnung nachschlagen</strong><small>Fragt die hinterlegte Shopware-Quelle nur bei Bedarf ab.</small></span><input name="lookupEnabled" type="checkbox" ${location.articleLookup?.enabled ? "checked" : ""} /></label>
-      <div class="loan-setting-fields">
-        <label class="field"><span>Artikelquelle</span><select name="lookupProvider"><option value="none">Keine externe Suche</option><option value="shopware_storefront" ${location.articleLookup?.provider === "shopware_storefront" ? "selected" : ""}>Shopware-Onlineshop</option></select></label>
-        <label class="field loan-setting-wide"><span>Basisadresse</span><input name="lookupBaseUrl" type="url" maxlength="1000" value="${escapeHtml(location.articleLookup?.baseUrl || "")}" placeholder="https://shop.example.com" /></label>
-        <label class="field"><span>Foto-PDF-Ausgabe</span><select name="photoOutputMode"><option value="grayscale" ${photoOutputMode === "grayscale" ? "selected" : ""}>Graustufen</option><option value="blackwhite" ${photoOutputMode === "blackwhite" ? "selected" : ""}>Schwarzweiß</option></select></label>
-        <label class="field loan-setting-wide"><span>Aufbereitete Farbfassungen</span><select name="photoOriginalRetention"><option value="retain" ${photoOriginalRetention === "retain" ? "selected" : ""}>Geschützt aufbewahren (sicherer Standard)</option><option value="delete" ${photoOriginalRetention === "delete" ? "selected" : ""}>Nach PDF-Verarbeitung löschen</option></select></label>
-        <label class="field"><span>Interner Belegempfänger</span><select name="documentRecipient"><option value="">Automatisch zuständige Leitung</option>${recipients.map((employee) => `<option value="${escapeHtml(employee.personnel_number)}" ${employee.personnel_number === selectedRecipient ? "selected" : ""}>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.nickname || employee.full_name)}</option>`).join("")}</select><small>${escapeHtml(internalRecipientEmailHint)}</small></label>
-        <label class="field loan-setting-wide"><span>Zusätzliche Beleg-E-Mail</span><input name="emailRecipient" type="email" maxlength="320" value="${escapeHtml(location.emailDelivery?.recipient || "")}" placeholder="Optional" /></label>
-      </div>
-      <p class="loan-photo-retention-note"><strong>Hinweis zur Aufbewahrung:</strong> Diese Auswahl gilt für neu hochgeladene Fotos. Die metadatenfrei verkleinerte Farbfassung kann besonders bei Schäden für eine spätere Beurteilung wichtig sein; der sichere Standard ist deshalb die geschützte Aufbewahrung. Die unveränderte Handydatei wird nicht gespeichert.</p>
-      <label class="switch-row"><span><strong>Beleg zusätzlich per E-Mail senden</strong><small>${escapeHtml(providerHint)}</small></span><input name="emailEnabled" type="checkbox" ${location.emailDelivery?.enabled ? "checked" : ""} ${loanDocumentEmailAvailable ? "" : "disabled"} /></label>
-      <div class="form-actions-inline"><span class="settings-note" data-loan-setting-message></span><button class="primary-button" type="submit">Standort speichern</button></div>
-    </form>`;
-  }).join("") : '<p class="settings-note">Es sind noch keine Standorte vorhanden.</p>';
+  const openLocations = new Set(Array.from(elements.loanSettingsList.querySelectorAll("details[data-loan-location][open]"),
+    item => item.dataset.loanLocation));
+  elements.loanSettingsList.innerHTML = settings.length ? settings.map(location => LoanLocationSettings.renderLocation(location, {
+    recipients, policyOnly: !canManageFullLoanSettings(),
+    returnPolicyEditable: !state.portalStatus?.portalEnabled
+      || state.portalSession?.user?.permissions?.includes("loans:return-policy:manage") === true,
+    open: openLocations.has(String(location.locationId)),
+  })).join("") : '<p class="settings-note">Es sind noch keine Standorte vorhanden.</p>';
   elements.loanSettingsHint.textContent = settings.length
     ? `${settings.length} Standort${settings.length === 1 ? "" : "e"} verfügbar.`
     : "Keine Standorte verfügbar.";
 }
 
 async function loadLoanSettings() {
-  if (!canManageLoanSettings() || state.loanSettingsLoading) return;
+  const actorKey = loanSettingsActorKey();
+  if (!actorKey || (state.loanSettingsLoading && state.loanSettingsLoadingKey === actorKey)) return;
+  const requestId = ++state.loanSettingsRequest;
+  if (state.loanSettingsActor !== actorKey) {
+    state.loanSettingsActor = actorKey;
+    state.loanSettings = null;
+    elements.loanSettingsList.innerHTML = "";
+  }
   state.loanSettingsLoading = true;
+  state.loanSettingsLoadingKey = actorKey;
   elements.loanSettingsHint.textContent = "Leiheinstellungen werden geladen.";
   try {
-    state.loanSettings = await api("/api/portal/v1/loans/settings");
+    const result = await api(canManageFullLoanSettings() ? "/api/portal/v1/loans/settings" : "/api/portal/v1/loans/return-policy-settings");
+    if (loanSettingsActorKey() !== actorKey || requestId !== state.loanSettingsRequest) return;
+    state.loanSettings = result;
     renderLoanSettings();
   } catch (error) {
+    if (loanSettingsActorKey() !== actorKey || requestId !== state.loanSettingsRequest) return;
     elements.loanSettingsHint.textContent = error.message;
     elements.loanSettingsList.innerHTML = "";
   } finally {
-    state.loanSettingsLoading = false;
+    if (requestId === state.loanSettingsRequest) state.loanSettingsLoading = false;
   }
 }
 
 async function saveLoanLocationSetting(form) {
   const locationId = form?.dataset.loanSettingLocation;
-  if (!locationId) return;
+  const actorKey = loanSettingsActorKey();
+  if (!locationId || !actorKey) return;
   const messageElement = form.querySelector("[data-loan-setting-message]");
   const submit = form.querySelector('button[type="submit"]');
+  if (submit.disabled) return;
+  const payload = LoanLocationSettings.formPayload(form);
+  const snapshot = JSON.stringify(payload);
   submit.disabled = true;
   messageElement.textContent = "Wird gespeichert …";
   try {
-    await api(`/api/portal/v1/loans/settings/locations/${encodeURIComponent(locationId)}`, {
+    const result = await api(`/api/portal/v1/loans/settings/locations/${encodeURIComponent(locationId)}${form.dataset.loanPolicyOnly === "true" ? "/return-policy" : ""}`, {
       method: "PUT",
-      body: JSON.stringify({
-        enabled: form.elements.enabled.checked,
-        articleLookup: {
-          enabled: form.elements.lookupEnabled.checked,
-          provider: form.elements.lookupProvider.value,
-          baseUrl: form.elements.lookupBaseUrl.value,
-        },
-        photoPdf: {
-          outputMode: form.elements.photoOutputMode.value,
-          originalRetention: form.elements.photoOriginalRetention.value,
-        },
-        documentRecipientEmployeeNumber: form.elements.documentRecipient.value,
-        emailDelivery: {
-          enabled: form.elements.emailEnabled.checked,
-          recipient: form.elements.emailRecipient.value,
-        },
-      }),
+      body: snapshot,
     });
-    messageElement.textContent = "Gespeichert.";
-    await loadLoanSettings();
+    if (loanSettingsActorKey() !== actorKey || !form.isConnected) return;
+    const savedLocation = result.location;
+    if (savedLocation && state.loanSettings?.locations) {
+      state.loanSettings.locations = state.loanSettings.locations.map(location => String(location.locationId) === String(locationId) ? savedLocation : location);
+      const summary = form.closest("details[data-loan-location]")?.querySelector("summary");
+      if (summary) {
+        summary.querySelector(".loan-location-policy").textContent = savedLocation.returnPolicy?.requiresWitness ? "Rückgabe mit Kontrolle" : "Rückgabe allein";
+        const badge = summary.querySelector(".status-badge");
+        badge.textContent = savedLocation.enabled ? "Aktiv" : "Inaktiv";
+        badge.classList.toggle("active", savedLocation.enabled);
+        badge.classList.toggle("inactive", !savedLocation.enabled);
+      }
+    }
+    messageElement.textContent = JSON.stringify(LoanLocationSettings.formPayload(form)) === snapshot
+      ? "Gespeichert." : "Gespeichert. Neuere Eingaben sind noch nicht gespeichert.";
     showToast(`Leiheinstellungen für ${locationId} wurden gespeichert.`);
   } catch (error) {
-    messageElement.textContent = error.message;
+    if (loanSettingsActorKey() === actorKey && form.isConnected) messageElement.textContent = error.message;
   } finally {
     submit.disabled = false;
   }
@@ -24081,7 +24086,7 @@ function openRightsEditor(employeeNumber) {
           : "Als Filialleitung können Sie Grundrechte dieser Abteilungsleitung entziehen oder wiederherstellen. Zusatzrechte, Rollen und Geltungsbereiche bleiben unverändert."
       : "Aktivierte Rollenrechte bleiben wirksam; abgewählte Rollenrechte werden persönlich entzogen. Änderungen gelten sofort.";
   refreshRightsEditorScope();
-  void rightsWorkspace?.showProfile(state.rightsEditorReturnFocus).then(() => {
+  void rightsWorkspace?.showProfile(state.rightsEditorReturnFocus, user).then(() => {
     if (generation !== rightsEditorGeneration || actor !== rightsWorkspaceActorKey() || !elements.rightsEditorModal.open) return;
     window.requestAnimationFrame(() => elements.rightsEditorTitle?.focus());
   });

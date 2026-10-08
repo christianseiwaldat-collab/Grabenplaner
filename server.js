@@ -14,6 +14,8 @@ const { completeProcessShutdown } = require("./lib/complete-process-shutdown");
 const startDashboardWorkspaceModel = require("./public/start-dashboard-workspace-preferences");
 const sidebarNotepadModel = require("./public/sidebar-notepad-preferences");
 const gpWindowsModel = require('./public/gp-window-preferences');
+const { personalAbsenceRequestPeriod, absenceRequestSubmissionAllowed,
+  absenceRequestSubmissionAssessment } = require('./lib/absence-request-policy');
 const { resolveScheduleDuty, defaultScheduleDutyCode, manualPlanningHours, PLANNING_DAY_COUNT,
   DEFAULT_DUTY_COLORS, normalizeScheduleDutyColors, scheduleDutyColor, scheduleDutyTextColor } = require("./public/schedule-duty");
 const {
@@ -731,6 +733,15 @@ const PERSONNEL_DOCUMENT_VISIBILITY = "hr_confidential";
 const PORTAL_API_VERSION = 1;
 const LOAN_OVERVIEW_PERMISSION = "loans:overview:read";
 const LOAN_SELF_SERVICE_PERMISSION = "loans:self:use";
+const {
+  LOAN_RETURN_POLICY_PERMISSION,
+  loanReturnPolicySettingKey,
+  loanReturnPolicyFromSettings,
+  normalizeLoanReturnPolicy,
+  canManageLoanReturnPolicy,
+  loanReturnPolicyAllowsLocation,
+  assertLoanReturnPolicyCompletion,
+} = require("./lib/loan-return-policy");
 const LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION = "loans:branch-overview:manage";
 const branchLoanOverviewColumnIds = Object.freeze([
   "borrowerName",
@@ -1066,6 +1077,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "loans:documents:read", label: "Leihdokumente des Bereichs lesen", description: "Ausgabe- und Rücknahmebelege im zugewiesenen Standort öffnen.", group: "Leihe", warningLevel: "high", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "it_admin", "developer"] },
   { id: LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION, label: "Leihansicht des Filialkontos festlegen", description: "Sichtbare Spalten der reinen Filialkonto-Übersicht im zugewiesenen Standort festlegen; keine Leih-, Foto-, Beleg- oder Personaldatenbearbeitung.", group: "Leihe", warningLevel: "high", eligibleRoles: ["manager", "developer"] },
   { id: "loans:settings", label: "Leihmodul und Artikelquelle verwalten", description: "Standortfreigaben und externe Artikelkataloge konfigurieren.", group: "Leihe", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: LOAN_RETURN_POLICY_PERMISSION, label: "Gegenprüfung bei der Leih-Rücknahme festlegen", description: "Für die eigene Filiale festlegen, ob die Rücknahme alleine oder mit einer zweiten Person erfolgt; Abteilungsleitungen benötigen dieses Zusatzrecht. Keine Freigabe von Artikelquellen, Fotos oder Belegversand.", group: "Leihe", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: BRANCH_ORDER_SUBMIT_PERMISSION, label: "Filialbestellungen für die eigene Filiale erfassen", description: "Erlaubt einer persönlich freigeschalteten Person Bestellungen ausschließlich für sich selbst und ihre Stammfiliale zu erfassen.", group: "Filialbestellungen", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["employee", "location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: BRANCH_ORDER_MANAGE_PERMISSION, label: "Filialbestellungen verwalten", description: "Warengruppen, Positionen, Einheiten, E-Mail-Ziele, Vorlagen und Bestellnachweise standortübergreifend im freigegebenen Bereich verwalten.", group: "Filialbestellungen", warningLevel: "high", eligibleRoles: ["hr", "admin", "developer"] },
   { id: BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION, label: "Anzeige des Filialkontos festlegen", description: "Dienstplanansicht, mobile Tagesausblendung und automatisches Speichern für den zugewiesenen Standort einstellen.", group: "Filialkonto", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
@@ -1962,6 +1974,7 @@ addBuiltinRolePermissions("manager", [
   "loans:location:manage",
   "loans:documents:read",
   LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION,
+  LOAN_RETURN_POLICY_PERMISSION,
   BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION,
   BRANCH_PORTAL_DISPLAY_MANAGE_PERMISSION,
 ]);
@@ -1971,10 +1984,14 @@ for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
     "loans:location:manage",
     "loans:documents:read",
     "loans:settings",
+    LOAN_RETURN_POLICY_PERMISSION,
   ]);
 }
 for (const roleId of ["hr", "admin", "developer"]) {
   addBuiltinRolePermissions(roleId, [BRANCH_ORDER_MANAGE_PERMISSION]);
+}
+for (const roleId of ["employee", "department_manager", "manager"]) {
+  addBuiltinRolePermissions(roleId, [BRANCH_ORDER_SUBMIT_PERMISSION]);
 }
 addBuiltinRolePermissions("developer", [
   LOAN_BRANCH_OVERVIEW_MANAGE_PERMISSION,
@@ -13241,7 +13258,7 @@ async function validateVacationRequestDates(employeeNumber, body) {
     throw httpError(400, "Bitte einen gültigen Urlaubszeitraum eingeben.");
   }
   const availability = await evaluateVacationRequest(employeeNumber, { dateFrom, dateTo });
-  if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
+  if (!absenceRequestSubmissionAllowed(availability)) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
   const overlapping = await absenceManagementRepository.vacationOverlap({
     employeeNumber,
     excludeId: 0,
@@ -15517,6 +15534,7 @@ async function vacationCoverageInputForDate(
   const unavailableFromSickness = await activeSicknessEmployeeNumbers(
     date,
     { includeEmployeeNumber: employeeNumber },
+    repository.sicknessAmu,
   );
   const capacityEmployees = (
     await repository.vacationCapacityEmployees(context.locationId)
@@ -15562,6 +15580,7 @@ async function assessApprovedAbsenceAvailability(
   body = {},
   requestType = "vacation",
   repository = absenceManagementRepository,
+  requestContextOverride = null,
 ) {
   const dateFrom = String(body.dateFrom || "");
   const dateTo = String(body.dateTo || "");
@@ -15595,7 +15614,12 @@ async function assessApprovedAbsenceAvailability(
       manualReview: false, blockingSlots: [], contexts: [],
     };
   }
-  const context = await vacationEmployeeGovernanceContext(employeeNumber, repository);
+  const employeeContext = await vacationEmployeeGovernanceContext(employeeNumber, repository);
+  const context = employeeContext && requestContextOverride
+    ? { ...employeeContext, locationId: requestContextOverride.locationId,
+      departmentId: requestContextOverride.departmentId,
+      branchPlanned: employeeContext.branchPlanned || Boolean(requestContextOverride.lent) }
+    : employeeContext;
   if (!context) {
     return {
       trafficLight: "red", allowed: false, code: `${codePrefix}_EMPLOYEE_NOT_FOUND`,
@@ -15610,6 +15634,7 @@ async function assessApprovedAbsenceAvailability(
       dateTo,
       null,
       repository,
+      requestContextOverride,
     );
     if (blackout) {
       return {
@@ -15627,7 +15652,10 @@ async function assessApprovedAbsenceAvailability(
     };
   }
 
-  const settings = await settingsForLocation(context.locationId);
+  const settings = await settingsForLocation(context.locationId, repository);
+  const locationStaffingFloor = Number((await repository.locationTimeOffConfiguration({
+    locationId: context.locationId,
+  }))?.min_staff || 0);
   const departmentRequired = context.departmentId
     ? Number((await repository.departmentStaffing({
       departmentId: context.departmentId,
@@ -15639,12 +15667,12 @@ async function assessApprovedAbsenceAvailability(
   let checkedSlots = 0;
   for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
     if (isVacationHoliday(date, context.locationId) || getGlobalDayBlockForDate(date, context.locationId)) continue;
-    const config = await dayConfiguration(date, settings, { locationId: context.locationId, departmentId: null });
+    const config = await dayConfiguration(date, settings);
     if (!config?.open || !isTime(config.minFrom) || !isTime(config.minTo) || config.minTo <= config.minFrom) continue;
     const coverageFrom = timeOff && !allDay && startTime > config.minFrom ? startTime : config.minFrom;
     const coverageTo = timeOff && !allDay && endTime < config.minTo ? endTime : config.minTo;
     if (coverageTo <= coverageFrom) continue;
-    const locationRequired = Number(config.minStaff || 0);
+    const locationRequired = Math.max(Number(config.minStaff || 0), locationStaffingFloor);
     if (locationRequired <= 0 && departmentRequired <= 0) continue;
     const input = await vacationCoverageInputForDate(
       employeeNumber,
@@ -15718,8 +15746,9 @@ async function assessDirectTimeOffAvailability(
   employeeNumber,
   body = {},
   repository = absenceManagementRepository,
+  requestContextOverride = null,
 ) {
-  return assessApprovedAbsenceAvailability(employeeNumber, body, "time_off", repository);
+  return assessApprovedAbsenceAvailability(employeeNumber, body, "time_off", repository, requestContextOverride);
 }
 
 async function evaluateVacationRequest(
@@ -15727,7 +15756,10 @@ async function evaluateVacationRequest(
   body,
   repository = absenceManagementRepository,
 ) {
-  return assessVacationAvailability(employeeNumber, body, repository);
+  const period = personalAbsenceRequestPeriod(String(body?.dateFrom || ""),
+    String(body?.dateTo || ""), viennaTodayIso(), "vacation");
+  if (period) return period;
+  return absenceRequestSubmissionAssessment(await assessVacationAvailability(employeeNumber, body, repository));
 }
 
 async function assertVacationGovernanceAvailable(
@@ -15805,10 +15837,8 @@ async function evaluateTimeOffRequest(
   const allDay = body.allDay === true || dateTo !== date;
   const startTime = String(body.startTime || "");
   const endTime = String(body.endTime || "");
-  if (!isIsoDate(date) || !isIsoDate(dateTo) || dateTo < date) {
-    return { trafficLight: "red", allowed: false, reason: "Bitte einen gültigen ZA-Zeitraum eingeben." };
-  }
-  if (date < viennaTodayIso()) return { trafficLight: "red", allowed: false, reason: "Für vergangene Tage kann kein Zeitausgleich beantragt werden." };
+  const period = personalAbsenceRequestPeriod(date, dateTo, viennaTodayIso(), "time_off");
+  if (period) return period;
   if (!allDay && (!isTime(startTime) || !isTime(endTime) || endTime <= startTime)) {
     return { trafficLight: "red", allowed: false, reason: "Bitte Datum und Uhrzeit für den Zeitausgleich vollständig eingeben." };
   }
@@ -15847,23 +15877,27 @@ async function evaluateTimeOffRequest(
       dateTo,
     });
     if (overlap) return { trafficLight: "red", allowed: false, reason: "Für diesen Zeitraum besteht bereits ein ZA-Antrag." };
-    const missingDays = [];
+    let missingPlan = false;
     for (let current = date; current <= dateTo; current = addDays(current, 1)) {
       if (!await operatingHours(current, await settingsForLocation(context.locationId, repository))) {
         return { trafficLight: "red", allowed: false, reason: `Am ${current} ist die Filiale geschlossen; dafür kann kein ganztägiger ZA beantragt werden.` };
       }
       const globalBlock = getGlobalDayBlockForDate(current, context.locationId);
       if (globalBlock) return { trafficLight: "red", allowed: false, reason: `Der ${current} ist bereits gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.` };
-      const planned = await repository.plannedShiftOnDate({
-        employeeNumber,
-        date: current,
-        locationId: context.locationId,
-      });
-      if (!planned) missingDays.push(current);
+      if (!await repository.plannedShiftOnDate({ employeeNumber, date: current,
+        locationId: context.locationId })) missingPlan = true;
     }
-    return { trafficLight: "yellow", allowed: true, reason: missingDays.length
-      ? "Der ganztägige ZA kann beantragt werden; der Dienstplan ist für mindestens einen Tag noch unvollständig und wird manuell geprüft."
-      : "Der ganztägige ZA wird unabhängig von der Vorprüfung immer zur Genehmigung eingereicht." };
+    const assessment = await assessDirectTimeOffAvailability(employeeNumber, {
+      dateFrom: date, dateTo, allDay: true,
+      excludeGroupId: body.excludeRequestId ? `za-request-${Number(body.excludeRequestId)}` : null,
+    }, repository, responsibility);
+    if (assessment.allowed && assessment.trafficLight === "green") {
+      return absenceRequestSubmissionAssessment({ ...assessment, trafficLight: "yellow", manualReview: true,
+        reason: missingPlan
+          ? "Der ganztägige ZA kann beantragt werden; der Dienstplan ist für mindestens einen Tag noch unvollständig und wird manuell geprüft."
+          : "Der ganztägige ZA wird unabhängig von der Vorprüfung immer zur Genehmigung eingereicht." });
+    }
+    return absenceRequestSubmissionAssessment(assessment);
   }
   if (!isIsoDate(date) || !isTime(startTime) || !isTime(endTime) || endTime <= startTime) {
     return { trafficLight: "red", allowed: false, reason: "Bitte Datum und Uhrzeit für den Zeitausgleich vollständig eingeben." };
@@ -15941,7 +15975,9 @@ async function evaluateTimeOffRequest(
       context.locationId, null, date, point, employeeNumber, repository,
     );
     if (locationCount < locationRequired) {
-      return { trafficLight: "red", allowed: false, reason: `Um ${point} Uhr würde die Filial-Mindestbesetzung auf ${locationCount} von ${locationRequired} Personen sinken.` };
+      return absenceRequestSubmissionAssessment({ trafficLight: "red", allowed: false,
+        code: "TIME_OFF_STAFFING_INSUFFICIENT", manualReview: true,
+        reason: `Um ${point} Uhr würde die Filial-Mindestbesetzung auf ${locationCount} von ${locationRequired} Personen sinken.` });
     }
     if (departmentId && departmentRequired > 0) {
       const departmentCount = await staffingCountAt(
@@ -15949,7 +15985,9 @@ async function evaluateTimeOffRequest(
       );
       if (departmentCount < departmentRequired) {
         const departmentName = department?.name || "Abteilung";
-        return { trafficLight: "red", allowed: false, reason: `Um ${point} Uhr würde die Mindestbesetzung in ${departmentName} auf ${departmentCount} von ${departmentRequired} Personen sinken.` };
+        return absenceRequestSubmissionAssessment({ trafficLight: "red", allowed: false,
+          code: "TIME_OFF_STAFFING_INSUFFICIENT", manualReview: true,
+          reason: `Um ${point} Uhr würde die Mindestbesetzung in ${departmentName} auf ${departmentCount} von ${departmentRequired} Personen sinken.` });
       }
     }
   }
@@ -16648,8 +16686,8 @@ function sicknessPayloadCoversDate(payload, date) {
   return false;
 }
 
-async function activeSicknessEmployeeNumbers(date, { excludeCaseId = null, includeEmployeeNumber = "" } = {}) {
-  const rows = await sicknessAmuManagementRepository.listActiveSicknessCases({
+async function activeSicknessEmployeeNumbers(date, { excludeCaseId = null, includeEmployeeNumber = "" } = {}, repository = sicknessAmuManagementRepository) {
+  const rows = await repository.listActiveSicknessCases({
     statusLookups: [
       sicknessStatusLookup("reported"),
       sicknessStatusLookup("aum_received"),
@@ -44884,6 +44922,7 @@ function publicLoanLocationSetting(row, { includeConfiguration = false } = {}) {
     locationName: row.location_name,
     locationActive: Boolean(row.location_active),
     enabled: Boolean(row.enabled) && Boolean(row.location_active),
+    returnPolicy: loanReturnPolicyFromSettings(getPortalSettings(), row.location_id),
     articleLookup: {
       enabled: Boolean(row.article_lookup_enabled),
       provider: row.article_lookup_provider || "none",
@@ -45202,14 +45241,6 @@ function articleLookupHttpError(error) {
   return httpError(status, error.message, error.code);
 }
 
-function articleLookupIsFresh(row, now = Date.now()) {
-  const storefrontRevision = row?.source_provider === "shopware_storefront"
-    || row?.revision_source_system === "shopware.storefront";
-  if (!storefrontRevision || !row.source_fetched_at) return false;
-  const fetchedAt = new Date(row.source_fetched_at).getTime();
-  return Number.isFinite(fetchedAt) && now - fetchedAt < 24 * 60 * 60 * 1000;
-}
-
 function assertArticleLookupRateLimit(actor) {
   const key = String(actor?.employeeNumber || "local");
   const now = Date.now();
@@ -45330,8 +45361,58 @@ app.get("/api/portal/v1/loans/settings", async (request, response) => {
   });
 });
 
+function loanReturnPolicyActor(request, { mutation = false } = {}) {
+  const session = requirePortalAnyPermissionOrLocal(request, [LOAN_RETURN_POLICY_PERMISSION], { csrf: mutation });
+  if (!isLocalSystemSession(session) && !canManageLoanReturnPolicy(session)) {
+    throw httpError(403, "Die Rücknahmeregel benötigt einen persönlichen Leitungszugang mit dem entsprechenden Recht.", "PORTAL_PERMISSION_DENIED");
+  }
+  return session;
+}
+
+function publicLoanReturnPolicySetting(row) {
+  return {
+    locationId: row.location_id,
+    locationName: row.location_name,
+    enabled: Boolean(row.enabled) && Boolean(row.location_active),
+    returnPolicy: loanReturnPolicyFromSettings(getPortalSettings(), row.location_id),
+  };
+}
+
+app.get("/api/portal/v1/loans/return-policy-settings", async (request, response) => {
+  const actor = loanReturnPolicyActor(request);
+  const rows = await loanModuleRepository.listLocationSettings();
+  response.json({ locations: rows.filter((row) => row.location_active
+    && (isLocalSystemSession(actor) || loanReturnPolicyAllowsLocation(actor, row.location_id)))
+    .map(publicLoanReturnPolicySetting) });
+});
+
+app.put("/api/portal/v1/loans/settings/locations/:locationId/return-policy", async (request, response) => {
+  const actor = loanReturnPolicyActor(request, { mutation: true });
+  const locationId = normalizeLocationId(request.params.locationId);
+  if (!isLocalSystemSession(actor) && !loanReturnPolicyAllowsLocation(actor, locationId)) {
+    throw httpError(403, "Die Rücknahmeregel darf nur für die eigene Filiale verwaltet werden.", "PORTAL_SCOPE_DENIED");
+  }
+  await validateActiveLocationExists(locationId);
+  if (!request.body || Object.keys(request.body).some((key) => key !== "returnPolicy")
+    || request.body.returnPolicy === undefined) {
+    throw httpError(400, "Hier kann ausschließlich die Rücknahmeregel geändert werden.", "LOAN_RETURN_POLICY_INVALID");
+  }
+  const policy = normalizeLoanReturnPolicy(request.body.returnPolicy);
+  await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    await repositories.planningSettings.upsertPortalSetting({
+      key: loanReturnPolicySettingKey(locationId), value: String(policy.requiresWitness),
+    });
+    await repositories.organizationPersonnel.insertAudit(actor.employeeNumber, "loan.return-policy.update", "location", locationId,
+      JSON.stringify({ requiresWitness: policy.requiresWitness }));
+  });
+  await refreshPortalSettingsSnapshot();
+  response.json({ location: publicLoanReturnPolicySetting(await loanLocationSettingRow(locationId)) });
+});
+
 app.put("/api/portal/v1/loans/settings/locations/:locationId", async (request, response) => {
   const actor = loanSettingsActor(request, { mutation: true });
+  if (request.body?.returnPolicy !== undefined) loanReturnPolicyActor(request, { mutation: true });
   const locationId = normalizeLocationId(request.params.locationId);
   await validateLocationExists(locationId);
   const lookup = request.body?.articleLookup && typeof request.body.articleLookup === "object"
@@ -45394,6 +45475,8 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", async (request, r
     );
   }
   const currentSetting = await loanLocationSettingRow(locationId);
+  const returnPolicy = normalizeLoanReturnPolicy(request.body?.returnPolicy,
+    loanReturnPolicyFromSettings(getPortalSettings(), locationId));
   const branchOverviewInput = request.body?.branchOverview;
   if (branchOverviewInput !== undefined
     && (!branchOverviewInput || typeof branchOverviewInput !== "object" || Array.isArray(branchOverviewInput))) {
@@ -45441,20 +45524,29 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", async (request, r
       "LOAN_PHOTO_ORIGINAL_RETENTION_INVALID",
     );
   }
-  await loanModuleRepository.upsertLocationSetting({
-    locationId,
-    enabled,
-    articleLookupEnabled: lookupEnabled,
-    articleLookupProvider: provider,
-    articleLookupBaseUrl: baseUrl,
-    documentRecipientEmployeeNumber: documentRecipientEmployeeNumber || null,
-    documentEmailEnabled,
-    documentRecipientEmail: documentEmailEnabled ? documentRecipientEmail : "",
-    photoPdfOutputMode,
-    photoOriginalRetention,
-    branchOverviewColumns: JSON.stringify(branchOverviewColumns),
-    actorEmployeeNumber: actor.employeeNumber,
+  await persistenceProvider.transaction(async (executor) => {
+    const repositories = createApplicationRepositories(executor);
+    await repositories.loanModule.upsertLocationSetting({
+      locationId,
+      enabled,
+      articleLookupEnabled: lookupEnabled,
+      articleLookupProvider: provider,
+      articleLookupBaseUrl: baseUrl,
+      documentRecipientEmployeeNumber: documentRecipientEmployeeNumber || null,
+      documentEmailEnabled,
+      documentRecipientEmail: documentEmailEnabled ? documentRecipientEmail : "",
+      photoPdfOutputMode,
+      photoOriginalRetention,
+      branchOverviewColumns: JSON.stringify(branchOverviewColumns),
+      actorEmployeeNumber: actor.employeeNumber,
+    });
+    if (request.body?.returnPolicy !== undefined) {
+      await repositories.planningSettings.upsertPortalSetting({
+        key: loanReturnPolicySettingKey(locationId), value: String(returnPolicy.requiresWitness),
+      });
+    }
   });
+  if (request.body?.returnPolicy !== undefined) await refreshPortalSettingsSnapshot();
   (await auditPortal(actor.employeeNumber, "loan.settings.update", "location", locationId, JSON.stringify({
     enabled,
     articleLookupEnabled: lookupEnabled,
@@ -45466,6 +45558,7 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", async (request, r
     photoPdfOutputMode,
     photoOriginalRetention,
     branchOverviewColumns,
+    returnPolicy,
   })));
   response.json({
     location: await publicLoanLocationSettingWithEmailState(
@@ -45922,7 +46015,7 @@ app.post("/api/portal/v1/loans/articles/resolve", async (request, response) => {
   let lookupWarning = null;
   let recordChanged = false;
 
-  if (setting.article_lookup_enabled) {
+  if (setting.article_lookup_enabled && !existing) {
     const lookupConfigured = setting.article_lookup_provider === "shopware_storefront"
       && Boolean(setting.article_lookup_base_url);
     if (!lookupConfigured) {
@@ -45930,7 +46023,7 @@ app.post("/api/portal/v1/loans/articles/resolve", async (request, response) => {
         code: "ARTICLE_LOOKUP_NOT_CONFIGURED",
         message: "Die externe Artikelsuche ist für diesen Standort nicht vollständig eingerichtet.",
       };
-    } else if (!existing || (identifier.type === "internal" && !articleLookupIsFresh(existing))) {
+    } else {
       try {
         assertArticleLookupRateLimit(actor);
         configureSystemCertificateAuthorities();
@@ -48191,6 +48284,7 @@ async function completePreparedLoanReturn({
   confirmationId = "",
   confirmationNote = "",
   directManagement = false,
+  singlePerson = false,
 }) {
   const completedAt = new Date().toISOString();
   const nextRevision = Number(expectedRevision) + 1;
@@ -48203,7 +48297,7 @@ async function completePreparedLoanReturn({
   try {
     preparedReturnDocument = await prepareLoanDocument({
       type: "return",
-      confirmationMode: directManagement ? "management" : "witness",
+      confirmationMode: directManagement ? "management" : singlePerson ? "single" : "witness",
       loanId: loan.id,
       revision: nextRevision,
       createdAt: completedAt,
@@ -48242,7 +48336,11 @@ async function completePreparedLoanReturn({
   }
   try {
     await persistenceProvider.transaction(async (executor) => {
-      const repository = createApplicationRepositories(executor).loanModule;
+      const repositories = createApplicationRepositories(executor);
+      const repository = repositories.loanModule;
+      const currentPortalSettings = Object.fromEntries((await repositories.planningSettings.listPortalSettings())
+        .map((row) => [String(row.key), String(row.value)]));
+      assertLoanReturnPolicyCompletion(loanReturnPolicyFromSettings(currentPortalSettings, loan.location_id), { witnessEmployeeNumber });
       const result = await repository.markLoanReturned({
         loanId: loan.id,
         returnedAt: completedAt,
@@ -48276,7 +48374,7 @@ async function completePreparedLoanReturn({
       await insertPreparedLoanDocument(loan.id, preparedReturnDocument, repository);
       await appendLoanEvent(loan.id, completionActor.employeeNumber, "returned", nextRevision, {
         confirmationId: confirmationId || null,
-        completionMode: directManagement ? "management" : "second_employee",
+        completionMode: directManagement ? "management" : singlePerson ? "single_employee" : "second_employee",
         requestedByEmployeeNumber: recordedByEmployeeNumber,
         witnessEmployeeNumber: witnessEmployeeNumber || null,
         borrowerConfirmed: Boolean(borrowerConfirmed),
@@ -48301,6 +48399,8 @@ async function completePreparedLoanReturn({
   ]);
   const messageText = directManagement
     ? `Die Rücknahme wurde von ${completionActor.employeeNumber} als zuständige Leitung abgeschlossen.`
+    : singlePerson
+      ? `Die Rücknahme wurde von ${completionActor.employeeNumber} abgeschlossen.`
     : `Die Rücknahme wurde von ${completionActor.employeeNumber} gegengeprüft und abgeschlossen.`;
   for (const recipient of new Set([recordedByEmployeeNumber, loan.borrower_employee_number])) {
     if (!recipient || recipient === completionActor.employeeNumber) continue;
@@ -48352,6 +48452,8 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
     throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
   }
   const witnessEmployeeNumber = String(request.body?.witnessEmployeeNumber || "").trim();
+  const prepareOnly = request.body?.prepareOnly === true;
+  if (!prepareOnly) assertLoanReturnPolicyCompletion(loanReturnPolicyFromSettings(getPortalSettings(), row.location_id), { witnessEmployeeNumber });
   const witness = witnessEmployeeNumber
     ? await loanEmployeeRow(witnessEmployeeNumber, { active: true })
     : null;
@@ -48376,7 +48478,7 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
   const pendingConfirmation = await loanPendingReturnConfirmationRow(row.id);
   let supersededConfirmationId = "";
   if (pendingConfirmation) {
-    if (managesLocation && !witness) {
+    if (managesLocation && !witness && !prepareOnly) {
       supersededConfirmationId = await cancelPendingLoanReturnConfirmation(
         row.id,
         new Date().toISOString(),
@@ -48412,7 +48514,7 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
     photoAttachmentIds,
   };
 
-  if (managesLocation && !witness) {
+  if (!witness && !prepareOnly) {
     photoIds = (await loanPhotoRows(row.id))
       .filter((photo) => photo.phase === "return")
       .map((photo) => photo.id);
@@ -48429,9 +48531,10 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
       borrowerConfirmed,
       recordedByEmployeeNumber: actor.employeeNumber,
       completionActor: actor,
-      directManagement: true,
+      directManagement: managesLocation,
+      singlePerson: !managesLocation,
     });
-    (await auditPortal(actor.employeeNumber, "loan.return.management-complete", "loan", row.id, JSON.stringify({
+    (await auditPortal(actor.employeeNumber, managesLocation ? "loan.return.management-complete" : "loan.return.single-complete", "loan", row.id, JSON.stringify({
       locationId: row.location_id,
       borrowerEmployeeNumber: row.borrower_employee_number,
       itemCount: returnedItems.length,
@@ -58683,7 +58786,7 @@ async function updateOwnVacationRequest(session, requestId, body = {}) {
     throw httpError(400, "Bitte einen gueltigen Urlaubszeitraum eingeben.", "VACATION_DATES_INVALID");
   }
   const availability = await evaluateVacationRequest(session.employeeNumber, { dateFrom, dateTo, excludeGroupId: `request-${entry.id}` });
-  if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
+  if (!absenceRequestSubmissionAllowed(availability)) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
   return absenceManagementRepository.transaction(async (repository) => {
     await assertNoVacationLendingOverlap(
       session.employeeNumber,
@@ -58758,7 +58861,7 @@ async function createOwnVacationChangeRequest(session, body = {}) {
       throw httpError(400, "Bitte einen gueltigen neuen Urlaubszeitraum eingeben.", "VACATION_DATES_INVALID");
     }
     const availability = await evaluateVacationRequest(session.employeeNumber, { dateFrom: requestedFrom, dateTo: requestedTo, excludeGroupId: groupId });
-    if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
+    if (!absenceRequestSubmissionAllowed(availability)) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
   }
   const note = stripEmoji(String(body.note || "").trim()).slice(0, 500);
   const context = await absenceEmployeeRequestContext(
@@ -58945,6 +59048,8 @@ function normalizedTimeOffInput(body = {}) {
   const dateFrom = String(body.date || body.requestDate || body.dateFrom || "");
   const dateTo = String(body.dateTo || dateFrom);
   const allDay = body.allDay === true || dateTo !== dateFrom;
+  const period = personalAbsenceRequestPeriod(dateFrom, dateTo, viennaTodayIso(), "time_off");
+  if (period) throw httpError(400, period.reason, period.code);
   return {
     dateFrom, dateTo, allDay,
     startTime: allDay ? "00:00" : String(body.startTime || ""),
@@ -58967,7 +59072,7 @@ async function createOwnTimeOffRequest(session, body = {}, { employeeNumber = se
       context,
       repository,
     );
-    if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
+    if (!absenceRequestSubmissionAllowed(check)) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
     if (authorize) await authorize(repository, context);
     const result = await repository.insertTimeOffRequest({
       employeeNumber,
@@ -59020,7 +59125,7 @@ async function updateOwnTimeOffRequest(session, requestId, body = {}) {
       context,
       repository,
     );
-    if (!check.allowed) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
+    if (!absenceRequestSubmissionAllowed(check)) throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
     const result = await repository.updateTimeOffRequest({
       id: Number(entry.id),
       locationId: context.locationId,
@@ -59107,7 +59212,7 @@ async function createOwnTimeOffChangeRequest(session, body = {}) {
         repository,
       )
       : null;
-    if (check && !check.allowed) {
+    if (check && !absenceRequestSubmissionAllowed(check)) {
       throw httpError(409, check.reason, check.code || "TIME_OFF_NOT_POSSIBLE");
     }
     const result = await repository.insertTimeOffChange({
