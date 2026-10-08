@@ -60,6 +60,13 @@
           : String(left.employeeNumber).localeCompare(String(right.employeeNumber), 'de-AT', {numeric:true});
       });
   }
+  function shortProfileTitle(profile = {}) {
+    const number = String(profile.employeeNumber || '').trim();
+    // Never infer a given name from fullName: imported names can be surname-first.
+    const name = [profile.firstName,profile.nickname,profile.fullName]
+      .map(value => String(value || '').trim()).find(Boolean) || '';
+    return [number,name].filter(Boolean).join(' · ');
+  }
   function mount(options) {
     const root = options.root, editor = options.editor;
     if (!root || !editor) return null;
@@ -82,7 +89,7 @@
     root.classList.add('rights-management-window');editor.classList.add('rights-profile-window');
     let actor = '', identity = '', epoch = 0, destroyed = false, rows = [], managerDenialOnly = false;
     let prefs = normalize(null), mainWindow = null, profileWindow = null, layout = null;
-    let mainOpen = false, profileOpen = false, profileOpener = null, profileEmployeeNumber = '';
+    let mainOpen = false, profileOpen = false, profileOpener = null, profileEmployeeNumber = '', profileShortTitle = '';
     let mainActivated = false, profileActivated = false, mainClosing = false, profileClosing = false;
     let mainRestoreOnActivate = false, mainMinimizeOnActivate = false, profileRestoreOnActivate = false;
     const key = () => String(options.key?.() || '');
@@ -122,7 +129,7 @@
     function synchronize() {
       const next = key(), nextIdentity = stableIdentity();
       if (next === actor && nextIdentity === identity && options.canUse?.()) return;
-      epoch++;actor = next;identity = nextIdentity;rows = [];managerDenialOnly = false;mainOpen = false;profileOpen = false;profileOpener = null;profileEmployeeNumber = '';
+      epoch++;actor = next;identity = nextIdentity;rows = [];managerDenialOnly = false;mainOpen = false;profileOpen = false;profileOpener = null;profileEmployeeNumber = '';profileShortTitle = '';
       mainActivated = false;profileActivated = false;mainClosing = false;profileClosing = false;
       mainWindow?.destroy();mainWindow = null;profileWindow?.destroy();profileWindow = null;
       if (editor.open) editor.close();editor.hidden = true;root.hidden = true;clearProfile();
@@ -209,7 +216,7 @@
       if (mainWindow) return;
       mainWindow = win.GpWindow.attach(root, {title:q('[data-rights-window-title]'),body:q('[data-rights-window-body]'),
         toggle:q('[data-rights-window-toggle]'),bounds:options.bounds,scale:options.scale,
-        geometry:options.windowPreferences?.value.windows['rights:management'] || defaultGeometry(),minWidth:300,minHeight:180,compactWidth:280,
+        geometry:options.windowPreferences?.value.windows['rights:management'] || defaultGeometry(),minWidth:300,minHeight:180,compactWidth:260,
         canUse:active,change:geometry => options.windowPreferences?.change('rights:management', geometry),closeTarget:() => options.closeTarget?.() || options.opener,
         onClose() {mainOpen = false;mainActivated = false;root.hidden = true;options.opener?.setAttribute('aria-expanded','false');}});
     }
@@ -217,7 +224,8 @@
       if (profileWindow) return;
       profileWindow = win.GpWindow.attach(editor, {nativeDialog:true,title:editor.querySelector('[data-rights-profile-window-title]'),body:editor.querySelector('#rightsEditorForm'),
         toggle:editor.querySelector('[data-rights-profile-window-toggle]'),bounds:options.bounds,scale:options.scale,
-        geometry:options.windowPreferences?.value.windows['rights:profile'] || defaultGeometry(true),minWidth:300,minHeight:200,compactWidth:280,
+        geometry:options.windowPreferences?.value.windows['rights:profile'] || defaultGeometry(true),minWidth:300,minHeight:200,compactWidth:260,
+        minimizedTitle:() => profileShortTitle,
         canUse:() => active() && editor.open,change:geometry => options.windowPreferences?.change('rights:profile',geometry),closeTarget:currentProfileOpener,
         onClose() {profileOpen = false;profileActivated = false;editor.close();}});
     }
@@ -229,8 +237,11 @@
       mainWindow.activate();mainActivated = true;if (mainMinimizeOnActivate) mainWindow.minimize(true);else if (mainRestoreOnActivate) mainWindow.restore();mainRestoreOnActivate = false;mainMinimizeOnActivate = false;options.opener?.setAttribute('aria-expanded','true');renderRows();
       if (!mainWindow.preferred.minimized) query?.focus({preventScroll:true});return true;
     }
-    async function showProfile(opener) {
+    async function showProfile(opener, profile = {}) {
       synchronize();if (!active()) return false;
+      const summary = editor.querySelector('#rightsEditorTitle')?.textContent || '';
+      const parts = summary.split('·');
+      profileShortTitle = shortProfileTitle(profile) || shortProfileTitle({employeeNumber:parts[0],firstName:parts.slice(1).join('·')});
       const ticket = epoch;profileOpener = opener || doc.activeElement;profileOpen = true;profileRestoreOnActivate = true;
       profileEmployeeNumber = profileOpener?.closest?.('[data-rights-user]')?.dataset.rightsUser || profileEmployeeNumber;
       await options.windowPreferences?.activate();if (!allowed() || ticket !== epoch || !profileOpen) return false;
@@ -300,5 +311,5 @@
       rows = [];if (editor.open) editor.close();editor.hidden = true;clearProfile();roster?.replaceChildren();root.hidden = true;},
     get preferences() {return normalize(prefs);}};
   }
-  return Object.freeze({COLUMNS,normalize,projectRows,sortRows,mount});
+  return Object.freeze({COLUMNS,normalize,projectRows,sortRows,shortProfileTitle,mount});
 });

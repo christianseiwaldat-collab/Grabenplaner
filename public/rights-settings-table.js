@@ -36,7 +36,7 @@
       label.append(node('span',options.searchLabel || 'Suchen'),search);toolbar.append(label);
     }
     const chooser = node('details',undefined,'rights-table-columns'), choices = node('div',undefined,'rights-table-column-options');
-    chooser.append(node('summary','Spaltenanzeige'),choices);toolbar.append(chooser);
+    chooser.append(node('summary','Spaltenansicht'),choices);toolbar.append(chooser);
     const count = node('p','', 'settings-note rights-table-count');count.setAttribute('aria-live','polite');
     const scroll = node('div',undefined,'rights-table-scroll'), table = node('table',undefined,'rights-settings-table');
     table.setAttribute('aria-label',options.label || options.tableId);

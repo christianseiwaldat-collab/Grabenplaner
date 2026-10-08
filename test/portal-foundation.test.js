@@ -541,6 +541,7 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
       GRABENPLANER_SEED_DEMO: "1",
       NODE_ENV: "test",
       GRABENPLANER_TEST_AMU_SCANNER: "clean",
+      GRABENPLANER_TEST_TODAY: "2027-01-01",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

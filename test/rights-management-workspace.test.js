@@ -3,6 +3,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const workspace = require('../public/rights-management-workspace');
 
+test('minimized profile title prioritizes a given name or established call name without guessing imported name order', () => {
+  assert.equal(workspace.shortProfileTitle({employeeNumber:'00101',firstName:'Alex Maria',nickname:'Spitzname',fullName:'Nachname Vorname'}),'00101 · Alex Maria');
+  assert.equal(workspace.shortProfileTitle({employeeNumber:'17',nickname:'Markus',fullName:'Markus Mustermann'}),'17 · Markus');
+  assert.equal(workspace.shortProfileTitle({employeeNumber:'153',fullName:'Muster Bernd'}),'153 · Muster Bernd');
+  assert.equal(workspace.shortProfileTitle({employeeNumber:'153',firstName:' ',nickname:'Bernd Max',fullName:'Muster Bernd'}),'153 · Bernd Max');
+  assert.equal(workspace.shortProfileTitle({employeeNumber:'252'}),'252');
+});
+
 test('rights table metadata allows only known columns, preserves widths and retains its mandatory identity column', () => {
   const prefs = workspace.normalize({version:1, columns:['name','name','personnel','unknown'],
     order:['personnel','name','employeeNumber','constructor'], sort:'added', direction:'desc',

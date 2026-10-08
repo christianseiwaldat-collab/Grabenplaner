@@ -34,7 +34,7 @@
       item.controller = win.GpWindow.attach(item.root,{
         title:item.root.querySelector('[data-rights-settings-window-title]'),body:item.root.querySelector('[data-rights-settings-window-body]'),
         toggle:item.root.querySelector('[data-rights-settings-window-toggle]'),
-        bounds:options.bounds,scale:options.scale,minWidth:300,minHeight:200,compactWidth:300,
+        bounds:options.bounds,scale:options.scale,minWidth:300,minHeight:200,compactWidth:260,
         geometry:options.windowPreferences.value.windows[item.id] || defaults(item),canUse:() => active(item),
         change:geometry=>options.windowPreferences.change(item.id,geometry),
         closeTarget:()=>options.closeTarget?.() || (item.opener.getClientRects().length ? item.opener : item.opener.closest('.settings-card')?.querySelector('.settings-field-disclosure-summary')),

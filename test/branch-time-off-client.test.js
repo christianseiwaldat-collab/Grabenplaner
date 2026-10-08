@@ -10,6 +10,14 @@ const root = path.resolve(__dirname, "..");
 const portal = fs.readFileSync(path.join(root, "public/portal.js"), "utf8");
 const branchScript = fs.readFileSync(path.join(root, "public/portal-branch-time-off.js"), "utf8");
 const formScript = portal.slice(portal.indexOf("let timeOffCheckTimer;"), portal.indexOf("async function loadTimeOffRequests()"));
+const requestHelperScript = ["requestSubmissionAllowed", "hasPortalPermission", "absenceTodayIso"].map(name => {
+  const start = portal.indexOf(`function ${name}(`);
+  const end = /\r?\n}/g;
+  end.lastIndex = start;
+  const closing = end.exec(portal);
+  assert.ok(start >= 0 && closing, `Actual ${name} helper exists`);
+  return portal.slice(start, closing.index + closing[0].length);
+}).join("\n");
 
 function harness() {
   let nextTimer = 0;
@@ -29,7 +37,7 @@ function harness() {
     api: (route, options = {}) => new Promise((resolve, reject) => pending.push({ route, options, resolve, reject })),
   };
   vm.createContext(context);
-  vm.runInContext(branchScript + "\n" + formScript, context);
+  vm.runInContext(branchScript + "\n" + requestHelperScript + "\n" + formScript, context);
   el.branchTimeOffEmployee.value = "employee-a";
   el.timeOffDate.value = "2031-09-05";
   const runTimer = () => {
@@ -107,7 +115,7 @@ test("ohne Person wird nichts geprüft; persönliche Anträge behalten ihren bes
   await context.checkTimeOff();
   assert.equal(pending.length, 0);
   assert.equal(el.timeOffSubmitButton.disabled, true);
-  context.portalState.session.user = { accountType: "employee", employeeNumber: "personal-a" };
+  context.portalState.session.user = { accountType: "employee", employeeNumber: "personal-a", permissions: ["own_time:read", "own_time:write"] };
   await context.checkTimeOff();
   const check = runTimer();
   assert.equal(pending[0].route, "/api/portal/v1/me/time-off-check");
@@ -115,6 +123,28 @@ test("ohne Person wird nichts geprüft; persönliche Anträge behalten ihren bes
   pending[0].resolve({ allowed: true });
   await check;
   assert.equal(el.timeOffSubmitButton.disabled, false);
+});
+
+test("nur eine berechtigte Person oder Filialkonto kann eine rote Besetzungswarnung einreichen", async () => {
+  for (const personal of [false, true]) {
+    const { context, el, pending, runTimer } = harness();
+    if (personal) context.portalState.session.user = {
+      accountType: "employee", employeeNumber: "personal-a", permissions: ["own_time:read", "own_time:write"],
+    };
+    await context.checkTimeOff();
+    const permitted = runTimer();
+    pending[0].resolve({ allowed: false, submissionAllowed: true, trafficLight: "red", code: "TIME_OFF_STAFFING_INSUFFICIENT" });
+    await permitted;
+    assert.equal(el.timeOffSubmitButton.disabled, false);
+    assert.equal(context.portalState.timeOffCheck.trafficLight, "red");
+
+    await context.checkTimeOff();
+    const denied = runTimer();
+    context.portalState.session.user.permissions = personal ? ["own_time:read"] : [];
+    pending[1].resolve({ allowed: false, submissionAllowed: true, trafficLight: "red", code: "TIME_OFF_STAFFING_INSUFFICIENT" });
+    await denied;
+    assert.equal(el.timeOffSubmitButton.disabled, true);
+  }
 });
 
 test("Filialkontext verlangt genau eine Filiale und bewahrt führende Nullen", () => {

@@ -1,5 +1,11 @@
 /* Rights administration uses the same viewport windows as the other GP workspaces. */
 #rightsSettings.rights-window-entry { min-height:68px; }
+/* The rights workspaces are fixed viewport windows. Their placeholder still
+   stretches the settings page, so the system footer stays at the page bottom. */
+.main-content:has(> #settingsView.active #rightsSettings.active) {
+  display:flex; flex-direction:column; min-height:calc(100dvh * var(--app-font-scale-inverse,1));
+}
+.main-content:has(> #settingsView.active #rightsSettings.active) > #settingsView { flex:1 0 auto; }
 .rights-settings-window { display:flex; flex-direction:column; overflow:hidden; padding:0; border:1px solid var(--line,#d7e0db); border-radius:12px; color:var(--ink,#18272e); background:var(--surface,#fff); box-shadow:0 16px 52px rgb(15 34 27 / 22%); font-size:12px; line-height:1.45; }
 .rights-settings-window[hidden] { display:none !important; }
 .rights-settings-window > [data-rights-settings-window-title] { display:flex; flex:none; align-items:center; gap:8px; min-height:44px; margin:0; padding:9px 14px; border-bottom:1px solid var(--line); background:var(--surface-muted); }

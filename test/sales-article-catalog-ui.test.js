@@ -46,8 +46,8 @@ test("Artikelstamm ist ein eigener berechtigungsgeschützter Verkaufsbereich", (
 
 test("Artikelsuche verwendet nur bestätigte Listenfelder und den serverseitigen Vertrag", () => {
   const view = between(html, '<section id="salesArticleCatalogView"', '<section id="crmView"');
-  assert.match(view, /<span>Artikelnr\., Bezeichnung oder EAN<\/span><input id="salesArticleSearchQuery"/);
-  assert.match(view, /placeholder="Artikel suchen …"/);
+  assert.match(view, /<span class="visually-hidden">Artikelnr\., Bezeichnung oder EAN<\/span><input id="salesArticleSearchQuery"/);
+  assert.match(view, /placeholder="Artikelnr\., Bezeichnung oder EAN"/);
   assert.match(view, /id="salesArticleAdvancedSearch"/);
   assert.match(view, /id="salesArticleSearchOrderNumber"/);
   assert.match(view, /id="salesArticleSearchStatusFilter"/);

@@ -2,8 +2,10 @@
   'use strict';
   // GP-Fenster sind interne Arbeitsfenster, keine Browserfenster. Dieser gemeinsame
   // Controller erlaubt Verschieben über den gesamten Viewport (auch die Sidebar)
-  // und Größenänderung an allen Rändern/Ecken. Fachliche Karten außerhalb des
-  // Startdashboards werden dadurch nicht zu frei veränderbaren Fenstern.
+  // und Größenänderung an allen Rändern/Ecken. Die Artikelsuche ist der visuelle
+  // Standard: Griff, einzeiliger Titel, 38-Pixel-Steuerungen und 12-Pixel-Radius;
+  // minimiert bleiben 260 × 44 Pixel, während die volle Größe gespeichert bleibt.
+  // Fachliche Karten außerhalb des Startdashboards werden dadurch nicht zu Fenstern.
   const model = typeof module === 'object' && module.exports ? require('./gp-window-preferences') : root.GpWindowPreferences;
   const api = factory(model);
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -113,7 +115,7 @@
     const title=resolve(options.title,'[data-gp-window-title]'), body=resolve(options.body,'[data-gp-window-body]');
     const toggle=resolve(options.toggle,'[data-gp-window-toggle]'), closeButton=resolve(options.closeButton,'[data-gp-window-close]');
     const moveHandle=options.move || title;
-    const removers=[],handles=[],ownedHandles=[];
+    const removers=[],handles=[],ownedHandles=[],ownedTitleNodes=[],titleClasses=[];
     const on=(target,type,fn)=>{target?.addEventListener(type,fn);removers.push(()=>target?.removeEventListener(type,fn));};
     const dimensions={minWidth:options.minWidth || 200,minHeight:options.minHeight || 80,compactWidth:options.compactWidth || 260};
     const getBounds=()=>options.bounds ? options.bounds() : viewportBounds(win.visualViewport || {width:win.innerWidth,height:win.innerHeight},options.scale?.() || 1);
@@ -131,7 +133,22 @@
       element.classList.remove('is-active-window');
     }
     const status=resolve(options.status,'[data-gp-window-status]');
-    element.classList.add('gp-window'); title?.classList.add('gp-window-title');
+    element.classList.add('gp-window','gp-window-standard'); title?.classList.add('gp-window-title','gp-window-titlebar');
+    const decorate=(node,name)=>{if(node&&!node.classList.contains(name)){node.classList.add(name);titleClasses.push([node,name]);}};
+    decorate(moveHandle,'gp-window-move-handle');
+    const titleText=options.titleText || title?.querySelector('strong,h2,h3');
+    const fullTitle=titleText?.textContent;
+    decorate(titleText,'gp-window-title-text');
+    if(title) {
+      const existingGrip=moveHandle?.querySelector('[data-gp-window-grip],[aria-hidden="true"]');
+      if(existingGrip)decorate(existingGrip,'gp-window-grip');
+      else {
+        const grip=doc.createElement('span');grip.className='gp-window-grip';grip.textContent='⠿';grip.setAttribute('aria-hidden','true');
+        (moveHandle || title).prepend(grip);ownedTitleNodes.push(grip);
+      }
+      for(const button of title.querySelectorAll('button'))if(button!==moveHandle)decorate(button,'gp-window-control');
+      for(const container of title.querySelectorAll('.rights-window-controls'))decorate(container,'gp-window-controls');
+    }
     if(moveHandle && !moveHandle.hasAttribute('tabindex') && moveHandle.tagName !== 'BUTTON') moveHandle.setAttribute('tabindex','0');
     if(moveHandle && !moveHandle.hasAttribute('aria-label')) moveHandle.setAttribute('aria-label','Fenster verschieben: ziehen oder Pfeiltasten verwenden');
     function announce() {if(status && fitted) status.textContent=preferred.minimized ? 'Fenster minimiert.' : `Fenster: ${fitted.width} × ${fitted.height} Pixel, Position ${fitted.x}, ${fitted.y}.`;}
@@ -139,10 +156,11 @@
       if(!usable()) {if(!options.nativeDialog) element.hidden=true;return;}
       if(!options.nativeDialog) element.hidden=false;
       const bounds=getBounds();
-      fitted=fit(preferred,bounds,{...dimensions,titleHeight:Math.max(32,title?.offsetHeight || 44)});
+      fitted=fit(preferred,bounds,{...dimensions,titleHeight:44});
       element.style.left=`${bounds.left+fitted.x}px`;element.style.top=`${bounds.top+fitted.y}px`;
       element.style.width=`${fitted.width}px`;element.style.height=`${fitted.height}px`;
       element.classList.toggle('is-minimized',preferred.minimized);
+      if(titleText&&options.minimizedTitle)titleText.textContent=preferred.minimized ? String(options.minimizedTitle() || fullTitle) : fullTitle;
       if(body) {if(preferred.minimized && body.contains(doc.activeElement)) toggle?.focus({preventScroll:true});body.hidden=preferred.minimized;}
       if(toggle) {toggle.setAttribute('aria-expanded',String(!preferred.minimized));toggle.setAttribute('aria-label',preferred.minimized?'Fenster wiederherstellen':'Fenster minimieren');toggle.textContent=preferred.minimized?'▢':'−';}
       for(const handle of handles) handle.hidden=preferred.minimized;
@@ -254,7 +272,7 @@
       set(value){finish(true);preferred=normalize(value || options.initialGeometry?.() || DEFAULTS,dimensions);render();},
       activate(){closeTicket++;animation?.cancel();animation=null;closing=null;active=true;render();foreground();},
       suspend(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);active=false;releaseForeground();if(!options.nativeDialog) element.hidden=true;},
-      destroy(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);destroyed=true;releaseForeground();observer?.disconnect();for(const remove of removers) remove();for(const handle of ownedHandles) handle.remove();element.classList.remove('gp-window');if(!options.nativeDialog) element.hidden=true;}
+      destroy(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);destroyed=true;releaseForeground();observer?.disconnect();for(const remove of removers) remove();for(const handle of ownedHandles) handle.remove();for(const node of ownedTitleNodes)node.remove();for(const[node,name]of titleClasses)node.classList.remove(name);if(titleText&&options.minimizedTitle)titleText.textContent=fullTitle;title?.classList.remove('gp-window-title','gp-window-titlebar');element.classList.remove('gp-window','gp-window-standard');if(!options.nativeDialog) element.hidden=true;}
     };
   }
   function installDocument(doc,options={}) {

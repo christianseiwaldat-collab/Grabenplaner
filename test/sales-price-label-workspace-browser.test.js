@@ -57,7 +57,10 @@ test('Price article search preserves navigation state and table layout, uses act
  for(const name of ['gp-window-preferences.js','gp-window.js','table-layout.js','sales-price-label-search-window.js'])await page.addScriptTag({path:path.join(root,'public',name)});
  try{
   await page.evaluate(()=>{window.actor='A';window.onPricePage=true;const prefs=GpWindow.createPreferences({key:()=>actor,canUse:()=>true,read:async()=>({version:1,windows:{}}),write:async g=>{window.savedGeometry=g;}});window.search=GrabenplanerPriceLabelSearchWindow.mount({root:document.querySelector('#root'),api:(u,o={})=>tableApi(u,{body:o.body}),searchArticles:o=>searchApi({query:o.query,offset:o.offset,sort:o.sort,direction:o.direction}),addArticle:n=>addLabel(n),key:()=>actor,canUse:()=>true,active:()=>onPricePage,windowPreferences:prefs,dock:document.querySelector('#dock')});});
-  await page.locator('#dock').click();await page.locator('.spl-search-window input[type=search]').fill('Kamera');await page.waitForFunction(()=>document.querySelector('.spl-search-window tbody').children.length===20);assert.equal(calls.at(-1).query,'Kamera');
+  await page.locator('#dock').click();await page.getByRole('searchbox',{name:'Artikelnr., Bezeichnung oder EAN',exact:true}).waitFor();
+  assert.equal(await page.locator('.spl-search-window input[type=search]').getAttribute('placeholder'),'Artikelnr., Bezeichnung oder EAN');
+  assert.equal(await page.locator('.spl-search-window details summary').textContent(),'Spaltenansicht');
+  await page.locator('.spl-search-window input[type=search]').fill('Kamera');await page.waitForFunction(()=>document.querySelector('.spl-search-window tbody').children.length===20);assert.equal(calls.at(-1).query,'Kamera');
   await page.locator('[data-spl-search-next]').click();await page.waitForFunction(()=>document.querySelector('[data-spl-search-page]').textContent==='21–40');assert.equal(calls.at(-1).offset,20);
   await page.locator('[data-spl-search-next]').click();await page.waitForFunction(()=>document.querySelector('[data-spl-search-page]').textContent==='41–45');await page.locator('[data-spl-search-prev]').click();await page.waitForFunction(()=>document.querySelector('[data-spl-search-page]').textContent==='21–40');
   await page.locator('[data-spl-add]').first().click();assert.deepEqual(added,['100020']);

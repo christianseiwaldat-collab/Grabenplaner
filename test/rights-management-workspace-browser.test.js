@@ -42,7 +42,7 @@ async function setup(page, { storage = {}, geometries = {} } = {}) {
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/*', route => route.abort());
   await page.setContent('<div class="app-shell"><aside class="sidebar" id="mainSidebar"><strong>GP · BEISPIEL</strong><span>Lokale Layoutprüfung</span></aside><main class="main-content"><section class="view active" id="settingsView"><header class="page-header"><span class="eyebrow">BEISPIEL · Einstellungen</span><h1>Rechtemanagement</h1></header><section id="rightsSettings" class="settings-section active">'
-    + elementHtml('openRightsManagementButton') + '</section><button id="backgroundButton">Hintergrund bleibt bedienbar</button></section></main></div>'
+    + elementHtml('openRightsManagementButton') + '</section><button id="backgroundButton">Hintergrund bleibt bedienbar</button></section><footer class="system-footer"><span>BEISPIEL · Systemstatus</span></footer></main></div>'
     + elementHtml('rightsManagementWindow') + elementHtml('rightsEditorModal'));
   for (const file of ['styles.css', 'mobile-refinements.css', 'table-layout.css', 'gp-window.css', 'rights-management-workspace.css']) {
     await page.addStyleTag({ path: path.join(repo, 'public', file) });
@@ -145,11 +145,17 @@ test('explicit minimized entry retains expanded dimensions and sticky profile co
         await page.evaluate(() => rightsManagementWorkspace.show({minimized:true}));
         assert.equal(await root.locator('[data-rights-window-body]').isVisible(),false);
         assert.ok((await root.boundingBox()).height<65);
+        const footer=await page.evaluate(() => {
+          const main=document.querySelector('.main-content'),node=document.querySelector('.system-footer');
+          return {bottom:node.getBoundingClientRect().bottom,height:innerHeight,padding:parseFloat(getComputedStyle(main).paddingBottom)};
+        });
+        assert.ok(Math.abs(footer.bottom+footer.padding-footer.height)<2,'Fixed or minimized rights windows keep the system footer at the page bottom');
         await root.locator('[data-rights-window-toggle]').click();
         assert.ok(Math.abs((await root.boundingBox()).width-expanded.width)<2);
         await page.evaluate(() => {
           for (let index=0;index<30;index++) state.rightsManagement.catalog.push({id:'example:'+index,label:'BEISPIEL Prüf-Recht '+index,group:'Prüfung',editable:true,scopeBehavior:'global'});
           openRightsEditor('153');
+          rightsManagementWorkspace.showProfile(undefined,{employeeNumber:'153',firstName:'Bernd'});
         });
         await page.waitForFunction(() => document.getElementById('rightsEditorModal').open);
         const positions=() => page.evaluate(() => Object.fromEntries(['#rightsEditorTitle','#rightsEditorSummary','.rights-editor-legend','#rightsEditorPermissions .rights-permission'].map(selector=>[selector,document.querySelector(selector).getBoundingClientRect().top])));
@@ -163,6 +169,11 @@ test('explicit minimized entry retains expanded dimensions and sticky profile co
         assert.ok(save.y>=profile.y&&save.y+save.height<=profile.y+profile.height);
         await page.locator('[data-rights-profile-window-toggle]').click();
         assert.equal(await page.locator('.rights-profile-context').isVisible(),false);
+        assert.equal(await page.locator('#rightsEditorModal .gp-window-title-text').textContent(), '153 · Bernd');
+        const minimizedProfile=await page.locator('#rightsEditorModal').boundingBox();
+        assert.ok(Math.abs(minimizedProfile.width-260)<2);assert.ok(Math.abs(minimizedProfile.height-44)<2);
+        await page.locator('[data-rights-profile-window-toggle]').click();
+        assert.equal(await page.locator('#rightsEditorModal .gp-window-title-text').textContent(), 'Persönliches Rechteprofil');
         assert.deepEqual(errors,[]);await page.close();
       });
     }finally {await instance.close();}

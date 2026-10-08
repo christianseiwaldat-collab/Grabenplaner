@@ -1,0 +1,35 @@
+.loan-settings-list { gap:9px; }
+.loan-location-disclosure { min-width:0; border:1px solid var(--line); border-radius:11px; background:var(--surface); overflow:hidden; }
+.loan-location-disclosure > summary { display:flex; align-items:center; gap:10px; min-height:48px; padding:9px 13px; color:var(--ink); cursor:pointer; list-style:none; font-size:11px; }
+.loan-location-disclosure > summary::-webkit-details-marker { display:none; }
+.loan-location-disclosure > summary::after { content:"›"; flex:none; color:var(--green); font-size:21px; font-weight:700; transition:transform .12s; }
+.loan-location-disclosure[open] > summary { border-bottom:1px solid var(--line); background:var(--surface-soft); }
+.loan-location-disclosure[open] > summary::after { transform:rotate(90deg); }
+.loan-location-disclosure > summary:focus-visible { outline:2px solid var(--green); outline-offset:-3px; }
+.loan-location-disclosure > summary > strong { min-width:0; flex:1; overflow-wrap:anywhere; font-size:12px; }
+.loan-location-number { flex:none; min-width:27px; padding:4px 5px; border-radius:5px; background:var(--green-soft); color:var(--green); text-align:center; font-weight:800; }
+.loan-location-policy { color:var(--muted); font-size:9px; }
+.loan-location-disclosure .status-badge { flex:none; font-size:8px; padding:4px 7px; }
+.loan-location-disclosure .loan-location-setting { gap:12px; padding:13px; border:0; border-radius:0; background:var(--surface); }
+.loan-setting-section { display:grid; gap:10px; min-width:0; margin:0; padding:11px 12px 12px; border:1px solid var(--line); border-radius:8px; }
+.loan-setting-section > legend { padding:0 5px; color:var(--green); font-size:10px; font-weight:800; }
+.loan-location-disclosure .switch-row { gap:14px; min-height:0; padding:4px 0; }
+.loan-location-disclosure .switch-row strong { font-size:10.5px; }
+.loan-location-disclosure .switch-row small,.loan-location-disclosure .field > small { font-size:9px; line-height:1.45; }
+.loan-location-disclosure .loan-setting-fields { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.loan-location-disclosure .field { min-width:0; gap:5px; }
+.loan-location-disclosure .field > span { font-size:9.5px; }
+.loan-location-disclosure .field :is(input,select) { min-width:0; width:100%; height:35px; padding:7px 9px; border-radius:7px; font-size:10px; }
+.loan-location-disclosure .settings-note { margin:0; font-size:9px; line-height:1.45; }
+.loan-location-disclosure :is(.loan-setting-external,.loan-setting-retention) > summary { width:fit-content; color:var(--green); font-size:9px; font-weight:700; cursor:pointer; }
+.loan-setting-external[open] { display:grid; gap:10px; }
+.loan-setting-retention[open] > summary { margin-bottom:8px; }
+.loan-location-disclosure .form-actions-inline { justify-content:space-between; }
+.loan-location-disclosure .primary-button { min-height:34px; padding:0 12px; border-radius:7px; font-size:10px; }
+@media (max-width:600px) {
+  .loan-location-policy { display:none; }
+  .loan-location-disclosure .loan-setting-fields { grid-template-columns:minmax(0,1fr); }
+  .loan-location-disclosure > summary { padding:9px 10px; }
+  .loan-location-disclosure .loan-location-setting { padding:10px; }
+}
+@media (prefers-reduced-motion:reduce) { .loan-location-disclosure > summary::after { transition:none; } }

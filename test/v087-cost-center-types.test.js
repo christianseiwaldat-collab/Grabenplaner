@@ -15,6 +15,7 @@ process.env.GRABENPLANER_HOST = "127.0.0.1";
 process.env.GRABENPLANER_FORCE_PORTAL = "1";
 process.env.GRABENPLANER_SEED_DEMO = "1";
 process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
+process.env.GRABENPLANER_TEST_TODAY = "2035-03-01";
 process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
@@ -222,13 +223,22 @@ test("v0.87 Kostenstellentypen: Filialstatus steuert Standortzuordnung und bleib
     VALUES (?, 'Custom Branch Test', 'Branchtest', '#2c7a68', 38.5, 5, ?, ?, ?, 1)
   `).run(customBranchEmployee, positionId, firstLocationId, branchCenter.id);
   const employee = session(customBranchEmployee, "employee");
+  const governedCheck = await request("/api/portal/v1/me/vacation-check", {
+    method: "POST", auth: employee,
+    body: { dateFrom: "2035-03-12", dateTo: "2035-03-12" },
+  });
+  assert.equal(governedCheck.response.status, 200, governedCheck.text);
+  assert.equal(governedCheck.payload.code, "VACATION_STAFFING_INSUFFICIENT");
+  assert.equal(governedCheck.payload.trafficLight, "red");
+  assert.equal(governedCheck.payload.allowed, false);
+  assert.equal(governedCheck.payload.submissionAllowed, true);
   const governedRequest = await request("/api/portal/v1/me/vacation-requests", {
     method: "POST",
     auth: employee,
     body: { dateFrom: "2035-03-12", dateTo: "2035-03-12", note: "Filialtypprüfung" },
   });
-  assert.equal(governedRequest.response.status, 409, governedRequest.text);
-  assert.equal(governedRequest.payload.code, "VACATION_STAFFING_INSUFFICIENT");
+  assert.equal(governedRequest.response.status, 201, governedRequest.text);
+  assert.equal(governedRequest.payload.status, "pending");
 
   const reusedCenter = await request("/api/locations", {
     method: "POST",
