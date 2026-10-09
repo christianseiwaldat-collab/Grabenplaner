@@ -74,12 +74,13 @@ async function readPdf(response) {
   const buffer = Buffer.from(await response.arrayBuffer()); assert.equal(buffer.subarray(0, 5).toString(), '%PDF-');
   const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs'), task = getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }), document = await task.promise;
   try {
-    const pages = []; let images = 0;
+    const pages = [], dimensions = [], metadata = await document.getMetadata(); let images = 0;
     for (let index = 1; index <= document.numPages; index++) {
       const page = await document.getPage(index), content = await page.getTextContent(), operators = await page.getOperatorList();
       pages.push(content.items.map(item => item.str).join(' ')); images += operators.fnArray.filter(id => [OPS.paintImageXObject, OPS.paintInlineImageXObject].includes(id)).length;
+      dimensions.push({ width: page.view[2], height: page.view[3] });
     }
-    return { buffer, text: pages.join(' '), pages, images };
+    return { buffer, text: pages.join(' '), pages, images, dimensions, title: metadata.info.Title };
   } finally { await task.destroy(); }
 }
 
@@ -136,6 +137,29 @@ test('Article PDF rejects invalid selections, unapproved histories, forged conte
   const result = await readPdf(await f.request('sheet.pdf', pdfBody({ sections: ['master', 'notes'] })));
   assert.match(result.text, /SERVER-TRUSTED-ARTICLE/); assert.match(result.text, /SERVER-TRUSTED-OWN-NOTE/);
   assert.doesNotMatch(result.text, /SERVER-SALE|SERVER-MOVEMENT/);
+});
+
+test('Article PDF validates optional title and orientation before loading data and preserves secure default and customized output', async t => {
+  const f = await fixture(t);
+  for (const invalid of [{ title: null }, { title: 123 }, { title: 'x'.repeat(161) }, { title: 'Titel\nFolgezeile' }, { title: 'Titel\u0000' },
+    { orientation: null }, { orientation: 'vertical' }, { orientation: true }]) {
+    const response = await f.request('sheet.pdf', pdfBody(invalid));
+    assert.equal(response.status, 400, JSON.stringify(invalid)); assert.equal(f.state.counts.catalog, 0);
+    assert.doesNotMatch(response.headers.get('content-type') || '', /application\/pdf/);
+  }
+  const baseline = await readPdf(await f.request('sheet.pdf', pdfBody()));
+  assert.equal(baseline.title, 'Artikelstammblatt 001234'); assert.ok(baseline.dimensions.every(page => page.width > page.height));
+  for (const orientation of ['portrait', 'landscape']) {
+    const result = await readPdf(await f.request('sheet.pdf', pdfBody({ title: '  BEISPIEL - Kameraübersicht  ', orientation, includeImage: true })));
+    assert.equal(result.title, 'BEISPIEL - Kameraübersicht'); assert.match(result.text, /BEISPIEL - Kameraübersicht/); assert.match(result.text, /Artikel 001234/);
+    assert.equal(result.images, 1); assert.match(result.text, /SERVER-TRUSTED-ARTICLE/);
+    assert.ok(result.dimensions.every(page => orientation === 'portrait' ? page.height > page.width : page.width > page.height));
+  }
+  const limited = allRights.filter(permission => ![History.SALES_HISTORY_PERMISSIONS.SELLERS, History.SALES_HISTORY_PERMISSIONS.CUSTOMER_PURCHASES,
+    Analytics.SALES_ANALYTICS_PERMISSIONS.MARGIN_READ, Article.SALES_ARTICLE_CATALOG_PERMISSIONS.COSTS_READ].includes(permission));
+  f.state.principals['42'] = principal('42', limited);
+  const safe = await readPdf(await f.request('sheet.pdf', pdfBody({ sections: ['sales'], title: 'BEISPIEL - Sicherer Export', orientation: 'portrait' })));
+  assert.match(safe.text, /SERVER-SALE/); assert.doesNotMatch(safe.text, /SERVER-SELLER|SERVER-CUSTOMER|CUSTOMER-NUMBER|55,12|4,73/);
 });
 
 test('Article PDF uses only trusted server content, honors tabs/photo/filename and suppresses historical fields without grants', async t => {

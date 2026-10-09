@@ -1,18 +1,25 @@
 'use strict';
-const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
 const {verifyBackupBudgetCompatibility}=require('../server-tools/linux/lib/postgresql-backup-budget-compat');
 const contract=require('../server-tools/linux/lib/postgresql-backup-budget-contract.json');
 const {sealPairBundle}=require('../lib/persistence/postgresql/operations/paired-bundle');
 const source=path.resolve(__dirname,'..');
+const historical=path.join(source,'test-support/postgresql-backup-budget-after');
+const hash=bytes=>crypto.createHash('sha256').update(bytes.toString('utf8').replace(/\r\n/g,'\n')).digest('hex');
 function fixture(t){
  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'gp-budget-bridge-')));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const installed=path.join(root,'installed'),candidate=path.join(root,'candidate');
  for(const [target,old] of [[installed,true],[candidate,false]]){
-  fs.mkdirSync(target);const metadata=JSON.parse(fs.readFileSync(path.join(source,'package.json'),'utf8'));if(old)metadata.version=contract.predecessorVersion;
+  fs.mkdirSync(target);const metadata=JSON.parse(fs.readFileSync(path.join(historical,'package.json.txt'),'utf8'));if(old)metadata.version=contract.predecessorVersion;
   fs.writeFileSync(path.join(target,'package.json'),JSON.stringify(metadata));
   for(const [file,pins] of Object.entries(contract.files)){
    if((old?pins.before:pins.after)===null)continue;
-   const from=old&&pins.before!==pins.after?path.join(source,'test-support/postgresql-backup-budget-before',file.replaceAll('/','__')+'.txt'):path.join(source,file);
+   // This one-time predecessor bridge tests its original reviewed source tree,
+   // never later application imports. Unchanged modules remain pinned by the
+   // same contract; changed common/after modules use frozen historical text.
+   const frozen=path.join(historical,file.replaceAll('/','__')+'.txt');
+   const from=old&&pins.before!==pins.after?path.join(source,'test-support/postgresql-backup-budget-before',file.replaceAll('/','__')+'.txt'):fs.existsSync(frozen)?frozen:path.join(source,file);
+   assert.equal(hash(fs.readFileSync(from)),old?pins.before:pins.after,'historical bridge source must match its original pin: '+file);
    const to=path.join(target,file);fs.mkdirSync(path.dirname(to),{recursive:true});fs.copyFileSync(from,to);
   }
  }
@@ -30,6 +37,18 @@ test('first-deploy bridge accepts only the pinned installed 0.92.75 and complete
   for(const tree of [f.installed,f.candidate]){const target=path.join(tree,file),old=fs.readFileSync(target);fs.appendFileSync(target,'\n// unreviewed');
    assert.throws(()=>verifyBackupBudgetCompatibility(f.installed,f.candidate),/PG_BACKUP_BUDGET_BRIDGE_UNREVIEWED/,scenario);fs.writeFileSync(target,old);}
  }
+});
+
+test('historical bridge still rejects the current BWL dependency expansion without widening its pins',t=>{
+ const f=fixture(t);
+ for(const relative of ['lib/persistence/postgresql/core/trade-annotations.js','lib/persistence/sqlite/application-catalog.js']){
+  const target=path.join(f.candidate,relative),historicalBytes=fs.readFileSync(target),currentBytes=fs.readFileSync(path.join(source,relative));
+  assert.notEqual(hash(currentBytes),contract.files[relative].after,'current BWL catalog is outside the historical bridge');
+  fs.writeFileSync(target,currentBytes);
+  assert.throws(()=>verifyBackupBudgetCompatibility(f.installed,f.candidate),/PG_BACKUP_BUDGET_BRIDGE_UNREVIEWED/);
+  fs.writeFileSync(target,historicalBytes);
+ }
+ assert.equal(verifyBackupBudgetCompatibility(f.installed,f.candidate).verified,true);
 });
 test('bridge rejects other versions, changed dependencies, missing modules and mixed source trees',t=>{
  const f=fixture(t),installedPackage=path.join(f.installed,'package.json'),original=fs.readFileSync(installedPackage);

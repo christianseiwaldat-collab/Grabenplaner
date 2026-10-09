@@ -1,8 +1,8 @@
 # Versionsstatus
 
-## v0.92.78 Beta · Quellstand
+## v0.92.79 Beta · Quellstand
 
-Verbesserte persönliche Anträge, Leihen und Filialbestellungen sowie kompakte Arbeitsfenster.
+Artikel-Auswertung und gemeinsame Druckvorschau, ABC-Analyse, Abverkaufs-Simulation und Maßnahmenliste sowie kompakte Verkaufsansichten und gestaltbare Dashboard-Felder.
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease

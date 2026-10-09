@@ -550,7 +550,7 @@ test("Dashboard-Feldbeschriftungen sind persönlich, privat und unabhängig vom 
   assert.equal(initial.response.status, 200);
   assert.match(initial.response.headers.get("cache-control"), /private.*no-store/);
   assert.deepEqual(initial.payload.startDashboardWorkspace, {version: 1, fields: {}});
-  const startDashboardWorkspace = {version: 1, fields: {"card:schedule": {title: "<b>Mein Plan</b>", description: "Persönlicher Überblick"}}};
+  const startDashboardWorkspace = {version: 1, fields: {"card:schedule": {title: "<b>Mein Plan</b>", description: "Persönlicher Überblick", color: "sage"}}};
   const saved = await requestJson(route, {method: "PUT", session: admin, body: {startDashboardWorkspace}});
   assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
   assert.deepEqual(saved.payload.startDashboardWorkspace, startDashboardWorkspace);
@@ -566,6 +566,7 @@ test("Dashboard-Feldbeschriftungen sind persönlich, privat und unabhängig vom 
   assert.deepEqual((await requestJson(route, {session: admin})).payload.startDashboardWorkspace, startDashboardWorkspace);
   for (const invalid of [null, {version: 1, fields: {unknown: {title: "X"}}}, {version: 1, fields: {"card:schedule": {title: " "}}},
     {version: 1, fields: {"card:schedule": {description: "x".repeat(401)}}},
+    ...["standard", "SAGE", "#fff", "url(https://example.com/image)", "", null, 0, true].map(color => ({version: 1, fields: {"card:schedule": {color}}})),
     {version: 1, fields: {}, employeeNumber: "v071-manager"}]) {
     const rejected = await requestJson(route, {method: "PUT", session: admin, body: {startDashboardWorkspace: invalid, pageThemes: {startDashboard: "light"}}});
     assert.equal(rejected.response.status, 400, JSON.stringify(rejected.payload));
@@ -575,6 +576,32 @@ test("Dashboard-Feldbeschriftungen sind persönlich, privat und unabhängig vom 
   assert.deepEqual(unchanged.payload.startDashboardWorkspace, startDashboardWorkspace);
   const cleared = await requestJson(route, {method: "PUT", session: admin, body: {startDashboardWorkspace: {version: 1, fields: {}}}});
   assert.deepEqual(cleared.payload.startDashboardWorkspace, {version: 1, fields: {}});
+});
+
+test("Dashboard-Farben bleiben gespeichert und kontogetrennt; Standard entfernt nur die Farbe", async () => {
+  const admin = createPortalSession("v071-admin", "admin");
+  const manager = createPortalSession("v071-manager", "manager");
+  const route = "/api/portal/v1/ui-preferences";
+  const managerWorkspace = {version: 1, fields: {"card:schedule": {title: "Mein Dienstplan", color: "rose"}}};
+  assert.equal((await requestJson(route, {method: "PUT", session: manager, body: {startDashboardWorkspace: managerWorkspace}})).response.status, 200);
+  const field = {title: "Mein Plan", description: "Übersicht", geometry: {x: 40, y: 60, width: 350, height: 420}};
+  for (const color of ["sage", "blue", "sand", "rose", "lavender", "peach"]) {
+    const startDashboardWorkspace = {version: 1, fields: {"card:schedule": {...field, color}, "control:vps": {hidden: true, color: "blue"}}};
+    const saved = await requestJson(route, {method: "PUT", session: admin, body: {startDashboardWorkspace}});
+    assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+    assert.deepEqual(saved.payload.startDashboardWorkspace, startDashboardWorkspace);
+    assert.deepEqual((await requestJson(route, {session: admin})).payload.startDashboardWorkspace, startDashboardWorkspace);
+  }
+  assert.deepEqual((await requestJson(route, {session: manager})).payload.startDashboardWorkspace, managerWorkspace);
+  const standard = {version: 1, fields: {"card:schedule": field, "control:vps": {hidden: true, color: "blue"}}};
+  assert.equal((await requestJson(route, {method: "PUT", session: admin, body: {startDashboardWorkspace: standard}})).response.status, 200);
+  const restored = await requestJson(route, {session: admin});
+  assert.deepEqual(restored.payload.startDashboardWorkspace, standard);
+  assert.equal(Object.hasOwn(restored.payload.startDashboardWorkspace.fields["card:schedule"], "color"), false);
+  const reset = {version: 1, fields: {}};
+  assert.equal((await requestJson(route, {method: "PUT", session: admin, body: {startDashboardWorkspace: reset}})).response.status, 200);
+  assert.deepEqual((await requestJson(route, {session: admin})).payload.startDashboardWorkspace, reset);
+  assert.deepEqual((await requestJson(route, {session: manager})).payload.startDashboardWorkspace, managerWorkspace);
 });
 
 test("Dashboard-Workspace sperrt Passwortpflicht, anonyme und deaktivierte Sitzungen", async () => {

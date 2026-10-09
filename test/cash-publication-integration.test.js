@@ -1512,3 +1512,31 @@ test('verified receipt summaries preserve every line filter, lazy details and ri
     coldQueries: cold[0].queries, warmQueries: warm[0].queries, coldChildReads: cold[0].childReads, warmChildReads: warm[0].childReads,
     fullTableCounts: 0, equalResults: true }));
 });
+
+test('ABC current-period workspace uses the real verified cash publication in two batches, without customer/seller disclosure', async t => {
+  const f = await fixture(t, { count: 201 }); await f.activate(); const runtime = f.history();
+  const input = { dateFrom: '2010-01-01', dateTo: '2010-12-31', locationIds: ['branch-a'], metric: 'netRevenue' };
+  const context = await runtime.run(f.get, w => w.abc.metadata());
+  assert.equal(context.available, true); assert.equal(context.sourceAt, TIME); assert.ok(!context.locations.some(l => l.id === 'online'));
+  const first = await runtime.run(f.get, w => w.abc.step(input)); assert.equal(first.analysis.processed, 200); assert.equal(first.snapshot, null);
+  const final = await runtime.run(f.get, w => w.abc.step(input, first.analysis.cursor));
+  assert.equal(final.analysis.complete, true); assert.equal(final.analysis.processed, 201);
+  assert.equal(final.snapshot.rows.length, 1); assert.equal(final.snapshot.rows[0].articleNumber, '00042');
+  assert.equal(final.snapshot.rows[0].quantity, '201.000000'); assert.equal(final.snapshot.rows[0].netRevenue, '2010.00');
+  assert.equal(final.snapshot.rows[0].class, 'A'); assert.equal(final.snapshot.rows[0].description, 'Synthetic article');
+  assert.ok(!Object.hasOwn(final.snapshot.rows[0], 'grossMargin')); assert.ok(!JSON.stringify(final.snapshot).includes('00031'));
+  assert.deepEqual(await runtime.run(f.get, w => w.abc.snapshot(final.exportToken)), final.snapshot);
+  await assert.rejects(runtime.run(f.get, w => w.abc.step(input, first.analysis.cursor)), code('BWL_ABC_ANALYSIS_EXPIRED'));
+  f.session.permissions = ['sales:analytics:access', 'sales:analytics:location:read', 'sales:history:read']; f.session.scopes = [{ locationId: 'branch-a', departmentId: null }];
+  assert.deepEqual((await runtime.run(f.get, w => w.abc.metadata())).locations.map(l => l.id), ['branch-a']);
+  await assert.rejects(runtime.run(f.get, w => w.abc.step({ ...input, locationIds: ['branch-b'] })), code('IMPORT_FORBIDDEN'));
+});
+test('ABC real unreconciled receipts stay visible but never acquire a ranked or fabricated revenue basis', async t => {
+  const f = await fixture(t, { unknown: true }); await f.activate(); const runtime = f.history();
+  const result = await runtime.run(f.get, w => w.abc.step({ dateFrom: '2010-01-01', dateTo: '2010-12-31', locationIds: ['branch-a'] }));
+  assert.equal(result.analysis.complete, true); assert.equal(result.snapshot.summary.ranked, 0);
+  assert.equal(result.snapshot.rows[0].rankingStatus, 'review'); assert.equal(result.snapshot.rows[0].description, '');
+  assert.equal(result.snapshot.rows[0].netRevenue, null); assert.equal(result.snapshot.rows[0].quantity, null);
+  assert.equal(result.snapshot.rows[0].reviewPositions, 1); assert.equal(result.snapshot.buckets[0].id, 'review');
+  assert.equal(result.snapshot.buckets[0].netRevenue, null); assert.equal(result.snapshot.summary.positiveBasis, '0.00');
+});

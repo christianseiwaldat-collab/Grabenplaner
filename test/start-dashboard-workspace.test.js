@@ -79,6 +79,39 @@ test('the two control cards can independently be hidden while legacy workspace v
  assert.deepEqual(model.validate(value('Personal')),value('Personal'));
  for(const invalid of [{version:1,fields:{'card:schedule':{hidden:true}}},{version:1,fields:{'control:center':{hidden:1}}},{version:1,fields:{'control:vps':{hidden:'true'}}}])assert.throws(()=>model.validate(invalid));
 });
+
+test('field colors accept only the shared palette and defaults need no migration',()=>{
+ assert.deepEqual(model.COLORS,['sage','blue','sand','rose','lavender','peach']);
+ assert.equal(Object.isFrozen(model.COLORS),true);
+ for(const color of model.COLORS) {
+  const preferences={version:1,fields:{'group:branch':{color,title:'Filiale',geometry:{x:0,y:50,width:300,height:500}},'control:vps':{color,hidden:true}}};
+  assert.deepEqual(model.validate(preferences),preferences);
+ }
+ for(const color of ['',null,undefined,0,true,'standard','SAGE','#fff','url(https://example.com/image)','sage blue',{toString:()=> 'sage'}]) {
+  assert.throws(()=>model.validate({version:1,fields:{'card:schedule':{color}}}),TypeError);
+ }
+ const legacy=value('Personal');assert.deepEqual(model.validate(legacy),legacy);
+ assert.equal(Object.hasOwn(model.validate(legacy).fields['group:personnel'],'color'),false);
+ assert.deepEqual(model.validate({version:1,fields:{'card:schedule':{}}}),model.empty());
+});
+
+test('color changes and reset preserve other saved field settings in the account cache',async()=>{
+ const cache=new Map();let actor='local:A';
+ const store=createStore({canUse:()=>true,key:()=>actor,localOnly:()=>true,
+  storage:{getItem:k=>cache.get(k),setItem:(k,v)=>cache.set(k,v)},api:()=>assert.fail('local preferences must remain local'),error:()=>{}});
+ await store.activate();
+ await store.change({version:1,fields:{'group:personnel':{title:'Personal',color:'sage'},'card:sales':{color:'blue'}}});
+ actor='local:B';await store.activate();assert.deepEqual(store.value,model.empty());
+ await store.change({version:1,fields:{'group:personnel':{color:'rose'}}});
+ actor='local:A';await store.activate();
+ assert.equal(store.value.fields['group:personnel'].color,'sage');
+ const defaults=store.value;delete defaults.fields['group:personnel'].color;await store.change(defaults);
+ assert.deepEqual(store.value.fields['group:personnel'],{title:'Personal'});
+ assert.equal(store.value.fields['card:sales'].color,'blue');
+ store.invalidate();await store.activate();assert.deepEqual(store.value,defaults);
+ await store.change(model.empty());store.invalidate();await store.activate();assert.deepEqual(store.value,model.empty());
+ actor='local:B';await store.activate();assert.equal(store.value.fields['group:personnel'].color,'rose');
+});
 test('initial slow GET gates changes so another saved field cannot be overwritten',async()=>{
  const get=deferred(),requests=[],errors=[];
  const store=createStore({canUse:()=>true,key:()=> 'employee:A',api:(url,options={})=>{requests.push(options);return options.method==='PUT'?Promise.resolve({}):get.promise;},error:e=>errors.push(e)});

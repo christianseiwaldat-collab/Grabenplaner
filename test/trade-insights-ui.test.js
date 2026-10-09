@@ -183,3 +183,23 @@ test('specialized Trade results build their table only once and keep sortable he
   f.workspace.destroy();
  }
 });
+
+test('saved stock results reclaim filter space while Logistics keeps its search form visible',async()=>{
+ for(const area of ['stock','logistics']){
+  const f=fixture(),kind=area==='stock'?'repairs':'purchasing';
+  f.workspace.setArea(area);
+  const opening=f.workspace.activate(kind);f.requests[0].resolve(context);await opening;
+  f.node('jobs').emit('click',{target:{closest:selector=>selector==='[data-job-open]'?{dataset:{jobOpen:'saved'}}:null}});await tick();
+  f.requests.at(-1).resolve({id:'saved',kind,title:'Gespeichert',created:'2026-10-08T10:00:00Z',completedAt:'2026-10-08T10:00:01Z',processed:1,query:{query:'093510',locationId:'93'},result:{rows:[],sourceDate:'2026-10-08'}});await tick();
+  assert.equal(f.node('filters').hidden,area==='stock');
+  if(area==='stock'){
+   assert.equal(f.node('movement-filter-toggle').attributes['aria-expanded'],'false');
+   f.node('movement-filter-toggle').emit('click');
+   assert.equal(f.node('filters').hidden,false);
+   assert.equal(f.node('movement-filter-toggle').attributes['aria-expanded'],'true');
+   assert.equal(f.node('filters').elements.query.value,'093510');
+   assert.equal(f.node('filters').elements.locationId.value,'93');
+  }
+  f.workspace.destroy();
+ }
+});

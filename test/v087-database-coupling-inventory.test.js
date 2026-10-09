@@ -332,7 +332,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // counts as a direct signal; its exact classification grants no raw SQL access.
   // The branch-window route likewise supplies only HTTP cache metadata;
   // its named classification grants no driver, statement or raw SQL access.
-  assert.equal(report.summary.productionDirectFiles, 96);
+  // The ABC and simulation routes likewise supply private HTTP cache metadata;
+  // their exact classifications grant no raw SQL or driver capabilities.
+  assert.equal(report.summary.productionDirectFiles, 99);
   // Five archive/child operating adapters and one read-only recovery-key
   // verifier and isolated full-source measurement extend the existing indirect
   // inventory; no raw business access or productive import activation.
@@ -455,7 +457,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1481);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1485);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -472,7 +474,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1481,
+    requiredReceiptCount: 1485,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {

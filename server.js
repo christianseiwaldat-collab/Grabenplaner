@@ -950,6 +950,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", description: "TradeFoto-Statistikberichte prüfen, einer freigegebenen Filiale zuordnen und nach ausdrücklicher Bestätigung unveränderlich übernehmen.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   ...SALES_HISTORY_PERMISSION_CATALOG,
   ...require('./lib/tradefoto-bestell/access').BESTELL_PERMISSION_CATALOG,
+  ...require('./lib/sales-bwl-actions-model').PERMISSION_CATALOG,
   ...DATA_IMPORT_PERMISSION_CATALOG,
   { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", description: "Öffnet den geschützten CRM-Arbeitsbereich und gewährt allein noch keinen Zugriff auf Kundendaten.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
   { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", description: "Sucht und liest Kundendaten ausschließlich im CRM-Arbeitsbereich.", group: "Verkaufsverwaltung", warningLevel: "critical", eligibleRoles: ["manager", "admin", "developer"] },
@@ -1556,6 +1557,7 @@ const portalDashboardPermissionDetails = Object.freeze([
   { id: SALES_ANALYTICS_PERMISSIONS.IMPORT_MANAGE, label: "PDF-Statistikberichte importieren", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "organizational" },
   ...SALES_HISTORY_PERMISSION_CATALOG,
   ...require('./lib/tradefoto-bestell/access').BESTELL_PERMISSION_CATALOG,
+  ...require('./lib/sales-bwl-actions-model').PERMISSION_CATALOG,
   ...DATA_IMPORT_PERMISSION_CATALOG,
   { id: CRM_PERMISSIONS.ACCESS, label: "CRM öffnen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
   { id: CRM_PERMISSIONS.CUSTOMERS_READ, label: "Kundenkartei lesen", group: "Verkaufsverwaltung", warningLevel: "critical", scopeBehavior: "global" },
@@ -26369,7 +26371,98 @@ require('./lib/sales-article-sales-routes').registerSalesArticleSalesRoutes(app,
   runtime:managedSalesHistoryRuntime, requireSession:requireEmployeePortalSession,assertCsrf:assertPortalCsrf,
   refreshSession:request=>loadPortalSessionFromRequest(request,{touch:false}),
 });
+const salesBwlPreferencesStore = require('./lib/sales-bwl-preferences-store').createSalesBwlPreferencesStore({
+  access:persistenceProvider, vault:integrationSecretVault, scopeId:'grabenplaner-main',
+});
+require('./lib/sales-bwl-abc-routes').registerSalesBwlAbcRoutes(app, {
+  pdf:require('./lib/sales-bwl-abc-pdf'),
+  preferences:salesBwlPreferencesStore,
+  sessionFor:request=>requireEmployeePortalSession(request,'sales:history:read'),
+  assertFresh:async(request,original,executor)=>{
+    const fresh=await loadPortalSessionFromRequest(request, {touch:false,
+      ...(executor ? {repository:require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor)}
+        : postgresqlActive ? {repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess} : {}),
+    });
+    const identity=session=>require('./lib/sales-bwl-abc-model').authority(session).identity;
+    if (!fresh || identity(fresh)!==identity(original)) require('./lib/data-import-contract').fail('BWL_ABC_FORBIDDEN',403);
+    return fresh;
+  },
+  assertCsrf:request=>assertPortalCsrf(request),
+  privateHeaders:response=>response.set({'Cache-Control':'private, no-store',Pragma:'no-cache','X-Content-Type-Options':'nosniff'}),
+  loadAbc:(fresh,operation,input)=>managedSalesHistoryRuntime.run(fresh,workspace=>{
+    if (!workspace?.abc) {
+      if (operation==='context') return fresh().then(session=>require('./lib/sales-bwl-abc-model').unavailableContext(session,viennaTodayIso()));
+      require('./lib/data-import-contract').fail('BWL_ABC_UNAVAILABLE',503);
+    }
+    if (operation==='context') return workspace.abc.metadata();
+    if (operation==='step') return workspace.abc.step(input.query,input.cursor||null);
+    if (operation==='snapshot') return workspace.abc.snapshot(input.exportToken);
+    if (operation==='cancel') return workspace.abc.cancel(input.cursor);
+    require('./lib/data-import-contract').fail('BWL_ABC_INVALID',422);
+  }),
+});
 const tradeInsightRuntime = require('./lib/persistence/repositories/trade-insights').createTradeInsightRuntime({ access: persistenceProvider, vault: integrationSecretVault, today: () => viennaTodayIso() });
+const salesBwlActionsLocations = async (fresh,executor) => {
+  const session=await fresh(executor),model=require('./lib/sales-bwl-actions-model');
+  const auth=model.authority(session),access=executor||persistenceProvider;
+  const locations=await access.queryAll(require('./lib/persistence/statements/import-master-data').IMPORT_MASTER_STATEMENTS.locationTargets,{after:'',query:'',limit:1000});
+  return locations.filter(row=>row.active&&(auth.company||auth.locationIds.includes(row.id))).map(row=>({id:row.id,label:row.label}));
+};
+const salesBwlActionsAssignees = require('./lib/sales-bwl-actions-assignees').createSalesBwlActionsAssignees({
+  access:persistenceProvider,
+  repositoryFor:executor=>createOrganizationPersonnelRepository(executor),
+  readFirstName:async(repository,row)=>(await personnelSensitiveProfile(String(row.personnel_number),repository)).identity.firstName,
+});
+const salesBwlActions = require('./lib/sales-bwl-actions-store').createSalesBwlActionsStore({
+  access:persistenceProvider,vault:integrationSecretVault,scopeId:'grabenplaner-main',
+  loadLocations:salesBwlActionsLocations,loadAssignees:salesBwlActionsAssignees,
+  loadSourceHint:async(fresh,locationId,sourceHint,executor)=>sourceHint.kind==='inventory'
+    ? tradeInsightRuntime.run(fresh,'bwl-actions-source',{locationId,sourceHint},{executor})
+    : managedSalesHistoryRuntime.run(fresh,workspace=>{
+      if(!workspace?.abc)require('./lib/data-import-contract').fail('BWL_ACTIONS_SOURCE_UNAVAILABLE',503);
+      return workspace.abc.sourceHint(sourceHint.exportToken,sourceHint.rowId,locationId,{executor});
+    },{executor}),
+});
+require('./lib/sales-bwl-actions-routes').registerSalesBwlActionsRoutes(app,{
+  actions:salesBwlActions,loadLocations:salesBwlActionsLocations,loadAssignees:salesBwlActionsAssignees,
+  preferences:require('./lib/sales-bwl-actions-preferences-store').createSalesBwlActionsPreferencesStore({access:persistenceProvider,vault:integrationSecretVault,scopeId:'grabenplaner-main'}),
+  pdf:require('./lib/sales-bwl-actions-pdf'),
+  sessionFor:request=>requireEmployeePortalSession(request,'sales:history:read'),
+  assertFresh:async(request,original,executor)=>{
+    const fresh=await loadPortalSessionFromRequest(request,{touch:false,
+      ...(executor?{repository:require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor)}
+        :postgresqlActive?{repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess}:{}),
+    });
+    const authority=session=>require('./lib/sales-bwl-actions-model').authority(session).identity;
+    if(!fresh||authority(fresh)!==authority(original))require('./lib/data-import-contract').fail('BWL_ACTIONS_FORBIDDEN',403);
+    return fresh;
+  },
+  assertCsrf:request=>assertPortalCsrf(request),
+  privateHeaders:response=>response.set({'Cache-Control':'private, no-store',Pragma:'no-cache','X-Content-Type-Options':'nosniff'}),
+});
+const salesBwlSimulationVariants = require('./lib/sales-bwl-simulation-variants-store').createSalesBwlSimulationVariantsStore({
+  access:persistenceProvider, vault:integrationSecretVault, scopeId:'grabenplaner-main',
+});
+require('./lib/sales-bwl-simulation-routes').registerSalesBwlSimulationRoutes(app, {
+  pdf:require('./lib/sales-bwl-simulation-pdf'),
+  variants:salesBwlSimulationVariants,
+  preferences:require('./lib/sales-bwl-simulation-preferences-store').createSalesBwlSimulationPreferencesStore({
+    access:persistenceProvider, vault:integrationSecretVault, scopeId:'grabenplaner-main',
+  }),
+  sessionFor:request=>requireEmployeePortalSession(request,'sales:history:read'),
+  assertFresh:async(request,original,executor)=>{
+    const fresh=await loadPortalSessionFromRequest(request,{touch:false,
+      ...(executor ? {repository:require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor)}
+        : postgresqlActive ? {repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess} : {}),
+    });
+    const authority=session=>require('./lib/sales-bwl-simulation-model').authority(session).identity;
+    if (!fresh || authority(fresh)!==authority(original)) require('./lib/data-import-contract').fail('BWL_SIMULATION_FORBIDDEN',403);
+    return fresh;
+  },
+  assertCsrf:request=>assertPortalCsrf(request),
+  privateHeaders:response=>response.set({'Cache-Control':'private, no-store',Pragma:'no-cache','X-Content-Type-Options':'nosniff'}),
+  loadSimulation:(fresh,operation,input)=>tradeInsightRuntime.run(fresh,'bwl-simulation-'+operation,input),
+});
 const tradeInsightJobs = require('./lib/persistence/repositories/trade-insight-jobs').createTradeInsightJobs({
   access: persistenceProvider, vault: integrationSecretVault, runtime: tradeInsightRuntime, resolvePrincipal: resolveSalesReportPrincipal,
   ...(postgresqlActive ? { dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
@@ -38776,6 +38869,8 @@ const salesArticleToolAuth = {
 require('./lib/sales-article-local-notes-routes').registerSalesArticleLocalNotesRoutes(app,{...salesArticleToolAuth,notes:salesArticleLocalNotesRepository});
 require('./lib/sales-recent-articles').register(app,{...salesArticleToolAuth,preferences:uiPreferencesRepository,
   vault:integrationSecretVault,projectionFor:salesArticleCatalogProjectionForSession});
+require('./lib/sales-article-report-routes').register(app,{...salesArticleToolAuth,preferences:uiPreferencesRepository,
+  vault:integrationSecretVault,loadReport:(fresh,kind,input)=>tradeInsightRuntime.run(fresh,'article-report-'+kind,input)});
 require('./lib/sales-article-tools-routes').registerSalesArticleToolsRoutes(app,{
   ...salesArticleToolAuth, preferences:uiPreferencesRepository,notes:salesArticleLocalNotesRepository,images:salesArticleImagesRepository,
   refreshSession:(request,original)=>isLocalSystemSession(original)?Promise.resolve(original):loadPortalSessionFromRequest(request,{touch:false}),

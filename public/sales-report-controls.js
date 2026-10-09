@@ -22,7 +22,42 @@
     return from > today ? null : { from, to: end > today ? today : end, partial: end > today };
   }
   const node = (tag, text, className) => { const n = document.createElement(tag); if (text) n.textContent = text; if (className) n.className = className; return n; };
+  const workspaces = new WeakSet();
+  function compactWorkspace(form) {
+    if (!form || workspaces.has(form)) return;
+    workspaces.add(form);
+    const scope = form.querySelector('.sales-report-scope-disclosure');
+    const scopeNote = scope?.querySelector('summary small');
+    const scopeDefault = scopeNote?.textContent || '';
+    const update = () => {
+      const summaries = [];
+      for (const detail of form.querySelectorAll('.sales-report-filter-disclosure')) {
+        const field = detail.querySelector('fieldset'), host = field?.querySelector('div[id]');
+        const count = host?.lastElementChild?.tagName === 'SMALL' ? host.lastElementChild.textContent : '';
+        const sellerExtra = field?.querySelector('#salesReportJobSellerExtra');
+        const number = sellerExtra ? new Set([...host.querySelectorAll('input:checked')].map(input => input.value)
+          .concat(sellerExtra.value.split(',').map(value => value.trim()).filter(Boolean))).size : Number(count.match(/^\d+/)?.[0] || 0);
+        const title = field?.querySelector('legend')?.textContent || '';
+        let badge = detail.querySelector('.sales-report-filter-disclosure-count');
+        if (!badge) { badge = node('span', '', 'sales-report-filter-disclosure-count'); detail.querySelector('summary').insertBefore(badge, detail.querySelector('summary b')); }
+        const text = number ? `${number} ausgewählt` : 'Alle';
+        if (badge.textContent !== text) badge.textContent = text;
+        if (number && !field.hidden) summaries.push(`${title}: ${number}`);
+      }
+      if (scopeNote) { const text = summaries.length ? summaries.join(' · ') : scopeDefault; if (scopeNote.textContent !== text) scopeNote.textContent = text; }
+      const comparisonMode = form.querySelector('#salesReportComparisonMode');
+      const comparisonNote = comparisonMode?.closest('details')?.querySelector('summary small');
+      if (comparisonNote && comparisonMode.textContent && comparisonNote.textContent !== comparisonMode.textContent) comparisonNote.textContent = comparisonMode.textContent;
+    };
+    // Collapsed criteria retain their values. Native validation reveals the offending field.
+    form.addEventListener('invalid', event => { let parent = event.target.parentElement; while (parent && parent !== form) { if (parent.tagName === 'DETAILS') parent.open = true; parent = parent.parentElement; } }, true);
+    form.addEventListener('input', update);
+    form.addEventListener('change', update);
+    new MutationObserver(update).observe(form, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['hidden'] });
+    update();
+  }
   function periodPicker(host, { from, to, today, onChange }) {
+    compactWorkspace(host.closest('form'));
     const legend = host.closest('fieldset').querySelector('legend').textContent;
     const mode = node('select'), year = node('input'), period = node('select'), note = node('small');
     for (const [id, label] of [['custom', 'Exaktes Datum'], ['month', 'Monat'], ['quarter', 'Quartal'], ['year', 'Jahr']]) mode.append(new Option(label, id));
