@@ -33,6 +33,11 @@
     <link rel="stylesheet" href="/sales-article-search-window.css" />
     <link rel="stylesheet" href="/start-dashboard-workspace.css" />
     <link rel="stylesheet" href="/rights-management-workspace.css" />
+    <link rel="stylesheet" href="/sales-analytics-workspace.css" />
+    <link rel="stylesheet" href="/sales-article-report.css" />
+    <link rel="stylesheet" href="/sales-bwl.css" />
+    <link rel="stylesheet" href="/gp-print-window.css" />
+    <link rel="stylesheet" href="/gp-definitions.css" />
   </head>
   <body>
     <div class="deployment-banner hidden" id="deploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
@@ -57,13 +62,14 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.78 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.79 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <div class="sidebar-session-copy">
             <strong id="sidebarSessionRole"></strong>
+            <button class="sidebar-definitions-button" id="gpDefinitionsNavButton" type="button" aria-label="GP-Definitionen öffnen" aria-controls="gpDefinitionsView" hidden>Developer</button>
             <span id="sidebarSessionIdentity"></span>
             <span id="sidebarSessionPosition"></span>
             <button class="sidebar-personal-actions-button" id="personalActionsAdminButton" type="button" aria-haspopup="dialog" aria-controls="personalActionsAdminDialog" aria-expanded="false">Meine Aktionen</button>
@@ -210,6 +216,8 @@
                 <span class="nav-symbol article-catalog-nav-symbol" aria-hidden="true">Art</span><span>Artikelstamm</span>
               </button>
               <button class="nav-item nav-module-route hidden" type="button" data-view="priceLabels" id="salesPriceLabelsNavButton"><span class="nav-symbol" aria-hidden="true">▱</span><span>Preisschilder</span></button>
+              <button class="nav-item nav-module-route hidden" type="button" data-view="articleReport" id="salesArticleReportNavButton"><span class="nav-symbol" aria-hidden="true">▥</span><span>Artikel-Auswertung</span></button>
+              <button class="nav-item nav-module-route hidden" type="button" data-view="salesBwl" id="salesBwlNavButton"><span class="nav-symbol" aria-hidden="true">▤</span><span>BWL-Werkzeuge</span></button>
               <button class="nav-item nav-module-route hidden" type="button" data-view="tradeInsights" id="tradeInsightsNavButton"><span class="nav-symbol" aria-hidden="true">▦</span><span>Einkauf &amp; Bestand</span></button>
               <button class="nav-item nav-module-route hidden" data-view="crm" id="crmNavButton">
                 <span class="nav-symbol crm-nav-symbol" aria-hidden="true">CRM</span><span>CRM</span>
@@ -256,6 +264,13 @@
           <span><strong id="serverAlertTitle">Serverzustand prüfen</strong><small id="serverAlertMessage">Eine technische Warnung benötigt Aufmerksamkeit.</small></span>
           <em>Details öffnen</em>
         </button>
+        <section id="gpDefinitionsView" class="view gp-definitions-view" aria-labelledby="gpDefinitionsTitle">
+          <header class="topbar">
+            <div><span class="eyebrow">Developer · Standards</span><h1 id="gpDefinitionsTitle">GP-Definitionen</h1><p>Die gemeinsamen Regeln für Fenster, Druck, Tabellen, gespeicherte Ansichten und Gestaltung.</p></div>
+            <span class="gp-definitions-access-badge">Nur Developer</span>
+          </header>
+          <div id="gpDefinitionsWorkspace" hidden></div>
+        </section>
         <section id="startDashboardView" class="view start-dashboard-view active" aria-labelledby="startDashboardTitle">
           <header class="topbar start-dashboard-topbar">
             <div><span class="eyebrow">Übersicht &amp; Schnellzugriff</span><h1 id="startDashboardTitle">Startdashboard</h1><p class="subtitle">Filial-, Personal- und Verkaufsinformationen im persönlichen Arbeitsüberblick.</p></div>
@@ -1597,6 +1612,8 @@
               </button>
               <button class="personnel-dashboard-card hidden" id="receiptSearchDashboardCard" type="button" data-sales-dashboard-view="receiptSearch"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▤</span><span class="personnel-dashboard-card-copy"><small>Belege &amp; Kassenbuchungen</small><strong>Kassenberichte &amp; Belegsuche</strong><span>Belege suchen, Spalten anpassen und Beleginformationen als PDF speichern.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
               <button class="personnel-dashboard-card hidden" id="salesPriceLabelsDashboardCard" type="button" data-sales-dashboard-view="priceLabels"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▱</span><span class="personnel-dashboard-card-copy"><small>Gestaltung &amp; Druck</small><strong>Preisschilder</strong><span>Artikelpreise übernehmen, Schilder gestalten und druckfertige PDFs erstellen.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
+              <button class="personnel-dashboard-card hidden" id="salesArticleReportDashboardCard" type="button" data-sales-dashboard-view="articleReport"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▥</span><span class="personnel-dashboard-card-copy"><small>Sortiment &amp; Filialbestand</small><strong>Artikel-Auswertung</strong><span>Sortimente und Filialen kombinieren, Bestände vergleichen und als PDF exportieren.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
+              <button class="personnel-dashboard-card hidden" id="salesBwlDashboardCard" type="button" data-sales-dashboard-view="salesBwl"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▤</span><span class="personnel-dashboard-card-copy"><small>Bewerten &amp; Planen</small><strong>BWL-Werkzeuge</strong><span>ABC-Analyse, Abverkaufsvarianten und Maßnahmen für den Filialbestand.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
               <button class="personnel-dashboard-card hidden" id="tradeInsightsDashboardCard" type="button" data-sales-dashboard-view="tradeInsights"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▦</span><span class="personnel-dashboard-card-copy"><small>Einkauf &amp; Warenbewegungen</small><strong>Einkauf &amp; Bestand</strong><span>Lieferstände, Filialversorgung, Bestände und Gerätehistorien auswerten.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
               <button class="personnel-dashboard-card hidden" id="crmDashboardCard" type="button" data-sales-dashboard-view="crm">
                 <span class="personnel-dashboard-card-symbol" aria-hidden="true">CRM</span>
@@ -1627,8 +1644,18 @@
           </section>
         </section>
         <section id="tradeInsightsView" class="view" aria-labelledby="tradeInsightsTitle">
-          <header class="topbar"><div><span class="eyebrow">Verkaufsverwaltung</span><h1 id="tradeInsightsTitle">Einkauf &amp; Bestand</h1><p class="subtitle">Reparaturen, Bestände, Umlagerungen und Historien aus den übernommenen Quelldaten.</p></div></header>
+          <header class="topbar"><div><span class="eyebrow">Verkauf · Warenwirtschaft</span><h1 id="tradeInsightsTitle">Einkauf &amp; Bestand</h1><p class="subtitle">Bestände, Warenfluss und Vorgänge gezielt auswerten.</p></div></header>
           <section class="card trade-insights-workspace" id="tradeInsightsWorkspace" aria-label="Einkauf und Bestand auswerten" tabindex="-1"></section>
+        </section>
+
+        <section id="salesArticleReportView" class="view sales-article-report-view" aria-labelledby="salesArticleReportTitle">
+          <header class="topbar"><div><span class="eyebrow">Verkauf · Sortiment &amp; Bestand</span><h1 id="salesArticleReportTitle">Artikel-Auswertung</h1><p class="subtitle">Sortimente mit Filialen verknüpfen, Bestände und Preise vergleichen und Listen drucken.</p></div></header>
+          <div id="salesArticleReportWorkspace"></div>
+        </section>
+
+        <section id="salesBwlView" class="view sales-bwl-view" aria-labelledby="salesBwlTitle">
+          <header class="topbar"><div><span class="eyebrow">Verkauf · Betriebswirtschaft</span><h1 id="salesBwlTitle">BWL-Werkzeuge</h1><p class="subtitle">Wertbeiträge bewerten, Abverkauf planen und Maßnahmen verfolgen.</p></div></header>
+          <div id="salesBwlWorkspace"></div>
         </section>
 
         <section id="receiptSearchView" class="view" aria-labelledby="receiptSearchTitle">
@@ -1802,22 +1829,33 @@
           </div>
 
           <section class="sales-analytics-panel sales-analytics-intro-card" id="salesAnalyticsCreatePanel" role="tabpanel" aria-labelledby="salesAnalyticsCreateTab" tabindex="0">
-            <div class="sales-analytics-section-heading"><div><h2>Bericht erstellen</h2><p>Verkäufe nach WGR, Sortimentsgruppe, Hersteller, Filiale und MA als PDF auswerten.</p></div></div>
+            <div class="sales-analytics-section-heading"><div><h2>Bericht konfigurieren</h2><p>Zeitraum, Filialen und Kennzahlen wählen. Weitere Eingrenzungen bei Bedarf öffnen.</p></div><span class="sales-analytics-workspace-label">PDF-Bericht</span></div>
             <div id="salesReportCreateEditor"></div>
             <form class="sales-analytics-request-form" id="salesAnalyticsRequestForm" aria-describedby="salesAnalyticsRequestHint">
-              <label class="sales-report-title-field" for="salesAnalyticsRequestQuery">Berichtstitel<input id="salesAnalyticsRequestQuery" type="text" maxlength="120" autocomplete="off" placeholder="z. B. (Monat) (Jahr) Filiale18: Rohertrag nach MA" /><small>(Monat) und (Jahr) werden beim Erstellen durch den Beginn des gewählten Zeitraums ersetzt.</small></label>
+              <label class="sales-report-title-field" for="salesAnalyticsRequestQuery">Berichtstitel<input id="salesAnalyticsRequestQuery" type="text" maxlength="120" autocomplete="off" placeholder="z. B. (Monat) (Jahr) · Umsatz und Rohertrag" /><small>Optional · (Monat) und (Jahr) beziehen sich auf den Beginn des Zeitraums.</small></label>
               <fieldset class="sales-report-period"><legend>Auswertungszeitraum</legend><div id="salesReportJobPeriod" class="sales-report-period-presets"></div><label for="salesReportJobFrom">Von<input id="salesReportJobFrom" type="date" required /></label><label for="salesReportJobTo">Bis<input id="salesReportJobTo" type="date" required /></label></fieldset>
-              <fieldset class="sales-report-period" data-report-only><legend>Vergleichszeitraum</legend><div id="salesReportJobComparisonPeriod" class="sales-report-period-presets"></div><label for="salesReportJobComparisonFrom">Von<input id="salesReportJobComparisonFrom" type="date" required /></label><label for="salesReportJobComparisonTo">Bis<input id="salesReportJobComparisonTo" type="date" required /></label><button id="salesReportJobPreviousYear" type="button" class="text-button">Vorjahr übernehmen</button><small id="salesReportComparisonMode">Automatisch ein Jahr zuvor</small></fieldset>
               <fieldset class="sales-report-selection"><legend>Filialen</legend><div id="salesReportJobLocations"></div><small id="salesReportOnlineHint" hidden>Online umfasst 00, 70 und 90. 0 / 00 ist gleichzeitig das Zentrallager. Verkäufe werden bei gemeinsamer Auswahl nur einmal gezählt.</small></fieldset>
-              <fieldset class="sales-report-selection" id="salesReportSellerField"><legend>MA (Positionsverkäufer)</legend><div id="salesReportJobSellers"></div><label>Weitere Personalnummern<input id="salesReportJobSellerExtra" type="text" maxlength="400" placeholder="z. B. 426, 123" /></label><small>Ohne Auswahl: alle MA im gewählten Filialumfang.</small></fieldset>
-              <fieldset class="sales-report-selection sales-report-transfer-field"><legend>Warengruppen (WGR)</legend><div id="salesReportJobMerchandiseGroups"></div><small>Höchstens 10 WGR. Die zugehörigen Sortimentsgruppen werden gemeinsam ausgewertet.</small></fieldset>
-              <fieldset class="sales-report-selection sales-report-transfer-field"><legend>Sortimentsgruppen</legend><div id="salesReportJobProductGroups"></div><small>Höchstens 10 Sortimentsgruppen. WGR- und Sortimentsauswahl gelten gemeinsam; ohne Auswahl keine Eingrenzung.</small></fieldset>
-              <fieldset class="sales-report-selection sales-report-transfer-field"><legend>Hersteller / Marke</legend><div id="salesReportJobManufacturers"></div><small>Höchstens 10 Hersteller; ohne Auswahl keine Eingrenzung. Maßgeblich ist die Marke am Verkaufsdatum.</small></fieldset>
-              <fieldset class="sales-report-selection sales-report-metrics" data-report-only><legend>Kennzahlen · Mehrfachauswahl</legend><div id="salesReportJobMetrics"></div><p id="salesReportMarginHint" class="sales-report-quality-hint" hidden></p></fieldset>
-              <fieldset class="sales-report-grouping" data-report-only><legend>Darstellung</legend><label>Aufschlüsselung<select id="salesReportJobGroupPrimary"></select></label><label>Darunter<select id="salesReportJobGroupSecondary"></select></label><label>Zusätzlich<select id="salesReportJobGroupThird"></select></label><label>PDF-Format<select id="salesReportJobOrientation"><option value="portrait">Hochformat</option><option value="landscape">Querformat</option></select></label><label>Diagramm<select id="salesReportJobChartType"><option value="auto">Automatisch passend</option><option value="bars">Balken · mit Vergleich</option><option value="shares">Anteile · Ringdiagramm</option><option value="none">Ohne Diagramm</option></select></label><label>Diagramm für<select id="salesReportJobChartMetric"></select></label><div class="sales-report-checks"><label><input type="checkbox" id="salesReportJobAbsolute" checked /> Veränderung absolut</label><label><input type="checkbox" id="salesReportJobPercent" checked /> Veränderung in Prozent</label></div><small>Bei ungeeigneten Anteilen, z. B. negativen Werten, verwendet der Bericht ein Balkendiagramm. Alle Gruppen stehen zusätzlich in den Tabellen.</small></fieldset>
+              <fieldset class="sales-report-selection sales-report-metrics" data-report-only><legend>Kennzahlen</legend><div id="salesReportJobMetrics"></div><p id="salesReportMarginHint" class="sales-report-quality-hint" hidden></p></fieldset>
+              <details class="sales-report-disclosure" data-report-only>
+                <summary><span><strong>Vergleichszeitraum</strong><small>Vorjahr automatisch · individuell anpassen</small></span><b aria-hidden="true"></b></summary>
+                <div class="sales-report-disclosure-content"><fieldset class="sales-report-period" data-report-only><legend>Vergleichszeitraum</legend><div id="salesReportJobComparisonPeriod" class="sales-report-period-presets"></div><label for="salesReportJobComparisonFrom">Von<input id="salesReportJobComparisonFrom" type="date" required /></label><label for="salesReportJobComparisonTo">Bis<input id="salesReportJobComparisonTo" type="date" required /></label><button id="salesReportJobPreviousYear" type="button" class="text-button">Vorjahr übernehmen</button><small id="salesReportComparisonMode">Automatisch ein Jahr zuvor</small></fieldset></div>
+              </details>
+              <details class="sales-report-disclosure sales-report-scope-disclosure">
+                <summary><span><strong>Berichtsumfang eingrenzen</strong><small>WGR, Sortiment, Marke und MA · ohne Auswahl keine Eingrenzung</small></span><b aria-hidden="true"></b></summary>
+                <div class="sales-report-disclosure-content sales-report-scope-grid">
+                  <details class="sales-report-filter-disclosure"><summary>Warengruppen (WGR)<b aria-hidden="true"></b></summary><fieldset class="sales-report-selection sales-report-transfer-field"><legend>Warengruppen (WGR)</legend><div id="salesReportJobMerchandiseGroups"></div><small>Höchstens 10 WGR. Die zugehörigen Sortimentsgruppen werden gemeinsam ausgewertet.</small></fieldset></details>
+                  <details class="sales-report-filter-disclosure"><summary>Sortimentsgruppen<b aria-hidden="true"></b></summary><fieldset class="sales-report-selection sales-report-transfer-field"><legend>Sortimentsgruppen</legend><div id="salesReportJobProductGroups"></div><small>Höchstens 10 Sortimentsgruppen. WGR- und Sortimentsauswahl gelten gemeinsam.</small></fieldset></details>
+                  <details class="sales-report-filter-disclosure"><summary>Hersteller / Marke<b aria-hidden="true"></b></summary><fieldset class="sales-report-selection sales-report-transfer-field"><legend>Hersteller / Marke</legend><div id="salesReportJobManufacturers"></div><small>Höchstens 10 Hersteller. Maßgeblich ist die Marke am Verkaufsdatum.</small></fieldset></details>
+                  <details class="sales-report-filter-disclosure"><summary>MA (Positionsverkäufer)<b aria-hidden="true"></b></summary><fieldset class="sales-report-selection" id="salesReportSellerField"><legend>MA (Positionsverkäufer)</legend><div id="salesReportJobSellers"></div><label>Weitere Personalnummern<input id="salesReportJobSellerExtra" type="text" maxlength="400" placeholder="z. B. 426, 123" /></label><small>Ohne Auswahl: alle MA im gewählten Filialumfang.</small></fieldset></details>
+                </div>
+              </details>
+              <details class="sales-report-disclosure" data-report-only>
+                <summary><span><strong>Darstellung &amp; PDF</strong><small>Aufschlüsselung, Diagramm und Seitenformat</small></span><b aria-hidden="true"></b></summary>
+                <div class="sales-report-disclosure-content"><fieldset class="sales-report-grouping" data-report-only><legend>Darstellung</legend><label>Aufschlüsselung<select id="salesReportJobGroupPrimary"></select></label><label>Darunter<select id="salesReportJobGroupSecondary"></select></label><label>Zusätzlich<select id="salesReportJobGroupThird"></select></label><label>PDF-Format<select id="salesReportJobOrientation"><option value="portrait">Hochformat</option><option value="landscape">Querformat</option></select></label><label>Diagramm<select id="salesReportJobChartType"><option value="auto">Automatisch passend</option><option value="bars">Balken · mit Vergleich</option><option value="shares">Anteile · Ringdiagramm</option><option value="none">Ohne Diagramm</option></select></label><label>Diagramm für<select id="salesReportJobChartMetric"></select></label><div class="sales-report-checks"><label><input type="checkbox" id="salesReportJobAbsolute" checked /> Veränderung absolut</label><label><input type="checkbox" id="salesReportJobPercent" checked /> Veränderung in Prozent</label></div><small>Alle Gruppen stehen zusätzlich in den Tabellen. Bei ungeeigneten Anteilen wird ein Balkendiagramm verwendet.</small></fieldset></div>
+              </details>
               <fieldset class="sales-report-grouping sales-graphic-options" data-graphic-only hidden><legend>Grafik im Zeitverlauf</legend><label>Y-Achse · Kennzahl<select id="salesGraphicMetric"></select></label><label>X-Achse · Zeitabschnitte<select id="salesGraphicGrain"><option value="day">Tage</option><option value="week">Wochen</option><option value="month" selected>Monate</option></select></label><label>Darstellung<select id="salesGraphicGroup"></select></label><label>PDF-Format<select id="salesGraphicOrientation"><option value="landscape">Querformat</option><option value="portrait">Hochformat</option></select></label><small>Eine Grafik für die gesamte Auswahl oder je Gruppe eine eigene PDF-Seite. Rohertrag in % wird aus Rohertrag und Nettoumsatz des Zeitabschnitts berechnet.</small></fieldset>
-              <fieldset class="sales-report-templates"><legend>Meine Berichtsvorlagen</legend><label>Gespeicherte Einstellungen<select id="salesReportTemplateSelect"><option value="">Vorlage auswählen</option></select></label><p id="salesReportTemplateTitle"></p><div class="sales-report-job-actions"><button id="salesReportTemplateLoad" class="secondary-button" type="button" disabled>Laden</button><button id="salesReportTemplateSave" class="secondary-button" type="button" disabled>Als Vorlage speichern</button><button id="salesReportTemplateCopy" class="secondary-button" type="button" hidden>Als neue Vorlage speichern</button><button id="salesReportTemplateDelete" class="text-button" type="button" disabled>Vorlage löschen</button></div><small>Gespeichert werden Titel und Einstellungen. Nach dem Laden kannst du alles anpassen; der PDF-Auftrag wird separat gestartet.</small></fieldset>
-              <div class="sales-report-submit"><button class="primary-button" id="salesReportJobSubmit" type="submit" disabled>PDF-Bericht beauftragen</button><small>Bis zu 366 Tage je Zeitraum. Die Erstellung läuft am Server weiter.</small></div>
+              <details class="sales-report-disclosure"><summary><span><strong>Meine Vorlagen</strong><small>Berichtseinstellungen speichern oder wiederverwenden</small></span><b aria-hidden="true"></b></summary><div class="sales-report-disclosure-content"><fieldset class="sales-report-templates"><legend>Meine Berichtsvorlagen</legend><label>Gespeicherte Einstellungen<select id="salesReportTemplateSelect"><option value="">Vorlage auswählen</option></select></label><p id="salesReportTemplateTitle"></p><div class="sales-report-job-actions"><button id="salesReportTemplateLoad" class="secondary-button" type="button" disabled>Laden</button><button id="salesReportTemplateSave" class="secondary-button" type="button" disabled>Als Vorlage speichern</button><button id="salesReportTemplateCopy" class="secondary-button" type="button" hidden>Als neue Vorlage speichern</button><button id="salesReportTemplateDelete" class="text-button" type="button" disabled>Vorlage löschen</button></div><small>Titel und Einstellungen werden gespeichert. Der PDF-Auftrag wird separat gestartet.</small></fieldset></div></details>
+              <div class="sales-report-submit"><small>Bis zu 366 Tage je Zeitraum · Berechnung im Hintergrund</small><button class="primary-button" id="salesReportJobSubmit" type="submit" disabled>PDF-Bericht beauftragen</button></div>
             </form>
             <p class="sales-analytics-request-hint" id="salesAnalyticsRequestHint" role="status">Die Verfügbarkeit der Kassendaten wird geprüft.</p>
           </section>
@@ -3070,7 +3108,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.78 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.79 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -4557,6 +4595,17 @@
     <script src="/rights-management-workspace.js"></script>
     <script src="/rights-settings-windows.js"></script>
     <script src="/loan-location-settings.js"></script>
+    <script src="/sales-article-report-pdf-preview.js"></script>
+    <script src="/gp-print-window.js"></script>
+    <script src="/sales-article-report.js"></script>
+    <script src="/sales-bwl-print.js"></script>
+    <script src="/sales-bwl-simulation-print.js"></script>
+    <script src="/sales-bwl-simulation.js"></script>
+  <script src="/sales-bwl-actions-print.js"></script>
+  <script src="/sales-bwl-actions.js"></script>
+  <script src="/sales-bwl.js"></script>
+    <script src="/gp-definitions-registry.js"></script>
+    <script src="/gp-definitions.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

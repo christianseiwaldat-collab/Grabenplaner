@@ -11,6 +11,7 @@
     'card:schedule', 'card:vacation', 'card:loans', 'card:branchOrders', 'card:personnel', 'card:sales',
     'widget:branchOnDuty', 'widget:branchAbsences', 'widget:personnelTeam', 'widget:personnelRequests', 'widget:salesKpis', 'widget:salesTopGroups',
   ]);
+  const COLORS = Object.freeze(['sage', 'blue', 'sand', 'rose', 'lavender', 'peach']);
   const LIMITS = Object.freeze({x:[0,16384], y:[0,16384], width:[200,4096], height:[80,4096]});
   const empty = () => ({version:1, fields:{}});
   const object = value => value && typeof value === 'object' && !Array.isArray(value)
@@ -22,8 +23,12 @@
     const fields = {};
     for (const [id, source] of Object.entries(value.fields)) {
       if (!IDS.includes(id) || !object(source)
-        || Object.keys(source).some(key => !['title','description','geometry','hidden'].includes(key))) invalid();
+        || Object.keys(source).some(key => !['title','description','geometry','hidden','color'].includes(key))) invalid();
       const field = {};
+      if (Object.hasOwn(source,'color')) {
+        if (!COLORS.includes(source.color)) invalid();
+        field.color = source.color;
+      }
       if (Object.hasOwn(source,'hidden')) {
         if (!['control:center','control:vps'].includes(id) || typeof source.hidden !== 'boolean') invalid();
         field.hidden = source.hidden;
@@ -53,5 +58,5 @@
     return {version:1, fields};
   }
   function normalize(value) { try { return validate(value); } catch { return empty(); } }
-  return {KEY, IDS, LIMITS, empty, validate, normalize};
+  return {KEY, IDS, COLORS, LIMITS, empty, validate, normalize};
 });

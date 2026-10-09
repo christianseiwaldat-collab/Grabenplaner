@@ -133,3 +133,23 @@ test('affinity keeps queue bounds and releases slots after failures and shutdown
   await f.pool.close();await stopped;await Promise.all(holding);
   await assert.rejects(f.pool.run({...base,query}),error=>error.code==='IMPORT_REPORT_WORKER_FAILED');
 });
+
+test('PostgreSQL receipt wrapper forwards a branded outer executor for protected source reads',async t=>{
+  const f=await require('../test-support/trade-insights-sqlite').fixture(t);
+  const {assertPersistenceExecutor}=require('../lib/persistence/contract');
+  const {createPostgresqlReceiptWorkers}=require('../lib/persistence/postgresql/reporting/receipt-runtime');
+  const pool=createPostgresqlReceiptWorkers({});t.after(()=>pool.close());
+  const runtime=pool.runtime({access:f.app.provider,vault:f.vault,cashEnabled:true});
+  let freshReads=0;
+  // Use the shipped PostgreSQL wrapper and the real protected runtime. The
+  // empty synthetic publication avoids starting database-backed workers; key
+  // and publication reads must still reuse this outer branded transaction.
+  await f.app.provider.transaction(async tx=>{
+    assertPersistenceExecutor(tx);
+    const getSession=async executor=>{assert.strictEqual(executor,tx);freshReads++;return f.state.session;};
+    assert.equal(await runtime.run(getSession,workspace=>workspace,{executor:tx}),null);
+  },{isolation:'serializable',readOnly:true});
+  assert.ok(freshReads>=2,'fresh authorization uses the same executor before protected reads');
+  await assert.rejects(runtime.run(async()=>f.state.session,()=>null,{executor:{}}),{code:'PERSISTENCE_CONTRACT_VIOLATION'});
+  assert.equal(await runtime.run(async()=>f.state.session,workspace=>workspace),null,'ordinary calls keep the existing default transaction behavior');
+});

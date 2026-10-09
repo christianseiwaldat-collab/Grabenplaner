@@ -11,6 +11,7 @@ let personalActionsWindow = null, personalActionsOpener = null;
 let rightsWorkspace = null, rightsWorkspaceActor = '', rightsLoadController = null, rightsLoadGeneration = 0;
 let rightsSettingsWindows = null, permissionDefaultsUI = null;
 let rightsEditorGeneration = 0, rightsEditorSaveContext = null, rightsEditorSnapshot = null;
+let gpDefinitionsWorkspace = null;
 (() => {
   const storageKey = "grabenplaner-bootstrap-token";
   const parameters = new URLSearchParams(window.location.search);
@@ -1407,6 +1408,31 @@ function hideLoginGate() {
   elements.loginGate?.classList.add("hidden");
 }
 
+function canUseGpDefinitions() {
+  return window.GpDefinitionsRegistry?.canAccess(state.portalSession) === true;
+}
+
+function renderGpDefinitionsAccess() {
+  const allowed = canUseGpDefinitions(), button = document.getElementById('gpDefinitionsNavButton');
+  if (button) {
+    button.hidden = !allowed;
+    button.disabled = !allowed;
+    if (allowed && state.currentView === 'gpDefinitions') button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  }
+  elements.sidebarSessionRole?.classList.toggle('hidden', allowed);
+  gpDefinitionsWorkspace?.synchronize();
+  if (!allowed && state.currentView === 'gpDefinitions') setView('startDashboard');
+}
+
+function activateGpDefinitions() {
+  if (!canUseGpDefinitions() || !window.GpDefinitions) return;
+  if (!gpDefinitionsWorkspace) gpDefinitionsWorkspace = window.GpDefinitions.mount(document.getElementById('gpDefinitionsWorkspace'), {
+    canUse: canUseGpDefinitions, key: () => String(state.portalSession?.user?.employeeNumber || ''),
+  });
+  gpDefinitionsWorkspace.activate();
+}
+
 function renderSidebarSession() {
   const user = state.portalSession?.user;
   const visible = state.portalStatus?.portalEnabled === true && Boolean(user);
@@ -1415,6 +1441,7 @@ function renderSidebarSession() {
   elements.portalLogoutButton?.classList.toggle("hidden", !visible);
   elements.personalActionsAdminButton?.classList.toggle("hidden", !visible || user?.isEmployee === false);
   elements.salesArticleActionsLogButton?.classList.toggle("hidden", !visible || user?.isEmployee === false);
+  renderGpDefinitionsAccess();
   if (!visible) return;
   elements.sidebarSessionRole.textContent = user.roleName || user.role || "Angemeldet";
   elements.sidebarSessionIdentity.textContent = `${user.employeeNumber} · ${user.fullName || user.nickname || ""}`;
@@ -1952,6 +1979,26 @@ function canReadSalesArticleCosts() {
   return !state.portalStatus?.portalEnabled
     || (canReadSalesArticles()
       && state.portalSession?.user?.permissions?.includes("sales:articles:costs:read") === true);
+}
+
+function canReadSalesArticleReport() {
+  return canReadSalesArticles() && (!state.portalStatus?.portalEnabled
+    || Boolean(state.portalSession?.user?.isEmployee !== false
+      && !state.portalSession?.user?.mustChangePassword
+      && state.portalSession?.user?.salesHistory?.read && state.portalSession?.user?.salesAnalytics?.inventory));
+}
+
+function canReadSalesBwl() {
+  const session=state.portalSession;
+  return Boolean(session?.authenticated && session.user?.isEmployee!==false
+    && session.user?.employeeNumber && session.user?.active!==false
+    && !session.user?.mustChangePassword && session.user?.salesHistory?.read);
+}
+
+function canWriteSalesBwlActions() {
+  const user=state.portalSession?.user;
+  return canReadSalesBwl() && ['manager','department_manager','admin','developer'].includes(user?.role)
+    && user?.permissions?.includes('sales:bwl:actions:write');
 }
 
 function canUseSalesPriceLabels() {
@@ -2792,6 +2839,12 @@ function applyRoleVisibility() {
   elements.salesAdministrationNav?.classList.toggle("hidden", !salesModuleAccess);
   elements.salesAnalyticsNavButton?.classList.toggle("hidden", !salesAnalyticsAccess);
   elements.salesArticleCatalogNavButton?.classList.toggle("hidden", !salesArticleCatalogAccess);
+  document.getElementById('salesArticleReportNavButton')?.classList.toggle('hidden', !canReadSalesArticleReport());
+  document.getElementById('salesArticleReportDashboardCard')?.classList.toggle('hidden', !canReadSalesArticleReport());
+  salesArticleReportWorkspace?.sync();
+  for (const id of ['salesBwlNavButton','salesBwlDashboardCard']) document.getElementById(id)?.classList.toggle('hidden',!canReadSalesBwl());
+  salesBwlWorkspace?.sync();
+  if (!canReadSalesBwl() && state.currentView==='salesBwl') setView('startDashboard');
   elements.crmNavButton?.classList.toggle("hidden", !crmAccess);
   elements.salesAnalyticsDashboardCard?.classList.toggle("hidden", !salesAnalyticsAccess);
   elements.salesArticleCatalogDashboardCard?.classList.toggle("hidden", !salesArticleCatalogAccess);
@@ -5153,13 +5206,15 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 
   const salesAdministrationVisible = !elements.salesAdministrationNav?.classList.contains("hidden");
-  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "priceLabels", "crm"].includes(state.currentView);
+  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "articleReport", "salesBwl", "priceLabels", "crm"].includes(state.currentView);
   elements.salesAdministrationNav?.classList.toggle("contains-active", salesAdministrationActive);
   applyNavigationGroupState("salesAdministration", salesAdministrationVisible);
   setNavigationCurrent(elements.salesDashboardNavButton, state.currentView === "salesAdministration");
   setNavigationCurrent(elements.salesAnalyticsNavButton, state.currentView === "salesAnalytics");
   setNavigationCurrent(elements.receiptSearchNavButton, state.currentView === "receiptSearch");
   setNavigationCurrent(elements.tradeInsightsNavButton, state.currentView === "tradeInsights");
+  setNavigationCurrent(document.getElementById('salesArticleReportNavButton'), state.currentView === 'articleReport');
+  setNavigationCurrent(document.getElementById('salesBwlNavButton'),state.currentView==='salesBwl');
   setNavigationCurrent(elements.logisticsNavButton, false);
   const logisticsNav = document.getElementById("logisticsNav");
   logisticsNav?.classList.toggle("contains-active", state.currentView === "logistics");
@@ -24587,6 +24642,9 @@ function pageViewElement(view) {
     privacyOrganization: document.getElementById("privacyOrganizationView"),
     priceLabels: document.getElementById("salesPriceLabelsView"),
     articleCatalog: elements.salesArticleCatalogView,
+    articleReport: document.getElementById('salesArticleReportView'),
+    salesBwl: document.getElementById('salesBwlView'),
+    gpDefinitions: document.getElementById('gpDefinitionsView'),
     crm: elements.crmView,
     loans: elements.loansView,
     branchOrders: elements.branchOrdersView,
@@ -33043,7 +33101,9 @@ function renderSalesArticleCatalogDetail() {
     preferenceKey: 'gp.article-price-columns.v1.' + currentSalesArticleCatalogActorKey(),
   });
   catalog.tools = window.SalesArticleTools?.mount(elements.salesArticleDetailBody, {api, rawApi, article, write:salesArticleDetailCanWrite(),
-    accessKey:currentSalesArticleCatalogDetailAccessKey, onCustomer:id=>{setView("crm");void openCrmCustomer(id);}});
+    accessKey:currentSalesArticleCatalogDetailAccessKey, windowPreferences:gpWindowManager?.preferences,
+    scale:salesArticleSearchWindowScale, active:()=>state.currentView==='articleCatalog',
+    trigger:()=>document.getElementById('salesArticlePdfButton'), onCustomer:id=>{setView("crm");void openCrmCustomer(id);}});
   if (canUseSalesPriceLabels()) catalog.priceLabels = window.SalesArticlePriceLabels?.mount(
     document.getElementById('salesArticlePriceLabelsSection'), { api, rawApi, article,
       accessKey: currentSalesArticlePriceLabelsAccessKey, onOpen: openSalesArticlePriceLabel });
@@ -33906,6 +33966,29 @@ let importMappingWorkspace = null;
 let crmPurchaseWorkspace = null;
 let receiptSearchWorkspace = null;
 let tradeInsightsWorkspace = null;
+let salesArticleReportWorkspace = null;
+let salesBwlWorkspace = null;
+function activateSalesBwl() {
+  if (!canReadSalesBwl()) return;
+  syncGpWindows();
+  if (!salesBwlWorkspace) salesBwlWorkspace=window.GrabenplanerSalesBwl?.mount(document.getElementById('salesBwlWorkspace'), {
+    api,rawApi,key:()=>JSON.stringify([currentSalesPriceLabelsAccessKey(),state.portalSession?.user?.salesHistory,state.portalSession?.user?.salesAnalytics]),
+    canUse:canReadSalesBwl,canWriteActions:canWriteSalesBwlActions,active:()=>state.currentView==='salesBwl',windowPreferences:gpWindowManager?.preferences,scale:salesArticleSearchWindowScale,
+    openArticle:number=>{setView('articleCatalog');void loadSalesArticleCatalogDetail(number,{moveFocus:true});},
+  });
+  return salesBwlWorkspace?.activate();
+}
+function activateSalesArticleReport() {
+  if (!canReadSalesArticleReport()) return;
+  syncGpWindows();
+  if (!salesArticleReportWorkspace) salesArticleReportWorkspace = window.GrabenplanerArticleReport?.mount(document.getElementById('salesArticleReportWorkspace'), {
+    api, rawApi, key: () => JSON.stringify([currentSalesPriceLabelsAccessKey(), state.portalSession?.user?.salesHistory, state.portalSession?.user?.salesAnalytics]), canUse: canReadSalesArticleReport,
+    active: () => state.currentView === 'articleReport', windowPreferences: gpWindowManager?.preferences,
+    scale: salesArticleSearchWindowScale,
+    openArticle: number => {setView('articleCatalog');void loadSalesArticleCatalogDetail(number, {moveFocus:true});},
+  });
+  return salesArticleReportWorkspace?.activate();
+}
 let privacyOrganizationWorkspace = null;
 let privacyOrganizationActorKey = "";
 let privacyOrganizationTab = "overview";
@@ -36523,6 +36606,9 @@ function setView(view) {
     || (view === "privacyOrganization" && (!canAccessPrivacyOrganization() || !canOpenPrivacyOrganizationTab(privacyOrganizationTab)))
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "articleCatalog" && !canAccessSalesArticleCatalog())
+    || (view === 'articleReport' && !canReadSalesArticleReport())
+    || (view === 'salesBwl' && !canReadSalesBwl())
+    || (view === 'gpDefinitions' && !canUseGpDefinitions())
     || (view === "priceLabels" && !canUseSalesPriceLabels())
     || (view === "crm" && !canAccessCrm())
     || (view === "loans" && !canReadLoanManagement())
@@ -36581,6 +36667,10 @@ function setView(view) {
   activatePrivacyOrganizationView();
   if (["tradeInsights","logistics"].includes(view)) void activateTradeArea(view); else tradeInsightsWorkspace?.suspend();
   elements.salesArticleCatalogView?.classList.toggle("active", view === "articleCatalog");
+  document.getElementById('salesArticleReportView')?.classList.toggle('active', view === 'articleReport');
+  if (view === 'articleReport') void activateSalesArticleReport(); else salesArticleReportWorkspace?.suspend();
+  document.getElementById('salesBwlView')?.classList.toggle('active',view==='salesBwl');
+  if (view==='salesBwl') void activateSalesBwl(); else salesBwlWorkspace?.suspend();
   if (view !== "articleCatalog") {
     state.salesArticleCatalog.priceLabels?.destroy(); state.salesArticleCatalog.priceLabels = null;
   }
@@ -36592,10 +36682,14 @@ function setView(view) {
   elements.branchOrdersView?.classList.toggle("active", view === "branchOrders");
   elements.rightsDashboardView?.classList.toggle("active", view === "rightsDashboard");
   elements.settingsView.classList.toggle("active", view === "settings");
+  document.getElementById('gpDefinitionsView')?.classList.toggle('active', view === 'gpDefinitions');
+  if (view === 'gpDefinitions') activateGpDefinitions(); else gpDefinitionsWorkspace?.suspend();
+  renderGpDefinitionsAccess();
   applyActivePageAppearance();
   syncSalesArticleSearchWindow();
   syncGpWindows();
   syncStartDashboardVps();
+  state.salesArticleCatalog.tools?.syncPrint();
   if (view === "settings") {
     const activeSettingsTab = document.querySelector("[data-settings-tab].active:not(.hidden)");
     const firstAllowedSettingsTab = document.querySelector("[data-settings-tab]:not(.hidden)");
@@ -36638,7 +36732,7 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     if (fromHistory) closeMobileNavigation({ restoreFocus: false });
     return;
   }
-  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "logistics", "privacyOrganization", "articleCatalog", "priceLabels", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
+  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "logistics", "privacyOrganization", "articleCatalog", "articleReport", "salesBwl", "gpDefinitions", "priceLabels", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
     setView("startDashboard");
     return;
   }
@@ -40541,6 +40635,12 @@ function syncMobileNavigationMode() {
     panel.open = !mobileNavigationMedia.matches;
   }
 }
+
+document.getElementById('gpDefinitionsNavButton')?.addEventListener('click', () => {
+  if (!canUseGpDefinitions()) return;
+  closeMobileNavigation({ restoreFocus: false });
+  setView('gpDefinitions');
+});
 
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
   closeMobileNavigation({ restoreFocus: false });

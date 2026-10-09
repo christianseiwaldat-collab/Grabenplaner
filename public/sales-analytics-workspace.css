@@ -1,0 +1,108 @@
+/* Compact report workspace. Shared controls, permissions and calculations remain unchanged. */
+#salesAnalyticsView {
+  --sales-workspace-muted:color-mix(in srgb,var(--ink) 70%,var(--surface) 30%);
+}
+#salesAnalyticsView[data-page-theme="dark"] .sales-analytics-request-form { color-scheme:dark; }
+#salesAnalyticsView .sales-analytics-topbar { margin-bottom:16px; }
+#salesAnalyticsView .sales-analytics-tabs { width:min(100%,640px);gap:4px; margin-bottom:14px; padding:4px; border-radius:9px; box-shadow:none; }
+#salesAnalyticsView .sales-analytics-tabs .settings-tab { min-height:32px; padding:6px 14px; border-radius:6px; font-size:12px;white-space:nowrap; }
+#salesAnalyticsView .sales-analytics-intro-card { width:100%; max-width:1320px; padding:18px; border-radius:12px; background:var(--surface); box-shadow:0 3px 14px rgba(23,35,49,.025); }
+#salesAnalyticsView .sales-analytics-section-heading { align-items:center; gap:14px; }
+#salesAnalyticsView .sales-analytics-section-heading h2 { font-size:16px; font-weight:750; letter-spacing:-.025em; }
+#salesAnalyticsView .sales-analytics-section-heading p { margin-top:5px; font-size:12px; color:var(--sales-workspace-muted); }
+#salesAnalyticsView .sales-analytics-workspace-label { flex:0 0 auto; padding:5px 9px; border:1px solid var(--line); border-radius:5px; color:var(--sales-workspace-muted); font-size:11px; font-weight:650; }
+#salesAnalyticsView .sales-analytics-request-form { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:12px; align-items:start; margin-top:16px; }
+#salesAnalyticsView .sales-analytics-request-form > .sales-report-title-field { width:100%; max-width:none; grid-column:1 / -1; }
+#salesAnalyticsView .sales-analytics-request-form label { gap:5px; font-size:12px; font-weight:650; }
+#salesAnalyticsView .sales-analytics-request-form :is(input:not([type="checkbox"]),select) { width:100%; min-width:0; min-height:33px; height:33px; padding:5px 9px; border:1px solid var(--line); border-radius:6px; color:var(--ink); background:var(--surface); font-size:13px; }
+#salesAnalyticsView .sales-analytics-request-form :is(input,select,button,summary):focus-visible { outline:2px solid var(--green); outline-offset:2px; }
+#salesAnalyticsView .sales-analytics-request-form input[type="checkbox"] { width:15px; height:15px; min-height:15px; margin:1px 0; accent-color:var(--green); }
+#salesAnalyticsView .sales-analytics-request-form fieldset { min-width:0; margin:0; padding:10px 12px 12px; border:1px solid var(--line); border-radius:8px; background:var(--surface); }
+#salesAnalyticsView .sales-analytics-request-form legend { padding:0 4px; color:var(--ink); font-size:12px; font-weight:750; }
+#salesAnalyticsView .sales-analytics-request-form small { margin-top:4px; color:var(--sales-workspace-muted); font-size:11px; line-height:1.45; }
+#salesAnalyticsView .sales-report-period { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+#salesAnalyticsView .sales-report-period-presets { grid-template-columns:minmax(130px,1.15fr) minmax(74px,.65fr) minmax(115px,1fr); gap:8px; }
+#salesAnalyticsView .sales-report-period-presets small:empty { display:none; }
+#salesAnalyticsView .sales-report-selection .sales-report-checks { margin:7px 0; max-height:125px; }
+#salesAnalyticsView #salesReportJobLocations .sales-report-checks { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:2px 6px; max-height:100px; }
+#salesAnalyticsView .sales-report-checks label { display:flex; align-items:flex-start; gap:6px; padding:3px 0; font-size:12px; font-weight:500; line-height:1.4; }
+#salesAnalyticsView .sales-report-metrics .sales-report-checks { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:3px 14px; max-height:none; }
+#salesAnalyticsView .sales-report-metrics > div > small { margin-top:6px; }
+#salesAnalyticsView .sales-report-selection-actions { gap:12px; margin-top:3px; }
+#salesAnalyticsView .sales-analytics-request-form .text-button { min-height:24px; padding:3px 0; border:0; border-radius:0; color:var(--green); background:transparent; font-size:11px; font-weight:650; text-decoration:underline; text-underline-offset:3px; }
+#salesAnalyticsView .sales-analytics-request-form .text-button:hover { background:transparent; text-decoration-thickness:2px; }
+#salesAnalyticsView .sales-report-disclosure { grid-column:auto; min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:8px; background:var(--surface); }
+#salesAnalyticsView .sales-report-disclosure[open] { grid-column:1 / -1; }
+#salesAnalyticsView .sales-report-disclosure > summary { display:grid; grid-template-columns:minmax(0,1fr) 20px; align-items:center; gap:10px; min-height:47px; padding:9px 12px; color:var(--ink); cursor:pointer; list-style:none; }
+#salesAnalyticsView .sales-report-disclosure > summary::-webkit-details-marker,
+#salesAnalyticsView .sales-report-filter-disclosure > summary::-webkit-details-marker { display:none; }
+#salesAnalyticsView .sales-report-disclosure > summary > span { display:grid; gap:3px; min-width:0; }
+#salesAnalyticsView .sales-report-disclosure > summary strong { font-size:12.5px; font-weight:700; }
+#salesAnalyticsView .sales-report-disclosure > summary small { margin:0; font-size:11px; }
+#salesAnalyticsView .sales-report-disclosure > summary > b,
+#salesAnalyticsView .sales-report-filter-disclosure > summary > b { display:grid; place-items:center; width:20px; height:20px; color:var(--sales-workspace-muted); font-size:17px; font-weight:500; }
+#salesAnalyticsView .sales-report-disclosure > summary > b::before,
+#salesAnalyticsView .sales-report-filter-disclosure > summary > b::before { content:"›"; transition:transform .15s ease; }
+#salesAnalyticsView .sales-report-disclosure[open] > summary > b::before,
+#salesAnalyticsView .sales-report-filter-disclosure[open] > summary > b::before { transform:rotate(90deg); }
+#salesAnalyticsView .sales-report-disclosure[open] > summary { border-bottom:1px solid var(--line); background:var(--surface-soft); }
+#salesAnalyticsView .sales-report-disclosure-content { padding:12px; }
+#salesAnalyticsView .sales-report-disclosure-content > fieldset { border:0; padding:0; background:transparent; }
+#salesAnalyticsView .sales-report-disclosure-content > fieldset > legend { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+#salesAnalyticsView .sales-report-scope-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; align-items:start; }
+#salesAnalyticsView .sales-report-filter-disclosure { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:6px; }
+#salesAnalyticsView .sales-report-filter-disclosure > summary { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:36px; padding:7px 10px; color:var(--ink); font-size:12px; font-weight:650; cursor:pointer; list-style:none; }
+#salesAnalyticsView .sales-report-filter-disclosure > fieldset { padding:10px; border:0; border-top:1px solid var(--line); border-radius:0; }
+#salesAnalyticsView .sales-report-filter-disclosure > fieldset > legend { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+#salesAnalyticsView .sales-report-filter-disclosure:has(> fieldset[hidden]) { display:none; }
+#salesAnalyticsView .sales-report-filter-disclosure-count { margin-left:auto; color:var(--sales-workspace-muted); font-size:11px; font-weight:500; white-space:nowrap; }
+#salesAnalyticsView .sales-report-transfer-field { grid-column:auto; }
+#salesAnalyticsView .sales-report-transfer { grid-template-columns:minmax(0,1fr) 64px minmax(0,1fr); gap:8px; }
+#salesAnalyticsView .sales-report-transfer strong { margin:6px 0 5px; font-size:11px; }
+#salesAnalyticsView .sales-report-transfer-scroll { height:150px; border-radius:5px; }
+#salesAnalyticsView .sales-report-transfer td label { padding:5px 6px; font-size:11px; }
+#salesAnalyticsView .sales-report-transfer-actions { gap:12px; align-items:center; }
+#salesAnalyticsView .sales-report-transfer-actions button { max-width:64px; font-size:10.5px; text-align:center; text-decoration:none; }
+#salesAnalyticsView .sales-report-transfer-empty { font-size:11px; }
+#salesAnalyticsView .sales-report-grouping { grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+#salesAnalyticsView .sales-report-grouping > .sales-report-checks,
+#salesAnalyticsView .sales-report-grouping > small { grid-column:1 / -1; }
+#salesAnalyticsView .sales-report-grouping > .sales-report-checks { display:flex; flex-wrap:wrap; gap:18px; }
+#salesAnalyticsView .sales-report-templates { gap:9px; }
+#salesAnalyticsView .sales-report-templates > label { max-width:460px; }
+#salesAnalyticsView .sales-report-job-actions { gap:7px; }
+#salesAnalyticsView .sales-report-job-actions .secondary-button { min-height:30px; padding:5px 10px; border-radius:6px; font-size:12px; }
+#salesAnalyticsView .sales-report-submit { justify-content:space-between; gap:10px; margin-top:2px; padding-top:13px; border-top:1px solid var(--line); }
+#salesAnalyticsView .sales-report-submit small { margin:0; }
+#salesAnalyticsView .sales-report-submit .primary-button { min-height:35px; padding:7px 14px; border-radius:7px; font-size:12px; box-shadow:none; }
+#salesAnalyticsView .sales-analytics-request-hint { margin:10px 0 0; font-size:11px; color:var(--sales-workspace-muted); }
+#salesAnalyticsView #salesAnalyticsReportsPanel > label { display:grid; width:min(100%,460px); gap:5px; margin-top:15px; color:var(--sales-workspace-muted); font-size:12px; font-weight:650; }
+#salesAnalyticsView #salesReportJobFilter { height:34px; padding:6px 10px; border-radius:6px; font-size:13px; }
+#salesAnalyticsView #salesReportJobRefresh { min-height:30px; padding:5px 10px; border-radius:6px; font-size:12px; }
+#salesAnalyticsView .sales-report-job { padding:14px 0; }
+#salesAnalyticsView .sales-report-job h3 { margin:0 0 6px; font-size:12px; font-weight:700; }
+#salesAnalyticsView .sales-report-job p { color:var(--sales-workspace-muted); font-size:12px; line-height:1.5; }
+#salesAnalyticsView .sales-report-quality-hint { margin:8px 0 0; font-size:11px; color:var(--sales-workspace-muted); background:var(--surface-soft); }
+@container sales-report-create (max-width:800px) {
+  #salesAnalyticsView .sales-analytics-request-form { grid-template-columns:1fr; }
+  #salesAnalyticsView .sales-report-metrics .sales-report-checks { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  #salesAnalyticsView .sales-report-scope-grid { grid-template-columns:1fr; }
+}
+@container sales-report-create (max-width:540px) {
+  #salesAnalyticsView .sales-report-period-presets { grid-template-columns:minmax(0,1fr) minmax(70px,.65fr); }
+  #salesAnalyticsView .sales-report-period-presets > label:last-of-type { grid-column:1 / -1; }
+  #salesAnalyticsView .sales-report-metrics .sales-report-checks { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #salesAnalyticsView .sales-report-grouping { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #salesAnalyticsView .sales-report-transfer { grid-template-columns:1fr; }
+  #salesAnalyticsView .sales-report-transfer-actions { flex-direction:row; justify-content:flex-start; }
+  #salesAnalyticsView .sales-report-transfer-actions button { max-width:none; }
+  #salesAnalyticsView .sales-analytics-workspace-label { display:none; }
+}
+@media (max-width:700px) {
+  #salesAnalyticsView .sales-analytics-intro-card { padding:14px; }
+  #salesAnalyticsView .sales-analytics-tabs { width:100%;grid-template-columns:repeat(4,minmax(120px,1fr)); overflow-x:auto; }
+  #salesAnalyticsView .sales-analytics-request-form { grid-template-columns:1fr; }
+  #salesAnalyticsView .sales-report-scope-grid { grid-template-columns:1fr; }
+  #salesAnalyticsView .sales-report-submit { align-items:stretch; flex-direction:column; }
+  #salesAnalyticsView #salesReportJobLocations .sales-report-checks { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}

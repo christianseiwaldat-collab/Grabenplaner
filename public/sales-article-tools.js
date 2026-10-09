@@ -15,7 +15,7 @@
   return {dateFrom:start.toISOString().slice(0,10),dateTo:today};
  }
  function display(key,value){if(value===null||value===undefined||value==='')return '–';if(key==='date')return formatDate(value);if(key==='status')return {sale:'Verkauf',return:'Rücknahme',review:'Prüfen'}[value]||String(value);if(numeric.has(key)&&/^-?\d+(\.\d+)?$/.test(String(value))){let raw=String(value),negative=raw.startsWith('-'),[whole,fraction='']=raw.replace(/^-/,'').split('.');if(key!=='quantity'){let cents=BigInt(whole)*100n+BigInt((fraction+'00').slice(0,2));if((fraction[2]||'0')>='5')cents++;whole=String(cents/100n);fraction=String(cents%100n).padStart(2,'0');if(cents===0n)negative=false;}return(negative?'-':'')+whole.replace(/\B(?=(\d{3})+(?!\d))/g,'.')+(fraction?','+fraction:'')+(key.endsWith('Percent')?' %':key==='quantity'?'':' €');}return String(value);}
- function mount(root,{api,rawApi,article,write=false,accessKey=()=>'',onCustomer=()=>{}}){
+ function mount(root,{api,rawApi,article,write=false,accessKey=()=>'',onCustomer=()=>{},windowPreferences,scale,active=()=>true,trigger}){
   const owner=accessKey();let disposed=false,context=null,contextLoading=null,localNotes=null,mutation=null,notesBusy=false;
   const authorized=()=>!disposed&&root.isConnected&&accessKey()===owner;
   const request=(url,body)=>api(url,body===undefined?{}:{method:'POST',body:JSON.stringify(body)});
@@ -105,21 +105,55 @@
   on(noteFilter,'submit',e=>{e.preventDefault();renderNotes();});
   on(notesPanel.querySelector('.article-note-add'),'submit',async e=>{e.preventDefault();if(notesBusy||!localNotes)return;notesBusy=true;const form=e.target,text=form.elements.text.value;if(!mutation||mutation.text!==text)mutation={id:crypto.randomUUID(),text};form.querySelector('button').disabled=true;try{const value=await request('/api/sales/articles/local-notes',{articleNumber:article.articleNumber,text,expectedRevision:localNotes.revision,mutationId:mutation.id});if(!authorized())return;localNotes=value;mutation=null;form.reset();renderNotes();noteStatus.textContent='Eigene GP-Notiz gespeichert.';}catch(error){if(authorized()){noteStatus.textContent=error.message;if(error.status===409)await loadNotes();}}finally{notesBusy=false;if(authorized())form.querySelector('button').disabled=false;}});
   renderNotes();
-  let pdf=null;
-  function openPdf(){if(!pdf)pdf=pdfDialog();void pdf.open();}
-  function pdfDialog(){
-   const exp=globalThis.GrabenplanerTradeExport; // public export module alias is resolved below
-   const exportModel=globalThis.GrabenplanerTradeExportOptions||exp;
-   const dialog=root.ownerDocument.createElement('dialog');dialog.className='modal article-sheet-dialog';dialog.setAttribute('aria-label','Artikelstammblatt als PDF');
-   dialog.innerHTML='<form><header class="modal-header"><h2>Artikelstammblatt als PDF</h2><button type="button" class="close-button" data-close aria-label="PDF-Dialog schließen">×</button></header><div class="article-sheet-body"><fieldset><legend>Bereiche im Stammblatt</legend>'+Object.entries(sectionLabels).map(([id,label])=>'<label><input type="checkbox" name="section" value="'+id+'"'+(['master','prices','notes'].includes(id)?' checked':'')+'> '+label+'</label>').join('')+'</fieldset><label><input type="checkbox" name="image"'+(article.image?.present?' checked':' disabled')+'> Artikelfoto einfügen'+(article.image?.present?'':' (kein Foto vorhanden)')+'</label><p>Historien verwenden die zuletzt gestarteten Filter des jeweiligen Reiters. Ohne eigene Auswahl gelten 90 Tage für Umlagerungen und ein Jahr für Verkäufe. Pro Historie werden höchstens die neuesten 1.000 Einträge exportiert.</p><label>Dateiname<input name="name" maxlength="110" required></label><div class="article-export-fields"><label>Zeitblock<select name="stamp" aria-label="Zeitblock"><option value="date-time">JJMMTT-HHMM</option><option value="date">JJMMTT</option><option value="date-suffix">JJMMTT-xxx</option><option value="none">Ohne Zeitblock</option></select></label><label>Anordnung<select name="position" aria-label="Anordnung"><option value="before">Vorne</option><option value="after">Hinten</option></select></label><label>Ergänzung (xxx)<input name="suffix" maxlength="40"></label><label>Trennzeichen<select name="separator" aria-label="Trennzeichen"><option value="-">Bindestrich</option><option value="_">Unterstrich</option><option value=" ">Leerzeichen</option></select></label></div><p class="article-sheet-preview"></p><p role="status"></p></div><footer class="modal-actions"><button type="button" class="secondary-button" data-close>Schließen</button><button type="submit" class="primary-button">PDF herunterladen</button></footer></form>';
-   root.append(dialog);dialogs.push(dialog);const form=dialog.querySelector('form'),status=form.querySelector('[role=status]');
-   const config=()=>Object.fromEntries(['stamp','position','separator','suffix'].map(k=>[k,form.elements[k].value]));
-   const preview=()=>{form.querySelector('.article-sheet-preview').textContent=exportModel?.filename(form.elements.name.value,config())||form.elements.name.value+'.pdf';form.elements.suffix.disabled=form.elements.stamp.value!=='date-suffix';};
-   form.elements.name.value='Artikel-'+article.articleNumber;on(form,'input',preview);on(form,'change',preview);on(form,'click',e=>{if(e.target.closest('[data-close]'))dialog.close();});
-   on(form,'submit',async e=>{e.preventDefault();const sections=[...form.querySelectorAll('[name=section]:checked')].map(i=>i.value);if(!sections.length){status.textContent='Bitte mindestens einen Bereich auswählen.';return;}const button=form.querySelector('[type=submit]');button.disabled=true;status.textContent='Stammblatt wird erstellt …';try{const ctx=await ensureContext(),options={...config(),sections,includeImage:form.elements.image.checked,name:form.elements.name.value,movements:{},sales:{}};for(const k of ['movements','sales'])if(sections.includes(k))options[k]=states[k]?.filters||historyDefaults(k,ctx.today);await request('/api/sales/articles/tools/pdf-options',config());await download('/api/sales/articles/sheet.pdf',{articleNumber:article.articleNumber,...options},exportModel?.filename(options.name,config())||options.name+'.pdf');if(authorized())status.textContent='PDF-Download gestartet.';}catch(error){if(authorized())status.textContent=error.message;}finally{if(authorized())button.disabled=false;}});
-   return {async open(){status.textContent='';dialog.showModal();try{const ctx=await ensureContext();for(const k of ['movements','sales'])form.querySelector('[name=section][value='+k+']').disabled=!(k==='sales'?ctx.sales:ctx.movements);const saved=await request('/api/sales/articles/tools/pdf-options');if(authorized()){for(const [k,v]of Object.entries(saved))if(form.elements[k])form.elements[k].value=v;preview();}}catch(e){if(authorized())status.textContent=e.message;}preview();}};
+  let pdf=null,pdfPreparing=null,pdfConfig=null,pdfWrites=Promise.resolve();
+  async function openPdf(){
+   if(!authorized()||!active())return;
+   root.querySelector('[data-article-print-status]')?.remove();
+   if(pdf?.state.open){pdf.activate();return;}
+   if(pdfPreparing)return pdfPreparing;
+   pdfPreparing=(async()=>{
+    try{
+     const ctx=await ensureContext();if(!authorized())return;
+     if(!pdfConfig)pdfConfig=await request('/api/sales/articles/tools/pdf-options');
+     if(!authorized()||!active())return;
+     if(!pdf)pdf=pdfWindow(ctx);
+     pdf.open({payload:{ctx,config:{...pdfConfig}},values:{title:'Artikel '+article.articleNumber,filename:'Artikel-'+article.articleNumber,orientation:'landscape'}});
+    }catch(error){if(authorized()&&active()){const notice=root.ownerDocument.createElement('p');notice.dataset.articlePrintStatus='';notice.className='sales-article-detail-message';notice.setAttribute('role','alert');notice.textContent='Druckfenster konnte nicht geöffnet werden: '+error.message;root.prepend(notice);}}
+    finally{pdfPreparing=null;}
+   })();return pdfPreparing;
   }
-  return {activate(id){if(!authorized())return;if(id==='salesArticleNotesSection'&&!localNotes)void loadNotes();if(id==='salesArticleMovementsSection'||id==='salesArticleSalesSection'){const state=history(id==='salesArticleSalesSection'?'sales':'movements');if(!state.loaded&&!state.busy)void loadHistory(state,true);}},openPdf,destroy(){disposed=true;for(const state of Object.values(states)){state.ticket++;state.period?.close();}notePeriod?.close();for(const remove of listeners)remove();tables?.destroy();for(const dialog of dialogs){if(dialog?.open)dialog.close();dialog?.remove();}}};
+  function pdfWindow(ctx){
+   const doc=root.ownerDocument,win=doc.defaultView,exportModel=win.GrabenplanerTradeExport;
+   return win.GpPrintWindow.mount({document:doc,id:'article-sheet-pdf',title:'Artikelstammblatt als PDF',key:accessKey,canUse:authorized,active,windowPreferences,scale,trigger,
+    defaults:{title:'Artikel '+article.articleNumber,filename:'Artikel-'+article.articleNumber,orientation:'landscape'},
+    renderOptions(host,{payload}){
+     host.innerHTML='<fieldset class="article-sheet-sections"><legend>Bereiche im Stammblatt</legend>'+Object.entries(sectionLabels).map(([id,label])=>'<label><input type="checkbox" name="section" value="'+id+'"'+(['master','prices','notes'].includes(id)?' checked':'')+((id==='sales'&&!ctx.sales||id==='movements'&&!ctx.movements)?' disabled':'')+'>'+label+'</label>').join('')+'</fieldset><label><input type="checkbox" name="image"'+(article.image?.present?' checked':' disabled')+'>Artikelfoto einfügen'+(article.image?.present?'':' (kein Foto vorhanden)')+'</label><details><summary>Dateinamen erweitern</summary><div class="article-sheet-naming"><label>Zeitblock<select name="stamp"><option value="date-time">JJMMTT-HHMM</option><option value="date">JJMMTT</option><option value="date-suffix">JJMMTT-xxx</option><option value="none">Ohne Zeitblock</option></select></label><label>Anordnung<select name="position"><option value="before">Vorne</option><option value="after">Hinten</option></select></label><label>Ergänzung (xxx)<input name="suffix" maxlength="40"></label><label>Trennzeichen<select name="separator"><option value="-">Bindestrich</option><option value="_">Unterstrich</option><option value=" ">Leerzeichen</option></select></label></div></details><p class="gp-print-hint">Historien übernehmen die zuletzt gestarteten Filter. Ohne eigene Auswahl: 90 Tage für Umlagerungen, ein Jahr für Verkäufe. Höchstens die neuesten 1.000 Einträge je Historie; begrenzte Ergebnisse werden im PDF gekennzeichnet.</p>';
+     for(const [name,value]of Object.entries(payload.config)){const input=host.querySelector('[name="'+name+'"]');if(input)input.value=value;}
+    },
+    readOptions(host){return {sections:[...host.querySelectorAll('[name=section]:checked:not(:disabled)')].map(input=>input.value),includeImage:host.querySelector('[name=image]').checked,...Object.fromEntries(['stamp','position','separator','suffix'].map(name=>[name,host.querySelector('[name="'+name+'"]').value]))};},
+    validateOptions:options=>options.sections.length?'':'Bitte mindestens einen Bereich auswählen.',
+    async createPdf({values,options,signal}){
+     const config=Object.fromEntries(['stamp','position','separator','suffix'].map(name=>[name,options[name]]));
+     const specification={articleNumber:article.articleNumber,...options,title:values.title,name:values.filename,orientation:values.orientation};
+     for(const kind of ['movements','sales'])if(options.sections.includes(kind))specification[kind]=states[kind]?.filters||historyDefaults(kind,ctx.today);
+     const response=await rawApi('/api/sales/articles/sheet.pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(specification),signal});
+     if(!response.ok)throw Error('Das Stammblatt konnte nicht erstellt werden.');
+     const blob=await response.blob();if(!authorized()||signal.aborted)throw new DOMException('Abgebrochen','AbortError');
+     pdfWrites=pdfWrites.catch(()=>{}).then(async()=>{
+      if(!authorized()||signal.aborted||JSON.stringify(config)===JSON.stringify(pdfConfig))return;
+      await request('/api/sales/articles/tools/pdf-options',config);
+      if(authorized()&&!signal.aborted)pdfConfig={...config};
+     });
+     await pdfWrites;
+     if(!authorized()||signal.aborted)throw new DOMException('Abgebrochen','AbortError');
+     const disposition=response.headers.get('Content-Disposition')||'',encoded=/filename\*=UTF-8''([^;]+)/i.exec(disposition),plain=/filename="([^"]+)"/i.exec(disposition);
+     let filename=exportModel.filename(values.filename,config);
+     if(encoded){try{filename=decodeURIComponent(encoded[1]);}catch{}}else if(plain)filename=plain[1];
+     return {blob,filename,summary:options.sections.length+' Bereiche'};
+    }
+   });
+  }
+  return {activate(id){if(!authorized())return;if(id==='salesArticleNotesSection'&&!localNotes)void loadNotes();if(id==='salesArticleMovementsSection'||id==='salesArticleSalesSection'){const state=history(id==='salesArticleSalesSection'?'sales':'movements');if(!state.loaded&&!state.busy)void loadHistory(state,true);}},openPdf,syncPrint(){if(active())pdf?.activate();else pdf?.deactivate();},destroy(){disposed=true;pdf?.destroy();for(const state of Object.values(states)){state.ticket++;state.period?.close();}notePeriod?.close();for(const remove of listeners)remove();tables?.destroy();for(const dialog of dialogs){if(dialog?.open)dialog.close();dialog?.remove();}}};
  }
  return {mount,movementColumns,noteColumns,sectionLabels,display,historyDefaults,historyFilterKeys};
 });

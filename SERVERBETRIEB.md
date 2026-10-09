@@ -60,6 +60,26 @@ Update, Neustart und Hostneustart sind getrennte administrativ freizugebende Vor
 Kompatible kurze Updates binden die vollständige Folgeprüfung an den Nachtablauf; der vollständige Ablauf prüft sie direkt.
 Eine Deploypause bleibt wirksam. Bewusst deaktivierte Timer bleiben deaktiviert; unveränderte Timer werden nicht neu gestartet.
 
+### VPS-Deploy: Zeitplanung und geordneter Abschluss
+
+Der lesende Preflight muss vor Paketbau auch den voraussichtlichen Prüfpfad, laufende oder unmittelbar bevorstehende Wartungen
+und das daraus abgeleitete Zeitbudget feststellen. Die Vorabschätzung verwendet den nachgewiesenen Produktivstand und den freigegebenen Quellstand;
+die verbindliche Entscheidung trifft weiterhin `--verification auto` anhand der geprüften Paket- und Betriebsverträge.
+Eine grüne Bereitschaftsprüfung bestätigt die Durchführbarkeit, noch keine bestimmte Gesamtdauer.
+Prüfpfad, Begründung, mögliche Wartezeit und erwartete Gesamtdauer werden vor Beginn der teuren Arbeiten mitgeteilt.
+
+Vollständige Betriebs-Selbsttests starten erst nach erfolgreichem Abschluss der erforderlichen Assurance und Freigabe ihrer Sperren.
+Während eines laufenden Restore dienen lesende Live-/Ready-, Status- und Fortschrittsabfragen zur Beobachtung.
+Einzelne bestandene Phasen ersetzen weder das signierte erfolgreiche Gesamtergebnis noch das reguläre Dienstende.
+Erst danach folgen `grabenplaner-test` und `grabenplaner-offsite-test` nacheinander und eine gebündelte Abschlussprüfung.
+Ein belegter vorübergehender Sperrfehler wird nach Freigabe einmal erneut geprüft; der erste Fehlerbeleg bleibt erhalten.
+
+Ausgelieferter App-Stand, abgeschlossene Recovery-Prüfung und Release-Abschluss werden getrennt berichtet.
+Belegte historische Lock-Timeouts werden einzeln qualifiziert und nur unter ihren exakten Unitnamen bereinigt;
+ein pauschales `reset-failed` oder ein Neustart gesunder Dienste ist kein Abschlussverfahren.
+Das ausführliche Quellstand-Prozedere mit den Erkenntnissen vom 08.10.2026 steht in
+[Deploy-Zeiten und Nachtprüfungen](docs/DEPLOY-ZEITEN-UND-NACHTPRUEFUNGEN.md).
+
 ## Sicherungen und Wiederherstellung
 
 Sicherungen koppeln Datenbanken, verschlüsselte Dokumente, erforderliche Schlüssel und Betriebskonfiguration über Identität, Manifest und Hashes.

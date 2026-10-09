@@ -32,10 +32,10 @@ async function pages(buffer) {
   const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const task = getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }), pdf = await task.promise;
   try {
-    const result = [];
+    const result = [], metadata = await pdf.getMetadata();
     for (let index = 1; index <= pdf.numPages; index += 1) {
       const page = await pdf.getPage(index), content = await page.getTextContent(), operators = await page.getOperatorList();
-      result.push({ items: content.items, text: content.items.map(item => item.str).join(' '), width: page.view[2], height: page.view[3],
+      result.push({ items: content.items, text: content.items.map(item => item.str).join(' '), width: page.view[2], height: page.view[3], title: metadata.info.Title,
         imageCount: operators.fnArray.filter(id => [OPS.paintImageXObject, OPS.paintInlineImageXObject].includes(id)).length });
     }
     return result;
@@ -45,8 +45,43 @@ async function pages(buffer) {
 test('Article sheet options require at least one unique known section and a boolean image choice', () => {
   assert.deepEqual(normalizeArticleSheetOptions(), { sections: ['master'], includeImage: false });
   assert.deepEqual(normalizeArticleSheetOptions({ sections: ['sales', 'master'], includeImage: true }), { sections: ['master', 'sales'], includeImage: true });
+  assert.deepEqual(normalizeArticleSheetOptions({ title: '  Mein Artikelstammblatt  ', orientation: 'portrait' }),
+    { sections: ['master'], includeImage: false, title: 'Mein Artikelstammblatt', orientation: 'portrait' });
+  assert.deepEqual(normalizeArticleSheetOptions({ title: '   ', orientation: 'landscape' }), { sections: ['master'], includeImage: false, orientation: 'landscape' });
   for (const input of [null, [], { sections: [] }, { sections: ['master', 'master'] }, { sections: ['unknown'] }, { sections: 'master' }, { includeImage: 'true' }, { includeImage: true, file: 'private' }]) {
     assert.throws(() => normalizeArticleSheetOptions(input), { code: 'ARTICLE_SHEET_OPTIONS' });
+  }
+  for (const input of [{ title: null }, { title: 123 }, { title: 'x'.repeat(161) }, { title: 'Titel\nFolgezeile' }, { title: 'Titel\u0000' },
+    { orientation: null }, { orientation: 'vertical' }, { orientation: true }]) assert.throws(() => normalizeArticleSheetOptions(input), { code: 'ARTICLE_SHEET_OPTIONS' });
+});
+
+test('Article sheet uses true A4 portrait/landscape bounds and custom title metadata while retaining every selected section and article identity', async () => {
+  const input = model(); input.imageBuffer = await sharp({ create: { width: 500, height: 340, channels: 3, background: '#276b58' } }).webp().toBuffer();
+  const title = 'BEISPIEL - Kameraübersicht für die Filiale';
+  for (const orientation of ['portrait', 'landscape']) {
+    const buffer = await createSalesArticleSheetPdf(input, { sections: selection, includeImage: true, title, orientation }), result = await pages(buffer);
+    const text = result.map(page => page.text).join(' ');
+    assert.equal(result[0].title, title); assert.match(text, /BEISPIEL - Kameraübersicht für die Filiale/); assert.match(result[0].text, /Artikel 001234/);
+    assert.equal(result.reduce((sum, page) => sum + page.imageCount, 0), 1);
+    for (const marker of ['Stammdaten', 'Preise', 'EIGENE-GP-NOTIZ', 'IMPORTIERTE-NOTIZ', 'Kennungen', 'Verlauf', 'ARTIKEL-UM-035', 'ARTIKEL-VK-035']) assert.ok(text.includes(marker), marker);
+    assert.ok(result.flatMap(page => page.items).filter(item => item.str === '19.09.2026').length >= input.movements.rows.length, 'Movement dates stay on one line');
+    assert.ok(result.flatMap(page => page.items).filter(item => item.str === '20.09.2026').length >= input.sales.rows.length, 'Sale dates stay on one line');
+    for (const page of result) {
+      assert.ok(Math.abs(page.width - (orientation === 'portrait' ? 595.28 : 841.89)) < .1);
+      assert.ok(Math.abs(page.height - (orientation === 'portrait' ? 841.89 : 595.28)) < .1);
+      for (const item of page.items.filter(item => item.str)) {
+        assert.ok(item.transform[4] >= 31.5 && item.transform[4] + item.width <= page.width - 31, orientation + ': ' + item.str);
+        assert.ok(item.transform[5] >= 20 && item.transform[5] <= page.height - 23, orientation + ': ' + item.str);
+      }
+    }
+    for (const rows of [input.movements.rows, input.sales.rows]) for (const row of rows) {
+      const marker = row.label || row.description;
+      assert.equal(result.flatMap(page => page.items).filter(item => item.str === marker).length, 1, orientation + ': ' + marker);
+    }
+    if (process.env.ARTICLE_SHEET_PDF_PREVIEW_DIR) {
+      const fs = require('node:fs'), path = require('node:path'); fs.mkdirSync(process.env.ARTICLE_SHEET_PDF_PREVIEW_DIR, { recursive: true });
+      fs.writeFileSync(path.join(process.env.ARTICLE_SHEET_PDF_PREVIEW_DIR, 'article-sheet-' + orientation + '.pdf'), buffer);
+    }
   }
 });
 

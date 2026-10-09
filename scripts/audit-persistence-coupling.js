@@ -415,6 +415,24 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   // Classification does not grant a driver import or raw database access.
   "lib/persistence/repositories/sales-article-local-notes.js",
   "lib/sales-article-sales-statements.js",
+  // Exactly two read-only membership statements for article/branch reporting.
+  // Its catalog bindings grant no driver or raw database-handle capability.
+  "lib/sales-article-report-statements.js",
+  // Simulation has one read-only accepted-catalog epoch and one revision-bound
+  // deletion of its encrypted chunks; no driver, raw handle or migration.
+  "lib/sales-bwl-simulation-statements.js",
+  "lib/sales-bwl-abc-routes.js",
+  "lib/sales-bwl-preferences-store.js",
+  "lib/sales-bwl-simulation-routes.js",
+  "lib/sales-bwl-simulation-variants-store.js",
+  "lib/sales-bwl-simulation-preferences-store.js",
+  // Filial actions keep their typed source proofs and encrypted CAS items in
+  // the established provider boundary; no driver or raw handle is granted.
+  "lib/sales-bwl-actions-routes.js",
+  "lib/sales-bwl-actions-source-data.js",
+  "lib/sales-bwl-actions-store.js",
+  "lib/sales-bwl-actions-assignees.js",
+  "lib/sales-bwl-actions-preferences-store.js",
   "lib/sales-article-sales-catalog.js",
   "lib/sales-article-sales-identity.js",
   "lib/sales-article-sales.js",
@@ -654,6 +672,20 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/trade-movements.test.js",
   "test/sales-article-local-notes.test.js",
   "test/sales-article-sales.test.js",
+  "test/sales-article-report.test.js",
+  "test/sales-bwl-preferences-store.test.js",
+  "test/sales-bwl-simulation-variants-store.test.js",
+  "test/sales-bwl-simulation-preferences.test.js",
+  "test/sales-bwl-simulation-browser.test.js",
+  "test/sales-bwl-simulation-ui.test.js",
+  "test/sales-bwl-actions-model.test.js",
+  "test/sales-bwl-actions-source.test.js",
+  "test/sales-bwl-actions-routes.test.js",
+  "test/sales-bwl-actions-store.test.js",
+  "test/sales-bwl-actions-preferences.test.js",
+  "test/sales-bwl-actions-browser.test.js",
+  "test/sales-bwl-actions-pdf-routes.test.js",
+  "test/sales-bwl-workflows-browser.test.js",
   "test/sales-article-branch-orders-sql.test.js",
   "test/sales-price-label-template-store.test.js",
   "test/sales-price-label-image-store.test.js",
@@ -823,6 +855,8 @@ const PHASE_3_STATEMENT_FILES = Object.freeze(
     // The exact article-sales statement module is catalog-bound; other lib/
     // modules still cannot declare provider statements.
     || file === "lib/sales-article-sales-statements.js"
+    || file === "lib/sales-article-report-statements.js"
+    || file === "lib/sales-bwl-simulation-statements.js"
   )),
 );
 const PHASE_3_SQLITE_RAW_ACCESS_FILES = Object.freeze(
@@ -861,10 +895,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1481;
-const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 45;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1436;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1363;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1485;
+const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 46;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1439;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1366;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -990,8 +1024,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1345;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 136;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1347;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 138;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",
@@ -2729,6 +2763,11 @@ function architectureBoundaryViolationsForText(file, text) {
   const persistenceInternalFiles = new Set([
     'lib/persistence/postgresql/application.js',
     'lib/persistence/postgresql/read-scope.js',
+    // Existing managed readers accept only a branded executor so source hints
+    // can join the action CAS transaction. This grants contract assertions only.
+    'lib/data-import-managed-protection.js',
+    'lib/persistence/repositories/trade-insights.js',
+    'lib/persistence/repositories/sales-bwl-abc-workspace.js',
     ...PHASE_2_CONTRACT_FILES,
     ...PHASE_3_SQLITE_PROVIDER_FILES,
     ...PHASE_4_PERSISTENCE_FILES,

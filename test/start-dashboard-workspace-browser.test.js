@@ -30,14 +30,18 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    window.controller=StartDashboardWorkspace.create(options);
   });
   async function check(name,fn){await fn();results.checks.push(name);process.stdout.write('PASS '+name+'\n');}
-  await check('seventeen_menus_and_native_dialog_editor_hides_menu',async()=>{
+  await check('seventeen_anchored_menus_open_separate_compact_editor',async()=>{
    assert.equal(await page.locator('[data-dashboard-field-menu]').count(),17);
    assert.equal(await page.locator('[data-dashboard-field-edge]').count(),17*8);
    assert.equal(await page.locator('[data-dashboard-field-edge]').evaluateAll(nodes=>nodes.every(node=>node.textContent==='')),true);
    await page.locator('[data-dashboard-field-menu="card:schedule"]').click();
-   assert.equal(await page.locator('.start-dashboard-field-dialog').evaluate(dialog=>dialog.open),true);
+   assert.equal(await page.locator('[data-field-menu]').isVisible(),true);
+   assert.equal(await page.locator('[data-field-hide]').isVisible(),false);
+   assert.equal(await page.locator('.start-dashboard-field-dialog').evaluate(dialog=>dialog.open),false);
+   assert.equal(await page.locator('[data-dashboard-field-menu="card:schedule"]').getAttribute('aria-expanded'),'true');
    await page.locator('[data-field-edit]').click();
    assert.equal(await page.locator('[data-field-menu]').evaluate(element=>getComputedStyle(element).display),'none');
+   assert.equal(await page.locator('.start-dashboard-field-dialog').evaluate(dialog=>dialog.open),true);
    assert.equal(await page.locator('[data-field-editor]').isVisible(),true);
   });
   await check('custom_labels_are_text_and_persist_only_for_current_synthetic_account',async()=>{
@@ -57,6 +61,7 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    await page.locator('[data-dashboard-field-menu="card:schedule"]').click();
    await page.evaluate(()=>{allowedIds.delete('card:schedule');controller.sync();});
    assert.equal(await page.locator('.start-dashboard-field-dialog').evaluate(dialog=>dialog.open),false);
+   assert.equal(await page.locator('[data-field-menu]').isVisible(),false);
    assert.equal(await page.locator('[data-dashboard-field-menu="card:schedule"]').evaluate(button=>getComputedStyle(button).display),'none');
    await page.evaluate(()=>{allowedIds.add('card:schedule');controller.sync();});
   });
@@ -64,11 +69,86 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    await page.evaluate(()=>{document.querySelector('#startDashboardSchedulePeriod').textContent='Fresh business period 42';actor='B';controller.sync();});
    await page.waitForFunction(()=>document.querySelector('#startDashboardSchedulePeriod').textContent==='Fresh business period 42');
   });
+  await check('all_field_title_bars_move_without_extra_buttons_and_native_navigation_survives_clicks',async()=>{
+   assert.equal(await page.locator('[data-dashboard-field-move]').count(),17);
+   assert.equal(await page.locator('.start-dashboard-field-move').count(),0);
+   assert.equal(await page.locator('[data-dashboard-field-move="group:branch"]').evaluate(node=>node.matches('.start-dashboard-group-link')),true);
+   assert.equal(await page.locator('[data-dashboard-field-move="card:loans"]').evaluate(node=>node.matches('.start-dashboard-card-link')),true);
+   assert.equal(await page.locator('[data-dashboard-field-move="widget:branchOnDuty"]').evaluate(node=>node.tagName),'SPAN');
+   assert.equal(await page.locator('[data-dashboard-field-move="control:vps"]').evaluate(node=>node.tagName),'HEADER');
+   await page.evaluate(()=>{
+    window.navigationClicks=[];
+    document.querySelector('#startDashboardView').addEventListener('click',event=>{
+     const button=event.target.closest('[data-start-dashboard-view],[data-start-dashboard-card-view],#startDashboardControlCenterButton');
+     if(button)navigationClicks.push(button.dataset.dashboardFieldMove);
+    });
+   });
+   const title=page.locator('[data-dashboard-field-move="group:branch"]');
+   await title.click();await title.press('Enter');
+   const box=await title.boundingBox();
+   await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+   await page.mouse.move(box.x+box.width/2+3,box.y+box.height/2+2);await page.mouse.up();
+   assert.deepEqual(await page.evaluate(()=>navigationClicks),['group:branch','group:branch','group:branch']);
+   assert.equal(await page.locator('[data-dashboard-floating]').count(),0);
+   assert.equal(await page.evaluate(()=>persisted.B?.fields['group:branch']?.geometry),undefined);
+  });
+  await check('dragging_native_title_suppresses_only_its_drag_click_and_child_controls_keep_working',async()=>{
+   const title=page.locator('[data-dashboard-field-move="group:branch"]');
+   const box=await title.boundingBox();await page.mouse.move(box.x+150,box.y+30);await page.mouse.down();
+   await page.mouse.move(box.x+190,box.y+60,{steps:4});await page.mouse.up();
+   await page.waitForFunction(()=>persisted.B?.fields['group:branch']?.geometry);
+   assert.equal(await page.evaluate(()=>navigationClicks.length),3,'a drag cannot activate the destination');
+   await title.click();assert.equal(await page.evaluate(()=>navigationClicks.length),4,'the next normal click still navigates');
+   await page.evaluate(()=>{
+    const next=controller.store.value;delete next.fields['group:branch'];void controller.store.change(next);
+    const select=document.querySelector('#startDashboardSalesMetric');select.innerHTML='<option value="net">Netto</option><option value="gross">Brutto</option>';
+   });
+   await page.locator('#startDashboardSalesMetric').selectOption('gross');
+   await page.locator('#startDashboardNextSalesMetric').click();
+   assert.equal(await page.locator('[data-dashboard-floating]').count(),0);
+   assert.equal(await page.locator('#startDashboardSalesMetric').inputValue(),'gross');
+  });
+  await check('widget_and_vps_title_drags_move_their_own_field_and_pending_drags_cannot_cross_accounts',async()=>{
+   for(const id of ['widget:branchOnDuty','control:vps']) {
+    await page.locator(`[data-dashboard-field-move="${id}"]`).evaluate(handle=>{
+     const rect=handle.getBoundingClientRect(),x=rect.x+12,y=rect.y+12;
+     handle.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:51,button:0,isPrimary:true,clientX:x,clientY:y}));
+     window.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:51,clientX:x+40,clientY:y+20}));
+     window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:51}));
+    });
+    await page.waitForFunction(id=>persisted.B?.fields[id]?.geometry,id);
+    assert.deepEqual(await page.locator('[data-dashboard-floating]').evaluateAll(nodes=>nodes.map(node=>node.dataset.dashboardFloating)),[id]);
+    await page.evaluate(id=>{const next=controller.store.value;delete next.fields[id];return controller.store.change(next);},id);
+   }
+   await page.evaluate(()=>{
+    const handle=document.querySelector('[data-dashboard-field-move="card:loans"]'),rect=handle.getBoundingClientRect();
+    handle.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:52,button:0,isPrimary:true,clientX:rect.x+12,clientY:rect.y+12}));
+    actor='C';controller.sync();
+    window.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:52,clientX:rect.x+60,clientY:rect.y+30}));
+    window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:52}));
+   });
+   await page.waitForFunction(()=>controller.store.ready);
+   assert.equal(await page.locator('[data-dashboard-floating]').count(),0);
+   assert.equal(await page.evaluate(()=>persisted.C),undefined);
+   await page.evaluate(()=>{actor='B';controller.sync();});await page.waitForFunction(()=>controller.store.ready);
+   assert.equal(await page.evaluate(()=>persisted.B?.fields['card:loans']?.geometry),undefined);
+  });
+  await check('widget_and_vps_title_bars_move_by_keyboard_without_moving_parent_fields',async()=>{
+   for(const id of ['widget:branchOnDuty','control:vps']) {
+    const title=page.locator(`[data-dashboard-field-move="${id}"]`);
+    assert.equal(await title.getAttribute('tabindex'),'0');await title.focus();await title.press('ArrowDown');
+    await page.waitForFunction(id=>persisted.B?.fields[id]?.geometry,id);
+    assert.deepEqual(await page.locator('[data-dashboard-floating]').evaluateAll(nodes=>nodes.map(node=>node.dataset.dashboardFloating)),[id]);
+    await page.evaluate(id=>{const next=controller.store.value;delete next.fields[id];return controller.store.change(next);},id);
+   }
+  });
   await check('destroy_restores_original_control_anchor_and_remount_never_nests_wrappers',async()=>{
    for(let i=0;i<3;i++) {
     await page.evaluate(()=>controller.destroy());
     assert.equal(await page.locator('.start-dashboard-control-workspace').count(),0);
     assert.equal(await page.locator('[data-dashboard-field-menu]').count(),0);
+    assert.equal(await page.locator('[data-dashboard-field-move]').count(),0);
+    assert.equal(await page.locator('[data-start-dashboard-widget="branchOnDuty"] > span').getAttribute('tabindex'),null);
     assert.deepEqual(await page.locator('#startDashboardControlCenterButton').evaluate(element=>({parent:element.parentElement.id,next:element.nextElementSibling.id})),{parent:'startDashboardView',next:'startDashboardCustomizer'});
     await page.evaluate(()=>{controller=StartDashboardWorkspace.create(options);});
     assert.equal(await page.locator('.start-dashboard-control-workspace').count(),1);
@@ -78,6 +158,26 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
   await check('escape_returns_keyboard_focus_to_originating_field_menu',async()=>{
    await page.locator('[data-dashboard-field-menu="card:schedule"]').click();await page.keyboard.press('Escape');
    await page.waitForFunction(()=>document.activeElement?.dataset.dashboardFieldMenu==='card:schedule');
+  });
+  await check('menu_keyboard_navigation_outside_click_and_scroll_reanchor_without_saving',async()=>{
+   const origin=page.locator('[data-dashboard-field-menu="card:schedule"]');
+   const before=await page.evaluate(()=>requests.filter(request=>request.options.method==='PUT').length);
+   await origin.focus();await origin.press('ArrowDown');
+   assert.equal(await page.evaluate(()=>document.activeElement?.hasAttribute('data-field-edit')),true);
+   await page.keyboard.press('End');
+   assert.equal(await page.evaluate(()=>document.activeElement?.hasAttribute('data-field-close')),true);
+   await page.keyboard.press('ArrowDown');
+   assert.equal(await page.evaluate(()=>document.activeElement?.hasAttribute('data-field-edit')),true);
+   await page.keyboard.press('Tab');
+   assert.equal(await page.locator('[data-field-menu]').isVisible(),false);
+   assert.equal(await origin.getAttribute('aria-expanded'),'false');
+   await origin.click();await page.locator('#startDashboardTitle').click();
+   assert.equal(await page.locator('[data-field-menu]').isVisible(),false);
+   await origin.click();await page.locator('#startDashboardView').dispatchEvent('scroll');
+   assert.equal(await page.locator('[data-field-menu]').isVisible(),true);
+   await page.locator('#startDashboardView').dispatchEvent('wheel');
+   assert.equal(await page.locator('[data-field-menu]').isVisible(),false);
+   assert.equal(await page.evaluate(()=>requests.filter(request=>request.options.method==='PUT').length),before);
   });
   await check('each_of_the_seventeen_fields_edits_independently_and_restores_its_default',async()=>{
    const ids=await page.evaluate(()=>StartDashboardWorkspacePreferences.IDS);
@@ -134,7 +234,8 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    assert.deepEqual(await page.evaluate(()=>persisted.B.fields['card:loans']),saved);
    await page.setViewportSize({width:390,height:844});
    await page.waitForFunction(()=>document.querySelectorAll('[data-dashboard-floating]').length===0);
-   assert.equal(await move.isVisible(),false);
+   assert.equal(await move.isVisible(),true);
+   assert.equal(await move.getAttribute('data-dashboard-drag-enabled'),'false');
    assert.equal(await page.locator('[data-start-dashboard-card="loans"]').evaluate(node=>node.parentElement.classList.contains('start-dashboard-card-list')),true);
    assert.deepEqual(await page.evaluate(()=>persisted.B.fields['card:loans']),saved);
    await page.setViewportSize({width:1600,height:1000});
@@ -162,7 +263,8 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    await page.evaluate(()=>{actor='anonymous';controller.sync();});
    assert.equal(await page.locator('[data-dashboard-floating]').count(),0);
    assert.equal(await page.locator('[data-start-dashboard-card="loans"]').isVisible(),true);
-   assert.equal(await page.locator('[data-dashboard-field-move="card:loans"]').isVisible(),false);
+   assert.equal(await page.locator('[data-dashboard-field-move="card:loans"]').isVisible(),true);
+   assert.equal(await page.locator('[data-dashboard-field-move="card:loans"]').getAttribute('data-dashboard-drag-enabled'),'false');
    await page.evaluate(()=>{allowedIds.add('card:loans');actor='B';controller.sync();});
    await page.waitForFunction(()=>controller.store.ready && document.querySelector('[data-dashboard-floating="card:loans"]'));
   });
@@ -212,20 +314,19 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    await page.evaluate(()=>{controller.geometry.canvas.style.width='';controller.sync();});
    assert.equal(await page.locator('[data-dashboard-floating="card:loans"]').evaluate(node=>node.style.width),'1000px');
   });
-  await check('queued_dialog_close_preserves_new_resize_focus_after_geometry_reset',async()=>{
+  await check('synchronous_menu_close_preserves_new_resize_focus_after_geometry_reset',async()=>{
    const resize=page.locator('[data-dashboard-field-resize="group:personnel"]');
    await resize.focus();await page.keyboard.press('ArrowRight');
    await page.waitForFunction(()=>persisted.B.fields['group:personnel']?.geometry);
    await page.locator('[data-dashboard-field-menu="group:personnel"]').click();
    const focus=await page.evaluate(async()=>{
     const handle=document.querySelector('[data-dashboard-field-resize="group:personnel"]');
-    const closed=new Promise(resolve=>controller.dialog.addEventListener('close',resolve,{once:true}));
-    // Keep reset and the user's next focus change in one task, before the
-    // browser dispatches the native queued close event. No timing delay needed.
+    // The anchored menu closes synchronously. Nothing queued may steal a later
+    // focus change from the field's resize edge.
     document.querySelector('[data-field-geometry-default]').click();handle.focus();
     const immediate=document.activeElement===handle;
-    await closed;
-    return {immediate,afterClose:document.activeElement===handle,open:controller.dialog.open};
+    await Promise.resolve();
+    return {immediate,afterClose:document.activeElement===handle,open:!controller.menu.hidden};
    });
    assert.deepEqual(focus,{immediate:true,afterClose:true,open:false});
    await page.keyboard.press('ArrowRight');
@@ -236,6 +337,7 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
   await check('queued_old_close_preserves_the_selection_of_an_immediately_reopened_dialog',async()=>{
    const previous=await page.evaluate(()=>controller.store.value);
    await page.locator('[data-dashboard-field-menu="card:loans"]').click();
+   await page.locator('[data-field-edit]').click();
    const state=await page.evaluate(async()=>{
     const closed=new Promise(resolve=>controller.dialog.addEventListener('close',resolve,{once:true}));
     controller.dialog.close();
@@ -302,7 +404,14 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
     controller=StartDashboardWorkspace.create(options);
    });
    assert.equal(await page.locator('[data-dashboard-field-menu="card:loans"]').isDisabled(),true);
-   assert.equal(await page.locator('[data-dashboard-field-move="card:loans"]').isDisabled(),true);
+   assert.equal(await page.locator('[data-dashboard-field-move="card:loans"]').isDisabled(),false);
+   assert.equal(await page.locator('[data-dashboard-field-move="card:loans"]').getAttribute('data-dashboard-drag-enabled'),'false');
+   await page.locator('[data-dashboard-field-move="card:loans"]').evaluate(handle=>{
+    handle.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:65,button:0,isPrimary:true,clientX:20,clientY:20}));
+    window.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:65,clientX:100,clientY:80}));
+    window.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:65}));
+   });
+   assert.equal(await page.locator('[data-dashboard-floating]').count(),0);
    await page.evaluate(()=>controller.resetAll());assert.equal(await page.evaluate(()=>slowWrites.length),0);
    await page.evaluate(()=>resolveInitial({startDashboardWorkspace:{version:1,fields:{'card:sales':{title:'Existing sales'}}}}));
    await page.waitForFunction(()=>controller.store.ready);
@@ -320,23 +429,100 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    assert.equal(await page.locator('[data-field-edit]').isDisabled(),true);
    assert.equal(await page.locator('[data-field-default]').isDisabled(),true);
    assert.equal(await page.locator('[data-field-geometry-default]').isDisabled(),true);
+   assert.equal(await page.locator('[data-field-color]').evaluateAll(buttons=>buttons.every(button=>button.disabled)),true);
    assert.equal(await page.locator('[data-field-retry]').textContent(),'Erneut laden');
    await page.locator('[data-field-retry]').click();await page.waitForFunction(()=>controller.store.ready);
    assert.equal(await page.evaluate(()=>controller.store.value.fields['card:sales'].title),'Existing sales');
    assert.equal(await page.evaluate(()=>initialReadAttempts),2);
    assert.deepEqual(await page.evaluate(()=>readErrors),['initial read failed']);
   });
-  await check('compact_control_checkboxes_and_shared_native_dialog_adapter_keep_layout_and_focus',async()=>{
+  await check('compact_editor_and_popup_are_excluded_from_generic_window_adapter',async()=>{
    assert.equal(await page.locator('#startDashboardCenterVisible').evaluate(node=>getComputedStyle(node).width),'16px');
    await page.evaluate(()=>{window.dialogPrefs=GpWindowPreferences.empty();window.dialogManager=GpWindow.installDocument(document,{actorKey:()=>actor,canUse:()=>true,readPreferences:async()=>({gpWindows:dialogPrefs}),writePreferences:async value=>{dialogPrefs=value;}});});
    await page.locator('[data-dashboard-field-menu="card:loans"]').click();
-   await page.waitForFunction(()=>controller.dialog.classList.contains('gp-window'));
+   assert.equal(await page.locator('[data-field-menu]').evaluate(node=>node.classList.contains('gp-window')),false);
    await page.locator('[data-field-edit]').click();
-   assert.equal(await page.locator('.start-dashboard-field-dialog').evaluate(node=>getComputedStyle(node).transform),'none');
-   const box=await page.locator('.start-dashboard-field-dialog').boundingBox();assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<=1601&&box.y+box.height<=1001);
+   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+   assert.equal(await page.locator('.start-dashboard-field-dialog').evaluate(node=>node.classList.contains('gp-window')),false);
+   assert.equal(await page.locator('.start-dashboard-field-dialog .gp-dialog-window-title').count(),0);
+   const box=await page.locator('.start-dashboard-field-dialog').boundingBox();assert.ok(box.width<=401&&box.x>=0&&box.y>=0&&box.x+box.width<=1601&&box.y+box.height<=1001);
    await page.locator('[data-field-editor] input').fill('Adapter-Test');await page.locator('[data-field-editor] button[type=submit]').click();
    await page.waitForFunction(()=>controller.dialog.open===false);
    assert.equal(await page.evaluate(()=>document.activeElement?.dataset.dashboardFieldMenu),'card:loans');await page.evaluate(()=>dialogManager.destroy());
+  });
+  await check('popup_and_rename_editor_fit_a_small_viewport_at_large_application_zoom',async()=>{
+   await page.locator('.start-dashboard-topbar').evaluate(header=>{header.style.display='none';});
+   for(const {zoom,width,height} of [{zoom:1.5,width:640,height:480},{zoom:2,width:640,height:480},{zoom:2,width:800,height:600}]) {
+    await page.setViewportSize({width,height});
+    await page.evaluate(({zoom,width,height})=>{
+     document.body.style.zoom=String(zoom);
+     const button=document.querySelector('[data-dashboard-field-menu="card:loans"]');
+     button.style.position='fixed';button.style.left=(width/zoom-40)+'px';button.style.top=(height/zoom-40)+'px';button.style.right='auto';
+    },{zoom,width,height});
+    await page.locator('[data-dashboard-field-menu="card:loans"]').click();
+    const popup=await page.locator('[data-field-menu]').boundingBox();
+    assert.ok(popup.x>=0&&popup.y>=0&&popup.x+popup.width<=width+1&&popup.y+popup.height<=height+1,JSON.stringify({zoom,popup}));
+    await page.locator('[data-field-edit]').click();
+    const editor=await page.locator('.start-dashboard-field-dialog').boundingBox();
+    assert.ok(editor.x>=0&&editor.y>=0&&editor.x+editor.width<=width+1&&editor.y+editor.height<=height+1,JSON.stringify({zoom,editor}));
+    await page.keyboard.press('Escape');
+   }
+   await page.evaluate(()=>{document.body.style.zoom='';document.querySelector('[data-dashboard-field-menu="card:loans"]').style.cssText='';document.querySelector('.start-dashboard-topbar').style.display='';});
+   await page.setViewportSize({width:1600,height:1000});
+  });
+  await check('pastel_colors_save_per_field_without_tinting_uncolored_children_and_restore_independently',async()=>{
+   // End the preceding failure fixture before exercising real mock persistence.
+   await page.evaluate(()=>{controller.destroy();options.api=originalApi;options.error=error=>{throw error;};actor='B';controller=StartDashboardWorkspace.create(options);});
+   await page.waitForFunction(()=>controller.store.ready);
+   const previous=await page.evaluate(()=>controller.store.value);
+   const childBackground=await page.locator('[data-start-dashboard-card="schedule"]').evaluate(node=>getComputedStyle(node).backgroundColor);
+   const palette=await page.evaluate(()=>StartDashboardWorkspacePreferences.COLORS);
+   const branchMenu=page.locator('[data-dashboard-field-menu="group:branch"]');
+   for(const color of palette) {
+    await branchMenu.click();await page.locator(`[data-field-color="${color}"]`).click();
+    await page.waitForFunction(color=>persisted.B.fields['group:branch']?.color===color,color);
+    assert.equal(await page.locator('[data-start-dashboard-group="branch"]').getAttribute('data-dashboard-color'),color);
+    assert.equal(await page.locator('[data-start-dashboard-card="schedule"]').getAttribute('data-dashboard-color'),null);
+    assert.equal(await page.locator('[data-start-dashboard-card="schedule"]').evaluate(node=>getComputedStyle(node).backgroundColor),childBackground);
+    const expected=structuredClone(previous);expected.fields['group:branch']={...expected.fields['group:branch'],color};
+    assert.deepEqual(await page.evaluate(()=>controller.store.value),expected);
+    await branchMenu.click();assert.equal(await page.locator(`[data-field-color="${color}"]`).getAttribute('aria-checked'),'true');await page.keyboard.press('Escape');
+   }
+   await branchMenu.click();await page.locator('[data-field-color=""]').click();
+   await page.waitForFunction(()=>!persisted.B.fields['group:branch']?.color);
+   assert.deepEqual(await page.evaluate(()=>controller.store.value),previous);
+   for(const [id,color] of [['group:branch','sage'],['card:schedule','blue'],['widget:salesKpis','rose'],['control:vps','lavender']]) {
+    await page.locator(`[data-dashboard-field-menu="${id}"]`).click();await page.locator(`[data-field-color="${color}"]`).click();
+    await page.waitForFunction(({id,color})=>persisted.B.fields[id]?.color===color,{id,color});
+   }
+   const saved=await page.evaluate(()=>controller.store.value);
+   await page.evaluate(()=>{controller.destroy();controller=StartDashboardWorkspace.create(options);});
+   await page.waitForFunction(()=>controller.store.ready);
+   assert.deepEqual(await page.evaluate(()=>controller.store.value),saved);
+   assert.equal(await page.locator('[data-start-dashboard-widget="salesKpis"]').getAttribute('data-dashboard-color'),'rose');
+   await page.evaluate(()=>{actor='ColorOther';controller.sync();});await page.waitForFunction(()=>controller.store.ready);
+   assert.equal(await page.locator('[data-dashboard-color]').count(),0);
+   await page.evaluate(()=>{actor='B';controller.sync();});await page.waitForFunction(()=>controller.store.ready);
+   assert.deepEqual(await page.evaluate(()=>controller.store.value),saved);
+   await page.locator('[data-dashboard-field-menu="group:branch"]').click();await page.locator('[data-field-default]').click();
+   assert.equal(await page.locator('[data-start-dashboard-group="branch"]').getAttribute('data-dashboard-color'),'sage');
+   await page.evaluate(()=>controller.resetAll());assert.equal(await page.locator('[data-dashboard-color]').count(),0);
+   await page.evaluate(value=>controller.store.change(value),previous);
+  });
+  await check('color_palette_has_keyboard_selection_and_honors_permission_gates',async()=>{
+   const previous=await page.evaluate(()=>controller.store.value),origin=page.locator('[data-dashboard-field-menu="group:branch"]');
+   const writes=await page.evaluate(()=>requests.filter(request=>request.options.method==='PUT').length);
+   await origin.click();await page.keyboard.press('ArrowDown');
+   assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('data-field-color')),'');
+   await page.keyboard.press('ArrowRight');
+   assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('data-field-color')),'sage');
+   assert.equal(await page.evaluate(()=>requests.filter(request=>request.options.method==='PUT').length),writes);
+   await page.keyboard.press('Enter');await page.waitForFunction(()=>persisted.B.fields['group:branch']?.color==='sage');
+   await origin.click();await page.evaluate(()=>{allowedIds.delete('group:branch');controller.sync();document.querySelector('[data-field-color="blue"]').click();});
+   assert.equal(await page.locator('[data-field-menu]').isVisible(),false);
+   assert.equal(await page.evaluate(()=>controller.store.value.fields['group:branch'].color),'sage');
+   await page.evaluate(()=>{allowedIds.add('group:branch');controller.sync();});
+   await page.evaluate(value=>controller.store.change(value),previous);
   });
   assert.deepEqual(results.pageErrors,[]);
  } finally {await browser.close();}

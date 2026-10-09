@@ -509,7 +509,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     report.phase5Progress.compilerVersion,
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1481);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1485);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -527,7 +527,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1481,
+    requiredReceiptCount: 1485,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -769,6 +769,41 @@ test("Article tools classify exact persistence modules without granting drivers 
   assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.includes("test/sales-article-catalog-other-local-route.test.js"), false);
   assert.equal(PHASE_3_SQLITE_PROVIDER_FILES.includes("lib/sales-article-search-window-preferences.js"), false,
     "The pure preference normalizer needs no production persistence exception");
+});
+
+test("Article report membership grants only its exact read-only statement declaration", () => {
+  const file = "lib/sales-article-report-statements.js";
+  assert.equal(PHASE_3_SQLITE_PROVIDER_FILES.filter(entry => entry === file).length, 1);
+  assert.equal(PHASE_3_SQLITE_RAW_ACCESS_FILES.includes(file), false);
+  assert.deepEqual(architectureBoundaryViolationsForText(file, fs.readFileSync(path.join(root, file), "utf8")), []);
+  assert.equal(architectureBoundaryViolationsForText(file, "const statement = definePersistenceStatement({});")
+    .some(entry => entry.kind === "provider-statement-outside-boundary"), false);
+  for (const target of [file, "lib/sales-article-report-other-statements.js", "lib/sales-article-report-data.js", "lib/sales-article-report-routes.js"]) {
+    for (const [source, kind] of [
+      ["const driver = require('node:" + "sqlite');", "sqlite-driver-import-outside-boundary"],
+      ["const driver = require('pg');", "postgresql-driver-import"],
+      ["const provider = createPersistenceProviderFacade(adapter);", "provider-facade-outside-boundary"],
+      ["const configured = process.env.DB_PROVIDER;", "provider-runtime-config-outside-boundary"],
+    ]) assert.equal(architectureBoundaryViolationsForText(target, source).some(entry => entry.kind === kind), true, `${target}: ${kind}`);
+    if (target !== file) assert.equal(architectureBoundaryViolationsForText(target, "const statement = definePersistenceStatement({});")
+      .some(entry => entry.kind === "provider-statement-outside-boundary"), true);
+  }
+});
+
+test("Simulation registration permits only its named epoch and scoped CAS statements without raw access", () => {
+  const file = "lib/sales-bwl-simulation-statements.js";
+  assert.equal(PHASE_3_SQLITE_PROVIDER_FILES.filter(entry => entry === file).length, 1);
+  assert.equal(PHASE_3_SQLITE_RAW_ACCESS_FILES.includes(file), false);
+  assert.deepEqual(architectureBoundaryViolationsForText(file, fs.readFileSync(path.join(root, file), "utf8")), []);
+  const statements = require('../lib/sales-bwl-simulation-statements');
+  assert.equal(statements.catalogEpoch.operation, 'queryOne'); assert.equal(statements.remove.operation, 'execute');
+  for (const target of [file, 'lib/sales-bwl-simulation-data.js', 'lib/sales-bwl-simulation-variants-store.js', 'lib/sales-bwl-simulation-routes.js']) {
+    for (const [source, kind] of [["const driver = require('node:" + "sqlite');", 'sqlite-driver-import-outside-boundary'], ["const driver = require('pg');", 'postgresql-driver-import'],
+      ['const provider = createPersistenceProviderFacade(adapter);', 'provider-facade-outside-boundary'], ['const configured = process.env.DB_PROVIDER;', 'provider-runtime-config-outside-boundary']]) {
+      assert.equal(architectureBoundaryViolationsForText(target, source).some(entry => entry.kind === kind), true);
+    }
+    if (target !== file) assert.equal(architectureBoundaryViolationsForText(target, 'const statement = definePersistenceStatement({});').some(entry => entry.kind === 'provider-statement-outside-boundary'), true);
+  }
 });
 
 test("Encrypted window and price-label workspace registration grants no drivers, raw SQL, facade or statements", () => {
