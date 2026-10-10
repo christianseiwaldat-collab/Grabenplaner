@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const GpTrustEvidence = require('../public/gp-trust-evidence.js');
 
 const root = path.resolve(__dirname, "..");
 const script = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
@@ -18,6 +19,33 @@ function loadFunction(name, nextName, helpers = {}) {
   vm.runInContext(`${script.slice(start, end)}\nthis.subject = ${name};`, context);
   return context.subject;
 }
+
+test('factor points and coverage preserve unavailable and genuine zero values', () => {
+  const normalize = loadFunction('normalizedSystemCenterFactors', 'systemCenterPhaseEntries', {systemCenterVisualState: String, GpTrustEvidence});
+  const factors = normalize({trustIndex: {cards: [{possiblePoints: null, earnedPoints: null, coverage: null}, {possiblePoints: 0, earnedPoints: 0, coverage: 0}]}});
+  assert.equal(factors[0].weight, null); assert.equal(factors[0].earned, null); assert.equal(factors[0].coverage, null);
+  assert.equal(factors[1].weight, 0); assert.equal(factors[1].earned, 0); assert.equal(factors[1].coverage, 0);
+  const invalid = normalize({generatedAt:'2026-10-10T02:00:00Z',trustIndex:{cards:[{evidenceAt:'2026-10-11T00:00:00Z',possiblePoints:'0',earnedPoints:false}]}})[0];
+  assert.equal(invalid.evidenceAt,null); assert.equal(invalid.weight,null); assert.equal(invalid.earned,null);
+});
+
+test('index renderer explains real backend deductions, cap and each proof time', () => {
+  const content = {setAttribute() {}, innerHTML: ''};
+  const esc = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+  const helpers = {GpTrustEvidence, elements: {systemCenterContent: content}, escapeHtml: esc, diagnosticTimestamp: String,
+    systemCenterVisualState: () => 'critical', systemCenterStateCopy: () => ({icon: '!', label: 'Prüfen'}),
+    normalizedSystemCenterFactors: () => [{id: 'backup', label: '<img>', state: 'critical', weight: 5, earned: 0, coverage: 100, checks: [{label:'Recovery',state:'fail',points:5,earnedPoints:0,critical:true,reasonCode:'CRITICAL_CHECK_FAILED',observedAt:'2026-10-09T20:00:00Z'}]}],
+    renderSystemCenterOffsiteProvider: () => '', systemCenterResourceCards: () => '', renderSystemCenterOperations: () => '', renderSystemCenterTrends: () => '', renderProductReadiness: () => ''};
+  const render = loadFunction('renderSystemCenter', 'applySystemCenterControls', helpers);
+  render({generatedAt:'2026-10-10T02:00:00Z',trustIndex:{rawScore:97,score:49,coverage:100,capReason:'CRITICAL_CHECK_FAILED'}});
+  assert.match(content.innerHTML,/97 \/ 100/); assert.match(content.innerHTML,/49 \/ 100/);
+  assert.match(content.innerHTML,/5 Punkte Abzug/); assert.match(content.innerHTML,/Nachweis: 2026-10-09T20:00:00Z/);
+  assert.match(content.innerHTML,/kein weiterer Einzelabzug/); assert.match(content.innerHTML,/&lt;img&gt;/);
+  for (const score of [null,undefined,'0',[],101,-1,false]) {
+    render({trustIndex:{score}}); assert.match(content.innerHTML,/nicht berechenbar/);
+  }
+  render({trustIndex:{score:0}}); assert.match(content.innerHTML,/0 von 100/);
+});
 
 test("unavailable database sizes never display as zero KB", () => {
   const label = loadFunction("systemCenterByteLabel", "systemCenterUptimeLabel");

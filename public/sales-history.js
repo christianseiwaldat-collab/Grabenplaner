@@ -6,6 +6,7 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function historyModule() {
   'use strict';
   const ArticleHistory = typeof module === 'object' && module.exports ? require('./trade-article-history') : globalThis.GrabenplanerArticleHistory;
+  const DataQuality = typeof module === 'object' && module.exports ? require('./gp-data-quality') : globalThis.GrabenplanerDataQuality;
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const statuses = { linked: 'Zugeordnet', historical_mapping: 'Historisch zugeordnet', unassigned: 'Nicht zugeordnet',
     unlinked: 'Zuordnung offen', missing_source: 'Altreferenz fehlt', target_missing: 'GP-Ziel fehlt', target_inactive: 'GP-Ziel inaktiv' };
@@ -53,12 +54,11 @@
     return `<p class="sales-history-customer-assignment"><strong>${label}</strong> ${detail}${empty}</p>`;
   }
   function renderSummary(result) {
-    const c = result.coverage, unresolved = { article: 'Artikelreferenzen', location: 'Filialreferenzen', lineSeller: 'Positionsverkäufer', headerSeller: 'Belegverkäufer' };
+    const c = result.coverage;
     return `<section class="sales-history-summary"><h3>${result.totals ? 'Geprüfte importierte Positionen' : 'Datenabdeckung und offene Prüfungen'}</h3>
       ${renderCustomerAssignment(result)}
-      <p>${escape(c.label)}</p><p>${c.complete ? `${c.counts.records} passende importierte Datensätze` : `${c.counts.records} Datensätze verarbeitet – Zeitraumsauswertung noch nicht vollständig`} · ${c.counts.checked} geprüft · ${c.counts.review} offen</p>
+      ${DataQuality.render(DataQuality.history(result))}<p>${escape(c.label)}</p>
       ${result.totals ? `<p class="sales-history-total">Brutto ${escape(number(result.totals.gross))} ${escape(result.totals.currency)} · Netto ${escape(number(result.totals.net))} ${escape(result.totals.currency)}</p>` : '<p class="sales-history-review">Keine freigegebene Umsatzsumme.</p>'}
-      <p>Offene Zuordnungen innerhalb dieser Auswahl: ${Object.entries(c.unresolved).map(([key, value]) => `${escape(unresolved[key] || key)} ${value}`).join(' · ')}.</p>
       <p>Fehlende Tage sind unbekannt, nicht automatisch umsatzfrei. PDF-Berichte, Einzelverkäufe und Kassenbewegungen werden nicht addiert.</p>
       ${c.issues.length ? `<ul>${[...new Set(c.issues.map(issueText))].map(issue => `<li>${escape(issue)}</li>`).join('')}</ul>` : ''}
       <details><summary>Nach Tagen aufschlüsseln</summary><div class="sales-history-days"><table><thead><tr><th scope="col">Tag</th><th scope="col">Datensätze</th><th scope="col">Prüfung offen</th><th scope="col">Geprüft brutto</th></tr></thead><tbody>

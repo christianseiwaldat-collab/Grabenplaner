@@ -50,7 +50,7 @@ test('An incomplete analysis does not report a confirmed empty period before pro
   incomplete.coverage = { ...incomplete.coverage, complete: false };
   const html = UI.renderSummary(incomplete);
   assert.match(html, /Kundenzuordnung bestätigt/);
-  assert.match(html, /Zeitraumsauswertung noch nicht vollständig/);
+  assert.match(html, /Auswahl noch nicht vollständig verarbeitet/);
   assert.doesNotMatch(html, /keine zugeordneten Käufe .* gefunden/);
 });
 

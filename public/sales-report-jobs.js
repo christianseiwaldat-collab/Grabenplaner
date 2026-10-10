@@ -3,11 +3,33 @@ function formatSalesReportDuration(value) {
   const totalSeconds = Math.max(0, Math.round(Number(value) || 0));
   return `${Math.floor(totalSeconds / 60)}min ${totalSeconds % 60}sek`;
 }
-window.createSalesReportJobUi = function ({ api, visible, navigate = () => {} }) {
-  const controls = window.SalesReportControls;
-  const el = id => document.getElementById(id), form = el('salesAnalyticsRequestForm'), hint = el('salesAnalyticsRequestHint'), list = el('salesReportJobList');
+window.createSalesReportJobUi = function ({ api, rawApi, visible, accessKey, canUse, printActive, windowPreferences, scale, navigate = () => {} }) {
+  const controls = window.SalesReportControls, DataQuality = window.GrabenplanerDataQuality;
+  const el = id => document.getElementById(id), form = el('salesAnalyticsRequestForm'), hint = el('salesAnalyticsRequestHint'), list = el('salesReportJobList'), quality = el('salesReportDataQuality');
   let generation = 0, context = null, loading = false, busy = false, rows = [], comparisonCustom = false;
   let mode = 'report', templates = [], templatesLoaded = false, activeTemplate = null;
+  let pdfWindow = null, pdfSelection = null;
+  const canPrint = () => Boolean(canUse?.() && context?.projection.read && pdfSelection
+    && pdfSelection.generation === generation && rows.some(row => row.id === pdfSelection.id && row.status === 'completed' && row.format === 'pdf'));
+  function syncPrint() {
+    if (!pdfWindow) return;
+    if (printActive?.()) pdfWindow.activate(); else pdfWindow.deactivate();
+    pdfWindow.sync();
+  }
+  function openPdf(row, target) {
+    if (!rawApi || !accessKey || !canUse?.() || !printActive?.()) return;
+    pdfSelection = { id: row.id, generation };
+    if (!canPrint()) return;
+    pdfWindow ||= window.GpExistingPdfWindow.mount({ document, rawApi, key: accessKey, canUse: canPrint, active: printActive,
+      id: 'sales-report-job-pdf', title: 'Verkaufsbericht als PDF', windowPreferences, scale,
+      commonFields: { title: 'readonly', filename: true, orientation: false },
+      useServerFilename: input => input.values.filename === input.payload.defaultFilename,
+      request(input) {
+        if (!canPrint() || input.payload.id !== pdfSelection?.id || input.payload.generation !== generation) throw Error('Der Bericht ist nicht mehr verfügbar.');
+        return window.GpSalesAnalyticsPrint.completedJobRequest(rows.find(item => item.id === input.payload.id));
+      }, summary: 'Gespeicherter Originalbericht' });
+    pdfWindow.open({ target, payload: { ...pdfSelection, defaultFilename: 'Verkaufsanalyse' }, values: { title: row.title, filename: 'Verkaufsanalyse' } });
+  }
   const selectors = new Map();
   const errors = { IMPORT_HISTORY_DATE_RANGE: 'Bitte gültige Zeiträume mit höchstens 366 Tagen und ohne zukünftige Tage wählen.',
     IMPORT_REPORT_SELECTION: 'Bitte Kennzahlen, Filialen und Aufschlüsselung prüfen. Höchstens je 10 WGR, Sortimentsgruppen und Hersteller auswählen.', IMPORT_REPORT_GROUP_LIMIT: 'Zu viele Gruppen. Bitte nach WGR, Sortiment, Hersteller, Filiale oder MA eingrenzen. Grafiken unterstützen höchstens 50 Gruppen.',
@@ -83,6 +105,7 @@ window.createSalesReportJobUi = function ({ api, visible, navigate = () => {} })
     el('salesReportJobSubmit').disabled = !next.projection.read || !next.locations.length;
     templateButtons();
     hint.textContent = `${next.source.label}. Der Server erstellt den PDF-Bericht im Hintergrund. Bis zu drei offene Aufträge.`;
+    if (quality) quality.innerHTML = DataQuality.render({ title: 'Datengrundlage · Verkaufsanalysen', source: DataQuality.sourceInfo(next.sourceQuality), calendarUnknown: true, note: 'Der Bericht verwendet geprüfte importierte Kassenpositionen. Offene Prüfungen und fehlender Rohertrag werden im Ergebnis ausgewiesen.' });
   }
   function render() {
     const query = el('salesReportJobFilter').value.toLocaleLowerCase('de-AT'); list.replaceChildren();
@@ -96,7 +119,9 @@ window.createSalesReportJobUi = function ({ api, visible, navigate = () => {} })
         const b = node('button', text, 'secondary-button'); b.type = 'button';
         b.addEventListener('click', async () => { b.disabled = true; const g = generation; try { await work(); if (g === generation) await refresh(); } catch (e) { if (g === generation) showError(e); } finally { b.disabled = false; } }); actions.append(b);
       };
-      if (row.status === 'completed') { const a = node('a', row.format === 'pdf' ? 'PDF herunterladen' : 'Früheren Bericht herunterladen', 'secondary-button'); a.href = `/api/sales-report-jobs/${encodeURIComponent(row.id)}/download`; actions.append(a); }
+      if (row.status === 'completed') { const a = node('a', row.format === 'pdf' ? 'PDF herunterladen' : 'Früheren Bericht herunterladen', 'secondary-button'); a.href = `/api/sales-report-jobs/${encodeURIComponent(row.id)}/download`;
+        if (row.format === 'pdf') a.addEventListener('click', event => { event.preventDefault(); try { openPdf(row, a); } catch (error) { showError(error); } });
+        actions.append(a); }
       if (row.query?.sourceId === 'compact-cash') button('Einstellungen laden', async () => { activeTemplate = null; loadSettings({ title: row.title, query: row.query }); });
       if (['queued', 'running'].includes(row.status)) button('Abbrechen', () => api(`/api/sales-report-jobs/${row.id}/cancel`, { method: 'POST', body: '{}' }));
       else {
@@ -106,6 +131,7 @@ window.createSalesReportJobUi = function ({ api, visible, navigate = () => {} })
       card.append(actions); list.append(card);
     }
     if (!list.children.length) list.append(node('p', rows.length ? 'Keine passenden Berichte.' : 'Noch keine Berichte beauftragt.'));
+    syncPrint();
   }
   async function refresh() {
     if (!visible() || loading) return;
@@ -115,7 +141,7 @@ window.createSalesReportJobUi = function ({ api, visible, navigate = () => {} })
       if (!templatesLoaded) { const saved = await api('/api/sales-report-templates'); if (g !== generation) return; templates = saved; templatesLoaded = true; renderTemplates(); }
       const next = await api('/api/sales-report-jobs'); if (g !== generation) return; el('salesReportJobError').hidden = true;
       if (JSON.stringify(rows) !== JSON.stringify(next) || !list.children.length) { rows = next; render(); }
-    } catch (error) { if (g === generation) { if (error.code === 'IMPORT_FORBIDDEN') reset(); showError(error); context = null; rows = []; list.replaceChildren(); el('salesReportJobSubmit').disabled = true; } }
+    } catch (error) { if (g === generation) { if (error.code === 'IMPORT_FORBIDDEN') reset(); showError(error); context = null; rows = []; list.replaceChildren(); quality?.replaceChildren(); el('salesReportJobSubmit').disabled = true; syncPrint(); } }
     finally { if (g === generation) loading = false; }
   }
   form.addEventListener('submit', async event => {
@@ -223,8 +249,8 @@ window.createSalesReportJobUi = function ({ api, visible, navigate = () => {} })
   el('salesReportJobPreviousYear').addEventListener('click', () => comparisonDates(true)); el('salesReportJobFilter').addEventListener('input', render);
   el('salesReportJobRefresh').addEventListener('click', () => { templatesLoaded = false; void refresh(); });
   setInterval(() => { if (visible() && !document.hidden) void refresh(); }, 4000);
-  function reset() { generation++; context = null; loading = false; busy = false; rows = []; comparisonCustom = false; templates = []; templatesLoaded = false; activeTemplate = null; selectors.clear(); list.replaceChildren(); form.reset(); currentPeriod.sync('custom'); comparisonPeriod.sync('custom'); renderTemplates();
+  function reset() { generation++; pdfWindow?.reset(); pdfSelection = null; context = null; loading = false; busy = false; rows = []; comparisonCustom = false; templates = []; templatesLoaded = false; activeTemplate = null; selectors.clear(); list.replaceChildren(); quality?.replaceChildren(); form.reset(); currentPeriod.sync('custom'); comparisonPeriod.sync('custom'); renderTemplates();
     for (const id of ['salesReportJobLocations', 'salesReportJobProductGroups', 'salesReportJobMerchandiseGroups', 'salesReportJobManufacturers', 'salesReportJobSellers', 'salesReportJobMetrics', 'salesGraphicMetric', 'salesGraphicGroup']) el(id).replaceChildren();
     el('salesReportJobFilter').value = ''; el('salesReportJobSubmit').disabled = true; hint.textContent = ''; el('salesReportJobError').hidden = true; el('salesReportJobError').textContent = ''; }
-  return { refresh, reset, setMode };
+  return { refresh, reset, setMode, syncPrint };
 };

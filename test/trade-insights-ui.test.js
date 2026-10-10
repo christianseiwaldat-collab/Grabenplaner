@@ -141,6 +141,23 @@ test('opening a saved result while metadata loads preserves the dropdowns and la
  metadata.resolve({groups:[{id:'2',label:'Objektive'}],wgr:[],stockLocations:[]});await pending;
  assert.deepEqual(f.node('filters').elements.group.children.map(n=>n.value),['','2']);assert.equal(f.node('snapshot').hidden,false);assert.equal(f.node('snapshot').elements.title.value,'Gespeichert');f.workspace.destroy();
 });
+test('saved stock data quality retains its own source date and honors current cost visibility',async()=>{
+ for(const costs of [true,false]){
+  const f=fixture(),pending=f.workspace.activate('stock-summary');f.requests[0].resolve({...context,projection:{...context.projection,costs}});await tick();
+  f.requests[1].resolve({groups:[],wgr:[],stockLocations:[]});await pending;
+  f.node('jobs').emit('click',{target:{closest:selector=>selector==='[data-job-open]'?{dataset:{jobOpen:'saved'}}:null}});await tick();
+  f.requests.at(-1).resolve({id:'saved',kind:'stock-summary',title:'BEISPIEL Bestand',created:'2026-10-09T10:00:00Z',completedAt:'2026-10-09T10:01:00Z',processed:5,query:{},result:{rows:[],complete:true,sourceDate:'2026-09-01T10:00:00Z',totals:{positions:5,positivePositions:2,positiveQuantity:'2',provisionalNet:'10',confirmedNet:'10',missingArticle:1,missingQuantity:0,missingCost:2,zeroCost:1}}});await tick();
+  const html=f.node('results').innerHTML;assert.match(html,/class="gp-data-quality"/);assert.match(html,/datetime="2026-09-01T10:00:00Z"/);assert.doesNotMatch(html,/Hochgeladen am/);assert.match(html,/Ohne Artikelstamm/);
+  if(costs){assert.match(html,/Ohne gültigen Einkaufspreis/);assert.match(html,/Einkaufspreis gleich 0/);}else assert.doesNotMatch(html,/Einkaufspreis/);
+  f.workspace.destroy();assert.equal(f.node('results').innerHTML,'');
+ }
+});
+test('late saved stock quality cannot reappear after the account workspace is destroyed',async()=>{
+ const f=fixture(),pending=f.workspace.activate('stock-summary');f.requests[0].resolve({...context,projection:{...context.projection,costs:true}});await tick();f.requests[1].resolve({groups:[],wgr:[],stockLocations:[]});await pending;
+ f.node('jobs').emit('click',{target:{closest:selector=>selector==='[data-job-open]'?{dataset:{jobOpen:'saved'}}:null}});await tick();const old=f.requests.at(-1);f.workspace.destroy();
+ old.resolve({id:'saved',kind:'stock-summary',processed:9,query:{},result:{rows:[],sourceDate:'2026-09-01T10:00:00Z',totals:{positions:9,missingCost:4,zeroCost:3}}});await tick();
+ assert.equal(f.node('results').innerHTML,'');assert.equal(f.node('snapshot').hidden,true);
+});
 test('movement filters exclude undated rows explicitly and article links submit exact keys without stale dates',async t=>{
  const SavedFormData=globalThis.FormData;globalThis.FormData=class{constructor(form){this.entries=Object.entries(form.elements).map(([k,v])=>[k,v.value]);}[Symbol.iterator](){return this.entries[Symbol.iterator]();}};t.after(()=>{globalThis.FormData=SavedFormData;});
  const f=fixture(),pending=f.workspace.activate('movements');f.requests[0].resolve(context);await pending;

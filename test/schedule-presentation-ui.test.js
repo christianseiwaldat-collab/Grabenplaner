@@ -17,7 +17,7 @@ function between(start, end) {
 function colorFixture(role = "hr", permissions = ["settings:write"]) {
   const state = { portalSession: { user: { role, permissions } }, data: { settings: { schedule_duty_colors: JSON.stringify(duty.DEFAULT_DUTY_COLORS) } } };
   const requests = [], messages = [], rows = new Map();
-  const list = { innerHTML: "" }, save = { disabled: false, hidden: false }, hint = { textContent: "" };
+  const list = { innerHTML: "", querySelector: () => null }, save = { disabled: false, hidden: false }, hint = { textContent: "" };
   function input(value, dataset) {
     return { value, dataset, custom: "", closest(selector) { return selector === "[data-duty-color-row]" ? rows.get(dataset.dutyColor || dataset.dutyRgb) : this; },
       setCustomValidity(value) { this.custom = value; },
@@ -33,11 +33,16 @@ function colorFixture(role = "hr", permissions = ["settings:write"]) {
   }
   const selectors = { "#scheduleDutyColorList": list, "#saveScheduleDutyColors": save, "#scheduleDutyColorsHint": hint };
   const sandbox = { window: { GPScheduleDuty: duty }, state,
+    startDashboardWorkspaceActorKey: () => JSON.stringify(state.portalSession),
+    settingsWriteGuard: () => { const key = JSON.stringify(state.portalSession); return () => key === JSON.stringify(state.portalSession); },
     document: { querySelector(selector) { assert.ok(selectors[selector], selector); return selectors[selector]; }, querySelectorAll() { return [...rows.values()].flatMap(row => row.channels); } },
     api: async (url, options) => { requests.push({ url, method: options.method, body: JSON.parse(options.body) }); return { colors: JSON.parse(options.body).colors }; },
     renderTimeline() {}, showToast(message) { messages.push(message); } };
   vm.createContext(sandbox);
-  vm.runInContext(between("function canManageScheduleDutyColors()", "function renderSettings()"), sandbox);
+  for (const name of ['canManageScheduleDutyColors','renderScheduleDutyColorSettings','updateScheduleDutyColor','scheduleDutyDraftSignature','saveScheduleDutyColors']) {
+    const start = app.search(new RegExp('^(?:async )?function ' + name + '\\(','m')), end = app.indexOf('\n}',start) + 2;
+    vm.runInContext(app.slice(start,end),sandbox);
+  }
   sandbox.renderScheduleDutyColorSettings();
   return { ...sandbox, list, save, hint, rows, requests, messages };
 }
@@ -108,7 +113,7 @@ test("settings disclosures retain compact responsive columns and neutral theme v
 
 test("PDF preview cannot publish company colors and unsaved draft survives only for its actor", () => {
   assert.match(between("async function saveSettings(", "async function deleteEmployee()"),
-    /if \(!silent && state\.scheduleDutyColorsDirty && canManageScheduleDutyColors\(\)\) await saveScheduleDutyColors/);
+    /const saveDuty = !silent && state\.scheduleDutyColorsDirty && canManageScheduleDutyColors\(\);/);
   const f = colorFixture("hr"), row = f.rows.get("HW");
   row.picker.value = "#00FFFF"; f.updateScheduleDutyColor(row.picker);
   f.renderScheduleDutyColorSettings({ preserveDraft: true });

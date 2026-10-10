@@ -3853,7 +3853,7 @@ app.use((request, response, next) => {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", embeddedPdfPreview ? "SAMEORIGIN" : "DENY");
   response.setHeader("Referrer-Policy", "no-referrer");
-  const portalCamera=request.path==='/portal'||request.path==='/portal/'||request.path==='/portal.html';
+  const portalCamera=request.path==='/'||request.path==='/index.html'||request.path==='/portal'||request.path==='/portal/'||request.path==='/portal.html'||request.path.startsWith('/api/portal/v1/private-workspaces/');
   response.setHeader("Permissions-Policy", `camera=(${portalCamera?'self':''}), microphone=(), geolocation=()`);
   response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
@@ -65355,6 +65355,35 @@ app.get("/api/vacations-preview.pdf", async (request, response) => {
   response.setHeader("Content-Type", "application/pdf");
   response.setHeader("Content-Disposition", "inline");
   drawVacationPdf(plan, selection, response, new Date());
+});
+
+// Optional installation-private workspaces are supplied outside this checkout.
+// Their assets and configuration never join the public static directory.
+// Isolated application qualification must depend only on its restored runtime.
+const privateWorkspaceRuntimeIsolated = deploymentKind === "recovery-smoke"
+  || Boolean(String(process.env.GRABENPLANER_POSTGRESQL_REHEARSAL || "").trim())
+  || Boolean(String(process.env.GRABENPLANER_RESTORE_ROOT || "").trim());
+const privateWorkspaceModulePath = privateWorkspaceRuntimeIsolated
+  ? "" : String(process.env.GRABENPLANER_PRIVATE_WORKSPACE_MODULE || "").trim();
+let privateWorkspaces = null;
+if (privateWorkspaceModulePath) {
+  if (!path.isAbsolute(privateWorkspaceModulePath)) throw new Error("PRIVATE_WORKSPACE_ABSOLUTE_PATH_REQUIRED");
+  const privateWorkspaceFile = fs.lstatSync(privateWorkspaceModulePath);
+  if (!privateWorkspaceFile.isFile() || privateWorkspaceFile.isSymbolicLink()
+    || path.relative(__dirname, fs.realpathSync(privateWorkspaceModulePath)).split(path.sep)[0] !== "..") {
+    throw new Error("PRIVATE_WORKSPACE_EXTERNAL_MODULE_REQUIRED");
+  }
+  privateWorkspaces = require(privateWorkspaceModulePath).mount(app, {
+    requireActor: request => requireEmployeePortalSession(request, "system:write"),
+    assertCsrf: assertPortalCsrf,
+    vault: integrationSecretVault,
+    applicationDirectory: __dirname,
+  });
+}
+app.get("/api/portal/v1/private-workspaces", (request, response) => {
+  const actor = requireEmployeePortalSession(request);
+  if (actor.role !== "developer" || actor.mustChangePassword) throw httpError(403, "Dieser Bereich ist nicht freigegeben.");
+  response.json({ workspaces: privateWorkspaces ? privateWorkspaces.list(actor) : [] });
 });
 
 app.use(async (error, request, response, _next) => {

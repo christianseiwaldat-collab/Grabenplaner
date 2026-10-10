@@ -13,7 +13,8 @@ async function qualifyHttp({root,config,rehearsal='application-11',connectionPor
  for(const line of fs.readFileSync(root+'/source-encryption.env','utf8').split(/\r?\n/)){
   const match=line.match(/^(GRABENPLANER_(?:AMU|INTEGRATION)_(?:KEY|KEY_ID|KEYS))=(.*)$/);if(match)process.env[match[1]]=match[2];
  }
- for(const key of ['DB_PATH','DATABASE_URL','GRABENPLANER_SEED_DEMO','GRABENPLANER_FORCE_PORTAL'])delete process.env[key];
+ for(const key of ['DB_PATH','DATABASE_URL','GRABENPLANER_SEED_DEMO','GRABENPLANER_FORCE_PORTAL',
+  'GRABENPLANER_PRIVATE_WORKSPACE_MODULE','GRABENPLANER_PRIVATE_WORKSPACE_DATA_DIR','GRABENPLANER_PRIVATE_IMAGE_KEY_FILE'])delete process.env[key];
  Object.assign(process.env,{NODE_ENV:'test',DB_PROVIDER:'postgresql',GRABENPLANER_POSTGRESQL_REHEARSAL:rehearsal,GRABENPLANER_RESTORE_ROOT:root,
   GRABENPLANER_DEPLOYMENT_KIND:'recovery-smoke',GRABENPLANER_OPERATION_MODE:'server',GRABENPLANER_DATA_DIR:runtime,
   GRABENPLANER_HOST:'127.0.0.1',GRABENPLANER_TRUST_PROXY:'loopback',GRABENPLANER_PUBLIC_URL:'https://rehearsal.invalid',

@@ -13,11 +13,11 @@
   host.addEventListener('click',event=>{const addAnswer=event.target.closest('[data-add-answer]');if(addAnswer){sync();const q=questions[Number(addAnswer.dataset.addAnswer)];if(q.options.length<6)q.options.push({id:'a-'+root.crypto.randomUUID(),text:''});render();}const remove=event.target.closest('[data-remove-question]');if(remove){sync();questions.splice(Number(remove.dataset.removeQuestion),1);render();}if(event.target.closest('[data-add-question]')){sync();questions.push({id:'q-'+root.crypto.randomUUID(),prompt:'',points:1,correctOptionId:'a',options:[]});render();}});
   return {set(value){questions=value?.questions?JSON.parse(JSON.stringify(value.questions)):[];el('[data-pass]').value=value?.passingPercent??80;el('[data-attempts]').value=value?.maxAttempts??3;el('[data-evidence-required]').checked=value?.requireEvidence===true;render();},get(){sync();if(!questions.length&&!el('[data-evidence-required]').checked)return null;return {questions:questions.map(q=>({...q,options:q.options.filter(o=>o.text.trim())})),passingPercent:Number(el('[data-pass]').value),maxAttempts:Number(el('[data-attempts]').value),requireEvidence:el('[data-evidence-required]').checked};}};
  }
- function init({api}){
+ function init({api,printPdf}){
   const dialog=document.createElement('dialog');dialog.className='learning-library-dialog';dialog.setAttribute('aria-label','Prüfungen und Nachweise');document.body.append(dialog);
-  let data=null,id='',generation=0,busy=false;
+  let data=null,id='',generation=0,busy=false,opener=null;
   const endpoint=()=>'/api/portal/v1/personnel-learning/assignments/'+encodeURIComponent(id);
-  async function open(assignmentId){id=assignmentId;const gen=++generation;dialog.innerHTML='<p>Prüfungen werden geladen …</p><button type="button" data-close>Schließen</button>';if(!dialog.open)dialog.showModal();try{const loaded=await api(endpoint()+'/assessment');if(gen!==generation)return;data=loaded;render();}catch(error){if(gen===generation)dialog.querySelector('p').textContent=error.message;}}
+  async function open(assignmentId,target=null){id=assignmentId;opener=target;data=null;const gen=++generation;dialog.innerHTML='<p>Prüfungen werden geladen …</p><button type="button" data-close>Schließen</button>';if(!dialog.open)dialog.showModal();try{const loaded=await api(endpoint()+'/assessment');if(gen!==generation)return;data=loaded;render();}catch(error){if(gen===generation)dialog.querySelector('p').textContent=error.message;}}
   function render(){
    const a=data.assessment;
    dialog.innerHTML=`<header><div><h2>${esc(data.title)}</h2><p>${esc(data.learner)}</p></div><button type="button" data-close aria-label="Schließen">×</button></header><h3>Wissenstest</h3>${a?.questions.length?`<p>${data.passed?'Bestanden':`${data.attempts.length} von ${a.maxAttempts} Versuchen verwendet`} · Bestehensgrenze ${a.passingPercent} %</p><form data-exam>${a.questions.map((q,i)=>`<fieldset class="learning-question"><legend>${i+1}. ${esc(q.prompt)}</legend>${q.options.map(o=>`<label class="learning-answer"><input type="radio" name="${esc(q.id)}" value="${esc(o.id)}" required ${data.canAttempt?'':'disabled'}><span>${esc(o.text)}</span></label>`).join('')}</fieldset>`).join('')}${data.canAttempt?'<button type="submit">Antworten abgeben</button>':''}</form>`:'<p>Für diese Fassung ist kein Fragenkatalog hinterlegt. Die fachliche Bewertung erfolgt über den Schulungsabschluss.</p>'}
@@ -26,10 +26,23 @@
    <h3>Dateinachweise</h3><p>${a?.requireEvidence?'Für einen erfolgreichen Abschluss erforderlich.':'Optional zur Dokumentation.'} PDF, PNG oder JPEG, jeweils höchstens 2 MiB.</p>
    ${data.evidence.map(e=>`<div class="learning-evidence"><a href="${endpoint()}/evidence/${encodeURIComponent(e.id)}" download>${esc(e.fileName)}</a>${data.canUpload?`<button type="button" data-action="withdraw" data-id="${esc(e.id)}">Zurücknehmen</button>`:''}</div>`).join('')||'<p>Noch keine Nachweise.</p>'}
    ${data.canUpload?'<label>Nachweis auswählen<input type="file" data-file accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg"></label><button type="button" data-action="upload">Nachweis hochladen</button>':''}
-   ${data.canConfirm?`<p><a class="secondary-button" href="${endpoint()}/confirmation.pdf" download>PDF-Bestätigung herunterladen</a></p>`:''}<p role="status" data-status></p><button type="button" data-close>Schließen</button>`;
+   ${data.canConfirm?`<p><a class="secondary-button" data-learning-confirmation-pdf href="${endpoint()}/confirmation.pdf" download>PDF-Bestätigung herunterladen</a></p>`:''}<p role="status" data-status></p><button type="button" data-close>Schließen</button>`;
   }
-  async function mutate(path,body){const gen=generation,targetId=id;if(!data||!targetId)return;await api(endpoint()+path,{method:'POST',body:JSON.stringify({...body,expectedReceipt:data.expectedReceipt})});if(gen===generation&&id===targetId)await open(targetId);}
+  async function mutate(path,body){const gen=generation,targetId=id;if(!data||!targetId)return;await api(endpoint()+path,{method:'POST',body:JSON.stringify({...body,expectedReceipt:data.expectedReceipt})});if(gen===generation&&id===targetId)await open(targetId,opener);}
   dialog.addEventListener('click',async event=>{
+   const confirmation=event.target.closest('[data-learning-confirmation-pdf]');
+   if(confirmation&&typeof printPdf==='function'){
+    if(event.defaultPrevented||event.button>0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
+    event.preventDefault();if(busy||!data?.canConfirm||!id)return;
+    const gen=generation,assignmentId=id,receipt=JSON.stringify(data.expectedReceipt??null);
+    const canUse=()=>gen===generation&&id===assignmentId&&data?.canConfirm===true&&JSON.stringify(data.expectedReceipt??null)===receipt;
+    const target=opener?.isConnected&&(!opener.getClientRects||opener.getClientRects().length>0)?opener:null;
+    const url=endpoint()+'/confirmation.pdf',title='Schulungsbestätigung';
+    dialog.close();
+    try{const opened=await printPdf({url,title,target,canUse,onClose(){if(canUse()&&!dialog.open)dialog.showModal();},onDiscard(){if(canUse())clear();}});if(opened===false&&canUse()&&!dialog.open)dialog.showModal();}
+    catch(error){if(canUse()){if(!dialog.open)dialog.showModal();const status=dialog.querySelector('[data-status]');if(status)status.textContent=error.message||'Die PDF-Vorschau konnte nicht geöffnet werden.';}}
+    return;
+   }
    if(event.target.closest('[data-close]')){clear();return;}const button=event.target.closest('[data-action]');if(!button||busy)return;busy=true;button.disabled=true;
    try{const action=button.dataset.action;
     if(action==='reset'||action==='withdraw'){const reason=root.prompt('Bitte die Änderung begründen:');if(reason==null)return;await mutate(action==='reset'?'/assessment/reset':`/evidence/${encodeURIComponent(button.dataset.id)}/withdraw`,{reason});}
@@ -37,8 +50,8 @@
    }catch(error){const status=dialog.querySelector('[data-status]');if(status)status.textContent=error.message;}finally{busy=false;button.disabled=false;}
   });
   dialog.addEventListener('submit',async event=>{event.preventDefault();if(busy)return;busy=true;try{await mutate('/assessment/attempt',{answers:Object.fromEntries(new FormData(event.target))});}catch(error){const status=dialog.querySelector('[data-status]');if(status)status.textContent=error.message;}finally{busy=false;}});
-  function clear(){generation++;id='';data=null;dialog.close();dialog.replaceChildren();}
-  document.addEventListener('click',event=>{const button=event.target.closest('[data-learning-proof]');if(button)open(button.dataset.learningProof);});
+  function clear(){generation++;id='';data=null;opener=null;dialog.close();dialog.replaceChildren();}
+  document.addEventListener('click',event=>{const button=event.target.closest('[data-learning-proof]');if(button)open(button.dataset.learningProof,button);});
   return {open,clear};
  }
  root.GrabenplanerLearningAssessment={editor,init};

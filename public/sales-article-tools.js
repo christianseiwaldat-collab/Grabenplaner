@@ -20,7 +20,9 @@
   const authorized=()=>!disposed&&root.isConnected&&accessKey()===owner;
   const request=(url,body)=>api(url,body===undefined?{}:{method:'POST',body:JSON.stringify(body)});
   const tables=globalThis.GrabenplanerTradeTables?.mount({api:(path,body)=>request('/api/sales/articles/tools/'+path,body)});
-  const states={};const listeners=[],dialogs=[];
+  const states={};const listeners=[],dialogs=[];let receiptPdf=null;
+  const receiptContext=()=>JSON.stringify({article:article.articleNumber,ticket:states.sales?.ticket,resultSet:states.sales?.resultSet,filters:states.sales?selectedFilters(states.sales):null});
+  function syncReceiptPrint(){if(!receiptPdf)return;if(active())receiptPdf.activate();else receiptPdf.deactivate();receiptPdf.sync();}
   const on=(el,event,fn)=>{el?.addEventListener(event,fn);listeners.push(()=>el?.removeEventListener(event,fn));};
   const duration=ms=>globalThis.GrabenplanerTradeResults?.duration(ms)||ms+' ms';
   async function ensureContext(){if(context)return context;if(!contextLoading)contextLoading=request('/api/sales/articles/tools/context');try{context=await contextLoading;return context;}finally{contextLoading=null;}}
@@ -48,10 +50,14 @@
    }).join('')+(key==='article-sales'?'<td><button type="button" class="text-button" data-receipt="'+i+'"'+(!row.receiptId?' disabled':'')+'>Beleg-PDF</button></td>':'')+'</tr>').join('')+'</tbody></table></div>';
    if(!rows.length)container.insertAdjacentHTML('beforeend','<p class="sales-article-detail-message">Keine Treffer für diesen Artikel und Zeitraum.</p>');
    tables?.attach(container,key);
-   container.onclick=event=>{const b=event.target.closest('[data-sort],[data-customer],[data-receipt]');if(!b)return;if(b.dataset.sort)sortAction?.(b.dataset.sort);else if(b.dataset.customer!==undefined)onCustomer(rows[Number(b.dataset.customer)].customerId);else void receipt(rows[Number(b.dataset.receipt)]);};
+   container.onclick=event=>{const b=event.target.closest('[data-sort],[data-customer],[data-receipt]');if(!b)return;if(b.dataset.sort)sortAction?.(b.dataset.sort);else if(b.dataset.customer!==undefined)onCustomer(rows[Number(b.dataset.customer)].customerId);else void receipt(rows[Number(b.dataset.receipt)],b);};
   }
-  async function download(url,body,name){const response=await rawApi(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const blob=await response.blob();if(!authorized())return;const href=URL.createObjectURL(blob),link=root.ownerDocument.createElement('a');link.href=href;link.download=name;root.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(href),60000);}
-  async function receipt(row){const state=states.sales;try{state.status.textContent='Vollständiger Beleg wird als Informations-PDF erstellt …';await download('/api/receipt-search/export.pdf',{ids:[row.receiptId]},'Beleginformation-keine-Rechnung-'+row.receipt+'.pdf');if(authorized())state.status.textContent='Beleg-PDF erstellt · keine Rechnung.';}catch(e){if(authorized())state.status.textContent=e.message;}}
+  function receipt(row,target){
+   const state=states.sales;if(!row?.receiptId||!authorized()||!active()||!context?.sales)return;
+   try{receiptPdf ||= root.ownerDocument.defaultView.GpReceiptPrint.mount({document:root.ownerDocument,rawApi,key:accessKey,
+    id:'article-receipt-pdf',canUse:()=>authorized()&&Boolean(context?.sales),active,contextKey:receiptContext,windowPreferences,scale});receiptPdf.open([row.receiptId],target);}
+   catch(error){if(authorized())state.status.textContent=error.message;}
+  }
   function history(kind){
    if(states[kind])return states[kind];
    const panel=root.querySelector(kind==='sales'?'#salesArticleSalesSection':'#salesArticleMovementsSection');
@@ -60,12 +66,14 @@
    panel.innerHTML='<section class="sales-article-detail-card article-history-card"><header><div><h3>'+title+'</h3><p>'+(kind==='sales'?'Historische Einzelverkäufe · Standard: letztes Jahr · Preise und Rohertrag je Stück':'Gebuchte Umlagerungen des Artikels · Standard: letzte 90 Tage')+'</p></div></header><form class="article-history-filters"><div><span>Zeitraum</span><button type="button" data-period-button disabled>Zeitraum wird geladen …</button><input type="hidden" name="dateFrom"><input type="hidden" name="dateTo"></div>'+(kind==='sales'?branch('locationId','Filiale')+'<label>MA / Personalnummer<input name="personnel" maxlength="160" autocomplete="off" placeholder="z. B. 252"></label>':branch('fromLocationId','Von Filiale')+branch('toLocationId','Zu Filiale'))+'<button type="submit" class="secondary-button">Aktualisieren</button></form><p class="article-history-status" role="status">Wird geladen …</p><p class="article-history-note"></p><div class="article-history-results"></div><div class="article-history-pagination"><button type="button" data-history-prev>Zurück</button><span></span><button type="button" data-history-next>Weitere</button></div></section>';
    const state={kind,panel,form:panel.querySelector('form'),status:panel.querySelector('[role=status]'),note:panel.querySelector('.article-history-note'),results:panel.querySelector('.article-history-results'),rows:[],all:[],sort:'date',direction:'desc',offset:0,next:null,resultSet:'',busy:false,ticket:0,loaded:false,cursors:[]};states[kind]=state;
    on(state.form,'submit',e=>{e.preventDefault();void loadHistory(state,true);});
+   if(kind==='sales')on(state.form,'input',syncReceiptPrint);
    on(panel.querySelector('[data-history-next]'),'click',()=>{if(kind==='sales'){state.cursors.push(state.next);void loadHistory(state,false,state.next);}else{state.offset+=50;renderHistory(state);}});
    on(panel.querySelector('[data-history-prev]'),'click',()=>{if(kind==='sales'){state.cursors.pop();void loadHistory(state,false,state.cursors.at(-1)||'');}else{state.offset=Math.max(0,state.offset-50);renderHistory(state);}});
    return state;
   }
   function renderHistory(state){
    const {kind,panel}=state;if(!authorized())return;
+   syncReceiptPrint();
    let rows=state.rows;
    if(kind==='movements'){let all=state.all.slice();all=globalThis.GrabenplanerTradeResults.sortRows(all,Object.keys(movementColumns).map(key=>({key,type:key==='quantity'?'decimal':'text',value:r=>r[key]})),state.sort,state.direction);state.filtered=all;rows=all.slice(state.offset,state.offset+50);state.total=all.length;}
    state.shown=rows;table(state.results,'article-'+kind,rows,kind==='sales'?state.columns:movementColumns,{sort:state.sort,direction:state.direction,sortAction:key=>{if(state.busy)return;state.direction=state.sort===key&&state.direction==='asc'?'desc':'asc';state.sort=key;state.offset=0;state.cursors=[];if(kind==='sales')void loadHistory(state,false);else renderHistory(state);}});
@@ -80,6 +88,7 @@
   async function loadHistory(state,reset=false,cursor=''){
    if(state.busy)return;const ticket=++state.ticket;state.busy=true;state.status.textContent='Daten werden gesucht …';state.form.querySelector('[type=submit]').disabled=true;state.results.querySelectorAll('[data-sort]').forEach(button=>{button.disabled=true;});
    if(reset){state.resultSet='';state.cursors=[];state.offset=0;}
+   syncReceiptPrint();
    try{
     const ctx=await ensureContext();if(!authorized())return;
     if(!(state.kind==='sales'?ctx.sales:ctx.movements))throw new Error('Für diese Artikelhistorie fehlt die persönliche Freigabe.');
@@ -153,7 +162,7 @@
     }
    });
   }
-  return {activate(id){if(!authorized())return;if(id==='salesArticleNotesSection'&&!localNotes)void loadNotes();if(id==='salesArticleMovementsSection'||id==='salesArticleSalesSection'){const state=history(id==='salesArticleSalesSection'?'sales':'movements');if(!state.loaded&&!state.busy)void loadHistory(state,true);}},openPdf,syncPrint(){if(active())pdf?.activate();else pdf?.deactivate();},destroy(){disposed=true;pdf?.destroy();for(const state of Object.values(states)){state.ticket++;state.period?.close();}notePeriod?.close();for(const remove of listeners)remove();tables?.destroy();for(const dialog of dialogs){if(dialog?.open)dialog.close();dialog?.remove();}}};
+  return {activate(id){if(!authorized())return;if(id==='salesArticleNotesSection'&&!localNotes)void loadNotes();if(id==='salesArticleMovementsSection'||id==='salesArticleSalesSection'){const state=history(id==='salesArticleSalesSection'?'sales':'movements');if(!state.loaded&&!state.busy)void loadHistory(state,true);}},openPdf,syncPrint(){if(active())pdf?.activate();else pdf?.deactivate();syncReceiptPrint();},destroy(){disposed=true;pdf?.destroy();receiptPdf?.destroy();for(const state of Object.values(states)){state.ticket++;state.period?.close();}notePeriod?.close();for(const remove of listeners)remove();tables?.destroy();for(const dialog of dialogs){if(dialog?.open)dialog.close();dialog?.remove();}}};
  }
  return {mount,movementColumns,noteColumns,sectionLabels,display,historyDefaults,historyFilterKeys};
 });

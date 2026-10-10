@@ -8,6 +8,7 @@
  'use strict';
  const tabs=Object.freeze(['purchasing','transfers','movements','stock-summary','inventory','stocktakes','suggestions','article-history','supplier-invoices','repairs','customer-history','device-history']);
  const model=typeof module==='object'&&module.exports?require('./trade-insight-results'):globalThis.GrabenplanerTradeResults;
+ const DataQuality=typeof module==='object'&&module.exports?require('./gp-data-quality'):globalThis.GrabenplanerDataQuality;
  const normalizeTab=value=>tabs.includes(value)?value:'purchasing';
  const legacyUrl=search=>'/?view=tradeInsights&section='+normalizeTab(new URLSearchParams(search).get('tab'));
  const markup=`
@@ -17,7 +18,7 @@
 <p data-ti="status" role="status" aria-live="polite">Zugriff wird geprüft …</p><p data-ti="note"></p><section data-ti="results" aria-label="Suchergebnisse"></section>
 </div><dialog data-ti="movement-dialog" aria-labelledby="movementDetailTitle"><form method="dialog" class="dialog-actions"><button>Schließen</button></form><div data-ti="movement-content"></div></dialog><dialog data-ti="repair-dialog" aria-label="Reparaturdetails"><form method="dialog" class="dialog-actions"><button>Schließen</button></form><div data-ti="repair-content"></div><form data-ti="repair-status-form" hidden><label>Eigener GP-Status<select name="state"><option value="unassigned">Noch nicht im GP gesetzt</option><option value="ready">Abholbereit</option><option value="collected">Abgeholt</option></select></label><button type="submit">Status speichern</button></form><p data-ti="repair-status" role="status"></p></dialog>
 `;
- function mount(root,{api:request,onTabChange=()=>{}}={}){
+ function mount(root,{api:request,rawApi,accessKey=()=>'',canUse=()=>true,windowPreferences,onTabChange=()=>{}}={}){
   if(!root||typeof request!=='function')throw new TypeError('Trade insights need a workspace and the GP API.');
   root.innerHTML=markup;
   const q=key=>root.querySelector('[data-ti="'+key+'"]');
@@ -55,17 +56,20 @@
  const period=periodModule.mount(root,form,q('period'),{today:()=>context?.today||new Date().toISOString().slice(0,10)});
  const suggestionsModule=typeof module==='object'&&module.exports?require('./trade-suggestions'):globalThis.GrabenplanerSuggestions;
  const exportModule=typeof module==='object'&&module.exports?require('./trade-export-options'):globalThis.GrabenplanerTradeExport;
- const pdfExport=browserDom?exportModule.mount(root,{api}):null;
+ let pdfExport=null;
  const archiveWidths={title:150,kind:90,created:100,status:110,count:90,actions:190};
  const sharedColumnLayout=globalThis.GrabenplanerTableLayout;
  const tableLayout=browserDom?globalThis.GrabenplanerTradeTables.mount({api,layout:sharedColumnLayout?{
   attach(table,options){if(area==='stock')for(const label of root.querySelectorAll('.trade-column-chooser > summary'))label.textContent='Spaltenansicht';return sharedColumnLayout.attach(table,{...options,columns:()=>options.columns().map(column=>
    area==='logistics'&&table===q('jobs').querySelector('table')?{...column,width:archiveWidths[column.id]||column.width}:column)});}
  }:null}):null;
- const exportSelection=value=>void pdfExport?.open(value);
+ const exportSelection=value=>void pdfExport?.open({...value,target:value.target||root.ownerDocument.activeElement});
  let resultMeta={};
  let kind='purchasing',generation=0,rows=[],scanned=0,context=null,summary=null;
  let jobTimer=null,jobRefresh=null,currentJob=null,opening=null,openGeneration=0,sortKey='',sortDirection='asc',jobRows=[],jobSort='created',jobDirection='desc';
+ if(browserDom)pdfExport=exportModule.mount(root,{api,rawApi,accessKey,windowPreferences,
+  scopeKey:()=>JSON.stringify([area,kind]),canUse:()=>!disposed&&canUse(),active:()=>active&&!disposed&&Boolean(context&&selected),
+  status:message=>{if(active&&!disposed)status.textContent=message;}});
   // Only interaction state is kept between pages. Results, permissions and
   // mutable detail records are fetched again before they become visible.
   const viewStates=new Map(),filterNames=['query','articleNumber','movementType','review','days','dateFrom','dateTo','customer','serial','supplier','locationId','group','wgr','resultTitle','stocktakeId','stocktakeVersion','stocktakeSource','difference','suggestionType'];
@@ -111,7 +115,7 @@
   if(['purchasing','transfers'].includes(kind)&&context.projection.purchasing&&rows.length)results.insertAdjacentHTML('beforeend','<div class="movement-links">'+model.relatedArticles(rows).map(r=>'<button type="button" data-related-movements="'+e(r.articleNumber)+'">Warenbewegungen · '+e(r.articleNumber)+'</button>').join('')+'</div>');
   if(kind==='stock-summary'&&summary){
    const card=(label,value)=>'<div><small>'+e(label)+'</small><strong>'+e(value)+'</strong></div>';
-   results.insertAdjacentHTML('afterbegin','<section class="trade-stock-summary" aria-label="Gesamtbestand"><div class="facts">'+card('Positionen mit positivem Bestand',number(summary.positivePositions))+card('Erfasster Bestand (vorläufig)',number(summary.positiveQuantity))+(context.projection.costs?card('Warenwert netto (vorläufig)',money(summary.provisionalNet))+card('Davon bestätigte Lagerware',money(summary.confirmedNet)):'')+'</div><p>'+number(summary.excluded)+' ausgeschlossene Positionen · '+number(summary.ambiguous)+' mehrdeutig · '+number(summary.missingArticle)+' ohne Artikelstamm · '+number(summary.missingQuantity)+' ohne Menge · '+number(summary.negative)+' negative Bestände · '+number(summary.unclassified)+' ungeklärte Artikelarten'+(context.projection.costs?' · '+number(summary.missingCost)+' ohne gültigen EK · '+number(summary.zeroCost)+' mit EK 0':'')+'. Prüffälle können sich überschneiden. Bei offenen Prüffällen ist der Warenwert nur ein Teilwert.</p></section>');
+   results.insertAdjacentHTML('afterbegin','<section class="trade-stock-summary" aria-label="Gesamtbestand"><div class="facts">'+card('Positionen mit positivem Bestand',number(summary.positivePositions))+card('Erfasster Bestand (vorläufig)',number(summary.positiveQuantity))+(context.projection.costs?card('Warenwert netto (vorläufig)',money(summary.provisionalNet))+card('Davon bestätigte Lagerware',money(summary.confirmedNet)):'')+'</div></section>'+DataQuality.render(DataQuality.stock({...resultMeta,totals:summary},context.projection)));
   }
   if(currentJob)q('pdf').href='/api/trade-insights/jobs/'+encodeURIComponent(currentJob)+'/pdf?sort='+encodeURIComponent(sortKey)+'&direction='+sortDirection;
   tableLayout?.attach(results,kind==='stocktakes'&&resultMeta.stocktake?'stocktakes-detail':kind);
@@ -127,6 +131,7 @@
   tableLayout?.attach(q('jobs'),'jobs');
  }
   async function openJob(id,{preserveView=false}={}){
+  if(!preserveView)pdfExport?.reset();
   let ticket=++openGeneration;opening=id;
   try{
    const data=await api('jobs/'+encodeURIComponent(id));if(ticket!==openGeneration)return;
@@ -159,6 +164,7 @@
  }
  async function load(){
   if(!active||!context||disposed||!selected)return;
+  pdfExport?.reset();
   const query=Object.fromEntries(new FormData(form)),title=query.resultTitle;delete query.resultTitle;
   if(!['repairs','customer-history','device-history'].includes(kind)){delete query.customer;delete query.serial;}else if(kind==='customer-history')delete query.serial;
   if(!['purchasing','movements'].includes(kind))delete query.supplier;
@@ -174,16 +180,17 @@
  }
  on(form.elements.days,'change',()=>{form.elements.dateFrom.value='';period.sync();});
  on(form,'submit',event=>{event.preventDefault();void load();});
- on(results,'click',event=>{const b=event.target.closest('[data-sort]');if(!b)return;sortDirection=sortKey===b.dataset.sort&&sortDirection==='asc'?'desc':'asc';sortKey=b.dataset.sort;render();results.querySelector('[data-sort="'+sortKey+'"]')?.focus();});
+ on(form,'input',()=>pdfExport?.reset());on(form,'change',()=>pdfExport?.reset());
+ on(results,'click',event=>{const b=event.target.closest('[data-sort]');if(!b)return;pdfExport?.reset();sortDirection=sortKey===b.dataset.sort&&sortDirection==='asc'?'desc':'asc';sortKey=b.dataset.sort;render();results.querySelector('[data-sort="'+sortKey+'"]')?.focus();});
  on(q('jobs'),'click',async event=>{
   const sort=event.target.closest('[data-job-sort]');if(sort){jobDirection=jobSort===sort.dataset.jobSort&&jobDirection==='asc'?'desc':'asc';jobSort=sort.dataset.jobSort;renderJobs();q('jobs').querySelector('[data-job-sort="'+jobSort+'"]')?.focus();return;}
   const open=event.target.closest('[data-job-open]');if(open){void openJob(open.dataset.jobOpen);return;}
-  const action=event.target.closest('[data-job-action]');if(!action)return;action.disabled=true;
+  const action=event.target.closest('[data-job-action]');if(!action)return;pdfExport?.reset();action.disabled=true;
   try{await api('jobs/'+encodeURIComponent(action.dataset.jobId)+'/'+action.dataset.jobAction,{});if(action.dataset.jobId===currentJob)reset();await refreshJobs();}
   catch(err){if(err.name!=='AbortError')q('job-status').textContent=err.message;}finally{action.disabled=false;}
  });
- on(q('snapshot'),'submit',async event=>{event.preventDefault();if(!currentJob)return;try{await api('jobs/'+encodeURIComponent(currentJob)+'/rename',{title:q('snapshot').elements.title.value});await refreshJobs();}catch(err){if(err.name!=='AbortError')status.textContent=err.message;}});
- on(root,'click',event=>{if(browserDom&&!event.target.closest?.('.trade-navigation-group'))for(const group of root.querySelectorAll('.trade-navigation-group'))group.open=false;const link=event.target.closest('a.trade-pdf-link');if(!link||!pdfExport)return;event.preventDefault();const id=link.getAttribute('href')?.match(/jobs\/([^/]+)\/pdf/)?.[1],job=jobRows.find(v=>v.id===id);exportSelection({url:link.getAttribute('href'),title:job?.title||q('snapshot').elements.title.value});});
+ on(q('snapshot'),'submit',async event=>{event.preventDefault();if(!currentJob)return;pdfExport?.reset();try{await api('jobs/'+encodeURIComponent(currentJob)+'/rename',{title:q('snapshot').elements.title.value});await refreshJobs();}catch(err){if(err.name!=='AbortError')status.textContent=err.message;}});
+ on(root,'click',event=>{if(browserDom&&!event.target.closest?.('.trade-navigation-group'))for(const group of root.querySelectorAll('.trade-navigation-group'))group.open=false;const link=event.target.closest('a.trade-pdf-link');if(!link||!pdfExport)return;event.preventDefault();const id=link.getAttribute('href')?.match(/jobs\/([^/]+)\/pdf/)?.[1],job=jobRows.find(v=>encodeURIComponent(v.id)===id);exportSelection({url:link.getAttribute('href'),title:job?.title||q('snapshot').elements.title.value,target:link});});
  let metadata=null,classificationSelection=null,classGeneration=0;
  const classForm=q('class-form'),classSave=q('class-save'),classStatus=q('class-status');
  function option(label,value){const item=root.ownerDocument.createElement('option');item.textContent=label;item.value=value;return item;}
@@ -191,6 +198,7 @@
  function classChanged(){classGeneration++;classificationSelection=null;classSave.hidden=true;const level=classForm.elements.level.value;
   classForm.elements.articleKey.hidden=level!=='article';classForm.elements.groupKey.hidden=level==='article';options(classForm.elements.groupKey,level==='wgr'?metadata?.wgr||[]:metadata?.groups||[],false);classStatus.textContent='';}
  async function choose(button,{replace=false}={}){
+   if(kind!==button.dataset.kind)pdfExport?.reset();
    rememberView();cancelPending();reset();metadata=null;resultMeta={};form.hidden=false;q('movement-filter-toggle').hidden=true;selected=true;kind=button.dataset.kind;
    const saved=viewStates.get(viewKey()),fieldBaseline={...fieldRevisions};restoreFields(saved);restorePresentation(saved);
   for(const b of root.querySelectorAll('[data-kind]')){const chosen=b===button;b.classList.toggle('active',chosen);b.setAttribute('aria-selected',String(chosen));b.tabIndex=chosen?0:-1;}
@@ -239,6 +247,7 @@
    if(saved?.currentJob){currentJob=saved.currentJob;if(saved.snapshotVisible)await openJob(saved.currentJob,{preserveView:true});else{await jobRefresh;await refreshJobs();}}
    if(ticket!==generation)return;
    await restoreWorkingDrafts(saved,ticket);
+   if(active&&!disposed&&ticket===generation){pdfExport?.activate();pdfExport?.sync();}
  }
  on(q('tabs'),'click',event=>{const group=event.target.closest?.('.trade-navigation-group');if(group&&browserDom)for(const other of root.querySelectorAll('.trade-navigation-group'))if(other!==group)other.open=false;const button=event.target.closest('[data-kind]');if(button&&!button.disabled&&active&&context)void choose(button);});
  on(classForm.elements.level,'change',classChanged);on(classForm,'input',()=>{classGeneration++;classificationSelection=null;classSave.hidden=true;});
@@ -281,7 +290,7 @@
  }
  function suspend(){
   if(!active)return;
-  pdfExport?.close();if(browserDom)for(const group of root.querySelectorAll('.trade-navigation-group'))group.open=false;
+  pdfExport?.deactivate();if(browserDom)for(const group of root.querySelectorAll('.trade-navigation-group'))group.open=false;
   tableLayout?.suspend();
    rememberView();active=false;cancelPending();reset();context=null;metadata=null;selected=false;jobRows=[];q('jobs').replaceChildren();
  }
@@ -310,7 +319,7 @@
   form.querySelector('button[type=submit]').disabled=!button;
   if(!button){status.textContent='Für diese Auswertungen fehlt die Freigabe.';return;}
   if(!selected||button.dataset.kind!==kind||(['inventory','stock-summary'].includes(kind)&&!metadata))await choose(button,{replace:button.dataset.kind!==requestedTab});
-  else {if(kind!==requestedTab)onTabChange(kind,{replace:true});if(kind==='article-history')articleHistory.activate();else if(kind==='supplier-invoices')supplierInvoices.activate();else void refreshJobs();}
+  else {if(kind!==requestedTab)onTabChange(kind,{replace:true});if(kind==='article-history')articleHistory.activate();else if(kind==='supplier-invoices')supplierInvoices.activate();else void refreshJobs();pdfExport?.activate();pdfExport?.sync();}
  }
  async function openRelated(target,criteria={}){
   await activate(target);if(!active||kind!==target)return;

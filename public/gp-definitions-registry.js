@@ -5,7 +5,7 @@
   else root.GpDefinitionsRegistry=api;
 })(typeof window==='object'?window:globalThis,function(){
   'use strict';
-  const VERSION=1,UPDATED='2026-10-09';
+  const VERSION=3,UPDATED='2026-10-10';
   const topics=[
     {id:'windows',title:'Fenster',symbol:'▣',summary:'Interne Arbeitsfenster im GP, mit einem gemeinsamen Verhalten und einer kompakten Titelleiste.',
       rules:[
@@ -52,6 +52,16 @@
         {title:'Hell, Dunkel und schmale Ansichten',text:'Gemeinsame Farbvariablen, lesbare Kontraste und sichtbare Fokusmarkierungen tragen beide Darstellungen. Inhalte passen sich schmalen Ansichten und einer vergrößerten GP-Schrift an.'},
         {title:'Rückmeldungen im Arbeitsfluss',text:'Laden, Speichern, Warnungen und Fehler erscheinen nahe am zugehörigen Inhalt. Ein Status benennt den tatsächlich belegten Stand und bleibt auch ohne Farbe verständlich.'},
       ],references:['public/styles.css','public/start-dashboard-workspace.js','public/start-dashboard-workspace.css'],example:'Startdashboard und kompakte Verkaufsoberflächen'},
+    {id:'galleries',title:'Galerien',symbol:'▦',summary:'Eine gemeinsame Galerie verbindet kompakte Vorschaubilder, Suche, Auswahl und geschützte Bildfenster.',
+      rules:[
+        {title:'Gemeinsame Galerie-Komponente',text:'Galerien verwenden dieselbe technische Komponente. Fachliche Adapter liefern freigegebene Bilder, Filter und Speicheraktionen; Downloads verwenden ausschließlich freigegebene Bildadressen und enthalten keine Zugangsschlüssel.'},
+        {title:'Suchen, filtern und sortieren',text:'Suche berücksichtigt alle eingegebenen Wörter. Sortierung und Filter lassen sich kompakt aufklappen; Bildgröße und Sortierung bleiben je Konto und Galerie gespeichert. Fehlende Sortierwerte stehen am Ende.'},
+        {title:'Auswahl bleibt nachvollziehbar',text:'Einzelne Bilder, Bereiche mit Umschalttaste und alle sichtbaren Bilder lassen sich auswählen. Änderungen der Ansicht entfernen unsichtbare Bilder aus der Auswahl. Sammelaktionen zeigen die aktuelle Auswahl an.'},
+        {title:'Ordner und Papierkorb',text:'Virtuelle Ordner ordnen Bilder ohne die Originaldateien umzubenennen. Entfernen legt Bilder zunächst in den Papierkorb; Wiederherstellen erhält Metadaten und Statistik. Endgültiges Entfernen benötigt eine ausdrückliche Bestätigung.'},
+        {title:'Bildfenster und Vollbild',text:'Bildfenster lassen sich verschieben, vergrößern, minimieren und wiederherstellen. Vollbild unterstützt Einpassen, Originalgröße, Mausrad-Zoom, Verschieben, Pfeiltasten und Escape; bei fehlender Browserfreigabe bleibt eine Ansicht innerhalb des Browsers verfügbar.'},
+        {title:'Freigaben und Originale schützen',text:'Bilder und Metadaten werden serverseitig nur für freigegebene Konten ausgeliefert. Abmeldung verwirft private Ansichten und Entwürfe. Galerieaktionen geben keine verbrauchten API-Kontingente zurück und ändern keine Originalbytes.'},
+        {title:'ZIP-Download gehört dazu',text:'Jede Galerie bietet einen ZIP-Download für die aktuelle Auswahl, Ansicht, gesamte Galerie und ganze Ordner einschließlich wählbarer Unterordner. Bilder, Beschreibungen oder Prompts, technische JSON-Daten und Ordnerstruktur sind wählbar. Ganze Ordner werden unabhängig von Suchfiltern geladen; Größenlimits werden vor einem unvollständigen Download erklärt. Original und Ergebnis bleiben gemeinsam nachvollziehbar.'},
+      ],references:['public/gp-gallery.mjs','public/gp-gallery.css','public/gp-gallery-window.mjs','public/gp-gallery-fullscreen.mjs','public/gp-gallery-download.mjs','public/gp-gallery-zip.mjs'],example:'Geschützte Bildgalerien mit gemeinsamen Bedienelementen und fachlichen Adaptern'},
   ];
   function freeze(value){Object.values(value).forEach(item=>{if(item&&typeof item==='object')freeze(item);});return Object.freeze(value);}
   freeze(topics);

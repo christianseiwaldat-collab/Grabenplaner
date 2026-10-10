@@ -3,13 +3,20 @@ const test = require("node:test"), assert = require("node:assert/strict");
 const UI = require("../public/portal-branch-sales"), Lines = require("../public/receipt-line-format");
 const { branchSalesContext, branchSalesIdentity, branchReceiptProjection, BRANCH_ARTICLES_PERMISSION: A, BRANCH_RECEIPTS_PERMISSION: R } = require("../lib/branch-sales-access");
 const user = () => ({ sessionKind: "organization", id: "session-a", isEmployee: false, accountId: "account-a", accountType: "branch", permissions: [A, R], scopes: [{ locationId: "00", departmentId: null }] });
+const Existing=require('../public/gp-existing-pdf-window'), Receipt=require('../public/gp-receipt-print');
+const pdfResponse=blob=>({ok:true,headers:new Headers({'Content-Disposition':'attachment; filename="Beleginformation-keine-Rechnung.pdf"'}),blob:async()=>blob});
 const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
 const article = name => ({ articleNumber: "00042", description: name, active: true, primaryIdentifier: "4006381333931", retailGross: "249.9", internetGross: "239" });
 const result = name => ({ items: [article(name)], total: 1, offset: 0 });
 
 function harness(kind, extra = {}) {
   const elements = new Map(), requests = [], downloads = [], listeners = new Map();
-  let html = "", current = user();
+  let html = "", current = user();const previews=[],printWindows=[];
+  const doc={defaultView:{location:{origin:'https://gp.example.test'},GpExistingPdfWindow:Existing,GpReceiptPrint:Receipt,GpPrintWindow:{mount(config){
+    let abort;const state={open:false,loading:false},window={config,state,open(input){abort?.abort();state.open=state.loading=true;abort=new AbortController();
+      config.createPdf({payload:input.payload,values:{filename:'Beleginformation-keine-Rechnung'},actor:config.key(),signal:abort.signal}).then(result=>{state.loading=false;previews.push(result);}).catch(()=>{state.loading=false;});return true;},
+      activate(){},deactivate(){abort?.abort();},sync(){if(!config.canUse())this.reset();},reset(){abort?.abort();state.open=state.loading=false;},destroy(){this.reset();}};printWindows.push(window);return window;
+  }}}};
   const node = name => {
     if (!elements.has(name)) {
       const handlers = new Map();
@@ -21,7 +28,7 @@ function harness(kind, extra = {}) {
     }
     return elements.get(name);
   };
-  const root = {
+  const root = { ownerDocument:doc,
     get firstChild() { return html ? {} : null; }, set innerHTML(value) { html = value; }, get innerHTML() { return html; },
     querySelector(selector) { return node(selector.match(/data-b="([^"]+)"/)[1]); }, querySelectorAll() { return []; },
     addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: type => listeners.delete(type),
@@ -35,7 +42,7 @@ function harness(kind, extra = {}) {
     if (kind === "receipts") requests[0].resolve({ available: true, today: "2026-09-13", location: { id: "00", name: "Demo" }, sourceLabel: "Demo", coverageLabel: "13.09.2026", ...extra });
     await promise;
   };
-  return { workspace, requests, downloads, node, root, click, load, fireRoot(type, target) { return listeners.get(type)?.({ target }); }, setUser(value) { current = value; } };
+  return { workspace, requests, downloads, previews, printWindows, node, root, click, load, fireRoot(type, target) { return listeners.get(type)?.({ target }); }, setUser(value) { current = value; } };
 }
 
 test('Kamera übernimmt den Code ins oberste Artikelfeld, sucht sofort und wird beim Verlassen geschlossen',async()=>{
@@ -97,16 +104,16 @@ test("Nach Logout füllt eine verspätete Suche keine verborgenen Ergebnisse auf
   const f = harness("articles"); await f.load(); f.node("form").fire("submit"); f.workspace.destroy();
   f.requests[0].resolve(result("PRIVATE-RESULT")); await settle(); assert.equal(f.root.innerHTML, "");
 });
-test("Ein verspäteter PDF-Download bleibt nach Kontowechsel aus", async () => {
+test("Eine verspätete PDF-Vorschau bleibt nach Kontowechsel aus", async () => {
   const f = harness("receipts"); await f.load(); f.click({ pdf: "receipt-a" });
-  assert.equal(f.requests[1].options.responseType, "blob");
-  f.setUser({ ...user(), accountId: "account-b" }); f.requests[1].resolve(new Blob(["%PDF-"])); await settle();
-  assert.equal(f.downloads.length, 0);
+  await settle();assert.equal(f.requests[1].options.responseType, "response");
+  f.setUser({ ...user(), accountId: "account-b" }); f.requests[1].resolve(pdfResponse(new Blob(["%PDF-1.7\nEXAMPLE"],{type:"application/pdf"}))); await settle();
+  assert.equal(f.downloads.length, 0);assert.equal(f.previews.length,0);
 });
-test("Doppelter PDF-Klick sendet einmal; der Download verwendet nur die gewählte ID", async () => {
+test("Doppelter PDF-Klick sendet einmal; die Vorschau enthält genau die Originalbytes der gewählten ID", async () => {
   const f = harness("receipts"); await f.load(); f.click({ pdf: "receipt-a" }); f.click({ pdf: "receipt-a" });
-  assert.equal(f.requests.length, 2); assert.deepEqual(JSON.parse(f.requests[1].options.body), { ids: ["receipt-a"] });
-  const blob = new Blob(["%PDF-"]); f.requests[1].resolve(blob); await settle(); assert.deepEqual(f.downloads, [[blob, "Beleginformation-keine-Rechnung.pdf"]]);
+  await settle();assert.equal(f.requests.length, 2); assert.deepEqual(JSON.parse(f.requests[1].options.body), { ids: ["receipt-a"] });
+  const blob = new Blob(["%PDF-1.7\nEXAMPLE"],{type:"application/pdf"}); f.requests[1].resolve(pdfResponse(blob)); await settle(); assert.equal(f.previews[0].blob,blob);assert.equal(f.previews[0].filename,"Beleginformation-keine-Rechnung.pdf");assert.equal(f.downloads.length,0);
 });
 test("Belegdetails eines zuvor geschlossenen Dialogs erscheinen nicht im neuen Dialog", async () => {
   const f = harness("receipts"); await f.load(); f.click({ detail: "receipt-a" }); f.node("close").fire("click");

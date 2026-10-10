@@ -15,6 +15,7 @@ function fixture() {
   const state = { data: {}, vacationData: { year: 2032 }, locations: [{ id: "18" }], weekStart: "2032-07-05", vacationYear: 2032,
     locationId: "18", departmentId: "", portalSession: { user: { role: "developer" } }, allEmployees: ["kept"], brandingKits: ["kept"] };
   const f = vm.createContext({ state, AbortController,
+    elements:{settingsView:{contains:()=>true}},document:{getElementById:()=>null},settingsDraftGuard:{clear(){},snapshot:()=>new Map()},
     api(url, options = {}) { return new Promise((resolve, reject) => calls.push({ url, options, resolve, reject })); },
     contextQuery: department => `&location=${state.locationId}${department && state.departmentId ? `&departmentId=${state.departmentId}` : ""}`,
     showToast: message => errors.push(message), render: () => renders.push({ week: state.data.weekStart, year: state.vacationData?.year }),
@@ -22,7 +23,7 @@ function fixture() {
     applyRequestedView(options) { assert.equal(options.loadContext, false); state.currentView = "planning"; state.locationId = "05"; },
     canReadManagerRequests: () => false, canReadLoanManagement: () => false, canManageBranchOrders: () => false,
   });
-  vm.runInContext("let loadAllGeneration=0; let planningPeriodController=null;\n" + ["applyLoadedSchedule", "enrichLoadedSchedule", "loadAll", "loadPlanningPeriod", "planningContextNeedsReload", "loadPlanningView"].map(extract).join("\n"), f);
+  vm.runInContext("let loadAllGeneration=0; let planningPeriodController=null; const settingsSaveStatuses=new Map(),settingsSaveStatusHosts=new Map(); let settingsSaveActor=null,settingsSavePrimary=null,settingsSaveCandidateSource=null,settingsSaveEpoch=0,settingsSavePrimaryEpoch=0,settingsConfirmedDraft=null,settingsConfirmedRevision=0; globalThis.confirmedDraft=()=>settingsConfirmedDraft;\n" + ["isLocalStartDashboardWorkspace","startDashboardWorkspaceActorKey","settingsPdfDraftScope","syncSettingsSaveScopes","settingsSaveKey","rememberSettingsConfirmation","settingsConfirmationReadToken","acknowledgeSettingsRead","applyLoadedSchedule", "enrichLoadedSchedule", "loadAll", "loadPlanningPeriod", "planningContextNeedsReload", "loadPlanningView"].map(extract).join("\n"), f);
   return { f, state, calls, errors, renders };
 }
 const schedule = (week = "2032-07-05") => ({ weekStart: week, settings: { allow_past_week_editing: "0" }, context: { locationId: "18", departmentId: null } });
@@ -175,4 +176,10 @@ test("a full refresh supersedes a period request, while a current failure remain
   const retry = f.loadPlanningPeriod();
   calls.at(-1).reject(new Error("schedule unavailable")); await retry;
   assert.equal(errors.at(-1), "schedule unavailable");
+});
+
+test('a real period GET begun before a partial settings confirmation cannot discard its confirmed overlay; a subsequent same-scope GET can',async()=>{
+ const {f,calls}=fixture();const old=f.loadPlanningPeriod();f.rememberSettingsConfirmation(new Map([['pdfTitleSetting','Confirmed']]),['pdfTitleSetting']);
+ const oldPayload={...schedule(),settings:{pdf_title:'Old read'}};calls[0].resolve(oldPayload);await new Promise(setImmediate);calls.at(-1).resolve(oldPayload);await old;assert.equal(f.confirmedDraft().values.get('pdfTitleSetting'),'Confirmed');
+ const fresh=f.loadPlanningPeriod(),freshPayload={...schedule(),settings:{pdf_title:'Confirmed'}};calls.at(-1).resolve(freshPayload);await new Promise(setImmediate);calls.at(-1).resolve(freshPayload);await fresh;assert.equal(f.confirmedDraft(),null);
 });

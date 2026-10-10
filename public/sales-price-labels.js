@@ -181,7 +181,7 @@
           <label>Rand (mm)<input type="number" name="marginMm" min="0" max="50" step="0.5" required></label><label>Abstand (mm)<input type="number" name="gapMm" min="0" max="50" step="0.5" required></label><label>Kopien je Artikel<input type="number" name="copies" min="1" max="50" step="1" required></label></div><div class="spl-checks"><label class="spl-wide"><input name="cutMarks" type="checkbox"> Umrandungsschnittmarken</label></div><p class="spl-hint" data-pl="cut-hint"></p><p class="spl-hint spl-fit-hint" data-pl="paper-fit-hint" role="status" aria-live="polite" hidden></p><button type="button" data-pl="paper-fit" hidden>Papier passend einstellen</button>
           <section class="spl-paper-layout" aria-label="Papierseiten-Belegung"><header><strong>Seitenbelegung</strong><span>Schilderanordnung</span></header><div class="spl-paper-navigation"><button type="button" data-pl="paper-prev" aria-label="Vorherige Papierseite">‹</button><label>Seite<input type="number" data-pl="paper-page-number" min="1" step="1" value="1" aria-label="Papierseite wählen"></label><span data-pl="paper-page-count"></span><button type="button" data-pl="paper-next" aria-label="Nächste Papierseite">›</button></div><div class="spl-paper-stage" data-pl="paper-preview"></div><p class="spl-hint" data-pl="paper-occupancy" role="status" aria-live="polite"></p><p class="spl-hint">Nummern zeigen die Druckreihenfolge. Grün: belegt · Hell: frei.</p></section><p class="spl-hint">PDF ohne Druckskalierung bei 100 % ausdrucken.</p></details>
       </form><div class="spl-output"><section class="spl-card spl-preview-card"><header><div><h2>Vorschau</h2><p data-pl="dimensions"></p></div><span class="spl-preview-badge">Preisschild</span></header><div class="spl-preview-branding" data-pl="branding-preview"></div><div data-pl="element-toolbar"></div><section class="spl-image-tools" data-pl="image-tools"></section><label class="spl-preview-font" hidden>Standardschriftart<select data-pl="preview-font" aria-label="Schriftart in der Schildvorschau">${Fonts.families.map(font => '<option value="' + font.id + '">' + font.label + '</option>').join('')}</select></label><label class="spl-picker" data-pl="picker-label">Artikel in der Vorschau<select data-pl="picker" aria-label="Artikel in der Vorschau"><option>Artikel laden</option></select></label><div class="spl-preview-stage" data-pl="stage"><div data-pl="preview"></div></div><p class="spl-hint spl-logo-editor-hint" data-pl="logo-editor-hint" hidden>Logo auswählen und ziehen; der Griff rechts unten ändert die Größe. Pfeiltasten verschieben, am Griff ändern sie die Größe (Umschalt: 5 mm). Freie Anordnung kann Text und Preis überdecken.</p><p class="spl-logo-live" data-pl="logo-live" role="status" aria-live="polite"></p><p class="spl-layout-info" data-pl="layout"></p><p class="spl-hint" data-pl="updated">Noch keine Artikel geladen.</p></section>
-        <section class="spl-card spl-export"><h2>PDF exportieren</h2><form data-pl="export"><label>Dateiname<input name="name" maxlength="110" value="Preisschilder" required></label><div class="spl-fields"><label>Zeitblock<select name="stamp"><option value="date-time">JJMMTT-HHMM</option><option value="date">JJMMTT</option><option value="date-suffix">JJMMTT-xxx</option><option value="none">Ohne Zeitblock</option></select></label><label>Anordnung<select name="position"><option value="before">Vorne</option><option value="after">Hinten</option></select></label><label>Ergänzung (xxx)<input name="suffix" maxlength="40" placeholder="z. B. Aktion"></label><label>Trennzeichen<select name="separator"><option value="-">Bindestrich (-)</option><option value="_">Unterstrich (_)</option><option value=" ">Leerzeichen</option></select></label></div><p class="spl-filename" data-pl="filename"></p><button type="submit" class="spl-primary" data-pl="download" disabled>PDF herunterladen</button></form><p class="spl-status" data-pl="status" role="status" aria-live="polite">Artikelnummern eingeben und die aktuellen Preise laden.</p></section>
+        <section class="spl-card spl-export"><h2>PDF exportieren</h2><form data-pl="export"><label>Dateiname<input name="name" maxlength="110" value="Preisschilder" required></label><div class="spl-fields"><label>Zeitblock<select name="stamp"><option value="date-time">JJMMTT-HHMM</option><option value="date">JJMMTT</option><option value="date-suffix">JJMMTT-xxx</option><option value="none">Ohne Zeitblock</option></select></label><label>Anordnung<select name="position"><option value="before">Vorne</option><option value="after">Hinten</option></select></label><label>Ergänzung (xxx)<input name="suffix" maxlength="40" placeholder="z. B. Aktion"></label><label>Trennzeichen<select name="separator"><option value="-">Bindestrich (-)</option><option value="_">Unterstrich (_)</option><option value=" ">Leerzeichen</option></select></label></div><p class="spl-filename" data-pl="filename"></p><button type="submit" class="spl-primary" data-pl="download" disabled>PDF-Vorschau &amp; Download</button></form><p class="spl-status" data-pl="status" role="status" aria-live="polite">Artikelnummern eingeben und die aktuellen Preise laden.</p></section>
       </div></div>`;
     const draftBar=root.ownerDocument.createElement('div');draftBar.className='spl-draft-status';draftBar.innerHTML='<span data-pl="draft-status" role="status"></span><button type="button" data-pl="draft-retry" hidden>Speichern erneut versuchen</button><button type="button" data-pl="recover-images">Hochgeladene Bilder</button><div data-pl="recovered-images" hidden></div>';root.querySelector('.spl-library').append(draftBar);
     const projectCard=root.ownerDocument.createElement('section');projectCard.className='spl-card spl-project';projectCard.innerHTML='<header><h2>Preisschildprojekt</h2><small>Nur für dein Konto</small></header><div class="spl-fields"><label>Projektname<input data-pl="project-name" maxlength="110" placeholder="z. B. Schaufenster Oktober"></label><label>Projekt öffnen<select data-pl="project-open"><option value="">Gespeichertes Projekt wählen</option></select></label></div><div class="spl-project-actions"><button type="button" data-pl="project-new">Neues Projekt</button><button type="button" data-pl="project-save">Projekt speichern</button><button type="button" data-pl="project-copy">Als Kopie speichern</button><button type="button" data-pl="project-remove">Gespeichertes Projekt löschen</button><button type="button" data-pl="search">Artikel suchen</button></div><label>Einzelnes Schild<select data-pl="project-label"><option value="">Noch kein Schild</option></select></label><div class="spl-project-actions"><button type="button" data-pl="label-copy">Schild kopieren</button><button type="button" data-pl="label-delete">Schild entfernen</button></div><p data-pl="project-status" class="spl-hint" role="status"></p>';root.prepend(projectCard);
@@ -194,7 +194,7 @@
       personalDefaults = { options: { ...defaults }, filenameOptions: { ...fileDefaults } };
     const controllers = new Set(), uploadControllers = new Set(), listeners = [];
     let initialized=false,workingDraftId=globalThis.crypto.randomUUID(),pendingArticleSelection='',destroyed=false;
-    let projectData=null,projectId='',projectVersion=null,projectRows=[],projectBusy=false,defaultLogo=null;
+    let projectData=null,projectId='',projectVersion=null,projectRows=[],projectBusy=false,defaultLogo=null,pdfPrint=null;
     const permitted = ticket => active && root.isConnected && accessKey() === owner && (ticket === undefined || ticket === generation);
     const on = (node, type, handler) => { node.addEventListener(type, handler); listeners.push(() => node.removeEventListener(type, handler)); };
     const request = async (url, body, method = 'POST') => {
@@ -237,6 +237,7 @@
           library:{mode:libraryMode,templateId:selectedTemplate?.id||'',templateVersion:selectedTemplate?.version||null,title:q('library-title').value,visibility:q('library-scope').value,recipients:recipientIds()},
           selectedArticleNumber:q('picker').value||pendingArticleSelection||'',paperPage,project:projectData?{id:projectId,version:projectVersion,data:projectData}:null});
       }catch(error){q('draft-status').textContent='Noch nicht gesichert: '+error.message;}
+      pdfPrint?.sync();
     }
     function draftStatus(){if(destroyed)return;const status=draftStore.status;q('draft-status').textContent=({loading:'Arbeitsentwurf wird geladen …',saving:'Arbeitsentwurf wird gesichert …',pending:'Ungespeicherte Änderungen …',saved:'Arbeitsentwurf automatisch gesichert.',conflict:'Ein anderes Fenster hat den Entwurf geändert. Deine Eingaben bleiben erhalten.',error:'Arbeitsentwurf nicht gesichert. '+(draftStore.error?.message||'Bitte erneut versuchen.')})[status];q('draft-retry').hidden=!['error','conflict'].includes(status);}
     const stopDraftSubscription=draftStore.subscribe(draftStatus);
@@ -255,6 +256,20 @@
         return insertRecoveredImage(asset,asset.draftTarget.labelId);
       }});
     const fileOptions = () => Object.fromEntries(Object.keys(fileDefaults).map(field => [field, exportForm.elements[field].value]));
+    function pdfContext() {
+      try {
+        options(); numbers();
+        return JSON.stringify([owner,draftEpoch,workingDraftId,libraryMode,selectedTemplate?.id,selectedTemplate?.version,
+          projectId,projectVersion,projectData,rawOptions(),form.elements.articleNumbers.value,form.elements.priceType.value,
+          exportForm.elements.name.value,fileOptions()]);
+      } catch { return 'invalid-price-label-draft'; }
+    }
+    pdfPrint = root.ownerDocument.defaultView.GpPriceLabelPdf.mount({
+      host: root, id: 'sales-price-label-pdf', key: accessKey, rawApi, windowPreferences, context: pdfContext,
+      active: () => active && !destroyed && root.isConnected,
+      canUse: () => !destroyed && root.isConnected && Boolean(owner) && accessKey() === owner && draftStore.ready
+        && !projectBusy && !libraryLoading && !imageUploading && pdfContext() !== 'invalid-price-label-draft',
+    });
     function insertRecoveredImage(asset,targetLabelId=''){
       if(destroyed||accessKey()!==owner||readOnlyTemplate()||projectBusy||!draftStore.ready)return false;
       const target=targetLabelId?projectData?.labels.find(label=>label.id===targetLabelId):null;
@@ -494,6 +509,7 @@
       exportForm.elements.suffix.disabled = exportForm.elements.stamp.value !== 'date-suffix';
       q('filename').textContent = filename(exportForm.elements.name.value, fileOptions());
       renderLibrary(valid && layout.capacity > 0);
+      pdfPrint?.sync();
     }
     function finishBusy(ticket) {
       if (!permitted(ticket)) return;
@@ -687,19 +703,20 @@
     });
     on(exportForm, 'submit', async event => {
       event.preventDefault(); if (!permitted() || busy || q('download').disabled) return;
-      const ticket = generation, controller = new AbortController(); controllers.add(controller); busy = true; render(); status('Preisschilder werden mit den aktuellen Artikelpreisen erstellt …');
       try {
+        recordDraft();
         const body = { articleNumbers: numbers(), priceType: form.elements.priceType.value, options: options(), name: exportForm.elements.name.value, ...fileOptions() };
-        recordDraft();const projectExport=projectData?.labels.length?{project:projectData,name:body.name}:null;
-        const response = await rawApi(projectExport?'/api/sales/price-labels/projects/export.pdf':'/api/sales/price-labels/export.pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(projectExport||body), signal: controller.signal });
-        if (!permitted(ticket)) return; const blob = await response.blob(); if (!permitted(ticket)) return;
-        const href = URL.createObjectURL(blob), link = root.ownerDocument.createElement('a'); link.href = href; link.download = filename(body.name, Object.fromEntries(Object.keys(fileDefaults).map(field => [field, body[field]]))); root.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(href), 60000);
-        status('PDF-Download gestartet. Beim Drucken 100 % beziehungsweise „Tatsächliche Größe“ wählen.');
-      } catch (error) { if (permitted(ticket) && error.name !== 'AbortError') status(error.message, true); }
-      finally { controllers.delete(controller); finishBusy(ticket); }
+        const projectExport=projectData?.labels.length?{project:projectData,name:body.name}:null;
+        const dimensions = projectExport ? { ...Project.paperLayout(projectData), labels: projectData.labels.map(label => ({width:label.options.labelWidthMm,height:label.options.labelHeightMm})) }
+          : { ...paperLayout(body.options), labels:[{width:body.options.labelWidthMm,height:body.options.labelHeightMm}] };
+        pdfPrint.activate();
+        pdfPrint.open({ url: projectExport ? '/api/sales/price-labels/projects/export.pdf' : '/api/sales/price-labels/export.pdf',
+          body: projectExport || body, dimensions, filename: filename(body.name,fileOptions()) }, event.submitter || q('download'));
+      } catch (error) { if (permitted() && error.name !== 'AbortError') status(error.message, true); }
     });
     setOptions(defaults); setFileOptions(fileDefaults); render();
     function suspend() {
+      pdfPrint?.deactivate();
       searchWindow?.suspend();
       recordDraft();void draftStore.flush();finishLogoDrag(null); elementEditor.clear(); logoSelected = false; logoDrag = null; q('logo-live').textContent = '';
       active = false; generation++; clearTimeout(timer); timer = null; articleReloadPending = false; for (const controller of controllers) controller.abort(); controllers.clear();
@@ -718,7 +735,7 @@
     const workspace = {
       async load() {
         const nextOwner = accessKey(); if (owner !== nextOwner) { suspend();searchWindow?.invalidate();for(const controller of uploadControllers)controller.abort();uploadControllers.clear();draftStore.invalidate();initialized=false;items=[];loadedKey='';libraryMode='defaults';selectedTemplate=null;projectData=null;projectId='';projectVersion=null;projectRows=[];defaultLogo=null;q('project-name').value='';form.elements.articleNumbers.value = ''; setOptions(defaults); setFileOptions(fileDefaults); }
-        if(initialized&&owner===nextOwner){active=true;generation++;searchWindow?.activate();loadedKey='';render();draftStatus();if(form.elements.articleNumbers.value.trim())void loadArticles();return;}
+        if(initialized&&owner===nextOwner){active=true;generation++;searchWindow?.activate();loadedKey='';render();draftStatus();pdfPrint.activate();if(form.elements.articleNumbers.value.trim())void loadArticles();return;}
         active = true; owner = nextOwner; const ticket = ++generation; libraryLoading = true; status('Gespeicherte Einstellungen werden geladen …'); render();
         const results = await Promise.allSettled([request('/api/sales/price-labels/templates'), request('/api/sales/price-labels/branding'), loadLibrary(ticket),draftStore.activate()]);
         if (!permitted(ticket)) return;
@@ -739,6 +756,7 @@
         searchWindow?.activate();
         void refreshProjects();
         render();
+        pdfPrint.activate();
         if(form.elements.articleNumbers.value.trim())void loadArticles();
       },
       async openArticle(article, templateId = '', {copy = false} = {}) {
@@ -773,7 +791,8 @@
       }, suspend,
       async flush(){recordDraft();return draftStore.flush();},
       get hasUnsaved(){return draftStore.hasUnsaved||imageUploading;},
-      destroy() { suspend();destroyed=true;searchWindow?.destroy();for(const controller of uploadControllers)controller.abort();uploadControllers.clear();draftStore.invalidate();stopDraftSubscription();for (const off of listeners) off(); elementEditor.destroy(); root.replaceChildren(); },
+      syncPrint(){pdfPrint?.sync();},
+      destroy() { suspend();destroyed=true;pdfPrint?.destroy();searchWindow?.destroy();for(const controller of uploadControllers)controller.abort();uploadControllers.clear();draftStore.invalidate();stopDraftSubscription();for (const off of listeners) off(); elementEditor.destroy(); root.replaceChildren(); },
     };
     on(root.ownerDocument.defaultView,'beforeunload',event=>{if(workspace.hasUnsaved){recordDraft();void draftStore.flush();event.preventDefault();event.returnValue='';}});
     return workspace;

@@ -34,6 +34,8 @@ test('scopes and cost permissions apply to totals and groups, not only visible r
  f.state.session={...f.state.session,permissions:rights.filter(p=>!['sales:analytics:company:read','sales:analytics:margin:read'].includes(p)),scopes:[{locationId:'18'}]};
  const r=await f.run('stock-summary',{locationId:'18'});assert.equal(r.totals.positions,5);
  assert.doesNotMatch(JSON.stringify(r),/provisionalNet|confirmedNet|246\.93|123\.45/);
+ assert.doesNotMatch(JSON.stringify(r),/missingCost|zeroCost|"valued"/);
+ const quality=require('../public/gp-data-quality');assert.doesNotMatch(quality.render(quality.stock(r,{costs:false})),/Einkaufspreis/);
  await assert.rejects(f.run('stock-summary',{locationId:'19'}),e=>e.status===403);
  const all=await f.run('stock-summary',{});assert.equal(all.totals.positions,5);
  assert.doesNotMatch(JSON.stringify(all),/provisionalNet|confirmedNet/);

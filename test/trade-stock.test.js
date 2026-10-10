@@ -37,11 +37,18 @@ test('Slow mover and reach require confirmed goods, full coverage and reconciled
 test('Annotation Core SQL has a separate owner and parameterized compare-and-set',()=>{
  const entries=require('../lib/persistence/postgresql/core/trade-annotations').CATALOG;
  assert.deepEqual(entries.map(e=>e.statement.id).sort(),[
-  'trade-annotations.epoch','trade-annotations.get','trade-annotations.insert',
+  'sales-bwl-simulation.annotation-remove','trade-annotations.epoch','trade-annotations.get','trade-annotations.insert',
   'trade-annotations.protected-images','trade-annotations.update',
  ].sort());
  for(const e of entries){assert.match(e.sql,/gp\.trade_annotations/);assert.doesNotMatch(e.sql,/gp\.gp\./);}
  assert.match(entries.find(e=>e.statement.id.endsWith('update')).sql,/revision\s*=\s*\(\s*\$/);
+ const removal=entries.find(e=>e.statement.id==='sales-bwl-simulation.annotation-remove');
+ assert.match(removal.sql,/^DELETE FROM gp\.trade_annotations WHERE /);
+ assert.deepEqual([...removal.parameterOrder].sort(),['expectedRevision','id','kind','scopeId']);
+ for(const [column,parameter] of [['id','id'],['scope_id','scopeId'],['kind','kind'],['revision','expectedRevision']]){
+  const index=removal.parameterOrder.indexOf(parameter);assert.notEqual(index,-1);
+  assert.match(removal.sql,new RegExp('\\b'+column+'\\s*=\\s*\\(\\s*\\$'+(index+1)+'\\b'));
+ }
 });
 
 test('Cash projection uses reconciled sales, stock branch and weighted prices with exact branch filtering',async t=>{

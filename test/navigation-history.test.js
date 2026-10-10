@@ -119,7 +119,7 @@ function administration() {
     salesAnalytics: { tab: 'create' }, personnelAdministrationTab: 'dashboard', personnelTab: 'employees',
     requestKindTab: 'vacation', rightsDashboardMode: 'rights', locationId: '18', departmentId: '',
     locations: [{ id: '18', active: true, departments: [{ id: 1, active: true }] }, { id: '20', active: true, departments: [{ id: 2, active: true }] }] },
-    elements, timePresenceRefreshTimer: null, receiptSearchWorkspace: null, tradeInsightsTab: 'repairs',
+    elements, timePresenceRefreshTimer: null, receiptSearchWorkspace: null, salesArticleReportWorkspace: null, salesBwlWorkspace: null, gpDefinitionsWorkspace: null, renderGpDefinitionsAccess: () => {}, tradeInsightsTab: 'repairs',
     privacyOrganizationTab: 'overview',
     privacyOrganizationWorkspace: {activate: tab => calls.push({privacy: tab}), suspend: () => calls.push('suspendPrivacy')},
     tradeInsightsWorkspace: { activate: tab => calls.push({ insights: tab }), setArea: area => calls.push({ area }), suspend: () => calls.push('suspendInsights') },
@@ -379,6 +379,10 @@ test('Administration: late context responses cannot replace the most recent bran
   ctx.state.weekStart = '2026-09-07'; ctx.state.vacationYear = 2026;
   ctx.canReadManagerRequests = ctx.canReadLoanManagement = ctx.canManageBranchOrders = () => false;
   ctx.enrichLoadedSchedule = () => Promise.resolve(false);
+  ctx.syncSettingsSaveScopes = () => {};
+  ctx.settingsSaveKey = () => JSON.stringify([ctx.state.locationId, ctx.state.departmentId]);
+  ctx.settingsConfirmationReadToken = () => ({key:ctx.settingsSaveKey(),revision:0});
+  ctx.acknowledgeSettingsRead = () => false;
   vm.runInContext('let loadAllGeneration = 0; let planningPeriodController = null;\n'
     + ['applyLoadedSchedule', 'loadAll']
       .map(name => functionSource(appSource, name)).join('\n'), ctx);

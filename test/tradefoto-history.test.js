@@ -143,6 +143,17 @@ async function workspaceFixture(t, workspaceOptions = {}) {
   return { ...f, session, workspace, customer, proofs, receipt, approve: () => { activePolicy = policy(); } };
 }
 
+test('data-quality source metadata stays bound to a visible registry source and cumulative history rights', async t => {
+  const sourceQuality = { sourceId: 'cash', uploadedAt: TIME };
+  const f = await workspaceFixture(t, { sourceQuality });
+  const scoped = f.workspace.context(); assert.deepEqual(scoped.sourceQuality, sourceQuality);
+  assert.deepEqual(scoped.sources[0].locations.map(location => location.id), ['gp-1']);
+  f.context.who.scopeId = 'foreign';
+  const hidden = f.workspace.context(); assert.equal(hidden.available, false); assert.equal(hidden.sourceQuality, null);
+  f.context.who.scopeId = 'scope'; f.session.permissions = [];
+  assert.throws(() => f.workspace.context(), code('IMPORT_FORBIDDEN'));
+});
+
 test('Block 5: location-scoped search excludes foreign sales, including a stock branch matching the viewer', async t => {
   const f = await workspaceFixture(t);
   await f.receipt(head(), [line()]);

@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="/learning-library.css" />
     <link rel="stylesheet" href="/privacy-organization.css" />
     <link rel="stylesheet" href="/sales-history.css" />
+    <link rel="stylesheet" href="/gp-data-quality.css" />
     <link rel="stylesheet" href="/table-layout.css" />
     <link rel="stylesheet" href="/sales-article-tools.css" />
     <link rel="stylesheet" href="/sales-price-labels.css" />
@@ -28,6 +29,7 @@
     <link rel="stylesheet" href="/mobile-refinements.css" />
     <link rel="stylesheet" href="/sidebar-notepad.css" />
     <link rel="stylesheet" href="/gp-window.css" />
+    <link rel="stylesheet" href="/gp-save-status.css" />
     <link rel="stylesheet" href="/loan-location-settings.css" />
     <link rel="stylesheet" href="/sales-recent-articles.css" />
     <link rel="stylesheet" href="/sales-article-search-window.css" />
@@ -55,14 +57,14 @@
       </form>
     </section>
     <div class="app-shell">
-      <button class="mobile-navigation-toggle" id="mobileNavigationToggle" type="button" aria-controls="mainSidebar" aria-expanded="false">
+      <button class="mobile-navigation-toggle" id="mobileNavigationToggle" data-gp-print-fallback type="button" aria-controls="mainSidebar" aria-expanded="false">
         <span aria-hidden="true"></span><span class="mobile-navigation-label">Menü</span>
       </button>
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
-          <button class="brand-home-button" id="startDashboardBrandButton" type="button" aria-label="Startdashboard öffnen">
+          <button class="brand-home-button" id="startDashboardBrandButton" data-gp-print-fallback type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.79 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.80 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -266,7 +268,7 @@
         </button>
         <section id="gpDefinitionsView" class="view gp-definitions-view" aria-labelledby="gpDefinitionsTitle">
           <header class="topbar">
-            <div><span class="eyebrow">Developer · Standards</span><h1 id="gpDefinitionsTitle">GP-Definitionen</h1><p>Die gemeinsamen Regeln für Fenster, Druck, Tabellen, gespeicherte Ansichten und Gestaltung.</p></div>
+            <div><span class="eyebrow">Developer · Standards</span><h1 id="gpDefinitionsTitle">GP-Definitionen</h1><p>Die gemeinsamen Regeln für Fenster, Druck, Tabellen, gespeicherte Ansichten, Gestaltung und Galerien.</p></div>
             <span class="gp-definitions-access-badge">Nur Developer</span>
           </header>
           <div id="gpDefinitionsWorkspace" hidden></div>
@@ -1858,6 +1860,7 @@
               <div class="sales-report-submit"><small>Bis zu 366 Tage je Zeitraum · Berechnung im Hintergrund</small><button class="primary-button" id="salesReportJobSubmit" type="submit" disabled>PDF-Bericht beauftragen</button></div>
             </form>
             <p class="sales-analytics-request-hint" id="salesAnalyticsRequestHint" role="status">Die Verfügbarkeit der Kassendaten wird geprüft.</p>
+          <div id="salesReportDataQuality"></div>
           </section>
 
           <section class="sales-analytics-panel sales-analytics-desktop-workspace" id="salesAnalyticsPdfPanel" role="tabpanel" aria-labelledby="salesAnalyticsPdfTab" tabindex="0" hidden>
@@ -2304,7 +2307,7 @@
         <section id="settingsView" class="view">
           <header class="settings-header">
             <div><span class="eyebrow">Konfiguration</span><h1>Einstellungen</h1></div>
-            <div class="settings-header-actions"><div class="page-theme-switch" role="group" aria-label="Darstellung der Einstellungen"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div><button class="settings-update-button" id="updateCheckButton" type="button"><span id="updateCheckIcon">↻</span><strong id="updateCheckText">Update prüfen</strong><small id="updateCheckHint">GitHub</small></button><button class="primary-button" id="saveSettingsButton">Einstellungen speichern</button></div>
+            <div class="settings-header-actions"><div class="page-theme-switch" role="group" aria-label="Darstellung der Einstellungen"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div><button class="settings-update-button" id="updateCheckButton" type="button"><span id="updateCheckIcon">↻</span><strong id="updateCheckText">Update prüfen</strong><small id="updateCheckHint">GitHub</small></button><span id="settingsSaveStatus" aria-label="Speicherstatus Einstellungen"></span><button class="primary-button" id="saveSettingsButton">Einstellungen speichern</button></div>
           </header>
 
           <div class="settings-tabs" role="tablist" aria-label="Bereiche der Einstellungen">
@@ -2448,7 +2451,7 @@
                     <div><strong>PDF-Vorschau Dienstplan</strong><small>Wird erst beim Klick generiert.</small></div>
                     <label class="field schedule-pdf-preview-design"><span>Design für die Vorschau</span><select id="schedulePdfPreviewDesign"></select></label>
                     <button type="button" class="secondary-button" id="schedulePdfPreviewButton">Vorschau erzeugen</button>
-                    <iframe id="schedulePdfPreviewFrame" title="PDF-Vorschau Dienstplan"></iframe>
+                    <p class="settings-note">Die Vorschau öffnet das gemeinsame Druckfenster mit den gespeicherten PDF-Vorgaben.</p>
                   </div>
                 </div>
                 <div class="settings-card pdf-card" id="vacationPdfSettingsCard">
@@ -2474,7 +2477,7 @@
                   <div class="pdf-live-preview">
                     <div><strong>PDF-Vorschau Urlaub</strong><small>Aktuelle Urlaubsansicht als echte PDF.</small></div>
                     <button type="button" class="secondary-button" id="vacationPdfPreviewButton">Vorschau erzeugen</button>
-                    <iframe id="vacationPdfPreviewFrame" title="PDF-Vorschau Urlaub"></iframe>
+                    <p class="settings-note">Die Vorschau öffnet das gemeinsame Druckfenster mit den gespeicherten PDF-Vorgaben.</p>
                   </div>
                 </div>
               </div>
@@ -2568,7 +2571,7 @@
               </div>
               <p class="settings-note">Wird ein Fall länger als erlaubt, ist die AUM rückwirkend für den gesamten Zeitraum erforderlich. Eine später geprüfte AUM gibt das verbrauchte Kontingent wieder frei.</p>
               <label class="switch-row"><span><strong>Korrekt erkannte AUM bei Vertrauensstufe A automatisch erledigen</strong><small>Nur bei exaktem SV-Abgleich, plausiblen und vom Teammitglied bestätigten Datumswerten sowie erfolgreicher Datei- und Sicherheitsprüfung.</small></span><input id="amuAutoReviewTrustA" type="checkbox" /></label>
-              <div class="form-actions-inline"><span class="settings-note" id="amuSettingsHint"></span><button class="primary-button" id="saveAmuSettingsButton" type="button">AUM-Einstellungen speichern</button></div>
+              <div class="form-actions-inline"><span class="settings-note" id="amuSettingsHint"></span><span id="amuSaveStatus" aria-label="Speicherstatus AUM-Einstellungen"></span><button class="primary-button" id="saveAmuSettingsButton" type="button">AUM-Einstellungen speichern</button></div>
               <section class="amu-access-policy" aria-labelledby="amuAccessPolicyTitle">
                 <div class="amu-access-policy-heading"><div><span class="eyebrow">Zugriff &amp; Zuständigkeit</span><h3 id="amuAccessPolicyTitle">Filialleitungen</h3></div><span class="status-badge">PL+</span></div>
                 <label class="switch-row"><span><strong>AUM im eigenen Filialbereich standardmäßig öffnen und prüfen</strong><small>Wird der Zugriff entzogen, übernimmt die Personalleitung automatisch die offene Bearbeitung. Abteilungsleitungen erhalten dadurch keinen Dokumentzugriff.</small></span><input id="amuManagerDefaultAccess" type="checkbox" /></label>
@@ -2592,7 +2595,7 @@
                 <label class="field"><span>Freundlicher Gruß während Abwesenheit</span><textarea id="greetingSicknessActiveTemplates" rows="4" maxlength="1600"></textarea><small>Nur allgemeine Wünsche – keine Diagnose oder AUM-Inhalte.</small></label>
                 <label class="field"><span>Rückkehr nach Genesung</span><textarea id="greetingSicknessReturnTemplates" rows="4" maxlength="1600"></textarea><small>Neutraler Willkommen-zurück-Text ohne Gesundheitsdetails.</small></label>
               </div>
-              <div class="form-actions-inline"><span class="settings-note" id="greetingSettingsHint">Begrüßungen werden ausschließlich serverseitig ausgewählt.</span><button class="primary-button" id="saveGreetingSettingsButton" type="button">Begrüßungen speichern</button></div>
+              <div class="form-actions-inline"><span class="settings-note" id="greetingSettingsHint">Begrüßungen werden ausschließlich serverseitig ausgewählt.</span><span id="greetingSaveStatus" aria-label="Speicherstatus Begrüßungen"></span><button class="primary-button" id="saveGreetingSettingsButton" type="button">Begrüßungen speichern</button></div>
             </div>
             <div class="settings-card hidden" id="birthdayPresentationSettingsCard">
               <div class="card-heading"><div class="card-icon">GB</div><div><h2>Geburtstagsdarstellung</h2><p>Legt je Teammitglied eine feste, professionell geprüfte Geburtstagsvariante fest.</p></div></div>
@@ -3108,7 +3111,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.79 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.80 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -3260,37 +3263,6 @@
           <label class="sales-article-import-confirmation"><input id="salesArticleImportConfirmed" type="checkbox" /><span>Ich habe die vollständige Vorschau geprüft. Die sichere Teilmenge wird gemeinsam und revisionssicher übernommen; Konflikt- und Quarantänezeilen bleiben vollständig unangetastet und werden protokolliert.</span></label>
         </section>
         <div class="modal-actions sales-article-import-actions"><button type="button" class="secondary-button" id="salesArticleImportCancel" data-close-sales-article-import>Abbrechen</button><span></span><span></span><button type="submit" class="primary-button" id="salesArticleImportApplyButton" disabled>Bestätigten Import übernehmen</button></div>
-      </form>
-    </dialog>
-
-    <dialog class="modal wide-modal sales-pdf-options-modal" id="salesReportPdfOptionsModal" aria-labelledby="salesReportPdfOptionsTitle" aria-describedby="salesReportPdfOptionsDescription">
-      <form id="salesReportPdfOptionsForm">
-        <div class="modal-header"><div><span class="eyebrow">Persönliche Exportvorgabe</span><h2 id="salesReportPdfOptionsTitle">Verkaufsanalyse als PDF</h2><p id="salesReportPdfOptionsDescription">Lege Umfang und Darstellung fest. Die Optionen gelten nur für dein Benutzerkonto.</p></div><button type="button" class="close-button" data-close="salesReportPdfOptionsModal" aria-label="PDF-Exportoptionen schließen">×</button></div>
-        <div class="sales-pdf-options-grid">
-          <section class="sales-pdf-options-section" aria-labelledby="salesReportPdfLayoutTitle">
-            <div class="sales-pdf-options-heading"><span aria-hidden="true">A4</span><div><h3 id="salesReportPdfLayoutTitle">Seiten &amp; Layout</h3><p>Nur ausgewählte Diagramme werden als eigene Seiten ausgegeben.</p></div></div>
-            <div class="form-grid sales-pdf-layout-fields">
-              <label class="field"><span>Ausrichtung</span><select id="salesReportPdfOrientation"><option value="landscape">Querformat</option><option value="portrait">Hochformat</option></select></label>
-              <label class="field"><span>Warengruppen je Diagramm</span><input id="salesReportPdfTopN" type="number" min="5" max="20" step="1" value="12" inputmode="numeric" /></label>
-            </div>
-            <fieldset class="sales-pdf-chart-options">
-              <legend>Diagrammseiten</legend>
-              <label><input type="checkbox" value="ranking" data-sales-pdf-chart /><span><strong>Aktuell &amp; Vergleich</strong><small>Stärkste Warengruppen gegenüberstellen</small></span></label>
-              <label><input type="checkbox" value="change" data-sales-pdf-chart /><span><strong>Relative Abweichung</strong><small>Prozentuale Entwicklung zum Vergleich</small></span></label>
-              <label><input type="checkbox" value="absolute_change" data-sales-pdf-chart /><span><strong>Absolute Abweichung</strong><small>Differenz in der gewählten Kennzahl</small></span></label>
-              <label><input type="checkbox" value="share" data-sales-pdf-chart /><span><strong>Anteile</strong><small>Anteil der Warengruppen am Gesamtwert</small></span></label>
-              <label><input type="checkbox" value="pareto" data-sales-pdf-chart /><span><strong>Pareto-Analyse</strong><small>Einzelanteil und kumulierter Anteil</small></span></label>
-            </fieldset>
-          </section>
-          <section class="sales-pdf-options-section" aria-labelledby="salesReportPdfContentTitle">
-            <div class="sales-pdf-options-heading"><span aria-hidden="true">Inhalt</span><div><h3 id="salesReportPdfContentTitle">Zusätzliche Inhalte</h3><p>Ergänze die Diagrammseiten um eine kompakte Übersicht.</p></div></div>
-            <label class="switch-row sales-pdf-switch"><span><strong>KPI-Übersicht</strong><small>Kennzahlen und Vergleichswerte voranstellen.</small></span><input id="salesReportPdfIncludeKpis" type="checkbox" /></label>
-            <label class="switch-row sales-pdf-switch"><span><strong>Detailtabelle</strong><small>Warengruppenwerte als zusätzliche Tabelle ausgeben.</small></span><input id="salesReportPdfIncludeTable" type="checkbox" /></label>
-            <label class="field sales-pdf-filename-field"><span>Dateiname-Präfix</span><input id="salesReportPdfFilenamePrefix" type="text" maxlength="64" value="Grabenplaner-Verkaufsanalyse" autocomplete="off" /><small>Unzulässige Dateizeichen werden entfernt; Datum und Dateiendung ergänzt der Export.</small></label>
-          </section>
-        </div>
-        <p class="calculation-note sales-pdf-options-message" id="salesReportPdfOptionsMessage" role="status" aria-live="polite">Mindestens eine Diagrammseite muss ausgewählt sein.</p>
-        <div class="modal-actions"><button type="button" class="secondary-button" id="salesReportPdfOptionsReset">Standard wiederherstellen</button><span></span><button type="button" class="secondary-button" data-close="salesReportPdfOptionsModal">Abbrechen</button><button type="submit" class="primary-button" id="salesReportPdfExportButton">Speichern &amp; PDF erstellen</button></div>
       </form>
     </dialog>
 
@@ -4528,11 +4500,14 @@
     <script src="/date-range-calendar.js"></script>
     <script src="/trade-article-history.js"></script>
     <script src="/trade-supplier-invoices.js"></script>
+    <script src="/gp-data-quality.js"></script>
+    <script src="/gp-trust-evidence.js"></script>
     <script src="/sales-history.js"></script>
     <script src="/table-layout.js"></script>
     <script src="/receipt-line-format.js"></script>
     <script src="/receipt-search.js"></script>
   <script src="/trade-insight-results.js"></script>
+  <script src="/trade-pdf-request.js"></script>
   <script src="/trade-export-options.js"></script>
   <script src="/trade-table-layout.js"></script>
   <script src="/trade-movements.js"></script>
@@ -4591,12 +4566,20 @@
     <script src="/start-dashboard-workspace.js"></script>
     <script src="/start-dashboard-vps.js"></script>
     <script src="/form-draft-guard.js"></script>
+    <script src="/gp-save-status.js"></script>
     <script src="/sales-recent-articles.js"></script>
     <script src="/rights-management-workspace.js"></script>
     <script src="/rights-settings-windows.js"></script>
     <script src="/loan-location-settings.js"></script>
     <script src="/sales-article-report-pdf-preview.js"></script>
     <script src="/gp-print-window.js"></script>
+    <script src="/gp-existing-pdf-window.js"></script>
+    <script src="/gp-document-print.js"></script>
+    <script src="/gp-price-label-pdf.js"></script>
+    <script src="/gp-branch-order-pdf-window.js"></script>
+    <script src="/gp-planning-print.js"></script>
+    <script src="/gp-sales-analytics-print.js"></script>
+    <script src="/gp-receipt-print.js"></script>
     <script src="/sales-article-report.js"></script>
     <script src="/sales-bwl-print.js"></script>
     <script src="/sales-bwl-simulation-print.js"></script>

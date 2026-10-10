@@ -10,7 +10,7 @@ test('Learning and Trade retain interaction drafts while revalidating data, scop
  try{
   const page=await browser.newPage();page.setDefaultTimeout(10000);page.on('pageerror',error=>errors.push(error.message));await page.route('**/*',route=>route.abort());
   await page.setContent('<div id="team"></div><div id="trade"></div>');
-  for(const file of ['learning-team.js','trade-insight-results.js','trade-movements.js','trade-stocktakes.js','trade-suggestions.js','trade-period.js'])await page.addScriptTag({path:path.join(root,'public',file)});
+  for(const file of ['learning-team.js','trade-insight-results.js','trade-movements.js','trade-stocktakes.js','trade-suggestions.js','trade-period.js','gp-data-quality.js'])await page.addScriptTag({path:path.join(root,'public',file)});
   await page.evaluate(()=>{
    window.learningOptions={locations:[{id:'18',name:'Filiale 18'}],positions:[{id:'sales',name:'Verkauf'}],roles:[{id:'employee',name:'Mitarbeiter'}],rules:[],canManage:true,
     scopes:[{type:'organization',label:'Organisation'},{type:'location',locationId:'18',label:'Filiale 18'}],modules:[{id:'skill',title:'Kassa',version:1,type:'skill',scope:{type:'organization'}}]};

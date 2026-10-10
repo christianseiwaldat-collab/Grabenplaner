@@ -1518,9 +1518,13 @@ test('ABC current-period workspace uses the real verified cash publication in tw
   const input = { dateFrom: '2010-01-01', dateTo: '2010-12-31', locationIds: ['branch-a'], metric: 'netRevenue' };
   const context = await runtime.run(f.get, w => w.abc.metadata());
   assert.equal(context.available, true); assert.equal(context.sourceAt, TIME); assert.ok(!context.locations.some(l => l.id === 'online'));
+  assert.deepEqual(context.sourceQuality, { sourceId: 'compact-cash', uploadedAt: TIME });
+  assert.deepEqual((await runtime.run(f.get, w => w.context())).sourceQuality, context.sourceQuality);
+  assert.deepEqual((await runtime.run(f.get, w => w.reports.metadata())).sourceQuality, context.sourceQuality);
   const first = await runtime.run(f.get, w => w.abc.step(input)); assert.equal(first.analysis.processed, 200); assert.equal(first.snapshot, null);
   const final = await runtime.run(f.get, w => w.abc.step(input, first.analysis.cursor));
   assert.equal(final.analysis.complete, true); assert.equal(final.analysis.processed, 201);
+  assert.deepEqual(final.snapshot.sourceQuality, context.sourceQuality);
   assert.equal(final.snapshot.rows.length, 1); assert.equal(final.snapshot.rows[0].articleNumber, '00042');
   assert.equal(final.snapshot.rows[0].quantity, '201.000000'); assert.equal(final.snapshot.rows[0].netRevenue, '2010.00');
   assert.equal(final.snapshot.rows[0].class, 'A'); assert.equal(final.snapshot.rows[0].description, 'Synthetic article');
