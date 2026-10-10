@@ -16,13 +16,14 @@ test('compact sales workspace preserves report choices, validation and graphic m
     await page.route('**/*', route => route.abort());
     const source = fs.readFileSync(path.join(repo, 'public/index.html'), 'utf8');
     const start = source.indexOf('<section id="salesAnalyticsView"'), end = source.indexOf('<section id="personnelView"', start);
-    const styles = ['styles.css', 'sales-analytics-workspace.css'].map(file => fs.readFileSync(path.join(repo, 'public', file), 'utf8')).join('\n');
+    const styles = ['styles.css', 'gp-data-quality.css', 'sales-analytics-workspace.css'].map(file => fs.readFileSync(path.join(repo, 'public', file), 'utf8')).join('\n');
     await page.setContent(`<style>${styles}\n.sidebar h2{font-size:17px;color:white}.synthetic-preview{position:absolute;right:34px;top:14px;font-size:9px;color:var(--muted)}</style><div class="app-shell"><aside class="sidebar"><h2>Grabenplaner</h2><div class="sidebar-session"><div class="sidebar-session-copy"><strong>BEISPIEL · Filialleitung</strong><span>Lokale Designvorschau</span></div></div><nav class="main-nav"><button class="nav-item">Dashboard</button><button class="nav-item">Filialverwaltung</button><button class="nav-item">Personal</button><button class="nav-item active">Verkaufsanalysen</button><button class="nav-item">Artikelstamm</button><button class="nav-item">Einkauf &amp; Bestand</button></nav></aside><main class="main-content"><span class="synthetic-preview">Vorschau · ausschließlich Beispieldaten</span>${source.slice(start, end)}</main></div>`);
     await page.evaluate(() => document.getElementById('salesAnalyticsView').classList.add('active'));
     await page.addScriptTag({ path:path.join(repo, 'public/sales-report-controls.js') });
+    await page.addScriptTag({ path:path.join(repo, 'public/gp-data-quality.js') });
     await page.addScriptTag({ path:path.join(repo, 'public/sales-report-jobs.js') });
     await page.evaluate(async () => {
-      const context = { today:'2026-10-08', projection:{ read:true, sellers:true, margin:true }, marginStatus:'confirmed', source:{ label:'Kassendaten · BEISPIEL' },
+      const context = { today:'2026-10-08', projection:{ read:true, sellers:true, margin:true }, marginStatus:'confirmed', source:{ label:'Kassendaten · BEISPIEL' }, sourceQuality:{sourceId:'compact-cash',uploadedAt:'2026-09-01T03:00:00Z'},
         locations:[{ id:'05', label:'05 · Beispiel West' }, { id:'11', label:'11 · Beispiel Mitte' }, { id:'18', label:'18 · Beispiel Ost' }],
         sellers:[{ id:'101', label:'101 · Anna' }, { id:'102', label:'102 · Ben' }, { id:'103', label:'103 · Chris' }],
         merchandiseGroups:[{ id:'101', label:'101 · Digitale Kameras' }, { id:'202', label:'202 · Objektive' }, { id:'301', label:'301 · Ferngläser' }],
@@ -118,6 +119,7 @@ test('compact sales workspace preserves report choices, validation and graphic m
     assert.deepEqual(overflow, []);
     await page.evaluate(() => reportUi.reset());
     await page.waitForFunction(() => [...document.querySelectorAll('.sales-report-filter-disclosure-count')].every(element => element.textContent === 'Alle'));
+    assert.equal(await page.locator('#salesReportDataQuality').textContent(),'');
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });

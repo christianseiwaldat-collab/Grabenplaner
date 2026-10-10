@@ -10,6 +10,7 @@ const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
 const styles = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
+const printAdapter = fs.readFileSync(path.join(root, "public", "gp-sales-analytics-print.js"), "utf8");
 
 function between(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -94,7 +95,7 @@ test("Desktop-Arbeitsbereich enthält Bereichs-, Datums- und Horizontfilter", ()
   assert.match(app, /horizon: "year_to_date"/);
   assert.match(app, /previewHorizon: "period"/);
   assert.match(app, /const horizon = series \? "period" : state\.salesAnalytics\.horizon/);
-  const seriesAnalysis = between(app, "async function analyzeSalesReportSeries()", "async function downloadSalesAnalyticsChartsPdf");
+  const seriesAnalysis = between(app, "async function analyzeSalesReportSeries()", "function setView(view)");
   assert.doesNotMatch(seriesAnalysis, /salesAnalytics\.horizon\s*=/);
 });
 
@@ -203,37 +204,18 @@ test("Persönliche PDF-Exportoptionen sind allowlisted, begrenzt und sicher norm
   assert.equal(defaults.pdf.includeKpis, true);
 });
 
-test("PDF-Dialog bietet nur den vereinbarten Analyseumfang und speichert kontobezogen", () => {
-  const modal = between(
-    html,
-    '<dialog class="modal wide-modal sales-pdf-options-modal"',
-    '<dialog class="modal wide-modal employee-modal"',
-  );
-  for (const id of [
-    "salesReportPdfOrientation",
-    "salesReportPdfTopN",
-    "salesReportPdfIncludeKpis",
-    "salesReportPdfIncludeTable",
-    "salesReportPdfFilenamePrefix",
-    "salesReportPdfExportButton",
-  ]) assert.match(modal, new RegExp(`id="${id}"`));
-  for (const chartId of ["ranking", "change", "absolute_change", "share", "pareto"]) {
-    assert.match(modal, new RegExp(`value="${chartId}" data-sales-pdf-chart`));
-  }
-  assert.doesNotMatch(modal, /Branding|Logo|RGB|Farbe/i);
+test("Gemeinsames PDF-Fenster erhält Analyseumfang und explizite persönliche Vorgaben", () => {
+  assert.doesNotMatch(html, /id="salesReportPdfOptionsModal"/);
+  assert.match(html, /src="\/gp-sales-analytics-print.js"/);
+  for (const option of ["orientation", "topN", "includeKpis", "includeTable", "filenamePrefix"]) assert.match(printAdapter, new RegExp(option));
+  for (const chartId of ["ranking", "change", "absolute_change", "share", "pareto"]) assert.match(printAdapter, new RegExp(chartId));
+  assert.match(printAdapter, /Als persönliche Vorgabe speichern/);
+  assert.match(printAdapter, /optionsVersion:1/);
+  assert.match(printAdapter, /top.min='5';top.max='20'/);
   assert.match(app, /api\("\/api\/sales-analytics\/preferences"\)/);
   assert.match(app, /method: "PUT"/);
-  assert.match(app, /optionsVersion: 1/);
-  assert.match(app, /function syncSalesAnalyticsActorState\(\)/);
-  assert.match(app, /syncSalesAnalyticsActorState\(\);/);
-  assert.match(app, /actorKey !== currentSalesAnalyticsActorKey\(\)/);
-  assert.match(app, /preferencesRequestId/);
-  assert.match(app, /seriesRequestId: 0/);
-  assert.match(app, /horizon: "year_to_date"/);
   assert.match(app, /pdfOptions: normalizeSalesAnalyticsPdfOptions\(\)/);
   assert.match(app, /const horizon = series \? "period" : state\.salesAnalytics\.horizon/);
-  assert.match(app, /charts\.length \? charts : \[\.\.\.SALES_ANALYTICS_PDF_DEFAULTS\.charts\]/);
-  assert.match(styles, /\.sales-pdf-options-grid/);
 });
 
 test("Asynchrone Verkaufsanalyse-Antworten bleiben an den aktuellen Actor gebunden", () => {
@@ -242,9 +224,7 @@ test("Asynchrone Verkaufsanalyse-Antworten bleiben an den aktuellen Actor gebund
     between(app, "async function loadSalesAnalytics({", "async function inspectSalesReportPdf"),
     between(app, "async function inspectSalesReportPdf", "async function discardSalesReportPreview"),
     between(app, "async function applySalesReportPreview", "function clearSalesReportSeries"),
-    between(app, "async function analyzeSalesReportSeries", "async function downloadSalesAnalyticsChartsPdf"),
-    between(app, "async function downloadSalesAnalyticsChartsPdf", "async function submitSalesAnalyticsPdfOptions"),
-    between(app, "async function submitSalesAnalyticsPdfOptions", "function setView(view)"),
+    between(app, "async function analyzeSalesReportSeries", "function setView(view)"),
   ];
   for (const functionSource of guardedFunctions) {
     assert.match(functionSource, /const actorKey = currentSalesAnalyticsActorKey\(\)/);
@@ -262,8 +242,8 @@ test("Asynchrone Verkaufsanalyse-Antworten bleiben an den aktuellen Actor gebund
   assert.match(actorReset, /preferencesRequestId \+= 1/);
   assert.match(actorReset, /seriesRequestId \+= 1/);
   assert.match(actorReset, /reports: \[\][\s\S]*selectedReport: null[\s\S]*pdfOptions: normalizeSalesAnalyticsPdfOptions\(\)/);
-  const download = between(app, "async function downloadSalesAnalyticsChartsPdf", "async function submitSalesAnalyticsPdfOptions");
-  assert.match(download, /beforeSave: requestIsCurrent/);
+  assert.match(printAdapter, /input.payload.scope!==scope\(\)/);
+  assert.match(app, /key: \(\) => state.portalStatus\?\.portalEnabled \? startDashboardWorkspaceActorKey\(\)/);
 });
 
 test("Session-Timeout neutralisiert Verkaufsanalysedaten vor dem Login-Gate", () => {
@@ -289,8 +269,8 @@ test("Gespeicherte Verkaufsanalyse-Präferenzen werden erst nach Actor- und Requ
 
   const submitPreferences = between(
     app,
-    "async function submitSalesAnalyticsPdfOptions",
-    "function setView(view)",
+    "async function saveSalesAnalyticsPrintOptions",
+    "function openSalesAnalyticsPdfOptions",
   );
   const saveAwait = submitPreferences.indexOf("await saveSalesAnalyticsPreferences(options)");
   const submitGuard = submitPreferences.indexOf("!salesAnalyticsActorIsCurrent(actorKey)", saveAwait);
@@ -298,6 +278,8 @@ test("Gespeicherte Verkaufsanalyse-Präferenzen werden erst nach Actor- und Requ
   assert.ok(saveAwait >= 0 && submitGuard > saveAwait && submitGuard < submitApply,
     "Gespeicherte Präferenzen dürfen nach dem PUT erst nach dem vollständigen Guard angewendet werden.");
   assert.match(submitPreferences, /requestId !== state\.salesAnalytics\.preferencesRequestId/);
+  assert.match(submitPreferences, /accountKey !== startDashboardWorkspaceActorKey\(\)/);
+  assert.match(submitPreferences, /selectionKey !== JSON.stringify\(salesAnalyticsPrintContext\(\)\)/);
   const applyPreferences = between(app, "function applySalesAnalyticsPreferences", "function currentSalesAnalyticsActorKey");
   assert.doesNotMatch(applyPreferences, /state\.salesAnalytics\.(?:horizon|chartType|chartMetric)\s*=/);
   const preferencePayload = between(app, "function salesAnalyticsPreferencePayload", "async function saveSalesAnalyticsPreferences");

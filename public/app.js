@@ -4,6 +4,12 @@ let salesPriceLabelsWorkspace = null;
 let sidebarLayout = null;
 let sidebarNotepad = null;
 let gpWindowManager = null, gpWindowActor = '', recentArticlesWindow = null;
+let gpDocumentPrint = null, documentPrintModelRevision = 0;
+const documentPrintModels = new WeakMap();
+const settingsSaveStatuses = new Map(), settingsSaveStatusHosts = new Map();
+let settingsSaveActor = null, settingsSavePrimary = null, settingsSaveCandidateSource = null;
+let settingsSaveEpoch = 0, settingsSavePrimaryEpoch = 0;
+let settingsConfirmedDraft = null, settingsConfirmedRevision = 0;
 let startDashboardVps = null;
 const branchOrderViewStates = new Map();
 let branchOrderViewActor = '';
@@ -393,7 +399,6 @@ const state = {
     chartType: "ranking",
     chartMetric: "netRevenue",
     pdfOptions: normalizeSalesAnalyticsPdfOptions(),
-    pdfOptionsDraft: null,
     preferencesLoaded: false,
     preferencesLoading: false,
     preferencesRequestId: 0,
@@ -857,7 +862,7 @@ const elements = Object.fromEntries(
     "payrollHandoffMonth", "payrollHandoffLocation", "payrollHandoffDepartment", "payrollHandoffPreflightButton", "payrollHandoffCreateButton", "payrollHandoffPreflightResult", "payrollHandoffList", "payrollHandoffProtocolModal", "payrollHandoffProtocolForm", "payrollHandoffProtocolId", "payrollHandoffProtocolSummary", "payrollHandoffProtocolResult", "payrollHandoffProtocolNumber", "payrollHandoffProtocolNote", "payrollHandoffProtocolMessage", "savePayrollHandoffProtocolButton",
     "personnelImportModal", "personnelImportForm", "personnelImportProgress", "personnelImportFileStep", "personnelImportMappingStep", "personnelImportPreviewStep", "personnelImportSourceType", "personnelImportFileField", "personnelImportSqlConnectionField", "personnelImportSqlConnection", "personnelImportFile", "personnelImportProfile", "personnelImportDuplicateStrategy", "personnelImportDefaultCostCenter", "personnelImportDefaultDepartment", "personnelImportDefaultPosition", "personnelImportDefaultHours", "inspectPersonnelImportButton", "personnelImportSheet", "personnelImportHeaderRow", "personnelImportMapping", "personnelImportProfileName", "savePersonnelImportProfileButton", "previewPersonnelImportButton", "personnelImportSummary", "personnelImportPreviewBody", "personnelImportPreviewHint", "personnelImportMessage", "resetPersonnelImportButton", "backPersonnelImportButton", "applyPersonnelImportButton",
     "integrationConnectionModal", "integrationConnectionForm", "integrationConnectionTitle", "integrationConnectionId", "integrationConnectionKind", "integrationConnectionName", "integrationConnectionActive", "integrationConnectionScopeLocations", "integrationConnectionScopeDepartments", "integrationSqlFields", "integrationSqlHost", "integrationSqlPort", "integrationSqlDatabase", "integrationSqlInstance", "integrationSqlSchema", "integrationSqlView", "integrationSqlAllowedColumns", "integrationSqlTls", "integrationSqlTimeout", "integrationSqlRowLimit", "integrationApiFields", "integrationApiEndpoint", "integrationApiAuthentication", "integrationApiKeyHeaderField", "integrationApiKeyHeader", "integrationApiTimeout", "integrationApiRequestLimit", "integrationApiResponseLimit", "integrationCredentialPanel", "integrationCredentialTitle", "integrationCredentialStatus", "integrationSqlCredentials", "integrationApiCredentials", "integrationBearerTokenField", "integrationApiKeyField", "integrationBasicUsernameField", "integrationBasicPasswordField", "integrationCredentialUsername", "integrationCredentialPassword", "integrationCredentialToken", "integrationCredentialApiKey", "integrationCredentialBasicUsername", "integrationCredentialBasicPassword", "integrationConnectionMessage", "deleteIntegrationConnectionButton", "testIntegrationConnectionButton", "saveIntegrationConnectionButton",
-    "salesAnalyticsStatusBadge", "salesReportImportPanel", "salesReportImportFile", "salesReportInspectButton", "salesReportImportMessage", "salesReportPreview", "salesReportPreviewSummary", "salesReportOcrReview", "salesReportOcrReviewState", "salesReportOcrReportFields", "salesReportImportLocation", "salesReportImportCurrency", "salesReportPreviewIssues", "salesReportPreviewTableTitle", "salesReportPreviewHorizonField", "salesReportPreviewHorizon", "salesReportPreviewHead", "salesReportPreviewBody", "salesReportPreviewFoot", "salesReportImportConfirmed", "salesReportConfirmationText", "salesReportDiscardButton", "salesReportApplyButton", "salesReportLocationFilter", "salesReportDateFrom", "salesReportDateTo", "salesReportResetFilters", "salesReportFilterNotice", "salesReportSelect", "salesReportHorizon", "salesReportArchive", "salesReportArchiveBody", "salesReportArchiveEmpty", "salesReportArchiveSelectionSummary", "salesReportCoverageChart", "salesReportSeriesAnalyzeButton", "salesReportSeriesClearButton", "salesReportKpis", "salesReportSummary", "salesAnalyticsChartEyebrow", "salesAnalyticsChartTitle", "salesReportChartType", "salesReportChartMetric", "salesReportChartPdfButton", "salesReportChartLegend", "salesReportChart", "salesReportGroupSearch", "salesReportTableCount", "salesReportTableHead", "salesReportTableBody", "salesReportTableEmpty", "salesReportPdfOptionsModal", "salesReportPdfOptionsForm", "salesReportPdfOrientation", "salesReportPdfTopN", "salesReportPdfIncludeKpis", "salesReportPdfIncludeTable", "salesReportPdfFilenamePrefix", "salesReportPdfOptionsMessage", "salesReportPdfOptionsReset", "salesReportPdfExportButton",
+    "salesAnalyticsStatusBadge", "salesReportImportPanel", "salesReportImportFile", "salesReportInspectButton", "salesReportImportMessage", "salesReportPreview", "salesReportPreviewSummary", "salesReportOcrReview", "salesReportOcrReviewState", "salesReportOcrReportFields", "salesReportImportLocation", "salesReportImportCurrency", "salesReportPreviewIssues", "salesReportPreviewTableTitle", "salesReportPreviewHorizonField", "salesReportPreviewHorizon", "salesReportPreviewHead", "salesReportPreviewBody", "salesReportPreviewFoot", "salesReportImportConfirmed", "salesReportConfirmationText", "salesReportDiscardButton", "salesReportApplyButton", "salesReportLocationFilter", "salesReportDateFrom", "salesReportDateTo", "salesReportResetFilters", "salesReportFilterNotice", "salesReportSelect", "salesReportHorizon", "salesReportArchive", "salesReportArchiveBody", "salesReportArchiveEmpty", "salesReportArchiveSelectionSummary", "salesReportCoverageChart", "salesReportSeriesAnalyzeButton", "salesReportSeriesClearButton", "salesReportKpis", "salesReportSummary", "salesAnalyticsChartEyebrow", "salesAnalyticsChartTitle", "salesReportChartType", "salesReportChartMetric", "salesReportChartPdfButton", "salesReportChartLegend", "salesReportChart", "salesReportGroupSearch", "salesReportTableCount", "salesReportTableHead", "salesReportTableBody", "salesReportTableEmpty",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
 );
 
@@ -1359,6 +1364,7 @@ function closeAdminCredentialDialogsForLogin() {
 }
 
 function showLoginGate(message = "") {
+  syncSettingsSaveScopes({ force: true });
   gpWindowManager?.synchronize();
   recentArticlesWindow?.sync();
   settingsDraftGuard?.clear();
@@ -1369,6 +1375,9 @@ function showLoginGate(message = "") {
   clearUsbProvisioningPasswords();
   resetAdminPersonalActionsState("");
   state.portalSession = null;
+  syncPlanningPrintWindows();
+  gpDocumentPrint?.reset();
+  gpDefinitionsWorkspace?.synchronize();
   syncPersonnelLearningAccessState();
   syncStartDashboardWorkspace();
   syncSalesHistoryAccess();
@@ -1429,6 +1438,7 @@ function activateGpDefinitions() {
   if (!canUseGpDefinitions() || !window.GpDefinitions) return;
   if (!gpDefinitionsWorkspace) gpDefinitionsWorkspace = window.GpDefinitions.mount(document.getElementById('gpDefinitionsWorkspace'), {
     canUse: canUseGpDefinitions, key: () => String(state.portalSession?.user?.employeeNumber || ''),
+    loadWorkspaces: async () => (await api('/api/portal/v1/private-workspaces')).workspaces,
   });
   gpDefinitionsWorkspace.activate();
 }
@@ -3494,11 +3504,14 @@ function updateManagementBrandingPreference(preference = {}) {
 
 async function loadManagementBrandingPreference() {
   if (!hasManagementBrandingAccess()) return null;
+  const current = settingsWriteGuard("read");
   try {
     const preference = await api("/api/branding/preference");
+    if (!current()) return null;
     updateManagementBrandingPreference(preference);
     return preference;
   } catch (error) {
+    if (!current()) return null;
     if (error.status !== 403) throw error;
     return null;
   }
@@ -3561,6 +3574,7 @@ async function enrichLoadedSchedule(url, {
 }
 
 async function loadAll({ restoreContext = true, applyInitialView = false, reusePortalStatus = false } = {}) {
+  syncSettingsSaveScopes();
   const generation = ++loadAllGeneration;
   const session = state.portalSession;
   const isCurrent = () => generation === loadAllGeneration && session === state.portalSession;
@@ -3584,9 +3598,11 @@ async function loadAll({ restoreContext = true, applyInitialView = false, reuseP
     const vacationEnabled = portalStatus?.installationFeatures?.vacation !== false;
     const scheduleUrl = `/api/schedule?week=${state.weekStart}${scheduleContext}`;
     const scheduleEnrichmentUrl = `/api/schedule/enrichment?week=${state.weekStart}${scheduleContext}`;
+    const settingsRead = settingsConfirmationReadToken();
     const schedule = await api(`${scheduleUrl}&fast=1`);
-    if (!isCurrent()) return;
+    if (!isCurrent() || settingsRead.key !== settingsSaveKey("main")) return;
     applyLoadedSchedule(schedule);
+    if (schedule.settings) acknowledgeSettingsRead(settingsRead, { schedule: true });
     render({ period: "schedule" });
     const positionsRequest = api("/api/positions");
     const roleDataRequest = api("/api/portal/v1/roles").catch(() => ({ roles: [], catalog: [] }));
@@ -3608,7 +3624,7 @@ async function loadAll({ restoreContext = true, applyInitialView = false, reuseP
         : Promise.resolve({ year: state.vacationYear, vacations: [], entitlements: [], publicHolidays: [] }),
       api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || []),
     ]);
-    if (!isCurrent()) return;
+    if (!isCurrent() || settingsRead.key !== settingsSaveKey("main")) return;
     if (positions.status === "fulfilled") state.positions = positions.value;
     if (roleData.status === "fulfilled") {
       state.portalRoles = roleData.value.roles || [];
@@ -3619,6 +3635,7 @@ async function loadAll({ restoreContext = true, applyInitialView = false, reuseP
     if (vacationData.status === "fulfilled") {
       state.vacationData = vacationData.value;
       state.vacationYear = vacationData.value.year;
+      if (vacationData.value.settings) acknowledgeSettingsRead(settingsRead, { vacation: true });
     }
     if (brandingKits.status === "fulfilled") state.brandingKits = brandingKits.value;
     for (const result of [positions, roleData, employees, vacationData, brandingKits]) {
@@ -3665,10 +3682,12 @@ async function loadPlanningPeriod(kind = "schedule") {
   const url = vacation
     ? `/api/vacations?year=${state.vacationYear}${contextQuery(session?.user?.role === "department_manager")}`
     : `/api/schedule?week=${state.weekStart}${contextQuery(true)}`;
+  const settingsRead = settingsConfirmationReadToken();
   try {
     const data = await api(vacation ? url : `${url}&fast=1`, { signal: controller.signal });
     if (generation !== loadAllGeneration || controller.signal.aborted
-      || session !== state.portalSession || locationId !== state.locationId || departmentId !== state.departmentId) return;
+      || session !== state.portalSession || locationId !== state.locationId || departmentId !== state.departmentId
+      || settingsRead.key !== settingsSaveKey("main")) return;
     if (vacation) {
       state.vacationData = data;
       state.vacationYear = data.year;
@@ -3676,6 +3695,7 @@ async function loadPlanningPeriod(kind = "schedule") {
     } else {
       applyLoadedSchedule(data);
     }
+    if (data.settings) acknowledgeSettingsRead(settingsRead, { schedule: !vacation, vacation });
     render({ period: vacation ? "vacation" : "schedule" });
     if (Number.isFinite(started) && globalThis.requestAnimationFrame && globalThis.performance?.measure) {
       // A bounded, anonymous browser timing includes rendering and the next
@@ -4109,7 +4129,30 @@ function setBranchOrdersManagementMessage(text = "", error = false) {
   elements.branchOrdersManagementMessage.classList.toggle("error", Boolean(text) && error);
 }
 
+let branchOrdersManagementPrintWindow = null;
+function syncBranchOrdersManagementPrintWindow() {
+  if (!branchOrdersManagementPrintWindow) return;
+  if (state.currentView === 'branchOrders') branchOrdersManagementPrintWindow.activate();
+  else branchOrdersManagementPrintWindow.deactivate();
+  branchOrdersManagementPrintWindow.sync();
+}
+function openBranchOrdersManagementPdf(orderId, target) {
+  if (!canManageBranchOrders() || state.currentView !== 'branchOrders') return;
+  const order = (state.branchOrdersManagementHistory || []).find(value => String(value.id) === String(orderId));
+  if (!order) return;
+  syncGpWindows();
+  if (!branchOrdersManagementPrintWindow) branchOrdersManagementPrintWindow = window.GpBranchOrderPdfWindow.mount({
+    document, rawApi, id: 'branch-orders-management-pdf', key: startDashboardWorkspaceActorKey,
+    scopeKey: selectedBranchOrdersManagementLocationId,
+    canUse: () => canManageBranchOrders() && state.branchOrdersManagementDraftLocationId === selectedBranchOrdersManagementLocationId(),
+    active: () => state.currentView === 'branchOrders', orders: () => state.branchOrdersManagementHistory || [],
+    windowPreferences: gpWindowManager?.preferences,
+  });
+  branchOrdersManagementPrintWindow.activate();
+  branchOrdersManagementPrintWindow.open(order, target);
+}
 function renderBranchOrdersManagementHistory() {
+  syncBranchOrdersManagementPrintWindow();
   if (!elements.branchOrdersManagementHistory) return;
   const selectedLocationId = selectedBranchOrdersManagementLocationId();
   const history = state.branchOrdersManagementHistory || [];
@@ -4118,13 +4161,11 @@ function renderBranchOrdersManagementHistory() {
     return;
   }
   elements.branchOrdersManagementHistory.innerHTML = history.length ? history.map((order) => {
-    const orderId = encodeURIComponent(String(order.id || ""));
-    const pdfBase = `/api/portal/v1/branch-orders/${orderId}/pdf`;
     return `
     <article class="branch-orders-management-history-entry">
       <div><strong>KW ${Number(order.calendarWeek || 0)} · ${escapeHtml(order.selectedEmployeeName || "Teammitglied")} · MA-Nr. ${escapeHtml(order.selectedEmployeeNumber || "–")}</strong><small>${escapeHtml(branchOrdersManagementTimestamp(order.submittedAt))} · ${escapeHtml(branchOrdersManagementStatusText(order.status))}</small></div>
       <ul>${(order.lines || []).map((line) => `<li>${escapeHtml(line.groupTitle || "Warengruppe")} · ${escapeHtml(line.itemTitle || "Position")}: ${escapeHtml(Number(line.quantity || 0).toLocaleString("de-AT", { maximumFractionDigits: 3 }))} ${escapeHtml(line.unit || "")}</li>`).join("")}</ul>
-      <nav class="branch-orders-management-history-actions"><a class="secondary-button" href="${escapeHtml(pdfBase)}" target="_blank" rel="noopener">PDF öffnen</a><a class="secondary-button" href="${escapeHtml(`${pdfBase}?download=1`)}">Herunterladen</a>${order.status !== "sent" ? `<button class="secondary-button" type="button" data-branch-orders-confirm-delivery="${escapeHtml(order.id)}">Zustellung bestätigen</button>` : ""}</nav>
+      <nav class="branch-orders-management-history-actions"><button class="secondary-button" type="button" data-branch-order-pdf="${escapeHtml(order.id)}">PDF-Vorschau &amp; Download</button>${order.status !== "sent" ? `<button class="secondary-button" type="button" data-branch-orders-confirm-delivery="${escapeHtml(order.id)}">Zustellung bestätigen</button>` : ""}</nav>
     </article>
   `;
   }).join("") : '<p class="settings-note">Für diesen Standort wurden noch keine Bestellungen gespeichert.</p>';
@@ -5306,6 +5347,41 @@ function closeSchedulePdfDesignMenu() {
   elements.pdfButton?.setAttribute("aria-expanded", "false");
 }
 
+const planningPrintWindows={schedule:null,vacation:null};
+const planningPrintModelIds=new WeakMap();let planningPrintModelSerial=0;
+function planningPrintContext(kind){
+  const params=contextSearchParams(kind==='schedule'||state.portalSession?.user?.role==='department_manager');
+  if(kind==='schedule')params.set('week',state.weekStart);
+  else for(const[name,value]of Object.entries({year:state.vacationYear,view:state.vacationViewMode,quarter:state.vacationQuarter,month:state.vacationMonth}))params.set(name,String(value));
+  const model=kind==='schedule'?state.data:state.vacationData;
+  if(model&&typeof model==='object'&&!planningPrintModelIds.has(model))planningPrintModelIds.set(model,++planningPrintModelSerial);
+  const settings=model?.settings||state.data?.settings||{};
+  return {page:state.currentView,query:Object.fromEntries(params),modelRevision:model?planningPrintModelIds.get(model):0,
+    departmentChoice:kind==='schedule'?String(elements.departmentPdfSelect?.value||''):'',
+    settings:Object.fromEntries(Object.entries(settings).filter(([key])=>/^(?:pdf_|schedule_pdf_|vacation_pdf_|schedule_duty_colors$)/.test(key)).sort(([a],[b])=>a.localeCompare(b))),
+    designs:kind==='schedule'?schedulePdfDesignIdsFromSettings().map(id=>schedulePdfDesignCatalog().find(design=>design.id===id)).filter(Boolean):[]};
+}
+function canUsePlanningPrint(kind){
+  if(state.portalStatus?.portalEnabled&&(state.portalSession?.authenticated!==true||state.portalSession?.user?.mustChangePassword))return false;
+  return kind==='schedule'?canReadStartDashboardSchedule():canReadStartDashboardVacations();
+}
+function planningPrintPageAllowed(kind){
+  return (kind==='schedule'?['planning','settings']:['vacations','settings']).includes(state.currentView);
+}
+function openPlanningPdf(kind,options={}){
+  if(!canUsePlanningPrint(kind)||!planningPrintPageAllowed(kind)){showToast('Diese PDF-Ausgabe ist für deinen aktuellen Bereich nicht freigegeben.',true);return false;}
+  try{
+    syncGpWindows();
+    planningPrintWindows[kind]||=window.GpPlanningPrint.mount({document,kind,rawApi,key:()=>state.portalStatus?.portalEnabled?startDashboardWorkspaceActorKey():'local',
+      canUse:()=>canUsePlanningPrint(kind),context:()=>planningPrintContext(kind),windowPreferences:gpWindowManager?.preferences,scale:salesArticleSearchWindowScale});
+    return planningPrintWindows[kind].open(options);
+  }catch(error){showToast(error.message||'Die PDF-Vorschau konnte nicht geöffnet werden.',true);return false;}
+}
+function syncPlanningPrintWindows(){
+  for(const[kind,print]of Object.entries(planningPrintWindows)){if(!print)continue;
+    if(planningPrintPageAllowed(kind)&&canUsePlanningPrint(kind))print.activate();else print.deactivate();print.sync();}
+}
+
 function renderSchedulePdfExportControl() {
   if (!elements.pdfButton) return;
   const catalog = schedulePdfDesignCatalog();
@@ -5337,6 +5413,7 @@ function renderHeader() {
   elements.calendarWeek.textContent = `Kalenderwoche ${state.data.calendarWeek}${contextLabel ? ` · ${contextLabel}` : ""}`;
   elements.scheduleTitle.textContent = `${state.data.settings.pdf_title} · KW ${state.data.calendarWeek}`;
   renderSchedulePdfExportControl();
+  planningPrintWindows.schedule?.sync();
   document.querySelector("#weekJumpDate").value = state.weekStart;
   const automaticallyLocked = isAutomaticallyWeekLocked();
   const manuallyLocked = isManuallyWeekLocked();
@@ -6475,6 +6552,7 @@ function updateVacationControls(range) {
   const locationParams = contextSearchParams(state.portalSession?.user?.role === "department_manager");
   locationParams.forEach((value, key) => parameters.set(key, value));
   elements.vacationPdfButton.href = `/api/vacations.pdf?${parameters.toString()}`;
+  planningPrintWindows.vacation?.sync();
   elements.vacationTitle.textContent = range.label;
   elements.vacationSubtitle.textContent = `${formatDate(range.start)} bis ${formatDate(range.end)} · ${state.vacationData?.vacations?.length || 0} Urlaubseinträge im Jahr`;
   elements.vacationCalendarTitle.textContent = `Urlaubskalender · ${range.label}`;
@@ -14328,7 +14406,7 @@ function renderCandidateEvaluationPdfOptions(application) {
   const preview = candidateEvaluationPdfPreviewFilename(preferences, application);
   return `<details class="personnel-candidate-pdf-options">
     <summary class="secondary-button">PDF-Exportoptionen</summary>
-    <form class="personnel-candidate-pdf-options-panel" data-personnel-candidate-pdf-options-form data-application-id="${escapeHtmlAttribute(application.id)}">
+    <form class="personnel-candidate-pdf-options-panel" data-personnel-candidate-pdf-options-form data-candidate-id="${escapeHtmlAttribute(state.selectedPersonnelCandidateId)}" data-application-id="${escapeHtmlAttribute(application.id)}">
       <header><div><strong>Persönliche Exportoptionen</strong><small>Diese Einstellungen gelten nur für das aktuell angemeldete Konto.</small></div><span>PDF</span></header>
       <div class="personnel-candidate-pdf-options-grid">
         <fieldset><legend>Seite &amp; Format</legend>
@@ -14362,7 +14440,7 @@ function renderCandidateEvaluationPdfOptions(application) {
           <div class="personnel-candidate-pdf-filename-preview"><small>Dateivorschau</small><output data-candidate-pdf-filename-preview>${escapeHtml(preview)}</output></div>
         </fieldset>
       </div>
-      <footer><small>Die Dienstplan- und Urlaubsplan-PDF-Einstellungen werden dadurch nicht verändert.</small><button class="primary-button" type="submit"${state.candidateEvaluationPdfPreferencesSaving ? " disabled" : ""}>${state.candidateEvaluationPdfPreferencesSaving ? "Speichert …" : "Exportoptionen speichern"}</button></footer>
+      <footer><span data-candidate-pdf-save-status></span><small>Die Dienstplan- und Urlaubsplan-PDF-Einstellungen werden dadurch nicht verändert.</small><button class="primary-button" type="submit"${state.candidateEvaluationPdfPreferencesSaving ? " disabled" : ""}>${state.candidateEvaluationPdfPreferencesSaving ? "Speichert …" : "Exportoptionen speichern"}</button></footer>
     </form>
   </details>`;
 }
@@ -15580,17 +15658,32 @@ function syncCandidateEvaluationPdfOptionPanel(form, changedControl = null) {
   } catch {
     if (preview) preview.textContent = "Dateivorschau nach gültiger Eingabe";
   }
+  const status = settingsSaveStatus("candidate-pdf:" + state.selectedPersonnelCandidateId + ":" + applicationId,
+    form.querySelector("[data-candidate-pdf-save-status]"));
+  if (changedControl) status.changed();
 }
 
 async function saveCandidateEvaluationPdfPreferences(form) {
-  if (state.candidateEvaluationPdfPreferencesSaving) return;
+  syncSettingsSaveScopes();
+  if (!form || form.isConnected === false || state.candidateEvaluationPdfPreferencesSaving) return false;
+  const candidateId = String(state.selectedPersonnelCandidateId || "");
+  if (!candidateId || String(form.dataset.candidateId || "") !== candidateId) return false;
   let preferences;
   try {
     preferences = candidateEvaluationPdfPreferencesFromForm(form);
   } catch (error) {
     showToast(error.message, true);
-    return;
+    return false;
   }
+  const scope = "candidate-pdf:" + state.selectedPersonnelCandidateId + ":" + form.dataset.applicationId;
+  const status = settingsSaveStatus(scope, form.querySelector("[data-candidate-pdf-save-status]"));
+  const token = status.begin(); if (!token) return false;
+  const authority = settingsWriteGuard(scope), applicationId = String(form.dataset.applicationId || "");
+  const context = {};
+  state.candidateEvaluationPdfPreferencesSavingContext = context;
+  const current = () => authority() && status.current(token) && form.isConnected !== false
+    && String(form.dataset.applicationId || "") === applicationId && state.candidateEvaluationPdfPreferencesSavingContext === context;
+  const submittedSignature = JSON.stringify(preferences);
   state.candidateEvaluationPdfPreferencesSaving = true;
   const button = form.querySelector('button[type="submit"]');
   if (button) {
@@ -15602,66 +15695,46 @@ async function saveCandidateEvaluationPdfPreferences(form) {
       method: "PUT",
       body: JSON.stringify({ candidateEvaluationPdfPreferences: preferences }),
     });
+    if (!current()) return false;
     state.candidateEvaluationPdfPreferences = normalizeCandidateEvaluationPdfPreferences(
       result.candidateEvaluationPdfPreferences || preferences,
     );
-    showToast("Die persönlichen PDF-Exportoptionen wurden gespeichert.");
+    let remaining = true;
+    try { remaining = JSON.stringify(candidateEvaluationPdfPreferencesFromForm(form)) !== submittedSignature; } catch {}
+    status.succeeded(token, { remaining });
+    showToast(remaining ? "Übermittelte PDF-Exportoptionen gespeichert. Neuere Änderungen sind noch offen." : "Die persönlichen PDF-Exportoptionen wurden gespeichert.");
+    return true;
   } catch (error) {
-    showToast(error.message || "Die PDF-Exportoptionen konnten nicht gespeichert werden.", true);
+    if (current()) { status.failed(token, error); showToast(error.message || "Die PDF-Exportoptionen konnten nicht gespeichert werden.", true); }
+    return false;
   } finally {
-    state.candidateEvaluationPdfPreferencesSaving = false;
-    if (button) {
-      button.disabled = false;
-      button.textContent = "Exportoptionen speichern";
+    if (state.candidateEvaluationPdfPreferencesSavingContext === context) {
+      if (authority() && status.current(token)) status.cancel(token);
+      state.candidateEvaluationPdfPreferencesSavingContext = null;
+      state.candidateEvaluationPdfPreferencesSaving = false;
+      if (authority()) {
+        const forms = [...document.querySelectorAll("[data-personnel-candidate-pdf-options-form]")];
+        if (form.isConnected !== false) forms.push(form);
+        for (const candidateForm of forms) {
+          if (candidateForm.isConnected === false || String(candidateForm.dataset.candidateId || "") !== candidateId) continue;
+          const submit = candidateForm.querySelector('button[type="submit"]');
+          if (submit) { submit.disabled = false; submit.textContent = "Exportoptionen speichern"; }
+        }
+      }
     }
   }
 }
 
-function candidateEvaluationPdfDownloadFilename(disposition, fallback = "Bewerbungsbewertung.pdf") {
-  const encoded = String(disposition || "").match(/filename\*=UTF-8''([^;]+)/i)?.[1];
-  if (encoded) {
-    try { return decodeURIComponent(encoded); } catch {}
-  }
-  return String(disposition || "").match(/filename="([^"]+)"/i)?.[1] || fallback;
-}
-
-async function downloadCandidateEvaluationPdf(anchor) {
-  if (state.candidateEvaluationPdfDownloadPending) return;
-  state.candidateEvaluationPdfDownloadPending = true;
-  anchor.classList.add("disabled");
-  anchor.setAttribute("aria-disabled", "true");
-  const previousText = anchor.textContent;
-  anchor.textContent = "PDF wird erstellt …";
-  try {
-    const response = await fetch(anchor.href, { headers: { Accept: "application/pdf" } });
-    if (!response.ok) {
-      let message = "Die Bewertungs-PDF konnte nicht erstellt werden.";
-      try {
-        const payload = await response.json();
-        message = payload.error || payload.message || message;
-      } catch {}
-      throw new Error(message);
-    }
-    const blob = await response.blob();
-    const downloadUrl = URL.createObjectURL(blob);
-    const download = document.createElement("a");
-    download.href = downloadUrl;
-    download.download = candidateEvaluationPdfDownloadFilename(
-      response.headers.get("Content-Disposition"),
-    );
-    document.body.append(download);
-    download.click();
-    download.remove();
-    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
-    showToast("Die Bewertungs-PDF wurde erstellt.");
-  } catch (error) {
-    showToast(error.message || "Die Bewertungs-PDF konnte nicht erstellt werden.", true);
-  } finally {
-    state.candidateEvaluationPdfDownloadPending = false;
-    anchor.classList.remove("disabled");
-    anchor.setAttribute("aria-disabled", "false");
-    anchor.textContent = previousText;
-  }
+function downloadCandidateEvaluationPdf(anchor) {
+  if (!anchor?.href || !canReadCandidatePreboarding() || !state.personnelCandidateCapabilities.canReadCandidates) return;
+  const url = new URL(anchor.href, location.origin);
+  const candidateId = state.selectedPersonnelCandidateId;
+  const paths = personnelCandidateApplications(state.selectedPersonnelCandidate).map(application =>
+    '/api/portal/v1/personnel-lifecycle/candidates/' + encodeURIComponent(candidateId) + '/applications/' + encodeURIComponent(application.id) + '/evaluation.pdf');
+  if (url.origin !== location.origin || url.username || url.password || url.search || url.hash
+    || !candidateId || state.selectedPersonnelCandidate?.id !== candidateId || !paths.includes(url.pathname)) return;
+  syncGpWindows();
+  gpDocumentPrint?.open(url.pathname, anchor, 'Bewerbungsbewertung');
 }
 
 function handlePersonnelCandidateDetailSubmit(event) {
@@ -20834,7 +20907,84 @@ function syncStartDashboardVps(){
   startDashboardVps?.sync();
 }
 
+function documentPrintRevision(model) {
+  if (!model || typeof model !== 'object') return 0;
+  if (!documentPrintModels.has(model)) documentPrintModels.set(model, ++documentPrintModelRevision);
+  return documentPrintModels.get(model);
+}
+
+function documentPrintContext(url) {
+  if (url.includes('/personnel-lifecycle/candidates/')) return {
+    candidate: state.selectedPersonnelCandidateId,
+    revision: documentPrintRevision(state.selectedPersonnelCandidate),
+    readable: canReadCandidatePreboarding() && state.personnelCandidateCapabilities.canReadCandidates,
+    preferences: state.candidateEvaluationPdfPreferences,
+  };
+  if (url.includes('/rights-dashboard/process-export.pdf')) return {
+    process: state.rightsDashboardSelectedProcessId,
+    scenario: state.rightsProcessScenarioIds[state.rightsDashboardSelectedProcessId] || 'current',
+    location: state.rightsProcessLocationId,
+    mode: state.rightsDashboardMode,
+    readable: canReadGovernanceDashboards(),
+    revision: documentPrintRevision(state.rightsDashboard),
+  };
+  if (url.includes('/time-record-statements/')) return {
+    month: elements.monthlyTimeRecordsMonth?.value || '', revision: documentPrintRevision(state.monthlyTimeRecords),
+    timeLocation: elements.timeTrackingLocation?.value || '', timeDepartment: elements.timeTrackingDepartment?.value || '', readable: canReadMonthlyTimeRecords(),
+  };
+  if (url.includes('/loans/')) return {
+    location: state.loanManagementLocationId, status: state.loanManagementStatus,
+    revision: documentPrintRevision(state.loanManagement), readable: canReadLoanManagement(),
+  };
+  if (url.includes('/recovery-assurance/')) return {revision: documentPrintRevision(state.systemCenter), readable: canReadSystemCenter()};
+  return {
+    location: state.locationId, department: state.departmentId,
+    personnelTab: state.personnelAdministrationTab,
+    loansLocation: state.loanManagementLocationId, loansStatus: state.loanManagementStatus,
+    timeLocation: elements.timeTrackingLocation?.value || '',
+  };
+}
+
+function syncDocumentPrint() {
+  if (!window.GpDocumentPrint || !gpWindowManager) return;
+  if (!gpDocumentPrint) gpDocumentPrint = window.GpDocumentPrint.mount({
+    document, key: () => state.portalSession?.authenticated ? startDashboardWorkspaceActorKey() : '',
+    page: () => state.currentView,
+    canUse: (_page,url) => Boolean(state.portalSession?.authenticated && !state.portalSession?.user?.mustChangePassword
+      && (!url.includes('/time-record-statements/') || canReadMonthlyTimeRecords())
+      && (!url.includes('/loans/') || canReadLoanManagement())
+      && (!url.includes('/recovery-assurance/') || canReadSystemCenter())
+      && (!url.includes('/personnel-lifecycle/candidates/') || (canReadCandidatePreboarding() && state.personnelCandidateCapabilities.canReadCandidates))
+      && (!url.includes('/rights-dashboard/') || canReadGovernanceDashboards())),
+    context: documentPrintContext, rawApi, beforeOpen: monthlyDocumentPrintBridge,
+    windowPreferences: () => gpWindowManager.preferences,
+  });
+  gpDocumentPrint.sync();
+}
+
+function monthlyDocumentPrintBridge({url, target}) {
+  const modal = elements.monthlyTimeRecordsModal;
+  if (!modal?.open || !modal.contains(target) || !/^\/api\/time-record-statements\/[A-Za-z0-9_-]+\/download$/.test(url)) return null;
+  const actor = startDashboardWorkspaceActorKey(), page = state.currentView;
+  const signature = JSON.stringify(documentPrintContext(url));
+  const canUse = () => actor === startDashboardWorkspaceActorKey() && canReadMonthlyTimeRecords()
+    && signature === JSON.stringify(documentPrintContext(url));
+  modal.close();
+  return {target: window.GpDocumentPrint.visibleTarget(document, elements.monthlyTimeRecordsButton), canUse,
+    onClose() { if (canUse() && state.currentView === page && !modal.open) modal.showModal(); },
+  };
+}
+
+function openPersonnelLearningConfirmation(input) {
+  syncGpWindows();
+  const target = window.GpDocumentPrint?.visibleTarget(document, input.target);
+  return gpDocumentPrint?.open(input.url, target, input.title, input.canUse,
+    {target, canUse:input.canUse, onClose:input.onClose, onDiscard:input.onDiscard}) || false;
+}
+
 function syncGpWindows() {
+  syncSettingsSaveScopes();
+  syncPlanningPrintWindows();
   if (!window.GpWindow) return;
   const key = state.portalSession?.authenticated ? startDashboardWorkspaceActorKey() : '';
   const canUse=()=>Boolean(state.portalSession?.authenticated && !state.portalSession?.user?.mustChangePassword);
@@ -20857,6 +21007,12 @@ function syncGpWindows() {
     cell:(row,id)=>SALES_ARTICLE_CATALOG_COLUMNS.find(c=>c.id===id)?.price?row[id]==null?'–':salesArticleCatalogMoney(row[id],'EUR'):row[id],
     error:error=>showToast('Artikelverlauf: '+error.message,true)});
   recentArticlesWindow?.sync();
+  syncSalesAnalyticsPrintWindows();
+  receiptSearchWorkspace?.syncPrint();
+  salesPriceLabelsWorkspace?.syncPrint?.();
+  state.salesArticleCatalog?.priceLabels?.syncPrint?.();
+  syncDocumentPrint();
+  syncBranchOrdersManagementPrintWindow();
   const articleDock=document.getElementById('sidebarArticleSearchButton'), priceDock=document.getElementById('sidebarPriceLabelSearchButton');
   if(articleDock)articleDock.hidden=state.currentView!=='articleCatalog'||!canReadSalesArticles();
   if(priceDock)priceDock.hidden=state.currentView!=='priceLabels'||!canUseSalesPriceLabels();
@@ -22563,6 +22719,7 @@ function updateSchedulePdfDesignName(target) {
   if (!input) return;
   const id = String(input.dataset.schedulePdfDesignName || "");
   state.schedulePdfDesignNames[id] = input.value;
+  state.schedulePdfSettingsDraftKey = settingsSaveKey("main");
   const row = input.closest("[data-schedule-pdf-design-row]");
   const heading = row?.querySelector(`[data-schedule-pdf-design-heading="${CSS.escape(id)}"]`);
   if (heading) heading.textContent = input.value.trim() || "Designname fehlt";
@@ -22578,6 +22735,8 @@ function resetSchedulePdfDesignName(target) {
   const design = schedulePdfDesignCatalog().find((entry) => entry.id === id);
   if (!design) return;
   state.schedulePdfDesignNames[id] = design.defaultLabel || design.label;
+  state.schedulePdfSettingsDraftKey = settingsSaveKey("main");
+  settingsSaveStatus("main", document.getElementById("settingsSaveStatus")).changed();
   renderSchedulePdfDesignSettings();
 }
 
@@ -22603,6 +22762,7 @@ function updateSchedulePdfDesignSelection(target) {
       if (index >= 0) activeIds.splice(index, 1);
     }
     state.schedulePdfDesignSelection = activeIds;
+    state.schedulePdfSettingsDraftKey = settingsSaveKey("main");
     renderSchedulePdfDesignSettings();
     return;
   }
@@ -22617,6 +22777,7 @@ function updateSchedulePdfDesignSelection(target) {
   activeIds.splice(currentIndex, 1);
   activeIds.splice(nextIndex, 0, id);
   state.schedulePdfDesignSelection = activeIds;
+  state.schedulePdfSettingsDraftKey = settingsSaveKey("main");
   renderSchedulePdfDesignSettings();
 }
 
@@ -22636,10 +22797,12 @@ function updateBranchSupervisionSettings({ applyPreset = false } = {}) {
     elements.branchSupervisionDepartmentGapMinutes.value = String(preset.departmentGapMinutes);
   }
   const custom = intensity === "custom";
-  elements.branchSupervisionIntensity.disabled = !active;
-  elements.branchSupervisionThresholds.classList.toggle("disabled-setting", !active || !custom);
-  elements.branchSupervisionPrimaryCoveragePercent.disabled = !active || !custom;
-  elements.branchSupervisionDepartmentGapMinutes.disabled = !active || !custom;
+  const canManage = state.portalStatus?.portalEnabled !== true || state.portalSession?.user?.permissions?.includes("settings:write") === true;
+  elements.branchSupervisionMode.disabled = !canManage;
+  elements.branchSupervisionIntensity.disabled = !active || !canManage;
+  elements.branchSupervisionThresholds.classList.toggle("disabled-setting", !active || !custom || !canManage);
+  elements.branchSupervisionPrimaryCoveragePercent.disabled = !active || !custom || !canManage;
+  elements.branchSupervisionDepartmentGapMinutes.disabled = !active || !custom || !canManage;
   const modeCopy = {
     off: "Die automatische Prüfung der Filialaufsicht ist deaktiviert.",
     yellow: "Aufsichtslücken erscheinen als gelber Hinweis; die Planung bleibt speicherbar.",
@@ -22658,8 +22821,9 @@ function renderScheduleDutyColorSettings({ preserveDraft = false } = {}) {
   const list = document.querySelector("#scheduleDutyColorList");
   if (!list) return;
   const dutyApi = window.GPScheduleDuty;
-  const user = state.portalSession?.user;
-  const draftActor = `${user?.employeeNumber || user?.employee_number || ""}:${user?.role || ""}`;
+  const draftActor = startDashboardWorkspaceActorKey();
+  if (preserveDraft && state.scheduleDutyColorDraft && state.scheduleDutyColorDraftActor === draftActor
+    && list.querySelector("[data-duty-rgb]")) return;
   if (!preserveDraft || !state.scheduleDutyColorDraft || state.scheduleDutyColorDraftActor !== draftActor) {
     state.scheduleDutyColorDraft = dutyApi.normalizeScheduleDutyColors(state.data?.settings?.schedule_duty_colors);
     state.scheduleDutyColorDraftActor = draftActor;
@@ -22723,19 +22887,190 @@ function updateScheduleDutyColor(target) {
     .some(channel => !channel.checkValidity());
 }
 
-async function saveScheduleDutyColors({ silent = false } = {}) {
+function scheduleDutyDraftSignature() {
+  return JSON.stringify([state.scheduleDutyColorDraft, [...document.querySelectorAll("[data-duty-color], [data-duty-rgb]")]
+    .map(input => [input.dataset.dutyColor || input.dataset.dutyRgb, input.dataset.rgbChannel || "", input.value])]);
+}
+async function saveScheduleDutyColors({ silent = false, colors: submittedColors = null, draftSignature = null, current: parentCurrent = null } = {}) {
+  const current = settingsWriteGuard("duty", parentCurrent);
   if (!canManageScheduleDutyColors()) throw new Error("Nur Personalleitung und Developer dürfen die unternehmensweiten Dienstfarben ändern.");
-  if ([...document.querySelectorAll("[data-duty-rgb]")].some(input => !input.reportValidity())) throw new Error("Bitte gültige RGB-Werte zwischen 0 und 255 eingeben.");
-  const colors = window.GPScheduleDuty.normalizeScheduleDutyColors(state.scheduleDutyColorDraft, { strict: true });
-  const result = await api("/api/settings/schedule-duty-colors", { method: "PUT", body: JSON.stringify({ colors }) });
+  if (!current()) return false;
+  if (!submittedColors && [...document.querySelectorAll("[data-duty-rgb]")].some(input => !input.reportValidity())) throw new Error("Bitte gültige RGB-Werte zwischen 0 und 255 eingeben.");
+  const colors = window.GPScheduleDuty.normalizeScheduleDutyColors(submittedColors || state.scheduleDutyColorDraft, { strict: true });
+  const sentSignature = draftSignature ?? scheduleDutyDraftSignature();
+  let result;
+  try { result = await api("/api/settings/schedule-duty-colors", { method: "PUT", body: JSON.stringify({ colors }) }); }
+  catch (error) { if (current()) throw error; return false; }
+  if (!current()) return false;
   state.data.settings.schedule_duty_colors = JSON.stringify(window.GPScheduleDuty.normalizeScheduleDutyColors(result.colors, { strict: true }));
-  renderScheduleDutyColorSettings();
+  const changed = scheduleDutyDraftSignature() !== sentSignature;
+  if (!changed) renderScheduleDutyColorSettings(); else state.scheduleDutyColorsDirty = true;
   renderTimeline();
-  if (!silent) showToast("Unternehmensweite Dienstfarben wurden gespeichert.");
+  if (!silent) showToast(changed ? "Übermittelte Dienstfarben gespeichert. Neuere Änderungen sind noch offen." : "Unternehmensweite Dienstfarben wurden gespeichert.");
+  return true;
 }
 
 const settingsDraftGuard = globalThis.GrabenplanerFormDraftGuard?.create(elements.settingsView);
+function settingsPdfDraftScope() {
+  return { contains: node => /^(?:pdfTitleSetting|pdfFilename|scheduleMatrix|schedulePdfDesign|vacationPdf)/.test(node?.id || "")
+    || Boolean(node?.closest?.("#schedulePdfSettingsCard, #vacationPdfSettingsCard")) };
+}
+function syncSettingsSaveScopes({ force = false } = {}) {
+  const actor = startDashboardWorkspaceActorKey();
+  if (force || (settingsSaveActor !== null && settingsSaveActor !== actor)) {
+    settingsSaveEpoch++;
+    settingsConfirmedDraft = null; settingsConfirmedRevision++;
+    state.brandingFormDirty = false;
+    state.scheduleDutyColorsDirty = false;
+    state.scheduleDutyColorDraft = null;
+    state.scheduleDutyColorDraftActor = "";
+    state.greetingSettings = null;
+    state.amuPolicy = null;
+    state.amuSettingsCanChange = false;
+    for (const status of settingsSaveStatuses.values()) status.dispose();
+    settingsSaveStatuses.clear();
+    for (const host of settingsSaveStatusHosts.values()) { host.cleanup(); host.node.textContent = ""; }
+    settingsSaveStatusHosts.clear();
+    settingsDraftGuard?.clear();
+    state.candidateEvaluationPdfPreferencesSavingContext = null;
+    state.candidateEvaluationPdfPreferencesSaving = false;
+    state.schedulePdfSettingsDraftKey = "";
+  }
+  settingsSaveActor = actor;
+  const primary = JSON.stringify([state.locationId || "", state.departmentId || ""]);
+  if (settingsSavePrimary !== null && primary !== settingsSavePrimary) {
+    settingsSavePrimaryEpoch++;
+    settingsConfirmedDraft = null; settingsConfirmedRevision++;
+    state.schedulePdfSettingsDraftKey = "";
+    settingsDraftGuard?.clear(settingsPdfDraftScope());
+    settingsSaveStatuses.get("main")?.dispose(); settingsSaveStatuses.delete("main");
+    const host = settingsSaveStatusHosts.get("main"); if (host) { host.cleanup(); host.node.textContent = ""; settingsSaveStatusHosts.delete("main"); }
+  }
+  settingsSavePrimary = primary;
+  const candidateSource = String(state.selectedPersonnelCandidateId || "");
+  if (settingsSaveCandidateSource !== null && candidateSource !== settingsSaveCandidateSource) {
+    for (const [scope, status] of settingsSaveStatuses) if (scope.startsWith("candidate-pdf:")) {
+      status.dispose(); settingsSaveStatuses.delete(scope);
+      const host = settingsSaveStatusHosts.get(scope); if (host) { host.cleanup(); settingsSaveStatusHosts.delete(scope); }
+    }
+    state.candidateEvaluationPdfPreferencesSavingContext = null;
+    state.candidateEvaluationPdfPreferencesSaving = false;
+  }
+  settingsSaveCandidateSource = candidateSource;
+}
+function settingsSaveKey(scope) {
+  return JSON.stringify([startDashboardWorkspaceActorKey(), settingsSaveEpoch, scope,
+    ...(scope === "main" ? [state.locationId || "", state.departmentId || "", settingsSavePrimaryEpoch] : []),
+    ...(scope.startsWith("candidate-pdf:") ? [state.selectedPersonnelCandidateId || ""] : [])]);
+}
+function settingsSaveAllowed(scope) {
+  const portal = state.portalStatus?.portalEnabled === true, user = state.portalSession?.user;
+  if (portal && (state.portalSession?.authenticated !== true || user?.mustChangePassword || user?.active === false)) return false;
+  const permissions = user?.permissions || [];
+  if (scope === "main") return !portal || ["settings:write", schedulePdfSettingsWritePermission, "schedule:cross_location:settings:write", "branding:write"].some(permission => permissions.includes(permission));
+  if (scope === "greeting") return state.greetingSettings?.canChange === true;
+  if (scope === "amu") return state.amuSettingsCanChange === true;
+  if (scope === "duty") return canManageScheduleDutyColors();
+  if (scope === "branding") return !portal || permissions.includes("branding:write");
+  if (scope.startsWith("candidate-pdf:")) return canReadCandidatePreboarding() && state.personnelCandidateCapabilities?.canReadCandidates === true;
+  return !portal || state.portalSession?.authenticated === true;
+}
+function settingsSaveStatus(scope, node = null) {
+  syncSettingsSaveScopes();
+  let status = settingsSaveStatuses.get(scope);
+  if (!status) {
+    status = globalThis.GpSaveStatus.create({ key: () => settingsSaveKey(scope), canUse: () => settingsSaveAllowed(scope),
+      onState(value) {
+        const button = scope === "main" ? elements.saveSettingsButton : scope === "greeting" ? elements.saveGreetingSettingsButton : scope === "amu" ? elements.saveAmuSettingsButton : null;
+        if (button) button.disabled = value.busy || !settingsSaveAllowed(scope);
+      } });
+    settingsSaveStatuses.set(scope, status);
+  }
+  if (node && settingsSaveStatusHosts.get(scope)?.node !== node) {
+    settingsSaveStatusHosts.get(scope)?.cleanup();
+    settingsSaveStatusHosts.set(scope, { node, cleanup: globalThis.GpSaveStatus.mount(node, status) });
+  }
+  return status;
+}
+function settingsWriteGuard(scope, parentCurrent = null) {
+  syncSettingsSaveScopes();
+  const key = settingsSaveKey(scope), epoch = settingsSaveEpoch;
+  return () => { syncSettingsSaveScopes(); return epoch === settingsSaveEpoch && key === settingsSaveKey(scope)
+    && settingsSaveAllowed(scope) && (!parentCurrent || parentCurrent()); };
+}
+function settingsSaveRemaining(scope = elements.settingsView) {
+  const draft = settingsDraftGuard?.snapshot(scope) || new Map();
+  const hasDraft = scope === elements.settingsView ? [...draft.keys()].some(id => {
+    const node = document.getElementById(id);
+    return ![elements.greetingSettingsCard, elements.amuSettingsCard, elements.birthdayPresentationSettingsCard].some(card => card?.contains(node));
+  }) : draft.size > 0;
+  return Boolean(hasDraft || (scope === elements.settingsView && (state.brandingFormDirty || state.scheduleDutyColorsDirty || state.schedulePdfSettingsDraftKey === settingsSaveKey("main"))));
+}
+function rememberSettingsConfirmation(sent, ids, designs = null) {
+  syncSettingsSaveScopes();
+  const key = settingsSaveKey("main");
+  if (settingsConfirmedDraft?.key !== key) settingsConfirmedDraft = { key, values: new Map(), designs: null };
+  for (const [id, value] of sent) if (ids.includes(id)) settingsConfirmedDraft.values.set(id, value);
+  if (designs) settingsConfirmedDraft.designs = { selection: [...designs.selection], names: { ...designs.names } };
+  settingsConfirmedRevision++;
+}
+function settingsConfirmationReadToken() {
+  syncSettingsSaveScopes();
+  return { key: settingsSaveKey("main"), revision: settingsConfirmedRevision };
+}
+function acknowledgeSettingsRead(token, { schedule = false, vacation = false } = {}) {
+  syncSettingsSaveScopes();
+  if (!settingsConfirmedDraft || token.key !== settingsSaveKey("main") || token.key !== settingsConfirmedDraft.key
+    || token.revision !== settingsConfirmedRevision) return false;
+  for (const id of settingsConfirmedDraft.values.keys()) {
+    const isVacation = /^vacationPdf/.test(id);
+    if (isVacation ? vacation : schedule) settingsConfirmedDraft.values.delete(id);
+  }
+  if (schedule) settingsConfirmedDraft.designs = null;
+  if (!settingsConfirmedDraft.values.size && !settingsConfirmedDraft.designs) settingsConfirmedDraft = null;
+  return true;
+}
+function restoreSettingsConfirmation(scope = elements.settingsView) {
+  if (settingsConfirmedDraft?.key !== settingsSaveKey("main")) return;
+  for (const [id, value] of settingsConfirmedDraft.values) {
+    const node = document.getElementById(id);
+    if (!node || !elements.settingsView.contains(node) || !scope.contains(node) || node.disabled || !/^(INPUT|TEXTAREA|SELECT)$/.test(node.tagName)) continue;
+    if (/^(checkbox|radio)$/i.test(node.type)) node.checked = value; else node.value = value;
+  }
+}
+function restoreSettingsFormDrafts() {
+  const restore = ids => {
+    const scope = { contains: node => ids.includes(node?.id) };
+    restoreSettingsConfirmation(scope); settingsDraftGuard?.restore(scope);
+  };
+  restore(["currentWeekAutoLock", "branchSupervisionMode"]);
+  updateWeekLockSettings(); updateBranchSupervisionSettings();
+  restore(["currentWeekLockMode", "currentWeekLockDay", "branchSupervisionIntensity"]);
+  updateWeekLockSettings(); updateBranchSupervisionSettings();
+  restoreSettingsConfirmation(); settingsDraftGuard?.restore();
+  updateWeekLockSettings(); updateBranchSupervisionSettings();
+}
+function trackSettingsSaveDraft(event) {
+  const node = event.target;
+  if (!settingsDraftGuard?.snapshot().has(node?.id)
+    && !node?.closest?.("[data-duty-color], [data-duty-rgb], [data-schedule-pdf-design-enabled], [data-schedule-pdf-design-rank], [data-schedule-pdf-design-name]")) return;
+  if (elements.birthdayPresentationSettingsCard?.contains(node)) return;
+  let scope = "main", host = document.getElementById("settingsSaveStatus");
+  if (elements.greetingSettingsCard?.contains(node)) { scope = "greeting"; host = document.getElementById("greetingSaveStatus"); }
+  else if (elements.amuSettingsCard?.contains(node)) {
+    if (node.id === "amuManagerDefaultAccess" || node.id.startsWith("amu-manager-access-")) return;
+    scope = "amu"; host = document.getElementById("amuSaveStatus");
+  }
+  settingsSaveStatus(scope, host).changed();
+}
+elements.settingsView?.addEventListener("input", trackSettingsSaveDraft);
+elements.settingsView?.addEventListener("change", trackSettingsSaveDraft);
 function renderSettings() {
+  syncSettingsSaveScopes();
+  const brandingDirty = state.brandingFormDirty;
+  const designDraft = state.schedulePdfSettingsDraftKey === settingsSaveKey("main")
+    ? { selection: [...state.schedulePdfDesignSelection], names: { ...state.schedulePdfDesignNames } }
+    : settingsConfirmedDraft?.key === settingsSaveKey("main") ? settingsConfirmedDraft.designs : null;
   const settings = state.data.settings;
   const vacationSettings = state.vacationData?.settings || settings;
   const branding = applyShellBranding(hasManagementBrandingAccess() ? {} : settings);
@@ -22752,6 +23087,7 @@ function renderSettings() {
   document.querySelector("#pdfFilenameIncludeTimestamp").checked = settings.pdf_filename_include_timestamp === "1";
   state.schedulePdfDesignSelection = schedulePdfDesignIdsFromSettings(settings);
   state.schedulePdfDesignNames = Object.fromEntries(schedulePdfDesignCatalog(settings).map((design) => [design.id, design.label]));
+  if (designDraft) { state.schedulePdfDesignSelection = designDraft.selection; state.schedulePdfDesignNames = designDraft.names; }
   renderSchedulePdfDesignSettings();
   renderScheduleDutyColorSettings({ preserveDraft: state.scheduleDutyColorsDirty && canManageScheduleDutyColors() });
   document.querySelector("#scheduleMatrixTimeFontSize").value = ["6", "8.5", "11", "14.5", "18"].includes(
@@ -22835,8 +23171,12 @@ function renderSettings() {
   localStorage.setItem(rememberContextCacheKey("vacations"), elements.rememberLastVacationOverallPlan.checked ? "1" : "0");
   renderPortalAccessState();
   renderMaintenanceSchedules();
-  settingsDraftGuard?.restore();
+  restoreSettingsFormDrafts();
+  state.brandingFormDirty = brandingDirty || [...(settingsDraftGuard?.snapshot() || [])].some(([id]) => /^branding(?:CompanyName|AdminEmail|LogoUrl|IconUrl|LogoAlt)$/.test(id));
+  if (state.brandingFormDirty) applyBranding(settingsBrandingInput());
   updatePdfPreview();
+  const saveStatus = settingsSaveStatus("main", document.getElementById("settingsSaveStatus"));
+  if (!settingsSaveRemaining()) saveStatus.loaded();
 }
 
 function updateWeekLockSettings() {
@@ -24926,6 +25266,8 @@ function applyAppFontScalePercent(value) {
 }
 
 async function loadUiPreferences() {
+  const settingsCurrent = settingsWriteGuard("read");
+  const candidatePreferences = state.candidateEvaluationPdfPreferences;
   const actorKey = startDashboardWorkspaceActorKey();
   const actorEpoch = startDashboardPreferenceActorEpoch;
   const dashboardRevision = startDashboardPreferenceSaveRevision;
@@ -24935,12 +25277,12 @@ async function loadUiPreferences() {
   } catch (error) {
     if (![401, 403, 404].includes(error.status)) throw error;
   }
-  if (actorKey !== startDashboardWorkspaceActorKey() || actorEpoch !== startDashboardPreferenceActorEpoch) return;
+  if (!settingsCurrent() || actorKey !== startDashboardWorkspaceActorKey() || actorEpoch !== startDashboardPreferenceActorEpoch) return;
   const localOnly = preferences?.actor === "local"
     || state.portalStatus?.portalEnabled !== true;
-  state.candidateEvaluationPdfPreferences = normalizeCandidateEvaluationPdfPreferences(
-    preferences?.candidateEvaluationPdfPreferences,
-  );
+  if (!state.candidateEvaluationPdfPreferencesSaving && state.candidateEvaluationPdfPreferences === candidatePreferences) {
+    state.candidateEvaluationPdfPreferences = normalizeCandidateEvaluationPdfPreferences(preferences?.candidateEvaluationPdfPreferences);
+  }
   let storedVacationCalendarView = preferences?.vacationCalendarView;
   if (localOnly) {
     try {
@@ -24965,8 +25307,9 @@ async function loadUiPreferences() {
   const loadedFontScale = normalizeAppFontScalePercent(storedFontScale, null)
     ?? normalizeAppFontScalePercent(legacyStoredFontSize, null)
     ?? normalizeAppFontScalePercent(preferences?.appFontScalePercent);
-  applyAppFontScalePercent(loadedFontScale);
-  state.persistedAppFontScalePercent = state.appFontScalePercent;
+  const fontDraft = settingsDraftGuard?.snapshot().has("appFontScalePercent");
+  if (!fontDraft) applyAppFontScalePercent(loadedFontScale);
+  state.persistedAppFontScalePercent = loadedFontScale;
   if (localOnly && legacyStoredFontSize) {
     localStorage.setItem(appFontScaleStorageKey(), String(state.persistedAppFontScalePercent));
     localStorage.removeItem(legacyDashboardFontSizeStorageKey());
@@ -25091,24 +25434,30 @@ async function saveGlobalTheme(theme) {
   }
 }
 
-async function saveAppFontScalePercent(value, { silent = false } = {}) {
+async function saveAppFontScalePercent(value, { silent = false, current: parentCurrent = null } = {}) {
+  const current = settingsWriteGuard("font", parentCurrent);
+  if (!current()) return false;
   const previous = state.persistedAppFontScalePercent;
   const normalized = normalizeAppFontScalePercent(value, null);
   if (normalized === null) throw new Error("Bitte eine gültige Schriftgröße in 5er-Schritten angeben.");
-  applyAppFontScalePercent(normalized);
+  const unchanged = () => !elements.appFontScalePercent || Number(elements.appFontScalePercent.value) === normalized;
+  if (unchanged()) applyAppFontScalePercent(normalized);
   try {
     const result = await api("/api/portal/v1/ui-preferences", {
       method: "PUT",
       body: JSON.stringify({ appFontScalePercent: normalized }),
     });
-    const stored = applyAppFontScalePercent(result.appFontScalePercent ?? normalized);
+    if (!current()) return false;
+    const stored = normalizeAppFontScalePercent(result.appFontScalePercent ?? normalized, normalized);
+    if (unchanged()) applyAppFontScalePercent(stored);
     state.persistedAppFontScalePercent = stored;
     localStorage.setItem(appFontScaleStorageKey(), String(stored));
     localStorage.removeItem(legacyDashboardFontSizeStorageKey());
-    if (!silent) showToast("Die Schriftgröße wurde gespeichert.");
+    if (!silent) showToast(unchanged() ? "Die Schriftgröße wurde gespeichert." : "Übermittelte Schriftgröße gespeichert. Neuere Änderungen sind noch offen.");
+    return true;
   } catch (error) {
-    applyAppFontScalePercent(previous);
-    localStorage.setItem(appFontScaleStorageKey(), String(previous));
+    if (!current()) return false;
+    if (unchanged()) { applyAppFontScalePercent(previous); localStorage.setItem(appFontScaleStorageKey(), String(previous)); }
     if (!silent) showToast(error.message, true);
     throw error;
   }
@@ -25646,22 +25995,23 @@ function fallbackSystemCenterFactors(payload) {
 }
 
 function normalizedSystemCenterFactors(payload) {
+  const optionalNumber = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
   const supplied = Array.isArray(payload?.trustIndex?.cards)
     ? payload.trustIndex.cards
     : Array.isArray(payload?.trustIndex?.factors) ? payload.trustIndex.factors : [];
   return (supplied.length ? supplied : fallbackSystemCenterFactors(payload)).map((factor, index) => {
-    const weight = Number(factor.possiblePoints ?? factor.weight);
-    const earned = Number(factor.earnedPoints ?? factor.earned ?? factor.points);
-    const coverage = Number(factor.coverage);
+    const weight = optionalNumber(factor.possiblePoints ?? factor.weight);
+    const earned = optionalNumber(factor.earnedPoints ?? factor.earned ?? factor.points);
+    const coverage = optionalNumber(factor.coverage);
     return {
       id: String(factor.id || `factor-${index + 1}`),
       label: String(factor.label || factor.title || "Technischer Nachweis"),
       detail: String(factor.detail || factor.summary || "Für diesen Nachweis liegen keine weiteren Details vor."),
       state: systemCenterVisualState(factor.state || factor.status, "neutral"),
-      weight: Number.isFinite(weight) ? weight : null,
-      earned: Number.isFinite(earned) ? earned : null,
-      coverage: Number.isFinite(coverage) ? Math.max(0, Math.min(100, Math.round(coverage))) : null,
-      evidenceAt: factor.evidenceAt || null,
+      weight,
+      earned,
+      coverage: coverage !== null ? Math.max(0, Math.min(100, Math.round(coverage))) : null,
+      evidenceAt: globalThis.GpTrustEvidence ? globalThis.GpTrustEvidence.timestamp(factor.evidenceAt, payload?.generatedAt) : factor.evidenceAt || null,
       checks: Array.isArray(factor.checks) ? factor.checks : [],
     };
   });
@@ -25997,14 +26347,17 @@ function renderProductReadiness(payload) {
 function renderSystemCenter(payload) {
   if (!elements.systemCenterContent) return;
   const trust = payload?.trustIndex || {};
-  const numericScore = Number(trust.score);
-  const hasScore = Number.isFinite(numericScore);
+  const numericScore = trust.score;
+  const hasScore = typeof numericScore === "number" && Number.isFinite(numericScore) && numericScore >= 0 && numericScore <= 100;
   const score = hasScore ? Math.max(0, Math.min(100, Math.round(numericScore))) : null;
   const scoreState = systemCenterVisualState(trust.state || trust.status,
     score === null ? "neutral" : score >= 80 ? "ok" : score >= 60 ? "warning" : "critical");
   const scoreCopy = systemCenterStateCopy(scoreState);
   const scoreLabel = String(trust.label || (score === null ? "Noch nicht berechenbar" : score >= 90 ? "Sehr hoher Nachweis" : score >= 75 ? "Hoher Nachweis" : score >= 60 ? "Eingeschränkter Nachweis" : "Kritischer Nachweis"));
   const factors = normalizedSystemCenterFactors(payload);
+  const evidenceApi = globalThis.GpTrustEvidence;
+  const indexEvidence = evidenceApi?.index(trust);
+  const indexExplanation = indexEvidence ? `<section class="system-center-index-explanation" aria-label="Berechnung des technischen Index"><strong>So entsteht der Index</strong><p>Erfüllte Punkte werden nach ihrem Gewicht auf 100 umgerechnet. Nicht erforderliche Prüfungen zählen nicht mit.</p><p>Rechnerischer Wert: <b>${indexEvidence.rawScore === null ? "Nicht verfügbar" : `${indexEvidence.rawScore} / 100`}</b> · Nachweisabdeckung: <b>${indexEvidence.coverage === null ? "Nicht verfügbar" : `${indexEvidence.coverage}%`}</b></p>${indexEvidence.reason ? `<p>${escapeHtml(indexEvidence.reason)} Angezeigter Index: <b>${score === null ? "Nicht verfügbar" : `${score} / 100`}</b>. Diese Begrenzung ist kein weiterer Einzelabzug.</p>` : ""}</section>` : "";
   const assurance = payload?.recoveryAssurance || payload?.status?.recoveryAssurance || {};
   const runs = Array.isArray(assurance.recentRuns) ? assurance.recentRuns : [];
   const alerts = Array.isArray(payload?.status?.alerts) ? payload.status.alerts.slice(0, 3) : [];
@@ -26018,6 +26371,7 @@ function renderSystemCenter(payload) {
       <div class="system-center-hero-copy"><span class="eyebrow">Technischer Vertrauensindex</span><h2>${escapeHtml(scoreLabel)}</h2><p>${escapeHtml(trust.summary || trust.detail || "Die Bewertung entsteht ausschließlich aus aktuell prüfbaren technischen Nachweisen.")}</p><small>${escapeHtml(disclaimer)}</small></div>
       <span class="system-center-state ${scoreState}"><i aria-hidden="true">${scoreCopy.icon}</i>${escapeHtml(scoreCopy.label)}</span>
     </section>
+    ${indexExplanation}
     ${alerts.length ? `<section class="system-center-alerts" aria-label="Aktuelle Systemhinweise">${alerts.map((alert) => {
       const alertState = systemCenterVisualState(alert.severity, "warning");
       const alertCopy = systemCenterStateCopy(alertState);
@@ -26050,7 +26404,9 @@ function renderSystemCenter(payload) {
             ? (payload?.capabilities?.canConfirmNotificationReceipt && receipt?.configurationToken
               ? '<button type="button" class="secondary-button compact-button" data-notification-receipt-confirm>Empfang bestätigen</button>' : "")
             : checkState !== "ok" && !notApplicable ? `<a href="/?view=settings&amp;section=backup" aria-label="${escapeHtml(checkLabel)}: Beheben">Beheben</a>` : "";
-          return `<li class="${checkState}"><i aria-hidden="true">${checkCopy.icon}</i><span>${escapeHtml(checkLabel)}${explanation || receiptNote ? `<small>${escapeHtml(receiptNote || explanation)}</small>` : ""}</span>${remedy}</li>`;
+          const proof = evidenceApi?.check(typeof check === "object" && check ? check : {}, payload?.generatedAt);
+          const proofHtml = proof ? `<small class="system-center-check-points">${escapeHtml(proof.pointsText)}</small><small>${proof.critical ? "Kritische Prüfung · " : ""}${escapeHtml(proof.reason)}</small><small>${proof.observedAt ? `Nachweis: ${escapeHtml(diagnosticTimestamp(proof.observedAt))}` : "Kein gültiger Nachweiszeitpunkt verfügbar"}</small>${proof.reasonCode ? `<details class="system-center-check-code"><summary>Technischer Grund</summary><code>${escapeHtml(proof.reasonCode)}</code></details>` : ""}` : "";
+          return `<li class="${checkState}"><i aria-hidden="true">${checkCopy.icon}</i><span>${escapeHtml(checkLabel)}${proofHtml}${explanation || receiptNote ? `<small>${escapeHtml(receiptNote || explanation)}</small>` : ""}</span>${remedy}</li>`;
         }).join("")}</ul>`
         : "";
       return `<article id="system-center-factor-${escapeHtml(factor.id)}" class="system-center-factor ${factor.state}"><header><span aria-hidden="true">${copy.icon}</span><small>${escapeHtml(points)}</small></header><strong>${escapeHtml(factor.label)}</strong><p>${escapeHtml(factor.detail)}</p>${coverage}${checks}<footer><span class="system-center-state ${factor.state}">${escapeHtml(copy.label)}</span><small>${escapeHtml(evidence)}</small></footer></article>`;
@@ -27291,16 +27647,12 @@ function showRightsProcessPermission(permissionId) {
 
 function exportRightsProcessPdf() {
   const processId = state.rightsDashboardSelectedProcessId;
-  if (!processId) return;
-  const scenario = state.rightsProcessScenarioIds[processId] || "current";
+  if (!processId || !canReadGovernanceDashboards()) return;
+  const scenario = state.rightsProcessScenarioIds[processId] || 'current';
   const parameters = new URLSearchParams({ process: processId, scenario });
-  if (state.rightsProcessLocationId) parameters.set("location", state.rightsProcessLocationId);
-  const link = document.createElement("a");
-  link.href = `/api/portal/v1/rights-dashboard/process-export.pdf?${parameters.toString()}`;
-  link.download = "";
-  document.body.append(link);
-  link.click();
-  link.remove();
+  if (state.rightsProcessLocationId) parameters.set('location', state.rightsProcessLocationId);
+  syncGpWindows();
+  gpDocumentPrint?.open('/api/portal/v1/rights-dashboard/process-export.pdf?' + parameters.toString(), elements.rightsProcessExportPdf, 'Berechtigungsablauf');
 }
 
 async function loadGovernanceDashboards() {
@@ -27375,13 +27727,14 @@ async function saveMobileLeadershipSettings() {
 async function loadAmuSettings() {
   if (!elements.amuSettingsCard) return;
   if(state.amuPolicy && settingsDraftGuard?.hasDraft(elements.amuSettingsCard))return;
-  const actor=startDashboardWorkspaceActorKey();
+  const current = settingsWriteGuard("read");
   try {
     const result = await api("/api/portal/v1/amu-settings");
-    if(actor!==startDashboardWorkspaceActorKey())return;
+    if(!current())return;
     if(state.amuPolicy && settingsDraftGuard?.hasDraft(elements.amuSettingsCard))return;
     const policy = result.policy || {};
     state.amuPolicy = policy;
+    state.amuSettingsCanChange = result.canChange === true;
     elements.amuUploadMaxMb.value = Number(policy.uploadMaxMb || 10);
     elements.amuStoredMaxMb.value = Number(policy.storedMaxMb || 2);
     elements.amuConvertImagesToPdf.checked = policy.convertImagesToPdf !== false;
@@ -27397,15 +27750,20 @@ async function loadAmuSettings() {
       .forEach((control) => { if (control) control.disabled = !result.canChange; });
     elements.amuSettingsHint.textContent = result.canChange ? "Änderbar durch Admin oder Personalleitung." : "Nur Admin oder Personalleitung kann diese Werte ändern.";
     settingsDraftGuard?.restore();
+    const status = settingsSaveStatus("amu", document.getElementById("amuSaveStatus"));
+    if (!settingsDraftGuard?.hasDraft(elements.amuSettingsCard)) status.loaded();
   } catch (error) {
-    if(actor!==startDashboardWorkspaceActorKey())return;
+    if(!current())return;
+    if (error.status === 403) state.amuSettingsCanChange = false;
     elements.amuSettingsCard.classList.toggle("hidden", error.status === 403);
     elements.amuSettingsHint.textContent = error.message;
   }
 }
 
 async function saveAmuSettings() {
-  const actor=startDashboardWorkspaceActorKey();
+  const status = settingsSaveStatus("amu", document.getElementById("amuSaveStatus"));
+  const token = status.begin(); if (!token) return false;
+  const current = () => { syncSettingsSaveScopes(); return status.current(token); };
   const sent=new Map([...(settingsDraftGuard?.snapshot(elements.amuSettingsCard)||[])].filter(([id])=>id!=='amuManagerDefaultAccess'&&!id.startsWith('amu-manager-access-')));
   try {
     const result = await api("/api/portal/v1/amu-settings", {
@@ -27426,12 +27784,16 @@ async function saveAmuSettings() {
         autoReviewTrustA: elements.amuAutoReviewTrustA.checked,
       }),
     });
-    if(actor!==startDashboardWorkspaceActorKey())return;
+    if(!current())return;
     settingsDraftGuard?.acknowledge(sent||new Map());
     state.amuPolicy = result.policy;
-    showToast("AUM-Einstellungen wurden gespeichert.");
     await loadAmuSettings();
-  } catch (error) { if(actor===startDashboardWorkspaceActorKey())showToast(error.message, true); }
+    if (!current()) return false;
+    const remaining = settingsSaveRemaining(elements.amuSettingsCard);
+    status.succeeded(token, { remaining });
+    showToast(remaining ? "Übermittelte AUM-Einstellungen gespeichert. Neuere Änderungen sind noch offen." : "AUM-Einstellungen wurden gespeichert.");
+    return true;
+  } catch (error) { if (current()) { status.failed(token, error); showToast(error.message, true); } return false; }
 }
 
 function renderAmuAccessPolicy(result = state.amuAccessPolicy) {
@@ -27545,20 +27907,25 @@ function renderGreetingSettings(result) {
 async function loadGreetingSettings() {
   if (!elements.greetingSettingsCard || elements.greetingSettingsCard.classList.contains("hidden")) return;
   if(state.greetingSettings && settingsDraftGuard?.hasDraft(elements.greetingSettingsCard))return;
-  const actor=startDashboardWorkspaceActorKey();
+  const current = settingsWriteGuard("read");
   try {
-    const result=await api("/api/portal/v1/greeting-settings");if(actor!==startDashboardWorkspaceActorKey())return;
+    const result=await api("/api/portal/v1/greeting-settings");if(!current())return;
     if(state.greetingSettings && settingsDraftGuard?.hasDraft(elements.greetingSettingsCard))return;
     renderGreetingSettings(result);settingsDraftGuard?.restore();
+    const status = settingsSaveStatus("greeting", document.getElementById("greetingSaveStatus"));
+    if (!settingsDraftGuard?.hasDraft(elements.greetingSettingsCard)) status.loaded();
   } catch (error) {
-    if(actor!==startDashboardWorkspaceActorKey())return;
+    if(!current())return;
     elements.greetingSettingsCard.classList.toggle("hidden", error.status === 403);
     elements.greetingSettingsHint.textContent = error.message;
   }
 }
 
 async function saveGreetingSettings() {
-  const actor=startDashboardWorkspaceActorKey(),sent=settingsDraftGuard?.snapshot(elements.greetingSettingsCard);
+  const status = settingsSaveStatus("greeting", document.getElementById("greetingSaveStatus"));
+  const token = status.begin(); if (!token) return false;
+  const current = () => { syncSettingsSaveScopes(); return status.current(token); };
+  const sent = settingsDraftGuard?.snapshot(elements.greetingSettingsCard);
   try {
     const result = await api("/api/portal/v1/greeting-settings", {
       method: "PUT",
@@ -27577,11 +27944,14 @@ async function saveGreetingSettings() {
         },
       }),
     });
-    if(actor!==startDashboardWorkspaceActorKey())return;
+    if(!current())return;
     settingsDraftGuard?.acknowledge(sent||new Map());
     renderGreetingSettings(result);settingsDraftGuard?.restore();
-    showToast("Persönliche Begrüßungen wurden gespeichert.");
-  } catch (error) { if(actor===startDashboardWorkspaceActorKey())showToast(error.message, true); }
+    const remaining = settingsSaveRemaining(elements.greetingSettingsCard);
+    status.succeeded(token, { remaining });
+    showToast(remaining ? "Übermittelte Begrüßungen gespeichert. Neuere Änderungen sind noch offen." : "Persönliche Begrüßungen wurden gespeichert.");
+    return true;
+  } catch (error) { if (current()) { status.failed(token, error); showToast(error.message, true); } return false; }
 }
 
 function birthdayPresentationCatalog(result = state.birthdayPresentationSettings) {
@@ -33106,7 +33476,7 @@ function renderSalesArticleCatalogDetail() {
     trigger:()=>document.getElementById('salesArticlePdfButton'), onCustomer:id=>{setView("crm");void openCrmCustomer(id);}});
   if (canUseSalesPriceLabels()) catalog.priceLabels = window.SalesArticlePriceLabels?.mount(
     document.getElementById('salesArticlePriceLabelsSection'), { api, rawApi, article,
-      accessKey: currentSalesArticlePriceLabelsAccessKey, onOpen: openSalesArticlePriceLabel });
+      accessKey: currentSalesArticlePriceLabelsAccessKey, windowPreferences:gpWindowManager?.preferences, onOpen: openSalesArticlePriceLabel });
   document.getElementById("salesArticlePdfButton")?.classList.remove("hidden");
   if (photo) { document.getElementById('salesArticlePhotoSlot').append(photo); photo.classList.remove('hidden'); }
   applySalesArticleDetailTabs();
@@ -34119,7 +34489,7 @@ function syncSalesHistoryAccess() {
   document.getElementById("logisticsNav")?.classList.toggle("hidden", !(user?.salesHistory?.read && user.permissions?.includes("sales:purchasing:read")));
   elements.tradeInsightsDashboardCard?.classList.toggle("hidden", !tradeInsightsAccess);
   if (tradeInsightsAccess) tradeInsightsWorkspace = window.GrabenplanerTradeInsights?.mount(document.getElementById("tradeInsightsWorkspace"), {
-    api,
+    api, rawApi, accessKey: startDashboardWorkspaceActorKey, canUse: canAccessTradeInsights, windowPreferences: gpWindowManager?.preferences,
     onTabChange(tab, { replace = false } = {}) {
       tradeInsightsTab = tab;
       if (["tradeInsights","logistics"].includes(state.currentView)) {
@@ -34137,7 +34507,9 @@ function syncSalesHistoryAccess() {
   receiptSearchWorkspace?.destroy(); receiptSearchWorkspace = null;
   document.getElementById("receiptSearchNavButton")?.classList.toggle("hidden", !user?.salesHistory?.read);
   document.getElementById("receiptSearchDashboardCard")?.classList.toggle("hidden", !user?.salesHistory?.read);
-  if (user?.salesHistory?.read) receiptSearchWorkspace = window.GrabenplanerReceiptSearch?.mount(document.getElementById("receiptSearchWorkspace"), { api, rawApi });
+  if (user?.salesHistory?.read) receiptSearchWorkspace = window.GrabenplanerReceiptSearch?.mount(document.getElementById("receiptSearchWorkspace"), { api, rawApi,
+    accessKey: startDashboardWorkspaceActorKey, canUse: () => state.portalSession?.authenticated === true && !state.portalSession?.user?.mustChangePassword && state.portalSession?.user?.salesHistory?.read === true,
+    active: () => state.currentView === "receiptSearch", windowPreferences: gpWindowManager?.preferences, scale: salesArticleSearchWindowScale });
   if (state.currentView === "receiptSearch") { if (user?.salesHistory?.read) void receiptSearchWorkspace?.load(); else setView("startDashboard"); }
   salesHistoryWorkspace?.destroy(); salesHistoryWorkspace = null;
   dataImportWorkspace?.destroy(); dataImportWorkspace = null;
@@ -35934,6 +36306,7 @@ function renderSalesAnalyticsTable(detail, horizon, hasGrossMargin) {
 }
 
 function renderSalesAnalyticsReport() {
+  syncSalesAnalyticsPrintWindows();
   const series = state.salesAnalytics.reportSeries;
   const detail = series || state.salesAnalytics.selectedReport;
   const horizon = series ? "period" : state.salesAnalytics.horizon;
@@ -36000,9 +36373,48 @@ function renderSalesAnalyticsReport() {
   renderSalesAnalyticsGraph(detail, horizon, metricDefinitions);
 }
 
+let salesAnalyticsPrintWindow = null;
+const salesAnalyticsPrintModelIds = new WeakMap(); let salesAnalyticsPrintModelSerial = 0;
+function salesAnalyticsPrintSelection() {
+  const current = state.salesAnalytics;
+  return current.reportSeries
+    ? { reportIds: [...current.reportSeries.selection.reportIds], horizon: "period", metric: current.chartMetric }
+    : { reportId: current.selectedReportId, horizon: current.horizon, metric: current.chartMetric };
+}
+function salesAnalyticsPrintContext() {
+  const current = state.salesAnalytics, model = current.reportSeries || current.selectedReport;
+  if (model && !salesAnalyticsPrintModelIds.has(model)) salesAnalyticsPrintModelIds.set(model, ++salesAnalyticsPrintModelSerial);
+  return { selection: salesAnalyticsPrintSelection(), modelRevision: model ? salesAnalyticsPrintModelIds.get(model) : 0,
+    loading: current.loading, seriesLoading: current.seriesLoading, location: current.locationFilter, from: current.dateFrom, to: current.dateTo };
+}
+function canUseSalesAnalyticsPrint() {
+  return canAccessSalesAnalytics() && (!state.portalStatus?.portalEnabled || (state.portalSession?.authenticated === true && !state.portalSession?.user?.mustChangePassword))
+    && Boolean(state.salesAnalytics.reportSeries || state.salesAnalytics.selectedReport) && !state.salesAnalytics.loading && !state.salesAnalytics.seriesLoading;
+}
+function ensureSalesAnalyticsPrintWindow() {
+  if (salesAnalyticsPrintWindow) return salesAnalyticsPrintWindow;
+  syncGpWindows();
+  salesAnalyticsPrintWindow = window.GpSalesAnalyticsPrint.mount({ document, rawApi,
+    key: () => state.portalStatus?.portalEnabled ? startDashboardWorkspaceActorKey() : "local",
+    canUse: canUseSalesAnalyticsPrint, active: () => state.currentView === "salesAnalytics",
+    windowPreferences: gpWindowManager?.preferences, scale: salesArticleSearchWindowScale,
+    selection: salesAnalyticsPrintSelection, context: salesAnalyticsPrintContext,
+    options: () => state.salesAnalytics.pdfOptions, normalizeOptions: normalizeSalesAnalyticsPdfOptions, saveOptions: saveSalesAnalyticsPrintOptions });
+  return salesAnalyticsPrintWindow;
+}
+function syncSalesAnalyticsPrintWindows() {
+  if (salesAnalyticsPrintWindow) {
+    if (state.currentView === "salesAnalytics") salesAnalyticsPrintWindow.activate(); else salesAnalyticsPrintWindow.deactivate();
+    salesAnalyticsPrintWindow.sync();
+  }
+  salesReportJobUi?.syncPrint();
+}
 let salesReportJobUi = null;
 function renderSalesAnalyticsTabs() {
-  if (!salesReportJobUi && window.createSalesReportJobUi) salesReportJobUi = window.createSalesReportJobUi({ api,
+  if (!salesReportJobUi && window.createSalesReportJobUi) salesReportJobUi = window.createSalesReportJobUi({ api, rawApi,
+    accessKey: () => state.portalStatus?.portalEnabled ? startDashboardWorkspaceActorKey() : "local",
+    canUse: () => canAccessSalesAnalytics() && (!state.portalStatus?.portalEnabled || (state.portalSession?.authenticated === true && !state.portalSession?.user?.mustChangePassword)),
+    printActive: () => state.currentView === "salesAnalytics", windowPreferences: gpWindowManager?.preferences, scale: salesArticleSearchWindowScale,
     visible: () => state.currentView === 'salesAnalytics' && ['create', 'reports', 'graphics'].includes(state.salesAnalytics.tab) && canAccessSalesAnalytics(),
     navigate: tab => setSalesAnalyticsTab(tab) });
   if (['create', 'graphics'].includes(state.salesAnalytics.tab)) salesReportJobUi?.setMode(state.salesAnalytics.tab === 'graphics' ? 'graphic' : 'report');
@@ -36150,7 +36562,6 @@ function resetSalesAnalyticsActorState(actorKey) {
     chartType: "ranking",
     chartMetric: "netRevenue",
     pdfOptions: normalizeSalesAnalyticsPdfOptions(),
-    pdfOptionsDraft: null,
     preferencesLoaded: false,
     selectionLoaded: false,
     preferencesLoading: false,
@@ -36170,7 +36581,7 @@ function resetSalesAnalyticsActorState(actorKey) {
   state.salesAnalytics.preferencesRequestId += 1;
   salesAnalysisSelectionRevision += 1;
   state.salesAnalytics.seriesRequestId += 1;
-  if (elements.salesReportPdfOptionsModal?.open) elements.salesReportPdfOptionsModal.close();
+  salesAnalyticsPrintWindow?.reset();
   const requestQuery = document.getElementById("salesAnalyticsRequestQuery");
   salesReportJobUi?.reset();
   if (requestQuery) requestQuery.value = "";
@@ -36229,61 +36640,29 @@ async function saveSalesAnalyticsPreferences(pdfOptions) {
   return normalizeSalesAnalyticsPreferences(saved);
 }
 
-function salesAnalyticsPdfChartInputs() {
-  return [...(elements.salesReportPdfOptionsForm?.querySelectorAll("[data-sales-pdf-chart]") || [])];
-}
-
-function setSalesAnalyticsPdfOptionsMessage(message, error = false) {
-  if (!elements.salesReportPdfOptionsMessage) return;
-  elements.salesReportPdfOptionsMessage.textContent = message;
-  elements.salesReportPdfOptionsMessage.classList.toggle("error", error);
-}
-
-function renderSalesAnalyticsPdfOptionsDraft() {
-  const options = normalizeSalesAnalyticsPdfOptions(
-    state.salesAnalytics.pdfOptionsDraft || state.salesAnalytics.pdfOptions,
-  );
-  state.salesAnalytics.pdfOptionsDraft = options;
-  if (elements.salesReportPdfOrientation) elements.salesReportPdfOrientation.value = options.orientation;
-  if (elements.salesReportPdfTopN) elements.salesReportPdfTopN.value = String(options.topN);
-  if (elements.salesReportPdfIncludeKpis) elements.salesReportPdfIncludeKpis.checked = options.includeKpis;
-  if (elements.salesReportPdfIncludeTable) elements.salesReportPdfIncludeTable.checked = options.includeTable;
-  if (elements.salesReportPdfFilenamePrefix) elements.salesReportPdfFilenamePrefix.value = options.filenamePrefix;
-  const selectedCharts = new Set(options.charts);
-  salesAnalyticsPdfChartInputs().forEach((input) => {
-    input.checked = selectedCharts.has(input.value);
-  });
-  setSalesAnalyticsPdfOptionsMessage(
-    state.salesAnalytics.preferencesError || "Die Auswahl wird nur für dein Benutzerkonto gespeichert.",
-    Boolean(state.salesAnalytics.preferencesError),
-  );
-}
-
-function readSalesAnalyticsPdfOptionsDraft() {
-  const charts = salesAnalyticsPdfChartInputs().filter((input) => input.checked).map((input) => input.value);
-  if (!charts.length) {
-    setSalesAnalyticsPdfOptionsMessage("Wähle mindestens eine Diagrammseite aus.", true);
-    return null;
+async function saveSalesAnalyticsPrintOptions(options) {
+  if (!canUseSalesAnalyticsPrint()) throw Error("Die PDF-Ausgabe ist für diesen Bereich nicht freigegeben.");
+  if (state.salesAnalytics.preferencesSaving) throw Error("Die persönlichen Vorgaben werden bereits gespeichert.");
+  const accountKey = startDashboardWorkspaceActorKey(), actorKey = currentSalesAnalyticsActorKey();
+  const selectionKey = JSON.stringify(salesAnalyticsPrintContext()), requestId = ++state.salesAnalytics.preferencesRequestId;
+  state.salesAnalytics.preferencesLoading = false;
+  state.salesAnalytics.preferencesSaving = true;
+  try {
+    const saved = await saveSalesAnalyticsPreferences(options);
+    if (accountKey !== startDashboardWorkspaceActorKey() || !salesAnalyticsActorIsCurrent(actorKey)
+      || requestId !== state.salesAnalytics.preferencesRequestId || !canUseSalesAnalyticsPrint()
+      || selectionKey !== JSON.stringify(salesAnalyticsPrintContext())) throw Error("Die Anmeldung, Berechtigung oder Berichtsauswahl hat sich geändert.");
+    applySalesAnalyticsPreferences(saved);
+    state.salesAnalytics.preferencesError = "";
+    return saved;
+  } finally {
+    if (accountKey === startDashboardWorkspaceActorKey() && requestId === state.salesAnalytics.preferencesRequestId) state.salesAnalytics.preferencesSaving = false;
   }
-  const options = normalizeSalesAnalyticsPdfOptions({
-    orientation: elements.salesReportPdfOrientation?.value,
-    charts,
-    topN: elements.salesReportPdfTopN?.value,
-    includeKpis: Boolean(elements.salesReportPdfIncludeKpis?.checked),
-    includeTable: Boolean(elements.salesReportPdfIncludeTable?.checked),
-    filenamePrefix: elements.salesReportPdfFilenamePrefix?.value,
-  });
-  state.salesAnalytics.pdfOptionsDraft = options;
-  if (elements.salesReportPdfTopN) elements.salesReportPdfTopN.value = String(options.topN);
-  if (elements.salesReportPdfFilenamePrefix) elements.salesReportPdfFilenamePrefix.value = options.filenamePrefix;
-  return options;
 }
-
 function openSalesAnalyticsPdfOptions() {
-  if (!state.salesAnalytics.reportSeries && !state.salesAnalytics.selectedReport) return;
-  state.salesAnalytics.pdfOptionsDraft = normalizeSalesAnalyticsPdfOptions(state.salesAnalytics.pdfOptions);
-  renderSalesAnalyticsPdfOptionsDraft();
-  if (!elements.salesReportPdfOptionsModal?.open) elements.salesReportPdfOptionsModal?.showModal();
+  if (!canUseSalesAnalyticsPrint()) return;
+  try { ensureSalesAnalyticsPrintWindow().open({ target: elements.salesReportChartPdfButton }); }
+  catch (error) { showToast(error.message, true); }
 }
 
 async function loadSalesAnalytics({ selectReportId = "" } = {}) {
@@ -36478,111 +36857,6 @@ async function analyzeSalesReportSeries() {
       && requestId === state.salesAnalytics.seriesRequestId) {
       state.salesAnalytics.seriesLoading = false;
       renderSalesAnalytics();
-    }
-  }
-}
-
-async function downloadSalesAnalyticsChartsPdf(pdfOptions = state.salesAnalytics.pdfOptions) {
-  const series = state.salesAnalytics.reportSeries;
-  const reportId = state.salesAnalytics.selectedReportId;
-  if (!series && !reportId) return false;
-  const actorKey = currentSalesAnalyticsActorKey();
-  const requestId = state.salesAnalytics.preferencesRequestId;
-  const requestIsCurrent = () => salesAnalyticsActorIsCurrent(actorKey)
-    && requestId === state.salesAnalytics.preferencesRequestId;
-  const options = normalizeSalesAnalyticsPdfOptions(pdfOptions);
-  const button = elements.salesReportPdfExportButton;
-  if (button) {
-    button.disabled = true;
-    button.textContent = "PDF wird erstellt …";
-  }
-  try {
-    const body = series
-      ? {
-        reportIds: series.selection.reportIds,
-        horizon: "period",
-        metric: state.salesAnalytics.chartMetric,
-        optionsVersion: 1,
-        options,
-      }
-      : {
-        reportId,
-        horizon: state.salesAnalytics.horizon,
-        metric: state.salesAnalytics.chartMetric,
-        optionsVersion: 1,
-        options,
-      };
-    const response = await rawApi("/api/sales-analytics/charts.pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!requestIsCurrent()) {
-      await response.body?.cancel();
-      return false;
-    }
-    const downloaded = await downloadFileResponse(response, `${options.filenamePrefix}.pdf`, {
-      beforeSave: requestIsCurrent,
-    });
-    if (!downloaded || !requestIsCurrent()) return false;
-    showToast("Die Verkaufsanalyse-PDF wurde erstellt.");
-    return true;
-  } catch (error) {
-    if (requestIsCurrent()) {
-      showToast(error.message, true);
-      setSalesAnalyticsPdfOptionsMessage(error.message, true);
-    }
-    return false;
-  } finally {
-    if (requestIsCurrent()) {
-      if (button) {
-        button.disabled = false;
-        button.textContent = "Speichern & PDF erstellen";
-      }
-      renderSalesAnalyticsReport();
-    }
-  }
-}
-
-async function submitSalesAnalyticsPdfOptions(event) {
-  event.preventDefault();
-  if (state.salesAnalytics.preferencesSaving) return;
-  const actorKey = currentSalesAnalyticsActorKey();
-  const options = readSalesAnalyticsPdfOptionsDraft();
-  if (!options || !elements.salesReportPdfOptionsForm?.reportValidity()) return;
-  const requestId = ++state.salesAnalytics.preferencesRequestId;
-  state.salesAnalytics.preferencesLoading = false;
-  state.salesAnalytics.preferencesSaving = true;
-  if (elements.salesReportPdfExportButton) {
-    elements.salesReportPdfExportButton.disabled = true;
-    elements.salesReportPdfExportButton.textContent = "Optionen werden gespeichert …";
-  }
-  if (elements.salesReportPdfOptionsReset) elements.salesReportPdfOptionsReset.disabled = true;
-  setSalesAnalyticsPdfOptionsMessage("Persönliche Exportoptionen werden gespeichert …");
-  try {
-    const saved = await saveSalesAnalyticsPreferences(options);
-    if (!salesAnalyticsActorIsCurrent(actorKey)
-      || requestId !== state.salesAnalytics.preferencesRequestId) return;
-    applySalesAnalyticsPreferences(saved);
-    state.salesAnalytics.preferencesError = "";
-    state.salesAnalytics.pdfOptionsDraft = saved.pdf;
-    const downloaded = await downloadSalesAnalyticsChartsPdf(saved.pdf);
-    if (downloaded) elements.salesReportPdfOptionsModal?.close();
-  } catch (error) {
-    if (salesAnalyticsActorIsCurrent(actorKey)
-      && requestId === state.salesAnalytics.preferencesRequestId) {
-      state.salesAnalytics.preferencesError = error.message;
-      setSalesAnalyticsPdfOptionsMessage(error.message, true);
-    }
-  } finally {
-    if (salesAnalyticsActorIsCurrent(actorKey)
-      && requestId === state.salesAnalytics.preferencesRequestId) {
-      state.salesAnalytics.preferencesSaving = false;
-      if (elements.salesReportPdfExportButton) {
-        elements.salesReportPdfExportButton.disabled = false;
-        elements.salesReportPdfExportButton.textContent = "Speichern & PDF erstellen";
-      }
-      if (elements.salesReportPdfOptionsReset) elements.salesReportPdfOptionsReset.disabled = false;
     }
   }
 }
@@ -40285,21 +40559,28 @@ function removeUsbEmployeeDraft(personnelNumber) {
   updateUsbSummary();
 }
 
-async function saveCustomManagementBranding() {
-  const result = await api("/api/branding/preference", {
+function settingsBrandingInput() {
+  return { companyName: elements.brandingCompanyName.value, logoUrl: elements.brandingLogoUrl.value,
+    iconUrl: elements.brandingIconUrl.value, logoAlt: elements.brandingLogoAlt.value, adminEmail: elements.brandingAdminEmail.value };
+}
+async function saveCustomManagementBranding({ branding: submittedBranding = null, current: parentCurrent = null } = {}) {
+  const current = settingsWriteGuard("branding", parentCurrent);
+  if (!current()) return false;
+  const branding = submittedBranding || settingsBrandingInput();
+  let result;
+  try { result = await api("/api/branding/preference", {
     method: "PUT",
     body: JSON.stringify({
       kitId: "custom",
-      branding: {
-        companyName: elements.brandingCompanyName.value,
-        logoUrl: elements.brandingLogoUrl.value,
-        iconUrl: elements.brandingIconUrl.value,
-        logoAlt: elements.brandingLogoAlt.value,
-        adminEmail: elements.brandingAdminEmail.value,
-      },
+      branding,
     }),
-  });
+  }); } catch (error) { if (current()) throw error; return false; }
+  if (!current()) return false;
+  const laterBranding = settingsBrandingInput(), changed = JSON.stringify(laterBranding) !== JSON.stringify(branding);
   updateManagementBrandingPreference(result);
+  state.brandingFormDirty = changed;
+  if (changed) applyBranding(laterBranding);
+  return true;
 }
 
 async function saveBackupSettings() {
@@ -40322,8 +40603,15 @@ async function saveBackupSettings() {
 }
 
 async function saveSettings(silent = false) {
-  const actor=startDashboardWorkspaceActorKey();
-  const submittedSettingsDraft = settingsDraftGuard?.snapshot();
+  const status = settingsSaveStatus("main", document.getElementById("settingsSaveStatus"));
+  const token = status.begin(); if (!token) return false;
+  const current = () => { syncSettingsSaveScopes(); return status.current(token); };
+  const submittedSettingsDraft = settingsDraftGuard?.snapshot() || new Map();
+  const confirm = ids => { if (current()) {
+    rememberSettingsConfirmation(submittedSettingsDraft, ids);
+    settingsDraftGuard?.acknowledge(new Map([...submittedSettingsDraft].filter(([id]) => ids.includes(id))));
+  } };
+  let writesConfirmed = false;
   try {
     const permissions = state.portalSession?.user?.permissions || [];
     const portalEnabled = state.portalStatus?.portalEnabled === true;
@@ -40403,74 +40691,83 @@ async function saveSettings(silent = false) {
           },
         } : {}),
     };
-    if(actor!==startDashboardWorkspaceActorKey())return false;
+    const crossPayload = payload.crossLocationSchedule || {
+      enabled: elements.crossLocationScheduleEnabled.checked,
+      horizonWeeks: Number(elements.crossLocationScheduleHorizonWeeks.value),
+      managerRequestCreateEnabled: elements.staffAssignmentManagerCreateEnabled.checked,
+      departmentManagerRequestCreateEnabled: elements.staffAssignmentDepartmentManagerCreateEnabled.checked,
+      departmentManagerRequestReviewEnabled: elements.staffAssignmentDepartmentManagerReviewEnabled.checked,
+      emailSubmittedEnabled: elements.staffAssignmentEmailSubmittedEnabled.checked,
+      emailDecisionEnabled: elements.staffAssignmentEmailDecisionEnabled.checked,
+      changePolicy: elements.staffAssignmentChangePolicy.value,
+      cancellationPolicy: elements.staffAssignmentCancellationPolicy.value,
+    };
+    const crossIds = ['crossLocationScheduleEnabled','crossLocationScheduleHorizonWeeks','staffAssignmentManagerCreateEnabled','staffAssignmentDepartmentManagerCreateEnabled','staffAssignmentDepartmentManagerReviewEnabled','staffAssignmentEmailSubmittedEnabled','staffAssignmentEmailDecisionEnabled','staffAssignmentChangePolicy','staffAssignmentCancellationPolicy'];
+    const pdfIds = [...Object.keys(schedulePdfPayload), 'pdfTitleSetting'];
+    const generalIds = [...Object.keys(payload), 'pdfTitleSetting','vacationPdfTitleSetting','breakAfterHours','breakDuration','branchSupervisionMode','branchSupervisionIntensity','branchSupervisionPrimaryCoveragePercent','branchSupervisionDepartmentGapMinutes'];
+    if (payload.crossLocationSchedule) generalIds.push(...crossIds);
+    const saveFont = !silent && canSaveGeneralSettings && elements.appFontScalePercent;
+    const fontValue = saveFont ? elements.appFontScalePercent.valueAsNumber : null;
+    const saveBranding = !silent && canSaveBranding && state.brandingFormDirty;
+    const branding = saveBranding ? settingsBrandingInput() : null;
+    const saveDuty = !silent && state.scheduleDutyColorsDirty && canManageScheduleDutyColors();
+    if (saveDuty && [...document.querySelectorAll("[data-duty-rgb]")].some(input => !input.reportValidity())) throw new Error("Bitte gültige RGB-Werte zwischen 0 und 255 eingeben.");
+    const dutyColors = saveDuty ? JSON.parse(JSON.stringify(state.scheduleDutyColorDraft || {})) : null;
+    const dutySignature = saveDuty ? scheduleDutyDraftSignature() : null;
+    const designSignature = JSON.stringify([state.schedulePdfDesignSelection, state.schedulePdfDesignNames]);
+    const confirmDesign = () => { if (!current()) return;
+      rememberSettingsConfirmation(new Map(), [], { selection: schedulePdfPayload.schedulePdfDesignIds, names: schedulePdfPayload.schedulePdfDesignNames });
+      if (designSignature === JSON.stringify([state.schedulePdfDesignSelection, state.schedulePdfDesignNames])) state.schedulePdfSettingsDraftKey = "";
+    };
+    if (!current()) return false;
     if (canSaveGeneralSettings) {
-      await api("/api/settings", {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
+      await api("/api/settings", { method: "PUT", body: JSON.stringify(payload) });
+      if (!current()) return false;
+      confirm(generalIds); confirmDesign();
     }
-    if(actor!==startDashboardWorkspaceActorKey())return false;
     if (canSaveSchedulePdfSettings && !canSaveGeneralSettings) {
-      await api("/api/portal/v1/schedule-pdf-settings", {
-        method: "PUT",
-        body: JSON.stringify(schedulePdfPayload),
-      });
+      await api("/api/portal/v1/schedule-pdf-settings", { method: "PUT", body: JSON.stringify(schedulePdfPayload) });
+      if (!current()) return false;
+      confirm(pdfIds); confirmDesign();
     }
-    if(actor!==startDashboardWorkspaceActorKey())return false;
     if (activeSettingsTab === "schedule" && canSaveScheduleSettings && !canSaveGeneralSettings) {
-      await api("/api/portal/v1/cross-location-schedule-settings", {
-        method: "PUT",
-        body: JSON.stringify({
-          enabled: elements.crossLocationScheduleEnabled.checked,
-          horizonWeeks: Number(elements.crossLocationScheduleHorizonWeeks.value),
-          managerRequestCreateEnabled: elements.staffAssignmentManagerCreateEnabled.checked,
-          departmentManagerRequestCreateEnabled: elements.staffAssignmentDepartmentManagerCreateEnabled.checked,
-          departmentManagerRequestReviewEnabled: elements.staffAssignmentDepartmentManagerReviewEnabled.checked,
-          emailSubmittedEnabled: elements.staffAssignmentEmailSubmittedEnabled.checked,
-          emailDecisionEnabled: elements.staffAssignmentEmailDecisionEnabled.checked,
-          changePolicy: elements.staffAssignmentChangePolicy.value,
-          cancellationPolicy: elements.staffAssignmentCancellationPolicy.value,
-        }),
-      });
+      await api("/api/portal/v1/cross-location-schedule-settings", { method: "PUT", body: JSON.stringify(crossPayload) });
+      if (!current()) return false;
+      confirm(crossIds);
     }
-    if(actor!==startDashboardWorkspaceActorKey())return false;
     if (portalEnabled && canSavePastWeekPreference) {
-      const preferences = await api("/api/portal/v1/ui-preferences", {
-        method: "PUT",
-        body: JSON.stringify({ allowPastWeekEditing }),
-      });
-      if(actor!==startDashboardWorkspaceActorKey())return false;
+      const preferences = await api("/api/portal/v1/ui-preferences", { method: "PUT", body: JSON.stringify({ allowPastWeekEditing }) });
+      if (!current()) return false;
       state.allowPastWeekEditing = preferences.allowPastWeekEditing === true;
+      confirm(['allowPastWeekEditing']);
     }
-    if(actor!==startDashboardWorkspaceActorKey())return false;
-    if (!silent && canSaveGeneralSettings && elements.appFontScalePercent) {
-      await saveAppFontScalePercent(elements.appFontScalePercent.valueAsNumber, { silent: true });
+    if (saveFont) {
+      if (await saveAppFontScalePercent(fontValue, { silent: true, current }) === false || !current()) return false;
+      confirm(['appFontScalePercent']);
     }
-    if(actor!==startDashboardWorkspaceActorKey())return false;
-    if (!silent && canSaveBranding && state.brandingFormDirty) {
-      await saveCustomManagementBranding();
+    if (saveBranding) {
+      if (await saveCustomManagementBranding({ branding, current }) === false || !current()) return false;
+      confirm(['brandingCompanyName','brandingAdminEmail','brandingLogoUrl','brandingIconUrl','brandingLogoAlt']);
     }
-    if(actor!==startDashboardWorkspaceActorKey())return false;
-    if (!silent && state.scheduleDutyColorsDirty && canManageScheduleDutyColors()) await saveScheduleDutyColors({ silent: true });
-    if(actor!==startDashboardWorkspaceActorKey())return false;
-    if (!silent) showToast("Einstellungen wurden gespeichert.");
-    if (submittedSettingsDraft) {
-      const savedIds=new Set(canSaveGeneralSettings ? Object.keys(payload) : canSaveSchedulePdfSettings ? Object.keys(schedulePdfPayload) : []);
-      if(canSaveGeneralSettings || canSaveSchedulePdfSettings)savedIds.add('pdfTitleSetting');
-      if(canSaveGeneralSettings){
-        for(const id of ['vacationPdfTitleSetting','breakAfterHours','breakDuration','branchSupervisionMode','branchSupervisionIntensity','branchSupervisionPrimaryCoveragePercent','branchSupervisionDepartmentGapMinutes'])savedIds.add(id);
-      }
-      if(activeSettingsTab==='schedule'&&canSaveScheduleSettings)for(const id of ['crossLocationScheduleEnabled','crossLocationScheduleHorizonWeeks','staffAssignmentManagerCreateEnabled','staffAssignmentDepartmentManagerCreateEnabled','staffAssignmentDepartmentManagerReviewEnabled','staffAssignmentEmailSubmittedEnabled','staffAssignmentEmailDecisionEnabled','staffAssignmentChangePolicy','staffAssignmentCancellationPolicy'])savedIds.add(id);
-      if(canSavePastWeekPreference)savedIds.add('allowPastWeekEditing');
-      if(!silent&&canSaveGeneralSettings)savedIds.add('appFontScalePercent');
-      settingsDraftGuard?.acknowledge(new Map([...submittedSettingsDraft].filter(([id])=>savedIds.has(id))));
-    }
-    if(actor!==startDashboardWorkspaceActorKey())return false;
+    if (saveDuty && (await saveScheduleDutyColors({ silent: true, colors: dutyColors, draftSignature: dutySignature, current }) === false || !current())) return false;
+    if (!current()) return false;
+    writesConfirmed = true;
     await loadAll();
+    if (!current()) return false;
+    const remaining = settingsSaveRemaining();
+    status.succeeded(token, { remaining });
+    if (!silent) showToast(remaining || status.state.state === "changed"
+      ? "Übermittelte Einstellungen gespeichert. Weitere Änderungen sind noch offen."
+      : "Einstellungen wurden gespeichert.");
     return true;
   } catch (error) {
-    if(actor!==startDashboardWorkspaceActorKey())return false;
+    if (!current()) return false;
+    if (writesConfirmed) {
+      status.succeeded(token, { remaining: settingsSaveRemaining() });
+      if (!silent) showToast("Einstellungen gespeichert. Die Ansicht konnte nicht aktualisiert werden: " + error.message, true);
+      return true;
+    }
+    status.failed(token, error);
     showToast(error.message, true);
     return false;
   }
@@ -40533,27 +40830,12 @@ function updatePdfPreview() {
 }
 
 async function generateSchedulePdfPreview() {
-  const saved = await saveSettings(true);
-  if (!saved) return;
-  const designId = elements.schedulePdfPreviewDesign?.value || state.schedulePdfDesignSelection[0] || "timeline";
-  elements.schedulePdfPreviewFrame.src = `/api/schedule-preview.pdf?week=${state.weekStart}${contextQuery(true)}&design=${encodeURIComponent(designId)}&t=${Date.now()}`;
-  showToast("Dienstplan-PDF-Vorschau wurde erzeugt.");
+  const design=elements.schedulePdfPreviewDesign?.value||schedulePdfDesignIdsFromSettings()[0];
+  openPlanningPdf('schedule',{design,target:elements.schedulePdfPreviewButton});
 }
 
 async function generateVacationPdfPreview() {
-  const saved = await saveSettings(true);
-  if (!saved) return;
-  const range = selectedVacationRange();
-  const parameters = new URLSearchParams({
-    year: String(state.vacationYear),
-    view: state.vacationViewMode,
-    quarter: String(state.vacationQuarter),
-    month: String(state.vacationMonth),
-    location: state.locationId || "",
-    t: String(Date.now()),
-  });
-  elements.vacationPdfPreviewFrame.src = `/api/vacations-preview.pdf?${parameters.toString()}`;
-  showToast(`Urlaubs-PDF-Vorschau ${range.label} wurde erzeugt.`);
+  openPlanningPdf('vacation',{target:elements.vacationPdfPreviewButton});
 }
 
 let toastTimer;
@@ -40788,24 +41070,6 @@ elements.salesReportChartType?.addEventListener("change", () => {
   void saveSalesAnalyticsSelection();
 });
 elements.salesReportChartPdfButton?.addEventListener("click", openSalesAnalyticsPdfOptions);
-elements.salesReportPdfOptionsForm?.addEventListener("submit", submitSalesAnalyticsPdfOptions);
-elements.salesReportPdfOptionsReset?.addEventListener("click", () => {
-  state.salesAnalytics.pdfOptionsDraft = normalizeSalesAnalyticsPdfOptions(SALES_ANALYTICS_PDF_DEFAULTS);
-  renderSalesAnalyticsPdfOptionsDraft();
-});
-elements.salesReportPdfOptionsForm?.addEventListener("change", (event) => {
-  if (!event.target.matches("[data-sales-pdf-chart]")) return;
-  const count = salesAnalyticsPdfChartInputs().filter((input) => input.checked).length;
-  setSalesAnalyticsPdfOptionsMessage(
-    count
-      ? `${count} Diagrammseite${count === 1 ? "" : "n"} ausgewählt. Die Optionen gelten nur für dein Benutzerkonto.`
-      : "Wähle mindestens eine Diagrammseite aus.",
-    count === 0,
-  );
-});
-elements.salesReportPdfOptionsModal?.addEventListener("close", () => {
-  state.salesAnalytics.pdfOptionsDraft = null;
-});
 elements.salesReportGroupSearch?.addEventListener("input", () => {
   state.salesAnalytics.tableSearch = elements.salesReportGroupSearch.value;
   renderSalesAnalyticsReport();
@@ -41265,14 +41529,19 @@ elements.schedulePdfDesignSettingsList?.addEventListener("click", (event) => {
   resetSchedulePdfDesignName(event.target);
 });
 elements.pdfButton?.addEventListener("click", (event) => {
-  if (schedulePdfDesignIdsFromSettings().length <= 1) return;
+  if (schedulePdfDesignIdsFromSettings().length <= 1) {event.preventDefault();openPlanningPdf("schedule",{target:elements.pdfButton});return;}
   event.preventDefault();
   const opening = elements.schedulePdfDesignMenu?.classList.contains("hidden") !== false;
   elements.schedulePdfDesignMenu?.classList.toggle("hidden", !opening);
   elements.pdfButton.setAttribute("aria-expanded", String(opening));
   if (opening) elements.schedulePdfDesignMenu?.querySelector("[role='menuitem']")?.focus();
 });
-elements.schedulePdfDesignMenu?.addEventListener("click", () => closeSchedulePdfDesignMenu());
+elements.schedulePdfDesignMenu?.addEventListener("click",event=>{
+  const choice=event.target.closest('[data-schedule-pdf-design-export]');if(!choice)return;event.preventDefault();
+  closeSchedulePdfDesignMenu();openPlanningPdf('schedule',{design:choice.dataset.schedulePdfDesignExport,target:elements.pdfButton});
+});
+elements.departmentPdfButton?.addEventListener('click',event=>{event.preventDefault();openPlanningPdf('schedule',{departmentId:elements.departmentPdfSelect?.value,target:elements.departmentPdfButton});});
+elements.vacationPdfButton?.addEventListener('click',event=>{event.preventDefault();openPlanningPdf('vacation',{target:elements.vacationPdfButton});});
 document.addEventListener("click", (event) => {
   if (!event.target.closest("#schedulePdfExport")) closeSchedulePdfDesignMenu();
 });
@@ -41312,6 +41581,7 @@ elements.branchOrdersManagementRefresh?.addEventListener("click", () => loadBran
 elements.branchOrdersManagementSave?.addEventListener("click", saveBranchOrdersManagement);
 elements.branchOrdersManagementSaveInline?.addEventListener("click", saveBranchOrdersManagement);
 elements.branchOrdersManagementLocation?.addEventListener("change", () => {
+  branchOrdersManagementPrintWindow?.reset();
   state.branchOrdersManagementLocationId = elements.branchOrdersManagementLocation.value;
   setBranchOrdersManagementMessage("");
   loadBranchOrdersManagement(state.branchOrdersManagementLocationId);
@@ -41349,6 +41619,8 @@ elements.branchOrdersManagementWorkspace?.addEventListener("keydown", (event) =>
 });
 elements.branchOrdersManagementWorkspace?.addEventListener("click", handleBranchOrdersManagementAction);
 elements.branchOrdersManagementHistory?.addEventListener("click", (event) => {
+  const pdf = event.target.closest?.('[data-branch-order-pdf]');
+  if (pdf) { openBranchOrdersManagementPdf(pdf.dataset.branchOrderPdf, pdf); return; }
   const button = event.target.closest?.("[data-branch-orders-confirm-delivery]");
   if (button) confirmBranchOrderDelivery(button.dataset.branchOrdersConfirmDelivery);
 });
@@ -41396,9 +41668,13 @@ document.querySelector("#sidebarDarkmodeToggle")?.addEventListener("click", () =
 });
 elements.decreaseAppFontScale?.addEventListener("click", () => {
   applyAppFontScalePercent(Math.max(APP_FONT_SCALE_MIN, state.appFontScalePercent - APP_FONT_SCALE_STEP));
+  settingsDraftGuard?.record(elements.appFontScalePercent);
+  settingsSaveStatus("main", document.getElementById("settingsSaveStatus")).changed();
 });
 elements.increaseAppFontScale?.addEventListener("click", () => {
   applyAppFontScalePercent(Math.min(APP_FONT_SCALE_MAX, state.appFontScalePercent + APP_FONT_SCALE_STEP));
+  settingsDraftGuard?.record(elements.appFontScalePercent);
+  settingsSaveStatus("main", document.getElementById("settingsSaveStatus")).changed();
 });
 elements.appFontScalePercent?.addEventListener("input", () => {
   const normalized = normalizeAppFontScalePercent(elements.appFontScalePercent.valueAsNumber, null);
@@ -41410,6 +41686,7 @@ elements.appFontScalePercent?.addEventListener("change", () => {
     ? Math.round(submitted / APP_FONT_SCALE_STEP) * APP_FONT_SCALE_STEP
     : state.appFontScalePercent;
   applyAppFontScalePercent(Math.max(APP_FONT_SCALE_MIN, Math.min(APP_FONT_SCALE_MAX, rounded)));
+  settingsDraftGuard?.record(elements.appFontScalePercent);
 });
 document.querySelectorAll("button[data-rights-dashboard-mode]").forEach((button) => button.addEventListener("click", () => setRightsDashboardMode(button.dataset.rightsDashboardMode)));
 elements.refreshPersonnelRulesDashboard?.addEventListener("click", loadPersonnelRulesDashboard);
@@ -43750,6 +44027,6 @@ window.addEventListener("focus", () => {
 });
 
 personnelLearningAssessmentEditor=GrabenplanerLearningAssessment.editor(document.getElementById("personnelLearningAssessmentEditor"));
-personnelLearningAssessmentPanel=GrabenplanerLearningAssessment.init({api});
+personnelLearningAssessmentPanel=GrabenplanerLearningAssessment.init({api,printPdf:openPersonnelLearningConfirmation});
 
  document.getElementById("salesArticlePdfButton")?.addEventListener("click",()=>state.salesArticleCatalog.tools?.openPdf());

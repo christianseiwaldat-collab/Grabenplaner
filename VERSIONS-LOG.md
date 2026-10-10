@@ -1,8 +1,8 @@
 # Versionsstatus
 
-## v0.92.79 Beta · Quellstand
+## v0.92.80 Beta · Quellstand
 
-Artikel-Auswertung und gemeinsame Druckvorschau, ABC-Analyse, Abverkaufs-Simulation und Maßnahmenliste sowie kompakte Verkaufsansichten und gestaltbare Dashboard-Felder.
+Datenqualität, gemeinsame Druckvorschau und verlässliche Speicherzustände.
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease

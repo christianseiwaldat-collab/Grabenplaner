@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="/table-layout.css" />
     <link rel="stylesheet" href="/sales-price-label-search-window.css" />
     <link rel="stylesheet" href="/gp-window.css" />
+    <link rel="stylesheet" href="/gp-print-window.css" />
   </head>
   <body>
     <div class="deployment-banner hidden" id="portalDeploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
@@ -40,7 +41,7 @@
           <button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button>
           <button class="text-button header-action portal-settings-shortcut hidden" id="portalSettingsShortcut" type="button" aria-label="Einstellungen öffnen"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 8.2A3.8 3.8 0 1 0 12 15.8 3.8 3.8 0 0 0 12 8.2ZM19 12a7.2 7.2 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7.7 7.7 0 0 0-2.1-1.2L14 3h-4l-.4 2.7a7.7 7.7 0 0 0-2.1 1.2l-2.4-1-2 3.4 2 1.5A7.2 7.2 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.4-1a7.7 7.7 0 0 0 2.1 1.2L10 21h4l.4-2.7a7.7 7.7 0 0 0 2.1-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" /></svg><span class="portal-settings-shortcut-label">Einstellungen</span></button>
           <button class="text-button header-action personal-actions-shortcut" id="personalActionsButton" type="button" aria-label="Meine letzten Aktionen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 7v5l3 2M21 12a9 9 0 1 1-2.64-6.36M18 3v4h-4" /></svg><span>Meine Aktionen</span></button>
-          <button class="text-button header-action" id="logoutButton" type="button">Abmelden</button>
+          <button class="text-button header-action" id="logoutButton" data-gp-print-fallback type="button">Abmelden</button>
         </div>
       </header>
       <p class="portal-logout-status message error hidden" id="portalLogoutStatus" role="alert"></p>
@@ -857,6 +858,13 @@
     <script src="/sales-price-label-editor.js"></script>
     <script src="/gp-window-preferences.js"></script>
     <script src="/gp-window.js"></script>
+    <script src="/sales-article-report-pdf-preview.js"></script>
+    <script src="/gp-print-window.js"></script>
+    <script src="/gp-existing-pdf-window.js"></script>
+    <script src="/gp-document-print.js"></script>
+    <script src="/gp-price-label-pdf.js"></script>
+    <script src="/gp-branch-order-pdf-window.js"></script>
+    <script src="/gp-receipt-print.js"></script>
     <script src="/table-layout.js"></script>
     <script src="/sales-price-label-project.js"></script>
     <script src="/sales-price-label-working-draft.js"></script>

@@ -184,7 +184,12 @@ test("Verkaufsanalyse: Archiv, Sortierung, Grafikvarianten und PDF-Export sind i
   assert.ok(section.indexOf('id="salesReportArchive"') > section.indexOf('id="salesReportTableBody"'));
   assert.match(app, /function changeSalesAnalyticsTableSort\(key, hasGrossMargin\)/);
   assert.match(app, /data-sales-table-sort/);
-  assert.match(app, /function downloadSalesAnalyticsChartsPdf\(pdfOptions = state\.salesAnalytics\.pdfOptions\)/);
+  const printAdapter = fs.readFileSync(path.join(root, "public", "gp-sales-analytics-print.js"), "utf8");
+  assert.match(html, /<script src="\/gp-sales-analytics-print\.js"><\/script>/);
+  assert.match(app, /window\.GpSalesAnalyticsPrint\.mount/);
+  assert.match(app, /salesReportChartPdfButton\?\.addEventListener\("click", openSalesAnalyticsPdfOptions\)/);
+  assert.match(app, /ensureSalesAnalyticsPrintWindow\(\)\.open\(\{ target: elements\.salesReportChartPdfButton \}\)/);
+  assert.match(printAdapter, /url:'\/api\/sales-analytics\/charts\.pdf'/);
   assert.match(server, /app\.post\("\/api\/sales-analytics\/charts\.pdf"/);
   assert.match(server, /salesAnalyticsRequestContext\(request, \{ csrf: true \}\)/);
   assert.match(server, /projectedSalesAnalyticsChartsPdfData/);

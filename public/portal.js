@@ -435,7 +435,89 @@ async function api(url, options = {}) {
 }
 
 const branchSalesWorkspaces = new Map();
+const branchOrderPrintWindows = new Map(), branchOrderPdfOwners = new Map(), branchOrderPdfRequests = new Map();
 let portalWindowManager=null,portalWindowActor='';
+let portalDocumentPrint=null, portalDocumentOwner='', loanConfirmationPrintBridge=null, loanConfirmationRequestGeneration=0;
+
+function portalDocumentActorKey() {
+  const user = portalUser();
+  return portalState.session?.authenticated ? JSON.stringify([user?.employeeNumber, user?.accountId, user?.sessionKind, user?.accountType,
+    user?.isEmployee, user?.role, user?.active, user?.permissions, user?.scopes, user?.mustChangePassword, user?.homeLocationId]) : '';
+}
+
+function portalDocumentPrintContext(url) {
+  if (url.includes('/self/time-record-statements/')) return {
+    period:portalState.timePeriod, anchor:portalState.timePeriodAnchor, month:portalState.timeRecordStatementsMonth,
+    readable:hasPortalPermission('own_time_record:read'),
+    statements:(portalState.timeRecordStatements||[]).map(item=>[item.id,item.revision,item.status,item.downloadAvailable]),
+  };
+  if (url.includes('/loans/')) return {location:portalState.loanStatus?.location?.id,
+    scope:el.loanScope?.value || '', status:el.loanStatusFilter?.value || '', readable:loanCapabilityEnabled()};
+  return {homeLocation:portalUser()?.homeLocationId};
+}
+
+function clearLoanConfirmationPrintState() {
+  loanConfirmationPrintBridge=null;
+  portalState.activeLoanConfirmation=null;
+  if(el.loanConfirmationDialog?.open)el.loanConfirmationDialog.close();
+  if(el.loanConfirmationNote)el.loanConfirmationNote.value='';
+}
+
+function loanConfirmationPrintSignature(value) {
+  return JSON.stringify([value?.id,value?.loanId,value?.status,value?.expectedRevision,value?.expiresAt,value?.loan?.revision,
+    value?.witness?.employeeNumber,(value?.photoAttachments||value?.loan?.photoAttachments||[]).map(item=>[item.id,item.revision,item.downloadUrl])]);
+}
+
+function portalLoanDocumentPrintBridge({url,target}) {
+  const dialog=el.loanConfirmationDialog,confirmation=portalState.activeLoanConfirmation;
+  if(!dialog?.open || !dialog.contains(target) || !confirmation || !/^\/api\/portal\/v1\/loans\/photo-attachments\/[A-Za-z0-9_-]+\/download$/.test(url))return null;
+  const attachments=confirmation.photoAttachments||confirmation.loan?.photoAttachments||[];
+  if(!attachments.some(item=>item.downloadUrl===url || '/api/portal/v1/loans/photo-attachments/'+encodeURIComponent(item.id)+'/download'===url))return null;
+  const actor=portalDocumentActorKey(),page=portalState.activeTab,signature=loanConfirmationPrintSignature(confirmation);
+  const canUse=()=>actor===portalDocumentActorKey() && loanCapabilityEnabled()
+    && Date.parse(confirmation.expiresAt)>Date.now()
+    && signature===loanConfirmationPrintSignature(portalState.activeLoanConfirmation)
+    && portalState.pendingLoanConfirmations.some(item=>item.status==='pending' && loanConfirmationPrintSignature(item)===signature);
+  let bridge;
+  const release=restore=>{
+    if(loanConfirmationPrintBridge!==bridge)return;
+    const valid=restore && canUse() && portalState.activeTab===page;
+    loanConfirmationPrintBridge=null;
+    if(valid){if(!dialog.open)dialog.showModal();}
+    else if(portalState.activeLoanConfirmation?.id===confirmation.id)clearLoanConfirmationPrintState();
+  };
+  bridge={target:window.GpDocumentPrint.visibleTarget(document,el.loanTab),canUse,
+    onClose(){release(true);},onDiscard(){release(false);}};
+  loanConfirmationPrintBridge=bridge;
+  dialog.close();
+  return bridge;
+}
+
+function syncPortalDocumentPrint() {
+  if (!window.GpDocumentPrint || !portalWindowManager) return;
+  const owner=portalDocumentActorKey();
+  if(owner!==portalDocumentOwner){
+    portalDocumentOwner=owner;portalDocumentPrint?.reset();clearLoanConfirmationPrintState();
+    portalState.pendingLoanConfirmations=[];portalState.loanConfirmationLoading=false;loanConfirmationRequestGeneration++;
+  }
+  if (!portalDocumentPrint) portalDocumentPrint = window.GpDocumentPrint.mount({
+    id:'portal-document-pdf',document,key:portalDocumentActorKey,page:()=>portalState.activeTab,
+    canUse:(page,url)=>Boolean(portalState.session?.authenticated && !portalUser()?.mustChangePassword && portalTabAllowed(page)
+      && (!url.includes('/loans/') || loanCapabilityEnabled())
+      && (!url.includes('/self/time-record-statements/') || hasPortalPermission('own_time_record:read'))),
+    context:portalDocumentPrintContext,beforeOpen:portalLoanDocumentPrintBridge,
+    rawApi:(url,options)=>api(url,{...options,responseType:'response'}),windowPreferences:()=>portalWindowManager.preferences,
+  });
+  portalDocumentPrint.sync();
+}
+
+function openPortalLearningConfirmation(input) {
+  syncPortalWindows();
+  const target=window.GpDocumentPrint?.visibleTarget(document,input.target);
+  return portalDocumentPrint?.open(input.url,target,input.title,input.canUse,
+    {target,canUse:input.canUse,onClose:input.onClose,onDiscard:input.onDiscard}) || false;
+}
+
 function syncPortalWindows(){
   if(!window.GpWindow)return;
   const user=portalUser();
@@ -461,6 +543,10 @@ function syncPortalWindows(){
       error:error=>message(el.portalLogoutStatus,error.message,true)});
   }
   if(key!==portalWindowActor){portalWindowActor=key;portalWindowManager.synchronize();}
+  for(const workspace of branchSalesWorkspaces.values())workspace.syncPrint();
+  syncBranchOrderPrintWindows();
+  branchPriceLabelsWorkspace?.syncPrint?.();
+  syncPortalDocumentPrint();
 }
 let branchPriceLabelsWorkspace = null;
 let branchPriceLabelsWorkspaceActive = false;
@@ -484,7 +570,8 @@ function syncBranchSalesWorkspaces(tab = null) {
     document.getElementById(name + "View")?.classList.toggle("active", active);
     if (active) {
       if (!branchSalesWorkspaces.has(name)) branchSalesWorkspaces.set(name, window.GrabenplanerBranchSales.mount(
-        document.getElementById(name + "Workspace"), { kind, api, getUser: portalUser, lineFormat: window.GrabenplanerReceiptLineFormat }));
+        document.getElementById(name + "Workspace"), { kind, api, rawApi: (url,options) => api(url,{...options,responseType:'response'}), getUser: portalUser, lineFormat: window.GrabenplanerReceiptLineFormat,
+          active: () => portalState.activeTab === name, windowPreferences: portalWindowManager?.preferences }));
       void branchSalesWorkspaces.get(name).load();
     } else branchSalesWorkspaces.get(name)?.suspend();
   }
@@ -2690,8 +2777,10 @@ function setTab(tab) {
   if (tab === "loan" && !loanCapabilityEnabled()) tab = defaultPortalTab();
   const tabChanged = portalState.activeTab !== tab;
   portalState.activeTab = tab;
+  syncPortalDocumentPrint();
   rememberPortalTab(tab);
   syncBranchSalesWorkspaces(tab);
+  syncBranchOrderPrintWindows();
   document.body.classList.toggle("portal-settings-active", tab === "settings" && isMobileUi());
   syncPortalTabButtons(tab);
   el.portalSettingsShortcut?.classList.toggle("active", tab === "settings");
@@ -3052,29 +3141,86 @@ function branchOrderPdfHref(order, { download = false } = {}) {
   return `/api/portal/v1/branch-orders/${encodeURIComponent(id)}/pdf${download ? "?download=1" : ""}`;
 }
 
+function branchOrderPdfScope() { return String(portalUser()?.homeLocationId || ''); }
+function branchOrderPdfAllowed(kind) {
+  return Boolean(portalState.session?.authenticated && !portalUser()?.mustChangePassword
+    && (kind === 'submit' ? branchOrderCapabilityEnabled() : branchOrderManagementEnabled()));
+}
+function branchOrderPdfOwner() { return JSON.stringify([portalWindowActor, branchOrderPdfScope()]); }
+function branchOrderPdfActive(kind) { return portalState.activeTab === (kind === 'submit' ? 'branchOrders' : 'settings'); }
+function syncBranchOrderPrintWindows() {
+  for (const kind of ['submit', 'manage']) {
+    if (branchOrderPdfOwners.has(kind) && branchOrderPdfOwners.get(kind) !== branchOrderPdfOwner()) {
+      branchOrderPdfOwners.delete(kind);
+      if (kind === 'submit') { portalState.branchOrderPortalHistory = []; renderBranchOrderPortalHistory(); }
+      else { portalState.branchOrderHistory = []; renderBranchOrderHistory(); }
+    }
+  }
+  for (const [kind, controller] of branchOrderPrintWindows) {
+    if (branchOrderPdfActive(kind)) controller.activate(); else controller.deactivate();
+    controller.sync();
+  }
+}
+function openBranchOrderPdf(kind, orderId, target) {
+  syncPortalWindows();
+  if (!branchOrderPdfAllowed(kind) || !branchOrderPdfActive(kind) || branchOrderPdfOwners.get(kind) !== branchOrderPdfOwner()) return;
+  const orders = () => (kind === 'submit' ? portalState.branchOrderPortalHistory : portalState.branchOrderHistory) || [];
+  const order = orders().find(value => String(value.id) === String(orderId));
+  if (!order) return;
+  let controller = branchOrderPrintWindows.get(kind);
+  if (!controller) {
+    controller = window.GpBranchOrderPdfWindow.mount({
+      document, id: 'portal-branch-order-' + kind + '-pdf', key: () => portalWindowActor,
+      scopeKey: branchOrderPdfScope, orders,
+      canUse: () => branchOrderPdfAllowed(kind) && branchOrderPdfOwners.get(kind) === branchOrderPdfOwner(),
+      active: () => branchOrderPdfActive(kind), windowPreferences: portalWindowManager?.preferences,
+      rawApi: (url, init) => api(url, { ...init, responseType: 'response' }),
+    });
+    branchOrderPrintWindows.set(kind, controller);
+  }
+  controller.activate(); controller.open(order, target);
+}
+
+// A history response belongs to the actor and location that requested it.
+// Page navigation retains its original-PDF selection; a new actor never does.
+async function loadBranchOrderPdfHistory(kind) {
+  syncPortalWindows();
+  if (!branchOrderPdfAllowed(kind)) return;
+  const owner = branchOrderPdfOwner(), ticket = (branchOrderPdfRequests.get(kind) || 0) + 1;
+  branchOrderPdfRequests.set(kind, ticket);
+  const current = () => owner === branchOrderPdfOwner() && ticket === branchOrderPdfRequests.get(kind) && branchOrderPdfAllowed(kind);
+  try {
+    const result = await api('/api/portal/v1/branch-orders/history?limit=50');
+    if (!current()) return;
+    branchOrderPdfOwners.set(kind, owner);
+    if (kind === 'submit') { portalState.branchOrderPortalHistory = result.orders || []; renderBranchOrderPortalHistory(); }
+    else { portalState.branchOrderHistory = result.orders || []; renderBranchOrderHistory(); }
+    syncBranchOrderPrintWindows();
+  } catch (error) {
+    if (!current()) return;
+    if ([401, 403].includes(error.status)) {
+      branchOrderPdfOwners.delete(kind); branchOrderPrintWindows.get(kind)?.reset();
+      if (kind === 'submit') portalState.branchOrderPortalHistory = []; else portalState.branchOrderHistory = [];
+    }
+    const host = kind === 'submit' ? el.branchOrderPortalHistoryList : el.branchOrderHistoryList;
+    if (host) host.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
+  }
+}
+
 function renderBranchOrderPortalHistory() {
   if (!el.branchOrderPortalHistoryList) return;
   const orders = portalState.branchOrderPortalHistory || [];
   el.branchOrderPortalHistoryList.innerHTML = orders.length ? orders.map((order) => {
-    const openPdf = branchOrderPdfHref(order);
-    const downloadPdf = branchOrderPdfHref(order, { download: true });
     return `<article class="branch-order-history-entry">
       <div><strong>KW ${Number(order.calendarWeek)} · ${esc(order.selectedEmployeeName)} · MA-Nr. ${esc(order.selectedEmployeeNumber)}</strong><small>${esc(branchOrderTimestampText(order.submittedAt))} · ${esc(branchOrderStatusText(order.status))}</small></div>
       <ul>${(order.lines || []).map((line) => `<li>${esc(line.groupTitle)} · ${esc(line.itemTitle)}: ${esc(Number(line.quantity).toLocaleString("de-AT", { maximumFractionDigits: 3 }))} ${esc(line.unit)}${line.note ? ` · ${esc(line.note)}` : ""}</li>`).join("")}</ul>
-      <nav class="branch-order-history-actions"><a class="text-button" href="${esc(openPdf)}" target="_blank" rel="noopener">PDF öffnen</a><a class="text-button" href="${esc(downloadPdf)}">Herunterladen</a></nav>
+      <nav class="branch-order-history-actions"><button class="text-button" type="button" data-branch-order-pdf="${esc(order.id)}">PDF-Vorschau &amp; Download</button></nav>
     </article>`;
   }).join("") : '<p class="empty-state">Für diesen Standort wurden noch keine Bestellungen gespeichert.</p>';
 }
 
 async function loadBranchOrderPortalHistory() {
-  if (!branchOrderCapabilityEnabled()) return;
-  try {
-    const result = await api("/api/portal/v1/branch-orders/history?limit=50");
-    portalState.branchOrderPortalHistory = result.orders || [];
-    renderBranchOrderPortalHistory();
-  } catch (error) {
-    el.branchOrderPortalHistoryList.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
-  }
+  return loadBranchOrderPdfHistory('submit');
 }
 
 async function submitBranchOrder(event) {
@@ -3462,26 +3608,17 @@ function renderBranchOrderHistory() {
   if (!el.branchOrderHistoryList) return;
   const orders = portalState.branchOrderHistory || [];
   el.branchOrderHistoryList.innerHTML = orders.length ? orders.map((order) => {
-    const openPdf = branchOrderPdfHref(order);
-    const downloadPdf = branchOrderPdfHref(order, { download: true });
     return `<article class="branch-order-history-entry">
     <div><strong>KW ${Number(order.calendarWeek)} · ${esc(order.selectedEmployeeName)} · MA-Nr. ${esc(order.selectedEmployeeNumber)}</strong><small>${esc(branchOrderTimestampText(order.submittedAt))} · ${esc(branchOrderStatusText(order.status))}</small></div>
     <small>Erfasst über ${esc(order.submittedByLogin || "Filialkonto")}${order.deliveries?.[0]?.senderEmail ? ` · Absender ${esc(order.deliveries[0].senderEmail)}` : ""}</small>
     <ul>${(order.lines || []).map((line) => `<li>${esc(line.groupTitle)} · ${esc(line.itemTitle)}: ${esc(Number(line.quantity).toLocaleString("de-AT", { maximumFractionDigits: 3 }))} ${esc(line.unit)}${line.note ? ` · ${esc(line.note)}` : ""}</li>`).join("")}</ul>
-    <nav class="branch-order-history-actions"><a class="text-button" href="${esc(openPdf)}" target="_blank" rel="noopener">PDF öffnen</a><a class="text-button" href="${esc(downloadPdf)}">Herunterladen</a></nav>
+    <nav class="branch-order-history-actions"><button class="text-button" type="button" data-branch-order-pdf="${esc(order.id)}">PDF-Vorschau &amp; Download</button></nav>
   </article>`;
   }).join("") : '<p class="empty-state">Für diesen Standort wurden noch keine Bestellungen gespeichert.</p>';
 }
 
 async function loadBranchOrderHistory() {
-  if (!branchOrderManagementEnabled()) return;
-  try {
-    const result = await api("/api/portal/v1/branch-orders/history?limit=50");
-    portalState.branchOrderHistory = result.orders || [];
-    renderBranchOrderHistory();
-  } catch (error) {
-    el.branchOrderHistoryList.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
-  }
+  return loadBranchOrderPdfHistory('manage');
 }
 
 async function saveBranchOrderSettings() {
@@ -7451,7 +7588,7 @@ async function runLoanManagementAction(action) {
 }
 
 function showLoanConfirmation(confirmation) {
-  if (!confirmation || !el.loanConfirmationDialog || el.loanConfirmationDialog.open) return;
+  if (loanConfirmationPrintBridge || !confirmation || !el.loanConfirmationDialog || el.loanConfirmationDialog.open) return;
   portalState.activeLoanConfirmation = confirmation;
   const borrower = confirmation.loan?.borrower || {};
   el.loanConfirmationTitle.textContent = `Rücknahme von ${borrower.name || borrower.employeeNumber || "Teammitglied"}`;
@@ -7479,22 +7616,27 @@ function showLoanConfirmation(confirmation) {
 }
 
 function presentNextLoanConfirmation() {
-  if (el.loanConfirmationDialog?.open) return;
+  if (loanConfirmationPrintBridge || el.loanConfirmationDialog?.open) return;
   const next = portalState.pendingLoanConfirmations.find((confirmation) => confirmation.status === "pending");
   if (next) showLoanConfirmation(next);
 }
 
 async function loadPendingLoanConfirmations({ present = true } = {}) {
   if (!loanCapabilityEnabled() || portalState.loanConfirmationLoading) return;
+  const actor=portalDocumentActorKey(),generation=++loanConfirmationRequestGeneration;
+  const owned=()=>generation===loanConfirmationRequestGeneration && actor===portalDocumentActorKey();
+  const current=()=>owned() && loanCapabilityEnabled();
   portalState.loanConfirmationLoading = true;
   try {
-    const result = await api("/api/portal/v1/loans/return-confirmations/pending");
+    const result = await api('/api/portal/v1/loans/return-confirmations/pending');
+    if(!current())return;
     portalState.pendingLoanConfirmations = Array.isArray(result.confirmations) ? result.confirmations : [];
+    syncPortalDocumentPrint();
     if (present) presentNextLoanConfirmation();
   } catch {
-    portalState.pendingLoanConfirmations = [];
+    if(current()){portalState.pendingLoanConfirmations=[];syncPortalDocumentPrint();}
   } finally {
-    portalState.loanConfirmationLoading = false;
+    if(owned())portalState.loanConfirmationLoading=false;
   }
 }
 
@@ -7845,6 +7987,14 @@ el.saveBranchOrderSettings?.addEventListener("click", saveBranchOrderSettings);
 el.branchPortalDisplaySettingsForm?.addEventListener("submit", saveBranchPortalDisplaySettings);
 el.refreshBranchOrderHistory?.addEventListener("click", loadBranchOrderHistory);
   el.branchOrderPortalHistoryRefresh?.addEventListener("click", loadBranchOrderPortalHistory);
+el.branchOrderPortalHistoryList?.addEventListener('click', event => {
+  const button = event.target.closest?.('[data-branch-order-pdf]');
+  if (button) openBranchOrderPdf('submit', button.dataset.branchOrderPdf, button);
+});
+el.branchOrderHistoryList?.addEventListener('click', event => {
+  const button = event.target.closest?.('[data-branch-order-pdf]');
+  if (button) openBranchOrderPdf('manage', button.dataset.branchOrderPdf, button);
+});
 function moveBranchOrderDraftEntry(entries, id, direction) {
   const index = entries.findIndex((entry) => (typeof entry === "string" ? entry : entry.id) === id);
   const target = index + Number(direction || 0);
@@ -8306,4 +8456,4 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
 initializeDateRangeCalendar();
 initialize();
 
-portalLearningAssessmentPanel=GrabenplanerLearningAssessment.init({api});
+portalLearningAssessmentPanel=GrabenplanerLearningAssessment.init({api,printPdf:openPortalLearningConfirmation});

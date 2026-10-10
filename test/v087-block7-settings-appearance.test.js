@@ -112,8 +112,8 @@ test("v0.87 Block 7: Grundeinstellungen verwenden Accordions und eine globale nu
   assert.match(script, /--app-font-scale-inverse/);
   assert.doesNotMatch(script, /--app-font-scale-(?:width|min-height)/);
   assert.match(script, /state\.persistedAppFontScalePercent/);
-  assert.match(script, /if \(!silent && canSaveGeneralSettings && elements\.appFontScalePercent\)/);
-  assert.match(script, /if \(!silent && canSaveBranding && state\.brandingFormDirty\)/);
+  assert.match(script, /const saveFont = !silent && canSaveGeneralSettings && elements\.appFontScalePercent;/);
+  assert.match(script, /const saveBranding = !silent && canSaveBranding && state\.brandingFormDirty;/);
   assert.match(styles, /body\s*\{[^}]*font-family:[^;}]*sans-serif[^}]*zoom:\s*var\(--app-font-scale\)/);
   assert.match(styles, /min-width:\s*calc\(320px \* var\(--app-font-scale-inverse\)\)/);
   assert.match(styles, /\.settings-two-column\s*\{[^}]*grid-auto-rows:\s*max-content[^}]*align-items:\s*start/);

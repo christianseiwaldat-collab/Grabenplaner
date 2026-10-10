@@ -10,7 +10,7 @@
   const allowed = (tab, user) => user?.isEmployee === false && user.accountType === "branch"
     && user.permissions?.includes(permissions[tab]) === true
     && user.scopes?.length === 1 && !!user.scopes[0].locationId && !user.scopes[0].departmentId;
-  const owner = user => JSON.stringify([user?.accountId, user?.accountType, user?.isEmployee, user?.permissions, user?.scopes]);
+  const owner = user => JSON.stringify([user?.accountId, user?.accountType, user?.isEmployee, user?.permissions, user?.scopes, user?.id, user?.sessionKind, user?.mustChangePassword]);
   const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   const money = value => value === null || value === undefined || value === "" ? "Nicht hinterlegt"
     : Number.isFinite(Number(value)) ? new Intl.NumberFormat("de-AT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value)) : "–";
@@ -74,13 +74,16 @@
         <p>${esc(row.quantity)} × ${esc(money(row.sourcePrice))} = <b>${esc(lines?.money(lines.total(row.sourcePrice, row.quantity)) || "–")}</b></p></article>`).join("")}</div>`;
   }
 
-  function mount(root, { kind, api, getUser, lineFormat, download = saveBlob,
+  function mount(root, { kind, api, rawApi, getUser, lineFormat, active = () => true, windowPreferences, scale,
     scannerFactory=options=>(typeof module==='object'&&module.exports?require('./article-code-scanner'):globalThis.GrabenplanerArticleScanner).create(options) }) {
     const tab = kind === "articles" ? "branchArticles" : "branchReceipts";
     const identity = owner(getUser());
     let disposed = false, generation = 0, busy = false, downloading = false, paused = false;
     let initialized = false, loading = null, available = false, offset = 0, total = 0, next = null, detailId = null;
-    let detailGeneration = 0, today = "", context = null, scanner = null;
+    let detailGeneration = 0, today = "", context = null, scanner = null, pdfWindow = null, pdfActive = true;
+    const pdfAllowed = () => valid(generation) && available && !getUser()?.mustChangePassword;
+    const pdfContext = () => JSON.stringify({generation,source:context?.sourceLabel,coverage:context?.coverageLabel,locations:[...selectedLocations].sort()});
+    function syncPrint(){if(!pdfWindow)return;if(pdfActive&&active())pdfWindow.activate();else pdfWindow.deactivate();pdfWindow.sync();}
     let selectedLocations = new Set();
     const articles = new Map(), pendingArticles = new WeakSet();
     const valid = ticket => !disposed && ticket === generation && owner(getUser()) === identity && allowed(tab, getUser());
@@ -96,7 +99,7 @@
     }
     function closeDetail() { detailId = null; detailGeneration++; el("dialog")?.close(); el("detail-body")?.replaceChildren(); }
     function invalidate() {
-      generation++; busy = false; paused = true; downloading = false;
+      generation++; pdfWindow?.reset(); busy = false; paused = true; downloading = false;
       offset = total = 0; next = null; closeDetail(); el("results").replaceChildren(); actions();
       articles.clear();
     }
@@ -133,7 +136,7 @@
       el("pause").addEventListener("click", () => { paused = true; message("Suche pausiert nach diesem Abschnitt …"); });
       el("close")?.addEventListener("click", closeDetail);
       el("dialog")?.addEventListener("close", () => { detailId = null; detailGeneration++; el("detail-body").replaceChildren(); });
-      el("detail-pdf")?.addEventListener("click", () => { if (detailId) void pdf(detailId); });
+      el("detail-pdf")?.addEventListener("click", () => { if (detailId) void pdf(detailId,el("detail-pdf")); });
       root.addEventListener("click", click);
       root.addEventListener('toggle', articleToggle, true);
       root.addEventListener('input', calculate);
@@ -183,7 +186,8 @@
       el("from").max = el("to").max = today;
     }
     async function load() {
-      if (disposed || initialized) return;
+      if (disposed) return;pdfActive=true;syncPrint();
+      if (initialized) return;
       if (loading) return loading;
       const live = () => valid(generation);
       if (!root.firstChild) formMarkup();
@@ -206,7 +210,7 @@
     }
     async function search(page) {
       if (busy || !available || !valid(generation)) return;
-      const ticket = ++generation;
+      const ticket = ++generation;pdfWindow?.reset();
       busy = true; paused = false; downloading = false; closeDetail(); articles.clear(); el("results").replaceChildren(); message("Suche läuft …"); actions();
       try {
         if (kind === "articles") {
@@ -245,15 +249,15 @@
         el("detail-body").innerHTML = receiptDetail(result.items[0], lineFormat); el("detail-pdf").disabled = downloading;
       } catch (error) { if (valid(ticket) && detailTicket === detailGeneration) { detailId = null; el("detail-body").textContent = error.message; } }
     }
-    async function pdf(id) {
-      if (downloading || !valid(generation)) return;
-      const ticket = generation; downloading = true; actions(); message("PDF wird erstellt …");
+    function pdf(id,target) {
+      if (!id || !pdfAllowed() || !pdfActive || !active()) return;
       try {
-        const blob = await api("/api/portal/v1/branch-receipts/export.pdf", { method: "POST", body: JSON.stringify({ ids: [id] }), responseType: "blob" });
-        if (!valid(ticket)) return;
-        download(blob, "Beleginformation-keine-Rechnung.pdf"); message("PDF-Download gestartet.");
-      } catch (error) { if (valid(ticket)) { message(error.message, true); if (el("dialog")?.open) el("detail-body").textContent = error.message; } }
-      finally { if (valid(ticket)) { downloading = false; actions(); } }
+        if(el('dialog')?.open){closeDetail();target=el('search');}
+        pdfWindow ||= root.ownerDocument.defaultView.GpReceiptPrint.mount({document:root.ownerDocument,
+          rawApi:rawApi||((url,options)=>api(url,{...options,responseType:'response'})),key:()=>owner(getUser()),
+          id:'branch-receipt-pdf',endpoint:'/api/portal/v1/branch-receipts/export.pdf',canUse:pdfAllowed,active:()=>pdfActive&&active(),contextKey:pdfContext,windowPreferences,scale});
+        pdfWindow.open([id],target);
+      } catch(error) { if(valid(generation))message(error.message,true); }
     }
     async function articleToggle(event) {
       const card = event.target;
@@ -299,19 +303,14 @@
         stock.dataset.open = String(open); stock.dataset.dismissed = String(!open); button.setAttribute('aria-expanded', String(open));
       }
       if (button.dataset.detail) void detail(button.dataset.detail);
-      if (button.dataset.pdf) void pdf(button.dataset.pdf);
+      if (button.dataset.pdf) void pdf(button.dataset.pdf,button);
     }
-    return { load, suspend() { paused = true; closeDetail(); scanner?.close(); }, destroy() {
+    return { load, syncPrint, suspend() { pdfActive=false;pdfWindow?.deactivate();paused = true; closeDetail(); scanner?.close(); }, destroy() {
       scanner?.destroy();scanner=null;
-      disposed = true; generation++; closeDetail(); articles.clear(); root.removeEventListener("click", click);
+      disposed = true; pdfWindow?.destroy();generation++; closeDetail(); articles.clear(); root.removeEventListener("click", click);
       root.removeEventListener('toggle', articleToggle, true); root.removeEventListener('input', calculate); root.replaceChildren(); context = null;
       root.removeEventListener('keydown', stockKey); root.removeEventListener('mouseout', stockLeave);
     } };
-  }
-  function saveBlob(blob, name) {
-    const url = URL.createObjectURL(blob), link = document.createElement("a");
-    link.href = url; link.download = name; document.body.append(link); link.click(); link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
   return { allowed, owner, mount, articleRows, articleBody, articleNumber, receiptRows, receiptDetail };
 }));

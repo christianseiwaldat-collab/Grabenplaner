@@ -5133,6 +5133,12 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 .system-center-card-checks li > [data-notification-receipt-confirm] { grid-column:2; justify-self:start; min-width:0; max-width:100%; white-space:normal; }
 .system-center-card-checks li small { display:block; margin-top:3px; line-height:1.4; }
 .system-center-factor { scroll-margin-top:100px; }
+.system-center-check-points { color:var(--rd-text); font-weight:800; }
+.system-center-check-code { margin-top:5px; font-size:inherit; }
+.system-center-check-code summary { cursor:pointer; }
+.system-center-check-code code { display:block; margin-top:4px; overflow-wrap:anywhere; white-space:normal; }
+.system-center-index-explanation { padding:12px 16px; border:1px solid var(--rd-line); border-radius:13px; background:var(--rd-surface); color:var(--rd-text); }
+.system-center-index-explanation p { margin:5px 0 0; font-size:10px; line-height:1.5; overflow-wrap:anywhere; }
 .system-center-factor > footer { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:7px; margin-top:auto; padding-top:10px; border-top:1px solid var(--rd-line); }
 .system-center-factor > footer > small { color:var(--rd-muted); font-size:7px; }
 .system-center-history { padding:18px; border:1px solid var(--rd-line); border-radius:17px; background:var(--rd-surface); }

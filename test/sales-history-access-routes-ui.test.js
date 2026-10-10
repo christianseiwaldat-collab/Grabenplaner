@@ -107,7 +107,7 @@ test('Productive Block 2: analysis continuation has the same CSRF, CRM and perso
 
 test('Productive Block 2: UI exposes processing progress, pause/resume and no partial amount', () => {
   const result = { totals: null, coverage: { label: 'Synthetic', complete: false, counts: { records: 200, checked: 200, review: 0 }, unresolved: {}, issues: [] }, days: [] };
-  const markup = UI.renderSummary(result); assert.match(markup, /200 Datensätze verarbeitet/); assert.match(markup, /Keine freigegebene Umsatzsumme/);
+  const markup = UI.renderSummary(result); assert.match(markup, /Importierte Positionen<\/dt><dd>200/); assert.match(markup, /Auswahl noch nicht vollständig verarbeitet/); assert.match(markup, /Keine freigegebene Umsatzsumme/);
   const source = fs.readFileSync(path.join(__dirname,'../public/sales-history.js'),'utf8');assert.match(source,/Nach diesem Schritt pausieren/);assert.match(source,/Zeitraumsauswertung fortsetzen/);assert.match(source,/endpoint\('analyze'\)/);
 });
 test('Block 5: UI escapes imported text, labels page sorting and separates raw prices from checked sales', () => {

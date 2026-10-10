@@ -54,16 +54,20 @@
       ${group.lines.map(l => `<tr><td class="receipt-number">${escape(number(l.quantity))}</td><td>${escape(l.article)}</td><td>${escape(l.displayDescription || l.description)}${ArticleHistory.referenceMarkup(l.articleDisplay,l.description)}${Lines.note(l.status) ? `<small class="receipt-line-note">${escape(Lines.note(l.status))}</small>` : ''}</td><td class="receipt-number">${escape(Lines.money(l.sourcePrice))}</td><td class="receipt-number">${escape(Lines.money(Lines.total(l.sourcePrice, l.quantity)))}</td></tr>`).join('')}</tbody>`).join('')}</table></div><p class="settings-note">Gesamtpreis = Menge × Einzelpreis, je Position auf Cent gerundet. Gutscheinausgaben, Zahlungsmittel und UID-Zwischenbuchungen sind kein Warenumsatz.</p><p><strong>${row.gross == null ? 'Quellbetrag des Belegkopfs' : 'Geprüfter Warenumsatz'}: ${escape(Lines.money(row.gross ?? row.sourceAmount))} ${escape(row.currency || '')}</strong></p>${row.gross == null ? '<p class="settings-note">Belegabgleich offen. Die angezeigten Positionsbeträge sind noch keine freigegebene Umsatzsumme.</p>' : ''}`
         : `<p>${escape(row.description)} · Konto ${escape(row.account)}</p><p>Einzahlung ${escape(number(row.inflow))} · Auszahlung ${escape(number(row.outflow))}</p><p>Separate Kassenbuchung; kein zusätzlicher Verkauf.</p>`}`;
   }
-  function mount(root, { api, rawApi, calendarFactory = globalThis.GrabenplanerDateRangeCalendar?.createDateRangeCalendar } = {}) {
+  function mount(root, { api, rawApi, accessKey = () => '', canUse = () => true, active, windowPreferences, scale, calendarFactory = globalThis.GrabenplanerDateRangeCalendar?.createDateRangeCalendar } = {}) {
     let disposed = false, generation = 0, controller = null, context = null, loading = null, calendar = null;
     let from, to, query = null, next = null, resultSet = null, total = null, scanned = 0, items = [], selected = new Set(), columns = [], allColumns = [], sort = { key: 'date', direction: -1 };
+    const owner = accessKey(); let pdfWindow = null, pdfActive = true;
+    const authorized = () => !disposed && accessKey() === owner && canUse();
+    const printContext = () => JSON.stringify({ generation, query, resultSet, sources: context?.sources, selection: [...selected].sort() });
+    function syncPrint() { if (!pdfWindow) return; if (pdfActive && (active?.() ?? true)) pdfWindow.activate(); else pdfWindow.deactivate(); pdfWindow.sync(); }
     let running = false, paused = false, exporting = false, detailId = null, displayKind = null;
     let columnWidths = {}, tableResize = null, preferenceRevision = 0, preferenceSaves = Promise.resolve();
     const el = key => root.querySelector(`[data-r="${key}"]`);
     const message = text => { if (!disposed && el('message')) el('message').textContent = text; };
     function cancel() { generation++; controller?.abort(); controller = null; running = false; }
     function clear() {
-      cancel(); items = []; selected.clear(); query = next = resultSet = total = null; scanned = 0; detailId = null;
+      cancel(); pdfWindow?.reset(); items = []; selected.clear(); query = next = resultSet = total = null; scanned = 0; detailId = null;
       el('detail-dialog')?.close(); if (el('detail-body')) el('detail-body').replaceChildren(); render();
     }
     function actions() {
@@ -76,6 +80,7 @@
       const all = root.querySelector('[data-r-all]');
       if (all) { all.checked = items.length > 0 && sortedRows(items, sort).slice(0, 50).every(row => selected.has(row.id)); all.indeterminate = selected.size > 0 && !all.checked; }
       tableResize?.render();
+      syncPrint();
     }
     function render() {
       if (!context || disposed) return;
@@ -155,18 +160,16 @@
         if (!disposed && ticket === generation) { items = []; selected.clear(); next = resultSet = total = null; render(); message(error.message || 'Suche fehlgeschlagen. Bitte erneut suchen.'); }
       } finally { if (!disposed && ticket === generation) { running = false; actions(); if (resort) root.querySelector(`[data-r-sort="${sort.key}"]`)?.focus(); } }
     }
-    async function exportPdf(ids) {
-      if (exporting || !ids.length || disposed) return;
-      const ticket = generation; exporting = true; actions();
+    function exportPdf(ids, target) {
+      if (!ids.length || !authorized() || !context || !pdfActive || !(active?.() ?? true)) return;
       try {
-        const response = await rawApi('/api/receipt-search/export.pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
-        if (!response.ok) { const error = await response.json().catch(() => ({})); throw new Error(error.error || 'PDF konnte nicht erstellt werden.'); }
-        const blob = await response.blob(); if (disposed || ticket !== generation) return;
-        const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'Beleginformation-keine-Rechnung.pdf';
-        document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
-        message(`Beleginformation für ${ids.length} ausgewählte Belege/Buchungen erstellt.`);
-      } catch (error) { if (!disposed && ticket === generation) message(error.message); }
-      finally { exporting = false; if (!disposed) actions(); }
+        if (el('detail-dialog')?.open) { el('detail-dialog').close(); target = el('export'); }
+        pdfWindow ||= root.ownerDocument.defaultView.GpReceiptPrint.mount({ document: root.ownerDocument, rawApi, key: accessKey,
+          id: 'receipt-search-pdf', canUse: () => authorized() && Boolean(context?.available), active: () => pdfActive && (active?.() ?? true),
+          contextKey: printContext, windowPreferences, scale,
+          onState: value => { exporting = value.loading; if (!disposed) { el('export').disabled = exporting || !selected.size; el('export').textContent = exporting ? 'PDF wird erstellt …' : `Auswahl als PDF (${selected.size})`; } } });
+        pdfWindow.open(ids, target);
+      } catch (error) { if (authorized()) message(error.message); }
     }
     async function detail(id) {
       const ticket = generation; detailId = id; el('detail-body').textContent = 'Vollständiger Beleg wird geladen …'; el('detail-pdf').disabled = true; el('detail-dialog').showModal();
@@ -177,6 +180,7 @@
       } catch (error) { if (!disposed && ticket === generation && detailId === id) el('detail-body').textContent = error.message; }
     }
     async function load() {
+      if (disposed || !authorized()) return; pdfActive = true; syncPrint();
       if (context || disposed) return; if (loading) return loading;
       const ticket = generation; root.textContent = 'Kassenstand wird geladen …';
       loading = (async () => {
@@ -218,10 +222,10 @@
           el('source').addEventListener('change', source); el('kind').addEventListener('change', filters);
           el('more').addEventListener('click', () => void search(true)); el('pause').addEventListener('click', () => { paused = true; message('Suche pausiert nach diesem Schritt …'); });
           el('reset').addEventListener('click', () => { el('form').reset(); to = context.today; const d = new Date(to); d.setUTCDate(d.getUTCDate() - 30); from = d.toISOString().slice(0, 10); el('range').textContent = `${date(from)} – ${date(to)}`; source(); filters(); message('Suchfilter zurückgesetzt.'); });
-          el('export').addEventListener('click', () => void exportPdf([...selected])); el('unselect').addEventListener('click', () => { selected.clear(); render(); });
+          el('export').addEventListener('click', () => void exportPdf([...selected], el('export'))); el('unselect').addEventListener('click', () => { selected.clear(); render(); });
           el('detail-close').addEventListener('click', () => { detailId = null; el('detail-dialog').close(); });
           el('detail-dialog').addEventListener('close', () => { detailId = null; el('detail-body').replaceChildren(); });
-          el('detail-pdf').addEventListener('click', () => { if (detailId) void exportPdf([detailId]); });
+          el('detail-pdf').addEventListener('click', () => { if (detailId) void exportPdf([detailId], el('detail-pdf')); });
           source(); filters(); renderColumns(); render();
         } catch (error) { if (!disposed) { context = null; root.textContent = error.message || 'Kassenstand nicht verfügbar.'; } }
         finally { loading = null; }
@@ -232,7 +236,7 @@
       const button = event.target.closest('button'); if (!button || !root.contains(button)) return;
       if (button.dataset.rSort) { if (running) return; const key = button.dataset.rSort; sort = { key, direction: sort.key === key ? -sort.direction : 1 }; void search(false, true); }
       if (button.dataset.rDetail) void detail(button.dataset.rDetail);
-      if (button.dataset.rPdf) void exportPdf([button.dataset.rPdf]);
+      if (button.dataset.rPdf) void exportPdf([button.dataset.rPdf], button);
       if (button.dataset.rMove) { const key = button.dataset.rMove, direction = button.dataset.direction, i = columns.indexOf(key), j = i + Number(direction); if (i >= 0 && j >= 0 && j < columns.length) { [columns[i], columns[j]] = [columns[j], columns[i]]; renderColumns(); render(); savePreferences(); root.querySelector(`[data-r-move="${key}"][data-direction="${direction}"]:not(:disabled)`)?.focus(); } }
     }
     function change(event) {
@@ -243,7 +247,7 @@
       if (target.dataset.rColumn) { const k = target.dataset.rColumn; if (target.checked) columns.push(k); else if (columns.length > 1) columns = columns.filter(c => c !== k); else target.checked = true; renderColumns(); render(); savePreferences(); root.querySelector(`[data-r-column="${k}"]`)?.focus(); }
     }
     root.addEventListener('click', click); root.addEventListener('change', change);
-    return { load, suspend() { paused = true; el('dialog')?.close(); el('detail-dialog')?.close(); }, destroy() { disposed = true; tableResize?.destroy(); cancel(); el('dialog')?.close(); el('detail-dialog')?.close(); root.removeEventListener('click', click); root.removeEventListener('change', change); root.replaceChildren(); selected.clear(); items = []; context = null; } };
+    return { load, syncPrint, suspend() { pdfActive = false; pdfWindow?.deactivate(); paused = true; el('dialog')?.close(); el('detail-dialog')?.close(); }, destroy() { disposed = true; pdfWindow?.destroy(); tableResize?.destroy(); cancel(); el('dialog')?.close(); el('detail-dialog')?.close(); root.removeEventListener('click', click); root.removeEventListener('change', change); root.replaceChildren(); selected.clear(); items = []; context = null; } };
   }
   return { mount, renderTable, renderDetail };
 }));

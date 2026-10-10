@@ -246,7 +246,8 @@ test('Logout, unauthenticated, organizational and required-password sessions inv
     const f=learningFixture();change(f.context);f.context.syncPersonnelLearningAccessState();
     assert.deepEqual(f.cleared,{knowledge:1,assessment:1,team:1});
   }
-  assert.match(source('showLoginGate'),/state\.portalSession = null;\s*syncPersonnelLearningAccessState\(\)/);
+  const login=source('showLoginGate'),cleared=login.indexOf('state.portalSession = null;');
+  assert.ok(cleared>=0 && login.indexOf('syncPersonnelLearningAccessState()',cleared)>cleared,'Learning access must be reconciled after logout, alongside other account teardown hooks');
   assert.match(source('applyRoleVisibility'),/syncPersonnelLearningAccessState\(\)/);
 });
 test('Real knowledge, assessment and team generation guards discard late reads after actor or learning context changes',async() => {

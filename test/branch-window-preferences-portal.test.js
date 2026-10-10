@@ -13,6 +13,7 @@ test('real portal window adapter binds revisions to the actor and ignores late a
   const sandbox={window:{GpWindow:{installDocument(_doc,options){const preferences=GpWindow.createPreferences({actorKey:options.actorKey,canUse:options.canUse,
     read:options.readPreferences,write:options.writePreferences,error:options.error});return{preferences,synchronize(){preferences.invalidate();}};}}},
     document:{},portalState:state,portalUser:()=>state.session.user,el:{portalLogoutStatus:{}},message:(_node,text)=>errors.push(text),
+    branchSalesWorkspaces:new Map(),syncBranchOrderPrintWindows(){},branchPriceLabelsWorkspace:null,syncPortalDocumentPrint(){},
     api:(url,options)=>{const request=deferred();calls.push({url,options,...request});return request.promise;}};
   vm.createContext(sandbox);vm.runInContext("let portalWindowManager=null,portalWindowActor='';\n"+source.slice(start,end)+"\nglobalThis.sync=syncPortalWindows;globalThis.getManager=()=>portalWindowManager;",sandbox);
   sandbox.sync();const prefs=sandbox.getManager().preferences,loading=prefs.activate();

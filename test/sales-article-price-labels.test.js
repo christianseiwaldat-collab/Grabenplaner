@@ -1,14 +1,16 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const List=require('../public/sales-article-price-labels'),Editor=require('../public/sales-price-labels');
+const PrintFixture=require('./helpers/price-label-print-fixture');
 const template=(id,extra={})=>({id,title:'Regal '+id,creator:{label:'Synthetischer Ersteller'},received:false,canEdit:true,
  options:{labelWidthMm:90,labelHeightMm:60},updatedAt:'2026-10-02T10:00:00.000Z',...extra});
 function uiFixture({api,rawApi=async()=>{},onOpen=()=>{},articleNumber='001234'}={}){
  const node=()=>({textContent:'',innerHTML:'',disabled:false,handlers:new Map(),addEventListener(type,fn){this.handlers.set(type,fn);},removeEventListener(type){this.handlers.delete(type);},replaceChildren(){this.innerHTML='';},insertAdjacentHTML(_position,html){this.innerHTML+=html;}});
  const status=node(),results=node(),create=node();let access='account-one';
  const root={isConnected:true,classList:{add(){}},innerHTML:'',ownerDocument:{},querySelector(selector){return selector==='[role=status]'?status:selector==='.sapl-results'?results:create;},replaceChildren(){this.innerHTML='';}};
+ const prints=PrintFixture.install(root.ownerDocument);
  const view=List.mount(root,{api,rawApi,article:{articleNumber},accessKey:()=>access,onOpen});
- return {view,root,status,results,create,changeAccount(){access='account-two';},click(dataset){const button={dataset};results.handlers.get('click')({target:{closest:()=>button}});}};
+ return {view,root,status,results,create,prints,changeAccount(){access='account-two';},click(dataset){const button={dataset};results.handlers.get('click')({target:{closest:()=>button}});}};
 }
 const turn=()=>new Promise(setImmediate);
 
@@ -42,14 +44,63 @@ test('Article list uses protected visible library and keeps current article on o
  assert.equal(calls.length,1,'Opening a design does not create or change a persisted template');f.view.destroy();
 });
 
-test('Direct PDF keeps exact current article and template and drops a late response after article navigation',async()=>{
+test('Standard PDF preview keeps exact current article and template and drops a late response after article navigation',async()=>{
  let resolvePdf,call;const response=new Promise(resolve=>{resolvePdf=resolve;});
- const f=uiFixture({api:async()=>({templates:[template('shared',{received:true})]}),rawApi:(path,options)=>{call={path,options};return response;}});
+ const value={...template('shared',{received:true}),version:1,options:{...Editor.defaults}};
+ const f=uiFixture({api:async(path)=>path==='/api/sales/price-labels/library'?{templates:[value]}:value,rawApi:(path,options)=>{call={path,options};return response;}});
  await f.view.activate();f.click({saplPdf:'shared'});await turn();
  assert.equal(call.path,'/api/sales/price-labels/library/shared/article.pdf');assert.equal(call.options.method,'POST');
  assert.deepEqual(JSON.parse(call.options.body),{articleNumber:'001234'});
  f.view.destroy();assert.equal(call.options.signal.aborted,true);let blobRead=false;
  resolvePdf({blob:async()=>{blobRead=true;return new Blob();}});await turn();assert.equal(blobRead,false,'No download after leaving this article');
+});
+
+test('Article PDF uses freshly verified physical dimensions and discards a changed template before reading its PDF bytes',async()=>{
+ for(const changed of [false,true]){
+  const list={...template('shared'),version:1},fresh={...list,version:2,options:{...Editor.defaults,paper:'custom',paperWidthMm:80.25,paperHeightMm:150.5,orientation:'landscape',labelWidthMm:70,labelHeightMm:40,marginMm:3}};
+  let metadataReads=0,blobReads=0,request;
+  const bytes=new Blob(['%PDF-1.7\nExact server label bytes'],{type:'application/pdf'});
+  const f=uiFixture({api:async(path)=>path==='/api/sales/price-labels/library'?{templates:[list]}:{...fresh,version:++metadataReads===1||!changed?2:3},
+   rawApi:async(path,init)=>{request={path,init};return {ok:true,headers:new Headers({'Content-Disposition':"attachment; filename*=UTF-8''Original%20Schild.pdf"}),blob:async()=>{blobReads++;return bytes;}};}});
+  await f.view.activate();f.click({saplPdf:'shared'});await turn();
+  assert.equal(metadataReads,2);assert.deepEqual(JSON.parse(request.init.body),{articleNumber:'001234'});assert.equal(request.init.method,'POST');
+  assert.match(f.prints[0].state.payload.summary,/Papier 150,5 × 80,25 mm.*Schilder 70 × 40 mm.*100 %/);
+  if(changed){assert.equal(blobReads,0);assert.match(f.prints[0].state.error.message,/Vorlage wurde inzwischen geändert/);}
+  else{assert.equal(blobReads,1);assert.equal(f.prints[0].state.result.blob,bytes);assert.equal(f.prints[0].state.result.filename,'Original Schild.pdf');}
+  f.view.destroy();
+ }
+});
+
+test('An article print selection survives page navigation only while its template version and permissions stay current',async()=>{
+ const value={...template('own'),version:1,options:{...Editor.defaults}};let version=1,pdfCalls=0;
+ const f=uiFixture({api:async(path)=>path==='/api/sales/price-labels/library'?{templates:[{...value,version}]}:{...value,version},
+  rawApi:async()=>{pdfCalls++;return {ok:true,headers:new Headers(),blob:async()=>new Blob(['%PDF-1.7'],{type:'application/pdf'})};}});
+ await f.view.activate();f.click({saplPdf:'own'});await turn();const payload=f.prints[0].state.payload;
+ f.view.suspend();assert.equal(f.prints[0].state.payload,payload);assert.equal(f.prints[0].state.result,null);
+ await f.view.activate();await turn();assert.equal(f.prints[0].state.payload,payload);assert.equal(pdfCalls,2);
+ f.view.suspend();version=2;await f.view.activate();await turn();assert.equal(f.prints[0].state.payload,null);assert.equal(pdfCalls,2);
+ f.click({saplPdf:'own'});await turn();assert.equal(pdfCalls,3);f.changeAccount();f.view.syncPrint();assert.equal(f.prints[0].state.payload,null);f.view.destroy();
+});
+
+test('A late template metadata response cannot open a print window after article page or account changes',async()=>{
+ for(const change of ['page','actor']){
+  let resolve;const pending=new Promise(done=>{resolve=done;}),value={...template('own'),version:1,options:{...Editor.defaults}};
+  const f=uiFixture({api:async(path)=>path==='/api/sales/price-labels/library'?{templates:[value]}:pending});
+  await f.view.activate();f.click({saplPdf:'own'});await turn();if(change==='page')f.view.suspend();else f.changeAccount();
+  resolve(value);await turn();assert.equal(f.prints[0].state.payload,null);f.view.destroy();
+ }
+});
+
+test('Choosing another template immediately invalidates the old PDF while its new metadata is still loading',async()=>{
+ let oldPdf,secondMetadata,oldRequest,blobReads=0;
+ const oldPending=new Promise(resolve=>{oldPdf=resolve;}),metadataPending=new Promise(resolve=>{secondMetadata=resolve;});
+ const one={...template('one'),version:1,options:{...Editor.defaults}},two={...template('two'),version:1,options:{...Editor.defaults}};
+ const f=uiFixture({api:async(path)=>path==='/api/sales/price-labels/library'?{templates:[one,two]}:path.endsWith('/one')?one:metadataPending,
+  rawApi:async(path,init)=>{if(path.includes('/one/')){oldRequest=init;return oldPending;}return {ok:true,headers:new Headers(),blob:async()=>new Blob(['%PDF-1.7'],{type:'application/pdf'})};}});
+ await f.view.activate();f.click({saplPdf:'one'});await turn();assert.equal(f.prints[0].state.payload.metadata.id,'one');
+ f.click({saplPdf:'two'});await turn();assert.equal(oldRequest.signal.aborted,true);assert.equal(f.prints[0].state.payload,null);
+ oldPdf({ok:true,headers:new Headers(),blob:async()=>{blobReads++;return new Blob(['%PDF-1.7'],{type:'application/pdf'});}});await turn();assert.equal(blobReads,0);
+ secondMetadata(two);await turn();assert.equal(f.prints[0].state.payload.metadata.id,'two');assert.ok(f.prints[0].state.result);f.view.destroy();
 });
 
 test('Revoked account and out-of-order library responses cannot repaint the article list',async()=>{
@@ -60,6 +111,7 @@ test('Revoked account and out-of-order library responses cannot repaint the arti
 });
 
 function editorFixture(api,{rawApi=async()=>{}}={}){
+ const PrintFixture=require('./helpers/price-label-print-fixture');
  // Parse the mounted markup and keep real parent/form relationships: the editor
  // moves branding controls out of the form and builds its preview with DOM calls.
  // Unknown selectors return null so missing UI cannot silently pass a test.
@@ -67,6 +119,7 @@ function editorFixture(api,{rawApi=async()=>{}}={}){
  const dataKey=name=>name.slice(5).replace(/-([a-z])/g,(_match,c)=>c.toUpperCase());
  const events=()=>({handlers:new Map(),addEventListener(type,fn){this.handlers.set(type,fn);},removeEventListener(type){this.handlers.delete(type);}});
  const doc={activeElement:null,...events(),defaultView:{crypto:globalThis.crypto,innerWidth:1400,innerHeight:1000,...events()}},voidTags=new Set(['input','img','br','hr','meta','link']);
+ const prints=PrintFixture.install(doc);
  let root;
  const node=(tagName='',text='')=>{
   const attrs={},element={tagName,ownerDocument:doc,parentNode:null,childNodes:[],dataset:{},handlers:new Map(),checked:false,disabled:false,hidden:false,
@@ -123,7 +176,7 @@ function editorFixture(api,{rawApi=async()=>{}}={}){
  const q=key=>root.querySelector(key.startsWith('.')?key:'[data-pl="'+key+'"]');
  let account='account-one';
  const workspace=Editor.mount(root,{api,rawApi,accessKey:()=>account});
- return {workspace,settings:q('settings'),q,root,changeAccount(){account='account-two';}};
+ return {workspace,settings:q('settings'),q,root,prints,changeAccount(){account='account-two';}};
 }
 function editorApi(calls,{delayFirstDefaults}={}){
  let defaultReads=0,draft={revision:0,draft:null,lastMutationId:null};
@@ -416,7 +469,7 @@ test('An outstanding image upload blocks saving, PDF export and template replace
   assert.equal(f.q('preview').querySelector('[data-pl-element="image:'+assetId+'"]').querySelector('img').src.startsWith('/api/sales/price-labels/images/'+assetId+'?preview='),true);
   await f.q('save').handlers.get('click')();const saved=libraryWrites(f).at(-1);
   assert.equal(saved.path,'/api/sales/price-labels/library/own');assert.equal(saved.options.method,'PATCH');assert.equal(saved.body.options.imageBoxes.length,1);assert.equal(saved.body.options.imageBoxes[0].assetId,assetId);
-  await f.q('export').handlers.get('submit')({preventDefault(){}});assert.equal(rawCalls.length,2);assert.equal(rawCalls[1].path,'/api/sales/price-labels/projects/export.pdf');
+  await f.q('export').handlers.get('submit')({preventDefault(){}});await turn();assert.equal(rawCalls.length,2);assert.equal(rawCalls[1].path,'/api/sales/price-labels/projects/export.pdf');
   assert.deepEqual(JSON.parse(rawCalls[1].options.body).project.labels[0].options.imageBoxes,saved.body.options.imageBoxes);
   f.q('library-select').value='other';f.q('library-select').handlers.get('change')();assert.equal(f.q('library-title').value,'Andere Vorlage');assert.equal(Number(f.settings.elements.labelWidthMm.value),70);
  } finally {f.workspace.destroy();}
@@ -474,11 +527,42 @@ test('A queued price reload validates the latest article input instead of reusin
  assert.equal(f.q('download').disabled,true);assert.equal(f.q('refresh').disabled,false);f.workspace.destroy();
 });
 
-test('Changing price type during PDF creation also starts the queued article read after an export failure',async()=>{
+test('Changing price type during PDF creation aborts its preview and loads new prices without waiting for the old PDF',async()=>{
  let rejectExport;const f=delayedArticleFixture({rawApi:()=>new Promise((_resolve,reject)=>{rejectExport=reject;})});
  await f.workspace.load();f.settings.elements.articleNumbers.value='001234';f.q('refresh').handlers.get('click')();f.complete(0);await turn();
  const exporting=f.q('export').handlers.get('submit')({preventDefault(){}});
- f.choose('internet_3');await settlePriceDebounce();assert.equal(f.reads.length,1);
+ await turn();const signal=f.prints[0].state.signal;
+ f.choose('internet_3');await settlePriceDebounce();assert.equal(f.reads.length,2);assert.equal(signal.aborted,true);
  rejectExport(Error('PDF unavailable'));await exporting;assert.equal(f.reads.length,2);assert.equal(f.reads[1].selection.priceType,'internet_3');
  f.complete(1);await turn();assert.equal(f.q('download').disabled,false);f.workspace.destroy();
+});
+
+test('Editor print captures all individual project labels and exact paper/name settings, and a later filename edit aborts it',async()=>{
+ const calls=[],rawCalls=[];let complete,read=false;
+ const f=editorFixture(editorApi(calls),{rawApi:(url,init)=>{rawCalls.push({url,init});return new Promise(resolve=>{complete=resolve;});}});
+ await f.workspace.openArticle('001234');const fields=f.settings.elements;
+ fields.articleNumbers.value='001234 001235';f.settings.handlers.get('input')({target:fields.articleNumbers});f.q('refresh').handlers.get('click')();await turn();
+ for(const [key,value]of Object.entries({paper:'custom',paperWidthMm:80.25,paperHeightMm:150.5,orientation:'landscape',labelWidthMm:70,labelHeightMm:40,marginMm:3}))fields[key].value=value;
+ f.settings.handlers.get('input')({target:fields.labelWidthMm});
+ const file=f.q('export').elements;for(const [key,value]of Object.entries({name:'Regal Oktober',stamp:'date-suffix',position:'after',separator:'_',suffix:'Fil18'}))file[key].value=value;
+ f.q('export').handlers.get('input')({target:file.name});await f.q('export').handlers.get('submit')({preventDefault(){}});await turn();
+ assert.equal(rawCalls.length,1);assert.equal(rawCalls[0].url,'/api/sales/price-labels/projects/export.pdf');
+ const body=JSON.parse(rawCalls[0].init.body);assert.deepEqual(Object.keys(body).sort(),['name','project']);assert.equal(body.name,'Regal Oktober');assert.equal(body.project.labels.length,2);
+ assert.deepEqual(body.project.filenameOptions,{stamp:'date-suffix',position:'after',separator:'_',suffix:'Fil18'});
+ assert.equal(body.project.paper.paperWidthMm,80.25);assert.equal(body.project.paper.paperHeightMm,150.5);assert.equal(body.project.paper.orientation,'landscape');
+ assert.equal(body.project.labels[0].options.labelWidthMm,70);assert.equal(body.project.labels[1].options.labelWidthMm,90);
+ assert.match(f.prints[0].state.payload.summary,/Papier 150,5 × 80,25 mm/);assert.match(f.prints[0].state.payload.summary,/70 × 40 mm, 90 × 60 mm/);
+ file.name.value='Spätere Auswahl';f.q('export').handlers.get('input')({target:file.name});assert.equal(rawCalls[0].init.signal.aborted,true);
+ complete({ok:true,headers:new Headers(),blob:async()=>{read=true;return new Blob(['%PDF-1.7'],{type:'application/pdf'});}});await turn();
+ assert.equal(read,false);assert.equal(f.prints[0].state.result,null);assert.equal(JSON.parse(rawCalls[0].init.body).name,'Regal Oktober');f.workspace.destroy();
+});
+
+test('Editor navigation retains the captured project and print settings, while an account change purges its preview',async()=>{
+ const calls=[],rawCalls=[],bytes=new Blob(['%PDF-1.7\nSaved server bytes'],{type:'application/pdf'});
+ const f=editorFixture(editorApi(calls),{rawApi:async(url,init)=>{rawCalls.push({url,init});return {ok:true,headers:new Headers({'Content-Disposition':"attachment; filename*=UTF-8''Original%20Projekt.pdf"}),blob:async()=>bytes};}});
+ await f.workspace.openArticle('001234');await f.q('export').handlers.get('submit')({preventDefault(){}});await turn();
+ const payload=f.prints[0].state.payload;assert.equal(f.prints[0].state.result.blob,bytes);assert.equal(f.prints[0].state.result.filename,'Original Projekt.pdf');
+ f.workspace.suspend();assert.equal(f.prints[0].state.payload,payload);assert.equal(f.prints[0].state.result,null);
+ await f.workspace.load();await turn();assert.equal(f.prints[0].state.payload,payload);assert.equal(rawCalls.length,2);assert.equal(rawCalls[1].init.body,rawCalls[0].init.body);
+ f.changeAccount();f.workspace.syncPrint();assert.equal(f.prints[0].state.payload,null);await f.workspace.load();assert.equal(f.prints[0].state.payload,null);f.workspace.destroy();
 });
