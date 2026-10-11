@@ -19,6 +19,29 @@ test('only absent new settings migrate legacy order/hiding; explicit empty alway
   assert.deepEqual(model.migrate(model.empty(),legacy),model.empty());assert.deepEqual(model.migrate({damaged:true},legacy),model.empty());
   assert.deepEqual(model.layout(migrated).hidden,['positions']);
 });
+
+test('all Personal fields have stable content choices; absent, selected and explicit empty remain distinct',()=>{
+  for(const id of model.IDS){
+    const options=model.contentOptions(id);assert.ok(options.length>0);assert.equal(new Set(options.map(item=>item.id)).size,options.length);
+    assert.deepEqual(model.content(model.empty(),id),options.map(item=>item.id));
+    const saved={...model.empty(),fields:{[id]:{content:[]}}};assert.deepEqual(model.validate(saved).fields[id].content,[]);assert.deepEqual(model.content(saved,id),[]);
+  }
+  const selected={...model.empty(),fields:{'card:requests':{content:['sickness.total','absence.timeOff']}}};
+  const clean=model.validate(selected);assert.deepEqual(clean.fields['card:requests'].content,['absence.timeOff','sickness.total']);
+  clean.fields['card:requests'].content.push('amu.total');assert.deepEqual(selected.fields['card:requests'].content,['sickness.total','absence.timeOff']);
+  for(const content of [['absence.unknown'],['absence.timeOff','absence.timeOff'],['employees.total'],[1],{},null])assert.throws(()=>model.validate({...model.empty(),fields:{'card:requests':{content}}}));
+  assert.deepEqual(model.contentOptions('unknown'),[]);
+});
+
+test('content selection and explicit empty persist without changing field geometry or another account',async()=>{
+  const f=fixture();await f.store.activate();
+  const geometry={x:35,y:45,width:360,height:250},selection={...model.empty(),fields:{'card:requests':{content:['absence.timeOff']},'card:collectiveAgreements':{hidden:true,geometry,content:[]}}};
+  assert.equal(await f.store.change(selection),true);selection.fields['card:requests'].content.push('absence.vacation');
+  assert.deepEqual(f.writes[0].personnelDashboardWorkspace.fields['card:requests'].content,['absence.timeOff']);
+  assert.deepEqual(f.store.value.fields['card:collectiveAgreements'],{content:[],hidden:true,geometry});
+  assert.deepEqual(f.writes[0].personnelDashboardLayout.hidden,['collectiveAgreements']);
+  f.setActor('B');await f.store.activate();assert.deepEqual(f.store.value,model.empty());
+});
 test('configured API property preserves immutable serialized writes and paired legacy schema',async()=>{
   const first=deferred(),writes=[];const f=fixture({api:async(_url,o)=>{if(o.method!=='PUT')return {personnelDashboardWorkspace:model.empty()};writes.push(JSON.parse(o.body));if(writes.length===1)await first.promise;return {};}});
   await f.store.activate();const a=value('First');const one=f.store.change(a);a.fields['card:employees'].title='Mutated';const two=f.store.change(value('Second'));await tick();assert.equal(writes.length,1);assert.equal(writes[0].personnelDashboardWorkspace.fields['card:employees'].title,'First');first.resolve();assert.deepEqual(await Promise.all([one,two]),[true,true]);assert.equal(writes[1].personnelDashboardWorkspace.fields['card:employees'].title,'Second');assert.deepEqual(writes[1].personnelDashboardLayout,model.layout(value('Second')));assert.equal(writes[0].startDashboardWorkspace,undefined);

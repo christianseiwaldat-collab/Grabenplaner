@@ -5,8 +5,19 @@
   else root.GpDefinitionsRegistry=api;
 })(typeof window==='object'?window:globalThis,function(){
   'use strict';
-  const VERSION=4,UPDATED='2026-10-11';
+  const VERSION=5,UPDATED='2026-10-11';
   const topics=[
+    {id:'sidebar',title:'GP-sidebar',symbol:'☷',summary:'Die gemeinsame Seitennavigation hält den aktuellen Bereich sichtbar und trennt Navigation von persönlichen Menüeinstellungen.',
+      rules:[
+        {title:'Unterpunkte öffnen ihren Bereich',text:'Der Wechsel zu einem Unterpunkt hält alle übergeordneten Menüs offen. Das gilt auch für tiefe Unterbereiche, Direktaufrufe sowie Zurück und Vorwärts im Browser.'},
+        {title:'Ein eindeutiges aktuelles Ziel',text:'Genau der aktuelle Menüpunkt trägt die aktive Markierung und aria-current. Übergeordnete Bereiche sind als aktiver Pfad erkennbar; ihre Offen- oder Geschlossenstellung wird mit aria-expanded angezeigt.'},
+        {title:'Persönliche Menüstellung behalten',text:'Manuell geöffnete oder geschlossene Bereiche werden je angemeldetem Konto gespeichert. Ein Seitenwechsel öffnet die benötigten Vorfahren; die persönlichen Einstellungen anderer Bereiche bleiben erhalten. Eine Hintergrundaktualisierung klappt kein Menü um.'},
+        {title:'Freigaben vor Darstellung prüfen',text:'Die Navigation bietet nur erlaubte Ziele an. Konto-, Rollen- und Rechtewechsel entfernen nicht mehr freigegebene Einträge und fremde Zustände. Eine gespeicherte Menüstellung erteilt keine zusätzlichen Rechte.'},
+        {title:'Klare Hierarchie und ruhige Markierung',text:'Hauptpunkte, Unterpunkte und weitere Ebenen verwenden einheitliche Einzüge, Abstände und aktive Markierungen. Beschriftungen bleiben lesbar und umbrechbar; Status wird nicht ausschließlich durch Farbe vermittelt.'},
+        {title:'Mobile Navigation gezielt schließen',text:'Nach der Auswahl eines Ziels darf sich die mobile Navigation schließen. Dabei schließt nur die mobile Menüfläche; die persönliche Stellung der darin enthaltenen Bereiche bleibt erhalten.'},
+        {title:'Tastatur und Touch unterstützen',text:'Alle Menüpunkte sind über Tastatur erreichbar. Enter oder Leertaste aktiviert Buttons; ein sichtbarer Fokus zeigt das Ziel. Mobile Touchflächen sind mindestens 44 Pixel hoch, Menütexte mindestens 13 Pixel groß.'},
+        {title:'Standards als gemeinsamer Bereich',text:'Alle GP-Standarddefinitionen liegen unter dem Hauptpunkt GP-Standards. Andere freigegebene Developer-Werkzeuge stehen auf derselben Ebene; zugehörige Unterseiten bleiben bei ihrem Werkzeug. Beim Zurückkehren zu GP-Standards bleibt das zuletzt gewählte Thema erhalten.'},
+      ],references:['public/sidebar-layout.js','public/navigation-history.js','public/app.js','public/gp-definitions.js'],example:'Artikel-Auswertung und BWL-Tools bleiben im geöffneten Verkauf-Menü; Personal-Unterpunkte behalten ihren Bereich'},
     {id:'windows',title:'Fenster',symbol:'▣',summary:'Interne Arbeitsfenster im GP, mit einem gemeinsamen Verhalten und einer kompakten Titelleiste.',
       rules:[
         {title:'Im gesamten GP verschieben',text:'Die Titelleiste bewegt das Fenster über den gesamten sichtbaren GP, auch über die Sidebar. Ein GP-Fenster öffnet kein zusätzliches Browserfenster.'},
@@ -48,11 +59,11 @@
       rules:[
         {title:'Kompakte klare Hierarchie',text:'Titel, kurze Einordnung, Eingaben und Ergebnis bilden eine verständliche Reihenfolge. Titelleisten und Formulare vermeiden große ungenutzte Flächen.'},
         {title:'Kontextmenüs direkt am Inhalt',text:'Kleine Menüs mit kurzen Aktionen öffnen am betreffenden Feld oder Element. Fokus, Escape und Tastaturbedienung sind Teil des Menüs; die Hauptaktion bleibt erkennbar.'},
-        {title:'Dashboard-Felder individuell gestalten',text:'Nur die Felder im Startdashboard lassen sich frei über die Titelleiste verschieben und an Rändern oder Ecken verändern. Beschriftung, Position, Größe, Sichtbarkeit und leichte Feldfarben bleiben je Konto gespeichert.'},
+        {title:'Dashboard-Felder individuell gestalten',text:'Felder im Startdashboard und Personaldashboard lassen sich über die Titelleiste verschieben und an Rändern oder Ecken verändern. Beschriftung, Position, Größe, Sichtbarkeit und leichte Feldfarben bleiben je Konto gespeichert. Unterstützte Inhalte lassen sich je Feld auswählen.'},
         {title:'Fenster und fachliche Felder unterscheiden',text:'Ein GP-Fenster besitzt die gemeinsamen Fenstersteuerungen. Normale fachliche Felder auf anderen Seiten werden durch den Fensterstandard nicht automatisch zu frei verschiebbaren Flächen.'},
         {title:'Hell, Dunkel und schmale Ansichten',text:'Gemeinsame Farbvariablen, lesbare Kontraste und sichtbare Fokusmarkierungen tragen beide Darstellungen. Inhalte passen sich schmalen Ansichten und einer vergrößerten GP-Schrift an.'},
         {title:'Rückmeldungen im Arbeitsfluss',text:'Laden, Speichern, Warnungen und Fehler erscheinen nahe am zugehörigen Inhalt. Ein Status benennt den tatsächlich belegten Stand und bleibt auch ohne Farbe verständlich.'},
-      ],references:['public/styles.css','public/start-dashboard-workspace.js','public/start-dashboard-workspace.css'],example:'Startdashboard und kompakte Verkaufsoberflächen'},
+      ],references:['public/styles.css','public/start-dashboard-workspace.js','public/start-dashboard-workspace.css','public/personnel-dashboard-workspace-preferences.js'],example:'Startdashboard, Personaldashboard und kompakte Verkaufsoberflächen'},
     {id:'galleries',title:'Galerien',symbol:'▦',summary:'Eine gemeinsame Galerie verbindet kompakte Vorschaubilder, Suche, Auswahl und geschützte Bildfenster.',
       rules:[
         {title:'Gemeinsame Galerie-Komponente',text:'Galerien verwenden dieselbe technische Komponente. Fachliche Adapter liefern freigegebene Bilder, Filter und Speicheraktionen; Downloads verwenden ausschließlich freigegebene Bildadressen und enthalten keine Zugangsschlüssel.'},

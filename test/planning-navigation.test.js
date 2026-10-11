@@ -52,6 +52,28 @@ test("A single planning context keeps the parent as current and removes obsolete
   assert.equal(h.node("planningNavChildren").classes.has("hidden"), true);
 });
 
+test("Vacation navigation marks the selected location as the sole current page", () => {
+  const h = navigation([{ id: "18", name: "Beispiel Nord" }, { id: "23", name: "Beispiel Süd" }]);
+  h.context.state.currentView = "vacations";
+  h.context.currentAdministrationRoute = () => ({ view: "vacations", location: "18" });
+  h.render();
+  assert.equal(h.node("vacationsNavButton").attributes["aria-current"], undefined);
+  assert.equal(h.node("vacationsNavButton").classes.has("contains-active"), true);
+  assert.equal((h.node("vacationNavChildren").innerHTML.match(/aria-current="page"/g) || []).length, 1);
+  assert.match(h.node("vacationNavChildren").innerHTML, /aria-current="page" data-context-view="vacations" data-location-id="18"/);
+});
+
+test("A single vacation location keeps its parent as the sole current page", () => {
+  const h = navigation([{ id: "18", name: "Beispiel" }]);
+  h.context.state.currentView = "vacations";
+  h.context.currentAdministrationRoute = () => ({ view: "vacations" });
+  h.render();
+  assert.equal(h.node("vacationsNavButton").attributes["aria-current"], "page");
+  assert.equal(h.node("vacationsNavButton").classes.has("contains-active"), false);
+  assert.equal(h.node("vacationNavChildren").innerHTML, "");
+  assert.equal(h.node("vacationNavChildren").classes.has("hidden"), true);
+});
+
 test("Department planning contexts preserve the authorized department route and escape visible and tooltip names", () => {
   const h = navigation([{ id: "18", name: 'Beispiel <Nord> "', departments: [{ id: "HW", name: "Hardware" }, { id: "F&V", name: "Foto & Verkauf" }] }], "department_manager");
   h.context.state.departmentId = "F&V"; h.render();

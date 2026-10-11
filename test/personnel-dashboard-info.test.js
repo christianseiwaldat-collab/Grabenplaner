@@ -46,6 +46,18 @@ test("Antragszahlen sind entscheidbare Kategorien, kein Jahres- oder Quartalswer
   assert.deepEqual(result.metrics.map(x=>x.value),[2,3]);assert.match(result.caption,/kein Jahres- oder Quartalswert/);
   assert.throws(()=>m("absence",{requests:[],counts:{vacation:2,timeOff:3,total:4}}));
 });
+
+test("ZA-only filters the metric and uses a ZA title without hiding invalid source counts",()=>{
+  const input={requests:[],counts:{vacation:2,timeOff:3,total:5}};
+  const result=Info.summarize('absence',input,{},['absence.timeOff']);
+  assert.deepEqual(result.metrics,[{id:'absence.timeOff',label:'Zeitausgleich: entscheidbar',value:3}]);
+  assert.equal(result.title,'Zeitausgleichsanträge');assert.match(result.caption,/entscheidbare Zeitausgleichsanträge/);assert.doesNotMatch(result.caption,/Urlaub/);
+  assert.equal(Info.summarize('absence',input,{},['absence.vacation']).title,'Urlaubsanträge');
+  assert.throws(()=>Info.summarize('absence',{...input,counts:{vacation:2,timeOff:3,total:4}},{},['absence.timeOff']));
+  assert.deepEqual(Info.summarize('absence',input,{},[]).metrics,[]);
+  const partial=Info.summarize('employees',{employees:[{active:true},{}]},{},['employees.active']);
+  assert.equal(partial.status,'partial');assert.deepEqual(partial.metrics,[], 'partial status does not pretend the selected active metric is complete');
+});
 test("Meldungen werten explizite PendingCounts aus und status-only ist nicht null",()=>{
   assert.equal(m("sickness",{cases:[],pendingCount:4}).metrics[0].value,4);
   assert.equal(m("amu",{reports:[],pendingCount:2,access:{available:true}}).metrics[0].value,2);
@@ -71,13 +83,20 @@ test("KV-Quellenfassungen und Urlaubspersonen haben fachlich getrennte Einheiten
   assert.throws(()=>m("vacations",{year:2025,vacations},{year:2026}));
 });
 function fixture(){
-  let session={},actor="A",scope=2026,visible=true,allowed=true;
+  let session={},actor="A",scope=2026,visible=true,allowed=true,content;
   const pending=[],changes=[];
-  const sources=()=>[{id:"employees",card:"employees",type:"employees",url:"/api/personnel-directory",allowed,scope:{year:scope}}];
+  const sources=()=>[{id:"employees",card:"employees",type:"employees",url:"/api/personnel-directory",allowed,scope:{year:scope},content}];
   const controller=Info.create({sources,capture:()=>({session,actor}),current:t=>t.session===session&&t.actor===actor,active:()=>visible,
     onChange:records=>changes.push(structuredClone(records)),api:(url,options)=>new Promise((resolve,reject)=>pending.push({url,options,resolve,reject}))});
-  return {controller,pending,changes,change(values){if("session"in values)session=values.session;if("actor"in values)actor=values.actor;if("scope"in values)scope=values.scope;if("visible"in values)visible=values.visible;if("allowed"in values)allowed=values.allowed;}};
+  return {controller,pending,changes,change(values){if("session"in values)session=values.session;if("actor"in values)actor=values.actor;if("scope"in values)scope=values.scope;if("visible"in values)visible=values.visible;if("allowed"in values)allowed=values.allowed;if('content'in values)content=values.content;}};
 }
+
+test("content changes abort old source requests and ignore their late results",async()=>{
+  const f=fixture(),old=f.controller.sync();f.change({content:['employees.active']});const next=f.controller.sync();
+  assert.equal(f.pending[0].options.signal.aborted,true);
+  f.pending[1].resolve({employees:[{active:false},{active:true}]});f.pending[0].resolve({employees:[]});await Promise.all([old,next]);
+  assert.deepEqual(f.controller.records.employees.metrics,[{id:'employees.active',label:'Aktiv',value:1}]);
+});
 test("Ladestatus, gültiger leerer Bestand und Wiederverwendung derselben Anfrage",async()=>{
   const f=fixture(),p=f.controller.sync();assert.equal(f.controller.records.employees.status,"loading");
   f.controller.sync();assert.equal(f.pending.length,1);f.pending[0].resolve({employees:[]});await p;

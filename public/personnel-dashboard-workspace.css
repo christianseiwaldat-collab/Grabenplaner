@@ -40,6 +40,12 @@
 [data-dashboard-scope="personnel"].start-dashboard-field-dialog input,[data-dashboard-scope="personnel"].start-dashboard-field-dialog textarea { font-size:16px; min-height:44px; }
 [data-dashboard-scope="personnel"].start-dashboard-field-dialog .start-dashboard-field-editor-actions button { font-size:14px; min-height:44px; }
 [data-dashboard-scope="personnel"].start-dashboard-field-dialog [data-field-error] { font-size:13px; }
+[data-dashboard-scope="personnel"] [data-field-contents] { min-width:0; margin:0 0 14px; padding:12px; border:1px solid var(--line); border-radius:10px; }
+[data-dashboard-scope="personnel"] [data-field-contents] legend { padding:0 5px; font-size:14px; font-weight:700; }
+[data-dashboard-scope="personnel"] [data-field-contents] p { margin:0 0 8px; color:var(--muted); font-size:13px; line-height:1.5; }
+[data-dashboard-scope="personnel"] [data-field-content-choices] { display:grid; gap:4px; }
+[data-dashboard-scope="personnel"] [data-field-content-choices] label { display:flex; align-items:center; gap:10px; min-height:44px; margin:0; font-weight:500; line-height:1.4; cursor:pointer; }
+[data-dashboard-scope="personnel"] [data-field-content-choices] input[type="checkbox"] { flex:0 0 20px; width:20px; height:20px; min-height:0; margin:0; accent-color:var(--green); }
 @media (max-width:700px) {
   #personnelDashboardSection .personnel-dashboard-heading { flex-direction:column; }
   #personnelDashboardSection .personnel-dashboard-actions { width:100%; }

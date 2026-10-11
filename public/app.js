@@ -1,5 +1,10 @@
 let personnelLearningAssessmentEditor=null, personnelLearningAssessmentPanel=null, personnelLearningTeam=null;
-const sidebarNavigationGroups = window.GrabenplanerSidebarLayout.createGroups();
+const sidebarNavigationGroups = window.GrabenplanerSidebarLayout.createGroups({
+  storage: { getItem: key => window.localStorage.getItem(key), setItem: (key, value) => window.localStorage.setItem(key, value) },
+  account: () => state.portalSession?.authenticated === true
+    ? JSON.stringify([state.portalSession.user?.accountId || "", state.portalSession.user?.employeeNumber || ""])
+    : state.portalStatus?.portalEnabled === false ? "local" : "",
+});
 let salesPriceLabelsWorkspace = null;
 let workflowStudioWorkspace = null;
 let sidebarLayout = null;
@@ -5231,16 +5236,16 @@ function applyNavigationGroupState(key, visible = true) {
 
 function renderContextNavigation() {
   const routeChanged = sidebarNavigationGroups.sync(JSON.stringify(currentAdministrationRoute()), state.currentView);
+  const activePath = sidebarNavigationGroups.navigationPath(state.currentView);
   const locations = activeLocations();
   const departmentOnly = state.portalSession?.user?.role === "department_manager";
-  const filialViewActive = ["filialAdministration", "personnel", "planning", "vacations", "loans", "branchOrders"].includes(state.currentView);
+  const filialViewActive = activePath.includes("filialManagement");
   elements.filialManagementNav?.classList.toggle("contains-active", filialViewActive);
   applyNavigationGroupState("filialManagement", true);
   setNavigationCurrent(elements.filialDashboardNavButton, state.currentView === "filialAdministration");
   setNavigationCurrent(elements.filialTeamsNavButton, state.currentView === "personnel");
   setNavigationCurrent(elements.loanManagementNavButton, state.currentView === "loans");
   setNavigationCurrent(elements.branchOrdersManagementNavButton, state.currentView === "branchOrders");
-  setNavigationCurrent(elements.vacationsNavButton, state.currentView === "vacations");
   const planningContexts = locations.flatMap((location) => departmentOnly
     ? (location.departments || []).map((department) => ({ locationId: location.id, departmentId: String(department.id), locationName: location.name, planLabel: department.name }))
     : [{ locationId: location.id, departmentId: "", locationName: location.name, planLabel: "Gesamtplan" }]);
@@ -5253,13 +5258,15 @@ function renderContextNavigation() {
   `).join("") : "";
 
   const showVacationChildren = locations.length > 1;
+  setNavigationCurrent(elements.vacationsNavButton, state.currentView === "vacations" && !showVacationChildren);
+  elements.vacationsNavButton?.classList.toggle("contains-active", state.currentView === "vacations" && showVacationChildren);
   applyNavigationGroupState("vacations", showVacationChildren);
   elements.vacationNavChildren.innerHTML = showVacationChildren ? locations.map((location) => `
     <button type="button" class="nav-child ${state.currentView === "vacations" && location.id === state.locationId ? "active" : ""}" ${state.currentView === "vacations" && location.id === state.locationId ? 'aria-current="page"' : ""} data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="${departmentOnly ? escapeHtml(String(location.departments?.[0]?.id || "")) : ""}">${escapeHtml(location.name)}</button>
   `).join("") : "";
 
   const personnelModuleVisible = !elements.personnelAdministrationNav?.classList.contains("hidden");
-  const personnelViewActive = ["personnelAdministration", "requests", "timeTracking"].includes(state.currentView);
+  const personnelViewActive = activePath.includes("personnelAdministration");
   elements.personnelAdministrationNav?.classList.toggle("contains-active", personnelViewActive);
   applyNavigationGroupState("personnelAdministration", personnelModuleVisible);
   setNavigationCurrent(elements.personnelDashboardNavButton,
@@ -5288,7 +5295,7 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 
   const salesAdministrationVisible = !elements.salesAdministrationNav?.classList.contains("hidden");
-  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "articleReport", "salesBwl", "priceLabels", "crm"].includes(state.currentView);
+  const salesAdministrationActive = activePath.includes("salesAdministration");
   elements.salesAdministrationNav?.classList.toggle("contains-active", salesAdministrationActive);
   applyNavigationGroupState("salesAdministration", salesAdministrationVisible);
   setNavigationCurrent(elements.salesDashboardNavButton, state.currentView === "salesAdministration");
@@ -5299,12 +5306,12 @@ function renderContextNavigation() {
   setNavigationCurrent(document.getElementById('salesBwlNavButton'),state.currentView==='salesBwl');
   setNavigationCurrent(elements.logisticsNavButton, false);
   const logisticsNav = document.getElementById("logisticsNav");
-  logisticsNav?.classList.toggle("contains-active", state.currentView === "logistics");
+  logisticsNav?.classList.toggle("contains-active", activePath.includes("logistics"));
   applyNavigationGroupState("logistics", !logisticsNav?.classList.contains("hidden"));
   setNavigationCurrent(document.getElementById("logisticsPurchasingNavButton"), state.currentView === "logistics" && logisticsTab === "purchasing");
   setNavigationCurrent(document.getElementById("logisticsOrdersNavButton"), state.currentView === "logistics" && logisticsTab === "orders");
   const privacyNav = document.getElementById("privacyOrganizationNav");
-  privacyNav?.classList.toggle("contains-active", state.currentView === "privacyOrganization");
+  privacyNav?.classList.toggle("contains-active", activePath.includes("privacyOrganization"));
   applyNavigationGroupState("privacyOrganization", !privacyNav?.classList.contains("hidden"));
   for (const button of privacyNav?.querySelectorAll("[data-privacy-organization-tab]") || []) {
     setNavigationCurrent(button, state.currentView === "privacyOrganization"
@@ -22617,6 +22624,10 @@ function syncPersonnelDashboardWorkspace() {
     canUse: canUsePersonnelDashboardWorkspace, allowed: personnelDashboardWorkspaceFieldAllowed,
     discover: personnelDashboardWorkspaceFields, editorWindowId: "personnel-dashboard-field-editor", scopeName: "personnel",
     hideable: id => window.PersonnelDashboardWorkspacePreferences.IDS.includes(id),
+    closeHidesField: true, awaitEditorSave: true, editLabel: "Feld anpassen",
+    onFieldHidden: () => elements.personnelDashboardCustomizeButton?.focus({ preventScroll: true }),
+    contentOptions: id => window.PersonnelDashboardWorkspacePreferences.contentOptions(id),
+    contentSelection: (id, value) => window.PersonnelDashboardWorkspacePreferences.content(value, id),
     migrate: window.PersonnelDashboardWorkspacePreferences.migrate,
     extraPreferences: value => ({ personnelDashboardLayout: window.PersonnelDashboardWorkspacePreferences.layout(value) }),
     localPreferences: payload => localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(payload.personnelDashboardLayout)),
@@ -22641,7 +22652,9 @@ function personnelDashboardInformationSources() {
   const visible = id => catalog.get(id) && !hidden.has(id);
   const date = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const scope = { date, year: Number(state.centralVacationYear || date.slice(0, 4)), locationId: String(state.locationId || ""), departmentId: String(state.departmentId || "") };
-  const source = (card, type, url, allowed = true, note = "") => ({ id: type, card, type, url, allowed: Boolean(allowed), scope, note });
+  const preferences = personnelDashboardWorkspace?.store.value;
+  const contentFor = card => window.PersonnelDashboardWorkspacePreferences?.content(preferences, `card:${card}`);
+  const source = (card, type, url, allowed = true, note = "") => ({ id: type, card, type, url, allowed: Boolean(allowed), scope, note, content: contentFor(card)?.filter(id => id.startsWith(type + ".")) });
   const requests = managerRequestTabAvailability();
   const query = new URLSearchParams({ locationId: scope.locationId, date });
   if (scope.departmentId) query.set("departmentId", scope.departmentId);
@@ -22661,7 +22674,7 @@ function personnelDashboardInformationSources() {
     source("ruleDrafts", "ruleDrafts", "/api/work-rules/drafts", canAccessCustomWorkRuleGovernance()),
     source("collectiveAgreements", "collectiveAgreements", "/api/collective-agreements/registry", canReadCollectiveAgreements()),
     source("vacations", "vacations", `/api/personnel-vacations?year=${scope.year}`, canReadCentralVacations()),
-  ].filter(item => visible(item.card));
+  ].filter(item => visible(item.card) && (item.content === undefined || item.content.length > 0));
 }
 
 function syncPersonnelDashboardInformation(options = {}) {
@@ -22679,9 +22692,10 @@ function renderPersonnelDashboardInformation() {
   for (const card of elements.personnelDashboardSection?.querySelectorAll("[data-personnel-dashboard-field]") || []) {
     const rows = records.filter(row => row.card === card.dataset.personnelDashboardField);
     const target = card.querySelector(".personnel-dashboard-info");
-    const sources = rows.length ? rows : [{ status: "idle", metrics: [], caption: "Kennzahlen werden beim Öffnen dieser Übersicht geladen." }];
+    const content = window.PersonnelDashboardWorkspacePreferences?.content(personnelDashboardWorkspace?.store.value, `card:${card.dataset.personnelDashboardField}`);
+    const sources = rows.length ? rows : [{ status: "idle", metrics: [], caption: content?.length === 0 ? "Keine Kennzahlen ausgewählt. Wähle die Inhalte im Feldmenü unter „Feld anpassen“." : "Kennzahlen werden beim Öffnen dieser Übersicht geladen." }];
     target.innerHTML = sources.map(row => `<section class="personnel-dashboard-source" data-source-status="${escapeHtmlAttribute(row.status)}"${row.id ? ` data-personnel-dashboard-source="${escapeHtmlAttribute(row.id)}"` : ""}>
-      ${rows.length > 1 ? `<h4>${escapeHtml(window.PersonnelDashboardInfo?.sourceLabels[row.id] || row.id)}</h4>` : ""}
+      ${rows.length > 1 || (row.id === "absence" && row.title !== "Urlaub & Zeitausgleich") ? `<h4>${escapeHtml(row.title || window.PersonnelDashboardInfo?.sourceLabels[row.id] || row.id)}</h4>` : ""}
       <span class="personnel-dashboard-source-state">${escapeHtml(window.PersonnelDashboardInfo?.labels[row.status] || row.status)}</span>
       ${row.metrics?.length ? `<dl class="personnel-dashboard-metrics">${row.metrics.map(metric => `<div class="personnel-dashboard-metric"><dt>${escapeHtml(metric.label)}</dt><dd>${metric.value === null ? "–" : escapeHtml(metric.value)}</dd></div>`).join("")}</dl>` : ""}
       <p class="personnel-dashboard-source-caption">${escapeHtml(row.caption)}</p></section>`).join("");

@@ -68,7 +68,7 @@
     const model=options.model||defaultModel;
     const root=options.root,doc=root.ownerDocument,win=doc.defaultView;
     const fields=new Map(),removers=[],on=(node,name,fn,options)=>{node.addEventListener(name,fn,options);const remove=()=>node.removeEventListener(name,fn,options);removers.push(remove);return remove;};
-    let identity='',session=null,geometryEpoch=0,selected=null,destroyed=false,controlAnchor=null,controlButton=null,controlWrapper=null,geometry=null,opener=null,menuInTopLayer=false;
+    let identity='',session=null,geometryEpoch=0,selected=null,destroyed=false,controlAnchor=null,controlButton=null,controlWrapper=null,geometry=null,opener=null,menuInTopLayer=false,editorRevision=0,editorSaveContext=null;
     const usable=()=>!destroyed && options.canUse();
     const store=createStore({...options,error:error=>options.error(error)});
     const instance=++instanceCount,menu=doc.createElement('div');
@@ -83,16 +83,16 @@
     const colorNames={sage:'Salbei',blue:'Hellblau',sand:'Sand',rose:'Rosé',lavender:'Lavendel',peach:'Apricot'};
     const colorChoice=color=>'<button type="button" class="start-dashboard-field-color-choice" role="menuitemradio" tabindex="-1" aria-checked="false" aria-label="Feldfarbe: '+(colorNames[color] || 'Standard')+'" title="'+(colorNames[color] || 'Standard')+'" data-field-color="'+color+'"><span aria-hidden="true">✓</span></button>';
     menu.innerHTML='<p class="start-dashboard-field-context-title" id="'+menu.id+'Title" data-menu-title>Feld anpassen</p>'
-      +action('edit','Beschriftung ändern','edit')
+      +action('edit',options.editLabel||'Beschriftung ändern','edit')
       +'<div class="start-dashboard-field-context-separator" role="separator"></div><p class="start-dashboard-field-color-label">Feldfarbe</p><div class="start-dashboard-field-color-choices" role="group" aria-label="Feldfarbe">'+['',...model.COLORS].map(colorChoice).join('')+'</div><div class="start-dashboard-field-context-separator" role="separator"></div>'
       +action('default','Standardbeschriftung','label')
       +action('geometry-default','Standardposition und -größe','geometry')+action('hide','Kachel ausblenden','hide',true)
-      +'<div class="start-dashboard-field-context-separator" role="separator"></div>'+action('retry','Erneut speichern','retry')+action('close','Schließen','close');
+      +'<div class="start-dashboard-field-context-separator" role="separator"></div>'+action('retry','Erneut speichern','retry')+action('close',options.closeHidesField?'Feld schließen':'Menü schließen','close');
     const dialog=doc.createElement('dialog');dialog.className='start-dashboard-field-dialog';dialog.dataset.gpWindowMode='workspace';dialog.dataset.gpWindowId=options.editorWindowId||'start-dashboard-field-editor';
     if(options.scopeName){menu.dataset.dashboardScope=options.scopeName;dialog.dataset.dashboardScope=options.scopeName;}
     dialog.setAttribute('aria-labelledby','startDashboardFieldEditorTitle'+instance);
-    dialog.innerHTML='<header class="start-dashboard-field-editor-heading"><h3 id="startDashboardFieldEditorTitle'+instance+'">Beschriftung ändern</h3><button type="button" data-field-editor-close aria-label="Beschriftungseditor schließen">×</button></header>'
-      +'<form data-field-editor><label>Feldtitel<input name="title" maxlength="120" required></label><label>Beschreibung<textarea name="description" maxlength="400" rows="3"></textarea></label><p data-field-error role="alert"></p><div class="start-dashboard-field-editor-actions"><button type="button" data-field-back>Abbrechen</button><button type="submit" class="primary-button">Übernehmen</button></div></form>';
+    dialog.innerHTML='<header class="start-dashboard-field-editor-heading"><h3 id="startDashboardFieldEditorTitle'+instance+'">'+(options.editLabel||'Beschriftung ändern')+'</h3><button type="button" data-field-editor-close aria-label="Feldeditor schließen">×</button></header>'
+      +'<form data-field-editor><label>Feldtitel<input name="title" maxlength="120" required></label><label>Beschreibung<textarea name="description" maxlength="400" rows="3"></textarea></label><fieldset data-field-contents hidden><legend>Inhalte im Feld</legend><p>Wähle die Kennzahlen für dieses Feld. Die Auswahl wird für dein Konto gespeichert.</p><div data-field-content-choices></div></fieldset><p data-field-error role="alert"></p><div class="start-dashboard-field-editor-actions"><button type="button" data-field-back>Abbrechen</button><button type="submit" class="primary-button">Übernehmen</button></div></form>';
     doc.body.append(menu,dialog);
     const editor=dialog.querySelector('[data-field-editor]');
     const allowed=field=>usable() && options.allowed(field.id);
@@ -108,6 +108,7 @@
       if(focus)restoreFocus();if(!keepSelection && !dialog.open)selected=null;
     }
     function closeEditor({focus=true}={}) {
+      editorRevision++;editorSaveContext=null;editor.querySelector('[type="submit"]').disabled=false;
       if(dialog.open)dialog.close();
       if(focus)restoreFocus();if(menu.hidden)selected=null;
     }
@@ -144,7 +145,16 @@
     }
     function openEditor() {
       if(!selected || !allowed(selected) || !store.ready)return;
+      editorRevision++;editorSaveContext=null;editor.querySelector('[type="submit"]').disabled=false;
       editor.elements.title.value=selected.title.textContent;editor.elements.description.value=selected.description?.textContent || selected.extraDescription?.textContent || '';
+      const contentOptions=options.contentOptions?.(selected.id)||[],contentChoices=editor.querySelector('[data-field-content-choices]');
+      editor.querySelector('[data-field-contents]').hidden=contentOptions.length===0;contentChoices.replaceChildren();
+      const chosen=new Set(options.contentSelection?.(selected.id,store.value)||contentOptions.map(item=>item.id));
+      for(const item of contentOptions){
+        const label=doc.createElement('label'),input=doc.createElement('input'),caption=doc.createElement('span');
+        input.type='checkbox';input.dataset.fieldContent=item.id;input.checked=chosen.has(item.id);caption.textContent=item.label;
+        label.append(input,caption);contentChoices.append(label);
+      }
       dialog.querySelector('[data-field-error]').textContent='';
       closeMenu({keepSelection:true});win.GpWindow?.prepare?.(dialog);dialog.showModal();positionEditor();editor.elements.title.focus({preventScroll:true});
     }
@@ -180,6 +190,7 @@
         field.menu.disabled=!store.ready && !store.failed;
       }
       for(const button of menu.querySelectorAll('[data-field-edit],[data-field-default],[data-field-geometry-default],[data-field-hide],[data-field-color]')) button.disabled=!store.ready;
+      if(options.closeHidesField)menu.querySelector('[data-field-close]').disabled=!store.ready;
       syncColors();
       menu.querySelector('[data-field-retry] [data-field-action-label]').textContent=store.ready ? 'Erneut speichern' : 'Erneut laden';
       if(selected && !allowed(selected)) closeControls();
@@ -230,9 +241,10 @@
       if(vps)add('control:vps',vps,vps.querySelector('[data-vps-title]'),vps.querySelector('[data-vps-description]'));
     }
     function modify(next) {if(!selected || !allowed(selected) || !store.ready) return;const preferences=store.value;
+      if(next?.hidden===true)geometry?.cancel();
       if(next===null) {const old=preferences.fields[selected.id] || {};delete old.title;delete old.description;if(Object.keys(old).length) preferences.fields[selected.id]=old;else delete preferences.fields[selected.id];}
       else preferences.fields[selected.id]={...(preferences.fields[selected.id] || {}),...next};
-      void store.change(preferences);closeControls({focus:true});
+      void store.change(preferences);closeControls({focus:true});if(next?.hidden===true)options.onFieldHidden?.();
     }
     function setColor(color) {
       if(!selected || !allowed(selected) || !store.ready || (color!=='' && !model.COLORS.includes(color)))return;
@@ -243,7 +255,7 @@
     }
     on(menu,'click',event=>{
       event.stopPropagation();
-      if(event.target.closest('[data-field-close]')) closeMenu({focus:true});
+      if(event.target.closest('[data-field-close]')) {if(options.closeHidesField && selected && options.hideable?.(selected.id))modify({hidden:true});else closeMenu({focus:true});}
       else if(event.target.closest('[data-field-edit]')) openEditor();
       else if(event.target.closest('[data-field-color]')) setColor(event.target.closest('[data-field-color]').dataset.fieldColor);
       else if(event.target.closest('[data-field-default]')) modify(null);
@@ -278,10 +290,24 @@
       }
     });
     on(dialog,'cancel',event=>{event.preventDefault();closeEditor();});
-    on(editor,'submit',event=>{event.preventDefault();if(!selected || !allowed(selected)) return;
+    function editorValue(){
       const next={title:editor.elements.title.value,description:editor.elements.description.value};
-      try {model.validate({version:1,fields:{[selected.id]:next}});modify(next);}
-      catch(error) {dialog.querySelector('[data-field-error]').textContent=error.message;}
+      if(options.contentOptions)next.content=[...editor.querySelectorAll('[data-field-content]:checked')].map(input=>input.dataset.fieldContent);
+      return next;
+    }
+    on(editor,'submit',async event=>{event.preventDefault();if(!selected || !allowed(selected) || !store.ready || editorSaveContext) return;
+      const next=editorValue(),field=selected;
+      try {model.validate({version:1,fields:{[field.id]:next}});}
+      catch(error) {dialog.querySelector('[data-field-error]').textContent=error.message;return;}
+      if(!options.awaitEditorSave){modify(next);return;}
+      const context={field,key:String(options.key()||''),session:options.sessionReference?.(),revision:editorRevision,signature:JSON.stringify(next)};
+      editorSaveContext=context;editor.querySelector('[type="submit"]').disabled=true;dialog.querySelector('[data-field-error]').textContent='';
+      const preferences=store.value;preferences.fields[field.id]={...(preferences.fields[field.id]||{}),...next};
+      const saved=await store.change(preferences);
+      if(editorSaveContext!==context || editorRevision!==context.revision || !dialog.open || selected!==field || !allowed(field) || String(options.key()||'')!==context.key || options.sessionReference?.()!==context.session)return;
+      editorSaveContext=null;editor.querySelector('[type="submit"]').disabled=false;
+      if(saved && JSON.stringify(editorValue())===context.signature)closeControls({focus:true});
+      else dialog.querySelector('[data-field-error]').textContent=saved?'Die gesendeten Einstellungen sind gespeichert. Neuere Änderungen sind noch offen.':'Die Einstellungen konnten nicht gespeichert werden. Bitte erneut übernehmen.';
     });
     // The native close event is queued. It must not steal later focus or clear
     // the selection of an already reopened menu or editor.

@@ -869,6 +869,8 @@ test("Personal-Workspace: nullable absence, strict own schema and paired reset p
   await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session: admin, body: { personnelDashboardLayout: legacy } });
   assert.equal((await requestJson("/api/portal/v1/ui-preferences", { session: admin })).payload.personnelDashboardWorkspace, null, "Legacy-only reads must not materialize empty new settings");
   const custom = model.migrate(null, legacy); custom.fields["card:employees"] = { title: "Mein Team", color: "blue", geometry: { x: 30, y: 40, width: 400, height: 350 } };
+  custom.fields["card:requests"] = { content: ["absence.timeOff"] };
+  custom.fields["card:collectiveAgreements"] = { content: [], hidden: true, geometry: { x: 80, y: 100, width: 350, height: 300 } };
   const saved = await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session: admin, body: { personnelDashboardWorkspace: custom, personnelDashboardLayout: model.layout(custom) } });
   assert.equal(saved.response.status, 200, JSON.stringify(saved.payload)); assert.deepEqual(saved.payload.personnelDashboardWorkspace, custom);
   assert.deepEqual((await requestJson("/api/portal/v1/ui-preferences", { session: admin })).payload.personnelDashboardWorkspace, custom);
@@ -883,7 +885,7 @@ test("Personal-Workspace: nullable absence, strict own schema and paired reset p
 
 test("Personal-Workspace: invalid/cross-model input, unauthenticated/CSRF and password gates reject mutation", async () => {
   const model = require("../public/personnel-dashboard-workspace-preferences"), session = createPortalSession("v071-admin", "admin");
-  for (const personnelDashboardWorkspace of [{ ...model.empty(), order: [] }, { version: 1, fields: { "control:center": { hidden: true } } }, { version: 1, fields: { "card:employees": { color: "url(x)" } } }, { ...model.empty(), actor: "someone-else" }]) {
+  for (const personnelDashboardWorkspace of [{ ...model.empty(), order: [] }, { version: 1, fields: { "control:center": { hidden: true } } }, { version: 1, fields: { "card:employees": { color: "url(x)" } } }, { ...model.empty(), actor: "someone-else" }, { ...model.empty(), fields: { "card:requests": { content: ["employees.total"] } } }, { ...model.empty(), fields: { "card:requests": { content: ["absence.timeOff", "absence.timeOff"] } } }]) {
     const result = await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session, body: { personnelDashboardWorkspace } }); assert.equal(result.response.status, 400); assert.equal(result.payload.code, "UI_PREFERENCES_INVALID");
   }
   assert.equal((await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", body: { personnelDashboardWorkspace: model.empty() } })).response.status, 401);
