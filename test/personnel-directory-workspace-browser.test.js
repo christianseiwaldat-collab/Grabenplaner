@@ -57,7 +57,12 @@ test('Reine Antrags-/Zeiterfassungsmanager dürfen eigenes Personal-Dashboard ko
   await page.waitForFunction(()=>personalWorkspace().store.ready);await page.waitForFunction(()=>Object.values(infoRecords()).every(r=>r.status!=='loading'));
   assert.equal(await page.evaluate(()=>canOpenPersonnelAdministrationView()),false);assert.equal(await page.evaluate(()=>canOpenPersonnelAdministrationModule()),true);assert.equal(await page.evaluate(()=>canOpenPersonnelAdministrationTab('employees')),false);assert.equal(await page.evaluate(()=>canUsePersonnelDashboardWorkspace()),true);assert.equal(await page.evaluate(()=>canUsePersonnelDashboardInformation()),true);
   assert.equal(await page.locator('[data-personnel-dashboard-field="employees"]').count(),0);assert.equal(await page.evaluate(()=>calls.slice(apiCallsBefore).some(u=>u.startsWith('/api/personnel-directory'))),false);
-  await page.locator('#personnelDashboardCustomizeButton').click();assert.equal(await page.locator('#personnelDashboardCustomizer').isVisible(),true);await page.locator('#savePersonnelDashboardLayout').click();await page.waitForFunction(()=>document.querySelector('#personnelDashboardCustomizer').classList.contains('hidden'));assert.ok(await page.evaluate(()=>savedPersonal['BEISPIEL-01']));
+  await page.locator('#personnelDashboardCustomizeButton').click();assert.equal(await page.locator('[data-dashboard-settings-form]').isVisible(),true);
+  assert.equal(await page.locator('[data-dashboard-choice="card:employees"]').count(),0);
+  assert.equal(await page.locator(`[data-dashboard-choice="card:${mode}"]`).isEnabled(),true);
+  await page.locator('[data-dashboard-settings-form] [name="dashboardName"]').fill(mode==='requests'?'Meine Anträge':'Meine Arbeitszeit');
+  await page.locator('[data-dashboard-settings-form] [type="submit"]').click();await page.waitForFunction(()=>!document.querySelector('[data-dashboard-settings-form]').closest('dialog').open);
+  assert.equal(await page.evaluate(()=>savedPersonal['BEISPIEL-01']?.version),2);assert.equal(await page.evaluate(()=>savedPersonal['BEISPIEL-01'].dashboards.length),3);
  }
  assert.deepEqual(errors,[]);
  }finally{await b.close();}

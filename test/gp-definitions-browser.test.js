@@ -45,11 +45,11 @@ test('Developer definitions navigate, search, survive ordinary navigation and wi
     await page.addScriptTag({content:script+'\n'+listener+'\nrenderSidebarSession();'});
     const view=page.locator('#gpDefinitionsView'),workspace=page.locator('#gpDefinitionsWorkspace'),button=page.locator('#gpDefinitionsNavButton');
     const screenshot=async name=>{const output=process.env.GP_DEFINITIONS_SCREENSHOT_DIR;if(output){fs.mkdirSync(output,{recursive:true});await page.screenshot({path:path.join(output,name),fullPage:true,animations:'disabled'});}};
-    await t.test('actual Developer button opens seven nested standards with seven window rules',async()=>{
+    await t.test('actual Developer button opens eight nested standards with seven window rules',async()=>{
       assert.equal(await button.isVisible(),true);assert.equal(await page.locator('#sidebarSessionRole').isVisible(),false);
       await button.click();assert.equal(await view.isVisible(),true);assert.equal(await workspace.isVisible(),true);
-      assert.equal(await button.getAttribute('aria-current'),'page');assert.equal(await page.locator('[data-gp-definition-topic]').count(),8);
-      assert.equal(await page.locator('[data-gp-definition-topic]:not([data-gp-definition-topic="all"])').count(),7);
+      assert.equal(await button.getAttribute('aria-current'),'page');assert.equal(await page.locator('[data-gp-definition-topic]').count(),9);
+      assert.equal(await page.locator('[data-gp-definition-topic]:not([data-gp-definition-topic="all"])').count(),8);
       assert.equal(await page.locator('[data-gp-definition-section="standards"]').getAttribute('aria-expanded'),'true');
       assert.equal(await page.locator('#gpDefinitionsStandardTopics [aria-current="page"]').count(),1);
       assert.equal(await page.locator('.gp-definition-rule').count(),7);assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');
@@ -152,7 +152,7 @@ test('standards and deferred workspace menus remain siblings, remember their top
         await page.waitForFunction(()=>pendingLoads.length===1);
         const parent=page.locator('[data-gp-definition-section="standards"]'),sidebar=page.locator('[data-gp-definition-topic="sidebar"]');
         assert.equal(await parent.textContent(),'≡GP-Standards›');assert.equal(await parent.getAttribute('aria-expanded'),'true');
-        assert.equal(await page.locator('#gpDefinitionsStandardTopics [data-gp-definition-topic]').count(),8);
+        assert.equal(await page.locator('#gpDefinitionsStandardTopics [data-gp-definition-topic]').count(),9);
         await sidebar.click();assert.equal(await page.locator('.gp-definition-card h2').textContent(),'GP-sidebar');assert.equal(await sidebar.getAttribute('aria-current'),'page');
         await page.locator('#gpDefinitionsSearch').fill('mobile');assert.equal(await page.locator('.gp-definition-card h2').textContent(),'GP-sidebar');
         await page.locator('.gp-definitions-clear').click();await sidebar.click();

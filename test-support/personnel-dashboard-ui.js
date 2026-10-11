@@ -6,15 +6,19 @@ const workspaceNames=["canUseStartDashboardWorkspace","canUsePersonnelDashboardW
 const app=read("app.js"),ids=app.slice(app.indexOf("const PERSONNEL_DASHBOARD_ITEM_IDS"),app.indexOf("function defaultPersonnelDashboardLayout"));
 const source=ids+"\nlet personnelDashboardInformation=null,personnelDashboardWorkspace=null;\n"+names.map(n=>functionSource(n)).join("\n")+"\nwindow.infoRecords=()=>personnelDashboardInformation?.records||{};";
 const workspaceSource=source+"\nlet personnelDashboardWorkspaceApplying=false,personnelDashboardWorkspaceOwner=null,personnelDashboardCustomizerRevision=0,personnelDashboardConfigurationSaveContext=null;\n"+workspaceNames.map(n=>functionSource(n)).join("\n")+"\nwindow.personalWorkspace=()=>personnelDashboardWorkspace;";
-async function prepare(page,{workspace=false}={}){
+async function prepare(page,{workspace=false,initialWorkspace=null,initialLayout=null}={}){
   if(workspace)page.setDefaultTimeout(6000);
   const errors=[];page.on("pageerror",e=>errors.push(e.message));await page.route("**/*",route=>route.abort());
-  await page.setContent('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main class="synthetic-personnel">'+section("personnelDashboardSection")+'</main></body></html>');
-  for(const name of workspace?["styles.css","gp-window.css","start-dashboard-workspace.css","personnel-dashboard-workspace.css"]:["styles.css","personnel-dashboard-workspace.css"])await page.addStyleTag({path:path.join(root,"public",name)});
+  const markup='<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main class="synthetic-personnel">'+section("personnelDashboardSection")+'</main></body></html>';
+  // A fulfilled loopback route provides a secure browser origin for real UUIDs
+  // and account-local storage without contacting an application server.
+  await page.route("http://127.0.0.1:34129/personnel-dashboard-test",route=>route.fulfill({status:200,contentType:"text/html",body:markup}));
+  await page.goto("http://127.0.0.1:34129/personnel-dashboard-test");
+  for(const name of workspace?["styles.css","gp-window.css","start-dashboard-workspace.css","gp-dashboard-boards.css","personnel-dashboard-workspace.css"]:["styles.css","personnel-dashboard-workspace.css"])await page.addStyleTag({path:path.join(root,"public",name)});
   await page.addStyleTag({content:'.synthetic-personnel{max-width:1320px;margin:32px auto;padding:0 24px;box-sizing:border-box}#personnelDashboardSection{display:block!important}@media(max-width:700px){.synthetic-personnel{padding:0 12px;margin:20px auto}}'});
   await page.addScriptTag({path:path.join(root,"public","personnel-dashboard-info.js")});
-  if(workspace)for(const name of ["gp-window-preferences.js","gp-window.js","start-dashboard-workspace-preferences.js","personnel-dashboard-workspace-preferences.js","start-dashboard-workspace-geometry.js","start-dashboard-workspace.js"])await page.addScriptTag({path:path.join(root,"public",name)});
-  await page.evaluate(({source,workspace,events})=>{
+  if(workspace)for(const name of ["gp-window-preferences.js","gp-window.js","start-dashboard-workspace-preferences.js","personnel-dashboard-workspace-preferences.js","start-dashboard-workspace-geometry.js","gp-dashboard-boards.js","start-dashboard-workspace.js"])await page.addScriptTag({path:path.join(root,"public",name)});
+  await page.evaluate(({source,workspace,events,initialWorkspace,initialLayout})=>{
     const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
     window.escapeHtml=window.escapeHtmlAttribute=esc;window.isLocalStartDashboardWorkspace=()=>false;
     window.elements=Object.fromEntries([...document.querySelectorAll("[id]")].map(n=>[n.id,n]));
@@ -23,7 +27,9 @@ async function prepare(page,{workspace=false}={}){
     window.hasGovernancePermission=p=>state.portalSession?.user?.permissions?.includes(p)===true;
     window.managerRequestTabAvailability=()=>({vacation:!denied.has("vacation"),amu:!denied.has("amu")});
     window.calls=[];window.held=[];window.hold=false;window.failSources=new Set();window.forbiddenSources=new Set();
-    window.savedPersonal={};window.savedLegacy={};window.preferenceWrites=[];window.heldPreferenceReads=[];window.heldPreferenceWrites=[];window.holdPreferenceReads=false;window.holdPreferenceWrites=false;window.preferenceFailure=false;window.showToast=(message)=>{window.lastToast=message;};
+    window.savedPersonal={};window.savedLegacy={};window.preferenceWrites=[];window.heldPreferenceReads=[];window.heldPreferenceWrites=[];window.holdPreferenceReads=false;window.holdPreferenceWrites=false;window.preferenceFailure=false;window.preferenceReadFailure=false;window.showToast=(message)=>{window.lastToast=message;};
+    if(initialWorkspace)savedPersonal['BEISPIEL-01']=initialWorkspace;
+    if(initialLayout)savedLegacy['BEISPIEL-01']=initialLayout;
     window.api=async(url,options)=>{
       calls.push(url);const path=new URL(url,"https://example.invalid").pathname;
       const employeeCount=window.syntheticEmployeeCount??3;
@@ -38,6 +44,7 @@ async function prepare(page,{workspace=false}={}){
         }
         const payload={personnelDashboardWorkspace:savedPersonal[actor]??null,personnelDashboardLayout:savedLegacy[actor]??{version:1,order:[],hidden:[]}};
         if(holdPreferenceReads)await new Promise(resolve=>heldPreferenceReads.push({resolve,options}));
+        if(preferenceReadFailure)throw Error("synthetic preference read failure");
         return structuredClone(payload);
       }
       if(hold)await new Promise(resolve=>held.push({url,options,resolve}));
@@ -66,8 +73,8 @@ async function prepare(page,{workspace=false}={}){
     document.getElementById("personnelDashboardRefreshButton").addEventListener("click",()=>syncPersonnelDashboardInformation({force:true}));
     if(workspace)(0,eval)(events);
     renderPersonnelDashboard();
-  },{source:workspace?workspaceSource:source,workspace,events:app.slice(app.indexOf('elements.personnelDashboardCustomizeButton?.addEventListener'),app.indexOf('elements.personnelLearningSearch?.addEventListener',app.indexOf('elements.personnelDashboardCustomizeButton?.addEventListener')))});
-  await page.waitForFunction(()=>Object.keys(infoRecords()).length===15&&Object.values(infoRecords()).every(r=>r.status!=="loading"));
+  },{source:workspace?workspaceSource:source,workspace,initialWorkspace,initialLayout,events:app.slice(app.indexOf('elements.personnelDashboardCustomizeButton?.addEventListener'),app.indexOf('elements.personnelLearningSearch?.addEventListener',app.indexOf('elements.personnelDashboardCustomizeButton?.addEventListener')))});
+  await page.waitForFunction(()=>Object.keys(infoRecords()).length===personnelDashboardInformationSources().length&&Object.values(infoRecords()).every(r=>r.status!=="loading"));
   if(workspace){await page.evaluate(()=>gpWindows.preferences.activate());await page.waitForFunction(()=>personalWorkspace()?.store.ready&&gpWindows.preferences.ready,{},{timeout:5000}).catch(async error=>{throw Error(error.message+'; page errors: '+errors.join('; ')+'; readiness: '+JSON.stringify(await page.evaluate(()=>({store:personalWorkspace()?.store.ready,failed:personalWorkspace()?.store.failed,gp:gpWindows.preferences?.ready,canUse:canUsePersonnelDashboardWorkspace(),toast:window.lastToast,calls:calls.filter(url=>url.includes('preferences'))}))));});}
   return {errors};
 }

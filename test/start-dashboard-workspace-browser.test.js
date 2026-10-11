@@ -47,7 +47,7 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
   });
   await check('custom_labels_are_text_and_persist_only_for_current_synthetic_account',async()=>{
    await page.locator('[data-field-editor] input').fill('<img src=x onerror=alert(1)>');
-   await page.locator('[data-field-editor] textarea').fill('Synthetic description');
+   await page.locator('[data-field-editor] textarea[name=description]').fill('Synthetic description');
    await page.locator('[data-field-editor] button[type=submit]').click();
    assert.equal(await page.locator('[data-start-dashboard-card="schedule"] .start-dashboard-card-link strong').textContent(),'<img src=x onerror=alert(1)>');
    assert.equal(await page.locator('[data-start-dashboard-card="schedule"] .start-dashboard-card-link img').count(),0);
@@ -187,7 +187,7 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
     const before=await page.evaluate(id=>controller.fields.get(id).title.textContent,id);
     await button.click();await page.locator('[data-field-edit]').click();
     await page.locator('[data-field-editor] input').fill('Eigenes Feld '+id);
-    await page.locator('[data-field-editor] textarea').fill('Eigene Beschreibung '+id);
+    await page.locator('[data-field-editor] textarea[name=description]').fill('Eigene Beschreibung '+id);
     await page.locator('[data-field-editor] button[type=submit]').click();
     assert.equal(await page.evaluate(id=>controller.fields.get(id).title.textContent,id),'Eigenes Feld '+id);
     await page.waitForFunction(id=>persisted.B?.fields[id]?.description==='Eigene Beschreibung '+id,id);

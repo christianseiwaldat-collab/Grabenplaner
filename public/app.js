@@ -21238,14 +21238,31 @@ function startDashboardWorkspaceFieldAllowed(id) {
   if (!canUseStartDashboardWorkspace()) return false;
   if (id === "control:center") return accessibleDashboardModes().length > 0;
   if (id === "control:vps") return canReadStartDashboardVps();
-  const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
-  const visibleCard = cardId => startDashboardCardAccessible(cardId) && !preferences.hidden.includes(cardId);
+  const visibleCard = cardId => startDashboardCardAccessible(cardId);
   if (id.startsWith("card:")) return visibleCard(id.slice(5));
   if (id.startsWith("group:")) {
     return START_DASHBOARD_GROUPS.find(group => group.id === id.slice(6))?.cardIds.some(visibleCard) === true;
   }
   const widget = START_DASHBOARD_WIDGETS.find(entry => `widget:${entry.id}` === id);
-  return Boolean(widget && visibleCard(widget.cardId) && !preferences.hiddenWidgets.includes(widget.id));
+  return Boolean(widget && visibleCard(widget.cardId));
+}
+
+function migrateStartDashboardWorkspace(source, unused, payload) {
+  const model = window.StartDashboardWorkspacePreferences;
+  const workspace = model.normalize(source);
+  if (workspace.version === 2) return workspace;
+  const legacy = normalizeStartDashboardPreferences(payload?.startDashboardPreferences || state.startDashboardPreferences);
+  for (const id of [...legacy.hidden.map(id => `card:${id}`), ...legacy.hiddenWidgets.map(id => `widget:${id}`)]) {
+    if (model.IDS.includes(id) && workspace.fields[id]?.hidden === undefined) workspace.fields[id] = { ...workspace.fields[id], hidden: true };
+  }
+  return workspace;
+}
+
+function applyStartDashboardWorkspace({ fields, store }) {
+  for (const field of fields.values()) if (!field.id.startsWith("custom:")) field.element.classList.toggle("hidden", !startDashboardWorkspaceFieldAllowed(field.id));
+  if (elements.startDashboardResetButton) elements.startDashboardResetButton.disabled = !store.ready;
+  if (elements.startDashboardCustomizeButton) elements.startDashboardCustomizeButton.disabled = !store.ready;
+  syncStartDashboardControlChoices();startDashboardVps?.sync();
 }
 
 function syncStartDashboardWorkspace() {
@@ -21262,9 +21279,12 @@ function syncStartDashboardWorkspace() {
       root: elements.startDashboardView, key: startDashboardWorkspaceActorKey,
       sessionReference: () => state.portalSession,
       canUse: canUseStartDashboardWorkspace, allowed: startDashboardWorkspaceFieldAllowed,
+      boards: true, closeHidesField: true, awaitEditorSave: true, hideable: () => true, editLabel: "Feld anpassen",
+      onFieldHidden: () => elements.startDashboardCustomizeButton?.focus({ preventScroll: true }),
+      migrate: migrateStartDashboardWorkspace,
       localOnly: isLocalStartDashboardWorkspace,
       storage: {getItem: key => window.localStorage.getItem(key), setItem: (key, value) => window.localStorage.setItem(key, value)}, api,
-      onApply: ({store}) => {if (elements.startDashboardResetButton) elements.startDashboardResetButton.disabled = !store.ready;syncStartDashboardControlChoices();startDashboardVps?.sync();},
+      onApply: applyStartDashboardWorkspace,
       error: error => showToast(`Dashboard-Einstellungen konnten nicht gespeichert oder geladen werden: ${error.message}`, true),
     });
   } else startDashboardWorkspace.sync();
@@ -21865,6 +21885,7 @@ function renderStartDashboardCustomizer() {
 }
 
 function openStartDashboardCustomizer() {
+  if (startDashboardWorkspace && window.GpDashboardBoards) { startDashboardWorkspace.openSettings(); return; }
   state.startDashboardDraftPreferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
   elements.startDashboardCustomizer?.classList.remove("hidden");
   elements.startDashboardCustomizeButton?.setAttribute("aria-expanded", "true");
@@ -22623,6 +22644,7 @@ function syncPersonnelDashboardWorkspace() {
     key: startDashboardWorkspaceActorKey, sessionReference: () => state.portalSession,
     canUse: canUsePersonnelDashboardWorkspace, allowed: personnelDashboardWorkspaceFieldAllowed,
     discover: personnelDashboardWorkspaceFields, editorWindowId: "personnel-dashboard-field-editor", scopeName: "personnel",
+    boards: true,
     hideable: id => window.PersonnelDashboardWorkspacePreferences.IDS.includes(id),
     closeHidesField: true, awaitEditorSave: true, editLabel: "Feld anpassen",
     onFieldHidden: () => elements.personnelDashboardCustomizeButton?.focus({ preventScroll: true }),
@@ -22728,8 +22750,9 @@ function renderPersonnelDashboard() {
     if (grid.children[index] !== card) grid.insertBefore(card, grid.children[index] || null);
   });
   let empty = grid.querySelector(".personnel-dashboard-empty");
-  if (!items.length && !empty) { empty = document.createElement("div"); empty.className = "personnel-dashboard-empty"; empty.innerHTML = '<strong>Keine Kachel eingeblendet</strong><p>Öffne „Dashboard anpassen“, um mindestens einen verfügbaren Arbeitsbereich einzublenden.</p>'; grid.append(empty); }
-  if (items.length) empty?.remove();
+  const hasOwnFields = personnelDashboardWorkspace?.store.value.customFields?.some(field => personnelDashboardWorkspace.isVisible(field.id)) === true;
+  if (!items.length && !hasOwnFields && !empty) { empty = document.createElement("div"); empty.className = "personnel-dashboard-empty"; empty.innerHTML = '<strong>Keine Kachel eingeblendet</strong><p>Öffne „Dashboard anpassen“, um einen Arbeitsbereich einzublenden, oder lege ein eigenes Feld an.</p>'; grid.append(empty); }
+  if (items.length || hasOwnFields) empty?.remove();
   renderPersonnelDashboardInformation();
   syncPersonnelDashboardInformation();
   syncPersonnelDashboardWorkspace();
@@ -22762,6 +22785,7 @@ function updatePersonnelDashboardCustomizerStatus(layout = state.personnelDashbo
 }
 
 function openPersonnelDashboardCustomizer() {
+  if (personnelDashboardWorkspace && window.GpDashboardBoards) { personnelDashboardWorkspace.openSettings(); return; }
   if (!personnelDashboardWorkspace?.store.ready || !canUsePersonnelDashboardWorkspace()) return;
   personnelDashboardCustomizerRevision++;
   state.personnelDashboardResetDraft = false;

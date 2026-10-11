@@ -5,7 +5,7 @@
   else root.GpDefinitionsRegistry=api;
 })(typeof window==='object'?window:globalThis,function(){
   'use strict';
-  const VERSION=5,UPDATED='2026-10-11';
+  const VERSION=6,UPDATED='2026-10-11';
   const topics=[
     {id:'sidebar',title:'GP-sidebar',symbol:'☷',summary:'Die gemeinsame Seitennavigation hält den aktuellen Bereich sichtbar und trennt Navigation von persönlichen Menüeinstellungen.',
       rules:[
@@ -18,6 +18,18 @@
         {title:'Tastatur und Touch unterstützen',text:'Alle Menüpunkte sind über Tastatur erreichbar. Enter oder Leertaste aktiviert Buttons; ein sichtbarer Fokus zeigt das Ziel. Mobile Touchflächen sind mindestens 44 Pixel hoch, Menütexte mindestens 13 Pixel groß.'},
         {title:'Standards als gemeinsamer Bereich',text:'Alle GP-Standarddefinitionen liegen unter dem Hauptpunkt GP-Standards. Andere freigegebene Developer-Werkzeuge stehen auf derselben Ebene; zugehörige Unterseiten bleiben bei ihrem Werkzeug. Beim Zurückkehren zu GP-Standards bleibt das zuletzt gewählte Thema erhalten.'},
       ],references:['public/sidebar-layout.js','public/navigation-history.js','public/app.js','public/gp-definitions.js'],example:'Artikel-Auswertung und BWL-Tools bleiben im geöffneten Verkauf-Menü; Personal-Unterpunkte behalten ihren Bereich'},
+    {id:'dashboard',title:'GP-dashboard',symbol:'▦',summary:'Persönliche Dashboards verbinden frei angeordnete Felder, wählbare Inhalte und drei individuell benannte Ansichten.',
+      rules:[
+        {title:'Drei persönliche Dashboard-Tabs',text:'Startdashboard und Personaldashboard bieten jeweils drei unabhängig einrichtbare Ansichten. Jeder Tab erhält einen frei wählbaren Namen. Die aktive Ansicht, Feldanordnung, Sichtbarkeit und Inhalte werden je angemeldetem Konto und Dashboard gespeichert.'},
+        {title:'Felder schließen und wieder einblenden',text:'Schließen im Drei-Punkte-Menü blendet das betreffende Feld aus. Dashboard anpassen zeigt ausgeblendete Felder an und kann sie wieder einblenden. Beschriftungen, Inhalte und gespeicherte Geometrie bleiben dabei erhalten; Schließen löscht keine fachlichen Daten.'},
+        {title:'Verschieben und Größe verändern',text:'Die Titelleiste bewegt ein Feld; alle acht Ränder und Ecken ändern seine Größe. Menüs und Navigationsaktionen bleiben eindeutig erreichbar. Überschriften und Steuerungen überdecken weder Inhalte noch Scrollleisten; breite Inhalte scrollen im eigenen Feld.'},
+        {title:'Aus Gruppen lösen und zurücklegen',text:'Ein Feld lässt sich aus seiner Gruppe auf das Dashboard ziehen. Beim Zurückziehen über die ursprüngliche Gruppe wird es wieder integriert. Beschriftung, ausgewählte Inhalte und Farbe bleiben erhalten; die freie Position entfällt zugunsten der Gruppenanordnung.'},
+        {title:'Eigene Felder erstellen',text:'Eigene Notizfelder erhalten einen Titel und einfachen Text. Sie lassen sich wie andere Felder gestalten, verschieben, schließen und wieder einblenden. Der Text wird als Text angezeigt; HTML, Skripte und eingebettete fremde Inhalte werden nicht ausgeführt.'},
+        {title:'Inhalte je Feld auswählen',text:'Unterstützte Informationsfelder bieten ihre erlaubten Inhalte einzeln zur Auswahl an. Beispielsweise kann ein Antragsfeld nur Zeitausgleich statt Urlaub und Zeitausgleich zeigen. Eine leere Auswahl zeigt einen verständlichen Hinweis; sie bedeutet weder Nullbestand noch eine Freigabe weiterer Daten.'},
+        {title:'Freigaben und Datenstand beachten',text:'Dashboards zeigen ausschließlich freigegebene Informationen und benennen Laden, Fehler oder fehlende Daten. Ein gespeichertes Feld erteilt keine zusätzlichen Rechte. Konto-, Sitzungs- oder Rechtewechsel beendet veraltete Aufträge und entfernt nicht mehr erlaubte Inhalte.'},
+        {title:'Schmale Ansichten und Tastatur unterstützen',text:'Auf schmalen Bildschirmen ordnen sich Felder in lesbarer Reihenfolge an; gespeicherte Desktop-Positionen bleiben erhalten. Menüs, Tabs und Einstellungen sind mit Tastatur bedienbar. Verschieben und Größenänderung unterstützen Pfeiltasten und Escape; Touchflächen und Fokusmarkierungen bleiben zugänglich.'},
+        {title:'Speicherstand nachvollziehbar halten',text:'Änderungen gehören zur aktiven Dashboard-Ansicht und werden in ihrer Reihenfolge gespeichert. Späte Antworten überschreiben keine neueren Eingaben oder eine andere Ansicht. Ein Speicherfehler bleibt sichtbar; erneutes Speichern darf den bearbeiteten Stand nicht verlieren.'},
+      ],references:['public/gp-dashboard-boards.js','public/gp-dashboard-boards.css','public/start-dashboard-workspace.js','public/start-dashboard-workspace-geometry.js','public/start-dashboard-workspace-preferences.js','public/personnel-dashboard-workspace-preferences.js','public/start-dashboard-workspace.css'],example:'Drei benannte Start- und Personaldashboards mit eigenen Notizen, zurückgelegten Gruppenfeldern und einem Antragsfeld nur für Zeitausgleich'},
     {id:'windows',title:'Fenster',symbol:'▣',summary:'Interne Arbeitsfenster im GP, mit einem gemeinsamen Verhalten und einer kompakten Titelleiste.',
       rules:[
         {title:'Im gesamten GP verschieben',text:'Die Titelleiste bewegt das Fenster über den gesamten sichtbaren GP, auch über die Sidebar. Ein GP-Fenster öffnet kein zusätzliches Browserfenster.'},
@@ -59,7 +71,7 @@
       rules:[
         {title:'Kompakte klare Hierarchie',text:'Titel, kurze Einordnung, Eingaben und Ergebnis bilden eine verständliche Reihenfolge. Titelleisten und Formulare vermeiden große ungenutzte Flächen.'},
         {title:'Kontextmenüs direkt am Inhalt',text:'Kleine Menüs mit kurzen Aktionen öffnen am betreffenden Feld oder Element. Fokus, Escape und Tastaturbedienung sind Teil des Menüs; die Hauptaktion bleibt erkennbar.'},
-        {title:'Dashboard-Felder individuell gestalten',text:'Felder im Startdashboard und Personaldashboard lassen sich über die Titelleiste verschieben und an Rändern oder Ecken verändern. Beschriftung, Position, Größe, Sichtbarkeit und leichte Feldfarben bleiben je Konto gespeichert. Unterstützte Inhalte lassen sich je Feld auswählen.'},
+        {title:'Dashboard-Felder individuell gestalten',text:'Startdashboard und Personaldashboard folgen dem GP-dashboard-Standard. Benannte Ansichten, Feldmenüs, eigene Notizen, leichte Feldfarben und auswählbare Inhalte verwenden eine gemeinsame Gestaltung und bleiben je Konto gespeichert.'},
         {title:'Fenster und fachliche Felder unterscheiden',text:'Ein GP-Fenster besitzt die gemeinsamen Fenstersteuerungen. Normale fachliche Felder auf anderen Seiten werden durch den Fensterstandard nicht automatisch zu frei verschiebbaren Flächen.'},
         {title:'Hell, Dunkel und schmale Ansichten',text:'Gemeinsame Farbvariablen, lesbare Kontraste und sichtbare Fokusmarkierungen tragen beide Darstellungen. Inhalte passen sich schmalen Ansichten und einer vergrößerten GP-Schrift an.'},
         {title:'Rückmeldungen im Arbeitsfluss',text:'Laden, Speichern, Warnungen und Fehler erscheinen nahe am zugehörigen Inhalt. Ein Status benennt den tatsächlich belegten Stand und bleibt auch ohne Farbe verständlich.'},

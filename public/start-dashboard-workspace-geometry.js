@@ -49,6 +49,10 @@
     }
     function restore(record) {
       if (!record.frame) return;
+      if (record.scrollBody) {
+        record.scrollBody.before(...record.scrollBody.childNodes);
+        record.scrollBody.remove(); record.scrollBody = null;
+      }
       record.anchor.after(record.field.element);
       record.field.element.append(record.field.menu, ...record.resizes);
       record.frame.remove(); record.frame = null;
@@ -59,6 +63,13 @@
       record.frame.dataset.dashboardFloating = record.field.id;
       canvas.append(record.frame);
       record.frame.append(record.field.element, record.field.menu, ...record.resizes);
+      // Keep the header and its controls outside the content's scrolling area.
+      // Original child anchors stay in the same containers inside this wrapper.
+      if (record.move.parentElement === record.field.element && record.move.matches('.start-dashboard-group-link,.start-dashboard-card-link')) {
+        record.scrollBody = doc.createElement('div'); record.scrollBody.className = 'start-dashboard-field-scrollbody';
+        const content = [...record.field.element.childNodes].filter(node => node !== record.move);
+        record.field.element.append(record.scrollBody); record.scrollBody.append(...content);
+      }
     }
     function paint(record, value) {
       promote(record);
@@ -75,6 +86,56 @@
       const {rect, scaleX, scaleY, width} = metrics(), box = (record.frame || record.field.element).getBoundingClientRect();
       return project({x: (box.left - rect.left) / scaleX, y: (box.top - rect.top) / scaleY,
         width: box.width / scaleX, height: box.height / scaleY}, width);
+    }
+    function dockParent(record) {
+      const parent = record?.parent;
+      if (!parent || !options.ready() || !options.usable() || !options.allowed(record.field) || !options.allowed(parent.field)) return null;
+      const preferences = options.value();
+      for (let current = parent; current; current = current.parent) {
+        if (!options.allowed(current.field) || preferences.fields[current.field.id]?.hidden === true || !current.field.element.getClientRects().length) return null;
+      }
+      const box = parent.field.element.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 ? parent : null;
+    }
+    function canDock(id) {
+      const record = records.get(id);
+      return Boolean(visible() && options.value().fields[id]?.geometry && dockParent(record));
+    }
+    function clearDockTarget() {
+      gesture?.dockTarget?.field.element.classList.remove('start-dashboard-dock-target');
+      if (gesture) gesture.dockTarget = null;
+    }
+    function pointInParent(parent, x, y) {
+      const rect = parent.field.element.getBoundingClientRect();
+      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    }
+    function updateDockTarget(x, y) {
+      if (!gesture || gesture.action !== 'move' || !gesture.saved) return;
+      const parent = dockParent(gesture.record);
+      if (!parent) {clearDockTarget(); return;}
+      // A detached card may overlap its group. Moving it within that overlap
+      // should stay a normal move; returning from outside arms the drop target.
+      gesture.dockArmed ||= !pointInParent(parent, gesture.pointer.x, gesture.pointer.y) || !pointInParent(parent, x, y);
+      const next = gesture.dockArmed && pointInParent(parent, x, y) ? parent : null;
+      if (next === gesture.dockTarget) return;
+      clearDockTarget(); gesture.dockTarget = next;
+      if (next) {
+        next.field.element.classList.add('start-dashboard-dock-target');
+        live.textContent = `${gesture.record.field.title.textContent}: Loslassen, um das Feld in ${next.field.title.textContent} zurückzulegen.`;
+      }
+    }
+    function withoutGeometry(preferences, id) {
+      const field = preferences.fields[id];
+      if (field) {delete field.geometry; if (!Object.keys(field).length) delete preferences.fields[id];}
+      return preferences;
+    }
+    function dock(id) {
+      if (!canDock(id)) return false;
+      cancel();
+      const record = records.get(id), parent = dockParent(record);
+      if (!parent) return false;
+      live.textContent = `${record.field.title.textContent}: In ${parent.field.title.textContent} zurückgelegt.`;
+      return options.change(withoutGeometry(options.value(), id));
     }
     function sync() {
       if (destroyed) return;
@@ -105,6 +166,7 @@
     function cancel() {
       pendingPointer = null;
       if (!gesture) return;
+      clearDockTarget();
       const prior = gesture; gesture = null;
       prior.record.frame?.classList.remove('is-manipulating');
       try {prior.handle.releasePointerCapture(prior.pointerId);} catch {}
@@ -114,10 +176,17 @@
       if (!gesture) return;
       const current = gesture;
       if (current.key !== options.key() || !canEdit(current.record.field)) {cancel(); return;}
+      const parent = current.dockTarget && dockParent(current.record) === current.dockTarget ? current.dockTarget : null;
+      clearDockTarget();
       gesture = null; current.record.frame?.classList.remove('is-manipulating');
       try {current.handle.releasePointerCapture(current.pointerId);} catch {}
-      if (!current.changed) {sync(); return;}
+      if (!current.changed && !parent) {sync(); return;}
       const preferences = options.value(), id = current.record.field.id;
+      if (parent) {
+        void options.change(withoutGeometry(preferences, id));
+        live.textContent = `${current.record.field.title.textContent}: In ${parent.field.title.textContent} zurückgelegt.`;
+        return;
+      }
       const geometry = persistedGeometry(current.saved, current.displayOrigin, current.value, current.action);
       preferences.fields[id] = {...preferences.fields[id], geometry};
       void options.change(preferences);
@@ -194,6 +263,12 @@
         on(handle, 'blur', () => {if (gesture?.handle === handle && gesture.pointerId === null && !gesture.initializing) finish();});
       }
     }
+    // Resolve original nesting after every field has its anchor. Reparenting a
+    // floating child or parent must never change that original relationship.
+    for (const record of records.values()) {
+      const element = record.anchor.parentElement.closest('.start-dashboard-workspace-field');
+      record.parent = [...records.values()].find(candidate => candidate.field.element === element) || null;
+    }
     on(win, 'pointermove', event => {
       if (pendingPointer?.pointerId === event.pointerId) {
         const pending=pendingPointer;
@@ -206,6 +281,7 @@
       }
       if (!gesture?.pointer || event.pointerId !== gesture.pointerId) return;
       const p = gesture.pointer; event.preventDefault(); update((event.clientX - p.x) / p.scaleX, (event.clientY - p.y) / p.scaleY);
+      updateDockTarget(event.clientX, event.clientY);
     });
     on(win, 'pointerup', event => {if (event.pointerId === pendingPointer?.pointerId) pendingPointer=null;if (event.pointerId === gesture?.pointerId) finish();});
     on(win, 'pointercancel', event => {if (event.pointerId === gesture?.pointerId || event.pointerId === pendingPointer?.pointerId) cancel();});
@@ -219,12 +295,10 @@
     observer?.observe(canvas);
     function reset(id) {
       const record = records.get(id); if (!record || !options.ready() || !options.allowed(record.field)) return;
-      cancel(); const preferences = options.value(), field = preferences.fields[id];
-      if (field) {delete field.geometry; if (!Object.keys(field).length) delete preferences.fields[id];}
-      void options.change(preferences);
+      cancel(); void options.change(withoutGeometry(options.value(), id));
     }
     sync();
-    return {canvas, sync, cancel, reset, reorder(ids) {
+    return {canvas, sync, cancel, reset, canDock, dock, reorder(ids) {
       const ordered=ids.map(id=>records.get(id)).filter(record=>record?.anchor.parentNode===grid);
       const current=[...grid.childNodes].filter(node=>ordered.some(record=>record.anchor===node));
       if(ordered.every((record,index)=>record.anchor===current[index]))return;
