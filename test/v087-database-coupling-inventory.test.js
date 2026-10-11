@@ -13,6 +13,7 @@ const {
   PHASE_3_SQLITE_PROVIDER_FILES,
   PHASE_3_SQLITE_PROVIDER_TEST_FILES,
   PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT,
+  PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS,
   PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT,
   PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT,
   PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT,
@@ -240,6 +241,21 @@ test("Deploy preflight may inspect the installed provider without allowing arbit
   ).some(entry => entry.kind === "provider-runtime-config-outside-boundary"), true);
 });
 
+test("Studio-Statementregistrierung bleibt exakt benannt und erlaubt keinen Treiber", () => {
+  const file = "lib/persistence/statements/workflow-studio.js";
+  const source = read(file);
+  assert.deepEqual(architectureBoundaryViolationsForText(file, source), []);
+  const unknown = architectureBoundaryViolationsForText(
+    "lib/persistence/statements/unregistered-studio.js", source,
+  );
+  assert.ok(unknown.some((entry) => entry.kind === "provider-statement-outside-boundary"));
+  assert.ok(unknown.some((entry) => entry.kind === "provider-contract-runtime-import"));
+  assert.ok(architectureBoundaryViolationsForText(file, 'require("node:sqlite")')
+    .some((entry) => entry.kind === "sqlite-driver-import-outside-boundary"));
+  assert.ok(architectureBoundaryViolationsForText(file, 'require("pg")')
+    .some((entry) => entry.kind === "postgresql-driver-import"));
+});
+
 test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben auditierbar", () => {
   const report = scanRepository(root);
 
@@ -334,7 +350,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // its named classification grants no driver, statement or raw SQL access.
   // The ABC and simulation routes likewise supply private HTTP cache metadata;
   // their exact classifications grant no raw SQL or driver capabilities.
-  assert.equal(report.summary.productionDirectFiles, 99);
+  // Six named browser modules and the already classified app.js only prepare
+  // DOM windows; these lexical signals grant no SQL, drivers or activation.
+  assert.equal(report.summary.productionDirectFiles, 106);
   // Five archive/child operating adapters and one read-only recovery-key
   // verifier and isolated full-source measurement extend the existing indirect
   // inventory; no raw business access or productive import activation.
@@ -344,7 +362,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 19);
   // Session fixtures, deferred PostgreSQL startup and the three named CRM/
   // article qualifications are classified; no new production access is allowed.
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 20);
+  // Twenty-one named workspace fixtures exercise DOM preparation or isolated
+  // application persistence; the historical baseline and driver lists stay fixed.
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 41);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
   assert.equal(report.summary.productionJavaScriptDriverFiles, 15);
@@ -379,6 +399,17 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   assert.equal(report.phase3Progress.fullSqliteParity, true);
   assert.equal(report.phase4Progress.status, "completed");
   assert.equal(report.phase4Progress.complete, true);
+  assert.deepEqual(PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS, [
+    "workflow-studio.completion.lookup",
+    "workflow-studio.instance.steps",
+    "workflow-studio.instances.page",
+    "xoffi-snapshots.get-scoped",
+  ]);
+  assert.deepEqual(
+    report.phase4Progress.applicationReadExtensionStatementIds,
+    PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS,
+  );
+  assert.deepEqual(report.phase4Progress.applicationReadExtensionViolations, []);
   assert.equal(report.phase4Progress.statementCount, PHASE_4_EXPECTED_STATEMENT_COUNT);
   assert.equal(report.phase4Progress.sqliteStatementCount, PHASE_4_EXPECTED_STATEMENT_COUNT);
   assert.equal(report.phase4Progress.postgresqlStatementCount, PHASE_4_EXPECTED_STATEMENT_COUNT);
@@ -457,7 +488,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1485);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1489);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -474,7 +505,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1485,
+    requiredReceiptCount: 1489,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {

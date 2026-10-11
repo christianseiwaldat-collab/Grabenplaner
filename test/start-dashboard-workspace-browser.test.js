@@ -21,6 +21,7 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
   await page.addScriptTag({path:path.join(repo,'public','start-dashboard-vps.js')});
   await page.evaluate(()=>{
    window.actor='A';window.allowedIds=new Set(StartDashboardWorkspacePreferences.IDS);window.persisted={};window.requests=[];
+   window.gpWindows=GpWindow.installDocument(document,{actorKey:()=>actor,canUse:()=>actor!=='anonymous',readPreferences:async()=>({version:1,windows:{}}),writePreferences:async()=>{}});
    const root=document.querySelector('#startDashboardView');
    root.querySelectorAll('.hidden').forEach(element=>element.classList.remove('hidden'));
    document.querySelector('#startDashboardCustomizer').classList.add('hidden');
@@ -436,15 +437,18 @@ test('dashboard menus preserve defaults, focus, account isolation and safe remou
    assert.equal(await page.evaluate(()=>initialReadAttempts),2);
    assert.deepEqual(await page.evaluate(()=>readErrors),['initial read failed']);
   });
-  await check('compact_editor_and_popup_are_excluded_from_generic_window_adapter',async()=>{
+  await check('compact_editor_uses_shared_workspace_chrome_and_popup_remains_a_menu',async()=>{
    assert.equal(await page.locator('#startDashboardCenterVisible').evaluate(node=>getComputedStyle(node).width),'16px');
    await page.evaluate(()=>{window.dialogPrefs=GpWindowPreferences.empty();window.dialogManager=GpWindow.installDocument(document,{actorKey:()=>actor,canUse:()=>true,readPreferences:async()=>({gpWindows:dialogPrefs}),writePreferences:async value=>{dialogPrefs=value;}});});
    await page.locator('[data-dashboard-field-menu="card:loans"]').click();
    assert.equal(await page.locator('[data-field-menu]').evaluate(node=>node.classList.contains('gp-window')),false);
    await page.locator('[data-field-edit]').click();
    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-   assert.equal(await page.locator('.start-dashboard-field-dialog').evaluate(node=>node.classList.contains('gp-window')),false);
-   assert.equal(await page.locator('.start-dashboard-field-dialog .gp-dialog-window-title').count(),0);
+   assert.equal(await page.locator('.start-dashboard-field-dialog').evaluate(node=>node.classList.contains('gp-window')),true);
+   assert.equal(await page.locator('.start-dashboard-field-dialog').evaluate(node=>node.matches(':modal')),false);
+   assert.equal(await page.locator('.start-dashboard-field-dialog .gp-dialog-window-title').count(),1);
+   await page.locator('.start-dashboard-field-dialog [data-gp-window-toggle]').click();
+   await page.locator('.start-dashboard-field-dialog [data-gp-window-toggle]').click();
    const box=await page.locator('.start-dashboard-field-dialog').boundingBox();assert.ok(box.width<=401&&box.x>=0&&box.y>=0&&box.x+box.width<=1601&&box.y+box.height<=1001);
    await page.locator('[data-field-editor] input').fill('Adapter-Test');await page.locator('[data-field-editor] button[type=submit]').click();
    await page.waitForFunction(()=>controller.dialog.open===false);

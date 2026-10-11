@@ -55,6 +55,7 @@
         : `<p>${escape(row.description)} · Konto ${escape(row.account)}</p><p>Einzahlung ${escape(number(row.inflow))} · Auszahlung ${escape(number(row.outflow))}</p><p>Separate Kassenbuchung; kein zusätzlicher Verkauf.</p>`}`;
   }
   function mount(root, { api, rawApi, accessKey = () => '', canUse = () => true, active, windowPreferences, scale, calendarFactory = globalThis.GrabenplanerDateRangeCalendar?.createDateRangeCalendar } = {}) {
+    let detailRequest = null;
     let disposed = false, generation = 0, controller = null, context = null, loading = null, calendar = null;
     let from, to, query = null, next = null, resultSet = null, total = null, scanned = 0, items = [], selected = new Set(), columns = [], allColumns = [], sort = { key: 'date', direction: -1 };
     const owner = accessKey(); let pdfWindow = null, pdfActive = true;
@@ -172,12 +173,12 @@
       } catch (error) { if (authorized()) message(error.message); }
     }
     async function detail(id) {
-      const ticket = generation; detailId = id; el('detail-body').textContent = 'Vollständiger Beleg wird geladen …'; el('detail-pdf').disabled = true; el('detail-dialog').showModal();
+      const ticket = generation, detailTicket = Symbol('receipt-detail'); detailRequest = detailTicket; detailId = id; el('detail-body').textContent = 'Vollständiger Beleg wird geladen …'; el('detail-pdf').disabled = true; globalThis.GpWindow?.prepare?.(el('detail-dialog'));el('detail-dialog').showModal();
       try {
         const result = await api('/api/receipt-search/documents', { method: 'POST', body: JSON.stringify({ ids: [id] }) });
-        if (disposed || ticket !== generation || detailId !== id) return;
+        if (disposed || ticket !== generation || detailRequest !== detailTicket || detailId !== id) return;
         el('detail-body').innerHTML = renderDetail(result.items[0]); el('detail-pdf').disabled = false;
-      } catch (error) { if (!disposed && ticket === generation && detailId === id) el('detail-body').textContent = error.message; }
+      } catch (error) { if (!disposed && ticket === generation && detailRequest === detailTicket && detailId === id) el('detail-body').textContent = error.message; }
     }
     async function load() {
       if (disposed || !authorized()) return; pdfActive = true; syncPrint();
@@ -205,7 +206,7 @@
             <section class="receipt-results-card" aria-label="Suchergebnisse"><div class="receipt-toolbar"><div><span class="eyebrow">Suchergebnisse</span><strong data-r="count"></strong></div><button type="button" data-r="export" class="secondary-button" disabled>Auswahl als PDF (0)</button><button type="button" data-r="unselect" class="secondary-button">Auswahl aufheben</button></div>
             <div class="receipt-table-settings"><details class="receipt-columns"><summary>Spaltenanzeige</summary><div class="receipt-columns-panel"><p class="settings-note">Spalten auswählen und mit den Pfeilen anordnen. Mindestens eine Spalte bleibt sichtbar.</p><div data-r="columns" class="receipt-column-list"></div></div></details><span data-r="columns-status" role="status" class="settings-note"></span></div>
             <div data-r="results"></div><button type="button" data-r="more" class="secondary-button" hidden>Weitere Treffer suchen</button></section>
-            <dialog data-r="detail-dialog" class="modal receipt-detail" aria-label="Beleginformation"><div class="modal-header"><h2>Beleginfo</h2><button type="button" data-r="detail-close" aria-label="Beleginfo schließen">×</button></div><div data-r="detail-body"></div><div class="modal-actions"><button type="button" data-r="detail-pdf" class="primary-button">Diesen Beleg als PDF</button></div></dialog>
+            <dialog data-gp-window-mode="workspace" data-r="detail-dialog" class="modal receipt-detail" aria-label="Beleginformation"><div class="modal-header"><h2>Beleginfo</h2><button type="button" data-r="detail-close" aria-label="Beleginfo schließen">×</button></div><div data-r="detail-body"></div><div class="modal-actions"><button type="button" data-r="detail-pdf" class="primary-button">Diesen Beleg als PDF</button></div></dialog>
             <dialog data-r="dialog" class="modal date-range-dialog" aria-label="Suchzeitraum"><form data-r="range-form"><div class="modal-header"><h2>Zeitraum auswählen</h2><button type="button" data-r="range-close" aria-label="Kalender schließen">×</button></div>
               <label class="receipt-month-jump">Zu Monat / Jahr springen<input data-r="month-jump" type="month" min="1900-01" max="${context.today.slice(0, 7)}"></label>
               <div class="date-range-selection"><div><span>Beginn</span><strong data-r="start"></strong></div><div><span>Ende</span><strong data-r="end"></strong></div></div>
@@ -224,7 +225,7 @@
           el('reset').addEventListener('click', () => { el('form').reset(); to = context.today; const d = new Date(to); d.setUTCDate(d.getUTCDate() - 30); from = d.toISOString().slice(0, 10); el('range').textContent = `${date(from)} – ${date(to)}`; source(); filters(); message('Suchfilter zurückgesetzt.'); });
           el('export').addEventListener('click', () => void exportPdf([...selected], el('export'))); el('unselect').addEventListener('click', () => { selected.clear(); render(); });
           el('detail-close').addEventListener('click', () => { detailId = null; el('detail-dialog').close(); });
-          el('detail-dialog').addEventListener('close', () => { detailId = null; el('detail-body').replaceChildren(); });
+          el('detail-dialog').addEventListener('close', () => { if (el('detail-dialog').open) return; detailRequest = null; detailId = null; el('detail-body').replaceChildren(); });
           el('detail-pdf').addEventListener('click', () => { if (detailId) void exportPdf([detailId], el('detail-pdf')); });
           source(); filters(); renderColumns(); render();
         } catch (error) { if (!disposed) { context = null; root.textContent = error.message || 'Kassenstand nicht verfügbar.'; } }

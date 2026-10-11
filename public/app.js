@@ -1,9 +1,10 @@
 let personnelLearningAssessmentEditor=null, personnelLearningAssessmentPanel=null, personnelLearningTeam=null;
 const sidebarNavigationGroups = window.GrabenplanerSidebarLayout.createGroups();
 let salesPriceLabelsWorkspace = null;
+let workflowStudioWorkspace = null;
 let sidebarLayout = null;
 let sidebarNotepad = null;
-let gpWindowManager = null, gpWindowActor = '', recentArticlesWindow = null;
+let gpWindowManager = null, gpWindowActor = '', gpWindowSession = null, recentArticlesWindow = null;
 let gpDocumentPrint = null, documentPrintModelRevision = 0;
 const documentPrintModels = new WeakMap();
 const settingsSaveStatuses = new Map(), settingsSaveStatusHosts = new Map();
@@ -618,6 +619,9 @@ const state = {
   personnelDirectorySearch: "",
   personnelDirectoryCostCenterFilter: "",
   personnelDirectoryStatusFilter: "active",
+  personnelDirectorySourceStatus: "idle",
+  personnelDirectorySourceContext: null,
+  personnelDirectorySourceError: "",
   employeeProfile: null,
   employeeProfileEmployeeNumber: "",
   employeeProfileTab: "overview",
@@ -668,6 +672,8 @@ const state = {
   personnelLifecycleEditorLoading: false,
   personnelLifecycleEditorError: "",
   personnelLifecycleEditorActorAccessKey: "",
+  personnelLifecycleEditorSession: null,
+  personnelLifecycleEditorWindowContext: null,
   personnelLifecycleEditorRequestToken: null,
   personnelLifecycleEditorDraft: null,
   personnelLifecycleEditorPristineDraft: null,
@@ -817,9 +823,9 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutDateRangeButton", "requestBlackoutDateRangeText", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList", "requestBlackoutDateRangeDialog", "requestBlackoutDateRangeForm", "requestBlackoutDateRangeStartText", "requestBlackoutDateRangeEndText", "requestBlackoutDateRangePreviousMonth", "requestBlackoutDateRangeMonthLabel", "requestBlackoutDateRangeNextMonth", "requestBlackoutDateRangeGrid", "requestBlackoutDateRangeOpenEnd", "requestBlackoutDateRangeClose", "requestBlackoutDateRangeCancel", "requestBlackoutDateRangeApply",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "positionManagementTab", "positionManagementSection", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "addPersonnelCandidateButton", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "personnelCandidateCreateModal", "personnelCandidateCreateForm", "personnelCandidateCreateApplication", "personnelCandidateCreateLocation", "personnelCandidateCreateDepartment", "personnelCandidateAuthorizationCheck", "personnelCandidateAuthorizationConfirmed", "personnelCandidateAuthorizationState", "personnelCandidateCreateMessage", "personnelCandidateCreateSubmit", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "positionManagementSection", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "addPersonnelCandidateButton", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "personnelCandidateCreateModal", "personnelCandidateCreateForm", "personnelCandidateCreateApplication", "personnelCandidateCreateLocation", "personnelCandidateCreateDepartment", "personnelCandidateAuthorizationCheck", "personnelCandidateAuthorizationConfirmed", "personnelCandidateAuthorizationState", "personnelCandidateCreateMessage", "personnelCandidateCreateSubmit", "workflowCenterSection", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryResultCount", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "personnelCandidateCreatePhotoField", "personnelCandidateCreatePhoto", "personnelCandidateCreatePhotoPreview", "personnelCandidateCreateTargetAreas", "personnelCandidateCreateAddTargetArea", "personnelCandidateCreateTrialAppointments", "personnelCandidateCreateAddTrialAppointment", "personnelCandidateCreateCompetencyRatings", "personnelCandidateCreateAddCompetencyRating", "personnelCandidateTrialDateRangeDialog", "personnelCandidateTrialDateRangeForm", "personnelCandidateTrialDateRangeStartText", "personnelCandidateTrialDateRangeEndText", "personnelCandidateTrialDateRangePreviousMonth", "personnelCandidateTrialDateRangeMonthLabel", "personnelCandidateTrialDateRangeNextMonth", "personnelCandidateTrialDateRangeGrid", "personnelCandidateTrialDateRangeOpenEnd", "personnelCandidateTrialDateRangeClose", "personnelCandidateTrialDateRangeCancel", "personnelCandidateTrialDateRangeApply",
-    "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelLearningTab", "personnelLearningSection", "personnelLearningDashboardPanel", "refreshPersonnelLearningDashboardButton", "personnelLearningDashboardStatus", "personnelLearningDashboardSummary", "personnelLearningDashboardScope", "personnelLearningDashboardAssignments", "personnelLearningDashboardEmployee", "personnelLearningSkillTree", "personnelLearningProcessesPanel", "personnelLearningSummary", "personnelLearningSearch", "personnelLearningTypeFilter", "personnelLearningStatusFilter", "refreshPersonnelLearningButton", "personnelLearningStatus", "personnelLearningList", "addPersonnelLearningModuleButton", "personnelLearningModal", "personnelLearningForm", "personnelLearningModalTitle", "personnelLearningModuleId", "personnelLearningExpectedReceipt", "personnelLearningModuleCode", "personnelLearningModuleType", "personnelLearningScope", "personnelLearningTitle", "personnelLearningSummaryInput", "personnelLearningObjective", "personnelLearningEstimatedMinutes", "personnelLearningVerificationMode", "personnelLearningTags", "personnelLearningVersionNote", "personnelLearningSteps", "addPersonnelLearningStepButton", "personnelLearningMessage", "savePersonnelLearningButton", "personnelLearningSkillsPanel", "personnelLearningSkillSummary", "personnelLearningSkillSearch", "personnelLearningSkillStatusFilter", "refreshPersonnelLearningSkillsButton", "personnelLearningSkillStatus", "personnelLearningSkillList", "addPersonnelLearningSkillButton", "personnelLearningSkillModal", "personnelLearningSkillForm", "personnelLearningSkillModalTitle", "personnelLearningSkillId", "personnelLearningSkillExpectedReceipt", "personnelLearningSkillCode", "personnelLearningSkillCategory", "personnelLearningSkillScope", "personnelLearningSkillTitle", "personnelLearningSkillSummaryInput", "personnelLearningSkillTags", "personnelLearningSkillVersionNote", "personnelLearningSkillLevels", "personnelLearningSkillMessage", "savePersonnelLearningSkillButton", "personnelLearningCompetenciesPanel", "personnelLearningCompetencySummary", "personnelLearningCompetencySearch", "personnelLearningCompetencyEmployee", "personnelLearningCompetencyStatusFilter", "refreshPersonnelLearningCompetenciesButton", "addPersonnelLearningCompetencyButton", "personnelLearningCompetencyStatus", "personnelLearningCompetencyEmployeeSummary", "personnelLearningCompetencyList", "personnelLearningCompetencyModal", "personnelLearningCompetencyForm", "personnelLearningCompetencyModalTitle", "personnelLearningCompetencyId", "personnelLearningCompetencyExpectedReceipt", "personnelLearningCompetencyEmployeeNumber", "personnelLearningCompetencyPerson", "personnelLearningCompetencySkill", "personnelLearningCompetencyLevel", "personnelLearningCompetencyTrainer", "personnelLearningCompetencyLevelPreview", "personnelLearningCompetencyMessage", "savePersonnelLearningCompetencyButton", "personnelLearningAssignmentsPanel", "personnelLearningAssignmentSummary", "personnelLearningAssignmentSearch", "personnelLearningAssignmentLearnerFilter", "personnelLearningAssignmentStatusFilter", "refreshPersonnelLearningAssignmentsButton", "addPersonnelLearningAssignmentButton", "personnelLearningAssignmentStatus", "personnelLearningAssignmentList", "personnelLearningAssignmentModal", "personnelLearningAssignmentForm", "personnelLearningAssignmentModalTitle", "personnelLearningAssignmentId", "personnelLearningAssignmentExpectedReceipt", "personnelLearningAssignmentProcess", "personnelLearningAssignmentLearner", "personnelLearningAssignmentTrainerSearch", "personnelLearningAssignmentTrainerCount", "personnelLearningAssignmentTrainerList", "personnelLearningAssignmentBindingPreview", "personnelLearningAssignmentMessage", "savePersonnelLearningAssignmentButton", "personnelLearningProgressModal", "personnelLearningProgressForm", "personnelLearningProgressModalTitle", "personnelLearningProgressAssignmentId", "personnelLearningProgressAssignmentReceipt", "personnelLearningProgressExpectedReceipt", "personnelLearningProgressSummary", "personnelLearningProgressCount", "personnelLearningProgressStepList", "personnelLearningProgressFinalized", "personnelLearningProgressResult", "personnelLearningProgressAssessmentNote", "personnelLearningProgressCorrectionReasonField", "personnelLearningProgressCorrectionReason", "personnelLearningProgressHistoryDetails", "personnelLearningProgressHistory", "personnelLearningProgressMessage", "savePersonnelLearningProgressButton", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList", "personnelLifecycleInterfacesSection", "personnelLifecycleInterfacesStatus", "personnelLifecycleInterfacesList", "personnelLifecycleAutomationSection", "personnelLifecycleAutomationStatus", "personnelLifecycleAutomationCatalog", "personnelLifecycleAutomationSummary", "personnelLifecycleAutomationList",
+    "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelLearningSection", "personnelLearningDashboardPanel", "refreshPersonnelLearningDashboardButton", "personnelLearningDashboardStatus", "personnelLearningDashboardSummary", "personnelLearningDashboardScope", "personnelLearningDashboardAssignments", "personnelLearningDashboardEmployee", "personnelLearningSkillTree", "personnelLearningProcessesPanel", "personnelLearningSummary", "personnelLearningSearch", "personnelLearningTypeFilter", "personnelLearningStatusFilter", "refreshPersonnelLearningButton", "personnelLearningStatus", "personnelLearningList", "addPersonnelLearningModuleButton", "personnelLearningModal", "personnelLearningForm", "personnelLearningModalTitle", "personnelLearningModuleId", "personnelLearningExpectedReceipt", "personnelLearningModuleCode", "personnelLearningModuleType", "personnelLearningScope", "personnelLearningTitle", "personnelLearningSummaryInput", "personnelLearningObjective", "personnelLearningEstimatedMinutes", "personnelLearningVerificationMode", "personnelLearningTags", "personnelLearningVersionNote", "personnelLearningSteps", "addPersonnelLearningStepButton", "personnelLearningMessage", "savePersonnelLearningButton", "personnelLearningSkillsPanel", "personnelLearningSkillSummary", "personnelLearningSkillSearch", "personnelLearningSkillStatusFilter", "refreshPersonnelLearningSkillsButton", "personnelLearningSkillStatus", "personnelLearningSkillList", "addPersonnelLearningSkillButton", "personnelLearningSkillModal", "personnelLearningSkillForm", "personnelLearningSkillModalTitle", "personnelLearningSkillId", "personnelLearningSkillExpectedReceipt", "personnelLearningSkillCode", "personnelLearningSkillCategory", "personnelLearningSkillScope", "personnelLearningSkillTitle", "personnelLearningSkillSummaryInput", "personnelLearningSkillTags", "personnelLearningSkillVersionNote", "personnelLearningSkillLevels", "personnelLearningSkillMessage", "savePersonnelLearningSkillButton", "personnelLearningCompetenciesPanel", "personnelLearningCompetencySummary", "personnelLearningCompetencySearch", "personnelLearningCompetencyEmployee", "personnelLearningCompetencyStatusFilter", "refreshPersonnelLearningCompetenciesButton", "addPersonnelLearningCompetencyButton", "personnelLearningCompetencyStatus", "personnelLearningCompetencyEmployeeSummary", "personnelLearningCompetencyList", "personnelLearningCompetencyModal", "personnelLearningCompetencyForm", "personnelLearningCompetencyModalTitle", "personnelLearningCompetencyId", "personnelLearningCompetencyExpectedReceipt", "personnelLearningCompetencyEmployeeNumber", "personnelLearningCompetencyPerson", "personnelLearningCompetencySkill", "personnelLearningCompetencyLevel", "personnelLearningCompetencyTrainer", "personnelLearningCompetencyLevelPreview", "personnelLearningCompetencyMessage", "savePersonnelLearningCompetencyButton", "personnelLearningAssignmentsPanel", "personnelLearningAssignmentSummary", "personnelLearningAssignmentSearch", "personnelLearningAssignmentLearnerFilter", "personnelLearningAssignmentStatusFilter", "refreshPersonnelLearningAssignmentsButton", "addPersonnelLearningAssignmentButton", "personnelLearningAssignmentStatus", "personnelLearningAssignmentList", "personnelLearningAssignmentModal", "personnelLearningAssignmentForm", "personnelLearningAssignmentModalTitle", "personnelLearningAssignmentId", "personnelLearningAssignmentExpectedReceipt", "personnelLearningAssignmentProcess", "personnelLearningAssignmentLearner", "personnelLearningAssignmentTrainerSearch", "personnelLearningAssignmentTrainerCount", "personnelLearningAssignmentTrainerList", "personnelLearningAssignmentBindingPreview", "personnelLearningAssignmentMessage", "savePersonnelLearningAssignmentButton", "personnelLearningProgressModal", "personnelLearningProgressForm", "personnelLearningProgressModalTitle", "personnelLearningProgressAssignmentId", "personnelLearningProgressAssignmentReceipt", "personnelLearningProgressExpectedReceipt", "personnelLearningProgressSummary", "personnelLearningProgressCount", "personnelLearningProgressStepList", "personnelLearningProgressFinalized", "personnelLearningProgressResult", "personnelLearningProgressAssessmentNote", "personnelLearningProgressCorrectionReasonField", "personnelLearningProgressCorrectionReason", "personnelLearningProgressHistoryDetails", "personnelLearningProgressHistory", "personnelLearningProgressMessage", "savePersonnelLearningProgressButton", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList", "personnelLifecycleInterfacesSection", "personnelLifecycleInterfacesStatus", "personnelLifecycleInterfacesList", "personnelLifecycleAutomationSection", "personnelLifecycleAutomationStatus", "personnelLifecycleAutomationCatalog", "personnelLifecycleAutomationSummary", "personnelLifecycleAutomationList",
     "personnelWorkflowInstanceWorkspace", "personnelLifecycleEditorSection", "personnelLifecycleEditorEntryTitle", "openPersonnelLifecycleEditorButton", "personnelLifecycleEditorEntryStatus", "personnelLifecycleEditorDialog", "personnelLifecycleEditorTitle", "closePersonnelLifecycleEditorButton", "personnelLifecycleEditorStatus", "personnelLifecycleEditorWorkspace", "personnelLifecycleEditorWorkflowType", "personnelLifecycleEditorCatalogHint", "personnelLifecycleEditorWorkflowCode", "personnelLifecycleEditorDraftTitle", "personnelLifecycleEditorDraftDescription", "personnelLifecycleEditorScopeType", "personnelLifecycleEditorRequirementKind", "addPersonnelLifecycleEditorStepButton", "personnelLifecycleEditorFlow", "personnelLifecycleEditorInspectorForm", "personnelLifecycleEditorInspectorFields", "personnelLifecycleEditorStepType", "personnelLifecycleEditorStepTitle", "personnelLifecycleEditorStepDescription", "personnelLifecycleEditorResponsibilityClass", "personnelLifecycleEditorStepRequired", "movePersonnelLifecycleEditorStepUpButton", "movePersonnelLifecycleEditorStepDownButton", "removePersonnelLifecycleEditorStepButton", "personnelLifecycleEditorValidation", "personnelLifecycleEditorValidationTitle", "personnelLifecycleEditorValidationResult", "resetPersonnelLifecycleEditorButton", "validatePersonnelLifecycleEditorButton",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
@@ -1269,6 +1275,7 @@ function contrastColor(hex) {
 }
 
 async function api(url, options = {}) {
+  const requestSession = state.portalSession;
   const csrfToken = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("grabenplaner_csrf="))?.split("=").slice(1).join("=");
   const headers = { "Content-Type": "application/json", ...options.headers };
   if (csrfToken && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase())) {
@@ -1290,13 +1297,14 @@ async function api(url, options = {}) {
     const error = new Error(detail.message);
     error.status = response.status;
     error.code = detail.code;
-    if (response.status === 401 && elements.loginGate) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
+    if (response.status === 401 && elements.loginGate && state.portalSession === requestSession) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
   return response.status === 204 ? null : response.json();
 }
 
 async function rawApi(url, options = {}) {
+  const requestSession = state.portalSession;
   const headers = { ...(options.headers || {}) };
   const method = String(options.method || "GET").toUpperCase();
   if (!["GET", "HEAD"].includes(method)) Object.assign(headers, csrfHeader());
@@ -1316,7 +1324,7 @@ async function rawApi(url, options = {}) {
     const error = new Error(detail.message);
     error.status = response.status;
     error.code = detail.code;
-    if (response.status === 401 && elements.loginGate) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
+    if (response.status === 401 && state.portalSession === requestSession && elements.loginGate) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
   return response;
@@ -1375,6 +1383,10 @@ function showLoginGate(message = "") {
   clearUsbProvisioningPasswords();
   resetAdminPersonalActionsState("");
   state.portalSession = null;
+  syncWorkflowStudio();
+  personnelDashboardInformation?.clear();
+  syncPersonnelDashboardWorkspace();
+  syncXoffiImport();
   syncPlanningPrintWindows();
   gpDocumentPrint?.reset();
   gpDefinitionsWorkspace?.synchronize();
@@ -2372,8 +2384,36 @@ function canReadPersonnelWorkflowInstances() {
     && state.personnelWorkflowInstanceCapabilities.canRead !== false;
 }
 
+function canReadWorkflowStudioCatalog() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  const user = state.portalSession?.user;
+  return state.portalSession?.authenticated === true && user?.mustChangePassword !== true && user?.active !== false
+    && ["developer", "it_admin", "admin", "hr"].includes(user?.role) && hasGovernancePermission("rights:read");
+}
+
 function canOpenWorkflowCenter() {
-  return canReadPersonnelWorkflowInstances() || canReadPersonnelLifecycleEditorCatalog();
+  return canReadPersonnelWorkflowInstances() || canReadPersonnelLifecycleEditorCatalog() || canReadWorkflowStudioCatalog();
+}
+
+function syncWorkflowStudio() {
+  if (state.personnelLifecycleEditorActorAccessKey && state.personnelLifecycleEditorSession !== state.portalSession) clearPersonnelLifecycleEditorState();
+  const context = state.personnelWorkflowInstancesContext;
+  if (context && !gpContextCurrent(context)) {
+    state.personnelWorkflowInstancesRequest = Symbol("workflow-context-changed");
+    state.personnelWorkflowInstancesContext = null;
+    clearPersonnelWorkflowInstanceState();
+    state.personnelWorkflowInstanceCapabilities = defaultPersonnelWorkflowInstanceCapabilities();
+  }
+  const host = document.getElementById("workflowStudioWorkspace");
+  if (!host || !window.GrabenplanerWorkflowStudio) return;
+  if (!workflowStudioWorkspace) workflowStudioWorkspace = window.GrabenplanerWorkflowStudio.mount(host, {
+    api, key: startDashboardWorkspaceActorKey, session: () => state.portalSession,
+    canUse: canReadWorkflowStudioCatalog,
+    canManage: () => !state.portalStatus?.portalEnabled || hasGovernancePermission("processes:write"),
+    active: () => state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "workflows",
+    scope: () => JSON.stringify([state.locationId, state.departmentId]),
+  });
+  workflowStudioWorkspace.sync();
 }
 
 function canReadPersonnelLearningCatalog() {
@@ -2629,7 +2669,9 @@ function canReadPersonnelLifecycleEditorCatalog() {
 
 function canWritePersonnelLifecycleEditorDraft() {
   return canReadPersonnelLifecycleEditorCatalog()
-    && hasGovernancePermission("personnel:lifecycle:editor:draft:write");
+    && hasGovernancePermission("personnel:lifecycle:editor:draft:write")
+    && !state.personnelLifecycleEditorLoading
+    && (!state.personnelLifecycleEditorWindowContext || gpEditorCurrent(state.personnelLifecycleEditorWindowContext));
 }
 
 function canValidatePersonnelLifecycleEditorDraft() {
@@ -2963,10 +3005,6 @@ function applyRoleVisibility() {
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !(employeeWriteAccess && centralPersonnelWriteAccess));
   elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
   document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
-  elements.positionManagementTab?.classList.toggle("hidden", !positionWriteAccess);
-  elements.candidatePreboardingTab?.classList.toggle("hidden", !candidatePreboardingAccess);
-  elements.workflowCenterTab?.classList.toggle("hidden", !workflowCenterAccess);
-  elements.personnelLearningTab?.classList.toggle("hidden", !personnelLearningAccess);
   document.querySelector('[data-learning-area="team"]')?.classList.toggle("hidden", !personnelLearningCompetencyAccess);
   elements.addPersonnelLearningModuleButton?.classList.toggle(
     "hidden",
@@ -2999,14 +3037,10 @@ function applyRoleVisibility() {
       || state.personnelLearningAssignmentCatalog?.capabilities?.canWriteAssignments !== true,
   );
   elements.personnelWorkflowInstanceWorkspace?.classList.toggle("hidden", !workflowInstanceAccess);
-  elements.personnelTasksTab?.classList.toggle("hidden", !personnelTasksAccess);
   elements.personnelLifecycleInterfacesSection?.classList.toggle("hidden", !lifecycleInterfacesAccess);
   elements.personnelLifecycleAutomationSection?.classList.toggle("hidden", !lifecycleAutomationAccess);
   elements.personnelLifecycleEditorSection?.classList.toggle("hidden", !lifecycleEditorAccess);
   document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
-  elements.customWorkRulesTab?.classList.toggle("hidden", !customWorkRulesAccess);
-  elements.collectiveAgreementsTab?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
-  elements.centralVacationsTab?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
   elements.addCostCenterTypeButton?.classList.toggle("hidden", !costCenterWriteAccess);
   elements.addCustomWorkRuleButton?.classList.toggle("hidden", !canDraftCustomWorkRules());
@@ -3210,7 +3244,8 @@ function applyRoleVisibility() {
   );
   const lifecycleEditorActorAccessChanged = Boolean(
     state.personnelLifecycleEditorActorAccessKey
-    && state.personnelLifecycleEditorActorAccessKey !== personnelLifecycleEditorActorAccessKey(),
+    && (state.personnelLifecycleEditorActorAccessKey !== personnelLifecycleEditorActorAccessKey()
+      || state.personnelLifecycleEditorSession !== state.portalSession),
   );
   if ((!lifecycleEditorAccess || lifecycleEditorActorAccessChanged) && (
     state.personnelLifecycleEditorCatalog
@@ -3574,6 +3609,7 @@ async function enrichLoadedSchedule(url, {
 }
 
 async function loadAll({ restoreContext = true, applyInitialView = false, reusePortalStatus = false } = {}) {
+  syncXoffiImport();
   syncSettingsSaveScopes();
   const generation = ++loadAllGeneration;
   const session = state.portalSession;
@@ -3622,7 +3658,9 @@ async function loadAll({ restoreContext = true, applyInitialView = false, reuseP
       vacationEnabled
         ? api(`/api/vacations?year=${state.vacationYear}${vacationContext}`)
         : Promise.resolve({ year: state.vacationYear, vacations: [], entitlements: [], publicHolidays: [] }),
-      api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || []),
+      portalStatus?.portalEnabled === false || session?.user?.permissions?.includes("branding:read")
+        ? api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || [])
+        : Promise.resolve([]),
     ]);
     if (!isCurrent() || settingsRead.key !== settingsSaveKey("main")) return;
     if (positions.status === "fulfilled") state.positions = positions.value;
@@ -3669,6 +3707,7 @@ function loadPlanningView(view) {
 }
 
 async function loadPlanningPeriod(kind = "schedule") {
+  syncXoffiImport();
   if (!state.data || (kind === "vacation" && !state.vacationData) || !state.locations?.length) return loadAll();
   const generation = ++loadAllGeneration;
   const started = globalThis.performance?.now();
@@ -3728,6 +3767,7 @@ async function loadPlanningPeriod(kind = "schedule") {
 }
 
 function render({ period = null } = {}) {
+  syncXoffiImport();
   if (period === "vacation") {
     applyShellBranding(hasManagementBrandingAccess() ? {} : state.vacationData?.settings || {});
     renderContextNavigation();
@@ -5200,15 +5240,16 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.filialTeamsNavButton, state.currentView === "personnel");
   setNavigationCurrent(elements.loanManagementNavButton, state.currentView === "loans");
   setNavigationCurrent(elements.branchOrdersManagementNavButton, state.currentView === "branchOrders");
-  setNavigationCurrent(elements.planningNavButton, state.currentView === "planning");
   setNavigationCurrent(elements.vacationsNavButton, state.currentView === "vacations");
   const planningContexts = locations.flatMap((location) => departmentOnly
-    ? (location.departments || []).map((department) => ({ locationId: location.id, departmentId: String(department.id), label: `${location.name} · ${department.name}` }))
-    : [{ locationId: location.id, departmentId: "", label: `${location.name} · Gesamtplan` }]);
+    ? (location.departments || []).map((department) => ({ locationId: location.id, departmentId: String(department.id), locationName: location.name, planLabel: department.name }))
+    : [{ locationId: location.id, departmentId: "", locationName: location.name, planLabel: "Gesamtplan" }]);
   const showPlanningChildren = planningContexts.length > 1;
+  setNavigationCurrent(elements.planningNavButton, state.currentView === "planning" && !showPlanningChildren);
+  elements.planningNavButton?.classList.toggle("contains-active", state.currentView === "planning" && showPlanningChildren);
   applyNavigationGroupState("planning", showPlanningChildren);
   elements.planningNavChildren.innerHTML = showPlanningChildren ? planningContexts.map((item) => `
-    <button type="button" class="nav-child ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? "active" : ""}" ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? 'aria-current="page"' : ""} data-context-view="planning" data-location-id="${escapeHtml(item.locationId)}" data-department-id="${escapeHtml(item.departmentId)}">${escapeHtml(item.label)}</button>
+    <button type="button" class="nav-child nav-planning-context ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? "active" : ""}" ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? 'aria-current="page"' : ""} data-context-view="planning" data-location-id="${escapeHtml(item.locationId)}" data-department-id="${escapeHtml(item.departmentId)}" title="${escapeHtml(`${item.locationName} · ${item.planLabel}`)}"><strong>${escapeHtml(item.locationName)}</strong><small>${escapeHtml(item.planLabel)}</small></button>
   `).join("") : "";
 
   const showVacationChildren = locations.length > 1;
@@ -5260,7 +5301,8 @@ function renderContextNavigation() {
   const logisticsNav = document.getElementById("logisticsNav");
   logisticsNav?.classList.toggle("contains-active", state.currentView === "logistics");
   applyNavigationGroupState("logistics", !logisticsNav?.classList.contains("hidden"));
-  setNavigationCurrent(document.getElementById("logisticsPurchasingNavButton"), state.currentView === "logistics");
+  setNavigationCurrent(document.getElementById("logisticsPurchasingNavButton"), state.currentView === "logistics" && logisticsTab === "purchasing");
+  setNavigationCurrent(document.getElementById("logisticsOrdersNavButton"), state.currentView === "logistics" && logisticsTab === "orders");
   const privacyNav = document.getElementById("privacyOrganizationNav");
   privacyNav?.classList.toggle("contains-active", state.currentView === "privacyOrganization");
   applyNavigationGroupState("privacyOrganization", !privacyNav?.classList.contains("hidden"));
@@ -8167,12 +8209,20 @@ function costCenterTypeLabel(type) {
 }
 
 async function loadPersonnelAdministration({ force = false } = {}) {
-  if (!canOpenPersonnelAdministrationView() || state.personnelAdministrationLoading) return;
-  if (state.personnelAdministrationLoaded && !force) {
+  if (!canOpenPersonnelAdministrationView() || (state.personnelAdministrationLoading && gpContextCurrent(state.loadPersonnelAdministrationContext))) return;
+  if (state.personnelAdministrationLoaded && !force && (!canReadCentralPersonnel() || personnelDirectorySource().status === "succeeded")) {
     renderPersonnelAdministration();
     return;
   }
+  const requestToken = Symbol("loadPersonnelAdministration");
+  state.loadPersonnelAdministrationRequest = requestToken;
+  const contextTicket = captureGpContext(canOpenPersonnelAdministrationView, () => state.loadPersonnelAdministrationRequest);
+  state.loadPersonnelAdministrationContext = contextTicket;
   state.personnelAdministrationLoading = true;
+  state.personnelDirectorySourceStatus = canReadCentralPersonnel() ? "loading" : "denied";
+  state.personnelDirectorySourceContext = canReadCentralPersonnel() ? captureGpContext(canReadCentralPersonnel) : null;
+  state.personnelDirectorySourceError = "";
+  if (elements.personnelAdministrationSummary) renderPersonnelAdministrationSummary();
   if (elements.personnelDirectoryBody) elements.personnelDirectoryBody.innerHTML = '<tr><td colspan="8">Personalstammdaten werden geladen.</td></tr>';
   try {
     const [directoryPayload, costCenterPayload] = await Promise.all([
@@ -8184,6 +8234,7 @@ async function loadPersonnelAdministration({ force = false } = {}) {
         })
         : Promise.resolve([]),
     ]);
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelDirectory = apiList(directoryPayload, ["employees", "items", "personnel"])
       .map(normalizePersonnelDirectoryEmployee);
     state.costCenters = apiList(costCenterPayload, ["costCenters", "cost_centers", "items"])
@@ -8197,13 +8248,18 @@ async function loadPersonnelAdministration({ force = false } = {}) {
       : apiList(costCenterPayload, ["positions"]);
     if (positionItems.length) state.positions = positionItems;
     state.personnelAdministrationLoaded = true;
-    renderPersonnelAdministration();
+    state.personnelDirectorySourceStatus = canReadCentralPersonnel() ? "succeeded" : "denied";
+    if (gpContextCurrent(contextTicket)) renderPersonnelAdministration();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
+    state.personnelDirectorySourceStatus = "failed";
+    state.personnelDirectorySourceError = error.message;
+    if (elements.personnelAdministrationSummary) renderPersonnelAdministrationSummary();
     if (elements.personnelDirectoryBody) elements.personnelDirectoryBody.innerHTML = `<tr><td colspan="8">${escapeHtml(error.message)}</td></tr>`;
     if (elements.costCenterList) elements.costCenterList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
     showToast(error.message, true);
   } finally {
-    state.personnelAdministrationLoading = false;
+    if (state.loadPersonnelAdministrationRequest === requestToken) state.personnelAdministrationLoading = false;
   }
 }
 
@@ -8223,18 +8279,30 @@ function filteredPersonnelDirectory() {
   }).sort((left, right) => String(left.personnel_number).localeCompare(String(right.personnel_number), "de-AT", { numeric: true, sensitivity: "base" }));
 }
 
+function personnelDirectorySource() {
+  if (!canReadCentralPersonnel()) return { status: "denied", message: "Kein Zugriff auf das Personalverzeichnis." };
+  if (!state.personnelDirectorySourceContext || !gpContextCurrent(state.personnelDirectorySourceContext)) return { status: "idle", message: "Noch kein Personalverzeichnis für die aktuelle Sitzung geladen." };
+  const status = state.personnelDirectorySourceStatus;
+  return { status, message: status === "loading" ? "Personalverzeichnis wird geladen." : status === "failed" ? "Das Personalverzeichnis konnte nicht geladen werden. Bitte erneut aktualisieren." : "" };
+}
+
 function renderPersonnelAdministrationSummary() {
   if (!elements.personnelAdministrationSummary) return;
   const total = state.personnelDirectory.length;
   const active = state.personnelDirectory.filter((employee) => employee.active).length;
   const inactive = total - active;
   const unassigned = state.personnelDirectory.filter((employee) => !employee.cost_center_id).length;
+  const source = personnelDirectorySource(), known = source.status === "succeeded";
+  elements.personnelAdministrationSummary.dataset.sourceStatus = source.status;
+  elements.personnelAdministrationSummary.setAttribute("aria-busy", String(source.status === "loading"));
+  elements.personnelDirectoryTable?.setAttribute("aria-busy", String(source.status === "loading"));
+  if (elements.personnelDirectoryResultCount && !known) elements.personnelDirectoryResultCount.textContent = source.message;
   elements.personnelAdministrationSummary.innerHTML = [
-    ["Beschäftigte", total, "gesamt"],
+    ["Mitarbeitende", total, "freigegebener Gesamtbestand"],
     ["Aktiv", active, "aktuelle Personalstämme"],
     ["Inaktiv", inactive, "historisch erhalten"],
     ["Ohne Kostenstelle", unassigned, unassigned ? "Zuordnung nachpflegen" : "vollständig zugeordnet"],
-  ].map(([label, value, note], index) => `<article class="personnel-administration-stat ${index === 3 && value ? "warning" : ""}"><span>${escapeHtml(label)}</span><strong>${Number(value)}</strong><small>${escapeHtml(note)}</small></article>`).join("");
+  ].map(([label, value, note], index) => `<article class="personnel-administration-stat ${known && index === 3 && value ? "warning" : ""}"><span>${escapeHtml(label)}</span><strong>${known ? Number(value) : "–"}</strong><small>${escapeHtml(known ? note : source.message)}</small></article>`).join("");
 }
 
 function renderPersonnelDirectory() {
@@ -8254,7 +8322,11 @@ function renderPersonnelDirectory() {
   state.employeeDisplayColumns = columns.map((column) => column.id);
   if (elements.personnelDirectoryHead) elements.personnelDirectoryHead.innerHTML = employeeDisplayHeader(columns);
   applyEmployeeDisplayTableLayout(elements.personnelDirectoryTable, columns);
-  const rows = sortedEmployeesForDisplay(filteredPersonnelDirectory());
+  const source = personnelDirectorySource();
+  const rows = source.status === "succeeded" ? sortedEmployeesForDisplay(filteredPersonnelDirectory()) : [];
+  if (elements.personnelDirectoryResultCount) elements.personnelDirectoryResultCount.textContent = source.status === "succeeded"
+    ? `${rows.length} Treffer · ${state.personnelDirectory.length} Personen im freigegebenen Gesamtbestand` : source.message;
+  elements.personnelDirectoryTable?.setAttribute("aria-busy", String(source.status === "loading"));
   const canEdit = canWriteCentralPersonnel();
   const canOpenRecord = personnelRecordAvailableInUi();
   const canOpenProfile = canOpenEmployeeProfileFoundation();
@@ -8268,7 +8340,7 @@ function renderPersonnelDirectory() {
       ${columns.map((column) => `<td data-label="${escapeHtmlAttribute(column.label)}">${employeeDisplayCell(employee, column)}</td>`).join("")}
       <td data-label="Aktionen"><span class="table-actions">${actions || "–"}</span></td>
     </tr>`;
-  }).join("") : `<tr><td colspan="${columns.length + 1}" class="personnel-directory-empty">Keine passenden Mitarbeitenden gefunden.</td></tr>`;
+  }).join("") : `<tr><td colspan="${columns.length + 1}" class="personnel-directory-empty">${escapeHtml(source.status === "succeeded" ? "Keine passenden Mitarbeitenden gefunden. Passe die Suche oder Filterauswahl an." : source.message)}</td></tr>`;
 }
 
 const EMPLOYEE_PROFILE_TABS = Object.freeze([
@@ -10694,10 +10766,14 @@ async function loadVacationAccounts({ force = false } = {}) {
   }
   state.vacationAccountsLoading = true;
   if (elements.vacationAccountsList) elements.vacationAccountsList.innerHTML = '<p class="settings-note">Urlaubskonten werden geladen.</p>';
+  const contextTicket = captureGpContext(canReadVacationAccounts, () => elements.vacationAccountsYear?.value);
   try {
-    state.vacationAccounts = await api(`/api/vacation-accounts?year=${encodeURIComponent(year)}`);
+    const result = await api(`/api/vacation-accounts?year=${encodeURIComponent(year)}`);
+    if (!gpContextCurrent(contextTicket)) return;
+    state.vacationAccounts = result;
     renderVacationAccounts();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     if (elements.vacationAccountsList) elements.vacationAccountsList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
     showToast(error.message, true);
   } finally {
@@ -10794,10 +10870,14 @@ async function loadMonthlyTimeRecords({ force = false } = {}) {
   }
   state.monthlyTimeRecordsLoading = true;
   if (elements.monthlyTimeRecordsList) elements.monthlyTimeRecordsList.innerHTML = '<p class="settings-note">Monatsnachweise werden geladen.</p>';
+  const contextTicket = captureGpContext(canReadMonthlyTimeRecords, () => elements.monthlyTimeRecordsMonth?.value);
   try {
-    state.monthlyTimeRecords = await api(`/api/time-record-statements?month=${encodeURIComponent(month)}`);
+    const result = await api(`/api/time-record-statements?month=${encodeURIComponent(month)}`);
+    if (!gpContextCurrent(contextTicket)) return;
+    state.monthlyTimeRecords = result;
     renderMonthlyTimeRecords();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     if (elements.monthlyTimeRecordsList) elements.monthlyTimeRecordsList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
     showToast(error.message, true);
   } finally {
@@ -11547,6 +11627,9 @@ async function loadCustomWorkRuleRegistry({ force = false } = {}) {
     renderCustomWorkRuleRegistry();
     return;
   }
+  const requestToken = Symbol("loadCustomWorkRuleRegistry");
+  state.loadCustomWorkRuleRegistryRequest = requestToken;
+  const contextTicket = captureGpContext(canAccessCustomWorkRuleGovernance, () => state.loadCustomWorkRuleRegistryRequest);
   state.customWorkRulesLoading = true;
   if (elements.customWorkRuleList) {
     elements.customWorkRuleList.innerHTML = '<p class="settings-note">Regelwerk und offene Aufgaben werden geladen.</p>';
@@ -11556,6 +11639,7 @@ async function loadCustomWorkRuleRegistry({ force = false } = {}) {
       api("/api/work-rules/drafts"),
       api("/api/work-rules/governance"),
     ]);
+    if (!gpContextCurrent(contextTicket)) return;
     if (registryResult.status === "rejected" && governanceResult.status === "rejected") {
       throw registryResult.reason;
     }
@@ -11584,15 +11668,16 @@ async function loadCustomWorkRuleRegistry({ force = false } = {}) {
     if (!ids.has(state.selectedCustomWorkRuleId)) {
       state.selectedCustomWorkRuleId = state.customWorkRuleRegistry.drafts?.[0]?.id || "";
     }
-    renderCustomWorkRuleRegistry();
+    if (gpContextCurrent(contextTicket)) renderCustomWorkRuleRegistry();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.customWorkRuleRegistry = null;
     if (elements.customWorkRuleList) {
       elements.customWorkRuleList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
     }
     showToast(error.message, true);
   } finally {
-    state.customWorkRulesLoading = false;
+    if (state.loadCustomWorkRuleRegistryRequest === requestToken) state.customWorkRulesLoading = false;
   }
 }
 
@@ -12341,10 +12426,16 @@ function openCustomWorkRuleModal(draft = null) {
   elements.customWorkRuleModalTitle.textContent = draft ? "Neue Entwurfsfassung" : "Regelentwurf anlegen";
   elements.customWorkRuleSubmitButton.textContent = draft ? "Neue Fassung speichern" : "Entwurf speichern";
   resetCustomWorkRuleSimulation();
+  elements.customWorkRuleSubmitButton.disabled = false;
+  elements.simulateCustomWorkRuleButton.disabled = false;
   elements.customWorkRuleModal.showModal();
 }
 
 async function simulateCustomWorkRuleDraft() {
+  const ticket = captureGpEditor(elements.customWorkRuleModal, canDraftCustomWorkRules);
+  const payload = JSON.stringify(customWorkRulePayload());
+  const current = () => gpEditorCurrent(ticket) && payload === JSON.stringify(customWorkRulePayload());
+  if (!current()) return false;
   if (!elements.customWorkRuleForm.reportValidity()) return false;
   elements.simulateCustomWorkRuleButton.disabled = true;
   elements.customWorkRuleTestResult.className = "custom-work-rule-test-result";
@@ -12352,8 +12443,9 @@ async function simulateCustomWorkRuleDraft() {
   try {
     const result = await api("/api/work-rules/drafts/simulate", {
       method: "POST",
-      body: JSON.stringify(customWorkRulePayload()),
+      body: payload,
     });
+    if (!current()) return false;
     const simulation = result.simulation || {};
     state.customWorkRuleSimulationValid = simulation.valid === true;
     elements.customWorkRuleTestResult.className = `custom-work-rule-test-result ${state.customWorkRuleSimulationValid ? "valid" : "invalid"}`;
@@ -12362,39 +12454,47 @@ async function simulateCustomWorkRuleDraft() {
       : "<strong>Die Testfälle passen noch nicht.</strong>";
     return state.customWorkRuleSimulationValid;
   } catch (error) {
+    if (!current()) return false;
     state.customWorkRuleSimulationValid = false;
     elements.customWorkRuleTestResult.className = "custom-work-rule-test-result invalid";
     elements.customWorkRuleTestResult.textContent = error.message;
     showToast(error.message, true);
     return false;
   } finally {
-    elements.simulateCustomWorkRuleButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.simulateCustomWorkRuleButton.disabled = false;
   }
 }
 
 async function saveCustomWorkRule(event) {
   event.preventDefault();
   if (!canDraftCustomWorkRules()) return;
-  if (!state.customWorkRuleSimulationValid && !(await simulateCustomWorkRuleDraft())) return;
+  const ticket = captureGpEditor(elements.customWorkRuleModal, canDraftCustomWorkRules);
   const draftId = elements.customWorkRuleId.value;
+  const payload = JSON.stringify(customWorkRulePayload());
+  if (!gpEditorCurrent(ticket)) return;
+  if (!state.customWorkRuleSimulationValid && !(await simulateCustomWorkRuleDraft())) return;
+  if (!gpEditorCurrent(ticket) || payload !== JSON.stringify(customWorkRulePayload())) return;
   elements.customWorkRuleSubmitButton.disabled = true;
   try {
     const result = await api(draftId
       ? `/api/work-rules/drafts/${encodeURIComponent(draftId)}/revisions`
       : "/api/work-rules/drafts", {
       method: "POST",
-      body: JSON.stringify(customWorkRulePayload()),
+      body: payload,
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.customWorkRuleModal.close();
     state.selectedCustomWorkRuleId = result.draft?.id || draftId;
     await loadCustomWorkRuleRegistry({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(draftId
       ? "Die neue unveränderliche Entwurfsfassung wurde gespeichert."
       : "Der Regelentwurf wurde ohne Dienstplanwirkung gespeichert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.customWorkRuleSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.customWorkRuleSubmitButton.disabled = false;
   }
 }
 
@@ -12748,6 +12848,12 @@ function openWorkRuleAssignmentModal(publicationId) {
 }
 
 async function previewWorkRuleAssignment() {
+  const ticket = captureGpEditor(elements.workRuleAssignmentModal, canAssignCustomWorkRules);
+  const publicationId = elements.workRuleAssignmentPublicationId.value;
+  const payload = workRuleAssignmentPayload();
+  const signature = JSON.stringify(payload);
+  const current = () => gpEditorCurrent(ticket) && publicationId === elements.workRuleAssignmentPublicationId.value && signature === JSON.stringify(workRuleAssignmentPayload());
+  if (!current()) return;
   if (!elements.workRuleAssignmentForm.reportValidity()) return;
   if (!elements.workRuleAssignmentApplicabilityConfirmed.checked) {
     showToast("Vor jeder Zuordnung muss die fachliche Anwendbarkeit bestätigt sein.", true);
@@ -12757,9 +12863,10 @@ async function previewWorkRuleAssignment() {
   try {
     const preview = await previewWorkRuleGovernance(
       "activate_assignment",
-      elements.workRuleAssignmentPublicationId.value,
-      workRuleAssignmentPayload(),
+      publicationId,
+      payload,
     );
+    if (!current()) return;
     state.workRuleGovernancePreview = preview;
     state.workRuleAssignmentPreviewValid = workRuleConflict(preview).outcome !== "blocked";
     elements.workRuleAssignmentBasisSha256.value = preview.basisSha256 || "";
@@ -12769,6 +12876,7 @@ async function previewWorkRuleAssignment() {
       : "Blockierender Konflikt";
     elements.workRuleAssignmentSubmitButton.disabled = !state.workRuleAssignmentPreviewValid;
   } catch (error) {
+    if (!current()) return;
     elements.workRuleAssignmentConflict.innerHTML = workRuleConflictMarkup({
       outcome: "blocked",
       title: "Konfliktprüfung fehlgeschlagen",
@@ -12776,11 +12884,13 @@ async function previewWorkRuleAssignment() {
     });
     showToast(error.message, true);
   } finally {
-    elements.previewWorkRuleAssignmentButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.previewWorkRuleAssignmentButton.disabled = false;
   }
 }
 
 async function saveWorkRuleAssignment(event) {
+  const ticket = captureGpEditor(elements.workRuleAssignmentModal, canAssignCustomWorkRules);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!state.workRuleAssignmentPreviewValid) {
     showToast("Bitte die Zuordnung nach der letzten Änderung erneut prüfen.", true);
@@ -12797,13 +12907,16 @@ async function saveWorkRuleAssignment(event) {
       basisSha256: elements.workRuleAssignmentBasisSha256.value,
       conflictRunId: state.workRuleGovernancePreview?.conflictRunId,
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.workRuleAssignmentModal.close();
     await loadCustomWorkRuleRegistry({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast("Der datierte Zuordnungsantrag wurde zur unabhängigen Freigabe eingereicht.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.workRuleAssignmentSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.workRuleAssignmentSubmitButton.disabled = false;
   }
 }
 
@@ -12967,6 +13080,9 @@ async function loadCollectiveAgreementRegistry({ force = false } = {}) {
     renderCollectiveAgreementRegistry();
     return;
   }
+  const requestToken = Symbol("loadCollectiveAgreementRegistry");
+  state.loadCollectiveAgreementRegistryRequest = requestToken;
+  const contextTicket = captureGpContext(canReadCollectiveAgreements, () => state.loadCollectiveAgreementRegistryRequest);
   state.collectiveAgreementsLoading = true;
   if (elements.collectiveAgreementList) {
     elements.collectiveAgreementList.innerHTML = '<p class="settings-note">KV-Fassungen werden geladen.</p>';
@@ -12976,6 +13092,7 @@ async function loadCollectiveAgreementRegistry({ force = false } = {}) {
       api("/api/collective-agreements/registry"),
       api("/api/work-rules/governance"),
     ]);
+    if (!gpContextCurrent(contextTicket)) return;
     if (registryResult.status === "rejected") throw registryResult.reason;
     state.collectiveAgreementRegistry = registryResult.value;
     if (governanceResult.status === "fulfilled") state.workRuleGovernance = governanceResult.value;
@@ -12983,15 +13100,16 @@ async function loadCollectiveAgreementRegistry({ force = false } = {}) {
     if (!agreementIds.has(state.selectedCollectiveAgreementId)) {
       state.selectedCollectiveAgreementId = state.collectiveAgreementRegistry.agreements?.[0]?.id || "";
     }
-    renderCollectiveAgreementRegistry();
+    if (gpContextCurrent(contextTicket)) renderCollectiveAgreementRegistry();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.collectiveAgreementRegistry = null;
     if (elements.collectiveAgreementList) {
       elements.collectiveAgreementList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
     }
     throw error;
   } finally {
-    state.collectiveAgreementsLoading = false;
+    if (state.loadCollectiveAgreementRegistryRequest === requestToken) state.collectiveAgreementsLoading = false;
   }
 }
 
@@ -13222,6 +13340,7 @@ function openCollectiveAgreementModal(agreement = null) {
     .forEach((input) => { input.disabled = newVersion; });
   document.querySelectorAll(".new-collective-agreement-only").forEach((field) => field.classList.toggle("hidden", newVersion));
   populateCollectiveAgreementProfileOptions();
+  elements.collectiveAgreementSubmitButton.disabled = false;
   elements.collectiveAgreementModal.showModal();
 }
 
@@ -13251,6 +13370,8 @@ function collectiveAgreementVersionPayload() {
 }
 
 async function saveCollectiveAgreement(event) {
+  const ticket = captureGpEditor(elements.collectiveAgreementModal, canManageCollectiveAgreements);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!canManageCollectiveAgreements()) return;
   const agreementId = elements.collectiveAgreementId.value;
@@ -13271,14 +13392,17 @@ async function saveCollectiveAgreement(event) {
         : "/api/collective-agreements",
       { method: "POST", body: JSON.stringify(body) },
     );
+    if (!gpEditorCurrent(ticket)) return;
     elements.collectiveAgreementModal.close();
     state.selectedCollectiveAgreementId = result.agreement?.id || agreementId;
     await loadCollectiveAgreementRegistry({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(agreementId ? "Die neue KV-Fassung wurde unveränderlich ergänzt." : "Der KV-Registereintrag wurde angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.collectiveAgreementSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.collectiveAgreementSubmitButton.disabled = false;
   }
 }
 
@@ -13332,10 +13456,13 @@ function openCollectiveAgreementBusinessUnitModal(unit = null) {
   elements.collectiveAgreementBusinessUnitModalTitle.textContent = unit ? "Betriebsteil um Bereiche ergänzen" : "Betriebsteil anlegen";
   elements.collectiveAgreementBusinessUnitSubmitButton.textContent = unit ? "Bereiche ergänzen" : "Betriebsteil speichern";
   renderCollectiveAgreementScopeOptions(unit);
+  elements.collectiveAgreementBusinessUnitSubmitButton.disabled = false;
   elements.collectiveAgreementBusinessUnitModal.showModal();
 }
 
 async function saveCollectiveAgreementBusinessUnit(event) {
+  const ticket = captureGpEditor(elements.collectiveAgreementBusinessUnitModal, canManageCollectiveAgreements);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!canManageCollectiveAgreements()) return;
   const businessUnitId = elements.collectiveAgreementBusinessUnitId.value;
@@ -13366,13 +13493,16 @@ async function saveCollectiveAgreementBusinessUnit(event) {
       body: JSON.stringify(body),
       },
     );
+    if (!gpEditorCurrent(ticket)) return;
     elements.collectiveAgreementBusinessUnitModal.close();
     await loadCollectiveAgreementRegistry({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(businessUnitId ? "Die Bereiche wurden unveränderlich ergänzt." : "Der Betriebsteil wurde angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.collectiveAgreementBusinessUnitSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.collectiveAgreementBusinessUnitSubmitButton.disabled = false;
   }
 }
 
@@ -13412,10 +13542,13 @@ function openCollectiveAgreementAssignmentModal() {
     <option value="${escapeHtmlAttribute(unit.id)}">${escapeHtml(`${unit.code} · ${unit.name}`)}</option>
   `).join("");
   updateCollectiveAgreementAssignmentDates();
+  elements.collectiveAgreementAssignmentSubmitButton.disabled = false;
   elements.collectiveAgreementAssignmentModal.showModal();
 }
 
 async function saveCollectiveAgreementAssignment(event) {
+  const ticket = captureGpEditor(elements.collectiveAgreementAssignmentModal, canPrepareCollectiveAgreementAssignments);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!canPrepareCollectiveAgreementAssignments()) return;
   const body = {
@@ -13433,13 +13566,16 @@ async function saveCollectiveAgreementAssignment(event) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.collectiveAgreementAssignmentModal.close();
     await loadCollectiveAgreementRegistry({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast("Der Zuordnungsvorschlag wurde mit Status „Prüfung offen“ gespeichert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.collectiveAgreementAssignmentSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.collectiveAgreementAssignmentSubmitButton.disabled = false;
   }
 }
 
@@ -14913,6 +15049,8 @@ function openPersonnelCandidateCreateModal() {
   );
   populatePersonnelCandidateCreateLocations();
   setPersonnelCandidateCreateMessage();
+  state.personnelCandidateCreatePendingOwner = null;
+  state.personnelCandidateCreatePending = false;
   syncPersonnelCandidateAuthorizationState();
   elements.personnelCandidateCreateModal.showModal();
   queueMicrotask(() => elements.personnelCandidateCreateForm.elements.firstName?.focus());
@@ -14920,6 +15058,8 @@ function openPersonnelCandidateCreateModal() {
 
 async function savePersonnelCandidate(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.personnelCandidateCreateModal, () => canReadCandidatePreboarding() && state.personnelCandidateCapabilities.canCreateCandidates);
+  if (!gpEditorCurrent(ticket)) return;
   const form = elements.personnelCandidateCreateForm;
   if (!form || state.personnelCandidateCreatePending
     || !state.personnelCandidateCapabilities.canCreateCandidates) return;
@@ -15006,6 +15146,8 @@ async function savePersonnelCandidate(event) {
   if (!validatePersonnelCandidateTrialRows(form)) return;
   if (!form.reportValidity()) return;
 
+  const mutationOwner = Symbol("personnelCandidateCreatePending");
+  state.personnelCandidateCreatePendingOwner = mutationOwner;
   state.personnelCandidateCreatePending = true;
   setPersonnelCandidateCreateMessage("Bewerber wird angelegt.");
   syncPersonnelCandidateAuthorizationState();
@@ -15015,6 +15157,7 @@ async function savePersonnelCandidate(event) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     const candidateId = String(result?.candidate?.id || "");
     let photoError = "";
     if (candidateId && photo) {
@@ -15024,15 +15167,19 @@ async function savePersonnelCandidate(event) {
         photoError = error.message || "Das Bewerberfoto konnte nicht gespeichert werden.";
       }
     }
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelCandidateCreateModal.close();
     await loadPersonnelCandidates({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     if (candidateId && state.personnelCandidateCapabilities.canReadCandidates) {
       await loadPersonnelCandidateDetail(candidateId);
     }
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(photoError
       ? `Der Bewerber wurde angelegt; ${photoError}`
       : "Der Bewerber wurde angelegt und die EDV-Erlaubnis revisionssicher bestätigt.", Boolean(photoError));
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     if ([401, 403].includes(error.status)) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
       return;
@@ -15042,13 +15189,13 @@ async function savePersonnelCandidate(event) {
       true,
     );
   } finally {
-    state.personnelCandidateCreatePending = false;
-    syncPersonnelCandidateAuthorizationState();
-    renderPersonnelCandidateOverview();
+    if (state.personnelCandidateCreatePendingOwner === mutationOwner) state.personnelCandidateCreatePending = false;
+    if (gpEditorCurrent(ticket, true)) { syncPersonnelCandidateAuthorizationState(); renderPersonnelCandidateOverview(); }
   }
 }
 
 async function loadPersonnelCandidates({ force = false } = {}) {
+  const contextTicket = captureGpContext(canReadCandidatePreboarding);
   if (!canReadCandidatePreboarding() || state.personnelCandidatesLoading) return;
   if (state.personnelCandidatesLoaded && !force) {
     renderPersonnelCandidateOverview();
@@ -15059,6 +15206,7 @@ async function loadPersonnelCandidates({ force = false } = {}) {
   renderPersonnelCandidateOverview();
   try {
     const result = await api("/api/portal/v1/personnel-lifecycle/candidates?limit=50&offset=0");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!canReadCandidatePreboarding()) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff wurde während des Ladens entzogen.");
       return;
@@ -15086,6 +15234,7 @@ async function loadPersonnelCandidates({ force = false } = {}) {
       state.personnelCandidateDetailError = "";
     }
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     if ([401, 403].includes(error.status)) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
       return;
@@ -15100,6 +15249,7 @@ async function loadPersonnelCandidates({ force = false } = {}) {
 }
 
 async function loadPersonnelCandidateEvaluatorOptions(candidate) {
+  const contextTicket = captureGpContext(canReadCandidatePreboarding, () => state.selectedPersonnelCandidate);
   const writableApplications = personnelCandidateApplications(candidate)
     .filter((application) => canWritePersonnelCandidateApplication(application));
   state.personnelCandidateEvaluatorOptions = Object.fromEntries(writableApplications.map((application) => ([
@@ -15123,14 +15273,17 @@ async function loadPersonnelCandidateEvaluatorOptions(candidate) {
       }];
     }
   }));
-  if (state.selectedPersonnelCandidateId !== candidate.id) return;
+  if (!gpContextCurrent(contextTicket) || state.selectedPersonnelCandidateId !== candidate.id) return;
   state.personnelCandidateEvaluatorOptions = Object.fromEntries(results);
   renderPersonnelCandidateOverview();
 }
 
 async function loadPersonnelCandidateDetail(candidateId) {
+  const contextTicket = captureGpContext(canReadCandidatePreboarding);
   const id = String(candidateId || "").trim();
   if (!id || !canReadCandidatePreboarding() || !state.personnelCandidateCapabilities.canReadCandidates) return;
+  const requestToken = Symbol("candidate-detail");
+  state.personnelCandidateDetailRequestToken = requestToken;
   state.selectedPersonnelCandidateId = id;
   state.selectedPersonnelCandidate = null;
   state.personnelCandidateEvaluatorOptions = {};
@@ -15139,7 +15292,8 @@ async function loadPersonnelCandidateDetail(candidateId) {
   renderPersonnelCandidateOverview();
   try {
     const result = await api(`/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(id)}`);
-    if (state.selectedPersonnelCandidateId !== id) return;
+    if (!gpContextCurrent(contextTicket)) return;
+    if (state.personnelCandidateDetailRequestToken !== requestToken || state.selectedPersonnelCandidateId !== id) return;
     if (!canReadCandidatePreboarding()) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff wurde während des Ladens entzogen.");
       return;
@@ -15156,16 +15310,17 @@ async function loadPersonnelCandidateDetail(candidateId) {
     renderPersonnelCandidateOverview();
     await loadPersonnelCandidateEvaluatorOptions(candidate);
   } catch (error) {
+    if (!gpContextCurrent(contextTicket) || state.personnelCandidateDetailRequestToken !== requestToken) return;
     if ([401, 403].includes(error.status)) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
       return;
     }
-    if (state.selectedPersonnelCandidateId === id) {
+    if (gpContextCurrent(contextTicket) && state.personnelCandidateDetailRequestToken === requestToken && state.selectedPersonnelCandidateId === id) {
       state.personnelCandidateDetailError = error.message || "Die Bewerbungsdetails konnten nicht geladen werden.";
     }
   } finally {
-    if (state.selectedPersonnelCandidateId === id) state.personnelCandidateDetailLoading = false;
-    renderPersonnelCandidateOverview();
+    if (gpContextCurrent(contextTicket) && state.personnelCandidateDetailRequestToken === requestToken && state.selectedPersonnelCandidateId === id) state.personnelCandidateDetailLoading = false;
+    if (gpContextCurrent(contextTicket) && state.personnelCandidateDetailRequestToken === requestToken) renderPersonnelCandidateOverview();
   }
 }
 
@@ -17306,13 +17461,14 @@ function personnelWorkflowStatusBadge(status, task = false) {
 
 function renderPersonnelWorkflowInstanceSummary() {
   if (!elements.personnelWorkflowInstanceSummary) return;
+  const ready = state.personnelWorkflowInstancesLoaded && !state.personnelWorkflowInstancesLoading && !state.personnelWorkflowInstanceLoadError && canReadPersonnelWorkflowInstances();
   const open = state.personnelWorkflowInstances.filter((instance) => instance.status === "open").length;
   const resolved = state.personnelWorkflowInstances.filter((instance) => instance.status === "resolved").length;
   elements.personnelWorkflowInstanceSummary.innerHTML = [
     ["Sichtbar", state.personnelWorkflowInstances.length, "serverseitig freigegebene Instanzen"],
     ["Offen", open, "laufende versionsgebundene Ausführungen"],
     ["Abgeschlossen", resolved, "unverändert historisch gebunden"],
-  ].map(([label, value, detail]) => `<article><span>${escapeHtml(label)}</span><strong>${value}</strong><small>${escapeHtml(detail)}</small></article>`).join("");
+  ].map(([label, value, detail]) => `<article><span>${escapeHtml(label)}</span><strong>${ready ? value : "–"}</strong><small>${escapeHtml(detail)}</small></article>`).join("");
 }
 
 function renderPersonnelWorkflowInstanceList() {
@@ -17912,7 +18068,7 @@ function renderPersonnelLifecycleEditorFlow() {
       ? PERSONNEL_LIFECYCLE_EDITOR_LABELS.responsibilityClasses[step.responsibilityClass]
       : "Verantwortung noch nicht festgelegt";
     return `<li data-editor-step-type="${escapeHtmlAttribute(step.type)}">
-      <button type="button" data-personnel-lifecycle-editor-step="${escapeHtmlAttribute(step.id)}" ${selected ? 'aria-current="step"' : ""} aria-label="Schritt ${index + 1} von ${draft.steps.length}: ${escapeHtmlAttribute(step.title || typeLabel)}">
+      <button type="button" data-personnel-lifecycle-editor-step="${escapeHtmlAttribute(step.id)}" draggable="${step.type !== "finish"}" ${selected ? 'aria-current="step"' : ""} aria-label="Schritt ${index + 1} von ${draft.steps.length}: ${escapeHtmlAttribute(step.title || typeLabel)}">
         <span class="personnel-lifecycle-editor-node-number" aria-hidden="true">${index + 1}</span>
         <span class="personnel-lifecycle-editor-node-copy"><strong>${escapeHtml(step.title || `Unbenannter ${typeLabel}`)}</strong><small>${escapeHtml(typeLabel)} · ${escapeHtml(step.required ? "Pflichtschritt" : "Optional")}</small><span>${escapeHtml(responsibilityLabel)}</span></span>
       </button>
@@ -17929,6 +18085,10 @@ function renderPersonnelLifecycleEditorInspector() {
   }
   if (step) {
     if (elements.personnelLifecycleEditorStepType) elements.personnelLifecycleEditorStepType.value = step.type;
+    if (elements.personnelLifecycleEditorStepType) {
+      elements.personnelLifecycleEditorStepType.disabled = !interactive || step.type === "finish";
+      elements.personnelLifecycleEditorStepType.querySelector('option[value="finish"]').disabled = step.type !== "finish";
+    }
     if (elements.personnelLifecycleEditorStepTitle) elements.personnelLifecycleEditorStepTitle.value = step.title;
     if (elements.personnelLifecycleEditorStepDescription) elements.personnelLifecycleEditorStepDescription.value = step.description;
     if (elements.personnelLifecycleEditorResponsibilityClass) {
@@ -17936,6 +18096,7 @@ function renderPersonnelLifecycleEditorInspector() {
     }
     if (elements.personnelLifecycleEditorStepRequired) {
       elements.personnelLifecycleEditorStepRequired.value = String(step.required);
+      elements.personnelLifecycleEditorStepRequired.disabled = !interactive || step.type === "finish";
     }
   } else {
     if (elements.personnelLifecycleEditorStepTitle) elements.personnelLifecycleEditorStepTitle.value = "";
@@ -17945,16 +18106,18 @@ function renderPersonnelLifecycleEditorInspector() {
   const steps = state.personnelLifecycleEditorDraft?.steps || [];
   const index = step ? steps.findIndex(({ id }) => id === step.id) : -1;
   if (elements.movePersonnelLifecycleEditorStepUpButton) {
-    elements.movePersonnelLifecycleEditorStepUpButton.disabled = !interactive || index <= 0;
+    elements.movePersonnelLifecycleEditorStepUpButton.disabled = !interactive || index <= 0 || step?.type === "finish";
   }
   if (elements.movePersonnelLifecycleEditorStepDownButton) {
     elements.movePersonnelLifecycleEditorStepDownButton.disabled = !interactive
-      || index < 0 || index >= steps.length - 1;
+      || index < 0 || index >= steps.length - 2 || step?.type === "finish";
   }
   if (elements.removePersonnelLifecycleEditorStepButton) {
     elements.removePersonnelLifecycleEditorStepButton.disabled = !interactive
-      || index < 0 || steps.length <= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.minimumSteps;
+      || index < 0 || steps.length <= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.minimumSteps || step?.type === "finish";
   }
+  const duplicateButton = typeof document !== "undefined" && document.getElementById("duplicatePersonnelLifecycleEditorStepButton");
+  if (duplicateButton) duplicateButton.disabled = !interactive || !step || step.type === "finish" || steps.length >= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps;
 }
 
 function renderPersonnelLifecycleEditorValidation() {
@@ -18095,6 +18258,9 @@ function clearPersonnelLifecycleEditorState(message = "", {
   state.personnelLifecycleEditorLoading = false;
   state.personnelLifecycleEditorError = String(message || "");
   state.personnelLifecycleEditorActorAccessKey = "";
+  state.personnelLifecycleEditorSession = null;
+  state.personnelLifecycleEditorWindowContext = null;
+  state.personnelLifecycleEditorDrag = null;
   state.personnelLifecycleEditorDraft = null;
   state.personnelLifecycleEditorPristineDraft = null;
   state.personnelLifecycleEditorSelectedStepId = "";
@@ -18143,15 +18309,17 @@ async function loadPersonnelLifecycleEditorCatalog() {
     return;
   }
   const requestToken = {};
+  const requestContext = captureGpEditor(elements.personnelLifecycleEditorDialog, canReadPersonnelLifecycleEditorCatalog);
   state.personnelLifecycleEditorRequestToken = requestToken;
   state.personnelLifecycleEditorLoading = true;
   state.personnelLifecycleEditorError = "";
   state.personnelLifecycleEditorActorAccessKey = actorAccessKey;
+  state.personnelLifecycleEditorSession = state.portalSession;
   setPersonnelLifecycleEditorStatus("Der O8-Katalog wird geladen …");
   renderPersonnelLifecycleEditor();
   try {
     const result = await api("/api/portal/v1/personnel-lifecycle/editor/catalog");
-    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    if (state.personnelLifecycleEditorRequestToken !== requestToken || !gpEditorCurrent(requestContext)) return;
     if (!elements.personnelLifecycleEditorDialog?.open
       || !canReadPersonnelLifecycleEditorCatalog()
       || personnelLifecycleEditorActorAccessKey() !== actorAccessKey) {
@@ -18174,13 +18342,8 @@ async function loadPersonnelLifecycleEditorCatalog() {
       state.personnelLifecycleEditorDirty = false;
     }
     state.personnelLifecycleEditorValidation = null;
-    setPersonnelLifecycleEditorStatus(
-      canWritePersonnelLifecycleEditorDraft()
-        ? "Arbeitsentwurf – nicht gespeichert. Änderungen bleiben ausschließlich in diesem Dialog."
-        : "Nur Lesen. Für lokale Änderungen fehlt das Entwurfsrecht.",
-    );
   } catch (error) {
-    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    if (state.personnelLifecycleEditorRequestToken !== requestToken || !gpEditorCurrent(requestContext)) return;
     const denied = [401, 403].includes(error.status);
     if(denied){
       clearPersonnelLifecycleEditorState("Der O8-Editorzugriff ist nicht mehr verfügbar.",{closeDialog:true,restoreFocus:false});
@@ -18191,10 +18354,17 @@ async function loadPersonnelLifecycleEditorCatalog() {
     }
     return;
   } finally {
-    if (state.personnelLifecycleEditorRequestToken === requestToken) {
+    if (state.personnelLifecycleEditorRequestToken === requestToken && gpEditorCurrent(requestContext)) {
       state.personnelLifecycleEditorRequestToken = null;
       state.personnelLifecycleEditorLoading = false;
       renderPersonnelLifecycleEditor();
+      if (state.personnelLifecycleEditorCatalogLoaded && !state.personnelLifecycleEditorError) {
+        setPersonnelLifecycleEditorStatus(
+          canWritePersonnelLifecycleEditorDraft()
+            ? "Arbeitsentwurf – nicht gespeichert. Änderungen bleiben ausschließlich in diesem Dialog."
+            : "Nur Lesen. Für lokale Änderungen fehlt das Entwurfsrecht.",
+        );
+      }
       if (state.personnelLifecycleEditorCatalogLoaded) {
         elements.personnelLifecycleEditorFlow
           ?.querySelector("[data-personnel-lifecycle-editor-step]")?.focus();
@@ -18206,23 +18376,34 @@ async function loadPersonnelLifecycleEditorCatalog() {
 function openPersonnelLifecycleEditor(opener) {
   if (!canReadPersonnelLifecycleEditorCatalog() || !elements.personnelLifecycleEditorDialog) return;
   const retained = state.personnelLifecycleEditorDraft
-    && state.personnelLifecycleEditorActorAccessKey === personnelLifecycleEditorActorAccessKey();
+    && state.personnelLifecycleEditorActorAccessKey === personnelLifecycleEditorActorAccessKey()
+    && state.personnelLifecycleEditorSession === state.portalSession;
   if (!retained) clearPersonnelLifecycleEditorState("", { closeDialog: false });
+  state.personnelLifecycleEditorRequestToken = null;
+  state.personnelLifecycleEditorLoading = false;
+  state.personnelLifecycleEditorValidating = false;
+  state.personnelLifecycleEditorValidation = null;
+  state.personnelLifecycleEditorSession = state.portalSession;
   state.personnelLifecycleEditorReturnFocus = opener || null;
+  window.GpWindow?.prepare(elements.personnelLifecycleEditorDialog);
+  window.GpWindow?.begin(elements.personnelLifecycleEditorDialog);
   elements.personnelLifecycleEditorDialog.showModal();
+  state.personnelLifecycleEditorWindowContext = captureGpEditor(elements.personnelLifecycleEditorDialog, canReadPersonnelLifecycleEditorCatalog);
   renderPersonnelLifecycleEditor();
   loadPersonnelLifecycleEditorCatalog().catch(() => {});
 }
 
 function pausePersonnelLifecycleEditor() {
   if (state.personnelLifecycleEditorActorAccessKey
-    && state.personnelLifecycleEditorActorAccessKey !== personnelLifecycleEditorActorAccessKey()) {
+    && (state.personnelLifecycleEditorActorAccessKey !== personnelLifecycleEditorActorAccessKey()
+      || state.personnelLifecycleEditorSession !== state.portalSession)) {
     clearPersonnelLifecycleEditorState('', {closeDialog: true, restoreFocus: false}); return;
   }
   state.personnelLifecycleEditorRequestToken = null;
   state.personnelLifecycleEditorLoading = false;
   state.personnelLifecycleEditorValidating = false;
   state.personnelLifecycleEditorValidation = null;
+  state.personnelLifecycleEditorDrag = null;
   if (elements.personnelLifecycleEditorDialog?.open) {
     state.personnelLifecycleEditorDiscardBypass = true;
     elements.personnelLifecycleEditorDialog.close();
@@ -18241,6 +18422,7 @@ function setPersonnelLifecycleEditorStepField(field, value) {
   const step = selectedPersonnelLifecycleEditorStep();
   if (!step || state.personnelLifecycleEditorValidating
     || !canWritePersonnelLifecycleEditorDraft()) return;
+  if ((step.type === "finish" && ["type", "required"].includes(field)) || (field === "type" && value === "finish")) return;
   step[field] = value;
   markPersonnelLifecycleEditorDirty();
   renderPersonnelLifecycleEditorFlow();
@@ -18260,8 +18442,8 @@ function movePersonnelLifecycleEditorStep(direction) {
     || !canWritePersonnelLifecycleEditorDraft()) return;
   const index = draft.steps.findIndex(({ id }) => id === selectedId);
   const target = index + direction;
-  if (index < 0 || target < 0 || target >= draft.steps.length) return;
-  [draft.steps[index], draft.steps[target]] = [draft.steps[target], draft.steps[index]];
+  if (index < 0 || target < 0 || target >= draft.steps.length - 1 || draft.steps[index].type === "finish") return;
+  draft.steps.splice(target, 0, draft.steps.splice(index, 1)[0]);
   markPersonnelLifecycleEditorDirty();
   renderPersonnelLifecycleEditor();
   setPersonnelLifecycleEditorStatus(`Schritt ${target + 1} von ${draft.steps.length}. Lokale Reihenfolge geändert.`);
@@ -18297,7 +18479,7 @@ function removePersonnelLifecycleEditorStep() {
     || !canWritePersonnelLifecycleEditorDraft()
     || draft.steps.length <= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.minimumSteps) return;
   const index = draft.steps.findIndex(({ id }) => id === selectedId);
-  if (index < 0) return;
+  if (index < 0 || draft.steps[index].type === "finish") return;
   draft.steps.splice(index, 1);
   const next = draft.steps[Math.min(index, draft.steps.length - 1)];
   state.personnelLifecycleEditorSelectedStepId = next?.id || "";
@@ -18305,6 +18487,16 @@ function removePersonnelLifecycleEditorStep() {
   renderPersonnelLifecycleEditor();
   setPersonnelLifecycleEditorStatus(`Schritt entfernt. ${draft.steps.length} Schritte verbleiben.`);
   if (next) focusPersonnelLifecycleEditorStep(next.id);
+}
+
+function duplicatePersonnelLifecycleEditorStep() {
+  const draft = state.personnelLifecycleEditorDraft, step = selectedPersonnelLifecycleEditorStep();
+  if (!draft || !step || step.type === "finish" || !canWritePersonnelLifecycleEditorDraft()
+    || state.personnelLifecycleEditorValidating || draft.steps.length >= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps) return;
+  const duplicate = { ...step, id: nextPersonnelLifecycleEditorStepId(draft.steps) };
+  draft.steps.splice(draft.steps.indexOf(step) + 1, 0, duplicate);
+  state.personnelLifecycleEditorSelectedStepId = duplicate.id;
+  markPersonnelLifecycleEditorDirty(); renderPersonnelLifecycleEditor(); focusPersonnelLifecycleEditorStep(duplicate.id);
 }
 
 function resetPersonnelLifecycleEditorDraft() {
@@ -18349,6 +18541,7 @@ async function validatePersonnelLifecycleEditorDraft() {
   }
   const body = JSON.stringify(draft);
   const requestToken = {};
+  const requestContext = captureGpEditor(elements.personnelLifecycleEditorDialog, canValidatePersonnelLifecycleEditorDraft);
   state.personnelLifecycleEditorRequestToken = requestToken;
   state.personnelLifecycleEditorValidating = true;
   state.personnelLifecycleEditorValidation = null;
@@ -18359,7 +18552,7 @@ async function validatePersonnelLifecycleEditorDraft() {
       method: "POST",
       body,
     });
-    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    if (state.personnelLifecycleEditorRequestToken !== requestToken || !gpEditorCurrent(requestContext)) return;
     if (!elements.personnelLifecycleEditorDialog?.open
       || !canValidatePersonnelLifecycleEditorDraft()
       || personnelLifecycleEditorActorAccessKey() !== actorAccessKey) {
@@ -18389,18 +18582,18 @@ async function validatePersonnelLifecycleEditorDraft() {
       !validation.valid,
     );
   } catch (error) {
-    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    if (state.personnelLifecycleEditorRequestToken !== requestToken || !gpEditorCurrent(requestContext)) return;
     const denied = [401, 403].includes(error.status);
-    clearPersonnelLifecycleEditorState(
-      denied
-        ? "Der O8-Editorzugriff ist nicht mehr verfügbar."
-        : "Die O8-Serverprüfung konnte nicht sicher verarbeitet werden; der lokale Entwurf wurde entfernt.",
-      { closeDialog: denied, restoreFocus: false },
-    );
-    if (denied) applyRoleVisibility();
+    if (denied) {
+      clearPersonnelLifecycleEditorState("Der O8-Editorzugriff ist nicht mehr verfügbar.", { closeDialog: true, restoreFocus: false });
+      applyRoleVisibility();
+    } else {
+      state.personnelLifecycleEditorValidation = null;
+      setPersonnelLifecycleEditorStatus("Die Serverprüfung konnte nicht abgeschlossen werden. Der lokale Arbeitsentwurf bleibt erhalten; bitte erneut prüfen.", true);
+    }
     return;
   } finally {
-    if (state.personnelLifecycleEditorRequestToken === requestToken) {
+    if (state.personnelLifecycleEditorRequestToken === requestToken && gpEditorCurrent(requestContext)) {
       state.personnelLifecycleEditorRequestToken = null;
       state.personnelLifecycleEditorValidating = false;
       renderPersonnelLifecycleEditor();
@@ -18511,6 +18704,10 @@ function clearPersonnelWorkflowInstanceState(message = "") {
 }
 
 async function loadPersonnelWorkflowInstances({ force = false } = {}) {
+  if (state.personnelWorkflowInstancesContext && !gpContextCurrent(state.personnelWorkflowInstancesContext)) {
+    clearPersonnelWorkflowInstanceState();
+    state.personnelWorkflowInstanceCapabilities = defaultPersonnelWorkflowInstanceCapabilities();
+  }
   if (!canReadPersonnelWorkflowInstances()
     || state.personnelWorkflowInstancesLoading) return;
   if (state.personnelWorkflowInstancesLoaded && !force) {
@@ -18518,10 +18715,15 @@ async function loadPersonnelWorkflowInstances({ force = false } = {}) {
     return;
   }
   state.personnelWorkflowInstancesLoading = true;
+  const requestToken = Symbol("workflow-instance-list");
+  state.personnelWorkflowInstancesRequest = requestToken;
+  const context = captureGpContext(() => personnelLifecycleFoundationEnabled() && hasGovernancePermission("personnel:workflows:read"), () => state.personnelWorkflowInstancesRequest);
+  state.personnelWorkflowInstancesContext = context;
   state.personnelWorkflowInstanceLoadError = "";
   renderPersonnelWorkflowInstanceOverview();
   try {
     const result = await api("/api/portal/v1/personnel-lifecycle/workflow-instances");
+    if (!gpContextCurrent(context)) return;
     if (!personnelLifecycleFoundationEnabled()
       || !hasGovernancePermission("personnel:workflows:read")) {
       clearPersonnelWorkflowInstanceState("Der Workflow-Zugriff wurde während des Ladens entzogen.");
@@ -18543,6 +18745,7 @@ async function loadPersonnelWorkflowInstances({ force = false } = {}) {
       .flatMap((instance) => instance.tasks);
     state.personnelWorkflowInstancesLoaded = true;
   } catch (error) {
+    if (!gpContextCurrent(context)) return;
     if ([401, 403].includes(error.status)) {
       clearPersonnelWorkflowInstanceState("Der Workflow-Zugriff ist nicht mehr verfügbar.");
       applyRoleVisibility();
@@ -18553,8 +18756,10 @@ async function loadPersonnelWorkflowInstances({ force = false } = {}) {
     state.personnelWorkflowInstancesLoaded = false;
     state.personnelWorkflowInstanceLoadError = error.message || "Die Workflow-Instanzen konnten nicht geladen werden.";
   } finally {
-    state.personnelWorkflowInstancesLoading = false;
-    renderPersonnelWorkflowInstanceOverview();
+    if (gpContextCurrent(context)) {
+      state.personnelWorkflowInstancesLoading = false;
+      renderPersonnelWorkflowInstanceOverview();
+    }
   }
 }
 
@@ -18712,11 +18917,15 @@ async function loadPersonnelLearningCatalog({ force = false } = {}) {
     renderPersonnelLearningCatalog();
     return;
   }
+  const requestToken = Symbol("loadPersonnelLearningCatalog");
+  state.loadPersonnelLearningCatalogRequest = requestToken;
+  const contextTicket = captureGpContext(canReadPersonnelLearningCatalog, () => state.loadPersonnelLearningCatalogRequest);
   state.personnelLearningLoading = true;
   state.personnelLearningLoadError = "";
   renderPersonnelLearningCatalog();
   try {
     const result = await api("/api/portal/v1/personnel-learning/modules");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!canReadPersonnelLearningCatalog()) {
       state.personnelLearningCatalog = null;
       state.personnelLearningLoadError = "Der Katalogzugriff wurde während des Ladens entzogen.";
@@ -18728,13 +18937,14 @@ async function loadPersonnelLearningCatalog({ force = false } = {}) {
     }
     state.personnelLearningCatalog = result;
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningCatalog = null;
     state.personnelLearningLoadError = error.message
       || "Der Schulungs- und Wissenskatalog konnte nicht geladen werden.";
     if ([401, 403].includes(error.status)) applyRoleVisibility();
   } finally {
-    state.personnelLearningLoading = false;
-    renderPersonnelLearningCatalog();
+    if (state.loadPersonnelLearningCatalogRequest === requestToken) state.personnelLearningLoading = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningCatalog();
   }
 }
 
@@ -18747,6 +18957,7 @@ function populatePersonnelLearningScopes(selectedScope = null) {
   const scopes = Array.isArray(state.personnelLearningCatalog?.scopes)
     ? state.personnelLearningCatalog.scopes
     : [];
+  state.personnelLearningEditorScopes = scopes.map(scope => ({ ...scope }));
   elements.personnelLearningScope.innerHTML = scopes.length
     ? scopes.map((scope, index) => `<option value="${index}">${escapeHtml(scope.label || "Freigegebener Bereich")}</option>`).join("")
     : '<option value="">Kein bearbeitbarer Bereich verfügbar</option>';
@@ -18764,6 +18975,19 @@ function newPersonnelLearningStep(index = 0) {
     completionCriteria: "",
     required: true,
   };
+}
+
+function restorePersonnelLearningEditorFields(dialog) {
+  for (const entry of dialog?.gpLearningSavingFields || []) entry.field.disabled = entry.disabled;
+  if (dialog) dialog.gpLearningSavingFields = null;
+}
+
+function lockPersonnelLearningEditorFields(dialog) {
+  restorePersonnelLearningEditorFields(dialog);
+  dialog.gpLearningSavingFields = [...dialog.querySelectorAll("input,select,textarea,button")]
+    .filter(field => !field.matches("[data-close],[data-gp-window-close],[data-gp-window-toggle]"))
+    .map(field => ({ field, disabled: field.disabled }));
+  for (const { field } of dialog.gpLearningSavingFields) field.disabled = true;
 }
 
 function syncPersonnelLearningStepsFromEditor() {
@@ -18821,8 +19045,13 @@ function personnelLearningTargetInput() {
 }
 
 async function openPersonnelLearningEditor(module = null) {
+  window.GpWindow?.begin?.(elements.personnelLearningModal);
+  state.openPersonnelLearningEditorIntent = Symbol("openPersonnelLearningEditor");
+  const contextTicket = captureGpContext(canManagePersonnelLearningCatalog, () => state.openPersonnelLearningEditorIntent);
   await loadPersonnelLearningSkillCatalog();
+  if (!gpContextCurrent(contextTicket)) return;
   if (!elements.personnelLearningModal || !state.personnelLearningCatalog) return;
+  restorePersonnelLearningEditorFields(elements.personnelLearningModal);
   const version = module?.latestVersion || null;
   const content = version?.content || {};
   elements.personnelLearningModuleId.value = module?.id || "";
@@ -18852,13 +19081,16 @@ async function openPersonnelLearningEditor(module = null) {
     ? "Neue Version speichern"
     : "Prozess anlegen";
   setPersonnelLearningMessage();
+  state.personnelLearningMutationPendingOwner = null;
+  state.personnelLearningMutationPending = false;
+  elements.savePersonnelLearningButton.disabled = false;
   elements.personnelLearningModal.showModal();
   elements.personnelLearningTitle.focus();
 }
 
 function personnelLearningEditorPayload() {
   syncPersonnelLearningStepsFromEditor();
-  const scopes = state.personnelLearningCatalog?.scopes || [];
+  const scopes = state.personnelLearningEditorScopes || [];
   const scope = scopes[Number(elements.personnelLearningScope.value)];
   if (!scope) throw new Error("Bitte einen gültigen Geltungsbereich auswählen.");
   return {
@@ -18883,6 +19115,8 @@ function personnelLearningEditorPayload() {
 }
 
 async function savePersonnelLearningModule(event) {
+  const ticket = captureGpEditor(elements.personnelLearningModal, canManagePersonnelLearningCatalog);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (state.personnelLearningMutationPending) return;
   const moduleId = elements.personnelLearningModuleId.value;
@@ -18894,8 +19128,11 @@ async function savePersonnelLearningModule(event) {
     return;
   }
   if (moduleId) body.expectedEventReceipt = elements.personnelLearningExpectedReceipt.value;
+  const mutationOwner = Symbol("personnelLearningMutationPending");
+  state.personnelLearningMutationPendingOwner = mutationOwner;
   state.personnelLearningMutationPending = true;
   elements.savePersonnelLearningButton.disabled = true;
+  lockPersonnelLearningEditorFields(elements.personnelLearningModal);
   setPersonnelLearningMessage(moduleId
     ? "Die neue Version wird revisionssicher angelegt …"
     : "Der Prozess wird revisionssicher angelegt …");
@@ -18906,32 +19143,39 @@ async function savePersonnelLearningModule(event) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelLearningModal.close();
     state.personnelLearningCatalog = null;
     await loadPersonnelLearningCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(moduleId
       ? "Die neue Prozessversion wurde angelegt. Eine bestehende Veröffentlichung blieb unverändert."
       : "Der Prozess wurde als Entwurf angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setPersonnelLearningMessage(error.message, true);
     if (error.status === 409) {
       state.personnelLearningCatalog = null;
       await loadPersonnelLearningCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     }
   } finally {
-    state.personnelLearningMutationPending = false;
-    elements.savePersonnelLearningButton.disabled = false;
+    if (state.personnelLearningMutationPendingOwner === mutationOwner) state.personnelLearningMutationPending = false;
+    if (gpEditorCurrent(ticket, true)) { restorePersonnelLearningEditorFields(elements.personnelLearningModal); elements.savePersonnelLearningButton.disabled = false; }
   }
 }
 
 async function mutatePersonnelLearningModule(module, action) {
-  if (!module || state.personnelLearningMutationPending) return;
+  if (!module || state.personnelLearningMutationPending || !canManagePersonnelLearningCatalog()) return;
   const confirmations = {
     publish: `Version ${module.latestVersionNumber} jetzt veröffentlichen?`,
     archive: "Diesen Prozess archivieren? Alle Versionen und Prüfbelege bleiben erhalten.",
   };
   if (confirmations[action] && !window.confirm(confirmations[action])) return;
+  const mutationOwner = Symbol("personnelLearningMutationPending");
+  state.personnelLearningMutationPendingOwner = mutationOwner;
   state.personnelLearningMutationPending = true;
+  const contextTicket = captureGpContext(canManagePersonnelLearningCatalog, () => state.personnelLearningMutationPendingOwner);
   renderPersonnelLearningCatalog();
   try {
     const body = { expectedEventReceipt: module.currentEventReceipt };
@@ -18940,22 +19184,25 @@ async function mutatePersonnelLearningModule(module, action) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningCatalog = null;
     await loadPersonnelLearningCatalog({ force: true });
+    if (!gpContextCurrent(contextTicket)) return;
     showToast({
       publish: "Die aktuelle Prozessversion wurde veröffentlicht.",
       archive: "Der Prozess wurde archiviert; die vollständige Historie bleibt erhalten.",
       restore: "Der Prozess wurde wiederhergestellt.",
     }[action]);
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     showToast(error.message, true);
     if (error.status === 409) {
       state.personnelLearningCatalog = null;
       await loadPersonnelLearningCatalog({ force: true });
     }
   } finally {
-    state.personnelLearningMutationPending = false;
-    renderPersonnelLearningCatalog();
+    if (state.personnelLearningMutationPendingOwner === mutationOwner) state.personnelLearningMutationPending = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningCatalog();
   }
 }
 
@@ -19101,11 +19348,15 @@ async function loadPersonnelLearningSkillCatalog({ force = false } = {}) {
     renderPersonnelLearningSkillCatalog();
     return;
   }
+  const requestToken = Symbol("loadPersonnelLearningSkillCatalog");
+  state.loadPersonnelLearningSkillCatalogRequest = requestToken;
+  const contextTicket = captureGpContext(canReadPersonnelLearningCatalog, () => state.loadPersonnelLearningSkillCatalogRequest);
   state.personnelLearningSkillsLoading = true;
   state.personnelLearningSkillLoadError = "";
   renderPersonnelLearningSkillCatalog();
   try {
     const result = await api("/api/portal/v1/personnel-learning/skills");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!canReadPersonnelLearningCatalog()) {
       state.personnelLearningSkillCatalog = null;
       state.personnelLearningSkillLoadError = "Der Katalogzugriff wurde während des Ladens entzogen.";
@@ -19117,13 +19368,14 @@ async function loadPersonnelLearningSkillCatalog({ force = false } = {}) {
     }
     state.personnelLearningSkillCatalog = result;
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningSkillCatalog = null;
     state.personnelLearningSkillLoadError = error.message
       || "Der Fähigkeitskatalog konnte nicht geladen werden.";
     if ([401, 403].includes(error.status)) applyRoleVisibility();
   } finally {
-    state.personnelLearningSkillsLoading = false;
-    renderPersonnelLearningSkillCatalog();
+    if (state.loadPersonnelLearningSkillCatalogRequest === requestToken) state.personnelLearningSkillsLoading = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningSkillCatalog();
   }
 }
 
@@ -19132,6 +19384,7 @@ function populatePersonnelLearningSkillScopes(selectedScope = null) {
   const scopes = Array.isArray(state.personnelLearningSkillCatalog?.scopes)
     ? state.personnelLearningSkillCatalog.scopes
     : [];
+  state.personnelLearningSkillEditorScopes = scopes.map(scope => ({ ...scope }));
   elements.personnelLearningSkillScope.innerHTML = scopes.length
     ? scopes.map((scope, index) => `<option value="${index}">${escapeHtml(scope.label || "Freigegebener Bereich")}</option>`).join("")
     : '<option value="">Kein bearbeitbarer Bereich verfügbar</option>';
@@ -19184,6 +19437,7 @@ function setPersonnelLearningSkillMessage(message = "", error = false) {
 
 function openPersonnelLearningSkillEditor(skill = null) {
   if (!elements.personnelLearningSkillModal || !state.personnelLearningSkillCatalog) return;
+  restorePersonnelLearningEditorFields(elements.personnelLearningSkillModal);
   const version = skill?.latestVersion || null;
   const content = version?.content || {};
   elements.personnelLearningSkillId.value = skill?.id || "";
@@ -19209,13 +19463,16 @@ function openPersonnelLearningSkillEditor(skill = null) {
     ? "Neue Version speichern"
     : "Fähigkeit anlegen";
   setPersonnelLearningSkillMessage();
+  state.personnelLearningSkillMutationPendingOwner = null;
+  state.personnelLearningSkillMutationPending = false;
+  elements.savePersonnelLearningSkillButton.disabled = false;
   elements.personnelLearningSkillModal.showModal();
   elements.personnelLearningSkillTitle.focus();
 }
 
 function personnelLearningSkillEditorPayload() {
   syncPersonnelLearningSkillLevelsFromEditor();
-  const scopes = state.personnelLearningSkillCatalog?.scopes || [];
+  const scopes = state.personnelLearningSkillEditorScopes || [];
   const scope = scopes[Number(elements.personnelLearningSkillScope.value)];
   if (!scope) throw new Error("Bitte einen gültigen Geltungsbereich auswählen.");
   return {
@@ -19236,6 +19493,8 @@ function personnelLearningSkillEditorPayload() {
 }
 
 async function savePersonnelLearningSkill(event) {
+  const ticket = captureGpEditor(elements.personnelLearningSkillModal, canManagePersonnelLearningCatalog);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (state.personnelLearningSkillMutationPending) return;
   const skillId = elements.personnelLearningSkillId.value;
@@ -19247,8 +19506,11 @@ async function savePersonnelLearningSkill(event) {
     return;
   }
   if (skillId) body.expectedEventReceipt = elements.personnelLearningSkillExpectedReceipt.value;
+  const mutationOwner = Symbol("personnelLearningSkillMutationPending");
+  state.personnelLearningSkillMutationPendingOwner = mutationOwner;
   state.personnelLearningSkillMutationPending = true;
   elements.savePersonnelLearningSkillButton.disabled = true;
+  lockPersonnelLearningEditorFields(elements.personnelLearningSkillModal);
   setPersonnelLearningSkillMessage(skillId
     ? "Die neue Fähigkeitsversion wird revisionssicher angelegt …"
     : "Die Fähigkeit wird mit allen zehn Stufen revisionssicher angelegt …");
@@ -19259,32 +19521,39 @@ async function savePersonnelLearningSkill(event) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelLearningSkillModal.close();
     state.personnelLearningSkillCatalog = null;
     await loadPersonnelLearningSkillCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(skillId
       ? "Die neue Fähigkeitsversion wurde angelegt. Die veröffentlichte Fassung blieb unverändert."
       : "Die Fähigkeit wurde mit zehn definierten Stufen als Entwurf angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setPersonnelLearningSkillMessage(error.message, true);
     if (error.status === 409) {
       state.personnelLearningSkillCatalog = null;
       await loadPersonnelLearningSkillCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     }
   } finally {
-    state.personnelLearningSkillMutationPending = false;
-    elements.savePersonnelLearningSkillButton.disabled = false;
+    if (state.personnelLearningSkillMutationPendingOwner === mutationOwner) state.personnelLearningSkillMutationPending = false;
+    if (gpEditorCurrent(ticket, true)) { restorePersonnelLearningEditorFields(elements.personnelLearningSkillModal); elements.savePersonnelLearningSkillButton.disabled = false; }
   }
 }
 
 async function mutatePersonnelLearningSkill(skill, action) {
-  if (!skill || state.personnelLearningSkillMutationPending) return;
+  if (!skill || state.personnelLearningSkillMutationPending || !canManagePersonnelLearningCatalog()) return;
   const confirmations = {
     publish: `Fähigkeitsversion ${skill.latestVersionNumber} jetzt veröffentlichen?`,
     archive: "Diese Fähigkeit archivieren? Alle Versionen und Prüfbelege bleiben erhalten.",
   };
   if (confirmations[action] && !window.confirm(confirmations[action])) return;
+  const mutationOwner = Symbol("personnelLearningSkillMutationPending");
+  state.personnelLearningSkillMutationPendingOwner = mutationOwner;
   state.personnelLearningSkillMutationPending = true;
+  const contextTicket = captureGpContext(canManagePersonnelLearningCatalog, () => state.personnelLearningSkillMutationPendingOwner);
   renderPersonnelLearningSkillCatalog();
   try {
     const body = { expectedEventReceipt: skill.currentEventReceipt };
@@ -19293,22 +19562,25 @@ async function mutatePersonnelLearningSkill(skill, action) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningSkillCatalog = null;
     await loadPersonnelLearningSkillCatalog({ force: true });
+    if (!gpContextCurrent(contextTicket)) return;
     showToast({
       publish: "Die aktuelle Fähigkeitsversion wurde veröffentlicht.",
       archive: "Die Fähigkeit wurde archiviert; ihre Historie bleibt erhalten.",
       restore: "Die Fähigkeit wurde wiederhergestellt.",
     }[action]);
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     showToast(error.message, true);
     if (error.status === 409) {
       state.personnelLearningSkillCatalog = null;
       await loadPersonnelLearningSkillCatalog({ force: true });
     }
   } finally {
-    state.personnelLearningSkillMutationPending = false;
-    renderPersonnelLearningSkillCatalog();
+    if (state.personnelLearningSkillMutationPendingOwner === mutationOwner) state.personnelLearningSkillMutationPending = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningSkillCatalog();
   }
 }
 
@@ -19519,11 +19791,15 @@ async function loadPersonnelLearningCompetencyCatalog({ force = false } = {}) {
     renderPersonnelLearningCompetencyCatalog();
     return;
   }
+  const requestToken = Symbol("loadPersonnelLearningCompetencyCatalog");
+  state.loadPersonnelLearningCompetencyCatalogRequest = requestToken;
+  const contextTicket = captureGpContext(canWritePersonnelLearningCompetencies, () => state.loadPersonnelLearningCompetencyCatalogRequest);
   state.personnelLearningCompetenciesLoading = true;
   state.personnelLearningCompetencyLoadError = "";
   renderPersonnelLearningCompetencyCatalog();
   try {
     const result = await api("/api/portal/v1/personnel-learning/competencies");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!canWritePersonnelLearningCompetencies()) {
       state.personnelLearningCompetencyCatalog = null;
       state.personnelLearningCompetencyLoadError = "Der Zugriff wurde während des Ladens entzogen.";
@@ -19536,13 +19812,14 @@ async function loadPersonnelLearningCompetencyCatalog({ force = false } = {}) {
     }
     state.personnelLearningCompetencyCatalog = result;
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningCompetencyCatalog = null;
     state.personnelLearningCompetencyLoadError = error.message
       || "Die Kompetenzprofile konnten nicht geladen werden.";
     if ([401, 403].includes(error.status)) applyRoleVisibility();
   } finally {
-    state.personnelLearningCompetenciesLoading = false;
-    renderPersonnelLearningCompetencyCatalog();
+    if (state.loadPersonnelLearningCompetencyCatalogRequest === requestToken) state.personnelLearningCompetenciesLoading = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningCompetencyCatalog();
   }
 }
 
@@ -19596,6 +19873,7 @@ function openPersonnelLearningCompetencyEditor(competency = null) {
     showToast("Für diesen Mitarbeiter ist keine weitere veröffentlichte Fähigkeit verfügbar.", true);
     return;
   }
+  restorePersonnelLearningEditorFields(elements.personnelLearningCompetencyModal);
   elements.personnelLearningCompetencyId.value = competency?.id || "";
   elements.personnelLearningCompetencyExpectedReceipt.value = competency?.currentRevisionReceipt || "";
   elements.personnelLearningCompetencyEmployeeNumber.value = employee.employeeNumber;
@@ -19617,12 +19895,18 @@ function openPersonnelLearningCompetencyEditor(competency = null) {
     ? "Kompetenz speichern" : competency ? "Kompetenz wiederherstellen" : "Kompetenz zuordnen";
   setPersonnelLearningCompetencyMessage();
   renderPersonnelLearningCompetencyLevelPreview();
+  state.personnelLearningCompetencyMutationPendingOwner = null;
+  state.personnelLearningCompetencyMutationPending = false;
+  elements.savePersonnelLearningCompetencyButton.disabled = false;
   elements.personnelLearningCompetencyModal.showModal();
   (competency ? elements.personnelLearningCompetencyLevel
     : elements.personnelLearningCompetencySkill).focus();
+  return true;
 }
 
 async function savePersonnelLearningCompetency(event) {
+  const ticket = captureGpEditor(elements.personnelLearningCompetencyModal, canWritePersonnelLearningCompetencies);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (state.personnelLearningCompetencyMutationPending) return;
   const employeeNumber = elements.personnelLearningCompetencyEmployeeNumber.value;
@@ -19636,38 +19920,49 @@ async function savePersonnelLearningCompetency(event) {
   if (competencyId) {
     body.expectedRevisionReceipt = elements.personnelLearningCompetencyExpectedReceipt.value;
   }
+  const mutationOwner = Symbol("personnelLearningCompetencyMutationPending");
+  state.personnelLearningCompetencyMutationPendingOwner = mutationOwner;
   state.personnelLearningCompetencyMutationPending = true;
   elements.savePersonnelLearningCompetencyButton.disabled = true;
+  lockPersonnelLearningEditorFields(elements.personnelLearningCompetencyModal);
   setPersonnelLearningCompetencyMessage("Das Kompetenzprofil wird revisionssicher gespeichert …");
   try {
     await api(`/api/portal/v1/personnel-learning/competencies/${encodeURIComponent(employeeNumber)}/${encodeURIComponent(skillId)}`, {
       method: "PUT",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelLearningCompetencyModal.close();
     state.personnelLearningCompetencyCatalog = null;
     await loadPersonnelLearningCompetencyCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     state.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(competencyId
       ? "Kompetenzstufe und Trainerfreigabe wurden revisionssicher aktualisiert."
       : "Die Kompetenz wurde revisionssicher zugeordnet.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setPersonnelLearningCompetencyMessage(error.message, true);
     if (error.status === 409) {
       state.personnelLearningCompetencyCatalog = null;
       await loadPersonnelLearningCompetencyCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     }
   } finally {
-    state.personnelLearningCompetencyMutationPending = false;
-    elements.savePersonnelLearningCompetencyButton.disabled = false;
+    if (state.personnelLearningCompetencyMutationPendingOwner === mutationOwner) state.personnelLearningCompetencyMutationPending = false;
+    if (gpEditorCurrent(ticket, true)) { restorePersonnelLearningEditorFields(elements.personnelLearningCompetencyModal); elements.savePersonnelLearningCompetencyButton.disabled = false; }
   }
 }
 
 async function withdrawPersonnelLearningCompetency(competency) {
-  if (!competency || state.personnelLearningCompetencyMutationPending) return;
+  if (!competency || state.personnelLearningCompetencyMutationPending || !canWritePersonnelLearningCompetencies()) return;
   if (!window.confirm(`Kompetenz „${competency.skillTitle}“ entziehen? Die bisherige Historie bleibt erhalten.`)) return;
+  const mutationOwner = Symbol("personnelLearningCompetencyMutationPending");
+  state.personnelLearningCompetencyMutationPendingOwner = mutationOwner;
   state.personnelLearningCompetencyMutationPending = true;
+  const contextTicket = captureGpContext(canWritePersonnelLearningCompetencies, () => state.personnelLearningCompetencyMutationPendingOwner);
   renderPersonnelLearningCompetencyCatalog();
   try {
     await api(`/api/portal/v1/personnel-learning/competencies/${encodeURIComponent(competency.employeeNumber)}/${encodeURIComponent(competency.skillId)}`, {
@@ -19677,20 +19972,24 @@ async function withdrawPersonnelLearningCompetency(competency) {
         expectedRevisionReceipt: competency.currentRevisionReceipt,
       }),
     });
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningCompetencyCatalog = null;
     await loadPersonnelLearningCompetencyCatalog({ force: true });
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
+    if (!gpContextCurrent(contextTicket)) return;
     showToast("Die Kompetenz und ihre Trainerfreigabe wurden entzogen; die Historie bleibt erhalten.");
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     showToast(error.message, true);
     if (error.status === 409) {
       state.personnelLearningCompetencyCatalog = null;
       await loadPersonnelLearningCompetencyCatalog({ force: true });
     }
   } finally {
-    state.personnelLearningCompetencyMutationPending = false;
-    renderPersonnelLearningCompetencyCatalog();
+    if (state.personnelLearningCompetencyMutationPendingOwner === mutationOwner) state.personnelLearningCompetencyMutationPending = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningCompetencyCatalog();
   }
 }
 
@@ -19851,11 +20150,15 @@ async function loadPersonnelLearningDashboard({ force = false } = {}) {
     renderPersonnelLearningDashboard();
     return;
   }
+  const requestToken = Symbol("loadPersonnelLearningDashboard");
+  state.loadPersonnelLearningDashboardRequest = requestToken;
+  const contextTicket = captureGpContext(canReadPersonnelLearningCatalog, () => state.loadPersonnelLearningDashboardRequest);
   state.personnelLearningDashboardLoading = true;
   state.personnelLearningDashboardLoadError = "";
   renderPersonnelLearningDashboard();
   try {
     const result = await api("/api/portal/v1/personnel-learning/dashboard");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!result || !Array.isArray(result.assignments) || !Array.isArray(result.profiles)) {
       throw new Error("Der Server hat kein gültiges Schulungsdashboard geliefert.");
     }
@@ -19867,19 +20170,24 @@ async function loadPersonnelLearningDashboard({ force = false } = {}) {
       state.personnelLearningDashboardEmployeeNumber = profiles[0]?.employee?.employeeNumber || "";
     }
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningDashboard = null;
     state.personnelLearningDashboardLoadError = error.message
       || "Das Schulungsdashboard konnte nicht geladen werden.";
   } finally {
-    state.personnelLearningDashboardLoading = false;
-    renderPersonnelLearningDashboard();
+    if (state.loadPersonnelLearningDashboardRequest === requestToken) state.personnelLearningDashboardLoading = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningDashboard();
   }
 }
 
 async function openPersonnelLearningDashboardProgress(assignmentId) {
+  window.GpWindow?.begin?.(elements.personnelLearningProgressModal);
+  state.openPersonnelLearningDashboardProgressIntent = Symbol("openPersonnelLearningDashboardProgress");
+  const contextTicket = captureGpContext(canWritePersonnelLearningCompetencies, () => state.openPersonnelLearningDashboardProgressIntent);
   if (!state.personnelLearningAssignmentCatalog) {
     await loadPersonnelLearningAssignmentCatalog();
   }
+  if (!gpContextCurrent(contextTicket)) return;
   const assignment = personnelLearningAssignmentById(assignmentId);
   if (!assignment) {
     showToast("Die Schulungszuweisung ist im aktuellen Verantwortungsbereich nicht bearbeitbar.", true);
@@ -20066,11 +20374,15 @@ async function loadPersonnelLearningAssignmentCatalog({ force = false } = {}) {
     renderPersonnelLearningAssignmentCatalog();
     return;
   }
+  const requestToken = Symbol("loadPersonnelLearningAssignmentCatalog");
+  state.loadPersonnelLearningAssignmentCatalogRequest = requestToken;
+  const contextTicket = captureGpContext(canWritePersonnelLearningCompetencies, () => state.loadPersonnelLearningAssignmentCatalogRequest);
   state.personnelLearningAssignmentsLoading = true;
   state.personnelLearningAssignmentLoadError = "";
   renderPersonnelLearningAssignmentCatalog();
   try {
     const result = await api("/api/portal/v1/personnel-learning/assignments");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!canWritePersonnelLearningCompetencies()) {
       state.personnelLearningAssignmentCatalog = null;
       state.personnelLearningAssignmentLoadError =
@@ -20084,13 +20396,14 @@ async function loadPersonnelLearningAssignmentCatalog({ force = false } = {}) {
     }
     state.personnelLearningAssignmentCatalog = result;
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningAssignmentCatalog = null;
     state.personnelLearningAssignmentLoadError = error.message
       || "Die Schulungszuweisungen konnten nicht geladen werden.";
     if ([401, 403].includes(error.status)) applyRoleVisibility();
   } finally {
-    state.personnelLearningAssignmentsLoading = false;
-    renderPersonnelLearningAssignmentCatalog();
+    if (state.loadPersonnelLearningAssignmentCatalogRequest === requestToken) state.personnelLearningAssignmentsLoading = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningAssignmentCatalog();
   }
 }
 
@@ -20173,6 +20486,7 @@ function renderPersonnelLearningAssignmentTrainerOptions() {
 }
 
 function openPersonnelLearningAssignmentEditor(assignment = null) {
+  restorePersonnelLearningEditorFields(elements.personnelLearningAssignmentModal);
   document.getElementById("personnelLearningRepeatOf").value = "";
   document.getElementById("personnelLearningScheduleReceipt").value = assignment?.schedule?.receiptSha256 || "";
   document.getElementById("personnelLearningDueDate").value = assignment?.schedule?.dueDate || "";
@@ -20193,7 +20507,7 @@ function openPersonnelLearningAssignmentEditor(assignment = null) {
   elements.personnelLearningAssignmentExpectedReceipt.value =
     assignment?.currentRevisionReceipt || "";
   elements.personnelLearningAssignmentProcess.innerHTML = processes.map((process) => (
-    `<option value="${escapeHtmlAttribute(process.id)}">${escapeHtml(process.title)} · Version ${Number(process.publishedVersionNumber)}</option>`
+    `<option value="${escapeHtmlAttribute(process.id)}">${escapeHtml(process.title)} · Version ${Number(assignment?.processVersionNumber || process.publishedVersionNumber)}</option>`
   )).join("");
   elements.personnelLearningAssignmentProcess.value = assignment?.processId || processes[0].id;
   elements.personnelLearningAssignmentProcess.disabled = Boolean(assignment);
@@ -20215,11 +20529,16 @@ function openPersonnelLearningAssignmentEditor(assignment = null) {
     ? "Änderungen speichern" : assignment ? "Zuweisung wiederherstellen" : "Schulung zuweisen";
   setPersonnelLearningAssignmentMessage();
   renderPersonnelLearningAssignmentTrainerOptions();
+  state.personnelLearningAssignmentMutationPendingOwner = null;
+  state.personnelLearningAssignmentMutationPending = false;
+  elements.savePersonnelLearningAssignmentButton.disabled = false;
   elements.personnelLearningAssignmentModal.showModal();
   elements.personnelLearningAssignmentProcess.focus();
 }
 
 async function savePersonnelLearningAssignment(event) {
+  const ticket = captureGpEditor(elements.personnelLearningAssignmentModal, canWritePersonnelLearningCompetencies);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (state.personnelLearningAssignmentMutationPending) return;
   const assignmentId = elements.personnelLearningAssignmentId.value;
@@ -20241,8 +20560,11 @@ async function savePersonnelLearningAssignment(event) {
     body.learnerEmployeeNumbers = learners;
     body.repeatOfAssignmentId = document.getElementById("personnelLearningRepeatOf").value;
   }
+  const mutationOwner = Symbol("personnelLearningAssignmentMutationPending");
+  state.personnelLearningAssignmentMutationPendingOwner = mutationOwner;
   state.personnelLearningAssignmentMutationPending = true;
   elements.savePersonnelLearningAssignmentButton.disabled = true;
+  lockPersonnelLearningEditorFields(elements.personnelLearningAssignmentModal);
   setPersonnelLearningAssignmentMessage("Die Schulungszuweisung wird revisionssicher gespeichert …");
   try {
     await api(assignmentId
@@ -20251,23 +20573,31 @@ async function savePersonnelLearningAssignment(event) {
       method: assignmentId ? "PUT" : "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelLearningAssignmentModal.close();
     state.personnelLearningAssignmentCatalog = null;
     await loadPersonnelLearningAssignmentCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     state.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(assignmentId
       ? "Trainerbindung und Frist wurden gespeichert."
       : "Die Schulung wurde revisionssicher zugewiesen.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setPersonnelLearningAssignmentMessage(error.message, true);
     if (error.status === 409) {
       state.personnelLearningAssignmentCatalog = null;
       await loadPersonnelLearningAssignmentCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     }
   } finally {
-    state.personnelLearningAssignmentMutationPending = false;
-    elements.savePersonnelLearningAssignmentButton.disabled = false;
+    if (state.personnelLearningAssignmentMutationPendingOwner === mutationOwner) state.personnelLearningAssignmentMutationPending = false;
+    if (gpEditorCurrent(ticket, true)) {
+      restorePersonnelLearningEditorFields(elements.personnelLearningAssignmentModal);
+      elements.savePersonnelLearningAssignmentButton.disabled = false;
+    }
   }
 }
 
@@ -20339,6 +20669,7 @@ function openPersonnelLearningProgressEditor(assignment) {
     showToast("Für diesen Schulungsfortschritt fehlt die aktuell wirksame Zuständigkeit.", true);
     return;
   }
+  restorePersonnelLearningEditorFields(elements.personnelLearningProgressModal);
   elements.personnelLearningProgressAssignmentId.value = assignment.id;
   elements.personnelLearningProgressAssignmentReceipt.value =
     assignment.currentRevisionReceipt || "";
@@ -20371,6 +20702,8 @@ function openPersonnelLearningProgressEditor(assignment) {
   elements.personnelLearningProgressHistoryDetails.classList.toggle("hidden", !history.length);
   elements.personnelLearningProgressHistory.innerHTML = history.map((revision) => `<span><strong>${escapeHtml(({ progress_recorded: "Fortschritt erfasst", completed: "Abschluss bewertet", corrected: "Korrektur dokumentiert" })[revision.changeType] || revision.changeType)}</strong><small>${Number(revision.completedStepCount)} von ${Number(revision.totalStepCount)} Schritten · ${escapeHtml(personnelLearningProgressResultLabel(revision.result))} · ${escapeHtml(personnelWorkflowTimestamp(revision.changedAt))}</small>${revision.correctionReason ? `<small>Begründung: ${escapeHtml(revision.correctionReason)}</small>` : ""}${revision.receiptSha256 ? `<code>${escapeHtml(String(revision.receiptSha256).slice(0, 16))}…</code>` : ""}</span>`).join("");
   setPersonnelLearningProgressMessage();
+  state.personnelLearningProgressMutationPendingOwner = null;
+  state.personnelLearningProgressMutationPending = false;
   renderPersonnelLearningProgressEditorState();
   elements.personnelLearningProgressModal.showModal();
   elements.personnelLearningProgressStepList.querySelector("input")?.focus();
@@ -20381,6 +20714,12 @@ async function savePersonnelLearningProgress(event) {
   if (state.personnelLearningProgressMutationPending) return;
   const assignment = personnelLearningProgressEditorAssignment();
   if (!assignment) return;
+  const ticket = captureGpEditor(elements.personnelLearningProgressModal, () => {
+    const live = personnelLearningProgressEditorAssignment();
+    const capabilities = live?.progress?.capabilities || {};
+    return live?.id === assignment.id && (capabilities.canRecord || capabilities.canCorrect);
+  });
+  if (!gpEditorCurrent(ticket)) return;
   const completedStepIds = [...elements.personnelLearningProgressStepList
     .querySelectorAll('input[type="checkbox"][data-progress-step-id]:checked')]
     .map((checkbox) => checkbox.dataset.progressStepId);
@@ -20389,53 +20728,67 @@ async function savePersonnelLearningProgress(event) {
     setPersonnelLearningProgressMessage("Bitte ein Abschlussergebnis auswählen.", true);
     return;
   }
+  const body = {
+    expectedAssignmentRevisionReceipt: elements.personnelLearningProgressAssignmentReceipt.value,
+    expectedProgressRevisionReceipt: elements.personnelLearningProgressExpectedReceipt.value,
+    completedStepIds,
+    finalized,
+    result: finalized ? elements.personnelLearningProgressResult.value : "pending",
+    assessmentNote: finalized ? elements.personnelLearningProgressAssessmentNote.value : "",
+    correctionReason: assignment.progress?.hasFinalizedRevision
+      ? elements.personnelLearningProgressCorrectionReason.value : "",
+  };
+  const mutationOwner = Symbol("personnelLearningProgressMutationPending");
+  state.personnelLearningProgressMutationPendingOwner = mutationOwner;
   state.personnelLearningProgressMutationPending = true;
   renderPersonnelLearningProgressEditorState();
+  lockPersonnelLearningEditorFields(elements.personnelLearningProgressModal);
   setPersonnelLearningProgressMessage(
     "Der Fortschritt wird als neuer unveränderlicher Revisionsstand gespeichert …",
   );
   try {
     await api(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignment.id)}/progress`, {
       method: "PUT",
-      body: JSON.stringify({
-        expectedAssignmentRevisionReceipt:
-          elements.personnelLearningProgressAssignmentReceipt.value,
-        expectedProgressRevisionReceipt:
-          elements.personnelLearningProgressExpectedReceipt.value,
-        completedStepIds,
-        finalized,
-        result: finalized ? elements.personnelLearningProgressResult.value : "pending",
-        assessmentNote: finalized
-          ? elements.personnelLearningProgressAssessmentNote.value : "",
-        correctionReason: assignment.progress?.hasFinalizedRevision
-          ? elements.personnelLearningProgressCorrectionReason.value : "",
-      }),
+      body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelLearningProgressModal.close();
     state.personnelLearningAssignmentCatalog = null;
     await loadPersonnelLearningAssignmentCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     state.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(assignment.progress?.hasFinalizedRevision
       ? "Die begründete Korrektur wurde als neue Revision gespeichert."
       : finalized
         ? "Der Schulungsabschluss wurde revisionssicher bewertet."
         : "Der Schulungsfortschritt wurde revisionssicher gespeichert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setPersonnelLearningProgressMessage(error.message, true);
     if (error.status === 409) {
       state.personnelLearningAssignmentCatalog = null;
       await loadPersonnelLearningAssignmentCatalog({ force: true });
     }
   } finally {
-    state.personnelLearningProgressMutationPending = false;
-    renderPersonnelLearningProgressEditorState();
+    if (state.personnelLearningProgressMutationPendingOwner === mutationOwner) state.personnelLearningProgressMutationPending = false;
+    if (gpEditorCurrent(ticket, true)) {
+      restorePersonnelLearningEditorFields(elements.personnelLearningProgressModal);
+      renderPersonnelLearningProgressEditorState();
+    }
   }
 }
 
 async function cancelPersonnelLearningAssignment(assignment) {
-  if (!assignment || state.personnelLearningAssignmentMutationPending) return;
+  if (!assignment || state.personnelLearningAssignmentMutationPending
+    || !assignment.capabilities?.canCancel || !canWritePersonnelLearningCompetencies()) return;
   if (!window.confirm(`Schulungszuweisung „${assignment.processTitle}“ für ${assignment.learner.fullName} abbrechen? Die Historie bleibt erhalten.`)) return;
+  const mutationOwner = Symbol("personnelLearningAssignmentMutationPending");
+  state.personnelLearningAssignmentMutationPendingOwner = mutationOwner;
+  const context = captureGpContext(canWritePersonnelLearningCompetencies,
+    () => state.personnelLearningAssignmentMutationPendingOwner);
+  if (!gpContextCurrent(context)) return;
   state.personnelLearningAssignmentMutationPending = true;
   renderPersonnelLearningAssignmentCatalog();
   try {
@@ -20446,20 +20799,24 @@ async function cancelPersonnelLearningAssignment(assignment) {
         expectedRevisionReceipt: assignment.currentRevisionReceipt,
       }),
     });
+    if (!gpContextCurrent(context)) return;
     state.personnelLearningAssignmentCatalog = null;
     await loadPersonnelLearningAssignmentCatalog({ force: true });
+    if (!gpContextCurrent(context)) return;
     state.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
+    if (!gpContextCurrent(context)) return;
     showToast("Die Schulungszuweisung wurde abgebrochen; alle bisherigen Belege bleiben erhalten.");
   } catch (error) {
+    if (!gpContextCurrent(context)) return;
     showToast(error.message, true);
     if (error.status === 409) {
       state.personnelLearningAssignmentCatalog = null;
       await loadPersonnelLearningAssignmentCatalog({ force: true });
     }
   } finally {
-    state.personnelLearningAssignmentMutationPending = false;
-    renderPersonnelLearningAssignmentCatalog();
+    if (state.personnelLearningAssignmentMutationPendingOwner === mutationOwner) state.personnelLearningAssignmentMutationPending = false;
+    if (gpContextCurrent(context)) renderPersonnelLearningAssignmentCatalog();
   }
 }
 
@@ -20473,6 +20830,9 @@ function handlePersonnelLearningAssignmentListAction(event) {
     if (!elements.personnelLearningAssignmentModal?.open) return;
     elements.personnelLearningAssignmentId.value="";
     elements.personnelLearningAssignmentExpectedReceipt.value="";
+    const process = selectedPersonnelLearningAssignmentProcess();
+    const option = elements.personnelLearningAssignmentProcess.selectedOptions[0];
+    if (process && option) option.textContent = `${process.title} · Version ${Number(process.publishedVersionNumber)}`;
     document.getElementById("personnelLearningScheduleReceipt").value="";
     document.getElementById("personnelLearningRepeatOf").value=assignment.id;
     renderPersonnelLearningAssignmentTrainerOptions();
@@ -20507,18 +20867,30 @@ function handlePersonnelLearningAssignmentListAction(event) {
 }
 
 async function reviewPersonnelLearningTarget(assignment) {
-  if (!assignment.learningTarget || assignment.progress?.result !== "passed" || !assignment.capabilities?.canEdit) return;
-  await loadPersonnelLearningCompetencyCatalog({ force:true });
+  if (!assignment.learningTarget || assignment.progress?.result !== "passed"
+    || !assignment.capabilities?.canEdit || !canWritePersonnelLearningCompetencies()) return;
+  const intent = Symbol("personnel-learning-target-review");
+  state.personnelLearningTargetReviewIntent = intent;
+  const context = captureGpContext(canWritePersonnelLearningCompetencies,
+    () => state.personnelLearningTargetReviewIntent);
+  if (!gpContextCurrent(context)) return;
   const employeeNumber = assignment.learner.employeeNumber;
-  const target = assignment.learningTarget;
+  const target = { ...assignment.learningTarget };
+  await loadPersonnelLearningCompetencyCatalog({ force:true });
+  if (!gpContextCurrent(context)) return;
   const existing = state.personnelLearningCompetencyCatalog?.competencies?.find(c => c.employeeNumber === employeeNumber && c.skillId === target.skillModuleId);
   const skill = personnelLearningCompetencySkill(target.skillModuleId);
   if (!skill || Number(skill.publishedVersionNumber) !== target.skillVersionNumber) {
     throw new Error("Die Fähigkeitsfassung hat sich geändert. Bitte die Zielkompetenz im Kompetenzprofil fachlich prüfen.");
   }
   state.personnelLearningCompetencyEmployeeNumber = employeeNumber;
-  openPersonnelLearningCompetencyEditor(existing || null);
+  if (openPersonnelLearningCompetencyEditor(existing || null) !== true
+    || !elements.personnelLearningCompetencyModal.open
+    || elements.personnelLearningCompetencyEmployeeNumber.value !== employeeNumber) return;
+  if (![...elements.personnelLearningCompetencySkill.options]
+    .some(option => option.value === target.skillModuleId)) return;
   elements.personnelLearningCompetencySkill.value = target.skillModuleId;
+  if (elements.personnelLearningCompetencySkill.value !== target.skillModuleId) return;
   populatePersonnelLearningCompetencyLevels(skill, Math.max(existing?.active ? existing.level : 0, target.targetLevel));
   renderPersonnelLearningCompetencyLevelPreview();
   setPersonnelLearningCompetencyMessage("Vorschlag aus dem bestandenen Kurs. Die tatsächliche Stufe prüfen und bewusst speichern. Die Trainerfreigabe bleibt eine eigene Entscheidung.");
@@ -20881,6 +21253,7 @@ function syncStartDashboardWorkspace() {
   if (!startDashboardWorkspace) {
     startDashboardWorkspace = window.StartDashboardWorkspace.create({
       root: elements.startDashboardView, key: startDashboardWorkspaceActorKey,
+      sessionReference: () => state.portalSession,
       canUse: canUseStartDashboardWorkspace, allowed: startDashboardWorkspaceFieldAllowed,
       localOnly: isLocalStartDashboardWorkspace,
       storage: {getItem: key => window.localStorage.getItem(key), setItem: (key, value) => window.localStorage.setItem(key, value)}, api,
@@ -20983,21 +21356,25 @@ function openPersonnelLearningConfirmation(input) {
 }
 
 function syncGpWindows() {
+  syncXoffiImport();
+  syncWorkflowStudio();
   syncSettingsSaveScopes();
   syncPlanningPrintWindows();
-  if (!window.GpWindow) return;
+  if (!window.GpWindow) { syncPersonnelDashboardWorkspace(); syncPersonnelDashboardInformation(); return; }
   const key = state.portalSession?.authenticated ? startDashboardWorkspaceActorKey() : '';
   const canUse=()=>Boolean(state.portalSession?.authenticated && !state.portalSession?.user?.mustChangePassword);
   if (!gpWindowManager) gpWindowManager=window.GpWindow.installDocument(document,{actorKey:()=>gpWindowActor,canUse,api,
     scale:salesArticleSearchWindowScale,error:error=>showToast('Fenstereinstellungen: '+error.message,true)});
-  if (key !== gpWindowActor) {
-    gpWindowActor=key;gpWindowManager.synchronize();personalActionsWindow?.destroy();personalActionsWindow=null;
+  if (key !== gpWindowActor || gpWindowSession !== state.portalSession) {
+    gpWindowActor=key;gpWindowSession=state.portalSession;gpWindowManager.synchronize();personalActionsWindow?.destroy();personalActionsWindow=null;
     branchOrderViewStates.clear();branchOrderViewActor=startDashboardWorkspaceActorKey();
     state.branchOrdersManagementRequestId++;state.branchOrdersManagement=null;state.branchOrdersManagementDraft=null;state.branchOrdersManagementBaseline='';state.branchOrdersManagementDraftLocationId='';state.branchOrdersManagementHistory=[];state.branchOrdersManagementLoading=false;state.branchOrdersManagementSaving=false;state.branchOrdersManagementSaveContext=null;
     state.loanManagementReturnContext=null;state.loanManagementReturnLoanId='';state.loanManagementReturnSaving=false;state.loanManagementReturnSavingContext=null;
     if (elements.personalActionsAdminDialog?.open) elements.personalActionsAdminDialog.close();
     settingsDraftGuard?.clear();employeeProfileBookmark=null;state.birthdayPresentationSettingsSavingContext=null;
   }
+  syncPersonnelDashboardInformation();
+  syncPersonnelDashboardWorkspace();
   if (!recentArticlesWindow && window.SalesRecentArticles) recentArticlesWindow=window.SalesRecentArticles.mount({
     dock:document.getElementById('sidebarRecentArticlesButton'),key:currentSalesArticleCatalogDetailAccessKey,
     canUse:()=>canReadSalesArticles() && state.portalSession?.user?.isEmployee !== false,
@@ -22190,18 +22567,158 @@ function orderedPersonnelDashboardItems(layout = state.personnelDashboardLayout)
   return normalized.order.map((id) => catalog.get(id)).filter((item) => item?.available);
 }
 
+let personnelDashboardInformation = null;
+let personnelDashboardWorkspace = null;
+let personnelDashboardWorkspaceApplying = false;
+let personnelDashboardWorkspaceOwner = null;
+let personnelDashboardCustomizerRevision = 0;
+let personnelDashboardConfigurationSaveContext = null;
+
+function canUsePersonnelDashboardWorkspace() {
+  return canUseStartDashboardWorkspace() && canOpenPersonnelAdministrationModule()
+    && state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "dashboard";
+}
+
+function personnelDashboardWorkspaceFieldAllowed(id) {
+  return canUsePersonnelDashboardWorkspace() && personnelDashboardCatalog().some(item => `card:${item.id}` === id && item.available);
+}
+
+function personnelDashboardWorkspaceFields(root) {
+  return [...root.querySelectorAll("[data-personnel-dashboard-field]")].map(element => ({
+    id: `card:${element.dataset.personnelDashboardField}`, element,
+    title: element.querySelector("h3"), description: element.querySelector(".personnel-dashboard-card-copy p"),
+  }));
+}
+
+function applyPersonnelDashboardWorkspace({ preferences, store }) {
+  if (personnelDashboardWorkspaceApplying) return;
+  personnelDashboardWorkspaceApplying = true;
+  try {
+    state.personnelDashboardLayout = store.ready ? window.PersonnelDashboardWorkspacePreferences.layout(preferences) : defaultPersonnelDashboardLayout();
+    if (elements.personnelDashboardCustomizeButton) elements.personnelDashboardCustomizeButton.disabled = !store.ready;
+    renderPersonnelDashboard();
+    personnelDashboardWorkspace?.geometry?.reorder(preferences.order);
+  } finally { personnelDashboardWorkspaceApplying = false; }
+}
+
+function syncPersonnelDashboardWorkspace() {
+  if (personnelDashboardWorkspaceApplying || !elements.personnelDashboardSection || !window.StartDashboardWorkspace || !window.PersonnelDashboardWorkspacePreferences) return;
+  const owner = { key: startDashboardWorkspaceActorKey(), session: state.portalSession };
+  if (personnelDashboardWorkspaceOwner?.key !== owner.key || personnelDashboardWorkspaceOwner?.session !== owner.session || !canUsePersonnelDashboardWorkspace()) {
+    personnelDashboardWorkspaceOwner = owner;
+    closePersonnelDashboardCustomizer({ restoreFocus: false });
+    personnelDashboardConfigurationSaveContext = null;
+    if (elements.savePersonnelDashboardLayout) elements.savePersonnelDashboardLayout.disabled = false;
+  }
+  if (!personnelDashboardWorkspace) personnelDashboardWorkspace = window.StartDashboardWorkspace.create({
+    root: elements.personnelDashboardSection, grid: elements.personnelDashboardGrid,
+    model: window.PersonnelDashboardWorkspacePreferences, property: "personnelDashboardWorkspace", cachePrefix: "gp.personnel.dashboard.workspace.v1.",
+    key: startDashboardWorkspaceActorKey, sessionReference: () => state.portalSession,
+    canUse: canUsePersonnelDashboardWorkspace, allowed: personnelDashboardWorkspaceFieldAllowed,
+    discover: personnelDashboardWorkspaceFields, editorWindowId: "personnel-dashboard-field-editor", scopeName: "personnel",
+    hideable: id => window.PersonnelDashboardWorkspacePreferences.IDS.includes(id),
+    migrate: window.PersonnelDashboardWorkspacePreferences.migrate,
+    extraPreferences: value => ({ personnelDashboardLayout: window.PersonnelDashboardWorkspacePreferences.layout(value) }),
+    localPreferences: payload => localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(payload.personnelDashboardLayout)),
+    localOnly: isLocalStartDashboardWorkspace,
+    legacy: () => { try { return JSON.parse(localStorage.getItem(personnelDashboardLayoutStorageKey()) || "null"); } catch { return null; } },
+    storage: { getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) },
+    api, onApply: applyPersonnelDashboardWorkspace,
+    error: error => showToast(`Personal-Dashboard: ${error.message}`, true),
+  });
+  else personnelDashboardWorkspace.sync();
+}
+
+function canUsePersonnelDashboardInformation() {
+  return canOpenPersonnelAdministrationModule()
+    && (!state.portalStatus?.portalEnabled || (state.portalSession?.authenticated === true && !state.portalSession?.user?.mustChangePassword))
+    && state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "dashboard";
+}
+
+function personnelDashboardInformationSources() {
+  const catalog = new Map(personnelDashboardCatalog().map(item => [item.id, item.available]));
+  const hidden = new Set(normalizePersonnelDashboardLayout(state.personnelDashboardLayout).hidden);
+  const visible = id => catalog.get(id) && !hidden.has(id);
+  const date = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const scope = { date, year: Number(state.centralVacationYear || date.slice(0, 4)), locationId: String(state.locationId || ""), departmentId: String(state.departmentId || "") };
+  const source = (card, type, url, allowed = true, note = "") => ({ id: type, card, type, url, allowed: Boolean(allowed), scope, note });
+  const requests = managerRequestTabAvailability();
+  const query = new URLSearchParams({ locationId: scope.locationId, date });
+  if (scope.departmentId) query.set("departmentId", scope.departmentId);
+  return [
+    source("employees", "employees", "/api/personnel-directory", canReadCentralPersonnel()),
+    source("positions", "positions", "/api/positions?includeInactive=1", canManagePositions()),
+    source("applications", "candidates", "/api/portal/v1/personnel-lifecycle/candidates?limit=50&offset=0", canReadCandidatePreboarding()),
+    source("workflows", "workflows", "/api/portal/v1/personnel-lifecycle/workflow-instances", canReadPersonnelWorkflowInstances()),
+    source("learning", "learning", "/api/portal/v1/personnel-learning/modules", canReadPersonnelLearningCatalog()),
+    source("tasks", "onboarding", "/api/portal/v1/personnel-lifecycle/onboarding/tasks", canReadLifecycleOnboardingTasks()),
+    source("tasks", "offboarding", "/api/portal/v1/personnel-lifecycle/offboarding/tasks", canReadLifecycleOffboardingTasks()),
+    source("requests", "absence", "/api/portal/v1/absence-requests", requests.vacation),
+    source("requests", "amu", "/api/portal/v1/amu-reports", requests.amu && (!state.portalStatus?.portalEnabled || hasGovernancePermission("sickness:read"))),
+    source("requests", "sickness", "/api/portal/v1/sickness-cases", requests.amu && (!state.portalStatus?.portalEnabled || hasGovernancePermission("sickness:read"))),
+    source("timeTracking", "timeTracking", `/api/portal/v1/time-presence?${query}`, canReadManagedTimeTracking() && (!state.portalStatus?.portalEnabled || hasGovernancePermission("time:read")) && Boolean(scope.locationId), scope.locationId ? "Heutiger Tagesbereich" : "Für die Kennzahl bitte einen Standort im GP auswählen."),
+    source("costCenters", "costCenters", "/api/cost-centers?includeInactive=1", canReadCostCenters()),
+    source("ruleDrafts", "ruleDrafts", "/api/work-rules/drafts", canAccessCustomWorkRuleGovernance()),
+    source("collectiveAgreements", "collectiveAgreements", "/api/collective-agreements/registry", canReadCollectiveAgreements()),
+    source("vacations", "vacations", `/api/personnel-vacations?year=${scope.year}`, canReadCentralVacations()),
+  ].filter(item => visible(item.card));
+}
+
+function syncPersonnelDashboardInformation(options = {}) {
+  if (!window.PersonnelDashboardInfo || !elements.personnelDashboardGrid) return;
+  if (!personnelDashboardInformation) personnelDashboardInformation = window.PersonnelDashboardInfo.create({
+    sources: personnelDashboardInformationSources,
+    capture: () => captureGpContext(canUsePersonnelDashboardInformation), current: gpContextCurrent,
+    active: canUsePersonnelDashboardInformation, api, onChange: renderPersonnelDashboardInformation,
+  });
+  return personnelDashboardInformation.sync(options);
+}
+
+function renderPersonnelDashboardInformation() {
+  const records = Object.values(personnelDashboardInformation?.records || {});
+  for (const card of elements.personnelDashboardSection?.querySelectorAll("[data-personnel-dashboard-field]") || []) {
+    const rows = records.filter(row => row.card === card.dataset.personnelDashboardField);
+    const target = card.querySelector(".personnel-dashboard-info");
+    const sources = rows.length ? rows : [{ status: "idle", metrics: [], caption: "Kennzahlen werden beim Öffnen dieser Übersicht geladen." }];
+    target.innerHTML = sources.map(row => `<section class="personnel-dashboard-source" data-source-status="${escapeHtmlAttribute(row.status)}"${row.id ? ` data-personnel-dashboard-source="${escapeHtmlAttribute(row.id)}"` : ""}>
+      ${rows.length > 1 ? `<h4>${escapeHtml(window.PersonnelDashboardInfo?.sourceLabels[row.id] || row.id)}</h4>` : ""}
+      <span class="personnel-dashboard-source-state">${escapeHtml(window.PersonnelDashboardInfo?.labels[row.status] || row.status)}</span>
+      ${row.metrics?.length ? `<dl class="personnel-dashboard-metrics">${row.metrics.map(metric => `<div class="personnel-dashboard-metric"><dt>${escapeHtml(metric.label)}</dt><dd>${metric.value === null ? "–" : escapeHtml(metric.value)}</dd></div>`).join("")}</dl>` : ""}
+      <p class="personnel-dashboard-source-caption">${escapeHtml(row.caption)}</p></section>`).join("");
+  }
+}
+
 function renderPersonnelDashboard() {
   if (!elements.personnelDashboardGrid) return;
   state.personnelDashboardLayout = normalizePersonnelDashboardLayout(state.personnelDashboardLayout);
   const hidden = new Set(state.personnelDashboardLayout.hidden);
   const items = orderedPersonnelDashboardItems().filter((item) => !hidden.has(item.id));
-  elements.personnelDashboardGrid.innerHTML = items.length
-    ? items.map((item) => `<button class="personnel-dashboard-card" type="button" data-personnel-dashboard-item="${escapeHtmlAttribute(item.id)}">
-        <span class="personnel-dashboard-card-symbol" aria-hidden="true">${escapeHtml(item.symbol)}</span>
-        <span class="personnel-dashboard-card-copy"><small>${escapeHtml(item.eyebrow)}</small><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.description)}</span></span>
-        <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
-      </button>`).join("")
-    : '<div class="personnel-dashboard-empty"><strong>Keine Kachel eingeblendet</strong><p>Öffne „Dashboard anpassen“, um mindestens einen verfügbaren Arbeitsbereich einzublenden.</p></div>';
+  const grid = elements.personnelDashboardGrid;
+  const all = personnelDashboardCatalog();
+  for (const item of all) {
+    let card = elements.personnelDashboardSection.querySelector(`[data-personnel-dashboard-field="${CSS.escape(item.id)}"]`);
+    if (!item.available) { card?.remove(); continue; }
+    if (!card) {
+      card = document.createElement("article"); card.className = "personnel-dashboard-card";
+      card.dataset.personnelDashboardField = item.id;
+      card.setAttribute("aria-labelledby", `personnel-dashboard-title-${item.id}`);
+      card.innerHTML = `<header class="personnel-dashboard-card-header"><span class="personnel-dashboard-card-symbol" aria-hidden="true">${escapeHtml(item.symbol)}</span>
+        <div class="personnel-dashboard-card-copy"><small>${escapeHtml(item.eyebrow)}</small><h3 id="personnel-dashboard-title-${escapeHtmlAttribute(item.id)}">${escapeHtml(item.label)}</h3><p>${escapeHtml(item.description)}</p></div></header>
+        <div class="personnel-dashboard-info"></div><button class="secondary-button personnel-dashboard-open" type="button" data-personnel-dashboard-item="${escapeHtmlAttribute(item.id)}" aria-label="${escapeHtmlAttribute(item.label + " öffnen")}">Bereich öffnen <span aria-hidden="true">→</span></button>`;
+      grid.append(card);
+    }
+    card.hidden = hidden.has(item.id);
+  }
+  if (!personnelDashboardWorkspace?.geometry) orderedPersonnelDashboardItems().forEach((item, index) => {
+    const card = grid.querySelector(`[data-personnel-dashboard-field="${CSS.escape(item.id)}"]`);
+    if (grid.children[index] !== card) grid.insertBefore(card, grid.children[index] || null);
+  });
+  let empty = grid.querySelector(".personnel-dashboard-empty");
+  if (!items.length && !empty) { empty = document.createElement("div"); empty.className = "personnel-dashboard-empty"; empty.innerHTML = '<strong>Keine Kachel eingeblendet</strong><p>Öffne „Dashboard anpassen“, um mindestens einen verfügbaren Arbeitsbereich einzublenden.</p>'; grid.append(empty); }
+  if (items.length) empty?.remove();
+  renderPersonnelDashboardInformation();
+  syncPersonnelDashboardInformation();
+  syncPersonnelDashboardWorkspace();
 }
 
 function renderPersonnelDashboardCustomizer() {
@@ -22231,6 +22748,10 @@ function updatePersonnelDashboardCustomizerStatus(layout = state.personnelDashbo
 }
 
 function openPersonnelDashboardCustomizer() {
+  if (!personnelDashboardWorkspace?.store.ready || !canUsePersonnelDashboardWorkspace()) return;
+  personnelDashboardCustomizerRevision++;
+  state.personnelDashboardResetDraft = false;
+  if (elements.savePersonnelDashboardLayout) elements.savePersonnelDashboardLayout.disabled = false;
   state.personnelDashboardDraftLayout = normalizePersonnelDashboardLayout(state.personnelDashboardLayout);
   elements.personnelDashboardCustomizer?.classList.remove("hidden");
   elements.personnelDashboardCustomizeButton?.setAttribute("aria-expanded", "true");
@@ -22239,6 +22760,8 @@ function openPersonnelDashboardCustomizer() {
 }
 
 function closePersonnelDashboardCustomizer({ restoreFocus = true } = {}) {
+  personnelDashboardCustomizerRevision++;
+  state.personnelDashboardResetDraft = false;
   state.personnelDashboardDraftLayout = null;
   elements.personnelDashboardCustomizer?.classList.add("hidden");
   elements.personnelDashboardCustomizeButton?.setAttribute("aria-expanded", "false");
@@ -22316,13 +22839,6 @@ function setPersonnelAdministrationTab(tab) {
   if (normalized !== "employees" && employeeProfileIsOpen()) pauseEmployeeProfile();
   if (normalized === "employees" && state.currentView === 'personnelAdministration') resumeEmployeeProfile('administration');
   state.personnelAdministrationTab = normalized;
-  document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => {
-    const active = button.dataset.personnelAdministrationTab === normalized;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-selected", String(active));
-    button.tabIndex = active ? 0 : -1;
-  });
-  document.querySelector(".personnel-administration-tabs")?.classList.toggle("hidden", normalized === "dashboard");
   elements.personnelDashboardSection?.classList.toggle("active", normalized === "dashboard");
   elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
   elements.positionManagementSection?.classList.toggle("active", normalized === "positions");
@@ -22335,7 +22851,9 @@ function setPersonnelAdministrationTab(tab) {
   elements.collectiveAgreementsSection?.classList.toggle("active", normalized === "collectiveAgreements");
   elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
   elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees" || employeeProfileIsOpen());
+  syncWorkflowStudio();
   if (normalized === "dashboard") renderPersonnelDashboard();
+  else syncPersonnelDashboardInformation();
   if (normalized === "positions") renderPositions();
   if (state.currentView === "personnelAdministration") renderContextNavigation();
   if (state.currentView === "personnelAdministration" && ["employees", "costCenters"].includes(normalized)) {
@@ -22398,6 +22916,38 @@ function syncCostCenterTypeHint() {
   elements.costCenterTypeHint.textContent = parts.join(" ");
 }
 
+function captureGpContext(canUse = () => true, source = () => "") {
+  return { actor: startDashboardWorkspaceActorKey(), session: state.portalSession, scope: window.GpWindow?.captureContext?.(document), canUse, source, value: source() };
+}
+
+function gpContextCurrent(ticket) {
+  return Boolean(ticket && ticket.session === state.portalSession && ticket.actor === startDashboardWorkspaceActorKey() && ticket.canUse()
+    && ticket.value === ticket.source() && (!ticket.scope || window.GpWindow?.currentContext?.(ticket.scope)));
+}
+
+function captureGpEditor(dialog, canUse = () => true) {
+  return { dialog, context: captureGpContext(canUse), window: window.GpWindow?.capture?.(dialog) };
+}
+
+function gpEditorCurrent(ticket, allowClosed = false) {
+  return Boolean(ticket && gpContextCurrent(ticket.context)
+    && (allowClosed || ticket.dialog?.open)
+    && (!ticket.window || window.GpWindow?.current?.(ticket.window, { allowClosed })));
+}
+
+function canEditEmployeeWindow() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  const permissions = state.portalSession?.user?.permissions || [];
+  return state.employeeEditMode === "display"
+    ? permissions.includes("employees:display:write") || permissions.includes("employees:nickname:write")
+    : state.currentView === "personnelAdministration" ? canWriteCentralPersonnel() : permissions.includes("employees:write");
+}
+
+function canEditLocationWindow() {
+  return canWriteLocationsFully() || canManageTimeTrackingSettings()
+    || state.portalSession?.user?.permissions?.includes("locations:operational:write") === true;
+}
+
 function openCostCenterModal(costCenter = null) {
   if (!canWriteCostCenters() || !elements.costCenterModal) return;
   state.editingCostCenterId = costCenter?.id ?? null;
@@ -22412,10 +22962,14 @@ function openCostCenterModal(costCenter = null) {
   elements.costCenterModalTitle.textContent = costCenter ? "Kostenstelle bearbeiten" : "Kostenstelle anlegen";
   elements.costCenterSubmitButton.textContent = costCenter ? "Kostenstelle speichern" : "Kostenstelle anlegen";
   elements.deactivateCostCenterButton.classList.toggle("hidden", !costCenter?.active);
+  elements.costCenterSubmitButton.disabled = false;
+  elements.deactivateCostCenterButton.disabled = false;
   elements.costCenterModal.showModal();
 }
 
 async function saveCostCenter(event) {
+  const ticket = captureGpEditor(elements.costCenterModal, canWriteCostCenters);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!canWriteCostCenters()) return;
   const id = state.editingCostCenterId;
@@ -22432,31 +22986,39 @@ async function saveCostCenter(event) {
       method: id === null ? "POST" : "PUT",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.costCenterModal.close();
     state.personnelAdministrationLoaded = false;
     await loadPersonnelAdministration({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(id === null ? "Kostenstelle wurde angelegt." : "Kostenstelle wurde gespeichert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.costCenterSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.costCenterSubmitButton.disabled = false;
   }
 }
 
 async function deactivateCostCenter() {
+  const ticket = captureGpEditor(elements.costCenterModal, canWriteCostCenters);
+  if (!gpEditorCurrent(ticket)) return;
   const id = state.editingCostCenterId;
   if (id === null || !canWriteCostCenters() || !confirm("Diese Kostenstelle deaktivieren? Bestehende Zuordnungen und historische Daten bleiben erhalten.")) return;
   elements.deactivateCostCenterButton.disabled = true;
   try {
     await api(`/api/cost-centers/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!gpEditorCurrent(ticket)) return;
     elements.costCenterModal.close();
     state.personnelAdministrationLoaded = false;
     await loadPersonnelAdministration({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast("Kostenstelle wurde deaktiviert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.deactivateCostCenterButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.deactivateCostCenterButton.disabled = false;
   }
 }
 
@@ -22506,10 +23068,14 @@ function openCostCenterTypeModal(type = null) {
   elements.costCenterTypeSubmitButton.textContent = type ? "Typ speichern" : "Typ anlegen";
   elements.deactivateCostCenterTypeButton.classList.toggle("hidden", !type?.active);
   renderCostCenterTypePositionOptions();
+  elements.costCenterTypeSubmitButton.disabled = false;
+  elements.deactivateCostCenterTypeButton.disabled = false;
   elements.costCenterTypeModal.showModal();
 }
 
 async function saveCostCenterType(event) {
+  const ticket = captureGpEditor(elements.costCenterTypeModal, canWriteCostCenters);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!canWriteCostCenters()) return;
   const id = state.editingCostCenterTypeId;
@@ -22527,32 +23093,40 @@ async function saveCostCenterType(event) {
       method: id ? "PUT" : "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.costCenterTypeModal.close();
     state.personnelAdministrationLoaded = false;
     await loadPersonnelAdministration({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(id ? "Kostenstellentyp wurde gespeichert." : "Kostenstellentyp wurde angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.costCenterTypeSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.costCenterTypeSubmitButton.disabled = false;
   }
 }
 
 async function deactivateCostCenterType() {
+  const ticket = captureGpEditor(elements.costCenterTypeModal, canWriteCostCenters);
+  if (!gpEditorCurrent(ticket)) return;
   const id = state.editingCostCenterTypeId;
   if (!id || !canWriteCostCenters()
     || !confirm("Diesen Kostenstellentyp archivieren? Verwendete Typen müssen zuerst von allen aktiven Kostenstellen gelöst werden.")) return;
   elements.deactivateCostCenterTypeButton.disabled = true;
   try {
     await api(`/api/cost-center-types/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!gpEditorCurrent(ticket)) return;
     elements.costCenterTypeModal.close();
     state.personnelAdministrationLoaded = false;
     await loadPersonnelAdministration({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast("Kostenstellentyp wurde archiviert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.deactivateCostCenterTypeButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.deactivateCostCenterTypeButton.disabled = false;
   }
 }
 
@@ -23651,17 +24225,91 @@ function xoffiMinutesInput(input, { nullable = false } = {}) {
   return Math.round(hours * 60);
 }
 
-function resetXoffiImport() {
+let xoffiImportGeneration = 0;
+let xoffiImportOwner = null;
+let xoffiInspectTicket = null;
+let xoffiPendingApply = null;
+
+function xoffiImportContext() {
+  return { actor: startDashboardWorkspaceActorKey(), session: state.portalSession,
+    locationId: String(state.locationId || ""), departmentId: String(state.departmentId || ""),
+    weekStart: String(state.weekStart || "") };
+}
+
+function xoffiImportAllowed() {
+  return canImportXoffiTime() && state.portalStatus?.installationFeatures?.timeTracking !== false
+    && (state.portalStatus?.portalEnabled !== true || (state.portalSession?.authenticated === true
+      && state.portalSession.user?.active !== false && state.portalSession.user?.mustChangePassword !== true));
+}
+
+function xoffiImportContextMatches(owner) {
+  if (!owner || !xoffiImportAllowed()) return false;
+  const current = xoffiImportContext();
+  return owner.actor === current.actor && owner.session === current.session
+    && owner.locationId === current.locationId && owner.departmentId === current.departmentId
+    && owner.weekStart === current.weekStart;
+}
+
+function xoffiImportRequestCurrent(ticket) {
+  return ticket.generation === xoffiImportGeneration && ticket.owner === xoffiImportOwner
+    && elements.xoffiImportDialog?.open && xoffiImportContextMatches(ticket.owner);
+}
+
+function clearXoffiImportPreview() {
   state.xoffiImportPreview = null;
-  if (elements.xoffiImportForm) elements.xoffiImportForm.reset();
-  if (elements.xoffiUseAsActual) elements.xoffiUseAsActual.checked = true;
   if (elements.xoffiImportConfirmed) elements.xoffiImportConfirmed.checked = false;
   if (elements.xoffiScreenshotWeekConfirmed) elements.xoffiScreenshotWeekConfirmed.checked = false;
   elements.xoffiScreenshotWeekConfirmation?.classList.add("hidden");
   if (elements.xoffiImportPreview) elements.xoffiImportPreview.innerHTML = "";
   elements.xoffiImportConfirmation?.classList.add("hidden");
   if (elements.xoffiApplyButton) elements.xoffiApplyButton.disabled = true;
+}
+
+function resetXoffiImport() {
+  xoffiImportGeneration++;
+  xoffiInspectTicket?.controller.abort();
+  xoffiInspectTicket = null;
+  xoffiImportOwner = null;
+  if (elements.xoffiImportForm) elements.xoffiImportForm.reset();
+  elements.xoffiImportForm?.querySelectorAll("input,select").forEach(field => { field.disabled = Boolean(xoffiPendingApply); });
+  if (elements.xoffiUseAsActual) elements.xoffiUseAsActual.checked = true;
+  clearXoffiImportPreview();
+  if (elements.xoffiImportFile) elements.xoffiImportFile.disabled = Boolean(xoffiPendingApply);
+  if (elements.xoffiInspectButton) elements.xoffiInspectButton.disabled = Boolean(xoffiPendingApply);
   if (elements.xoffiImportStatus) elements.xoffiImportStatus.textContent = "MHTML-Datei auswählen. Mitarbeiter und Kalenderwoche werden automatisch erkannt. Die Übernahme ist ab dem letzten geplanten Dienstende im gewählten Bereich möglich.";
+}
+
+function syncXoffiImport() {
+  if (!xoffiImportOwner || xoffiImportContextMatches(xoffiImportOwner)) return;
+  resetXoffiImport();
+  if (elements.xoffiImportDialog?.open) elements.xoffiImportDialog.close();
+}
+
+function openXoffiImport() {
+  if (!xoffiImportAllowed()) return;
+  syncGpWindows();
+  resetXoffiImport();
+  xoffiImportOwner = xoffiImportContext();
+  if (xoffiPendingApply) elements.xoffiImportStatus.textContent = "Ein zuvor gestarteter Importauftrag wird noch abgeschlossen. Danach kann eine neue Datei ausgelesen werden.";
+  if (!elements.xoffiImportDialog.open) elements.xoffiImportDialog.show();
+}
+
+function closeXoffiImport() {
+  const pending = Boolean(xoffiPendingApply);
+  resetXoffiImport();
+  if (elements.xoffiImportDialog?.open) elements.xoffiImportDialog.close();
+  if (pending) showToast("Fenster geschlossen. Der bereits gestartete Importauftrag läuft weiter; sein Ergebnis wird geprüft.");
+}
+
+function changeXoffiImportFile() {
+  if (xoffiPendingApply) return;
+  xoffiImportGeneration++;
+  xoffiInspectTicket?.controller.abort();
+  xoffiInspectTicket = null;
+  clearXoffiImportPreview();
+  xoffiImportOwner = xoffiImportContext();
+  elements.xoffiInspectButton.disabled = false;
+  elements.xoffiImportStatus.textContent = "Datei ausgewählt. Auslesen und anschließend Quelle, Zuordnungen und Review-Werte prüfen.";
 }
 
 function xoffiWeekRangeLabel(weekStart, weekEnd = addDays(weekStart, 6)) {
@@ -23672,7 +24320,7 @@ function xoffiWeekConfirmationRequired() {
   return state.xoffiImportPreview?.weekResolution?.confirmationRequired === true;
 }
 
-function updateXoffiApplyAvailability() {
+function updateXoffiApplyAvailability({ preserveStatus = false } = {}) {
   if (!elements.xoffiApplyButton) return;
   const reviewed = Boolean(state.xoffiImportPreview && elements.xoffiImportConfirmed?.checked);
   const weekConfirmed = !xoffiWeekConfirmationRequired() || elements.xoffiScreenshotWeekConfirmed?.checked === true;
@@ -23682,24 +24330,29 @@ function updateXoffiApplyAvailability() {
     blocker.querySelector("[data-xoffi-mapping-message]").textContent = issue.replace(/^Import noch nicht möglich:\s*/, "");
     blocker.hidden = !issue;
   }
-  elements.xoffiApplyButton.disabled = !(reviewed && weekConfirmed) || Boolean(issue);
-  if (state.xoffiImportPreview) elements.xoffiImportStatus.textContent = issue
+  elements.xoffiApplyButton.disabled = Boolean(xoffiPendingApply || xoffiInspectTicket) || !(reviewed && weekConfirmed) || Boolean(issue);
+  if (!preserveStatus && state.xoffiImportPreview && !xoffiPendingApply && !xoffiInspectTicket) elements.xoffiImportStatus.textContent = issue
     || "Zuordnungen vollständig. Bitte Werte prüfen und die Übernahme bestätigen.";
 }
 
 function xoffiMappingIssue() {
   const rows = [...elements.xoffiImportPreview.querySelectorAll("[data-xoffi-row]")];
-  const selected = new Set(), missing = [], duplicate = [];
+  const selected = new Set(), missing = [], duplicate = [], sourceInvalid = [];
   for (const row of rows) {
     const input = row.querySelector("[data-xoffi-employee]"), value = input.value;
-    const invalid = !value || (value !== "__skip__" && selected.has(value));
+    const invalidSource = row.dataset.reviewStatus === "invalid" && value !== "__skip__";
+    const invalid = invalidSource || !value || (value !== "__skip__" && selected.has(value));
     input.setAttribute("aria-invalid", String(invalid));
-    if (!value) missing.push(row.dataset.sourceName);
+    row.classList?.toggle("xoffi-row-excluded", value === "__skip__");
+    row.querySelectorAll?.(".xoffi-row-review input").forEach(field => { field.disabled = value === "__skip__" || Boolean(xoffiPendingApply); });
+    if (invalidSource) sourceInvalid.push(row.dataset.sourceName);
+    else if (!value) missing.push(row.dataset.sourceName);
     else if (value !== "__skip__") {
       if (selected.has(value)) duplicate.push(row.dataset.sourceName);
       selected.add(value);
     }
   }
+  if (sourceInvalid.length) return `Import noch nicht möglich: ${sourceInvalid.length} ungeklärte ${sourceInvalid.length === 1 ? "Quellzeile muss" : "Quellzeilen müssen"} ausdrücklich ausgeschlossen werden: ${sourceInvalid.join(", ")}. Bitte „Diese Zeile nicht übernehmen“ wählen. Die übrigen gültigen Zuordnungen bleiben importierbar.`;
   if (missing.length) return `Import noch nicht möglich: ${missing.length === 1 ? "Diese xoffi-Person ist" : `Diese ${missing.length} xoffi-Personen sind`} keinem aktiven GP-Teammitglied zugeordnet: ${missing.join(", ")}. Bitte zuordnen oder in der jeweiligen Zeile „Diese Zeile nicht übernehmen“ wählen. Danach können die übrigen Personen übernommen werden.`;
   if (duplicate.length) return `Teammitglied mehrfach zugeordnet: ${duplicate.join(", ")}. Bitte korrigieren.`;
   if (rows.length && !selected.size) return "Bitte mindestens ein Teammitglied zur Übernahme auswählen.";
@@ -23711,35 +24364,7 @@ function renderXoffiImportPreview() {
   if (!preview || !elements.xoffiImportPreview) return;
   const weekResolution = preview.weekResolution || {};
   const targetWeek = xoffiWeekRangeLabel(preview.weekStart, preview.weekEnd);
-  const candidateOptions = (selected) => preview.candidates.map((employee) => `
-    <option value="${escapeHtmlAttribute(employee.employeeNumber)}" ${employee.employeeNumber === selected ? "selected" : ""}>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</option>
-  `).join("");
-  elements.xoffiImportPreview.innerHTML = `
-    <div class="xoffi-preview-heading"><strong>KW ${Number(preview.calendarWeek)} · ${escapeHtml(preview.context.locationName || preview.context.locationId)}</strong><span>${formatDate(preview.weekStart)}–${formatDate(preview.weekEnd)}</span></div>
-    ${(preview.warnings || []).map((warning) => `<p class="calculation-note">${escapeHtml(warning)}</p>`).join("")}
-    <aside class="xoffi-import-blocker" role="alert" aria-atomic="true" data-xoffi-mapping-blocker hidden><strong>Import noch nicht möglich</strong><p data-xoffi-mapping-message></p></aside>
-    <div class="xoffi-preview-rows">${preview.employees.map((employee, rowIndex) => `
-      <article class="xoffi-preview-row" data-xoffi-row="${rowIndex}" data-source-name="${escapeHtmlAttribute(employee.sourceName)}" data-match-confidence="${Number(employee.matchConfidence || 0)}">
-        <div class="xoffi-row-heading">
-          <div><strong>${escapeHtml(employee.sourceName)}</strong><small>${employee.employeeNumber ? "Namensvorschlag · bitte prüfen" : "Zuordnung erforderlich"}</small></div>
-          <label>Teammitglied<select data-xoffi-employee><option value="">Bitte zuordnen</option>${candidateOptions(employee.employeeNumber)}<option value="__skip__">Diese Zeile nicht übernehmen</option></select></label>
-        </div>
-        <div class="xoffi-week-values">
-          <label>Ist gesamt (h)<input data-xoffi-week-actual type="number" step="0.01" min="0" max="168" value="${xoffiHoursInput(employee.weeklyActualMinutes)}" /></label>
-          <label>Gewertet (h)<input data-xoffi-week-valued type="number" step="0.01" min="0" max="336" value="${xoffiHoursInput(employee.weeklyValuedMinutes)}" /></label>
-          <label>Zuschläge (h)<input data-xoffi-week-surcharge type="number" step="0.01" min="0" max="168" value="${xoffiHoursInput(employee.weeklySurchargeMinutes)}" /></label>
-          ${employee.snapshot ? `<div class="xoffi-source-snapshot"><strong>Stand ${formatDate(employee.snapshot.balanceDate)}</strong><span>Zeitkonto: ${xoffiHoursInput(employee.snapshot.openingBalanceMinutes)} h</span><span>Resturlaub: ${Number(employee.snapshot.remainingVacationDays).toLocaleString("de-AT")} Tage</span><span>Vertrag: ${employee.snapshot.workdaysPerWeek} × ${xoffiHoursInput(employee.snapshot.dailyTargetMinutes)} h = ${xoffiHoursInput(employee.snapshot.dailyTargetMinutes * employee.snapshot.workdaysPerWeek)} h/Woche</span><span>Mehrstunden dieser Woche: ${xoffiHoursInput(employee.snapshot.weeklyBalanceDeltaMinutes)} h</span><small>Resturlaub am Stichtag, ohne künftig fixierte Urlaube. Der GP-Urlaubsstand und der GP-Vertrag bleiben erhalten.</small></div>` : `<label>Stundenkonto (h)<input data-xoffi-balance type="number" step="0.01" min="-10000" max="10000" value="${xoffiHoursInput(employee.closingBalanceMinutes)}" /></label>`}
-        </div>
-        <div class="xoffi-days">${employee.days.map((day, dayIndex) => `
-          <div class="xoffi-day" data-xoffi-day="${dayIndex}" data-work-date="${escapeHtmlAttribute(day.workDate)}" data-confidence="${Number(day.confidence || 0)}">
-            <strong>${weekdayNames[dayIndex]} <small>${formatDate(day.workDate, { day: "2-digit", month: "2-digit" })}</small></strong>
-            <label>Zeiten<input data-xoffi-intervals type="text" value="${escapeHtmlAttribute((day.intervals || []).join(", "))}" placeholder="09:00-12:30, 13:00-17:00" /></label>
-            <label>Ist (h)<input data-xoffi-day-actual type="number" step="0.01" min="0" max="24" value="${xoffiHoursInput(day.actualMinutes)}" /></label>
-            <label>Gewertet (h)<input data-xoffi-day-valued type="number" step="0.01" min="0" max="48" value="${xoffiHoursInput(day.valuedMinutes)}" /></label>
-            <label>Zuschlag (h)<input data-xoffi-day-surcharge type="number" step="0.01" min="0" max="24" value="${xoffiHoursInput(day.surchargeMinutes)}" /></label>
-          </div>`).join("")}</div>
-        ${(employee.warnings || []).map((warning) => `<p class="settings-note">${escapeHtml(warning)}</p>`).join("")}
-      </article>`).join("")}</div>`;
+  elements.xoffiImportPreview.innerHTML = window.GpXoffiImport.render(preview);
   elements.xoffiImportConfirmation?.classList.remove("hidden");
   if (elements.xoffiScreenshotWeekConfirmed) elements.xoffiScreenshotWeekConfirmed.checked = false;
   elements.xoffiScreenshotWeekConfirmation?.classList.toggle("hidden", weekResolution.confirmationRequired !== true);
@@ -23756,20 +24381,31 @@ function renderXoffiImportPreview() {
 }
 
 async function inspectXoffiImportFile() {
+  syncXoffiImport();
+  if (xoffiPendingApply || !elements.xoffiImportDialog?.open || !xoffiImportContextMatches(xoffiImportOwner)) return;
+  if (state.data?.weekStart !== state.weekStart || String(state.data?.context?.locationId || "") !== String(state.locationId || "")
+    || String(state.data?.context?.departmentId || "") !== String(state.departmentId || "")) {
+    elements.xoffiImportStatus.textContent = "Der gewählte Bereich wird noch geladen. Bitte danach die Datei erneut auslesen.";
+    return;
+  }
   const file = elements.xoffiImportFile?.files?.[0];
   if (!file) {
     elements.xoffiImportStatus.textContent = "Bitte zuerst eine MHTML-Datei oder eine JPG-, PNG- oder WebP-Datei auswählen.";
     return;
   }
+  xoffiInspectTicket?.controller.abort();
+  const ticket = { owner: xoffiImportOwner, generation: ++xoffiImportGeneration, controller: new AbortController() };
+  xoffiInspectTicket = ticket;
+  clearXoffiImportPreview();
   elements.xoffiInspectButton.disabled = true;
   elements.xoffiApplyButton.disabled = true;
   elements.xoffiImportStatus.textContent = "Datei wird ausgelesen und der Kalenderwoche zugeordnet. Das letzte Dienstende wird geprüft.";
   try {
     const parameters = new URLSearchParams({
-      weekStart: state.data.weekStart,
-      locationId: state.data.context.locationId,
+      weekStart: ticket.owner.weekStart,
+      locationId: ticket.owner.locationId,
     });
-    if (state.data.context.departmentId) parameters.set("departmentId", state.data.context.departmentId);
+    if (ticket.owner.departmentId) parameters.set("departmentId", ticket.owner.departmentId);
     const response = await rawApi(`/api/portal/v1/xoffi-time-import/inspect?${parameters}`, {
       method: "POST",
       headers: {
@@ -23777,8 +24413,13 @@ async function inspectXoffiImportFile() {
         "X-Import-Filename": encodeURIComponent(file.name || "xoffi.png"),
       },
       body: file,
+      signal: ticket.controller.signal,
     });
-    state.xoffiImportPreview = await response.json();
+    const preview = await response.json();
+    if (!xoffiImportRequestCurrent(ticket)) return;
+    if (String(preview.context?.locationId || "") !== ticket.owner.locationId
+      || String(preview.context?.departmentId || "") !== ticket.owner.departmentId) throw new Error("Die Vorschau gehört nicht zum ausgewählten Bereich. Bitte die Datei erneut auslesen.");
+    state.xoffiImportPreview = { ...preview, clientFileName: String(file.name || "Xoffi-Datei").slice(0, 120) };
     elements.xoffiImportConfirmed.checked = false;
     renderXoffiImportPreview();
     elements.xoffiImportStatus.textContent = xoffiWeekConfirmationRequired()
@@ -23786,13 +24427,17 @@ async function inspectXoffiImportFile() {
       : "Mitarbeiter und Kalenderwoche erkannt. Bitte die Zuordnung und Werte vor der Übernahme prüfen.";
     updateXoffiApplyAvailability();
   } catch (error) {
-    state.xoffiImportPreview = null;
-    elements.xoffiImportPreview.innerHTML = "";
-    elements.xoffiImportConfirmation?.classList.add("hidden");
-    elements.xoffiScreenshotWeekConfirmation?.classList.add("hidden");
+    if (!xoffiImportRequestCurrent(ticket)) return;
+    clearXoffiImportPreview();
     elements.xoffiImportStatus.textContent = error.message;
   } finally {
-    elements.xoffiInspectButton.disabled = false;
+    if (xoffiInspectTicket === ticket) {
+      xoffiInspectTicket = null;
+      if (xoffiImportRequestCurrent(ticket)) {
+        elements.xoffiInspectButton.disabled = false;
+        if (state.xoffiImportPreview) updateXoffiApplyAvailability();
+      }
+    }
   }
 }
 
@@ -23822,6 +24467,8 @@ function collectXoffiReviewedRows() {
 
 async function applyXoffiImport(event) {
   event.preventDefault();
+  syncXoffiImport();
+  if (xoffiPendingApply || xoffiInspectTicket || !elements.xoffiImportDialog?.open || !xoffiImportContextMatches(xoffiImportOwner)) return;
   if (!state.xoffiImportPreview || !elements.xoffiImportConfirmed.checked
     || (xoffiWeekConfirmationRequired() && !elements.xoffiScreenshotWeekConfirmed?.checked)) return;
   const mappingIssue = xoffiMappingIssue();
@@ -23830,6 +24477,14 @@ async function applyXoffiImport(event) {
     elements.xoffiImportStatus.focus();
     return;
   }
+  let employees;
+  try { employees = collectXoffiReviewedRows(); }
+  catch (error) { elements.xoffiImportStatus.textContent = error.message;elements.xoffiImportStatus.focus();return; }
+  const preview = state.xoffiImportPreview;
+  const ticket = { owner: xoffiImportOwner, generation: xoffiImportGeneration, previewId: preview.previewId,
+    targetWeek: preview.weekStart, targetLocationId: String(preview.context.locationId), targetDepartmentId: String(preview.context.departmentId || "") };
+  xoffiPendingApply = ticket;
+  elements.xoffiImportForm.querySelectorAll("input,select").forEach(field => { field.disabled = true; });
   elements.xoffiApplyButton.disabled = true;
   elements.xoffiInspectButton.disabled = true;
   elements.xoffiImportStatus.textContent = "Geprüfte xoffi-Werte werden gespeichert.";
@@ -23837,25 +24492,44 @@ async function applyXoffiImport(event) {
     const result = await api("/api/portal/v1/xoffi-time-import/apply", {
       method: "POST",
       body: JSON.stringify({
-        previewId: state.xoffiImportPreview.previewId,
+        previewId: ticket.previewId,
         confirmed: true,
         screenshotWeekConfirmed: elements.xoffiScreenshotWeekConfirmed?.checked === true,
         useAsActual: elements.xoffiUseAsActual.checked,
-        employees: collectXoffiReviewedRows(),
+        employees,
       }),
     });
-    state.data = result.schedule;
-    state.weekStart = result.schedule.weekStart;
-    render();
+    if (result.schedule?.weekStart !== ticket.targetWeek || String(result.schedule?.context?.locationId || "") !== ticket.targetLocationId
+      || String(result.schedule?.context?.departmentId || "") !== ticket.targetDepartmentId) throw new Error("Der Import wurde beantwortet, aber der aktualisierte Dienstplan passt nicht zur geprüften Quelle. Bitte den Bereich neu laden.");
+    if (!xoffiImportRequestCurrent(ticket)) {
+      const current = xoffiImportContext();
+      if (ticket.owner.actor === current.actor && ticket.owner.session === current.session && xoffiImportAllowed()) showToast("Der zuvor gestartete xoffi-Import wurde abgeschlossen. Die aktuelle Ansicht bleibt erhalten; den betreffenden Bereich bei Bedarf neu laden.");
+      return;
+    }
     elements.xoffiImportDialog.close();
+    resetXoffiImport();
+    applyLoadedSchedule(result.schedule);
+    render();
     showToast("xoffi-Zeiterfassung wurde revisionssicher übernommen.");
   } catch (error) {
+    if (!xoffiImportRequestCurrent(ticket)) {
+      const current = xoffiImportContext();
+      if (ticket.owner.actor === current.actor && ticket.owner.session === current.session && xoffiImportAllowed()) showToast("Der zuvor gestartete Import konnte nicht vollständig bestätigt werden. Bitte den betreffenden Bereich prüfen.", true);
+      return;
+    }
     updateXoffiApplyAvailability();
     elements.xoffiImportStatus.textContent = error.message;
     elements.xoffiImportStatus.focus();
     showToast(error.message, true);
   } finally {
-    elements.xoffiInspectButton.disabled = false;
+    if (xoffiPendingApply === ticket) {
+      xoffiPendingApply = null;
+      if (elements.xoffiImportDialog?.open && xoffiImportContextMatches(xoffiImportOwner)) {
+        elements.xoffiImportForm.querySelectorAll("input,select").forEach(field => { field.disabled = false; });
+        elements.xoffiInspectButton.disabled = false;
+        updateXoffiApplyAvailability({ preserveStatus: true });
+      }
+    }
   }
 }
 
@@ -25360,27 +26034,43 @@ async function loadUiPreferences() {
 }
 
 async function persistPersonnelDashboardLayout(layout, { silent = false } = {}) {
-  const previous = normalizePersonnelDashboardLayout(state.personnelDashboardLayout);
   const normalized = normalizePersonnelDashboardLayout(layout);
-  state.personnelDashboardLayout = normalized;
-  localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(normalized));
-  renderPersonnelDashboard();
-  try {
-    const result = await api("/api/portal/v1/ui-preferences", {
-      method: "PUT",
-      body: JSON.stringify({ personnelDashboardLayout: normalized }),
-    });
-    state.personnelDashboardLayout = normalizePersonnelDashboardLayout(result.personnelDashboardLayout || normalized);
-    localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(state.personnelDashboardLayout));
-    renderPersonnelDashboard();
-    if (!silent) showToast("Das Personal-Dashboard wurde gespeichert.");
-    return true;
-  } catch (error) {
-    state.personnelDashboardLayout = previous;
-    localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(previous));
-    renderPersonnelDashboard();
-    if (!silent) showToast(error.message, true);
-    return false;
+  if (!personnelDashboardWorkspace?.store.ready || !canUsePersonnelDashboardWorkspace()) return false;
+  const ticket = captureGpContext(canUsePersonnelDashboardWorkspace, () => personnelDashboardCustomizerRevision);
+  const value = state.personnelDashboardResetDraft ? window.PersonnelDashboardWorkspacePreferences.empty() : personnelDashboardWorkspace.store.value;
+  value.order = normalized.order.map(id => `card:${id}`);
+  for (const id of window.PersonnelDashboardWorkspacePreferences.IDS) {
+    const field = { ...value.fields[id] };
+    if (normalized.hidden.includes(id.slice(5))) field.hidden = true;
+    else delete field.hidden;
+    if (Object.keys(field).length) value.fields[id] = field;
+    else delete value.fields[id];
+  }
+  const saved = await personnelDashboardWorkspace.store.change(value);
+  if (!gpContextCurrent(ticket)) return false;
+  if (saved && !silent) showToast("Das Personal-Dashboard wurde gespeichert.");
+  return saved === true;
+}
+
+async function savePersonnelDashboardConfiguration() {
+  if (!state.personnelDashboardDraftLayout || !personnelDashboardWorkspace?.store.ready || !canUsePersonnelDashboardWorkspace()) return;
+  const layout = normalizePersonnelDashboardLayout(state.personnelDashboardDraftLayout);
+  if (!orderedPersonnelDashboardItems(layout).some(item => !layout.hidden.includes(item.id))) {
+    if (elements.personnelDashboardCustomizerStatus) elements.personnelDashboardCustomizerStatus.textContent = "Bitte mindestens einen verfügbaren Arbeitsbereich einblenden.";
+    return;
+  }
+  const context = captureGpContext(canUsePersonnelDashboardWorkspace, () => personnelDashboardCustomizerRevision);
+  const signature = JSON.stringify([layout, state.personnelDashboardResetDraft === true]);
+  personnelDashboardConfigurationSaveContext = context;
+  elements.savePersonnelDashboardLayout.disabled = true;
+  const saved = await persistPersonnelDashboardLayout(layout, { silent: true });
+  if (!gpContextCurrent(context) || personnelDashboardConfigurationSaveContext !== context) return;
+  personnelDashboardConfigurationSaveContext = null;
+  elements.savePersonnelDashboardLayout.disabled = false;
+  if (saved && signature === JSON.stringify([normalizePersonnelDashboardLayout(state.personnelDashboardDraftLayout), state.personnelDashboardResetDraft === true])) {
+    closePersonnelDashboardCustomizer();showToast("Das Personal-Dashboard wurde gespeichert.");
+  } else if (elements.personnelDashboardCustomizerStatus) {
+    elements.personnelDashboardCustomizerStatus.textContent = saved ? "Die gesendete Anordnung ist gespeichert. Neuere Änderungen sind noch offen." : "Die Anordnung konnte nicht gespeichert werden. Deine Einstellungen bleiben zum erneuten Speichern erhalten.";
   }
 }
 
@@ -27402,6 +28092,8 @@ function customProcessPayload() {
 }
 
 async function saveCustomProcess(event) {
+  const ticket = captureGpEditor(elements.customProcessModal, canManageCustomProcesses);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   const payload = customProcessPayload();
   if (payload.steps.length < 2) return setCustomProcessMessage("Bitte mindestens zwei Prozessschritte hinzufügen.", true);
@@ -27417,18 +28109,22 @@ async function saveCustomProcess(event) {
       method: id ? "PUT" : "POST",
       body: JSON.stringify(payload),
     });
+    if (!gpEditorCurrent(ticket)) return;
     const saved = result?.process || result;
     if (saved?.id) {
       state.rightsDashboardSelectedProcessId = String(saved.id);
       state.rightsProcessCategoryId = String(saved.category || "all");
     }
+    if (!gpEditorCurrent(ticket)) return;
     elements.customProcessModal.close();
     await loadRightsDashboard();
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(id ? "Der eigene Ablauf wurde gespeichert." : "Der eigene Ablauf wurde angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setCustomProcessMessage(error.message, true);
   } finally {
-    elements.saveCustomProcessButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.saveCustomProcessButton.disabled = false;
   }
 }
 
@@ -28666,7 +29362,10 @@ function xoffiDisplayComparison(row) {
   const valued = xoffiComparisonMode === "valued";
   const comparison = row[valued ? "valuedComparison" : "presenceComparison"];
   const partial = comparison.actualMinutes === null && row.coveredDays > 0 && !row.scopeMismatch;
-  return { ...row, presenceMinutes: row.actualMinutes, ...comparison, partial,
+  const valuationUnknown = valued && row.valuationAllocationIncomplete === true;
+  const weeklyProofMissing = valuationUnknown && (row.weeklyCredits || []).some(credit => credit.status !== "verified");
+  return { ...row, presenceMinutes: row.actualMinutes, ...comparison, partial, valuationUnknown, weeklyProofMissing,
+    comparisonComplete: comparison.actualMinutes != null,
     actualMinutes: partial ? (valued ? row.knownValuedMinutes : row.knownActualMinutes) : comparison.actualMinutes,
     planCredits: xoffiComparisonMode === "valued" ? row.planCredits : [],
   };
@@ -28679,7 +29378,7 @@ function xoffiDifference(row) {
 function xoffiComparisonCells(row) {
   const credit = !row.partial && row.actualMinutes !== null && xoffiComparisonMode === "valued" ? Math.max(0, row.valuedMinutes - row.presenceMinutes) : 0;
   return `<td class="xoffi-hours"><strong>${formatHours(row.plannedMinutes)}</strong>${(row.planCredits || []).map(item => `<small class="xoffi-plan-credit">${escapeHtml(item.label)} · ${formatHours(item.minutes)}</small>`).join("")}</td>
-    <td class="xoffi-hours"><strong>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</strong>${row.partial ? `<small>Teilstand · ${row.coveredDays}/${row.totalDays} Tage</small>` : ""}${credit ? `<small>${formatHours(row.presenceMinutes)} anwesend<br>+ ${formatHours(credit)} ${row.absence === "sick" ? "Krankenstand" : "Gutschrift / Zuschlag"}</small>` : ""}${row.intervals?.length ? `<small class="xoffi-intervals">${row.intervals.map(escapeHtml).join("<br>")}</small>` : ""}</td>
+    <td class="xoffi-hours"><strong>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</strong>${row.partial ? `<small>${row.valuationUnknown ? "Gesicherter Teilstand · Bewertung offen" : `Teilstand · ${row.coveredDays}/${row.totalDays} Tage`}</small>` : ""}${credit ? `<small>${formatHours(row.presenceMinutes)} anwesend<br>+ ${formatHours(credit)} ${row.absence === "sick" ? "Krankenstand" : "Gutschrift / Zuschlag"}</small>` : ""}${row.intervals?.length ? `<small class="xoffi-intervals">${row.intervals.map(escapeHtml).join("<br>")}</small>` : ""}</td>
     <td class="xoffi-hours xoffi-difference">${xoffiDifference(row)}</td><td><span class="xoffi-variance ${escapeHtml(row.severity)}">${escapeHtml(xoffiComparisonLabel(row))}</span></td>`;
 }
 
@@ -28691,6 +29390,7 @@ function renderXoffiPersonDays(details) {
   const imports = source.imports || [];
   const label = xoffiComparisonMode === "valued" ? "xoffi gewertet" : "Anwesenheit";
   details.querySelector(".xoffi-person-content").innerHTML = `
+    ${xoffiComparisonMode === "valued" ? window.GpXoffiImport.weeklyEvidence(source) : ""}
     <div class="xoffi-comparison-table ${row.days.length > 7 ? "long" : ""}" tabindex="0" role="region" aria-label="Tagesvergleich für MA ${escapeHtmlAttribute(row.employeeNumber)}"><table><caption class="sr-only">Tagesvergleich für MA ${escapeHtml(row.employeeNumber)} · ${label}</caption><thead><tr><th scope="col">Tag</th><th scope="col">GP-Plan</th><th scope="col">${label}</th><th scope="col">Differenz</th><th scope="col">Abweichung</th></tr></thead><tbody>${row.days.map(sourceDay => {
       const day = xoffiDisplayComparison(sourceDay);
       return `<tr class="${day.plannedMinutes === 0 && day.actualMinutes === 0 ? "xoffi-day-empty" : ""}"><th scope="row"><span class="xoffi-day-name">${escapeHtml(new Date(`${day.date}T12:00:00`).toLocaleDateString("de-AT", { weekday: "short" }))}</span> ${escapeHtml(formatDate(day.date))}${day.absence ? `<small>${escapeHtml(({sick:"Krankenstand",vacation:"Urlaub"})[day.absence] || day.absence)}</small>` : ""}</th>${xoffiComparisonCells(day)}</tr>`;
@@ -28700,7 +29400,11 @@ function renderXoffiPersonDays(details) {
 }
 
 function xoffiComparisonLabel(row) {
-  if (row.severity === "missing") return row.importState === "incomplete" ? "Import unvollständig" : "Nicht importiert";
+  if (row.severity === "missing") {
+    if (row.weeklyProofMissing) return "Bewertung ohne bestätigten Wochennachweis";
+    if (row.valuationUnknown) return "Wochenposten nicht im Zeitraum zuordenbar";
+    return row.importState === "incomplete" ? "Import unvollständig" : row.importState === "complete" ? "Bewertung unvollständig" : "Nicht importiert";
+  }
   if (row.severity === "scope") return "Importbereich abweichend · Bereich wählen";
   if (row.severity === "unplanned") return "Ohne Planstunden · prüfen";
   const percent = Math.abs(Number(row.percent)).toLocaleString("de-AT", { maximumFractionDigits: 1 });
@@ -28712,7 +29416,7 @@ function renderXoffiComparison(result) {
   updateXoffiComparisonControls();
   const opened = new Set([...elements.xoffiComparisonList.querySelectorAll("details[open]")].map(details => details.dataset.xoffiPerson));
   const employees = result.employees.map(xoffiDisplayComparison);
-  const complete = employees.filter(row => row.importState === "complete" && !row.scopeMismatch).length;
+  const complete = employees.filter(row => row.comparisonComplete && !row.scopeMismatch).length;
   const attention = employees.filter(row => ["yellow", "red", "unplanned"].includes(row.severity)).length;
   const inRange = employees.filter(row => row.severity === "green").length;
   const label = xoffiComparisonMode === "valued" ? "xoffi gewertet" : "Anwesenheit";
@@ -28724,7 +29428,7 @@ function renderXoffiComparison(result) {
   </div>`;
   elements.xoffiComparisonList.innerHTML = overview + (employees.length ? employees.map(row => `<details class="xoffi-comparison-person" data-xoffi-person="${escapeHtmlAttribute(row.employeeNumber)}" ${opened.has(row.employeeNumber) ? "open" : ""}><summary>
     <span class="xoffi-person-name"><small>MA ${escapeHtml(row.employeeNumber)}</small><strong>${escapeHtml(row.fullName)}</strong></span>
-    <span class="xoffi-person-metrics"><span><small>GP-Plan</small><strong>${formatHours(row.plannedMinutes)}</strong></span><span><small>${label}</small><strong>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</strong>${row.partial ? `<small>Teilstand · ${row.coveredDays}/${row.totalDays} Tage</small>` : ""}</span><span><small>Differenz</small><strong>${xoffiDifference(row)}</strong></span></span>
+    <span class="xoffi-person-metrics"><span><small>GP-Plan</small><strong>${formatHours(row.plannedMinutes)}</strong></span><span><small>${label}</small><strong>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</strong>${row.partial ? `<small>${row.valuationUnknown ? "Gesicherter Teilstand · Bewertung offen" : `Teilstand · ${row.coveredDays}/${row.totalDays} Tage`}</small>` : ""}</span><span><small>Differenz</small><strong>${xoffiDifference(row)}</strong></span></span>
     <span class="xoffi-variance ${escapeHtml(row.severity)}">${escapeHtml(xoffiComparisonLabel(row))}</span></summary>
     <div class="xoffi-person-content"></div></details>`).join("") : '<p class="xoffi-comparison-empty">Keine Teammitglieder oder importierten Zeiten für diesen Bereich.</p>');
   elements.xoffiComparisonList.querySelectorAll("details[open]").forEach(renderXoffiPersonDays);
@@ -29516,6 +30220,8 @@ function renderPersonnelDocuments(employeeNumber, result, access) {
 
 async function openPersonnelRecord(employeeNumber) {
   if (!elements.personnelRecordModal) return;
+  window.GpWindow?.begin?.(elements.personnelRecordModal);
+  const contextTicket = captureGpContext(personnelRecordAvailableInUi);
   const freshDialog = !elements.personnelRecordModal.open;
   if (freshDialog || String(state.personnelRecord?.employeeNumber || "") !== String(employeeNumber)) {
     state.personnelRecordOpenSections.clear();
@@ -29529,10 +30235,11 @@ async function openPersonnelRecord(employeeNumber) {
   elements.personnelRecordMessage.textContent = "";
   elements.personnelRecordMessage.classList.add("hidden");
   elements.savePersonnelRecordButton.classList.add("hidden");
+  elements.savePersonnelRecordButton.disabled = false;
   if (!elements.personnelRecordModal.open) elements.personnelRecordModal.showModal();
   try {
     const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}`);
-    if (!elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
+    if (!gpContextCurrent(contextTicket) || !elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
     state.personnelRecord = { employeeNumber, result };
     const employee = result.employee || {};
     const access = result.access || {};
@@ -29541,9 +30248,12 @@ async function openPersonnelRecord(employeeNumber) {
     const mode = (key) => personnelRecordAccessMode(access, key);
     const retailKvMode = mode("employment.retailKv");
     if (retailKvMode !== "hidden" && canReadCollectiveAgreements()) {
-      try { state.personnelRecord.kvRegistry = await api("/api/collective-agreements/registry"); }
-      catch { state.personnelRecord.kvRegistry = {}; }
-      if (!elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
+      try {
+        const kvRegistry = await api("/api/collective-agreements/registry");
+        if (!gpContextCurrent(contextTicket) || state.personnelRecordRequestToken !== requestToken) return;
+        state.personnelRecord.kvRegistry = kvRegistry;
+      } catch { if (!gpContextCurrent(contextTicket) || state.personnelRecordRequestToken !== requestToken) return; state.personnelRecord.kvRegistry = {}; }
+      if (!gpContextCurrent(contextTicket) || !elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
     }
     elements.personnelRecordTitle.textContent = `${employee.personnel_number || employeeNumber} · ${employee.nickname || employee.full_name || "Personalakt"}`;
 
@@ -29634,7 +30344,7 @@ async function openPersonnelRecord(employeeNumber) {
     const canWriteFormField = mode("phone") === "write" || protectionMode === "write" || retailKvMode === "write" || PERSONNEL_RECORD_FORM_FIELDS.some(([, fieldKey]) => mode(fieldKey) === "write");
     elements.savePersonnelRecordButton.classList.toggle("hidden", !canWriteFormField);
   } catch (error) {
-    if (!elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
+    if (!gpContextCurrent(contextTicket) || !elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
     state.personnelRecord = null;
     elements.personnelRecordContent.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
   }
@@ -29642,6 +30352,8 @@ async function openPersonnelRecord(employeeNumber) {
 
 async function savePersonnelRecord(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.personnelRecordModal, personnelRecordAvailableInUi);
+  if (!gpEditorCurrent(ticket)) return;
   const current = state.personnelRecord;
   if (!current) return;
   const access = current.result?.access || {};
@@ -29687,17 +30399,21 @@ async function savePersonnelRecord(event) {
   try {
     const submittedBody = withPersonnelPlanningStatusBasis(body, current.result?.planningStatusBasis || {});
     const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}`, { method: "PUT", body: JSON.stringify(submittedBody) });
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     showToast(result.changedFields?.length ? "Der Personalakt wurde verschlüsselt gespeichert." : "Es waren keine Änderungen zu speichern.");
     await openPersonnelRecord(current.employeeNumber);
   } catch (error) {
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     elements.personnelRecordMessage.textContent = error.message;
     elements.personnelRecordMessage.classList.remove("hidden");
   } finally {
-    elements.savePersonnelRecordButton.disabled = false;
+    if (gpEditorCurrent(ticket)) elements.savePersonnelRecordButton.disabled = false;
   }
 }
 
 async function uploadPersonnelDocument() {
+  const ticket = captureGpEditor(elements.personnelRecordModal, personnelRecordAvailableInUi);
+  if (!gpEditorCurrent(ticket)) return;
   const current = state.personnelRecord;
   if (!current) return;
   const fields = elements.personnelRecordForm.elements;
@@ -29717,23 +30433,29 @@ async function uploadPersonnelDocument() {
   try {
     const response = await rawApi(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}/documents`, { method: "POST", body: formData });
     await response.json().catch(() => ({}));
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     showToast("Das Dokument wurde geschützt gespeichert.");
     await openPersonnelRecord(current.employeeNumber);
   } catch (error) {
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     showToast(error.message, true);
   } finally {
-    if (button?.isConnected) button.disabled = false;
+    if (gpEditorCurrent(ticket) && button?.isConnected) button.disabled = false;
   }
 }
 
 async function archivePersonnelDocument(documentId) {
+  const ticket = captureGpEditor(elements.personnelRecordModal, personnelRecordAvailableInUi);
+  if (!gpEditorCurrent(ticket)) return;
   const current = state.personnelRecord;
   if (!current || !documentId || !confirm("Dieses Personalakt-Dokument archivieren? Alle Versionen bleiben geschützt erhalten.")) return;
   try {
     await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" });
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     showToast("Das Dokument wurde archiviert.");
     await openPersonnelRecord(current.employeeNumber);
   } catch (error) {
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     showToast(error.message, true);
   }
 }
@@ -32666,6 +33388,7 @@ function setSalesArticleImportMessage(message = "", isError = false) {
 
 function captureSalesArticleImportContext() {
   return {
+    session: state.portalSession,
     actorKey: currentSalesArticleCatalogActorKey(),
     accessKey: currentSalesArticleCatalogDetailAccessKey(),
   };
@@ -32673,6 +33396,7 @@ function captureSalesArticleImportContext() {
 
 function salesArticleImportContextIsCurrent(context) {
   return Boolean(context)
+    && context.session === state.portalSession
     && context.actorKey === currentSalesArticleCatalogActorKey()
     && context.accessKey === currentSalesArticleCatalogDetailAccessKey()
     && canReadSalesArticles()
@@ -33145,6 +33869,7 @@ function invalidateAdminPersonalActionsAfterMutation() {
 
 function captureSalesArticleMutationContext() {
   return {
+    session: state.portalSession,
     actorKey: currentSalesArticleCatalogActorKey(),
     accessKey: currentSalesArticleCatalogDetailAccessKey(),
   };
@@ -33152,6 +33877,7 @@ function captureSalesArticleMutationContext() {
 
 function salesArticleMutationContextIsCurrent(context, { requireWrite = true } = {}) {
   return Boolean(context)
+    && context.session === state.portalSession
     && context.actorKey === currentSalesArticleCatalogActorKey()
     && context.accessKey === currentSalesArticleCatalogDetailAccessKey()
     && canReadSalesArticles()
@@ -34336,6 +35062,7 @@ let importMappingWorkspace = null;
 let crmPurchaseWorkspace = null;
 let receiptSearchWorkspace = null;
 let tradeInsightsWorkspace = null;
+let tradeOrdersWorkspace = null;
 let salesArticleReportWorkspace = null;
 let salesBwlWorkspace = null;
 function activateSalesBwl() {
@@ -34440,10 +35167,16 @@ function syncPrivacyOrganizationAccess() {
   }
 }
 let tradeInsightsTab = "repairs";
+let logisticsTab = "purchasing";
 function activateTradeArea(view) {
   const workspace=document.getElementById("tradeInsightsWorkspace");
   const host=view==="logistics"?document.getElementById("logisticsWorkspaceHost"):elements.tradeInsightsView;
   if(workspace&&host)host.append(workspace);
+  const ordersActive=view==="logistics"&&logisticsTab==="orders";
+  workspace?.classList.toggle("hidden",ordersActive);
+  document.getElementById("tradeOrdersWorkspace")?.classList.toggle("hidden",!ordersActive);
+  if(ordersActive){tradeInsightsWorkspace?.suspend();syncGpWindows();return tradeOrdersWorkspace?.activate();}
+  tradeOrdersWorkspace?.suspend();
   tradeInsightsWorkspace?.setArea(view==="logistics"?"logistics":"stock");
   return tradeInsightsWorkspace?.activate(view==="logistics"?"purchasing":tradeInsightsTab);
 }
@@ -34472,6 +35205,8 @@ function syncSalesHistoryAccess() {
   if (nextKey === salesHistoryActorKey) return;
   salesHistoryActorKey = nextKey;
   tradeInsightsWorkspace?.destroy(); tradeInsightsWorkspace = null;
+  tradeOrdersWorkspace?.destroy(); tradeOrdersWorkspace = null;
+  document.getElementById("tradeOrdersWorkspace")?.replaceChildren();
   if (typeof salesPriceLabelsWorkspace?.destroy === "function") salesPriceLabelsWorkspace.destroy();
   else salesPriceLabelsWorkspace?.suspend?.();
   salesPriceLabelsWorkspace = null;
@@ -34485,8 +35220,10 @@ function syncSalesHistoryAccess() {
   document.getElementById('salesArticleMovementsButton')?.classList.toggle('hidden', !canReadTradeMovements());
   document.getElementById('salesArticleHistoryButton')?.classList.toggle('hidden', !(user?.salesHistory?.read && canReadSalesArticles()));
   elements.tradeInsightsNavButton?.classList.toggle("hidden", !tradeInsightsAccess);
-  elements.logisticsNavButton?.classList.toggle("hidden", !(user?.salesHistory?.read && user.permissions?.includes("sales:purchasing:read")));
-  document.getElementById("logisticsNav")?.classList.toggle("hidden", !(user?.salesHistory?.read && user.permissions?.includes("sales:purchasing:read")));
+  elements.logisticsNavButton?.classList.toggle("hidden", !canReadTradeMovements());
+  document.getElementById("logisticsNav")?.classList.toggle("hidden", !canReadTradeMovements());
+  if(canReadTradeMovements())tradeOrdersWorkspace=window.GrabenplanerTradeOrders?.mount(document.getElementById("tradeOrdersWorkspace"),{api,key:startDashboardWorkspaceActorKey,session:()=>state.portalSession,
+    canUse:()=>state.portalSession?.authenticated===true&&!state.portalSession?.user?.mustChangePassword&&canReadTradeMovements(),active:()=>state.currentView==="logistics"&&logisticsTab==="orders"});
   elements.tradeInsightsDashboardCard?.classList.toggle("hidden", !tradeInsightsAccess);
   if (tradeInsightsAccess) tradeInsightsWorkspace = window.GrabenplanerTradeInsights?.mount(document.getElementById("tradeInsightsWorkspace"), {
     api, rawApi, accessKey: startDashboardWorkspaceActorKey, canUse: canAccessTradeInsights, windowPreferences: gpWindowManager?.preferences,
@@ -36876,7 +37613,8 @@ function setView(view) {
     || (view === "personnel" && !canAccessTeamManagement())
     || (view === "salesAdministration" && !canOpenSalesAdministrationModule())
     || (view === "receiptSearch" && !state.portalSession?.user?.salesHistory?.read)
-    || (["tradeInsights","logistics"].includes(view) && !canAccessTradeInsights())
+    || (view === "tradeInsights" && !canAccessTradeInsights())
+    || (view === "logistics" && !canReadTradeMovements())
     || (view === "privacyOrganization" && (!canAccessPrivacyOrganization() || !canOpenPrivacyOrganizationTab(privacyOrganizationTab)))
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "articleCatalog" && !canAccessSalesArticleCatalog())
@@ -36921,7 +37659,7 @@ function setView(view) {
     const active = button.dataset.view === view
       && (!personnelRoute || personnelRoute === state.personnelAdministrationTab)
       && (!privacyRoute || privacyRoute === privacyOrganizationTab);
-    button.classList.toggle("active", active);
+    setNavigationCurrent(button, active);
   });
   renderContextNavigation();
   elements.startDashboardView?.classList.toggle("active", view === "startDashboard");
@@ -36939,7 +37677,7 @@ function setView(view) {
   elements.logisticsView?.classList.toggle("active", view === "logistics");
   document.getElementById("privacyOrganizationView")?.classList.toggle("active", view === "privacyOrganization");
   activatePrivacyOrganizationView();
-  if (["tradeInsights","logistics"].includes(view)) void activateTradeArea(view); else tradeInsightsWorkspace?.suspend();
+  if (["tradeInsights","logistics"].includes(view)) void activateTradeArea(view); else {tradeInsightsWorkspace?.suspend();tradeOrdersWorkspace?.suspend();}
   elements.salesArticleCatalogView?.classList.toggle("active", view === "articleCatalog");
   document.getElementById('salesArticleReportView')?.classList.toggle('active', view === 'articleReport');
   if (view === 'articleReport') void activateSalesArticleReport(); else salesArticleReportWorkspace?.suspend();
@@ -37016,6 +37754,7 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
   }
   if (requestedView === "tradeInsights" && parameters.get("section") === "purchasing") requestedView = "logistics";
+  if (requestedView === "logistics") logisticsTab = parameters.get("section") === "orders" ? "orders" : "purchasing";
   if (requestedView === "tradeInsights") {
     const tab = window.GrabenplanerTradeInsights.normalizeTab(parameters.get("section") || "repairs");
     tradeInsightsTab = tab === "purchasing" ? "repairs" : tab;
@@ -37079,7 +37818,7 @@ function currentAdministrationRoute() {
   if (view === "personnel") route.section = state.personnelTab;
   if (view === "salesAnalytics") route.section = state.salesAnalytics.tab;
   if (view === "tradeInsights") route.section = tradeInsightsTab;
-  if (view === "logistics") route.section = "purchasing";
+  if (view === "logistics") route.section = logisticsTab;
   if (view === "privacyOrganization") route.section = privacyOrganizationTab;
   if (view === "requests") route.kind = state.requestKindTab;
   if (view === "rightsDashboard") {
@@ -37761,13 +38500,15 @@ function collectEmployeeProtectedRecord() {
 }
 
 async function loadEmployeeProtectedRecord(employeeNumber) {
+  const ticket = captureGpEditor(elements.employeeModal, () => canEditEmployeeWindow() && canWriteSensitivePersonnelRecord());
+  if (!gpEditorCurrent(ticket)) return;
   const requestedEmployee = String(employeeNumber || "");
   state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: false };
   setEmployeeProtectedRecordDisabled(true);
   if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = "Geschützte Daten werden geladen …";
   try {
     const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(requestedEmployee)}`);
-    if (String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
+    if (!gpEditorCurrent(ticket) || String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
     const initial = normalizeProtectedPersonnelRecord(result.profile || {});
     fillEmployeeProtectedRecord(initial);
     fillEmployeeProtectionEditor(initial.sensitive.employment.protectionStatus, result.access || {});
@@ -37775,7 +38516,7 @@ async function loadEmployeeProtectedRecord(employeeNumber) {
     if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = "Die Angaben werden verschlüsselt im Personalakt gespeichert.";
     setEmployeeProtectedRecordDisabled(false);
   } catch (error) {
-    if (String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
+    if (!gpEditorCurrent(ticket) || String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
     state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: false };
     if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = `Personalakt konnte nicht geladen werden: ${error.message}`;
   }
@@ -37792,7 +38533,6 @@ function openEmployeeModal(employee = null) {
   if (!fullAccess && !displayAccess) return;
   const centralPersonnelWrite = canWriteCentralPersonnel();
   state.employeeEditMode = fullAccess ? "full" : "display";
-  loadEmployeeSaturdayCredit(employee, fullAccess);
   elements.employeeForm.reset();
   elements.employeeForm.querySelectorAll("details").forEach((section) => { section.open = false; });
   state.employeePersonnelRecord = null;
@@ -37860,8 +38600,7 @@ function openEmployeeModal(employee = null) {
     control.setAttribute("data-lpignore", "true");
   });
   if (canEditProtectedRecord) {
-    if (employee) loadEmployeeProtectedRecord(employee.personnel_number);
-    else {
+    if (!employee) {
       const initial = normalizeProtectedPersonnelRecord({ sensitive: { address: { country: "Österreich" } } });
       fillEmployeeProtectedRecord(initial);
       const access = state.portalSession?.user?.personnelRecordAccess || {};
@@ -37894,6 +38633,8 @@ function openEmployeeModal(employee = null) {
   }
   elements.deleteEmployeeButton.classList.toggle("hidden", !employee || displayOnly);
   elements.employeeModal.showModal();
+  void loadEmployeeSaturdayCredit(employee, fullAccess);
+  if (canEditProtectedRecord && employee) void loadEmployeeProtectedRecord(employee.personnel_number);
 }
 
 function shiftRuleFindingsForCandidate(assessmentValue, employeeNumber, dateValue) {
@@ -38175,6 +38916,7 @@ function initializeEmployeeLendingDateRangeCalendar() {
 }
 
 function resetEmployeeLendingEditor() {
+  window.GpWindow?.begin?.(elements.employeeLendingModal);
   elements.employeeLendingForm.reset();
   elements.employeeLendingEmployee.disabled = false;
   elements.employeeLendingId.value = "";
@@ -38197,6 +38939,7 @@ function resetEmployeeLendingEditor() {
   employeeLendingDestinationDepartments();
   syncEmployeeLendingTimeFields();
   elements.employeeLendingCancelEdit.classList.add("hidden");
+  elements.employeeLendingSave.disabled = false;
   elements.employeeLendingSave.textContent = "Filialeinsatz anlegen";
   elements.employeeLendingMessage.textContent = "Bestehende Dienste oder genehmigte Abwesenheiten werden nicht automatisch verändert.";
 }
@@ -38242,6 +38985,10 @@ function renderEmployeeLendingDelegates() {
 
 async function loadEmployeeLendings() {
   if (!canManageEmployeeLendings()) return;
+  const requestToken = Symbol("employee-lendings");
+  state.employeeLendingLoadRequest = requestToken;
+  const contextTicket = captureGpContext(canManageEmployeeLendings, () => JSON.stringify([state.locationId, state.weekStart]));
+  const current = () => gpContextCurrent(contextTicket) && state.employeeLendingLoadRequest === requestToken;
   state.employeeLendingLoading = true;
   elements.employeeLendingRefresh.disabled = true;
   try {
@@ -38253,6 +39000,7 @@ async function loadEmployeeLendings() {
         throw error;
       }),
     ]);
+    if (!current()) return;
     state.employeeLendings = Array.isArray(result) ? result : (result.assignments || result.lendings || []);
     state.employeeLendingCandidates = result.candidates || [];
     state.employeeLendingLocations = result.locations || [];
@@ -38261,22 +39009,29 @@ async function loadEmployeeLendings() {
     renderEmployeeLendingList();
     renderEmployeeLendingDelegates();
   } catch (error) {
+    if (!current()) return;
     elements.employeeLendingMessage.textContent = error.message;
     elements.employeeLendingList.innerHTML = `<p class="employee-lending-empty error">${escapeHtml(error.message)}</p>`;
   } finally {
-    state.employeeLendingLoading = false;
-    elements.employeeLendingRefresh.disabled = false;
+    if (state.employeeLendingLoadRequest === requestToken) state.employeeLendingLoading = false;
+    if (current()) elements.employeeLendingRefresh.disabled = false;
   }
 }
 
 async function openEmployeeLendingModal() {
   resetEmployeeLendingEditor();
   elements.employeeLendingModal.showModal();
+  const ticket = captureGpEditor(elements.employeeLendingModal, canManageEmployeeLendings);
+  const contextTicket = captureGpContext(canManageEmployeeLendings, () => JSON.stringify([state.locationId, state.weekStart]));
+  const signature = () => JSON.stringify([...elements.employeeLendingForm.querySelectorAll("input,select,textarea")]
+    .map(field => [field.name, field.value, field.checked]));
+  const initial = signature();
   await loadEmployeeLendings();
-  resetEmployeeLendingEditor();
+  if (gpEditorCurrent(ticket) && gpContextCurrent(contextTicket) && initial === signature()) resetEmployeeLendingEditor();
 }
 
 function editEmployeeLending(id) {
+  window.GpWindow?.begin?.(elements.employeeLendingModal);
   const lending = state.employeeLendings.find((entry) => String(entry.id) === String(id));
   if (!lending) return;
   elements.employeeLendingId.value = lending.id;
@@ -38294,12 +39049,16 @@ function editEmployeeLending(id) {
   syncEmployeeLendingTimeFields();
   elements.employeeLendingEmployee.disabled = true;
   elements.employeeLendingCancelEdit.classList.remove("hidden");
+  elements.employeeLendingSave.disabled = false;
   elements.employeeLendingSave.textContent = "Änderung speichern";
   elements.employeeLendingMessage.textContent = "Eine Verkürzung oder Stornierung ist nur möglich, wenn keine Zielschicht ohne gültige Abdeckung zurückbleibt.";
 }
 
 async function saveEmployeeLending(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.employeeLendingModal, canManageEmployeeLendings);
+  const contextTicket = captureGpContext(canManageEmployeeLendings, () => JSON.stringify([state.locationId, state.weekStart]));
+  if (!gpEditorCurrent(ticket)) return;
   const id = elements.employeeLendingId.value;
   const allDay = elements.employeeLendingAllDay.checked;
   const payload = {
@@ -38320,17 +39079,21 @@ async function saveEmployeeLending(event) {
       method: id ? "PUT" : "POST",
       body: JSON.stringify(payload),
     });
+    if (!gpEditorCurrent(ticket) || !gpContextCurrent(contextTicket)) return;
     showToast(id ? "Filialeinsatz wurde aktualisiert." : "Filialeinsatz wurde angelegt.");
     resetEmployeeLendingEditor();
     await Promise.all([loadEmployeeLendings(), loadAll()]);
   } catch (error) {
+    if (!gpEditorCurrent(ticket) || !gpContextCurrent(contextTicket)) return;
     elements.employeeLendingMessage.textContent = error.message;
   } finally {
-    elements.employeeLendingSave.disabled = false;
+    if (gpEditorCurrent(ticket)) elements.employeeLendingSave.disabled = false;
   }
 }
 
 async function cancelEmployeeLending(id) {
+  const contextTicket = captureGpContext(canManageEmployeeLendings, () => JSON.stringify([state.locationId, state.weekStart]));
+  if (!gpContextCurrent(contextTicket)) return;
   const lending = state.employeeLendings.find((entry) => String(entry.id) === String(id));
   const employeeName = lending?.employee_nickname || lending?.employeeNickname
     || lending?.employee_name || lending?.employeeName
@@ -38341,27 +39104,33 @@ async function cancelEmployeeLending(id) {
       method: "POST",
       body: JSON.stringify({ revision: Number(lending.revision || 1) }),
     });
+    if (!gpContextCurrent(contextTicket)) return;
     showToast("Filialeinsatz wurde storniert.");
     await Promise.all([loadEmployeeLendings(), loadAll()]);
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     elements.employeeLendingMessage.textContent = error.message;
   }
 }
 
 async function updateEmployeeLendingDelegate(employeeNumber, enabled, control) {
+  const contextTicket = captureGpContext(canManageEmployeeLendings, () => JSON.stringify([state.locationId, state.weekStart]));
+  if (!gpContextCurrent(contextTicket)) return;
   control.disabled = true;
   try {
     await api(`/api/portal/v1/staff-assignments/delegates/${encodeURIComponent(employeeNumber)}`, {
       method: "PUT",
       body: JSON.stringify({ enabled, locationId: state.locationId }),
     });
+    if (!gpContextCurrent(contextTicket)) return;
     showToast(enabled ? "Einsatzrecht wurde delegiert." : "Delegiertes Einsatzrecht wurde entzogen.");
     await loadEmployeeLendings();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     control.checked = !enabled;
     elements.employeeLendingMessage.textContent = error.message;
   } finally {
-    control.disabled = false;
+    if (gpContextCurrent(contextTicket) && control.isConnected) control.disabled = false;
   }
 }
 
@@ -38726,6 +39495,8 @@ function renderOptionList() {
 }
 
 async function loadEmployeeSaturdayCredit(employee, fullAccess) {
+  const ticket = captureGpEditor(elements.employeeModal, canEditEmployeeWindow);
+  if (!gpEditorCurrent(ticket)) return;
   const panel = document.querySelector('#employeeSaturdayCredit');
   if (!panel) return;
   const number = String(employee?.personnel_number || '');
@@ -38742,7 +39513,7 @@ async function loadEmployeeSaturdayCredit(employee, fullAccess) {
   if (!number || !fullAccess) return;
   try {
     const value = await api(`/api/employees/${encodeURIComponent(number)}/saturday-credit`);
-    if (state.employeeSaturdayCreditGeneration !== generation) return;
+    if (!gpEditorCurrent(ticket) || state.employeeSaturdayCreditGeneration !== generation) return;
     state.employeeSaturdayCredit = { ...value, employeeNumber: number };
     control('employeeSalesActivity').value = value.assignment?.activity || '';
     const today = toIsoDate(new Date());
@@ -38763,11 +39534,13 @@ async function loadEmployeeSaturdayCredit(employee, fullAccess) {
       control('employeeSalesHistory').append(item);
     }
   } catch (error) {
-    if (state.employeeSaturdayCreditGeneration === generation) control('employeeSaturdayCreditStatus').textContent = error.message;
+    if (gpEditorCurrent(ticket) && state.employeeSaturdayCreditGeneration === generation) control('employeeSaturdayCreditStatus').textContent = error.message;
   }
 }
 
 async function saveEmployeeSaturdayCredit(configure = false) {
+  const ticket = captureGpEditor(elements.employeeModal, canEditEmployeeWindow);
+  if (!gpEditorCurrent(ticket)) return;
   const current = state.employeeSaturdayCredit;
   if (!current || (configure ? !current.canConfigure : !current.canAssign)) return;
   const effectiveDate = document.querySelector('#employeeSalesEffectiveDate').value;
@@ -38781,17 +39554,20 @@ async function saveEmployeeSaturdayCredit(configure = false) {
     await api(configure ? '/api/saturday-credit/cutover' : `/api/employees/${encodeURIComponent(current.employeeNumber)}/saturday-credit`, {
       method: 'POST', body: JSON.stringify(configure ? { effectiveDate } : { effectiveDate, activity, reason, expectedPreviousId: current.history[0]?.id || '' }),
     });
-    if (generation !== state.employeeSaturdayCreditGeneration) return;
+    if (!gpEditorCurrent(ticket) || generation !== state.employeeSaturdayCreditGeneration) return;
     await loadEmployeeSaturdayCredit({ personnel_number: current.employeeNumber }, true);
+    if (!gpEditorCurrent(ticket)) return;
     showToast(configure ? 'Der Umstellungsstichtag wurde gespeichert.' : 'Die Verkaufszuordnung wurde gespeichert.');
   } catch (error) {
-    if (generation !== state.employeeSaturdayCreditGeneration) return;
+    if (!gpEditorCurrent(ticket) || generation !== state.employeeSaturdayCreditGeneration) return;
     button.disabled = false; showToast(error.message, true);
   }
 }
 
 async function saveEmployee(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.employeeModal, canEditEmployeeWindow);
+  if (!gpEditorCurrent(ticket)) return;
   const number = document.querySelector("#employeeNumber").value.trim();
   const isEdit = document.querySelector("#employeeNumber").disabled;
   if (isEdit && state.employeeEditMode === "display") {
@@ -38806,10 +39582,11 @@ async function saveEmployee(event) {
         method: "PATCH",
         body: JSON.stringify(displayPatch),
       });
+      if (!gpEditorCurrent(ticket)) return;
       elements.employeeModal.close();
       showToast("Die Teamdarstellung wurde aktualisiert.");
       await loadAll();
-    } catch (error) { showToast(error.message, true); }
+    } catch (error) { if (gpEditorCurrent(ticket, true)) showToast(error.message, true); }
     return;
   }
   if (!elements.employeeCostCenter.value) {
@@ -38874,8 +39651,9 @@ async function saveEmployee(event) {
     state.personnelAdministrationLoaded = false;
     showToast(isEdit ? "Teammitglied wurde aktualisiert." : "Teammitglied wurde angelegt.");
     await loadAll();
+    if (!gpEditorCurrent(ticket, true)) return;
     if (state.currentView === "personnelAdministration") await loadPersonnelAdministration({ force: true });
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { if (gpEditorCurrent(ticket, true)) showToast(error.message, true); }
 }
 
 function canManageTimeTrackingSettings() {
@@ -38901,7 +39679,9 @@ function syncLocationTimeTrackingFields() {
 
 async function ensureLocationCostCenters() {
   if (!canReadCostCenters() || state.costCenters.length) return;
+  const contextTicket = captureGpContext(canReadCostCenters);
   const payload = await api("/api/cost-centers?includeInactive=1");
+  if (!gpContextCurrent(contextTicket)) return;
   state.costCenters = apiList(payload, ["costCenters", "cost_centers", "items"]).map(normalizeCostCenter);
   if (!Array.isArray(payload)) {
     state.costCenterTypes = apiList(payload, ["types", "costCenterTypes", "cost_center_types"])
@@ -39009,6 +39789,8 @@ function readLocationDayFields() {
 
 async function saveLocation(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.locationEditorModal, canEditLocationWindow);
+  if (!gpEditorCurrent(ticket)) return;
   const isEdit = Boolean(state.editingLocationId);
   const id = isEdit ? state.editingLocationId : elements.locationId.value;
   try {
@@ -39019,7 +39801,7 @@ async function saveLocation(event) {
       timeTrackingVarianceMinutes: Number(elements.locationTimeTrackingVarianceMinutes.value || 15),
     } : {};
     const costCenterSettings = canWriteCostCenters() ? { costCenterId: elements.locationCostCenter.value } : {};
-    state.locations = await api(isEdit ? `/api/locations/${encodeURIComponent(id)}` : "/api/locations", {
+    const locations = await api(isEdit ? `/api/locations/${encodeURIComponent(id)}` : "/api/locations", {
       method: isEdit ? "PUT" : "POST",
       body: JSON.stringify({
         id,
@@ -39031,12 +39813,14 @@ async function saveLocation(event) {
         daySettings: readLocationDayFields(),
       }),
     });
+    if (!gpEditorCurrent(ticket)) return;
+    state.locations = locations;
     elements.locationEditorModal?.close();
     state.personnelAdministrationLoaded = false;
     resetLocationForm();
     showToast(isEdit ? "Filiale wurde gespeichert." : "Filiale wurde angelegt.");
     await loadAll();
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { if (gpEditorCurrent(ticket, true)) showToast(error.message, true); }
 }
 
 function resetDepartmentForm() {
@@ -39065,9 +39849,11 @@ function fillDepartmentForm(department) {
 
 async function saveDepartment(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.departmentEditorModal, () => !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("departments:write"));
+  if (!gpEditorCurrent(ticket)) return;
   const isEdit = Boolean(state.editingDepartmentId);
   try {
-    state.locations = await api(isEdit ? `/api/departments/${state.editingDepartmentId}` : "/api/departments", {
+    const locations = await api(isEdit ? `/api/departments/${state.editingDepartmentId}` : "/api/departments", {
       method: isEdit ? "PUT" : "POST",
       body: JSON.stringify({
         locationId: elements.departmentLocation.value,
@@ -39076,11 +39862,13 @@ async function saveDepartment(event) {
         active: elements.departmentActive.checked,
       }),
     });
+    if (!gpEditorCurrent(ticket)) return;
+    state.locations = locations;
     elements.departmentEditorModal?.close();
     resetDepartmentForm();
     showToast(isEdit ? "Abteilung wurde gespeichert." : "Abteilung wurde angelegt.");
     await loadAll();
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { if (gpEditorCurrent(ticket, true)) showToast(error.message, true); }
 }
 
 function resetPositionForm() {
@@ -39103,17 +39891,20 @@ function fillPositionForm(position) {
 async function savePosition(event) {
   event.preventDefault();
   if (!canManagePositions()) return;
+  const contextTicket = captureGpContext(canManagePositions, () => JSON.stringify([state.editingPositionId, elements.positionName.value]));
   const isEdit = Boolean(state.editingPositionId);
   try {
-    state.positions = await api(isEdit ? `/api/positions/${encodeURIComponent(state.editingPositionId)}` : "/api/positions", {
+    const positions = await api(isEdit ? `/api/positions/${encodeURIComponent(state.editingPositionId)}` : "/api/positions", {
       method: isEdit ? "PUT" : "POST",
       body: JSON.stringify({ name: elements.positionName.value }),
     });
+    if (!gpContextCurrent(contextTicket)) return;
+    state.positions = positions;
     resetPositionForm();
     state.personnelAdministrationLoaded = false;
     renderPositions();
     showToast(isEdit ? "Position wurde gespeichert." : "Position wurde hinzugefügt.");
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { if (gpContextCurrent(contextTicket)) showToast(error.message, true); }
 }
 
 function positionAssignmentCounts(position) {
@@ -40927,6 +41718,7 @@ document.getElementById('gpDefinitionsNavButton')?.addEventListener('click', () 
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
   closeMobileNavigation({ restoreFocus: false });
   const view = button.dataset.view;
+  if(view==="logistics")logisticsTab=button.dataset.logisticsTab==="orders"?"orders":"purchasing";
   if (button.dataset.personnelAdministrationRoute) {
     setPersonnelAdministrationTab(button.dataset.personnelAdministrationRoute);
   }
@@ -41174,6 +41966,7 @@ elements.personnelLifecycleEditorDialog?.addEventListener("cancel", (event) => {
   requestClosePersonnelLifecycleEditor();
 });
 elements.personnelLifecycleEditorDialog?.addEventListener("close", () => {
+  if (elements.personnelLifecycleEditorDialog.open) return;
   if (state.personnelLifecycleEditorDiscardBypass) {
     state.personnelLifecycleEditorDiscardBypass = false;
     return;
@@ -41227,7 +42020,34 @@ elements.personnelLifecycleEditorFlow?.addEventListener("click", (event) => {
   renderPersonnelLifecycleEditorCatalogControls();
   renderPersonnelLifecycleEditorFlow();
   renderPersonnelLifecycleEditorInspector();
+  focusPersonnelLifecycleEditorStep(stepId);
 });
+elements.personnelLifecycleEditorFlow?.addEventListener("keydown", (event) => {
+  if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  const button = event.target.closest?.("[data-personnel-lifecycle-editor-step]");
+  if (!button || !canWritePersonnelLifecycleEditorDraft()) return;
+  event.preventDefault(); state.personnelLifecycleEditorSelectedStepId = button.dataset.personnelLifecycleEditorStep;
+  movePersonnelLifecycleEditorStep(event.key === "ArrowUp" ? -1 : 1);
+});
+elements.personnelLifecycleEditorFlow?.addEventListener("dragstart", (event) => {
+  const button = event.target.closest?.("[data-personnel-lifecycle-editor-step]");
+  const step = state.personnelLifecycleEditorDraft?.steps.find(item => item.id === button?.dataset.personnelLifecycleEditorStep);
+  if (!step || step.type === "finish" || !canWritePersonnelLifecycleEditorDraft()) { event.preventDefault(); return; }
+  state.personnelLifecycleEditorDrag = { id: step.id, context: captureGpEditor(elements.personnelLifecycleEditorDialog, canWritePersonnelLifecycleEditorDraft) };
+  event.dataTransfer?.setData("text/plain", step.id);
+});
+elements.personnelLifecycleEditorFlow?.addEventListener("dragover", (event) => {
+  if (state.personnelLifecycleEditorDrag && gpEditorCurrent(state.personnelLifecycleEditorDrag.context)) event.preventDefault();
+});
+elements.personnelLifecycleEditorFlow?.addEventListener("drop", (event) => {
+  event.preventDefault(); const dragged = state.personnelLifecycleEditorDrag; state.personnelLifecycleEditorDrag = null;
+  const button = event.target.closest?.("[data-personnel-lifecycle-editor-step]");
+  if (!dragged || !button || !gpEditorCurrent(dragged.context) || !state.personnelLifecycleEditorDraft) return;
+  const steps = state.personnelLifecycleEditorDraft.steps, from = steps.findIndex(step => step.id === dragged.id), target = steps.findIndex(step => step.id === button.dataset.personnelLifecycleEditorStep);
+  if (from < 0 || target < 0 || target === from) return;
+  state.personnelLifecycleEditorSelectedStepId = dragged.id; movePersonnelLifecycleEditorStep(target - from);
+});
+elements.personnelLifecycleEditorFlow?.addEventListener("dragend", () => { state.personnelLifecycleEditorDrag = null; });
 elements.personnelLifecycleEditorInspectorForm?.addEventListener("submit", (event) => {
   event.preventDefault();
 });
@@ -41254,6 +42074,7 @@ elements.movePersonnelLifecycleEditorStepDownButton?.addEventListener("click", (
   movePersonnelLifecycleEditorStep(1);
 });
 elements.removePersonnelLifecycleEditorStepButton?.addEventListener("click", removePersonnelLifecycleEditorStep);
+document.getElementById("duplicatePersonnelLifecycleEditorStepButton")?.addEventListener("click", duplicatePersonnelLifecycleEditorStep);
 elements.resetPersonnelLifecycleEditorButton?.addEventListener("click", resetPersonnelLifecycleEditorDraft);
 elements.validatePersonnelLifecycleEditorButton?.addEventListener("click", () => {
   validatePersonnelLifecycleEditorDraft().catch(() => {});
@@ -41355,13 +42176,12 @@ elements.delegationList?.addEventListener("click", async (event) => {
   try { await api(`/api/portal/v1/approval-delegations/${row.dataset.delegationId}`, { method: "DELETE" }); await loadApprovalDelegations(); } catch (error) { showToast(error.message, true); }
 });
 elements.refreshRequestsButton?.addEventListener("click", loadManagerVacationRequests);
-elements.xoffiImportButton?.addEventListener("click", () => {
-  if (!canImportXoffiTime()) return;
-  resetXoffiImport();
-  elements.xoffiImportDialog?.showModal();
-});
-elements.xoffiImportClose?.addEventListener("click", () => elements.xoffiImportDialog?.close());
-elements.xoffiImportCancel?.addEventListener("click", () => elements.xoffiImportDialog?.close());
+elements.xoffiImportButton?.addEventListener("click", openXoffiImport);
+elements.xoffiImportClose?.addEventListener("click", closeXoffiImport);
+elements.xoffiImportCancel?.addEventListener("click", closeXoffiImport);
+elements.xoffiImportDialog?.addEventListener("close", () => { if (!elements.xoffiImportDialog.open) resetXoffiImport(); });
+elements.xoffiImportDialog?.addEventListener("cancel", resetXoffiImport);
+elements.xoffiImportFile?.addEventListener("change", changeXoffiImportFile);
 elements.xoffiInspectButton?.addEventListener("click", inspectXoffiImportFile);
 elements.xoffiImportConfirmed?.addEventListener("change", () => {
   updateXoffiApplyAvailability();
@@ -42277,8 +43097,8 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
   loadPlanningView(button.dataset.contextView);
 });
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.querySelector(`#${button.dataset.close}`).close()));
-elements.employeeModal?.addEventListener("close", clearEmployeeProtectedRecord);
-elements.personnelRecordModal?.addEventListener("close", clearPersonnelRecordDialog);
+elements.employeeModal?.addEventListener("close", () => { if (!elements.employeeModal.open) clearEmployeeProtectedRecord(); });
+elements.personnelRecordModal?.addEventListener("close", () => { if (!elements.personnelRecordModal.open) clearPersonnelRecordDialog(); });
 document.querySelector("#previousWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, -7); loadPlanningPeriod(); });
 document.querySelector("#nextWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, 7); loadPlanningPeriod(); });
 document.querySelector("#todayButton").addEventListener("click", () => { state.weekStart = getMonday(new Date()); loadPlanningPeriod(); });
@@ -42877,10 +43697,11 @@ elements.crmCustomerDetail?.addEventListener("submit", (event) => {
 elements.crmCustomerDetail?.addEventListener("change", (event) => {
   if (event.target.matches('[data-crm-photo-form] input[name="photo"]')) updateCrmPhotoPreview(event.target);
 });
-elements.personnelDashboardGrid?.addEventListener("click", (event) => {
+elements.personnelDashboardSection?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-personnel-dashboard-item]");
   if (button) navigateFromPersonnelDashboard(button.dataset.personnelDashboardItem);
 });
+document.getElementById("personnelDashboardRefreshButton")?.addEventListener("click", () => syncPersonnelDashboardInformation({ force: true }));
 elements.personnelDashboardCustomizeButton?.addEventListener("click", () => {
   if (elements.personnelDashboardCustomizer?.classList.contains("hidden")) openPersonnelDashboardCustomizer();
   else closePersonnelDashboardCustomizer();
@@ -42902,27 +43723,14 @@ elements.personnelDashboardCustomizerList?.addEventListener("click", (event) => 
   if (button) movePersonnelDashboardDraft(button.dataset.personnelDashboardMove, Number(button.dataset.direction));
 });
 elements.resetPersonnelDashboardLayout?.addEventListener("click", () => {
+  state.personnelDashboardResetDraft = true;
   state.personnelDashboardDraftLayout = defaultPersonnelDashboardLayout();
   renderPersonnelDashboardCustomizer();
   if (elements.personnelDashboardCustomizerStatus) {
-    elements.personnelDashboardCustomizerStatus.textContent = "Die Standardanordnung ist vorbereitet. Zum Übernehmen bitte speichern.";
+    elements.personnelDashboardCustomizerStatus.textContent = "Standardanordnung, Beschriftungen, Farben und Größen sind vorbereitet. Zum Übernehmen bitte speichern.";
   }
 });
-elements.savePersonnelDashboardLayout?.addEventListener("click", async () => {
-  const layout = normalizePersonnelDashboardLayout(state.personnelDashboardDraftLayout || state.personnelDashboardLayout);
-  const hidden = new Set(layout.hidden);
-  if (!orderedPersonnelDashboardItems(layout).some((item) => !hidden.has(item.id))) {
-    if (elements.personnelDashboardCustomizerStatus) {
-      elements.personnelDashboardCustomizerStatus.textContent = "Bitte mindestens einen verfügbaren Arbeitsbereich einblenden.";
-    }
-    return;
-  }
-  elements.savePersonnelDashboardLayout.disabled = true;
-  const saved = await persistPersonnelDashboardLayout(layout);
-  elements.savePersonnelDashboardLayout.disabled = false;
-  if (saved) closePersonnelDashboardCustomizer();
-});
-document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => button.addEventListener("click", () => setPersonnelAdministrationTab(button.dataset.personnelAdministrationTab)));
+elements.savePersonnelDashboardLayout?.addEventListener("click", savePersonnelDashboardConfiguration);
 elements.personnelLearningSearch?.addEventListener("input", (event) => {
   state.personnelLearningSearch = event.target.value;
   renderPersonnelLearningCatalog();
@@ -43142,17 +43950,11 @@ elements.personnelLearningSteps?.addEventListener("click", (event) => {
     renderPersonnelLearningStepEditor();
   }
 });
-document.querySelector(".personnel-administration-tabs")?.addEventListener("keydown", (event) => {
-  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-  const tabs = [...document.querySelectorAll("[data-personnel-administration-tab]:not(.hidden)")];
-  if (!tabs.length) return;
-  const currentIndex = Math.max(0, tabs.indexOf(document.activeElement));
-  const targetIndex = event.key === "Home" ? 0
-    : event.key === "End" ? tabs.length - 1
-      : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-  event.preventDefault();
-  tabs[targetIndex].focus();
-  setPersonnelAdministrationTab(tabs[targetIndex].dataset.personnelAdministrationTab);
+document.getElementById("refreshPersonnelDirectoryButton")?.addEventListener("click", () => loadPersonnelAdministration({ force: true }));
+document.getElementById("resetPersonnelDirectoryFiltersButton")?.addEventListener("click", () => {
+  state.personnelDirectorySearch = ""; state.personnelDirectoryCostCenterFilter = ""; state.personnelDirectoryStatusFilter = "active";
+  elements.personnelDirectorySearch.value = ""; elements.personnelDirectoryCostCenterFilter.value = ""; elements.personnelDirectoryStatusFilter.value = "active";
+  renderPersonnelDirectory();
 });
 elements.personnelDirectorySearch?.addEventListener("input", (event) => {
   state.personnelDirectorySearch = event.target.value;
@@ -43245,6 +44047,7 @@ elements.personnelCandidateCreateForm?.addEventListener("input", () => {
 });
 elements.personnelCandidateCreateForm?.addEventListener("submit", savePersonnelCandidate);
 elements.personnelCandidateCreateModal?.addEventListener("close", () => {
+  if (elements.personnelCandidateCreateModal.open) return;
   elements.personnelCandidateCreateForm?.reset();
   resetPersonnelCandidateCreateEnhancements();
   setPersonnelCandidateCreateMessage();
@@ -43531,8 +44334,12 @@ document.querySelector("#saveSettingsButton").addEventListener("click", () => {
 elements.locationForm.addEventListener("submit", saveLocation);
 elements.departmentForm.addEventListener("submit", saveDepartment);
 elements.addLocationButton?.addEventListener("click", async () => {
+  const intent = Symbol("location-open");
+  state.locationEditorOpenIntent = intent;
+  const contextTicket = captureGpContext(canEditLocationWindow, () => state.locationEditorOpenIntent);
   try {
     await ensureLocationCostCenters();
+    if (!gpContextCurrent(contextTicket)) return;
     resetLocationForm();
     if (!state.costCenters.some((center) => center.active && center.isBranch && !center.locationId)) {
       showToast("Bitte zuerst eine freie, aktive Filialkostenstelle anlegen.", true);
@@ -43905,8 +44712,12 @@ elements.locationList.addEventListener("click", async (event) => {
   if (locationButton) {
     const location = (state.locations || []).find((item) => item.id === locationButton.dataset.editLocation);
     if (location) {
+      const intent = Symbol("location-open");
+      state.locationEditorOpenIntent = intent;
+      const contextTicket = captureGpContext(canEditLocationWindow, () => state.locationEditorOpenIntent);
       try {
         await ensureLocationCostCenters();
+        if (!gpContextCurrent(contextTicket)) return;
         fillLocationForm(location);
         elements.locationEditorModal?.showModal();
       } catch (error) {

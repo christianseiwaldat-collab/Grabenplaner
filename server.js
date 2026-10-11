@@ -12,6 +12,7 @@ const updateRequestLifecycle = require("./lib/update-request-lifecycle").createU
 const { executeUpdateCommand } = require("./lib/update-command");
 const { completeProcessShutdown } = require("./lib/complete-process-shutdown");
 const startDashboardWorkspaceModel = require("./public/start-dashboard-workspace-preferences");
+const personnelDashboardWorkspaceModel = require("./public/personnel-dashboard-workspace-preferences");
 const sidebarNotepadModel = require("./public/sidebar-notepad-preferences");
 const gpWindowsModel = require('./public/gp-window-preferences');
 const { personalAbsenceRequestPeriod, absenceRequestSubmissionAllowed,
@@ -72,6 +73,7 @@ const {
   inspectXoffiImageBuffer,
 } = require("./lib/xoffi-time-import");
 const { inspectXoffiMhtmlBuffer, matchEmployee: matchXoffiEmployee } = require("./lib/xoffi-mhtml-import");
+const { createReviewedXoffiSnapshot, XoffiWeekReconciliationError } = require("./lib/xoffi-week-reconciliation");
 const {
   SalesAnalyticsReportSeriesError,
   aggregateSalesAnalyticsReportSeries,
@@ -10130,9 +10132,9 @@ function actorCanManagePermissionGrants(actor, target) {
   return managedLocations.has(String(target.homeLocationId || ""));
 }
 
-async function getPortalRoles() {
+async function getPortalRoles(repository = organizationPersonnelRepository) {
   const builtinDefinitions = new Map(builtinPortalRoles.map((role) => [role.id, role]));
-  return (await organizationPersonnelRepository.listPortalRoles()).map((role) => {
+  return (await repository.listPortalRoles()).map((role) => {
     const definition = builtinDefinitions.get(role.id);
     const protectedRole = PROTECTED_PORTAL_ROLES.has(role.id);
     return {
@@ -18254,10 +18256,10 @@ async function getPositions(repository = organizationPersonnelRepository, includ
   return includeInactive ? positions : positions.filter((position) => position.active);
 }
 
-async function getLocations(includeInactive = true) {
+async function getLocations(includeInactive = true, repository = organizationPersonnelRepository) {
   const [locationRows, departmentRows] = await Promise.all([
-    organizationPersonnelRepository.listLocations(includeInactive),
-    organizationPersonnelRepository.listDepartments(includeInactive),
+    repository.listLocations(includeInactive),
+    repository.listDepartments(includeInactive),
   ]);
   const serializedDepartments = departmentRows.map(serializeDepartment);
   return locationRows.map((location) =>
@@ -26869,6 +26871,9 @@ function validateXoffiReviewedRows(inputRows, preview) {
     const employeeNumber = String(row?.employeeNumber || "").trim();
     const original = preview.employees[rowIndex];
     if (sourceName === original?.sourceName && row?.excluded === true && !employeeNumber) return null;
+    if (original?.reviewStatus === "invalid") {
+      throw httpError(400, "Eine fehlerhafte Quellzeile muss ausdrücklich ausgeschlossen werden.", "XOFFI_SOURCE_ROW_INVALID");
+    }
     if (sourceName !== original?.sourceName || !candidates.has(employeeNumber) || employeeNumbers.has(employeeNumber)) {
       throw httpError(400, "Jede xoffi-Zeile muss genau einem Teammitglied des ausgewählten Bereichs zugeordnet sein.", "XOFFI_EMPLOYEE_MAPPING_INVALID");
     }
@@ -26920,11 +26925,13 @@ function validateXoffiReviewedRows(inputRows, preview) {
       const invalidDay = days.some((day) => day.actualMinutes !== day.intervals.reduce((sum, value) =>
         sum + clockMinutes(value.slice(6)) - clockMinutes(value.slice(0, 5)), 0)
         || day.actualMinutes + day.surchargeMinutes > day.valuedMinutes + 2);
-      const invalidWeek = [["actualMinutes", "weeklyActualMinutes"], ["valuedMinutes", "weeklyValuedMinutes"],
-        ["surchargeMinutes", "weeklySurchargeMinutes"]].some(([dayKey, weekKey]) =>
-        Math.abs(days.reduce((sum, day) => sum + day[dayKey], 0) - reviewed[weekKey]) > 7);
-      if (invalidDay || invalidWeek) throw httpError(400,
+      if (invalidDay) throw httpError(400,
         "Die Tagesintervalle, Tagesstunden und Wochensummen passen nicht zusammen. Bitte die geänderten Werte prüfen.", "XOFFI_REVIEW_INVALID");
+      try { reviewed.snapshot = createReviewedXoffiSnapshot(original.snapshot, reviewed); }
+      catch (error) {
+        if (!(error instanceof XoffiWeekReconciliationError)) throw error;
+        throw httpError(400, "Die Tageswerte, Wochensummen und belegten Wochenposten passen nicht zusammen.", "XOFFI_REVIEW_INVALID");
+      }
     }
     return reviewed;
   }).filter(Boolean);
@@ -26940,8 +26947,10 @@ function assertXoffiScreenshotWeekConfirmation(preview, input = {}) {
     && preview.weekEnd === addDays(preview.weekStart, 6)
     && resolution.detectedWeekStart === preview.weekStart && resolution.detectedWeekEnd === preview.weekEnd
     && resolution.selectedWeekStart === preview.weekStart && resolution.selectedWeekEnd === preview.weekEnd
-    && preview.employees.length > 0 && preview.employees.every((row) => row.snapshot?.kind === "mhtml"
-      && row.snapshot.balanceDate === addDays(preview.weekStart, -1))) return resolution;
+    && preview.employees.length > 0 && preview.employees.some(row => row.reviewStatus !== "invalid")
+    && preview.employees.every((row) => (row.reviewStatus === "invalid"
+      ? row.weekStart === preview.weekStart && row.balanceDate === addDays(preview.weekStart, -1)
+      : row.snapshot?.kind === "mhtml" && row.snapshot.balanceDate === addDays(preview.weekStart, -1)))) return resolution;
   const selectedWeekValid = isIsoDate(preview?.weekStart)
     && getMonday(preview.weekStart) === preview.weekStart
     && preview.weekEnd === addDays(preview.weekStart, 6)
@@ -34717,6 +34726,7 @@ const UI_PERSONNEL_DASHBOARD_ITEMS = Object.freeze([
   "positions",
   "applications",
   "workflows",
+  "learning",
   "tasks",
   "requests",
   "timeTracking",
@@ -34724,9 +34734,9 @@ const UI_PERSONNEL_DASHBOARD_ITEMS = Object.freeze([
   "ruleDrafts",
   "collectiveAgreements",
   "vacations",
-  "dataRequests",
 ]);
 const UI_PERSONNEL_DASHBOARD_ITEM_SET = new Set(UI_PERSONNEL_DASHBOARD_ITEMS);
+const UI_PERSONNEL_DASHBOARD_LEGACY_ITEM_SET = new Set([...UI_PERSONNEL_DASHBOARD_ITEMS, "dataRequests"]);
 const UI_START_DASHBOARD_WIDGETS = Object.freeze([
   "branchOnDuty",
   "branchAbsences",
@@ -34847,12 +34857,12 @@ function normalizePersonnelDashboardLayout(value) {
 function validatePersonnelDashboardLayout(value) {
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 1
     || !Array.isArray(value.order) || !Array.isArray(value.hidden)
-    || value.order.length > UI_PERSONNEL_DASHBOARD_ITEMS.length
-    || value.hidden.length > UI_PERSONNEL_DASHBOARD_ITEMS.length
+    || value.order.length > UI_PERSONNEL_DASHBOARD_LEGACY_ITEM_SET.size
+    || value.hidden.length > UI_PERSONNEL_DASHBOARD_LEGACY_ITEM_SET.size
     || new Set(value.order.map(String)).size !== value.order.length
     || new Set(value.hidden.map(String)).size !== value.hidden.length
-    || value.order.some((id) => !UI_PERSONNEL_DASHBOARD_ITEM_SET.has(String(id)))
-    || value.hidden.some((id) => !UI_PERSONNEL_DASHBOARD_ITEM_SET.has(String(id)))) {
+    || value.order.some((id) => !UI_PERSONNEL_DASHBOARD_LEGACY_ITEM_SET.has(String(id)))
+    || value.hidden.some((id) => !UI_PERSONNEL_DASHBOARD_LEGACY_ITEM_SET.has(String(id)))) {
     throw httpError(400, "Bitte eine gültige Dashboard-Anordnung übermitteln.", "UI_PREFERENCES_INVALID");
   }
   return normalizePersonnelDashboardLayout(value);
@@ -35172,6 +35182,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
   let startDashboardPreferences = defaultStartDashboardPreferences();
   let startDashboardWorkspace = startDashboardWorkspaceModel.empty();
+  let personnelDashboardWorkspace = null;
   let gpWindows = gpWindowsModel.empty();
   let sidebarNotepad = sidebarNotepadModel.isPersonalActor(actor) ? sidebarNotepadModel.empty() : null;
   let mobilePortalNavigation = defaultMobilePortalNavigation();
@@ -35239,6 +35250,10 @@ async function uiPreferencesForActor(actor, overrides = {}) {
         );
       }
     } catch {}
+    if (!actor.mustChangePassword && lookup.has(personnelDashboardWorkspaceModel.KEY)) {
+      try { personnelDashboardWorkspace = personnelDashboardWorkspaceModel.validate(JSON.parse(lookup.get(personnelDashboardWorkspaceModel.KEY))); }
+      catch { personnelDashboardWorkspace = personnelDashboardWorkspaceModel.empty(); }
+    }
     try {
       mobilePortalNavigation = normalizeMobilePortalNavigation(
         JSON.parse(lookup.get("mobile_portal_navigation_v1") || "null"),
@@ -35288,6 +35303,9 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   if (overrides.startDashboardWorkspace && !actor?.mustChangePassword) {
     startDashboardWorkspace = startDashboardWorkspaceModel.normalize(overrides.startDashboardWorkspace);
   }
+  if (overrides.personnelDashboardWorkspace && !actor?.mustChangePassword) {
+    personnelDashboardWorkspace = personnelDashboardWorkspaceModel.normalize(overrides.personnelDashboardWorkspace);
+  }
   if (overrides.sidebarNotepad && sidebarNotepadModel.isPersonalActor(actor)) sidebarNotepad = sidebarNotepadModel.validate(overrides.sidebarNotepad);
   if (overrides.gpWindows && !actor?.mustChangePassword) gpWindows = gpWindowsModel.validate(overrides.gpWindows);
   if (overrides.mobilePortalNavigation) {
@@ -35319,6 +35337,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     personnelDashboardLayout,
     startDashboardPreferences,
     startDashboardWorkspace,
+    personnelDashboardWorkspace,
     gpWindows,
     sidebarNotepad,
     mobilePortalNavigation,
@@ -35407,6 +35426,12 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     catch (error) { throw httpError(400, error.message, "UI_PREFERENCES_INVALID"); }
   }
   let gpWindows;
+  let personnelDashboardWorkspace;
+  if (input.personnelDashboardWorkspace !== undefined) {
+    if (actor?.mustChangePassword) throw httpError(428,"Bitte zuerst das persönliche Passwort ändern.","PORTAL_PASSWORD_CHANGE_REQUIRED");
+    try { personnelDashboardWorkspace = personnelDashboardWorkspaceModel.validate(input.personnelDashboardWorkspace); }
+    catch(error) { throw httpError(400,error.message,"UI_PREFERENCES_INVALID"); }
+  }
   if (input.gpWindows !== undefined) {
     if (actor?.mustChangePassword) throw httpError(428,'Bitte zuerst das persönliche Passwort ändern.','PORTAL_PASSWORD_CHANGE_REQUIRED');
     try { gpWindows = gpWindowsModel.validate(input.gpWindows); }
@@ -35439,7 +35464,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     && allowPastWeekEditing === undefined
     && vacationCalendarView === undefined
     && personnelDashboardLayout === undefined && startDashboardPreferences === undefined
-    && startDashboardWorkspace === undefined && sidebarNotepad === undefined && gpWindows === undefined
+    && startDashboardWorkspace === undefined && personnelDashboardWorkspace === undefined && sidebarNotepad === undefined && gpWindows === undefined
     && mobilePortalNavigation === undefined
     && mobilePortalAppearance === undefined && mobilePortalHome === undefined
     && candidateEvaluationPdfPreferences === undefined) {
@@ -35503,6 +35528,9 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     }
     if (startDashboardWorkspace !== undefined) {
       upserts.push({preferenceKey: startDashboardWorkspaceModel.KEY, value: JSON.stringify(startDashboardWorkspace)});
+    }
+    if (personnelDashboardWorkspace !== undefined) {
+      upserts.push({preferenceKey: personnelDashboardWorkspaceModel.KEY, value: JSON.stringify(personnelDashboardWorkspace)});
     }
     if (gpWindows !== undefined) upserts.push({preferenceKey:gpWindowsModel.KEY,value:JSON.stringify(gpWindows)});
     if (sidebarNotepad !== undefined) {
@@ -35576,6 +35604,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     personnelDashboardLayout,
     startDashboardPreferences,
     startDashboardWorkspace,
+    personnelDashboardWorkspace,
     gpWindows,
     sidebarNotepad,
     mobilePortalNavigation,
@@ -36207,6 +36236,9 @@ async function assertCustomProcessStepIdsAvailable(
   repository = customProcessRepository,
 ) {
   const ids = [...new Set((steps || []).map((step) => String(step?.id || "").trim()).filter(Boolean))];
+  if (ids.some(id => id.startsWith("studio-"))) {
+    throw httpError(409, "Studio-Schrittkennungen können nur im Workflow-Studio verwendet werden.", "CUSTOM_PROCESS_STUDIO_REQUIRED");
+  }
   if (!ids.length) return;
   const conflict = await repository.conflictingStep({
     stepIds: ids,
@@ -36349,7 +36381,14 @@ async function createCustomProcess(actor, body) {
   });
 }
 
+function assertLegacyCustomProcess(id) {
+  if (String(id || "").startsWith("studio-")) {
+    throw httpError(409, "Dieser Entwurf wird ausschließlich im Workflow-Studio bearbeitet.", "CUSTOM_PROCESS_STUDIO_REQUIRED");
+  }
+}
+
 async function updateCustomProcess(actor, id, body) {
+  assertLegacyCustomProcess(id);
   const revision = Number(body?.revision);
   if (!Number.isInteger(revision) || revision < 1) throw httpError(400, "Die Prozessrevision fehlt.", "CUSTOM_PROCESS_REVISION_REQUIRED");
   const existing = await customProcessById(id);
@@ -36396,6 +36435,7 @@ async function updateCustomProcess(actor, id, body) {
 }
 
 async function setCustomProcessStatus(actor, id, body = {}) {
+  assertLegacyCustomProcess(id);
   const status = String(body.status || "").trim();
   const revision = Number(body.revision);
   if (!CUSTOM_PROCESS_STATUS.has(status) || !Number.isInteger(revision) || revision < 1) {
@@ -36625,6 +36665,7 @@ async function ensureCustomProcessRunProgress(
   run,
   repository = customProcessRepository,
 ) {
+  assertLegacyCustomProcess(run.process_id);
   const freshRun = await repository.openRunById({ id: run.id });
   if (!freshRun) return { completed: true, notifications: { internal: 0, external: 0, blocked: 0 } };
   const bundle = await customProcessRunBundle(freshRun, repository);
@@ -36688,6 +36729,7 @@ async function createOrReopenCustomProcessRun(bundle, {
   departmentId = null,
   reopenResolved = true,
 }, repository = customProcessRepository) {
+  assertLegacyCustomProcess(bundle.process.id);
   const existing = await repository.runByTriggerKey({ triggerKey });
   if (existing) {
     if (existing.process_id !== bundle.process.id || Number(existing.process_revision) !== Number(bundle.process.revision)) {
@@ -36733,6 +36775,7 @@ async function createOrReopenCustomProcessRun(bundle, {
 }
 
 async function triggerCustomProcess(actor, id, body = {}) {
+  assertLegacyCustomProcess(id);
   const input = customProcessInputObject(body, "Die Prozessauslösung");
   assertCustomProcessKeys(input, new Set(["idempotencyKey"]), "Die Prozessauslösung");
   const bundle = await customProcessById(id);
@@ -36923,6 +36966,7 @@ async function reconcileCustomProcessTriggers(now = new Date()) {
   let retried = 0;
   const remainingRuns = await customProcessRepository.listOpenRuns();
   for (const run of remainingRuns) {
+    if (run.trigger_type === "manual_studio" || String(run.process_id).startsWith("studio-")) continue;
     const result = await customProcessRepository.transaction(async (repository) => {
       const currentRun = await repository.openRunById({ id: run.id });
       if (!currentRun) return { resolved: false, retried: 0 };
@@ -36960,6 +37004,7 @@ async function customProcessTasksForEmployee(
   const runs = await repository.listActiveTaskRuns();
   const items = [];
   for (const run of runs) {
+    if (run.trigger_type === "manual_studio" || String(run.process_id).startsWith("studio-")) continue;
     const bundle = await customProcessRunBundle(run, repository);
     if (!bundle) continue;
     const step = bundle.dto.steps.find((entry) => entry.id === run.step_id);
@@ -37041,17 +37086,20 @@ function personnelWorkflowPortalTask(item) {
   });
 }
 
-async function processTasksForPortalSession(session) {
-  const legacyItems = await customProcessTasksForEmployee(session.employeeNumber);
-  if (!installationFeatureEnabled("personnelLifecycle")) return legacyItems;
+async function processTasksForPortalSession(session, request = null) {
+  const studioContext = workflowStudioParticipantContext(session, request);
+  const studioItems = (await workflowStudioService.tasks(studioContext)).items;
+  const legacyItems = [...studioItems, ...await customProcessTasksForEmployee(session.employeeNumber)];
+  if (!installationFeatureEnabled("personnelLifecycle")) { await studioContext.current(); return legacyItems; }
   const workflowAccess = createPersonnelWorkflowAccessSnapshot(session);
-  if (workflowAccess.canReadInstances !== true) return legacyItems;
+  if (workflowAccess.canReadInstances !== true) { await studioContext.current(); return legacyItems; }
   const result = await requirePersonnelWorkflowInstanceService().tasksForEmployee(
     session.employeeNumber,
     {
       access: personnelWorkflowInstanceAccessForSession(session, workflowAccess),
     },
   );
+  await studioContext.current();
   return [...legacyItems, ...result.items.map(personnelWorkflowPortalTask)]
     .sort((left, right) => (
       String(right.assignedAt || right.createdAt || "")
@@ -37079,6 +37127,7 @@ async function completeCustomProcessTask(actor, runId, stepId, body = {}) {
   return customProcessRepository.transaction(async (repository) => {
     const run = await repository.runById({ id: String(runId || "") });
     if (!run) throw httpError(404, "Die Prozessaufgabe wurde nicht gefunden.", "CUSTOM_PROCESS_TASK_NOT_FOUND");
+    assertLegacyCustomProcess(run.process_id);
     if (Math.max(1, Number(run.activation_count || 1)) !== activationCount) {
       throw httpError(409, "Diese Prozessaufgabe gehört zu einer früheren Aktivierung.", "CUSTOM_PROCESS_TASK_ACTIVATION_CONFLICT");
     }
@@ -37145,6 +37194,7 @@ async function customProcessTaskOwnedByActor(
 ) {
   const run = await repository.runById({ id: String(runId || "") });
   if (!run) return false;
+  if (run.trigger_type === "manual_studio" || String(run.process_id).startsWith("studio-")) return false;
   const bundle = await customProcessRunBundle(run, repository);
   const step = bundle?.dto.steps.find((entry) => entry.id === String(stepId || ""));
   const state = await repository.runStepById({
@@ -40071,6 +40121,57 @@ app.post("/api/portal/v1/system-center/recovery-assurance/run", async (request, 
 app.get("/api/portal/v1/rights-dashboard", async (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:read");
   response.json(await rightsDashboardPayload(actor));
+});
+
+const workflowStudioCatalog = async (executor) => {
+  const repository = executor ? createOrganizationPersonnelRepository(executor) : organizationPersonnelRepository;
+  return { roles: await getPortalRoles(repository), locations: await getLocations(false, repository) };
+};
+const workflowStudioDraftService = require("./lib/workflow-studio-drafts").createWorkflowStudioDraftService(customProcessRepository, { catalog: workflowStudioCatalog, vault: integrationSecretVault });
+const workflowStudioService = Object.freeze({
+  ...require("./lib/workflow-studio").createWorkflowStudioService(customProcessRepository, { catalog: workflowStudioCatalog }),
+  ...workflowStudioDraftService,
+  ...require("./lib/workflow-studio-instances").createWorkflowStudioInstanceService(customProcessRepository, { catalog: workflowStudioCatalog, vault: integrationSecretVault, drafts: workflowStudioDraftService }),
+});
+function workflowStudioParticipantContext(session, request = null) {
+  const identity = require("./lib/workflow-studio-routes").identity;
+  const owner = identity(session);
+  return {
+    actorId: session.employeeNumber, actorRole: session.role, actorBinding: owner,
+    access: { canRead: true, canManage: false, canReadScope: () => false, canAssignUser: customProcessPortalUserInScope },
+    current: async (executor) => {
+      if (!request) return;
+      const freshRequest = Object.create(request);
+      freshRequest.portalSession = await loadPortalSessionFromRequest(request, { touch: false, ...(executor ? { repository: require("./lib/persistence/repositories/portal-access").createPortalAccessRepository(executor) } : {}) });
+      const fresh = requireEmployeePortalSession(freshRequest);
+      if (identity(fresh) !== owner) throw httpError(403, "Die Sitzung der Prozessaufgabe hat sich geändert.", "WORKFLOW_STUDIO_SESSION_CHANGED");
+    },
+  };
+}
+require("./lib/workflow-studio-routes").registerWorkflowStudioRoutes(app, {
+  service: workflowStudioService,
+  requireActor: (request, permission) => {
+    const actor = requireAdminHrOrLocal(request, "rights:read");
+    if (permission === "processes:write") requireAdminHrOrLocal(request, "processes:write");
+    return actor;
+  },
+  refreshActor: async (request, original, permission, executor) => {
+    if (isLocalSystemSession(original)) return original;
+    const freshRequest = Object.create(request);
+    freshRequest.portalSession = await loadPortalSessionFromRequest(request, { touch: false, ...(executor ? { repository: require("./lib/persistence/repositories/portal-access").createPortalAccessRepository(executor) } : {}) });
+    const actor = requireAdminHrOrLocal(freshRequest, "rights:read");
+    if (permission === "processes:write") requireAdminHrOrLocal(freshRequest, "processes:write");
+    return actor;
+  },
+  accessFor: actor => ({
+    canRead: true, global: sessionHasGlobalScope(actor),
+    canManage: isLocalSystemSession(actor) || actor.permissions?.includes("processes:write") === true,
+    canReadScope: scope => {
+      if (scope.type === "company") return sessionHasGlobalScope(actor);
+      try { assertSessionContextScope(actor, scope); return true; } catch { return false; }
+    },
+    canAssignUser: (user, scope) => customProcessPortalUserInScope(user, scope),
+  }),
 });
 
 app.get("/api/portal/v1/custom-processes", async (request, response) => {
@@ -50044,7 +50145,7 @@ app.get(["/api/portal/v1/me/absence-history", "/api/portal/v1/me/absence-request
 app.get("/api/portal/v1/me/process-tasks", async (request, response) => {
   const session = requireEmployeePortalSession(request);
   try {
-    const items = await processTasksForPortalSession(session);
+    const items = await processTasksForPortalSession(session, request);
     response.json({
       available: true,
       items,
@@ -50061,6 +50162,13 @@ app.post("/api/portal/v1/me/process-tasks/:runId/:stepId/complete", async (reque
   assertPortalCsrf(request);
   const runId = String(request.params.runId || "");
   const stepId = String(request.params.stepId || "");
+  const studioRun = await customProcessRepository.runById({ id: runId });
+  if (studioRun && (studioRun.trigger_type === "manual_studio" || String(studioRun.process_id).startsWith("studio-"))) {
+    const result = await workflowStudioService.complete(runId, stepId, request.body, workflowStudioParticipantContext(session, request));
+    if (result.replayed) response.setHeader("Idempotency-Replayed", "true");
+    response.json(result);
+    return;
+  }
   const boundInstance = await customProcessRepository.personnelWorkflowInstanceById({ id: runId });
   if (boundInstance && installationFeatureEnabled("personnelLifecycle")) {
     const workflowAccess = createPersonnelWorkflowAccessSnapshot(session);
@@ -54920,6 +55028,7 @@ app.get("/api/portal/v1/personnel-lifecycle/workflow-publications/resolve", asyn
 app.post("/api/portal/v1/personnel-lifecycle/workflows/:processId/publish", async (request, response) => {
   const accessContext = (await requirePersonnelWorkflowAccess(request, { action: "publish" }));
   try {
+    assertLegacyCustomProcess(request.params.processId);
     const publication = await requirePersonnelWorkflowPublicationService().publish(
       request.params.processId,
       request.body,
@@ -54938,6 +55047,8 @@ app.post("/api/portal/v1/personnel-lifecycle/workflows/:processId/publish", asyn
 app.post("/api/portal/v1/personnel-lifecycle/workflow-publications/:publicationId/archive", async (request, response) => {
   const accessContext = (await requirePersonnelWorkflowAccess(request, { action: "publish" }));
   try {
+    const source = await customProcessRepository.workflowPublicationById({ publicationId: request.params.publicationId });
+    if (source) assertLegacyCustomProcess(source.process_id);
     const publication = await requirePersonnelWorkflowPublicationService().archive(
       request.params.publicationId,
       request.body,
@@ -59907,14 +60018,18 @@ app.get("/api/portal/v1/xoffi-plan-comparison", async (request, response) => {
       timeTrackingRepository.listActiveXoffiWeekRows(query), timeTrackingRepository.listActiveXoffiWeekDays(query),
       planningSettingsRepository.listScheduleWeekOptions(query),
     ]);
-    snapshots.push({ query, employees, shifts, imports, importDays, weekOptions });
+    const importSnapshots = (await Promise.all(comparison.selectImports({ employees, shifts, imports, departmentId: context.departmentId })
+      .map(entry => timeTrackingRepository.getScopedXoffiSnapshot({ importId: entry.import_id,
+        employeeNumber: String(entry.employee_number), locationId: context.locationId,
+        departmentId: Number(context.departmentId || 0), weekStart: start })))).filter(Boolean);
+    snapshots.push({ query, employees, shifts, imports, importDays, weekOptions, importSnapshots });
   }
   const allSicknessCredits = await sicknessCreditsForEmployeesInRange(
     [...new Set(snapshots.flatMap(snapshot => snapshot.employees.map(employee => employee.personnel_number)))],
     getMonday(dateFrom), addDays(getMonday(dateTo), 6),
   );
   const weeks = [];
-  for (const { query, employees, shifts, imports, importDays, weekOptions } of snapshots) {
+  for (const { query, employees, shifts, imports, importDays, weekOptions, importSnapshots } of snapshots) {
     const visible = new Set(employees.map(employee => String(employee.personnel_number)));
     const sicknessCredits = allSicknessCredits.filter(credit => visible.has(String(credit.employee_number))
       && credit.date >= query.weekStart && credit.date <= query.weekEnd);
@@ -59923,7 +60038,7 @@ app.get("/api/portal/v1/xoffi-plan-comparison", async (request, response) => {
     })));
     const planCredits = await xoffiPlannedOptionCredits(weekOptions, shifts, query, sicknessCredits);
     weeks.push(comparison.buildComparison({ dates: Array.from({ length: 7 }, (_, day) => addDays(query.weekStart, day)),
-      employees, shifts: measuredShifts, planCredits, imports, importDays, limits, departmentId: context.departmentId }));
+      employees, shifts: measuredShifts, planCredits, imports, importDays, importSnapshots, limits, departmentId: context.departmentId }));
   }
   const dates = Array.from({ length: daysBetweenInclusive(dateFrom, dateTo) }, (_, day) => addDays(dateFrom, day));
   response.json({ weekStart: getMonday(dateFrom), weekEnd: addDays(getMonday(dateTo), 6), dateFrom, dateTo, limits,
@@ -60020,7 +60135,7 @@ app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
     for (const row of inspected.employees) {
       row.employeeNumber = matchXoffiEmployee(row.sourceName, candidateRows);
       row.matchConfidence = row.employeeNumber ? 100 : 0;
-      if (row.employeeNumber) row.warnings = [];
+      if (row.employeeNumber) row.warnings = (row.warnings || []).filter(warning => !warning.startsWith("Kein eindeutiger vollständiger Namensabgleich."));
     }
   } else {
     try { inspected = await inspectXoffiImageBuffer(request.body, { fileName, selectedWeekStart: expectedWeekStart, employees: candidateRows }); }
@@ -60064,6 +60179,7 @@ app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
     employees: inspected.employees,
     candidates,
     warnings: inspected.warnings,
+    reviewSummary: inspected.reviewSummary || null,
   });
 });
 

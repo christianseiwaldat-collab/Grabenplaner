@@ -59,9 +59,14 @@
 .gp-window.is-minimized .gp-window-edge { display:none; }
 /* Native dialogs also use the stored viewport geometry when attached manually. */
 dialog.gp-window[open] { inset:auto; margin:0; max-width:none; max-height:none; }
-dialog.gp-window.gp-dialog[open] { inset:auto; margin:0; max-width:none; max-height:none; overflow:auto; transform:none; }
-.gp-window.gp-dialog > form { width:auto; max-width:100%; height:auto; max-height:100%; overflow:auto; }
-.gp-window.gp-dialog > .modal-header { padding:18px 20px 0; }
+dialog.gp-window.gp-dialog[open] { display:flex; flex-direction:column; inset:auto; margin:0; max-width:none; max-height:none; padding:0; overflow:hidden; transform:none; }
+.gp-window.gp-dialog > .gp-dialog-window-title { flex:none; position:relative; z-index:1; }
+.gp-window.gp-dialog > .gp-dialog-body { flex:1 1 auto; min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; }
+.gp-window.gp-dialog .gp-dialog-body > form { width:auto; max-width:100%; height:auto; max-height:none; overflow:visible; }
+.gp-window.gp-dialog .gp-window-legacy-heading,.gp-window.gp-dialog .gp-window-legacy-close { display:none !important; }
+.gp-window.gp-dialog.is-minimized > .gp-dialog-body { display:none; }
+.gp-window.gp-dialog .gp-dialog-body > .modal-header { padding:18px 20px 0; }
+.gp-window.gp-dialog .gp-dialog-body .modal-actions { bottom:0 !important; padding-bottom:8px; }
 .gp-dialog-window-title { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 18px; border-bottom:1px solid var(--line,#d7e0db); }
 .gp-dialog-window-title strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .gp-window-control { display:inline-flex; align-items:center; justify-content:center; width:30px; height:28px; padding:0; border:0; border-radius:7px; background:transparent; color:inherit; font-size:18px; }

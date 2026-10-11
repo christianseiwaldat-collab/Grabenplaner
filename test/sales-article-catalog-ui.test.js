@@ -522,6 +522,7 @@ test("Laufende Artikelmutationen verwerfen höher projizierte Antworten nach Rec
     "async function discardStaleSalesArticleMutationResponse",
   );
   const makeGuards = Function(
+    "state",
     "currentSalesArticleCatalogActorKey",
     "currentSalesArticleCatalogDetailAccessKey",
     "canReadSalesArticles",
@@ -529,7 +530,9 @@ test("Laufende Artikelmutationen verwerfen höher projizierte Antworten nach Rec
     `"use strict"; ${guards}; return { captureSalesArticleMutationContext, salesArticleMutationContextIsCurrent };`,
   );
   const current = { actorKey: "419", accessKey: "419|true|true|true|true|false", read: true, write: true };
+  const sessionState = { portalSession: { authenticated: true } };
   const race = makeGuards(
+    sessionState,
     () => current.actorKey,
     () => current.accessKey,
     () => current.read,
@@ -537,6 +540,9 @@ test("Laufende Artikelmutationen verwerfen höher projizierte Antworten nach Rec
   );
   const captured = race.captureSalesArticleMutationContext();
   assert.equal(race.salesArticleMutationContextIsCurrent(captured), true);
+  sessionState.portalSession = { authenticated: true };
+  assert.equal(race.salesArticleMutationContextIsCurrent(captured), false, "Identische erneute Anmeldung darf alte Antworten nicht reaktivieren");
+  sessionState.portalSession = captured.session;
   current.accessKey = "419|true|true|false|true|false";
   assert.equal(race.salesArticleMutationContextIsCurrent(captured), false, "Kostenrechtentzug muss die Antwort verwerfen");
   current.accessKey = "419|true|false|false|true|false";

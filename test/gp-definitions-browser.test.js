@@ -13,7 +13,7 @@ test('Developer definitions navigate, search, survive ordinary navigation and wi
   let server;const errors=[];
   try{
     const source=fs.readFileSync(path.join(publicRoot,'app.js'),'utf8');
-    const script=['canUseGpDefinitions','renderGpDefinitionsAccess','activateGpDefinitions','renderSidebarSession','pageViewElement','applyActivePageAppearance','setView','applyRequestedView'].map(name=>appFunction(source,name)).join('\n');
+    const script=['canUseGpDefinitions','renderGpDefinitionsAccess','activateGpDefinitions','renderSidebarSession','pageViewElement','applyActivePageAppearance','setNavigationCurrent','setView','applyRequestedView'].map(name=>appFunction(source,name)).join('\n');
     const listenerStart=source.indexOf("document.getElementById('gpDefinitionsNavButton')?.addEventListener('click'");
     assert.ok(listenerStart>=0);const listener=source.slice(listenerStart,source.indexOf('\ndocument.querySelectorAll(".nav-item")',listenerStart));
     const index=fs.readFileSync(path.join(publicRoot,'index.html'),'utf8').replace(/<script\b[^>]*>[\s\S]*?<\/script>/g,'').replace(/<link\b[^>]*>/g,'');
@@ -36,8 +36,8 @@ test('Developer definitions navigate, search, survive ordinary navigation and wi
       window.elements=Object.fromEntries([...document.querySelectorAll('[id]')].map(element=>[element.id,element]));
       window.state={portalSession:{authenticated:true,user:{role:'developer',roleName:'Developer',employeeNumber:'00991',fullName:'BEISPIEL Developer',isEmployee:true,active:true,mustChangePassword:false}},portalStatus:{portalEnabled:true,installationFeatures:{}},currentView:'startDashboard',personnelAdministrationTab:'dashboard',salesArticleCatalog:{priceLabels:null},employeeProfileHost:'team',globalTheme:'light'};
       window.gpDefinitionsWorkspace=null;window.timePresenceRefreshTimer=null;
-      for(const name of ['receiptSearchWorkspace','tradeInsightsWorkspace','salesArticleReportWorkspace','salesPriceLabelsWorkspace','salesBwlWorkspace'])window[name]=null;
-      for(const name of ['renderContextNavigation','activatePrivacyOrganizationView','syncSalesArticleSearchWindow','syncGpWindows','syncStartDashboardVps','loadStartDashboard','loadPlanningView','closeMobileNavigation'])window[name]=()=>{};
+      for(const name of ['receiptSearchWorkspace','tradeInsightsWorkspace','tradeOrdersWorkspace','salesArticleReportWorkspace','salesPriceLabelsWorkspace','salesBwlWorkspace'])window[name]=null;
+      for(const name of ['renderContextNavigation','activatePrivacyOrganizationView','syncSalesArticleSearchWindow','syncGpWindows','syncStartDashboardVps','loadStartDashboard','loadPlanningView','closeMobileNavigation','clearUsbProvisioningPasswords'])window[name]=()=>{};
       window.canReadSalesBwl=()=>false;window.employeeProfileIsOpen=()=>false;window.restoreRememberedOverallContext=()=>false;window.planningContextNeedsReload=()=>false;
       // Mark the evidence as an isolated visual preview without live VPS state.
       const badge=document.createElement('p');badge.textContent='Lokale UI-Prüfung · BEISPIEL-Konto · ohne Produktivdaten';badge.style.cssText='margin:18px 0 0;color:var(--muted);font-size:9px';document.getElementById('gpDefinitionsView').append(badge);
@@ -45,11 +45,12 @@ test('Developer definitions navigate, search, survive ordinary navigation and wi
     await page.addScriptTag({content:script+'\n'+listener+'\nrenderSidebarSession();'});
     const view=page.locator('#gpDefinitionsView'),workspace=page.locator('#gpDefinitionsWorkspace'),button=page.locator('#gpDefinitionsNavButton');
     const screenshot=async name=>{const output=process.env.GP_DEFINITIONS_SCREENSHOT_DIR;if(output){fs.mkdirSync(output,{recursive:true});await page.screenshot({path:path.join(output,name),fullPage:true,animations:'disabled'});}};
-    await t.test('actual Developer button opens the view with five topics and six window rules',async()=>{
+    await t.test('actual Developer button opens the view with six topics and seven window rules',async()=>{
       assert.equal(await button.isVisible(),true);assert.equal(await page.locator('#sidebarSessionRole').isVisible(),false);
       await button.click();assert.equal(await view.isVisible(),true);assert.equal(await workspace.isVisible(),true);
-      assert.equal(await button.getAttribute('aria-current'),'page');assert.equal(await page.locator('[data-gp-definition-topic]').count(),6);
-      assert.equal(await page.locator('.gp-definition-rule').count(),6);assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');
+      assert.equal(await button.getAttribute('aria-current'),'page');assert.equal(await page.locator('[data-gp-definition-topic]').count(),7);
+      assert.equal(await page.locator('[data-gp-definition-topic]:not([data-gp-definition-topic="all"])').count(),6);
+      assert.equal(await page.locator('.gp-definition-rule').count(),7);assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');
       await screenshot('01-gp-definitions-light.png');
     });
     await t.test('search finds PDF byte identity and empty states contain no injected markup',async()=>{
@@ -60,8 +61,15 @@ test('Developer definitions navigate, search, survive ordinary navigation and wi
     });
     await t.test('ordinary navigation keeps the selected topic while a Developer account switch resets it',async()=>{
       await page.evaluate(()=>setView('startDashboard'));assert.equal(await workspace.isVisible(),false);
+      assert.equal(await page.locator('.nav-item[data-view="startDashboard"]').first().getAttribute('aria-current'),'page');
+      assert.equal(await button.getAttribute('aria-current'),null);
+      await page.evaluate(()=>setView('settings'));
+      assert.equal(await page.locator('.nav-item[data-view="settings"]').first().getAttribute('aria-current'),'page');
+      assert.equal(await page.locator('.nav-item[data-view="startDashboard"]').first().getAttribute('aria-current'),null);
       await button.click();assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Druck & PDF');
-      await page.evaluate(()=>{state.portalSession.user.employeeNumber='00992';renderSidebarSession();});assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');
+      await page.evaluate(()=>{state.portalSession.user.employeeNumber='00992';renderSidebarSession();});
+      assert.equal(await page.locator('.gp-definition-card h2').count(),1,JSON.stringify({errors,state:await page.evaluate(()=>({view:state.currentView,workspace:gpDefinitionsWorkspace.state,hidden:document.getElementById('gpDefinitionsWorkspace').hidden}))}));
+      assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');
     });
     await t.test('topics and implementation references work with the keyboard',async()=>{
       await page.locator('[data-gp-definition-topic=tables]').focus();await page.keyboard.press('Enter');assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Tabellen');

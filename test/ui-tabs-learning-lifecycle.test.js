@@ -280,7 +280,7 @@ function teardownContext(workspace, priceRoot) {
     salesPriceLabelsWorkspace:workspace,window:{},document:{getElementById:id => id === 'salesPriceLabelsWorkspace' ? priceRoot : null},
     elements:{},syncPrivacyOrganizationAccess(){},syncSalesPriceLabelsNavigation(){},canUseSalesPriceLabels:() => false,
     canAccessTradeInsights:() => false,canReadTradeMovements:() => false,canReadSalesArticles:() => false};
-  for(const name of ['tradeInsightsWorkspace','salesReportJobUi','receiptSearchWorkspace','salesHistoryWorkspace',
+  for(const name of ['tradeInsightsWorkspace','tradeOrdersWorkspace','salesReportJobUi','receiptSearchWorkspace','salesHistoryWorkspace',
     'dataImportWorkspace','importMappingWorkspace','crmPurchaseWorkspace'])c[name]=null;
   return load(c,['syncSalesHistoryAccess']);
 }

@@ -52,8 +52,11 @@ test('compact sales workspace preserves report choices, validation and graphic m
     assert.equal(await page.locator('#salesReportJobSubmit').isVisible(), true);
     assert.equal(await page.locator('#salesReportJobSubmit').isEnabled(), true);
     await screenshot('01-sales-analytics-compact-light.png');
-    const initialHeight = (await page.locator('#salesAnalyticsCreatePanel').boundingBox()).height;
-    assert.ok(initialHeight < 750, `Initial criteria stay compact (${initialHeight}px)`);
+    const initialHeight = (await page.locator('#salesAnalyticsRequestForm').boundingBox()).height;
+    assert.ok(initialHeight < 650, `Initial criteria stay compact independently of the source-quality explanation (${initialHeight}px)`);
+    assert.equal(await page.locator('#salesReportDataQuality').isVisible(), true);
+    assert.match(await page.locator('#salesReportDataQuality').textContent(), /Hochgeladen am:.*01\.09\.2026/);
+    assert.match(await page.locator('#salesReportDataQuality').textContent(), /Vollständigkeit.*nicht nachgewiesen/);
     assert.ok(await page.locator('#salesReportJobFrom').isVisible());
     assert.ok(await page.locator('#salesReportJobLocations').isVisible());
     assert.ok(await page.locator('#salesReportJobMetrics').isVisible());

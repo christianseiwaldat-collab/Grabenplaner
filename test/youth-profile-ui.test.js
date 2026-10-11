@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const school = require("../public/vocational-school");
+const { functionSource } = require("../test-support/learning-workspace-ui");
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
@@ -181,14 +182,19 @@ test("Personalakt: Position und Freitext erzeugen keinen bestätigten Lehrlingss
 test("Personalakt: Speichern verwendet Boolesche Bestätigung und respektiert einzelne Feldrechte", async () => {
   const fields = { apprenticeshipStatus: control("active"), apprenticeshipConfirmed: { ...control("on"), type: "checkbox", checked: false }, apprenticeshipSourceReference: control("nicht freigegeben") };
   const calls = [];
-  const context = vm.createContext({ window: { GPVocationalSchool: school },
-    state: { personnelRecord: { employeeNumber: "synthetic-youth", result: { access: { fieldAccess: {
+  const context = vm.createContext({ window: { GPVocationalSchool: school }, document: {},
+    state: { portalStatus: { portalEnabled: true }, portalSession: { authenticated: true, user: {
+      employeeNumber: "synthetic-hr", sessionKind: "employee", isEmployee: true, role: "hr",
+      permissions: ["personnel:sensitive:write"],
+    } }, personnelRecord: { employeeNumber: "synthetic-youth", result: { access: { fieldAccess: {
       "employment.apprenticeshipStatus": "write", "employment.apprenticeshipConfirmed": "write", "employment.apprenticeshipSourceReference": "hidden",
     } } } }, personnelRecordDirtyFields: new Set(["employment.apprenticeshipStatus", "employment.apprenticeshipConfirmed", "employment.apprenticeshipSourceReference"]) },
-    elements: { personnelRecordForm: { elements: { namedItem: (name) => fields[name] } }, savePersonnelRecordButton: control(), personnelRecordMessage: control() },
+    elements: { personnelRecordModal: { open: true }, personnelRecordForm: { elements: { namedItem: (name) => fields[name] } }, savePersonnelRecordButton: control(), personnelRecordMessage: control() },
     showToast() {}, api: async (url, request) => { calls.push(JSON.parse(request.body)); return {}; }, openPersonnelRecord: async () => {},
   });
   vm.runInContext(between("const PERSONNEL_RECORD_FORM_FIELDS", "function personnelRecordSectionMode("), context);
+  vm.runInContext(["isLocalStartDashboardWorkspace", "startDashboardWorkspaceActorKey", "personnelRecordAvailableInUi",
+    "captureGpContext", "gpContextCurrent", "captureGpEditor", "gpEditorCurrent"].map(name => functionSource(name)).join("\n"), context);
   vm.runInContext(between("function withPersonnelPlanningStatusBasis(", "function personnelRecordPatch("), context);
   vm.runInContext(between("async function savePersonnelRecord(", "async function uploadPersonnelDocument("), context);
   await context.savePersonnelRecord({ preventDefault() {} });

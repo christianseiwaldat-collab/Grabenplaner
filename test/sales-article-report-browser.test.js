@@ -242,14 +242,19 @@ test('article report protects account state and renders sortable branch reports 
       if(process.env.GP_ARTICLE_REPORT_SCREENSHOTS)fs.writeFileSync(path.join(process.env.GP_ARTICLE_REPORT_SCREENSHOTS,'article-report-example.pdf'),buffer);
       await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('.gp-print-window').hidden);
     });
-    await baseline('an in-flight PDF survives page navigation and is restored without losing the report',async()=>{
+    await baseline('page navigation aborts an in-flight PDF and releases its preview while retaining report options for return',async()=>{
       const selection=await page.evaluate(()=>ui.state.filters),total=await page.evaluate(()=>ui.state.total);
       await page.evaluate(()=>holdPdf=true);await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>pdfReleases.length===1);
+      const submitted=await page.evaluate(()=>pdfCalls.at(-1).body),requestCount=await page.evaluate(()=>pdfCalls.length);
       await page.evaluate(()=>{pageActive=false;ui.suspend();pdfReleases.shift()();holdPdf=false;});
-      await page.waitForFunction(()=>document.querySelector('[data-gp-print-status]').textContent==='Vorschau entspricht der PDF-Datei.');
-      assert.equal(await pdf.locator('[data-gp-print-download]').isDisabled(),true,'A suspended print window keeps its preview but cannot download');
+      assert.equal(await page.evaluate(()=>pdfCalls.at(-1).signal.aborted),true,'Navigation aborts the outgoing PDF request');
+      await page.waitForTimeout(100);
+      assert.equal(await pdf.locator('canvas').count(),0,'A suspended print window releases PDF bytes and its viewer');
+      assert.equal(await pdf.locator('[data-gp-print-download]').isDisabled(),true);
       assert.equal(await pdf.isVisible(),false);
       await page.evaluate(()=>{pageActive=true;ui.activate();});await page.waitForFunction(()=>!document.querySelector('.gp-print-window').hidden&&document.querySelector('[data-gp-print-viewer] canvas')?.width>100);
+      assert.equal(await page.evaluate(()=>pdfCalls.length),requestCount+1,'Returning creates a fresh PDF from the retained selection');
+      assert.deepEqual(await page.evaluate(()=>pdfCalls.at(-1).body),submitted);
       assert.equal(await pdf.locator('canvas').count(),1);assert.deepEqual(await page.evaluate(()=>ui.state.filters),selection);assert.equal(await page.evaluate(()=>ui.state.total),total);
       await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('.gp-print-window').hidden);
     });

@@ -76,6 +76,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   // Named CRM reads, article qualifications and protected administrative statistics.
   // Registration grants no driver import, statement declaration or activation.
   'lib/persistence/postgresql/core/import-master-customer-reference.js',
+  // Three reviewed read-only adapters over existing tables; no driver or DDL grant.
+  'lib/persistence/postgresql/core/workflow-studio.js',
   'lib/persistence/postgresql/sales/cash-customer-search.js',
   'lib/persistence/postgresql/operations/sql-runtime-statistics.js',
   'test/cash-customer-search-sql.test.js',
@@ -408,6 +410,8 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/trade-annotations.js",
   "lib/persistence/statements/personnel-learning-runs.js",
   "lib/persistence/statements/xoffi-snapshots.js",
+  // Exactly three typed Studio reads over existing run tables; no driver or DDL grant.
+  "lib/persistence/statements/workflow-studio.js",
   "lib/persistence/statements/sales-article-workspace.js",
   "lib/persistence/sqlite/sales-article-workspace-catalog.js",
   "lib/persistence/repositories/sales-article-workspace.js",
@@ -895,10 +899,16 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1485;
+const PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS = Object.freeze([
+  "workflow-studio.completion.lookup",
+  "workflow-studio.instance.steps",
+  "workflow-studio.instances.page",
+  "xoffi-snapshots.get-scoped",
+]);
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1489;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 46;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1439;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1366;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1443;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1370;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -1024,7 +1034,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1347;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1351;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 138;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
@@ -1125,6 +1135,24 @@ const PHASE_6_CLASSIFICATION = Object.freeze({
 });
 
 const PRODUCTION_DIRECT_GROUPS = Object.freeze([
+  Object.freeze({
+    id: "learning-and-workflow-workspace-ui",
+    files: Object.freeze([
+      "public/gp-window.js",
+      "public/learning-library.js",
+      "public/learning-team.js",
+      "public/trade-orders.js",
+      "public/workflow-studio-editor.js",
+      "public/workflow-studio-runs.js",
+    ]),
+    scope: "product-client-ui",
+    owner: "workspace-and-domain-ui",
+    targetLayer: "provider-neutral HTTP clients and account-bound DOM window preferences",
+    risk: "medium",
+    transactionContext: "server-owned persistence through existing authenticated HTTP contracts",
+    transitionException: "lexical prepare calls are DOM window preparation only; no SQL, database driver or provider activation grant",
+    laterPhase: "not-applicable",
+  }),
   Object.freeze({
     id: "scoped-crm-maintenance-import",
     files: Object.freeze(["scripts/import-tradefoto-crm.cjs"]),
@@ -1475,6 +1503,29 @@ const BASELINE_TEST_FILES = Object.freeze([
 ]);
 
 const TEST_SPECIAL_GROUPS = Object.freeze({
+  "learning-and-workflow-workspace-fixtures": new Set([
+    "test-support/learning-delivery-ui.js",
+    "test-support/workflow-studio-editor-ui.js",
+    "test-support/workflow-studio-persistence-ui.js",
+    "test/gp-window-browser.test.js",
+    "test/gp-window-explicit-reopen-browser.test.js",
+    "test/learning-catalog-workspace-browser.test.js",
+    "test/learning-overview-workspace-browser.test.js",
+    "test/personnel-dashboard-layout-browser.test.js",
+    "test/personnel-dashboard-workspace-browser.test.js",
+    "test/personnel-directory-workspace-browser.test.js",
+    "test/workflow-studio-browser.test.js",
+    "test/workflow-studio-drafts-api.test.js",
+    "test/workflow-studio-drafts.test.js",
+    "test/workflow-studio-editor-browser.test.js",
+    "test/workflow-studio-executor.test.js",
+    "test/workflow-studio-instances.test.js",
+    "test/workflow-studio-persistence-browser.test.js",
+    "test/workflow-studio-portal-api.test.js",
+    "test/workflow-studio-portal-browser.test.js",
+    "test/workflow-studio-read.test.js",
+    "test/workflow-studio-runs-browser.test.js",
+  ]),
   "deployment-operations-verification": new Set([
     "test/deploy-startup.test.js",
     "test/deploy-workflow.test.js",
@@ -3020,6 +3071,16 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
   const extraSqliteStatementBindings = sortedDifference(sqliteStatementIds, statementIds);
   const missingPostgresqlStatementBindings = sortedDifference(statementIds, postgresqlStatementIds);
   const extraPostgresqlStatementBindings = sortedDifference(postgresqlStatementIds, statementIds);
+  const applicationReadExtensionStatementIds = statementIds
+    .filter((id) => PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS.includes(id)).sort();
+  const applicationReadExtensionViolations = PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS
+    .filter((id) => {
+      const entries = applicationCatalog.filter((entry) => entry?.statement?.id === id);
+      return entries.length !== 1
+        || !["queryOne", "queryAll"].includes(entries[0]?.statement?.operation)
+        || entries[0]?.returning !== false
+        || !/^\s*SELECT\b/i.test(entries[0]?.sql || "");
+    });
   const sqliteBaselineStatementCount = sqliteDialectEntries
     .filter((entry) => entry?.classification === "sqlite-baseline")
     .length;
@@ -3272,6 +3333,7 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
     && missingTestFiles.length === 0
     && moduleErrors.length === 0
     && statementIds.length === PHASE_4_EXPECTED_STATEMENT_COUNT
+    && applicationReadExtensionViolations.length === 0
     && duplicateStatementIds.length === 0
     && sqliteStatementIds.length === PHASE_4_EXPECTED_STATEMENT_COUNT
     && postgresqlStatementIds.length === PHASE_4_EXPECTED_STATEMENT_COUNT
@@ -3321,6 +3383,8 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
     extraSqliteStatementBindings,
     missingPostgresqlStatementBindings,
     extraPostgresqlStatementBindings,
+    applicationReadExtensionStatementIds,
+    applicationReadExtensionViolations,
     dialectMetadataViolations: [...new Set(dialectMetadataViolations)].sort(),
     duplicateMigrationOperationIds,
     duplicateSqliteMigrationBindings,
@@ -4364,6 +4428,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
   const baselineTests = new Set([
     ...BASELINE_TEST_FILES,
     ...TEST_SPECIAL_GROUPS["deployment-operations-verification"],
+    ...TEST_SPECIAL_GROUPS["learning-and-workflow-workspace-fixtures"],
   ]);
   const classificationDuplicates = [
     ...directGroups.duplicates,
@@ -4770,6 +4835,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
     || phase4Progress.sqliteBaselineStatementCount !== PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT
     || phase4Progress.dialectVariantStatementCount !== PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT
     || phase4Progress.namedDollarParameterStatementCount !== PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT
+    || phase4Progress.applicationReadExtensionViolations.length
     || phase4Progress.duplicateStatementIds.length
     || phase4Progress.duplicateSqliteStatementBindings.length
     || phase4Progress.duplicatePostgresqlStatementBindings.length
@@ -4964,6 +5030,7 @@ module.exports = {
   PHASE_3_SQLITE_PROVIDER_TEST_FILES,
   PHASE_3_SQLITE_RAW_ACCESS_FILES,
   PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT,
+  PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS,
   PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT,
   PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT,
   PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT,

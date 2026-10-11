@@ -8,6 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="/assets/webicon.svg" data-brand-icon />
     <link rel="stylesheet" href="/portal.css" />
     <link rel="stylesheet" href="/learning-library.css" />
+    <link rel="stylesheet" href="/personnel-learning-workspace.css" />
     <link rel="stylesheet" href="/mobile-refinements.css" />
     <link rel="stylesheet" href="/sales-price-labels.css" />
     <link rel="stylesheet" href="/sales-price-label-editor.css" />
@@ -354,19 +355,20 @@
         <section class="portal-view portal-learning-dashboard-view" id="personnelLearningDashboardView" role="tabpanel" aria-labelledby="personnelLearningDashboardTab">
           <div class="view-heading portal-learning-dashboard-heading"><div><span class="eyebrow">Transparentes Lernen</span><h1>Schulungen &amp; Fähigkeiten</h1><p id="portalLearningDashboardScope">Sichtbar sind ausschließlich deine eigenen oder die im aktuell freigegebenen Bereich liegenden Schulungen.</p></div><button class="text-button" id="refreshPortalLearningDashboard" type="button">Aktualisieren</button></div>
           <p class="message hidden" id="portalLearningDashboardMessage" role="status" aria-live="polite"></p>
-          <details class="portal-card" id="portalKnowledgeArea"><summary><strong>Wissensbibliothek</strong></summary><section id="portalKnowledgeLibrary"></section></details>
+          <p class="portal-learning-metric-scope">Kennzahlen im freigegebenen Bereich</p>
           <div class="portal-learning-summary" id="portalLearningDashboardSummary" aria-label="Zusammenfassung der Schulungen"></div>
           <div class="portal-learning-grid">
             <section class="portal-card portal-learning-assignments" aria-labelledby="portalLearningAssignmentsTitle">
-              <div class="list-heading"><div><span class="eyebrow">Durchführung</span><h2 id="portalLearningAssignmentsTitle">Schulungsfortschritte</h2></div></div>
+              <div class="list-heading"><div><h2 id="portalLearningAssignmentsTitle">Schulungsstände</h2></div></div>
               <p class="portal-learning-transparency">Erledigte Schritte und Bewertungen werden revisionsgebunden dokumentiert. Im Filialkonto sind Schritte erfassbar; Abschlüsse und Korrekturen bleiben persönlichen berechtigten Konten vorbehalten.</p>
               <div class="portal-learning-assignment-list" id="portalLearningDashboardAssignments"><p class="empty-state">Schulungsstände werden geladen.</p></div>
             </section>
             <section class="portal-card portal-learning-skills" aria-labelledby="portalLearningSkillsTitle">
-              <div class="portal-learning-skills-heading"><div><span class="eyebrow">Fähigkeitsprofil</span><h2 id="portalLearningSkillsTitle">Fähigkeitsbaum · Stufen 1–10</h2></div><label><span>Mitarbeiter</span><select id="portalLearningDashboardEmployee"><option value="">Profile werden geladen</option></select></label></div>
+              <div class="portal-learning-skills-heading"><div><h2 id="portalLearningSkillsTitle">Fähigkeiten · Stufen 1–10</h2></div><label><span>Mitarbeiter</span><select id="portalLearningDashboardEmployee"><option value="">Profile werden geladen</option></select></label></div>
               <div class="portal-learning-skill-tree" id="portalLearningSkillTree"><p class="empty-state">Fähigkeitsprofil wird geladen.</p></div>
             </section>
           </div>
+          <details class="portal-card" id="portalKnowledgeArea"><summary><strong>Wissensbibliothek</strong><span>Wissen lesen und passende Fassungen ansehen</span></summary><section id="portalKnowledgeLibrary"></section></details>
         </section>
 
         <section class="portal-view leadership-view" id="leadershipMoreView" role="tabpanel" aria-labelledby="leadershipMoreTab">
@@ -751,7 +753,7 @@
         <div class="dialog-actions"><button type="button" data-close-time-off-change>Abbrechen</button><button class="primary" type="submit">Antrag absenden</button></div>
       </form>
     </dialog>
-    <dialog id="historyDetailDialog">
+    <dialog id="historyDetailDialog" data-gp-window-mode="workspace">
       <form method="dialog">
         <div class="dialog-heading"><div><span class="eyebrow">Antragsverlauf</span><h2 id="historyDetailTitle">Antrag</h2></div><button type="button" data-close-history-detail>×</button></div>
         <div class="history-detail-summary" id="historyDetailSummary"></div>
@@ -791,7 +793,7 @@
         <div class="dialog-actions leadership-request-actions" id="leadershipRequestActions"></div>
       </form>
     </dialog>
-    <dialog class="personal-actions-dialog" id="personalActionsDialog" aria-labelledby="personalActionsTitle">
+    <dialog class="personal-actions-dialog" id="personalActionsDialog" data-gp-window-mode="workspace" aria-labelledby="personalActionsTitle">
       <form>
         <div class="dialog-heading"><div><span class="eyebrow">Persönlich &amp; revisionssicher</span><h2 id="personalActionsTitle">Meine letzten Aktionen</h2></div><button type="button" data-close-personal-actions aria-label="Dialog schließen">×</button></div>
         <p class="personal-actions-intro">Hier erscheinen ausschließlich deine eigenen protokollierten Aktionen. Rückgängig wird nur angeboten, wenn der aktuelle Stand unverändert ist und eine sichere Gegenaktion existiert.</p>
@@ -800,7 +802,7 @@
         <div class="dialog-actions personal-actions-dialog-actions"><button class="text-button hidden" id="personalActionsLoadMore" type="button">Ältere Aktionen laden</button><button type="button" data-close-personal-actions>Schließen</button></div>
       </form>
     </dialog>
-    <dialog id="notificationsDialog">
+    <dialog id="notificationsDialog" data-gp-window-mode="workspace">
       <form method="dialog">
         <div class="dialog-heading"><div><span class="eyebrow">Mitarbeiterportal</span><h2>Benachrichtigungen</h2></div><button type="button" data-close-notifications>×</button></div>
         <div class="notification-toolbar"><button class="text-button" id="markAllNotificationsRead" type="button">Alle als gelesen markieren</button></div>
@@ -820,7 +822,7 @@
         <button class="primary birthday-presentation-confirm" id="birthdayPresentationConfirm" type="button">Schließen</button>
       </div>
     </dialog>
-    <dialog class="portal-learning-progress-dialog" id="portalLearningProgressDialog" aria-labelledby="portalLearningProgressTitle">
+    <dialog class="portal-learning-progress-dialog" id="portalLearningProgressDialog" data-gp-window-mode="workspace" aria-labelledby="portalLearningProgressTitle">
       <form id="portalLearningProgressForm">
         <div class="dialog-heading"><div><span class="eyebrow">Schulungsdurchführung</span><h2 id="portalLearningProgressTitle">Fortschritt erfassen</h2></div><button type="button" data-close-portal-learning-progress aria-label="Dialog schließen">×</button></div>
         <input id="portalLearningProgressAssignmentId" type="hidden" />

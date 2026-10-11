@@ -30,7 +30,7 @@
   }
   function create(options) {
     const {root, fields} = options, doc = root.ownerDocument, win = doc.defaultView;
-    const grid = root.querySelector('#startDashboardGrid'),controls=['control:center','control:vps'].map(id=>fields.get(id)?.element).filter(Boolean);
+    const grid = options.grid || root.querySelector('#startDashboardGrid'),controls=['control:center','control:vps'].map(id=>fields.get(id)?.element).filter(Boolean);
     const canvas = doc.createElement('div'); canvas.className = 'start-dashboard-workspace-canvas';
     canvas.dataset.dashboardCanvas = '';
     const gridAnchor = doc.createComment('dashboard-grid-original'); grid.before(gridAnchor, canvas);
@@ -224,7 +224,12 @@
       void options.change(preferences);
     }
     sync();
-    return {canvas, sync, cancel, reset, destroy() {
+    return {canvas, sync, cancel, reset, reorder(ids) {
+      const ordered=ids.map(id=>records.get(id)).filter(record=>record?.anchor.parentNode===grid);
+      const current=[...grid.childNodes].filter(node=>ordered.some(record=>record.anchor===node));
+      if(ordered.every((record,index)=>record.anchor===current[index]))return;
+      for(const record of ordered){grid.append(record.anchor);if(!record.frame)grid.append(record.field.element);}
+    }, destroy() {
       cancel(); destroyed = true; observer?.disconnect(); if (frameRequest !== null) win.cancelAnimationFrame(frameRequest);
       for (const remove of removers) remove();
       for (const record of records.values()) {

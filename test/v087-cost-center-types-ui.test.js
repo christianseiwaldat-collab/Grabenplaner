@@ -47,7 +47,8 @@ test("v0.87 Kostenstellentypen UI: Typen und Positionssets sind direkt verwaltba
 });
 
 test("v0.87 Kostenstellentypen UI: Kostenstellen verwenden den Serverkatalog statt fixer Auswahlwerte", () => {
-  const modal = between(html, '<dialog class="modal" id="costCenterModal">', '<dialog class="modal wide-modal" id="costCenterTypeModal">');
+  const tag = id => { const value = html.match(new RegExp('<dialog\\b[^>]*\\bid="' + id + '"[^>]*>'))?.[0]; assert.ok(value, `Dialog fehlt: ${id}`); return value; };
+  const modal = between(html, tag('costCenterModal'), tag('costCenterTypeModal'));
   assert.match(modal, /<select id="costCenterType" required><\/select>/);
   assert.doesNotMatch(modal, /value="branch"|value="administration"|value="production"|value="other"/);
   assert.match(app, /apiList\(costCenterPayload, \["types", "costCenterTypes", "cost_center_types"\]\)/);

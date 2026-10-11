@@ -1,0 +1,50 @@
+#personnelDashboardSection .personnel-dashboard-heading { align-items:flex-start; gap:18px; }
+#personnelDashboardSection .personnel-dashboard-heading p { font-size:14px; line-height:1.55; max-width:760px; }
+#personnelDashboardSection .personnel-dashboard-actions { display:flex; flex-wrap:wrap; gap:8px; }
+#personnelDashboardSection .personnel-dashboard-grid { align-items:start; gap:18px; grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr)); }
+#personnelDashboardSection .personnel-dashboard-card { display:flex; flex-direction:column; gap:16px; min-height:0; padding:22px; min-width:0; cursor:default; text-align:left; transform:none; isolation:isolate; }
+#personnelDashboardSection .personnel-dashboard-card:hover { transform:none; }
+#personnelDashboardSection .personnel-dashboard-card[hidden] { display:none; }
+#personnelDashboardSection .personnel-dashboard-card-header { display:flex; align-items:flex-start; gap:14px; min-width:0; }
+#personnelDashboardSection .personnel-dashboard-card-symbol { flex:0 0 42px; width:42px; height:42px; font-size:19px; }
+#personnelDashboardSection .personnel-dashboard-card-copy { display:block; min-width:0; }
+#personnelDashboardSection .personnel-dashboard-card-copy small { display:block; font-size:13px; line-height:1.4; letter-spacing:.035em; text-transform:none; }
+#personnelDashboardSection .personnel-dashboard-card-copy h3 { font-size:18px; line-height:1.3; margin:3px 0 6px; overflow-wrap:anywhere; }
+#personnelDashboardSection .personnel-dashboard-card-copy p { font-size:14px; line-height:1.5; margin:0; color:var(--muted); }
+#personnelDashboardSection .personnel-dashboard-info { display:grid; gap:12px; }
+#personnelDashboardSection .personnel-dashboard-source { padding:12px 0 0; border-top:1px solid var(--line); min-width:0; }
+#personnelDashboardSection .personnel-dashboard-source:first-child { padding-top:0; border-top:0; }
+#personnelDashboardSection .personnel-dashboard-source h4 { margin:0 0 7px; font-size:14px; line-height:1.4; }
+#personnelDashboardSection .personnel-dashboard-source-state { display:inline-flex; align-items:center; font-size:13px; line-height:1.4; padding:3px 8px; margin-bottom:10px; border-radius:6px; background:var(--surface-muted,#f2f3ef); color:var(--muted); }
+#personnelDashboardSection [data-source-status="succeeded"] .personnel-dashboard-source-state { background:#e6f3ed; color:#185d46; }
+#personnelDashboardSection [data-source-status="partial"] .personnel-dashboard-source-state { background:#fff0d5; color:#795115; }
+#personnelDashboardSection [data-source-status="failed"] .personnel-dashboard-source-state { background:#fbe8e4; color:#8b3027; }
+#personnelDashboardSection .personnel-dashboard-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(90px,1fr)); gap:12px 15px; margin:0 0 10px; }
+#personnelDashboardSection .personnel-dashboard-metric { display:flex; flex-direction:column-reverse; gap:3px; flex:1 1 105px; min-width:0; }
+#personnelDashboardSection dt { font-size:13px; line-height:1.4; color:var(--muted); overflow-wrap:anywhere; }
+#personnelDashboardSection dd { margin:0; font-size:26px; line-height:1.15; font-weight:700; font-variant-numeric:tabular-nums; color:var(--ink); }
+#personnelDashboardSection .personnel-dashboard-source-caption { font-size:13px; line-height:1.5; margin:0; color:var(--muted); overflow-wrap:anywhere; }
+#personnelDashboardSection .personnel-dashboard-open { align-self:flex-start; min-height:44px; padding:9px 15px; font-size:14px; margin-top:0; }
+#personnelDashboardSection .personnel-dashboard-empty { grid-column:1/-1; }
+#personnelDashboardSection .personnel-dashboard-card-header { padding-right:28px; }
+#personnelDashboardSection .start-dashboard-field-menu-button { width:44px; height:44px; top:8px; right:8px; }
+#personnelDashboardSection .personnel-dashboard-card[data-dashboard-color] { background:color-mix(in srgb,var(--surface) 88%,var(--dashboard-field-accent) 12%); border-color:color-mix(in srgb,var(--line) 65%,var(--dashboard-field-accent) 35%); }
+#personnelDashboardSection .personnel-dashboard-customizer-row label strong { font-size:14px; }
+#personnelDashboardSection .personnel-dashboard-customizer-row label small { font-size:13px; }
+#personnelDashboardSection .personnel-dashboard-customizer-row button { min-width:44px; min-height:44px; }
+#personnelDashboardSection .personnel-dashboard-customizer-heading p,#personnelDashboardSection .personnel-dashboard-customizer-status { font-size:14px; line-height:1.5; }
+[data-dashboard-scope="personnel"] .start-dashboard-field-context-title,[data-dashboard-scope="personnel"] .start-dashboard-field-color-label { font-size:13px; }
+[data-dashboard-scope="personnel"] .start-dashboard-field-context-action { min-height:44px; font-size:14px; }
+[data-dashboard-scope="personnel"] .start-dashboard-field-color-choice { min-height:44px; }
+[data-dashboard-scope="personnel"].start-dashboard-field-dialog label { font-size:14px; }
+[data-dashboard-scope="personnel"].start-dashboard-field-dialog input,[data-dashboard-scope="personnel"].start-dashboard-field-dialog textarea { font-size:16px; min-height:44px; }
+[data-dashboard-scope="personnel"].start-dashboard-field-dialog .start-dashboard-field-editor-actions button { font-size:14px; min-height:44px; }
+[data-dashboard-scope="personnel"].start-dashboard-field-dialog [data-field-error] { font-size:13px; }
+@media (max-width:700px) {
+  #personnelDashboardSection .personnel-dashboard-heading { flex-direction:column; }
+  #personnelDashboardSection .personnel-dashboard-actions { width:100%; }
+  #personnelDashboardSection .personnel-dashboard-actions button { min-height:44px; }
+  #personnelDashboardGrid { grid-template-columns:minmax(0,1fr); }
+  #personnelDashboardSection .personnel-dashboard-card { padding:18px; min-height:0; gap:16px; }
+  #personnelDashboardSection .personnel-dashboard-card-copy h3 { font-size:18px; }
+}

@@ -110,13 +110,13 @@ function validDraft() {
 test("O8 ist ein eigenständiger, klar flüchtiger Dialog ohne Wirkungsaktionen", () => {
   const dialog = between(
     html,
-    '<dialog class="modal personnel-lifecycle-editor-dialog"',
+    '<dialog class="modal personnel-lifecycle-editor-dialog gp-linear-editor"',
     '<dialog class="modal request-action-modal"',
   );
   assert.match(dialog, /Arbeitsentwurf – nicht gespeichert/);
   assert.match(dialog, /Nur flüchtige Arbeitskopie/);
   assert.match(dialog, /speichert, veröffentlicht, aktiviert oder startet diesen Entwurf nicht/);
-  assert.match(dialog, /<ol class="personnel-lifecycle-editor-flow"/);
+  assert.match(dialog, /<ol class="personnel-lifecycle-editor-flow gp-linear-flow"/);
   assert.match(dialog, /Schritt hinzufügen/);
   assert.match(dialog, /Nach oben/);
   assert.match(dialog, /Nach unten/);
@@ -127,7 +127,7 @@ test("O8 ist ein eigenständiger, klar flüchtiger Dialog ohne Wirkungsaktionen"
   assert.doesNotMatch(dialog, /customProcess/);
   assert.doesNotMatch(buttonLabels, /Speichern|Veröffentlichen|Archivieren|Aktivieren|Ausführen|Trigger|Kanal/);
   assert.ok(html.indexOf('id="customProcessModal"') < html.indexOf('id="personnelLifecycleEditorDialog"'));
-  assert.match(html, /M5 \/ O8 · kontrolliert/);
+  assert.match(html, /Personalprozess skizzieren/);
 });
 
 test("O8-Zugriff ist persönlich, fachrechtlich und nach Quelle fail-closed", () => {
@@ -310,6 +310,8 @@ test("O8 sendet nur die normalisierte flüchtige Kopie und behält echte Race-Pr
     let capturedBody = "";
     let lastStatus = "";
     function canValidatePersonnelLifecycleEditorDraft() { return true; }
+    function captureGpEditor() { return {}; }
+    function gpEditorCurrent() { return true; }
     function personnelLifecycleEditorActorAccessKey() { return "O8-ACTOR"; }
     function renderPersonnelLifecycleEditor() {}
     function renderPersonnelLifecycleEditorValidation() {}
@@ -433,7 +435,7 @@ test("O8 verdrahtet Auswahl, Reihenfolge, Quellwechsel und Verwerfbestätigung",
     "async function validatePersonnelLifecycleEditorDraft",
   );
   assert.match(mutations, /draft\.steps\.splice\(insertAt, 0, step\)/);
-  assert.match(mutations, /\[draft\.steps\[index\], draft\.steps\[target\]\] =/);
+  assert.match(mutations, /draft\.steps\.splice\(target, 0, draft\.steps\.splice\(index, 1\)\[0\]\)/);
   assert.match(mutations, /minimumSteps/);
   assert.match(mutations, /maximumSteps/);
 });

@@ -35,7 +35,18 @@ test('Trade views use actual session authority, CSRF and protected read/write co
  assert.equal((await request('repair-save',{id:r.id,state:'collected',expectedRevision:0},{...auth,csrf:'wrong'})).status,403);
  res=await request('repair-save',{id:r.id,state:'collected',expectedRevision:0});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.gpStatus,'collected');
  assert.equal((await request('repair-save',{id:r.id,state:'ready',expectedRevision:0})).status,409);
+ assert.equal((await request('orders',{query:'BE-1'},null)).status,401);
+ assert.equal((await request('orders',{query:'BE-1'},{...auth,csrf:'wrong'})).status,403);
+ assert.equal((await request('orders',{query:'1',pageSize:5000})).status,422);
+ res=await request('orders',{query:'BE-1'});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.rows[0].orderNumber,'1');assert.equal(res.data.rows[0].matchMode,'be_alias');
+ const order={orderId:res.data.rows[0].id,orderRevision:res.data.rows[0].revision,sourceRevision:res.data.sourceRevision};
+ assert.equal((await request('order-detail',{...order,part:'positions'},{...auth,csrf:'wrong'})).status,403);
+ res=await request('order-detail',{...order,part:'positions'});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.rows.length,60);assert.equal(res.data.coverage.complete,true);
+ res=await request('table-options/orders',null);assert.equal(res.status,200,JSON.stringify(res.data));assert.deepEqual(res.data.columns,['orderNumber','supplier','date','location','sourceDate']);
+ res=await request('table-options/orders',{columns:['orderNumber','supplier'],widths:{orderNumber:200}});assert.equal(res.status,200,JSON.stringify(res.data));
+ assert.equal((await request('table-options/orders',{columns:['BEmail'],widths:{}})).status,422);
  db.prepare("UPDATE portal_users SET active=0 WHERE employee_number='insights-user'").run();assert.ok([401,403].includes((await request('repair-detail',{id:r.id})).status));
+ assert.ok([401,403].includes((await request('order-detail',{...order,part:'header'})).status));
 });
 
 test('Legacy trade links enter the GP shell with the requested supported tab',async()=>{

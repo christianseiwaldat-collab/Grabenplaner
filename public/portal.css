@@ -252,6 +252,26 @@ dialog form > *,dialog :is(input,select,textarea,button) { min-width:0; max-widt
 .process-task-completion { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:10px; margin-top:15px; padding-top:14px; border-top:1px solid var(--line); }
 .process-task-completion textarea { min-height:62px; resize:vertical; }.process-task-completion button { min-height:44px; white-space:nowrap; }
 .process-task-message,.process-task-flash { margin-top:10px; }
+.process-task-version { font-size:14px; line-height:1.5; color:var(--muted); margin:12px 0 0; }
+.process-task-completion [data-skip-process-task] { grid-column:1 / -1; justify-self:start; }
+#processTasksView { --muted:#536168; font-size:14px; line-height:1.5; min-width:0; }
+#processTasksView :is(.eyebrow,.status,.process-task-summary span,.process-task-symbol,.process-task-meta,.process-task-condition strong,.process-task-condition span) { font-size:13px; line-height:1.5; text-transform:none; letter-spacing:normal; }
+#processTasksView :is(.process-task-card>header p,.process-task-description,.message,.process-task-completion label,.process-task-completion label>span,.process-task-version) { font-size:14px; line-height:1.5; }
+#processTasksView :is(button,textarea) { min-height:44px; font-size:14px; }
+#processTasksView textarea { font-size:16px; }
+#processTasksView .process-task-card { min-width:0; overflow-wrap:anywhere; }
+@media (prefers-color-scheme:dark) {
+ #processTasksView { --ink:#edf4f1; --muted:#a5b2ad; --line:#40524b; --paper:#1b2522; color:var(--ink); }
+ #processTasksView .process-tasks-heading { padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--paper); }
+ #processTasksView :is(.portal-card,.process-task-summary article) { color:var(--ink); border-color:var(--line); background:#1b2522; }
+ #processTasksView textarea { color:var(--ink); border-color:var(--line); background:#202d29; }
+ #processTasksView .process-task-completion label>span { color:var(--muted); }
+ #processTasksView :is(.eyebrow,.process-task-card>header p,.process-task-meta) { color:var(--muted); }
+ #processTasksView .process-task-condition { color:#f2d695; background:#302b1d; }
+ #processTasksView .status { color:#d9ede4; background:#314b3f; }
+ #processTasksView :is(.message,.message.error) { color:#edf4f1; background:#30473c; }
+ #processTasksView .secondary { color:#edf4f1; background:#314b3f; }
+}
 .process-task-empty { padding:34px 20px; text-align:center; }.process-task-empty > span { display:grid; place-items:center; width:50px; height:50px; margin:0 auto 12px; border-radius:50%; color:#fff; background:var(--green); font-size:24px; }.process-task-empty h2 { margin-bottom:5px; }.process-task-empty p { margin:0; }
 .file-field small { color:var(--muted); font-size:10px; font-weight:500; }.file-field input { padding:8px; }.amu-report-list { padding:0; }.amu-report .document-links { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }.document-links a { padding:6px 8px; border-radius:8px; color:var(--green); background:#e8f1ec; font-size:10px; font-weight:750; text-decoration:none; }.empty-state { margin:0; padding:14px; color:var(--muted); text-align:center; }
 .sickness-hub-heading { display:grid; grid-template-columns:64px minmax(0,1fr); align-items:center; gap:16px; margin-bottom:18px; }.sickness-hub-heading h1 { margin-bottom:4px; }.sickness-hub-heading p { max-width:760px; margin:0; }.sickness-hub-icon { display:grid; place-items:center; width:64px; height:64px; border:1px solid #b9d6ca; border-radius:20px; color:var(--green); background:linear-gradient(145deg,#e5f2ec,#f8fbf8); box-shadow:0 10px 25px rgba(39,110,85,.12); }.sickness-hub-icon svg { width:38px; height:38px; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
@@ -1545,3 +1565,5 @@ body[data-theme="dark"] .branch-article .branch-negative, [data-theme="dark"] .b
 .branch-search-form .branch-location-option { display:flex; align-items:center; gap:8px; flex:0 1 auto; padding:5px 0; margin:0; font-size:13px; cursor:pointer; }
 .branch-search-form .branch-location-option input { width:18px; height:18px; flex:0 0 18px; accent-color:var(--green); margin:0; padding:0; }
 .branch-search-form .branch-location-group { font-weight:600; }
+
+@media (max-width:720px) { .gp-dialog-body .dialog-actions { bottom:0; padding-bottom:max(2px,env(safe-area-inset-bottom)); } }

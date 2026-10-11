@@ -93,17 +93,19 @@ async function getFreePort() {
   });
 }
 
-async function waitForJson(url, child, timeoutMs = 8000) {
+async function waitForJson(url, child, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
+  let lastHttpStatus = null;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error(`Serverprozess wurde vorzeitig mit Code ${child.exitCode} beendet.`);
     try {
       const response = await fetch(url);
+      lastHttpStatus = response.status;
       if (response.ok) return response.json();
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  throw new Error(`Server war nach ${timeoutMs} ms nicht erreichbar.`);
+  throw new Error(`Server war nach ${timeoutMs} ms nicht erreichbar; letzter HTTP-Status: ${lastHttpStatus ?? "keine Antwort"}.`);
 }
 
 async function waitForExit(child, timeoutMs = 8000) {

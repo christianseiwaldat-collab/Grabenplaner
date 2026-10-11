@@ -31,7 +31,7 @@ test('a changed account neither consumes nor displays the previous account respo
   x.complete(4,8);await current;assert.equal(x.renders.length,3);
 });
 test('week navigation renders the complete planning area without rebuilding other administration pages',()=>{
-  const calls=[],ctx={state:{data:{settings:{}}},hasManagementBrandingAccess:()=>true};
+  const calls=[],ctx={state:{data:{settings:{}}},hasManagementBrandingAccess:()=>true,syncXoffiImport(){}};
   for(const name of [...extract('render',false).matchAll(/\b(render\w+|applyShellBranding)\(/g)].map(m=>m[1]).filter(n=>n!=='render'))ctx[name]=()=>calls.push(name);
   vm.runInNewContext(extract('render',false),ctx);ctx.render({period:'schedule'});
   for(const name of ['renderHeader','renderSummary','renderTimeline','renderWorkRuleAssessment','renderBranchSupervisionAssessment','renderHoursOverview','renderRemarks'])assert.ok(calls.includes(name),name);

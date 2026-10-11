@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync(require('node:path').join(__dirname,'../public/learning-assessment.js'),'utf8');
-const loaded=receipt=>({title:'BEISPIEL Schulung',learner:'BEISPIEL',assessment:null,attempts:[],evidence:[],canConfirm:true,expectedReceipt:receipt});
+const loaded=receipt=>({assignmentId:'assignment-one',title:'BEISPIEL Schulung',learner:'BEISPIEL',assessment:null,attempts:[],evidence:[],canConfirm:true,expectedReceipt:receipt});
 function fixture(printPdf){
   const events=new Map(),documentEvents=new Map(),status={textContent:''},dialog={open:false,html:'',shows:0,closes:0,
     setAttribute(){},addEventListener:(type,fn)=>events.set(type,fn),querySelector:()=>status,
@@ -10,7 +10,7 @@ function fixture(printPdf){
   let data=loaded('receipt-one');const reads=[];
   const document={body:{append(){}},createElement:()=>dialog,addEventListener:(type,fn)=>documentEvents.set(type,fn)};
   const context={document};vm.createContext(context);vm.runInContext(source,context);
-  const panel=context.GrabenplanerLearningAssessment.init({api:async(url)=>{reads.push(url);return data;},printPdf});
+  const panel=context.GrabenplanerLearningAssessment.init({api:async(url)=>{reads.push(url);data.assignmentId=decodeURIComponent(url.split('/').at(-2));return data;},printPdf});
   const proof=(id='assignment-one',visible=true)=>({dataset:{learningProof:id},isConnected:true,getClientRects:()=>visible?[{}]:[]});
   const click=async(extra={})=>{const event={button:0,prevented:false,preventDefault(){this.prevented=true;},target:{closest:selector=>selector==='[data-learning-confirmation-pdf]'?{}:null},...extra};await events.get('click')(event);return event;};
   const launch=async(target=proof())=>{documentEvents.get('click')({target:{closest:()=>target}});for(let i=0;i<6;i++)await Promise.resolve();return target;};

@@ -123,6 +123,19 @@ button { color: inherit; }
 .nav-child { width: 100%; padding: 7px 10px; border: 0; border-radius: 8px; color: rgba(255,255,255,.74); background: rgba(255,255,255,.045); font-size: 9.5px; font-weight: 700; text-align: left; cursor: pointer; }
 .nav-child:hover, .nav-child.active { color: white; background: rgba(255,255,255,.12); }
 .nav-item[aria-current="page"],.nav-child[aria-current="page"] { color:#fff; }
+.nav-item.contains-active { color:#fff; font-weight:750; }
+#planningNavChildren { position:relative; gap:2px; margin:1px 0 8px; padding:2px 0 2px 38px; }
+#planningNavChildren::before { content:""; position:absolute; top:5px; bottom:5px; left:31px; width:1px; background:rgba(255,255,255,.18); }
+#planningNavChildren .nav-planning-context { position:relative; display:grid; align-content:center; gap:2px; min-height:40px; padding:7px 10px; border-radius:7px; background:transparent; line-height:1.25; }
+#planningNavChildren .nav-planning-context::before { content:""; position:absolute; left:-9px; top:calc(50% - 2px); width:5px; height:5px; border-radius:50%; background:#648177; }
+#planningNavChildren .nav-planning-context strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; font-weight:750; }
+#planningNavChildren .nav-planning-context small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:rgba(255,255,255,.59); font-size:8.5px; font-weight:500; }
+#planningNavChildren .nav-planning-context:hover { background:rgba(255,255,255,.06); }
+#planningNavChildren .nav-planning-context.active { background:rgba(255,255,255,.1); }
+#planningNavChildren .nav-planning-context.active::before { background:var(--coral); box-shadow:0 0 0 3px var(--green-dark); }
+#planningNavChildren .nav-planning-context.active small { color:rgba(255,255,255,.84); }
+#planningNavChildren .nav-planning-context:focus-visible { outline:2px solid #bcebd8; outline-offset:-2px; }
+@media (max-width:760px) { #planningNavChildren .nav-planning-context { min-height:44px; } }
 .sidebar-session-links { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:center; gap:2px 8px; min-width:0; }
 .sidebar-session-links :is(.sidebar-session-link,#portalLogoutButton) { display:inline-block; width:auto; margin:0; padding:2px 0; border:0; border-radius:0; color:#bcebd8; background:transparent; box-shadow:none; font-size:8px; font-weight:700; line-height:1.5; text-align:left; text-decoration:none; white-space:nowrap; cursor:pointer; }
 .sidebar-session-links #portalLogoutButton { color:#f3caba; }
@@ -2013,7 +2026,6 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .employee-table tr:hover td { background: #fafbf9; }
 .employee-color { display: block; width: 25px; height: 25px; border-radius: 8px; }
 .employee-table strong { font-size: 10.5px; }
-.personnel-administration-tabs { max-width:100%; }
 .personnel-administration-section { display:none; }
 .personnel-administration-section.active { display:block; }
 .personnel-lifecycle-foundation-heading { align-items:flex-start; }
@@ -3324,6 +3336,8 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   overscroll-behavior:contain;
   box-sizing:border-box;
 }
+.gp-dialog .gp-dialog-body > .personnel-lifecycle-editor-shell { max-height:none; overflow:visible; }
+.gp-dialog .gp-dialog-body .personnel-lifecycle-editor-actions { bottom:0; padding-bottom:8px; }
 .personnel-lifecycle-editor-header { align-items:center; }
 .personnel-lifecycle-editor-header .close-button { min-width:44px; min-height:44px; }
 .personnel-lifecycle-editor-boundary {
@@ -4014,9 +4028,10 @@ html[data-active-page-theme="dark"] .option-school-details { --ink:#edf4f1; --mu
   .mobile-navigation-toggle:focus-visible,.sidebar-mobile-close:focus-visible { outline:3px solid color-mix(in srgb,var(--coral) 75%,white); outline-offset:3px; }
   .sidebar { z-index:960; bottom:0; flex-direction:column; width:var(--sidebar-mobile-width,min(320px,calc((100vw - 42px) * var(--app-font-scale-inverse)))); padding:18px 17px 15px; overflow:hidden; visibility:hidden; transform:translateX(-105%); transition:transform .2s ease,visibility 0s linear .2s; }
   body.mobile-navigation-open { overflow:hidden; }
-  body.mobile-navigation-open .sidebar { visibility:visible; box-shadow:18px 0 55px rgba(8,25,19,.34); transform:translateX(0); transition-delay:0s; }
+  body.mobile-navigation-open .sidebar { z-index:995; visibility:visible; box-shadow:18px 0 55px rgba(8,25,19,.34); transform:translateX(0); transition-delay:0s; }
+  body.mobile-navigation-open .sidebar-notepad-paper { z-index:996; }
   .sidebar-backdrop { position:fixed; z-index:950; inset:0; display:block; border:0; visibility:hidden; opacity:0; background:rgba(9,20,16,.54); backdrop-filter:blur(2px); transition:opacity .2s ease,visibility .2s ease; }
-  body.mobile-navigation-open .sidebar-backdrop { visibility:visible; opacity:1; }
+  body.mobile-navigation-open .sidebar-backdrop { z-index:994; visibility:visible; opacity:1; }
   .sidebar-mobile-close { position:absolute; top:0; right:0; z-index:2; place-items:center; width:38px; height:38px; padding:0; border:1px solid rgba(255,255,255,.16); border-radius:11px; color:white; background:rgba(255,255,255,.08); font-size:22px; cursor:pointer; }
   body.mobile-navigation-open .sidebar-mobile-close { display:grid; }
   .brand { width:100%; padding:0 48px 12px 0; }
@@ -6129,6 +6144,7 @@ html[data-active-page-theme="dark"] #settingsView .f18-migration-summary span { 
 
 @container popup (min-width:1200px) {
   .wide-modal > form > :is(.form-grid,.inline-fields),
+  .wide-modal > .gp-dialog-body > form > :is(.form-grid,.inline-fields),
   .location-editor-modal form > :is(.form-grid,.inline-fields),
   .integration-import-modal .integration-wizard-step > .form-grid,
   .integration-connection-modal .integration-connection-fields > .form-grid,
@@ -6357,7 +6373,7 @@ html[data-active-page-theme="dark"] #settingsView .f18-migration-summary span { 
 .status-badge.critical { color:#9d392a; background:#f9d8d1; }
 .governance-dialog { width:min(980px,calc(100vw - 28px)); }
 #monthlyTimeRecordActionModal { width:min(720px,calc(100vw - 28px)); }
-.governance-dialog > form { min-width:0; overflow-x:hidden; }
+.governance-dialog > form,.governance-dialog > .gp-dialog-body > form { min-width:0; overflow-x:hidden; }
 .governance-dialog :is(.governance-summary,.governance-list,.data-subject-request-detail) { min-width:0; }
 
 html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(

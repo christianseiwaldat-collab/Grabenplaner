@@ -41,7 +41,7 @@ test('GP windows retain native modal semantics, resize at edges and restore comp
       await page.mouse.move(eastBox.x+eastBox.width/2,eastBox.y+eastBox.height/2);await page.mouse.down();await page.mouse.move(eastBox.x+eastBox.width/2+100,eastBox.y+eastBox.height/2);await page.mouse.up();
       const after=await page.locator('#demo').boundingBox();assert.ok(Math.abs(after.width-before.width-100)<2);assert.ok(Math.abs(after.x-before.x)<2);
       await page.waitForFunction(()=>saved.some(value=>value.windows?.demo));assert.equal(await page.evaluate(()=>saved.find(value=>value.windows?.demo).windows.existing.width),300);
-      await page.locator('#close').click();await page.addStyleTag({content:'.gp-centering-test:has([data-editor]:not([hidden])){inset:50% auto auto 50%;transform:translate(-50%,-50%)}'});await page.evaluate(()=>{const dynamic=document.createElement('dialog');dynamic.id='dynamic';dynamic.className='gp-centering-test';dynamic.innerHTML='<form data-editor><h3>Neue Angaben</h3><input><button type="button" onclick="this.closest(\'dialog\').close()">Schließen</button></form>';document.body.append(dynamic);dynamic.showModal();});
+      await page.locator('#demo [data-gp-window-close]').click();await page.addStyleTag({content:'.gp-centering-test:has([data-editor]:not([hidden])){inset:50% auto auto 50%;transform:translate(-50%,-50%)}'});await page.evaluate(()=>{const dynamic=document.createElement('dialog');dynamic.id='dynamic';dynamic.className='gp-centering-test';dynamic.innerHTML='<form data-editor><h3>Neue Angaben</h3><input><button type="button" onclick="this.closest(\'dialog\').close()">Schließen</button></form>';document.body.append(dynamic);dynamic.showModal();});
       await page.waitForFunction(()=>document.querySelector('#dynamic').classList.contains('gp-window'));assert.equal(await page.locator('#dynamic .gp-window-edge').count(),8);
       assert.equal(await page.locator('#dynamic .gp-dialog-window-title').count(),1);assert.equal(await page.locator('#dynamic').evaluate(node=>getComputedStyle(node).transform),'none');await page.evaluate(()=>document.querySelector('#dynamic').close());
       await page.evaluate(()=>{const manual=document.createElement('dialog');manual.id='manual';manual.dataset.gpWindowManual='';manual.innerHTML='<header class="modal-header"><strong>Meine Aktionen</strong><button data-manual-min>−</button></header><main data-manual-body>Persönliche Aktionen</main>';document.body.append(manual);manual.show();window.manualWindow=GpWindow.attach(manual,{nativeDialog:true,title:manual.querySelector('header'),body:manual.querySelector('main'),toggle:manual.querySelector('button'),scale:()=>1.25,geometry:{x:100,y:80,width:300,height:200,minimized:false}});manualWindow.activate();});
@@ -52,6 +52,72 @@ test('GP windows retain native modal semantics, resize at edges and restore comp
       await page.evaluate(()=>{actor='';dialogs.synchronize();});assert.equal(await page.locator('#demo').isVisible(),false);
       assert.deepEqual(errors,[]);
     } finally {await browser.close();}
+  });
+
+test('workspace chrome preserves drafts/files, keeps the background usable and respects nested modal and discard gates',
+  {skip:process.env.GP_WINDOW_BROWSER_TEST!=='1',timeout:60000},async()=>{
+    const {chromium}=require(process.env.GP_BROWSER_TEST_MODULE || 'playwright');
+    const browser=await chromium.launch({headless:true,...(process.env.GP_BROWSER_EXECUTABLE?{executablePath:process.env.GP_BROWSER_EXECUTABLE}:{}),args:['--no-first-run']});
+    try {
+      const page=await browser.newPage({viewport:{width:1280,height:900}});page.setDefaultTimeout(7000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
+      await page.route('**/*',route=>route.abort());
+      await page.setContent('<style>body{margin:0}dialog{padding:0;border:0;width:700px;background:#faf9f5}.modal-header{display:flex}form{padding:18px}.long{height:1300px}button{min-height:24px}</style>'
+        +'<button id="open">Öffnen</button><button id="background">Hintergrund</button><dialog id="work" data-gp-window-mode="workspace"><form><header class="modal-header"><div><span>Einordnung</span><h2>BEISPIEL-Entwurf</h2><p>Erklärung bleibt vollständig im Inhalt.</p></div><button type="button" class="close-button" id="legacy">×</button></header><input id="draft" required><input id="file" type="file"><button type="button" id="nested">Bestätigung</button><div class="long">Langer Inhalt</div><button type="submit">Speichern</button></form></dialog><dialog id="critical"><h2>Pflichtbestätigung</h2><input id="guard"><button id="criticalClose">Zurück</button></dialog>');
+      await page.addStyleTag({path:path.join(root,'public/gp-window.css')});
+      for(const file of ['gp-window-preferences.js','gp-window.js'])await page.addScriptTag({path:path.join(root,'public',file)});
+      await page.evaluate(()=>{
+        window.actor='A';window.saved=[];window.closes=0;window.allowClose=false;window.backgroundClicks=0;
+        window.originalModal=work.showModal;window.manager=GpWindow.installDocument(document,{actorKey:()=>actor,canUse:()=>Boolean(actor),
+          readPreferences:async()=>({version:1,windows:{work:{x:30,y:40,width:720,height:610,minimized:false}}}),writePreferences:async value=>saved.push(value)});
+        document.querySelector('#open').onclick=()=>work.showModal();background.onclick=()=>backgroundClicks++;
+        work.addEventListener('close',()=>closes++);work.addEventListener('cancel',event=>{if(!allowClose)event.preventDefault();});
+        legacy.onclick=()=>work.close();nested.onclick=()=>critical.showModal();criticalClose.onclick=()=>critical.close();
+        window.originalForm=work.querySelector('form');window.originalFile=file;
+      });
+      await page.locator('#open').click();await page.locator('#draft').fill('Ungespeicherter Entwurf');await page.locator('#file').setInputFiles({name:'BEISPIEL.txt',mimeType:'text/plain',buffer:Buffer.from('BEISPIEL')});
+      assert.deepEqual(await page.evaluate(()=>{
+        const ticket=GpWindow.capture(work),context=GpWindow.captureContext(document);
+        const initial=GpWindow.current(ticket)&&GpWindow.currentContext(context);
+        work.showModal();
+        return [initial,GpWindow.current(ticket),GpWindow.currentContext(context)];
+      }),[true,false,true]);
+      await page.waitForFunction(()=>manager.preferences.ready);
+      assert.equal(await page.evaluate(()=>work.matches(':modal')),false);assert.equal(await page.evaluate(()=>work.querySelector('form')===originalForm&&file===originalFile),true);
+      assert.equal(await page.locator('#work .gp-dialog-window-title').count(),1);assert.equal(await page.locator('#work [data-gp-window-toggle]').count(),1);
+      const titleBox=await page.locator('#work .gp-dialog-window-title').boundingBox();assert.equal(titleBox.height,44);
+      await page.evaluate(()=>work.querySelector('.gp-dialog-body').scrollTop=400);
+      assert.equal((await page.locator('#work .gp-dialog-window-title').boundingBox()).y,titleBox.y);
+      assert.equal(await page.locator('#work .gp-dialog-body').evaluate(node=>node.scrollTop>0),true);
+      await page.locator('#work [data-gp-window-toggle]').click();await page.locator('#background').click();
+      assert.equal(await page.evaluate(()=>backgroundClicks),1);assert.equal(await page.evaluate(()=>closes),0);assert.equal(await page.evaluate(()=>work.open),true);
+      await page.locator('#work [data-gp-window-toggle]').click();assert.equal(await page.locator('#draft').inputValue(),'Ungespeicherter Entwurf');
+      assert.equal(await page.locator('#file').evaluate(node=>node.files[0].name),'BEISPIEL.txt');
+      await page.locator('#draft').focus();await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>work.open),true);assert.equal(await page.evaluate(()=>closes),0);
+      await page.locator('#work [data-gp-window-close]').click();assert.equal(await page.evaluate(()=>work.open),true);
+      await page.locator('#nested').click();assert.equal(await page.evaluate(()=>critical.matches(':modal')),true);assert.equal(await page.locator('#critical [data-gp-window-toggle]').count(),0);
+      await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>work.open),true);
+      await page.evaluate(()=>{allowClose=true;});await page.locator('#draft').focus();await page.keyboard.press('Escape');
+      await page.evaluate(()=>setTimeout(()=>{const detail=document.createElement('p');detail.textContent='Später Detailstand';work.querySelector('form').append(detail);},20));
+      await page.waitForFunction(()=>!work.open);assert.equal(await page.evaluate(()=>closes),1);
+      await page.locator('#open').click();await page.locator('#work [data-gp-window-toggle]').click();await page.waitForFunction(()=>saved.some(value=>value.windows.work.minimized));
+      await page.evaluate(()=>{work.innerHTML='<form><h2>Neuer Entwurf</h2><input id="replacement" value="Bleibt erhalten"></form>';});
+      await page.waitForFunction(()=>work.querySelector('.gp-dialog-window-title strong')?.textContent==='Neuer Entwurf');
+      assert.equal(await page.locator('#work .gp-window-edge').count(),8);assert.equal(await page.locator('#work .gp-dialog-window-title').count(),1);
+      assert.equal(await page.locator('#work .gp-dialog-body').isVisible(),false);await page.locator('#work [data-gp-window-toggle]').click();assert.equal(await page.locator('#replacement').inputValue(),'Bleibt erhalten');
+      assert.deepEqual(await page.evaluate(()=>{
+        const ticket=GpWindow.capture(work),context=GpWindow.captureContext(document);
+        actor='B';manager.synchronize();actor='A';
+        return [GpWindow.current(ticket,{allowClosed:true}),GpWindow.currentContext(context)];
+      }),[false,false]);
+      await page.evaluate(()=>actor='B');assert.equal(await page.evaluate(()=>work.open),false);assert.equal(await page.evaluate(()=>manager.preferences.value.windows.work===undefined),true);
+      await page.evaluate(()=>{window.dynamic=document.createElement('dialog');dynamic.dataset.gpWindowMode='workspace';dynamic.innerHTML='<h2>Dynamisch</h2><input>';document.body.append(dynamic);GpWindow.prepare(dynamic);dynamic.showModal();});
+      assert.equal(await page.evaluate(()=>dynamic.matches(':modal')),false);assert.equal(await page.locator('#work').isVisible(),false);
+      await page.locator('#open').click();await page.locator('#replacement').focus();
+      await page.evaluate(()=>{const paragraph=document.createElement('p');paragraph.textContent='Hintergrundupdate';dynamic.querySelector('.gp-dialog-body').append(paragraph);});
+      await page.waitForTimeout(30);assert.equal(await page.evaluate(()=>work.classList.contains('is-active-window')),true);assert.equal(await page.evaluate(()=>dynamic.classList.contains('is-active-window')),false);
+      await page.evaluate(()=>{manager.destroy();});assert.equal(await page.evaluate(()=>work.showModal===originalModal),true);assert.equal(await page.locator('.gp-window-edge').count(),0);
+      assert.deepEqual(errors,[]);
+    }finally{await browser.close();}
   });
 test('actual article workspace keeps full-width details and viewport window geometry',
   {skip:process.env.GP_WINDOW_BROWSER_TEST!=='1',timeout:60000},async()=>{

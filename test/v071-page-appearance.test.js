@@ -264,7 +264,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(defaults.payload.vacationCalendarView.view, "year");
   assert.deepEqual(defaults.payload.personnelDashboardLayout, {
     version: 1,
-    order: ["employees", "positions", "applications", "workflows", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"],
+    order: ["employees", "positions", "applications", "workflows", "learning", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"],
     hidden: [],
   });
   assert.deepEqual(defaults.payload.startDashboardPreferences, {
@@ -280,7 +280,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
 
   const personnelDashboardLayout = {
     version: 1,
-    order: ["requests", "employees", "positions", "applications", "workflows", "tasks", "costCenters", "timeTracking", "vacations", "ruleDrafts", "collectiveAgreements", "dataRequests"],
+    order: ["requests", "employees", "positions", "applications", "workflows", "learning", "tasks", "costCenters", "timeTracking", "vacations", "ruleDrafts", "collectiveAgreements"],
     hidden: ["collectiveAgreements"],
   };
   const vacationCalendarView = {
@@ -859,4 +859,35 @@ test("Verkaufsanalyse: PDF-Detailtabelle bricht oberhalb von 24 Seiten kontrolli
   assert.equal(result.response.status, 413, JSON.stringify(result.payload));
   assert.equal(result.payload.code, "SALES_ANALYTICS_CHART_PDF_TABLE_TOO_LARGE");
   assert.match(result.payload.error, /mehr als 24 Seiten/);
+});
+
+test("Personal-Workspace: nullable absence, strict own schema and paired reset persist independently per account", async () => {
+  const model = require("../public/personnel-dashboard-workspace-preferences");
+  const admin = createPortalSession("v071-admin", "admin"), manager = createPortalSession("v071-manager", "manager");
+  assert.equal((await requestJson("/api/portal/v1/ui-preferences", { session: admin })).payload.personnelDashboardWorkspace, null);
+  const legacy = { version: 1, order: ["vacations", "employees", "positions", "applications", "workflows", "learning", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements"], hidden: ["positions"] };
+  await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session: admin, body: { personnelDashboardLayout: legacy } });
+  assert.equal((await requestJson("/api/portal/v1/ui-preferences", { session: admin })).payload.personnelDashboardWorkspace, null, "Legacy-only reads must not materialize empty new settings");
+  const custom = model.migrate(null, legacy); custom.fields["card:employees"] = { title: "Mein Team", color: "blue", geometry: { x: 30, y: 40, width: 400, height: 350 } };
+  const saved = await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session: admin, body: { personnelDashboardWorkspace: custom, personnelDashboardLayout: model.layout(custom) } });
+  assert.equal(saved.response.status, 200, JSON.stringify(saved.payload)); assert.deepEqual(saved.payload.personnelDashboardWorkspace, custom);
+  assert.deepEqual((await requestJson("/api/portal/v1/ui-preferences", { session: admin })).payload.personnelDashboardWorkspace, custom);
+  assert.equal((await requestJson("/api/portal/v1/ui-preferences", { session: manager })).payload.personnelDashboardWorkspace, null);
+  const defaults = model.empty(); const reset = await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session: admin, body: { personnelDashboardWorkspace: defaults, personnelDashboardLayout: model.layout(defaults) } });
+  assert.equal(reset.response.status, 200); assert.deepEqual(reset.payload.personnelDashboardWorkspace, defaults); assert.deepEqual(reset.payload.personnelDashboardLayout, model.layout(defaults));
+  const oldClient = await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session: admin, body: { personnelDashboardLayout: { ...model.layout(defaults), order: [...model.layout(defaults).order, "dataRequests"], hidden: ["dataRequests"] } } });
+  assert.equal(oldClient.response.status, 200, JSON.stringify(oldClient.payload)); assert.deepEqual(oldClient.payload.personnelDashboardLayout, model.layout(defaults));
+  const stored = db.prepare("SELECT value FROM portal_user_preferences WHERE employee_number = ? AND preference_key = ?").get("v071-admin", model.KEY);
+  assert.deepEqual(JSON.parse(stored.value), defaults);
+});
+
+test("Personal-Workspace: invalid/cross-model input, unauthenticated/CSRF and password gates reject mutation", async () => {
+  const model = require("../public/personnel-dashboard-workspace-preferences"), session = createPortalSession("v071-admin", "admin");
+  for (const personnelDashboardWorkspace of [{ ...model.empty(), order: [] }, { version: 1, fields: { "control:center": { hidden: true } } }, { version: 1, fields: { "card:employees": { color: "url(x)" } } }, { ...model.empty(), actor: "someone-else" }]) {
+    const result = await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session, body: { personnelDashboardWorkspace } }); assert.equal(result.response.status, 400); assert.equal(result.payload.code, "UI_PREFERENCES_INVALID");
+  }
+  assert.equal((await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", body: { personnelDashboardWorkspace: model.empty() } })).response.status, 401);
+  const csrf = await fetch(`${baseUrl}/api/portal/v1/ui-preferences`, { method: "PUT", headers: { Cookie: session.cookie, "Content-Type": "application/json" }, body: JSON.stringify({ personnelDashboardWorkspace: model.empty() }) }); assert.equal(csrf.status, 403);
+  db.prepare("UPDATE portal_users SET must_change_password = 1 WHERE employee_number = ?").run("v071-admin");
+  assert.equal((await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session, body: { personnelDashboardWorkspace: model.empty() } })).response.status, 428);
 });

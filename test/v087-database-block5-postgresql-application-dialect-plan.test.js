@@ -25,7 +25,7 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1485 Statements genau einmal ab", () => {
+test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1489 Statements genau einmal ab", () => {
   const plan = POSTGRESQL_APPLICATION_DIALECT_PLAN;
   const sqliteEntries = SQLITE_APPLICATION_DIALECT_MANIFEST.entries;
 
@@ -34,8 +34,8 @@ test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1485 Statemen
   assert.equal(plan.status, "implementation-in-progress");
   assert.equal(plan.executable, false);
   assert.match(plan.fingerprint, /^[a-f0-9]{64}$/);
-  assert.equal(plan.entries.length, 1485);
-  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1485);
+  assert.equal(plan.entries.length, 1489);
+  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1489);
 
   for (let index = 0; index < sqliteEntries.length; index += 1) {
     const source = sqliteEntries[index];
@@ -62,8 +62,8 @@ test("Block 5/7: nur portable Einträge enthalten kompiliertes PostgreSQL-SQL", 
   const portable = entries.filter((entry) => entry.strategy === "portable-generated");
   const blocked = entries.filter((entry) => entry.strategy === "requires-override");
 
-  assert.equal(summary.statementCount, 1485);
-  assert.equal(summary.portableGeneratedCount, 1347);
+  assert.equal(summary.statementCount, 1489);
+  assert.equal(summary.portableGeneratedCount, 1351);
   assert.equal(summary.requiresOverrideCount, 138);
   assert.equal(portable.length, summary.portableGeneratedCount);
   assert.equal(blocked.length, summary.requiresOverrideCount);
@@ -189,6 +189,53 @@ test("CRM and article extensions register exactly seven reads without opening th
   assert.equal(POSTGRESQL_APPLICATION_DIALECT_PLAN.executable, false);
 });
 
+test("Workflow-Studio und Xoffi ergänzen genau vier portable Leseabfragen ohne Vollfreigabe", () => {
+  const { S: studio } = require("../lib/persistence/statements/workflow-studio");
+  const { S: xoffi } = require("../lib/persistence/statements/xoffi-snapshots");
+  const additions = [...Object.values(studio), xoffi.getScoped];
+  const expected = {
+    "workflow-studio.completion.lookup": ["queryAll", ["key"]],
+    "workflow-studio.instance.steps": ["queryAll", ["runId"]],
+    "workflow-studio.instances.page": ["queryAll", ["after", "limit"]],
+    "xoffi-snapshots.get-scoped": ["queryOne", ["departmentId", "employeeNumber", "importId", "locationId", "weekStart"]],
+  };
+  const ids = Object.keys(expected).sort();
+  assert.deepEqual(additions.map((statement) => statement.id).sort(), ids);
+  const retained = POSTGRESQL_APPLICATION_DIALECT_PLAN.entries
+    .filter((entry) => !ids.includes(entry.statementId));
+  assert.equal(retained.length, 1485);
+  assert.equal(retained.filter((entry) => entry.strategy === "portable-generated").length, 1347);
+  assert.equal(retained.filter((entry) => entry.strategy === "requires-override").length, 138);
+
+  for (const statement of additions) {
+    const sources = SQLITE_APPLICATION_DIALECT_MANIFEST.entries
+      .filter((entry) => entry.statement.id === statement.id);
+    const plans = POSTGRESQL_APPLICATION_DIALECT_PLAN.entries
+      .filter((entry) => entry.statementId === statement.id);
+    const [operation, parameters] = expected[statement.id];
+    assert.equal(sources.length, 1, statement.id);
+    assert.equal(plans.length, 1, statement.id);
+    const [source] = sources;
+    const [plan] = plans;
+    assert.equal(source.statement, statement, statement.id);
+    assert.equal(statement.operation, operation, statement.id);
+    assert.deepEqual(Object.keys(statement.parameters).sort(), parameters, statement.id);
+    assert.match(source.sql, /^\s*SELECT\b/i, statement.id);
+    assert.equal(source.returning, false, statement.id);
+    assert.equal(plan.returning, false, statement.id);
+    assert.equal(plan.strategy, "portable-generated", statement.id);
+    assert.deepEqual(plan.blockingFeatures, [], statement.id);
+    assert.deepEqual(plan.parameterOrder, parameters, statement.id);
+    assert.deepEqual(plan.parameterBindings, parameters.map((parameter) => ({
+      parameter, source: "value", path: [],
+    })), statement.id);
+    assert.equal(plan.sourceSqlFingerprint, sha256(source.sql), statement.id);
+    assert.equal(plan.compiledSqlFingerprint, sha256(plan.sql), statement.id);
+    assert.doesNotMatch(plan.sql, /\$[A-Za-z_]/, statement.id);
+  }
+  assert.equal(POSTGRESQL_APPLICATION_DIALECT_PLAN.executable, false);
+});
+
 test("Block 5/7: Summary erfasst die bekannten Override-Grenzen stabil", () => {
   const counts = POSTGRESQL_APPLICATION_DIALECT_PLAN.summary.blockingFeatureCounts;
 
@@ -238,7 +285,7 @@ test("Block 5/7: die Block-4-Plan-Fixture bleibt unverändert nicht ausführbar"
 
   assert.equal(fixture.status, "contract-only");
   assert.equal(fixture.executable, false);
-  assert.equal(fixture.entries.length, 1485);
+  assert.equal(fixture.entries.length, 1489);
   assert.equal(fixture.sourceFingerprint, SQLITE_APPLICATION_DIALECT_MANIFEST.fingerprint);
   for (const entry of fixture.entries) {
     assert.equal(entry.status, "contract-only");

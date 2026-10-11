@@ -18,6 +18,20 @@ const taskHelpers = between("function processTaskValue(", "function processTaskD
 const taskLoader = between("async function loadProcessTasks(", "async function completeProcessTask(");
 const taskCompletion = between("async function completeProcessTask(", "function formatBytes(");
 
+test("Studio task symbols use the four human-readable local icons and preserve escaped legacy signs", () => {
+  const context = vm.createContext({ esc: value => String(value).replace(/</g, "&lt;").replace(/>/g, "&gt;") });
+  vm.runInContext(taskHelpers, context);
+  for (const [symbol, label] of [["workflow", "Ablauf"], ["check", "Prüfung"], ["package", "Waren"], ["people", "Zusammenarbeit"]]) {
+    const task = context.normalizeProcessTask({ studioWorkflow: true, processSymbol: symbol });
+    assert.equal(task.processSymbol, symbol);
+    const markup = context.processTaskSymbolMarkup(task);
+    assert.match(markup, /<svg /); assert.ok(markup.includes('aria-label="' + label + '"'));
+    assert.doesNotMatch(markup, />workf</);
+  }
+  assert.equal(context.processTaskSymbolMarkup(context.normalizeProcessTask({ processSymbol: "<IV>" })), "&lt;IV&gt;");
+  assert.equal(context.processTaskSymbolMarkup(context.normalizeProcessTask({ studioWorkflow: true, processSymbol: "unknown" })), "AP");
+});
+
 function processTaskState(user) {
   return {
     session: user ? { user } : null,
@@ -91,6 +105,7 @@ test("M5-Task-Normalisierung behält nur die explizite UI-Allowlist", () => {
     "activationCount",
     "assignedAt",
     "canComplete",
+    "canSkip",
     "completionNoteRequired",
     "conditionText",
     "dueAt",
@@ -102,11 +117,14 @@ test("M5-Task-Normalisierung behält nur die explizite UI-Allowlist", () => {
     "processTitle",
     "runId",
     "scopeLabel",
+    "sourceRevision",
     "status",
     "stepCount",
     "stepDescription",
     "stepId",
     "stepTitle",
+    "studioWorkflow",
+    "versionNumber",
   ]);
   assert.deepEqual(result, {
     runId: "run-1",
@@ -128,6 +146,10 @@ test("M5-Task-Normalisierung behält nur die explizite UI-Allowlist", () => {
     canComplete: true,
     completionNoteRequired: true,
     personnelWorkflow: true,
+    studioWorkflow: false,
+    canSkip: false,
+    versionNumber: null,
+    sourceRevision: null,
   });
   assert.deepEqual(JSON.parse(JSON.stringify(context.summaryResult)), { openCount: 3, activeRuns: 2 });
   assert.doesNotMatch(taskHelpers, /\.\.\.task\b/);
@@ -242,14 +264,14 @@ test("verspätete M5-Task-Response kann nach Actorwechsel keinen State zurücksc
     renderProcessTasks: () => { renders += 1; },
   });
   vm.runInContext(`${taskHelpers}\n${taskLoader}`, context);
-  vm.runInContext("portalState.processTasksOwnerFingerprint = processTaskActorFingerprint(portalUser());", context);
+  vm.runInContext("portalState.processTasksOwnerFingerprint = processTaskActorFingerprint(portalUser()); portalState.processTasksOwnerSession = portalState.session;", context);
   const pendingLoad = vm.runInContext("loadProcessTasks()", context);
   assert.equal(state.processTasksLoading, true);
 
   state.session = { user: secondUser };
   vm.runInContext(`
     clearProcessTaskState({ resetAvailability: true, clearRequest: true });
-    portalState.processTasksOwnerFingerprint = processTaskActorFingerprint(portalUser());
+    portalState.processTasksOwnerFingerprint = processTaskActorFingerprint(portalUser()); portalState.processTasksOwnerSession = portalState.session;
   `, context);
   const rendersAfterSwitch = renders;
   resolveResponse({
@@ -287,4 +309,14 @@ test("Auth-Rückfall, Actorwechsel, Rechteverlust und Completion nutzen dieselbe
   assert.match(logout, /portalState\.session = null/);
   assert.match(logout, /clearProcessTaskState\(\{ resetAvailability: true, clearRequest: hadProcessTaskOwner \}\)/);
   assert.ok((taskCompletion.match(/processTaskRequestContextCurrent\(requestGeneration, actorFingerprint\)/g) || []).length >= 4);
+});
+test('Studio Portal skip keeps exact action/note/secure operation on retry and cannot change into completion; required tasks never skip',async()=>{
+ const state=processTaskState(employee('STUDIO-A'));const calls=[];let failed=true;
+ const context=vm.createContext({portalState:state,portalUser:()=>state.session.user,portalTabAllowed:()=>true,el:{},renderProcessTasks(){},clearProcessTaskRequest(){},loadProcessTasks(){},loadNotifications(){},confirm:()=>true,crypto:{randomUUID:()=> '11111111-1111-4111-8111-111111111111'},api:async(url,request)=>{calls.push({url,body:JSON.parse(request.body)});if(failed)throw Error('BEISPIEL temporary connection failure');return{};}});
+ vm.runInContext(taskHelpers+'\n'+taskCompletion,context);context.task=vm.runInContext("normalizeProcessTask({runId:'studio-run',stepId:'studio-step',studioWorkflow:true,canComplete:true,canSkip:true,versionNumber:2,processRevision:3})",context);state.processTasks=[context.task];state.processTasksOwnerSession=state.session;state.processTasksOwnerFingerprint=context.processTaskActorFingerprint(state.session.user);
+ let note='BEISPIEL erster sachlicher Hinweis';context.card={querySelector:()=>({value:note})};await context.completeProcessTask(context.task,context.card,'skip');note='Nach der fehlgeschlagenen Antwort anders';await context.completeProcessTask(context.task,context.card,'complete');assert.equal(calls.length,1);failed=false;await context.completeProcessTask(context.task,context.card,'skip');assert.equal(calls.length,2);assert.deepEqual(calls[0].body,calls[1].body);assert.deepEqual(calls[1].body,{action:'skip',operationId:'11111111-1111-4111-8111-111111111111',note:'BEISPIEL erster sachlicher Hinweis'});assert.equal(state.processTaskCompletionPending.size,0);assert.equal(state.processTaskCompletionKeys.size,0);assert.match(state.processTaskFlash,/übersprungen/);
+ context.task.canSkip=false;state.processTasks=[context.task];await context.completeProcessTask(context.task,context.card,'skip');assert.equal(calls.length,2);const blocked=context.normalizeProcessTask({studioWorkflow:true,canComplete:false,canSkip:true});assert.equal(blocked.canSkip,false);
+});
+test('Portal late same-account ABA task GET or completion cannot rewrite freshly replaced session state',async()=>{
+ for(const kind of ['GET','POST']){const state=processTaskState(employee('SAME-A'));let resolve;const reply=new Promise(r=>resolve=r);const context=vm.createContext({portalState:state,portalUser:()=>state.session?.user,portalTabAllowed:()=>true,api:()=>reply,el:{refreshProcessTasks:{disabled:false},processTaskList:{setAttribute(){}},processTasksTab:{classList:{add(){},toggle(){}}}},setTab(){},clearProcessTaskRequest(){},renderProcessTasks(){},loadNotifications(){},crypto:{randomUUID:()=> '11111111-1111-4111-8111-111111111111'}});vm.runInContext(taskHelpers+'\n'+taskLoader+'\n'+taskCompletion,context);state.processTasksOwnerSession=state.session;state.processTasksOwnerFingerprint=context.processTaskActorFingerprint(state.session.user);const task=context.normalizeProcessTask({runId:'old-run',stepId:'old-step',studioWorkflow:true,canComplete:true});state.processTasks=[task];const pending=kind==='GET'?context.loadProcessTasks():context.completeProcessTask(task,{querySelector:()=>({value:'old-note'})});state.session={user:{...state.session.user}};context.clearProcessTaskState();state.processTasksOwnerSession=state.session;state.processTasksOwnerFingerprint=context.processTaskActorFingerprint(state.session.user);state.processTasks=[{runId:'new-run',stepId:'new-step',key:'new-key'}];state.processTaskFlash='Neue Sitzung';state.processTaskMessages.set('new-key','Eigener aktueller Hinweis');resolve({items:[{runId:'stale-run',stepId:'stale-step'}]});await pending;assert.equal(state.processTasks[0].runId,'new-run');assert.equal(state.processTaskFlash,'Neue Sitzung');assert.equal(state.processTaskMessages.get('new-key'),'Eigener aktueller Hinweis');assert.equal(state.processTaskCompletionPending.size,0);}
 });

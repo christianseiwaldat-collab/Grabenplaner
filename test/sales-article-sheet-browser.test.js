@@ -76,7 +76,8 @@ test('article sheet opens its shared PDF window with saved options, scoped histo
     await page.evaluate(initialArticle=>{
       window.actor='A';window.pageActive=true;window.article=initialArticle;
       window.api=async(url,options={})=>{const response=await fetch(url,{...options,headers:{'Content-Type':'application/json','X-Fixture-Owner':actor,...options.headers}});const value=await response.json();if(!response.ok)throw Error(value.error);return value;};
-      window.rawApi=(url,options)=>fetch(url,{...options,headers:{'X-Fixture-Owner':actor,...options.headers}});
+      window.pdfSignals=[];
+      window.rawApi=(url,options)=>{pdfSignals.push(options.signal);return fetch(url,{...options,headers:{'X-Fixture-Owner':actor,...options.headers}});};
       window.mountTools=()=>{
         const root=document.querySelector('#salesArticleDetailBody'),formats={money:(value)=>new Intl.NumberFormat('de-AT',{style:'currency',currency:'EUR'}).format(Number(value)),timestamp:()=> '08.10.26, 05:00'};
         root.innerHTML='<section id="salesArticleOverviewPanel" class="sales-article-detail-tab-panel">'+SalesArticleLayout.overview(article,formats)+'</section><section id="salesArticleNotesSection" class="sales-article-detail-tab-panel" hidden></section><section id="salesArticleMovementsSection" class="sales-article-detail-tab-panel" hidden></section><section id="salesArticleSalesSection" class="sales-article-detail-tab-panel" hidden></section>';
@@ -126,13 +127,16 @@ test('article sheet opens its shared PDF window with saved options, scoped histo
       await button.click();await waitReady();await shell.locator('[name=section][value=sales]').check();await waitReady();
       assert.deepEqual(pdfs.at(-1).body.sales,{dateFrom:'2026-09-01',dateTo:'2026-10-07',locationId:'18',personnel:'42'});
     });
-    await t.test('navigation suspends and restores the same in-flight preview and minimized geometry',async()=>{
+    await t.test('navigation aborts and releases the PDF preview while retaining options and minimized geometry for a fresh return',async()=>{
       await shell.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('[data-gp-print-id=article-sheet-pdf]').hidden);
       state.holdPdfs=true;await button.click();await waitServer(()=>state.pdfWaiters.length===1);
+      const submitted=pdfs.at(-1).body,count=pdfs.length;
       await page.evaluate(()=>{pageActive=false;tools.syncPrint();});assert.equal(await shell.isVisible(),false);
-      state.holdPdfs=false;state.pdfWaiters.shift()();await page.waitForFunction(()=>document.querySelector('[data-gp-print-status]').textContent==='Vorschau entspricht der PDF-Datei.');
-      const count=pdfs.length;await page.evaluate(()=>{pageActive=true;tools.syncPrint();});await waitReady();assert.equal(pdfs.length,count);assert.equal(await shell.locator('canvas').count(),1);
-      await shell.locator('[data-gp-print-min]').click();assert.equal(Math.round((await shell.boundingBox()).height),44);await page.evaluate(()=>{pageActive=false;tools.syncPrint();pageActive=true;tools.syncPrint();});assert.equal(Math.round((await shell.boundingBox()).height),44);await shell.locator('[data-gp-print-min]').click();
+      assert.equal(await page.evaluate(()=>pdfSignals.at(-1).aborted),true);
+      state.holdPdfs=false;state.pdfWaiters.shift()();await page.waitForTimeout(100);
+      assert.equal(await shell.locator('canvas').count(),0);assert.equal(await download().isDisabled(),true);
+      await page.evaluate(()=>{pageActive=true;tools.syncPrint();});await waitReady();assert.equal(pdfs.length,count+1);assert.deepEqual(pdfs.at(-1).body,submitted);assert.equal(await shell.locator('canvas').count(),1);
+      await shell.locator('[data-gp-print-min]').click();assert.equal(Math.round((await shell.boundingBox()).height),44);await page.evaluate(()=>{pageActive=false;tools.syncPrint();pageActive=true;tools.syncPrint();});assert.equal(Math.round((await shell.boundingBox()).height),44);await waitReady();await shell.locator('[data-gp-print-min]').click();
       await page.setViewportSize({width:560,height:900});await shell.locator('canvas').scrollIntoViewIfNeeded();await screenshot('03-article-sheet-window-narrow.png');await page.setViewportSize({width:1600,height:1100});
     });
     await t.test('account changes destroy the previous window and missing history/image grants disable those choices',async()=>{

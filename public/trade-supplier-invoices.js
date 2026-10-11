@@ -24,7 +24,7 @@
    <form data-si="filters" class="si-filters"><label>Datum für Zeitraum<select name="dateField" aria-label="Datum für Zeitraum"><option value="booked">Buchdatum</option><option value="created">Anlegedatum</option></select></label><div class="trade-period-field"><span>Zeitraum</span><button type="button" data-si="period">Zeitraum auswählen</button><input type="hidden" name="dateFrom"><input type="hidden" name="dateTo"></div><button type="submit">Liste aktualisieren</button></form>
    <p data-si="summary"></p><button type="button" data-si="export">PDF exportieren …</button><div data-si="results" class="table-scroll"></div>
    <p class="si-hint">EK netto entspricht dem Rechnungspreis je Stück. Negative Mengen können Rücknahmen oder Korrekturen sein. Original-PDFs sind in dieser Datenbank nicht enthalten.</p></section>
-   <dialog data-si="detail" class="modal si-detail" aria-labelledby="supplierInvoiceDetailTitle"><div class="modal-header"><h2 id="supplierInvoiceDetailTitle" data-si="detail-title">Rechnungspositionen</h2><button type="button" data-si="close" aria-label="Dialog schließen">×</button></div><div data-si="positions"></div></dialog>`;
+   <dialog data-gp-window-mode="workspace" data-si="detail" class="modal si-detail" aria-labelledby="supplierInvoiceDetailTitle"><div class="modal-header"><h2 id="supplierInvoiceDetailTitle" data-si="detail-title">Rechnungspositionen</h2><button type="button" data-si="close" aria-label="Dialog schließen">×</button></div><div data-si="positions"></div></dialog>`;
   const q=k=>root.querySelector('[data-si="'+k+'"]'),form=q('search'),filters=q('filters'),listeners=[];
   let active=false,generation=0,selected='',data=null,key='booked',direction='desc',detailRow=null,detailKey='id',detailDirection='asc';
   const on=(node,type,fn)=>{node.addEventListener(type,fn);listeners.push(()=>node.removeEventListener(type,fn));};
@@ -59,8 +59,8 @@
   on(q('results'),'click',async e=>{
    const sort=e.target.closest('[data-si-sort]');if(sort){direction=key===sort.dataset.siSort&&direction==='asc'?'desc':'asc';key=sort.dataset.siSort;render();q('results').querySelector('[data-si-sort="'+key+'"]').focus();return;}
    const copy=e.target.closest('[data-si-copy]'),detail=e.target.closest('[data-si-detail]');const row=data?.rows.find(r=>r.id===(copy?.dataset.siCopy||detail?.dataset.siDetail));if(!row)return;
-   if(copy){const ticket=generation,text=copyText(data.article,row);try{await navigator.clipboard.writeText(text);if(!active||ticket!==generation)return;q('status').textContent='Rechnungsangaben kopiert.';}catch{if(!active||ticket!==generation)return;q('detail-title').textContent='Rechnungsangaben kopieren';q('status').textContent='Bitte die Angaben im Dialog markieren und kopieren.';q('positions').innerHTML='<label>Rechnungsangaben zum Kopieren<textarea readonly rows="8">'+escape(text)+'</textarea></label>';q('detail').showModal();q('positions').querySelector('textarea').select();}return;}
-   detailRow=row;detailKey='id';detailDirection='asc';renderPositions();q('detail').showModal();
+   if(copy){const ticket=generation,text=copyText(data.article,row);try{await navigator.clipboard.writeText(text);if(!active||ticket!==generation)return;q('status').textContent='Rechnungsangaben kopiert.';}catch{if(!active||ticket!==generation)return;q('detail-title').textContent='Rechnungsangaben kopieren';q('status').textContent='Bitte die Angaben im Dialog markieren und kopieren.';q('positions').innerHTML='<label>Rechnungsangaben zum Kopieren<textarea readonly rows="8">'+escape(text)+'</textarea></label>';globalThis.GpWindow?.prepare?.(q('detail'));q('detail').showModal();q('positions').querySelector('textarea').select();}return;}
+   detailRow=row;detailKey='id';detailDirection='asc';renderPositions();globalThis.GpWindow?.prepare?.(q('detail'));q('detail').showModal();
   });
   function renderPositions(){
    q('detail-title').textContent='Rechnungspositionen';

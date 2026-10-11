@@ -20,6 +20,7 @@ function fixture() {
     contextQuery: department => `&location=${state.locationId}${department && state.departmentId ? `&departmentId=${state.departmentId}` : ""}`,
     showToast: message => errors.push(message), render: () => renders.push({ week: state.data.weekStart, year: state.vacationData?.year }),
     setDefaultContext() {}, restoreRememberedOverallContext() {},
+    syncXoffiImport() {},
     applyRequestedView(options) { assert.equal(options.loadContext, false); state.currentView = "planning"; state.locationId = "05"; },
     canReadManagerRequests: () => false, canReadLoanManagement: () => false, canManageBranchOrders: () => false,
   });
@@ -30,7 +31,7 @@ const schedule = (week = "2032-07-05") => ({ weekStart: week, settings: { allow_
 
 async function resolveInitialContext(calls) {
   calls[0].resolve([{ id: "18" }]);
-  calls[1].resolve({ installationFeatures: {} });
+  calls[1].resolve({ portalEnabled: false, installationFeatures: {} });
   await new Promise(setImmediate);
 }
 

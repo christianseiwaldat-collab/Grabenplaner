@@ -5,11 +5,19 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
+const { functionSource } = require("../test-support/learning-workspace-ui");
 
 const projectRoot = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(projectRoot, "public", "portal.html"), "utf8");
 const script = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
 const styles = fs.readFileSync(path.join(projectRoot, "public", "portal.css"), "utf8");
+
+function logoutSource() {
+  const start = script.indexOf("let logoutInProgress = null;");
+  const end = script.indexOf("function setTab(", start);
+  assert.ok(start >= 0 && end > start, "Current Portal logout owner and function boundaries exist");
+  return script.slice(start, end);
+}
 
 test("v0.92.5: mobiler Portal-Header nutzt vollständige Symbole und zugängliche Statusausgabe", () => {
   assert.match(html, /id="notificationsButton"[\s\S]*?d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/);
@@ -27,8 +35,10 @@ test("v0.92.5: schmale Header halten zwei 44-Pixel-Iconziele ohne Einstellungsla
 });
 
 test("v0.92.5: Logout ist doppelklickfest, begrenzt und wechselt nach Bestätigung direkt zum Login", () => {
-  const logout = script.slice(script.indexOf("let logoutInProgress = false;"), script.indexOf("function setTab("));
-  assert.match(logout, /if \(logoutInProgress\) return;/);
+  const logout = logoutSource();
+  assert.match(logout, /if \(logoutInProgress\?\.session === portalState\.session\) return;/);
+  assert.match(logout, /logoutInProgress = operation;/);
+  assert.match(logout, /portalState\.session === logoutSession/);
   assert.match(logout, /controller\.abort\(\), 15000/);
   assert.match(logout, /setAttribute\("aria-busy", "true"\)/);
   assert.match(logout, /keepalive: true,[\s\S]*?signal: controller\.signal/);
@@ -39,7 +49,7 @@ test("v0.92.5: Logout ist doppelklickfest, begrenzt und wechselt nach Bestätigu
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout, workspace = null) {
-  const logoutSource = script.slice(script.indexOf("let logoutInProgress = false;"), script.indexOf("function setTab("));
+  const currentLogoutSource = logoutSource();
   const actorStart = script.indexOf('function processTaskActorFingerprint(');
   const actorSource = script.slice(actorStart, script.indexOf('\n}', actorStart) + 2);
   const calls = { api: 0, clearTab: 0, showLogin: 0, processClear: 0, autosaveStop: 0, themeNeutralize: 0, themeRefresh: 0, windowSync: 0 };
@@ -75,10 +85,27 @@ function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout
     showLogin: () => { calls.showLogin += 1; },
     neutralizeBirthdayPresentationTheme: () => { calls.themeNeutralize += 1; },
     refreshBirthdayPresentationTheme: async () => { calls.themeRefresh += 1; },
+    branchPriceLabelsOwner: () => "",
+    timeOffOwnerKey: () => "",
+    portalPersonalActionsActorKey: () => "synthetic-personal-actions",
+    birthdayPresentationActor: () => "",
+    resetBranchSalesWorkspaces() {},
+    resetBranchTimeOffState() {},
+    resetPersonalActionsState() {},
+    neutralizeBirthdayPresentation() {},
   };
+  const showPortal = functionSource("showPortal", "portal.js");
+  const initializerEnd = showPortal.indexOf("  syncPortalWindows();");
+  assert.ok(initializerEnd > 0, "The real session initializer precedes unrelated Portal rendering");
+  const sessionInitializer = showPortal.slice(0, initializerEnd) + "\n}\n";
   vm.createContext(context);
-  vm.runInContext(`${actorSource}\n${logoutSource}\nthis.runLogout = logout;`, context);
-  return { context, calls, status, button };
+  vm.runInContext(`${actorSource}\n${currentLogoutSource}\n${sessionInitializer}\nthis.runLogout = logout;`, context);
+  return { context, calls, status, button, replaceSession(session) {
+    context.showPortal(session);
+    assert.equal(context.portalState.session, session);
+    assert.equal(button.disabled, false, "Actual session initialization releases inherited logout controls");
+    assert.equal(button.attributes.has("aria-busy"), false);
+  } };
 }
 
 test("v0.92.5: Logout zeigt sofort Fortschritt, ignoriert Doppelklick und rendert nach Erfolg Login", async () => {
@@ -176,7 +203,7 @@ test('Portal logout starts its authentication timeout only after the price draft
 test('Portal logout does not send an old-account request after the actor changes during draft flush', async () => {
   let finishSave;const workspace={hasUnsaved:true,flush:()=>new Promise(resolve=>{finishSave=()=>{workspace.hasUnsaved=false;resolve();};})};
   const runtime=createLogoutRuntime(async()=>({ok:true}),setTimeout,workspace),pending=runtime.context.runLogout();
-  runtime.context.portalState.session={user:{employeeNumber:'253'}};
+  runtime.replaceSession({user:{employeeNumber:'253'}});
   finishSave();await pending;
   assert.equal(runtime.calls.api,0);assert.equal(runtime.calls.showLogin,0);assert.equal(runtime.context.portalState.session.user.employeeNumber,'253');
   assert.equal(runtime.button.disabled,false);
@@ -184,7 +211,7 @@ test('Portal logout does not send an old-account request after the actor changes
 
 test('Portal logout ignores a late old-account acknowledgement after another actor entered', async () => {
   let finishLogout;const runtime=createLogoutRuntime(()=>new Promise(resolve=>{finishLogout=resolve;})),pending=runtime.context.runLogout();await tick();
-  assert.equal(runtime.calls.api,1);runtime.context.portalState.session={user:{employeeNumber:'253'}};
+  assert.equal(runtime.calls.api,1);runtime.replaceSession({user:{employeeNumber:'253'}});
   finishLogout({ok:true});await pending;
   assert.equal(runtime.calls.showLogin,0);assert.equal(runtime.calls.windowSync,0);assert.equal(runtime.context.portalState.session.user.employeeNumber,'253');
   assert.equal(runtime.button.disabled,false);

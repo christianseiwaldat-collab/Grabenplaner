@@ -307,7 +307,7 @@ test("Block 4/7: Personalverwaltung verdrahtet Register, Betriebsteile und Vorsc
   const styles = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
   for (const marker of [
     'data-personnel-administration-route="collectiveAgreements"',
-    'data-personnel-administration-tab="collectiveAgreements"',
+    'aria-labelledby="collectiveAgreementsTitle"',
     'id="collectiveAgreementsSection"',
     'id="collectiveAgreementModal"',
     'id="collectiveAgreementBusinessUnitModal"',

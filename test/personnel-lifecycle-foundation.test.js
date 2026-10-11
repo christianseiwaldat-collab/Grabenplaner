@@ -35,13 +35,13 @@ test("Personalmodul-Fundament: neue Einstiege bleiben Teil der bestehenden Perso
     assert.match(navigation, new RegExp(`data-personnel-administration-route="${route}"`));
   }
 
-  for (const [tabId, sectionId, route] of [
-    ["candidatePreboardingTab", "candidatePreboardingSection", "applications"],
-    ["workflowCenterTab", "workflowCenterSection", "workflows"],
-    ["personnelTasksTab", "personnelTasksSection", "tasks"],
+  for (const [titleId, sectionId] of [
+    ["candidatePreboardingTitle", "candidatePreboardingSection"],
+    ["workflowCenterTitle", "workflowCenterSection"],
+    ["personnelTasksTitle", "personnelTasksSection"],
   ]) {
-    assert.match(html, new RegExp(`id="${tabId}"[^>]*aria-controls="${sectionId}"[^>]*data-personnel-administration-tab="${route}"`));
-    assert.match(html, new RegExp(`id="${sectionId}"[^>]*aria-labelledby="${tabId}"`));
+    assert.match(html, new RegExp(`id="${titleId}"`));
+    assert.match(html, new RegExp(`id="${sectionId}"[^>]*role="region"[^>]*aria-labelledby="${titleId}"`));
   }
 
   assert.doesNotMatch(html, /data-view="(?:applications|workflows|personnelTasks)"/);
@@ -56,7 +56,7 @@ test("Personalmodul-Fundament: Feature und eigene Fachrechte sperren Navigation 
   const access = between(
     app,
     "function canReadCandidatePreboarding()",
-    "function canOpenPersonnelAdministrationView()",
+    "function canReadWorkflowStudioCatalog()",
   );
   assert.match(featureBoundary, /installationFeatures\?\.personnelLifecycle === true/);
   assert.match(access, /hasGovernancePermission\("personnel:candidates:read"\)/);
@@ -68,9 +68,6 @@ test("Personalmodul-Fundament: Feature und eigene Fachrechte sperren Navigation 
     "candidatePreboardingNavButton",
     "workflowCenterNavButton",
     "personnelTasksNavButton",
-    "candidatePreboardingTab",
-    "workflowCenterTab",
-    "personnelTasksTab",
   ]) assert.match(app, new RegExp(`elements\\.${element}\\?\\.classList\\.toggle\\("hidden", !`));
 
   assert.match(server, /id: "personnelLifecycle",[\s\S]*?defaultEnabled: false,[\s\S]*?provisionable: false/);
@@ -84,10 +81,10 @@ test("Personalmodul-Fundament: M5- und O8-Ansichten kommunizieren ihre Wirkungsg
     'id="workflowCenterSection"',
     '<section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks"',
   );
-  assert.match(workflowSection, /Versionsgebundene Ausführung/);
-  assert.match(workflowSection, /M5 \/ O8 · kontrolliert/);
+  assert.match(workflowSection, /Jede gestartete Instanz bleibt an ihre veröffentlichte Version gebunden/);
+  assert.match(workflowSection, /Personalprozesse · freigegebene Instanzen/);
   assert.match(workflowSection, /personnelLifecycleEditorSection/);
-  assert.match(workflowSection, /Arbeitsentwurf lebt nur im Arbeitsspeicher/);
+  assert.match(workflowSection, /Diese Skizze wird weder gespeichert noch veröffentlicht/);
   assert.match(workflowSection, /personnelWorkflowInstanceWorkspace/);
   assert.match(workflowSection, /personnelWorkflowInstanceList/);
   const taskSection = between(html, 'id="personnelTasksSection"', "</section>");

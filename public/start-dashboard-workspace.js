@@ -5,20 +5,22 @@
     common ? require('./start-dashboard-workspace-geometry') : root.StartDashboardWorkspaceGeometry);
   if(typeof module==='object' && module.exports) module.exports=api;
   else root.StartDashboardWorkspace=api;
-})(typeof window==='object' ? window : this,function(model,geometryApi) {
+})(typeof window==='object' ? window : this,function(defaultModel,geometryApi) {
   'use strict';
   let instanceCount=0;
   function createStore(options) {
-    let actor='',epoch=0,revision=0,value=model.empty(),loaded=false,failed=false,read=null,write=null,queue=Promise.resolve();
+    const model=options.model||defaultModel,property=options.property||'startDashboardWorkspace';
+    const sessionReference=()=>options.sessionReference?.();
+    let actor='',session=null,epoch=0,revision=0,value=model.empty(),loaded=false,failed=false,read=null,write=null,queue=Promise.resolve();
     const listeners=new Set();
     const notify=()=>listeners.forEach(fn=>fn(value));
-    const current=(key,ticket)=>options.canUse() && key===String(options.key() || '') && actor===key && ticket===epoch;
+    const current=(key,ticket)=>options.canUse() && key===String(options.key() || '') && actor===key && ticket===epoch && session===sessionReference();
     function invalidate() {
       epoch++;revision++;read?.abort();write?.abort();read=null;write=null;loaded=false;failed=false;
-      actor=String(options.key() || '');value=model.empty();notify();
+      actor=String(options.key() || '');session=sessionReference();value=model.empty();notify();
     }
-    function synchronize() {if(actor!==String(options.key() || '')) invalidate();}
-    function localKey() {return 'gp.dashboard.workspace.v1.'+actor;}
+    function synchronize() {if(actor!==String(options.key() || '')||session!==sessionReference()) invalidate();}
+    function localKey() {return (options.cachePrefix||'gp.dashboard.workspace.v1.')+actor;}
     async function activate({retry=false}={}) {
       synchronize();if(!options.canUse() || loaded || read || (failed && !retry)) return;
       failed=false;
@@ -29,7 +31,11 @@
         if(options.localOnly?.()) {
           try {source=JSON.parse(options.storage?.getItem(localKey()) || 'null');}
           catch {source=null; /* A damaged local-only cache falls back once to defaults. */}
-        } else source=(await options.api('/api/portal/v1/ui-preferences',{signal:controller.signal})).startDashboardWorkspace;
+          if(options.migrate)source=options.migrate(source,options.legacy?.());
+        } else {
+          const payload=await options.api('/api/portal/v1/ui-preferences',{signal:controller.signal});
+          source=options.migrate?options.migrate(payload[property],payload.personnelDashboardLayout):payload[property];
+        }
         if(controller.signal.aborted || !current(key,ticket) || version!==revision) return;
         value=model.normalize(source);loaded=true;notify();
       } catch(error) {if(!controller.signal.aborted && current(key,ticket) && version===revision) {failed=true;notify();options.error(error);}}
@@ -38,25 +44,31 @@
     function change(next) {
       synchronize();if(!options.canUse() || !loaded) return Promise.resolve(false);
       value=model.validate(next);loaded=true;revision++;read?.abort();read=null;notify();
-      const key=actor,ticket=epoch,body=JSON.stringify({startDashboardWorkspace:value});
+      const key=actor,ticket=epoch,body=JSON.stringify({...options.extraPreferences?.(value),[property]:value});
       queue=queue.catch(()=>{}).then(async()=>{
-        if(!current(key,ticket)) return;
+        if(!current(key,ticket)) return false;
         const controller=new AbortController();write=controller;
         try {
-          if(options.localOnly?.()) options.storage?.setItem(localKey(),JSON.stringify(JSON.parse(body).startDashboardWorkspace));
+          if(options.localOnly?.()) {
+            const payload=JSON.parse(body);
+            options.storage?.setItem(localKey(),JSON.stringify(payload[property]));
+            options.localPreferences?.(payload,key);
+          }
           else await options.api('/api/portal/v1/ui-preferences',{method:'PUT',body,signal:controller.signal});
-        } catch(error) {if(!controller.signal.aborted && current(key,ticket)) options.error(error);}
+          return !controller.signal.aborted&&current(key,ticket);
+        } catch(error) {if(!controller.signal.aborted && current(key,ticket)) options.error(error);return false;}
         finally {if(write===controller) write=null;}
       });return queue;
     }
-    return {activate,change,invalidate,get ready(){return loaded && options.canUse() && actor===String(options.key() || '');},
-      get failed(){return failed && actor===String(options.key() || '');},
-      get value(){return model.validate(value);},subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn);}};
+    return {activate,change,invalidate,get ready(){return loaded && current(actor,epoch);},
+      get failed(){return failed && current(actor,epoch);},
+      get value(){return model.validate(current(actor,epoch)?value:model.empty());},subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn);}};
   }
   function create(options) {
+    const model=options.model||defaultModel;
     const root=options.root,doc=root.ownerDocument,win=doc.defaultView;
-    const fields=new Map(),removers=[],on=(node,name,fn,options)=>{node.addEventListener(name,fn,options);removers.push(()=>node.removeEventListener(name,fn,options));};
-    let identity='',selected=null,destroyed=false,controlAnchor=null,controlButton=null,controlWrapper=null,geometry=null,opener=null,menuInTopLayer=false;
+    const fields=new Map(),removers=[],on=(node,name,fn,options)=>{node.addEventListener(name,fn,options);const remove=()=>node.removeEventListener(name,fn,options);removers.push(remove);return remove;};
+    let identity='',session=null,geometryEpoch=0,selected=null,destroyed=false,controlAnchor=null,controlButton=null,controlWrapper=null,geometry=null,opener=null,menuInTopLayer=false;
     const usable=()=>!destroyed && options.canUse();
     const store=createStore({...options,error:error=>options.error(error)});
     const instance=++instanceCount,menu=doc.createElement('div');
@@ -76,7 +88,8 @@
       +action('default','Standardbeschriftung','label')
       +action('geometry-default','Standardposition und -größe','geometry')+action('hide','Kachel ausblenden','hide',true)
       +'<div class="start-dashboard-field-context-separator" role="separator"></div>'+action('retry','Erneut speichern','retry')+action('close','Schließen','close');
-    const dialog=doc.createElement('dialog');dialog.className='start-dashboard-field-dialog';dialog.dataset.gpWindowManual='';
+    const dialog=doc.createElement('dialog');dialog.className='start-dashboard-field-dialog';dialog.dataset.gpWindowMode='workspace';dialog.dataset.gpWindowId=options.editorWindowId||'start-dashboard-field-editor';
+    if(options.scopeName){menu.dataset.dashboardScope=options.scopeName;dialog.dataset.dashboardScope=options.scopeName;}
     dialog.setAttribute('aria-labelledby','startDashboardFieldEditorTitle'+instance);
     dialog.innerHTML='<header class="start-dashboard-field-editor-heading"><h3 id="startDashboardFieldEditorTitle'+instance+'">Beschriftung ändern</h3><button type="button" data-field-editor-close aria-label="Beschriftungseditor schließen">×</button></header>'
       +'<form data-field-editor><label>Feldtitel<input name="title" maxlength="120" required></label><label>Beschreibung<textarea name="description" maxlength="400" rows="3"></textarea></label><p data-field-error role="alert"></p><div class="start-dashboard-field-editor-actions"><button type="button" data-field-back>Abbrechen</button><button type="submit" class="primary-button">Übernehmen</button></div></form>';
@@ -112,7 +125,7 @@
       menu.style.left=x/scale+'px';menu.style.top=Math.max(top+8,Math.min(y,top+height-rect.height-8))/scale+'px';
     }
     function positionEditor() {
-      if(!dialog.open)return;
+      if(!dialog.open || dialog.classList.contains('gp-window'))return;
       const rect=dialog.getBoundingClientRect(),scale=rect.width/dialog.offsetWidth || 1,viewport=win.visualViewport;
       const left=viewport?.offsetLeft || 0,top=viewport?.offsetTop || 0,width=viewport?.width || win.innerWidth,height=viewport?.height || win.innerHeight;
       dialog.style.maxWidth=Math.max(0,width-24)/scale+'px';dialog.style.maxHeight=Math.max(0,height-24)/scale+'px';
@@ -123,7 +136,7 @@
       if(selected===field && !menu.hidden) {if(toggle)closeMenu({focus:true});else {const items=menuItems();(last?items.at(-1):items[0])?.focus({preventScroll:true});}return;}
       closeControls();selected=field;opener=field.menu;
       menu.querySelector('[data-menu-title]').textContent=field.title.textContent;
-      menu.querySelector('[data-field-hide]').hidden=!['control:center','control:vps'].includes(field.id);
+      menu.querySelector('[data-field-hide]').hidden=!(options.hideable?.(field.id)??['control:center','control:vps'].includes(field.id));
       syncColors();
       menu.hidden=false;if(typeof menu.showPopover==='function') {menu.showPopover();menuInTopLayer=true;}
       opener.setAttribute('aria-expanded','true');positionMenu();
@@ -133,7 +146,7 @@
       if(!selected || !allowed(selected) || !store.ready)return;
       editor.elements.title.value=selected.title.textContent;editor.elements.description.value=selected.description?.textContent || selected.extraDescription?.textContent || '';
       dialog.querySelector('[data-field-error]').textContent='';
-      closeMenu({keepSelection:true});dialog.showModal();positionEditor();editor.elements.title.focus({preventScroll:true});
+      closeMenu({keepSelection:true});win.GpWindow?.prepare?.(dialog);dialog.showModal();positionEditor();editor.elements.title.focus({preventScroll:true});
     }
     function rememberDefaults(field) {
       if(field.appliedTitle!==field.title.textContent) field.defaultTitle=field.title.textContent;
@@ -179,10 +192,24 @@
       button.dataset.dashboardFieldMenu=id;button.textContent='⋯';button.setAttribute('aria-haspopup','menu');button.setAttribute('aria-expanded','false');button.setAttribute('aria-controls',menu.id);
       const field={id,element,title,description,defaultTitle:title.textContent,defaultDescription:description?.textContent || '',appliedTitle:null,appliedDescription:null,menu:button};
       element.classList.add('start-dashboard-workspace-field');element.append(button);fields.set(id,field);
-      on(button,'click',event=>{event.stopPropagation();openMenu(field);});
-      on(button,'keydown',event=>{if(!['ArrowDown','ArrowUp'].includes(event.key))return;event.preventDefault();event.stopPropagation();openMenu(field,{last:event.key==='ArrowUp',toggle:false});});
+      field.removers=[on(button,'click',event=>{event.stopPropagation();openMenu(field);}),
+        on(button,'keydown',event=>{if(!['ArrowDown','ArrowUp'].includes(event.key))return;event.preventDefault();event.stopPropagation();openMenu(field,{last:event.key==='ArrowUp',toggle:false});})];
     }
     function discover() {
+      if(options.discover){
+        const descriptors=options.discover(root),byId=new Map(descriptors.map(field=>[field.id,field]));
+        const obsolete=[...fields.values()].filter(field=>byId.get(field.id)?.element!==field.element);
+        if(obsolete.length||descriptors.some(field=>!fields.has(field.id))){
+          geometry?.destroy();geometry=null;
+          for(const field of obsolete){
+            if(selected===field)closeControls();restore(field);
+            for(const remove of field.removers){remove();const index=removers.indexOf(remove);if(index>=0)removers.splice(index,1);}
+            field.menu.remove();field.element.remove();fields.delete(field.id);
+          }
+        }
+        for(const field of descriptors)if(model.IDS.includes(field.id))add(field.id,field.element,field.title,field.description);
+        return;
+      }
       for(const element of root.querySelectorAll('[data-start-dashboard-group]')) {
         const link=element.querySelector(':scope > .start-dashboard-group-link');
         add('group:'+element.dataset.startDashboardGroup,element,link?.querySelector('strong'),link?.querySelector('em'));
@@ -220,7 +247,7 @@
       else if(event.target.closest('[data-field-edit]')) openEditor();
       else if(event.target.closest('[data-field-color]')) setColor(event.target.closest('[data-field-color]').dataset.fieldColor);
       else if(event.target.closest('[data-field-default]')) modify(null);
-      else if(event.target.closest('[data-field-hide]')) {if(selected && ['control:center','control:vps'].includes(selected.id)) modify({hidden:true});}
+      else if(event.target.closest('[data-field-hide]')) {if(selected && (options.hideable?.(selected.id)??['control:center','control:vps'].includes(selected.id))) modify({hidden:true});}
       else if(event.target.closest('[data-field-geometry-default]') && selected && allowed(selected) && store.ready) {geometry?.reset(selected.id);closeMenu({focus:true});}
       else if(event.target.closest('[data-field-retry]') && selected && allowed(selected)) {if(store.ready) void store.change(store.value);else void store.activate({retry:true});closeMenu({focus:true});}
     });
@@ -262,13 +289,15 @@
     const unsubscribe=store.subscribe(apply);
     function sync() {
       const key=String(options.key() || '');
-      if(identity!==key || !usable()) {geometry?.cancel();for(const field of fields.values()) restore(field);closeControls();store.invalidate();identity=key;}
+      const nextSession=options.sessionReference?.();
+      if(identity!==key || session!==nextSession || !usable()) {geometryEpoch++;geometry?.cancel();for(const field of fields.values()) restore(field);closeControls();store.invalidate();identity=key;session=nextSession;}
       discover();
-      if(!geometry && geometryApi && root.querySelector('#startDashboardGrid')) geometry=geometryApi.create({root,fields,allowed,usable,key:options.key,ready:()=>store.ready,value:()=>store.value,change:value=>store.change(value)});
+      const grid=options.grid||root.querySelector('#startDashboardGrid');
+      if(!geometry && geometryApi && grid) geometry=geometryApi.create({root,grid,fields,allowed,usable,key:()=>String(options.key()||'')+':'+geometryEpoch,ready:()=>store.ready,value:()=>store.value,change:value=>store.change(value)});
       apply();if(usable()) void store.activate();
     }
     sync();
-    return {sync,fields,store,get geometry(){return geometry;},setVisible(id,visible){if(!['control:center','control:vps'].includes(id)||!store.ready||!options.allowed(id))return Promise.resolve(false);const value=store.value;value.fields[id]={...value.fields[id],hidden:visible!==true};return store.change(value);},isVisible(id){return store.value.fields[id]?.hidden!==true;},resetAll(){geometry?.cancel();closeControls();return store.change(model.empty());},destroy(){closeControls();geometry?.destroy();destroyed=true;unsubscribe();store.invalidate();for(const remove of removers) remove();menu.remove();dialog.remove();for(const field of fields.values()) {restore(field);field.menu.remove();field.element.classList.remove('start-dashboard-workspace-field','start-dashboard-field-user-hidden');}
+    return {sync,fields,store,get geometry(){return geometry;},setVisible(id,visible){if(!(options.hideable?.(id)??['control:center','control:vps'].includes(id))||!store.ready||!options.allowed(id))return Promise.resolve(false);const value=store.value;value.fields[id]={...value.fields[id],hidden:visible!==true};return store.change(value);},isVisible(id){return store.value.fields[id]?.hidden!==true;},resetAll(){geometry?.cancel();closeControls();return store.change(model.empty());},destroy(){closeControls();geometry?.destroy();destroyed=true;unsubscribe();store.invalidate();for(const remove of removers) remove();menu.remove();dialog.remove();for(const field of fields.values()) {restore(field);field.menu.remove();field.element.classList.remove('start-dashboard-workspace-field','start-dashboard-field-user-hidden');}
       if(controlAnchor?.parentNode) controlAnchor.replaceWith(controlButton);else if(controlWrapper?.parentNode) controlWrapper.before(controlButton);
       controlWrapper?.remove();controlAnchor?.remove();},dialog,menu};
   }

@@ -291,7 +291,7 @@ test("Block 5/7: Personalverwaltung verdrahtet Regelwerk, Baukasten und mobile D
   const styles = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
   for (const marker of [
     'data-personnel-administration-route="ruleDrafts"',
-    'data-personnel-administration-tab="ruleDrafts"',
+    'aria-labelledby="customWorkRulesTitle"',
     'id="customWorkRulesSection"',
     'id="customWorkRuleModal"',
     "Geführter Regelbaukasten",

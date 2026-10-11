@@ -44,6 +44,7 @@ function element(id = "", dataset = {}) {
     },
     setAttribute(name, value) { attributes.set(name, String(value)); },
     getAttribute: name => attributes.get(name) ?? null,
+    removeAttribute(name) { attributes.delete(name); },
     querySelectorAll: () => [],
   };
 }
@@ -75,15 +76,16 @@ function navigationContext(permissions, options = {}) {
     get(target, key) { return target[key] ||= nodes.get(key) || element(key); },
   });
   const settingsTab = element("settingsGeneralTab", { settingsTab: "general" });
+  const navigation = ["startDashboard", "personnel", "loans", "salesAdministration", "crm"].map(view => element(view + "Nav", { view }));
   settingsTab.classList.toggle("active", true);
   context.document = {
     getElementById(id) { if (!nodes.has(id)) nodes.set(id, element(id)); return nodes.get(id); },
-    querySelectorAll: () => [],
+    querySelectorAll: selector => selector === ".nav-item" ? navigation : [],
     querySelector: () => settingsTab,
   };
   Object.assign(context, {
     window: {}, privacyOrganizationTab: "overview", timePresenceRefreshTimer: null,
-    receiptSearchWorkspace: null, tradeInsightsWorkspace: null, salesPriceLabelsWorkspace: null,
+    receiptSearchWorkspace: null, tradeInsightsWorkspace: null, salesPriceLabelsWorkspace: null, tradeOrdersWorkspace: null,
     salesArticleReportWorkspace: null, salesBwlWorkspace: null, gpDefinitionsWorkspace: null,
     employeeProfileIsOpen: () => false, accessibleDashboardModes: () => ["rights"],
     setPersonnelAdministrationTab: () => {}, setSettingsTab: () => {}, setSalesAnalyticsTab: () => {},
@@ -105,9 +107,22 @@ function navigationContext(permissions, options = {}) {
   for (const name of ["loadSalesArticleTablePreferences", "loadSalesArticleLastImport", "loadCrmPreferences"]) {
     context[name] = async () => {};
   }
-  vm.runInContext(["pageViewElement", "setView"].map(name => functionSource(name)).join("\n"), context);
-  return { context, calls };
+  vm.runInContext(["pageViewElement", "setNavigationCurrent", "setView"].map(name => functionSource(name)).join("\n"), context);
+  return { context, calls, navigation };
 }
+
+test("Actual navigation aria-current follows the permitted destination and denied Team falls back to Home", () => {
+  const denied = navigationContext([]);
+  denied.context.setView("personnel");
+  assert.equal(denied.navigation[0].getAttribute("aria-current"), "page");
+  assert.equal(denied.navigation[1].getAttribute("aria-current"), null);
+  const allowed = navigationContext(["employees:read"]);
+  allowed.context.setView("personnel");
+  assert.equal(allowed.navigation[1].getAttribute("aria-current"), "page");
+  allowed.context.setView("startDashboard");
+  assert.equal(allowed.navigation[0].getAttribute("aria-current"), "page");
+  assert.equal(allowed.navigation[1].getAttribute("aria-current"), null);
+});
 
 test("Team access and its dashboard tile follow effective read/display/write rights, including local and Developer sessions", () => {
   for (const permissions of [[], ...TEAM_PERMISSIONS.map(permission => [permission]), ["sales:articles:read"]]) {

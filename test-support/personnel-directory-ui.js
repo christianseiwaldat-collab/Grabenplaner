@@ -1,0 +1,45 @@
+"use strict";
+const path=require("node:path");
+const UI=require("./learning-workspace-ui");
+const app=UI.read("app.js");
+const names=["canReadCentralPersonnel","canWriteCentralPersonnel","canReadCostCenters","canWriteCostCenters","canManagePositions","canOpenPersonnelAdministrationView","canOpenPersonnelAdministrationModule","firstAccessiblePersonnelAdministrationTab","canOpenPersonnelAdministrationTab","startDashboardWorkspaceActorKey","captureGpContext","gpContextCurrent","availableEmployeeDisplayColumns","normalizeEmployeeDisplayColumns","normalizeEmployeeDisplaySort","employeeDisplayProfileValue","employeeDisplayRawValue","employeeDisplayCell","sortedEmployeesForDisplay","employeeDisplayHeader","applyEmployeeDisplayTableLayout","apiList","normalizedActive","normalizeCostCenterType","normalizeCostCenter","normalizePersonnelDirectoryEmployee","loadPersonnelAdministration","filteredPersonnelDirectory","personnelDirectorySource","renderPersonnelAdministrationSummary","renderPersonnelDirectory","setPersonnelAdministrationTab","employeeProfileIsOpen","syncEmployeeProfileWorkspace","changeEmployeeDisplaySort","setNavigationCurrent"];
+const columns=app.slice(app.indexOf("const EMPLOYEE_DISPLAY_COLUMNS"),app.indexOf("function availableEmployeeDisplayColumns"));
+const events=app.slice(app.indexOf('document.getElementById("refreshPersonnelDirectoryButton")'),app.indexOf('elements.personnelCandidateSearch?.addEventListener',app.indexOf('document.getElementById("refreshPersonnelDirectoryButton")')));
+const rowEvents=app.slice(app.indexOf('elements.personnelDirectoryBody?.addEventListener'),app.indexOf('\n});',app.indexOf('elements.personnelDirectoryBody?.addEventListener'))+5);
+const sortEvents=app.slice(app.indexOf('[elements.employeeTableHead, elements.personnelDirectoryHead]'),app.indexOf('elements.exportBrandingButton',app.indexOf('[elements.employeeTableHead, elements.personnelDirectoryHead]')));
+async function prepare(page,{dark=false}={}){
+ const errors=[];page.on("pageerror",e=>errors.push(e.message));await page.route("**/*",r=>r.abort());
+ await page.setContent('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main class="synthetic-directory">'+UI.section("personnelAdministrationView")+'</main></body></html>');
+ for(const name of ["styles.css","personnel-dashboard-workspace.css","personnel-learning-workspace.css","personnel-directory-workspace.css"])await page.addStyleTag({path:path.join(UI.root,"public",name)});
+ await page.addStyleTag({content:'.synthetic-directory{max-width:1380px;margin:24px auto;padding:0 24px;box-sizing:border-box}#personnelAdministrationView{display:block!important}@media(max-width:700px){.synthetic-directory{padding:0 12px;margin:16px auto}}'});
+ await page.evaluate(({source,events,rowEvents,sortEvents,dark})=>{
+  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));window.escapeHtml=window.escapeHtmlAttribute=esc;
+  document.documentElement.dataset.activePageTheme=dark?"dark":"light";
+  document.getElementById("personnelAdministrationView").classList.add("active");
+  document.getElementById("personnelAdministrationView").dataset.pageTheme=dark?"dark":"light";
+  window.elements=Object.fromEntries([...document.querySelectorAll("[id]")].map(n=>[n.id,n]));
+  window.state={portalStatus:{portalEnabled:true,installationFeatures:{}},portalSession:{authenticated:true,user:{employeeNumber:"BEISPIEL-A",role:"hr",sessionKind:"employee",isEmployee:true,active:true,permissions:["personnel:central:read","cost_centers:read"]}},currentView:"personnelAdministration",personnelAdministrationTab:"employees",personnelDirectory:[],costCenters:[],costCenterTypes:[],positions:[],allEmployees:[],personnelDirectorySearch:"",personnelDirectoryCostCenterFilter:"",personnelDirectoryStatusFilter:"active",employeeDisplayColumns:["personnel_number","name","position","cost_center","assignment","workload","status"],employeeDisplaySort:{key:"personnel_number",direction:"asc"},personnelAdministrationLoaded:false,personnelAdministrationLoading:false,personnelDirectorySourceStatus:"idle",employeeProfileOpen:false,employeeProfileHost:"administration"};
+  window.knownRoutes=new Set(["learning","workflows","tasks","ruleDrafts","collectiveAgreements","vacations","applications"]);
+  for(const [name,key]of Object.entries({canReadCandidatePreboarding:"applications",canOpenWorkflowCenter:"workflows",canReadPersonnelLearningCatalog:"learning",canReadPersonnelTasks:"tasks",canAccessCustomWorkRuleGovernance:"ruleDrafts",canReadCollectiveAgreements:"collectiveAgreements",canReadCentralVacations:"vacations"}))window[name]=()=>knownRoutes.has(key);
+  for(const name of ["canReadManagerRequests","canReadManagedTimeTracking","canReadPersonnelWorkflowInstances","canReadLifecycleOnboardingTasks","canReadLifecycleOffboardingTasks","canReadLifecycleInterfaces","canReadLifecycleAutomationCatalog"])window[name]=()=>false;
+  window.isLocalStartDashboardWorkspace=()=>false;window.preferredDayLabels={};window.formatFixedWorkdays=()=>"";window.formatDate=v=>v;window.personnelRecordAvailableInUi=()=>false;window.canOpenEmployeeProfileFoundation=()=>true;
+  window.showToast=m=>{window.lastToast=m;};window.syncWorkflowStudio=()=>{};window.syncPersonnelDashboardInformation=()=>{};window.renderPersonnelDashboard=()=>{};window.renderPositions=()=>{};window.pausePersonnelLifecycleEditor=()=>{};window.clearPersonnelLifecycleAutomationState=()=>{};
+  for(const name of ["loadPersonnelCandidates","loadPersonnelLearningDashboard","loadCustomWorkRuleRegistry","loadCollectiveAgreementRegistry","loadCentralVacations"])window[name]=async()=>{};
+  window.loadPersonnelLearningArea=()=>{};
+  window.grabenplanerNavigation={record:()=>{window.recordedRoute=state.personnelAdministrationTab;history.replaceState({},"","about:blank?view=personnelAdministration&section="+recordedRoute);}};
+  window.renderContextNavigation=()=>{};window.profileCalls=[];
+  window.openEmployeeProfile=(id)=>{profileCalls.push(id);state.employeeProfileOpen=true;state.employeeProfileNumber=id;elements.employeeProfileName.textContent=state.personnelDirectory.find(e=>e.personnel_number===id)?.full_name||id;syncEmployeeProfileWorkspace();};
+  window.pauseEmployeeProfile=()=>{state.employeeProfileOpen=false;syncEmployeeProfileWorkspace();};window.resumeEmployeeProfile=()=>syncEmployeeProfileWorkspace();
+  window.renderPersonnelAdministration=()=>{renderPersonnelAdministrationSummary();renderPersonnelDirectory();syncEmployeeProfileWorkspace();};
+  window.saveEmployeeDisplayPreferences=async({sort})=>{state.employeeDisplaySort=sort;renderPersonnelDirectory();};
+  window.syntheticEmployees=[{employeeNumber:"0002",fullName:"Alexandra Beispiel mit ausführlichem Familiennamen",positionName:"Persönliche Kundenberatung und Service",costCenterId:"18",costCenterCode:"F18",costCenterName:"Filiale Innenstadt",homeLocationName:"Filiale Innenstadt",preferredDepartmentName:"Verkauf und Kundenservice",contractedHours:30,active:true},{employeeNumber:"0010",fullName:"Martin Beispiel",positionName:"Lager & Logistik",costCenterId:"19",costCenterCode:"F19",costCenterName:"Filiale Nord",homeLocationName:"Filiale Nord",preferredDepartmentName:"Logistik",contractedHours:38.5,active:true},{employeeNumber:"0003",fullName:"Patricia Historisches Beispiel",positionName:"Verkaufsleitung",active:false}];
+  window.syntheticCenters=[{id:"18",code:"F18",name:"Filiale Innenstadt",active:true},{id:"19",code:"F19",name:"Filiale Nord",active:true}];window.apiCalls=[];window.holdDirectory=false;window.heldDirectories=[];window.failDirectory=false;
+  window.api=async(url)=>{apiCalls.push(url);if(url.startsWith("/api/personnel-directory")){const value=structuredClone(syntheticEmployees);if(holdDirectory)await new Promise(resolve=>heldDirectories.push({resolve,value}));if(failDirectory)throw Error("BEISPIEL: Quelle vorübergehend nicht verfügbar");return {employees:value};}if(url.startsWith("/api/cost-centers"))return {costCenters:structuredClone(syntheticCenters)};throw Error("unexpected endpoint "+url);};
+  (0,eval)(source);(0,eval)(events);(0,eval)(rowEvents);(0,eval)(sortEvents);
+  elements.employeeProfileBackButton.addEventListener("click",pauseEmployeeProfile);
+  window.regions=()=>[...document.querySelectorAll('#personnelAdministrationView>.personnel-administration-section')].filter(n=>n.classList.contains('active')).map(n=>n.id);
+  setPersonnelAdministrationTab("employees");
+ },{source:columns+names.map(n=>UI.functionSource(n)).join("\n"),events,rowEvents,sortEvents,dark});
+ await page.waitForFunction(()=>personnelDirectorySource().status==="succeeded");return{errors};
+}
+module.exports={...UI,prepare};

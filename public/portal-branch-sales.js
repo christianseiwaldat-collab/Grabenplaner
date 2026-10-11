@@ -119,7 +119,7 @@
         <button class="text-button" data-b="previous" type="button" ${kind === "receipts" ? "hidden" : ""}>Zurück</button>
         <button class="text-button" data-b="next" type="button">${kind === "articles" ? "Weiter" : "Suche fortsetzen"}</button>
         <button class="text-button" data-b="pause" type="button" hidden>Suche pausieren</button></nav>
-        ${kind === "receipts" ? '<dialog class="branch-receipt-dialog" data-b="dialog" aria-labelledby="branchReceiptDetailTitle"><div class="branch-search-dialog-heading"><h2 id="branchReceiptDetailTitle" data-b="detail-title">Beleg</h2><button class="text-button" data-b="close" type="button" aria-label="Beleg schließen">Schließen</button></div><p class="branch-search-source">Informationsauszug aus dem Kassenstand. Kein Ersatz für den Originalbeleg.</p><div data-b="detail-body"></div><button class="primary" data-b="detail-pdf" type="button">PDF herunterladen</button></dialog>'
+        ${kind === "receipts" ? '<dialog data-gp-window-mode="workspace" class="branch-receipt-dialog" data-b="dialog" aria-labelledby="branchReceiptDetailTitle"><div class="branch-search-dialog-heading"><h2 id="branchReceiptDetailTitle" data-b="detail-title">Beleg</h2><button class="text-button" data-b="close" type="button" aria-label="Beleg schließen">Schließen</button></div><p class="branch-search-source">Informationsauszug aus dem Kassenstand. Kein Ersatz für den Originalbeleg.</p><div data-b="detail-body"></div><button class="primary" data-b="detail-pdf" type="button">PDF herunterladen</button></dialog>'
           : '<dialog class="branch-scanner-dialog" data-b="scan-dialog" aria-labelledby="branchScannerTitle"><div class="branch-search-dialog-heading"><h2 id="branchScannerTitle">EAN / QR scannen</h2><button type="button" class="text-button" data-b="scan-close">Schließen</button></div><video data-b="scan-video" autoplay muted playsinline aria-label="Kameravorschau"></video><p data-b="scan-status" role="status" aria-live="polite"></p><p class="branch-article-note">Die Erkennung erfolgt auf diesem Gerät. Es werden keine Kamerabilder hochgeladen.</p></dialog>'}`;
       if(kind==='articles'){
         scanner=scannerFactory({dialog:el('scan-dialog'),video:el('scan-video'),status:el('scan-status'),active:()=>valid(generation),onValue:value=>{
@@ -135,7 +135,7 @@
       el("next").addEventListener("click", () => void search(kind === "articles" ? offset + 20 : next));
       el("pause").addEventListener("click", () => { paused = true; message("Suche pausiert nach diesem Abschnitt …"); });
       el("close")?.addEventListener("click", closeDetail);
-      el("dialog")?.addEventListener("close", () => { detailId = null; detailGeneration++; el("detail-body").replaceChildren(); });
+      el("dialog")?.addEventListener("close", () => { if(el("dialog").open)return; detailId = null; detailGeneration++; el("detail-body").replaceChildren(); });
       el("detail-pdf")?.addEventListener("click", () => { if (detailId) void pdf(detailId,el("detail-pdf")); });
       root.addEventListener("click", click);
       root.addEventListener('toggle', articleToggle, true);
@@ -241,7 +241,7 @@
     }
     async function detail(id) {
       const ticket = generation, detailTicket = ++detailGeneration; detailId = id;
-      el("detail-title").textContent = "Beleg wird geladen …"; el("detail-body").replaceChildren(); el("detail-pdf").disabled = true; el("dialog").showModal();
+      el("detail-title").textContent = "Beleg wird geladen …"; el("detail-body").replaceChildren(); el("detail-pdf").disabled = true; globalThis.GpWindow?.prepare?.(el("dialog")); el("dialog").showModal();
       try {
         const result = await api("/api/portal/v1/branch-receipts/documents", { method: "POST", body: JSON.stringify({ ids: [id] }) });
         if (!valid(ticket) || detailTicket !== detailGeneration || detailId !== id) return;

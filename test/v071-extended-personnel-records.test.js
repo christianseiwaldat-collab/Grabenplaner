@@ -6,6 +6,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const vm = require("node:vm");
 const { spawnSync } = require("node:child_process");
 const { createAmuStorage } = require("../lib/amu-storage");
 
@@ -811,5 +812,12 @@ test("v0.71 Block 4: geschützte Formulare vermeiden Autofill und senden nur Fel
   assert.doesNotMatch(protectedForm, /autocomplete="(?:given-name|family-name|tel|email|street-address|postal-code|address-level|country-name|bday|honorific-prefix)"/);
   assert.match(appSource, /function personnelRecordPatch\(/);
   assert.match(appSource, /body\.personnelRecord = isEdit \? recordPatch : currentPersonnelRecord/);
-  assert.match(appSource, /elements\.employeeModal\?\.addEventListener\("close", clearEmployeeProtectedRecord\)/);
+  const closeRegistration = appSource.match(/^elements\.employeeModal\?\.addEventListener\("close",[^\n]+/m)?.[0];
+  assert.ok(closeRegistration, "The actual employee close listener must be installed");
+  let onClose, cleared = 0;
+  const employeeModal = { open: false, addEventListener(type, listener) { assert.equal(type, "close"); onClose = listener; } };
+  vm.runInNewContext(closeRegistration, { elements: { employeeModal }, clearEmployeeProtectedRecord() { cleared++; } });
+  onClose(); assert.equal(cleared, 1, "A completed close clears protected profile fields");
+  employeeModal.open = true; onClose();
+  assert.equal(cleared, 1, "A queued old close must preserve the newly opened employee form");
 });

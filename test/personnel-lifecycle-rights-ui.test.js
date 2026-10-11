@@ -26,7 +26,7 @@ test("Bewerbernavigation hängt ausschließlich am neuen Leserecht und dem Featu
   const access = between(
     app,
     "function canReadCandidatePreboarding()",
-    "function canOpenWorkflowCenter()",
+    "function canReadPersonnelWorkflowInstances()",
   );
   assert.match(access, /personnelLifecycleFoundationEnabled\(\)/);
   assert.match(access, /hasGovernancePermission\("personnel:candidates:read"\)/);

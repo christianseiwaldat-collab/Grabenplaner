@@ -716,3 +716,51 @@ test("xoffi comparison: date ranges clip weekly imports, flag gaps and keep the 
   const otherLocation = db.prepare('SELECT id FROM locations WHERE id != ? LIMIT 1').get(LOCATION).id;
   assert.equal((await get('2026-09-01', '2026-09-30', otherLocation)).status, 403);
 });
+
+test("xoffi MHTML: synthetic partial import requires explicit exclusion and preserves the original holiday source and reviewed week separately", async () => {
+  const { holidayFixtureHtml, fixtureHtml, mhtml } = require('../test-support/xoffi-mhtml');
+  const auth=createSession(MANAGER),original=holidayFixtureHtml({name:'Mara Filialleitung',week:35,balanceDate:'23.08.2026'});
+  const invalid=fixtureHtml({name:'Alina Abteilungsleitung',week:35,balanceDate:'23.08.2026'}).replace('Gesamt: 8.50','missing');
+  const inspect=await fetch(`${baseUrl}/api/portal/v1/xoffi-time-import/inspect?locationId=${LOCATION}&departmentId=${departmentId}`,{
+    method:'POST',headers:{Cookie:auth.cookie,'X-CSRF-Token':auth.csrf,'Content-Type':'application/octet-stream','X-Import-Filename':'synthetic-partial.mhtml'},body:mhtml(original+invalid)});
+  const preview=await inspect.json();assert.equal(inspect.status,200,JSON.stringify(preview));
+  assert.deepEqual(preview.reviewSummary,{totalRows:2,validRows:1,invalidRows:1});
+  assert.equal(preview.employees[1].reviewStatus,'invalid');assert.deepEqual(preview.employees[1].days,[]);
+  assert.equal(preview.employees[1].diagnostics[0].workDate,'2026-08-24');
+  assert.ok(preview.employees[0].warnings.some(value=>/Wochenposten/.test(value)));
+  const originalSnapshot=structuredClone(preview.employees[0].snapshot);
+  async function apply(employees,session=auth){const response=await fetch(`${baseUrl}/api/portal/v1/xoffi-time-import/apply`,{
+    method:'POST',headers:{Cookie:session.cookie,'X-CSRF-Token':session.csrf,'Content-Type':'application/json'},
+    body:JSON.stringify({previewId:preview.previewId,confirmed:true,useAsActual:true,employees})});return{status:response.status,body:await response.json()};}
+  assert.equal((await apply(preview.employees)).body.code,'XOFFI_SOURCE_ROW_INVALID');
+  assert.equal((await apply(preview.employees.slice(0,1))).body.code,'XOFFI_REVIEW_INVALID');
+  const rows=structuredClone(preview.employees);rows[0].snapshot.weeklyHolidayMinutes=999;rows[0].snapshot.remainingVacationDays=999;
+  rows[1]={sourceName:rows[1].sourceName,employeeNumber:'',excluded:true};
+  const foreign=await apply(rows,createSession(DEPARTMENT_MANAGER));assert.equal(foreign.status,410);assert.equal(foreign.body.code,'XOFFI_PREVIEW_EXPIRED');
+  const applied=await apply(rows);assert.equal(applied.status,201,JSON.stringify(applied.body));
+  assert.deepEqual(Object.keys(applied.body.schedule.xoffiTime.weekByEmployee),[MANAGER]);
+  const stored=applied.body.schedule.xoffiTime.weekByEmployee[MANAGER];
+  for(const key of Object.keys(originalSnapshot))assert.deepEqual(stored.snapshot[key],originalSnapshot[key]);
+  assert.equal(stored.snapshot.reviewedWeek.weeklyValuedMinutes,2460);
+  assert.equal(stored.snapshot.reviewedWeek.valuationReconciliation.unallocatedHolidayMinutes,480);
+  assert.equal(stored.days[5].actualMinutes,0);assert.equal(stored.days[5].valuedMinutes,0);assert.deepEqual(stored.days[5].intervals,[]);
+  assert.equal(db.prepare(`SELECT COUNT(*) n FROM xoffi_time_employee_rows WHERE import_id=?`).get(applied.body.importId).n,1);
+  assert.throws(()=>db.prepare("UPDATE xoffi_time_snapshots SET snapshot_json='{}'").run(),/immutable/);
+});
+
+test("xoffi Plan-Ist: persisted source proof supplies 33 + 8 = 41 only for a complete week and keeps scoped partial totals unknown", async () => {
+  const auth=createSession(MANAGER);
+  async function get(from,to,location=LOCATION){const response=await fetch(`${baseUrl}/api/portal/v1/xoffi-plan-comparison?from=${from}&to=${to}&locationId=${location}${location===LOCATION?`&departmentId=${departmentId}`:''}`,{headers:{Cookie:auth.cookie}});return{status:response.status,body:await response.json()};}
+  const full=await get('2026-08-24','2026-08-30');assert.equal(full.status,200,JSON.stringify(full.body));
+  const row=full.body.employees.find(person=>person.employeeNumber===MANAGER);
+  assert.equal(row.actualMinutes,1500);assert.equal(row.valuedMinutes,2460);assert.equal(row.knownDailyValuedMinutes,1980);
+  assert.equal(row.unallocatedHolidayMinutes,480);assert.equal(row.weeklyCredits[0].status,'verified');
+  assert.equal(row.days[5].actualMinutes,0);assert.equal(row.days[5].valuedMinutes,0);
+  const partial=await get('2026-08-24','2026-08-28');assert.equal(partial.status,200);
+  const clipped=partial.body.employees.find(person=>person.employeeNumber===MANAGER);
+  assert.equal(clipped.actualMinutes,1500);assert.equal(clipped.knownDailyValuedMinutes,1980);
+  assert.equal(clipped.valuedMinutes,null);assert.equal(clipped.valuationAllocationIncomplete,true);
+  assert.equal(clipped.valuedComparison.percent,null);assert.equal(clipped.valuedComparison.severity,'missing');
+  const otherLocation=db.prepare('SELECT id FROM locations WHERE id!=? LIMIT 1').get(LOCATION).id;
+  assert.equal((await get('2026-08-24','2026-08-30',otherLocation)).status,403);
+});

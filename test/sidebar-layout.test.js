@@ -148,7 +148,7 @@ test("Logistik opens its child path and marks only Einkauf / Lieferstände as th
   }
   const context = {
     elements: new Proxy({}, { get: (_, id) => node(id) }),
-    state: { currentView: "logistics", portalSession: null }, privacyOrganizationTab: "overview",
+    state: { currentView: "logistics", portalSession: null }, logisticsTab: "purchasing", privacyOrganizationTab: "overview",
     sidebarNavigationGroups: createGroups(), activeLocations: () => [],
     currentAdministrationRoute: () => ({ view: "logistics", section: "purchasing" }),
     document: { getElementById: node, querySelector: selector => selector === ".main-nav" ? null : node(selector) },

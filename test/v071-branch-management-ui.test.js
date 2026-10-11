@@ -33,7 +33,7 @@ test("v0.71 Block 7 UI: Filialverwaltung fasst Teams, Dienst- und Urlaubsplanung
   assert.ok(navigation.indexOf("filialTeamsNavButton") < navigation.indexOf("planningNavButton"));
   assert.ok(navigation.indexOf("planningNavButton") < navigation.indexOf("vacationsNavButton"));
   assert.match(app, /setNavigationCurrent\(elements\.filialTeamsNavButton, state\.currentView === "personnel"\)/);
-  assert.match(app, /setNavigationCurrent\(elements\.planningNavButton, state\.currentView === "planning"\)/);
+  assert.match(app, /setNavigationCurrent\(elements\.planningNavButton, state\.currentView === "planning" && !showPlanningChildren\)/);
   assert.match(app, /setNavigationCurrent\(elements\.vacationsNavButton, state\.currentView === "vacations"\)/);
   const dashboard = between(html, '<section id="filialAdministrationView"', '<section id="planningView"');
   assert.match(dashboard, /Filialverwaltung im/);
@@ -72,9 +72,9 @@ test("v0.71 Block 7 UI: bestehende Views und View-Deep-Links bleiben kompatibel"
 });
 
 test("v0.71 Block 7 UI: zentrale Urlaube sind ein eigener lesender Personalverwaltungs-Tab", () => {
-  assert.match(html, /id="centralVacationsTab"[^>]*role="tab"[^>]*aria-controls="centralVacationSection"[^>]*data-personnel-administration-tab="vacations"/);
+  assert.match(html, /<button(?=[^>]*id="centralVacationsNavButton")(?=[^>]*data-personnel-administration-route="vacations")[^>]*>/);
   const section = between(html, '<section class="personnel-administration-section" id="centralVacationSection"', "</section>");
-  assert.match(section, /role="tabpanel"[^>]*aria-labelledby="centralVacationsTab"/);
+  assert.match(section, /role="region"[^>]*aria-labelledby="centralVacationsTitle"/);
   for (const id of ["centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList"]) {
     assert.match(section, new RegExp(`id="${id}"`));
   }
