@@ -23,7 +23,7 @@ let personalActionsWindow = null, personalActionsOpener = null;
 let rightsWorkspace = null, rightsWorkspaceActor = '', rightsLoadController = null, rightsLoadGeneration = 0;
 let rightsSettingsWindows = null, permissionDefaultsUI = null;
 let rightsEditorGeneration = 0, rightsEditorSaveContext = null, rightsEditorSnapshot = null;
-let gpDefinitionsWorkspace = null;
+let gpDefinitionsWorkspace = null, privateWorkspaceReturnRoute = null;
 (() => {
   const storageKey = "grabenplaner-bootstrap-token";
   const parameters = new URLSearchParams(window.location.search);
@@ -1456,6 +1456,11 @@ function activateGpDefinitions() {
   if (!gpDefinitionsWorkspace) gpDefinitionsWorkspace = window.GpDefinitions.mount(document.getElementById('gpDefinitionsWorkspace'), {
     canUse: canUseGpDefinitions, key: () => String(state.portalSession?.user?.employeeNumber || ''),
     loadWorkspaces: async () => (await api('/api/portal/v1/private-workspaces')).workspaces,
+    onExit: () => {
+      const route = privateWorkspaceReturnRoute || { view: 'startDashboard' };
+      history.pushState({}, '', location.pathname + '?' + new URLSearchParams(route));
+      applyRequestedView({ fromHistory: true });
+    },
   });
   gpDefinitionsWorkspace.activate();
 }
@@ -6563,17 +6568,26 @@ function renderHoursOverview() {
         <span class="${difference === null ? "hours-under" : difference > 0 ? "hours-over" : difference < 0 ? "hours-under" : "hours-exact"}"><small>Differenz</small><strong>${difference === null ? '<span class="status-badge danger">Berechnungsfehler</span>' : `${difference > 0 ? "+" : ""}${formatHours(difference)}`}</strong></span>
       </div>
       ${calculationError ? '<p class="calculation-note">Die Wochenstunden konnten nicht vollständig berechnet werden. Bitte den Dienstplan neu laden.</p>' : ""}
-      ${xoffiHtml}
-      ${xoffiSnapshot ? `<div class="xoffi-source-snapshot"><strong>xoffi · Stand ${formatDate(xoffiSnapshot.balanceDate)}</strong><span>Zeitkonto: ${formatHours(xoffiSnapshot.openingBalanceMinutes)}</span><span>Resturlaub: ${Number(xoffiSnapshot.remainingVacationDays).toLocaleString("de-AT")} Tage</span><small>Ohne künftig fixierte Urlaube · separater Quellenstand</small>${xoffi?.snapshot ? `<span>Mehrstunden dieser Woche: ${formatHours(xoffiSnapshot.weeklyBalanceDeltaMinutes)}</span>` : ""}</div>` : balanceHtml}
+      ${xoffiSnapshot || xoffi || effectiveBalance ? `<details class="xoffi-source-snapshot"><summary>xoffi-Stand</summary>
+        ${xoffiHtml}${balanceHtml}
+        ${xoffiSnapshot ? `<dl><div><dt>Datenstand</dt><dd>${formatDate(xoffiSnapshot.balanceDate)}</dd></div><div><dt>Zeitkonto am Datenstand</dt><dd>${formatHours(xoffiSnapshot.openingBalanceMinutes)}</dd></div><div><dt>Resturlaub</dt><dd>${Number(xoffiSnapshot.remainingVacationDays).toLocaleString("de-AT")} Tage</dd></div>${xoffi?.snapshot ? `<div><dt>Mehrstunden dieser Woche</dt><dd>${formatHours(xoffiSnapshot.weeklyBalanceDeltaMinutes)}</dd></div>` : ""}</dl><small>Ohne künftig fixierte Urlaube · separater Quellenstand</small>` : ""}
+      </details>` : ""}
       ${saturdayStatsHtml}
       <div class="hours-progress"><span style="width:${percentage}%;background:${employee.color}"></span></div>
     </article>`;
   }).join("");
-  if (showSaturdayStats && hasEstimatedSaturdayStats) {
-    elements.hoursOverview.insertAdjacentHTML(
-      "beforeend",
-      '<div class="hours-estimate-note">* Errechneter Wert, da noch nicht ausreichend vergangene Dienstplandaten zur Verfügung stehen.</div>',
-    );
+  const coverage = state.data.saturdayStats?.historicalCoverage;
+  const missing = coverage?.missing || [];
+  const links = missing.map(week => {
+    const query = new URLSearchParams({view:"planning", location:String(state.locationId || ""), department:String(state.departmentId || ""), week:week.weekStart});
+    const selectedYear = new Date(state.weekStart + "T12:00:00").getFullYear();
+    return `<a href="?${escapeHtmlAttribute(query.toString())}" data-missing-planning-week="${escapeHtmlAttribute(week.weekStart)}" title="${escapeHtmlAttribute(formatDate(week.weekStart))}">KW${week.week}${week.year !== selectedYear ? `/${week.year}` : ""}</a>`;
+  }).join(", ");
+  if (showSaturdayStats && hasEstimatedSaturdayStats || missing.length) {
+    elements.hoursOverview.insertAdjacentHTML("beforeend", `<div class="hours-estimate-note">
+      ${showSaturdayStats && hasEstimatedSaturdayStats ? "<span>* Errechneter Wert, da noch nicht ausreichend vergangene Dienstplandaten zur Verfügung stehen.</span>" : ""}
+      ${missing.length ? `<span>Fehlend letzte 12W: ${links}</span>` : ""}
+    </div>`);
   }
 }
 
@@ -32623,8 +32637,8 @@ function changeSalesArticleColumns(id, move = 0) {
   if (sortChanged && catalog.searchStarted) void loadSalesArticleCatalog({ reset: true, preserveDetail: true });
 }
 function applySalesArticleDetailTabs() {
-  const panels = ['salesArticleOverviewPanel','salesArticlePricesSection','salesArticleNotesSection','salesArticleIdentifiersSection','salesArticleMovementsSection','salesArticleSalesSection','salesArticlePriceLabelsSection'];
-  const allowed = id => id !== 'salesArticlePriceLabelsSection' || canUseSalesPriceLabels();
+  const panels = ['salesArticleOverviewPanel','salesArticlePricesSection','salesArticleNotesSection','salesArticleOrdersSection','salesArticleMovementsSection','salesArticleSalesSection','salesArticlePriceLabelsSection','salesArticleIdentifiersSection'];
+  const allowed = id => id === 'salesArticleOrdersSection' ? canReadTradeMovements() : id !== 'salesArticlePriceLabelsSection' || canUseSalesPriceLabels();
   const active = panels.includes(state.salesArticleCatalog.detailTab) && allowed(state.salesArticleCatalog.detailTab) ? state.salesArticleCatalog.detailTab : panels[0];
   const nav = elements.salesArticleDetailNavigation; if (!nav) return;
   nav.setAttribute('role', 'tablist');
@@ -32634,6 +32648,7 @@ function applySalesArticleDetailTabs() {
     const panel = document.getElementById(id); if (panel) { panel.hidden = !selected; panel.setAttribute('role','tabpanel'); panel.setAttribute('aria-labelledby',a.id); if (panel.tagName === 'DETAILS' && selected) panel.open = true; }
   });
   state.salesArticleCatalog.tools?.activate(active);
+  if (active === 'salesArticleOrdersSection') void state.salesArticleCatalog.orders?.activate(); else state.salesArticleCatalog.orders?.suspend();
   if (active === 'salesArticlePriceLabelsSection') void state.salesArticleCatalog.priceLabels?.activate();
   else state.salesArticleCatalog.priceLabels?.suspend();
 }
@@ -32680,7 +32695,7 @@ function salesArticleCatalogSourceLabel(sourceSystem) {
   if (value === "manual.article-catalog") return "Manuelle Pflege";
   if (value === "legacy.loan_articles") return "Übernommene Leihartikel";
   if (value === "manual.loan") return "Manuell / Leihe";
-  if (value.startsWith("tradefoto")) return "TradeFoto";
+  if (value.startsWith("tradefoto")) return "Importierter Artikelbestand";
   if (value === "shopware.storefront") return "Shopware";
   return value;
 }
@@ -34129,6 +34144,7 @@ function renderSalesArticleSourceFieldValue(field) {
 function renderSalesArticleCatalogDetail() {
   const catalog = state.salesArticleCatalog;
   catalog.stockPanel?.destroy(); catalog.stockPanel=null;
+  catalog.orders?.destroy(); catalog.orders=null;
   catalog.tools?.destroy(); catalog.tools=null;
   catalog.priceLabels?.destroy(); catalog.priceLabels=null;
   document.getElementById("salesArticlePdfButton")?.classList.add("hidden");
@@ -34234,6 +34250,10 @@ function renderSalesArticleCatalogDetail() {
   window.SalesArticlePriceControls.mount(elements.salesArticleDetailBody, article.priceMatrix, formats, {
     preferenceKey: 'gp.article-price-columns.v1.' + currentSalesArticleCatalogActorKey(),
   });
+  const ordersSection = document.createElement('section'); ordersSection.id = 'salesArticleOrdersSection'; ordersSection.className = 'sales-article-orders-panel'; ordersSection.hidden = true;
+  elements.salesArticleDetailBody.append(ordersSection);
+  if (canReadTradeMovements()) catalog.orders = window.SalesArticleOrders?.mount(ordersSection, { api, articleNumber:article.articleNumber,
+    key:currentSalesArticleCatalogDetailAccessKey, canUse:()=>canReadTradeMovements() && state.currentView === 'articleCatalog', onOrder:openArticleOrder });
   catalog.tools = window.SalesArticleTools?.mount(elements.salesArticleDetailBody, {api, rawApi, article, write:salesArticleDetailCanWrite(),
     accessKey:currentSalesArticleCatalogDetailAccessKey, windowPreferences:gpWindowManager?.preferences,
     scale:salesArticleSearchWindowScale, active:()=>state.currentView==='articleCatalog',
@@ -35101,6 +35121,22 @@ let crmPurchaseWorkspace = null;
 let receiptSearchWorkspace = null;
 let tradeInsightsWorkspace = null;
 let tradeOrdersWorkspace = null;
+async function openRequestedOrder(number,orderId='') {
+  if (state.currentView !== 'logistics' || logisticsTab !== 'orders' || !canReadTradeMovements()) return;
+  await tradeOrdersWorkspace?.openExact(number,{orderId:orderId||undefined});
+}
+function openArticleOrder(row) {
+  if (!canReadTradeMovements()) return;
+  globalThis.gpSelectedOrderNumber = row.orderNumber;
+  globalThis.gpSelectedOrderId = row.orderId;
+  logisticsTab = 'orders'; setView('logistics');
+  void openRequestedOrder(row.orderNumber,row.orderId);
+}
+function openOrderArticle(articleNumber) {
+  if (!canReadSalesArticles()) return;
+  setView('articleCatalog');
+  void loadSalesArticleCatalogDetail(articleNumber,{moveFocus:true});
+}
 let salesArticleReportWorkspace = null;
 let salesBwlWorkspace = null;
 function activateSalesBwl() {
@@ -35244,6 +35280,7 @@ function syncSalesHistoryAccess() {
   salesHistoryActorKey = nextKey;
   tradeInsightsWorkspace?.destroy(); tradeInsightsWorkspace = null;
   tradeOrdersWorkspace?.destroy(); tradeOrdersWorkspace = null;
+  globalThis.gpSelectedOrderNumber = ""; globalThis.gpSelectedOrderId = "";
   document.getElementById("tradeOrdersWorkspace")?.replaceChildren();
   if (typeof salesPriceLabelsWorkspace?.destroy === "function") salesPriceLabelsWorkspace.destroy();
   else salesPriceLabelsWorkspace?.suspend?.();
@@ -35261,7 +35298,8 @@ function syncSalesHistoryAccess() {
   elements.logisticsNavButton?.classList.toggle("hidden", !canReadTradeMovements());
   document.getElementById("logisticsNav")?.classList.toggle("hidden", !canReadTradeMovements());
   if(canReadTradeMovements())tradeOrdersWorkspace=window.GrabenplanerTradeOrders?.mount(document.getElementById("tradeOrdersWorkspace"),{api,key:startDashboardWorkspaceActorKey,session:()=>state.portalSession,
-    canUse:()=>state.portalSession?.authenticated===true&&!state.portalSession?.user?.mustChangePassword&&canReadTradeMovements(),active:()=>state.currentView==="logistics"&&logisticsTab==="orders"});
+    canUse:()=>state.portalSession?.authenticated===true&&!state.portalSession?.user?.mustChangePassword&&canReadTradeMovements(),active:()=>state.currentView==="logistics"&&logisticsTab==="orders",
+    onSelect:row=>{globalThis.gpSelectedOrderNumber=row.orderNumber;globalThis.gpSelectedOrderId=row.id;globalThis.grabenplanerNavigation?.record();},onArticle:openOrderArticle});
   elements.tradeInsightsDashboardCard?.classList.toggle("hidden", !tradeInsightsAccess);
   if (tradeInsightsAccess) tradeInsightsWorkspace = window.GrabenplanerTradeInsights?.mount(document.getElementById("tradeInsightsWorkspace"), {
     api, rawApi, accessKey: startDashboardWorkspaceActorKey, canUse: canAccessTradeInsights, windowPreferences: gpWindowManager?.preferences,
@@ -37637,6 +37675,7 @@ async function analyzeSalesReportSeries() {
 }
 
 function setView(view) {
+  if (view === 'gpDefinitions' && state.currentView !== 'gpDefinitions') privateWorkspaceReturnRoute = currentAdministrationRoute();
   if (view === "personnelAdministration" && state.personnelAdministrationTab === "dataRequests") {
     view = "privacyOrganization";
     privacyOrganizationTab = "dataRequests";
@@ -37834,6 +37873,15 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
       setDefaultContext(state.locations);
     }
   }
+  if (requestedView === "planning") {
+    const requestedWeek = parameters.get("week");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(requestedWeek || "")) {
+      const date = new Date(requestedWeek + "T12:00:00");
+      if (Number.isFinite(date.getTime()) && toIsoDate(date) === requestedWeek) {
+        const week = getMonday(date); contextChanged = contextChanged || week !== state.weekStart; state.weekStart = week;
+      }
+    }
+  }
   setView(requestedView);
   if (state.currentView === "settings") {
     const tab = functionSearchSettingsTabButton(parameters.get("section"));
@@ -37843,6 +37891,12 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     const section = parameters.get("section");
     const tab = [...document.querySelectorAll('[data-personnel-tab]:not(.hidden)')].find(button => button.dataset.personnelTab === section);
     if (tab) setPersonnelTab(section);
+  }
+  if (state.currentView === 'logistics' && logisticsTab === 'orders' && parameters.get('order') && typeof openRequestedOrder === 'function') {
+    void openRequestedOrder(parameters.get('order'),parameters.get('orderId')||'');
+  }
+  if (state.currentView === 'articleCatalog' && parameters.get('article') && typeof openOrderArticle === 'function') {
+    void loadSalesArticleCatalogDetail(parameters.get('article'));
   }
   if (state.currentView === "rightsDashboard") setRightsDashboardMode(state.rightsDashboardMode);
   if (fromHistory) closeMobileNavigation({ restoreFocus: false });
@@ -37856,13 +37910,18 @@ function currentAdministrationRoute() {
   if (view === "personnel") route.section = state.personnelTab;
   if (view === "salesAnalytics") route.section = state.salesAnalytics.tab;
   if (view === "tradeInsights") route.section = tradeInsightsTab;
-  if (view === "logistics") route.section = logisticsTab;
+  if (view === "logistics") {
+    route.section = logisticsTab;
+    if (logisticsTab === 'orders' && globalThis.gpSelectedOrderNumber) {route.order=globalThis.gpSelectedOrderNumber;route.orderId=globalThis.gpSelectedOrderId||'';}
+  }
   if (view === "privacyOrganization") route.section = privacyOrganizationTab;
   if (view === "requests") route.kind = state.requestKindTab;
   if (view === "rightsDashboard") {
     route.dashboard = state.rightsDashboardMode;
     if (route.dashboard === "processes") route.process = state.rightsDashboardSelectedProcessId;
   }
+  if (view === "articleCatalog" && state.salesArticleCatalog?.selectedArticleNumber) route.article = state.salesArticleCatalog.selectedArticleNumber;
+  if (view === "planning") route.week = state.weekStart;
   if (["planning", "vacations"].includes(view)) { route.location = String(state.locationId || ""); route.department = String(state.departmentId || ""); }
   return route;
 }
@@ -43137,6 +43196,12 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.querySelector(`#${button.dataset.close}`).close()));
 elements.employeeModal?.addEventListener("close", () => { if (!elements.employeeModal.open) clearEmployeeProtectedRecord(); });
 elements.personnelRecordModal?.addEventListener("close", () => { if (!elements.personnelRecordModal.open) clearPersonnelRecordDialog(); });
+elements.hoursOverview?.addEventListener("click", event => {
+  const link = event.target.closest("[data-missing-planning-week]");
+  if (!link || event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  event.preventDefault(); state.weekStart = link.dataset.missingPlanningWeek;
+  globalThis.grabenplanerNavigation?.record(); loadPlanningPeriod();
+});
 document.querySelector("#previousWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, -7); loadPlanningPeriod(); });
 document.querySelector("#nextWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, 7); loadPlanningPeriod(); });
 document.querySelector("#todayButton").addEventListener("click", () => { state.weekStart = getMonday(new Date()); loadPlanningPeriod(); });
@@ -44858,7 +44923,7 @@ sidebarLayout = window.GrabenplanerSidebarLayout.mount({
   handle: document.getElementById("sidebarResizeHandle"), mobileMedia: mobileNavigationMedia,
 });
 globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create({
-  window, app: "administration", keys: ["view", "section", "kind", "dashboard", "process", "location", "department"],
+  window, app: "administration", keys: ["view", "section", "kind", "dashboard", "process", "location", "department", "week", "order", "orderId", "article"],
   read: currentAdministrationRoute, apply: () => applyRequestedView({ fromHistory: true }),
   enabled: () => !document.body.classList.contains("portal-locked")
     && Boolean(state.portalStatus) && (!state.portalStatus.portalEnabled || state.portalSession?.authenticated === true),

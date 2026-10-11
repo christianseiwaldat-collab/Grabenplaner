@@ -20632,9 +20632,20 @@ function saturdayShiftFilterSql(context, prefix = "s") {
 }
 
 async function buildSaturdayServiceStats(weekStart, context, employees, currentWeekShifts, settings) {
+  const coverageQuery = { locationId: context.locationId, departmentId: context.departmentId || null,
+    weekStart: addDays(weekStart, -84), weekEnd: addDays(weekStart, -1) };
+  const [coverageShifts, coverageOptions, coverageBlocks] = await Promise.all([
+    planningSettingsRepository.listScheduleShifts(coverageQuery),
+    planningSettingsRepository.listScheduleWeekOptions(coverageQuery),
+    planningSettingsRepository.listGlobalDayBlocks(),
+  ]);
+  const historicalCoverage = require("./lib/schedule-history-coverage").planningHistoryCoverage({
+    weekStart, shifts: coverageShifts, options: coverageOptions,
+    dayBlocks: coverageBlocks.filter(block => String(block.location_id) === String(context.locationId)),
+  });
   const employeeNumbers = employees.map((employee) => employee.personnel_number);
   if (!employeeNumbers.length || !settingEnabled(settings, "show_saturday_service_stats")) {
-    return { byEmployee: {}, estimated: false };
+    return { byEmployee: {}, estimated: false, historicalCoverage };
   }
   const employeeNumberSet = new Set(employeeNumbers);
   const history = (await planningSettingsRepository.listSaturdayServiceShifts({
@@ -20704,6 +20715,7 @@ async function buildSaturdayServiceStats(weekStart, context, employees, currentW
       ]),
     ),
     estimated: fourWeeks.estimated || threeMonths.estimated,
+    historicalCoverage,
   };
 }
 
@@ -65490,15 +65502,32 @@ if (privateWorkspaceModulePath) {
     throw new Error("PRIVATE_WORKSPACE_EXTERNAL_MODULE_REQUIRED");
   }
   privateWorkspaces = require(privateWorkspaceModulePath).mount(app, {
-    requireActor: request => requireEmployeePortalSession(request, "system:write"),
+    requireActor: request => requirePortalSession(request),
     assertCsrf: assertPortalCsrf,
+    listPrincipals: async () => {
+      const [users, accounts] = await Promise.all([
+        organizationPersonnelRepository.listPortalUsersForAdmin(),
+        organizationPersonnelRepository.listOrganizationAccounts(),
+      ]);
+      return [
+        ...users.filter(row => [true, 1, "1"].includes(row.active) && [true, 1, "1"].includes(row.employee_active)).map(row => ({
+          id: `employee:${row.personnel_number}`,
+          name: `${row.personnel_number} · ${row.full_name || row.nickname || row.personnel_number}`,
+          kind: "employee",
+        })),
+        ...accounts.filter(row => [true, 1, "1"].includes(row.active)).map(row => ({
+          id: `account:${row.id}`, name: `${row.login_name} · ${row.display_name || row.login_name}`,
+          loginName: row.login_name, kind: "account",
+        })),
+      ];
+    },
     vault: integrationSecretVault,
     applicationDirectory: __dirname,
   });
 }
 app.get("/api/portal/v1/private-workspaces", (request, response) => {
-  const actor = requireEmployeePortalSession(request);
-  if (actor.role !== "developer" || actor.mustChangePassword) throw httpError(403, "Dieser Bereich ist nicht freigegeben.");
+  const actor = requirePortalSession(request);
+  if (actor.mustChangePassword) throw httpError(428, "Bitte zuerst das Startpasswort ändern.");
   response.json({ workspaces: privateWorkspaces ? privateWorkspaces.list(actor) : [] });
 });
 

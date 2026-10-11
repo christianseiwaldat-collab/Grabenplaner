@@ -25,7 +25,7 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1489 Statements genau einmal ab", () => {
+test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1491 Statements genau einmal ab", () => {
   const plan = POSTGRESQL_APPLICATION_DIALECT_PLAN;
   const sqliteEntries = SQLITE_APPLICATION_DIALECT_MANIFEST.entries;
 
@@ -34,8 +34,8 @@ test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1489 Statemen
   assert.equal(plan.status, "implementation-in-progress");
   assert.equal(plan.executable, false);
   assert.match(plan.fingerprint, /^[a-f0-9]{64}$/);
-  assert.equal(plan.entries.length, 1489);
-  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1489);
+  assert.equal(plan.entries.length, 1491);
+  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1491);
 
   for (let index = 0; index < sqliteEntries.length; index += 1) {
     const source = sqliteEntries[index];
@@ -62,9 +62,9 @@ test("Block 5/7: nur portable Einträge enthalten kompiliertes PostgreSQL-SQL", 
   const portable = entries.filter((entry) => entry.strategy === "portable-generated");
   const blocked = entries.filter((entry) => entry.strategy === "requires-override");
 
-  assert.equal(summary.statementCount, 1489);
-  assert.equal(summary.portableGeneratedCount, 1351);
-  assert.equal(summary.requiresOverrideCount, 138);
+  assert.equal(summary.statementCount, 1491);
+  assert.equal(summary.portableGeneratedCount, 1352);
+  assert.equal(summary.requiresOverrideCount, 139);
   assert.equal(portable.length, summary.portableGeneratedCount);
   assert.equal(blocked.length, summary.requiresOverrideCount);
 
@@ -189,6 +189,22 @@ test("CRM and article extensions register exactly seven reads without opening th
   assert.equal(POSTGRESQL_APPLICATION_DIALECT_PLAN.executable, false);
 });
 
+test("Bestellnavigation registriert zwei Leseabfragen und erhält die geschlossene Vollfreigabe", () => {
+  const { ARTICLE_BRANCH_ORDER_STATEMENTS: statements } = require("../lib/persistence/statements/sales-article-branch-orders");
+  for (const statement of [statements.page, statements.articleLinks]) {
+    const source = SQLITE_APPLICATION_DIALECT_MANIFEST.entries.filter(entry => entry.statement === statement);
+    const planned = POSTGRESQL_APPLICATION_DIALECT_PLAN.entries.filter(entry => entry.statementId === statement.id);
+    assert.equal(source.length, 1, statement.id);
+    assert.equal(planned.length, 1, statement.id);
+    assert.equal(statement.operation, "queryAll");
+    assert.deepEqual(planned[0].parameterOrder, Object.keys(statement.parameters).sort());
+    assert.equal(planned[0].strategy, statement === statements.page ? "portable-generated" : "requires-override");
+    assert.deepEqual(planned[0].blockingFeatures, statement === statements.page ? [] : ["sqlite.json-functions"]);
+  }
+  assert.equal(POSTGRESQL_APPLICATION_DIALECT_PLAN.executable, false);
+  assert.equal(require("../lib/persistence/postgresql/catalog-contract").POSTGRESQL_APPLICATION_ACCEPTANCE.acceptedReceiptCount, 0);
+});
+
 test("Workflow-Studio und Xoffi ergänzen genau vier portable Leseabfragen ohne Vollfreigabe", () => {
   const { S: studio } = require("../lib/persistence/statements/workflow-studio");
   const { S: xoffi } = require("../lib/persistence/statements/xoffi-snapshots");
@@ -203,9 +219,9 @@ test("Workflow-Studio und Xoffi ergänzen genau vier portable Leseabfragen ohne 
   assert.deepEqual(additions.map((statement) => statement.id).sort(), ids);
   const retained = POSTGRESQL_APPLICATION_DIALECT_PLAN.entries
     .filter((entry) => !ids.includes(entry.statementId));
-  assert.equal(retained.length, 1485);
-  assert.equal(retained.filter((entry) => entry.strategy === "portable-generated").length, 1347);
-  assert.equal(retained.filter((entry) => entry.strategy === "requires-override").length, 138);
+  assert.equal(retained.length, 1487);
+  assert.equal(retained.filter((entry) => entry.strategy === "portable-generated").length, 1348);
+  assert.equal(retained.filter((entry) => entry.strategy === "requires-override").length, 139);
 
   for (const statement of additions) {
     const sources = SQLITE_APPLICATION_DIALECT_MANIFEST.entries
@@ -239,7 +255,7 @@ test("Workflow-Studio und Xoffi ergänzen genau vier portable Leseabfragen ohne 
 test("Block 5/7: Summary erfasst die bekannten Override-Grenzen stabil", () => {
   const counts = POSTGRESQL_APPLICATION_DIALECT_PLAN.summary.blockingFeatureCounts;
 
-  assert.equal(counts["sqlite.json-functions"], 51);
+  assert.equal(counts["sqlite.json-functions"], 52);
   assert.equal(counts["sqlite.insert-or-ignore"], 18);
   assert.equal(counts["sqlite.collate-nocase"], 27);
   assert.equal(counts["sqlite.like-operator"], 13);
@@ -285,7 +301,7 @@ test("Block 5/7: die Block-4-Plan-Fixture bleibt unverändert nicht ausführbar"
 
   assert.equal(fixture.status, "contract-only");
   assert.equal(fixture.executable, false);
-  assert.equal(fixture.entries.length, 1489);
+  assert.equal(fixture.entries.length, 1491);
   assert.equal(fixture.sourceFingerprint, SQLITE_APPLICATION_DIALECT_MANIFEST.fingerprint);
   for (const entry of fixture.entries) {
     assert.equal(entry.status, "contract-only");

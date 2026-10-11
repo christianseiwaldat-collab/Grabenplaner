@@ -2504,6 +2504,7 @@ function showLogin(error = "") {
   neutralizeBirthdayPresentationTheme();
   resetPersonalActionsState("");
   portalState.session = null;
+  void privatePortalWorkspaces?.synchronize();
   syncPortalWindows();
   resetBranchSalesWorkspaces();
   resetBranchTimeOffState();
@@ -2629,6 +2630,7 @@ function showPortal(session) {
     neutralizeBirthdayPresentationTheme();
   }
   portalState.session = session;
+  void privatePortalWorkspaces?.synchronize();
   syncPortalLogoutControls();
   syncPortalWindows();
   clearCandidateEvaluationState();
@@ -2859,6 +2861,7 @@ async function logout() {
     });
     if (!current()) return;
     portalState.session = null;
+    void privatePortalWorkspaces?.synchronize();
     syncPortalWindows();
     stopBranchOrderAutosave();
     clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
@@ -2886,6 +2889,8 @@ async function logout() {
 }
 
 function setTab(tab) {
+  privatePortalWorkspaces?.exit();
+  if (tab === 'home') void privatePortalWorkspaces?.synchronize();
   if (portalUser() && !portalTabAllowed(tab)) tab = defaultPortalTab();
   if (tab === "timeTracking" && !timeTrackingCapabilityEnabled()) tab = defaultPortalTab();
   if (tab === "loan" && !loanCapabilityEnabled()) tab = defaultPortalTab();
@@ -3468,13 +3473,20 @@ function mobileHomeTilesForCurrentAccount() {
     .filter(Boolean);
 }
 
+const privatePortalWorkspaces = window.GpPrivateWorkspaces?.mount({
+  document, getActor: () => portalUser(),
+  load: async () => (await api('/api/portal/v1/private-workspaces')).workspaces,
+  onChange: () => renderMobileHome(),
+}) || null;
+
 function renderMobileHome() {
   if (!el.mobileHomeTiles) return;
   const visible = isMobileUi() && portalState.activeTab === "home";
   el.mobileHomeTiles.classList.toggle("hidden", !visible);
   if (!visible) return;
   const tiles = mobileHomeTilesForCurrentAccount();
-  if (!tiles.length) {
+  const launches = privatePortalWorkspaces?.launches || [];
+  if (!tiles.length && !launches.length) {
     el.mobileHomeTiles.innerHTML = '<p class="empty-state">Für dieses Konto ist derzeit kein Portalbereich freigeschaltet.</p>';
     return;
   }
@@ -3484,7 +3496,7 @@ function renderMobileHome() {
       <span><strong>${esc(tile.label)}</strong><small>${esc(tile.description)}</small></span>
       <b aria-hidden="true">›</b>
     </button>
-  `).join("");
+  `).join("") + launches.map(item => `<button type="button" class="gp-private-launch" data-private-workspace="${esc(item.id)}" style="--private-launch-color:${esc(item.launch.color)}"><strong>${esc(item.launch.label)}</strong></button>`).join("");
 }
 
 function renderBranchMobileActionBar() {
@@ -7868,6 +7880,8 @@ document.querySelectorAll("[data-close-personal-actions]").forEach((button) => b
 el.personalActionsDialog?.addEventListener("close", () => {if (!el.personalActionsDialog.open) {portalState.personalActionsRequestId++;portalState.personalActionsLoading=false;portalState.personalActionUndoPending="";el.personalActionsButton?.setAttribute("aria-expanded", "false");}});
 el.mobileSettingsHome?.addEventListener("click", () => setTab("home"));
 el.mobileHomeTiles?.addEventListener("click", (event) => {
+  const workspace = event.target.closest('[data-private-workspace]');
+  if (workspace) { void privatePortalWorkspaces?.open(workspace.dataset.privateWorkspace); return; }
   const button = event.target.closest("[data-mobile-home-tab]");
   if (button) setTab(button.dataset.mobileHomeTab);
 });

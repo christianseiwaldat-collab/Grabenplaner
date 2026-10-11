@@ -10,7 +10,7 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'),
 const integration = source.slice(source.indexOf('function applySalesArticleDetailTabs()'), source.indexOf('function normalizeSalesArticleCatalogItem'));
 
 function harness() {
-  const links = Array.from({ length: 7 }, () => ({ setAttribute() {}, classList: { toggle() {} } }));
+  const links = Array.from({ length: 8 }, () => ({ setAttribute() {}, classList: { toggle() {} } }));
   const panels = new Map();
   const calls = [];
   const context = {
@@ -22,7 +22,7 @@ function harness() {
     } },
     elements: { salesArticleDetailNavigation: { setAttribute() {}, querySelectorAll: () => links } },
     document: { getElementById: id => { if (!panels.has(id)) panels.set(id, { setAttribute() {} }); return panels.get(id); } },
-    canUseSalesPriceLabels: () => true,
+    canUseSalesPriceLabels: () => true, canReadTradeMovements: () => false,
     currentSalesArticleCatalogDetailAccessKey: () => 'article-owner',
     currentSalesPriceLabelsAccessKey: () => 'label-owner',
     setView: view => { calls.push(['view', view]); context.state.currentView = view; },

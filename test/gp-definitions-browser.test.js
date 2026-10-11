@@ -35,7 +35,8 @@ test('Developer definitions navigate, search, survive ordinary navigation and wi
     await page.evaluate(()=>{
       window.elements=Object.fromEntries([...document.querySelectorAll('[id]')].map(element=>[element.id,element]));
       window.state={portalSession:{authenticated:true,user:{role:'developer',roleName:'Developer',employeeNumber:'00991',fullName:'BEISPIEL Developer',isEmployee:true,active:true,mustChangePassword:false}},portalStatus:{portalEnabled:true,installationFeatures:{}},currentView:'startDashboard',personnelAdministrationTab:'dashboard',salesArticleCatalog:{priceLabels:null},employeeProfileHost:'team',globalTheme:'light'};
-      window.gpDefinitionsWorkspace=null;window.timePresenceRefreshTimer=null;
+      window.gpDefinitionsWorkspace=null;window.timePresenceRefreshTimer=null;window.privateWorkspaceReturnRoute=null;
+      window.currentAdministrationRoute=()=>({view:state.currentView});window.api=async()=>({workspaces:[]});
       for(const name of ['receiptSearchWorkspace','tradeInsightsWorkspace','tradeOrdersWorkspace','salesArticleReportWorkspace','salesPriceLabelsWorkspace','salesBwlWorkspace'])window[name]=null;
       for(const name of ['renderContextNavigation','activatePrivacyOrganizationView','syncSalesArticleSearchWindow','syncGpWindows','syncStartDashboardVps','loadStartDashboard','loadPlanningView','closeMobileNavigation','clearUsbProvisioningPasswords'])window[name]=()=>{};
       window.canReadSalesBwl=()=>false;window.employeeProfileIsOpen=()=>false;window.restoreRememberedOverallContext=()=>false;window.planningContextNeedsReload=()=>false;

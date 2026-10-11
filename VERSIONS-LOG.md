@@ -1,6 +1,6 @@
 # Versionsstatus
 
-## v0.92.81 Beta · Quellstand
+## v0.92.82 Beta · Quellstand
 
 Importprüfung, Personal-Arbeitsbereiche, Bestellungen und versionierte Abläufe.
 Der installierte Serverstand wird im GP angezeigt.

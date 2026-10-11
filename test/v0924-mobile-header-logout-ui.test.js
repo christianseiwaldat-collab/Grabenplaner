@@ -64,6 +64,7 @@ function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout
   const context = {
     AbortController,
     branchPriceLabelsWorkspace: workspace,
+    privatePortalWorkspaces: { synchronize() {} },
     syncPortalWindows: () => { calls.windowSync += 1; },
     portalState: { session: { user: { employeeNumber: "252" } }, processTasksOwnerFingerprint: "252" },
     el: {

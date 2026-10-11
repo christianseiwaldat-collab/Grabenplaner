@@ -5,7 +5,7 @@
   else root.GpDefinitions=api;
 })(typeof window==='object'?window:globalThis,function(registry){
   'use strict';
-  function mount(root,{canUse=()=>false,key=()=>'',loadWorkspaces=null}={}){
+  function mount(root,{canUse=()=>false,key=()=>'',loadWorkspaces=null,onExit=()=>{}}={}){
     if(!root||!registry)throw new TypeError('Die GP-Definitionsübersicht benötigt einen Bereich und die Registry.');
     const doc=root.ownerDocument,handlers=[];let active=false,dead=false,actor='',topic='windows',standardTopic='windows',query='';
     const on=(element,type,listener)=>{element.addEventListener(type,listener);handlers.push(()=>element.removeEventListener(type,listener));};
@@ -33,6 +33,7 @@
       if(event.data?.type==='gp-private-workspace-fullscreen'&&frames.get(topic)===source)frameScreen(source,event.data.active===true);
       if(event.data?.type==='gp-private-workspace-ready')source.contentWindow.postMessage({type:'gp-private-workspace-visibility',active:allowed()&&frames.get(topic)===source},event.origin);
       if(event.data?.type==='gp-private-workspace-size'&&Number.isFinite(event.data.height)&&source.dataset.gpScreenStyle===undefined)source.style.height=Math.max(550,Math.min(2400,Math.ceil(event.data.height)+8))+'px';
+      if(event.data?.type==='gp-private-workspace-exit'&&frames.get(topic)===source){frameScreen(source,false);onExit();}
       if(event.data?.type==='gp-private-workspace-navigate'){
         const id='private/'+String(event.data.id||''),target=frames.get(id);if(!target||frames.get(topic)!==source)return;
         topic=id;render();

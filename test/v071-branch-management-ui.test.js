@@ -34,7 +34,8 @@ test("v0.71 Block 7 UI: Filialverwaltung fasst Teams, Dienst- und Urlaubsplanung
   assert.ok(navigation.indexOf("planningNavButton") < navigation.indexOf("vacationsNavButton"));
   assert.match(app, /setNavigationCurrent\(elements\.filialTeamsNavButton, state\.currentView === "personnel"\)/);
   assert.match(app, /setNavigationCurrent\(elements\.planningNavButton, state\.currentView === "planning" && !showPlanningChildren\)/);
-  assert.match(app, /setNavigationCurrent\(elements\.vacationsNavButton, state\.currentView === "vacations"\)/);
+  assert.match(app, /setNavigationCurrent\(elements\.vacationsNavButton, state\.currentView === "vacations" && !showVacationChildren\)/);
+  assert.match(app, /elements\.vacationsNavButton\?\.classList\.toggle\("contains-active", state\.currentView === "vacations" && showVacationChildren\)/);
   const dashboard = between(html, '<section id="filialAdministrationView"', '<section id="planningView"');
   assert.match(dashboard, /Filialverwaltung im/);
   assert.match(dashboard, /id="filialDashboardGrid"/);

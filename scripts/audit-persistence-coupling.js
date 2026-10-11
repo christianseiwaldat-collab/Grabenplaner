@@ -905,10 +905,10 @@ const PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS = Object.freeze([
   "workflow-studio.instances.page",
   "xoffi-snapshots.get-scoped",
 ]);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1489;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1491;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 46;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1443;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1370;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1445;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1372;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -1034,8 +1034,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1351;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 138;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1352;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 139;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",
@@ -1504,6 +1504,9 @@ const BASELINE_TEST_FILES = Object.freeze([
 
 const TEST_SPECIAL_GROUPS = Object.freeze({
   "learning-and-workflow-workspace-fixtures": new Set([
+    "test/dashboard-boards-api.test.js",
+    "test/gp-dashboard-boards-browser.test.js",
+    "test/personnel-dashboard-content-browser.test.js",
     "test-support/learning-delivery-ui.js",
     "test-support/workflow-studio-editor-ui.js",
     "test-support/workflow-studio-persistence-ui.js",

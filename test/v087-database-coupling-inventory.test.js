@@ -362,9 +362,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 19);
   // Session fixtures, deferred PostgreSQL startup and the three named CRM/
   // article qualifications are classified; no new production access is allowed.
-  // Twenty-one named workspace fixtures exercise DOM preparation or isolated
+  // Twenty-four named workspace fixtures exercise DOM preparation or isolated
   // application persistence; the historical baseline and driver lists stay fixed.
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 41);
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 44);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
   assert.equal(report.summary.productionJavaScriptDriverFiles, 15);
@@ -488,7 +488,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1489);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1491);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -505,7 +505,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1489,
+    requiredReceiptCount: 1491,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {

@@ -48,7 +48,7 @@ function logoutFixture({ flush = null } = {}) {
   const el = { logoutButton: button, portalLogoutStatus: {}, loginPassword: { value: "BEISPIEL" },
     loginPersonnelNumber: { focus: () => effects.push("focus") } };
   const workspace = flush ? { hasUnsaved: true, flush: () => flush.promise } : null;
-  const context = vm.createContext({ portalState: state, el, AbortController,
+  const context = vm.createContext({ portalState: state, el, AbortController, privatePortalWorkspaces: { synchronize: () => effects.push("privateSync") },
     window: { setTimeout: () => 1, clearTimeout: () => {} }, branchPriceLabelsWorkspace: workspace,
     portalUser: () => state.session?.user, processTaskActorFingerprint: user => user?.employeeNumber || "",
     message: (_target, text, error) => messages.push({ text, error: Boolean(error) }),
@@ -95,7 +95,7 @@ test("Portal logout: delayed draft flush from an old session cannot post logout 
 test("Portal logout: current success clears tasks/tab and current failure keeps the session with useful retry controls", async () => {
   const success = logoutFixture(), successRequest = success.logout(); success.reply.resolve(); await successRequest;
   assert.equal(success.state.session, null);
-  assert.deepEqual(success.effects, ["neutralize", "sync", "stop", "clearTasks", "clearTab", "login", "focus"]);
+  assert.deepEqual(success.effects, ["neutralize", "privateSync", "sync", "stop", "clearTasks", "clearTab", "login", "focus"]);
   assert.equal(success.button.disabled, false); assert.equal(success.button.textContent, "Abmelden");
   const failure = logoutFixture(), actor = failure.state.session, failedRequest = failure.logout();
   failure.reply.reject(new Error("BEISPIEL disconnected")); await failedRequest;
