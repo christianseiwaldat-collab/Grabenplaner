@@ -20,6 +20,7 @@ const { personalAbsenceRequestPeriod, absenceRequestSubmissionAllowed,
 const { createOpenAiVoiceProvider } = require('./lib/voice-assistant-openai');
 const voiceAssistantSettings = require('./lib/voice-assistant-settings');
 const planningAssistantSettings = require('./lib/planning-assistant-settings');
+const assistantPilotAccess = require('./lib/assistant-pilot-access');
 const { createPlanningAssistantReader } = require('./lib/planning-assistant-gp');
 const { createVoiceAssistant } = require('./lib/voice-assistant');
 const { resolveScheduleDuty, defaultScheduleDutyCode, manualPlanningHours, PLANNING_DAY_COUNT,
@@ -32511,6 +32512,10 @@ const readPlanningAssistant = createPlanningAssistantReader({
 });
 
 const planningOptimizerService = require('./lib/planning-optimizer-service').createOptimizerService();
+function assertPlanningAssistantPilot(actor) {
+  const numbers = assistantPilotAccess.fromEnv(process.env.GRABENPLANER_PLANNING_ASSISTANT_PILOT_EMPLOYEES);
+  if (!assistantPilotAccess.allows(actor, numbers)) throw httpError(403, 'Der Planungsassistent ist für diesen Zugang noch nicht freigegeben.', 'PLANNING_ASSISTANT_PILOT_DENIED');
+}
 const planningOptimizerModel = require('./lib/planning-optimizer');
 const planningOptimizerRevision = require('./lib/planning-optimizer-revision').sourceRevision;
 const planningOptimizer = planningOptimizerModel.createPlanningOptimizer({
@@ -32531,6 +32536,7 @@ const planningOptimizer = planningOptimizerModel.createPlanningOptimizer({
       const fresh = isLocalSystemSession(actor) || !actor ? actor : await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
       if (planningOptimizerAuthority(fresh) !== planningOptimizerAuthority(actor)) throw httpError(403, 'Anmeldung oder Berechtigungen haben sich geändert.', 'PORTAL_PERMISSION_DENIED');
       if (fresh?.mustChangePassword) throw httpError(428, 'Bitte zuerst das Startpasswort ändern.', 'PORTAL_PASSWORD_CHANGE_REQUIRED');
+      assertPlanningAssistantPilot(fresh);
       assertSessionContextScope(fresh, entry.snapshot.facts.context);
       if (entry.sourceStamp !== await planningOptimizerRevision(repositories, entry.snapshot.facts.context, entry.snapshot.facts.period.from)) {
         throw httpError(409, 'Die Planungsgrundlage wurde geändert. Bitte neue Vorschläge berechnen.', 'OPTIMIZER_PLAN_CHANGED');
@@ -32559,6 +32565,7 @@ function planningOptimizerAuthority(actor) { return JSON.stringify([actor?.id, a
 async function planningOptimizerActor(request) {
   if (request.portalSession && !isLocalSystemSession(request.portalSession)) request.portalSession = await loadPortalSessionFromRequest(request, { touch: false });
   const actor = requirePortalAnyPermissionOrLocal(request, ['schedule:write'], { csrf: true });
+  assertPlanningAssistantPilot(actor);
   if (actor && !isLocalSystemSession(actor) && (!actor.permissions.includes('schedule:read') || !actor.permissions.includes('work_rules:read'))) {
     throw httpError(403, 'Für Vorschläge werden Dienstplan- und Arbeitsregelrechte benötigt.', 'PORTAL_PERMISSION_DENIED');
   }
@@ -32616,6 +32623,7 @@ app.get("/api/schedule/assistant", (_request, response, next) => {
   response.setHeader("Cache-Control", "no-store"); next();
 }, readModelResponse(async request => {
   const actor = requirePortalAnyPermissionOrLocal(request, ["schedule:read"]);
+  assertPlanningAssistantPilot(actor);
   if (Object.keys(request.query).some(key => !["week", "location", "locationId", "department", "departmentId"].includes(key))
     || typeof request.query.week !== "string" || !isIsoDate(request.query.week)) throw httpError(400, "Bitte eine gültige Planungswoche auswählen.", "PLANNING_ASSISTANT_INPUT_INVALID");
   const authority = value => JSON.stringify([value?.id, value?.employeeNumber, value?.accountId, value?.permissions, value?.scopes, value?.role, value?.mustChangePassword]);
@@ -32635,6 +32643,7 @@ app.get("/api/schedule/assistant", (_request, response, next) => {
 
 app.put("/api/settings/planning-assistant", async (request, response) => {
   const actor = requirePortalAnyPermissionOrLocal(request, ["settings:write"], { csrf: true });
+  assertPlanningAssistantPilot(actor);
   const body = request.body;
   if (!body || Object.keys(body).some(key => !["locationId", "departmentId", "week", "revision", "configuration"].includes(key))
     || !isIsoDate(body.week) || typeof body.revision !== "string") throw httpError(400, "Bitte vollständige Prüfeinstellungen übermitteln.", "PLANNING_ASSISTANT_INPUT_INVALID");

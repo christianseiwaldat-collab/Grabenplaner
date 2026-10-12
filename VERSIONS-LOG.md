@@ -1,8 +1,9 @@
 # Versionsstatus
 
-## v0.92.82 Beta · Quellstand
+## v0.92.85 Beta · Quellstand
 
-Importprüfung, Personal-Arbeitsbereiche, Bestellungen und versionierte Abläufe.
+Persönlich begrenzter Sprachassistent und lokale Dienstplanprüfung mit bestätigungspflichtigen Planvorschlägen.
+Die bisherigen Verbesserungen an mobilen Ansichten und Kameraabläufen bleiben enthalten.
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease

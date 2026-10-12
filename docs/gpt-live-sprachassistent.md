@@ -52,6 +52,8 @@ Allgemeine Bedienhilfe ist eine kurze, fest hinterlegte Orientierung zu den unte
 
 ## Konfiguration und Einrichtung
 
+Für einen persönlichen Pilot lassen sich auf **portal.assistant** einzelne Personalnummern eintragen. Eine nicht leere Liste begrenzt zusätzlich zur Rollenfreigabe jeden Aufruf auf diese persönlichen Konten. Die serverseitige Variable `GRABENPLANER_VOICE_ASSISTANT_PILOT_EMPLOYEES` setzt eine zusätzliche Obergrenze (kommagetrennte Personalnummern). Die Oberfläche kann diese Grenze nicht erweitern. Ungültige Listen sperren den Betrieb; ein Entzug wirkt auch auf bereits laufende Gespräche und vorbereitete Bestätigungen. Bestehende gespeicherte Einstellungen ohne Liste werden beim Lesen kompatibel ergänzt; veraltete Browser dürfen beim Speichern keine Liste versehentlich entfernen.
+
 Im **Developer-Bereich → voice.assistants** liegen die allgemeinen Freigaben, Gesprächsdauer, Anzahl gleichzeitiger GP-Gespräche und der Status der serverseitigen OpenAI-Konfiguration. Die Unterseite **portal.assistant** verwaltet die eigene Freigabe des MA-Sprachassistenten und den Administrator-Pilot. Nur ein aktiver persönlicher Developer-Zugang mit Einstellungsrecht und geändertem Startpasswort darf diese Einstellungen lesen oder speichern. Die API erzwingt dieselbe Grenze bei direkten Aufrufen.
 
 Die nicht geheimen Einstellungen werden als versionierter JSON-Wert `voice_assistants` in der bestehenden GP-Einstellungstabelle gespeichert. Gleichzeitige Änderungen werden anhand des zuletzt gelesenen Inhaltsstands erkannt und mit HTTP 409 zurückgewiesen. Änderungen werden im bestehenden Audit protokolliert. Es werden weder API-Schlüssel noch Transkripte in diesen Einstellungen oder Audits gespeichert.
@@ -62,6 +64,7 @@ Solange noch kein Wert gespeichert wurde, liefern die folgenden Servervariablen 
 | --- | --- | --- |
 | `GRABENPLANER_VOICE_ASSISTANT_ENABLED` | nicht gesetzt; Modul aus | `1` als erstmalige Freigabevorgabe; ausdrücklich `0` sperrt auch eine Developer-Freigabe |
 | `GRABENPLANER_VOICE_ASSISTANT_ADMIN_ONLY` | `1` | Pilot nur für persönliche Zugänge mit Rolle `admin`, `it_admin` oder `developer`; `0` hebt die Pilotsperre auf, persönliche Rechte bleiben gültig |
+| `GRABENPLANER_VOICE_ASSISTANT_PILOT_EMPLOYEES` | leer | Zusätzliche serverseitige Begrenzung auf kommagetrennte Personalnummern; keine Erweiterung durch Developer-Einstellungen möglich |
 | `GRABENPLANER_OPENAI_API_KEY` | leer | Projekt-API-Schlüssel nur auf dem GP-Server; alternativ wird `OPENAI_API_KEY` verwendet |
 | `GRABENPLANER_VOICE_BACKEND_MODEL` | `gpt-6-luna` | Responses-Modell für die beschränkte Absichtsinterpretation |
 | `GRABENPLANER_VOICE_MAX_SECONDS` | `600` | Gesprächslimit der normalen Portaloberfläche, zulässiger Wert 60–1800 Sekunden |

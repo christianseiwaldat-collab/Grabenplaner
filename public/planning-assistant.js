@@ -74,7 +74,10 @@
         const dateText = value => new Intl.DateTimeFormat("de-AT", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value + "T12:00:00Z"));
         caption.textContent = `Gespeicherter Plan ${dateText(payload.assessment.period.from)} bis ${dateText(payload.assessment.period.to)} · ${payload.assessment.context.departmentName || payload.assessment.context.locationName}. Lokal geprüft; Vorschläge ändern keine Dienste.`;
         details.hidden = false; summary.textContent = `Konflikte und Hinweise (${payload.assessment.findings.length})`; renderFindings(); renderSettings(); optimizer?.synchronize(payload, source);
-      } catch (error) { if (token === generation && error.name !== "AbortError") status.textContent = "Prüfung nicht verfügbar: " + error.message; }
+      } catch (error) { if (token === generation && error.name !== "AbortError") {
+        if (error.code === "PLANNING_ASSISTANT_PILOT_DENIED") { clearResult(); host.hidden = true; }
+        else status.textContent = "Prüfung nicht verfügbar: " + error.message;
+      } }
       finally { if (token === generation) lock(false); }
     }
     form.addEventListener("submit", async event => {

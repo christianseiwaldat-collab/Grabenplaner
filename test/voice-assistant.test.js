@@ -36,6 +36,22 @@ test("pilot role, personal account, password and per-tool permissions all fail c
   f.actor.mustChangePassword = false; await f.start(); f.actor.permissions = [];
   await assert.rejects(f.message(), { code: "PORTAL_PERMISSION_DENIED" }); assert.equal(f.writes.length, 0);
 });
+test("personal pilot list applies to status, active conversations and draft confirmation after revocation", async () => {
+  const f = fixture(); f.settings.pilotEmployeeNumbers = [f.actor.employeeNumber];
+  await f.start(); const draft = (await f.message()).draft;
+  f.settings.pilotEmployeeNumbers = ["BEISPIEL-B"];
+  assert.equal((await f.service.status({})).enabled, false);
+  await assert.rejects(f.message(), { code: "ASSISTANT_DISABLED" });
+  await assert.rejects(f.confirm(draft), { code: "ASSISTANT_DISABLED" });
+  await assert.rejects(f.start(), { code: "ASSISTANT_DISABLED" });
+  assert.equal(f.writes.length, 0);
+  f.settings.pilotEmployeeNumbers = [f.actor.employeeNumber];
+  f.settings.environmentPilotEmployeeNumbers = ["BEISPIEL-B"];
+  await assert.rejects(f.start(), { code: "ASSISTANT_DISABLED" });
+  f.settings.environmentPilotEmployeeNumbers = null;
+  await assert.rejects(f.start(), { code: "ASSISTANT_DISABLED" });
+});
+
 test("a conversation and confirmation cannot be used by another employee or another login", async () => {
   const f = fixture(); await f.start(); const draft = (await f.message()).draft;
   for (const change of [{ employeeNumber: "BEISPIEL-B" }, { id: "session-B" }]) {

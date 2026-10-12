@@ -66,6 +66,46 @@ test("voice settings enforce CSRF, optimistic revision, strict schema and audite
   const disabled = await api(VOICE, { method: "PUT", body: { revision: saved.data.revision, settings: { ...saved.data.settings, portal: { ...saved.data.settings.portal, enabled: false } } } });
   assert.equal(disabled.status, 200); assert.equal((await api("/api/portal/v1/me/assistant/status")).data.enabled, false);
 });
+test("voice pilot restricts personal accounts on every route and rejects stale clients omitting its list", async () => {
+  const original = (await api(VOICE)).data;
+  const settings = { ...original.settings, enabled: true, portal: { enabled: true, adminOnly: true, pilotEmployeeNumbers: [DEV] } };
+  try {
+    const saved = await api(VOICE, { method: "PUT", body: { revision: original.revision, settings } });
+    assert.equal(saved.status, 200, JSON.stringify(saved.data));
+    assert.deepEqual(saved.data.settings.portal.pilotEmployeeNumbers, [DEV]);
+    assert.equal((await api("/api/portal/v1/me/assistant/status")).data.enabled, true);
+    assert.equal((await api("/api/portal/v1/me/assistant/status", { actor: ADMIN })).data.enabled, false);
+    assert.equal((await api("/api/portal/v1/me/assistant/conversations", { actor: ADMIN, method: "POST", body: {} })).status, 403);
+    const legacy = structuredClone(settings); delete legacy.portal.pilotEmployeeNumbers;
+    assert.equal((await api(VOICE, { method: "PUT", body: { revision: saved.data.revision, settings: legacy } })).status, 400);
+    process.env.GRABENPLANER_VOICE_ASSISTANT_PILOT_EMPLOYEES = ADMIN;
+    assert.equal((await api("/api/portal/v1/me/assistant/status")).data.enabled, false);
+    assert.equal((await api("/api/portal/v1/me/assistant/status", { actor: ADMIN })).data.enabled, false);
+  } finally {
+    delete process.env.GRABENPLANER_VOICE_ASSISTANT_PILOT_EMPLOYEES;
+    const current = (await api(VOICE)).data;
+    assert.equal((await api(VOICE, { method: "PUT", body: { revision: current.revision, settings: original.settings } })).status, 200);
+  }
+});
+
+test("planning pilot gates read, settings, proposals and apply while ordinary schedules remain available", async () => {
+  const before = db.prepare("SELECT * FROM shifts ORDER BY id").all();
+  process.env.GRABENPLANER_PLANNING_ASSISTANT_PILOT_EMPLOYEES = DEV;
+  try {
+    assert.equal((await api(route())).status, 200);
+    for (const [endpoint, method] of [[route(), "GET"], ["/api/settings/planning-assistant", "PUT"],
+      ["/api/schedule/assistant/proposals", "POST"], ["/api/schedule/assistant/apply", "POST"]]) {
+      const response = await api(endpoint, { actor: ADMIN, method, ...(method === "GET" ? {} : { body: {} }) });
+      assert.equal(response.status, 403, JSON.stringify(response.data));
+      assert.equal(response.data.code, "PLANNING_ASSISTANT_PILOT_DENIED");
+    }
+    assert.equal((await api(`/api/schedule?week=${WEEK}&locationId=${LOCATION}`, { actor: ADMIN })).status, 200);
+    process.env.GRABENPLANER_PLANNING_ASSISTANT_PILOT_EMPLOYEES = ",";
+    assert.equal((await api(route())).status, 403);
+    assert.deepEqual(db.prepare("SELECT * FROM shifts ORDER BY id").all(), before);
+  } finally { delete process.env.GRABENPLANER_PLANNING_ASSISTANT_PILOT_EMPLOYEES; }
+});
+
 test("read-only planning route detects real stored collisions, absence, staffing, legal results and hides unrelated personnel", async () => {
   const before = db.prepare("SELECT id,employee_number,shift_date,start_time,end_time FROM shifts ORDER BY id").all();
   const response = await api(route(), { actor: MANAGER }); assert.equal(response.status, 200, JSON.stringify(response.data));

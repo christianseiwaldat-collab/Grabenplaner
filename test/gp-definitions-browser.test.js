@@ -178,6 +178,7 @@ test('standards and deferred workspace menus remain siblings, remember their top
         assert.ok(sizes.every(size=>size.height>=(viewport.width<620?44:40)&&size.font>=13&&size.left>=0&&size.right<=viewport.width));
         if(process.env.GP_DEFINITIONS_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.GP_DEFINITIONS_SCREENSHOT_DIR,'standards-'+(viewport.width>620?'desktop':'mobile')+'.png'),fullPage:true,animations:'disabled'});
         await page.locator('[data-gp-private-workspace="studio-alpha"]').click();
+        await page.waitForFunction(()=>document.querySelector('iframe[src$="/studio-alpha/page"]')?.contentDocument?.readyState==='complete');
         const frame=page.frames().find(frame=>frame.url().endsWith('/studio-alpha/page'));assert.ok(frame);
         await frame.evaluate(()=>parent.postMessage({type:'gp-private-workspace-fullscreen',active:true},location.origin));
         await page.waitForFunction(()=>document.documentElement.style.overflow==='hidden');

@@ -82,7 +82,9 @@ Vor der Übernahme werden die aktuellen Daten erneut geprüft. Ein Fingerabdruck
 
 ## Python-Einrichtung und Betrieb
 
-Getestet ist Python 3.10 mit `ortools==9.15.6755`. Installation in einer eigenen virtuellen Umgebung gemäß [offizieller Python-Installation](https://developers.google.com/optimization/install/python):
+Für einen persönlichen Pilot kann `GRABENPLANER_PLANNING_ASSISTANT_PILOT_EMPLOYEES` auf eine kommagetrennte Liste von Personalnummern gesetzt werden. Nur diese persönlichen Konten erhalten dann Planprüfung, Prüfeinstellungen, Vorschläge und bestätigte Übernahmen; vorhandene Planungsrechte bleiben zusätzlich erforderlich. Ohne die Variable gelten die normalen GP-Rechte. Eine fehlerhafte Liste sperrt die Assistentenfunktionen. Die gewöhnliche Dienstplanung bleibt für die übrigen berechtigten Konten verfügbar.
+
+Getestet sind Python 3.10 unter Windows und Python 3.14.4 unter Linux mit `ortools==9.15.6755`. Installation in einer eigenen virtuellen Umgebung gemäß [offizieller Python-Installation](https://developers.google.com/optimization/install/python):
 
 ```powershell
 python -m venv .venv-planning

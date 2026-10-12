@@ -58,9 +58,11 @@ for (const [name, viewport, dark] of [["desktop", { width: 1366, height: 900 }, 
       await page.locator('[data-gp-voice-page="portal.assistant"]').click();
       assert.equal(await page.locator('[data-gp-voice-page="portal.assistant"]').getAttribute("aria-current"), "page");
       assert(await page.locator('[data-gp-voice-page="voice.assistants"]').evaluate(el => el.classList.contains("is-active-ancestor")));
+      await page.locator('[name="pilotEmployeeNumbers"]').fill("252");
       await page.locator('[name="portalEnabled"]').uncheck(); await page.locator('.voice-settings form:not([hidden]) button[type="submit"]').click();
       await page.waitForFunction(() => !voice.settings.portal.enabled && !document.querySelector('[name="portalEnabled"]').disabled);
       assert.equal(await page.evaluate(() => voice.settings.maxSessionSeconds), 240);
+      assert.deepEqual(await page.evaluate(() => voice.settings.portal.pilotEmployeeNumbers), ["252"]);
       await capture(page, "portal-assistant-" + name);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       assert((await page.locator('.voice-settings form:not([hidden]) button[type="submit"]').boundingBox()).height >= 44);
