@@ -3795,7 +3795,7 @@ function render({ period = null } = {}) {
   renderSummary();
   renderBranchSupervisionAssessment();
   renderWorkRuleAssessment();
-  if (!planningAssistantWorkspace && window.GpPlanningAssistant) planningAssistantWorkspace = window.GpPlanningAssistant.mount(document.getElementById('planningAssistantPanel'), { api });
+  if (!planningAssistantWorkspace && window.GpPlanningAssistant) planningAssistantWorkspace = window.GpPlanningAssistant.mount(document.getElementById('planningAssistantPanel'), { api, onApplied: () => loadPlanningPeriod('schedule') });
   planningAssistantWorkspace?.synchronize({ data: state.data, session: state.portalSession, allowed: canReadStartDashboardSchedule() });
   renderTimeline();
   renderRemarks();

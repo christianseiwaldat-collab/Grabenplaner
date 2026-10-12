@@ -75,7 +75,7 @@ test("unparseable or overnight legacy rows cannot yield a verified weekly total"
   const f = fixture(); f.shifts[0].startTime = "22:00"; f.shifts[0].endTime = "06:00";
   const r = assessPlanning(f); assert.equal(byRule(r, "input").length, 1); assert.equal(byRule(r, "weekly_target")[0].severity, "unknown");
 });
-test("future optimization contract has integer minutes, hard constraints and no write capability or personnel labels", () => {
+test("read-only v1 fact export has integer minutes, hard constraints and no write capability or personnel labels", () => {
   const f = fixture(), problem = optimizationProblem(f);
   assert.equal(problem.status, "not_solved"); assert.equal(problem.applyAllowed, false); assert.equal(problem.shifts[0].startMinute, 540);
   assert.equal(problem.legalRules.revalidationRequired, true); assert.equal(problem.constraints[0].constraint, "hard"); assert(!JSON.stringify(problem).includes("BEISPIEL Eins"));

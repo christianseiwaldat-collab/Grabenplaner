@@ -1,7 +1,7 @@
 (function (root) {
   "use strict";
   const severityLabels = { error: "Konflikt", warning: "Warnung", unknown: "Nicht prüfbar", info: "Hinweis" };
-  function mount(host, { api }) {
+  function mount(host, { api, onApplied = async () => {} }) {
     const doc = host.ownerDocument, node = (tag, text, className) => { const item = doc.createElement(tag); if (text !== undefined) item.textContent = text; if (className) item.className = className; return item; };
     let source = null, actor = null, result = null, generation = 0, controller = null, busy = false, limit = 40, dirty = false, draftRevision = null;
     host.className = "planning-assistant"; host.hidden = true;
@@ -24,9 +24,11 @@
     const save = node("button", "Prüfeinstellungen speichern", "primary-button"), reloadSettings = node("button", "Eingaben verwerfen und neu laden", "secondary-button"); save.type = "submit"; reloadSettings.type = "button";
     const settingsActions = node("div", undefined, "planning-assistant-actions"); settingsActions.append(save, reloadSettings);
     form.append(node("p", "Öffnungs-, Pausen- und Mindestbesetzungszeiten stammen aus den Filialeinstellungen. Gesetzliche Grenzen stammen aus den bestehenden Arbeitsregelprofilen."), toleranceLabel, positions, keyPeople, settingsStatus, settingsActions);
-    host.replaceChildren(heading, caption, details, settings);
+    const optimizerHost = node("div");
+    const optimizer = root.GpPlanningOptimizer?.mount(optimizerHost, { api, onApplied });
+    host.replaceChildren(heading, caption, details, optimizerHost, settings);
     function lock(value) { busy = value; refresh.disabled = value || !source; for (const item of form.querySelectorAll("input,select,button")) item.disabled = value; }
-    function clearResult() { result = null; list.replaceChildren(); details.hidden = true; settings.hidden = true; if (!dirty) { form.reset(); rows.replaceChildren(); people.replaceChildren(); settingsStatus.textContent = ""; } more.hidden = true; }
+    function clearResult() { optimizer?.reset(); result = null; list.replaceChildren(); details.hidden = true; settings.hidden = true; if (!dirty) { form.reset(); rows.replaceChildren(); people.replaceChildren(); settingsStatus.textContent = ""; } more.hidden = true; }
     function reset() { generation++; controller?.abort(); source = null; actor = null; dirty = false; draftRevision = null; clearResult(); lock(false); host.hidden = true; }
     function markDirty() { if (!dirty && result) draftRevision = result.configuration.revision; dirty = true; }
     function renderFindings() {
@@ -71,7 +73,7 @@
         status.textContent = `${counts.error} ${counts.error === 1 ? "Konflikt" : "Konflikte"} · ${counts.warning} ${counts.warning === 1 ? "Warnung" : "Warnungen"} · ${counts.unknown} nicht prüfbar · ${counts.info} ${counts.info === 1 ? "Hinweis" : "Hinweise"}`;
         const dateText = value => new Intl.DateTimeFormat("de-AT", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value + "T12:00:00Z"));
         caption.textContent = `Gespeicherter Plan ${dateText(payload.assessment.period.from)} bis ${dateText(payload.assessment.period.to)} · ${payload.assessment.context.departmentName || payload.assessment.context.locationName}. Lokal geprüft; Vorschläge ändern keine Dienste.`;
-        details.hidden = false; summary.textContent = `Konflikte und Hinweise (${payload.assessment.findings.length})`; renderFindings(); renderSettings();
+        details.hidden = false; summary.textContent = `Konflikte und Hinweise (${payload.assessment.findings.length})`; renderFindings(); renderSettings(); optimizer?.synchronize(payload, source);
       } catch (error) { if (token === generation && error.name !== "AbortError") status.textContent = "Prüfung nicht verfügbar: " + error.message; }
       finally { if (token === generation) lock(false); }
     }

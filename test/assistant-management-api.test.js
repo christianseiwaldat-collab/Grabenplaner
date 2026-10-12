@@ -74,7 +74,7 @@ test("read-only planning route detects real stored collisions, absence, staffing
   assert(findings.some(item => item.ruleId === "gp.planning.unavailable")); assert(findings.some(item => item.ruleId === "gp.planning.staffing" && item.startTime === "10:07"));
   assert(findings.some(item => item.ruleId === "gp.planning.work_rules"));
   assert(!JSON.stringify(response.data).includes(FOREIGN)); assert(!JSON.stringify(response.data).includes("PRIVATE-"));
-  assert.equal(result.optimization.available, false); assert.deepEqual(db.prepare("SELECT id,employee_number,shift_date,start_time,end_time FROM shifts ORDER BY id").all(), before);
+  assert.equal(result.optimization.contractVersion, 2); assert.equal(result.optimization.confirmationRequired, true); assert.deepEqual(db.prepare("SELECT id,employee_number,shift_date,start_time,end_time FROM shifts ORDER BY id").all(), before);
   const normal = await api(`/api/schedule?week=${WEEK}&locationId=${LOCATION}`, { actor: MANAGER }); assert.equal(normal.status, 200); assert.equal(normal.data.shifts.length, 3);
 });
 test("planning scope, own-only staff, query injection and session gates are enforced", async () => {
@@ -111,6 +111,15 @@ test("department settings and report do not assert whole-branch staffing or inco
   assert(response.data.assessment.findings.some(item => item.severity === "unknown" && item.message.includes("filialweite Mindestbesetzung")));
   assert(response.data.assessment.findings.filter(item => item.ruleId === "gp.planning.weekly_target").every(item => item.severity === "unknown"));
 });
+test("a whole-branch review includes hard requirements configured for its departments", async () => {
+  const scoped = await api(route(LOCATION, "&departmentId=" + department)); assert.equal(scoped.status, 200);
+  const result = await api('/api/settings/planning-assistant', { method: 'PUT', body: { locationId: LOCATION, departmentId: department, week: WEEK,
+    revision: scoped.data.configuration.revision, configuration: { weeklyToleranceMinutes: 0, requiredPositions: [{ positionId: 'verkaufsmitarbeiter', count: 3 }], keyPersonNumbers: [] } } });
+  assert.equal(result.status, 200, JSON.stringify(result.data));
+  const branch = await api(route()); assert.equal(branch.status, 200);
+  assert(branch.data.assessment.findings.some(f => f.ruleId === 'gp.planning.position' && f.required === 3 && f.constraint === 'hard'));
+});
+
 test("revoked work-rule permission removes legal findings and stale Developer session cannot change settings", async () => {
   for (const permission of ["work_rules:read", "work_rules:planning:read"]) db.prepare("INSERT INTO portal_permission_denials(employee_number,permission,denied_by) VALUES(?,?,?)").run(MANAGER, permission, DEV);
   const denied = await api(route(), { actor: MANAGER }); assert.equal(denied.status, 200, JSON.stringify(denied.data));

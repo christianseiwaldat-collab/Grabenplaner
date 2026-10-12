@@ -10,9 +10,11 @@ const test = require("node:test");
 const { openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider");
 const { createAmuStorage } = require("../lib/amu-storage");
 const root = path.resolve(__dirname, "..");
-const runtimeEntries = ["backup.js", "lib/backup-maintenance.js", "scripts/run-background-backup.js", "scripts/manage-local-backup-archive.js"];
+const runtimeEntries = ["backup.js", "lib/backup-maintenance.js", "scripts/run-background-backup.js", "scripts/manage-local-backup-archive.js",
+  "services/planning-optimizer/service.py", "services/planning-optimizer/requirements.txt"];
 const excluded = ["scripts/verify-tradefoto-full-import.mjs", "scripts/unapproved.js", "scripts/run-background-backup.js/extra",
-  "scripts/run-background-backup.js.env", ".env", "data/private.db", "tmp/report.json", "import-jobs/private.source"];
+  "scripts/run-background-backup.js.env", ".env", "data/private.db", "tmp/report.json", "import-jobs/private.source",
+  "services/other-service.py", "services/planning-optimizer/.env", "services/planning-optimizer/__pycache__/service.pyc", ".venv-planning/Scripts/python.exe"];
 function verifierPolicy() {
   const source = fs.readFileSync(path.join(root, "server-tools/linux/lib/verify-package.js"), "utf8");
   const definitions = [source.match(/^const backupRuntimeScripts = new Set\([\s\S]*?^\]\);/m)?.[0] || ""];

@@ -40,6 +40,8 @@ function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
     $normalized = $RelativePath.Replace('\', '/')
     if ($normalized -in @(
         'server.js',
+        'services/planning-optimizer/service.py',
+        'services/planning-optimizer/requirements.txt',
         'backup.js',
         'scripts/run-background-backup.js',
         'scripts/manage-local-backup-archive.js',
@@ -299,6 +301,8 @@ try {
         'scripts\run-background-backup.js',
         'scripts\manage-local-backup-archive.js',
         'lib\backup-workspace.js',
+        'services\planning-optimizer\service.py',
+        'services\planning-optimizer\requirements.txt',
         'lib\background-backup-process.js',
         'lib\local-backup-archive.js',
         'package.json',

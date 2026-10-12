@@ -2,7 +2,7 @@
 
 Der optionale GP-Assistent fragt eigene Urlaubssalden, den letzten importierten ZA-Saldo, eigene Dienste und den eigenen Antragsverlauf ab. Urlaub und ZA werden zunächst als Gesprächsentwurf vorbereitet. Erst die Schaltfläche **Antrag verbindlich absenden** reicht den angezeigten Entwurf über den bestehenden GP-Antragsprozess ein. Die Genehmigung bleibt bei der zuständigen Leitung.
 
-Der lokale Entwicklungsstand ist für einen Administrator-Pilot vorbereitet. Ohne Konfiguration bleibt das Modul ausgeschaltet. Ein realer WebRTC-Test mit OpenAI und eine Produktionsfreigabe sind separate Abnahmeschritte.
+Der lokale Entwicklungsstand ist für einen Administrator-Pilot vorbereitet. Ohne Konfiguration bleibt das Modul ausgeschaltet. Am 12. Oktober 2026 wurden echte OpenAI-WebRTC-Läufe mit synthetischer deutscher Sprache und isolierten GP-Testdaten durchgeführt: eigener Urlaubssaldo, eigener Dienstplan, Urlaubsentwurf und ZA-Entwurf mit anschließender ausdrücklicher Bestätigung. Eine produktive Aktivierung wurde dabei nicht vorgenommen.
 
 ## Integration in den bestehenden GP
 
@@ -96,7 +96,7 @@ Diese Rechenbeispiele sind keine gemessenen GP-Verbrauchswerte. Steuern, Währun
 
 ## Tests und Pilotabnahme
 
-Die Tests verwenden synthetische Personen, eine isolierte temporäre GP-Datenbank und simulierte OpenAI- beziehungsweise Medienantworten. Sie prüfen eigene Daten, echte bestehende GP-Erstellungsfunktionen, Rechte und CSRF, fremde Sitzungen, Datumsgrenzen, Feiertage, geänderte Vorschauen, doppelte Bestätigung, Verbindungsfehler, Abmeldung sowie Desktop-/Smartphone-Darstellung. Sie belegen keinen echten OpenAI-Audiolauf und keine Prüfung produktiver Personaldaten.
+Die regulären Tests verwenden synthetische Personen, eine isolierte temporäre GP-Datenbank und simulierte OpenAI- beziehungsweise Medienantworten. Sie prüfen eigene Daten, echte bestehende GP-Erstellungsfunktionen, Rechte und CSRF, fremde Sitzungen, Datumsgrenzen, Feiertage, geänderte Vorschauen, doppelte Bestätigung, Verbindungsfehler, Abmeldung sowie Desktop-/Smartphone-Darstellung. Diese Tests verursachen keine Modellkosten.
 
 Modul- und API-Tests:
 
@@ -113,4 +113,17 @@ node --test --test-concurrency=1 test/voice-assistant-browser.test.js
 node --test --test-concurrency=1 test/assistant-management-browser.test.js
 ```
 
-Für die reale Pilotabnahme sind anschließend ein Gespräch mit Mikrofon und Sprachausgabe, der Vergleich eigener Salden und Dienste mit dem normalen Portal, je ein bestätigter Urlaub-/ZA-Antrag und ein bewusst unbestätigter Entwurf zu prüfen. Die Freigabe muss im bestehenden GP-Verlauf offen bleiben. Kontowechsel, verweigerter Mikrofonzugriff, Smartphone und Verbindungsabbruch gehören zu dieser Abnahme. Erst diese Prüfung bestätigt die Live-Abnahmekriterien.
+`scripts/verify-assistant-live.js` führt zusätzlich einen ausdrücklich aktivierten, kostenpflichtigen Test mit dem echten Portal, tatsächlicher WebRTC-Verbindung, GPT-Live-1 und GPT-6 Luna durch. Es startet einen isolierten GP mit synthetischen Personen und speist eine synthetisch gesprochene WAV-Datei über Chromes Testmikrofon ein. Es prüft GP-Daten, Delegation, Rücksprache, Audio in beide Richtungen und Mikrofonstopp. Urlaub/ZA erzeugen vor der Bestätigung keinen Antrag; nach dem Klick muss genau ein Antrag im normalen offenen Freigabeprozess stehen. Testdatenbank und Gespräche werden anschließend geschlossen und entfernt. Der Schlüssel wird nur in den Testprozess geladen; im Repository und in den Ergebnisbelegen steht kein Schlüssel.
+
+Beispiel für Windows (vorhandene Playwright-/Chrome-Einstellungen wie oben):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-assistant-test-audio.ps1
+$env:GP_VOICE_LIVE_TEST = '1'
+$env:GP_VOICE_TEST_KEY_FILE = 'C:\geschuetzte-testkonfiguration\.env.local'
+$env:GP_VOICE_TEST_SCENARIO = 'balances' # alternativ schedule, vacation, time_off
+$env:GP_VOICE_TEST_AUDIO = Join-Path (Get-Location) ('output\planning-assistant-live\' + $env:GP_VOICE_TEST_SCENARIO + '.wav')
+node scripts/verify-assistant-live.js
+```
+
+Alternativ kann der Schlüssel bereits als `GRABENPLANER_OPENAI_API_KEY` im Prozess vorliegen. `GP_VOICE_TEST_KEY_FILE` darf nur auf eine für den Test freigegebene Datei zeigen; der Test liest daraus ausschließlich die unterstützte OpenAI-Variable. Ein aufgezeichneter Mitarbeiterdialog ist für diesen Test nicht erforderlich. Auf anderen Plattformen kann eine lokal erzeugte synthetische WAV-Datei bereitgestellt werden. Die vier erfolgreichen lokalen Läufe belegen den echten API-/Audio-Durchlauf mit Testdaten; ein physisches Mikrofon und reale Mobilgeräte bleiben Teil der jeweiligen betrieblichen Pilotabnahme.

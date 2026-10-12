@@ -20178,7 +20178,10 @@ async function validateShift(body, contextInput = {}, actor = null) {
   if ((await activeSicknessEmployeeNumbers(shiftDate)).has(employeeNumber)) {
     throw httpError(409, `${employee.nickname} ist an diesem Tag krankgemeldet.`, "SICKNESS_SHIFT_CONFLICT");
   }
-  const overlappingShift = await planningSettingsRepository.getOverlappingShift({
+  const overlappingShift = contextInput.ignoredShiftIds instanceof Set
+    ? (await planningSettingsRepository.listWorkRuleShiftsForRange({ dateFrom: shiftDate, dateTo: shiftDate })).find(row =>
+      row.employee_number === employeeNumber && !contextInput.ignoredShiftIds.has(String(row.id)) && row.start_time < endTime && row.end_time > startTime)
+    : await planningSettingsRepository.getOverlappingShift({
     employeeNumber,
     shiftDate,
     existingId,
@@ -32490,13 +32493,123 @@ app.get("/api/schedule", readModelResponse(request =>
 app.get("/api/schedule/enrichment", readModelResponse(request =>
   getScheduleEnrichment(request.query.week, request.query, request.portalSession)));
 
+const readPlanningQualifications = require('./lib/planning-qualifications').createQualificationReader({
+  actor: session => personnelLearningCatalogActor(session || { localSystem: true, sessionKind: "local", employeeNumber: "local" }),
+  employeeAllowed: personnelLearningCompetencyEmployeeAllowed,
+  repository: personnelLearningRepository, bundles: personnelLearningModuleBundles,
+  competencyState: personnelLearningCompetencyStateOrUnavailable,
+  assignmentState: personnelLearningAssignmentStateOrUnavailable, progressState: personnelLearningProgressStateOrUnavailable,
+  roles: ids => Promise.all(ids.map(id => organizationPersonnelRepository.getPortalUserAccountProjection(id))).then(rows => rows.filter(Boolean)),
+});
 const readPlanningAssistant = createPlanningAssistantReader({
   getSchedule, settings: getSettings, settingsForLocation, plannedShiftBreaks, dayConfiguration,
   optionIsAllDay, optionLabel, employeeCanWorkOnDate, assessBranchSupervision,
   loadShifts: (dateFrom, dateTo) => planningSettingsRepository.listWorkRuleShiftsForRange({ dateFrom, dateTo }),
   loadOptions: (employeeNumber, dateFrom, dateTo) => planningSettingsRepository.listOverlappingWeekOptions({ employeeNumber, dateFrom, dateTo, existingId: 0, excludedGroupId: null }),
   loadPositions: () => organizationPersonnelRepository.listPositions(),
-  loadDepartments: () => organizationPersonnelRepository.listDepartments(true),
+  loadDepartments: () => organizationPersonnelRepository.listDepartments(true), loadQualifications: readPlanningQualifications,
+});
+
+const planningOptimizerService = require('./lib/planning-optimizer-service').createOptimizerService();
+const planningOptimizerModel = require('./lib/planning-optimizer');
+const planningOptimizerRevision = require('./lib/planning-optimizer-revision').sourceRevision;
+const planningOptimizer = planningOptimizerModel.createPlanningOptimizer({
+  service: planningOptimizerService, refresh: refreshPlanningSettingsReadModel,
+  authorize: async (options, actor) => assertSessionContextScope(actor, await resolvePlanningContext(options)),
+  read: (options, actor) => readPlanningAssistant(options.week, options, actor, { includeFacts: true }),
+  stamp: async (options, repositories = applicationRepositories) => planningOptimizerRevision(repositories,
+    { locationId: options.locationId, departmentId: options.departmentId }, getMonday(options.week)),
+  day: dayConfiguration,
+  history: async (week, ids) => {
+    const rows = await planningSettingsRepository.listWorkRuleShiftsForRange({ dateFrom: addDays(week, -56), dateTo: addDays(week, -1) });
+    return Object.fromEntries(ids.map(id => [id, new Set(rows.filter(r => String(r.employee_number) === id && new Date(r.shift_date + 'T12:00:00Z').getUTCDay() === 6).map(r => r.shift_date)).size]));
+  },
+  candidate: planningOptimizerCandidate, validate: validatePlanningOptimizerSelection,
+  commit: async (entry, scenario, preview, actor, request) => {
+    const result = await persistenceProvider.transaction(async executor => {
+      const repositories = createApplicationRepositories(executor);
+      const fresh = isLocalSystemSession(actor) || !actor ? actor : await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+      if (planningOptimizerAuthority(fresh) !== planningOptimizerAuthority(actor)) throw httpError(403, 'Anmeldung oder Berechtigungen haben sich geändert.', 'PORTAL_PERMISSION_DENIED');
+      if (fresh?.mustChangePassword) throw httpError(428, 'Bitte zuerst das Startpasswort ändern.', 'PORTAL_PASSWORD_CHANGE_REQUIRED');
+      assertSessionContextScope(fresh, entry.snapshot.facts.context);
+      if (entry.sourceStamp !== await planningOptimizerRevision(repositories, entry.snapshot.facts.context, entry.snapshot.facts.period.from)) {
+        throw httpError(409, 'Die Planungsgrundlage wurde geändert. Bitte neue Vorschläge berechnen.', 'OPTIMIZER_PLAN_CHANGED');
+      }
+      const repository = repositories.workRules;
+      for (const change of scenario.changes) if (change.kind === 'remove') {
+        const removed = await repository.deletePlanningShift(Number(change.shift.existingId));
+        if (!removed.rowsAffected) throw httpError(409, 'Ein Dienst wurde zwischenzeitlich geändert.', 'OPTIMIZER_PLAN_CHANGED');
+      }
+      const addedIds = [];
+      for (const change of scenario.changes) if (change.kind === 'add') {
+        const inserted = await repository.insertPlanningShift(change.shift); addedIds.push(inserted.returnedRows[0]?.id);
+      }
+      for (const change of scenario.changes) await repository.invalidatePlanningDayReview(change.shift.employeeNumber, change.shift.shiftDate);
+      await recordEvaluatedWorkRuleEvaluation(repository, preview.evaluated, entry.snapshot.facts.context, actor?.employeeNumber || 'local');
+      await repositories.organizationPersonnel.insertAudit(actor?.employeeNumber || 'local', 'planning.assistant.proposal.apply', 'schedule', entry.id,
+        JSON.stringify({ scenarioId: scenario.id, context: entry.snapshot.facts.context, week: entry.snapshot.facts.period.from, sourceStamp: entry.sourceStamp,
+          engine: scenario.engine, engineVersion: scenario.engineVersion, removedIds: scenario.changes.filter(c => c.kind === 'remove').map(c => c.shift.existingId), addedIds }));
+      return { applied: true, changedShifts: scenario.changes.length, proposalId: entry.id };
+    }, { isolation: 'serializable' });
+    try { await refreshSicknessStaffingAfterPlanningChange(); } catch { result.refreshRequired = true; }
+    return result;
+  },
+});
+function planningOptimizerAuthority(actor) { return JSON.stringify([actor?.id, actor?.employeeNumber, actor?.accountId, actor?.permissions, actor?.scopes, actor?.role, actor?.mustChangePassword]); }
+async function planningOptimizerActor(request) {
+  if (request.portalSession && !isLocalSystemSession(request.portalSession)) request.portalSession = await loadPortalSessionFromRequest(request, { touch: false });
+  const actor = requirePortalAnyPermissionOrLocal(request, ['schedule:write'], { csrf: true });
+  if (actor && !isLocalSystemSession(actor) && (!actor.permissions.includes('schedule:read') || !actor.permissions.includes('work_rules:read'))) {
+    throw httpError(403, 'Für Vorschläge werden Dienstplan- und Arbeitsregelrechte benötigt.', 'PORTAL_PERMISSION_DENIED');
+  }
+  return actor;
+}
+async function planningOptimizerCandidate(proposed, actor, ignored, settings) {
+  const shift = await validateShift({ ...proposed, date: proposed.shiftDate }, { locationId: proposed.locationId, ignoredShiftIds: ignored }, actor);
+  await assertShiftEmployeeAssignmentScope(actor, shift);
+  const pause = await plannedShiftBreaks({ employee_number: shift.employeeNumber, location_id: shift.locationId,
+    shift_date: shift.shiftDate, start_time: shift.startTime, end_time: shift.endTime }, settings);
+  const model = require('./lib/planning-assistant'), breaks = pause.lunchBreakMinutes > 0 ? [{ start: Math.max(pause.start, model.minutes(pause.dayConfig.lunchStart)), end: Math.min(pause.end, model.minutes(pause.dayConfig.lunchEnd)) }] : [];
+  const unlocated = Math.max(0, pause.breakMinutes - pause.lunchBreakMinutes);
+  return { shift, minutes: pause.end - pause.start - pause.breakMinutes,
+    coverage: unlocated ? [] : model.subtract([{ start: pause.start, end: pause.end }], breaks),
+    projection: { id: proposed.existingId || 'candidate-' + planningOptimizerModel.hash(shift).slice(0, 20), employeeId: shift.employeeNumber,
+      date: shift.shiftDate, startTime: shift.startTime, endTime: shift.endTime, locationId: shift.locationId, departmentId: shift.departmentId,
+      dutyCode: shift.dutyCode, visible: true, breaks: breaks.map(b => ({ startTime: model.clock(b.start), endTime: model.clock(b.end) })), unlocatedBreakMinutes: unlocated } };
+}
+async function validatePlanningOptimizerSelection(snapshot, selected, actor) {
+  const { facts, schedule, rawShifts } = snapshot;
+  const localRows = rawShifts.filter(r => String(r.location_id) === facts.context.locationId && (!facts.context.departmentId || Number(r.department_id) === facts.context.departmentId));
+  const ignored = new Set(localRows.map(r => String(r.id))), checked = [];
+  try {
+    for (const candidate of selected) checked.push(await planningOptimizerCandidate({ ...candidate.shift, existingId: candidate.originalId }, actor, ignored, schedule.settings));
+    for (const row of localRows) await assertDateEditable(row.shift_date, schedule.settings, actor, facts.context.locationId);
+    const changes = planningOptimizerModel.diff(localRows.map(r => ({ ...planningOptimizerModel.fromRow(r), existingId: String(r.id) })), selected);
+    const planningChange = { deletedShiftIds: changes.filter(c => c.kind === 'remove').map(c => c.shift.existingId), addedShifts: changes.filter(c => c.kind === 'add').map(c => c.shift) };
+    const evaluated = await evaluateScheduleWorkRules(facts.period.from, facts.context, schedule.employees, planningChange);
+    assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
+    const supervision = await evaluateBranchSupervisionMutation(facts.period.from, facts.context.locationId, planningChange, Array.from({ length: 7 }, (_, i) => addDays(facts.period.from, i)));
+    assertBranchSupervisionComplete(supervision);
+    const report = require('./lib/planning-assistant').assessPlanning({ ...facts, shifts: [...facts.shifts.filter(s => !s.visible), ...checked.map(c => c.projection)],
+      workRuleAssessment: evaluated.assessment, supervision: supervision.after });
+    const blocked = report.findings.filter(f => f.constraint === 'hard' && f.severity !== 'info');
+    const findings = report.findings.filter(f => f.ruleId !== 'gp.planning.weekly_target').map(({ title, message, severity, date }) => ({ title, message, severity, date }));
+    return { allowed: !blocked.length, reasons: blocked.slice(0, 8).map(f => f.title + ': ' + f.message), evaluated,
+      review: { outcome: evaluated.assessment.outcome, counts: Object.fromEntries(['error', 'warning', 'unknown', 'info'].map(key => [key, findings.filter(f => f.severity === key).length])), findings } };
+  } catch (error) { if ([400, 409, 423].includes(error.status)) return { allowed: false, reasons: [error.message] }; throw error; }
+}
+for (const action of ['proposals', 'apply']) app.post('/api/schedule/assistant/' + action, async (request, response) => {
+  response.setHeader('Cache-Control', 'no-store');
+  const actor = await planningOptimizerActor(request), authority = planningOptimizerAuthority(actor);
+  const computation = new AbortController();
+  const disconnected = () => { if (!response.writableEnded) computation.abort(); };
+  response.once('close', disconnected);
+  let result;
+  try { result = action === 'proposals' ? await planningOptimizer.prepare(actor, request.body, { signal: computation.signal }) : await planningOptimizer.apply(actor, request.body, request); }
+  finally { response.removeListener('close', disconnected); }
+  const fresh = await planningOptimizerActor(request);
+  if (authority !== planningOptimizerAuthority(fresh)) throw httpError(403, 'Die Berechtigungen haben sich geändert.', 'PORTAL_PERMISSION_DENIED');
+  response.json(result);
 });
 
 app.get("/api/schedule/assistant", (_request, response, next) => {
@@ -32508,12 +32621,16 @@ app.get("/api/schedule/assistant", (_request, response, next) => {
   const authority = value => JSON.stringify([value?.id, value?.employeeNumber, value?.accountId, value?.permissions, value?.scopes, value?.role, value?.mustChangePassword]);
   const before = authority(actor);
   const result = await readPlanningAssistant(request.query.week, request.query, actor);
+  const optimizer = await planningOptimizerService.health();
   if (!isLocalSystemSession(actor) && actor) {
     const fresh = await loadPortalSessionFromRequest(request, { touch: false });
     if (!fresh || authority(fresh) !== before) throw httpError(403, "Die Anmeldung oder Berechtigungen haben sich geändert. Bitte erneut laden.", "PORTAL_PERMISSION_DENIED");
     assertSessionContextScope(fresh, result.assessment.context);
   }
-  return { ...result, canConfigure: !actor || isLocalSystemSession(actor) || actor.permissions?.includes("settings:write") === true };
+  const canOptimize = optimizer.available && (!actor || isLocalSystemSession(actor) || actor.permissions?.includes('schedule:write') && actor.permissions?.includes('work_rules:read'));
+  result.assessment.optimization.available = Boolean(canOptimize);
+  return { ...result, optimizer, canOptimize,
+    canConfigure: !actor || isLocalSystemSession(actor) || actor.permissions?.includes("settings:write") === true };
 }));
 
 app.put("/api/settings/planning-assistant", async (request, response) => {

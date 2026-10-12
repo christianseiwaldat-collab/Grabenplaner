@@ -120,6 +120,8 @@ function isAllowedRuntimePath(relative) {
   ]);
   return topLevelFiles.has(relative)
     || backupRuntimeScripts.has(relative)
+    || relative === "services/planning-optimizer/service.py"
+    || relative === "services/planning-optimizer/requirements.txt"
     || relative.startsWith("lib/")
     || relative.startsWith("public/")
     || relative.startsWith("server-tools/");

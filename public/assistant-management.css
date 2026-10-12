@@ -41,3 +41,9 @@
 [data-active-page-theme=dark] .voice-settings, [data-active-page-theme=dark] .planning-assistant { --paper:#172720; --ink:#e4eee7; --muted:#b3c9ba; --line:#41584a; }
 .voice-settings :focus-visible, .planning-assistant :focus-visible { outline:3px solid #5c9b7e; outline-offset:2px; }
 @media(max-width:600px) { .voice-settings form:not([hidden]) { padding:12px; } .voice-settings label { flex-wrap:wrap; gap:6px; } .planning-assistant { padding:12px; } .voice-settings-actions button { flex:1; } }
+.planning-optimizer-scenarios { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,320px),1fr)); gap: 16px; margin-top: 16px; }
+.planning-optimizer-scenario { border: 1px solid var(--line, #d4dcd5); border-radius: 12px; padding: 16px; min-width: 0; overflow-wrap: anywhere; }
+.planning-optimizer-scenario li { margin-bottom: 8px; }
+.planning-optimizer-scenario ul { padding-left: 20px; }
+.planning-optimizer-confirmation { display: flex; align-items: flex-start; gap: 12px; margin: 16px 0; }
+.planning-optimizer-confirmation input { flex: 0 0 22px; min-height: 22px; width: 22px; }
