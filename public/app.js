@@ -41814,6 +41814,7 @@ function syncMobileNavigationMode() {
 document.getElementById('gpDefinitionsNavButton')?.addEventListener('click', () => {
   if (!canUseGpDefinitions()) return;
   closeMobileNavigation({ restoreFocus: false });
+  gpDefinitionsWorkspace?.overview();
   setView('gpDefinitions');
 });
 

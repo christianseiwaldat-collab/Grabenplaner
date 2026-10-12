@@ -340,6 +340,11 @@ const ISOLATED_CASH_QUALIFICATION_CLI_FILES = new Set([
   "scripts/measure-cash-history-snapshot.mjs",
   "scripts/verify-compact-cash-full.mjs",
 ]);
+// Explicit paid-test opt-in, synthetic temporary database and loopback-only app.
+// This source-only harness is never an application persistence adapter.
+const ISOLATED_ASSISTANT_QUALIFICATION_CLI_FILES = new Set([
+  'scripts/verify-assistant-live.js',
+]);
 
 const SCAN_ROOTS = Object.freeze([
   "server.js",
@@ -652,6 +657,11 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  'scripts/verify-assistant-live.js',
+  'test/assistant-management-api.test.js',
+  'test/planning-optimizer-api.test.js',
+  'test/planning-optimizer.test.js',
+  'test/voice-assistant-api.test.js',
   // These synthetic tests qualify encrypted status writes and neutral receipts
   // through the existing provider repositories; no product driver is added.
   "test/maternity-protection-integration.test.js",
@@ -2953,7 +2963,7 @@ function architectureBoundaryViolationsForText(file, text) {
 function scanPhaseBoundary(root, files) {
   const violations = [];
   for (const file of files) {
-    if (file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file) || EXCLUDED_FILES.has(file)) continue;
+    if (file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file) || ISOLATED_ASSISTANT_QUALIFICATION_CLI_FILES.has(file) || EXCLUDED_FILES.has(file)) continue;
     const text = fs.readFileSync(path.join(root, file), "utf8");
     violations.push(...architectureBoundaryViolationsForText(file, text));
   }
@@ -4510,7 +4520,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
     .sort();
   const records = [];
   for (const file of files) {
-    const isTest = file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file);
+    const isTest = file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file) || ISOLATED_ASSISTANT_QUALIFICATION_CLI_FILES.has(file);
     const classification = MIGRATION_DEVELOPMENT_FILES.has(file) ? {
       ...PHASE_5_CLASSIFICATION,
       id: 'postgresql-core-migration-development',
@@ -4716,7 +4726,9 @@ function scanRepository(root = REPOSITORY_ROOT) {
   const providerNeutralServerPrepareCalls = countMatches(
     serverText,
     /\brequirePersonnelLifecycleOffboardingService\(\)\.prepare\s*\(/g,
-  );
+  ) + (/\bconst planningOptimizerModel\s*=\s*require\(['"]\.\/lib\/planning-optimizer['"]\)/.test(serverText)
+    && /\bconst planningOptimizer\s*=\s*planningOptimizerModel\.createPlanningOptimizer\(/.test(serverText)
+    ? countMatches(serverText, /\bplanningOptimizer\.prepare\s*\(/g) : 0);
   const remainingDomainRawAccess = productionDirect
     .filter((record) => domainRuntimeFiles.has(record.file))
     .reduce((sum, record) => (

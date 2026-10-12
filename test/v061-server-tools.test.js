@@ -168,6 +168,8 @@ test("Windows package assertions reject each missing runtime control module", {
     "  'lib\\offsite-provider-policy.js',",
     "  'lib\\host-reboot-control-client.js',",
     "  'lib\\controlled-host-reboot.js',",
+    "  'services\\planning-optimizer\\service.py',",
+    "  'services\\planning-optimizer\\requirements.txt',",
     "  'server-tools\\windows\\Update-GrabenplanerServer.ps1'",
     ")",
     "$base = Join-Path ([IO.Path]::GetTempPath()) ('GrabenplanerRuntimeModules-' + [guid]::NewGuid().ToString('N'))",

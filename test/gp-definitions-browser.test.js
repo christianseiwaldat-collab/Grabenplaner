@@ -46,13 +46,13 @@ test('Developer definitions navigate, search, survive ordinary navigation and wi
     await page.addScriptTag({content:script+'\n'+listener+'\nrenderSidebarSession();'});
     const view=page.locator('#gpDefinitionsView'),workspace=page.locator('#gpDefinitionsWorkspace'),button=page.locator('#gpDefinitionsNavButton');
     const screenshot=async name=>{const output=process.env.GP_DEFINITIONS_SCREENSHOT_DIR;if(output){fs.mkdirSync(output,{recursive:true});await page.screenshot({path:path.join(output,name),fullPage:true,animations:'disabled'});}};
-    await t.test('actual Developer button opens eight nested standards with seven window rules',async()=>{
+    await t.test('actual Developer button opens an overview and collapsible standards',async()=>{
       assert.equal(await button.isVisible(),true);assert.equal(await page.locator('#sidebarSessionRole').isVisible(),false);
       await button.click();assert.equal(await view.isVisible(),true);assert.equal(await workspace.isVisible(),true);
       assert.equal(await button.getAttribute('aria-current'),'page');assert.equal(await page.locator('[data-gp-definition-topic]').count(),9);
       assert.equal(await page.locator('[data-gp-definition-topic]:not([data-gp-definition-topic="all"])').count(),8);
       assert.equal(await page.locator('[data-gp-definition-section="standards"]').getAttribute('aria-expanded'),'true');
-      assert.equal(await page.locator('#gpDefinitionsStandardTopics [aria-current="page"]').count(),1);
+      assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Developer');await page.locator('[data-gp-definition-section="standards"]').click();assert.equal(await page.locator('#gpDefinitionsStandardTopics').isVisible(),false);await page.locator('[data-gp-definition-section="standards"]').click();await page.locator('[data-gp-definition-topic=windows]').click();assert.equal(await page.locator('#gpDefinitionsStandardTopics [aria-current="page"]').count(),1);
       assert.equal(await page.locator('.gp-definition-rule').count(),7);assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');
       await screenshot('01-gp-definitions-light.png');
     });
@@ -62,17 +62,17 @@ test('Developer definitions navigate, search, survive ordinary navigation and wi
       await page.locator('.gp-definitions-clear').click();assert.equal(await page.locator('#gpDefinitionsSearch').inputValue(),'');
       await page.locator('[data-gp-definition-topic=print]').click();await screenshot('02-gp-definitions-print-standard.png');
     });
-    await t.test('ordinary navigation keeps the selected topic while a Developer account switch resets it',async()=>{
+    await t.test('Developer entry and account changes always return to the overview',async()=>{
       await page.evaluate(()=>setView('startDashboard'));assert.equal(await workspace.isVisible(),false);
       assert.equal(await page.locator('.nav-item[data-view="startDashboard"]').first().getAttribute('aria-current'),'page');
       assert.equal(await button.getAttribute('aria-current'),null);
       await page.evaluate(()=>setView('settings'));
       assert.equal(await page.locator('.nav-item[data-view="settings"]').first().getAttribute('aria-current'),'page');
       assert.equal(await page.locator('.nav-item[data-view="startDashboard"]').first().getAttribute('aria-current'),null);
-      await button.click();assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Druck & PDF');
+      await button.click();assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Developer');
       await page.evaluate(()=>{state.portalSession.user.employeeNumber='00992';renderSidebarSession();});
       assert.equal(await page.locator('.gp-definition-card h2').count(),1,JSON.stringify({errors,state:await page.evaluate(()=>({view:state.currentView,workspace:gpDefinitionsWorkspace.state,hidden:document.getElementById('gpDefinitionsWorkspace').hidden}))}));
-      assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');
+      assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Developer');
     });
     await t.test('topics and implementation references work with the keyboard',async()=>{
       await page.locator('[data-gp-definition-topic=tables]').focus();await page.keyboard.press('Enter');assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Tabellen');
@@ -159,19 +159,19 @@ test('standards and deferred workspace menus remain siblings, remember their top
         await page.locator('.gp-definitions-clear').click();await sidebar.click();
         await page.evaluate(()=>pendingLoads.shift()(workspaceItems));
         await page.locator('[data-gp-private-workspace="studio-alpha"]').waitFor();
-        assert.equal(await page.locator('.gp-definitions-topics > .gp-definitions-menu-group').count(),3);
+        assert.equal(await page.locator('.gp-definitions-topics > .gp-definitions-menu-group').count(),3);const imageGroup=page.locator('[data-gp-private-workspace="studio-alpha"]');await imageGroup.locator('.gp-definitions-menu-chevron').click();assert.equal(await page.locator('[data-gp-private-parent="studio-alpha"]').isVisible(),false);await imageGroup.locator('.gp-definitions-menu-chevron').click();
         assert.equal(await page.locator('[data-gp-private-parent="studio-alpha"]').count(),1);
         assert.equal(await page.locator('[data-gp-private-workspace="studio-alpha"]').getAttribute('aria-expanded'),'true');
         await page.locator('[data-gp-private-workspace="studio-alpha-gallery"]').click();
-        assert.equal(await parent.getAttribute('aria-expanded'),'false');assert.equal(await page.locator('#gpDefinitionsStandardTopics').isVisible(),false);
+        assert.equal(await parent.getAttribute('aria-expanded'),'true');assert.equal(await page.locator('#gpDefinitionsStandardTopics').isVisible(),true);
         assert.equal(await page.locator('.gp-definitions-toolbar').isVisible(),false);
         assert.equal(await page.locator('[data-gp-private-workspace="studio-alpha"]').getAttribute('class'),'is-active-ancestor');
         assert.equal(await page.locator('.gp-definitions-topics [aria-current="page"]').count(),1);
         assert.equal(await page.locator('[data-gp-private-workspace="studio-alpha-gallery"]').getAttribute('aria-current'),'page');
-        await parent.focus();await page.keyboard.press('Enter');
+        await parent.focus();await page.keyboard.press('Enter');assert.equal(await page.locator('#gpDefinitionsStandardTopics').isVisible(),false);await page.keyboard.press('Enter');await sidebar.click();
         assert.equal(await page.locator('.gp-definition-card h2').textContent(),'GP-sidebar');assert.equal(await sidebar.getAttribute('aria-current'),'page');assert.equal(await parent.getAttribute('aria-expanded'),'true');
         assert.equal(await page.locator('.gp-definitions-toolbar').isVisible(),true);
-        await page.locator('#gpDefinitionsSearch').fill('PDF Bytes');await page.locator('[data-gp-private-workspace="studio-beta"]').click();await parent.click();
+        await page.locator('#gpDefinitionsSearch').fill('PDF Bytes');await page.locator('[data-gp-private-workspace="studio-beta"]').click();await page.locator('[data-gp-definition-topic=all]').click();
         assert.equal(await page.locator('#gpDefinitionsSearch').inputValue(),'PDF Bytes');assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Druck & PDF');
         await page.locator('.gp-definitions-clear').click();await sidebar.click();
         const sizes=await page.locator('.gp-definitions-topics button').evaluateAll(buttons=>buttons.map(button=>({height:button.getBoundingClientRect().height,font:parseFloat(getComputedStyle(button).fontSize),left:button.getBoundingClientRect().left,right:button.getBoundingClientRect().right})));
@@ -183,7 +183,7 @@ test('standards and deferred workspace menus remain siblings, remember their top
         await frame.evaluate(()=>parent.postMessage({type:'gp-private-workspace-fullscreen',active:true},location.origin));
         await page.waitForFunction(()=>document.documentElement.style.overflow==='hidden');
         await page.evaluate(()=>preview.suspend());assert.equal(await page.evaluate(()=>document.documentElement.style.overflow),'');
-        await page.evaluate(()=>preview.activate());
+        await page.evaluate(()=>preview.activate());assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Developer');await page.locator('[data-gp-private-workspace="studio-alpha"]').click();
         await page.locator('[data-gp-private-workspace="studio-alpha"]').waitFor();
         await frame.evaluate(()=>parent.postMessage({type:'gp-private-workspace-fullscreen',active:true},location.origin));
         await page.waitForFunction(()=>document.documentElement.style.overflow==='hidden');
@@ -197,7 +197,7 @@ test('standards and deferred workspace menus remain siblings, remember their top
         assert.equal(await page.locator('[data-gp-private-workspace]').count(),0);
         await page.evaluate(()=>preview.activate());await page.waitForFunction(()=>pendingLoads.length===1);
         await page.evaluate(()=>pendingLoads.shift()(workspaceItems));await page.locator('[data-gp-private-workspace="studio-alpha"]').waitFor();
-        assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');
+        assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Developer');
         await page.evaluate(()=>preview.destroy());assert.equal(await page.locator('#preview').isVisible(),false);assert.equal(await page.locator('iframe').count(),0);
       }finally{await page.close();}
     });

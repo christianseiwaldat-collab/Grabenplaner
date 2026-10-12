@@ -31,6 +31,9 @@
 .gp-definitions-topic-symbol { flex:none;display:grid;place-items:center;width:20px;font-size:15px;font-weight:400; }
 .gp-definitions-version { margin:7px 4px 2px;padding-top:11px;border-top:1px solid var(--line);font-size:9px;line-height:1.5;color:var(--muted); }
 .gp-definitions-content { min-width:0;display:grid;gap:16px; }
+.gp-developer-overview { display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;padding:18px; }
+.gp-developer-overview button { display:grid;gap:6px;text-align:left;border:1px solid var(--line);border-radius:10px;padding:16px;background:var(--surface-soft);color:var(--ink);cursor:pointer; }
+.gp-developer-overview strong { font-size:15px; }.gp-developer-overview span { font-size:12px;line-height:1.5;color:var(--muted); }
 .gp-definition-card { min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden; }
 .gp-definition-card > header { padding:18px 20px 14px;border-bottom:1px solid var(--line);background:var(--surface-soft); }
 .gp-definition-tag { display:inline-block;margin-bottom:6px;font-size:8px;font-weight:750;color:var(--coral);letter-spacing:.1em;text-transform:uppercase; }
