@@ -1,8 +1,9 @@
 # Versionsstatus
 
-## v0.92.83 Beta · Quellstand
+## v0.92.84 Beta · Quellstand
 
 Mobile Ansichten, Kameraabläufe und verschiebbare Arbeitsfenster verbessert.
+Hinweise vor der Kameraaufnahme lesbarer dargestellt.
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease

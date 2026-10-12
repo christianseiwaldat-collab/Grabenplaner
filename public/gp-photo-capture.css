@@ -7,6 +7,7 @@
 .gp-photo{font:inherit;max-width:100%;overflow-wrap:break-word}
 .gp-photo-camera{overflow:hidden;max-width:100%;border-radius:12px;background:#14201a}
 .gp-photo-camera video{width:100%;height:100%;max-height:none;object-fit:contain;border-radius:0}
+.gp-photo-camera>.fine{margin:0;padding:16px;color:#e8f1eb;font-size:14px;line-height:1.5}
 .gp-photo .buttons{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}
 .gp-photo button{appearance:none;min-width:44px;min-height:44px;padding:11px 16px;border:1px solid var(--line,#b5c9be);border-radius:10px;background:var(--paper,#fffefa);color:var(--ink,#183c33);font:600 14px/1.3 system-ui,sans-serif;cursor:pointer;touch-action:manipulation}
 .gp-photo .buttons button{flex:1 1 auto;max-width:100%;min-height:44px}

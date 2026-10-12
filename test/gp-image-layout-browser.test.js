@@ -14,6 +14,21 @@ async function fixture(){
   return {origin,page,context,errors,async close(){await browser.close();await new Promise(resolve=>server.close(resolve));}};
 }
 async function assertInside(locator,width,height){const b=await locator.boundingBox();assert(b);assert(b.x>=-1&&b.y>=-1&&b.x+b.width<=width+1&&b.y+b.height<=height+1,JSON.stringify(b));}
+test('idle camera instructions have readable contrast before the camera is opened',options,async()=>{
+ const f=await fixture();
+ try {
+  await f.page.goto(f.origin+'/api/portal/v1/private-workspaces/example-camera/page');
+  await f.page.waitForFunction(()=>window.ready===true);
+  const hint=f.page.locator('.gp-photo-camera>.fine');
+  assert(await hint.isVisible());
+  const colors=await hint.evaluate(e=>({foreground:getComputedStyle(e).color,background:getComputedStyle(e.parentElement).backgroundColor}));
+  const luminance=value=>{const rgb=value.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
+  const a=luminance(colors.foreground),b=luminance(colors.background);
+  assert((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5,'Idle instruction contrast must satisfy readable normal text');
+  for(const width of [320,412,700]){await f.page.setViewportSize({width,height:800});await assertInside(hint,width,800);}
+  assert.deepEqual(f.errors,[]);
+ } finally {await f.close();}
+});
 test('closed adopted windows cannot obscure definitions, and a selected module keeps the GP background usable',options,async()=>{
  const f=await fixture();try{const {page}=f;await page.setContent('<button id="background">Hintergrund</button><main id="definitions"></main>');for(const file of ['gp-definitions-registry.js','gp-definitions.js'])await page.addScriptTag({url:f.origin+'/'+file});await page.evaluate(()=>{window.definitions=GpDefinitions.mount(document.getElementById('definitions'),{canUse:()=>true,key:()=> 'BEISPIEL',loadWorkspaces:async()=>[{id:'example-camera',title:'BEISPIEL',url:'/api/portal/v1/private-workspaces/example-camera/page',camera:true}]});definitions.activate();});await page.locator('[data-gp-private-workspace]').waitFor();assert.equal(await page.locator('iframe[src]').count(),0);assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');await page.locator('[data-gp-private-workspace]').click();const iframe=page.frameLocator('iframe');await iframe.locator('#settings').waitFor();await page.waitForFunction(()=>document.querySelector('.gp-private-window-portal')?.hidden===true);assert.equal(await page.locator('.gp-private-window-portal').evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)');await iframe.locator('#settings').click();const dialog=page.locator('dialog[open]#sample');await dialog.waitFor();await dialog.locator('#draft').fill('Entwurf behalten');const title=dialog.locator('[data-window-title]');assert((await dialog.boundingBox()).x>250);await title.focus();for(let i=0;i<70;i++)await title.press('ArrowLeft');assert((await dialog.boundingBox()).x<=12);await dialog.locator('[data-window-toggle]').click();assert.equal(Math.round((await dialog.boundingBox()).height),44);await page.locator('#background').click();await dialog.locator('[data-window-toggle]').click();assert.equal(await dialog.locator('#draft').inputValue(),'Entwurf behalten');await dialog.locator('#close').click();await page.waitForFunction(()=>document.querySelector('.gp-private-window-portal').hidden);assert.equal(await page.locator('#background').evaluate(e=>document.elementFromPoint(10,10)===e),true);await page.locator('[data-gp-definition-section="standards"]').click();assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');assert.deepEqual(f.errors,[]);}finally{await f.close();}
 });
