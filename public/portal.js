@@ -3496,7 +3496,7 @@ function renderMobileHome() {
       <span><strong>${esc(tile.label)}</strong><small>${esc(tile.description)}</small></span>
       <b aria-hidden="true">›</b>
     </button>
-  `).join("") + launches.map(item => `<button type="button" class="gp-private-launch" data-private-workspace="${esc(item.id)}" style="--private-launch-color:${esc(item.launch.color)}"><strong>${esc(item.launch.label)}</strong></button>`).join("");
+  `).join("") + launches.map(item => `<button type="button" class="gp-private-launch" data-private-workspace="${esc(item.id)}" style="--private-launch-color:${esc(item.launch.color)};--mobile-home-tile-color:${esc(item.launch.color)}"><span class="mobile-home-tile-accent" aria-hidden="true"></span><span><strong>${esc(item.launch.label)}</strong></span><b aria-hidden="true">›</b></button>`).join("");
 }
 
 function renderBranchMobileActionBar() {

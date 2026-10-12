@@ -12,7 +12,7 @@ test('actual personnel and organization windows preserve drafts while security d
   await page.setContent('<button id="background">BEISPIEL Hintergrund</button>'+[...ids,'workRuleFinalizeModal','positionDeleteModal'].map(dialog).join('')+'<div id="library"></div><div id="team"></div>');
   for(const file of ['styles.css','mobile-refinements.css','gp-window.css','personnel-learning.css','learning-library.css','learning-team.css'])if(fs.existsSync(path.join(root,'public',file)))await page.addStyleTag({path:path.join(root,'public',file)});
   for(const file of ['gp-window-preferences.js','gp-window.js','learning-library.js','learning-team.js'])await page.addScriptTag({path:path.join(root,'public',file)});
-  const app=fs.readFileSync(path.join(root,'public/app.js'),'utf8'),start=app.indexOf('function requestClosePersonnelLifecycleEditor('),end=app.indexOf('\n}\n',start)+3;assert.ok(start>0&&end>start);
+  const app=fs.readFileSync(path.join(root,'public/app.js'),'utf8').replace(/\r\n/g,'\n'),start=app.indexOf('function requestClosePersonnelLifecycleEditor('),end=app.indexOf('\n}\n',start)+3;assert.ok(start>0&&end>start);
   await page.evaluate(source=>{
    window.actor='BEISPIEL';window.clicked=0;window.discards=0;window.allowDiscard=false;window.state={personnelLifecycleEditorDirty:true};
    window.elements={personnelLifecycleEditorDialog:document.getElementById('personnelLifecycleEditorDialog')};

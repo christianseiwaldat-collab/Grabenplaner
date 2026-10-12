@@ -26,7 +26,10 @@
     on(standardsButton,'click',()=>{if(!allowed())return;topic=standardTopic;render();});
     const buttons=new Map();
     const privateButtons=new Map(),privateGroups=new Map(),privateParents=new Map(),frames=new Map();let loadGeneration=0,loadedActor='',loadingActor='';
-    function frameScreen(frame,enabled){if(enabled){if(frame.dataset.gpScreenStyle===undefined){frame.dataset.gpScreenStyle=frame.style.cssText;frame.dataset.gpScreenOverflow=doc.documentElement.style.overflow;}doc.documentElement.style.overflow='hidden';frame.style.cssText='position:fixed;inset:0;width:100vw;height:100dvh;min-height:0;border:0;border-radius:0;z-index:50000';}else if(frame.dataset.gpScreenStyle!==undefined){frame.style.cssText=frame.dataset.gpScreenStyle;doc.documentElement.style.overflow=frame.dataset.gpScreenOverflow||'';delete frame.dataset.gpScreenStyle;delete frame.dataset.gpScreenOverflow;}}
+    function screenGeometry(frame){const win=doc.defaultView,v=win.visualViewport,scale=Number.parseFloat(win.getComputedStyle(doc.body).zoom)||1;Object.assign(frame.style,{left:(v?.offsetLeft||0)/scale+'px',top:(v?.offsetTop||0)/scale+'px',width:(v?.width||win.innerWidth)/scale+'px',height:(v?.height||win.innerHeight)/scale+'px'});}
+    function frameScreen(frame,enabled){if(enabled){if(frame.dataset.gpScreenStyle===undefined){frame.dataset.gpScreenStyle=frame.style.cssText;frame.dataset.gpScreenOverflow=doc.documentElement.style.overflow;}doc.documentElement.style.overflow='hidden';frame.style.cssText='position:fixed;inset:auto;min-height:0;border:0;border-radius:0;z-index:50000';screenGeometry(frame);}else if(frame.dataset.gpScreenStyle!==undefined){frame.style.cssText=frame.dataset.gpScreenStyle;doc.documentElement.style.overflow=frame.dataset.gpScreenOverflow||'';delete frame.dataset.gpScreenStyle;delete frame.dataset.gpScreenOverflow;}}
+    const resizeScreens=()=>{for(const frame of frames.values())if(frame.dataset.gpScreenStyle!==undefined)screenGeometry(frame);};on(doc.defaultView,'resize',resizeScreens);if(doc.defaultView.visualViewport){on(doc.defaultView.visualViewport,'resize',resizeScreens);on(doc.defaultView.visualViewport,'scroll',resizeScreens);}
+    if(doc.defaultView.ResizeObserver){const observer=new doc.defaultView.ResizeObserver(resizeScreens);observer.observe(doc.body);handlers.push(()=>observer.disconnect());}
     on(doc.defaultView,'message',event=>{
       if(event.origin!==doc.defaultView.location.origin||!allowed())return;
       const source=[...frames.values()].find(frame=>event.source===frame.contentWindow);if(!source)return;
@@ -70,7 +73,7 @@
       if(isPrivate){
         for(const button of buttons.values())selectButton(button,false);
         counter.textContent='Persönlicher Arbeitsbereich';clear.hidden=true;
-        standardContent.hidden=true;standardContent.style.display='none';privateContent.hidden=false;for(const[id,frame]of frames){frame.hidden=id!==topic;if(id!==topic)frameScreen(frame,false);frame.contentWindow.postMessage({type:'gp-private-workspace-visibility',active:id===topic},doc.defaultView.location.origin);}return;
+        standardContent.hidden=true;standardContent.style.display='none';privateContent.hidden=false;for(const[id,frame]of frames){frame.hidden=id!==topic;if(id===topic&&!frame.getAttribute('src'))frame.src=frame.dataset.gpWorkspaceUrl;if(id!==topic)frameScreen(frame,false);frame.contentWindow?.postMessage({type:'gp-private-workspace-visibility',active:id===topic},doc.defaultView.location.origin);}return;
       }
       standardContent.hidden=false;standardContent.style.display='grid';privateContent.hidden=true;
       for(const frame of frames.values()){frameScreen(frame,false);frame.contentWindow.postMessage({type:'gp-private-workspace-visibility',active:false},doc.defaultView.location.origin);}
@@ -121,7 +124,7 @@
             }else{
               const group=node('div',undefined,'gp-definitions-menu-group');group.append(button);privateGroups.set(id,group);nav.insertBefore(group,stamp);
             }
-            frame.title=item.title;frame.src=item.url;frame.style.cssText='width:100%;height:calc(100vh - 250px);min-height:550px;border:0;border-radius:12px';
+            frame.title=item.title;frame.dataset.gpWorkspaceUrl=item.url;frame.style.cssText='width:100%;height:calc(100dvh - 250px);min-height:550px;border:0;border-radius:12px';
             if(item.camera===true)frame.setAttribute('allow',"camera 'self'; fullscreen 'self'");
             on(frame,'load',()=>frame.contentWindow.postMessage({type:'gp-private-workspace-visibility',active:allowed()&&frames.get(topic)===frame},doc.defaultView.location.origin));
             frame.setAttribute('referrerpolicy','no-referrer');frame.hidden=true;privateContent.append(frame);frames.set(id,frame);privateButtons.set(id,button);

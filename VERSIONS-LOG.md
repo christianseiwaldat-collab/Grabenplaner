@@ -1,8 +1,8 @@
 # Versionsstatus
 
-## v0.92.82 Beta · Quellstand
+## v0.92.83 Beta · Quellstand
 
-Importprüfung, Personal-Arbeitsbereiche, Bestellungen und versionierte Abläufe.
+Mobile Ansichten, Kameraabläufe und verschiebbare Arbeitsfenster verbessert.
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease

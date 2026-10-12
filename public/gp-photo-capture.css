@@ -1,3 +1,37 @@
 .gp-photo{min-width:0}.gp-photo video{display:block;width:100%;max-height:65dvh;object-fit:contain;background:#17201c;border-radius:10px}.gp-photo [hidden]{display:none!important}.gp-photo-camera{margin:0 0 12px}.gp-photo-review{position:relative;background:#17201c;border-radius:12px;overflow:hidden;min-height:300px}.gp-photo-review>img{display:block;width:100%;height:min(70dvh,660px);object-fit:contain}.gp-photo-overlay{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,#14221ce8 24%);color:#fff;padding:30px 16px 16px}.gp-photo-overlay label{display:grid;gap:6px;font-size:12px}.gp-photo-overlay textarea{width:100%;box-sizing:border-box;background:#fffffff2;color:#17201c;border:1px solid #c9d8cd;border-radius:9px;min-height:62px;max-height:130px;padding:10px;font:15px/1.5 system-ui;resize:vertical}.gp-photo-overlay output{display:block;font-size:11px;text-align:right;margin:4px 0 10px}.gp-photo-overlay .buttons{display:flex;flex-wrap:wrap;gap:8px}.gp-photo .buttons button{min-height:42px}.gp-photo-review.is-screen,.gp-photo-review:fullscreen{position:fixed;inset:0;border-radius:0;z-index:1100}.gp-photo-review.is-screen>img,.gp-photo-review:fullscreen>img{height:100dvh}.gp-photo-progress{margin:16px 0}.gp-photo-progress progress{width:100%;height:8px;accent-color:var(--green,#236d51)}.gp-photo-progress p{font-size:12px}.gp-photo-result p{white-space:pre-wrap;overflow-wrap:anywhere}.gp-photo-result img{width:100%;max-height:70dvh;object-fit:contain;border-radius:10px;background:#17201c}.gp-photo-result h3{font-size:16px}.gp-gallery-zip-option{display:flex!important;flex-direction:row!important;align-items:center;gap:10px!important;margin:12px 0;font-size:12px}.gp-gallery-zip-option input{width:16px!important;height:16px;flex:0 0 16px}.gp-gallery-download form>label:not(.gp-gallery-zip-option){display:grid;gap:6px;margin-bottom:12px}.gp-gallery-download form>select,.gp-gallery-download form>label>select{width:100%}.gp-gallery-download .download{display:inline-block;margin:10px 0;padding:10px}.generation-tabs{display:flex;gap:8px;margin-bottom:16px}.generation-tabs [aria-selected=true]{background:var(--soft,#eaf1e8);border-color:var(--green,#236d51)}.policy-fieldset{border:1px solid var(--line,#dce4db);border-radius:8px;padding:10px;margin:12px 0}.policy-fieldset legend{font-size:12px;font-weight:600}.policy-checks{display:flex;flex-wrap:wrap;gap:9px 16px}.policy-checks label{display:flex!important;align-items:center;gap:7px!important;font-size:12px}.policy-checks input{width:16px!important;height:16px}.usage-status{font-variant-numeric:tabular-nums}.image-asset-tabs{display:flex;gap:8px;margin-bottom:10px}.image-asset-tabs [aria-pressed=true]{background:var(--soft,#eaf1e8)}@media(max-width:700px){.gp-photo-review{min-height:360px}.gp-photo-overlay{padding:32px 12px 12px}.gp-photo-overlay .buttons button{font-size:12px;padding:9px}.gp-photo-review>img{height:68dvh}.gp-photo-camera video{max-height:65dvh}.policy-checks{gap:12px}}
 .gp-photo-review>.gp-photo-progress{position:absolute;top:14px;left:12px;right:12px;margin:0;padding:12px;border-radius:9px;background:#fffefaf2;color:#243c33;box-shadow:0 3px 18px #0002}.gp-photo-review>.gp-photo-progress p{margin:6px 0 0}
 .gp-photo-fast .gp-photo-camera{position:relative;overflow:hidden;background:#14201a;border-radius:12px}.gp-photo-fast .gp-photo-camera video{height:100%;max-height:none;border-radius:0;object-fit:contain}.gp-photo-crop-frame{position:absolute;box-sizing:border-box;border:3px solid #168dff;box-shadow:0 0 0 2000px #07151c66;pointer-events:none}.gp-photo-fast .gp-photo-review .buttons:empty{display:none}
+
+/* Camera, review and input share the currently visible browser area. */
+.gp-photo,.gp-photo *{box-sizing:border-box}
+.gp-photo{font:inherit;max-width:100%;overflow-wrap:break-word}
+.gp-photo-camera{overflow:hidden;max-width:100%;border-radius:12px;background:#14201a}
+.gp-photo-camera video{width:100%;height:100%;max-height:none;object-fit:contain;border-radius:0}
+.gp-photo .buttons{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}
+.gp-photo button{appearance:none;min-width:44px;min-height:44px;padding:11px 16px;border:1px solid var(--line,#b5c9be);border-radius:10px;background:var(--paper,#fffefa);color:var(--ink,#183c33);font:600 14px/1.3 system-ui,sans-serif;cursor:pointer;touch-action:manipulation}
+.gp-photo .buttons button{flex:1 1 auto;max-width:100%;min-height:44px}
+.gp-photo button.primary{background:var(--green,#236d51);border-color:var(--green,#236d51);color:#fff}
+.gp-photo button:disabled{opacity:.55;cursor:default}
+.gp-photo :focus-visible{outline:3px solid #168dff;outline-offset:2px}
+.gp-photo-review{min-height:0;height:min(68dvh,660px)}
+.gp-photo-review>img{height:100%;max-width:100%}
+.gp-photo-overlay{box-sizing:border-box;max-height:calc(100% - 8px);overflow-y:auto;overscroll-behavior:contain;scroll-padding:12px}
+.gp-photo-overlay textarea{font:16px/1.45 system-ui,sans-serif;min-height:68px;max-height:100px;scroll-margin:12px}
+.gp-photo-review.is-screen,.gp-photo-review:fullscreen{inset:auto;left:var(--gp-photo-screen-left,0px);top:var(--gp-photo-screen-top,0px);width:var(--gp-photo-screen-width,100vw);height:var(--gp-photo-screen-height,100dvh);min-height:0;border-radius:0}
+.gp-photo-review.is-screen>img,.gp-photo-review:fullscreen>img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+@media(max-width:700px){
+  .gp-photo .buttons button{padding:11px 12px;font-size:14px;min-height:46px}
+  .gp-photo-camera{margin-bottom:12px}
+  .gp-photo-overlay{padding:24px 12px max(12px,env(safe-area-inset-bottom))}
+  .gp-photo-overlay .buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .gp-photo-overlay label{font-size:13px;line-height:1.4}
+  .gp-photo-review>img{height:100%}
+}
+@media(max-width:700px) and (max-height:480px){
+  .gp-photo-overlay{padding:8px}
+  .gp-photo-overlay label{font-size:12px;line-height:1.2}
+  .gp-photo-overlay textarea{height:60px;min-height:60px;max-height:80px;padding:8px;font:16px/1.3 system-ui,sans-serif}
+  .gp-photo-overlay output{position:absolute;top:8px;right:8px;margin:0;font-size:10px}
+  .gp-photo-overlay .buttons{margin-top:8px}
+  .gp-photo-overlay .buttons button{min-height:44px;padding:8px;font-size:13px}
+}
