@@ -5,7 +5,7 @@
   else root.GpDefinitions=api;
 })(typeof window==='object'?window:globalThis,function(registry){
   'use strict';
-  function mount(root,{canUse=()=>false,key=()=>'',loadWorkspaces=null,onExit=()=>{}}={}){
+  function mount(root,{canUse=()=>false,key=()=>'',loadWorkspaces=null,onExit=()=>{},api=null}={}){
     if(!root||!registry)throw new TypeError('Die GP-Definitionsübersicht benötigt einen Bereich und die Registry.');
     const doc=root.ownerDocument,handlers=[];let active=false,dead=false,actor='',topic='windows',standardTopic='windows',query='';
     const on=(element,type,listener)=>{element.addEventListener(type,listener);handlers.push(()=>element.removeEventListener(type,listener));};
@@ -46,6 +46,19 @@
       on(button,'click',()=>{if(!allowed())return;topic=standardTopic=item.id;render();});
     }
     const stamp=node('p','Registry · Version '+registry.VERSION+' · '+new Intl.DateTimeFormat('de-AT',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'UTC'}).format(new Date(registry.UPDATED+'T12:00:00Z')),'gp-definitions-version');
+    const voiceContent=node('div');voiceContent.hidden=true;content.append(voiceContent);
+    const voiceWorkspace=api&&doc.defaultView.GpVoiceAssistantSettings?.mount(voiceContent,{api,canUse,key});
+    const voiceButtons=new Map();
+    if(voiceWorkspace){
+      const group=node('div',undefined,'gp-definitions-menu-group'),children=node('div',undefined,'gp-definitions-menu-children');
+      children.id='gpDefinitionsVoiceTopics';children.setAttribute('role','group');children.setAttribute('aria-label','voice.assistants');
+      for(const id of ['voice.assistants','portal.assistant']){
+        const button=node('button',id);button.type='button';button.dataset.gpVoicePage=id;button.setAttribute('aria-controls',content.id);
+        voiceButtons.set(id,button);if(id==='voice.assistants'){group.append(button);button.setAttribute('aria-expanded','true');button.setAttribute('aria-controls',content.id+' '+children.id);}else children.append(button);
+        on(button,'click',()=>{if(!allowed())return;topic=id;render();});
+      }
+      group.append(children);nav.append(group);
+    }
     nav.append(stamp);layout.append(nav,content);
     const note=node('p','Diese Definitionen gelten als GP-Standard für neue und überarbeitete Bereiche. Ältere Bereiche werden bei ihrer Überarbeitung an diesen Standard angepasst.','gp-definitions-scope-note');
     root.replaceChildren(toolbar,layout,note);
@@ -61,11 +74,20 @@
     }
     function render(){
       root.hidden=!allowed();if(!allowed()){
+        voiceWorkspace?.suspend();voiceWorkspace?.synchronize();
         for(const frame of frames.values()){frameScreen(frame,false);frame.contentWindow.postMessage({type:'gp-private-workspace-visibility',active:false},doc.defaultView.location.origin);}
         if(!canUse()||!key()){standardContent.replaceChildren();clearPrivate();}
         return;
       }
-      const isPrivate=privateButtons.has(topic);toolbar.hidden=isPrivate;note.hidden=isPrivate;standardItems.hidden=isPrivate;standardsButton.setAttribute('aria-expanded',String(!isPrivate));standardsButton.setAttribute('aria-pressed',String(!isPrivate));standardsButton.classList.toggle('is-active-ancestor',!isPrivate);
+      const isVoice=voiceButtons.has(topic),isPrivate=privateButtons.has(topic),isTool=isPrivate||isVoice;toolbar.hidden=isTool;note.hidden=isTool;standardItems.hidden=isTool;standardsButton.setAttribute('aria-expanded',String(!isTool));standardsButton.setAttribute('aria-pressed',String(!isTool));standardsButton.classList.toggle('is-active-ancestor',!isTool);
+      for(const[id,button]of voiceButtons)selectButton(button,id===topic,id==='voice.assistants'&&topic==='portal.assistant');
+      if(isVoice){
+        for(const button of buttons.values())selectButton(button,false);
+        for(const button of privateButtons.values())selectButton(button,false);
+        for(const frame of frames.values()){frame.hidden=true;frameScreen(frame,false);frame.contentWindow.postMessage({type:'gp-private-workspace-visibility',active:false},doc.defaultView.location.origin);}
+        standardContent.hidden=true;standardContent.style.display='none';privateContent.hidden=true;voiceWorkspace.activate(topic);return;
+      }
+      voiceWorkspace?.suspend();
       for(const[id,button]of privateButtons)selectButton(button,id===topic,privateParents.get(topic)===id);
       if(isPrivate){
         for(const button of buttons.values())selectButton(button,false);
@@ -99,6 +121,7 @@
       const next=String(key()||'');if(actor!==next||!canUse()){
         actor=next;topic=standardTopic='windows';query='';input.value='';loadGeneration++;loadedActor='';loadingActor='';
         clearPrivate();standardContent.replaceChildren();
+        voiceWorkspace?.reset();
       }
       render();
       if(allowed()&&loadWorkspaces&&loadedActor!==actor&&loadingActor!==actor){
@@ -134,7 +157,7 @@
     on(input,'input',()=>{if(!allowed())return;query=input.value;topic=standardTopic='all';render();});
     on(clear,'click',()=>{if(!allowed())return;query='';input.value='';render();input.focus();});
     return {activate(){active=true;synchronize();},suspend(){active=false;if(loadingActor){loadGeneration++;loadingActor='';}render();},synchronize,
-      destroy(){if(dead)return;active=false;for(const frame of frames.values()){frameScreen(frame,false);frame.contentWindow.postMessage({type:'gp-private-workspace-visibility',active:false},doc.defaultView.location.origin);}dead=true;handlers.forEach(remove=>remove());root.replaceChildren();root.hidden=true;},
+      destroy(){if(dead)return;active=false;voiceWorkspace?.reset();for(const frame of frames.values()){frameScreen(frame,false);frame.contentWindow.postMessage({type:'gp-private-workspace-visibility',active:false},doc.defaultView.location.origin);}dead=true;handlers.forEach(remove=>remove());root.replaceChildren();root.hidden=true;},
       get state(){return {active:allowed(),topic,standardTopic,query,actor};}};
   }
   return Object.freeze({mount});

@@ -1,4 +1,5 @@
 let portalLearningAssessmentPanel=null;
+let portalVoiceAssistant=null;
 const portalState = {
   session: null,
   weekStart: mondayOf(new Date()),
@@ -2494,6 +2495,7 @@ function neutralizeCredentialDialogsForLogin() {
 }
 
 function showLogin(error = "") {
+  portalVoiceAssistant?.reset();
   portalLearningAssessmentPanel?.clear();
   portalKnowledgeLibrary?.clear();
   globalThis.grabenplanerNavigation?.stop();
@@ -2630,6 +2632,7 @@ function showPortal(session) {
     neutralizeBirthdayPresentationTheme();
   }
   portalState.session = session;
+  void portalVoiceAssistant?.synchronize();
   void privatePortalWorkspaces?.synchronize();
   syncPortalLogoutControls();
   syncPortalWindows();
@@ -2860,6 +2863,7 @@ async function logout() {
       signal: controller.signal,
     });
     if (!current()) return;
+    portalVoiceAssistant?.reset();
     portalState.session = null;
     void privatePortalWorkspaces?.synchronize();
     syncPortalWindows();
@@ -8653,6 +8657,8 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
   onError: () => message(el.portalLogoutStatus, "Die Seitennavigation konnte nicht wiederhergestellt werden.", true),
 });
 initializeDateRangeCalendar();
+portalVoiceAssistant=window.GpVoiceAssistant?.mount({ api, getSession: () => portalState.session,
+  onSubmitted: () => Promise.allSettled([loadVacationRequests(), loadTimeOffRequests(), loadAbsenceHistory(), loadNotifications()]) });
 initialize();
 
 portalLearningAssessmentPanel=GrabenplanerLearningAssessment.init({api,printPdf:openPortalLearningConfirmation});

@@ -24,6 +24,7 @@ let rightsWorkspace = null, rightsWorkspaceActor = '', rightsLoadController = nu
 let rightsSettingsWindows = null, permissionDefaultsUI = null;
 let rightsEditorGeneration = 0, rightsEditorSaveContext = null, rightsEditorSnapshot = null;
 let gpDefinitionsWorkspace = null, privateWorkspaceReturnRoute = null;
+let planningAssistantWorkspace = null;
 (() => {
   const storageKey = "grabenplaner-bootstrap-token";
   const parameters = new URLSearchParams(window.location.search);
@@ -1388,6 +1389,7 @@ function showLoginGate(message = "") {
   clearUsbProvisioningPasswords();
   resetAdminPersonalActionsState("");
   state.portalSession = null;
+  planningAssistantWorkspace?.reset();
   syncWorkflowStudio();
   personnelDashboardInformation?.clear();
   syncPersonnelDashboardWorkspace();
@@ -1454,6 +1456,7 @@ function renderGpDefinitionsAccess() {
 function activateGpDefinitions() {
   if (!canUseGpDefinitions() || !window.GpDefinitions) return;
   if (!gpDefinitionsWorkspace) gpDefinitionsWorkspace = window.GpDefinitions.mount(document.getElementById('gpDefinitionsWorkspace'), {
+    api,
     canUse: canUseGpDefinitions, key: () => String(state.portalSession?.user?.employeeNumber || ''),
     loadWorkspaces: async () => (await api('/api/portal/v1/private-workspaces')).workspaces,
     onExit: () => {
@@ -3792,6 +3795,8 @@ function render({ period = null } = {}) {
   renderSummary();
   renderBranchSupervisionAssessment();
   renderWorkRuleAssessment();
+  if (!planningAssistantWorkspace && window.GpPlanningAssistant) planningAssistantWorkspace = window.GpPlanningAssistant.mount(document.getElementById('planningAssistantPanel'), { api });
+  planningAssistantWorkspace?.synchronize({ data: state.data, session: state.portalSession, allowed: canReadStartDashboardSchedule() });
   renderTimeline();
   renderRemarks();
   renderHoursOverview();

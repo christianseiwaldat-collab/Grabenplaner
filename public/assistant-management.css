@@ -1,0 +1,43 @@
+.voice-settings, .planning-assistant { color:var(--ink, #26332c); min-width:0; overflow-wrap:anywhere; }
+.voice-settings[hidden], .voice-settings [hidden], .planning-assistant[hidden], .planning-assistant [hidden] { display:none !important; }
+.voice-settings { padding:16px; border:1px solid var(--line, #d4dcd5); border-radius:12px; background:var(--paper, #fff); }
+.voice-settings a { color:var(--ink, #26332c); text-decoration:underline; text-underline-offset:3px; }
+.voice-settings header p, .voice-settings form>p { color:var(--muted, #546259); line-height:1.5; }
+.voice-settings h2 { margin:0 0 8px; }
+.voice-settings form:not([hidden]) { display:grid; gap:16px; padding:18px; border:1px solid var(--line, #d4dcd5); border-radius:12px; background:var(--paper, #fff); }
+.voice-settings label { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.voice-settings input[type=number] { width:105px; }
+.voice-settings input, .planning-assistant input, .planning-assistant select { min-height:44px; color:inherit; background:var(--paper, #fff); border:1px solid var(--line, #bac8be); border-radius:6px; padding:8px; max-width:100%; }
+.voice-settings input[type=checkbox], .planning-assistant input[type=checkbox] { width:22px; flex:0 0 22px; accent-color:var(--green, #27664b); }
+.voice-settings dl { display:grid; grid-template-columns:minmax(110px, 1fr) minmax(0, 2fr); gap:8px; }
+.voice-settings dd { margin:0; font-weight:600; }
+.voice-settings-actions, .planning-assistant-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.voice-settings button, .planning-assistant button, .planning-assistant summary { cursor:pointer; min-height:44px; }
+.voice-settings button, .planning-assistant button { font-size:13px; }
+.voice-settings .secondary-button, .planning-assistant .secondary-button { color:var(--ink, #26332c); background:var(--paper, #fff); border:1px solid var(--line, #bac8be); }
+.voice-settings-status { min-height:1.5em; }
+.planning-assistant { margin:14px 0; padding:14px 16px; border:1px solid var(--line, #cad5ce); border-radius:12px; background:var(--paper, #fff); }
+.planning-assistant>header { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; }
+.planning-assistant h2 { font-size:18px; margin:0; }
+.planning-assistant p { margin:6px 0; line-height:1.5; }
+.planning-assistant-status { font-weight:600; }
+.planning-assistant-filter { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:12px 0; }
+.planning-assistant-list { display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(min(100%, 340px),1fr)); }
+.planning-assistant-finding { padding:12px; border:1px solid var(--line, #d3dcd5); border-left:4px solid #6c7b71; border-radius:8px; min-width:0; }
+.planning-assistant-finding[data-severity=error] { border-left-color:#c24444; }
+.planning-assistant-finding[data-severity=warning] { border-left-color:#b47d1f; }
+.planning-assistant-finding[data-severity=unknown] { border-left-color:#76659a; }
+.planning-assistant-finding h3 { font-size:15px; margin:6px 0; }
+.planning-assistant-finding small { color:var(--muted, #526458); }
+.planning-assistant-finding .planning-assistant-suggestion { border-top:1px solid var(--line, #d3dcd5); padding-top:7px; }
+.planning-assistant-settings { margin-top:14px; border-top:1px solid var(--line, #d3dcd5); padding-top:8px; }
+.planning-assistant-settings form { display:grid; gap:12px; }
+.planning-assistant-settings label { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.planning-assistant-settings fieldset { min-width:0; border:1px solid var(--line, #d3dcd5); border-radius:8px; }
+.planning-assistant-settings .planning-position-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.planning-position-row select { flex:1 1 160px; }
+.planning-position-row input { width:85px; }
+.planning-assistant-settings .planning-key-people { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%, 220px),1fr)); max-height:220px; overflow:auto; }
+[data-active-page-theme=dark] .voice-settings, [data-active-page-theme=dark] .planning-assistant { --paper:#172720; --ink:#e4eee7; --muted:#b3c9ba; --line:#41584a; }
+.voice-settings :focus-visible, .planning-assistant :focus-visible { outline:3px solid #5c9b7e; outline-offset:2px; }
+@media(max-width:600px) { .voice-settings form:not([hidden]) { padding:12px; } .voice-settings label { flex-wrap:wrap; gap:6px; } .planning-assistant { padding:12px; } .voice-settings-actions button { flex:1; } }

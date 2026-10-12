@@ -17,6 +17,11 @@ const sidebarNotepadModel = require("./public/sidebar-notepad-preferences");
 const gpWindowsModel = require('./public/gp-window-preferences');
 const { personalAbsenceRequestPeriod, absenceRequestSubmissionAllowed,
   absenceRequestSubmissionAssessment } = require('./lib/absence-request-policy');
+const { createOpenAiVoiceProvider } = require('./lib/voice-assistant-openai');
+const voiceAssistantSettings = require('./lib/voice-assistant-settings');
+const planningAssistantSettings = require('./lib/planning-assistant-settings');
+const { createPlanningAssistantReader } = require('./lib/planning-assistant-gp');
+const { createVoiceAssistant } = require('./lib/voice-assistant');
 const { resolveScheduleDuty, defaultScheduleDutyCode, manualPlanningHours, PLANNING_DAY_COUNT,
   DEFAULT_DUTY_COLORS, normalizeScheduleDutyColors, scheduleDutyColor, scheduleDutyTextColor } = require("./public/schedule-duty");
 const {
@@ -3856,11 +3861,12 @@ app.use((request, response, next) => {
   response.setHeader("X-Frame-Options", embeddedPdfPreview ? "SAMEORIGIN" : "DENY");
   response.setHeader("Referrer-Policy", "no-referrer");
   const portalCamera=request.path==='/'||request.path==='/index.html'||request.path==='/portal'||request.path==='/portal/'||request.path==='/portal.html'||request.path.startsWith('/api/portal/v1/private-workspaces/');
-  response.setHeader("Permissions-Policy", `camera=(${portalCamera?'self':''}), microphone=(), geolocation=()`);
+  const voicePortal = voiceAssistantConfig().enabled && ['/portal', '/portal/', '/portal.html'].includes(request.path);
+  response.setHeader("Permissions-Policy", `camera=(${portalCamera?'self':''}), microphone=(${voicePortal?'self':''}), geolocation=()`);
   response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
   response.setHeader("X-Permitted-Cross-Domain-Policies", "none");
-  response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'${ocrClientAsset ? " 'wasm-unsafe-eval'" : ""}; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
+  response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'${ocrClientAsset ? " 'wasm-unsafe-eval'" : ""}; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
   if (request.secure) response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   if ((serverModeActive && request.path.startsWith("/api/"))
     || request.path.startsWith("/api/portal/") || request.path.startsWith("/api/mobile/")) {
@@ -6488,6 +6494,10 @@ function getSettings() {
   return { ...applicationSettingsSnapshot };
 }
 
+function voiceAssistantConfig() {
+  return voiceAssistantSettings.runtimeConfig(getSettings());
+}
+
 function installationFeaturesForApiPath(apiPath) {
   const requestPath = String(apiPath || "").toLowerCase();
   const required = new Set();
@@ -6564,6 +6574,11 @@ async function daySettingsFromLocation(locationId, repository = null) {
 
 async function settingsForLocation(locationId, repository = null) {
   const settings = getSettings();
+  // These scoped/developer values are served only by their authorized routes,
+  // never through the generic settings included in every schedule response.
+  for (const key of Object.keys(settings)) {
+    if (key === "voice_assistants" || key.startsWith("planning_assistant:")) delete settings[key];
+  }
   const branding = brandingForLocation(locationId, settings);
   settings.branding_company_name = branding.companyName;
   settings.branding_logo_url = branding.logoUrl;
@@ -32475,6 +32490,68 @@ app.get("/api/schedule", readModelResponse(request =>
 app.get("/api/schedule/enrichment", readModelResponse(request =>
   getScheduleEnrichment(request.query.week, request.query, request.portalSession)));
 
+const readPlanningAssistant = createPlanningAssistantReader({
+  getSchedule, settings: getSettings, settingsForLocation, plannedShiftBreaks, dayConfiguration,
+  optionIsAllDay, optionLabel, employeeCanWorkOnDate, assessBranchSupervision,
+  loadShifts: (dateFrom, dateTo) => planningSettingsRepository.listWorkRuleShiftsForRange({ dateFrom, dateTo }),
+  loadOptions: (employeeNumber, dateFrom, dateTo) => planningSettingsRepository.listOverlappingWeekOptions({ employeeNumber, dateFrom, dateTo, existingId: 0, excludedGroupId: null }),
+  loadPositions: () => organizationPersonnelRepository.listPositions(),
+  loadDepartments: () => organizationPersonnelRepository.listDepartments(true),
+});
+
+app.get("/api/schedule/assistant", (_request, response, next) => {
+  response.setHeader("Cache-Control", "no-store"); next();
+}, readModelResponse(async request => {
+  const actor = requirePortalAnyPermissionOrLocal(request, ["schedule:read"]);
+  if (Object.keys(request.query).some(key => !["week", "location", "locationId", "department", "departmentId"].includes(key))
+    || typeof request.query.week !== "string" || !isIsoDate(request.query.week)) throw httpError(400, "Bitte eine gültige Planungswoche auswählen.", "PLANNING_ASSISTANT_INPUT_INVALID");
+  const authority = value => JSON.stringify([value?.id, value?.employeeNumber, value?.accountId, value?.permissions, value?.scopes, value?.role, value?.mustChangePassword]);
+  const before = authority(actor);
+  const result = await readPlanningAssistant(request.query.week, request.query, actor);
+  if (!isLocalSystemSession(actor) && actor) {
+    const fresh = await loadPortalSessionFromRequest(request, { touch: false });
+    if (!fresh || authority(fresh) !== before) throw httpError(403, "Die Anmeldung oder Berechtigungen haben sich geändert. Bitte erneut laden.", "PORTAL_PERMISSION_DENIED");
+    assertSessionContextScope(fresh, result.assessment.context);
+  }
+  return { ...result, canConfigure: !actor || isLocalSystemSession(actor) || actor.permissions?.includes("settings:write") === true };
+}));
+
+app.put("/api/settings/planning-assistant", async (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(request, ["settings:write"], { csrf: true });
+  const body = request.body;
+  if (!body || Object.keys(body).some(key => !["locationId", "departmentId", "week", "revision", "configuration"].includes(key))
+    || !isIsoDate(body.week) || typeof body.revision !== "string") throw httpError(400, "Bitte vollständige Prüfeinstellungen übermitteln.", "PLANNING_ASSISTANT_INPUT_INVALID");
+  const context = await resolvePlanningContext(body);
+  assertSessionContextScope(actor, context);
+  const configuration = planningAssistantSettings.validateSettings(body.configuration);
+  await persistenceProvider.transaction(async executor => {
+    const repositories = createApplicationRepositories(executor);
+    let liveActor = actor;
+    if (actor && !isLocalSystemSession(actor)) {
+      liveActor = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+      if (!liveActor || liveActor.id !== actor.id) throw httpError(401, "Bitte erneut anmelden.", "PORTAL_LOGIN_REQUIRED");
+      if (liveActor.mustChangePassword) throw httpError(428, "Bitte zuerst das Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+      assertLivePortalRoutePermission(liveActor, "settings:write");
+      assertSessionContextScope(liveActor, context);
+    }
+    const [employees, positions, rows] = await Promise.all([
+      repositories.planningSettings.listScheduleEmployees({ ...context, weekStart: getMonday(body.week), weekEnd: addDays(getMonday(body.week), 6) }),
+      repositories.organizationPersonnel.listPositions(), repositories.planningSettings.listSettings(),
+    ]);
+    if (configuration.keyPersonNumbers.some(id => !employees.some(item => item.personnel_number === id))
+      || configuration.requiredPositions.some(entry => !positions.some(item => item.id === entry.positionId && item.active))) {
+      throw httpError(400, "Bitte aktive Positionen und Personen aus dem freigegebenen Planungsbereich auswählen.", "PLANNING_ASSISTANT_SETTINGS_INVALID");
+    }
+    const current = planningAssistantSettings.read(settingsObjectFromRows(rows), context);
+    if (current.revision !== body.revision) throw httpError(409, "Die Prüfeinstellungen wurden inzwischen geändert. Bitte neu laden.", "PLANNING_ASSISTANT_SETTINGS_CHANGED");
+    await repositories.planningSettings.upsertSetting({ key: planningAssistantSettings.key(context), value: JSON.stringify(configuration) });
+    await repositories.organizationPersonnel.insertAudit(liveActor?.employeeNumber || "local", "planning.assistant.settings.update", "schedule_settings", context.locationId,
+      JSON.stringify({ departmentId: context.departmentId, before: current.configuration, after: configuration }));
+  }, { isolation: "serializable" });
+  await refreshPlanningSettingsReadModel();
+  response.json(planningAssistantSettings.read(getSettings(), context));
+});
+
 app.put("/api/schedule/manual-lock", async (request, response) => {
   const requestedLocationId = String(
     request.body?.locationId || request.body?.location || "",
@@ -50057,9 +50134,7 @@ app.put("/api/portal/v1/me/password", async (request, response) => {
   response.json({ ok: true });
 });
 
-app.get("/api/portal/v1/me/schedule", async (request, response) => {
-  const session = requireEmployeePortalSession(request, "own_schedule:read");
-  const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
+async function ownPortalSchedule(session, weekStart) {
   const weekEnd = addDays(weekStart, 6);
   const [shifts, options] = await Promise.all([
     planningSettingsRepository.listMobileScheduleShifts({
@@ -50073,7 +50148,13 @@ app.get("/api/portal/v1/me/schedule", async (request, response) => {
       weekEnd,
     }),
   ]);
-  response.json({ weekStart, weekEnd, calendarWeek: getIsoWeek(weekStart), shifts, options, user: publicPortalUser(session) });
+  return { weekStart, weekEnd, calendarWeek: getIsoWeek(weekStart), shifts, options, user: publicPortalUser(session) };
+}
+
+app.get("/api/portal/v1/me/schedule", async (request, response) => {
+  const session = requireEmployeePortalSession(request, "own_schedule:read");
+  const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
+  response.json(await ownPortalSchedule(session, weekStart));
 });
 
 app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) => {
@@ -57484,6 +57565,121 @@ app.delete("/api/portal/v1/amu-reports/:reportId/documents/:documentId", async (
   response.status(204).end();
 });
 
+function assertAssistantFeatures(...features) {
+  if (features.some(feature => !installationFeatureEnabled(feature))) {
+    throw httpError(403, "Diese Funktion ist für diese Grabenplaner-Installation nicht freigeschaltet.", "FEATURE_DISABLED");
+  }
+}
+
+async function ownAssistantBalances(session, kind, year) {
+  const result = {};
+  if (kind !== "time_off") {
+    assertAssistantFeatures("vacation");
+    const account = (await vacationAccountsForYear(year, session.employeeNumber, session.employeeNumber, session))[0];
+    result.vacation = account ? { year, remainingDays: account.remainingDays, totalDays: account.totalDays,
+      plannedDays: account.plannedDays, revision: account.revision, status: account.status } : null;
+  }
+  if (kind !== "vacation") {
+    assertAssistantFeatures("timeTracking");
+    // Reuse the GP's imported closing balance. A weekly actual/planned
+    // difference must never be presented as a cumulative ZA account.
+    const rows = await timeTrackingRepository.listLatestXoffiBalances({ locationId: session.homeLocationId,
+      departmentId: null, filterDepartment: 0, weekStart: currentWeekStart() });
+    const row = rows.find(item => item.employee_number === session.employeeNumber);
+    result.timeOff = row ? { minutes: Number(row.closing_balance_minutes), weekStart: row.balance_week_start,
+      source: "imported_closing_balance" } : null;
+  }
+  return result;
+}
+
+async function ownAssistantPreview(session, kind, parameters) {
+  assertAssistantFeatures("requests", ...(kind === "vacation" ? ["vacation"] : []));
+  let assessment = kind === "vacation" ? await evaluateVacationRequest(session.employeeNumber, parameters)
+    : await evaluateTimeOffRequest(session.employeeNumber, parameters);
+  if (kind === "vacation" && absenceRequestSubmissionAllowed(assessment)) {
+    try { await validateVacationRequestDates(session.employeeNumber, parameters); }
+    catch (error) {
+      if (![400, 409].includes(error.status)) throw error;
+      assessment = { ...assessment, trafficLight: "red", allowed: false, submissionAllowed: false,
+        reason: error.message, code: error.code || "VACATION_REQUEST_INVALID" };
+    }
+  }
+  const facts = { check: { trafficLight: assessment.trafficLight, code: assessment.code || "",
+    submissionAllowed: absenceRequestSubmissionAllowed(assessment), reason: assessment.reason || "",
+    manualReview: Boolean(assessment.manualReview) }, warnings: [], workDates: [], days: null, minutes: null };
+  if (kind === "vacation") {
+    facts.days = vacationDayCount(parameters.dateFrom, parameters.dateTo, session.homeLocationId);
+    facts.balancesByYear = [];
+    for (let year = Number(parameters.dateFrom.slice(0, 4)); year <= Number(parameters.dateTo.slice(0, 4)); year++) {
+      const from = parameters.dateFrom < `${year}-01-01` ? `${year}-01-01` : parameters.dateFrom;
+      const to = parameters.dateTo > `${year}-12-31` ? `${year}-12-31` : parameters.dateTo;
+      const days = vacationDayCount(from, to, session.homeLocationId);
+      const balance = (await ownAssistantBalances(session, "vacation", year)).vacation;
+      facts.balancesByYear.push({ year, days, remainingDays: balance?.remainingDays ?? null, revision: balance?.revision ?? null });
+      if (!balance) facts.warnings.push(`Für ${year} fehlt ein Urlaubskonto; der Saldo muss im Freigabeprozess geprüft werden.`);
+      else if (days > balance.remainingDays) facts.warnings.push(`Für ${year} übersteigt der Entwurf den verfügbaren Saldo (${balance.remainingDays} Tage). Die zuständige Leitung muss das prüfen.`);
+    }
+    for (let date = parameters.dateFrom; date <= parameters.dateTo; date = addDays(date, 1)) {
+      if (vacationDayCount(date, date, session.homeLocationId) > 0) facts.workDates.push(date);
+    }
+    if (facts.workDates.length !== facts.days) facts.warnings.push("Die GP-Urlaubsbewertung berücksichtigt zusätzlich Feiertage im Zeitraum; maßgeblich ist die angezeigte Gesamtzahl der Urlaubstage.");
+  } else {
+    const balances = await ownAssistantBalances(session, "time_off", Number(parameters.dateFrom.slice(0, 4)));
+    facts.timeOffBalance = balances.timeOff;
+    if (!balances.timeOff) facts.warnings.push("Kein bestätigter ZA-Saldo hinterlegt; manuelle Prüfung im bestehenden Freigabeprozess erforderlich.");
+    else facts.warnings.push(`Letzter importierter ZA-Saldo: ${balances.timeOff.minutes / 60} Stunden, Woche ab ${balances.timeOff.weekStart}; kein laufend aktualisiertes Konto.`);
+    if (parameters.allDay) {
+      let minutes = 0, missingPlan = false;
+      for (let date = parameters.dateFrom; date <= parameters.dateTo; date = addDays(date, 1)) {
+        const day = await plannedDayMetrics(session.employeeNumber, date, session.homeLocationId);
+        if (!day.blocks.length) missingPlan = true;
+        else { facts.workDates.push(date); minutes += day.netMinutes; }
+      }
+      facts.minutes = missingPlan ? null : minutes;
+      if (missingPlan) facts.warnings.push("Der Dienstplan ist unvollständig; der genaue Stundenumfang wird bei der Freigabe geprüft.");
+    } else {
+      facts.workDates = [parameters.dateFrom];
+      facts.minutes = timeToMinutes(parameters.endTime) - timeToMinutes(parameters.startTime);
+      facts.warnings.push("Der Stundenwert beschreibt das beantragte Zeitfenster; die endgültige ZA-Bewertung erfolgt im bestehenden Freigabeprozess.");
+    }
+    if (Number.isFinite(facts.minutes) && balances.timeOff && facts.minutes > balances.timeOff.minutes) facts.warnings.push("Das beantragte Zeitfenster übersteigt den letzten importierten ZA-Saldo; manuelle Prüfung erforderlich.");
+  }
+  return facts;
+}
+
+const voiceAssistant = createVoiceAssistant({
+  config: voiceAssistantConfig, provider: createOpenAiVoiceProvider({ config: voiceAssistantConfig }), today: viennaTodayIso,
+  authorize: async request => {
+    const session = await loadPortalSessionFromRequest(request, { touch: false });
+    return requireEmployeePortalSession({ portalSession: session });
+  },
+  balances: ownAssistantBalances, preview: ownAssistantPreview,
+  schedule: async (session, weekStart) => {
+    assertAssistantFeatures("schedule");
+    const data = await ownPortalSchedule(session, weekStart);
+    return { weekStart: data.weekStart, weekEnd: data.weekEnd,
+      shifts: data.shifts.map(item => ({ date: item.shift_date, startTime: item.start_time,
+        endTime: item.end_time, location: item.location_name || "", department: item.department_name || "" })),
+      options: data.options.map(item => ({ kind: optionLabel(item.option_type), dateFrom: item.date_from, dateTo: item.date_to })) };
+  },
+  requests: async (session, kind) => {
+    assertAssistantFeatures("requests", ...(kind !== "time_off" ? ["vacation"] : []));
+    const data = await absenceHistoryForEmployee(session.employeeNumber, {
+      vacationRead: kind !== "time_off", timeOffRead: kind !== "vacation" });
+    const labels = { pending: "offen", pending_local: "lokale Prüfung offen", preliminary_local: "vorläufig lokal genehmigt",
+      pending_hr: "Personalprüfung offen", approved: "genehmigt", rejected: "abgelehnt", withdrawn: "zurückgenommen", cancelled: "storniert" };
+    return data.filter(item => ["vacation", "time_off"].includes(item.kind)).map(item => ({ id: item.id, kind: item.kind,
+      dateFrom: item.date_from || item.request_date, dateTo: item.date_to || item.request_date,
+      status: item.status, statusLabel: labels[item.status] || item.status }));
+  },
+  submit: (session, kind, parameters) => {
+    assertAssistantFeatures("requests", ...(kind === "vacation" ? ["vacation"] : []));
+    return kind === "vacation" ? createOwnVacationRequest(session, parameters) : createOwnTimeOffRequest(session, parameters);
+  },
+  audit: (session, action, id, details) => auditPortal(session.employeeNumber, action, "assistant", id, JSON.stringify(details)),
+});
+require('./lib/voice-assistant-routes').registerVoiceAssistantRoutes(app, { assistant: voiceAssistant, assertCsrf: assertPortalCsrf });
+
 app.post("/api/portal/v1/me/vacation-check", async (request, response) => {
   const session = requirePortalSession(request, "own_vacation:request");
   assertPortalCsrf(request);
@@ -61000,6 +61196,43 @@ app.post("/api/usb-provisioning/create", async (request, response) => {
     usbProvisioningActive = false;
     if (stage?.stageRoot) fs.rmSync(stage.stageRoot, { recursive: true, force: true });
   }
+});
+
+async function voiceSettingsDeveloper(request) {
+  const fresh = await loadPortalSessionFromRequest(request, { touch: false });
+  const actor = requireEmployeePortalSession({ portalSession: fresh }, "settings:write");
+  if (actor.role !== "developer") throw httpError(403, "Dieser Bereich ist dem Developer vorbehalten.", "VOICE_SETTINGS_DENIED");
+  return actor;
+}
+
+app.get("/api/portal/v1/developer/voice-assistants", async (request, response) => {
+  await voiceSettingsDeveloper(request);
+  await refreshApplicationSettingsSnapshot();
+  await voiceSettingsDeveloper(request);
+  response.json(voiceAssistantSettings.settingsPayload(getSettings()));
+});
+
+app.put("/api/portal/v1/developer/voice-assistants", async (request, response) => {
+  const actor = await voiceSettingsDeveloper(request);
+  assertPortalCsrf(request);
+  const body = request.body;
+  if (!body || Object.keys(body).some(key => !["settings", "revision"].includes(key)) || typeof body.revision !== "string") {
+    throw httpError(400, "Die Einstellungen benötigen ihren zuletzt geladenen Stand.", "VOICE_SETTINGS_INVALID");
+  }
+  const settings = voiceAssistantSettings.validateSettings(body.settings);
+  await persistenceProvider.transaction(async executor => {
+    const repositories = createApplicationRepositories(executor);
+    const liveActor = await livePersonnelLearningRoleAdministrationActor(actor, repositories.organizationPersonnel);
+    assertLivePortalRoutePermission(liveActor, "settings:write", { allowedRoles: new Set(["developer"]) });
+    if (liveActor.mustChangePassword) throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+    const current = settingsObjectFromRows(await repositories.planningSettings.listSettings());
+    if (voiceAssistantSettings.revision(current) !== body.revision) throw httpError(409, "Die Einstellungen wurden inzwischen geändert. Bitte neu laden.", "VOICE_SETTINGS_CHANGED");
+    const before = voiceAssistantSettings.storedSettings(current);
+    await repositories.planningSettings.upsertSetting({ key: voiceAssistantSettings.SETTINGS_KEY, value: JSON.stringify(settings) });
+    await repositories.organizationPersonnel.insertAudit(liveActor.employeeNumber, "voice.assistants.settings.update", "settings", "voice.assistants", JSON.stringify({ before, after: settings }));
+  }, { isolation: "serializable" });
+  await refreshPlanningSettingsReadModel();
+  response.json(voiceAssistantSettings.settingsPayload(getSettings()));
 });
 
 // Duty badge colors are company-wide, never a location/department PDF override.
