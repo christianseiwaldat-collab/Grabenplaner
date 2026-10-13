@@ -1378,6 +1378,7 @@ function closeAdminCredentialDialogsForLogin() {
 }
 
 function showLoginGate(message = "") {
+  document.body.classList.remove("session-pending");
   syncSettingsSaveScopes({ force: true });
   gpWindowManager?.synchronize();
   recentArticlesWindow?.sync();
@@ -1426,6 +1427,7 @@ function showLoginGate(message = "") {
 }
 
 function hideLoginGate() {
+  document.body.classList.remove("session-pending");
   if (elements.adminLoginPassword) {
     elements.adminLoginPassword.value = "";
     resetAdminCredentialVisibility(elements.adminLoginPassword);

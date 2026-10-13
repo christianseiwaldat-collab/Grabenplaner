@@ -50306,7 +50306,21 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
   );
   assertSessionContextScope(session, { locationId });
   const location = await validateLocationExists(locationId);
-  const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
+  let weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
+  let focusDate = null;
+  if (request.query.focus === "current") {
+    const today = viennaTodayIso();
+    const upcoming = await planningSettingsRepository.listLocationDashboardScheduleShifts({
+      locationId, weekStart: today, weekEnd: addDays(today, 35),
+    });
+    const settings = await settingsForLocation(locationId);
+    focusDate = await require("./lib/mobile-schedule-focus").mobileScheduleFocus({
+      today, time: viennaNowLocal().slice(11), shifts: upcoming,
+      opening: date => operatingHours(date, settings),
+      isClosed: date => Boolean(publicHolidayName(date) || getGlobalDayBlockForDate(date, locationId)),
+    });
+    weekStart = getMonday(focusDate || today);
+  }
   const weekEnd = addDays(weekStart, 6);
   const shifts = (await planningSettingsRepository.listLocationDashboardScheduleShifts({
     locationId,
@@ -50328,6 +50342,7 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
     calendarWeek: getIsoWeek(weekStart),
     shifts,
     displaySettings: (await sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId)),
+    ...(request.query.focus === "current" ? { focusDate } : {}),
   });
 });
 

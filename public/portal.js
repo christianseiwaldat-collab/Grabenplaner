@@ -1899,7 +1899,7 @@ async function initialize() {
       .forEach((input) => { if (input) input.minLength = minimum; });
     if (el.portalAccessModeLabel) el.portalAccessModeLabel.textContent = status.operationMode === "server" ? "Mitarbeiterportal · HTTPS" : "Mitarbeiterportal";
     if (!status.portalEnabled) {
-      message(el.loginError, "Das Mitarbeiterportal ist für diese Installation nicht freigeschaltet.", true);
+      showLogin("Das Mitarbeiterportal ist für diese Installation nicht freigeschaltet.");
       return;
     }
     const session = await api("/api/portal/v1/session");
@@ -1927,7 +1927,7 @@ async function loadPortalData() {
   const requests = [];
   requests.push(loadPersonnelLearningDashboard());
   if (!isOrganizationAccount()) requests.push(loadPortalHome(), loadNotifications());
-  if (portalTabAllowed("schedule")) requests.push(loadSchedule());
+  if (portalTabAllowed("schedule")) requests.push(loadSchedule({ focus: portalState.activeTab === "schedule" && isBranchMobileAccount() }));
   if (portalTabAllowed("branchVacation")) requests.push(loadBranchVacationOverview());
   if (portalTabAllowed("vacation")) requests.push(loadVacationRequests(), loadApprovedVacations());
   if (portalTabAllowed("timeOff")) requests.push(loadTimeOffRequests());
@@ -2495,6 +2495,7 @@ function neutralizeCredentialDialogsForLogin() {
 }
 
 function showLogin(error = "") {
+  document.body.classList.remove("session-pending");
   portalVoiceAssistant?.reset();
   portalLearningAssessmentPanel?.clear();
   portalKnowledgeLibrary?.clear();
@@ -2691,6 +2692,8 @@ function showPortal(session) {
   populateVacationAccountYears();
   applySelfServiceVisibility();
   applyMobileLeadershipLayout();
+  setTab(normalizedPortalTab(new URLSearchParams(location.search).get("tab")) || (isMobileUi() ? "home" : requestedPortalTab() || defaultPortalTab()));
+  document.body.classList.remove("session-pending");
   if (session.user.mustChangePassword) setTimeout(openPasswordChangeDialog, 100);
 }
 
@@ -2893,7 +2896,7 @@ async function logout() {
 }
 
 function setTab(tab) {
-  privatePortalWorkspaces?.exit();
+  privatePortalWorkspaces?.exit({ history: false, notify: false });
   if (tab === 'home') void privatePortalWorkspaces?.synchronize();
   if (portalUser() && !portalTabAllowed(tab)) tab = defaultPortalTab();
   if (tab === "timeTracking" && !timeTrackingCapabilityEnabled()) tab = defaultPortalTab();
@@ -2933,6 +2936,7 @@ function setTab(tab) {
     if (branchPortalDisplaySettingsEnabled()) loadBranchPortalDisplaySettings();
     focusPortalSettingsSection();
   }
+  if (tab === "schedule" && tabChanged && isBranchMobileAccount()) void loadSchedule({ focus: true });
   if (tab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
   if (tab === "vacation") {
     loadVacationRequests();
@@ -3481,6 +3485,7 @@ const privatePortalWorkspaces = window.GpPrivateWorkspaces?.mount({
   document, getActor: () => portalUser(),
   load: async () => (await api('/api/portal/v1/private-workspaces')).workspaces,
   onChange: () => renderMobileHome(),
+  onExit: () => { if (isMobileUi() && portalUser()) setTab("home"); },
 }) || null;
 
 function renderMobileHome() {
@@ -3879,7 +3884,7 @@ function renderSchedule(data) {
   el.scheduleHeading.textContent = organizationView
     ? `${data.location?.name || "Standort"} · KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`
     : `KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`;
-  const today = iso(new Date());
+  const today = absenceTodayIso();
   const settings = data.displaySettings || {};
   const hideElapsedDays = organizationView
     && isBranchMobileAccount()
@@ -3894,7 +3899,7 @@ function renderSchedule(data) {
     const options = organizationView
       ? []
       : data.options.filter((item) => item.date_from <= date && item.date_to >= date);
-    return `<article class="schedule-day ${date === today ? "today" : ""} ${index > 4 ? "weekend" : ""}">
+    return `<article data-schedule-date="${date}" class="schedule-day ${date === today ? "today" : ""} ${index > 4 ? "weekend" : ""}">
       <header><strong>${weekdayNames[index]}</strong><span>${dateText(date, { day: "2-digit", month: "2-digit" })}</span></header>
       ${shifts.map((shift) => `<div class="shift-card${colored ? " shift-card-colored" : ""}"${colored ? ` style="--schedule-person-color:${schedulePersonColor(shift.employeeColor || shift.employeeName)}"` : ""}>${organizationView && shift.employeeName ? `<span>${esc(shift.employeeName)}</span><br>` : ""}<strong>${esc(shift.start_time || shift.startTime)}–${esc(shift.end_time || shift.endTime)}</strong>${shift.department_name || shift.departmentName ? `<br>${esc(shift.department_name || shift.departmentName)}` : ""}${shift.area ? `<br>${esc(shift.area)}` : ""}</div>`).join("")}
       ${options.map((option) => `<div class="option-card"><strong>${esc(optionNames[option.option_type] || option.option_type)}</strong>${!option.all_day && option.start_time ? `<br>${esc(option.start_time)}–${esc(option.end_time)}` : ""}${option.note ? `<br>${esc(option.note)}` : ""}</div>`).join("")}
@@ -3904,12 +3909,28 @@ function renderSchedule(data) {
   renderMobileHome();
 }
 
-async function loadSchedule() {
-  const organizationView = isOrganizationAccount();
+let scheduleRequestGeneration = 0;
+async function loadSchedule({ focus = false } = {}) {
+  const organizationView = isOrganizationAccount(), session = portalState.session;
+  const ticket = ++scheduleRequestGeneration;
+  const focusCurrent = focus && isBranchMobileAccount();
   const route = organizationView
-    ? `/api/portal/v1/location-dashboard/schedule?week=${portalState.weekStart}`
+    ? `/api/portal/v1/location-dashboard/schedule?week=${portalState.weekStart}${focusCurrent ? "&focus=current" : ""}`
     : `/api/portal/v1/me/schedule?week=${portalState.weekStart}`;
-  renderSchedule(await api(route));
+  try {
+    const data = await api(route);
+    if (ticket !== scheduleRequestGeneration || session !== portalState.session) return;
+    renderSchedule(data);
+    if (focusCurrent && data.focusDate) requestAnimationFrame(() => {
+      if (ticket !== scheduleRequestGeneration || portalState.activeTab !== "schedule" || session !== portalState.session) return;
+      const day = [...el.scheduleGrid.querySelectorAll("[data-schedule-date]")].find(item => item.dataset.scheduleDate === data.focusDate);
+      if (!day) return;
+      const header = document.querySelector(".portal-header")?.getBoundingClientRect().bottom || 0;
+      window.scrollTo({top:Math.max(0,window.scrollY+day.getBoundingClientRect().top-header-8),behavior:"instant"});
+    });
+  } catch (error) {
+    if (ticket === scheduleRequestGeneration && session === portalState.session) el.scheduleHeading.textContent = error.message;
+  }
 }
 
 function branchVacationDateRangeText(entry) {
@@ -8109,7 +8130,7 @@ document.querySelectorAll("[data-more-tab]").forEach((button) => button.addEvent
 document.querySelectorAll("[data-request-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.requestTab)));
 el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, -7); loadSchedule(); });
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
-el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
+el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule({ focus: true }); });
 el.branchVacationPrevious?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, -7); loadBranchVacationOverview(); });
 el.branchVacationNext?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, 7); loadBranchVacationOverview(); });
 el.branchVacationCurrent?.addEventListener("click", () => { portalState.branchVacationWeekStart = mondayOf(new Date()); loadBranchVacationOverview(); });
