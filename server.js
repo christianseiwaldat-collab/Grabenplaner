@@ -1,4 +1,5 @@
 const express = require("express");
+const { preferredDaysOff, preferredDaysLimit, validatePreferredDays, preferredDayCost, protectedPersonnelName } = require("./lib/employee-preferences");
 const PDFDocument = require("pdfkit");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -9859,6 +9860,29 @@ async function persistPersonnelRecordMutationWithRepository(repository, prepared
   prepared.before = before;
   prepared.next = next;
   prepared.changedFields = changedFields;
+  if (prepared.submittedFields.some(key => ["identity.firstName", "identity.lastName"].includes(key))) {
+    const fullName = protectedPersonnelName(next);
+    if (fullName) {
+      const current = await repository.getEmployeeForUpdate(prepared.employeeNumber);
+      if (current && fullName !== current.full_name) {
+        // Copy only the name. Every other field comes from the fresh row in
+        // this same serializable transaction; encrypted identity stays private.
+        await repository.updateEmployee({
+          personnelNumber: current.personnel_number, fullName, nickname: current.nickname,
+          color: current.color, contractedHours: Number(current.contracted_hours),
+          targetWorkdaysPerWeek: normalizeTargetWorkdays(current.target_workdays_per_week),
+          preferredDaysOff: preferredDaysOff(current), fixedWorkdays: current.fixed_workdays || "",
+          positionId: current.position_id, timeConfirmationLevel: current.time_confirmation_level || "C",
+          sicknessWithoutAumEnabled: Boolean(current.sickness_without_aum_enabled),
+          homeLocationId: current.home_location_id, preferredDepartmentId: current.preferred_department_id,
+          costCenterId: current.cost_center_id, active: Boolean(current.active),
+        });
+        await repository.insertAudit(prepared.session.employeeNumber, "employee.name-from-personnel-record",
+          "employee", prepared.employeeNumber, JSON.stringify({ fields: ["fullName"] }));
+      }
+      prepared.publicName = fullName;
+    }
+  }
   if (!changedFields.length) return [];
   const socialSecurityLookup = next.socialSecurityNumber
     ? personnelSensitiveLookup("social-security-number", next.socialSecurityNumber) : "";
@@ -10653,7 +10677,7 @@ function employeeMutationConcurrencySignature(employee = {}) {
     targetWorkdaysPerWeek: Number(
       employee.target_workdays_per_week ?? employee.targetWorkdaysPerWeek ?? 0,
     ),
-    preferredDayOff: String(employee.preferred_day_off ?? employee.preferredDayOff ?? ""),
+    preferredDaysOff: preferredDaysOff(employee),
     fixedWorkdays: String(employee.fixed_workdays ?? employee.fixedWorkdays ?? ""),
     positionId: String(employee.position_id ?? employee.positionId ?? ""),
     timeConfirmationLevel: String(
@@ -19877,6 +19901,8 @@ function serializeEmployee(row, options = {}) {
   const serialized = {
     ...row,
     target_workdays_per_week: normalizeTargetWorkdays(row.target_workdays_per_week),
+    preferred_day_off: preferredDaysOff(row)[0] || null,
+    preferred_days_off: preferredDaysOff(row),
     fixed_workdays: row.fixed_workdays || "",
     position_id: row.position_id || "verkaufsmitarbeiter",
     position_name: row.position_name || "Verkaufsmitarbeiter",
@@ -19932,16 +19958,27 @@ async function assertEmployeePrincipalLoginAvailable(
   }
 }
 
+function employeePreferenceMutationInput(body, existing) {
+  if (Object.hasOwn(body, "preferredDaysOff")) return body.preferredDaysOff;
+  if (Object.hasOwn(body, "preferred_days_off")) return body.preferred_days_off;
+  const previous = preferredDaysOff(existing);
+  if (!Object.hasOwn(body, "preferredDayOff") || String(body.preferredDayOff || "") === (previous[0] || "")) return previous;
+  return body.preferredDayOff;
+}
+
 async function validateEmployee(body, isNew, options = {}) {
   const personnelNumber = String(body.personnelNumber || "").trim();
   assertEmployeePrincipalNotReserved(personnelNumber);
-  const fullName = String(body.fullName || "").trim();
+  const repository = options.repository || organizationPersonnelRepository;
+  const protectedName = !isNew && personnelNumber
+    ? protectedPersonnelName(await personnelSensitiveProfile(personnelNumber, repository)) : "";
+  const fullName = protectedName || String(body.fullName || "").trim();
   const nickname = String(body.nickname || "").trim();
   const color = /^#[0-9a-f]{6}$/i.test(body.color || "") ? body.color : "#0b84c6";
   const contractedHours = Number(body.contractedHours);
   const submittedTargetWorkdays = Number(body.targetWorkdaysPerWeek ?? body.target_workdays_per_week ?? 5);
   const targetWorkdaysPerWeek = normalizeTargetWorkdays(submittedTargetWorkdays);
-  const preferredDayOff = String(body.preferredDayOff || "").trim();
+  const submittedPreferredDays = body.preferredDaysOff ?? body.preferred_days_off ?? body.preferredDayOff ?? "";
   const fixedWorkdays = normalizeFixedWorkdays(body.fixedWorkdays ?? body.fixed_workdays);
   const requestedPositionId = String(body.positionId || body.position_id || "").trim();
   let positionId = requestedPositionId;
@@ -19951,7 +19988,6 @@ async function validateEmployee(body, isNew, options = {}) {
   const timeConfirmationLevel = String(submittedTimeConfirmationLevel).trim().toUpperCase();
   const sicknessWithoutAumEnabled = body.sicknessWithoutAumEnabled === true
     || body.sickness_without_aum_enabled === true || Number(body.sickness_without_aum_enabled) === 1;
-  const allowedPreferredDays = ["", "monday", "tuesday", "wednesday", "thursday", "friday"];
   const costCenterSubmitted = own(body, "costCenterId") || own(body, "cost_center_id");
   const costCenterId = costCenterSubmitted
     ? String(body.costCenterId ?? body.cost_center_id ?? "").trim()
@@ -20025,9 +20061,8 @@ async function validateEmployee(body, isNew, options = {}) {
   if (!Number.isInteger(submittedTargetWorkdays) || submittedTargetWorkdays < 1 || submittedTargetWorkdays > 6) {
     throw httpError(400, "Die vertraglichen Soll-Arbeitstage müssen zwischen 1 und 6 liegen.", "EMPLOYEE_TARGET_WORKDAYS_INVALID");
   }
-  if (!allowedPreferredDays.includes(preferredDayOff)) {
-    throw httpError(400, "Der bevorzugte freie Tag ist ungültig.");
-  }
+  const orderedPreferredDays = validatePreferredDays(submittedPreferredDays,
+    preferredDaysLimit({ isBranch: assignment.isBranch, positionId }));
   if (!["A", "B", "C"].includes(timeConfirmationLevel)) {
     throw httpError(400, "Bitte eine gültige Vertrauensstufe A, B oder C auswählen.", "EMPLOYEE_CONFIRMATION_LEVEL_INVALID");
   }
@@ -20039,7 +20074,8 @@ async function validateEmployee(body, isNew, options = {}) {
     color,
     contractedHours,
     targetWorkdaysPerWeek,
-    preferredDayOff: preferredDayOff || null,
+    preferredDayOff: orderedPreferredDays[0] || null,
+    preferredDaysOff: orderedPreferredDays,
     fixedWorkdays: fixedWorkdays.join(","),
     positionId,
     timeConfirmationLevel,
@@ -25019,7 +25055,8 @@ async function resolvePersonnelImportCandidate(incoming, mapping, existing, acto
     color: existing.color,
     contractedHours: Number(existing.contracted_hours),
     targetWorkdaysPerWeek: normalizeTargetWorkdays(existing.target_workdays_per_week),
-    preferredDayOff: existing.preferred_day_off || "",
+    preferredDaysOff: preferredDaysOff(existing),
+    preferredDayOff: preferredDaysOff(existing)[0] || "",
     fixedWorkdays: String(existing.fixed_workdays || "").split(",").filter(Boolean),
     positionId: existing.position_id,
     timeConfirmationLevel: existing.time_confirmation_level || "C",
@@ -25035,6 +25072,7 @@ async function resolvePersonnelImportCandidate(incoming, mapping, existing, acto
     color: incoming.color,
     contractedHours: incoming.contractedHours,
     targetWorkdaysPerWeek: 5,
+    preferredDaysOff: incoming.preferredDaysOff,
     preferredDayOff: incoming.preferredDayOff,
     fixedWorkdays: incoming.fixedWorkdays,
     positionId: incoming.positionId,
@@ -25050,7 +25088,10 @@ async function resolvePersonnelImportCandidate(incoming, mapping, existing, acto
   if (use("nickname")) base.nickname = incoming.nickname;
   if (use("color")) base.color = incoming.color;
   if (use("contractedHours")) base.contractedHours = incoming.contractedHours;
-  if (use("preferredDayOff")) base.preferredDayOff = incoming.preferredDayOff;
+  if (use("preferredDayOff") || importFieldMapped(mapping, "preferredDaysOff")) {
+    base.preferredDaysOff = incoming.preferredDaysOff;
+    base.preferredDayOff = incoming.preferredDayOff;
+  }
   if (use("fixedWorkdays")) base.fixedWorkdays = incoming.fixedWorkdays;
   if (use("active")) base.active = incoming.active;
 
@@ -25214,7 +25255,7 @@ async function personnelImportPreview(actor, inspection, body = {}) {
           color: candidate.color,
           contracted_hours: candidate.contractedHours,
           target_workdays_per_week: candidate.targetWorkdaysPerWeek,
-          preferred_day_off: candidate.preferredDayOff,
+          preferred_day_off: preferredDaysOff(candidate).join(",") || null,
           fixed_workdays: candidate.fixedWorkdays,
           position_id: candidate.positionId,
           time_confirmation_level: candidate.timeConfirmationLevel,
@@ -25435,7 +25476,7 @@ async function applyPersonnelImport(actor, preview) {
           color: candidate.color,
           contractedHours: candidate.contractedHours,
           targetWorkdaysPerWeek: candidate.targetWorkdaysPerWeek,
-          preferredDayOff: candidate.preferredDayOff,
+          preferredDayOff: preferredDaysOff(candidate).join(",") || null,
           fixedWorkdays: candidate.fixedWorkdays,
           positionId: candidate.positionId,
           timeConfirmationLevel: candidate.timeConfirmationLevel,
@@ -33860,6 +33901,7 @@ app.post("/api/employees", async (request, response) => {
   await reconcileOpenAmuResponsibilities(responseProjectionActor?.employeeNumber || "local");
   const responseEmployee = {
     ...employee,
+    fullName: personnelRecordMutation?.publicName || employee.fullName,
     active: Boolean(employee.active),
     portal_access: await publicPortalAccessProfileForEmployee(
       employee.personnelNumber,
@@ -33896,6 +33938,7 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
   let employee = await validateEmployee({
     ...request.body,
     personnelNumber,
+    preferredDaysOff: employeePreferenceMutationInput(request.body, existing),
     targetWorkdaysPerWeek: request.body.targetWorkdaysPerWeek ?? request.body.target_workdays_per_week
       ?? existing.target_workdays_per_week ?? 5,
     ...(canManageTimeConfirmationLevel ? {} : { timeConfirmationLevel: existing.time_confirmation_level || "C" }),
@@ -33972,6 +34015,7 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
     const liveValidatedEmployee = await validateEmployee({
       ...request.body,
       personnelNumber,
+      preferredDaysOff: employeePreferenceMutationInput(request.body, liveEmployee),
       targetWorkdaysPerWeek: request.body.targetWorkdaysPerWeek
         ?? request.body.target_workdays_per_week
         ?? liveEmployee.target_workdays_per_week
@@ -34108,6 +34152,7 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
   }
   const responseEmployee = {
     ...employee,
+    fullName: personnelRecordMutation?.publicName || employee.fullName,
     personnelNumber,
     active: Boolean(employee.active),
     portal_access: await publicPortalAccessProfileForEmployee(
@@ -53488,6 +53533,7 @@ function personnelLifecycleConversionInput(value) {
     "contractedHours",
     "targetWorkdaysPerWeek",
     "preferredDayOff",
+    "preferredDaysOff",
     "fixedWorkdays",
     "positionId",
     "costCenterId",
@@ -53518,6 +53564,8 @@ function personnelLifecycleConversionInput(value) {
     contractedHours: Number(submittedEmployee.contractedHours),
     targetWorkdaysPerWeek: Number(submittedEmployee.targetWorkdaysPerWeek),
     preferredDayOff: String(submittedEmployee.preferredDayOff || "").trim(),
+    ...(Object.hasOwn(submittedEmployee, "preferredDaysOff")
+      ? { preferredDaysOff: validatePreferredDays(submittedEmployee.preferredDaysOff) } : {}),
     fixedWorkdays,
     positionId: String(submittedEmployee.positionId || "").trim(),
     costCenterId: String(submittedEmployee.costCenterId || "").trim(),
@@ -63233,8 +63281,8 @@ app.post("/api/schedule/auto", async (request, response) => {
           .filter((employee) => !unavailable.has(`${employee.personnel_number}|${date}`))
           .filter((employee) => employeeCanWorkOnDate(employee, date))
           .sort((a, b) => {
-            const aPreferred = a.preferred_day_off === config.key ? 1 : 0;
-            const bPreferred = b.preferred_day_off === config.key ? 1 : 0;
+            const aPreferred = preferredDayCost(a, config.key);
+            const bPreferred = preferredDayCost(b, config.key);
             if (aPreferred !== bPreferred) return aPreferred - bPreferred;
             return remainingByEmployee[b.personnel_number] - remainingByEmployee[a.personnel_number];
           });
@@ -63311,8 +63359,8 @@ app.post("/api/schedule/auto", async (request, response) => {
       while (remaining >= 30 && availableDates.length) {
         availableDates.sort((a, b) => {
           const preferredDifference =
-            Number(dayKeyForDate(a) === employee.preferred_day_off) -
-            Number(dayKeyForDate(b) === employee.preferred_day_off);
+            preferredDayCost(employee, dayKeyForDate(a)) -
+            preferredDayCost(employee, dayKeyForDate(b));
           if (preferredDifference) return preferredDifference;
           const loadDifference = dayLoads[a] - dayLoads[b];
           if (loadDifference) return loadDifference;
@@ -64909,6 +64957,7 @@ const {
   paginateScheduleMatrixNote,
   wrapScheduleMatrixNote,
 } = require("./lib/schedule-matrix-layout");
+const { selectSchedulePrintEmployees } = require("./lib/schedule-print-selection");
 
 function scheduleMatrixOptionStyle(optionType) {
   if (optionType === "team_meeting") {
@@ -65091,10 +65140,10 @@ function scheduleMatrixFittedFontSize(doc, text, font, preferredSize, width, min
 }
 
 function scheduleMatrixMinimumRowHeight(timeFontSize, detailFontSize) {
-  if (timeFontSize >= 18) return 70;
-  if (timeFontSize >= 14.5) return 58;
-  if (timeFontSize >= 11) return 52;
-  if (timeFontSize >= 8.5) return 43;
+  if (timeFontSize >= 18) return 54;
+  if (timeFontSize >= 14.5) return 48;
+  if (timeFontSize >= 11) return 44;
+  if (timeFontSize >= 8.5) return 40;
   return Math.max(35, Math.ceil(timeFontSize + detailFontSize + 19));
 }
 
@@ -65471,7 +65520,7 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const showEmployeePosition = settingEnabled(schedule.settings, "pdf_schedule_matrix_show_position");
   const matrixHeaderText = normalizeScheduleMatrixHeaderText(schedule.settings.pdf_schedule_matrix_header_text);
   const tableTop = 58;
-  const noteAreaHeight = 80;
+  const noteAreaHeight = 64;
   const postTableHeight = 25 + noteAreaHeight + (meetings.length ? 33 : 0);
   const tableBottom = 556 - postTableHeight;
   const headerHeight = 42;
@@ -65834,7 +65883,7 @@ async function drawSchedulePdf(schedule, response, createdAt = new Date(), desig
 }
 
 app.get("/api/schedule.pdf", async (request, response) => {
-  const schedule = await getSchedule(request.query.week, request.query, request.portalSession);
+  const schedule = selectSchedulePrintEmployees(await getSchedule(request.query.week, request.query, request.portalSession), request.query.employees);
   const designId = schedulePdfDesignForRequest(schedule, request.query.design);
   const createdAt = new Date();
   const filename = buildPdfFilename(schedule, createdAt);
@@ -65853,7 +65902,7 @@ app.get("/api/vacations.pdf", async (request, response) => {
 });
 
 app.get("/api/schedule-preview.pdf", async (request, response) => {
-  const schedule = await getSchedule(request.query.week, request.query, request.portalSession);
+  const schedule = selectSchedulePrintEmployees(await getSchedule(request.query.week, request.query, request.portalSession), request.query.employees);
   const designId = schedulePdfDesignForRequest(schedule, request.query.design);
   response.setHeader("Content-Type", "application/pdf");
   response.setHeader("Content-Disposition", "inline");

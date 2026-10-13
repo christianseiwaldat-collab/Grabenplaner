@@ -7,7 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { Writable } = require("node:stream");
 const { finished } = require("node:stream/promises");
-const { syntheticSchedule } = require("../test-support/render-schedule-matrix-preview");
+const { syntheticSchedule, compactSixSchedule } = require("../test-support/render-schedule-matrix-preview");
 
 const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "gp-matrix-render-"));
 Object.assign(process.env, { DB_PATH: path.join(fixtureRoot, "fixture.db"),
@@ -82,6 +82,15 @@ test("echte Wochenmatrix enthält sechs Personen, Dienstbuttons und normale Beme
   const heading = items.find(item => item.str === "Bemerkungen");
   const firstNote = items.find(item => item.str.startsWith("Montag: Warenübernahme"));
   assert.ok(heading.transform[5] > firstNote.transform[5], "Remarks heading is above the text field");
+});
+
+test("sechs Personen mit großen Uhrzeiten und Teamsitzung passen ohne verkleinerte PDF-Seite", async () => {
+  const schedule = compactSixSchedule();
+  const pages = await render(schedule);
+  assert.equal(pages.length,1);assert.equal(Math.round(pages[0].width),842);assert.equal(Math.round(pages[0].height),595);
+  for(const employee of schedule.employees)assert.ok(pages[0].text.includes(employee.nickname));
+  assert.ok(pages[0].text.includes('18:00-18:30'));assert.ok(pages[0].text.includes('Samstag: Übergabe'));
+  assert.ok(pages[0].items.filter(item=>item.str==='09:00-18:00').every(item=>item.height>=11),'Time typography remains legible rather than scaling down the entire PDF');
 });
 
 test("Dienstbezeichnungen sind standardmäßig verborgen und lassen sich rechts neben dem Button einblenden", async () => {

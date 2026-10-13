@@ -740,6 +740,7 @@ const state = {
     payrollHandoffPreflight: null,
   },
   employeeEditMode: "full",
+  employeePreferredDays: [],
   personnelTab: "employees",
   editingLocationId: null,
   editingDepartmentId: null,
@@ -800,7 +801,7 @@ const TEAM_MEETING_GROUP_PREFIX = "team-meeting:";
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const planningDayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const dayKeyByNumber = { 0: "sunday", 1: "monday", 2: "tuesday", 3: "wednesday", 4: "thursday", 5: "friday", 6: "saturday" };
-const preferredDayLabels = { monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag", friday: "Freitag" };
+const preferredDayLabels = { monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag", friday: "Freitag", saturday: "Samstag" };
 const fixedDayLabels = { ...preferredDayLabels, saturday: "Samstag" };
 const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thursday: "Do", friday: "Fr", saturday: "Sa" };
 const fallbackSchedulePdfDesignCatalog = Object.freeze([
@@ -1397,6 +1398,7 @@ function showLoginGate(message = "") {
   syncXoffiImport();
   syncPlanningPrintWindows();
   gpDocumentPrint?.reset();
+  usbGuidePrint?.reset();
   gpDefinitionsWorkspace?.synchronize();
   syncPersonnelLearningAccessState();
   syncStartDashboardWorkspace();
@@ -5416,6 +5418,7 @@ function closeSchedulePdfDesignMenu() {
 }
 
 const planningPrintWindows={schedule:null,vacation:null};
+let usbGuidePrint=null;
 const planningPrintModelIds=new WeakMap();let planningPrintModelSerial=0;
 function planningPrintContext(kind){
   const params=contextSearchParams(kind==='schedule'||state.portalSession?.user?.role==='department_manager');
@@ -5427,6 +5430,7 @@ function planningPrintContext(kind){
   return {page:state.currentView,query:Object.fromEntries(params),modelRevision:model?planningPrintModelIds.get(model):0,
     departmentChoice:kind==='schedule'?String(elements.departmentPdfSelect?.value||''):'',
     settings:Object.fromEntries(Object.entries(settings).filter(([key])=>/^(?:pdf_|schedule_pdf_|vacation_pdf_|schedule_duty_colors$)/.test(key)).sort(([a],[b])=>a.localeCompare(b))),
+    employees:kind==='schedule'?(model?.employees||[]).map(employee=>({number:String(employee.personnel_number),name:String(employee.nickname||employee.full_name||employee.personnel_number)})):[],
     designs:kind==='schedule'?schedulePdfDesignIdsFromSettings().map(id=>schedulePdfDesignCatalog().find(design=>design.id===id)).filter(Boolean):[]};
 }
 function canUsePlanningPrint(kind){
@@ -8018,7 +8022,7 @@ const EMPLOYEE_DISPLAY_COLUMNS = Object.freeze([
   { id: "location", label: "Filiale", group: "Zuordnung" },
   { id: "department", label: "Abteilung", group: "Zuordnung" },
   { id: "workload", label: "Wochen-Soll / Tage", group: "Arbeitszeit" },
-  { id: "preferred_day", label: "Freier Tag", group: "Arbeitszeit" },
+  { id: "preferred_day", label: "Freie Tage · Priorität", group: "Arbeitszeit" },
   { id: "fixed_days", label: "Fixe Tage", group: "Arbeitszeit" },
   { id: "status", label: "Status", group: "Stammdaten" },
   { id: "phone", label: "Telefonnummer", group: "Freigegebener Personalakt", fieldKey: "phone" },
@@ -8077,7 +8081,7 @@ function employeeDisplayRawValue(employee, columnId) {
   if (columnId === "location") return employee.home_location_name || employee.home_location_id || "";
   if (columnId === "department") return employee.preferred_department_name || "";
   if (columnId === "workload") return Number(employee.contracted_hours || 0);
-  if (columnId === "preferred_day") return preferredDayLabels[employee.preferred_day_off] || "";
+  if (columnId === "preferred_day") return employeePreferredDaysValue(employee).map((day, index) => `${index + 1}. ${preferredDayLabels[day]}`).join(" · ");
   if (columnId === "fixed_days") return formatFixedWorkdays(employee.fixed_workdays);
   if (columnId === "status") return employee.active ? "Aktiv" : "Inaktiv";
   return "";
@@ -21416,6 +21420,7 @@ function syncGpWindows() {
   syncWorkflowStudio();
   syncSettingsSaveScopes();
   syncPlanningPrintWindows();
+  syncUsbGuidePrint();
   if (!window.GpWindow) { syncPersonnelDashboardWorkspace(); syncPersonnelDashboardInformation(); return; }
   const key = state.portalSession?.authenticated ? startDashboardWorkspaceActorKey() : '';
   const canUse=()=>Boolean(state.portalSession?.authenticated && !state.portalSession?.user?.mustChangePassword);
@@ -38222,6 +38227,7 @@ function updateEmployeeAssignmentOptions(selectedPositionId = "", selectedDepart
         : "Diese Kostenstelle ist keiner Filiale zugeordnet; ein Standort wird nicht benötigt.";
   }
   updateEmployeeDepartmentOptions(selectedDepartmentId, center);
+  renderEmployeePreferredDays();
 }
 
 function canEditEmployeeAccessProfile(employee = null) {
@@ -38632,11 +38638,74 @@ async function loadEmployeeProtectedRecord(employeeNumber) {
     state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: true, initial, access: result.access || {}, planningStatusBasis: result.planningStatusBasis || {} };
     if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = "Die Angaben werden verschlüsselt im Personalakt gespeichert.";
     setEmployeeProtectedRecordDisabled(false);
+    syncEmployeeNameFromPersonnelRecord();
   } catch (error) {
     if (!gpEditorCurrent(ticket) || String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
     state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: false };
     if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = `Personalakt konnte nicht geladen werden: ${error.message}`;
   }
+}
+
+function employeePreferredDaysValue(employee) {
+  const value = employee?.preferred_days_off ?? employee?.preferredDaysOff ?? employee?.preferred_day_off ?? employee?.preferredDayOff ?? [];
+  return [...new Set((Array.isArray(value) ? value : String(value).split(","))
+    .map(day => String(day).trim()).filter(day => Object.hasOwn(preferredDayLabels, day)))].slice(0, 4);
+}
+
+function employeePreferredDaysLimit() {
+  const center = selectedEmployeeCostCenter();
+  const type = center ? costCenterTypeByKey(center.typeId || center.type) : null;
+  const branch = type?.isBranch === true || center?.isBranch === true || type?.id === "branch";
+  return branch && ["verkaufsmitarbeiter", "abteilungsleitung", "fl-stellvertretung", "teamleitung", "filialleitung", "lehrling"]
+    .includes(elements.employeePosition.value) ? 4 : 1;
+}
+
+function renderEmployeePreferredDays() {
+  const field = document.querySelector("#employeePreferredDays");
+  if (!field) return;
+  const days = state.employeePreferredDays || [], limit = employeePreferredDaysLimit();
+  const readOnly = state.employeeEditMode === "display";
+  field.innerHTML = Object.entries(preferredDayLabels).map(([day, label]) => {
+    const rank = days.indexOf(day) + 1;
+    return `<button type="button" class="employee-preferred-day${rank ? " selected" : ""}" data-preferred-day="${day}" aria-pressed="${rank > 0}" aria-label="${label}${rank ? `, Priorität ${rank}, entfernen` : ", auswählen"}"${readOnly || (!rank && days.length >= limit) ? " disabled" : ""}><span class="employee-preferred-day-rank" aria-hidden="true">${rank || ""}</span><span>${label.slice(0, 2)}</span></button>`;
+  }).join("");
+  document.querySelector("#employeePreferredDay").value = days[0] || "";
+  document.querySelector("#employeePreferredDaysOrder").innerHTML = days.map((day, index) =>
+    `<li><span>${index + 1}. ${preferredDayLabels[day]}</span><button class="secondary-button" type="button" data-preferred-promote="${day}" aria-label="${preferredDayLabels[day]}: höhere Priorität"${readOnly || index === 0 ? " disabled" : ""}>↑</button><button class="secondary-button" type="button" data-preferred-demote="${day}" aria-label="${preferredDayLabels[day]}: niedrigere Priorität"${readOnly || index === days.length - 1 ? " disabled" : ""}>↓</button></li>`).join("");
+  document.querySelector("#employeePreferredDaysHint").textContent =
+    `${days.length} von ${limit} Tagen · Auswahlreihenfolge = Priorität. Erneutes Antippen entfernt einen Tag. Fixe Arbeitstage und Mindestbesetzung haben Vorrang.`;
+}
+
+function changeEmployeePreferredDay(event) {
+  if (state.employeeEditMode === "display") return;
+  const button = event.target.closest("[data-preferred-day],[data-preferred-promote],[data-preferred-demote]");
+  if (!button || button.disabled) return;
+  const day = button.dataset.preferredDay || button.dataset.preferredPromote || button.dataset.preferredDemote;
+  const days = [...state.employeePreferredDays], index = days.indexOf(day);
+  if (button.dataset.preferredDay) {
+    if (index >= 0) days.splice(index, 1);
+    else if (days.length < employeePreferredDaysLimit()) days.push(day);
+  } else {
+    const next = index + (button.dataset.preferredPromote ? -1 : 1);
+    if (index >= 0 && next >= 0 && next < days.length) [days[index], days[next]] = [days[next], days[index]];
+  }
+  state.employeePreferredDays = days;
+  const selector = button.dataset.preferredDay ? `[data-preferred-day="${day}"]`
+    : button.dataset.preferredPromote ? `[data-preferred-promote="${day}"]` : `[data-preferred-demote="${day}"]`;
+  renderEmployeePreferredDays();
+  const updated = document.querySelector(selector);
+  if (updated && !updated.disabled) updated.focus();
+  else document.querySelector(`[data-preferred-day="${day}"]`)?.focus();
+}
+
+function syncEmployeeNameFromPersonnelRecord() {
+  const firstName = String(employeeRecordControl("employeeRecordFirstName")?.value || "").trim();
+  const lastName = String(employeeRecordControl("employeeRecordLastName")?.value || "").trim();
+  const input = document.querySelector("#employeeName");
+  if (!input || !firstName || !lastName) return;
+  input.value = `${firstName} ${lastName}`;
+  input.readOnly = true;
+  document.querySelector("#employeeNameSource").textContent = "Vor- und Nachname aus dem geschützten Personalakt. Der Dienstplan-Name bleibt separat.";
 }
 
 function openEmployeeModal(employee = null) {
@@ -38684,6 +38753,8 @@ function openEmployeeModal(employee = null) {
   document.querySelector("#employeeNumber").value = employee?.personnel_number || "";
   document.querySelector("#employeeNumber").disabled = Boolean(employee);
   document.querySelector("#employeeName").value = employee?.full_name || "";
+  document.querySelector("#employeeName").readOnly = false;
+  document.querySelector("#employeeNameSource").textContent = "Wird bei vollständigem Namen aus dem Personalakt übernommen.";
   document.querySelector("#employeeNickname").value = employee?.nickname || "";
   document.querySelector("#employeeHours").value = employee?.contracted_hours ?? 38.5;
   elements.employeeTargetWorkdays.value = employee?.target_workdays_per_week ?? 5;
@@ -38696,7 +38767,8 @@ function openEmployeeModal(employee = null) {
     employee?.position_id || "verkaufsmitarbeiter",
     employee?.preferred_department_id || "",
   );
-  document.querySelector("#employeePreferredDay").value = employee?.preferred_day_off || "";
+  state.employeePreferredDays = employeePreferredDaysValue(employee);
+  renderEmployeePreferredDays();
   const fixedDays = fixedWorkdays(employee);
   document.querySelectorAll('[name="employeeFixedWorkday"]').forEach((checkbox) => {
     checkbox.checked = fixedDays.includes(checkbox.value);
@@ -39725,7 +39797,8 @@ async function saveEmployee(event) {
     costCenterId: elements.employeeCostCenter.value,
     positionId: elements.employeePosition.value,
     preferredDepartmentId: elements.employeePreferredDepartment.value,
-    preferredDayOff: document.querySelector("#employeePreferredDay").value,
+    preferredDayOff: state.employeePreferredDays[0] || "",
+    preferredDaysOff: [...state.employeePreferredDays],
     fixedWorkdays: Array.from(document.querySelectorAll('[name="employeeFixedWorkday"]:checked')).map((input) => input.value),
     color: state.selectedColor,
     active: document.querySelector("#employeeActive").checked,
@@ -41252,24 +41325,29 @@ function usbBasePayload() {
   };
 }
 
+function canUseUsbGuidePrint() {
+  const user=state.portalSession?.user;
+  return !state.portalStatus?.portalEnabled || Boolean(state.portalSession?.authenticated && !user?.mustChangePassword
+    && ['developer','admin','it_admin'].includes(user?.role) && user?.permissions?.includes('usb:provision'));
+}
+
+function syncUsbGuidePrint() {
+  if(!usbGuidePrint)return;
+  if(state.currentView==='settings' && canUseUsbGuidePrint())usbGuidePrint.activate();
+  else usbGuidePrint.deactivate();
+  usbGuidePrint.sync();
+}
+
 async function previewUsbFirstSteps() {
-  elements.usbGuidePreviewButton.disabled = true;
   try {
-    const response = await fetch("/api/usb-provisioning/first-steps.pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Grabenplaner-USB-Action": "provisioning", ...csrfHeader() },
-      body: JSON.stringify(usbBasePayload()),
+    syncGpWindows();
+    usbGuidePrint ||= window.GpUsbGuidePrint.mount({
+      document,rawApi,key:()=>state.portalStatus?.portalEnabled?startDashboardWorkspaceActorKey():'local',
+      canUse:canUseUsbGuidePrint,active:()=>state.currentView==='settings',context:usbBasePayload,
+      windowPreferences:gpWindowManager?.preferences,
     });
-    if (!response.ok) {
-      const detail = await response.json().catch(() => ({}));
-      throw new Error(detail.error || "Die PDF-Vorschau konnte nicht erstellt werden.");
-    }
-    const url = URL.createObjectURL(await response.blob());
-    const old = elements.usbGuidePreviewFrame.dataset.objectUrl;
-    elements.usbGuidePreviewFrame.src = url;
-    elements.usbGuidePreviewFrame.dataset.objectUrl = url;
-    if (old) URL.revokeObjectURL(old);
-  } finally { elements.usbGuidePreviewButton.disabled = false; }
+    return usbGuidePrint.open({target:elements.usbGuidePreviewButton});
+  } catch(error) { showToast(error.message || 'Die PDF-Vorschau konnte nicht geöffnet werden.',true); return false; }
 }
 
 async function importUsbBranding() {
@@ -42974,6 +43052,7 @@ elements.usbWizardNextButton?.addEventListener("click", () => {
   const index = usbWizardSteps.indexOf(state.usbProvisioning.step);
   setUsbWizardStep(usbWizardSteps[Math.min(usbWizardSteps.length - 1, index + 1)]);
 });
+for(const type of ['input','change'])elements.usbProvisioningWizard?.addEventListener(type,syncUsbGuidePrint);
 elements.usbInstallationProfile?.addEventListener("change", () => applyUsbProfile());
 elements.usbModuleSelection?.addEventListener("change", (event) => {
   if (!event.target.matches('input[type="checkbox"]')) return;
@@ -44560,7 +44639,15 @@ salesArticleColumnResize = window.SalesArticleColumnWidths?.attach(elements.sale
   canResize:canReadSalesArticles, persist:() => queueSalesArticlePreferencesSave(0),
 });
 
-elements.employeePosition.addEventListener("change", () => renderEmployeeAccessProfile(employeeAccessCurrentEmployee()));
+document.querySelector("#employeePreferredDays").addEventListener("click", changeEmployeePreferredDay);
+document.querySelector("#employeePreferredDaysOrder").addEventListener("click", changeEmployeePreferredDay);
+["employeeRecordFirstName", "employeeRecordLastName"].forEach(name => {
+  employeeRecordControl(name)?.addEventListener("input", syncEmployeeNameFromPersonnelRecord);
+});
+elements.employeePosition.addEventListener("change", () => {
+  renderEmployeeAccessProfile(employeeAccessCurrentEmployee());
+  renderEmployeePreferredDays();
+});
 elements.employeeForm.addEventListener("invalid", (event) => {
   event.target.closest("details")?.setAttribute("open", "");
 }, true);

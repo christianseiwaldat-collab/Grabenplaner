@@ -313,7 +313,9 @@ test("v0.71 Block 4: Personalakt wird vollständig, partiell und ohne Klartext-L
   });
   assert.equal(created.response.status, 201, created.text);
   assert.equal(Object.hasOwn(created.payload, "personnelRecord"), false);
-  assert.doesNotMatch(JSON.stringify(created.payload), new RegExp(marker, "i"));
+  assert.equal(created.payload.fullName, `${personnelRecord.sensitive.identity.firstName} ${personnelRecord.sensitive.identity.lastName}`);
+  const { fullName: publicName, ...nonNameResponse } = created.payload;
+  assert.doesNotMatch(JSON.stringify(nonNameResponse), new RegExp(marker, "i"));
 
   const loaded = await request("/api/portal/v1/personnel-records/8711", { auth: hr });
   assert.equal(loaded.response.status, 200, loaded.text);

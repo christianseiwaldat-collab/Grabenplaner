@@ -5,7 +5,7 @@
   else root.GpDefinitionsRegistry=api;
 })(typeof window==='object'?window:globalThis,function(){
   'use strict';
-  const VERSION=6,UPDATED='2026-10-11';
+  const VERSION=7,UPDATED='2026-10-13';
   const topics=[
     {id:'sidebar',title:'GP-sidebar',symbol:'☷',summary:'Die gemeinsame Seitennavigation hält den aktuellen Bereich sichtbar und trennt Navigation von persönlichen Menüeinstellungen.',
       rules:[
@@ -43,8 +43,11 @@
     {id:'print',title:'Druck & PDF',symbol:'▤',summary:'Ein gemeinsames Druckfenster verbindet die Ausgabeoptionen mit der tatsächlichen PDF-Datei.',
       rules:[
         {title:'PDF-Export als GP-Fenster',text:'Der Export verwendet den GP-Fensterstandard mit Verschieben, Größenänderung, Minimieren und Schließen. Ausgabeoptionen und Vorschau stehen gemeinsam im Fenster.'},
-        {title:'Titel und Dateiname getrennt',text:'PDF-Titel, frei wählbarer Dateiname und Hoch- oder Querformat sind direkt einstellbar. Fachliche Ausgabeoptionen ergänzen die gemeinsamen Einstellungen.'},
+        {title:'Nur wirksame Ausgabeoptionen anbieten',text:'Ein frei wählbarer Dateiname und die unterstützten fachlichen Optionen stehen links. Titel und Ausrichtung sind nur dort einstellbar, wo der Renderer sie übernehmen kann. Beim Dienstplan ist der Titel vorgegeben und wird nicht als zusätzliches Eingabefeld angezeigt.'},
         {title:'Tatsächliches Drucklayout zeigen',text:'Die Vorschau rendert die erzeugte PDF-Datei und zeigt ihre echte Seitenzahl. Seitenwechsel und Zoom machen auch mehrseitige Ausgaben prüfbar.'},
+        {title:'Gemeinsamer Zoom in jeder PDF-Vorschau',text:'Alle Druckbereiche, einschließlich Verkaufsanalysen, Artikel-Auswertung, Artikelstamm, Belegen, BWL-Tools und Preisschildern, verwenden dieselbe Vorschau. Neben Ganze Seite und Seitenbreite sind 50, 60, 70, 80, 90, 100, 125, 150 und 200 Prozent sowie ein eigener Wert von 10 bis 400 Prozent wählbar. Der Zoom vergrößert die Ansicht; Seitengröße, Umbrüche und PDF-Datei bleiben gleich.'},
+        {title:'Mitarbeitende gezielt drucken',text:'Im Dienstplan lassen sich die Mitarbeitenden für Wochenmatrix und klassisches Design einzeln auswählen. Die Auswahl begrenzt ausschließlich den Ausdruck auf den freigegebenen Planungsbereich. Alle auswählen stellt die vollständige Liste wieder her; eine leere Auswahl sperrt die Ausgabe. Personen bleiben unabhängig davon aktiv.'},
+        {title:'Sechs Personen lesbar auf einer Seite',text:'Die A4-Wochenmatrix nutzt kompakte Zeilen und einen schlanken Bemerkungsbereich. Sechs Mitarbeitende mit üblichen Diensten passen auf eine Seite. Zusätzliche Ereignisse und längere Inhalte dürfen weitere Seiten beanspruchen, damit Zeiten und Bemerkungen lesbar und vollständig bleiben.'},
         {title:'Dieselbe Datei herunterladen',text:'Vorschau und Download verwenden dieselben PDF-Bytes. Ändern sich Optionen oder der Ergebnisstand, muss die Vorschau neu berechnet werden, bevor der passende Download bereitsteht.'},
         {title:'Vollständigkeit und Datenstand',text:'Ein Export benennt den verwendeten Datenstand und enthält die vollständige gewählte Ergebnisliste innerhalb der fachlichen Schutzgrenzen. Begrenzte Ausgaben werden ausdrücklich ausgewiesen.'},
         {title:'Aufträge sicher trennen',text:'Ein veralteter Auftrag darf keinen neueren Entwurf ersetzen. Konto- oder Rechtewechsel verwirft fremde Ausgaben; Schließen räumt die Vorschau und temporäre Download-Adressen auf.'},

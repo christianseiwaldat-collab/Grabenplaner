@@ -25,10 +25,18 @@
 .gp-print-preview > p { flex:none;min-height:18px;margin:8px 0;font-size:11px;line-height:1.45;color:var(--muted); }
 .gp-print-preview > p.is-error { color:#a13f2e; }
 .gp-print-window .article-report-pdf-viewer { display:flex;flex:1;flex-direction:column;min-height:240px;min-width:0;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--surface); }
-.gp-print-window .article-report-pdf-viewer-tools { display:flex;align-items:center;flex:none;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line);font-size:11px; }
+.gp-print-window .article-report-pdf-viewer-tools { display:flex;align-items:center;flex-wrap:wrap;flex:none;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line);font-size:11px; }
 .gp-print-window .article-report-pdf-viewer-tools button { min-height:28px;padding:3px 7px;font-size:12px;border-radius:5px; }
 .gp-print-window .article-report-pdf-viewer-tools label { display:flex;align-items:center;gap:7px;margin-left:auto;font-size:11px; }
 .gp-print-window .article-report-pdf-viewer-tools select { width:auto;max-width:130px;min-height:28px;padding:3px 6px;font-size:11px; }
+.gp-print-window .article-report-pdf-viewer-tools .gp-print-custom-zoom { margin-left:0;gap:4px; }
+.gp-print-window .article-report-pdf-viewer-tools input[data-preview-percent] { width:64px;min-height:28px;padding:3px 6px;font-size:11px;text-align:right; }
+.gp-print-window .article-report-pdf-viewer-tools input[aria-invalid=true] { border-color:#a13f2e; }
+.gp-print-employee-selection { display:grid;gap:8px;margin:0;padding:10px;border:1px solid var(--line);border-radius:7px;min-width:0; }
+.gp-print-employee-selection legend { padding:0 4px;font-size:12px;font-weight:600;color:var(--ink); }
+.gp-print-employee-selection > div { display:grid;gap:7px;max-height:220px;overflow:auto; }
+.gp-print-employee-selection [data-print-employee-count] { font-size:11px;color:var(--muted); }
+.gp-print-employee-selection > button { justify-self:start;padding:3px 7px;min-height:28px;font-size:11px; }
 .gp-print-window .article-report-pdf-canvas-scroll { display:flex;align-items:flex-start;justify-content:flex-start;flex:1;min-height:160px;min-width:0;overflow:auto;padding:14px;background:color-mix(in srgb,var(--surface-soft) 85%,var(--ink)); }
 .gp-print-window .article-report-pdf-canvas-scroll canvas { flex:none;display:block;margin:auto;background:white;box-shadow:0 2px 10px rgb(0 0 0 / 12%); }
 .gp-print-footer { display:flex;align-items:center;justify-content:space-between;flex:none;gap:12px;padding:11px 16px;border-top:1px solid var(--line);background:var(--surface); }

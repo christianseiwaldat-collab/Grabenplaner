@@ -191,6 +191,24 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
+test('Dienstplan-Druckauswahl begrenzt beide PDF-Routen und Designs auf den berechtigten Bereich',async()=>{
+  const auth=session(DEVELOPER),before=db.prepare('SELECT personnel_number, active FROM employees ORDER BY personnel_number').all();
+  const designs=await request('/api/portal/v1/schedule-pdf-settings',{method:'PUT',auth,body:{locationId:LOCATION,schedulePdfDesignIds:['timeline','matrix']}});
+  assert.equal(designs.response.status,200,designs.text);
+  for(const route of ['schedule.pdf','schedule-preview.pdf'])for(const design of ['matrix','timeline']){
+    const selected=await request(`/api/${route}?week=${WEEK_START}&locationId=${LOCATION}&design=${design}&employees=${DEVELOPER},999999`,{auth,binary:true});
+    assert.equal(selected.response.status,200);const details=await pdfTextDetails(selected.payload);
+    assert.match(details.text,/TS0/);assert.doesNotMatch(details.text,/TS1|TS2/);
+  }
+  for(const value of ['',MEMBER_SICK_WITH_SHIFT+',','999999']){
+    const invalid=await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&design=matrix&employees=${encodeURIComponent(value)}`,{auth});
+    assert.equal(invalid.response.status,400);assert.equal(invalid.payload.code,'SCHEDULE_PRINT_EMPLOYEES_INVALID');
+  }
+  const anonymous=await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&employees=${DEVELOPER}`);
+  assert.equal(anonymous.response.status,401);
+  assert.deepEqual(db.prepare('SELECT personnel_number, active FROM employees ORDER BY personnel_number').all(),before,'Printing never changes active staff');
+});
+
 test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis 20 Uhr planbar", async () => {
   const auth = session(DEVELOPER);
   const body = {

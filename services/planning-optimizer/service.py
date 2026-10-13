@@ -17,6 +17,7 @@ def integer(value, lower, upper):
 def solve(problem):
     if problem.get("schemaVersion") != 2:
         raise ValueError("unsupported schema")
+    preference_scale = integer(problem.get("preferenceCostScale", 1), 1, 4)
     candidates = problem["candidates"]
     employees = problem["employees"]
     groups = problem["groups"]
@@ -73,7 +74,9 @@ def solve(problem):
     profiles = {"stable": (600, 1, 25, 20), "balanced": (180, 3, 60, 100), "wishes": (120, 2, 300, 60)}
     scenario = problem.get("profile", "balanced")
     change_w, hours_w, preference_w, fair_w = profiles[scenario]
-    model.minimize((added + removed) * change_w + sum(hours_deviation) * hours_w + preferences * preference_w + (weekend_max - weekend_min) * fair_w)
+    # Ranked wishes use quarter steps. Scale the other terms equally so that
+    # priority 1 retains the former single-wish weight, including without ZA.
+    model.minimize(((added + removed) * change_w + sum(hours_deviation) * hours_w + (weekend_max - weekend_min) * fair_w) * preference_scale + preferences * preference_w)
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = integer(problem.get("timeLimitSeconds", 3), 1, 10)
     solver.parameters.max_memory_in_mb = 256
@@ -84,10 +87,10 @@ def solve(problem):
     result = {"schemaVersion": 2, "engine": "OR-Tools CP-SAT", "engineVersion": ortools.__version__,
               "status": solver.status_name(status), "durationMs": round((time.monotonic() - started) * 1000), "selected": []}
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        result.update(selected=[i for i in range(count) if solver.value(chosen[i])], objective=solver.objective_value,
-                      bound=solver.best_objective_bound,
+        result.update(selected=[i for i in range(count) if solver.value(chosen[i])], objective=solver.objective_value / preference_scale,
+                      bound=solver.best_objective_bound / preference_scale,
                       metrics={"changedShifts": int(solver.value(added + removed)), "targetDeviationMinutes": int(sum(solver.value(x) for x in hours_deviation)),
-                               "preferencePenalty": int(solver.value(preferences)), "saturdaySpread": solver.value(weekend_max) - solver.value(weekend_min)})
+                               "preferencePenalty": solver.value(preferences) / preference_scale, "saturdaySpread": solver.value(weekend_max) - solver.value(weekend_min)})
     elif status == cp_model.INFEASIBLE:
         result["conflictingGroups"] = [assumptions[i] for i in solver.sufficient_assumptions_for_infeasibility() if i in assumptions]
     return result

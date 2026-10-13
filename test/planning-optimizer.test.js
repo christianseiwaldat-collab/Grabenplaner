@@ -28,6 +28,31 @@ test("impossible coverage reports infeasible with the responsible requirement in
   const p = problem(); p.groups.push({ indices: [], minimum: 1, maximum: 1 });
   const result = await service.run(p); assert.equal(result.status, "INFEASIBLE"); assert.deepEqual(result.selected, []); assert(result.conflictingGroups.includes(1));
 });
+
+test("ranked wishes preserve the single-wish weight and do not delete a required 240-minute shift without approved credit", { skip: !ready }, async () => {
+  const legacy = { schemaVersion: 2, employees: [{ id: "one", targetMinutes: 240, creditMinutes: 0, saturdayHistory: 0 }],
+    candidates: [{ employeeId: "one", minutes: 240, preferenceCost: 1, saturday: 0 }],
+    groups: [], baselineIndices: [0], forbidden: [], profile: "wishes" };
+  const prior = await service.run(legacy);
+  assert.deepEqual(prior.selected, [0]);
+  const ranked = { ...legacy, preferenceCostScale: 4, candidates: [{ ...legacy.candidates[0], preferenceCost: 4 }] };
+  const current = await service.run(ranked);
+  assert.deepEqual(current.selected, prior.selected);
+  assert.deepEqual(current.metrics, prior.metrics);
+  assert.equal(current.objective, prior.objective);
+  assert.equal(current.metrics.preferencePenalty, 1);
+  const credited = await service.run({ ...ranked, employees: [{ ...ranked.employees[0], creditMinutes: 240 }] });
+  assert.deepEqual(credited.selected, []);
+  assert.equal(credited.metrics.targetDeviationMinutes, 0);
+  const ordered = { ...ranked, candidates: [4, 3, 2, 1].map(preferenceCost => ({ ...ranked.candidates[0], preferenceCost })),
+    groups: [{ indices: [0, 1, 2, 3], minimum: 1, maximum: 1 }], baselineIndices: [] };
+  const choice = await service.run(ordered);
+  assert.deepEqual(choice.selected, [3]);
+  assert.equal(choice.metrics.preferencePenalty, 0.25);
+  for (const invalid of [0, -1, 5, 1.5, "4", true]) {
+    await assert.rejects(service.run({ ...ranked, preferenceCostScale: invalid }), { code: "OPTIMIZER_UNAVAILABLE" });
+  }
+});
 test("unavailable runtime, oversized input and cancellation return bounded safe errors", async () => {
   await assert.rejects(createOptimizerService({ python: path.join(os.tmpdir(), "missing-gp-python") }).run(problem()), { code: "OPTIMIZER_UNAVAILABLE" });
   if (!ready) return;

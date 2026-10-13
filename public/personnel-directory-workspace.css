@@ -46,3 +46,17 @@
   #personnelDirectorySection .personnel-directory-table tr { grid-template-columns:minmax(0,1fr); gap:14px; }
   #personnelDirectorySection .personnel-directory-table .table-actions { justify-content:flex-start; }
 }
+
+.employee-preferred-days-field { min-width:0; border:0; padding:0; margin:0; }
+.employee-preferred-days-field legend { padding:0; margin-bottom:10px; color:var(--muted); font-size:13px; font-weight:600; }
+.employee-preferred-days { display:flex; flex-wrap:wrap; gap:8px; }
+.employee-preferred-day { display:inline-flex; align-items:center; justify-content:center; gap:9px; min-width:76px; min-height:46px; padding:9px 13px; border:1px solid var(--line); border-radius:12px; background:var(--surface,#fff); color:var(--text); font:inherit; cursor:pointer; }
+.employee-preferred-day.selected { border-color:#246aab; background:color-mix(in srgb,#246aab 9%,var(--surface,#fff)); }
+.employee-preferred-day-rank { display:inline-grid; place-items:center; width:22px; height:22px; border:1px solid #86958f; border-radius:5px; font-weight:700; font-size:13px; }
+.employee-preferred-day.selected .employee-preferred-day-rank { border-color:#2169b1; background:#2169b1; color:#fff; }
+.employee-preferred-day:disabled { cursor:default; opacity:.55; }
+.employee-preferred-day:focus-visible,.employee-preferred-days-order button:focus-visible { outline:3px solid #2474c5; outline-offset:3px; }
+.employee-preferred-days-order { display:flex; flex-wrap:wrap; gap:8px 14px; list-style:none; margin:12px 0 5px; padding:0; }
+.employee-preferred-days-order li { display:flex; gap:5px; align-items:center; font-size:12px; }
+.employee-preferred-days-order button { padding:0; min-width:44px; min-height:44px; border-radius:8px; }
+.employee-preferred-days-field small,#employeeNameSource { line-height:1.45; color:var(--muted); font-size:12px; }

@@ -1522,6 +1522,10 @@ const BASELINE_TEST_FILES = Object.freeze([
 ]);
 
 const TEST_SPECIAL_GROUPS = Object.freeze({
+  "employee-preferences-api-fixtures": new Set([
+    // Isolated synthetic API qualification; no new product database access.
+    "test/employee-preferred-days-api.test.js",
+  ]),
   "learning-and-workflow-workspace-fixtures": new Set([
     "test/dashboard-boards-api.test.js",
     "test/gp-dashboard-boards-browser.test.js",
@@ -4451,6 +4455,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
     ...BASELINE_TEST_FILES,
     ...TEST_SPECIAL_GROUPS["deployment-operations-verification"],
     ...TEST_SPECIAL_GROUPS["learning-and-workflow-workspace-fixtures"],
+    ...TEST_SPECIAL_GROUPS["employee-preferences-api-fixtures"],
   ]);
   const classificationDuplicates = [
     ...directGroups.duplicates,

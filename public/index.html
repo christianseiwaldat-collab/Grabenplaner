@@ -3082,7 +3082,7 @@
                 <section class="usb-panel-card usb-guide-preview-card">
                   <div class="usb-panel-heading"><span class="usb-panel-number">PDF</span><div><h3>Vorschau</h3><p>Logo und Farben stammen automatisch aus dem Haupt-Branding.</p></div></div>
                   <button class="secondary-button" id="usbGuidePreviewButton" type="button">PDF-Vorschau erzeugen</button>
-                  <iframe id="usbGuidePreviewFrame" title="Vorschau der Erste-Schritte-PDF"></iframe>
+                  <p class="settings-note">Die Vorschau öffnet im GP-Druckfenster.</p>
                 </section>
               </div>
 
@@ -3290,7 +3290,7 @@
             <summary><span><strong>Person &amp; Organisation</strong><small>Kostenstelle, Position und organisatorische Zuordnung</small></span><span class="status-badge">Stammdaten</span></summary>
             <div class="form-grid employee-form-section-grid">
               <label class="field"><span>Personalnummer</span><input id="employeeNumber" required /></label>
-              <label class="field"><span>Name</span><input id="employeeName" required /></label>
+              <label class="field"><span>Name</span><input id="employeeName" required aria-describedby="employeeNameSource" /><small id="employeeNameSource">Wird bei vollständigem Namen aus dem Personalakt übernommen.</small></label>
               <label class="field"><span>Kostenstelle</span><select id="employeeCostCenter" required></select><small id="employeeCostCenterHint">Die Kostenstelle bestimmt Standort und auswählbare Positionen.</small></label>
               <label class="field"><span>Position</span><select id="employeePosition" required></select><small id="employeePositionHint">Nach Auswahl der Kostenstelle erscheinen nur freigegebene Positionen.</small></label>
               <label class="field"><span>Bevorzugte Abteilung</span><select id="employeePreferredDepartment"><option value="">Keine Abteilung</option></select><small id="employeePreferredDepartmentHint">Nur für Kostenstellen mit zugeordnetem Standort.</small></label>
@@ -3312,7 +3312,12 @@
               <label class="field"><span>Soll-Arbeitstage pro Woche</span><div class="unit-input"><input id="employeeTargetWorkdays" type="number" min="1" max="6" step="1" required /><em>Tage</em></div><small>Grundlage für die unveränderlich gespeicherte Krankenstandszeit je vorgesehenem Arbeitstag.</small></label>
               <label class="field" id="employeeTimeConfirmationLevelField"><span>Vertrauensstufe</span><select id="employeeTimeConfirmationLevel" required><option value="A">Stufe A · Wochenabschluss</option><option value="B">Stufe B · spätestens nach 3 Tagen</option><option value="C">Stufe C · täglich bis 12:00 Uhr</option></select><small>Unabhängig von Position und Rolle; steuert künftig die Bestätigungsfrist automatischer Zeitvorschläge.</small></label>
               <label class="switch-row full-width hidden" id="employeeSicknessWithoutAumField"><span><strong>Persönliches Kontingent ohne AUM freischalten</strong><small id="employeeSicknessWithoutAumHint">Wirksam nur bei Vertrauensstufe A und aktivierter Unternehmensregel.</small></span><input id="employeeSicknessWithoutAumEnabled" type="checkbox" /></label>
-              <label class="field modal-span-2"><span>Bevorzugter freier Tag</span><select id="employeePreferredDay"><option value="">Kein bevorzugter Tag</option><option value="monday">Montag</option><option value="tuesday">Dienstag</option><option value="wednesday">Mittwoch</option><option value="thursday">Donnerstag</option><option value="friday">Freitag</option></select></label>
+              <fieldset class="field modal-span-2 employee-preferred-days-field"><legend>Bevorzugte freie Tage</legend>
+                <input type="hidden" id="employeePreferredDay" />
+                <div class="employee-preferred-days" id="employeePreferredDays" aria-label="Bevorzugte freie Tage wählen"></div>
+                <ol class="employee-preferred-days-order" id="employeePreferredDaysOrder" aria-label="Prioritäten ändern"></ol>
+                <small id="employeePreferredDaysHint" aria-live="polite"></small>
+              </fieldset>
               <div class="field modal-span-3"><span>Dienstvertraglich vereinbarte fixe Arbeitstage</span>
                 <div class="weekday-checks">
                   <label><input type="checkbox" name="employeeFixedWorkday" value="monday" /> Mo</label>
@@ -4603,6 +4608,7 @@
     <script src="/gp-price-label-pdf.js"></script>
     <script src="/gp-branch-order-pdf-window.js"></script>
     <script src="/gp-planning-print.js"></script>
+    <script src="/gp-usb-guide-print.js"></script>
     <script src="/gp-sales-analytics-print.js"></script>
     <script src="/gp-receipt-print.js"></script>
     <script src="/sales-article-report.js"></script>
