@@ -3,7 +3,7 @@ const test=require("node:test"),assert=require("node:assert/strict"),vm=require(
 test("actual main window hook invalidates identical-actor replacement sessions once",()=>{
   let resets=0;const infoEpochs=[];const session={authenticated:true,user:{employeeNumber:"BEISPIEL"}};
   const noop=()=>{},context=vm.createContext({state:{portalSession:session,branchOrdersManagementRequestId:0,salesArticleCatalog:{}},elements:{},document:{getElementById:()=>null},window:{GpWindow:{}},gpWindowManager:{preferences:{},synchronize(){resets++;}},gpWindowActor:"BEISPIEL",gpWindowSession:session,personalActionsWindow:null,recentArticlesWindow:null,branchOrderViewStates:new Map(),branchOrderViewActor:"BEISPIEL",settingsDraftGuard:null,employeeProfileBookmark:null,receiptSearchWorkspace:null,salesPriceLabelsWorkspace:null,vpsStorageWorkspace:null,startDashboardWorkspaceActorKey:()=>"BEISPIEL"});
-  for(const name of ["syncXoffiImport","syncWorkflowStudio","syncSettingsSaveScopes","syncPlanningPrintWindows","syncPersonnelDashboardInformation","syncPersonnelDashboardWorkspace","syncSalesAnalyticsPrintWindows","syncDocumentPrint","syncBranchOrdersManagementPrintWindow","syncRightsWorkspace"])context[name]=noop;
+  for(const name of ["syncXoffiImport","syncWorkflowStudio","syncSettingsSaveScopes","syncPlanningPrintWindows","syncUsbGuidePrint","syncPersonnelDashboardInformation","syncPersonnelDashboardWorkspace","syncSalesAnalyticsPrintWindows","syncDocumentPrint","syncBranchOrdersManagementPrintWindow","syncRightsWorkspace"])context[name]=noop;
   context.syncPersonnelDashboardInformation=()=>infoEpochs.push(resets);
   vm.runInContext(functionSource("syncGpWindows"),context);
   context.syncGpWindows();assert.equal(resets,0);
@@ -13,6 +13,6 @@ test("actual main window hook invalidates identical-actor replacement sessions o
 });
 test("actual main hook synchronizes own personnel sources before missing-window dependency return",()=>{
   let syncs=0;
-  const context=vm.createContext({window:{},syncXoffiImport(){},syncWorkflowStudio(){},syncSettingsSaveScopes(){},syncPlanningPrintWindows(){},syncPersonnelDashboardWorkspace(){},syncPersonnelDashboardInformation(){syncs++;}});
+  const context=vm.createContext({window:{},syncXoffiImport(){},syncWorkflowStudio(){},syncSettingsSaveScopes(){},syncPlanningPrintWindows(){},syncUsbGuidePrint(){},syncPersonnelDashboardWorkspace(){},syncPersonnelDashboardInformation(){syncs++;}});
   vm.runInContext(functionSource("syncGpWindows"),context);context.syncGpWindows();assert.equal(syncs,1);
 });

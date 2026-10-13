@@ -73,6 +73,9 @@ function fixture(names) {
   let payload = { code: "SYN-RULE-A", title: "Synthetic draft A", threshold: 4 };
   const context = vm.createContext({
     state, elements, document, window,
+    preferredDayLabels: { monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag", friday: "Freitag", saturday: "Samstag" },
+    selectedEmployeeCostCenter: () => null,
+    costCenterTypeByKey: () => null,
     isLocalStartDashboardWorkspace: () => false,
     canWriteCostCenters: () => rights.cost,
     canEditEmployeeWindow: () => rights.employee,
@@ -96,7 +99,8 @@ function fixture(names) {
     toIsoDate: () => "2026-10-11", formatDate: value => value,
   });
   const helpers = ["startDashboardWorkspaceActorKey", "captureGpEditor", "gpEditorCurrent",
-    "captureGpContext", "gpContextCurrent"];
+    "captureGpContext", "gpContextCurrent", "employeeRecordControl", "syncEmployeeNameFromPersonnelRecord",
+    "employeePreferredDaysValue", "employeePreferredDaysLimit", "renderEmployeePreferredDays"];
   vm.runInContext([...new Set([...helpers, ...names])].map(functionSource).join("\n"), context);
   function dialog(id) {
     const node = control(id);

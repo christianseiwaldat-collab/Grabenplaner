@@ -364,7 +364,8 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // article qualifications are classified; no new production access is allowed.
   // Twenty-four named workspace fixtures exercise DOM preparation or isolated
   // application persistence; the historical baseline and driver lists stay fixed.
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 44);
+  // Ranked employee preferences add one explicitly classified API fixture.
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 45);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
   assert.equal(report.summary.productionJavaScriptDriverFiles, 15);
