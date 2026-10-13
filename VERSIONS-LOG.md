@@ -1,9 +1,9 @@
 # Versionsstatus
 
-## v0.92.85 Beta · Quellstand
+## v0.92.86 Beta · Quellstand
 
 Persönlich begrenzter Sprachassistent und lokale Dienstplanprüfung mit bestätigungspflichtigen Planvorschlägen.
-Die bisherigen Verbesserungen an mobilen Ansichten und Kameraabläufen bleiben enthalten.
+Technische Speicherübersicht, geprüfte Bereinigung ersetzter Importkopien und verbesserte mobile Navigation.
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease

@@ -34,6 +34,7 @@ const RIGHTS_WINDOW_CASES = Object.freeze([
   { id: "settings.mobile-leadership", gateId: "openMobileLeadershipWindowButton", focusId: "mobileLeadershipWindow" },
   { id: "settings.personnel-field-rights", gateId: "openPersonnelFieldRightsWindowButton", focusId: "personnelFieldRightsWindow" },
 ]);
+const VPS_STORAGE_GATE_IDS = Object.freeze(["vpsStorageSettingsCard", "openVpsStorage"]);
 
 const FEATURE_CASES = Object.freeze([
   {
@@ -134,8 +135,8 @@ function availableIds(availableGateIds) {
 
 test("Block 5: alle Portalrollen bleiben vollständig an die projizierten UI-Gates gebunden", () => {
   assert.ok(catalogApi.FUNCTION_SEARCH_CATALOG.length > 0);
-  // The existing 107 gates plus two independently protected rights-window openers.
-  assert.equal(ALL_GATE_IDS.size, 107 + RIGHTS_WINDOW_CASES.length);
+  // Every additional technical window keeps its own projected visibility gates.
+  assert.equal(ALL_GATE_IDS.size, 107 + RIGHTS_WINDOW_CASES.length + VPS_STORAGE_GATE_IDS.length);
   assert.doesNotMatch(catalogSource, /options\?\.role|options\.role|role\s*===\s*["']/);
   assert.match(appSource, /isGateAvailable: functionSearchGateAvailable/);
 
@@ -184,6 +185,21 @@ test("Block 5: zusätzliche Rechtefenster verlangen ihr eigenes Gate neben dem R
   assert.deepEqual(catalogApi.FUNCTION_SEARCH_CATALOG.filter(item => !catalogApi.functionSearchEntryIsAvailable(item, {
     authenticated: true, availableGateIds: withoutWindowGates,
   })).map(item => item.id).sort(), RIGHTS_WINDOW_CASES.map(item => item.id).sort());
+});
+
+test("VPS storage search requires its settings tab, technical card and window opener", () => {
+  const entry = catalogApi.FUNCTION_SEARCH_CATALOG.find(item => item.id === "settings.vps-storage");
+  const gates = ["settingsBackupTab", ...VPS_STORAGE_GATE_IDS];
+  assert.deepEqual(entry.access.gateIds, gates);
+  assert.deepEqual(entry.target, { kind: "navigation", view: "settings", settingsTab: "backup", focusId: "openVpsStorage" });
+  for (const gate of VPS_STORAGE_GATE_IDS) assert.match(indexHtml, new RegExp(`\\bid="${gate}"`));
+  for (const role of PORTAL_ROLES) {
+    assert.equal(catalogApi.availableFunctionSearchEntry(entry.id, { authenticated: true, role }), null);
+    for (const missing of gates) assert.equal(catalogApi.availableFunctionSearchEntry(entry.id, {
+      authenticated: true, role, availableGateIds: gates.filter(gate => gate !== missing),
+    }), null, `${role}: ${missing}`);
+    assert.equal(catalogApi.availableFunctionSearchEntry(entry.id, { authenticated: true, role, availableGateIds: gates }), entry);
+  }
 });
 
 test("Block 5: Logistik und Preisschilder haben eigene reale Ziele und erhalten keinen Zugriff durch eine Portalrolle allein", () => {

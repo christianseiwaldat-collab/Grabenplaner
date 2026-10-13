@@ -95,6 +95,13 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'lib/persistence/postgresql/sales/import-delete.js',
   'lib/persistence/postgresql/sales/import-delete-performance.js',
   'lib/persistence/postgresql/operations/restore-capacity.js',
+  // Exact protected maintenance targets; import caches only, with paired backup.
+  'lib/persistence/postgresql/operations/import-retention.js',
+  'lib/persistence/postgresql/operations/storage-residuals.js',
+  'server-tools/linux/postgresql/storage-worker.js',
+  'server-tools/linux/postgresql/storage-import-run.js',
+  'server-tools/linux/postgresql/storage-import-maintenance.sh',
+  'test/vps-storage-postgresql.test.js',
   'server-tools/linux/lib/import-delete-migrate.js',
   'test/postgresql-stock-import-delete.test.js',
   'test/postgresql-trade-insights.test.js',
@@ -288,6 +295,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
 ]);
 const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
   // Only the installed maintenance-lease migration CLI opens the driver.
+  'server-tools/linux/postgresql/storage-worker.js',
   'server-tools/linux/lib/vocational-school-migrate.js',
   'server-tools/linux/lib/import-delete-migrate.js',
   'lib/persistence/postgresql/application-operations/system-health.js',
@@ -1149,6 +1157,7 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
     id: "learning-and-workflow-workspace-ui",
     files: Object.freeze([
       "public/gp-window.js",
+      "public/vps-storage.js",
       "public/learning-library.js",
       "public/learning-team.js",
       "public/trade-orders.js",

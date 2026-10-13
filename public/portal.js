@@ -2495,6 +2495,7 @@ function neutralizeCredentialDialogsForLogin() {
 }
 
 function showLogin(error = "") {
+  neutralizeBirthdayPresentation();
   document.body.classList.remove("session-pending");
   portalVoiceAssistant?.reset();
   portalLearningAssessmentPanel?.clear();
@@ -2503,7 +2504,6 @@ function showLogin(error = "") {
   const hadProcessTaskOwner = Boolean(
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
-  neutralizeBirthdayPresentation();
   neutralizeBirthdayPresentationTheme();
   resetPersonalActionsState("");
   portalState.session = null;

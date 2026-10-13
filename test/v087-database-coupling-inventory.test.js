@@ -350,9 +350,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // its named classification grants no driver, statement or raw SQL access.
   // The ABC and simulation routes likewise supply private HTTP cache metadata;
   // their exact classifications grant no raw SQL or driver capabilities.
-  // Six named browser modules and the already classified app.js only prepare
+  // Seven named browser modules and the already classified app.js only prepare
   // DOM windows; these lexical signals grant no SQL, drivers or activation.
-  assert.equal(report.summary.productionDirectFiles, 106);
+  assert.equal(report.summary.productionDirectFiles, 107);
   // Five archive/child operating adapters and one read-only recovery-key
   // verifier and isolated full-source measurement extend the existing indirect
   // inventory; no raw business access or productive import activation.
