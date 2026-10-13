@@ -495,14 +495,15 @@ function clearLoanConfirmationPrintState() {
 
 function loanConfirmationPrintSignature(value) {
   return JSON.stringify([value?.id,value?.loanId,value?.status,value?.expectedRevision,value?.expiresAt,value?.loan?.revision,
-    value?.witness?.employeeNumber,(value?.photoAttachments||value?.loan?.photoAttachments||[]).map(item=>[item.id,item.revision,item.downloadUrl])]);
+    value?.witness?.employeeNumber,(value?.photoAttachments||value?.loan?.photoAttachments||[]).map(item=>[item.id,item.revision,item.previewUrl,item.downloadUrl])]);
 }
 
 function portalLoanDocumentPrintBridge({url,target}) {
   const dialog=el.loanConfirmationDialog,confirmation=portalState.activeLoanConfirmation;
-  if(!dialog?.open || !dialog.contains(target) || !confirmation || !/^\/api\/portal\/v1\/loans\/photo-attachments\/[A-Za-z0-9_-]+\/download$/.test(url))return null;
+  const route=/^\/api\/portal\/v1\/loans\/photo-attachments\/([A-Za-z0-9_-]+)\/(preview|download)$/.exec(url);
+  if(!dialog?.open || !dialog.contains(target) || !confirmation || !route)return null;
   const attachments=confirmation.photoAttachments||confirmation.loan?.photoAttachments||[];
-  if(!attachments.some(item=>item.downloadUrl===url || '/api/portal/v1/loans/photo-attachments/'+encodeURIComponent(item.id)+'/download'===url))return null;
+  if(!attachments.some(item=>item[route[2]+'Url']===url || '/api/portal/v1/loans/photo-attachments/'+encodeURIComponent(item.id)+'/'+route[2]===url))return null;
   const actor=portalDocumentActorKey(),page=portalState.activeTab,signature=loanConfirmationPrintSignature(confirmation);
   const canUse=()=>actor===portalDocumentActorKey() && loanCapabilityEnabled()
     && Date.parse(confirmation.expiresAt)>Date.now()

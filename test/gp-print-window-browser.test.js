@@ -24,12 +24,16 @@ test('standard print window uses real PDF bytes and isolates malformed outputs, 
     const appSource=fs.readFileSync(path.join(publicRoot,'app.js'),'utf8');
     const appFunction=name=>{const start=appSource.indexOf('function '+name+'('),end=appSource.indexOf('\n}',start)+2;assert.ok(start>=0&&end>start,name);return appSource.slice(start,end);};
     const usbAppLifecycle=['canUseUsbGuidePrint','syncUsbGuidePrint'].map(appFunction).join('\n');
+    const portalSource=fs.readFileSync(path.join(publicRoot,'portal.js'),'utf8');
+    const portalFunction=name=>{const start=portalSource.indexOf('function '+name+'('),end=portalSource.indexOf('\n}',start)+2;assert.ok(start>=0&&end>start,name);return portalSource.slice(start,end);};
+    const loanPrintLifecycle=['clearLoanConfirmationPrintState','loanConfirmationPrintSignature','portalLoanDocumentPrintBridge'].map(portalFunction).join('\n');
     server=http.createServer((request,response)=>{
       const url=new URL(request.url,'http://127.0.0.1');
       response.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'"+(url.pathname.startsWith('/vendor/pdfjs-v6.2.108/')?" 'wasm-unsafe-eval'":"")+"; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
       response.setHeader('X-Content-Type-Options','nosniff');response.setHeader('Cross-Origin-Opener-Policy','same-origin');response.setHeader('Cross-Origin-Resource-Policy','same-origin');
       if(url.pathname==='/'){response.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});response.end(html);return;}
       if(url.pathname==='/usb-app-lifecycle.js'){response.writeHead(200,{'Content-Type':'application/javascript'});response.end(usbAppLifecycle);return;}
+      if(url.pathname==='/loan-print-lifecycle.js'){response.writeHead(200,{'Content-Type':'application/javascript'});response.end(loanPrintLifecycle);return;}
       const prefix='/vendor/pdfjs-v6.2.108/',vendor=url.pathname.startsWith(prefix),root=vendor?vendorRoot:publicRoot;
       const file=path.resolve(root,decodeURIComponent(url.pathname.slice(vendor?prefix.length:1)));
       if(file.startsWith(root+path.sep)&&fs.existsSync(file)&&fs.statSync(file).isFile()){
@@ -38,7 +42,7 @@ test('standard print window uses real PDF bytes and isolates malformed outputs, 
       response.writeHead(404);response.end();
     });
     await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));await page.goto('http://127.0.0.1:'+server.address().port+'/');
-    for(const file of ['gp-window-preferences.js','gp-window.js','sales-article-report-pdf-preview.js','gp-print-window.js','gp-existing-pdf-window.js','gp-planning-print.js','gp-usb-guide-print.js','usb-app-lifecycle.js'])await page.addScriptTag({url:'/'+file});
+    for(const file of ['gp-window-preferences.js','gp-window.js','sales-article-report-pdf-preview.js','gp-print-window.js','gp-existing-pdf-window.js','gp-document-print.js','gp-planning-print.js','gp-usb-guide-print.js','usb-app-lifecycle.js','loan-print-lifecycle.js'])await page.addScriptTag({url:'/'+file});
     await page.evaluate(()=>{
       window.actor='A';window.allowed=true;window.pageActive=true;window.mode='valid';window.hold=false;window.releases=[];window.calls=[];window.urls=[];window.revoked=[];window.cleanups=0;
       const originalCreate=URL.createObjectURL.bind(URL),originalRevoke=URL.revokeObjectURL.bind(URL);
@@ -155,6 +159,44 @@ test('standard print window uses real PDF bytes and isolates malformed outputs, 
       assert.equal(await usb.isVisible(),false);assert.equal(await page.evaluate(()=>usbGuidePrint.open()),false);
       await page.evaluate(()=>usbGuidePrint.destroy());
       assert.match(appSource,/usbProvisioningWizard\?\.addEventListener\(type,syncUsbGuidePrint\)/,'Real provisioning input/change events reach the same lifecycle');
+    });
+    await t.test('loan photo preview uses shared zoom and identical PDF download in GP and portal, restoring only the current dialog',async()=>{
+      await page.setViewportSize({width:1450,height:1000});
+      const original=documents[0].buffer;
+      for(const surface of ['main','portal']){
+        await page.evaluate(({surface,base64})=>{
+          actor='A';allowed=true;window.loanPage='loan';window.loanRequests=[];window.loanRelease=null;window.loanHold=false;
+          const fixture=document.createElement(surface==='portal'?'dialog':'section');fixture.id='loan-print-fixture';
+          fixture.innerHTML='<label>Notiz<textarea id="loan-print-note">BEISPIEL angefangene Notiz</textarea></label><a id="loan-preview" href="/api/portal/v1/loans/photo-attachments/BEISPIEL/preview" target="_blank">Vorschau</a><a id="loan-download" href="/api/portal/v1/loans/photo-attachments/BEISPIEL/download">PDF herunterladen</a>';
+          document.body.append(fixture);
+          const confirmation={id:'C1',loanId:'L1',status:'pending',expectedRevision:2,expiresAt:new Date(Date.now()+60000).toISOString(),loan:{revision:2},photoAttachments:[{id:'BEISPIEL',revision:1,previewUrl:'/api/portal/v1/loans/photo-attachments/BEISPIEL/preview',downloadUrl:'/api/portal/v1/loans/photo-attachments/BEISPIEL/download'}]};
+          window.portalState={activeTab:'loan',activeLoanConfirmation:confirmation,pendingLoanConfirmations:[confirmation]};
+          window.el={loanConfirmationDialog:fixture,loanConfirmationNote:fixture.querySelector('textarea'),loanTab:document.querySelector('#opener')};
+          window.loanConfirmationPrintBridge=null;window.portalDocumentActorKey=()=>actor;window.loanCapabilityEnabled=()=>allowed;
+          if(surface==='portal')fixture.showModal();
+          window.loanPrint=GpDocumentPrint.mount({document,id:'loan-photo-pdf',key:()=>actor,page:()=>loanPage,canUse:()=>allowed,context:()=>({scope:'example-branch'}),beforeOpen:surface==='portal'?portalLoanDocumentPrintBridge:null,
+            async rawApi(url,init){loanRequests.push({url,signal:init.signal});if(loanHold)await new Promise(resolve=>loanRelease=resolve);return new Response(Uint8Array.from(atob(base64),char=>char.charCodeAt(0)),{headers:{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="Fotobeilage-BEISPIEL.pdf"'}});}});
+        },{surface,base64:original.toString('base64')});
+        const photo=page.locator('[data-gp-print-id=loan-photo-pdf]');
+        await page.locator('#loan-preview').click();
+        await photo.locator('canvas').waitFor();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id=loan-photo-pdf] [data-gp-print-download]').disabled);
+        assert.equal(page.context().pages().length,1,'Preview was intercepted instead of opening a native PDF tab');
+        assert.equal(await page.evaluate(()=>loanRequests.at(-1).url),'/api/portal/v1/loans/photo-attachments/BEISPIEL/preview');
+        if(surface==='portal')assert.equal(await page.locator('#loan-print-fixture').evaluate(node=>node.open),false);
+        await photo.locator('[data-preview-zoom]').selectOption('0.5');
+        await page.waitForFunction(()=>Math.abs(parseFloat(document.querySelector('[data-gp-print-id=loan-photo-pdf] canvas').style.width)-841.89*.5)<2);
+        const pending=page.waitForEvent('download');await photo.locator('[data-gp-print-download]').click();const result=await pending;
+        assert.ok(fs.readFileSync(await result.path()).equals(original),'Zoom and preview preserve the original photo PDF bytes');
+        assert.equal(result.suggestedFilename(),'Fotobeilage-BEISPIEL.pdf');
+        await photo.locator('[data-gp-print-close]').click();await photo.waitFor({state:'hidden'});
+        if(surface==='portal')assert.equal(await page.locator('#loan-print-fixture').evaluate(node=>node.open),true);
+        assert.equal(await page.locator('#loan-print-note').inputValue(),'BEISPIEL angefangene Notiz');
+        await page.evaluate(()=>loanHold=true);await page.locator('#loan-download').click();await page.waitForFunction(()=>typeof loanRelease==='function');
+        await page.evaluate(()=>{actor='B';loanPrint.sync();loanRelease();});
+        await photo.waitFor({state:'hidden'});assert.equal(await page.evaluate(()=>loanRequests.at(-1).signal.aborted),true);assert.equal(await photo.locator('canvas').count(),0);
+        if(surface==='portal'){assert.equal(await page.locator('#loan-print-fixture').evaluate(node=>node.open),false);assert.equal(await page.locator('#loan-print-note').inputValue(),'');}
+        await page.evaluate(()=>{loanPrint.destroy();document.querySelector('#loan-print-fixture').remove();});
+      }
     });
     assert.deepEqual(errors,[],'No CSP, worker cleanup or browser exceptions');
   }finally{await browser.close();if(server)await new Promise(resolve=>server.close(resolve));}
