@@ -93,12 +93,13 @@ async function main() {
   } finally { process.removeListener('SIGTERM', onSignal); process.removeListener('SIGINT', onSignal); fs.closeSync(log); }
 }
 async function businessEvidence(client) {
-  const tables = ['integration.data_import_links', 'integration.import_master_records', 'integration.import_master_segments', 'integration.import_master_relations', 'integration.import_master_bindings',
-    'integration.import_history_records', 'integration.import_history_versions', 'integration.import_history_segments', 'integration.import_history_references'];
+  const layout = require('../../../lib/persistence/postgresql/sales/layout');
+  const tables = ['data_import_links', 'import_master_records', 'import_master_segments', 'import_master_relations', 'import_master_bindings',
+    'import_history_records', 'import_history_versions', 'import_history_segments', 'import_history_references'].map(layout.relation);
   const counts = {};
   for (const table of tables) counts[table] = (await client.query('SELECT count(*)::text AS count,bit_xor(hashtextextended(t::text,0))::text AS contentFingerprint FROM ' + table + ' t')).rows[0];
   const schemaSha256 = await require('../../../lib/persistence/postgresql/core/fingerprint').schemaFingerprint(client,
-    require('../../../lib/persistence/postgresql/sales/layout').SCHEMAS);
+    layout.SCHEMAS);
   return { counts, schemaSha256 };
 }
 if (require.main === module) main().catch(error => { process.stderr.write(S.safeCode(error) + '\n'); process.exitCode = 1; });

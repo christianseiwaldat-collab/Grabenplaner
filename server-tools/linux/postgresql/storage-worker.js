@@ -158,7 +158,7 @@ async function serve(request, config) {
   });
   await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', code => {
     if (!answered) reply({ accepted: false, code: code === 73 ? 'VPS_STORAGE_MAINTENANCE_BUSY' : 'VPS_STORAGE_OPERATION_FAILED' });
-    if (request.action === 'retire-imports' && code !== 0) process.exitCode = 1;
+    if (request.action === 'retire-imports' && code !== 0 && code !== 73) process.exitCode = 1;
     resolve();
   }); });
 }

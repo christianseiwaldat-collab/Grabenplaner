@@ -1,6 +1,26 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const enabled=process.env.GP_STORAGE_POSTGRESQL_TEST==='1'&&process.platform==='linux';
+test('native business preservation proof uses the reviewed Sales namespaces under a read-only transaction',
+ {skip:!enabled,timeout:300000},async()=>{
+  assert.equal(process.getuid(),0);
+  const R=require('../lib/persistence/postgresql/operations/runtime'),{Client}=require('pg');
+  const cfg=R.loadConfiguration('/etc/grabenplaner/postgresql-operations.json');
+  const client=new Client({...R.url(cfg,cfg.domains[1],'administrator'),statement_timeout:120000});
+  try{
+   await client.connect();await client.query('SET ROLE gp_sales_owner');await client.query('BEGIN READ ONLY');
+   assert.equal((await client.query('SHOW transaction_read_only')).rows[0].transaction_read_only,'on');
+   const evidence=await require('../server-tools/linux/postgresql/storage-import-run').businessEvidence(client);
+   assert.equal(Object.keys(evidence.counts).length,9);
+   assert.ok(Object.keys(evidence.counts).some(table=>table==='trade."import_master_records"'));
+   assert.ok(Object.keys(evidence.counts).some(table=>table==='integration."data_import_links"'));
+   for(const value of Object.values(evidence.counts)){
+    assert.match(value.count,/^\d+$/);
+    if(value.count!=='0')assert.match(value.contentfingerprint,/^-?\d+$/);
+   }
+   assert.match(evidence.schemaSha256,/^[a-f0-9]{64}$/);
+  }finally{await client.end();}
+ });
 test('native retirement preserves current rows, provenance links and shared payloads and resumes a committed partial batch',
  {skip:!enabled,timeout:180000},async()=>{
   assert.equal(process.getuid(),0,'Protected VPS configuration requires a root qualification process');
