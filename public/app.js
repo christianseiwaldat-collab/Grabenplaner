@@ -2774,6 +2774,12 @@ function canReadSystemCenter() {
   return permissions.includes("system:diagnostics:read") || permissions.includes("system:diagnostics:technical");
 }
 
+function canReadVpsStorage() {
+  const user = state.portalSession?.user;
+  return state.portalSession?.authenticated === true && ['developer', 'it_admin', 'admin'].includes(user?.role)
+    && user.permissions?.includes('system:diagnostics:technical') && !user.mustChangePassword;
+}
+
 function canReadPersonnelRulesDashboard() {
   if (!state.portalStatus?.portalEnabled) return true;
   return (state.portalSession?.user?.permissions || []).includes("work_rules:read");
@@ -2990,6 +2996,7 @@ function applyRoleVisibility() {
     if (!allowed) group.open = false;
   });
   document.getElementById("databaseImportSettings")?.classList.toggle("hidden", !databaseImportAccess);
+  document.getElementById('vpsStorageSettingsCard')?.classList.toggle('hidden', !canReadVpsStorage());
   elements.crossLocationScheduleSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
   elements.staffAssignmentNotificationSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
   elements.staffAssignmentChangeSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
@@ -21401,6 +21408,7 @@ function openPersonnelLearningConfirmation(input) {
     {target, canUse:input.canUse, onClose:input.onClose, onDiscard:input.onDiscard}) || false;
 }
 
+let vpsStorageWorkspace = null;
 function syncGpWindows() {
   syncXoffiImport();
   syncWorkflowStudio();
@@ -21411,6 +21419,11 @@ function syncGpWindows() {
   const canUse=()=>Boolean(state.portalSession?.authenticated && !state.portalSession?.user?.mustChangePassword);
   if (!gpWindowManager) gpWindowManager=window.GpWindow.installDocument(document,{actorKey:()=>gpWindowActor,canUse,api,
     scale:salesArticleSearchWindowScale,error:error=>showToast('Fenstereinstellungen: '+error.message,true)});
+  if (!vpsStorageWorkspace && window.VpsStorage && document.getElementById('vpsStorageDialog')) vpsStorageWorkspace = window.VpsStorage.mount({
+    opener:document.getElementById('openVpsStorage'),dialog:document.getElementById('vpsStorageDialog'),api,
+    key:startDashboardWorkspaceActorKey,canUse:canReadVpsStorage,active:()=>state.currentView==='settings',
+  });
+  vpsStorageWorkspace?.sync();
   if (key !== gpWindowActor || gpWindowSession !== state.portalSession) {
     gpWindowActor=key;gpWindowSession=state.portalSession;gpWindowManager.synchronize();personalActionsWindow?.destroy();personalActionsWindow=null;
     branchOrderViewStates.clear();branchOrderViewActor=startDashboardWorkspaceActorKey();

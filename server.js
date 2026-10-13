@@ -40230,6 +40230,15 @@ async function systemCenterPayload(actor) {
   };
 }
 
+require('./lib/vps-storage-routes').install(app, {
+  actor: request => requirePortalSession(request, 'system:diagnostics:technical'),
+  freshActor: request => loadPortalSessionFromRequest(request, { touch: false }),
+  csrf: assertPortalCsrf,
+  eligible: () => serverModeActive && process.platform === 'linux' && deploymentKind !== 'recovery-smoke'
+    && !process.env.GRABENPLANER_POSTGRESQL_REHEARSAL && !process.env.GRABENPLANER_RESTORE_ROOT,
+  audit: (actor, action, requestId) => auditPortal(actor.employeeNumber, 'system.storage.' + action, 'system', requestId, JSON.stringify({ action })),
+});
+
 app.get("/api/portal/v1/system-center", async (request, response) => {
   const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
   response.setHeader("Cache-Control", "private, no-store");

@@ -737,6 +737,15 @@
       ["settingsSystemCenterTab"],
       { view: "settings", settingsTab: "systemCenter", focusId: "systemCenterPanel" },
     ),
+    entry(
+      "settings.vps-storage",
+      "VPS-Speicher prüfen",
+      ["Einstellungen", "System & Backups", "VPS-Speicher"],
+      "Öffnet den Zugang zur technischen Speicherübersicht und zur Prüfung ersetzter Importkopien.",
+      ["vps speicher", "speicherplatz", "sicherungsreste", "importkopien", "datenbankgröße", "restore reserve"],
+      ["settingsBackupTab", "vpsStorageSettingsCard", "openVpsStorage"],
+      { view: "settings", settingsTab: "backup", focusId: "openVpsStorage" },
+    ),
 
     entry(
       "settings.view-behavior",

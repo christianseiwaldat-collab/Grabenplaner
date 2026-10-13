@@ -117,6 +117,18 @@ test('server import authorization uses its independent reader inside deletion tr
  await assert.rejects(f.runtime.sourceOperation(get,source.id,'delete-preview',{expectedRevision:result.revision||1}),code('IMPORT_FORBIDDEN'));
 });
 
+test('retired source checkpoints remain readable and never expose obsolete apply, rows or undo actions',async t=>{
+ const f=await fixture(t);let source=await f.upload();source=await f.finish(source,'review');source=await f.finish(source,'apply');
+ const protection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+ try{
+  const row=f.database.prepare('SELECT * FROM data_import_sources WHERE id=?').get(source.id),ctx=['source',row.scope_id,row.owner_id,row.id,row.revision];
+  const data=protection.open(row.payload,ctx);data.retirement={successorId:'a'.repeat(64),complete:true};data.status='purged';
+  f.database.prepare('UPDATE data_import_sources SET payload=? WHERE id=?').run(protection.seal(data,ctx),source.id);
+ }finally{protection.destroy();}
+ const view=await f.runtime.sourceOperation(f.getSession,source.id,'read');assert.equal(view.status,'purged');assert.equal(view.activationEnabled,false);
+ for(const action of ['apply','undo','rows','events','delete-preview'])await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,action,{expectedRevision:view.revision}),code('IMPORT_RUN_PURGED'));
+});
+
 test('source deletion is owner-authorized, resumable and refuses even a partially applied source',async t=>{
  const f=await fixture(t,{values:{ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'123'})]}});
  let source=await f.upload();source=await f.finish(source,'review');

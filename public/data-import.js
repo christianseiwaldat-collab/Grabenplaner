@@ -4,9 +4,9 @@
   const progressUI=typeof module==='object'&&module.exports?require('./data-import-progress'):globalThis.GrabenplanerImportProgress;
   const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const labels={dating:'Datenstand wird ermittelt',queued:'Wartet auf Verarbeitung',retrying:'Automatischer Wiederholungsversuch geplant',paused:'Auftrag pausiert',failed:'Auftrag benötigt Aufmerksamkeit',reading:'Datei wird bereitgestellt',interrupted:'Bereitstellung unterbrochen',staging:'Zwischenspeicherung',reviewing:'Prüfung läuft',rechecking:'Prüfung wird vorbereitet',
-    needs_review:'Vorschau abgeschlossen · Prüffälle offen',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen',deleting:'Endgültige Löschung begonnen'};
+    needs_review:'Vorschau abgeschlossen · Prüffälle offen',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen',deleting:'Endgültige Löschung begonnen',purged:'Ersetzte Importkopien bereinigt',retiring:'Importbereinigung noch nicht abgeschlossen'};
   const label=state=>labels[state]||'Prüfung erforderlich';
-  const sourceState=source=>source.cashPublication?.active?'applied':source.background?.status||source.status;
+  const sourceState=source=>source.retirement?source.retirement.complete?'purged':'retiring':source.cashPublication?.active?'applied':source.background?.status||source.status;
   const number=value=>Number(value||0).toLocaleString('de-AT');
   const sourceLabel=kind=>({cash:'Kassen-Umsätze',trade:'Stammdaten und Historie',bestell:'Bestellungen, Rechnungen und Reparaturen'})[kind]||'Unbekannte Quelle';
   const sourceFileName=source=>source.fileName||({cash:'Kassen_Umsätze.accdb',trade:'Trade_Daten.accdb',bestell:'Trade_DatenBestell.accdb',weum:'WEUM.accdb',inventur:'InventurProtokoll.accdb'})[source.kind]||'Unbekannte Datenbank';
@@ -65,6 +65,7 @@
       (!complete?'<p class="data-import-note">Die Übersicht enthält die neuesten gefundenen Importe. Nicht gefundene Quellen können in älteren Importen liegen; bitte den Importverlauf prüfen.</p>':'');
   }
   function renderSource(source,projection={}) {
+    if(source.retirement) return `<header><h3>${escape(sourceFileName(source))}</h3><p>${escape(label(sourceState(source)))} · Datenstand: ${contentDate(source)}</p></header><p class="data-import-note">${source.retirement.complete?'Die ersetzten Roh-, Prüf- und Rücknahmekopien wurden entfernt.':'Die Bereinigung ist noch nicht abgeschlossen. Der gespeicherte Stand kann unter Einstellungen → System &amp; Backups → VPS-Speicher erneut geprüft werden.'} Geschäftsdaten und benötigte Zuordnungen bleiben erhalten. Für diesen Vorgänger ist keine Rücknahme mehr verfügbar.</p>`;
     const tables=source.tables||[], received=tables.reduce((n,t)=>n+(t.run?.receivedRows||0),0), expected=tables.reduce((n,t)=>n+t.declaredRows,0),job=source.background;
     const applied=tables.reduce((n,t)=>n+(t.run?.status==='applied'?t.run.receivedRows:t.run?.counts?.applied||0),0),takingOver=job?.phase==='applying'||['applying','applied'].includes(source.status),jobName=job?.phase==='content-date'?'Ermittlung des Datenstands':job?.phase==='applying'?'Übernahme':'Prüfung';
     const fileDeleted=job?.error==='IMPORT_JOB_FILE_DELETED';

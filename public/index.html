@@ -36,6 +36,7 @@
     <link rel="stylesheet" href="/mobile-refinements.css" />
     <link rel="stylesheet" href="/sidebar-notepad.css" />
     <link rel="stylesheet" href="/gp-window.css" />
+    <link rel="stylesheet" href="/vps-storage.css" />
     <link rel="stylesheet" href="/gp-save-status.css" />
     <link rel="stylesheet" href="/loan-location-settings.css" />
     <link rel="stylesheet" href="/sales-recent-articles.css" />
@@ -2873,6 +2874,10 @@
           </section>
 
           <section id="backupSettings" class="settings-section settings-two-column" role="tabpanel" aria-labelledby="settingsBackupTab">
+            <div class="settings-card full-settings-card hidden" id="vpsStorageSettingsCard">
+              <div class="card-heading"><div class="card-icon">VPS</div><div><h2>VPS-Speicher</h2><p>Speicherbelegung, Restore-Reserve und alte Sicherungs- oder Importreste prüfen.</p></div></div>
+              <button type="button" class="secondary-button" id="openVpsStorage" aria-haspopup="dialog" aria-expanded="false">VPS-Speicher öffnen</button>
+            </div>
             <details class="settings-accordion full-settings-card hidden" id="databaseImportSettings">
               <summary><span class="card-icon">Import</span><span class="settings-accordion-copy"><strong>Datenbankimporte</strong><small>Kasse, Stammdaten und Bestelldaten sicher aktualisieren.</small></span><span class="settings-accordion-chevron" aria-hidden="true">›</span></summary>
               <div class="settings-accordion-body">
@@ -4610,6 +4615,14 @@
     <script src="/planning-assistant.js"></script>
     <script src="/gp-definitions.js"></script>
     <script src="/gp-xoffi-import.js"></script>
+    <dialog id="vpsStorageDialog" class="modal vps-storage-modal" data-gp-window-id="settings:vps-storage" data-gp-window-mode="workspace" data-gp-window-rich aria-label="VPS-Speicher">
+      <header class="modal-header"><h2>VPS-Speicher</h2><button type="button" data-storage-close aria-label="VPS-Speicher schließen">×</button></header>
+      <div class="vps-storage-shell"><div class="vps-storage-toolbar"><p data-storage-status role="status" aria-live="polite">Noch nicht geprüft</p><button class="secondary-button" type="button" data-storage-inspect>Speicher prüfen</button></div>
+        <nav class="vps-storage-tabs" role="tablist" aria-label="VPS-Speicher"><button role="tab" type="button" aria-selected="true" data-storage-tab="overview" aria-controls="vpsStorageContent">Übersicht</button><button role="tab" type="button" aria-selected="false" tabindex="-1" data-storage-tab="backups" aria-controls="vpsStorageContent">Sicherungsreste</button><button role="tab" type="button" aria-selected="false" tabindex="-1" data-storage-tab="imports" aria-controls="vpsStorageContent">Importstände</button><button role="tab" type="button" aria-selected="false" tabindex="-1" data-storage-tab="settings" aria-controls="vpsStorageContent">Optionen</button></nav>
+        <div id="vpsStorageContent" data-storage-content role="tabpanel"></div>
+      </div>
+    </dialog>
+    <script src="/vps-storage.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
