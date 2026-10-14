@@ -13,6 +13,22 @@
   const dateTime=value=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleString('de-AT',{dateStyle:'short',timeStyle:'short'}):'Nicht erfasst';
   const kindForFile=name=>/^TRADE_AusgangsRech(?:[ ._-]|$)/i.test(name)?'lieferantenrechnungen':/^Trade_DatenBestell(?:[ ._-]|$)/i.test(name)?'bestell':/^Trade_Daten(?:[ ._-]|$)/i.test(name)?'trade':/^Kassen[_ -]Ums[aä]tze(?:[ ._-]|$)/i.test(name)?'cash':/^WEUM(?:[ ._-]|$)/i.test(name)?'weum':/^InventurProtokoll(?:[ ._-]|$)/i.test(name)?'inventur':null;
   const invoiceHeads=source=>(source.tables||[]).find(t=>t.name==='Rechnung_A');
+  function sourceAdmission(source) {
+    const tables=source.tables||[],blocked=tables.filter(t=>t.run?.gates?.length),invalid=tables.some(t=>t.run?.counts?.invalid>0);
+    const pending=blocked.flatMap(t=>(t.run.availableSourceTolerances||[]).map(proof=>({table:t.name,proof})));
+    const approvable=!invalid&&blocked.length>0&&blocked.every(t=>t.run.gates.includes('SOURCE_ROW_COUNT_MISMATCH')&&t.run.gates.every(g=>['SOURCE_ROW_COUNT_MISMATCH','SOURCE_TOLERANCE_UNAVAILABLE'].includes(g))&&t.run.availableSourceTolerances?.length);
+    return {blocked,invalid,pending,approvable};
+  }
+  function renderSourceAdmission(source,projection) {
+    const admission=sourceAdmission(source);
+    if(!source.complete||source.retirement||source.cashPublication?.active||!['ready','needs_review'].includes(source.status))return '';
+    if(!admission.blocked.length&&!admission.invalid)return '';
+    return `<aside class="data-import-review-summary"><strong>Übernahme gesperrt</strong>
+      ${admission.invalid?'<p>Ungültige Daten müssen zuerst korrigiert werden. Eine Zählerfreigabe hebt diese Sperre nicht auf.</p>':''}
+      ${admission.blocked.length?`<p>Quellprüfung: ${admission.blocked.map(t=>`${escape(t.name)} · ${t.run.gates.map(g=>g==='SOURCE_ROW_COUNT_MISMATCH'?'abweichender Quellzähler':escape(g)).join(', ')}`).join('; ')}.</p>`:''}
+      ${admission.pending.length?`<p>Ein unabhängiger Prüfnachweis liegt für diesen Dateistand vor:</p><ul>${admission.pending.map(({table,proof})=>`<li>${escape(table)}: ${number(proof.expectedRows)} gelesene / ${number(proof.declaredRows)} deklarierte Zeilen.<small>Nachweis: ${escape(proof.evidenceReference)}</small></li>`).join('')}</ul>
+      <button type="button" data-i-action="approve-counts" ${!projection.apply||!projection.prepare||source.active||!admission.approvable||projection.pendingAction?'disabled':''}>Geprüfte Zählerabweichung freigeben</button><p>Die Freigabe wird protokolliert. Anschließend kann die Datenübernahme separat gestartet werden; echte Datenfehler bleiben gesperrt.</p>`:'<p>Ohne passenden unabhängigen Prüfnachweis ist keine Zählerfreigabe möglich.</p>'}</aside>`;
+  }
   function renderReviewSummary(source,pendingAction,uncertainApply) {
     if(pendingAction==='apply'&&source.storage==='cash-compact-v1')return '<aside class="data-import-review-summary" role="status"><strong>Kassenstand wird übernommen …</strong><p>Die Rückmeldung des Servers steht noch aus. Der angezeigte Stand wird danach aktualisiert.</p></aside>';
     if(uncertainApply&&!source.cashPublication?.active)return '<aside class="data-import-review-summary" role="status"><strong>Ergebnis der Übernahme noch unklar</strong><p>Für diesen Import ist noch keine erfolgreiche Übernahme bestätigt. Der zuletzt bestätigte Kassenstand bleibt aktiv. Bitte „Status aktualisieren“; ein erneuter Upload ist nicht nötig.</p></aside>';
@@ -84,10 +100,11 @@
         <div class="data-import-actions">${fileDeleted?'':['paused','failed'].includes(job.status)?`<button type="button" data-i-job="retry" ${!projection.prepare||job?.phase==='applying'&&!projection.apply?'disabled':''}>${jobName} fortsetzen</button>`:`<button type="button" data-i-job="pause" ${!projection.prepare||job?.phase==='applying'&&!projection.apply?'disabled':''}>${jobName} pausieren</button>`}</div>`
         :source.error?`<p role="status">Unterbrechung: ${escape(source.error)}. Bitte denselben Dateistand erneut auswählen; bereits geprüfte Pakete bleiben erhalten.</p>`:''}
       ${renderReviewSummary(source,projection.pendingAction,projection.uncertainApply)}
+      ${renderSourceAdmission(source,projection)}
       <div class="data-import-actions">
         ${source.storage==='cash-compact-v1'?`<button type="button" data-i-action="apply" ${!projection.apply||!projection.prepare||!source.complete||source.active||source.status!=='ready'||!source.cashPublication?.available||source.cashPublication.active||!Number.isInteger(source.cashPublication.revision)?'disabled':''}>Übernehmen</button>`:''}
         ${job||source.status!=='reviewing'?'':`<button type="button" data-i-action="review" ${!projection.prepare||!source.complete||source.active?'disabled':''}>Prüfung fortsetzen</button>`}
-        ${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-action="apply" ${!projection.apply||!source.activationEnabled||!source.complete||source.active||!source.catalogUpdatePending&&!['ready','needs_review','applying'].includes(source.status)?'disabled':''}>Übernehmen</button>
+        ${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-action="apply" ${!projection.apply||!source.activationEnabled||!source.complete||source.active||sourceAdmission(source).blocked.length||sourceAdmission(source).invalid||!source.catalogUpdatePending&&!['ready','needs_review','applying'].includes(source.status)?'disabled':''}>Übernehmen</button>
         `}
         ${source.complete?`<button type="button" data-i-check-status ${projection.pendingAction?'disabled':''}>Status aktualisieren</button>`:''}
       </div>
@@ -99,6 +116,7 @@
       <p class="data-import-note">${number(received)} gelesene / ${number(expected)} ${source.selection?'ausgewählte':'deklarierte'} Zeilen · Hochgeladen: ${escape(dateTime(source.createdAt))} · GP-Bearbeitung: ${escape(dateTime(source.updatedAt||source.createdAt))}</p><p class="data-import-note">Dateifingerabdruck <code>${escape(source.fileSha256)}</code></p>
       ${source.contentDate?.evidence?`<p class="data-import-note">Datenstand ermittelt aus ${escape(source.contentDate.evidence.table)} · ${escape(source.contentDate.evidence.field)}.</p>`:''}
       ${tables.flatMap(t=>(t.run?.acceptedDeviations||[]).map(p=>`<aside class="data-import-tolerance"><strong>Bestätigte Quellzähler-Abweichung · ${escape(t.name)}</strong><p>${number(p.expectedRows)} lesbare / ${number(p.declaredRows)} deklarierte Zeilen. Nur für diesen Dateistand akzeptiert.</p><small>Freigabe: ${escape(p.approvalReference)} · ${escape(p.recordedAt)}<br>Prüfnachweis: ${escape(p.evidenceReference)} · ${escape(p.id)}</small></aside>`)).join('')}
+      ${tables.flatMap(t=>(t.run?.sourceToleranceReceipts||[]).map(r=>`<p class="data-import-note">Freigabe protokolliert · ${escape(t.name)} · ${escape(dateTime(r.recordedAt))} · Akteur ${escape(r.actorId)} · Revision ${number(r.revision)}<br>Nachweis-Fingerabdruck: <code>${escape(r.fingerprint)}</code></p>`)).join('')}
       ${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-action="undo" ${!projection.undo||source.active||!['applied','applying','reverting'].includes(source.status)?'disabled':''}>Rücknahme starten / fortsetzen</button>`}
       <div class="data-import-scroll" tabindex="0" role="region" aria-label="Tabellen und Prüfstatus"><table><thead><tr><th scope="col">Quelltabelle</th><th scope="col">Gelesen / ${source.selection?'ausgewählt':'deklariert'}</th><th scope="col">Status / Hinweise</th><th scope="col">Prüfung</th></tr></thead><tbody>
       ${tables.map(t=>`<tr><td>${escape(t.name)}</td><td>${number(t.run?.receivedRows)} / ${number(t.declaredRows)}</td><td>${escape(label(t.run?.status||'staging'))}${t.run?.counts?.invalid?` · ${number(t.run.counts.invalid)} ungültig`:''}${t.run?.counts?.conflict?` · ${number(t.run.counts.conflict)} offene Prüffälle`:''}${source.kind==='lieferantenrechnungen'&&t.name==='Rechnungsdetails_A'&&t.run?.status==='needs_review'&&invoiceHeads(source)&&invoiceHeads(source).run?.status!=='applied'?'<small class="data-import-table-hint">Erneute Prüfung nach Übernahme der Rechnungsköpfe aus derselben Datei. Einzelne Gründe: „Zeilenstatus“.</small>':''}${t.run?.gates?.length?` · ${t.run.gates.map(escape).join(', ')}`:''}</td><td>${t.run?`${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-log="${escape(t.run.id)}">Protokoll</button> `}<button type="button" data-i-rows="${escape(t.run.id)}">Zeilenstatus</button>${projection.undo&&['applied','applying','reverting'].includes(t.run.status)?` <button type="button" data-i-undo-preview="${escape(t.run.id)}">Rücknahme prüfen</button>`:''}`:'–'}</td></tr>`).join('')}
@@ -171,6 +189,19 @@
     }
     async function runAction(action) {
       if(!selected||working)return;
+      if(action==='approve-counts') {
+        const admission=sourceAdmission(selected);
+        if(!context.projection.apply||!context.projection.prepare||selected.active||!admission.approvable)return;
+        if(!confirmAction(`Die unabhängig geprüften Zählerabweichungen für ${sourceFileName(selected)} protokolliert freigeben?\n${admission.pending.map(({table,proof})=>`${table}: ${proof.expectedRows} gelesene / ${proof.declaredRows} deklarierte Zeilen`).join('\n')}\nNur dieser Dateistand wird freigegeben. Echte Datenfehler bleiben gesperrt; die Datenübernahme wird hier noch nicht gestartet.`))return;
+        const ticket=generation;working=true;pendingAction=action;renderSelected();
+        try {
+          const result=await post(`/api/data-import/sources/${selected.id}/approve-counts`,{expectedRevision:selected.revision});
+          if(disposed||ticket!==generation)return;selected=result;
+          message('Zählerfreigabe protokolliert. Die Datenübernahme kann jetzt separat gestartet werden.');
+        }catch(error){if(!disposed&&ticket===generation)message(errorMessage(error));}
+        finally{if(!disposed&&ticket===generation){working=false;pendingAction=null;renderSelected();}}
+        return;
+      }
       const cash=action==='apply'&&selected.storage==='cash-compact-v1';
       if(action!=='review'&&!confirmAction(cash?'Den gesamten geprüften Kassenstand übernehmen? Bestehende Zuordnungen werden beibehalten; Zentrallager, Onlinefilialen und im GP inaktive Filialen sind eingeschlossen.':action==='apply'?selected.kind==='lieferantenrechnungen'?'Rechnungen aus dieser Datei übernehmen? Zuerst werden die Rechnungsköpfe übernommen, danach die Positionen erneut geprüft und übernommen. Die Kassen_Umsätze.accdb wird dafür nicht benötigt. Verbleibende Konflikte halten die Übernahme an der betroffenen Tabelle an; bereits übernommene Tabellen bleiben erhalten.':'Geprüfte Quelltabellen schrittweise übernehmen?':'Eigene Importänderungen schrittweise zurücknehmen? Spätere Änderungen und Abhängigkeiten werden vor jedem Paket erneut geprüft. Es kann nur ein Teil rücknehmbar sein.'))return;
       const ticket=generation;working=true;pendingAction=action;el('stop')?.removeAttribute('hidden');
@@ -219,7 +250,7 @@
       const rows=Array.isArray(result)?result:result.rows;
       const last=rows.at(-1),nextCursor=!last?null:action==='events'?{after:last.revision}:action==='rows'?{after:last.rowNumber}:{beforeRow:last.rowNumber};
       logState={action,runId,cursor:nextCursor};
-      el('log').innerHTML=`<h3>${action==='events'?'Importprotokoll':action==='rows'?'Zeilenstatus':'Rücknahmeprüfung'}</h3><p>Diese Seite zeigt ${rows.length} Einträge.${action==='undo-preview'?' Die Rücknahme prüft jede Änderung erneut.':action==='rows'?' Offene Prüffälle werden hier einzeln erklärt.':''}</p><ul>${rows.map(r=>`<li>${escape(action==='events'?`${r.at} · ${r.action==='import.source-tolerance.accepted'?'Bestätigte Quellzähler-Abweichung protokolliert':r.action} · Revision ${r.revision}`:action==='rows'?rowStatusText(selected,runId,r):`Zeile ${r.rowNumber} · ${r.canUndo?'rücknehmbar':'nicht rücknehmbar'} ${r.issue||''}`)}</li>`).join('')}</ul>${nextCursor?'<button type="button" data-i-log-next>Weitere Einträge prüfen</button>':''}`;
+      el('log').innerHTML=`<h3>${action==='events'?'Importprotokoll':action==='rows'?'Zeilenstatus':'Rücknahmeprüfung'}</h3><p>Diese Seite zeigt ${rows.length} Einträge.${action==='undo-preview'?' Die Rücknahme prüft jede Änderung erneut.':action==='rows'?' Offene Prüffälle werden hier einzeln erklärt.':''}</p><ul>${rows.map(r=>`<li>${escape(action==='events'?`${r.at} · ${/^import\.source-tolerance\.accepted(?::[a-f0-9]{64})?$/.test(r.action)?'Bestätigte Quellzähler-Abweichung protokolliert':r.action} · Revision ${r.revision}`:action==='rows'?rowStatusText(selected,runId,r):`Zeile ${r.rowNumber} · ${r.canUndo?'rücknehmbar':'nicht rücknehmbar'} ${r.issue||''}`)}</li>`).join('')}</ul>${nextCursor?'<button type="button" data-i-log-next>Weitere Einträge prüfen</button>':''}`;
     }
     async function click(event) {
       const target=event.target.closest?.('button');if(!target||working&& !target.hasAttribute('data-i-stop'))return;

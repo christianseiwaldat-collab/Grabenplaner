@@ -443,6 +443,74 @@ test('Q01: managed source persists accepted counts and audit across restart with
   assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,0);
 });
 
+function runtimeCountProof(name,declaredRows,expectedRows,extra={}) {
+  const profile=definitions('trade').find(table=>table.name===name).profile;
+  return require('../lib/data-import-source-tolerance').defineDataImportSourceTolerance({id:'synthetic-late-runtime-'+name.toLowerCase(),recordedAt:TIME,
+    approvalReference:'synthetic-explicit-approval',reason:'Independent synthetic source verification',evidenceReference:'synthetic-evidence',sourceSystem:profile.sourceSystem,
+    sourceTable:name,profileHash:profile.fingerprint,sourceInstance:'tradefoto-trade',schemaSha256:profile.schemaSha256,
+    fileSha256:crypto.createHash('sha256').update(sourceBuffer()).digest('hex'),declaredRows,expectedRows,...extra});
+}
+test('late source approval requires explicit authorized action and survives stale cache, restart and revoked registry',async t=>{
+  const f=await fixture(t,{values:{KUNDEN:[rawMaster('KUNDEN',{KUND_NR:'verified-customer'})]},counts:{KUNDEN:2}});
+  let source=await f.upload();source=await f.finish(source,'review');assert.equal(source.status,'needs_review');
+  const tableId=source.tables.find(t=>t.name==='KUNDEN').run.id;
+  const manifest=f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(tableId).manifest;
+  const proof=runtimeCountProof('KUNDEN',2,1);f.options.sourceTolerances=[proof];f.reload();
+  let read=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+  assert.deepEqual(read.tables.find(t=>t.name==='KUNDEN').run.availableSourceTolerances,[proof]);
+  assert.ok(read.tables.find(t=>t.name==='KUNDEN').run.gates.includes('SOURCE_ROW_COUNT_MISMATCH'));
+  const approve=()=>f.runtime.sourceOperation(f.getSession,source.id,'approve-counts',{expectedRevision:source.revision});
+  for(const permission of [P.APPLY,P.PREPARE]) {
+    f.state.session.permissions=f.state.session.permissions.filter(p=>p!==permission);
+    await assert.rejects(approve(),code('IMPORT_FORBIDDEN'));f.state.session=base();
+  }
+  await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'approve-counts',{expectedRevision:source.revision+1}),code('IMPORT_REVISION_CONFLICT'));
+  const staleCore=f.database.prepare('SELECT * FROM data_import_sources WHERE id=?').get(source.id);
+  source=await approve();const approvedRevision=source.revision;
+  assert.deepEqual(source.tables.find(t=>t.name==='KUNDEN').run.gates,[]);assert.equal(source.tables.find(t=>t.name==='KUNDEN').run.id,tableId);
+  assert.equal(f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(tableId).manifest,manifest);
+  assert.equal((await approve()).revision,approvedRevision);
+  // Simulate a lost source-cache save: the authoritative receipt is already
+  // committed in Sales and is recovered without rereading the Access file.
+  f.database.prepare('UPDATE data_import_sources SET revision=?,payload=? WHERE id=?').run(staleCore.revision,staleCore.payload,source.id);
+  f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+  assert.deepEqual(source.tables.find(t=>t.name==='KUNDEN').run.gates,[]);
+  assert.deepEqual(source.tables.find(t=>t.name==='KUNDEN').run.acceptedDeviations,[proof]);
+  f.options.sourceTolerances=[];f.reload();
+  read=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+  assert.ok(read.tables.find(t=>t.name==='KUNDEN').run.gates.includes('SOURCE_TOLERANCE_UNAVAILABLE'));
+  await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'apply',{expectedRevision:source.revision}),code('IMPORT_DECISION_GATE'));
+  assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,0);
+  f.options.sourceTolerances=[proof];f.reload();source=await f.finish(source,'apply');
+  assert.equal(source.status,'applied');assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,1);
+  f.database.prepare('UPDATE data_import_sources SET revision=?,payload=? WHERE id=?').run(staleCore.revision,staleCore.payload,source.id);
+  f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+  const recovered=source.tables.find(t=>t.name==='KUNDEN').run;
+  assert.equal(recovered.status,'applied');assert.deepEqual(recovered.counts,{applied:1});
+  source=await f.finish(source,'apply');assert.equal(source.status,'applied');
+  assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,1);
+  const events=await f.runtime.sourceOperation(f.getSession,source.id,'events',{runId:tableId});
+  assert.equal(events.filter(e=>e.action==='import.source-tolerance.accepted:'+proof.fingerprint).length,1);
+});
+
+test('source count approval preflights every mismatch and refuses invalid rows before any receipt',async t=>{
+  const f=await fixture(t,{values:{KUNDEN:[rawMaster('KUNDEN',{KUND_NR:'verified-customer'})],ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'123'})]},counts:{KUNDEN:2,ARTIKEL_STAMM:2}});
+  let source=await f.upload();source=await f.finish(source,'review');
+  f.options.sourceTolerances=[runtimeCountProof('KUNDEN',2,1)];f.reload();
+  await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'approve-counts',{expectedRevision:source.revision}),code('IMPORT_TOLERANCE_UNAVAILABLE'));
+  assert.equal(f.database.prepare("SELECT COUNT(*) n FROM data_import_events WHERE substr(action,1,33)='import.source-tolerance.accepted:'").get().n,0);
+  f.options.sourceTolerances.push(runtimeCountProof('ARTIKEL_STAMM',2,1));f.reload();
+  source=await f.runtime.sourceOperation(f.getSession,source.id,'approve-counts',{expectedRevision:source.revision});
+  assert.equal(source.tables.flatMap(t=>t.run.sourceToleranceReceipts||[]).length,2);
+  const invalid=await fixture(t,{values:{KUNDEN:[rawMaster('KUNDEN',{})]},counts:{KUNDEN:2}});
+  let bad=await invalid.upload();bad=await invalid.finish(bad,'review');
+  invalid.options.sourceTolerances=[runtimeCountProof('KUNDEN',2,1)];invalid.reload();
+  assert.ok(bad.tables.find(t=>t.name==='KUNDEN').run.counts.invalid);
+  await assert.rejects(invalid.runtime.sourceOperation(invalid.getSession,bad.id,'approve-counts',{expectedRevision:bad.revision}),code('IMPORT_DECISION_GATE'));
+  assert.equal(invalid.database.prepare("SELECT COUNT(*) n FROM data_import_events WHERE substr(action,1,33)='import.source-tolerance.accepted:'").get().n,0);
+  assert.equal(invalid.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,0);
+});
+
 test('Productive Block 1: rights are cumulative, personal and not granted by a role name',()=>{
   assert.equal(buildDataImportProjection(base()).prepare,true);
   for(const change of [{permissions:[]},{employeeNumber:null},{isEmployee:false},{mustChangePassword:true},{sessionKind:'organization'},

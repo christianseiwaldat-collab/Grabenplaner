@@ -83,6 +83,54 @@ test('missing tables, count mismatch, review gates and invalid rows keep previou
     assert.equal(I.planSources([old.source,next.source],new Map([...old.runs,...next.runs])).pairs.length,0);
   }
 });
+function approvedCountSource() {
+  const T = require('../lib/data-import-source-tolerance');
+  const f = source({seed:'approved-count',at:'2026-10-01T12:00:00.000Z'}), table = f.source.data.tables[0];
+  const run = f.runs.get(table.run.id), profile = definitions('trade')[0].profile;
+  Object.assign(run.manifest,{expectedRows:1,declaredRows:2,gates:['SOURCE_ROW_COUNT_MISMATCH']});
+  Object.assign(run,{received_count:1,revision:2});
+  table.declaredRows=2;table.run.receivedRows=1;table.run.counts={applied:1};
+  const proof=T.defineDataImportSourceTolerance({id:'synthetic-retention-count',recordedAt:'2026-10-01T12:01:00.000Z',
+    approvalReference:'synthetic:approval',reason:'Synthetic exact source-count qualification',evidenceReference:'synthetic:row-counts',
+    sourceSystem:profile.sourceSystem,sourceInstance:run.manifest.sourceInstance,sourceTable:profile.sourceTable,
+    profileHash:profile.fingerprint,schemaSha256:profile.schemaSha256,fileSha256:f.source.data.fileSha256,declaredRows:2,expectedRows:1});
+  run.sourceToleranceEvents=[{runId:run.id,actorId:run.owner_id,revision:2,at:'2026-10-01T12:01:00.000Z',
+    action:'import.source-tolerance.accepted:'+proof.fingerprint}];
+  return {...f,run,table,proof,options:{sourceTolerances:[proof]}};
+}
+test('an exact registered count approval qualifies a complete successor without rewriting the manifest',()=>{
+  const old=source(),f=approvedCountSource(),manifest=JSON.stringify(f.run.manifest);
+  assert.equal(I.completeSuccessor(f.source,f.runs,f.options),true);
+  const plan=I.planSources([old.source,f.source],new Map([...old.runs,...f.runs]),f.options);
+  assert.equal(plan.pairs.length,1);assert.equal(plan.pairs[0].sourceId,old.source.row.id);
+  assert.equal(JSON.stringify(f.run.manifest),manifest);assert.deepEqual(f.run.manifest.gates,['SOURCE_ROW_COUNT_MISMATCH']);
+});
+test('count receipts never replace an exact trusted proof or bypass other import defects',()=>{
+  const alterations=[
+    f=>{f.options.sourceTolerances=[];},
+    f=>{f.run.sourceToleranceEvents=[];},
+    f=>{f.run.sourceToleranceEvents[0].action='import.source-tolerance.accepted:'+'0'.repeat(64);},
+    f=>{f.run.sourceToleranceEvents[0].action='import.source-tolerance.accepted';},
+    f=>{f.run.sourceToleranceEvents[0].runId='0'.repeat(64);},
+    f=>{f.run.sourceToleranceEvents[0].actorId='different-account';},
+    f=>{f.run.sourceToleranceEvents[0].revision=3;},
+    f=>{f.run.sourceToleranceEvents.push({...f.run.sourceToleranceEvents[0],actorId:'different-account'});},
+    f=>{f.run.sourceToleranceEvents.push({...f.run.sourceToleranceEvents[0],revision:3});},
+    f=>{f.run.sourceToleranceEvents.push({...f.run.sourceToleranceEvents[0],action:'import.source-tolerance.accepted:malformed'});},
+    f=>{f.run.manifest.fileSha256='0'.repeat(64);f.source.data.fileSha256='0'.repeat(64);},
+    f=>{f.run.manifest.declaredRows=3;f.table.declaredRows=3;},
+    f=>{f.run.manifest.gates.push('SOURCE_SCHEMA_MISMATCH');},
+    f=>{f.table.run.counts.invalid=1;},
+    f=>{f.table.run.counts.conflict=1;},
+    f=>{f.table.run.counts.staged=1;},
+    f=>{f.table.run.gates=['SOURCE_ROW_COUNT_MISMATCH'];},
+    f=>{f.run.status='needs_review';},
+    f=>{f.source.data.catalog.complete=false;},
+  ];
+  for(const alter of alterations){const f=approvedCountSource();alter(f);assert.equal(I.completeSuccessor(f.source,f.runs,f.options),false);}
+  const f=approvedCountSource();f.options.sourceTolerances=[{...f.proof}];
+  assert.throws(()=>I.completeSuccessor(f.source,f.runs,f.options),{code:'IMPORT_TOLERANCE_UNTRUSTED'});
+});
 test('native source readers authenticate the exact source context and logical database identity',()=>{
   const protection=createDataImportProtection({encryptionKey:Buffer.alloc(32,7),indexKey:Buffer.alloc(32,8),keyId:'synthetic'});
   try {

@@ -63,6 +63,11 @@ test('native retirement preserves current rows, provenance links and shared payl
     return {row,data,run:tables[0].run.id};
    };
    const old=await source('old','2026-09-01T12:00:00.000Z',2001),current=await source('current','2026-10-01T12:00:00.000Z',1);
+   const retainedApproval='import.source-tolerance.accepted:'+C.digest('synthetic-exact-count-approval');
+   for(const [revision,action] of [[1,'import.source-tolerance.accepted'],[2,retainedApproval],[3,'import.review']])
+    await sales.query('INSERT INTO integration.data_import_events(id,run_id,revision,actor_id,action,at) VALUES($1,$2,$3,$4,$5,$6)',
+     [crypto.randomUUID(),old.run,revision,'synthetic-owner',action,'2026-09-01T12:01:00.000Z']);
+   await sales.query('UPDATE integration.data_import_runs SET revision=3 WHERE id=$1',[old.run]);
    for(const [s,count] of [[old,2001],[current,1]]){
     await sales.query(`INSERT INTO integration.data_import_rows(run_id,row_number,identity_hash,content_hash,state,issue,payload)
      SELECT $1,n,$2,$2,'applied','','synthetic-cache-'||n FROM generate_series(1,$3::integer) n`,[s.run,C.digest('row'),count]);
@@ -85,6 +90,8 @@ test('native retirement preserves current rows, provenance links and shared payl
    assert.equal(Number((await sales.query('SELECT count(*) FROM integration.data_import_rows WHERE run_id=$1',[old.run])).rows[0].count),0);
    assert.equal(Number((await sales.query('SELECT count(*) FROM integration.data_import_changes WHERE run_id=$1',[old.run])).rows[0].count),0);
    assert.equal((await sales.query('SELECT status FROM integration.data_import_runs WHERE id=$1',[old.run])).rows[0].status,'purged');
+   assert.deepEqual((await sales.query('SELECT action FROM integration.data_import_events WHERE run_id=$1 ORDER BY revision',[old.run])).rows.map(row=>row.action),
+    ['import.source-tolerance.accepted',retainedApproval]);
    assert.equal((await sales.query('SELECT payload FROM integration.data_import_links WHERE id=$1',[link])).rows[0].payload,'current-link-payload');
    assert.deepEqual((await sales.query('SELECT * FROM integration.data_import_rows WHERE run_id=$1',[current.run])).rows,beforeCurrent);
    assert.deepEqual((await sales.query('SELECT id FROM integration.data_import_payload_blocks ORDER BY id')).rows.map(r=>r.id),[shared]);

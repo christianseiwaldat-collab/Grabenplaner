@@ -163,10 +163,10 @@ test("M5-Audit-Inventar klassifiziert das neue SQLite-Schema und den erweiterten
     /"lib\/persistence\/sqlite\/operations\/personnel-workflow-instance-schema\.js"/,
   );
   for (const expected of [
-    "PHASE_4_EXPECTED_STATEMENT_COUNT = 1491",
-    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1445",
-    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1372",
-    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1352",
+    "PHASE_4_EXPECTED_STATEMENT_COUNT = 1492",
+    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1446",
+    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1373",
+    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1353",
     "PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 139",
   ]) assert.match(persistenceAudit, new RegExp(expected));
   const readExtensions = between(
@@ -175,6 +175,7 @@ test("M5-Audit-Inventar klassifiziert das neue SQLite-Schema und den erweiterten
     "]);",
   );
   assert.deepEqual([...readExtensions.matchAll(/"([^"]+)"/g)].map((match) => match[1]), [
+    "data-import.events.source-tolerances",
     "workflow-studio.completion.lookup",
     "workflow-studio.instance.steps",
     "workflow-studio.instances.page",

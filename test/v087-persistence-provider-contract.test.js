@@ -509,7 +509,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     report.phase5Progress.compilerVersion,
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1491);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1492);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -527,7 +527,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1491,
+    requiredReceiptCount: 1492,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -642,6 +642,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
 
 test("CRM, article and statistics registration grants no additional provider capabilities", () => {
   const modules = [
+    "lib/persistence/postgresql/sales/import-source-tolerance-catalog.js",
     "lib/persistence/postgresql/core/import-master-customer-reference.js",
     "lib/persistence/postgresql/sales/cash-customer-search.js",
     "lib/persistence/postgresql/operations/sql-runtime-statistics.js",

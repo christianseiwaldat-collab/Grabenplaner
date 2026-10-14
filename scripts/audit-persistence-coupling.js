@@ -119,6 +119,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-cash-takeover.test.js',
   'test/postgresql-transaction-activity.test.js',
   'lib/persistence/postgresql/sales/import-recheck-catalog.js',
+  // Exact read-only audit receipt lookup; no driver, DDL or activation grant.
+  'lib/persistence/postgresql/sales/import-source-tolerance-catalog.js',
   'lib/persistence/postgresql/sales/import-work-queues.js',
   'lib/persistence/postgresql/import-reader-batches.js',
   'lib/persistence/postgresql/core/import-reader-batches.js',
@@ -471,6 +473,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/import-batches.js",
   "lib/persistence/statements/import-reader-batches.js",
   "lib/persistence/statements/data-import-recheck.js",
+  "lib/persistence/statements/data-import-source-tolerance.js",
   "lib/persistence/sqlite/personnel-learning-runs-catalog.js",
   "lib/persistence/sqlite/operations/personnel-learning-runs-schema.js",
   "lib/persistence/sqlite/branch-article-stock-catalog.js",
@@ -538,6 +541,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   // Isolated Block-2 import foundation; not part of the application startup catalog.
   "lib/persistence/repositories/data-import.js",
   "lib/persistence/sqlite/data-import-catalog.js",
+  "lib/persistence/sqlite/data-import-source-tolerance-catalog.js",
   "lib/persistence/sqlite/operations/data-import-schema.js",
   "lib/persistence/statements/data-import.js",
   "lib/persistence/application-repositories.js",
@@ -918,15 +922,16 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
 const PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS = Object.freeze([
+  "data-import.events.source-tolerances",
   "workflow-studio.completion.lookup",
   "workflow-studio.instance.steps",
   "workflow-studio.instances.page",
   "xoffi-snapshots.get-scoped",
 ]);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1491;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1492;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 46;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1445;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1372;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1446;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1373;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -1052,7 +1057,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1352;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1353;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 139;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",

@@ -25,7 +25,7 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1491 Statements genau einmal ab", () => {
+test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1492 Statements genau einmal ab", () => {
   const plan = POSTGRESQL_APPLICATION_DIALECT_PLAN;
   const sqliteEntries = SQLITE_APPLICATION_DIALECT_MANIFEST.entries;
 
@@ -34,8 +34,8 @@ test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1491 Statemen
   assert.equal(plan.status, "implementation-in-progress");
   assert.equal(plan.executable, false);
   assert.match(plan.fingerprint, /^[a-f0-9]{64}$/);
-  assert.equal(plan.entries.length, 1491);
-  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1491);
+  assert.equal(plan.entries.length, 1492);
+  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1492);
 
   for (let index = 0; index < sqliteEntries.length; index += 1) {
     const source = sqliteEntries[index];
@@ -62,8 +62,8 @@ test("Block 5/7: nur portable Einträge enthalten kompiliertes PostgreSQL-SQL", 
   const portable = entries.filter((entry) => entry.strategy === "portable-generated");
   const blocked = entries.filter((entry) => entry.strategy === "requires-override");
 
-  assert.equal(summary.statementCount, 1491);
-  assert.equal(summary.portableGeneratedCount, 1352);
+  assert.equal(summary.statementCount, 1492);
+  assert.equal(summary.portableGeneratedCount, 1353);
   assert.equal(summary.requiresOverrideCount, 139);
   assert.equal(portable.length, summary.portableGeneratedCount);
   assert.equal(blocked.length, summary.requiresOverrideCount);
@@ -205,11 +205,13 @@ test("Bestellnavigation registriert zwei Leseabfragen und erhält die geschlosse
   assert.equal(require("../lib/persistence/postgresql/catalog-contract").POSTGRESQL_APPLICATION_ACCEPTANCE.acceptedReceiptCount, 0);
 });
 
-test("Workflow-Studio und Xoffi ergänzen genau vier portable Leseabfragen ohne Vollfreigabe", () => {
+test("Workflow-Studio, Xoffi und Importfreigaben ergänzen genau fünf portable Leseabfragen ohne Vollfreigabe", () => {
   const { S: studio } = require("../lib/persistence/statements/workflow-studio");
   const { S: xoffi } = require("../lib/persistence/statements/xoffi-snapshots");
-  const additions = [...Object.values(studio), xoffi.getScoped];
+  const { SOURCE_TOLERANCE: tolerance } = require("../lib/persistence/statements/data-import-source-tolerance");
+  const additions = [...Object.values(studio), xoffi.getScoped, tolerance.listSourceToleranceEvents];
   const expected = {
+    "data-import.events.source-tolerances": ["queryAll", ["runId"]],
     "workflow-studio.completion.lookup": ["queryAll", ["key"]],
     "workflow-studio.instance.steps": ["queryAll", ["runId"]],
     "workflow-studio.instances.page": ["queryAll", ["after", "limit"]],
@@ -301,7 +303,7 @@ test("Block 5/7: die Block-4-Plan-Fixture bleibt unverändert nicht ausführbar"
 
   assert.equal(fixture.status, "contract-only");
   assert.equal(fixture.executable, false);
-  assert.equal(fixture.entries.length, 1491);
+  assert.equal(fixture.entries.length, 1492);
   assert.equal(fixture.sourceFingerprint, SQLITE_APPLICATION_DIALECT_MANIFEST.fingerprint);
   for (const entry of fixture.entries) {
     assert.equal(entry.status, "contract-only");

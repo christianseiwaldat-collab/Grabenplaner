@@ -401,6 +401,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   assert.equal(report.phase4Progress.status, "completed");
   assert.equal(report.phase4Progress.complete, true);
   assert.deepEqual(PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS, [
+    "data-import.events.source-tolerances",
     "workflow-studio.completion.lookup",
     "workflow-studio.instance.steps",
     "workflow-studio.instances.page",
@@ -489,7 +490,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1491);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1492);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -506,7 +507,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1491,
+    requiredReceiptCount: 1492,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {

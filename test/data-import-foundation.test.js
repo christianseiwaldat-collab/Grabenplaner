@@ -174,11 +174,11 @@ test('Q01: trusted exact snapshot tolerance preserves evidence, idempotence, res
   await assert.rejects(engine.checkpoint(run.id), permissionError('IMPORT_RUN_INTEGRITY'));
 });
 
-test('Q01: approved TradeFoto registry matches only two exact profiles and exposes escaped evidence', () => {
+test('approved TradeFoto registry matches only its five exact snapshot proofs and exposes escaped evidence', () => {
   const { TRADEFOTO_SOURCE_TOLERANCES: proofs } = require('../lib/tradefoto-source-tolerances');
   const { definitions } = require('../lib/tradefoto-full-import-source');
   const registry = T.sourceToleranceRegistry(proofs);
-  assert.equal(proofs.length, 2);
+  assert.equal(proofs.length, 5);
   for (const proof of proofs) {
     const p = definitions('trade').find(t => t.name === proof.sourceTable).profile;
     const raw = C.normalizeDataImportManifest({ sourceInstance: proof.sourceInstance, fileSha256: proof.fileSha256, schemaSha256: proof.schemaSha256,
@@ -189,6 +189,75 @@ test('Q01: approved TradeFoto registry matches only two exact profiles and expos
       run: { counts: {}, acceptedDeviations: [{ ...proof, approvalReference: '<script>bad</script>' }] } }] });
     assert.match(html, /Bestätigte Quellzähler-Abweichung/); assert.match(html, /&lt;script&gt;/); assert.doesNotMatch(html, /<script>/);
   }
+});
+
+function countProof(f, declaredRows, expectedRows, overrides = {}) {
+  return T.defineDataImportSourceTolerance({id:'synthetic-late-count-approval',recordedAt:f.context.time,
+    approvalReference:'synthetic-explicit-approval',reason:'Independent synthetic count verification',evidenceReference:'synthetic-count-evidence',
+    sourceSystem:f.profile.sourceSystem,sourceTable:f.profile.sourceTable,profileHash:f.profile.fingerprint,
+    sourceInstance:'synthetic-ledger',schemaSha256:f.profile.schemaSha256,fileSha256:HASH,declaredRows,expectedRows,...overrides});
+}
+for (const declaredRows of [0,2]) test(`late count approval (${declaredRows} declared, 1 read) preserves immutable identity, audit, restart and revocation`,async t=>{
+  const f=await fixture(t);let run=await f.ready([sourceRow()],{declaredRows});
+  const id=run.id,before=f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(id).manifest;
+  const proof=countProof(f,declaredRows,1),config={...f.composition,sourceTolerances:[proof]};
+  let engine=createDataImportEngine(config),view=await engine.preview(id);
+  assert.deepEqual(view.gates,['SOURCE_ROW_COUNT_MISMATCH']);assert.deepEqual(view.availableSourceTolerances,[proof]);
+  await assert.rejects(engine.apply(id,view.revision),permissionError('IMPORT_STATE_CONFLICT'));
+  for(const permission of ['apply','review']) {
+    f.context.denied.add(permission);await assert.rejects(engine.acceptSourceTolerance(id,view.revision),permissionError('IMPORT_FORBIDDEN'));
+    f.context.denied.delete(permission);
+  }
+  await assert.rejects(engine.acceptSourceTolerance(id,view.revision+1),permissionError('IMPORT_REVISION_CONFLICT'));
+  run=await engine.acceptSourceTolerance(id,view.revision);
+  assert.equal(run.id,id);assert.deepEqual(run.gates,[]);assert.deepEqual(run.acceptedDeviations,[proof]);
+  assert.deepEqual(run.sourceToleranceReceipts,[{fingerprint:proof.fingerprint,recordedAt:f.context.time,actorId:f.context.who.ownerId,revision:run.revision}]);
+  assert.equal(f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(id).manifest,before);
+  const revision=run.revision;
+  run=await engine.acceptSourceTolerance(id,revision);assert.equal(run.revision,revision);
+  assert.equal((await engine.events(id)).filter(e=>e.action===T.SOURCE_TOLERANCE_EVENT_PREFIX+proof.fingerprint).length,1);
+  engine=createDataImportEngine(config);assert.deepEqual((await engine.preview(id)).sourceToleranceReceipts,run.sourceToleranceReceipts);
+  run=await engine.recheck(id,run.revision);run=await engine.review(id,run.revision);assert.equal(run.status,'ready');
+  const revoked=await f.engine.preview(id);assert.ok(revoked.gates.includes('SOURCE_TOLERANCE_UNAVAILABLE'));assert.equal(revoked.canApply,false);
+  await assert.rejects(f.engine.apply(id,run.revision),permissionError('IMPORT_DECISION_GATE'));
+  const replacement=countProof(f,declaredRows,1,{reason:'Changed proof is not the recorded approval'});
+  const changed=createDataImportEngine({...config,sourceTolerances:[replacement]});
+  assert.ok((await changed.preview(id)).gates.includes('SOURCE_TOLERANCE_UNAVAILABLE'));
+  run=await engine.apply(id,run.revision);assert.equal(f.targets().length,1);
+  run=await f.engine.undo(id,run.revision);assert.equal(f.targets().length,0);
+  assert.equal(f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(id).manifest,before);
+});
+
+test('count approval requires exact evidence and never approves equal counts, source errors or other gates',async t=>{
+  const f=await fixture(t);assert.throws(()=>countProof(f,1,1),permissionError('IMPORT_TOLERANCE_INVALID'));
+  let run=await f.ready([sourceRow()],{declaredRows:2,gates:['OTHER_DECISION_REQUIRED']});
+  for(const change of [{fileSha256:'b'.repeat(64)},{schemaSha256:'b'.repeat(64)},{profileHash:'b'.repeat(64)},
+    {sourceInstance:'other'},{sourceTable:'Other'},{declaredRows:3},{expectedRows:0}]) {
+    const engine=createDataImportEngine({...f.composition,sourceTolerances:[countProof(f,2,1,change)]});
+    await assert.rejects(engine.acceptSourceTolerance(run.id,run.revision),permissionError('IMPORT_TOLERANCE_UNAVAILABLE'));
+  }
+  const engine=createDataImportEngine({...f.composition,sourceTolerances:[countProof(f,2,1)]});
+  run=await engine.acceptSourceTolerance(run.id,run.revision);assert.deepEqual(run.gates,['OTHER_DECISION_REQUIRED']);assert.equal(f.targets().length,0);
+  for(const rows of [[sourceRow('1',{Amount:'not-decimal'})],[sourceRow('2'),sourceRow('2',{Label:'Different'})]]) {
+    const g=await fixture(t),proof=countProof(g,rows.length+1,rows.length),e=createDataImportEngine({...g.composition,sourceTolerances:[proof]});
+    let blocked=await g.ready(rows,{declaredRows:rows.length+1});blocked=await e.acceptSourceTolerance(blocked.id,blocked.revision);
+    blocked=await e.recheck(blocked.id,blocked.revision);blocked=await e.review(blocked.id,blocked.revision);
+    assert.equal(blocked.status,'needs_review');assert.ok(blocked.counts.invalid||blocked.counts.conflict);assert.equal(blocked.canApply,false);
+    await assert.rejects(e.apply(blocked.id,blocked.revision),permissionError('IMPORT_STATE_CONFLICT'));assert.equal(g.targets().length,0);
+  }
+});
+
+test('count approval receipt must belong to the authenticated owner and run revision',async t=>{
+  const f=await fixture(t),proof=countProof(f,2,1),e=createDataImportEngine({...f.composition,sourceTolerances:[proof]});
+  let run=await f.ready([sourceRow()],{declaredRows:2});run=await e.acceptSourceTolerance(run.id,run.revision);
+  f.database.prepare('UPDATE data_import_events SET actor_id=? WHERE run_id=? AND action=?').run('another-owner',run.id,T.SOURCE_TOLERANCE_EVENT_PREFIX+proof.fingerprint);
+  await assert.rejects(e.checkpoint(run.id),permissionError('IMPORT_RUN_INTEGRITY'));
+});
+
+test('count approval query is registered for qualified PostgreSQL Sales runtime without migration changes',()=>{
+  const {CATALOG}=require('../lib/persistence/postgresql/sales/import-source-tolerance-catalog');
+  assert.equal(CATALOG.length,1);assert.match(CATALOG[0].sql,/integration\s*\.\s*"?data_import_events/);
+  assert.deepEqual(CATALOG[0].parameterOrder,['runId']);
 });
 
 test("Block 2: contract preserves string IDs, exact decimals, civil dates, nulls and source-only values", () => {
