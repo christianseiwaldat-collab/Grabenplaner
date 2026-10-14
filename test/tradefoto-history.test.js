@@ -513,6 +513,7 @@ test('Block 4: every selected history profile writes and reads a complete synthe
     for (const key of table.keys || []) value[key] = H.profileFor(table.source, table.name).fields.find(f => f.source === key).type === 'guid' ? '00000000-0000-0000-0000-000000000001' : 'synthetic-key';
     if (table.name === 'Umsatz_Kasse_Details') value = line();
     if (table.name === 'KassenJournal_Details') value.Vorgang = '7';
+    if (table.name === 'ARTIKEL_FILIALEN') { value.EAN='0000000000042';value.FilialID=18; }
     if (table.name === 'Rechnungsdetails_A') { value.Rechnungsnr='synthetic-key';value.Suchname='synthetic-key'; }
     if (table.name === 'Inventurdetails') { value.Inventurnummer='synthetic-key';value.InventurFilialid='synthetic-key'; }
     const { records: [record] } = await f.ingest(table.source, table.name, [value], ['Inventur','Inventurdetails','Rechnung_A','Rechnungsdetails_A'].includes(table.name)?{fileSha256:SHA}:{});
@@ -521,9 +522,11 @@ test('Block 4: every selected history profile writes and reads a complete synthe
   assert.equal(f.database.prepare('SELECT count(DISTINCT source_table) n FROM import_history_records').get().n, 70);
 });
 
-test('Central imports use the existing portable history catalog and permission-checked apply', () => {
-  assert.equal(SQLITE_IMPORT_HISTORY_CATALOG.length, 23); assert.equal(Object.keys(S).length, 23);
-  for (const entry of SQLITE_IMPORT_HISTORY_CATALOG) assert.equal(compilePostgresqlDialectEntry(entry).strategy, 'portable-generated', entry.statement.id);
+test('Central imports register history and snapshot catalogs with permission-checked apply', () => {
+  assert.equal(SQLITE_IMPORT_HISTORY_CATALOG.length, 33); assert.equal(Object.keys(S).length, 23);
+  const snapshotStatements=require('../lib/persistence/statements/import-history-snapshots').S;
+  for (const entry of SQLITE_IMPORT_HISTORY_CATALOG) assert.equal(compilePostgresqlDialectEntry(entry).strategy,
+    entry.statement===snapshotStatements.membersPut?'requires-override':'portable-generated', entry.statement.id);
   assert.ok(!/AUTOINCREMENT|PRAGMA|rowid|json_|RAISE\(/iu.test(IMPORT_HISTORY_SCHEMA_SQL));
   const catalog=require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG;
   assert.ok(SQLITE_IMPORT_HISTORY_CATALOG.every(e=>catalog.some(c=>c.statement===e.statement)));

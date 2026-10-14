@@ -7,14 +7,14 @@ const {createImportHistoryWriters}=require('../lib/persistence/repositories/impo
 const TIME='2026-09-14T09:00:00.000Z';
 async function insightFixture({access,protection,scopeId='grabenplaner-main',ownerId='synthetic-owner',branches=['18','19'],seedBase=true,clock=()=>TIME}){
  const composition={protection,getActor:()=>({scopeId,ownerId}),authorize:()=>true,clock};
- const engine=createDataImportEngine({...composition,repository:createDataImportRepository(access),profiles:[...M.TRADEFOTO_MASTER_PROFILES,...H.TRADEFOTO_HISTORY_PROFILES],
+ const engine=createDataImportEngine({...composition,repository:createDataImportRepository(access),profiles:[...M.TRADEFOTO_MASTER_PROFILES,...H.TRADEFOTO_HISTORY_READABLE_PROFILES],
   writers:{...createImportMasterWriters({protection}),...createImportHistoryWriters({...composition,resolveMasterSourceInstance:()=> 'tradefoto-trade'})}});
  const masters=createImportMasterService({...composition,access});
- async function ingest(table,values,{master=false,sourceInstance=master?'tradefoto-trade':'tradefoto-bestell',snapshotAt=TIME,apply=true,fileSha256=C.fingerprint([table,values,snapshotAt])}={}){
-  const profile=master?M.profileFor(table):H.profileFor('trade',table),definition=master?M.tableFor(table):H.tableFor('trade',table);
+ async function ingest(table,values,{master=false,legacy=false,sourceInstance=master?'tradefoto-trade':'tradefoto-bestell',snapshotAt=TIME,apply=true,fileSha256=C.fingerprint([table,values,snapshotAt])}={}){
+  const profile=master?M.profileFor(table):legacy?H.profilesFor('trade',table).find(p=>p.version===1):H.profileFor('trade',table),definition=master?M.tableFor(table):H.tableFor('trade',table);
   let run=await engine.start({profileHash:profile.fingerprint,manifest:{sourceInstance,fileSha256,schemaSha256:profile.schemaSha256,expectedRows:values.length,declaredRows:values.length,snapshotAt,gates:[]}});
   if(run.status==='applied')return run;
-  const rows=values.map((v,i)=>{const raw={...Object.fromEntries(definition.columns.map(c=>[c.name,null])),...v};return master?M.prepareTradeFotoMasterRow(table,raw,{fileSha256,rowNumber:i+1}):H.prepareTradeFotoHistoryRow('trade',table,raw,{fileSha256,rowNumber:i+1});});
+  const rows=values.map((v,i)=>{const raw={...Object.fromEntries(definition.columns.map(c=>[c.name,null])),...v};return master?M.prepareTradeFotoMasterRow(table,raw,{fileSha256,rowNumber:i+1}):H.prepareTradeFotoHistoryRow('trade',table,raw,{fileSha256,rowNumber:i+1,profileHash:profile.fingerprint});});
   for(let i=0;i<rows.length;i+=C.LIMITS.batch)run=await engine.stage(run.id,{expectedRevision:run.revision,startRow:i+1,rows:rows.slice(i,i+C.LIMITS.batch)});
   run=await engine.seal(run.id,run.revision);do{run=await engine.review(run.id,run.revision);}while(run.status==='reviewing');
   if(run.status!=='ready')throw new Error(JSON.stringify(await engine.preview(run.id)));

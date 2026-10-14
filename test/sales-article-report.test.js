@@ -39,7 +39,7 @@ async function setup(t,{duplicates=false,count=2}={}){
  const source=Array.from({length:count},(_,i)=>({EAN:String(i+42).padStart(13,'0'),Artikelbezeichnung:`BEISPIEL Kamera ${i}`,Sortimentsart:i?'Lagerware':'Abverkauf',Abverkauf:i===0,DurchschnittEK:'70',MWST:1,Sachkonto:false,OhneBestand:false}));
  await f.ingest('ARTIKEL_STAMM',source,{master:true});
  const stocks=source.flatMap((a,i)=>[{EAN:a.EAN,FilialID:18,FBestand:String(i+2),Bestellt:'3'},{EAN:a.EAN,FilialID:19,FBestand:'0',Bestellt:'0'}]);
- if(duplicates)stocks.push({...stocks[0],FBestand:'7'});await f.ingest('ARTIKEL_FILIALEN',stocks,{sourceInstance:'tradefoto-trade'});
+ if(duplicates)stocks.push({...stocks[0],FBestand:'7'});await f.ingest('ARTIKEL_FILIALEN',stocks,{legacy:duplicates,sourceInstance:'tradefoto-trade'});
  const repo=require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.app.provider);
  const price=(type,basis,amount,field)=>({priceType:type,priceBasis:basis,amount,currency:'EUR',qualityStatus:'confirmed',sourceField:field});
  const articles=source.map(a=>({sourceArticleKey:a.EAN,articleNumber:Model.articleNumber(a.EAN),description:a.Artikelbezeichnung,active:true,sourceUpdatedAt:null,identifiers:[],prices:[price('sales','gross','120','Verkaufspreis'),price('sales','net','100','eNvk'),price('internet_1','gross','114','Internet_VK'),price('average_purchase','net','70','DurchschnittEK')]}));
@@ -63,7 +63,7 @@ test('scopes, catalog prices and cost capabilities protect rows, summaries, sort
  await assert.rejects(f.run('article-report-query',{sort:'retailGross'}),e=>e.status===403);
  f.state.session.permissions=f.state.session.permissions.filter(p=>p!=='sales:analytics:inventory:read');await assert.rejects(f.run('article-report-query',{}),e=>e.status===403);
 });
-test('duplicate stock pairs are explicit unknowns and cannot inflate counts or valuation',async t=>{
+test('legacy duplicate stock pairs are explicit unknowns and cannot inflate counts or valuation',async t=>{
  const f=await setup(t,{duplicates:true}),result=await f.run('article-report-query',{assortment:'sellout',locations:['18'],stock:'all'});
  assert.equal(result.total,1);assert.equal(result.rows[0].ambiguous,true);assert.equal(result.rows[0].quantity,null);assert.equal(result.rows[0].ordered,null);assert.equal(result.summary.stockValue,'0');
  assert.equal((await f.run('article-report-query',{assortment:'sellout',locations:['18'],stock:'positive'})).total,0);
@@ -76,11 +76,13 @@ test('cached source stock preserves accepted current prices and source membershi
  await f.repo.updateManual({input:{currentArticleNumber:'009999',expectedRevision:updated.revision,articleNumber:'009999',description:'BEISPIEL neue Nummer',identifiers:[],prices:{sales:[{priceType:'sales',priceBasis:'gross',amount:'240',currency:'EUR'}]}},actor:'synthetic-owner',timestamp:'2026-09-14T10:01:00.000Z',mutationId:require('node:crypto').randomUUID()});
  result=await f.run('article-report-query',{assortment:'sellout',locations:['18']});assert.equal(require('../lib/tradefoto-bestell/decimal').compare(result.rows[0].retailGross,'240'),0);assert.equal(result.rows[0].marginPercent,null,'manual gross price without a confirmed current VAT basis has no fabricated net RE');
 });
-test('PostgreSQL and SQLite reporting packets share a typed current-revision contract',()=>{
+test('PostgreSQL and SQLite reporting packets share a typed snapshot-revision contract',()=>{
  const S=require('../lib/sales-article-report-statements'),entries=S.postgresql(),entry=entries[0];assert.equal(entry.statement,S.catalog);assert.equal(entry.returning,false);assert.deepEqual(new Set(entry.parameterBindings.map(b=>b.parameter)),new Set(['keys','limit']));
  assert.match(entry.sql,/source_article_key/);assert.match(entry.sql,/sales_article_search_projection/);assert.match(entry.sql,/jsonb/);assert.match(entry.sql,/tradefoto\.artikel_stamm/);
  const registered=require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG.find(e=>e.statement===S.catalog);assert.ok(registered);
- const stock=entries.find(e=>e.statement===S.stockCandidates);assert.match(stock.sql,/jsonb_array_elements_text\(\$1::jsonb\)/);assert.match(stock.sql,/jsonb_array_elements_text\(\$2::jsonb\)/);assert.doesNotMatch(stock.sql,/gp\s*\.\s*json_each/);assert.equal(stock.statement.operation,'queryAll');assert.equal(stock.returning,false);
+ const stock=entries.find(e=>e.statement===S.stockCandidates);
+ for(const name of ['articles','locations']){const index=stock.parameterBindings.findIndex(binding=>binding.parameter===name)+1;assert.ok(index>0);assert.ok(stock.sql.includes(`jsonb_array_elements_text($${index}::jsonb)`));}
+ assert.match(stock.sql,/import_history_snapshot_members/);assert.match(stock.sql,/chosen\s*\.\s*revision/);assert.doesNotMatch(stock.sql,/gp\s*\.\s*json_each/);assert.equal(stock.statement.operation,'queryAll');assert.equal(stock.returning,false);
 });
 test('real PDF has exact page metadata, selected columns, row text and correct A4 orientation',async()=>{
  const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -132,18 +134,18 @@ test('three-branch sellout report never reads 51,000 irrelevant stock payloads a
  const branch=(await f.masters.mappings({table:'FILIALEN',sourceInstance:'tradefoto-trade',key:'20'})).items[0],input={recordId:branch.id,expectedSourceRevision:branch.revision,targetId:'20',historical:false,reason:'Synthetic qualification'};
  await f.masters.bind(input,(await f.masters.previewBinding(input)).planHash);
  const stocks=f.articles.flatMap((article,i)=>['18','19','20'].map(FilialID=>({EAN:article.sourceArticleKey,FilialID,FBestand:i===0?'2':'0',Bestellt:'0'})));
- const snapshotAt='2026-09-14T09:30:00.000Z';await f.ingest('ARTIKEL_FILIALEN',stocks,{sourceInstance:'tradefoto-trade',snapshotAt});const snapshot=require('../lib/data-import-contract').fingerprint(['ARTIKEL_FILIALEN',stocks,snapshotAt]);
+ const snapshotAt='2026-09-14T09:30:00.000Z',imported=await f.ingest('ARTIKEL_FILIALEN',stocks,{sourceInstance:'tradefoto-trade',snapshotAt});const snapshot=require('../lib/data-import-contract').fingerprint(['ARTIKEL_FILIALEN',stocks,snapshotAt]);
  const lookup=async(table,key)=>f.app.provider.queryOne(MS.find,{scopeId:'grabenplaner-main',identityHash:M.masterIdentity(f.protection,{scopeId:'grabenplaner-main',sourceInstance:'tradefoto-trade'},table,[key])});
  const article=await lookup('ARTIKEL_STAMM','0000000000042'),other=await lookup('ARTIKEL_STAMM','0000000000043'),locations=await Promise.all(['18','19','20'].map(id=>lookup('FILIALEN',id)));
  const template=db.prepare("SELECT id FROM import_history_records WHERE source_table='ARTIKEL_FILIALEN' LIMIT 1").get().id;
  // Deliberately unreadable unselected ciphertext proves that the report never
  // authenticates/decrypts non-candidates. Only selected rows use real imports.
- const addRecord=db.prepare('INSERT INTO import_history_records SELECT $id,scope_id,source_instance,source,source_table,profile_hash,$identity,revision FROM import_history_records WHERE id=$template');
- const addVersion=db.prepare('INSERT INTO import_history_versions SELECT $id,revision,$snapshot,snapshot_at,imported_by,imported_at,run_id,master_source_instance,business_date,parent_id,parent_revision,payload FROM import_history_versions WHERE record_id=$template ORDER BY revision DESC LIMIT 1');
+ const addRecord=db.prepare('INSERT INTO import_history_records SELECT $id,scope_id,source_instance,source,source_table,profile_hash,$identity,1 FROM import_history_records WHERE id=$template');
+ const addVersion=db.prepare('INSERT INTO import_history_versions SELECT $id,1,$snapshot,snapshot_at,imported_by,imported_at,run_id,master_source_instance,business_date,parent_id,parent_revision,payload FROM import_history_versions WHERE record_id=$template ORDER BY revision DESC LIMIT 1');
  const addRef=db.prepare("INSERT INTO import_history_references VALUES($id,1,$role,'internal_business',$master,NULL)");
  db.exec('BEGIN');try{for(let i=0;i<51000;i++){const id='synthetic-unselected-'+String(i).padStart(7,'0'),identity=require('node:crypto').createHash('sha256').update(id).digest('hex');addRecord.run({id,identity,template});addVersion.run({id,snapshot,template});addRef.run({id,role:'article',master:other.id});addRef.run({id,role:'location.filialid',master:locations[i%3].id});}db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}
  const result=await f.run('article-report-query',{assortment:'sellout',locations:['18','19','20']});assert.equal(result.total,3);assert.equal(result.scanned,3,'only three matching stock documents are read');assert.equal(result.candidateScanned,8);assert.deepEqual(new Set(result.rows.map(r=>r.locationId)),new Set(['18','19','20']));
- const sql=S.sqlite.find(e=>e.statement===S.stockCandidates).sql,plan=db.prepare('EXPLAIN QUERY PLAN '+sql).all({articles:JSON.stringify([article.id]),locations:JSON.stringify(locations.map(l=>l.id)),scopeId:'grabenplaner-main',snapshot,after:'',limit:201});assert.ok(plan.some(p=>/SEARCH a USING (?:COVERING )?INDEX import_history_reference_master/.test(p.detail)),JSON.stringify(plan));
+ const sql=S.sqlite.find(e=>e.statement===S.stockCandidates).sql,plan=db.prepare('EXPLAIN QUERY PLAN '+sql).all({articles:JSON.stringify([article.id]),locations:JSON.stringify(locations.map(l=>l.id)),scopeId:'grabenplaner-main',snapshot:imported.id,after:'',limit:201});assert.ok(plan.some(p=>/SEARCH a USING (?:COVERING )?INDEX import_history_reference_master/.test(p.detail)),JSON.stringify(plan));
  const current=await f.repo.getByArticleNumber('000042');await f.repo.updateManual({input:{currentArticleNumber:'000042',expectedRevision:current.currentRevision,articleNumber:'009999',description:'BEISPIEL aktueller Suchname',identifiers:[]},actor:'synthetic-owner',timestamp:'2026-09-14T10:00:00.000Z',mutationId:require('node:crypto').randomUUID()});
  const searched=await f.run('article-report-query',{assortment:'sellout',query:'aktueller Suchname',locations:['18','19','20']});assert.equal(searched.total,3);assert.equal(searched.scanned,3);assert.ok(searched.rows.every(r=>r.articleNumber==='009999'));
  assert.equal((await f.run('article-report-query',{assortment:'sellout',query:'Kamera 0',locations:['18','19','20']})).total,0,'the imported obsolete name never overrides the accepted search name');

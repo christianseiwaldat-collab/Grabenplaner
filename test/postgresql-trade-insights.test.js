@@ -26,11 +26,23 @@ test('Six-block views run against native Core/Sales, preserve GP annotations and
  await require('../test-support/postgresql-migration/report-fixture').withReportFixture(async f=>{
   const migration=require('../lib/persistence/postgresql/core/trade-annotations');
   assert.equal(Number((await f.core.migrator.query('SELECT count(*) AS n FROM gp.trade_annotations')).rows[0].n),0);
-  await f.core.migrator.query('SET ROLE gp_core_owner');await f.core.migrator.query('DROP TABLE gp.trade_annotations,gp.trade_annotations_migration_history');await f.core.migrator.query('RESET ROLE');
-  const fault=Object.assign(new Error('Synthetic migration interruption'),{code:'SYNTHETIC_MIGRATION_STOP'});
-  await assert.rejects(migration.migrate({query:(sql,...args)=>sql.startsWith('GRANT SELECT,INSERT')?Promise.reject(fault):f.core.migrator.query(sql,...args)}),e=>e===fault);
-  assert.equal((await f.core.migrator.query("SELECT to_regclass('gp.trade_annotations') AS name")).rows[0].name,null);
-  const applied=await migration.migrate(f.core.migrator);assert.equal((await migration.migrate(f.core.migrator)).applied,false);
+  const {schemaFingerprint}=require('../lib/persistence/postgresql/core/fingerprint');
+  let applied=await migration.migrate(f.core.migrator);assert.equal(applied.applied,false);
+  const beforeFingerprint=await schemaFingerprint(f.core.migrator),beforeLedger=(await f.core.migrator.query('SELECT * FROM gp.trade_annotations_migration_history')).rows;
+  assert.equal(beforeLedger.length,1);
+  const replayBaseline=beforeLedger[0].target_sha256===beforeFingerprint;
+  // Removing a predecessor would break the authenticated chain of later Core
+  // extensions. Replay fault injection only when annotations are still its leaf.
+  if(replayBaseline){
+   await f.core.migrator.query('SET ROLE gp_core_owner');await f.core.migrator.query('DROP TABLE gp.trade_annotations,gp.trade_annotations_migration_history');await f.core.migrator.query('RESET ROLE');
+   const fault=Object.assign(new Error('Synthetic migration interruption'),{code:'SYNTHETIC_MIGRATION_STOP'});
+   await assert.rejects(migration.migrate({query:(sql,...args)=>sql.startsWith('GRANT SELECT,INSERT')?Promise.reject(fault):f.core.migrator.query(sql,...args)}),e=>e===fault);
+   assert.equal((await f.core.migrator.query("SELECT to_regclass('gp.trade_annotations') AS name")).rows[0].name,null);
+   applied=await migration.migrate(f.core.migrator);assert.equal(applied.applied,true);
+  }
+  assert.equal((await migration.migrate(f.core.migrator)).applied,false);
+  assert.equal(await schemaFingerprint(f.core.migrator),beforeFingerprint);
+  assert.deepEqual((await f.core.migrator.query('SELECT * FROM gp.trade_annotations_migration_history')).rows,beforeLedger);
   assert.equal((await f.core.migrator.query("SELECT has_table_privilege('gp_core_app','gp.trade_annotations_migration_history','UPDATE') AS write")).rows[0].write,false);
   await f.core.migrator.query('SET ROLE gp_core_owner');await f.core.migrator.query("INSERT INTO gp.cost_centers(id,code,name,type,cost_center_type_id) VALUES('cc19','19','Synthetic 19','branch','branch'); INSERT INTO gp.locations(id,name,active,cost_center_id) VALUES('19','Synthetic 19',1,'cc19')");await f.core.migrator.query('RESET ROLE');
   const source=await require('../test-support/trade-insights-fixture').insightFixture({access:f.access,protection:f.protection,scopeId:'synthetic-migration',ownerId:'00001',branches:['18','19']});
@@ -50,12 +62,13 @@ test('Six-block views run against native Core/Sales, preserve GP annotations and
   let page=await worker('purchasing');assert.equal(page.rows.length,50);page=await worker('purchasing',{cursor:page.next});assert.equal(page.rows.length,15);
   const {createTradeInsightJobs}=require('../lib/persistence/repositories/trade-insight-jobs');
   const session=await f.resolvePrincipal('00001');let queueTime=Date.now();
-  const makeInsightQueue=()=>createTradeInsightJobs({access:f.access,vault:f.vault,runtime,resolvePrincipal:f.resolvePrincipal,dispatchRead:input=>f.worker.run(input),scopeId:'synthetic-migration',now:()=>queueTime});
+  const makeInsightQueue=()=>createTradeInsightJobs({access:f.access,vault:f.vault,runtime,resolvePrincipal:f.resolvePrincipal,dispatchRead:input=>f.worker.run(input),scopeId:'synthetic-migration',now:()=>queueTime,pageSize:50});
   const firstQueue=makeInsightQueue();let resumedQueue;
   try {
    const job=await firstQueue.create(session,{kind:'purchasing',query:{},title:'Native Ergebnisablage'});
-   await firstQueue.tick();assert.equal((await firstQueue.list(session))[0].processed,50);await firstQueue.stop();
-   queueTime+=180001;resumedQueue=makeInsightQueue();await resumedQueue.tick();
+   await firstQueue.tick();const partial=(await firstQueue.list(session))[0];assert.equal(partial.processed,50);assert.equal(partial.status,'running');await firstQueue.stop();
+   resumedQueue=makeInsightQueue();await resumedQueue.tick();assert.equal((await resumedQueue.list(session))[0].processed,50);
+   queueTime+=180001;await resumedQueue.tick();
    const saved=await resumedQueue.get(session,job.id);assert.equal(saved.status,'completed');assert.equal(saved.result.rows.length,65);
    assert.equal(new Set(saved.result.rows.map(row=>row.id)).size,65);
    const payload=(await f.access.queryOne(require('../lib/persistence/statements/sales-report-jobs').SALES_REPORT_JOB_STATEMENTS.get,{scope:'synthetic-migration:trade-insights',id:job.id})).payload;
@@ -83,6 +96,6 @@ test('Six-block views run against native Core/Sales, preserve GP annotations and
   await assert.rejects(worker('repairs'),e=>e.code==='IMPORT_FORBIDDEN');
   await f.core.migrator.query('SET ROLE gp_core_owner');await f.core.migrator.query("UPDATE gp.portal_users SET active=1 WHERE employee_number='00001'");await f.core.migrator.query('RESET ROLE');
   assert.equal((await worker('repairs')).rows.length,2);
-  console.log(JSON.stringify({qualification:'six-block-native',migrationApplied:applied.applied,purchasing:true,classification:true,repairs:true,revocation:true}));
+  console.log(JSON.stringify({qualification:'six-block-native',migrationApplied:applied.applied,migrationReplay:replayBaseline?'leaf-rollback-and-reapply':'later-chain-idempotence',purchasing:true,classification:true,repairs:true,revocation:true}));
  });
 });

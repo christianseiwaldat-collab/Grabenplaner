@@ -94,6 +94,9 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'lib/persistence/postgresql/sales/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete.js',
   'lib/persistence/postgresql/sales/import-delete-performance.js',
+  'lib/persistence/postgresql/sales/import-history-snapshots.js',
+  'lib/persistence/postgresql/sales/import-history-snapshots-catalog.js',
+  'test/postgresql-import-history-snapshots-migration.test.js',
   'lib/persistence/postgresql/operations/restore-capacity.js',
   // Exact protected maintenance targets; import caches only, with paired backup.
   'lib/persistence/postgresql/operations/import-retention.js',
@@ -530,6 +533,10 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "scripts/verify-tradefoto-test-import.mjs",
   "lib/persistence/repositories/sales-history-workspace.js",
   "lib/persistence/repositories/import-history.js",
+  "lib/persistence/repositories/import-history-snapshots.js",
+  "lib/persistence/sqlite/import-history-snapshots-catalog.js",
+  "lib/persistence/sqlite/operations/import-history-snapshots-schema.js",
+  "lib/persistence/statements/import-history-snapshots.js",
   "lib/persistence/sqlite/import-history-catalog.js",
   "lib/persistence/sqlite/operations/import-history-schema.js",
   "lib/persistence/statements/import-history.js",
@@ -746,6 +753,14 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/backup-recovery-keys.test.js",
   "test/full-source-backup-measurement.test.js",
   "test/data-import-runtime.test.js",
+  "test/article-stock-snapshots.test.js",
+  "test/article-stock-snapshot-integrity.test.js",
+  "test/article-stock-snapshot-retention.test.js",
+  "test/data-import-unchanged-review.test.js",
+  "test/import-history-snapshots-schema.test.js",
+  "test/history-snapshot-stock-read.test.js",
+  "test/import-master-reference-prefetch.test.js",
+  "test/sales-article-import-batch-read.test.js",
   "test/data-import-jobs.test.js",
   "test/data-import-state-counts.test.js",
   "test/saturday-credit-integration.test.js",
@@ -928,10 +943,10 @@ const PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS = Object.freeze([
   "workflow-studio.instances.page",
   "xoffi-snapshots.get-scoped",
 ]);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1492;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1503;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 46;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1446;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1373;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1457;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1384;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -1057,8 +1072,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1353;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 139;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1363;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 140;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",

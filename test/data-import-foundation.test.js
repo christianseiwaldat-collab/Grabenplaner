@@ -180,10 +180,13 @@ test('approved TradeFoto registry matches only its five exact snapshot proofs an
   const registry = T.sourceToleranceRegistry(proofs);
   assert.equal(proofs.length, 5);
   for (const proof of proofs) {
-    const p = definitions('trade').find(t => t.name === proof.sourceTable).profile;
+    const definition = definitions('trade').find(t => t.name === proof.sourceTable);
+    const p = definition.master ? definition.profile : require('../lib/tradefoto-history-profiles').profileFor('trade',proof.sourceTable,proof.profileHash);
     const raw = C.normalizeDataImportManifest({ sourceInstance: proof.sourceInstance, fileSha256: proof.fileSha256, schemaSha256: proof.schemaSha256,
       expectedRows: proof.expectedRows, declaredRows: proof.declaredRows, snapshotAt: proof.recordedAt, gates: [] }, p);
     assert.deepEqual(T.acceptSourceTolerances(raw, p, registry).acceptedDeviations, [proof]);
+    if (definition.profile.fingerprint !== p.fingerprint)
+      assert.deepEqual(T.acceptSourceTolerances(raw, definition.profile, registry), raw);
     assert.deepEqual(T.acceptSourceTolerances(raw, { ...p, fingerprint: 'd'.repeat(64) }, registry), raw);
     const html = require('../public/data-import').renderSource({ kind: 'trade', tables: [{ name: proof.sourceTable, declaredRows: proof.declaredRows,
       run: { counts: {}, acceptedDeviations: [{ ...proof, approvalReference: '<script>bad</script>' }] } }] });

@@ -44,7 +44,17 @@ const catalog = [
 const row = (number = '0001', extra = {}) => ({ Number: number, Label: 'Synthetic item '.repeat(100), Amount: '12', Note: null, ...extra });
 const code = expected => error => error?.code === expected;
 
-async function fixture(t, { sharedPayloads = false, dependencies = false, operationBatchSize = 200 } = {}) {
+function snapshotObserver() {
+  const calls = [], state = { failFinish: false };
+  const hooks = {
+    async recordSnapshotRows(_tx, entries, context) { calls.push({kind:'rows',entries:structuredClone(entries),context}); },
+    async finishSnapshot(_tx, context) { if(state.failFinish)C.fail('IMPORT_HISTORY_SNAPSHOT_INCOMPLETE',409); calls.push({kind:'finish',context}); },
+    async withdrawSnapshot(_tx, context) { calls.push({kind:'withdraw',context}); },
+  };
+  return {calls,state,hooks};
+}
+
+async function fixture(t, { sharedPayloads = false, dependencies = false, operationBatchSize = 200, snapshotHooks = null } = {}) {
   const app = openSqliteApplicationPersistence({ databasePath: ':memory:', catalog: [...SQLITE_DATA_IMPORT_CATALOG, ...catalog] });
   ensureSqliteDataImportSchema(app.database);
   app.database.exec('CREATE TABLE unchanged_targets(id TEXT PRIMARY KEY,number TEXT UNIQUE NOT NULL,revision INTEGER NOT NULL,data TEXT NOT NULL)');
@@ -60,6 +70,7 @@ async function fixture(t, { sharedPayloads = false, dependencies = false, operat
   };
   const update = async (tx, input) => { assert.equal((await tx.execute(S.update, input)).rowsAffected, 1); return read(tx, input.id); };
   const writer = {
+    ...snapshotHooks,
     read, findExisting: (tx, record) => tx.queryAll(S.find, { number: record.data.number }),
     async create(tx, { id, data }) { await tx.execute(S.create, { id, number: data.number, data }); return read(tx, id); },
     update, restore: update, canRemove: async () => true, canRestore: async () => true,
@@ -124,6 +135,60 @@ for (const sharedPayloads of [false, true]) test(`unchanged review retains origi
   // An unchanged run neither owns the old link nor invents undo work.
   assert.deepEqual((await f.engine.undoPreview(next.id)).rows, []);
   await f.finish(first, 'undo'); assert.deepEqual(f.targets(), []);
+});
+
+test('snapshot hooks record exact reused revisions and finish or withdraw runs with no target changes',async t=>{
+  const observer=snapshotObserver(),f=await fixture(t,{snapshotHooks:observer.hooks,sharedPayloads:true});
+  await f.finish(await f.ready([row()]),'apply');
+  const target=f.targets()[0];observer.calls.length=0;
+  let next=await f.ready([row()],'b'.repeat(64));
+  assert.deepEqual(next.counts,{unchanged:1});
+  assert.deepEqual(observer.calls.map(c=>c.kind),['rows']);
+  assert.deepEqual(observer.calls[0].entries,[{rowNumber:1,target}]);
+  assert.equal(observer.calls[0].context.expectedRows,1);
+  assert.equal(observer.calls[0].context.runId,next.id);
+  next=await f.finish(next,'apply');
+  assert.deepEqual(observer.calls.map(c=>c.kind),['rows','finish']);
+  assert.equal(f.database.prepare('SELECT count(*) n FROM data_import_changes WHERE run_id=?').get(next.id).n,0);
+  await f.finish(next,'undo');
+  assert.deepEqual(observer.calls.map(c=>c.kind),['rows','finish','withdraw']);
+  assert.deepEqual(f.targets(),[target]);
+});
+
+test('snapshot hooks cover refresh, source recheck and cancel without forcing a new business version',async t=>{
+  const observer=snapshotObserver(),f=await fixture(t,{snapshotHooks:observer.hooks});
+  await f.finish(await f.ready([row()]),'apply');const target=f.targets()[0];
+  observer.calls.length=0;
+  let next=await f.ready([row('0001',{Note:'source-only change'})],'b'.repeat(64));
+  assert.deepEqual(next.counts,{refresh:1});assert.deepEqual(observer.calls,[]);
+  next=await f.finish(next,'apply');
+  assert.deepEqual(observer.calls.map(c=>c.kind),['rows','finish']);
+  assert.deepEqual(observer.calls[0].entries,[{rowNumber:1,target}]);
+  observer.calls.length=0;
+  let third=await f.ready([row('0001',{Note:'source-only change'})],'c'.repeat(64));
+  third=await f.engine.recheck(third.id,third.revision);third=await f.finish(third,'review');
+  assert.deepEqual(observer.calls.map(c=>c.kind),['rows','rows']);
+  assert.deepEqual(observer.calls[0].entries,observer.calls[1].entries);
+  assert.equal((await f.engine.cancel(third.id,third.revision)).status,'cancelled');
+  assert.equal(observer.calls.at(-1).kind,'withdraw');assert.deepEqual(f.targets(),[target]);
+});
+
+test('snapshot completion failure rolls back business changes and can be resumed',async t=>{
+  const observer=snapshotObserver(),f=await fixture(t,{snapshotHooks:observer.hooks});
+  let first=await f.ready([row()]);observer.state.failFinish=true;
+  await assert.rejects(f.engine.apply(first.id,first.revision),code('IMPORT_HISTORY_SNAPSHOT_INCOMPLETE'));
+  assert.deepEqual(f.targets(),[]);assert.equal((await f.engine.checkpoint(first.id)).revision,first.revision);
+  observer.state.failFinish=false;first=await f.finish(first,'apply');assert.equal(first.status,'applied');
+  observer.calls.length=0;
+  let next=await f.ready([row('0001',{Amount:'24'})],'b'.repeat(64));assert.equal(next.counts.update,1);
+  next=await f.finish(next,'apply');
+  assert.equal(observer.calls[0].entries[0].target.revision,2);
+  assert.equal(observer.calls[0].entries[0].target.data.amount,'24.00');
+});
+
+test('snapshot hooks are an all-or-nothing writer contract',async t=>{
+  const f=await fixture(t),writer=f.composition.writers[profile.entity];
+  assert.throws(()=>createDataImportEngine({...f.composition,writers:{[profile.entity]:{...writer,recordSnapshotRows:async()=>{}}}}),code('IMPORT_WRITER_INVALID'));
 });
 
 test('unchanged recheck survives reconstruction and still preserves manual target fields', async t => {
