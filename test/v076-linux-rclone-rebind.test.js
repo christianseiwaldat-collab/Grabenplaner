@@ -97,7 +97,7 @@ test("v0.76 uses a wrapper-compatible isolated setup directory that can persist 
 });
 
 test("current offsite module preserves the v0.76 controlled rebind command", () => {
-  assert.equal(schema.moduleVersion, 11);
+  assert.equal(schema.moduleVersion, 12);
   assert.ok(schema.managedArtifacts.includes("server-tools/linux/offsite/grabenplaner-offsite-assurance.sh"));
   assert.ok(schema.managedArtifacts.includes("server-tools/linux/offsite/grabenplaner-offsite-recovery-set.sh"));
   assert.ok(schema.managedArtifacts.includes("server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh"));

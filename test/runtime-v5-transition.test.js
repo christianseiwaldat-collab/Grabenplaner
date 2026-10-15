@@ -24,10 +24,12 @@ function fixture(t) {
     }
   }
   fs.writeFileSync(path.join(old, "server-tools/linux/runtime-schema.json"), JSON.stringify({ ...runtime, deploymentSchemaVersion: 4 }));
-  fs.writeFileSync(path.join(old, "server-tools/linux/offsite/module-schema.json"), JSON.stringify({ ...offsite, moduleVersion: 6 }));
+  const historicalOffsite = { ...offsite, managedArtifacts: offsite.managedArtifacts.filter(file => !file.endsWith("/deploy-deferral.js")) };
+  for (const target of [old, candidate]) fs.unlinkSync(path.join(target, "server-tools/linux/offsite/lib/deploy-deferral.js"));
+  fs.writeFileSync(path.join(old, "server-tools/linux/offsite/module-schema.json"), JSON.stringify({ ...historicalOffsite, moduleVersion: 6 }));
   // This fixture describes the historical 6 -> 7 transition, independently
   // of the module bundled by today's package.
-  fs.writeFileSync(path.join(candidate, "server-tools/linux/offsite/module-schema.json"), JSON.stringify({ ...offsite, moduleVersion: 7 }));
+  fs.writeFileSync(path.join(candidate, "server-tools/linux/offsite/module-schema.json"), JSON.stringify({ ...historicalOffsite, moduleVersion: 7 }));
   for (const name of ["grabenplaner", "grabenplaner-bootstrap"]) {
     const file = path.join(old, "server-tools/linux", name + ".service.in");
     fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("TimeoutStartSec=1500s\n", "TimeoutStartSec=120s\n").replace("TimeoutStopSec=1500s\n", "TimeoutStopSec=120s\n"));
@@ -84,11 +86,11 @@ test("runtime-v5 uses a complete verified candidate for fresh backups and binds 
   assert.match(updater, /trap 'exit 143' TERM/);
   assert.doesNotMatch(migration, /\bsystemctl\s+(reboot|poweroff)|\bshutdown\s+-r/);
 });
-test("runtime-v5 and offsite-v11 are the current package contracts", () => {
+test("runtime-v5 and offsite-v12 are the current package contracts", () => {
   const result = spawnSync(process.execPath, [path.join(root, "server-tools/linux/lib/verify-package.js"), "--runtime-contract", root], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).deploymentSchemaVersion, 5);
-  assert.equal(JSON.parse(read("server-tools/linux/offsite/module-schema.json")).moduleVersion, 11);
+  assert.equal(JSON.parse(read("server-tools/linux/offsite/module-schema.json")).moduleVersion, 12);
 });
 
 test("the historical runtime migration never authorizes module 8", t => {

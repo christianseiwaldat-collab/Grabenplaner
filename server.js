@@ -155,6 +155,10 @@ const {
 const recoveryAssuranceStatusReader = require("./lib/recovery-assurance-status-reader")
   .createRecoveryAssuranceStatusReader();
 const readRecoveryAssuranceStatus = options => recoveryAssuranceStatusReader.read(options);
+const {
+  DEFAULT_STATE_PATH: DEFAULT_DEPLOY_DEFERRAL_PATH,
+  readDeployDeferral,
+} = require("./server-tools/linux/offsite/lib/deploy-deferral");
 const { buildSystemTrustIndex } = require("./lib/system-trust-index");
 const {
   buildSystemCenterTrendPayload,
@@ -39947,6 +39951,7 @@ function systemCenterTechnicalFingerprint() {
     process.env.GRABENPLANER_MONITOR_STATUS_FILE || DEFAULT_MONITOR_STATUS_PATH,
     process.env.GRABENPLANER_HOST_SECURITY_STATUS_FILE || DEFAULT_HOST_SECURITY_STATUS_PATH,
     DEFAULT_ASSURANCE_HEAD_PATH,
+    DEFAULT_DEPLOY_DEFERRAL_PATH,
   ];
   return watched.map((candidate) => `${candidate}:${systemCenterFileStamp(candidate)}`).join("|")
     + `|email:${externalNotificationAdapter.getEmailConfigurationFingerprint()}`;
@@ -39970,7 +39975,15 @@ const systemCenterTechnicalCache = createSystemCenterTechnicalCache({
       systemCenterUpdateStatus(),
       systemCenterControlCache.read(),
     ]);
-    diagnostics.recoveryAssurance = { ...diagnostics.recoveryAssurance, scheduler: control.scheduler };
+    const deployDeferral = readDeployDeferral({ now: Date.now() });
+    diagnostics.recoveryAssurance = {
+      ...diagnostics.recoveryAssurance,
+      // The control broker shares the maintenance lock. During an update only
+      // the fresh, root-verified heartbeat can supply its scheduler evidence.
+      scheduler: control.scheduler?.evidenceTrusted === true
+        ? control.scheduler : deployDeferral.scheduler || control.scheduler,
+      deployDeferral,
+    };
     const automation = deriveAutomationStatus(diagnostics.recoveryAssurance, { now: new Date() });
     const resources = systemCenterResourceSummary(diagnostics);
     let databaseHistoryWriteFailed = false;

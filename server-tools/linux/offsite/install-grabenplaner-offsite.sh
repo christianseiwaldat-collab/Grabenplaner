@@ -276,7 +276,7 @@ if [[ -e "$OFFSITE_MODULE_ROOT" || -L "$OFFSITE_MODULE_ROOT" ]]; then
   installed_module_version="$("$OFFSITE_NODE" - "$OFFSITE_CONFIG_ROOT/installed-contract.json" <<'NODE'
 const fs = require("node:fs");
 const value = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(value.moduleVersion)) process.exit(1);
+if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(value.moduleVersion)) process.exit(1);
 process.stdout.write(String(value.moduleVersion));
 NODE
 )" || offsite_die "Die installierte Offsite-Modulversion ist nicht migrationsfaehig."
@@ -920,7 +920,7 @@ core_offsite_module_version="$($OFFSITE_NODE - "$OFFSITE_APP_ROOT/server-tools/l
 const fs=require("node:fs");
 const value=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));
 if(value?.format!=="grabenplaner-linux-offsite-module-contract"||value?.schemaVersion!==1
-  ||![7,8,9,10,11].includes(value?.moduleVersion))process.exit(1);
+  ||![7,8,9,10,11,12].includes(value?.moduleVersion))process.exit(1);
 process.stdout.write(String(value.moduleVersion));
 NODE
 )" || offsite_die "Der installierte Core-Offsite-Vertrag ist ungueltig."

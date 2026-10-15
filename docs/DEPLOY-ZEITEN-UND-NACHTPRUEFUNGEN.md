@@ -17,6 +17,14 @@ Ergibt die tatsächliche Entscheidung einen längeren Pfad als angekündigt, wir
 Der Wunsch nach höchstens 90 Minuten darf weder einen ungültigen Kurzpfad erzwingen noch Sicherungs- oder Restoreprüfungen verkürzen.
 Ein aktiver Nachtlauf wird regulär abgewartet; seine Sperre wird weder umgangen noch durch Abbruch oder Neustart beseitigt.
 
+## Nachtstart während eines Deployments
+
+Ab Offsite-Modul 12 bleibt der zuvor aktive und aktivierte GP-Nacht-Timer während eines regulären Deployments erreichbar. Wird seine Ausführung während der Bereitstellung fällig, wartet die Nachtprüfung auf die Wartungssperre. Der Start darf sich höchstens drei Stunden gegenüber der ursprünglichen Fälligkeit verschieben. Ein erneuter Deploy-Versuch verlängert diese Frist nicht. Die Frist beendet niemals ein laufendes transaktionales Update; eine Überschreitung wird als Störung gemeldet.
+
+Der Updater schreibt dafür einen geschützten Beleg mit ursprünglichem Termin, fester Frist und gebundener Prozessidentität. Der System-Index berücksichtigt den Aufschub nur bei gültigem Beleg und tatsächlich aktivem Deployment. Schon vorher fehlende oder fehlerhafte Nachweise, deaktivierte Timer, ein abgebrochener Deploy und überzogene Fristen werden weiterhin bewertet. Der Aufschub ist kein erfolgreicher Recovery-Nachweis. Sobald die Sperre frei ist, wird der fällige Nachtlauf nachgeholt; die drei Stunden begrenzen seinen Start, nicht die Dauer seiner vollständigen Prüfung.
+
+Das System-Center zeigt den bestätigten Aufschub einschließlich ursprünglichem Termin und spätestem Start. Andere Host-, APT- und Anwendungswartungen behalten ihre eigenen Zeitpläne. Für ältere separat installierte Offsite-Module gilt weiterhin der bisherige sichere Ablauf; die neue Funktion benötigt die reguläre Modulmigration.
+
 ## Aktualisierung und Beobachtung
 
 - Erst nach grünem Preflight folgen Paketbau, Manifest-/Hashprüfung und erforderliche Kandidatentests. Vor dem Update wird die Bereitschaft erneut geprüft.

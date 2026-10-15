@@ -26900,10 +26900,19 @@ function systemCenterDurationLabel(seconds) {
 
 function renderSystemCenterOperations(automation, notifications) {
   const schedule = automation && typeof automation === "object" ? automation : {};
+  const deferred = schedule.state === "healthy" && schedule.paused === true
+    && schedule.reasonCode === "AUTOMATION_DEPLOY_DEFERRED";
+  const catchupRunning = schedule.state === "healthy"
+    && schedule.reasonCode === "AUTOMATION_DEPLOY_CATCHUP_RUNNING";
+  const deferral = schedule.deployDeferral && typeof schedule.deployDeferral === "object"
+    ? schedule.deployDeferral : {};
   const delivery = notifications && typeof notifications === "object" ? notifications : {};
   const automationState = systemCenterVisualState(schedule.overdue === true ? "critical" : schedule.state,
     schedule.enabled === false ? "neutral" : "warning");
-  const automationCopy = systemCenterStateCopy(automationState);
+  const automationCopy = deferred
+    ? { icon: "◷", label: "Wegen Deployment verschoben" }
+    : catchupRunning ? { icon: "◷", label: "Nachgeholte Prüfung läuft" }
+      : systemCenterStateCopy(automationState);
   const smokeState = systemCenterVisualState(schedule.applicationSmokeState, "neutral");
   const smokeCopy = systemCenterStateCopy(smokeState);
   const notificationState = systemCenterVisualState(delivery.state,
@@ -26918,7 +26927,9 @@ function renderSystemCenterOperations(automation, notifications) {
     <article class="system-center-operation ${automationState}">
       <header><div><span class="eyebrow">Automatische Prüfung</span><h2>Nächtliche Recovery Assurance</h2></div><span class="system-center-state ${automationState}"><i aria-hidden="true">${automationCopy.icon}</i>${escapeHtml(automationCopy.label)}</span></header>
       <p>${schedule.enabled === false ? "Die automatische Prüfung ist auf diesem System nicht aktiv." : escapeHtml(schedule.scheduleLabel || "Tägliche Ausführung mit zufälliger Startverzögerung und geschützter Parallelitätssperre.")}</p>
-      <dl><div><dt>Letzter Nachtlauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.lastRunAt))}</dd></div><div><dt>Nächster Lauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.nextRunAt))}</dd></div><div><dt>App-Start im letzten Nachtlauf</dt><dd><span class="system-center-inline-state ${smokeState}"><i aria-hidden="true">${smokeCopy.icon}</i>${escapeHtml(smokeCopy.label)}</span></dd></div>${schedule.latestFullProofAt ? `<div><dt>Letzter vollständiger Nachweis (alle Auslöser)</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.latestFullProofAt))}</dd></div>` : ""}</dl>
+      ${deferred ? `<p>Die Nachtprüfung startet nach dem laufenden Deployment. Ursprünglich fällig: ${escapeHtml(diagnosticTimestamp(deferral.dueAt))}. Aufschub bis spätestens ${escapeHtml(diagnosticTimestamp(deferral.deadlineAt))} (höchstens 3 Stunden). Der bestätigte Aufschub senkt den System-Index nicht.</p>` : ""}
+      ${catchupRunning ? '<p>Der verschobene Nachtlauf ist innerhalb der dreistündigen Frist gestartet. Das vollständige Prüfergebnis steht noch aus.</p>' : ""}
+      <dl><div><dt>Letzter Nachtlauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.lastRunAt))}</dd></div><div><dt>${deferred ? "Spätester Start" : catchupRunning ? "Aktueller Lauf" : "Nächster Lauf"}</dt><dd>${catchupRunning ? "Läuft" : escapeHtml(diagnosticTimestamp(deferred ? deferral.deadlineAt : schedule.nextRunAt))}</dd></div><div><dt>App-Start im letzten Nachtlauf</dt><dd><span class="system-center-inline-state ${smokeState}"><i aria-hidden="true">${smokeCopy.icon}</i>${escapeHtml(smokeCopy.label)}</span></dd></div>${schedule.latestFullProofAt ? `<div><dt>Letzter vollständiger Nachweis (alle Auslöser)</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.latestFullProofAt))}</dd></div>` : ""}</dl>
       ${schedule.state !== "healthy" ? '<a href="/?view=settings&amp;section=backup">Beheben</a>' : ""}
       ${schedule.reasonCode === "AUTOMATION_RUN_FAILED" && schedule.latestFullProofAt && Date.parse(schedule.latestFullProofAt) > Date.parse(schedule.lastRunAt) ? '<p>Ein späterer vollständiger Lauf hat die Wiederherstellbarkeit bestätigt. Der fehlgeschlagene Nachtlauf bleibt als Störung der Automatik sichtbar.</p>' : ""}
       ${schedule.overdue === true ? '<strong class="system-center-operation-warning">Der automatische Nachweis ist überfällig und benötigt Aufmerksamkeit.</strong>' : ""}

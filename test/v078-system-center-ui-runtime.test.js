@@ -20,6 +20,40 @@ function loadFunction(name, nextName, helpers = {}) {
   return context.subject;
 }
 
+test("nightly deployment deferral shows its original due time and fixed deadline without hiding failures", () => {
+  const render = loadFunction("renderSystemCenterOperations", "normalizedSystemCenterTrendPoints", {
+    escapeHtml: value => String(value).replaceAll("<", "&lt;"),
+    diagnosticTimestamp: String,
+    systemCenterVisualState: value => value === "healthy" ? "ok" : value === "critical" ? "critical" : "neutral",
+    systemCenterStateCopy: value => ({ icon: "!", label: value }),
+  });
+  const schedule = {
+    state: "healthy", enabled: true, paused: true, reasonCode: "AUTOMATION_DEPLOY_DEFERRED",
+    scheduleLabel: "Täglich, nachts", lastRunAt: "2026-10-14T03:00:00.000Z",
+    deployDeferral: { dueAt: "2026-10-15T03:00:00.000Z", deadlineAt: "2026-10-15T06:00:00.000Z" },
+  };
+  const deferred = render(schedule, {});
+  assert.match(deferred, /Wegen Deployment verschoben/);
+  assert.match(deferred, /Ursprünglich fällig: 2026-10-15T03:00:00.000Z/);
+  assert.match(deferred, /spätestens 2026-10-15T06:00:00.000Z/);
+  assert.match(deferred, /höchstens 3 Stunden/);
+  assert.match(deferred, /<dt>Spätester Start<\/dt>/);
+  assert.doesNotMatch(deferred, /nicht aktiv|>Beheben<|überfällig und/);
+  const running = render({ ...schedule, paused: false, reasonCode: "AUTOMATION_DEPLOY_CATCHUP_RUNNING" }, {});
+  assert.match(running, /Nachgeholte Prüfung läuft/);
+  assert.match(running, /vollständige Prüfergebnis steht noch aus/);
+  assert.doesNotMatch(running, /Wegen Deployment verschoben|<dt>Nächster Lauf<\/dt>/);
+  const failed = render({ ...schedule, state: "critical", paused: false,
+    reasonCode: "AUTOMATION_DEPLOY_DEFERRAL_EXPIRED", overdue: true }, {});
+  assert.match(failed, /überfällig und benötigt Aufmerksamkeit/);
+  assert.match(failed, />Beheben</);
+  assert.doesNotMatch(failed, /Wegen Deployment verschoben|senkt den System-Index nicht/);
+  const disabled = render({ ...schedule, state: "critical", enabled: false,
+    reasonCode: "AUTOMATION_TIMER_DISABLED" }, {});
+  assert.match(disabled, /nicht aktiv/);
+  assert.doesNotMatch(disabled, /Wegen Deployment verschoben/);
+});
+
 test('factor points and coverage preserve unavailable and genuine zero values', () => {
   const normalize = loadFunction('normalizedSystemCenterFactors', 'systemCenterPhaseEntries', {systemCenterVisualState: String, GpTrustEvidence});
   const factors = normalize({trustIndex: {cards: [{possiblePoints: null, earnedPoints: null, coverage: null}, {possiblePoints: 0, earnedPoints: 0, coverage: 0}]}});

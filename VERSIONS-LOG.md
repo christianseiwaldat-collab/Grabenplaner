@@ -1,10 +1,10 @@
 # Versionsstatus
 
-## v0.92.87 Beta · Quellstand
+## v0.92.88 Beta · Quellstand
 
-Persönlich begrenzter Sprachassistent und lokale Dienstplanprüfung mit bestätigungspflichtigen Planvorschlägen.
-Technische Speicherübersicht, geprüfte Bereinigung ersetzter Importkopien und verbesserte mobile Navigation.
-Protokollierte Freigabe unabhängig geprüfter Importzähler; echte Datenfehler bleiben gesperrt.
+Beschleunigte Datenübernahme mit Wiederverwendung unveränderter Datensätze und eindeutiger Zuordnung zum Importstand.
+Einheitliche Untermenüs auf Desktop und Mobilgeräten.
+Begrenzter Aufschub der nächtlichen Recovery-Prüfung während laufender Deployments mit nachvollziehbarer Statusbewertung.
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease
