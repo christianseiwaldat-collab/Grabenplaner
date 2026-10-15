@@ -37,3 +37,20 @@ test('invalid stored upload preference uses a finite default',async t=>{
   const f=await fixture(t);f.stored.set('first:data_import_upload_timeout_v1',{value:'{"uploadTimeoutMinutes":9999}'});
   assert.equal((await f.get()).uploadPolicy.minutes,30);
 });
+test('concurrent preference reads cannot admit two uploads without background jobs',async t=>{
+  const app=express();let reads=0,releasePreferences,releaseUpload,accepted=0;
+  const preferencesReady=new Promise(r=>releasePreferences=r),uploadDone=new Promise(r=>releaseUpload=r);
+  const session=()=>({employeeNumber:'first',accountId:'first',permissions:[...Object.values(P),'sales:analytics:access','sales:analytics:company:read']});
+  registerDataImportRoutes(app,{runtime:{context:async()=>({available:true}),upload:async(_get,{onStarted})=>{
+    accepted++;onStarted({id:'a'.repeat(64),status:'reading'});await uploadDone;
+  }},preferences:{get:async()=>{reads++;if(reads===2)releasePreferences();await preferencesReady;return {value:'{"uploadTimeoutMinutes":30}'};}},
+    requireSession:session,refreshSession:session,assertCsrf:()=>{}});
+  const listener=app.listen(0,'127.0.0.1');await new Promise(r=>listener.once('listening',r));
+  t.after(async()=>{releasePreferences();releaseUpload();await new Promise(r=>listener.close(r));});
+  const upload=()=>fetch('http://127.0.0.1:'+listener.address().port+'/api/data-import/upload/cash',{
+    method:'POST',headers:{'Content-Type':'application/octet-stream'},body:Buffer.alloc(4096)});
+  const responses=await Promise.all([upload(),upload()]);
+  assert.deepEqual(responses.map(r=>r.status).sort(),[202,409]);assert.equal(accepted,1);
+  for(const response of responses)await response.json();
+  releaseUpload();
+});
