@@ -41,7 +41,7 @@ die Offsite-Timer bis zur gezielten Reparatur pausiert.
 
 Die Initialisierung der beiden lokalen Archive und deren ausdrueckliche
 Aktivierung erfolgen anschliessend mit den installierten Werkzeugen und der
-vorhandenen Vault-Bindung. Ein App-Update allein importiert keine Kassendaten
+vorhandenen Vault-Bindung. Ein App-Update allein aendert keine fachlichen Daten
 und aktiviert keine fachlichen Zuordnungen.
 
 `runtime-schema.json` versioniert den ausserhalb des App-Ordners installierten

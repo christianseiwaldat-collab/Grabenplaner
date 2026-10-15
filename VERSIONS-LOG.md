@@ -2,7 +2,7 @@
 
 ## v0.92.88 Beta · Quellstand
 
-Beschleunigte Datenübernahme mit Wiederverwendung unveränderter Datensätze und eindeutiger Zuordnung zum Importstand.
+Optimierte Datenverarbeitung.
 Einheitliche Untermenüs auf Desktop und Mobilgeräten.
 Begrenzter Aufschub der nächtlichen Recovery-Prüfung während laufender Deployments mit nachvollziehbarer Statusbewertung.
 Der installierte Serverstand wird im GP angezeigt.

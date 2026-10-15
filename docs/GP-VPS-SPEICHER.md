@@ -10,14 +10,6 @@ Die Prüfung erkennt ausschließlich alte unversiegelte GP-Sicherungsverzeichnis
 
 Ein Bereinigungsplan wird vor der Bestätigung angezeigt und durch einen SHA-256 gebunden. Unter der Wartungssperre werden mindestens zwei vollständige Sicherungspunkte einschließlich aller Dateiinhalte und der produktiven Clusterbindung bestätigt. Offene Dateiverwendungen, veränderte Pläne oder beschädigte Sicherungen sperren die Entfernung. Ein privater Beleg dokumentiert die Dateien vor der Entfernung.
 
-## Ersetzte Importstände
-
-Ein vollständig geprüfter und übernommener Folgeimport derselben logischen Datenbank und desselben Kontos gibt seine Vorgänger frei. Die Quelle wird aus authentifiziert verschlüsselten Metadaten bestimmt. Dateiname oder Ablaufdatum allein geben keine Löschung frei. Alle erforderlichen Tabellen, Profile, Mengen, Entscheidungsprüfungen und gegebenenfalls der Artikelkatalogabgleich müssen abgeschlossen sein. Veröffentlichte Kassenstände bleiben gesondert geschützt.
-
-Entfernt werden ersetzte Roh-/Prüfkopien, Rücknahmekopien, deren Protokolle und ausschließlich unbenutzte gemeinsame Speicherblöcke. Aktuelle Importstände, Geschäftsdaten, aktuelle Zuordnungen, geschäftliche Referenzen und deren Indizes bleiben erhalten. Kleine Herkunftsbelege bleiben bestehen, wenn aktuelle Datensätze auf alte Importkennungen verweisen. Alte Katalog-Rücknahmeinformationen werden aus dem verbleibenden Herkunftsbeleg entfernt.
-
-Die Importbereinigung arbeitet im Wartungsfenster nach einer vollständig geprüften gemeinsamen Sicherung. Ein dauerhafter Bereinigungsauftrag verhindert veraltete Rücknahmen nach einer Unterbrechung und erlaubt die Fortsetzung. Die redundanten Importtabellen werden anschließend verdichtet. Geschäftszahlen, Inhaltsfingerabdrücke, Schema und Indexgültigkeit werden geprüft; danach startet GP wieder. Bereinigte Vorgänger bieten keine Übernahme-, Zeilen- oder Rücknahmeaktionen mehr an.
-
 ## Optionen und Nachweise
 
 - Die Zusatzreserve warnt oberhalb des unveränderten Mindestbedarfs der Assurance.

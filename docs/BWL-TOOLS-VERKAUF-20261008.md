@@ -59,4 +59,3 @@ Preisreduzierungen, Lieferantenabweichungen und Lagerkennzahlen sind etablierte 
 - „Bestellt“ und „im Zulauf“ werden in den Bestands-Hinweisen als ungeprüfte Quellwerte behandelt. Auch das Alter des Datenstands ist kein Alter einzelner physischer Artikel.
 - Der aktuelle Durchschnitts-EK ist kein nachgewiesener historischer Einstand jeder Verkaufsposition. Ein neuer Ertragsbericht darf diese Größen nicht gleichsetzen.
 - Ein Nullbestand belegt noch keinen entgangenen Umsatz. Saison, Öffnungstage, Mindestpräsentationsbestand und Artikelstatus müssten bei einer späteren Bedarfsprognose berücksichtigt werden.
-
