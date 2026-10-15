@@ -781,6 +781,8 @@ let scheduleNoteQuill = null;
 let scheduleNoteSanitizing = false;
 let shiftRulePreviewTimer = null;
 let shiftRulePreviewRequest = null;
+let shiftMutation = null;
+let shiftEditorGeneration = 0;
 let workRuleAssessmentPreferenceRequestId = 0;
 let vacationCalendarPreferenceRequestId = 0;
 let vacationCalendarPreferenceSave = Promise.resolve();
@@ -3730,7 +3732,7 @@ function loadPlanningView(view) {
     : loadAll({ restoreContext: false });
 }
 
-async function loadPlanningPeriod(kind = "schedule") {
+async function loadPlanningPeriod(kind = "schedule", { errorPrefix = "" } = {}) {
   syncXoffiImport();
   if (!state.data || (kind === "vacation" && !state.vacationData) || !state.locations?.length) return loadAll();
   const generation = ++loadAllGeneration;
@@ -3784,7 +3786,7 @@ async function loadPlanningPeriod(kind = "schedule") {
       });
     }
   } catch (error) {
-    if (generation === loadAllGeneration && !controller.signal.aborted) showToast(error.message, true);
+    if (generation === loadAllGeneration && !controller.signal.aborted) showToast(`${errorPrefix}${error.message}`, true);
   } finally {
     if (planningPeriodController === controller) planningPeriodController = null;
   }
@@ -38945,6 +38947,7 @@ function scheduleShiftRulePreview() {
   clearTimeout(shiftRulePreviewTimer);
   shiftRulePreviewRequest?.abort();
   shiftRulePreviewRequest = null;
+  if (shiftMutation && shiftMutationCurrent(shiftMutation)) return;
   const candidateShift = currentShiftRuleCandidate();
   renderShiftRulePreview(state.data?.workRuleAssessment, { loading: Boolean(candidateShift) });
   if (!candidateShift) return;
@@ -39336,6 +39339,9 @@ async function updateEmployeeLendingDelegate(employeeNumber, enabled, control) {
 
 function openShiftModal(employeeNumber, date, shift = null) {
   if (guardScheduleEditing()) return;
+  if (shiftMutation && shiftMutationCurrent(shiftMutation)) return;
+  finishShiftMutation(shiftMutation);
+  shiftEditorGeneration++;
   const planningHours = window.GPScheduleDuty.manualPlanningHours();
   const opening = operatingHours(shift?.shift_date || date);
   const hours = opening && opening.start >= planningHours.start && opening.end <= planningHours.end
@@ -39382,7 +39388,11 @@ function openShiftModal(employeeNumber, date, shift = null) {
   elements.shiftModalTitle.textContent = shift ? "Dienst bearbeiten" : "Dienst eintragen";
   elements.deleteShiftButton.classList.toggle("hidden", !shift);
   calculateShiftPreview();
+  // The workspace dialog focuses before GP positions it. Keep the plan in view
+  // when that native focus would otherwise scroll to the dialog's DOM location.
+  const viewportScroll = { left: window.scrollX, top: window.scrollY, behavior: "instant" };
   elements.shiftModal.showModal();
+  window.scrollTo(viewportScroll);
 }
 
 function openOptionsModal() {
@@ -40187,6 +40197,38 @@ async function confirmPositionDelete(event) {
   }
 }
 
+function shiftMutationScope() {
+  return JSON.stringify([state.currentView, state.locationId, state.departmentId, state.weekStart, shiftEditorGeneration]);
+}
+
+function shiftMutationCurrent(mutation) {
+  return Boolean(mutation && shiftMutation === mutation && mutation.scope === shiftMutationScope()
+    && gpEditorCurrent(mutation.editor, true));
+}
+
+function beginShiftMutation() {
+  if (shiftMutation && shiftMutationCurrent(shiftMutation)) return null;
+  finishShiftMutation(shiftMutation);
+  if (!elements.shiftModal.open) return null;
+  clearTimeout(shiftRulePreviewTimer);
+  shiftRulePreviewRequest?.abort();
+  shiftRulePreviewRequest = null;
+  const controls = [...elements.shiftForm.querySelectorAll('input, select, textarea, button[type="submit"], #deleteShiftButton')]
+    .map(control => ({ control, disabled: control.disabled }));
+  const mutation = { editor: captureGpEditor(elements.shiftModal), scope: shiftMutationScope(), controls };
+  shiftMutation = mutation;
+  for (const { control } of controls) control.disabled = true;
+  elements.shiftForm.setAttribute("aria-busy", "true");
+  return mutation;
+}
+
+function finishShiftMutation(mutation) {
+  if (!mutation || shiftMutation !== mutation) return;
+  for (const { control, disabled } of mutation.controls) control.disabled = disabled;
+  elements.shiftForm.removeAttribute("aria-busy");
+  shiftMutation = null;
+}
+
 async function saveShift(event) {
   event.preventDefault();
   if (guardScheduleEditing()) return;
@@ -40201,13 +40243,21 @@ async function saveShift(event) {
     area: document.querySelector("#shiftArea").value,
     note: document.querySelector("#shiftNote").value,
   };
+  const mutation = beginShiftMutation();
+  if (!mutation) return;
   try {
     await api(id ? `/api/shifts/${id}` : "/api/shifts", { method: id ? "PUT" : "POST", body: JSON.stringify(body) });
-    elements.shiftModal.close();
-    state.weekStart = getMonday(new Date(`${body.date}T12:00:00`));
-    showToast(id ? "Dienst wurde aktualisiert." : "Dienst wurde eingetragen.");
-    await loadAll();
-  } catch (error) { showToast(error.message, true); }
+    if (!shiftMutationCurrent(mutation)) return;
+  } catch (error) {
+    if (shiftMutationCurrent(mutation)) showToast(error.message, true);
+    return;
+  } finally {
+    finishShiftMutation(mutation);
+  }
+  elements.shiftModal.close();
+  state.weekStart = getMonday(new Date(`${body.date}T12:00:00`));
+  showToast(id ? "Dienst wurde aktualisiert." : "Dienst wurde eingetragen.");
+  await loadPlanningPeriod("schedule", { errorPrefix: "Dienst gespeichert. Die Ansicht konnte nicht aktualisiert werden: " });
 }
 
 async function saveOption(event) {
@@ -41785,14 +41835,23 @@ async function deleteEmployee() {
 
 async function deleteShift() {
   if (guardScheduleEditing()) return;
+  if (shiftMutation && shiftMutationCurrent(shiftMutation)) return;
   const id = document.querySelector("#shiftId").value;
   if (!id || !confirm("Diesen Dienst wirklich löschen?")) return;
+  const mutation = beginShiftMutation();
+  if (!mutation) return;
   try {
     await api(`/api/shifts/${id}`, { method: "DELETE" });
-    elements.shiftModal.close();
-    showToast("Dienst wurde gelöscht.");
-    await loadAll();
-  } catch (error) { showToast(error.message, true); }
+    if (!shiftMutationCurrent(mutation)) return;
+  } catch (error) {
+    if (shiftMutationCurrent(mutation)) showToast(error.message, true);
+    return;
+  } finally {
+    finishShiftMutation(mutation);
+  }
+  elements.shiftModal.close();
+  showToast("Dienst wurde gelöscht.");
+  await loadPlanningPeriod("schedule", { errorPrefix: "Dienst gelöscht. Die Ansicht konnte nicht aktualisiert werden: " });
 }
 
 function updatePdfPreview() {

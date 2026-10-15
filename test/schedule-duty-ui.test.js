@@ -41,13 +41,16 @@ function fixture() {
   let previews = 0, opened = 0, closed = 0, guard = false;
   const requests = [], properties = {};
   const elements = { shiftDepartment: control(true), shiftModalTitle: control(), deleteShiftButton: control(),
-    shiftModal: { showModal() { opened++; }, close() { closed++; } },
+    shiftModal: { open: false, showModal() { opened++; this.open = true; }, close() { closed++; this.open = false; } },
     timeline: { innerHTML: "", style: { setProperty(name, value) { properties[name] = value; } } } };
-  elements.shiftForm = { reset() { for (const field of Object.values(fields)) field.value = ""; elements.shiftDepartment.value = ""; } };
-  const sandbox = { window: { GPScheduleDuty: duty }, state, elements, document: { querySelector(selector) { assert.ok(fields[selector], selector); return fields[selector]; } },
+  elements.shiftForm = { reset() { for (const field of Object.values(fields)) field.value = ""; elements.shiftDepartment.value = ""; },
+    querySelectorAll: () => [...Object.values(fields), elements.shiftDepartment, elements.deleteShiftButton], setAttribute() {}, removeAttribute() {} };
+  const sandbox = { window: { GPScheduleDuty: duty, scrollX: 0, scrollY: 0,
+    scrollTo({ left, top }) { this.scrollX = left; this.scrollY = top; } }, state, elements, document: { querySelector(selector) { assert.ok(fields[selector], selector); return fields[selector]; } },
     escapeHtml: escape, escapeHtmlAttribute: escape, guardScheduleEditing: () => guard,
     operatingHours: () => ({ start: "09:00", end: "18:00" }), fullDaySpecialCaseFor: () => null, employeeCanWorkOnDate: () => true,
-    calculateShiftPreview: () => { previews++; }, showToast() {}, getMonday: () => "2026-09-07", loadAll: async () => {},
+    calculateShiftPreview: () => { previews++; }, showToast() {}, getMonday: () => "2026-09-07", loadPlanningPeriod: async () => {}, clearTimeout,
+    captureGpEditor: dialog => ({ dialog }), gpEditorCurrent: () => true,
     api: async (url, options) => { requests.push({ url, ...options, body: JSON.parse(options.body) }); },
     planningDayKeys: ["monday"], weekdayNames: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
     timeToMinutes: value => { const [h, m] = value.split(":").map(Number); return h * 60 + m; },
@@ -60,11 +63,12 @@ function fixture() {
   };
   vm.createContext(sandbox);
   vm.runInContext([
+    "let shiftMutation=null, shiftEditorGeneration=0, shiftRulePreviewTimer=null, shiftRulePreviewRequest=null;",
     between("function departmentsForLocation(", "function currentLocation("),
     between("function currentShiftDuty()", "function scheduleShiftRulePreview()"),
     between("function canUseAllEmployeesForShiftPlanning()", "function canManageEmployeeLendings()"),
     between("function openShiftModal(", "function openOptionsModal()"),
-    between("async function saveShift(event)", "async function saveOption(event)"),
+    between("function shiftMutationScope()", "async function saveOption(event)"),
     between("function scheduleEmployeeAccessibleLabel(", "function renderRemarks()"),
   ].join("\n"), sandbox);
   return { ...sandbox, fields, requests, properties, departments, employees, setOperatingHours(value) { sandbox.operatingHours = value; },
@@ -80,6 +84,19 @@ test("Dienstwahl loads its shared helper before the app and uses passive unclipp
   assert.match(badge, /color:var\(--duty-contrast,#172331\); background:var\(--duty-color,#fff\)/); assert.match(badge, /pointer-events:none/);
   assert.doesNotMatch(badge, /text-overflow|overflow:hidden|cursor:pointer/);
   assert.match(css, /minmax\(var\(--day-min-width\),1fr\)/);
+});
+
+test("opening the duty editor retains the visible plan when native dialog focus scrolls the document", () => {
+  const f = fixture();
+  f.window.scrollX = 18; f.window.scrollY = 336;
+  const open = f.elements.shiftModal.showModal;
+  f.elements.shiftModal.showModal = function () {
+    open.call(this); f.window.scrollX = 0; f.window.scrollY = 2389;
+  };
+  f.openShiftModal("102", "2026-09-07");
+  assert.equal(f.elements.shiftModal.open, true);
+  assert.equal(f.window.scrollX, 18); assert.equal(f.window.scrollY, 336);
+  assert.equal(f.fields["#shiftEmployee"].value, "102");
 });
 
 test("new FL and deputies default to branch supervision independently of preferred department and scope", () => {
@@ -144,6 +161,7 @@ test("save and live rule preview send the same explicit duty with only real nume
   const f = fixture(); f.openShiftModal("100", "2026-09-07");
   for (const [selected, expected] of [["__branch_supervision__", { departmentId: "", dutyCode: "branch_supervision" }],
     ["__general__", { departmentId: "", dutyCode: "general" }], ["2", { departmentId: 2, dutyCode: "department" }]]) {
+    f.elements.shiftModal.showModal();
     f.elements.shiftDepartment.value = selected;
     const candidate = f.currentShiftRuleCandidate();
     assert.equal(candidate.departmentId, expected.departmentId); assert.equal(candidate.dutyCode, expected.dutyCode);
@@ -153,7 +171,7 @@ test("save and live rule preview send the same explicit duty with only real nume
     assert.equal(request.body.departmentId, expected.departmentId); assert.equal(request.body.dutyCode, expected.dutyCode);
     assert.equal(request.body.employeeNumber, "100"); assert.equal(request.body.locationId, "18");
   }
-  f.fields["#shiftId"].value = "7"; await f.saveShift({ preventDefault() {} });
+  f.elements.shiftModal.showModal(); f.fields["#shiftId"].value = "7"; await f.saveShift({ preventDefault() {} });
   assert.equal(f.requests.at(-1).method, "PUT");
   assert.equal(f.requests.at(-1).url, "/api/shifts/7");
   f.setGuard(true); await f.saveShift({ preventDefault() {} });

@@ -7977,6 +7977,19 @@ async function refreshSicknessStaffingAfterPlanningChange(now = new Date()) {
   return result;
 }
 
+const planningDerivedRefresh = require("./lib/planning-derived-refresh").createPlanningDerivedRefresh({
+  work: () => persistenceRequestContext.exit(() => refreshSicknessStaffingAfterPlanningChange()),
+  onError: error => console.error("Dienstplan-Folgeprüfung fehlgeschlagen:", error),
+});
+
+async function refreshPlanningDerivedStateAfterCommit() {
+  // Only a running server has the startup/periodic recovery path. Embedded
+  // callers without that scheduler keep the synchronous completion contract.
+  if (!sicknessSweepInterval) return refreshSicknessStaffingAfterPlanningChange();
+  // No request/session is retained by the system worker after the HTTP reply.
+  persistenceRequestContext.exit(() => planningDerivedRefresh.request());
+}
+
 const SICKNESS_NOTIFICATION_CHANNELS = Object.freeze(["email", "sms", "whatsapp"]);
 const PERSONAL_NOTIFICATION_QUIET_HOURS_ROLES = new Set([
   "department_manager",
@@ -16277,6 +16290,7 @@ async function evaluateWorkRuleChanges(
   shiftRows,
   planningChange = null,
   repository = absenceManagementRepository,
+  evaluate = evaluateScheduleWorkRules,
 ) {
   const targets = new Map();
   for (const shift of Array.isArray(shiftRows) ? shiftRows : []) {
@@ -16297,7 +16311,7 @@ async function evaluateWorkRuleChanges(
       locationId: target.locationId,
       departmentId: target.departmentId,
     });
-    const evaluated = await evaluateScheduleWorkRules(
+    const evaluated = await evaluate(
       target.weekStart,
       context,
       [employee],
@@ -19590,17 +19604,25 @@ async function evaluateBranchSupervisionMutation(
   planningChange,
   dates,
 ) {
+  const planningQuery = { locationId: String(locationId), departmentId: null,
+    weekStart, weekEnd: addDays(weekStart, 6) };
+  const [settings, employees, shifts] = await Promise.all([
+    settingsForLocation(locationId),
+    planningSettingsRepository.listScheduleEmployees(planningQuery),
+    planningSettingsRepository.listScheduleShifts(planningQuery),
+  ]);
+  const snapshot = { settings, employees, shifts };
   const before = await branchSupervisionAssessmentForSchedule(
     weekStart,
     locationId,
     null,
-    { dates },
+    { dates, snapshot },
   );
   const after = await branchSupervisionAssessmentForSchedule(
     weekStart,
     locationId,
     planningChange,
-    { dates },
+    { dates, snapshot },
   );
   return { before, after };
 }
@@ -20992,6 +21014,43 @@ function workRuleEvaluationEmployees(employees, candidateShift = null) {
   ));
   if (candidateEmployee) result.push(candidateEmployee);
   return result;
+}
+
+async function planningMutationEmployees(weekStart, context, session) {
+  assertSessionContextScope(session, context);
+  const rows = await planningSettingsRepository.listScheduleEmployees({
+    locationId: context.locationId,
+    departmentId: context.departmentId || null,
+    weekStart,
+    weekEnd: addDays(weekStart, 6),
+  });
+  return rows.map(serializeEmployee);
+}
+
+function readPlanningMutation(build) {
+  // Legacy lending validation stays outside this catalog-only read snapshot.
+  // It ends (including reauthorization) before the separate write transaction.
+  return postgresqlActive ? applicationPersistence.readSnapshot(build) : build();
+}
+
+function createPlanningWorkRuleEvaluator() {
+  // One mutation only. Reuse an entire assessment only for the same effective
+  // employee inputs, context and proposed change, never a team result for one person.
+  const pending = new Map();
+  return (weekStart, context, employees, candidateShift = null) => {
+    const effectiveEmployees = workRuleEvaluationEmployees(employees, candidateShift);
+    const key = workRuleSha256({ weekStart, context, candidateShift,
+      employees: effectiveEmployees.map(employee => ({
+        employeeNumber: String(employee.personnel_number),
+        name: employee.nickname || employee.full_name || String(employee.personnel_number),
+        positionId: employee.position_id || null,
+        employmentClassification: employee.position_employment_classification || "",
+      })),
+    });
+    if (!pending.has(key)) pending.set(key,
+      evaluateScheduleWorkRules(weekStart, context, effectiveEmployees, candidateShift));
+    return pending.get(key);
+  };
 }
 
 function workRuleAssignmentGroups(facts, context, employeeNumber, assignments, birthDate = "") {
@@ -32394,7 +32453,6 @@ app.post("/api/work-rules/evaluate", async (request, response) => {
   const weekStart = getMonday(isIsoDate(request.body.weekStart) ? request.body.weekStart : request.body?.shift?.date);
   const context = await resolvePlanningContext(request.body);
   assertSessionContextScope(request.portalSession, context);
-  const schedule = await getSchedule(weekStart, context, request.portalSession);
   const submittedValue = request.body.shift ?? request.body.candidateShift;
   const submitted = submittedValue && typeof submittedValue === "object" ? submittedValue : null;
   let candidate = null;
@@ -32425,12 +32483,10 @@ app.post("/api/work-rules/evaluate", async (request, response) => {
     assertSessionContextScope(request.portalSession, { locationId: candidate.locationId, departmentId: candidate.departmentId });
     await assertShiftEmployeeAssignmentScope(request.portalSession, candidate, existing);
   }
-  const evaluated = await evaluateScheduleWorkRules(
-    weekStart,
-    context,
-    schedule.employees,
-    candidate,
-  );
+  const evaluated = await readPlanningMutation(async () => {
+    const employees = await planningMutationEmployees(weekStart, context, request.portalSession);
+    return evaluateScheduleWorkRules(weekStart, context, employees, candidate);
+  });
   response.json({
     ...evaluated.assessment,
     candidate: candidate ? {
@@ -62179,24 +62235,16 @@ app.post("/api/shifts", async (request, response) => {
   const weekStart = getMonday(shift.shiftDate);
   assertSessionContextScope(request.portalSession, context);
   await assertShiftEmployeeAssignmentScope(request.portalSession, shift);
-  const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
-  const evaluationEmployees = workRuleEvaluationEmployees(scheduleBefore.employees, shift);
-  const [evaluated, branchSupervision] = await Promise.all([
-    evaluateScheduleWorkRules(
-      weekStart,
-      context,
-      evaluationEmployees,
-      shift,
-    ),
-    evaluateBranchSupervisionMutation(
-      weekStart,
-      shift.locationId,
-      shift,
-      [shift.shiftDate],
-    ),
-  ]);
-  assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
-  assertBranchSupervisionAllowsMutation(branchSupervision);
+  const [evaluated, branchSupervision] = await readPlanningMutation(async () => {
+    const employees = await planningMutationEmployees(weekStart, context, request.portalSession);
+    const results = await Promise.all([
+      evaluateScheduleWorkRules(weekStart, context, employees, shift),
+      evaluateBranchSupervisionMutation(weekStart, shift.locationId, shift, [shift.shiftDate]),
+    ]);
+    assertWorkRuleAssessmentAllowsMutation(results[0].assessment);
+    assertBranchSupervisionAllowsMutation(results[1]);
+    return results;
+  });
   let saved;
   try {
     saved = await runWorkRuleMutationTransaction(async (repository) => {
@@ -62226,7 +62274,7 @@ app.post("/api/shifts", async (request, response) => {
   } catch (error) {
     throw staffAssignmentShiftConstraintError(error);
   }
-  await refreshSicknessStaffingAfterPlanningChange();
+  await refreshPlanningDerivedStateAfterCommit();
   response.status(201).json({
     id: saved.id,
     ...shift,
@@ -62255,21 +62303,18 @@ app.put("/api/shifts/:id", async (request, response) => {
   const weekStart = getMonday(shift.shiftDate);
   assertSessionContextScope(request.portalSession, context);
   await assertShiftEmployeeAssignmentScope(request.portalSession, shift, existing);
-  const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
-  const evaluationEmployees = workRuleEvaluationEmployees(scheduleBefore.employees, shift);
   const planningChange = { id, ...shift };
-  const preview = await evaluateScheduleWorkRules(
-    weekStart,
-    context,
-    evaluationEmployees,
-    planningChange,
-  );
-  assertWorkRuleAssessmentAllowsMutation(preview.assessment);
-  const branchSupervisionAssessment = await evaluateBranchSupervisionShiftUpdate(existing, shift, id);
-  const preparedEvaluations = await evaluateWorkRuleChanges(
-    [existing, shift],
-    planningChange,
-  );
+  const { preview, branchSupervisionAssessment, preparedEvaluations } = await readPlanningMutation(async () => {
+    const employees = await planningMutationEmployees(weekStart, context, request.portalSession);
+    const evaluate = createPlanningWorkRuleEvaluator();
+    const preview = await evaluate(weekStart, context, employees, planningChange);
+    assertWorkRuleAssessmentAllowsMutation(preview.assessment);
+    const branchSupervisionAssessment = await evaluateBranchSupervisionShiftUpdate(existing, shift, id);
+    const preparedEvaluations = await evaluateWorkRuleChanges(
+      [existing, shift], planningChange, absenceManagementRepository, evaluate,
+    );
+    return { preview, branchSupervisionAssessment, preparedEvaluations };
+  });
   let workRuleAssessment;
   try {
     workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
@@ -62310,7 +62355,7 @@ app.put("/api/shifts/:id", async (request, response) => {
   } catch (error) {
     throw staffAssignmentShiftConstraintError(error);
   }
-  await refreshSicknessStaffingAfterPlanningChange();
+  await refreshPlanningDerivedStateAfterCommit();
   response.json({
     id,
     ...shift,
@@ -62332,23 +62377,16 @@ app.delete("/api/shifts/:id", async (request, response) => {
   );
   const context = await resolvePlanningContext({ locationId: existing.location_id, departmentId: existing.department_id });
   const weekStart = getMonday(existing.shift_date);
-  const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
-  const [evaluated, branchSupervision] = await Promise.all([
-    evaluateScheduleWorkRules(
-      weekStart,
-      context,
-      scheduleBefore.employees,
-      { id, deleted: true },
-    ),
-    evaluateBranchSupervisionMutation(
-      weekStart,
-      existing.location_id,
-      { id, deleted: true },
-      [existing.shift_date],
-    ),
-  ]);
-  assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
-  assertBranchSupervisionAllowsMutation(branchSupervision);
+  const [evaluated, branchSupervision] = await readPlanningMutation(async () => {
+    const employees = await planningMutationEmployees(weekStart, context, request.portalSession);
+    const results = await Promise.all([
+      evaluateScheduleWorkRules(weekStart, context, employees, { id, deleted: true }),
+      evaluateBranchSupervisionMutation(weekStart, existing.location_id, { id, deleted: true }, [existing.shift_date]),
+    ]);
+    assertWorkRuleAssessmentAllowsMutation(results[0].assessment);
+    assertBranchSupervisionAllowsMutation(results[1]);
+    return results;
+  });
   await runWorkRuleMutationTransaction(async (repository) => {
     const result = await repository.deletePlanningShift(id);
     if (!result.rowsAffected) throw httpError(404, "Der Dienst wurde nicht gefunden.");
@@ -62360,7 +62398,7 @@ app.delete("/api/shifts/:id", async (request, response) => {
       request.portalSession?.employeeNumber || "local",
     );
   });
-  await refreshSicknessStaffingAfterPlanningChange();
+  await refreshPlanningDerivedStateAfterCommit();
   response.status(204).end();
 });
 
@@ -66102,8 +66140,7 @@ async function startServer() {
     if (process.env.GRABENPLANER_DEPLOYMENT_KIND !== 'recovery-smoke') {salesReportJobs.start();tradeInsightJobs.start();dataImportJobs.start();}
     try { await reconcileInterruptedIntegrationDeliveries(); } catch (error) { console.error("Unterbrochene Lohnübergaben konnten nicht abgeglichen werden:", error); }
     try { await reconcileOrphanAmuBlobs(); } catch (error) { console.error("AUM-Abgleich fehlgeschlagen:", error); }
-    try { await runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
-    try { await reconcileCustomProcessTriggers(); } catch (error) { console.error("Eigene Prozessauslöser konnten nicht geprüft werden:", error); }
+    await planningDerivedRefresh.run();
     try {
       const interrupted = (
         await runtimeRecoveryRepository.markInterruptedNotifications()
@@ -66126,9 +66163,8 @@ async function startServer() {
       try { await reconcileOrphanAmuBlobs(); } catch (error) { console.error("Dokumentenabgleich fehlgeschlagen:", error); }
     }, 24 * 60 * 60 * 1000);
     retentionInterval.unref();
-    sicknessSweepInterval = setInterval(async () => {
-      try { await runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
-      try { await reconcileCustomProcessTriggers(); } catch (error) { console.error("Eigene Prozessauslöser konnten nicht geprüft werden:", error); }
+    sicknessSweepInterval = setInterval(() => {
+      void planningDerivedRefresh.run();
     }, 60 * 1000);
     sicknessSweepInterval.unref();
     notificationDispatchInterval = setInterval(() => {
@@ -66203,6 +66239,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
     await importDrain;
     await assuranceDrain;
     await updateDrain;
+    await planningDerivedRefresh.close();
     await systemCenterHealthSyncInFlight?.catch(() => {});
     await amuScannerProbe.catch(() => {});
     await tradeInsightJobs.stop().catch(() => {});
