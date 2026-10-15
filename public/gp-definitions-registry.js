@@ -5,7 +5,7 @@
   else root.GpDefinitionsRegistry=api;
 })(typeof window==='object'?window:globalThis,function(){
   'use strict';
-  const VERSION=7,UPDATED='2026-10-13';
+  const VERSION=8,UPDATED='2026-10-15';
   const topics=[
     {id:'sidebar',title:'GP-sidebar',symbol:'☷',summary:'Die gemeinsame Seitennavigation hält den aktuellen Bereich sichtbar und trennt Navigation von persönlichen Menüeinstellungen.',
       rules:[
@@ -13,11 +13,12 @@
         {title:'Ein eindeutiges aktuelles Ziel',text:'Genau der aktuelle Menüpunkt trägt die aktive Markierung und aria-current. Übergeordnete Bereiche sind als aktiver Pfad erkennbar; ihre Offen- oder Geschlossenstellung wird mit aria-expanded angezeigt.'},
         {title:'Persönliche Menüstellung behalten',text:'Manuell geöffnete oder geschlossene Bereiche werden je angemeldetem Konto gespeichert. Ein Seitenwechsel öffnet die benötigten Vorfahren; die persönlichen Einstellungen anderer Bereiche bleiben erhalten. Eine Hintergrundaktualisierung klappt kein Menü um.'},
         {title:'Freigaben vor Darstellung prüfen',text:'Die Navigation bietet nur erlaubte Ziele an. Konto-, Rollen- und Rechtewechsel entfernen nicht mehr freigegebene Einträge und fremde Zustände. Eine gespeicherte Menüstellung erteilt keine zusätzlichen Rechte.'},
-        {title:'Klare Hierarchie und ruhige Markierung',text:'Hauptpunkte, Unterpunkte und weitere Ebenen verwenden einheitliche Einzüge, Abstände und aktive Markierungen. Beschriftungen bleiben lesbar und umbrechbar; Status wird nicht ausschließlich durch Farbe vermittelt.'},
+        {title:'Untermenüs mit Verbindungslinie und Punkten',text:'Alle Untermenüs verwenden mobil und am Desktop dieselbe vertikale Hierarchie wie die Filialauswahl der Dienstplanung: eine dezente Verbindungslinie mit einem kleinen Punkt je Eintrag. Das aktuelle Ziel erhält einen Akzentpunkt und eine abgerundete hinterlegte Fläche sowie aria-current. Dies gilt für Filialverwaltung, Personal, Verkauf, Logistik, Datenschutz und die Navigation im Developer-Bereich einschließlich GP-Standards und image.GP. Hauptgruppen behalten ihre Symbole und getrennt bedienbaren Aufklappschalter.'},
+        {title:'Beschriftungen vollständig lesbar halten',text:'Die Textspalte nutzt die verfügbare Breite; Zähler und Aufklappschalter dürfen sie nicht auf Symbolbreite verengen. Filialbestellungen steht in der mobilen Navigation ausgeschrieben in einer Zeile. Längere andere Beschriftungen dürfen bei Bedarf an Wortgrenzen umbrechen; keine künstliche Silbentrennung oder vertikalen Buchstabenfolgen. Einzüge und Abstände bleiben über alle Ebenen einheitlich, Fokus und aktive Fläche machen den Status auch unabhängig von Farbe erkennbar.'},
         {title:'Mobile Navigation gezielt schließen',text:'Nach der Auswahl eines Ziels darf sich die mobile Navigation schließen. Dabei schließt nur die mobile Menüfläche; die persönliche Stellung der darin enthaltenen Bereiche bleibt erhalten.'},
         {title:'Tastatur und Touch unterstützen',text:'Alle Menüpunkte sind über Tastatur erreichbar. Enter oder Leertaste aktiviert Buttons; ein sichtbarer Fokus zeigt das Ziel. Mobile Touchflächen sind mindestens 44 Pixel hoch, Menütexte mindestens 13 Pixel groß.'},
         {title:'Standards als gemeinsamer Bereich',text:'Alle GP-Standarddefinitionen liegen unter dem Hauptpunkt GP-Standards. Andere freigegebene Developer-Werkzeuge stehen auf derselben Ebene; zugehörige Unterseiten bleiben bei ihrem Werkzeug. Beim Zurückkehren zu GP-Standards bleibt das zuletzt gewählte Thema erhalten.'},
-      ],references:['public/sidebar-layout.js','public/navigation-history.js','public/app.js','public/gp-definitions.js'],example:'Artikel-Auswertung und BWL-Tools bleiben im geöffneten Verkauf-Menü; Personal-Unterpunkte behalten ihren Bereich'},
+      ],references:['public/sidebar-layout.js','public/navigation-history.js','public/styles.css','public/mobile-refinements.css','public/app.js','public/gp-definitions.js','public/gp-definitions.css'],example:'Personal und Verkauf zeigen dieselbe Verbindungslinie mit Punkten wie die Filialauswahl; Artikel-Auswertung und BWL-Tools bleiben im geöffneten Verkauf-Menü'},
     {id:'dashboard',title:'GP-dashboard',symbol:'▦',summary:'Persönliche Dashboards verbinden frei angeordnete Felder, wählbare Inhalte und drei individuell benannte Ansichten.',
       rules:[
         {title:'Drei persönliche Dashboard-Tabs',text:'Startdashboard und Personaldashboard bieten jeweils drei unabhängig einrichtbare Ansichten. Jeder Tab erhält einen frei wählbaren Namen. Die aktive Ansicht, Feldanordnung, Sichtbarkeit und Inhalte werden je angemeldetem Konto und Dashboard gespeichert.'},

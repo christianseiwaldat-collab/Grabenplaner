@@ -79,17 +79,21 @@
   .sidebar .function-search { flex:none; }
   .sidebar .function-search input { height:44px; font-size:14px; }
   .sidebar .function-search-field { min-height:44px; }
-  .sidebar .main-nav { flex:1 0 auto; display:grid; align-content:start; align-items:start; gap:2px; min-height:0; width:100%; padding:8px 0; overflow:visible; }
+  .sidebar .main-nav { --sidebar-submenu-row-height:44px; flex:1 0 auto; display:grid; align-content:start; align-items:start; gap:2px; min-height:0; width:100%; padding:8px 0; overflow:visible; }
   .sidebar .nav-module-toggle { min-height:44px; gap:8px; font-size:13px; }
   .sidebar .nav-branch { grid-template-columns:36px minmax(0,1fr); column-gap:4px; }
   .sidebar .nav-disclosure { width:36px; min-height:40px; }
-  .sidebar .nav-item.nav-module-route { grid-template-columns:36px 22px minmax(0,1fr) auto; column-gap:4px; }
+  .sidebar .nav-item.nav-module-route { grid-template-columns:minmax(0,1fr) auto; column-gap:8px; }
   .sidebar .nav-symbol { white-space:nowrap; overflow-wrap:normal; font-size:13px; }
   .sidebar .nav-symbol:is(.text-nav-symbol,.crm-nav-symbol,.article-catalog-nav-symbol) { font-size:9px; }
-  .sidebar .nav-module-children { gap:2px; margin:0 0 4px; padding:0; }
-  .sidebar .nav-item { min-height:40px; padding-top:8px; padding-bottom:8px; font-size:12px; line-height:1.25; overflow-wrap:anywhere; }
-  .sidebar .nav-submodule > .nav-children { padding-left:42px; }
-  .sidebar .nav-children .nav-item { min-height:36px; font-size:11px; }
+  .sidebar .nav-module-children { margin-bottom:4px; }
+  .sidebar .nav-item { min-height:44px; padding-top:8px; padding-bottom:8px; font-size:13px; line-height:1.25; overflow-wrap:normal; }
+  .sidebar .nav-child { min-height:44px; font-size:13px; }
+  .sidebar .nav-planning-context strong { font-size:13px; }
+  .sidebar .nav-planning-context small { font-size:11px; }
+  .sidebar .nav-submodule > .nav-branch { grid-template-columns:minmax(0,1fr) 36px; }
+  .sidebar .nav-submodule > .nav-branch > .nav-disclosure { width:36px; min-height:44px; }
+  .sidebar .nav-children .nav-item { min-height:44px; font-size:13px; }
   .sidebar .sidebar-settings-shortcut { flex:none; width:100%; min-height:44px; margin-top:4px; }
 }
 

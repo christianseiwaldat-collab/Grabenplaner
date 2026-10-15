@@ -24,8 +24,13 @@
 .gp-definitions-topics button.is-selected { color:var(--green);background:var(--surface-muted);box-shadow:inset 3px 0 var(--green); }
 .gp-definitions-topics button.is-active-ancestor { color:var(--green);background:var(--surface-soft);font-weight:700; }
 .gp-definitions-menu-group { display:grid;gap:4px;min-width:0; }
-.gp-definitions-menu-children { display:grid;gap:3px;margin-left:11px;padding-left:6px;border-left:1px solid var(--line);min-width:0; }
-.gp-definitions-menu-children button { gap:6px;padding:8px 7px; }
+.gp-definitions-menu-children { position:relative;display:grid;grid-template-columns:1fr;gap:3px;margin-left:0;padding-left:16px;min-width:0; }
+.gp-definitions-menu-children::before { content:"";position:absolute;top:5px;bottom:5px;left:9px;width:1px;background:var(--line);pointer-events:none; }
+.gp-definitions-menu-children button { position:relative;gap:6px;padding:8px 10px;border-radius:7px;overflow-wrap:normal;word-break:normal;hyphens:none; }
+.gp-definitions-menu-children button::before { content:"";position:absolute;left:-9px;top:calc(50% - 2px);width:5px;height:5px;border-radius:50%;background:var(--muted);pointer-events:none; }
+.gp-definitions-menu-children button > .gp-definitions-topic-symbol { display:none; }
+.gp-definitions-menu-children button.is-selected { box-shadow:none;background:var(--surface-muted);color:var(--ink); }
+.gp-definitions-menu-children button:is(.is-selected,.is-active-ancestor)::before { background:var(--coral);box-shadow:0 0 0 3px var(--surface); }
 .gp-definitions-menu-chevron { margin-left:auto;flex:none;font-size:18px;transition:transform .15s ease; }
 .gp-definitions-topics button[aria-expanded="true"] .gp-definitions-menu-chevron { transform:rotate(90deg); }
 .gp-definitions-topic-symbol { flex:none;display:grid;place-items:center;width:20px;font-size:15px;font-weight:400; }
@@ -61,7 +66,7 @@ html[data-active-page-theme="dark"] #gpDefinitionsView { --canvas:#111916;--surf
 @media(max-width:620px) {
   #gpDefinitionsView .topbar { flex-wrap:wrap;gap:9px; }#gpDefinitionsView .topbar h1 { font-size:23px; }
   .gp-definitions-workspace { margin-top:16px; }.gp-definitions-toolbar { flex-wrap:wrap;padding:11px; }.gp-definitions-toolbar label { flex-basis:calc(100% - 66px); }.gp-definitions-count { flex-basis:100%;margin:0; }
-  .gp-definitions-layout { grid-template-columns:1fr;gap:13px; }.gp-definitions-topics { grid-template-columns:1fr; }.gp-definitions-topics button { min-height:44px;padding:9px 8px;font-size:13px; }.gp-definitions-menu-children { grid-template-columns:repeat(2,minmax(0,1fr)); }.gp-definitions-version { padding-top:8px;margin-top:4px; }
+  .gp-definitions-layout { grid-template-columns:1fr;gap:13px; }.gp-definitions-topics { grid-template-columns:1fr; }.gp-definitions-topics button { min-height:44px;padding:9px 8px;font-size:13px; }.gp-definitions-version { padding-top:8px;margin-top:4px; }
   .gp-definition-card > header { padding:15px; }.gp-definition-card > footer { padding:11px 15px; }.gp-definition-rules { padding-inline:15px; }.gp-definition-rule { padding-block:14px; }.gp-definitions-scope-note { margin-left:0; }
 }
 @media(prefers-reduced-motion:reduce) { .gp-definitions-menu-chevron { transition:none; } }
