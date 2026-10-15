@@ -108,7 +108,8 @@ test("lässt fehlende OCR-Treffer kontrolliert zur manuellen Prüfung offen", as
   }
 });
 
-test("leitet für die Automatik nur einen vollständigen, sicheren AUM-Zeitraum ab", () => {
+test("leitet für die Automatik nur einen vollständigen, sicheren AUM-Zeitraum ab", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-07-17T12:00:00Z") });
   assert.deepEqual(datesFromTexts(["Arbeitsunfähig von 10.07.2026 bis 17.07.2026"]), {
     status: "detected",
     dateFrom: "2026-07-10",
@@ -127,9 +128,16 @@ test("leitet für die Automatik nur einen vollständigen, sicheren AUM-Zeitraum 
     dateFrom: "",
     dateTo: "",
   });
+  t.mock.timers.setTime(new Date("2026-10-16T12:00:00Z").getTime());
+  assert.deepEqual(datesFromTexts(["Arbeitsunfähig von 10.07.2026 bis 17.07.2026"]), {
+    status: "not_detected",
+    dateFrom: "",
+    dateTo: "",
+  });
 });
 
-test("wertet SV-Nummer und Zeitraum serverseitig aus demselben Dokumenttext aus", async () => {
+test("wertet SV-Nummer und Zeitraum serverseitig aus demselben Dokumenttext aus", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-07-17T12:00:00Z") });
   const previousNodeEnv = process.env.NODE_ENV;
   const previousFixture = process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT;
   process.env.NODE_ENV = "test";
@@ -143,6 +151,7 @@ test("wertet SV-Nummer und Zeitraum serverseitig aus demselben Dokumenttext aus"
     assert.equal(evidence.dates.status, "detected");
     assert.equal(evidence.dates.dateFrom, "2026-07-10");
     assert.equal(evidence.dates.dateTo, "2026-07-17");
+    assert.equal(evidence.dates.checkedAt, "2026-07-17T12:00:00.000Z");
     assert.doesNotMatch(JSON.stringify(evidence), /1000010190|Versicherungsnummer|Arbeitsunfähig/i);
   } finally {
     if (previousNodeEnv === undefined) delete process.env.NODE_ENV;

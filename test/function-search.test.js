@@ -67,7 +67,7 @@ test("Präzise deutsche Suchen, Abkürzungen und Fachbegriffe liefern das richti
     ["Mitarbeiter importieren", "settings.personnel-import"],
     ["FL Vertretung", "settings.vacation-delegation"],
     ["KV", "personnel.collective-agreements"],
-    ["TradeFoto PDF", "sales.report-import"],
+    ["PDF import", "sales.report-import"],
     ["DB Sicherung", "settings.database-backups"],
     ["ACCDB", "settings.database-imports"],
     ["persoenliche begruessungen", "settings.greetings"],
@@ -119,7 +119,7 @@ test("Tippfehler bleiben fehlertolerant, ohne die Rangfolge gleich guter Ziele z
 });
 
 test("Mehrwortsuche verlangt für jeden relevanten Suchbegriff einen Treffer", () => {
-  const ids = resultIds("TradeFoto PDF", fullAccess, { limit: 10 });
+  const ids = resultIds("PDF import", fullAccess, { limit: 10 });
   assert.deepEqual(ids, ["sales.report-import", "sales.pdf-analytics", "sales.report-archive"]);
   assert.equal(ids.includes("settings.pdf"), false);
   assert.equal(ids.includes("settings.loans"), false);
