@@ -68,6 +68,12 @@ die verbindliche Entscheidung trifft weiterhin `--verification auto` anhand der 
 Eine grüne Bereitschaftsprüfung bestätigt die Durchführbarkeit, noch keine bestimmte Gesamtdauer.
 Prüfpfad, Begründung, mögliche Wartezeit und erwartete Gesamtdauer werden vor Beginn der teuren Arbeiten mitgeteilt.
 
+Vor der ersten produktiven Änderung müssen auch alle tatsächlichen Zwischenstände der Update-Reihenfolge geprüft sein,
+insbesondere alte App mit neuem Betriebsmodul einschließlich der abschließenden Assurance-/Monitorprüfung und des Rollbackstands.
+Eine grüne Testsuite des neuen Gesamtstands ersetzt diesen Nachweis nicht. Ein inkompatibler oder ungeprüfter Übergang stoppt
+den Ablauf vor der Mutation. Zusätzliche gezielte Vorprüfung hat Vorrang vor vermeidbaren Ausfällen und stundenlanger Nacharbeit;
+der verbindliche Ablauf steht unter „Pflicht vor der ersten Änderung“ in den verlinkten Deploy-Regeln.
+
 Vollständige Betriebs-Selbsttests starten erst nach erfolgreichem Abschluss der erforderlichen Assurance und Freigabe ihrer Sperren.
 Während eines laufenden Restore dienen lesende Live-/Ready-, Status- und Fortschrittsabfragen zur Beobachtung.
 Einzelne bestandene Phasen ersetzen weder das signierte erfolgreiche Gesamtergebnis noch das reguläre Dienstende.
