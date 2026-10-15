@@ -102,7 +102,7 @@ test("Fest integrierter Verkaufsbereich bleibt eine klar gekennzeichnete Desktop
 
   const view = between(html, '<section id="salesAnalyticsView"', '<section id="personnelView"');
   assert.match(view, /id="salesAnalyticsTitle">Verkaufsanalysen/);
-  assert.match(view, /TradeFoto-PDF-Statistiken sicher erkennen und auswerten/);
+  assert.match(view, /PDF-Verkaufsstatistiken sicher erkennen und auswerten/);
   assert.match(view, /Desktop für Tabellen und Grafiken/);
   assert.match(view, /id="salesReportImportFile"[^>]*accept="application\/pdf,.pdf"/);
   assert.match(view, /id="salesReportImportConfirmed"/);
