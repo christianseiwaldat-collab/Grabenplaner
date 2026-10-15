@@ -346,7 +346,7 @@ test("Block 4: Vorschaugrenze, Zeitzone und Quellmetadaten sind strikt", () => {
 });
 
 test("Integrationsdokumentation verlangt kontrollierte Vorschau und bestätigte Übernahme", () => {
-  assert.match(contract, /Access-DB-Importe verwenden eine kontrollierte Vorschau, Feldzuordnung, Bereichsprüfung und nachvollziehbare Übernahme/);
+  assert.match(contract, /Datenübernahmen verwenden eine kontrollierte Vorschau, Feldzuordnung, Bereichsprüfung und nachvollziehbare Übernahme/);
   assert.match(contract, /Dateifingerabdruck, Profil und Tabellenplan binden eine Wiederaufnahme an denselben Quelldatenstand/);
   assert.match(contract, /gespeicherte Profile ersetzen keine erneute Vorschau und Bestätigung/);
 });
