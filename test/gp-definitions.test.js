@@ -5,11 +5,11 @@ const repo=path.resolve(__dirname,'..'),app=fs.readFileSync(path.join(repo,'publ
 function appFunction(name){const start=app.indexOf('function '+name+'(');assert.ok(start>=0,name);const end=app.indexOf('\nfunction ',start+1);return app.slice(start,end<0?app.length:end);}
 
 test('registry provides eight stable, immutable standards and existing implementation references',()=>{
-  assert.equal(Registry.VERSION,9);assert.equal(Registry.UPDATED,'2026-10-15');
+  assert.equal(Registry.VERSION,10);assert.equal(Registry.UPDATED,'2026-10-16');
   assert.deepEqual(Registry.topics.map(topic=>topic.id),['sidebar','dashboard','windows','print','tables','views','design','galleries']);
   assert.ok(Object.isFrozen(Registry.topics));
   for(const topic of Registry.topics){
-    assert.ok(Object.isFrozen(topic)&&Object.isFrozen(topic.rules));assert.equal(topic.rules.length,['dashboard','print','sidebar'].includes(topic.id)?9:['galleries','windows'].includes(topic.id)?7:6);
+    assert.ok(Object.isFrozen(topic)&&Object.isFrozen(topic.rules));assert.equal(topic.rules.length,['dashboard','print','sidebar'].includes(topic.id)?9:topic.id==='windows'?8:topic.id==='galleries'?7:6);
     for(const rule of topic.rules)assert.ok(rule.title&&rule.text&&Object.isFrozen(rule));
     for(const reference of topic.references)assert.ok(fs.existsSync(path.join(repo,reference)),reference);
   }

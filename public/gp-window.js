@@ -122,7 +122,7 @@
     const title=resolve(options.title,'[data-gp-window-title]'), body=resolve(options.body,'[data-gp-window-body]');
     const toggle=resolve(options.toggle,'[data-gp-window-toggle]'), closeButton=resolve(options.closeButton,'[data-gp-window-close]');
     const moveHandle=options.move || title;
-    const removers=[],handles=[],ownedHandles=[],ownedTitleNodes=[],titleClasses=[];
+    const removers=[],handles=[],ownedHandles=[],ownedTitleNodes=[],decoratedClasses=[];
     const on=(target,type,fn)=>{target?.addEventListener(type,fn);removers.push(()=>target?.removeEventListener(type,fn));};
     const dimensions={minWidth:options.minWidth || 200,minHeight:options.minHeight || 80,compactWidth:options.compactWidth || 260};
     const getBounds=()=>options.bounds ? options.bounds() : viewportBounds(win.visualViewport || {width:win.innerWidth,height:win.innerHeight},options.scale?.() || 1);
@@ -141,7 +141,8 @@
     }
     const status=resolve(options.status,'[data-gp-window-status]');
     element.classList.add('gp-window','gp-window-standard'); title?.classList.add('gp-window-title','gp-window-titlebar');
-    const decorate=(node,name)=>{if(node&&!node.classList.contains(name)){node.classList.add(name);titleClasses.push([node,name]);}};
+    const decorate=(node,name)=>{if(node&&!node.classList.contains(name)){node.classList.add(name);decoratedClasses.push([node,name]);}};
+    decorate(body,'gp-window-scroll-body');
     decorate(moveHandle,'gp-window-move-handle');
     const titleText=options.titleText || title?.querySelector('strong,h2,h3');
     const fullTitle=titleText?.textContent;
@@ -290,7 +291,7 @@
       set(value){finish(true);preferred=normalize(value || options.initialGeometry?.() || DEFAULTS,dimensions);render();},
       activate(){closeTicket++;animation?.cancel();animation=null;closing=null;active=true;render();foreground();},
       suspend(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);active=false;releaseForeground();if(!options.nativeDialog) element.hidden=true;},
-      destroy(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);destroyed=true;releaseForeground();observer?.disconnect();for(const remove of removers) remove();for(const handle of ownedHandles) handle.remove();for(const node of ownedTitleNodes)node.remove();for(const[node,name]of titleClasses)node.classList.remove(name);if(titleText&&options.minimizedTitle)titleText.textContent=fullTitle;title?.classList.remove('gp-window-title','gp-window-titlebar');element.classList.remove('gp-window','gp-window-standard');if(!options.nativeDialog) element.hidden=true;}
+      destroy(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);destroyed=true;releaseForeground();observer?.disconnect();for(const remove of removers) remove();for(const handle of ownedHandles) handle.remove();for(const node of ownedTitleNodes)node.remove();for(const[node,name]of decoratedClasses)node.classList.remove(name);if(titleText&&options.minimizedTitle)titleText.textContent=fullTitle;title?.classList.remove('gp-window-title','gp-window-titlebar');element.classList.remove('gp-window','gp-window-standard');if(!options.nativeDialog) element.hidden=true;}
     };
   }
   function installDocument(doc,options={}) {

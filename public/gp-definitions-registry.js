@@ -5,7 +5,7 @@
   else root.GpDefinitionsRegistry=api;
 })(typeof window==='object'?window:globalThis,function(){
   'use strict';
-  const VERSION=9,UPDATED='2026-10-15';
+  const VERSION=10,UPDATED='2026-10-16';
   const topics=[
     {id:'sidebar',title:'GP-sidebar',symbol:'☷',summary:'Die gemeinsame Seitennavigation hält den aktuellen Bereich sichtbar und trennt Navigation von persönlichen Menüeinstellungen.',
       rules:[
@@ -38,6 +38,7 @@
         {title:'Minimieren und wiederherstellen',text:'Arbeitsfenster bleiben beim Minimieren geöffnet: Entwürfe, Eingaben und ausgewählte Dateien bleiben erhalten, der übrige GP bleibt bedienbar. Wiederherstellen bringt die volle Größe zurück. Der Standard verwendet 260 × 44 Pixel im minimierten Zustand.'},
         {title:'Zum passenden Öffner schließen',text:'Schließen führt das Fenster mit dezenter Bewegung zu seinem Button oder Seitensymbol zurück. Artikelsuche und letzte Artikel haben ihren Dock links unten innerhalb der Artikelstamm-Seite.'},
         {title:'Gemeinsame Titelleiste',text:'Griff, einzeiliger Titel, 38-Pixel-Steuerungen und 12-Pixel-Ecken folgen der Artikelsuche. Die Titelleiste bleibt sichtbar; Erklärungen, Eingaben und Aktionen liegen im scrollbaren Inhalt.'},
+        {title:'Inhalte unter dem Zeiger scrollen',text:'Mausrad und Touchpad bewegen den Inhalt unter dem Zeiger. Textfelder und Tabellen behalten ihre eigenen Scrollbereiche und geben die Bewegung an ihrer Grenze an das übergeordnete Fenster weiter. Am Fensterende bleibt der GP-Hintergrund stehen. Native Pflichtdialoge bleiben modal.'},
         {title:'Geschützte Bestätigungen bleiben modal',text:'Sicherheitsbestätigungen, Pflicht- und Passwortdialoge behalten ihre native Modalität und fachlichen Abbruchregeln. Sie verwenden dieselbe Titelleiste, lassen sich aber nicht minimieren. Arbeitsfenster lassen den übrigen GP bedienbar. Hintergründe bleiben scharf; auch geschützte Bestätigungen verwenden keinen Blur. Escape schließt nur das fokussierte Arbeitsfenster und respektiert offene Bestätigungen und Verwerfenschutz.'},
         {title:'Geometrie je Konto behalten',text:'Position, volle Größe und Minimierungszustand werden je angemeldetem Konto und Fenster gespeichert. Tastatur und Touch sind bedienbar; reduzierte Bewegung wird berücksichtigt.'},
       ],references:['public/gp-window.js','public/gp-window.css','public/gp-window-preferences.js'],example:'Artikelsuche auf der Artikelstamm-Seite'},

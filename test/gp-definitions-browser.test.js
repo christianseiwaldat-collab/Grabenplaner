@@ -53,7 +53,7 @@ test('Developer definitions navigate, search, survive ordinary navigation and wi
       assert.equal(await page.locator('[data-gp-definition-topic]:not([data-gp-definition-topic="all"])').count(),8);
       assert.equal(await page.locator('[data-gp-definition-section="standards"]').getAttribute('aria-expanded'),'true');
       assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Developer');await page.locator('[data-gp-definition-section="standards"]').click();assert.equal(await page.locator('#gpDefinitionsStandardTopics').isVisible(),false);await page.locator('[data-gp-definition-section="standards"]').click();await page.locator('[data-gp-definition-topic=windows]').click();assert.equal(await page.locator('#gpDefinitionsStandardTopics [aria-current="page"]').count(),1);
-      assert.equal(await page.locator('.gp-definition-rule').count(),7);assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');
+      assert.equal(await page.locator('.gp-definition-rule').count(),8);assert.equal(await page.locator('.gp-definition-card h2').textContent(),'Fenster');
       await screenshot('01-gp-definitions-light.png');
     });
     await t.test('search finds PDF byte identity and empty states contain no injected markup',async()=>{
