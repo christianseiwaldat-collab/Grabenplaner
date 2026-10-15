@@ -1,10 +1,11 @@
 # Versionsstatus
 
-## v0.92.88 Beta · Quellstand
+## v0.92.89 Beta · Quellstand
 
-Optimierte Datenverarbeitung.
-Einheitliche Untermenüs auf Desktop und Mobilgeräten.
-Begrenzter Aufschub der nächtlichen Recovery-Prüfung während laufender Deployments mit nachvollziehbarer Statusbewertung.
+Schnellere Dienstplanung und gezielte Aktualisierung nach Änderungen.
+Verbessertes Scrollen in GP-Fenstern.
+Einstellbare Upload-Dauer und optimierte Datenverarbeitung.
+
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease

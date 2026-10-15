@@ -18538,7 +18538,8 @@ async function resolvePlanningContext(input = {}) {
   let locationId = String(input.locationId || input.location || "").trim();
   if (!locationId) locationId = fallbackLocation?.id || "01";
   locationId = normalizeLocationId(locationId);
-  const location = await validateLocationExists(locationId);
+  const location = locations.find((entry) => String(entry.id) === String(locationId));
+  if (!location) throw httpError(404, "Die Filiale wurde nicht gefunden.");
   let departmentId = normalizeDepartmentId(input.departmentId ?? input.department, true);
   const department = await validateDepartmentExists(departmentId, locationId);
   return {
@@ -20135,32 +20136,35 @@ async function validateShift(body, contextInput = {}, actor = null) {
   if (!employeeNumber) throw httpError(400, "Bitte ein Teammitglied auswählen.");
   if (!isIsoDate(shiftDate)) throw httpError(400, "Das Datum ist ungültig.");
   if (!isTime(startTime) || !isTime(endTime)) throw httpError(400, "Die Arbeitszeit ist ungültig.");
-  const employee = await planningSettingsRepository.getPlanningEmployee({ employeeNumber });
-  if (!employee) {
-    throw httpError(404, "Die ausgewählte Person wurde nicht gefunden.");
-  }
-  const hasDutyInput = Object.hasOwn(body, "dutyCode") || Object.hasOwn(body, "duty_code");
-  const rawDutyCode = body.dutyCode ?? body.duty_code;
-  if (hasDutyInput && (typeof rawDutyCode !== "string"
-    || !["", "branch_supervision", "department", "general"].includes(rawDutyCode))) {
-    throw httpError(400, "Die Dienstzuordnung ist ungültig.", "SHIFT_DUTY_INVALID");
-  }
-  const departmentChanged = existing && hasDepartmentInput
-    && Number(departmentId || 0) !== Number(existing.department_id || 0);
-  const dutyCode = !hasDutyInput && existing && !departmentChanged
-    ? String(existing.duty_code || "")
-    : (rawDutyCode || (departmentId ? "department" : defaultScheduleDutyCode(employee)));
-  if ((dutyCode === "department" && !departmentId)
-    || (["branch_supervision", "general"].includes(dutyCode) && departmentId)) {
-    throw httpError(400, "Dienstzuordnung und Abteilung passen nicht zusammen.", "SHIFT_DUTY_DEPARTMENT_MISMATCH");
-  }
-  const department = departmentId ? await validateDepartmentExists(departmentId) : null;
-  const locationId = submittedLocationId
-    ? normalizeLocationId(submittedLocationId)
-    : String(department?.location_id || employee.home_location_id || "").trim();
-  if (!locationId) throw httpError(400, "Bitte eine Einsatzfiliale auswählen.", "SHIFT_LOCATION_REQUIRED");
-  await validateLocationExists(locationId);
-  if (department) await validateDepartmentExists(departmentId, locationId);
+  const { employee, dutyCode, locationId } = await readPlanningMutation(async () => {
+    const employee = await planningSettingsRepository.getPlanningEmployee({ employeeNumber });
+    if (!employee) {
+      throw httpError(404, "Die ausgewählte Person wurde nicht gefunden.");
+    }
+    const hasDutyInput = Object.hasOwn(body, "dutyCode") || Object.hasOwn(body, "duty_code");
+    const rawDutyCode = body.dutyCode ?? body.duty_code;
+    if (hasDutyInput && (typeof rawDutyCode !== "string"
+      || !["", "branch_supervision", "department", "general"].includes(rawDutyCode))) {
+      throw httpError(400, "Die Dienstzuordnung ist ungültig.", "SHIFT_DUTY_INVALID");
+    }
+    const departmentChanged = existing && hasDepartmentInput
+      && Number(departmentId || 0) !== Number(existing.department_id || 0);
+    const dutyCode = !hasDutyInput && existing && !departmentChanged
+      ? String(existing.duty_code || "")
+      : (rawDutyCode || (departmentId ? "department" : defaultScheduleDutyCode(employee)));
+    if ((dutyCode === "department" && !departmentId)
+      || (["branch_supervision", "general"].includes(dutyCode) && departmentId)) {
+      throw httpError(400, "Dienstzuordnung und Abteilung passen nicht zusammen.", "SHIFT_DUTY_DEPARTMENT_MISMATCH");
+    }
+    const department = departmentId ? await validateDepartmentExists(departmentId) : null;
+    const locationId = submittedLocationId
+      ? normalizeLocationId(submittedLocationId)
+      : String(department?.location_id || employee.home_location_id || "").trim();
+    if (!locationId) throw httpError(400, "Bitte eine Einsatzfiliale auswählen.", "SHIFT_LOCATION_REQUIRED");
+    await validateLocationExists(locationId);
+    if (department) await validateDepartmentExists(departmentId, locationId);
+    return { employee, dutyCode, locationId };
+  });
   const homeLocationId = String(employee.home_location_id || "").trim();
   if (locationId === homeLocationId) {
     const awayAssignment = (await sqliteEmployeeLocationLendingOperations.overlapForShift(
@@ -20207,59 +20211,63 @@ async function validateShift(body, contextInput = {}, actor = null) {
       );
     }
   }
-  if (!employeeCanWorkOnDate(employee, shiftDate)) {
-    throw httpError(409, `${employee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`);
-  }
-  const settings = await settingsForLocation(locationId);
-  await assertDateEditable(shiftDate, settings, actor, locationId);
-  const globalBlock = getGlobalDayBlockForDate(shiftDate, locationId);
-  if (globalBlock) {
-    throw httpError(409, `Dieser Tag ist für alle gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.`);
-  }
-  const hours = manualPlanningHours();
-  if (startTime < hours.start || endTime > hours.end || endTime <= startTime) {
-    throw httpError(
-      400,
-      `Der Dienst muss innerhalb der Dienstzeit ${hours.start}–${hours.end} Uhr liegen.`,
-      "SHIFT_PLANNING_WINDOW_INVALID",
-    );
-  }
-  const dayConfig = await dayConfiguration(shiftDate, settings);
-  if (
-    dayConfig?.lunchEnabled &&
-    startTime >= dayConfig.lunchStart &&
-    endTime <= dayConfig.lunchEnd
-  ) {
-    throw httpError(400, "Der Dienst liegt vollständig innerhalb der eingestellten Mittagspause.");
-  }
-  const conflict = await overlappingWeekOption(employeeNumber, shiftDate, startTime, endTime);
-  if (conflict) {
-    throw httpError(
-      409,
-      `${conflict.nickname} ist zu dieser Zeit bereits als „${optionLabel(conflict.option_type)}“ eingetragen.`,
-    );
-  }
-  if ((await activeSicknessEmployeeNumbers(shiftDate)).has(employeeNumber)) {
-    throw httpError(409, `${employee.nickname} ist an diesem Tag krankgemeldet.`, "SICKNESS_SHIFT_CONFLICT");
-  }
-  const overlappingShift = contextInput.ignoredShiftIds instanceof Set
-    ? (await planningSettingsRepository.listWorkRuleShiftsForRange({ dateFrom: shiftDate, dateTo: shiftDate })).find(row =>
-      row.employee_number === employeeNumber && !contextInput.ignoredShiftIds.has(String(row.id)) && row.start_time < endTime && row.end_time > startTime)
-    : await planningSettingsRepository.getOverlappingShift({
-    employeeNumber,
-    shiftDate,
-    existingId,
-    endTime,
-    startTime,
+  // Only catalog reads share these snapshots; the lending checks above use
+  // their own legacy connection and must remain outside the read scope.
+  await readPlanningMutation(async () => {
+    if (!employeeCanWorkOnDate(employee, shiftDate)) {
+      throw httpError(409, `${employee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`);
+    }
+    const settings = await settingsForLocation(locationId);
+    await assertDateEditable(shiftDate, settings, actor, locationId);
+    const globalBlock = getGlobalDayBlockForDate(shiftDate, locationId);
+    if (globalBlock) {
+      throw httpError(409, `Dieser Tag ist für alle gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.`);
+    }
+    const hours = manualPlanningHours();
+    if (startTime < hours.start || endTime > hours.end || endTime <= startTime) {
+      throw httpError(
+        400,
+        `Der Dienst muss innerhalb der Dienstzeit ${hours.start}–${hours.end} Uhr liegen.`,
+        "SHIFT_PLANNING_WINDOW_INVALID",
+      );
+    }
+    const dayConfig = await dayConfiguration(shiftDate, settings);
+    if (
+      dayConfig?.lunchEnabled &&
+      startTime >= dayConfig.lunchStart &&
+      endTime <= dayConfig.lunchEnd
+    ) {
+      throw httpError(400, "Der Dienst liegt vollständig innerhalb der eingestellten Mittagspause.");
+    }
+    const conflict = await overlappingWeekOption(employeeNumber, shiftDate, startTime, endTime);
+    if (conflict) {
+      throw httpError(
+        409,
+        `${conflict.nickname} ist zu dieser Zeit bereits als „${optionLabel(conflict.option_type)}“ eingetragen.`,
+      );
+    }
+    if ((await activeSicknessEmployeeNumbers(shiftDate)).has(employeeNumber)) {
+      throw httpError(409, `${employee.nickname} ist an diesem Tag krankgemeldet.`, "SICKNESS_SHIFT_CONFLICT");
+    }
+    const overlappingShift = contextInput.ignoredShiftIds instanceof Set
+      ? (await planningSettingsRepository.listWorkRuleShiftsForRange({ dateFrom: shiftDate, dateTo: shiftDate })).find(row =>
+        row.employee_number === employeeNumber && !contextInput.ignoredShiftIds.has(String(row.id)) && row.start_time < endTime && row.end_time > startTime)
+      : await planningSettingsRepository.getOverlappingShift({
+      employeeNumber,
+      shiftDate,
+      existingId,
+      endTime,
+      startTime,
+    });
+    if (overlappingShift) {
+      const locationText = overlappingShift.location_name ? ` in ${overlappingShift.location_name}` : "";
+      throw httpError(
+        409,
+        `${employee.nickname} ist von ${overlappingShift.start_time} bis ${overlappingShift.end_time} Uhr bereits${locationText} eingeteilt.`,
+        "SHIFT_TIME_CONFLICT",
+      );
+    }
   });
-  if (overlappingShift) {
-    const locationText = overlappingShift.location_name ? ` in ${overlappingShift.location_name}` : "";
-    throw httpError(
-      409,
-      `${employee.nickname} ist von ${overlappingShift.start_time} bis ${overlappingShift.end_time} Uhr bereits${locationText} eingeteilt.`,
-      "SHIFT_TIME_CONFLICT",
-    );
-  }
 
   return { employeeNumber, locationId, departmentId, dutyCode, shiftDate, startTime, endTime, area, note };
 }

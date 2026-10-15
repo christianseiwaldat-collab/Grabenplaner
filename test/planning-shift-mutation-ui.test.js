@@ -72,10 +72,12 @@ test("create/update wait for acknowledgement, suppress duplicate writes and pain
     const shift = { id: 7, employee_number: "E1", shift_date: "2032-07-05", start_time: "09:00", counted_minutes: 450 };
     f.calls[1].resolve(f.schedule([shift])); await turn();
     assert.equal(f.renders.length, 1); assert.equal(f.renders[0].data.shifts[0], shift);
+    assert.equal(f.renders[0].options.period, "schedule");
     assert.equal(f.state.allEmployees, roster); assert.equal(f.state.vacationData, vacation);
     assert.equal(f.calls.length, 3); assert.match(f.calls[2].url, /^\/api\/schedule\/enrichment\?/);
     f.calls[2].resolve({ ...f.schedule([shift]), enrichmentPending: false }); await pending;
     assert.equal(f.calls.length, 3); assert.equal(f.renders.length, 2);
+    assert.equal(f.renders[1].options.period, "schedule-enrichment");
   }
 });
 
@@ -149,6 +151,22 @@ test("a second acknowledged mutation need not wait for the previous enrichment",
   oldEnrichment.resolve({ ...f.schedule([{ id: 7 }]), enrichmentPending: false }); await first;
   await resolveRefresh(f, [{ id: 7 }, { id: 8 }]); await second;
   assert.deepEqual(Array.from(f.state.data.shifts, shift => shift.id), [7, 8]);
+});
+
+test("late enrichment cannot update cards or the assistant after the account or planning context changes", async () => {
+  for (const change of [
+    f => { f.state.portalSession = { user: { id: "actor-b" } }; },
+    f => { f.state.weekStart = "2032-07-12"; },
+    f => { f.state.locationId = "05"; },
+    f => { f.state.departmentId = "2"; },
+  ]) {
+    const f = fixture(), pending = f.context.loadPlanningPeriod();
+    f.calls[0].resolve(f.schedule([{ id: 7 }])); await turn();
+    const confirmed = f.state.data;
+    assert.equal(f.renders.length, 1); change(f);
+    f.calls[1].resolve({ workRuleAssessment: { outcome: "pass" }, enrichmentPending: false }); await pending;
+    assert.equal(f.state.data, confirmed); assert.equal(f.renders.length, 1); assert.equal(f.toasts.length, 0);
+  }
 });
 
 test("locked planning cannot send a save or deletion", async () => {

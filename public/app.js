@@ -3624,7 +3624,7 @@ async function enrichLoadedSchedule(url, {
       || state.locationId !== expectedLocationId
       || String(state.departmentId || "") !== String(expectedDepartmentId || "")) return false;
     state.data = { ...state.data, ...schedule, enrichmentPending: false };
-    render({ period: "schedule" });
+    render({ period: "schedule-enrichment" });
     return true;
   } catch (error) {
     if (generation === loadAllGeneration && !signal?.aborted) {
@@ -3793,6 +3793,13 @@ async function loadPlanningPeriod(kind = "schedule", { errorPrefix = "" } = {}) 
 }
 
 function render({ period = null } = {}) {
+  if (period === "schedule-enrichment") {
+    renderBranchSupervisionAssessment();
+    renderWorkRuleAssessment();
+    renderHoursOverview();
+    planningAssistantWorkspace?.synchronize({ data: state.data, session: state.portalSession, allowed: canReadStartDashboardSchedule() });
+    return;
+  }
   syncXoffiImport();
   if (period === "vacation") {
     applyShellBranding(hasManagementBrandingAccess() ? {} : state.vacationData?.settings || {});
@@ -29315,7 +29322,7 @@ let managerRequestsInFlight = null;
 let managerRequestsLastRefresh = 0;
 async function loadManagerVacationRequests({ background = false } = {}) {
   if (!elements.managerVacationRequestList) return;
-  if (background && (document.hidden || planningPeriodController || Date.now() - managerRequestsLastRefresh < 10000)) return;
+  if (background && (document.hidden || shiftMutation || planningPeriodController || Date.now() - managerRequestsLastRefresh < 10000)) return;
   const session = state.portalSession;
   if (managerRequestsInFlight?.session === session) return managerRequestsInFlight.pending;
   const pending = refreshManagerVacationRequests(session);
@@ -45109,7 +45116,7 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
 });
 bootstrapApplication();
 setInterval(() => {
-  if (!document.hidden && !planningPeriodController && !document.body.classList.contains("portal-locked")) loadSystemInfo();
+  if (!document.hidden && !shiftMutation && !planningPeriodController && !document.body.classList.contains("portal-locked")) loadSystemInfo();
 }, 120000);
 setInterval(() => {
   if (!document.body.classList.contains("portal-locked") && state.portalStatus?.portalEnabled) loadManagerVacationRequests({ background: true });

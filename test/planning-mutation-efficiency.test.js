@@ -20,6 +20,105 @@ function load(names, values) {
   return context;
 }
 
+function validationFixture({ postgres = true, revokeAt = 0, foreign = false } = {}) {
+  const state = { inside: false, snapshots: 0, reauthorizations: 0, lending: 0, sick: false, trace: [] };
+  const employee = { personnel_number: "E1", nickname: "One", home_location_id: foreign ? "19" : "18" };
+  const catalog = (name, value) => async () => {
+    assert.equal(state.inside, postgres, name + " must use the current read snapshot");
+    state.trace.push(name);
+    return typeof value === "function" ? value() : value;
+  };
+  const legacy = value => async () => {
+    assert.equal(state.inside, false, "legacy lending must stay outside the catalog snapshot");
+    state.lending++; state.trace.push("lending"); return value;
+  };
+  const c = load(["readPlanningMutation", "validateShift"], {
+    postgresqlActive: postgres, Set,
+    applicationPersistence: { async readSnapshot(work) {
+      assert.equal(state.inside, false); const phase = ++state.snapshots;
+      state.inside = true; state.trace.push("begin:" + phase);
+      try {
+        const result = await work(); state.reauthorizations++;
+        if (phase === revokeAt) throw new Error("AUTHORITY_REVOKED");
+        state.trace.push("authorized:" + phase); return result;
+      } finally { state.inside = false; }
+    } },
+    planningSettingsRepository: {
+      getPlanningEmployee: catalog("employee", employee), getOverlappingShift: catalog("overlap", null),
+    },
+    normalizeDepartmentId: value => Number(value || 0) || null,
+    normalizeLocationId: value => String(value),
+    isIsoDate: value => /^\d{4}-\d{2}-\d{2}$/.test(value), isTime: value => /^\d{2}:\d{2}$/.test(value),
+    defaultScheduleDutyCode: () => "general",
+    validateLocationExists: catalog("location", { id: "18" }),
+    validateDepartmentExists: catalog("department", { id: 7, location_id: "18" }),
+    sqliteEmployeeLocationLendingOperations: { overlapForShift: legacy(null), coverageForShift: legacy({ destinationDepartmentId: 7 }) },
+    employeeCanWorkOnDate: () => true, settingsForLocation: catalog("settings", {}),
+    assertDateEditable: catalog("manual-lock", undefined), getGlobalDayBlockForDate: () => null,
+    manualPlanningHours: () => ({ start: "07:00", end: "21:00" }), dayConfiguration: async () => ({}),
+    overlappingWeekOption: catalog("week-options", null),
+    activeSicknessEmployeeNumbers: catalog("sickness", () => new Set(state.sick ? ["E1"] : [])),
+    sessionHasGlobalScope: () => false,
+    httpError: (status, message, code) => Object.assign(new Error(message), { status, code }),
+  });
+  const input = { employeeNumber: "E1", locationId: "18", departmentId: 7,
+    date: "2032-07-05", startTime: "09:00", endTime: "17:00", area: "Area", note: "Note" };
+  return { c, state, input };
+}
+
+test("shift validation brackets legacy lending with two independently authorized catalog snapshots", async () => {
+  for (const postgres of [true, false]) for (const foreign of [true, false]) {
+    const { c, state, input } = validationFixture({ postgres, foreign });
+    assert.deepEqual(plain(await c.validateShift(input, {}, { employeeNumber: "actor" })), {
+      employeeNumber: "E1", locationId: "18", departmentId: 7, dutyCode: "department",
+      shiftDate: input.date, startTime: "09:00", endTime: "17:00", area: "Area", note: "Note",
+    });
+    assert.equal(state.lending, 1);
+    assert.equal(state.snapshots, postgres ? 2 : 0);
+    assert.equal(state.reauthorizations, postgres ? 2 : 0);
+    if (postgres) assert.deepEqual(state.trace.filter(value => /^(begin|authorized|lending)/.test(value)),
+      ["begin:1", "authorized:1", "lending", "begin:2", "authorized:2"]);
+  }
+});
+
+test("shift validation rejects authority loss in either read phase and never caches a later sickness change", async () => {
+  for (const revokeAt of [1, 2]) {
+    const { c, state, input } = validationFixture({ revokeAt });
+    await assert.rejects(c.validateShift(input), /AUTHORITY_REVOKED/);
+    assert.equal(state.snapshots, revokeAt);
+    assert.equal(state.lending, revokeAt === 1 ? 0 : 1);
+    assert.equal(state.inside, false);
+  }
+  const { c, state, input } = validationFixture();
+  await c.validateShift(input);
+  state.sick = true;
+  await assert.rejects(c.validateShift(input), error => error.code === "SICKNESS_SHIFT_CONFLICT");
+  assert.equal(state.snapshots, 4);
+  assert.equal(state.lending, 2);
+});
+
+test("planning context uses one fresh locations list while preserving fallback, missing and department checks", async () => {
+  let reads = 0, rows = [{ id: "17", name: "Inactive", active: false }, { id: "18", name: "Active", active: true }];
+  const c = load(["resolvePlanningContext"], {
+    postgresqlActive: true,
+    organizationPersonnelRepository: { async listLocations(includeInactive) { assert.equal(includeInactive, true); reads++; return rows; } },
+    normalizeLocationId: value => String(value), normalizeDepartmentId: value => Number(value || 0) || null,
+    async validateDepartmentExists(id, locationId) {
+      if (id && locationId !== "18") throw new Error("DEPARTMENT_LOCATION_MISMATCH");
+      return id ? { id, name: "Department" } : null;
+    },
+    httpError: (status, message) => Object.assign(new Error(message), { status }),
+  });
+  assert.equal((await c.resolvePlanningContext({})).locationId, "18");
+  assert.equal(reads, 1);
+  assert.equal((await c.resolvePlanningContext({ locationId: "17" })).locationName, "Inactive");
+  await assert.rejects(c.resolvePlanningContext({ locationId: "missing" }), error => error.status === 404);
+  await assert.rejects(c.resolvePlanningContext({ locationId: "17", departmentId: 7 }), /DEPARTMENT_LOCATION_MISMATCH/);
+  rows = [];
+  await assert.rejects(c.resolvePlanningContext({}), /PG_APPLICATION_LOCATION_REQUIRED/);
+  assert.equal(reads, 5, "one current locations read per invocation, no cross-request cache");
+});
+
 test("mutation employees retain the exact weekly scope and serialization without loading the schedule", async () => {
   const reads = [], rows = [{ personnel_number: "lent" }, { personnel_number: "home" }];
   const c = load(["planningMutationEmployees"], { addDays,
