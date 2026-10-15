@@ -25,12 +25,15 @@
 .gp-definitions-topics button.is-active-ancestor { color:var(--green);background:var(--surface-soft);font-weight:700; }
 .gp-definitions-menu-group { display:grid;gap:4px;min-width:0; }
 .gp-definitions-menu-children { position:relative;display:grid;grid-template-columns:1fr;gap:3px;margin-left:0;padding-left:16px;min-width:0; }
-.gp-definitions-menu-children::before { content:"";position:absolute;top:5px;bottom:5px;left:9px;width:1px;background:var(--line);pointer-events:none; }
 .gp-definitions-menu-children button { position:relative;gap:6px;padding:8px 10px;border-radius:7px;overflow-wrap:normal;word-break:normal;hyphens:none; }
-.gp-definitions-menu-children button::before { content:"";position:absolute;left:-9px;top:calc(50% - 2px);width:5px;height:5px;border-radius:50%;background:var(--muted);pointer-events:none; }
+.gp-definitions-menu-children > [hidden] { display:none; }
+.gp-definitions-menu-children button::before { content:"";position:absolute;z-index:1;left:-6.5px;top:50%;width:5px;height:5px;transform:translate(-50%,-50%);border-radius:50%;background:var(--muted);pointer-events:none; }
+.gp-definitions-menu-children > button::after { content:"";position:absolute;left:-7px;top:0;bottom:-3px;width:1px;background:var(--line);pointer-events:none; }
+.gp-definitions-menu-children > button:nth-child(1 of :not(.hidden,[hidden]))::after { top:50%; }
+.gp-definitions-menu-children > button:not(:has(~ :not(.hidden,[hidden])))::after { bottom:50%; }
 .gp-definitions-menu-children button > .gp-definitions-topic-symbol { display:none; }
 .gp-definitions-menu-children button.is-selected { box-shadow:none;background:var(--surface-muted);color:var(--ink); }
-.gp-definitions-menu-children button:is(.is-selected,.is-active-ancestor)::before { background:var(--coral);box-shadow:0 0 0 3px var(--surface); }
+.gp-definitions-menu-children button:is(.is-selected,.is-active-ancestor)::before { width:8px;height:8px;background:var(--coral);box-shadow:0 0 0 3px var(--surface); }
 .gp-definitions-menu-chevron { margin-left:auto;flex:none;font-size:18px;transition:transform .15s ease; }
 .gp-definitions-topics button[aria-expanded="true"] .gp-definitions-menu-chevron { transform:rotate(90deg); }
 .gp-definitions-topic-symbol { flex:none;display:grid;place-items:center;width:20px;font-size:15px;font-weight:400; }

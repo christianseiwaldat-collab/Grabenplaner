@@ -5,7 +5,7 @@ const repo=path.resolve(__dirname,'..'),app=fs.readFileSync(path.join(repo,'publ
 function appFunction(name){const start=app.indexOf('function '+name+'(');assert.ok(start>=0,name);const end=app.indexOf('\nfunction ',start+1);return app.slice(start,end<0?app.length:end);}
 
 test('registry provides eight stable, immutable standards and existing implementation references',()=>{
-  assert.equal(Registry.VERSION,8);assert.equal(Registry.UPDATED,'2026-10-15');
+  assert.equal(Registry.VERSION,9);assert.equal(Registry.UPDATED,'2026-10-15');
   assert.deepEqual(Registry.topics.map(topic=>topic.id),['sidebar','dashboard','windows','print','tables','views','design','galleries']);
   assert.ok(Object.isFrozen(Registry.topics));
   for(const topic of Registry.topics){

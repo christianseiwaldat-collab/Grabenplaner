@@ -176,10 +176,13 @@ async function treeGeometry(page) {
     const number = value => Number.parseFloat(value) || 0;
     const rows = [...sidebar.querySelectorAll(".nav-module-route,.nav-child,.nav-submodule > .nav-branch > .nav-item")].filter(shown).map(element => {
       const style = getComputedStyle(element), dot = getComputedStyle(element, "::before"), bounds = element.getBoundingClientRect();
-      const group = element.closest(".nav-children,.nav-module-children"), line = getComputedStyle(group, "::before");
+      const group = element.closest(".nav-children,.nav-module-children"), parent = element.closest(".nav-branch");
+      const owner = parent ? parent.parentElement : element, line = getComputedStyle(owner, parent ? "::before" : "::after");
+      const ownerBounds = owner.getBoundingClientRect(), siblings = [...group.children].filter(shown);
       const scale = Number.parseFloat(getComputedStyle(document.body).zoom) || 1;
-      const lineX = group.getBoundingClientRect().left + (number(line.left) + number(line.width) / 2) * scale;
-      const dotX = bounds.left + (number(dot.left) + number(dot.width) / 2) * scale;
+      const lineX = ownerBounds.left + (number(line.left) + number(line.width) / 2) * scale;
+      const dotX = bounds.left + number(dot.left) * scale, dotY = bounds.top + bounds.height / 2;
+      const lineTop = ownerBounds.top + number(line.top) * scale, lineBottom = lineTop + number(line.height) * scale;
       const label = element.querySelector("span:not(.nav-symbol)") || element;
       const range = document.createRange(); range.selectNodeContents(label);
       const labelRects = [...range.getClientRects()].filter(rect => rect.width > 0 && rect.height > 0);
@@ -187,6 +190,8 @@ async function treeGeometry(page) {
       const badgeBounds = badge?.getBoundingClientRect();
       return { id: element.id || element.dataset.contextView + ":" + element.dataset.locationId, active: element.matches(".active,.contains-active"),
         line: { content: line.content, width: number(line.width), color: line.backgroundColor },
+        last: siblings.at(-1) === owner, endDistance: Math.abs(lineBottom - dotY),
+        continuation: parent && siblings.at(-1) === owner ? getComputedStyle(owner, "::after").content : null,
         dot: { content: dot.content, width: number(dot.width), height: number(dot.height), radius: dot.borderRadius, color: dot.backgroundColor, pointer: dot.pointerEvents },
         alignment: Math.abs(dotX - lineX), radius: number(style.borderRadius), background: style.backgroundColor,
         height: bounds.height / scale, textLines: new Set(labelRects.map(rect => Math.round(rect.top))).size,
@@ -194,8 +199,34 @@ async function treeGeometry(page) {
         labelWidth: labelBounds.width, badgeFits: !badgeBounds || badgeBounds.left >= labelBounds.right - 1 && badgeBounds.right <= bounds.right + 1,
         iconHidden: !element.querySelector(".nav-symbol") || getComputedStyle(element.querySelector(".nav-symbol")).display === "none" };
     });
-    return { coral, rows, sidebarFits: sidebar.getBoundingClientRect().right <= innerWidth + 1 };
+    const branches = [...sidebar.querySelectorAll(".nav-submodule")].filter(shown).map(element => {
+      const parent = element.querySelector(":scope > .nav-branch > .nav-item"), group = element.querySelector(":scope > .nav-children");
+      const children = [...group.children].filter(shown), elbow = getComputedStyle(parent, "::after"), bounds = parent.getBoundingClientRect();
+      const scale = Number.parseFloat(getComputedStyle(document.body).zoom) || 1, first = children[0];
+      const childDot = first && getComputedStyle(first, "::before"), dot = getComputedStyle(parent, "::before");
+      const elbowX = bounds.left + number(elbow.left) * scale, elbowY = bounds.top + (number(elbow.top) + .5) * scale;
+      return { id: parent.id, visibleChildren: children.length, content: elbow.content,
+        horizontal: number(elbow.borderTopWidth), vertical: number(elbow.borderRightWidth),
+        originX: Math.abs(elbowX + .5 * scale - (bounds.left + number(dot.left) * scale)),
+        originY: Math.abs(elbowY - (bounds.top + bounds.height / 2)),
+        stemX: first ? Math.abs(elbowX + (number(elbow.width) - .5) * scale - (first.getBoundingClientRect().left + number(childDot.left) * scale)) : null,
+        joinsFirst: first ? Math.abs(bounds.top + (number(elbow.top) + number(elbow.height)) * scale - first.getBoundingClientRect().top) : null };
+    });
+    return { coral, rows, branches, sidebarFits: sidebar.getBoundingClientRect().right <= innerWidth + 1 };
   });
+}
+
+function assertTreeEnds(geometry, context) {
+  for (const row of geometry.rows.filter(row => row.last)) {
+    assert.ok(row.endDistance <= 1, "Line ends at the last visible point: " + context + " " + row.id + " " + row.endDistance);
+    if (row.continuation !== null) assert.equal(row.continuation, "none", "No outer tail below the last parent: " + row.id);
+  }
+  for (const branch of geometry.branches) {
+    if (!branch.visibleChildren) { assert.equal(branch.content, "none", "No dangling branch: " + branch.id); continue; }
+    assert.equal(branch.content, '""', context + " " + branch.id);
+    assert.ok(branch.horizontal >= .5 && branch.horizontal <= 1); assert.ok(branch.vertical >= .5 && branch.vertical <= 1);
+    for (const key of ["originX", "originY", "stemX", "joinsFirst"]) assert.ok(branch[key] <= 1, "Connected elbow " + key + ": " + context + " " + branch.id + " " + branch[key]);
+  }
 }
 
 test("Sidebar tree: every module and context shares visible markers across mobile widths, resizing and GP zoom", options, async () => {
@@ -231,7 +262,7 @@ test("Sidebar tree: every module and context shares visible markers across mobil
           const label = context + " " + row.id;
           assert.equal(row.line.content, '""', label); assert.equal(row.line.width, 1, label);
           assert.notEqual(row.line.color, "rgba(0, 0, 0, 0)", label);
-          assert.equal(row.dot.content, '""', label); assert.equal(row.dot.width, 5, label); assert.equal(row.dot.height, 5, label);
+          assert.equal(row.dot.content, '""', label); assert.equal(row.dot.width, row.active ? 8 : 5, label); assert.equal(row.dot.height, row.active ? 8 : 5, label);
           assert.equal(row.dot.radius, "50%", label); assert.equal(row.dot.pointer, "none", label);
           assert.ok(row.alignment <= 1, "Dot must sit on its own parent line: " + label + " " + row.alignment);
           assert.ok(row.radius >= 7, label); assert.equal(row.iconHidden, true, label);
@@ -245,6 +276,7 @@ test("Sidebar tree: every module and context shares visible markers across mobil
           }
           assert.equal(row.badgeFits, true, "Count badge must not overlap the label: " + label);
         }
+        assertTreeEnds(geometry, context);
         await current(f.page, '.nav-child[data-context-view="planning"][data-location-id="18"]');
         captures.push({ mobile, ...size, geometry });
         await f.page.locator("#branchOrdersManagementNavButton").scrollIntoViewIfNeeded();
@@ -301,4 +333,86 @@ test("Sidebar tree: disclosure, hidden permissions and current route remain inde
     assert.equal(await f.page.locator("#personnelAdministrationNavChildren").isVisible(), true);
     assert.deepEqual(f.errors, []);
   } finally { await f.close(); }
+});
+
+test("Sidebar tree ends follow hidden rows, a single child and the last expanded parent", options, async () => {
+  for (const mobile of [false, true]) {
+    const f = await fixture({ mobile, width: mobile ? 320 : 1440 });
+    try {
+      await f.load("?view=planning&location=18");
+      await f.page.evaluate(() => {
+        for (const key of Object.keys(navigationGroups())) sidebarGroupsForTest().setOpen(key, true);
+        renderContextNavigation();
+        if (mobileNavigationMedia.matches) openMobileNavigation();
+        const sales = document.getElementById("salesAdministrationNavChildren");
+        [...sales.children].slice(-2).forEach(row => row.classList.add("hidden"));
+        const planning = document.getElementById("planningNavChildren");
+        planning.lastElementChild.hidden = true;
+      });
+      let geometry = await treeGeometry(f.page);
+      assert.equal(await f.page.locator("#planningNavChildren > [hidden]").isVisible(), false);
+      assertTreeEnds(geometry, "hidden last rows, mobile=" + mobile);
+      assert.equal(geometry.rows.find(row => row.id === "salesBwlNavButton").last, true);
+      assert.equal(geometry.rows.find(row => row.id === "vacationsNavButton").last, true);
+      assert.equal(geometry.branches.find(row => row.id === "planningNavButton").visibleChildren, 1);
+      await f.page.evaluate(() => {
+        const sales = document.getElementById("salesAdministrationNavChildren");
+        [...sales.children].forEach(row => row.classList.toggle("hidden", row.id !== "salesArticleCatalogNavButton"));
+        document.querySelectorAll("#vacationNavChildren > *").forEach(row => row.hidden = true);
+        document.getElementById("planningNavChildren").replaceChildren();
+      });
+      geometry = await treeGeometry(f.page);
+      assertTreeEnds(geometry, "single route and empty child groups, mobile=" + mobile);
+      const only = geometry.rows.find(row => row.id === "salesArticleCatalogNavButton");
+      assert.equal(only.last, true); assert.ok(only.endDistance <= 1);
+      assert.ok(geometry.branches.every(branch => branch.visibleChildren === 0));
+      assert.deepEqual(f.errors, []);
+    } finally { await f.close(); }
+  }
+});
+
+test("Developer tree uses centered active points and stops at the last visible standard or workspace child", options, async () => {
+  for (const mobile of [false, true]) {
+    const f = await fixture({ mobile, width: mobile ? 390 : 1440 });
+    try {
+      await f.load("?view=gpDefinitions");
+      for (const name of ["gp-definitions-registry.js", "gp-definitions.js"]) await f.page.addScriptTag({ path: path.join(root, "public", name) });
+      await f.page.evaluate(() => {
+        gpDefinitionsWorkspace = GpDefinitions.mount(document.getElementById("gpDefinitionsWorkspace"), {
+          canUse: () => true, key: () => "synthetic-developer",
+          loadWorkspaces: async () => [
+            { id: "image-gp", title: "image.GP", url: "/api/portal/v1/private-workspaces/image-gp/page" },
+            { id: "image-create", parentId: "image-gp", title: "Bild erstellen", url: "/api/portal/v1/private-workspaces/image-create/page" },
+            { id: "image-gallery", parentId: "image-gp", title: "Galerie", url: "/api/portal/v1/private-workspaces/image-gallery/page" }
+          ]
+        });
+        gpDefinitionsWorkspace.activate();
+      });
+      await f.page.locator('[data-gp-private-workspace="image-gallery"]').waitFor();
+      await f.page.locator('[data-gp-definition-topic="sidebar"]').click();
+      for (const hidden of [false, true]) {
+        await f.page.evaluate(hidden => {
+          document.querySelectorAll(".gp-definitions-menu-children").forEach(group => { group.lastElementChild.hidden = hidden; });
+        }, hidden);
+        if (hidden) for (const row of await f.page.locator(".gp-definitions-menu-children > [hidden]").all()) assert.equal(await row.isVisible(), false);
+        const groups = await f.page.locator(".gp-definitions-menu-children").evaluateAll(groups => groups.map(group => {
+          const rows = [...group.children].filter(row => !row.hidden && !row.classList.contains("hidden"));
+          const last = rows.at(-1), bounds = last.getBoundingClientRect(), line = getComputedStyle(last, "::after");
+          const selected = rows.find(row => row.classList.contains("is-selected")), dot = selected && getComputedStyle(selected, "::before");
+          return { id: group.id, endDistance: Math.abs(parseFloat(line.top) + parseFloat(line.height) - bounds.height / 2),
+            selectedWidth: dot ? parseFloat(dot.width) : null, selectedHeight: dot ? parseFloat(dot.height) : null,
+            selectedCenter: selected ? Math.abs(parseFloat(dot.top) - selected.getBoundingClientRect().height / 2) : null };
+        }));
+        assert.equal(groups.length, 2);
+        for (const group of groups) {
+          assert.ok(group.endDistance <= 1, "Developer visible end: " + group.id);
+          if (group.selectedWidth !== null) {
+            assert.equal(group.selectedWidth, 8); assert.equal(group.selectedHeight, 8); assert.ok(group.selectedCenter <= 1);
+          }
+        }
+      }
+      await f.page.locator(".gp-definitions-topics").screenshot({ path: path.join(screenshotDirectory(), "developer-tree-" + (mobile ? "mobile" : "desktop") + ".png") });
+      assert.deepEqual(f.errors, []);
+    } finally { await f.close(); }
+  }
 });
