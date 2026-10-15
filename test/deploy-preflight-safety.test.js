@@ -12,6 +12,13 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 const updater = read("server-tools/linux/update-grabenplaner-server.sh");
 const preflight = read("server-tools/linux/preflight-grabenplaner-deploy.sh");
 const bash = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "/bin/bash";
+const functionSource = (name) => {
+  // Stop at the next shell function, not a closing brace inside a Node heredoc.
+  const source = updater.match(new RegExp(`^${name}\\(\\) \\{\\r?\\n[\\s\\S]*?(?=^[a-z_]+\\(\\) \\{)`, "m"));
+  assert.ok(source, `${name} is available`);
+  assert.match(source[0].trim(), /\}$/);
+  return source[0];
+};
 
 test("deploy has a separate pre-build preflight entry point", () => {
   assert.match(updater, /--preflight-only/);
@@ -38,6 +45,8 @@ test("updater reserves the maintenance window before copying or scanning a packa
   const packageCopy = updater.indexOf('install -m 0600 -o root -g root -- "$package"', phase);
   const scan = updater.indexOf("scan_candidate_with_clamav", packageCopy);
   assert.ok(phase >= 0 && lock > phase && timers > lock && packageCopy > timers && scan > packageCopy);
+  assert.ok(updater.indexOf("begin_deploy_deferral() {") < updater.indexOf("pause_deploy_timers() {"));
+  assert.ok(updater.indexOf("pause_deploy_timers() {") < timers);
   assert.match(updater, /restore_deploy_timers \|\| exit_code=1/);
   assert.match(updater, /Der Deploy wird vor Paketinstallation und Virenscan beendet/);
   assert.match(updater, /grabenplaner-offsite-assurance@app-updated\.service/);
@@ -61,15 +70,10 @@ test("both deploy entry points reject unsafe shared /tmp before expensive work",
 
 for (const timer of ["grabenplaner-offsite-assurance.timer", "apt-daily.timer", "apt-daily-upgrade.timer"])
 for (const active of [0, 1]) for (const enabled of [0, 1]) {
-  test(`deploy uses and restores ${timer} before its own pause: active=${active}, enabled=${enabled}`,
+  test(`deploy uses and restores ${timer} without an offsite lease: active=${active}, enabled=${enabled}`,
     { skip: !fs.existsSync(bash) }, (t) => {
       const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-deploy-timer-"));
       t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
-      const functionSource = (name) => {
-        const source = updater.match(new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?^\\}`, "m"));
-        assert.ok(source, `${name} is available`);
-        return source[0];
-      };
       const decisionStart = updater.indexOf("  nightly_timer_active=0", updater.indexOf("begin_deploy_phase verification-policy"));
       const decisionEnd = updater.indexOf("  deploy_decision=", decisionStart);
       assert.ok(decisionStart > 0 && decisionEnd > decisionStart);
@@ -79,6 +83,8 @@ ${updater.match(/^declare -a deploy_timer_units=\([\s\S]*?^\)/m)[0]}
 declare -a deploy_blocking_timer_units=() deploy_maintenance_units=()
 declare -A deploy_timer_was_active=() deploy_timer_was_enabled=()
 deploy_timer_state_captured=0
+GRABENPLANER_OFFSITE_CONFIGURED=0
+deploy_deferral_generation=''
 active=${active}
 enabled=${enabled}
 gp_systemd_unit_exists() { [[ "$1" == "${timer}" ]]; }
@@ -95,10 +101,12 @@ systemctl() {
     *) exit 90 ;;
   esac
 }
+${functionSource("begin_deploy_deferral")}
 ${functionSource("pause_deploy_timers")}
 ${functionSource("restore_deploy_timers")}
 pause_deploy_timers
 [[ "$active" == 0 ]]
+[[ -z "$deploy_deferral_generation" ]]
 ${updater.slice(decisionStart, decisionEnd)}
 printf 'decision=%s\\n' "$nightly_timer_active"
 restore_deploy_timers
@@ -111,6 +119,32 @@ printf 'active=%s enabled=%s\\n' "$active" "$enabled"
       assert.equal(result.status, 0, result.stderr || result.error?.message);
       const expectedDecision = timer === "grabenplaner-offsite-assurance.timer" ? active && enabled : 0;
       assert.equal(result.stdout.trim(), `decision=${expectedDecision}\nactive=${active} enabled=${enabled}`);
+    });
+}
+
+for (const [configured, active, enabled] of [[0, 1, 1], [1, 0, 1], [1, 1, 0], [0, 0, 0], [1, 0, 0]]) {
+  test(`deploy creates no lease without configured active/enabled night timer: ${configured}/${active}/${enabled}`,
+    { skip: !fs.existsSync(bash) }, () => {
+      // Run the real guard. Any accidental contract/lease/heartbeat or lock
+      // operation fails; the configured positive lifecycle is exercised in
+      // deploy-nightly-deferral.test.js, including the native root CLI test.
+      const result = spawnSync(bash, ["--noprofile", "--norc", "-c", `set -Eeuo pipefail
+GRABENPLANER_OFFSITE_CONFIGURED=${configured}
+deploy_deferral_generation=''
+deploy_deferral_pid=''
+declare -A deploy_timer_was_active=([grabenplaner-offsite-assurance.timer]=${active})
+declare -A deploy_timer_was_enabled=([grabenplaner-offsite-assurance.timer]=${enabled})
+node=node
+node() { echo unexpected-node >&2; exit 97; }
+flock() { echo unexpected-lock >&2; exit 98; }
+gp_die() { echo "$*" >&2; exit 99; }
+${functionSource("begin_deploy_deferral")}
+begin_deploy_deferral
+[[ -z "$deploy_deferral_generation" && -z "$deploy_deferral_pid" ]]
+printf 'no-lease\\n'
+`], { encoding: "utf8", windowsHide: true, timeout: 10000 });
+      assert.equal(result.status, 0, result.stderr || result.error?.message);
+      assert.equal(result.stdout.trim(), "no-lease");
     });
 }
 
