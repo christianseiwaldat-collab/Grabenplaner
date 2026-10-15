@@ -42,6 +42,7 @@ const { registerSalesReportJobRoutes } = require('./lib/sales-report-jobs-routes
 const { createCashPublicationRuntime } = require("./lib/persistence/repositories/cash-publication-runtime");
 const { CASH_SOURCE_POLICIES } = require("./lib/cash-source-policies");
 const { registerDataImportRoutes } = require("./lib/data-import-routes");
+const { installImportUploadTimeouts } = require("./lib/data-import-upload-timeout");
 const {
   CRM_PERMISSIONS,
   CRM_PERMISSION_IDS,
@@ -26410,6 +26411,7 @@ const dataImportJobs=require('./lib/data-import-jobs').createDataImportJobs({
 const dataImportRoutes=registerDataImportRoutes(app, {
   lifecycle:dataImportLifecycle,
   runtime:dataImportRuntime,jobs:dataImportJobs,
+  preferences:uiPreferencesRepository,
   mappings: createDataImportMappingRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowMapping: false }),
   cashPublications: cashPublicationRuntime,
   requireSession: requireEmployeePortalSession,
@@ -66175,6 +66177,7 @@ async function startServer() {
       }
     }, 1500);
   });
+  installImportUploadTimeouts(server);
   server.once("error", () => releaseInstanceLock());
   return server;
 }

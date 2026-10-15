@@ -124,19 +124,41 @@
   }
   function mount(root,{api,confirmAction=message=>globalThis.confirm(message)}) {
     const body=root.querySelector('[data-import-body]');
-    let disposed=false,generation=0,controller=null,timer=null,context=null,selected=null,cursor=null,sourcePage={},working=false,pendingAction=null,unconfirmedCashSource=null,logState=null,publicationView=null;
+    let disposed=false,generation=0,controller=null,timer=null,context=null,selected=null,cursor=null,sourcePage={},working=false,pendingAction=null,unconfirmedCashSource=null,logState=null,publicationView=null,uploadPolicySave=null;
     const progressTracker=progressUI.createTracker();
     const el=name=>body.querySelector(`[data-i="${name}"]`);
     const containers=[];
     for(let node=root.parentElement;node;node=node.parentElement) if(node.matches?.('.view,.settings-section,details')) containers.push(node);
     const visible=()=>root.open && containers.every(node=>!node.classList.contains('hidden')
       && (node.matches('details')?node.open:node.classList.contains('active')));
-    const cancel=()=>{generation++;controller?.abort();controller=null;clearTimeout(timer);working=false;pendingAction=null;};
+    const cancel=()=>{generation++;controller?.abort();controller=null;clearTimeout(timer);working=false;pendingAction=null;uploadPolicySave=null;};
     async function request(url,options={}) {return api(url,{...options,signal:controller?.signal});}
     const post=(url,data={})=>request(url,{method:'POST',body:JSON.stringify(data)});
     const message=text=>{if(el('message'))el('message').textContent=text;};
+    const uploadPolicy=()=>context?.uploadPolicy||{minutes:30,minMinutes:1,maxMinutes:120};
+    const updateUploadTimeout=()=>{const field=el('upload-timeout');if(field)field.disabled=working||!!uploadPolicySave||!context?.projection?.prepare;};
+    async function saveUploadPolicy() {
+      const ticket=generation;
+      if(uploadPolicySave)await uploadPolicySave;
+      if(disposed||ticket!==generation)return;
+      const field=el('upload-timeout');if(!field)return;
+      const policy=uploadPolicy(),minutes=Number(field.value);
+      if(!Number.isInteger(minutes)||minutes<policy.minMinutes||minutes>policy.maxMinutes)
+        throw new Error(`Bitte ein Upload-Zeitlimit von ${policy.minMinutes} bis ${policy.maxMinutes} ganzen Minuten eingeben.`);
+      if(minutes===policy.minutes)return;
+      const pending=request('/api/data-import/preferences',{method:'PUT',body:JSON.stringify({uploadTimeoutMinutes:minutes})});
+      uploadPolicySave=pending;updateUploadTimeout();
+      try {
+        const result=await pending;
+        if(disposed||ticket!==generation)return;
+        context.uploadPolicy=result.uploadPolicy;
+        field.value=String(result.uploadPolicy.minutes);
+        if(el('upload-timeout-status'))el('upload-timeout-status').textContent='Persönliches Upload-Zeitlimit gespeichert.';
+      }finally{if(uploadPolicySave===pending){uploadPolicySave=null;updateUploadTimeout();}}
+    }
     let renderedSourceId=null;
     function renderSelected(){
+      updateUploadTimeout();
       const detail=el('detail');if(!detail)return;
       const sameSource=selected?.id===renderedSourceId,technicalOpen=sameSource&&detail.querySelector('.data-import-technical')?.open;
       const focused=globalThis.document?.activeElement,restoreFocus=sameSource&&focused&&detail.contains(focused);
@@ -179,11 +201,13 @@
           <section class="data-import-upload" data-i="upload" hidden aria-labelledby="dataImportUploadTitle"><h3 data-i="upload-title" id="dataImportUploadTitle">Datenbank hochladen</h3>
           <form data-i="form" class="data-import-form" autocomplete="off"><input type="hidden" data-i="kind" value="trade"><p class="data-import-note" data-i="kind-hint" id="dataImportSourceHint">${sourceLabel('trade')}</p>
           <label>ACCDB-Datei<input data-i="file" type="file" accept=".accdb" required aria-describedby="dataImportFileHint"><small id="dataImportFileHint">Maximal 512 MiB · alle Filialen und Zeiträume.</small></label><label>Dateikennwort (falls erforderlich)<input data-i="password" type="password" autocomplete="new-password" maxlength="256"></label>
+          <label>Upload-Zeitlimit (Minuten)<input data-i="upload-timeout" type="number" min="${escape(uploadPolicy().minMinutes)}" max="${escape(uploadPolicy().maxMinutes)}" step="1" value="${escape(uploadPolicy().minutes)}" required aria-describedby="dataImportUploadTimeoutHint" ${!context.projection.prepare?'disabled':''}><small id="dataImportUploadTimeoutHint">Persönlich gespeichert. Gilt nur für die Dateiübertragung; der Hintergrundimport läuft anschließend unabhängig weiter.</small><small data-i="upload-timeout-status" aria-live="polite"></small></label>
           <div class="data-import-actions"><button type="submit" ${!context.available||!context.projection.prepare?'disabled':''}>Prüfen und hochladen</button><button type="button" data-i-upload-cancel>Abbrechen</button></div></form><p data-i="file-name" class="data-import-note" aria-live="polite"></p>
           <p class="data-import-note">${context.available?'Nach dem Hochladen automatisch prüfen, danach übernehmen.':escape(context.message)}</p><p class="data-import-note">${context.backgroundEnabled?'Die Access-Datei wird nach dem Einlesen automatisch gelöscht. Bei Unterbrechungen spätestens nach 72 Stunden.':'Die Access-Datei wird nicht gespeichert.'} GP-Daten und Importprotokolle bleiben erhalten.</p></section></div>
           ${!context.available?`<p class="data-import-note" role="status">${escape(context.message)}</p>`:''}
           <details class="data-import-history"><summary>Importverlauf und frühere Dateistände</summary><div data-i="sources"></div><button type="button" data-i="next" hidden>Ältere Importe</button></details>
           <p data-i="message" role="status" aria-live="polite"></p><button type="button" data-i="stop" data-i-stop hidden>Anhalten</button><section data-i="detail"></section><section data-i="publication"></section><section data-i="log"></section>`;
+        if(el('upload-timeout'))el('upload-timeout').value=String(uploadPolicy().minutes);
         if(context.available)await refresh();
       }catch(error){if(!disposed&&ticket===generation)body.textContent=error.message||'Importanbindung nicht verfügbar.';}
     }
@@ -309,16 +333,19 @@
       if(!definition||!context.available||!context.projection?.prepare){message('Für diese Datenbank ist derzeit kein Upload möglich.');return;}
       const file=el('file').files[0];if(!file||file.size<4096||file.size>context.maxBytes||!file.name.toLowerCase().endsWith('.accdb')){message('Bitte eine vollständige ACCDB-Datei bis 512 MiB auswählen.');return;}
       const recognized=kindForFile(file.name);if(recognized&&recognized!==kind){message(`Die ausgewählte Datei gehört zu einer anderen Datenbank. Bitte ${definition.fileName} auswählen.`);return;}
-      const ticket=generation;working=true;message('Datei wird geschützt übertragen …');
-      let password=el('password').value;el('password').value='';
+      const ticket=generation;working=true;updateUploadTimeout();message('Datei wird geschützt übertragen …');
+      let password=el('password').value,uploadStarted=false,uploadAccepted=false;el('password').value='';
       try {
+        await saveUploadPolicy();if(disposed||ticket!==generation)return;
         const passwordHeader=btoa(Array.from(new TextEncoder().encode(password),b=>String.fromCharCode(b)).join(''));password='';
+        uploadStarted=true;
         const result=await request(`/api/data-import/upload/${kind}`,{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Import-Password':passwordHeader,'X-Import-File-Name':encodeURIComponent(file.name)},body:file});
+        uploadAccepted=true;
         if(disposed||ticket!==generation)return;el('file').value='';el('file-name').textContent='';el('upload').hidden=true;
         const source=await request(`/api/data-import/sources/${result.id}`);if(disposed||ticket!==generation)return;selected=source;sourcePage={};working=false;
         message(context.backgroundEnabled?'Datei sicher angenommen. Der Server liest und prüft sie automatisch; Sie können den GP jetzt schließen.':'Datei angenommen. Der Fortschritt wird laufend aktualisiert.');await refresh();
-      }catch(error){if(!disposed&&ticket===generation)message(error.message);}
-      finally{password='';if(!disposed&&ticket===generation)working=false;}
+      }catch(error){if(!disposed&&ticket===generation)message(error.status===408&&uploadStarted&&!uploadAccepted?'Die Dateiübertragung wurde wegen Zeitüberschreitung beendet (HTTP 408). Die Dateiauswahl bleibt erhalten. Bitte das Upload-Zeitlimit erhöhen und erneut hochladen.':error.message);}
+      finally{password='';if(!disposed&&ticket===generation){working=false;updateUploadTimeout();}}
     }
     let wasVisible=false;
     const visibility=()=>{
@@ -326,7 +353,14 @@
       publicationView?.destroy();publicationView=null;
       if(!next){cancel();body.replaceChildren();selected=null;logState=null;}else void load();
     };
-    const change=event=>{
+    const change=async event=>{
+      if(event.target===el('upload-timeout')) {
+        if(working||!context?.projection?.prepare)return;
+        if(el('upload-timeout-status'))el('upload-timeout-status').textContent='';
+        const ticket=generation;
+        try{await saveUploadPolicy();}catch(error){if(!disposed&&ticket===generation)message(error.message);}
+        return;
+      }
       if(event.target===el('kind')) el('kind-hint').textContent=sourceLabel(el('kind').value);
       if(event.target===el('file')) {
         const name=el('file').files[0]?.name||'',kind=kindForFile(name);el('file-name').textContent=name;
