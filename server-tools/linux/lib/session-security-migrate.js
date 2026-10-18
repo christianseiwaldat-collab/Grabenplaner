@@ -51,7 +51,8 @@ async function main(args = process.argv.slice(2)) {
   let result;
   try {
     await client.connect();
-    await client.query("SET lock_timeout='5s';SET statement_timeout='30s'");
+    // Keep the canonical deparse context after the migration commits its LOCAL settings.
+    await client.query("SET search_path=pg_catalog,gp;SET lock_timeout='5s';SET statement_timeout='30s'");
     result = await require("../../../lib/persistence/postgresql/core/session-security").migrate(client, { binding: config.binding });
     await require("../../../lib/persistence/postgresql/boundary/migrate").verifyCoreSchema(client,
       { requireVocationalSchool: true, requireSessionSecurity: true });

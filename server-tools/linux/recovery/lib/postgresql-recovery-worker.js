@@ -12,7 +12,8 @@ async function prepareRestoredSchema({config,connect}){
  // remains untouched and is never opened by the target application.
  const client=connect(core.database,'gp_core_migrator');
  try{
-  await client.connect();await client.query("SET lock_timeout='5s';SET statement_timeout='30s'");
+  // The final schema fingerprint runs after the migrations commit their LOCAL settings.
+  await client.connect();await client.query("SET search_path=pg_catalog,gp;SET lock_timeout='5s';SET statement_timeout='30s'");
   const xoffi=await require('../../../../lib/persistence/postgresql/core/xoffi-snapshots').migrate(client,{binding:config.binding});
   const vocationalSchool=await require('../../../../lib/persistence/postgresql/core/vocational-school').migrate(client,{binding:config.binding});
   const sessionSecurity=await require('../../../../lib/persistence/postgresql/core/session-security').migrate(client,{binding:config.binding});

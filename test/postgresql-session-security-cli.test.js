@@ -24,7 +24,7 @@ function harness(scenario = 'success') {
         sales: { schemaSha256: scenario === 'domain-drift' && inspected === 2 ? 'changed' : 'sales' } }; },
     url(value, domain) { assert.equal(value, config); assert.equal(domain.database, 'fixture_core'); return 'synthetic'; },
   };
-  const client = { async connect() { events.push('connect'); }, async query(sql) { assert.match(sql, /lock_timeout='5s'/); assert.match(sql, /statement_timeout='30s'/); events.push('bounded'); },
+  const client = { async connect() { events.push('connect'); }, async query(sql) { assert.match(sql, /SET search_path=pg_catalog,gp;/); assert.doesNotMatch(sql, /SET LOCAL search_path/); assert.match(sql, /lock_timeout='5s'/); assert.match(sql, /statement_timeout='30s'/); events.push('bounded'); },
     async end() { events.push('end'); } };
   const context = { module: { exports: {} }, __dirname: root + '/server-tools/linux/lib',
     process: { platform: 'linux', getuid: () => 0 }, require(id) {

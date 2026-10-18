@@ -14,7 +14,7 @@ test('restored application copy upgrades school and session security in order th
   const boundary=require('../lib/persistence/postgresql/boundary/migrate');
   const {prepareRestoredSchema}=require('../server-tools/linux/recovery/lib/postgresql-recovery-worker');
   const events=[],binding={environmentId:'synthetic'};
-  const client={async connect(){events.push('connected');},async query(sql){assert.match(sql,/lock_timeout/);events.push('bounded');},async end(){events.push('closed');}};
+  const client={async connect(){events.push('connected');},async query(sql){assert.match(sql,/SET search_path=pg_catalog,gp;/);assert.doesNotMatch(sql,/SET LOCAL search_path/);assert.match(sql,/lock_timeout/);events.push('bounded');},async end(){events.push('closed');}};
   t.mock.method(migration,'migrate',async(c,options)=>{assert.equal(c,client);assert.equal(options.binding,binding);events.push('migrated');return {applied:true,digest:'synthetic'};});
   t.mock.method(school,'migrate',async(c,options)=>{assert.equal(c,client);assert.equal(options.binding,binding);events.push('school');return {applied:false};});
   t.mock.method(security,'migrate',async(c,options)=>{assert.equal(c,client);assert.equal(options.binding,binding);events.push('security');return {applied:true};});
@@ -31,4 +31,25 @@ test('restored application copy upgrades school and session security in order th
   await assert.rejects(prepareRestoredSchema({config,connect}),/rejected schema/);
   assert.equal(events.at(-1),'closed');
   await assert.rejects(prepareRestoredSchema({config:{domains:[]},connect}),/PG_RECOVERY_CORE_MISSING/);
+});
+
+test('native restored-schema verification survives migration commits with a restricted initial search path',{
+  skip:!process.env.GP_CORE_MIGRATOR_URL,timeout:45000,
+},async()=>{
+  const {Client}=require('pg');
+  const url=new URL(process.env.GP_CORE_MIGRATOR_URL);
+  assert.equal(url.hostname,'127.0.0.1');
+  assert.ok(['55482','55483'].includes(url.port));
+  assert.equal(url.pathname,'/gp_migration_core');
+  assert.equal(url.username,'gp_core_migrator');
+  const {prepareRestoredSchema}=require('../server-tools/linux/recovery/lib/postgresql-recovery-worker');
+  const config={domains:[{domain:'core',database:'gp_migration_core'}]};
+  const connect=(database,role)=>{
+    assert.equal(database,'gp_migration_core');assert.equal(role,'gp_core_migrator');
+    return new Client({connectionString:url.href,options:'-c search_path=pg_catalog'});
+  };
+  const first=await prepareRestoredSchema({config,connect});
+  assert.equal(typeof first.sessionSecurity.applied,'boolean');
+  const repeated=await prepareRestoredSchema({config,connect});
+  assert.equal(repeated.sessionSecurity.applied,false);
 });
