@@ -39250,6 +39250,7 @@ require('./lib/sales-article-local-notes-routes').registerSalesArticleLocalNotes
 require('./lib/sales-recent-articles').register(app,{...salesArticleToolAuth,preferences:uiPreferencesRepository,
   vault:integrationSecretVault,projectionFor:salesArticleCatalogProjectionForSession});
 require('./lib/sales-article-report-routes').register(app,{...salesArticleToolAuth,preferences:uiPreferencesRepository,
+  savedReports:require('./lib/sales-article-report-store').createSalesArticleReportStore({access:persistenceProvider,vault:integrationSecretVault,scopeId:'grabenplaner-main'}),
   vault:integrationSecretVault,loadReport:(fresh,kind,input)=>tradeInsightRuntime.run(fresh,'article-report-'+kind,input)});
 require('./lib/sales-article-tools-routes').registerSalesArticleToolsRoutes(app,{
   ...salesArticleToolAuth, preferences:uiPreferencesRepository,notes:salesArticleLocalNotesRepository,images:salesArticleImagesRepository,

@@ -1,6 +1,6 @@
 # GP-Druckfenster
 
-Stand: 13.10.2026 · GP-Standard Druck & PDF, Fassung 7.
+Stand: 18.10.2026 · GP-Standard Druck & PDF, Fassung 8.
 
 Neue und überarbeitete PDF-Ausgaben verwenden den gemeinsamen Baustein `public/gp-print-window.js`. Er ergänzt den Fensterstandard aus `public/gp-window.js`; es wird kein Browserfenster geöffnet.
 
@@ -42,6 +42,8 @@ Alle genannten Fachadapter führen über `GpPrintWindow` oder `GpExistingPdfWind
 Aktuell verwenden Artikel-Auswertung, Artikelstammblatt, ABC-Analyse, Abverkaufs-Simulation und Maßnahmenliste diesen Baustein. Im Artikelstamm bleiben die Bereiche, das optionale Foto, die zuletzt gestarteten Historienfilter und die Erweiterung des Dateinamens erhalten. Eigener PDF-Titel und A4-Ausrichtung werden im serverseitig erzeugten Stammblatt umgesetzt.
 
 Die ABC-Ausgabe verwendet einen kontogebundenen serverseitigen Auswertungsnachweis (`exportToken`). Der Browser liefert keine Finanzzeilen. Alle Ergebniszeilen, Klassenanteile und Prüfhinweise werden aus dem vollständigen geprüften Stand erzeugt; die Seitennavigation der Bildschirmtabelle begrenzt den Export nicht. Rechte und Quellstand werden auch nach der PDF-Erstellung erneut geprüft.
+
+Die Artikel-Auswertung bietet „Auswertung“ und „Berichte“. „Bericht speichern“ legt ausdrücklich die aktuell dargestellten PDF-Bytes zusammen mit Filtern, Spalten, Titel und Ausrichtung im persönlichen Berichtskatalog ab. Ein kurzlebiger, kontogebundener Vorschau-Nachweis verbindet Anzeige und Speicherung; geänderte Optionen verlangen eine neue Vorschau. „PDF ansehen“ öffnet die unveränderte Datei im `GpExistingPdfWindow`. „Einstellungen öffnen“ berechnet mit den gespeicherten Einstellungen den aktuellen Datenstand neu; erneutes Speichern erstellt einen weiteren Bericht. Das Löschen entfernt die PDF und ihre Metadaten gemeinsam. Konto- und Rechtewechsel verwerfen geladene Listen, Einstellungen und Vorschauen; jeder Zugriff prüft die aktuellen Filial- und Spaltenrechte. Die Ablage ist auf 50 Berichte und 100 MiB pro Konto sowie 10 MiB je PDF begrenzt.
 
 Die Simulation exportiert einen geprüften aktuellen Szenariostand oder die konkrete Version einer gespeicherten persönlichen Variante. Ein gewählter Variantenvergleich enthält seine Annahmen und Herkunft. Historische Varianten werden beim Export nicht automatisch mit neuen Preisen überschrieben. Geänderte, noch nicht berechnete Eingaben sperren den Download.
 

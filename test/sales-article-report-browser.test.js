@@ -15,7 +15,8 @@ for (let article = 1; article <= 35; article++) for (const locationId of ['05','
     internetGross:String(89 + article * 10), averageCost:String(40 + article), marginPercent:String(20 + article % 12), stockValue:String((40 + article) * (article % 7 + 1)) });
 }
 function rowsFor(filters, owner) {
-  let rows = exampleRows.filter(row => (!filters.locations?.length || filters.locations.includes(row.locationId))
+  assert.ok(Array.isArray(filters.locations) && filters.locations.length, 'The browser must explicitly select at least one branch');
+  let rows = exampleRows.filter(row => filters.locations.includes(row.locationId)
     && (filters.stock !== 'positive' || Number(row.quantity) > 0)
     && (!filters.assortment || filters.assortment === 'all' || (filters.assortment === 'sellout' ? row.assortment === 'Abverkauf' : row.assortment === 'Auslaufartikel'))
     && (!filters.query || (row.articleNumber + ' ' + row.description).toLowerCase().includes(filters.query.toLowerCase())));
@@ -29,7 +30,7 @@ function rowsFor(filters, owner) {
 }
 
 test('article report protects account state and renders sortable branch reports and real PDF windows', {
-  skip:process.env.GP_ARTICLE_REPORT_BROWSER_TEST !== '1', timeout:90000,
+  skip:process.env.GP_ARTICLE_REPORT_BROWSER_TEST !== '1', timeout:150000,
 }, async t => {
   const { chromium } = require(process.env.GP_BROWSER_TEST_MODULE || 'playwright');
   const browser = await chromium.launch({headless:true, ...(process.env.GP_BROWSER_EXECUTABLE ? {executablePath:process.env.GP_BROWSER_EXECUTABLE} : {}), args:['--no-first-run']});
@@ -45,7 +46,8 @@ test('article report protects account state and renders sortable branch reports 
       const rows = rowsFor(options.filters,owner), spec = Pdf.normalize(options,caps);
       const result = await Pdf.render({spec,report:{available:true,rows,total:rows.length,hasMore:false,sourceAt:'2026-10-08T03:00:00Z'},generatedAt:'2026-10-08T12:00:00Z'});
       pdfSamples.push({...result,options});
-      return {base64:result.buffer.toString('base64'),pages:result.pages,rows:result.rows,name:result.name};
+      return {base64:result.buffer.toString('base64'),pages:result.pages,rows:result.rows,name:result.name,
+        spec:{...spec,columns:spec.columns.map(column=>column.id)}};
     });
     const source = fs.readFileSync(path.join(repo,'public/index.html'),'utf8');
     const start = source.indexOf('<section id="salesArticleReportView"'), end = source.indexOf('<section id="receiptSearchView"',start);
@@ -75,10 +77,12 @@ test('article report protects account state and renders sortable branch reports 
     });
     await new Promise(resolve=>localServer.listen(0,'127.0.0.1',resolve));
     await page.goto('http://127.0.0.1:'+localServer.address().port+'/');
-    for (const file of ['gp-window-preferences.js','gp-window.js','table-layout.js','sales-article-report-pdf-preview.js','gp-print-window.js','sales-article-report.js']) await page.addScriptTag({url:'/'+file});
+    for (const file of ['gp-window-preferences.js','gp-window.js','table-layout.js','sales-article-report-pdf-preview.js','gp-print-window.js','gp-existing-pdf-window.js','sales-article-report.js']) await page.addScriptTag({url:'/'+file});
     await page.evaluate(({columns,rows}) => {
       window.actor='A';window.allowed=true;window.pageActive=true;window.reportXss=0;window.apiCalls=[];window.pdfCalls=[];window.openedArticles=[];
       window.holdPreferences=true;window.preferenceReleases=[];window.holdQuery=false;window.queryReleases=[];window.holdPdf=false;window.pdfReleases=[];
+      window.savedReports={A:[],B:[]};window.previewFixtures={};window.previewCounter=0;window.savedPdfCalls=[];
+      window.holdReports=false;window.reportsReleases=[];window.holdSavedPdf=false;window.savedPdfReleases=[];
       window.fixtureContext={available:true,columns,defaultColumns:['articleNumber','description','assortment','location','quantity','ordered','retailGross','marginPercent'],
         sortiments:[{id:'sellout',label:'Abverkauf'},{id:'discontinued',label:'Auslaufartikel'}],locations:[{id:'05',label:'05 · Beispiel West'},{id:'11',label:'11 · Beispiel Mitte'},{id:'18',label:'18 · Beispiel Ost'}]};
       window.persisted={A:{preferences:{columns:[...fixtureContext.defaultColumns],columnWidths:{description:310},sort:'articleNumber',direction:'asc'},revision:1},
@@ -98,14 +102,48 @@ test('article report protects account state and renders sortable branch reports 
           if(holdQuery)await new Promise(resolve=>queryReleases.push(resolve));
           return result;
         }
+        if(url.endsWith('/reports')) {
+          if(options.method==='POST') {
+            const token=JSON.parse(options.body).previewToken,preview=previewFixtures[token];
+            if(!preview||preview.owner!==owner)throw Object.assign(Error('Die Vorschau ist abgelaufen. Bitte erneut erstellen.'),{status:410,code:'ARTICLE_REPORT_PREVIEW_EXPIRED'});
+            let report=savedReports[owner].find(item=>item.token===token);
+            if(!report) {
+              const {rendered}=preview,metadata={id:'report-'+token,title:rendered.spec.title,name:rendered.name,
+                createdAt:'2026-10-18T12:00:00Z',sourceAt:'2026-10-08T03:00:00Z',pages:rendered.pages,rows:rendered.rows,
+                bytes:atob(rendered.base64).length,filters:copy(rendered.spec.filters)};
+              report={...metadata,spec:copy(rendered.spec),base64:rendered.base64,token};savedReports[owner].unshift(report);
+            }
+            const {base64,spec,token:ignored,...metadata}=report;return {report:copy(metadata)};
+          }
+          const reports=copy(savedReports[owner].map(({base64,spec,token,...metadata})=>metadata));
+          if(holdReports)await new Promise(resolve=>reportsReleases.push(resolve));
+          return {reports,limits:{reports:50,bytes:104857600,pdfBytes:10485760}};
+        }
+        const savedMatch=url.match(/\/reports\/([^/]+)$/);
+        if(savedMatch) {
+          const report=savedReports[owner].find(item=>item.id===decodeURIComponent(savedMatch[1]));
+          if(!report)throw Object.assign(Error('Bericht nicht gefunden.'),{status:404});
+          if(options.method==='DELETE'){savedReports[owner]=savedReports[owner].filter(item=>item!==report);return {removed:true};}
+          const {base64,token,...detail}=report;return {report:copy(detail)};
+        }
         throw Error('Unexpected API '+url);
       };
-      window.reportRawApi=async (url,options) => {
-        const owner=actor,body=JSON.parse(options.body);pdfCalls.push({url,owner,body,signal:options.signal});
+      window.reportRawApi=async (url,options={}) => {
+        const owner=actor,savedMatch=url.match(/\/reports\/([^/]+)\/pdf(?:-preview)?$/);
+        if(savedMatch) {
+          savedPdfCalls.push({url,owner,method:options.method||'GET',signal:options.signal});
+          const report=copy(savedReports[owner].find(item=>item.id===decodeURIComponent(savedMatch[1]))||null);
+          if(!report)return new Response(null,{status:404});
+          if(holdSavedPdf)await new Promise(resolve=>savedPdfReleases.push(resolve));
+          return new Response(Uint8Array.from(atob(report.base64),char=>char.charCodeAt(0)),{headers:{'Content-Type':'application/pdf',
+            'Content-Disposition':'inline; filename="'+report.name+'"','X-PDF-Pages':String(report.pages),'X-Report-Rows':String(report.rows)}});
+        }
+        const body=JSON.parse(options.body);pdfCalls.push({url,owner,body,signal:options.signal});
         const rendered=await articleReportPdf(body,owner);
+        const token='preview-'+(++previewCounter);previewFixtures[token]={owner,rendered};
         if(holdPdf)await new Promise(resolve=>pdfReleases.push(resolve));
         const buffer=Uint8Array.from(atob(rendered.base64),char=>char.charCodeAt(0));
-        return new Response(buffer,{headers:{'Content-Type':'application/pdf','X-PDF-Pages':String(rendered.pages),'X-Report-Rows':String(rendered.rows)}});
+        return new Response(buffer,{headers:{'Content-Type':'application/pdf','X-PDF-Pages':String(rendered.pages),'X-Report-Rows':String(rendered.rows),'X-Report-Preview-Token':token}});
       };
       window.geometrySaved={};
       window.windowStore=GpWindow.createPreferences({key:()=>actor,canUse:()=>allowed,read:async()=>({version:1,windows:geometrySaved[actor]||{}}),write:async value=>{geometrySaved[actor]=copy(value.windows);}});
@@ -113,7 +151,7 @@ test('article report protects account state and renders sortable branch reports 
         api:reportApi,rawApi:reportRawApi,key:()=>actor,canUse:()=>allowed,active:()=>pageActive,windowPreferences:windowStore,scale:()=>1,openArticle:id=>openedArticles.push(id)});window.activation=ui.activate();};
       mountReport();
     }, {columns:Model.columnsFor(caps),rows:exampleRows});
-    const main = page.locator('#salesArticleReportWorkspace'), pdf = page.locator('.gp-print-window');
+    const main = page.locator('#salesArticleReportWorkspace'), pdf = page.locator('[data-gp-print-id="article-report-pdf"]'), savedPdf = page.locator('[data-gp-print-id="article-report-saved-pdf"]');
     const screenshot = async name => {
       if (!process.env.GP_ARTICLE_REPORT_SCREENSHOTS) return;
       fs.mkdirSync(process.env.GP_ARTICLE_REPORT_SCREENSHOTS,{recursive:true});
@@ -124,6 +162,7 @@ test('article report protects account state and renders sortable branch reports 
     const prepareAccount=async owner=>{
       await page.evaluate(value=>{holdPreferences=false;while(preferenceReleases.length)preferenceReleases.shift()();fixtureContext.available=true;allowed=true;pageActive=true;actor=value;windowStore.invalidate();ui.sync();},owner);
       await page.waitForFunction(()=>ui.state.preferencesReady);
+      await main.locator('[data-report-tab=query]').click();
       await main.locator('[type=submit]').click();await page.waitForFunction(()=>ui.state.total>0);
     };
     const fingerprint=()=>pdf.locator('canvas').evaluate(canvas=>{const pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;let hash=2166136261;for(let i=0;i<pixels.length;i+=16)hash=Math.imul(hash^pixels[i],16777619);return {width:canvas.width,height:canvas.height,label:canvas.getAttribute('aria-label'),hash:hash>>>0};});
@@ -195,7 +234,7 @@ test('article report protects account state and renders sortable branch reports 
       await screenshot('05-article-report-light.png');
     });
     await baseline('PDF uses complete rows and real renderer; GP window moves, resizes, minimizes and closes',async()=>{
-      await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-download]').disabled);
+      await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-download]').disabled);
       assert.equal(await pdf.locator('.gp-window-grip').count(),1);
       assert.equal(await pdf.locator('[data-gp-window-edge]').count(),8);
       assert.match(await pdf.locator('[data-gp-print-count]').textContent(),/\d+ Seiten · \d+ Zeilen/);
@@ -209,10 +248,10 @@ test('article report protects account state and renders sortable branch reports 
       assert.ok(await pdf.locator('canvas').evaluate(canvas=>{const bytes=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;let ink=0;for(let i=0;i<bytes.length;i+=32)if(bytes[i]<220&&bytes[i+1]<220&&bytes[i+2]<220)ink++;return ink>50;}),'First open renders real PDF text without native-viewer warm-up');
       await screenshot('06-article-report-pdf-window.png');
       const fitted=await pdf.locator('canvas').evaluate(canvas=>canvas.width);
-      await pdf.locator('[data-preview-next]').click();await page.waitForFunction(()=>document.querySelector('[data-preview-page]').textContent.startsWith('Seite 2 /'));
+      await pdf.locator('[data-preview-next]').click();await page.waitForFunction(()=>document.querySelector('[data-gp-print-id="article-report-pdf"] [data-preview-page]').textContent.startsWith('Seite 2 /'));
       assert.match(await pdf.locator('canvas').getAttribute('aria-label'),/PDF-Seite 2/);
-      await pdf.locator('[data-preview-zoom]').selectOption('1');await page.waitForFunction(before=>document.querySelector('[data-gp-print-viewer] canvas').width>before,fitted);
-      await pdf.locator('[data-preview-prev]').click();await page.waitForFunction(()=>document.querySelector('[data-preview-page]').textContent.startsWith('Seite 1 /'));
+      await pdf.locator('[data-preview-zoom]').selectOption('1');await page.waitForFunction(before=>document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-viewer] canvas').width>before,fitted);
+      await pdf.locator('[data-preview-prev]').click();await page.waitForFunction(()=>document.querySelector('[data-gp-print-id="article-report-pdf"] [data-preview-page]').textContent.startsWith('Seite 1 /'));
       await pdf.locator('[data-preview-zoom]').selectOption('page');
       const before=await pdf.boundingBox(),title=pdf.locator('[data-gp-print-title]'),titleBox=await title.boundingBox();
       await page.mouse.move(titleBox.x+100,titleBox.y+22);await page.mouse.down();await page.mouse.move(110,45,{steps:5});await page.mouse.up();
@@ -222,7 +261,7 @@ test('article report protects account state and renders sortable branch reports 
       await pdf.locator('[data-gp-print-min]').click();assert.equal(Math.round((await pdf.boundingBox()).width),260);assert.equal(Math.round((await pdf.boundingBox()).height),44);
       assert.equal(await pdf.locator('[data-gp-print-body]').isVisible(),false);
       await pdf.locator('[data-gp-print-min]').click();assert.ok((await pdf.boundingBox()).width>1000);
-      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('.gp-print-window').hidden);
+      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('[data-gp-print-id="article-report-pdf"]').hidden);
       assert.equal(await pdf.locator('[data-gp-print-viewer] canvas').count(),0);
       assert.ok(await page.evaluate(()=>geometrySaved.A['article-report-pdf']));
     });
@@ -232,7 +271,7 @@ test('article report protects account state and renders sortable branch reports 
       await page.waitForFunction(()=>pdfReleases.length>=2);
       assert.equal(await pdf.locator('[data-gp-print-download]').isDisabled(),true);
       assert.equal(await page.evaluate(()=>pdfCalls.at(-2).signal.aborted),true);
-      await page.evaluate(()=>pdfReleases.pop()());await page.waitForFunction(()=>!document.querySelector('[data-gp-print-download]').disabled);
+      await page.evaluate(()=>pdfReleases.pop()());await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-download]').disabled);
       const count=await pdf.locator('[data-gp-print-count]').textContent();
       await page.evaluate(()=>{while(pdfReleases.length)pdfReleases.shift()();holdPdf=false;});await page.waitForTimeout(100);
       assert.equal(await pdf.locator('[data-gp-print-count]').textContent(),count);
@@ -240,7 +279,7 @@ test('article report protects account state and renders sortable branch reports 
       const buffer=fs.readFileSync(await downloaded.path());assert.ok(buffer.subarray(0,5).equals(Buffer.from('%PDF-')));
       assert.match(downloaded.suggestedFilename(),/\.pdf$/);assert.equal(buffer.length,pdfSamples.at(-1).buffer.length);
       if(process.env.GP_ARTICLE_REPORT_SCREENSHOTS)fs.writeFileSync(path.join(process.env.GP_ARTICLE_REPORT_SCREENSHOTS,'article-report-example.pdf'),buffer);
-      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('.gp-print-window').hidden);
+      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('[data-gp-print-id="article-report-pdf"]').hidden);
     });
     await baseline('page navigation aborts an in-flight PDF and releases its preview while retaining report options for return',async()=>{
       const selection=await page.evaluate(()=>ui.state.filters),total=await page.evaluate(()=>ui.state.total);
@@ -252,31 +291,31 @@ test('article report protects account state and renders sortable branch reports 
       assert.equal(await pdf.locator('canvas').count(),0,'A suspended print window releases PDF bytes and its viewer');
       assert.equal(await pdf.locator('[data-gp-print-download]').isDisabled(),true);
       assert.equal(await pdf.isVisible(),false);
-      await page.evaluate(()=>{pageActive=true;ui.activate();});await page.waitForFunction(()=>!document.querySelector('.gp-print-window').hidden&&document.querySelector('[data-gp-print-viewer] canvas')?.width>100);
+      await page.evaluate(()=>{pageActive=true;ui.activate();});await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"]').hidden&&document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-viewer] canvas')?.width>100);
       assert.equal(await page.evaluate(()=>pdfCalls.length),requestCount+1,'Returning creates a fresh PDF from the retained selection');
       assert.deepEqual(await page.evaluate(()=>pdfCalls.at(-1).body),submitted);
       assert.equal(await pdf.locator('canvas').count(),1);assert.deepEqual(await page.evaluate(()=>ui.state.filters),selection);assert.equal(await page.evaluate(()=>ui.state.total),total);
-      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('.gp-print-window').hidden);
+      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('[data-gp-print-id="article-report-pdf"]').hidden);
     });
     await baseline('light and dark page screenshots and narrow layout remain usable',async()=>{
       await page.evaluate(()=>{document.documentElement.dataset.activePageTheme='dark';document.getElementById('salesArticleReportView').dataset.pageTheme='dark';});
       await screenshot('07-article-report-dark.png');
-      await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-download]').disabled);
+      await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-download]').disabled);
       await screenshot('08-article-report-pdf-dark.png');
-      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('.gp-print-window').hidden);
+      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('[data-gp-print-id="article-report-pdf"]').hidden);
       await page.evaluate(()=>{document.documentElement.dataset.activePageTheme='light';document.getElementById('salesArticleReportView').dataset.pageTheme='light';});
       await page.setViewportSize({width:560,height:900});
       await screenshot('09-article-report-narrow.png');
       const out=await main.locator('form input,form select,form button').evaluateAll(nodes=>nodes.filter(n=>{const r=n.getBoundingClientRect();return r.width&&(r.left<-1||r.right>innerWidth+1);}).map(n=>n.name||n.textContent));
       assert.deepEqual(out,[]);
-      await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-download]').disabled);
+      await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-download]').disabled);
       await pdf.locator('[data-gp-print-form] details>summary').click();await pdf.locator('canvas').scrollIntoViewIfNeeded();
       await screenshot('12-article-report-pdf-narrow.png');
       const pdfOut=await pdf.locator('input,select,button').evaluateAll(nodes=>nodes.filter(n=>{const r=n.getBoundingClientRect();return r.width&&(r.left<-1||r.right>innerWidth+1);}).map(n=>n.name||n.textContent));
       assert.deepEqual(pdfOut,[]);assert.ok((await pdf.boundingBox()).width<=560);
       const windowBox=await pdf.boundingBox(),footerBox=await pdf.locator('.gp-print-footer').boundingBox();
       assert.ok(Math.abs(windowBox.y+windowBox.height-footerBox.y-footerBox.height)<3,'Download footer stays at the lower window edge while preview scrolls');
-      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('.gp-print-window').hidden);
+      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('[data-gp-print-id="article-report-pdf"]').hidden);
       await page.setViewportSize({width:1600,height:1100});
     });
     await baseline('account change rejects late results and permission revocation clears rows and PDF',async()=>{
@@ -287,7 +326,7 @@ test('article report protects account state and renders sortable branch reports 
       await main.locator('[type=submit]').click();await page.waitForFunction(()=>ui.state.total>0&&ui.state.rows[0].description.includes('Konto B'));
       await page.evaluate(()=>queryReleases.shift()());await page.waitForTimeout(100);
       assert.equal(await main.locator('tbody').textContent().then(text=>text.includes('Konto B')),true);
-      await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-download]').disabled);
+      await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-download]').disabled);
       await page.evaluate(()=>{allowed=false;ui.sync();});
       assert.equal(await main.locator('[data-report-pdf]').isDisabled(),true);
       assert.equal(await pdf.isVisible(),false);assert.equal(await main.locator('tbody img').count(),0);assert.equal(await page.evaluate(()=>ui.state.rows.length),0);
@@ -309,9 +348,9 @@ test('article report protects account state and renders sortable branch reports 
       await page.evaluate(()=>holdPdf=true);await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>pdfReleases.length===1);
       const heldCall=await page.evaluate(()=>pdfCalls.length-1);
       await page.evaluate(()=>holdPdf=false);await prepareAccount('B');
-      await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-download]').disabled);
+      await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-download]').disabled);
       await pdf.locator('[name=title]').fill('BEISPIEL Konto B - aktueller Bericht');await pdf.locator('[name=filename]').fill('Konto-B-Auswertung');
-      await page.waitForFunction(()=>!document.querySelector('[data-gp-print-download]').disabled);await page.waitForTimeout(200);
+      await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-download]').disabled);await page.waitForTimeout(200);
       const before=await fingerprint(),count=await pdf.locator('[data-gp-print-count]').textContent(),renderedB=pdfSamples.at(-1);
       assert.equal(await page.evaluate(index=>pdfCalls[index].signal.aborted,heldCall),true);
       await page.evaluate(()=>pdfReleases.shift()());await page.waitForTimeout(200);
@@ -319,11 +358,11 @@ test('article report protects account state and renders sortable branch reports 
       assert.equal(await pdf.locator('[data-gp-print-download]').isDisabled(),false);
       const downloadPromise=page.waitForEvent('download',{timeout:3000});await pdf.locator('[data-gp-print-download]').click();const download=await downloadPromise;
       assert.equal(download.suggestedFilename(),'Konto-B-Auswertung.pdf');assert.ok(fs.readFileSync(await download.path()).equals(renderedB.buffer));
-      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('.gp-print-window').hidden);
+      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('[data-gp-print-id="article-report-pdf"]').hidden);
     });
     await t.test('table column changes preserve independently configured PDF while open and minimized',async()=>{
-      await prepareAccount('A');await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-download]').disabled);
-      await pdf.locator('[data-report-pdf-columns] input[value=quantity]').uncheck();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-download]').disabled);
+      await prepareAccount('A');await main.locator('[data-report-pdf]').click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-download]').disabled);
+      await pdf.locator('[data-report-pdf-columns] input[value=quantity]').uncheck();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-download]').disabled);
       const titleBox=await pdf.locator('[data-gp-print-title]').boundingBox();await page.mouse.move(titleBox.x+100,titleBox.y+22);await page.mouse.down();await page.mouse.move(110,45,{steps:4});await page.mouse.up();
       // Keep the separate table's chooser exposed beside the print window.
       const east=await pdf.locator('[data-gp-window-edge=e]').boundingBox();await page.mouse.move(east.x+east.width/2,east.y+100);await page.mouse.down();await page.mouse.move(east.x+east.width/2-220,east.y+100,{steps:4});await page.mouse.up();
@@ -340,7 +379,131 @@ test('article report protects account state and renders sortable branch reports 
       assert.equal(await pdf.locator('[data-gp-print-count]').textContent(),count);assert.equal(await page.evaluate(()=>pdfCalls.length),requests,'Table layout changes do not request a new PDF');
       const downloadPromise=page.waitForEvent('download',{timeout:3000});await pdf.locator('[data-gp-print-download]').click();const download=await downloadPromise;
       assert.ok(fs.readFileSync(await download.path()).equals(rendered.buffer));
-      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('.gp-print-window').hidden);
+      await pdf.locator('[data-gp-print-close]').click();await page.waitForFunction(()=>document.querySelector('[data-gp-print-id="article-report-pdf"]').hidden);
+    });
+    let savedId,savedBytes,savedSpec;
+    await t.test('bulk branch selection is explicit and an empty selection sends no query or PDF',async()=>{
+      await prepareAccount('A');
+      await main.locator('[data-report-branches]>summary').click();
+      await main.locator('[data-report-select-none]').click();
+      assert.equal(await main.locator('[data-report-branch-options] input:checked').count(),0);
+      const queries=await page.evaluate(()=>apiCalls.filter(call=>call.url.includes('/query?')).length),pdfCount=pdfSamples.length;
+      await main.locator('[data-report-branches]>summary').click();await main.locator('[type=submit]').click();
+      assert.match(await main.locator('[data-report-status]').textContent(),/mindestens eine Filiale/);
+      assert.equal(await page.evaluate(()=>apiCalls.filter(call=>call.url.includes('/query?')).length),queries);
+      assert.equal(pdfSamples.length,pdfCount);assert.equal(await main.locator('[data-report-pdf]').isDisabled(),true);
+      await main.locator('[data-report-branches]>summary').click();await main.locator('[data-report-select-all]').click();
+      assert.equal(await main.locator('[data-report-branch-options] input:checked').count(),3);
+      await main.locator('[data-report-branches]>summary').click();await main.locator('[type=submit]').click();
+      await page.waitForFunction(()=>ui.state.total>0);
+      assert.deepEqual(await page.evaluate(()=>ui.state.filters.locations),['05','11','18']);
+    });
+    await t.test('saving archives the ready PDF once and the reports tab opens the exact saved bytes',async()=>{
+      await main.locator('[data-report-pdf]').click();
+      await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-report-save]').disabled);
+      await pdf.locator('[name=title]').fill('BEISPIEL Abverkauf Oktober');await pdf.locator('[name=filename]').fill('Beispiel-Abverkauf-Oktober');
+      await pdf.locator('[name=orientation]').selectOption('portrait');
+      await pdf.locator('[data-report-pdf-columns] input[value=quantity]').check();
+      await pdf.locator('[data-report-pdf-columns] input[value=articleNumber]').uncheck();
+      await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-report-save]').disabled);
+      savedBytes=pdfSamples.at(-1).buffer;const renderedCount=pdfSamples.length;
+      await pdf.locator('[data-report-save]').click();
+      await page.waitForFunction(()=>document.querySelector('[data-report-save-status]').textContent.includes('gespeichert'));
+      assert.equal(await pdf.locator('[data-report-save]').isDisabled(),true,'An unchanged ready preview cannot be saved twice');
+      assert.equal(pdfSamples.length,renderedCount,'Saving must not regenerate the shown PDF');
+      ({id:savedId,spec:savedSpec}=await page.evaluate(()=>({id:savedReports.A[0].id,spec:savedReports.A[0].spec})));
+      assert.equal(await page.evaluate(()=>savedReports.A.length),1);
+      const saveCall=await page.evaluate(()=>apiCalls.findLast(call=>call.url.endsWith('/reports')&&call.method==='POST'));
+      assert.deepEqual(Object.keys(saveCall.body),['previewToken']);assert.ok(saveCall.body.previewToken);
+      await pdf.locator('[data-gp-print-close]').click();await main.locator('[data-report-tab=reports]').click();
+      await main.locator(`[data-report-saved-view="${savedId}"]`).waitFor();
+      assert.equal(await main.locator('[data-report-tab=reports]').getAttribute('aria-selected'),'true');
+      assert.equal(await main.locator('[data-report-panel=query]').isVisible(),false);
+      assert.match(await main.locator('[data-report-saved-list]').textContent(),/BEISPIEL Abverkauf Oktober.*Zeilen/s);
+      await screenshot('13-article-report-saved-desktop.png');
+      // The current source can change; opening a saved report must still use its original PDF bytes.
+      const original=exampleRows[0].description;exampleRows[0].description='BEISPIEL inzwischen geänderter Artikel';
+      try{
+        await main.locator(`[data-report-saved-view="${savedId}"]`).click();
+        await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-saved-pdf"] [data-gp-print-download]').disabled);
+        assert.equal(await savedPdf.locator('canvas').count(),1);assert.equal(pdfSamples.length,renderedCount);
+        assert.equal(await page.evaluate(()=>savedPdfCalls.at(-1).method),'GET');
+        const downloadPromise=page.waitForEvent('download',{timeout:3000});await savedPdf.locator('[data-gp-print-download]').click();const download=await downloadPromise;
+        assert.equal(download.suggestedFilename(),'Beispiel-Abverkauf-Oktober.pdf');assert.ok(fs.readFileSync(await download.path()).equals(savedBytes));
+        await screenshot('14-article-report-saved-pdf-desktop.png');
+      }finally{exampleRows[0].description=original;}
+      await savedPdf.locator('[data-gp-print-close]').click();
+    });
+    await t.test('saved settings query current data and reopen the editor without changing the saved snapshot',async()=>{
+      const before=pdfSamples.length;
+      await main.locator(`[data-report-saved-edit="${savedId}"]`).click();
+      await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-pdf"] [data-gp-print-download]').disabled);
+      assert.equal(await main.locator('[data-report-tab=query]').getAttribute('aria-selected'),'true');
+      assert.deepEqual(await page.evaluate(()=>ui.state.filters.locations),savedSpec.filters.locations);
+      assert.equal(await pdf.locator('[name=title]').inputValue(),savedSpec.title);
+      assert.equal(await pdf.locator('[name=orientation]').inputValue(),savedSpec.orientation);
+      assert.deepEqual(await pdf.locator('[data-report-pdf-columns] input:checked').evaluateAll(nodes=>nodes.map(n=>n.value)),savedSpec.columns);
+      assert.equal(savedSpec.columns.includes('articleNumber'),false,'The saved PDF may omit article numbers');
+      assert.equal(await main.locator('thead [data-report-sort=articleNumber]').count(),1,'The on-screen table retains its mandatory article number column');
+      await page.waitForFunction(()=>persisted.A.preferences.columns.includes('articleNumber'));
+      assert.ok(pdfSamples.length>before,'A settings reopen explicitly creates a new current-data preview');
+      assert.equal(await page.evaluate(()=>savedReports.A.length),1);
+      assert.ok(Buffer.from(await page.evaluate(()=>savedReports.A[0].base64),'base64').equals(savedBytes));
+      await pdf.locator('[data-gp-print-close]').click();await main.locator('[data-report-tab=reports]').click();
+      await main.locator(`[data-report-saved-view="${savedId}"]`).waitFor();
+      await page.evaluate(id=>{savedReports.A.find(report=>report.id===id).spec.filters.locations=['99'];},savedId);
+      const queries=await page.evaluate(()=>apiCalls.filter(call=>call.url.includes('/query?')).length);
+      await main.locator(`[data-report-saved-edit="${savedId}"]`).click();
+      await page.waitForFunction(()=>document.querySelector('[data-report-status]').textContent.includes('verfügbare Filiale'));
+      assert.equal(await page.evaluate(()=>apiCalls.filter(call=>call.url.includes('/query?')).length),queries);
+      assert.equal(await pdf.isVisible(),false);assert.equal(await main.locator('[data-report-branch-options] input:checked').count(),0);
+      await page.evaluate(({id,spec})=>{savedReports.A.find(report=>report.id===id).spec=spec;},{id:savedId,spec:savedSpec});
+      await main.locator('[data-report-tab=reports]').click();
+    });
+    await t.test('saved report cards and their real PDF window remain usable on a narrow screen',async()=>{
+      await page.setViewportSize({width:390,height:844});
+      await screenshot('15-article-report-saved-mobile.png');
+      const overflowing=await main.locator('[data-report-panel=reports] button').evaluateAll(nodes=>nodes.filter(node=>{const box=node.getBoundingClientRect();return box.width&&(box.left<-1||box.right>innerWidth+1);}).map(node=>node.textContent));
+      assert.deepEqual(overflowing,[]);
+      await main.locator(`[data-report-saved-view="${savedId}"]`).click();
+      await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-saved-pdf"] [data-gp-print-download]').disabled);
+      await savedPdf.locator('canvas').scrollIntoViewIfNeeded();await screenshot('16-article-report-saved-pdf-mobile.png');
+      const windowBox=await savedPdf.boundingBox(),footerBox=await savedPdf.locator('.gp-print-footer').boundingBox();
+      assert.ok(windowBox.x>=-1&&windowBox.x+windowBox.width<=391);assert.ok(windowBox.y>=-1&&windowBox.y+windowBox.height<=845);
+      assert.ok(Math.abs(windowBox.y+windowBox.height-footerBox.y-footerBox.height)<3);
+      const scrollable=await savedPdf.locator('[data-gp-print-body]').evaluate(node=>({height:node.clientHeight,scroll:node.scrollHeight,top:node.scrollTop}));
+      if(scrollable.scroll>scrollable.height){await savedPdf.locator('[data-gp-print-body]').evaluate(node=>node.scrollTop=0);const box=await savedPdf.locator('[data-gp-print-body]').boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.wheel(0,450);await page.waitForFunction(()=>document.querySelector('[data-gp-print-id="article-report-saved-pdf"] [data-gp-print-body]').scrollTop>0);}
+      await savedPdf.locator('[data-gp-print-close]').click();await page.setViewportSize({width:1600,height:1100});
+    });
+    await t.test('late archive and saved PDF responses cannot expose account A data to account B',async()=>{
+      await page.evaluate(()=>holdSavedPdf=true);await main.locator(`[data-report-saved-view="${savedId}"]`).click();
+      await page.waitForFunction(()=>savedPdfReleases.length===1);
+      await prepareAccount('B');
+      assert.equal(await page.evaluate(()=>savedPdfCalls.at(-1).signal.aborted),true);
+      await page.evaluate(()=>{holdSavedPdf=false;savedPdfReleases.shift()();});await page.waitForTimeout(100);
+      assert.equal(await savedPdf.isVisible(),false);assert.equal(await savedPdf.locator('canvas').count(),0);
+      await main.locator('[data-report-tab=reports]').click();await page.waitForFunction(()=>ui.state.tab==='reports'&&ui.state.reports.length===0);
+      assert.equal(await main.locator(`[data-report-saved-view="${savedId}"]`).count(),0);
+      await prepareAccount('A');await page.evaluate(()=>holdReports=true);await main.locator('[data-report-tab=reports]').click();
+      await page.waitForFunction(()=>reportsReleases.length===1);
+      await page.evaluate(()=>holdReports=false);await prepareAccount('B');await main.locator('[data-report-tab=reports]').click();
+      await page.evaluate(()=>reportsReleases.shift()());await page.waitForTimeout(100);
+      assert.deepEqual(await page.evaluate(()=>ui.state.reports),[]);assert.equal(await main.locator(`[data-report-saved-view="${savedId}"]`).count(),0);
+      await prepareAccount('A');await main.locator('[data-report-tab=reports]').click();await main.locator(`[data-report-saved-view="${savedId}"]`).waitFor();
+      await main.locator(`[data-report-saved-view="${savedId}"]`).click();await page.waitForFunction(()=>!document.querySelector('[data-gp-print-id="article-report-saved-pdf"] [data-gp-print-download]').disabled);
+      await page.evaluate(()=>{allowed=false;ui.sync();});assert.equal(await savedPdf.isVisible(),false);assert.equal(await savedPdf.locator('canvas').count(),0);assert.deepEqual(await page.evaluate(()=>ui.state.reports),[]);
+    });
+    await t.test('saved reports require explicit delete confirmation and cancellation preserves the PDF',async()=>{
+      await prepareAccount('A');await main.locator('[data-report-tab=reports]').click();await main.locator(`[data-report-saved-delete="${savedId}"]`).waitFor();
+      const deletions=await page.evaluate(()=>apiCalls.filter(call=>call.method==='DELETE').length);
+      await main.locator(`[data-report-saved-delete="${savedId}"]`).click();await main.locator(`[data-report-saved-cancel="${savedId}"]`).click();
+      assert.equal(await page.evaluate(()=>apiCalls.filter(call=>call.method==='DELETE').length),deletions);assert.equal(await page.evaluate(()=>savedReports.A.length),1);
+      await main.locator(`[data-report-saved-delete="${savedId}"]`).click();await main.locator(`[data-report-saved-confirm="${savedId}"]`).click();
+      await page.waitForFunction(()=>savedReports.A.length===0&&ui.state.reports.length===0);
+      const deletion=await page.evaluate(()=>apiCalls.findLast(call=>call.method==='DELETE'));
+      assert.equal(deletion.url,'/api/sales/article-report/reports/'+savedId);assert.equal(deletion.body,undefined);
+      assert.equal(await main.locator(`[data-report-saved-view="${savedId}"]`).count(),0);
+      assert.match(await main.locator('[data-report-saved-list]').textContent(),/Noch keine gespeicherten Berichte/);
     });
     assert.deepEqual(errors,[]);
   } finally { await browser.close();if(localServer)await new Promise(resolve=>localServer.close(resolve)); }

@@ -34,11 +34,11 @@ test('report preferences and PDF columns cannot restore withdrawn price or cost 
  assert.equal(Pdf.filename('../../Stock<bad>.pdf'),'Stock.pdf');
  assert.equal(Model.articleNumber('0000000000042'),'000042');
 });
-async function setup(t,{duplicates=false,count=2}={}){
+async function setup(t,{duplicates=false,count=2,allSellout=false,stockQuantity=i=>String(i+2)}={}){
  const f=await fixture(t);f.state.session.permissions=[...rights,...catalogRights];
- const source=Array.from({length:count},(_,i)=>({EAN:String(i+42).padStart(13,'0'),Artikelbezeichnung:`BEISPIEL Kamera ${i}`,Sortimentsart:i?'Lagerware':'Abverkauf',Abverkauf:i===0,DurchschnittEK:'70',MWST:1,Sachkonto:false,OhneBestand:false}));
+ const source=Array.from({length:count},(_,i)=>({EAN:String(i+42).padStart(13,'0'),Artikelbezeichnung:`BEISPIEL Kamera ${i}`,Sortimentsart:allSellout||i===0?'Abverkauf':'Lagerware',Abverkauf:allSellout||i===0,DurchschnittEK:'70',MWST:1,Sachkonto:false,OhneBestand:false}));
  await f.ingest('ARTIKEL_STAMM',source,{master:true});
- const stocks=source.flatMap((a,i)=>[{EAN:a.EAN,FilialID:18,FBestand:String(i+2),Bestellt:'3'},{EAN:a.EAN,FilialID:19,FBestand:'0',Bestellt:'0'}]);
+ const stocks=source.flatMap((a,i)=>[{EAN:a.EAN,FilialID:18,FBestand:stockQuantity(i),Bestellt:'3'},{EAN:a.EAN,FilialID:19,FBestand:'0',Bestellt:'0'}]);
  if(duplicates)stocks.push({...stocks[0],FBestand:'7'});await f.ingest('ARTIKEL_FILIALEN',stocks,{legacy:duplicates,sourceInstance:'tradefoto-trade'});
  const repo=require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.app.provider);
  const price=(type,basis,amount,field)=>({priceType:type,priceBasis:basis,amount,currency:'EUR',qualityStatus:'confirmed',sourceField:field});
@@ -82,7 +82,7 @@ test('PostgreSQL and SQLite reporting packets share a typed snapshot-revision co
  const registered=require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG.find(e=>e.statement===S.catalog);assert.ok(registered);
  const stock=entries.find(e=>e.statement===S.stockCandidates);
  for(const name of ['articles','locations']){const index=stock.parameterBindings.findIndex(binding=>binding.parameter===name)+1;assert.ok(index>0);assert.ok(stock.sql.includes(`jsonb_array_elements_text($${index}::jsonb)`));}
- assert.match(stock.sql,/import_history_snapshot_members/);assert.match(stock.sql,/chosen\s*\.\s*revision/);assert.doesNotMatch(stock.sql,/gp\s*\.\s*json_each/);assert.equal(stock.statement.operation,'queryAll');assert.equal(stock.returning,false);
+ assert.match(stock.sql,/import_history_snapshot_members/);assert.match(stock.sql,/m\s*\.\s*revision\s*=\s*a\s*\.\s*revision/);assert.doesNotMatch(stock.sql,/gp\s*\.\s*json_each/);assert.equal(stock.statement.operation,'queryAll');assert.equal(stock.returning,false);
 });
 test('real PDF has exact page metadata, selected columns, row text and correct A4 orientation',async()=>{
  const {getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -126,6 +126,17 @@ test('protected stock scanning keeps global ordering beyond its packet boundary'
  assert.equal(result.total,205);assert.equal(result.rows[0].quantity,'206');assert.equal(result.rows[1].quantity,'205');assert.equal(result.hasMore,true);
  const tail=await f.run('article-report-query',{locations:['18'],sort:'quantity',direction:'desc',limit:2,offset:204});assert.equal(tail.rows[0].quantity,'2');assert.equal(tail.hasMore,false);
  const all=await f.run('article-report-export',{locations:['18'],stock:'all'});assert.equal(all.rows.length,205);assert.equal(all.hasMore,false);
+});
+
+test('Fil18 sellout selection includes every packet and distinguishes all stock from strictly positive stock',async t=>{
+ const f=await setup(t,{count:205,allSellout:true,stockQuantity:i=>['0','-1','2'][i%3]});
+ const filters={assortment:'sellout',locations:['18'],stock:'all',sort:'articleNumber',limit:100};
+ const first=await f.run('article-report-query',filters),second=await f.run('article-report-query',{...filters,offset:100}),last=await f.run('article-report-query',{...filters,offset:200});
+ assert.equal(first.total,205);assert.equal(first.rows.length,100);assert.equal(second.rows.length,100);assert.equal(last.rows.length,5);assert.equal(last.hasMore,false);
+ const rows=[...first.rows,...second.rows,...last.rows];assert.equal(new Set(rows.map(r=>r.articleNumber)).size,205);assert.ok(rows.every(r=>r.locationId==='18'&&r.assortment==='Abverkauf'));
+ assert.deepEqual(new Set(rows.map(r=>r.quantity)),new Set(['0','-1','2']));
+ const positive=await f.run('article-report-export',{...filters,stock:'positive'});assert.equal(positive.total,68);assert.equal(positive.rows.length,68);assert.ok(positive.rows.every(r=>r.quantity==='2'));assert.equal(positive.summary.quantity,'136');
+ const exported=await f.run('article-report-export',filters);assert.equal(exported.rows.length,205);assert.equal(exported.hasMore,false);
 });
 test('three-branch sellout report never reads 51,000 irrelevant stock payloads and preserves current search names',async t=>{
  const f=await setup(t,{count:8}),db=f.app.database,M=require('../lib/tradefoto-master-profiles'),MS=require('../lib/persistence/statements/import-master-data').IMPORT_MASTER_STATEMENTS,S=require('../lib/sales-article-report-statements');
