@@ -816,6 +816,7 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 const elements = Object.fromEntries(
   [
     "staffAssignmentRequestDeadline",
+    "costCenterActiveCount", "costCenterInactiveCount", "costCenterTypeCount", "costCenterFilterForm", "costCenterSearch", "costCenterFilterType", "costCenterFilterStatus", "costCenterFilterReset", "costCenterResultCount",
     "optionDateRangeButton", "optionDateRangeText", "optionDateRangeDialog", "optionDateRangeForm", "optionDateRangeGrid", "optionDateRangeMonthLabel", "optionDateRangeStartText", "optionDateRangeEndText",
     "optionDateRangePreviousMonth", "optionDateRangeNextMonth", "optionDateRangeOpenEnd", "optionDateRangeApply", "optionDateRangeClose", "optionDateRangeCancel",
     "xoffiComparisonMode", "xoffiComparisonPeriod", "xoffiComparisonDescription", "xoffiComparisonRangeButton", "xoffiComparisonRangeText", "xoffiComparisonRangeLabel",
@@ -10593,15 +10594,15 @@ function renderCostCenterTypes() {
       <div class="cost-center-type-card-meta">
         <span>${type.active ? "Aktiv" : "Archiviert"}</span>
         <span>${type.builtin ? "Standardtyp" : "Eigener Typ"}</span>
-        <span>${Number(type.costCenterCount)} Kostenstelle(n)</span>
-        ${type.isBranch ? `<span>${Number(type.locationCount)} Standort(e)</span>` : ""}
+        <span>${Number(type.costCenterCount)} ${Number(type.costCenterCount) === 1 ? "Kostenstelle" : "Kostenstellen"}</span>
+        ${type.isBranch ? `<span>${Number(type.locationCount)} ${Number(type.locationCount) === 1 ? "Standort" : "Standorte"}</span>` : ""}
       </div>
       <div class="cost-center-type-card-positions">${
         visiblePositions.length
           ? visiblePositions.map((position) => `<span>${escapeHtml(position.name || position.id)}</span>`).join("")
           : "<span>Keine Positionen zugeordnet</span>"
       }${remainingPositions ? `<span>+ ${remainingPositions} weitere</span>` : ""}</div>
-      ${canEdit ? `<button type="button" class="edit-button" data-edit-cost-center-type="${escapeHtmlAttribute(type.id)}">Bearbeiten</button>` : ""}
+      ${canEdit ? `<button type="button" class="edit-button" data-edit-cost-center-type="${escapeHtmlAttribute(type.id)}" aria-label="${escapeHtmlAttribute(`Typ ${type.name || type.code} bearbeiten`)}">Bearbeiten</button>` : ""}
     </article>`;
   }).join("") : '<p class="settings-note">Noch keine Kostenstellentypen angelegt.</p>';
 }
@@ -10609,14 +10610,52 @@ function renderCostCenterTypes() {
 function renderCostCenters() {
   if (!elements.costCenterList) return;
   const canEdit = canWriteCostCenters();
-  const centers = state.costCenters.slice().sort((left, right) => left.code.localeCompare(right.code, "de-AT", { numeric: true, sensitivity: "base" }));
+  const allCenters = state.costCenters.slice().sort((left, right) => left.code.localeCompare(right.code, "de-AT", { numeric: true, sensitivity: "base" }));
+  const typeKey = (center) => String(costCenterTypeByKey(center.typeId || center.typeCode || center.type)?.id || center.typeId || center.typeCode || center.type || "other");
+  if (elements.costCenterActiveCount) elements.costCenterActiveCount.textContent = allCenters.filter((center) => center.active).length;
+  if (elements.costCenterInactiveCount) elements.costCenterInactiveCount.textContent = allCenters.filter((center) => !center.active).length;
+  if (elements.costCenterTypeCount) elements.costCenterTypeCount.textContent = state.costCenterTypes.filter((type) => type.active).length;
+  if (elements.costCenterFilterType) {
+    const selected = elements.costCenterFilterType.value;
+    const types = new Map(state.costCenterTypes.map((type) => [String(type.id), type.name]));
+    allCenters.forEach((center) => types.set(typeKey(center), costCenterTypeLabel(center)));
+    const options = '<option value="">Alle Typen</option>' + [...types].sort((a, b) => a[1].localeCompare(b[1], "de-AT")).map(([id, label]) => `<option value="${escapeHtmlAttribute(id)}">${escapeHtml(label)}</option>`).join("");
+    if (elements.costCenterFilterType.innerHTML !== options) {
+      elements.costCenterFilterType.innerHTML = options;
+      elements.costCenterFilterType.value = types.has(selected) ? selected : "";
+    }
+  }
+  const terms = String(elements.costCenterSearch?.value || "").trim().toLocaleLowerCase("de-AT").split(/\s+/).filter(Boolean);
+  const selectedType = elements.costCenterFilterType?.value || "";
+  const status = elements.costCenterFilterStatus?.value || "";
+  const centers = allCenters.filter((center) => {
+    const text = [center.code, center.name, center.description, costCenterTypeLabel(center)].join(" ").toLocaleLowerCase("de-AT");
+    return terms.every((term) => text.includes(term)) && (!selectedType || typeKey(center) === selectedType)
+      && (!status || (status === "active" ? center.active : !center.active));
+  });
+  if (elements.costCenterResultCount) elements.costCenterResultCount.textContent = `${centers.length} von ${allCenters.length} Kostenstellen`;
   elements.costCenterList.innerHTML = centers.length ? centers.map((center) => `
     <article class="cost-center-card ${center.active ? "" : "inactive"}">
       <div class="cost-center-card-code"><strong>${escapeHtml(center.code || "–")}</strong><span class="status-badge ${center.active ? "" : "inactive"}">${center.active ? "Aktiv" : "Inaktiv"}</span></div>
       <div class="cost-center-card-copy"><span class="eyebrow">${escapeHtml(costCenterTypeLabel(center))}</span><h3>${escapeHtml(center.name || center.code || "Kostenstelle")}</h3>${center.description ? `<p>${escapeHtml(center.description)}</p>` : ""}</div>
       <div class="cost-center-card-counts"><span><strong>${Number(center.employee_count)}</strong> Beschäftigte</span><span><strong>${Number(center.location_count)}</strong> Standorte</span></div>
-      ${canEdit ? `<button type="button" class="edit-button" data-edit-cost-center="${escapeHtmlAttribute(String(center.id))}">Bearbeiten</button>` : ""}
-    </article>`).join("") : '<p class="settings-note">Noch keine Kostenstelle angelegt.</p>';
+      ${canEdit ? `<button type="button" class="edit-button" data-edit-cost-center="${escapeHtmlAttribute(String(center.id))}" aria-label="${escapeHtmlAttribute(`Kostenstelle ${center.code || center.name} bearbeiten`)}">Bearbeiten <span aria-hidden="true">↗</span></button>` : ""}
+    </article>`).join("") : `<div class="cost-center-empty"><strong>${allCenters.length ? "Keine passende Kostenstelle" : "Noch keine Kostenstellen"}</strong><p>${allCenters.length ? "Suchbegriff oder Filter ändern, um weitere Kostenstellen anzuzeigen." : canEdit ? "Lege die erste Kostenstelle über „Kostenstelle anlegen“ an." : "Hier erscheinen die für dich verfügbaren Kostenstellen."}</p></div>`;
+}
+
+function setupCostCenterFilters() {
+  elements.costCenterSearch?.addEventListener("input", renderCostCenters);
+  elements.costCenterFilterType?.addEventListener("change", renderCostCenters);
+  elements.costCenterFilterStatus?.addEventListener("change", renderCostCenters);
+  elements.costCenterFilterForm?.addEventListener("submit", (event) => event.preventDefault());
+  elements.costCenterFilterForm?.addEventListener("reset", (event) => {
+    event.preventDefault();
+    for (const input of [elements.costCenterSearch, elements.costCenterFilterType, elements.costCenterFilterStatus]) {
+      if (input) input.value = "";
+    }
+    renderCostCenters();
+    elements.costCenterSearch?.focus();
+  });
 }
 
 function normalizeCentralVacation(item = {}) {
@@ -17577,7 +17616,7 @@ function renderPersonnelLifecycleOnboardingTasksMarkup() {
         ? `Standort ${task.scope.locationId} · Abteilung ${task.scope.departmentId}`
         : `Standort ${task.scope.locationId}`;
       return `<article class="personnel-workflow-task-card personnel-lifecycle-onboarding-task-card">
-        <div><span class="eyebrow">Schritt ${task.position} · ${escapeHtml(task.workflowCode)}</span><h3>${escapeHtml(task.title)}</h3><p><strong>Einschulung für:</strong> ${escapeHtml(task.subject.displayName)} · Personalnummer ${escapeHtml(task.subject.employeeNumber)}</p><p>${escapeHtml(task.workflowTitle)} · ${escapeHtml(scopeLabel)}</p><small>Aktiv seit ${escapeHtml(personnelWorkflowTimestamp(task.activatedAt))}</small></div>
+        <div><span class="eyebrow">Schritt ${task.position} · Onboarding</span><h3>${escapeHtml(task.title)}</h3><p><strong>Einschulung für:</strong> ${escapeHtml(task.subject.displayName)} · Personalnummer ${escapeHtml(task.subject.employeeNumber)}</p><p>${escapeHtml(task.workflowTitle)} · ${escapeHtml(scopeLabel)}</p><small>Aktiv seit ${escapeHtml(personnelWorkflowTimestamp(task.activatedAt))}</small></div>
         ${canComplete ? `<form data-personnel-lifecycle-onboarding-task-complete data-run-id="${escapeHtmlAttribute(task.runId)}" data-step-id="${escapeHtmlAttribute(task.stepId)}">
           <label><input type="checkbox" required data-onboarding-task-confirm${pending ? " disabled" : ""}><span>Ich bestätige, dass diese Aufgabe tatsächlich erledigt ist.</span></label>
           <button type="submit" class="primary-button"${pending ? " disabled" : ""}>${pending ? "Wird sicher bestätigt …" : "Erledigung bestätigen"}</button>
@@ -17616,12 +17655,13 @@ function renderPersonnelLifecycleOffboardingTasksMarkup() {
         .map((field) => `<span><small>${escapeHtml(PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_FIELD_LABELS[field])}</small><strong>${escapeHtml(task[field])}</strong></span>`)
         .join("");
       const completable = canComplete && task.status === "active";
+      const projectionLabel = { leadership_task: "Führungskraft", it_security_task: "IT und Zugänge", asset_task: "Arbeitsmittel", payroll_task: "Lohnverrechnung" }[task.projection] || "Persönlicher Auftrag";
       return `<article class="personnel-workflow-task-card personnel-lifecycle-onboarding-task-card employee-offboarding-task-card">
-        <div><span class="eyebrow">${escapeHtml(task.projection)}</span><h3>${escapeHtml(task.title)}</h3>${details ? `<div class="employee-offboarding-task-details">${details}</div>` : ""}</div>
+        <div><span class="eyebrow">${escapeHtml(projectionLabel)}</span><h3>${escapeHtml(task.title)}</h3>${details ? `<div class="employee-offboarding-task-details">${details}</div>` : ""}</div>
         ${completable ? `<form data-personnel-lifecycle-offboarding-task-complete data-run-id="${escapeHtmlAttribute(task.runId)}" data-step-id="${escapeHtmlAttribute(task.stepId)}">
           <label><input type="checkbox" required data-offboarding-task-confirm${pending ? " disabled" : ""}><span>Ich bestätige, dass dieser Auftrag tatsächlich erledigt ist.</span></label>
           <button type="submit" class="primary-button"${pending ? " disabled" : ""}>${pending ? "Wird sicher bestätigt …" : "Erledigung bestätigen"}</button>
-        </form>` : '<span class="status-badge inactive">Bis zur Aktivierung nur Lesen</span>'}
+        </form>` : `<span class="status-badge inactive">${task.status === "active" ? "Nur Lesen" : "Bis zur Aktivierung nur Lesen"}</span>`}
       </article>`;
     }).join("")}</div>
     <p class="employee-profile-boundary">O5 erlaubt nur die ausdrückliche Erledigung aktiver Aufträge. Überspringen, „nicht anwendbar“, freie Nachweise und externe Kontoaktionen sind nicht freigegeben.</p>
@@ -18649,12 +18689,151 @@ async function validatePersonnelLifecycleEditorDraft() {
   }
 }
 
+function personnelTaskWorkspaceRecords() {
+  const preview = canReadLifecycleAutomationPreview()
+    && state.personnelLifecycleAutomationPreviewLoaded
+    && !state.personnelLifecycleAutomationLoading && !state.personnelLifecycleAutomationError
+    ? state.personnelLifecycleAutomationPreview?.items || [] : [];
+  const records = [];
+  const add = (task, kind, index) => {
+    const personal = kind !== "workflow";
+    const projected = personal ? preview.find(item => item.source === kind
+      && item.runId === task.runId && item.stepId === task.stepId) : null;
+    const pending = task.status === "pending";
+    const actionable = personal && !pending && (kind === "onboarding"
+      ? state.personnelLifecycleOnboardingTaskCapabilities.canComplete === true
+      : task.status === "active" && state.personnelLifecycleOffboardingTaskCapabilities.canComplete === true);
+    records.push({ task, kind, index, personal, actionable, pending,
+      key: JSON.stringify(personal ? [kind, task.runId, task.stepId] : [kind, index, task.workflowTitle, task.title]),
+      kindLabel: kind === "onboarding" ? "Onboarding" : kind === "offboarding" ? "Offboarding" : "Personalprozess",
+      context: kind === "onboarding" ? task.subject.displayName : kind === "offboarding"
+        ? task.displayName || task.assetIdentifier || task.targetSystem || "Persönlich zugewiesener Auftrag"
+        : task.workflowTitle,
+      statusLabel: pending ? "Vorgemerkt" : actionable ? "Bearbeitbar" : "Nur Lesen",
+      dueState: projected?.dueState || "not_configured",
+      dueAt: projected?.dueAt || (kind === "offboarding" ? task.dueAt : null) || null,
+      dueLabel: projected && projected.dueState !== "not_configured"
+        ? PERSONNEL_LIFECYCLE_AUTOMATION_DUE_STATE_LABELS[projected.dueState] : "Ohne Fristbewertung",
+    });
+  };
+  if (canReadPersonnelWorkflowInstances()) state.personnelWorkflowTasks.forEach((task, index) => add(task, "workflow", index));
+  if (canReadLifecycleOnboardingTasks()) state.personnelLifecycleOnboardingTasks.forEach((task, index) => add(task, "onboarding", index));
+  if (canReadLifecycleOffboardingTasks()) state.personnelLifecycleOffboardingTasks.forEach((task, index) => add(task, "offboarding", index));
+  const rank = { overdue: 0, due_today: 1, due_soon: 2, not_due: 3, not_configured: 4 };
+  return records.sort((a, b) => (rank[a.dueState] ?? 4) - (rank[b.dueState] ?? 4)
+    || Number(b.actionable) - Number(a.actionable) || a.task.title.localeCompare(b.task.title, "de"));
+}
+
+function filterPersonnelTaskWorkspaceRecords(records, filters) {
+  const search = String(filters.search || "").trim().toLocaleLowerCase("de");
+  return records.filter(record => (!search || [record.task.title, record.task.workflowTitle, record.context]
+    .filter(Boolean).join(" ").toLocaleLowerCase("de").includes(search))
+    && (filters.kind === "all" || record.kind === filters.kind)
+    && (filters.status === "all" || (filters.status === "actionable" && record.actionable)
+      || (filters.status === "pending" && record.pending) || (filters.status === "readonly" && !record.actionable && !record.pending))
+    && (filters.due === "all" || (filters.due === "attention" && ["overdue", "due_today", "due_soon"].includes(record.dueState))
+      || (filters.due === "unknown" && record.dueState === "not_configured")));
+}
+
+function personnelTaskDueDateLabel(value) {
+  if (!value) return "Keine Frist angegeben";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value.split("-").reverse().join(".");
+  return personnelWorkflowTimestamp(value);
+}
+
+function closePersonnelTaskWorkspaceDetail() {
+  const dialog = document.getElementById("personnelTaskDetailDialog");
+  if (!dialog) return;
+  if (dialog.open) dialog.close();
+  delete dialog.dataset.taskKey;
+  dialog.personnelTaskContext = null;
+  const content = document.getElementById("personnelTaskDetailContent");
+  content.replaceChildren(); content.personnelTaskRevision = null;
+}
+
+function renderPersonnelTaskWorkspaceDetail(record) {
+  const content = document.getElementById("personnelTaskDetailContent");
+  if (!content) return;
+  const revision = JSON.stringify(record);
+  const confirmed = content.personnelTaskRevision === revision
+    && content.querySelector('input[type="checkbox"]')?.checked === true;
+  const metadata = `<div class="personnel-task-detail-meta"><span>${escapeHtml(record.kindLabel)} · ${escapeHtml(record.statusLabel)}</span>
+    <p><strong>Zuständigkeit:</strong> ${record.personal ? "Dir persönlich zugewiesen" : "Nicht in dieser Ansicht angegeben"}</p>
+    <p><strong>Fälligkeit:</strong> ${escapeHtml(personnelTaskDueDateLabel(record.dueAt))}${record.dueState !== "not_configured" ? ` · ${escapeHtml(record.dueLabel)} (Vorschau)` : ""}</p></div>`;
+  const template = document.createElement("template");
+  template.innerHTML = record.kind === "onboarding" ? renderPersonnelLifecycleOnboardingTasksMarkup()
+    : record.kind === "offboarding" ? renderPersonnelLifecycleOffboardingTasksMarkup()
+      : `<article class="personnel-workflow-task-card"><div><h3>${escapeHtml(record.task.title)}</h3><p>${escapeHtml(record.task.workflowTitle)}</p><p>Dieser Schritt dient der Übersicht. Eine Erledigungsaktion ist hier nicht freigegeben.</p></div></article>`;
+  const detail = template.content.querySelectorAll("article.personnel-workflow-task-card")[record.personal ? record.index : 0];
+  content.innerHTML = metadata;
+  content.personnelTaskRevision = revision;
+  if (detail) content.append(detail);
+  const checkbox = content.querySelector('input[type="checkbox"]');
+  if (checkbox) checkbox.checked = confirmed;
+}
+
+function bindPersonnelTaskWorkspace() {
+  const section = elements.personnelTasksSection, dialog = document.getElementById("personnelTaskDetailDialog");
+  if (!section || !dialog || section.dataset.taskWorkspaceBound === "true") return;
+  section.dataset.taskWorkspaceBound = "true";
+  const filter = event => { if (event.target.matches("[data-personnel-task-filter]")) renderPersonnelWorkflowTasksImpl(); };
+  section.addEventListener("input", filter);
+  section.addEventListener("change", filter);
+  section.addEventListener("click", event => {
+    if (event.target.closest("[data-personnel-task-reset]")) {
+      for (const input of section.querySelectorAll("[data-personnel-task-filter]")) input.value = input.type === "search" ? "" : "all";
+      renderPersonnelWorkflowTasksImpl();
+      return;
+    }
+    const button = event.target.closest("[data-personnel-task-open]");
+    if (!button || !canReadPersonnelTasks()) return;
+    const record = personnelTaskWorkspaceRecords().find(item => item.key === button.dataset.personnelTaskOpen);
+    if (!record) return;
+    closePersonnelTaskWorkspaceDetail();
+    dialog.dataset.taskKey = record.key;
+    dialog.personnelTaskContext = captureGpContext(canReadPersonnelTasks);
+    renderPersonnelTaskWorkspaceDetail(record);
+    window.GpWindow?.prepare(dialog);
+    window.GpWindow?.begin(dialog);
+    const scroll = { left: window.scrollX, top: window.scrollY, behavior: "instant" };
+    dialog.showModal();
+    window.scrollTo(scroll);
+  });
+  dialog.querySelector("[data-personnel-task-close]")?.addEventListener("click", closePersonnelTaskWorkspaceDetail);
+  dialog.addEventListener("close", () => {
+    if (dialog.open) return;
+    delete dialog.dataset.taskKey; dialog.personnelTaskContext = null;
+    document.getElementById("personnelTaskDetailContent").replaceChildren();
+  });
+  dialog.addEventListener("submit", event => {
+    event.preventDefault();
+    if (!dialog.open || !gpContextCurrent(dialog.personnelTaskContext) || !canReadPersonnelTasks()) {
+      closePersonnelTaskWorkspaceDetail(); return;
+    }
+    if (dialog.classList.contains("is-minimized") || !event.target.getClientRects().length) return;
+    if (event.target.closest("[data-personnel-lifecycle-offboarding-task-complete]")) {
+      void submitPersonnelLifecycleOffboardingTaskCompletion(event);
+    } else if (event.target.closest("[data-personnel-lifecycle-onboarding-task-complete]")) {
+      void submitPersonnelLifecycleOnboardingTaskCompletion(event);
+    }
+  });
+}
+
 function renderPersonnelWorkflowTasksImpl() {
   if (!elements.personnelWorkflowTaskList) return;
+  bindPersonnelTaskWorkspace();
+  const summary = document.getElementById("personnelTasksSummary");
+  if (summary) summary.replaceChildren();
+  if (!canReadPersonnelTasks()) {
+    elements.personnelWorkflowTaskList.replaceChildren();
+    closePersonnelTaskWorkspaceDetail();
+    return;
+  }
   if (state.personnelWorkflowInstancesLoading
     || state.personnelLifecycleOnboardingTasksLoading
     || state.personnelLifecycleOffboardingTasksLoading) {
-    elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Die freigegebenen Aufgaben werden geladen …</p>';
+    closePersonnelTaskWorkspaceDetail();
+    elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Deine Aufgaben werden geladen …</p>';
     return;
   }
   const loadErrors = [
@@ -18663,27 +18842,44 @@ function renderPersonnelWorkflowTasksImpl() {
     state.personnelLifecycleOffboardingTasksError,
   ].filter(Boolean);
   if (loadErrors.length) {
+    closePersonnelTaskWorkspaceDetail();
     elements.personnelWorkflowTaskList.innerHTML = `<div class="personnel-workflow-empty error"><strong>Aufgaben konnten nicht vollständig geladen werden</strong><p>${escapeHtml(loadErrors.join(" "))}</p></div>`;
     return;
   }
   if (!state.personnelWorkflowInstancesLoaded
     && !state.personnelLifecycleOnboardingTasksLoaded
     && !state.personnelLifecycleOffboardingTasksLoaded) {
-    elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Noch keine Aufgaben geladen.</p>';
+    closePersonnelTaskWorkspaceDetail();
+    elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Noch keine Aufgaben geladen. Öffne die Seite erneut oder wähle „Aktualisieren“.</p>';
     return;
   }
-  if (!state.personnelWorkflowTasks.length
-    && !state.personnelLifecycleOnboardingTasks.length
-    && !state.personnelLifecycleOffboardingTasks.length) {
-    elements.personnelWorkflowTaskList.innerHTML = '<div class="personnel-workflow-empty"><strong>Keine sichtbaren Aufgaben</strong><p>Der Server hat derzeit keine Aufgabenschritte für diese geschützte Projektion freigegeben.</p></div>';
-    return;
+  const records = personnelTaskWorkspaceRecords();
+  const filters = { search: "", kind: "all", status: "all", due: "all" };
+  for (const input of elements.personnelTasksSection?.querySelectorAll("[data-personnel-task-filter]") || []) filters[input.dataset.personnelTaskFilter] = input.value;
+  const visible = filterPersonnelTaskWorkspaceRecords(records, filters);
+  const deadlinesReady = canReadLifecycleAutomationPreview() && state.personnelLifecycleAutomationPreviewLoaded
+    && !state.personnelLifecycleAutomationLoading && !state.personnelLifecycleAutomationError;
+  if (summary) summary.innerHTML = [
+    [records.length, "Sichtbare Aufgaben", "Im freigegebenen Bereich"],
+    [records.filter(record => record.actionable).length, "Bearbeitbar", "Dir persönlich zugewiesen"],
+    [deadlinesReady ? records.filter(record => ["overdue", "due_today", "due_soon"].includes(record.dueState)).length : "–", "Frist beachten", deadlinesReady ? "Laut freigegebener Vorschau" : "Fristvorschau nicht verfügbar"],
+    [records.filter(record => record.pending).length, "Vorgemerkt", "Noch nicht zur Erledigung aktiv"],
+  ].map(([count, title, hint]) => `<article><strong>${count}</strong><span>${title}</span><small>${hint}</small></article>`).join("");
+  if (elements.personnelWorkflowTaskStatus) elements.personnelWorkflowTaskStatus.textContent = `${visible.length} von ${records.length} Aufgaben · Fristen zuerst, danach bearbeitbare Aufgaben`;
+  elements.personnelWorkflowTaskList.innerHTML = visible.length ? visible.map(record => `
+    <article class="personnel-task-workspace-card" data-task-kind="${record.kind}">
+      <div class="personnel-task-workspace-main"><span class="eyebrow">${escapeHtml(record.kindLabel)}</span><h3>${escapeHtml(record.task.title)}</h3><p>${escapeHtml(record.context)}</p></div>
+      <dl><div><dt>Zuständigkeit</dt><dd>${record.personal ? "Dir zugewiesen" : "Nicht angegeben"}</dd></div><div><dt>Fälligkeit</dt><dd>${escapeHtml(personnelTaskDueDateLabel(record.dueAt))}</dd>${record.dueState !== "not_configured" ? `<dd class="personnel-task-due due-${escapeHtmlAttribute(record.dueState)}">${escapeHtml(record.dueLabel)} · Vorschau</dd>` : ""}</div></dl>
+      <div class="personnel-task-workspace-action"><span class="status-badge ${record.pending ? "inactive" : record.actionable ? "active" : ""}">${escapeHtml(record.statusLabel)}</span><button type="button" class="secondary-button" data-personnel-task-open="${escapeHtmlAttribute(record.key)}" aria-label="Details: ${escapeHtmlAttribute(record.task.title)}">Details öffnen <span aria-hidden="true">↗</span></button></div>
+    </article>`).join("") : records.length
+    ? '<div class="personnel-workflow-empty"><strong>Keine passenden Aufgaben</strong><p>Ändere die Suche oder setze die Filter zurück.</p></div>'
+    : '<div class="personnel-workflow-empty"><strong>Aktuell keine Aufgaben</strong><p>Für dich sind derzeit keine Aufgaben freigegeben. Neue Zuweisungen erscheinen nach dem Aktualisieren.</p></div>';
+  const dialog = document.getElementById("personnelTaskDetailDialog");
+  if (dialog?.open) {
+    const record = records.find(item => item.key === dialog.dataset.taskKey);
+    if (!record || !gpContextCurrent(dialog.personnelTaskContext)) closePersonnelTaskWorkspaceDetail();
+    else renderPersonnelTaskWorkspaceDetail(record);
   }
-  const genericTasks = state.personnelWorkflowTasks.map((task) => `
-      <article class="personnel-workflow-task-card">
-        <div><span class="eyebrow">Freigegebener Aktivschritt</span><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.workflowTitle)}</p></div>
-        ${personnelWorkflowStatusBadge(task.status, true)}
-      </article>`).join("");
-  elements.personnelWorkflowTaskList.innerHTML = `${genericTasks}${renderPersonnelLifecycleOnboardingTasksMarkup()}${renderPersonnelLifecycleOffboardingTasksMarkup()}`;
 }
 
 function renderPersonnelWorkflowInstanceOverview() {
@@ -27212,8 +27408,10 @@ function applySystemCenterControls(payload) {
   elements.startRecoveryAssurance?.classList.toggle("hidden", !allowed);
   if (elements.startRecoveryAssurance) {
     elements.startRecoveryAssurance.disabled = busy || manualRun.available === false;
-    elements.startRecoveryAssurance.textContent = manualRun.busy ? "Recovery-Test läuft" : "Recovery-Test starten";
-    elements.startRecoveryAssurance.title = String(manualRun.reason || "Startet eine vollständige, isolierte Wiederherstellungsprüfung.");
+    elements.startRecoveryAssurance.textContent = manualRun.busy ? "Sicherung oder Wartung läuft" : "Recovery-Test starten";
+    elements.startRecoveryAssurance.title = manualRun.busy
+      ? "Eine Sicherung oder Wartung läuft bereits. Eine weitere Wiederherstellungsprüfung kann danach gestartet werden."
+      : String(manualRun.reason || "Startet eine vollständige, isolierte Wiederherstellungsprüfung.");
   }
   if (elements.refreshSystemCenter) elements.refreshSystemCenter.disabled = state.systemCenterLoading;
 }
@@ -44964,6 +45162,7 @@ document.querySelectorAll("[data-employee-profile-tab]").forEach((button) => {
   });
 });
 
+setupCostCenterFilters();
 elements.costCenterList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-edit-cost-center]");
   if (!button) return;

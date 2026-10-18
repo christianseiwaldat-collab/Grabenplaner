@@ -15,6 +15,8 @@
     <link rel="stylesheet" href="/personnel-learning-workspace.css" />
     <link rel="stylesheet" href="/personnel-dashboard-workspace.css" />
     <link rel="stylesheet" href="/personnel-directory-workspace.css" />
+    <link rel="stylesheet" href="/cost-centers-workspace.css" />
+    <link rel="stylesheet" href="/personnel-tasks-workspace.css" />
     <link rel="stylesheet" href="/workflow-studio.css" />
     <link rel="stylesheet" href="/workflow-studio-editor.css" />
     <link rel="stylesheet" href="/privacy-organization.css" />
@@ -76,7 +78,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" data-gp-print-fallback type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.89 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.90 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -1002,8 +1004,8 @@
 
           <section class="personnel-administration-section personnel-learning-catalog" id="personnelLearningSection" role="region" aria-labelledby="personnelLearningSectionTitle">
             <div class="employee-toolbar personnel-learning-heading">
-              <div><span class="eyebrow">Personalentwicklung</span><h2 id="personnelLearningSectionTitle">Schulung &amp; Wissen</h2><p>Lernen organisieren, Wissen teilen und Fähigkeiten gezielt entwickeln. Veröffentlichte Fassungen und bisherige Abschlüsse bleiben nachvollziehbar.</p></div>
-
+              <div class="learning-workspace-title"><span class="eyebrow">Personalentwicklung</span><h2 id="personnelLearningSectionTitle">Schulung &amp; Wissen</h2><p>Schulungen begleiten, Fähigkeiten entwickeln und Wissen im Team teilen.</p></div>
+              <span class="learning-workspace-symbol" aria-hidden="true"><svg viewBox="0 0 32 32" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 26V9M16 9C12 5 6 5 3 7v18c4-2 9-2 13 1 4-3 9-3 13-1V7c-3-2-9-2-13 2Z"/><path d="M7 12c2-.3 4 0 5 1M20 13c1-1 3-1.3 5-1M7 17c2-.3 4 0 5 1M20 18c1-1 3-1.3 5-1"/></svg></span>
             </div>
             <section class="personnel-learning-dashboard" id="personnelLearningDashboardPanel" aria-labelledby="personnelLearningDashboardTitle">
               <header class="personnel-learning-dashboard-heading">
@@ -1024,43 +1026,28 @@
                 </section>
               </div>
             </section>
+            <header class="learning-workspace-group"><span aria-hidden="true">01</span><div><h3>Schulungen begleiten</h3><p>Zuweisungen, Fortschritt und Anforderungen im Team.</p></div></header>
+            <details class="personnel-learning-area" data-learning-area="assignments">
+              <summary><strong>Schulungen</strong><span>Zuweisen und Fortschritt begleiten</span></summary>
+            <section class="personnel-learning-catalog-panel personnel-learning-assignment-panel" id="personnelLearningAssignmentsPanel" aria-labelledby="personnelLearningAssignmentsTitle">
+              <div class="personnel-learning-subheading"><div><h3 id="personnelLearningAssignmentsTitle">Schulungen im Team</h3></div><p>Zuweisungen, Schritte und Abschlüsse begleiten. Frühere Fassungen und begründete Korrekturen bleiben nachvollziehbar.</p></div>
+              <p class="personnel-learning-metric-scope">Gesamter freigegebener Bereich · die Filter gelten für die Liste darunter</p>
+              <div class="personnel-learning-summary" id="personnelLearningAssignmentSummary" aria-label="Zusammenfassung der Schulungszuweisungen"></div>
+              <div class="personnel-learning-toolbar personnel-learning-assignment-toolbar" aria-label="Schulungszuweisungen filtern">
+                <label class="field"><span>Suche</span><input id="personnelLearningAssignmentSearch" type="search" autocomplete="off" placeholder="Lernende, Prozess, Trainer, Fähigkeit oder Filiale" /></label>
+                <label class="field"><span>Lernende Person</span><select id="personnelLearningAssignmentLearnerFilter"><option value="all">Alle sichtbaren Lernenden</option></select></label>
+                <label class="field"><span>Status</span><select id="personnelLearningAssignmentStatusFilter"><option value="active">Aktive Zuweisungen</option><option value="not_started">Noch nicht begonnen</option><option value="in_progress">In Durchführung</option><option value="completed">Abgeschlossen</option><option value="attention">Klärungsbedarf</option><option value="cancelled">Abgebrochene Zuweisungen</option><option value="all">Alle Revisionsstände</option></select></label>
+                <button class="secondary-button" id="refreshPersonnelLearningAssignmentsButton" type="button">Aktualisieren</button>
+                <button class="primary-button hidden" id="addPersonnelLearningAssignmentButton" type="button">+ Schulung zuweisen</button>
+              </div>
+              <p class="personnel-learning-status" id="personnelLearningAssignmentStatus" role="status" aria-live="polite">Schulungszuweisungen werden beim Öffnen geladen.</p>
+              <div class="personnel-learning-list personnel-learning-assignment-list" id="personnelLearningAssignmentList">
+                <p class="personnel-workflow-empty">Noch keine Schulungszuweisungen geladen.</p>
+              </div>
+            </section>
+            </details>
             <details class="personnel-learning-area" data-learning-area="team"><summary><strong>Team · Soll und Ist</strong><span>Kompetenzmatrix und Pflichtschulungen</span></summary><section class="personnel-learning-catalog-panel" id="personnelLearningTeam"></section></details>
-            <details class="personnel-learning-area" data-learning-area="knowledge"><summary><strong>Wissensbibliothek</strong><span>Nachschlagen, suchen und Wissen pflegen</span></summary><section class="personnel-learning-catalog-panel" id="personnelKnowledgeLibrary"></section></details>
-            <details class="personnel-learning-area" data-learning-area="processes">
-              <summary><strong>Vorlagen</strong><span>Schulungen und Lernschritte vorbereiten</span></summary>
-            <section class="personnel-learning-catalog-panel" id="personnelLearningProcessesPanel" aria-labelledby="personnelLearningProcessesTitle">
-              <div class="personnel-learning-subheading"><div><h3 id="personnelLearningProcessesTitle">Prozessvorlagen</h3><button class="primary-button hidden" id="addPersonnelLearningModuleButton" type="button">+ Prozess anlegen</button></div><p>Veröffentlichte Schulungs- und Wissensabläufe sowie neue Entwürfe mit geordneten Lernschritten.</p></div>
-              <p class="personnel-learning-metric-scope">Gesamter Katalog im freigegebenen Bereich</p>
-              <div class="personnel-learning-summary" id="personnelLearningSummary" aria-label="Zusammenfassung des Schulungs- und Wissenskatalogs"></div>
-              <div class="personnel-learning-toolbar" aria-label="Schulungs- und Wissensprozesse filtern">
-                <label class="field"><span>Suche</span><input id="personnelLearningSearch" type="search" autocomplete="off" placeholder="Titel, Code, Lernziel oder Schlagwort" /></label>
-                <label class="field"><span>Art</span><select id="personnelLearningTypeFilter"><option value="all">Alle Arten</option><option value="training">Schulungsprozess</option><option value="knowledge">Wissensprozess</option></select></label>
-                <label class="field"><span>Status</span><select id="personnelLearningStatusFilter"><option value="all">Alle Status</option><option value="draft">Entwurf</option><option value="published">Veröffentlicht</option><option value="published_with_draft">Veröffentlicht mit neuer Version</option><option value="archived">Archiviert</option></select></label>
-                <button class="secondary-button" id="refreshPersonnelLearningButton" type="button">Aktualisieren</button>
-              </div>
-              <p class="personnel-learning-status" id="personnelLearningStatus" role="status" aria-live="polite">Der Prozesskatalog wird beim Öffnen geladen.</p>
-              <div class="personnel-learning-list" id="personnelLearningList">
-                <p class="personnel-workflow-empty">Noch keine Prozessvorlagen geladen.</p>
-              </div>
-            </section>
-            </details>
-            <details class="personnel-learning-area" data-learning-area="skills">
-              <summary><strong>Fähigkeiten</strong><span>Stufen und Lernziele definieren</span></summary>
-            <section class="personnel-learning-catalog-panel personnel-learning-skills-panel" id="personnelLearningSkillsPanel" aria-labelledby="personnelLearningSkillsTitle">
-              <div class="personnel-learning-subheading"><div><h3 id="personnelLearningSkillsTitle">Fähigkeitskatalog</h3><button class="secondary-button hidden" id="addPersonnelLearningSkillButton" type="button">+ Fähigkeit anlegen</button></div><p>Beschreibe die Entwicklung von Stufe 1 bis 10. Jede veröffentlichte Fassung bleibt erhalten.</p></div>
-              <p class="personnel-learning-metric-scope">Gesamter Katalog im freigegebenen Bereich</p>
-              <div class="personnel-learning-summary" id="personnelLearningSkillSummary" aria-label="Zusammenfassung des Fähigkeitskatalogs"></div>
-              <div class="personnel-learning-toolbar personnel-learning-skill-toolbar" aria-label="Fähigkeiten filtern">
-                <label class="field"><span>Suche</span><input id="personnelLearningSkillSearch" type="search" autocomplete="off" placeholder="Fähigkeit, Kategorie, Code oder Schlagwort" /></label>
-                <label class="field"><span>Status</span><select id="personnelLearningSkillStatusFilter"><option value="all">Alle Status</option><option value="draft">Entwurf</option><option value="published">Veröffentlicht</option><option value="published_with_draft">Veröffentlicht mit neuer Version</option><option value="archived">Archiviert</option></select></label>
-                <button class="secondary-button" id="refreshPersonnelLearningSkillsButton" type="button">Aktualisieren</button>
-              </div>
-              <p class="personnel-learning-status" id="personnelLearningSkillStatus" role="status" aria-live="polite">Der Fähigkeitskatalog wird beim Öffnen geladen.</p>
-              <div class="personnel-learning-list personnel-learning-skill-list" id="personnelLearningSkillList">
-                <p class="personnel-workflow-empty">Noch keine Fähigkeiten geladen.</p>
-              </div>
-            </section>
-            </details>
+            <header class="learning-workspace-group"><span aria-hidden="true">02</span><div><h3>Fähigkeiten entwickeln</h3><p>Kompetenzen zuordnen, Trainerfreigaben und Stufen pflegen.</p></div></header>
             <details class="personnel-learning-area" data-learning-area="competencies">
               <summary><strong>Kompetenzprofile</strong><span>Fähigkeiten und Trainerfreigaben zuordnen</span></summary>
             <section class="personnel-learning-catalog-panel personnel-learning-competency-panel" id="personnelLearningCompetenciesPanel" aria-labelledby="personnelLearningCompetenciesTitle">
@@ -1081,54 +1068,84 @@
               </div>
             </section>
             </details>
-            <details class="personnel-learning-area" data-learning-area="assignments">
-              <summary><strong>Schulungen</strong><span>Zuweisen und Fortschritt begleiten</span></summary>
-            <section class="personnel-learning-catalog-panel personnel-learning-assignment-panel" id="personnelLearningAssignmentsPanel" aria-labelledby="personnelLearningAssignmentsTitle">
-              <div class="personnel-learning-subheading"><div><h3 id="personnelLearningAssignmentsTitle">Schulungen im Team</h3></div><p>Zuweisungen, Schritte und Abschlüsse begleiten. Frühere Fassungen und begründete Korrekturen bleiben nachvollziehbar.</p></div>
-              <p class="personnel-learning-metric-scope">Gesamter freigegebener Bereich · die Filter gelten für die Liste darunter</p>
-              <div class="personnel-learning-summary" id="personnelLearningAssignmentSummary" aria-label="Zusammenfassung der Schulungszuweisungen"></div>
-              <div class="personnel-learning-toolbar personnel-learning-assignment-toolbar" aria-label="Schulungszuweisungen filtern">
-                <label class="field"><span>Suche</span><input id="personnelLearningAssignmentSearch" type="search" autocomplete="off" placeholder="Lernende, Prozess, Trainer, Fähigkeit oder Filiale" /></label>
-                <label class="field"><span>Lernende Person</span><select id="personnelLearningAssignmentLearnerFilter"><option value="all">Alle sichtbaren Lernenden</option></select></label>
-                <label class="field"><span>Status</span><select id="personnelLearningAssignmentStatusFilter"><option value="active">Aktive Zuweisungen</option><option value="not_started">Noch nicht begonnen</option><option value="in_progress">In Durchführung</option><option value="completed">Abgeschlossen</option><option value="attention">Klärungsbedarf</option><option value="cancelled">Abgebrochene Zuweisungen</option><option value="all">Alle Revisionsstände</option></select></label>
-                <button class="secondary-button" id="refreshPersonnelLearningAssignmentsButton" type="button">Aktualisieren</button>
-                <button class="primary-button hidden" id="addPersonnelLearningAssignmentButton" type="button">+ Schulung zuweisen</button>
+            <details class="personnel-learning-area" data-learning-area="skills">
+              <summary><strong>Fähigkeiten</strong><span>Stufen und Lernziele definieren</span></summary>
+            <section class="personnel-learning-catalog-panel personnel-learning-skills-panel" id="personnelLearningSkillsPanel" aria-labelledby="personnelLearningSkillsTitle">
+              <div class="personnel-learning-subheading"><div><h3 id="personnelLearningSkillsTitle">Fähigkeitskatalog</h3><button class="secondary-button hidden" id="addPersonnelLearningSkillButton" type="button">+ Fähigkeit anlegen</button></div><p>Beschreibe die Entwicklung von Stufe 1 bis 10. Jede veröffentlichte Fassung bleibt erhalten.</p></div>
+              <p class="personnel-learning-metric-scope">Gesamter Katalog im freigegebenen Bereich</p>
+              <div class="personnel-learning-summary" id="personnelLearningSkillSummary" aria-label="Zusammenfassung des Fähigkeitskatalogs"></div>
+              <div class="personnel-learning-toolbar personnel-learning-skill-toolbar" aria-label="Fähigkeiten filtern">
+                <label class="field"><span>Suche</span><input id="personnelLearningSkillSearch" type="search" autocomplete="off" placeholder="Fähigkeit, Kategorie, Code oder Schlagwort" /></label>
+                <label class="field"><span>Status</span><select id="personnelLearningSkillStatusFilter"><option value="all">Alle Status</option><option value="draft">Entwurf</option><option value="published">Veröffentlicht</option><option value="published_with_draft">Veröffentlicht mit neuer Version</option><option value="archived">Archiviert</option></select></label>
+                <button class="secondary-button" id="refreshPersonnelLearningSkillsButton" type="button">Aktualisieren</button>
               </div>
-              <p class="personnel-learning-status" id="personnelLearningAssignmentStatus" role="status" aria-live="polite">Schulungszuweisungen werden beim Öffnen geladen.</p>
-              <div class="personnel-learning-list personnel-learning-assignment-list" id="personnelLearningAssignmentList">
-                <p class="personnel-workflow-empty">Noch keine Schulungszuweisungen geladen.</p>
+              <p class="personnel-learning-status" id="personnelLearningSkillStatus" role="status" aria-live="polite">Der Fähigkeitskatalog wird beim Öffnen geladen.</p>
+              <div class="personnel-learning-list personnel-learning-skill-list" id="personnelLearningSkillList">
+                <p class="personnel-workflow-empty">Noch keine Fähigkeiten geladen.</p>
               </div>
             </section>
             </details>
+            <header class="learning-workspace-group"><span aria-hidden="true">03</span><div><h3>Wissen &amp; Vorlagen</h3><p>Wiederverwendbare Lerninhalte und Wissen zum Nachschlagen.</p></div></header>
+            <details class="personnel-learning-area" data-learning-area="processes">
+              <summary><strong>Schulungs- &amp; Wissensvorlagen</strong><span>Abläufe und Lernschritte vorbereiten</span></summary>
+            <section class="personnel-learning-catalog-panel" id="personnelLearningProcessesPanel" aria-labelledby="personnelLearningProcessesTitle">
+              <div class="personnel-learning-subheading"><div><h3 id="personnelLearningProcessesTitle">Prozessvorlagen</h3><button class="primary-button hidden" id="addPersonnelLearningModuleButton" type="button">+ Prozess anlegen</button></div><p>Veröffentlichte Schulungs- und Wissensabläufe sowie neue Entwürfe mit geordneten Lernschritten.</p></div>
+              <p class="personnel-learning-metric-scope">Gesamter Katalog im freigegebenen Bereich</p>
+              <div class="personnel-learning-summary" id="personnelLearningSummary" aria-label="Zusammenfassung des Schulungs- und Wissenskatalogs"></div>
+              <div class="personnel-learning-toolbar" aria-label="Schulungs- und Wissensprozesse filtern">
+                <label class="field"><span>Suche</span><input id="personnelLearningSearch" type="search" autocomplete="off" placeholder="Titel, Code, Lernziel oder Schlagwort" /></label>
+                <label class="field"><span>Art</span><select id="personnelLearningTypeFilter"><option value="all">Alle Arten</option><option value="training">Schulungsprozess</option><option value="knowledge">Wissensprozess</option></select></label>
+                <label class="field"><span>Status</span><select id="personnelLearningStatusFilter"><option value="all">Alle Status</option><option value="draft">Entwurf</option><option value="published">Veröffentlicht</option><option value="published_with_draft">Veröffentlicht mit neuer Version</option><option value="archived">Archiviert</option></select></label>
+                <button class="secondary-button" id="refreshPersonnelLearningButton" type="button">Aktualisieren</button>
+              </div>
+              <p class="personnel-learning-status" id="personnelLearningStatus" role="status" aria-live="polite">Der Prozesskatalog wird beim Öffnen geladen.</p>
+              <div class="personnel-learning-list" id="personnelLearningList">
+                <p class="personnel-workflow-empty">Noch keine Prozessvorlagen geladen.</p>
+              </div>
+            </section>
+            </details>
+            <details class="personnel-learning-area" data-learning-area="knowledge"><summary><strong>Wissenskatalog</strong><span>Nachschlagen, suchen und Wissen pflegen</span></summary><section class="personnel-learning-catalog-panel" id="personnelKnowledgeLibrary"></section></details>
           </section>
 
           <section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks" id="personnelTasksSection" role="region" aria-labelledby="personnelTasksTitle">
             <div class="employee-toolbar personnel-lifecycle-foundation-heading">
-              <div><span class="eyebrow">Datensparsame Projektion</span><h2 id="personnelTasksTitle">Personalaufgaben</h2><p>Die sichtbaren Aufgaben stammen aus denselben versionsgebundenen Instanzen und werden nicht als zweite Wahrheit dupliziert.</p></div>
-              <span class="status-badge" data-pre-o6-stage="M5 / O4 / O5 · kontrolliert" data-pre-o7-stage="M5 / O4 / O5 / O6 · kontrolliert">M5 / O4 / O5 / O6 / O7 · kontrolliert</span>
+              <div><span class="eyebrow">Personal · Aufgaben</span><h2 id="personnelTasksTitle">Was steht als Nächstes an?</h2><p>Persönliche Aufgaben erledigen, offene Schritte überblicken und Fristen im Blick behalten.</p></div>
+              <span class="status-badge" data-pre-o6-stage="M5 / O4 / O5 · kontrolliert" data-pre-o7-stage="M5 / O4 / O5 / O6 · kontrolliert" data-stage="M5 / O4 / O5 / O6 / O7 · kontrolliert">Dein freigegebener Bereich</span>
             </div>
-            <article class="personnel-lifecycle-boundary">
-              <strong>Serverfreigabe statt Client-Ableitung</strong>
-              <p>Gezeigt werden nur bereits berechtigte Aufgabenschritte. O4 und O5 erlauben ausschließlich die bewusst bestätigte Erledigung persönlich zugewiesener Aufgaben. Fristen und Eskalationen werden nicht automatisiert: O7 zeigt Fristen, Klärungsbedarf, Erinnerungs- und Eskalationszustände nur als serverseitig berechnete Vorschau; der Browser ergänzt keine Fristannahmen und löst keine Folgeaktion aus. Vertrauliche Offboarding-Fälle bleiben vor der Kommunikationsfreigabe vollständig unsichtbar.</p>
-            </article>
+            <div class="personnel-tasks-summary" id="personnelTasksSummary" aria-label="Aufgaben im freigegebenen Bereich"></div>
+            <div class="personnel-tasks-filters" aria-label="Personalaufgaben filtern">
+              <label class="field"><span>Aufgabe suchen</span><input type="search" data-personnel-task-filter="search" placeholder="Aufgabe, Prozess oder zugeordnete Person" autocomplete="off" /></label>
+              <label class="field"><span>Aufgabenart</span><select data-personnel-task-filter="kind"><option value="all">Alle Arten</option><option value="onboarding">Onboarding</option><option value="offboarding">Offboarding</option><option value="workflow">Weitere Prozesse</option></select></label>
+              <label class="field"><span>Status</span><select data-personnel-task-filter="status"><option value="all">Alle Status</option><option value="actionable">Bearbeitbar</option><option value="pending">Vorgemerkt</option><option value="readonly">Nur Lesen</option></select></label>
+              <label class="field"><span>Fristvorschau</span><select data-personnel-task-filter="due"><option value="all">Alle Fristen</option><option value="attention">Frist beachten</option><option value="unknown">Ohne Fristbewertung</option></select></label>
+            </div>
             <div class="personnel-workflow-task-heading">
               <p class="personnel-workflow-status" id="personnelWorkflowTaskStatus" role="status" aria-live="polite">Aufgaben werden beim Öffnen geladen.</p>
+              <button class="secondary-button" type="button" data-personnel-task-reset>Filter zurücksetzen</button>
               <button class="secondary-button" id="refreshPersonnelWorkflowTasksButton" type="button">Aktualisieren</button>
             </div>
             <div class="personnel-workflow-task-list" id="personnelWorkflowTaskList">
               <p class="personnel-workflow-empty">Noch keine Aufgaben geladen.</p>
             </div>
+            <p class="personnel-tasks-note">Persönliche Aufgaben werden erst nach deiner ausdrücklichen Bestätigung erledigt. Fristen und Eskalationen werden nicht automatisiert.</p>
+            <dialog class="personnel-task-detail-dialog" id="personnelTaskDetailDialog" aria-labelledby="personnelTaskDetailTitle" data-gp-window-mode="workspace" data-gp-window-width="680" data-gp-window-rich>
+              <header class="modal-header"><h2 id="personnelTaskDetailTitle">Aufgabendetails</h2><button type="button" class="close-button" aria-label="Aufgabendetails schließen" data-personnel-task-close>×</button></header>
+              <div id="personnelTaskDetailContent"></div>
+            </dialog>
             <section class="personnel-lifecycle-interface-catalog hidden" id="personnelLifecycleInterfacesSection" aria-labelledby="personnelLifecycleInterfacesTitle">
+              <details class="personnel-tasks-reference"><summary>Schulungen, Arbeitsmittel und Zugänge <span>Verfügbare Aufgabenbereiche ansehen</span></summary>
               <header>
-                <div><span class="eyebrow">O6 · kontrollierte Schnittstellengrenze</span><h3 id="personnelLifecycleInterfacesTitle">Schulungen, Arbeitsmittel und Zugänge</h3><p>Der Katalog zeigt ausschließlich die für das angemeldete Konto freigegebenen Domänen. Er löst keine Aktion in einem Zielsystem aus.</p></div>
+                <div><h3 id="personnelLifecycleInterfacesTitle">Verfügbare Aufgabenbereiche</h3><p>Hier siehst du die für dich freigegebenen Bereiche. Aktionen in anderen Systemen werden nicht ausgeführt.</p></div>
                 <span class="status-badge inactive">Außenwirkung gesperrt</span>
               </header>
               <p class="personnel-lifecycle-interface-status" id="personnelLifecycleInterfacesStatus" role="status" aria-live="polite">Schnittstellenstatus wird beim Öffnen geladen.</p>
               <div class="personnel-lifecycle-interface-list" id="personnelLifecycleInterfacesList"></div>
+              </details>
             </section>
             <section class="personnel-lifecycle-automation hidden" id="personnelLifecycleAutomationSection" aria-labelledby="personnelLifecycleAutomationTitle">
+              <details class="personnel-tasks-reference"><summary>Fristen und Zuständigkeit <span>Vorschau und Klärungsbedarf ansehen</span></summary>
               <header>
-                <div><span class="eyebrow">O7 · kontrollierte Vorschau</span><h3 id="personnelLifecycleAutomationTitle">Fristen, Vertretung, Erinnerungen und Eskalationen</h3><p>Der Katalog und die persönliche Aufgabenansicht zeigen ausschließlich serverseitig freigegebene Domänen und Zustände. Es wird keine Automatik aktiviert.</p></div>
+                <div><h3 id="personnelLifecycleAutomationTitle">Fristen, Vertretung, Erinnerungen und Eskalationen</h3><p>Die freigegebene Vorschau hilft bei der Abstimmung. Erinnerungen werden nicht versendet und Vertretungen nicht automatisch geändert.</p></div>
                 <span class="status-badge warning">Nur Vorschau</span>
               </header>
               <p class="personnel-lifecycle-automation-status" id="personnelLifecycleAutomationStatus" role="status" aria-live="polite">O7-Katalog und Vorschau werden beim Öffnen geladen.</p>
@@ -1140,6 +1157,7 @@
                 <li><strong>Keine Erinnerung versendet.</strong> Interne und externe Benachrichtigungen bleiben gesperrt.</li>
                 <li><strong>Keine automatische Vertretung/Eskalation.</strong> Klärungen bleiben bewusst bei der Personalstelle.</li>
               </ul>
+              </details>
             </section>
           </section>
 
@@ -1178,24 +1196,38 @@
 
           <section class="personnel-administration-section" id="costCenterSection" role="region" aria-labelledby="costCentersTitle">
             <div class="employee-toolbar cost-center-toolbar">
-              <div><h2 id="costCentersTitle">Kostenstellen</h2><p>Verwaltung, Filialen, Produktion und weitere Unternehmensbereiche eindeutig zuordnen.</p></div>
+              <div><span class="eyebrow">Organisation</span><h2 id="costCentersTitle">Kostenstellen</h2><p>Bereiche finden, Zuordnungen überblicken und Stammdaten pflegen.</p></div>
               <div class="cost-center-toolbar-actions">
-                <button class="secondary-button hidden" id="addCostCenterTypeButton" type="button">+ Typ anlegen</button>
                 <button class="primary-button hidden" id="addCostCenterButton" type="button">+ Kostenstelle anlegen</button>
               </div>
             </div>
-            <p class="calculation-note">Kostenstellen werden nicht endgültig gelöscht. Vor der Deaktivierung müssen bestehende Zuordnungen verschoben werden; historische Daten bleiben erhalten.</p>
-            <section class="cost-center-types-panel" aria-labelledby="costCenterTypesTitle">
-              <div class="cost-center-subheading">
-                <div><span class="eyebrow">Organisationsmodell</span><h3 id="costCenterTypesTitle">Typen und erlaubte Positionen</h3></div>
-                <p>Typen legen fest, ob eine Kostenstelle eine Filiale abbildet und welche Positionen dort später auswählbar sind.</p>
-              </div>
-              <div class="cost-center-type-list" id="costCenterTypeList"><p class="settings-note">Kostenstellentypen werden geladen.</p></div>
+            <dl class="cost-center-overview" aria-label="Kostenstellen im Überblick">
+              <div><dt>Aktive Kostenstellen</dt><dd id="costCenterActiveCount">–</dd></div>
+              <div><dt>Inaktive Kostenstellen</dt><dd id="costCenterInactiveCount">–</dd></div>
+              <div><dt>Aktive Typen</dt><dd id="costCenterTypeCount">–</dd></div>
+            </dl>
+            <section class="cost-center-directory" aria-labelledby="costCenterDirectoryTitle">
+              <div class="cost-center-subheading"><div><span class="eyebrow">Zuordnungen</span><h3 id="costCenterDirectoryTitle">Alle Kostenstellen</h3></div></div>
+              <form class="cost-center-filters" id="costCenterFilterForm" role="search" aria-label="Kostenstellen filtern">
+                <label class="field cost-center-search"><span>Kostenstelle suchen</span><input type="search" id="costCenterSearch" placeholder="Code, Name oder Beschreibung" autocomplete="off" /></label>
+                <label class="field"><span>Typ</span><select id="costCenterFilterType"><option value="">Alle Typen</option></select></label>
+                <label class="field"><span>Status</span><select id="costCenterFilterStatus"><option value="">Alle</option><option value="active">Aktiv</option><option value="inactive">Inaktiv</option></select></label>
+                <button class="secondary-button" id="costCenterFilterReset" type="reset">Zurücksetzen</button>
+              </form>
+              <p class="cost-center-result-count" id="costCenterResultCount" role="status" aria-live="polite"></p>
+              <div class="cost-center-list" id="costCenterList"><p class="settings-note">Kostenstellen werden geladen.</p></div>
             </section>
-            <div class="cost-center-subheading cost-center-subheading-concrete">
-              <div><span class="eyebrow">Konkrete Zuordnung</span><h3>Kostenstellen</h3></div>
-            </div>
-            <div class="cost-center-list" id="costCenterList"><p class="settings-note">Kostenstellen werden geladen.</p></div>
+            <details class="cost-center-types-panel">
+              <summary><span><strong id="costCenterTypesTitle">Typen &amp; erlaubte Positionen</strong><small>Grundlagen für Filialen, Verwaltung und weitere Bereiche</small></span></summary>
+              <div class="cost-center-type-settings">
+                <div class="cost-center-subheading">
+                  <p>Ein Typ legt fest, ob eine Kostenstelle eine Filiale abbildet und welche Positionen zugeordnet werden können.</p>
+                  <button class="secondary-button hidden" id="addCostCenterTypeButton" type="button">+ Typ anlegen</button>
+                </div>
+                <div class="cost-center-type-list" id="costCenterTypeList"><p class="settings-note">Kostenstellentypen werden geladen.</p></div>
+              </div>
+            </details>
+            <p class="cost-center-history-note">Historische Zuordnungen bleiben erhalten. Vor dem Deaktivieren einer Kostenstelle müssen bestehende Zuordnungen verschoben werden.</p>
           </section>
 
           <section class="personnel-administration-section custom-work-rules-section" id="customWorkRulesSection" role="region" aria-labelledby="customWorkRulesTitle">
@@ -3126,7 +3158,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.89 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.90 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -3514,9 +3546,9 @@
       </form>
     </dialog>
 
-    <dialog class="modal" id="costCenterModal" data-gp-window-mode="workspace">
+    <dialog class="modal" id="costCenterModal" data-gp-window-mode="workspace" aria-labelledby="costCenterModalTitle">
       <form id="costCenterForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Personalverwaltung</span><h2 id="costCenterModalTitle">Kostenstelle anlegen</h2><p>Der Code bleibt nach der Anlage unveränderbar, damit Auswertungen und Exporte eindeutig bleiben.</p></div><button type="button" class="close-button" data-close="costCenterModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Organisation</span><h2 id="costCenterModalTitle">Kostenstelle anlegen</h2><p>Der Code bleibt nach der Anlage unveränderbar, damit Auswertungen und Exporte eindeutig bleiben.</p></div><button type="button" class="close-button" data-close="costCenterModal" aria-label="Kostenstelle schließen">×</button></div>
         <input id="costCenterId" type="hidden" />
         <div class="form-grid">
           <label class="field"><span>Code</span><input id="costCenterCode" maxlength="30" pattern="[A-Za-z0-9._-]+" placeholder="z. B. VERW" required /></label>
@@ -3529,9 +3561,9 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal" id="costCenterTypeModal" data-gp-window-mode="workspace">
+    <dialog class="modal wide-modal" id="costCenterTypeModal" data-gp-window-mode="workspace" aria-labelledby="costCenterTypeModalTitle">
       <form id="costCenterTypeForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Organisationsmodell</span><h2 id="costCenterTypeModalTitle">Kostenstellentyp anlegen</h2><p>Der technische Code bleibt unveränderlich. Bezeichnung, Filialstatus und erlaubte Positionen können später angepasst werden.</p></div><button type="button" class="close-button" data-close="costCenterTypeModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Typen &amp; Positionen</span><h2 id="costCenterTypeModalTitle">Kostenstellentyp anlegen</h2><p>Der Code bleibt nach der Anlage fest. Name, Filialstatus und erlaubte Positionen lassen sich später ändern.</p></div><button type="button" class="close-button" data-close="costCenterTypeModal" aria-label="Kostenstellentyp schließen">×</button></div>
         <input id="costCenterTypeId" type="hidden" />
         <div class="form-grid cost-center-type-form-grid">
           <label class="field"><span>Technischer Code</span><input id="costCenterTypeCode" maxlength="40" pattern="[A-Za-z0-9._-]+" placeholder="z. B. lager-logistik" required /><small>Kleinbuchstaben, Zahlen, Punkt, Strich oder Unterstrich.</small></label>
@@ -3542,12 +3574,12 @@
         </div>
         <section class="cost-center-type-positions" aria-labelledby="costCenterTypePositionsTitle">
           <div class="cost-center-type-position-heading">
-            <div><strong id="costCenterTypePositionsTitle">Erlaubte Positionen</strong><small>Die Einschränkung der Mitarbeiteranlage erfolgt im nächsten Block. Hier wird bereits das verbindliche Positionsset gepflegt.</small></div>
+            <div><strong id="costCenterTypePositionsTitle">Erlaubte Positionen</strong><small>Diese Positionen stehen für Mitarbeitende in Kostenstellen dieses Typs zur Auswahl.</small></div>
             <span class="status-badge" id="costCenterTypePositionCount">0 ausgewählt</span>
           </div>
           <label class="field"><span>Positionen durchsuchen</span><input id="costCenterTypePositionSearch" type="search" inputmode="search" autocomplete="off" placeholder="Position suchen" /></label>
           <div class="cost-center-type-position-options" id="costCenterTypePositionOptions"></div>
-          <p class="calculation-note" id="costCenterTypePositionHint">Ohne Auswahl steht für diesen Typ später keine Position zur Verfügung.</p>
+          <p class="calculation-note" id="costCenterTypePositionHint">Ohne Auswahl steht für diesen Typ keine Position zur Verfügung.</p>
         </section>
         <div class="modal-actions"><button type="button" class="danger-button hidden" id="deactivateCostCenterTypeButton">Deaktivieren</button><span></span><button type="button" class="secondary-button" data-close="costCenterTypeModal">Abbrechen</button><button type="submit" class="primary-button" id="costCenterTypeSubmitButton">Typ anlegen</button></div>
       </form>
@@ -4116,7 +4148,7 @@
 
     <dialog class="modal personnel-learning-modal personnel-learning-competency-modal" id="personnelLearningCompetencyModal" data-gp-window-mode="workspace">
       <form method="dialog" id="personnelLearningCompetencyForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Revisionsgebundenes Mitarbeiterprofil</span><h2 id="personnelLearningCompetencyModalTitle">Kompetenz zuordnen</h2><p>Die Auswahl wird an die aktuell veröffentlichte Fähigkeitsversion gebunden.</p></div><button type="button" class="close-button" data-close="personnelLearningCompetencyModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Persönliche Entwicklung</span><h2 id="personnelLearningCompetencyModalTitle">Kompetenz zuordnen</h2><p>Fähigkeit und Stufe auswählen; die veröffentlichte Fassung bleibt zugeordnet.</p></div><button type="button" class="close-button" data-close="personnelLearningCompetencyModal">×</button></div>
         <input id="personnelLearningCompetencyId" type="hidden" />
         <input id="personnelLearningCompetencyExpectedReceipt" type="hidden" />
         <input id="personnelLearningCompetencyEmployeeNumber" type="hidden" />
@@ -4134,7 +4166,7 @@
 
     <dialog class="modal personnel-learning-modal personnel-learning-assignment-modal" id="personnelLearningAssignmentModal" data-gp-window-mode="workspace">
       <form method="dialog" id="personnelLearningAssignmentForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Revisionsgebundene Durchführungsvorbereitung</span><h2 id="personnelLearningAssignmentModalTitle">Schulung zuweisen</h2><p>Die Prozessversion und jede ausgewählte Trainerfähigkeit werden exakt mit ihrem aktuellen Revisionsbeleg gespeichert.</p></div><button type="button" class="close-button" data-close="personnelLearningAssignmentModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Schulung planen</span><h2 id="personnelLearningAssignmentModalTitle">Schulung zuweisen</h2><p>Lernende, Ablauf und passende Trainer auswählen. Die gewählten Fassungen bleiben nachvollziehbar.</p></div><button type="button" class="close-button" data-close="personnelLearningAssignmentModal">×</button></div>
         <input id="personnelLearningAssignmentId" type="hidden" />
         <input id="personnelLearningAssignmentExpectedReceipt" type="hidden" />
         <div class="modal-grid personnel-learning-assignment-form-grid">
@@ -4158,7 +4190,7 @@
 
     <dialog class="modal personnel-learning-modal personnel-learning-progress-modal" id="personnelLearningProgressModal" data-gp-window-mode="workspace">
       <form method="dialog" id="personnelLearningProgressForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Revisionsgebundene Durchführung</span><h2 id="personnelLearningProgressModalTitle">Schulungsfortschritt</h2><p>Der Fortschritt wird ausschließlich aus den erledigten Schritten der gebundenen Prozessversion berechnet.</p></div><button type="button" class="close-button" data-close="personnelLearningProgressModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Lernfortschritt</span><h2 id="personnelLearningProgressModalTitle">Schulungsfortschritt</h2><p>Der Fortschritt ergibt sich ausschließlich aus den erledigten Schritten. Anschließend die Schulung abschließen und bewerten.</p></div><button type="button" class="close-button" data-close="personnelLearningProgressModal">×</button></div>
         <input id="personnelLearningProgressAssignmentId" type="hidden" />
         <input id="personnelLearningProgressAssignmentReceipt" type="hidden" />
         <input id="personnelLearningProgressExpectedReceipt" type="hidden" />

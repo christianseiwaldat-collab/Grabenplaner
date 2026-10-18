@@ -32,8 +32,10 @@ test("current offsite module preserves predecessors and requires the complete pa
   assert.equal(run().stdout, 'current');
   write(moduleName, JSON.stringify({ moduleVersion: 10 }));
   assert.equal(run().stdout, 'current');
-  write(moduleName, JSON.stringify({ moduleVersion: 11 }));
-  assert.equal(run().stdout, 'current');
+  for (const moduleVersion of [11, 12]) {
+    write(moduleName, JSON.stringify({ moduleVersion }));
+    assert.equal(run().stdout, 'current');
+  }
   fs.chmodSync(path.join(root, "server-tools/linux/lib/deploy-policy.js"), 0o666);
   assert.notEqual(run().status, 0);
   write(moduleName, JSON.stringify({ moduleVersion: 6 }));

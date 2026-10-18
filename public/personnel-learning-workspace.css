@@ -5,7 +5,7 @@
 #personnelLearningSection .personnel-learning-heading { margin-bottom:24px; }
 #personnelLearningSection .personnel-learning-heading h2 { font-size:28px; line-height:1.2; margin:6px 0 10px; }
 #personnelLearningSection .personnel-learning-heading p { max-width:900px; font-size:15px; line-height:1.6; margin:0; }
-#personnelLearningSection :is(.field>span,.learning-team-filters label) { font-size:14px; font-weight:600; }
+#personnelLearningSection :is(.field>span,.learning-team-filters label) { font-size:14px; font-weight:600; color:var(--muted); }
 #personnelLearningSection :is(input,select,textarea) { font-size:16px; min-width:0; }
 #personnelLearningSection :is(button,.learning-team-pagination a) { min-height:44px; font-size:14px; }
 #personnelLearningSection .personnel-learning-status { font-size:13px; margin:12px 0; }
@@ -79,6 +79,21 @@
 #personnelLearningTeam .learning-team-rule :is(strong,small) { font-size:14px; }
 .learning-team-dialog :is(label,p,small) { font-size:14px; line-height:1.5; }
 .learning-team-dialog :is(input,select) { font-size:16px; }
+/* GP windows own the outer frame; spacing belongs to their scrollable body. */
+.learning-team-dialog.gp-dialog > .gp-dialog-body { padding:24px; box-sizing:border-box; }
+.learning-team-dialog .learning-team-fields { grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr)); gap:20px 16px; align-items:start; }
+.learning-team-dialog .learning-team-fields > label { gap:8px; align-content:start; color:var(--ink); font-weight:600; }
+.learning-team-dialog .learning-team-fields > [hidden] { display:none; }
+.learning-team-dialog .learning-team-fields :is(input,select) { color:var(--ink); font-weight:400; }
+.learning-team-dialog .learning-team-fields small { color:var(--muted); font-size:13px; font-weight:400; }
+.learning-team-dialog form > p { margin:20px 0 0; color:var(--muted); }
+.learning-team-dialog form > [data-dialog-error]:empty { display:none; }
+.learning-team-dialog form > [data-dialog-error] { color:var(--danger-ink,#a13122); }
+.learning-team-dialog form > .learning-team-pagination { margin:20px 0 0; padding-top:16px; border-top:1px solid var(--line); justify-content:flex-end; }
+.learning-team-dialog form > .learning-team-pagination button { color:var(--ink); border-color:var(--line); }
+.learning-team-dialog form > .learning-team-pagination button[type="submit"] { background:var(--green); border-color:var(--green); color:#fff; font-weight:600; }
+html[data-active-page-theme="dark"] .learning-team-dialog form > .learning-team-pagination button[type="submit"] { color:#10241d; }
+@media(max-width:600px) { .learning-team-dialog.gp-dialog > .gp-dialog-body { padding:16px; } }
 #personnelLearningSection .personnel-learning-subheading { margin-bottom:16px; }
 #personnelLearningSection .personnel-learning-subheading>div { width:100%; justify-content:space-between; }
 #personnelLearningSection .personnel-learning-subheading h3 { font-size:20px; margin:0; }
@@ -307,4 +322,67 @@
   #personnelLearningTeam .learning-team-person dt small { display:block; font-size:13px; color:var(--muted); font-weight:400; margin-top:4px; }
   #personnelLearningTeam .learning-team-person dd { margin:0; }
   #personnelLearningTeam .learning-team-person dd small { display:block; font-size:13px; color:var(--muted); margin-top:4px; }
+}
+
+/* Administration workspace: overview first, reusable knowledge at the bottom. */
+html[data-active-page-theme="dark"] #personnelLearningSection .primary-button { color:#10241d; }
+#personnelLearningSection .personnel-learning-heading {
+  display:flex; align-items:center; justify-content:space-between; gap:24px;
+  padding:26px 28px; border:1px solid var(--line); border-radius:16px;
+  background:linear-gradient(115deg,color-mix(in srgb,var(--green) 9%,var(--surface)),var(--surface) 80%);
+}
+#personnelLearningSection .learning-workspace-title { min-width:0; }
+#personnelLearningSection .learning-workspace-title .eyebrow { color:var(--green); }
+#personnelLearningSection .learning-workspace-symbol {
+  display:grid; place-items:center; flex:0 0 72px; height:72px; border-radius:20px;
+  color:var(--green); background:color-mix(in srgb,var(--green) 9%,var(--surface));
+}
+#personnelLearningSection .learning-workspace-group { display:flex; align-items:center; gap:14px; margin:32px 0 12px; }
+#personnelLearningSection .learning-workspace-group>span {
+  display:grid; place-items:center; flex:0 0 38px; height:38px; border-radius:11px;
+  color:var(--green); background:color-mix(in srgb,var(--green) 9%,var(--surface)); font-weight:700; font-size:13px;
+}
+#personnelLearningSection .learning-workspace-group h3 { margin:0; font-size:19px; line-height:1.4; color:var(--ink); }
+#personnelLearningSection .learning-workspace-group p { margin:3px 0 0; font-size:14px; color:var(--muted); }
+#personnelLearningSection .personnel-learning-area {
+  --learning-accent:var(--green); border:1px solid var(--line); overflow:hidden;
+  border-inline-start:3px solid color-mix(in srgb,var(--learning-accent) 55%,var(--line));
+}
+#personnelLearningSection .personnel-learning-area[data-learning-area="assignments"] { --learning-accent:#a17b32; }
+#personnelLearningSection .personnel-learning-area[data-learning-area="team"] { --learning-accent:#527f91; }
+#personnelLearningSection .personnel-learning-area:is([data-learning-area="skills"],[data-learning-area="competencies"]) { --learning-accent:#7b6c9b; }
+#personnelLearningSection .personnel-learning-area>summary { background:color-mix(in srgb,var(--learning-accent) 5%,var(--surface)); }
+#personnelLearningSection .personnel-learning-area>summary::before { color:var(--learning-accent); }
+#personnelLearningSection .personnel-learning-area>summary:hover { background:color-mix(in srgb,var(--learning-accent) 9%,var(--surface)); }
+#personnelLearningSection .personnel-learning-area>summary:focus-visible { outline:2px solid var(--green); outline-offset:-4px; border-radius:9px; }
+#personnelLearningSection .personnel-learning-area[open]>summary { border-bottom:1px solid var(--line); }
+#personnelLearningSection .personnel-learning-dashboard { border-radius:16px; padding:24px; }
+#personnelLearningSection .personnel-learning-dashboard-summary article { border:1px solid var(--line); background:var(--surface); }
+#personnelLearningSection .personnel-learning-dashboard-summary article:nth-child(2) { background:color-mix(in srgb,#527f91 7%,var(--surface)); }
+#personnelLearningSection .personnel-learning-dashboard-summary article:nth-child(3) { background:color-mix(in srgb,var(--green) 7%,var(--surface)); }
+#personnelLearningSection .personnel-learning-dashboard-summary article:nth-child(4) { background:color-mix(in srgb,#b88c3b 8%,var(--surface)); }
+#personnelLearningSection .personnel-learning-dashboard-summary article:nth-child(5) { background:color-mix(in srgb,#7b6c9b 7%,var(--surface)); }
+#personnelLearningSection .personnel-learning-dashboard-column { padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+#personnelLearningSection .personnel-learning-dashboard-assignment { border:1px solid var(--line); }
+#personnelLearningSection .personnel-learning-dashboard-assignment.attention { border-color:color-mix(in srgb,#b88c3b 55%,var(--line)); }
+#personnelLearningSection .personnel-learning-skill-node { border:1px solid var(--line); background:var(--surface-soft); }
+#personnelLearningSection .personnel-workflow-empty { border:1px dashed var(--line); border-radius:10px; padding:20px; background:var(--surface-soft); }
+#personnelLearningSection .personnel-learning-card { border:1px solid var(--line); }
+#personnelLearningSection .personnel-learning-card>header { padding-bottom:14px; border-bottom:1px solid var(--line); }
+#personnelLearningSection .personnel-learning-toolbar { border:1px solid var(--line); }
+#personnelKnowledgeLibrary .learning-library-card { border-inline-start:3px solid color-mix(in srgb,var(--green) 55%,var(--line)); }
+.personnel-learning-modal :is(.personnel-learning-step-editor,.personnel-learning-assignment-trainers,.personnel-learning-progress-steps) { border:1px solid var(--line); border-radius:12px; padding:18px; margin-block:18px; }
+.personnel-learning-modal .personnel-learning-step-heading .eyebrow { color:var(--green); }
+.personnel-learning-modal :is(.personnel-learning-assignment-binding-preview,.personnel-learning-progress-summary,.personnel-learning-competency-level-preview) { border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); }
+@media(max-width:700px) {
+  #personnelLearningSection .personnel-learning-heading { padding:20px; gap:12px; flex-direction:row; }
+  #personnelLearningSection .learning-workspace-symbol { flex-basis:46px; height:46px; border-radius:14px; }
+  #personnelLearningSection .learning-workspace-symbol svg { width:28px; height:28px; }
+  #personnelLearningSection .personnel-learning-heading h2 { font-size:25px; }
+  #personnelLearningSection .personnel-learning-dashboard { padding:16px; }
+  #personnelLearningSection .personnel-learning-dashboard-column { padding:14px; }
+  #personnelLearningSection .learning-workspace-group { margin-top:26px; gap:10px; }
+  #personnelLearningSection .learning-workspace-group h3 { font-size:18px; }
+  #personnelLearningSection .personnel-learning-area>summary { padding:16px 14px; }
+  .personnel-learning-modal :is(.personnel-learning-step-editor,.personnel-learning-assignment-trainers,.personnel-learning-progress-steps) { padding:12px; }
 }

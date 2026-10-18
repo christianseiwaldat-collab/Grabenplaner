@@ -1,10 +1,10 @@
 # Versionsstatus
 
-## v0.92.89 Beta · Quellstand
+## v0.92.90 Beta · Quellstand
 
-Schnellere Dienstplanung und gezielte Aktualisierung nach Änderungen.
-Verbessertes Scrollen in GP-Fenstern.
-Einstellbare Upload-Dauer und optimierte Datenverarbeitung.
+Übersichtlichere Seiten für Schulung und Wissen, Kostenstellen und Personalaufgaben.
+Verbesserte GP-Fenster für Desktop, Mobilgeräte und den Dunkelmodus.
+Verlässliche Statusanzeigen während Wartungsarbeiten.
 
 Der installierte Serverstand wird im GP angezeigt.
 

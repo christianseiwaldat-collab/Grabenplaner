@@ -7,6 +7,9 @@ test("learning overview and exact page matrix stay readable in desktop and real 
   try{for(const mode of [{name:"desktop",viewport:{width:1440,height:1000}},{name:"mobile",viewport:{width:390,height:844},isMobile:true,hasTouch:true}]){
     const context=await browser.newContext(mode),page=await context.newPage(),errors=[];page.on("pageerror",e=>errors.push(e.message));
     await fixture.prepare(page,{areas:["team"]});await page.evaluate(()=>team.load());
+    assert.deepEqual(await page.locator('#personnelLearningSection > details[data-learning-area]').evaluateAll(nodes=>nodes.map(node=>node.dataset.learningArea)),["assignments","team","competencies","skills","processes","knowledge"]);
+    assert.deepEqual(await page.locator('.learning-workspace-group h3').allTextContents(),["Schulungen begleiten","Fähigkeiten entwickeln","Wissen & Vorlagen"]);
+    assert.equal(await page.locator('#personnelLearningSection > :last-child > summary > strong').textContent(),"Wissenskatalog");
     assert.equal(await page.evaluate(()=>innerWidth),mode.viewport.width);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
     assert.match(await page.locator(".learning-team-page-summary").textContent(),/Diese Seite · 25 % erfüllt/);

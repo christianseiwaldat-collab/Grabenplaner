@@ -121,6 +121,14 @@ Produktive Daten, Schlüssel und öffentliche Ports bleiben unzugänglich. Teilf
 Der Nachtablauf führt keine produktive Wiederherstellung durch; Zeitgrenzen und Aufräumen gelten auch bei Fehlern.
 Manuelle Webstarts benötigen das gesonderte Recovery-Recht und einen root-isolierten Broker mit festen Aktionen, Schema, Sperren und Sperrfrist.
 Browserwerte bestimmen keine Befehle, Pfade oder Unitnamen.
+Statusabfragen und Wartungszeitplan-Abfragen lesen auch bei aktiver Wartung.
+Der Broker serialisiert diese Momentaufnahmen weiterhin mit Zeitplanänderungen; eine belegte Brokersperre liefert sofort eine strukturierte Belegt-Antwort.
+Manuelle Prüfstarts und Zeitplanänderungen benötigen zusätzlich die exklusive Wartungssperre.
+Ist sie belegt, wird die Aktion ohne Änderung mit dem Status „belegt“ beantwortet; der erwartete Konflikt erzeugt keine fehlgeschlagene Steuerungs-Unit.
+Unlesbare oder unsichere Sperrdateien sowie tatsächliche Brokerfehler bleiben Fehler.
+Der kompatible Modulvertrag bleibt bei Version 12: Dateisatz, Nachrichten- und Zustandsschemas bleiben unverändert.
+Die geänderten Broker- und Unitdateien erhalten einen neuen Vertragsfingerprint und benötigen vor dem App-Update eine explizite Modulwartung.
+Vor der Freigabe sind die installierte App mit altem und neuem Modul sowie Kandidat und App-Rollback mit dem neuen Modul zu prüfen.
 
 Wartungszeiten werden anhand tatsächlicher systemd-Werte und Serverzeitzone angezeigt.
 Änderungen benötigen Rechte, aktuelle Revision und Wartungssperre; laufende Arbeiten werden nicht beendet.

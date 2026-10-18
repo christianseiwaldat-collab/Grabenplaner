@@ -20,6 +20,43 @@ function loadFunction(name, nextName, helpers = {}) {
   return context.subject;
 }
 
+test("busy recovery controls explain backup or maintenance without claiming a recovery test is running", () => {
+  const classes = new Set();
+  const button = { classList: { toggle(name, enabled) { enabled ? classes.add(name) : classes.delete(name); } } };
+  const state = { systemCenterLoading: false };
+  const elements = { startRecoveryAssurance: button, refreshSystemCenter: {} };
+  const start = script.indexOf("function applySystemCenterControls(");
+  const end = script.indexOf("\nasync function loadSystemCenter(", start);
+  assert.ok(start >= 0 && end > start);
+  const context = vm.createContext({ state, elements });
+  vm.runInContext(script.slice(start, end), context);
+  const apply = payload => context.applySystemCenterControls(payload);
+
+  apply({ capabilities: { canRunRecoveryAssurance: true }, manualRun: { available: true, busy: true, reason: "ASSURANCE_REQUEST_BUSY" } });
+  assert.equal(button.disabled, true);
+  assert.equal(classes.has("hidden"), false);
+  assert.equal(button.textContent, "Sicherung oder Wartung läuft");
+  assert.match(button.title, /Sicherung oder Wartung läuft bereits/);
+  assert.match(button.title, /danach gestartet/);
+  assert.doesNotMatch(button.title, /ASSURANCE_REQUEST_BUSY|Recovery-Test läuft/);
+
+  apply({ manualRun: { allowed: true, available: true, busy: false } });
+  assert.equal(button.disabled, false);
+  assert.equal(button.textContent, "Recovery-Test starten");
+  assert.equal(button.title, "Startet eine vollständige, isolierte Wiederherstellungsprüfung.");
+  apply({ capabilities: { canRunRecoveryAssurance: true }, manualRun: { available: false, reason: "ASSURANCE_CONTROL_FAILED" } });
+  assert.equal(button.disabled, true);
+  assert.equal(button.title, "ASSURANCE_CONTROL_FAILED");
+
+  state.systemCenterLoading = true;
+  apply({ manualRun: { allowed: true, available: true } });
+  assert.equal(button.disabled, true);
+  assert.equal(elements.refreshSystemCenter.disabled, true);
+  assert.equal(button.textContent, "Recovery-Test starten");
+  apply({});
+  assert.equal(classes.has("hidden"), true);
+});
+
 test("nightly deployment deferral shows its original due time and fixed deadline without hiding failures", () => {
   const render = loadFunction("renderSystemCenterOperations", "normalizedSystemCenterTrendPoints", {
     escapeHtml: value => String(value).replaceAll("<", "&lt;"),

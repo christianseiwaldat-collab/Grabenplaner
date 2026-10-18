@@ -8,7 +8,9 @@ After=grabenplaner-offsite-assurance-control.socket
 Type=oneshot
 User=root
 Group=root
-ExecStart=/usr/bin/flock --exclusive --wait 3 /run/grabenplaner/maintenance.lock /usr/bin/flock --exclusive --wait 3 /run/grabenplaner-assurance-control/broker.lock /usr/bin/node /opt/grabenplaner-offsite/module/lib/assurance-control-broker.js
+# The broker validates the action before acquiring its fixed locks. Read-only
+# status stays available during maintenance; mutations hold both locks.
+ExecStart=/usr/bin/node /opt/grabenplaner-offsite/module/lib/assurance-control-broker.js
 StandardInput=socket
 StandardOutput=socket
 StandardError=journal
