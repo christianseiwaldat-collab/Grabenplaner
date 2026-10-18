@@ -1,10 +1,10 @@
 # Versionsstatus
 
-## v0.92.90 Beta · Quellstand
+## v0.92.91 Beta · Quellstand
 
-Übersichtlichere Seiten für Schulung und Wissen, Kostenstellen und Personalaufgaben.
-Verbesserte GP-Fenster für Desktop, Mobilgeräte und den Dunkelmodus.
-Verlässliche Statusanzeigen während Wartungsarbeiten.
+Verbesserte Konten-, Kennwort- und Sitzungssicherheit.
+Erweiterte Sicherheitsprüfungen und nachvollziehbare Auditübersicht.
+Aktualisierte Abhängigkeiten und abgesicherte Betriebsübergänge.
 
 Der installierte Serverstand wird im GP angezeigt.
 

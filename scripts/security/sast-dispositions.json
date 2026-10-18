@@ -37856,12 +37856,12 @@
         },
         {
           "path": "public/index.html",
-          "sha256": "7f806ed85ecc5e5db95c0913fd2da3511c7b0fc2c6375b2cccb826a6fd831f4e",
+          "sha256": "4953a370e4800f29a8faeab525081b5d7a08de1be02f710f1e6c9b0fdd5e6b57",
           "sha256Variants": [
-            "3b4218e08433f7f9a68adc499f9e3176afe17bdbf4a9701c2301673292a99a1a",
-            "7f806ed85ecc5e5db95c0913fd2da3511c7b0fc2c6375b2cccb826a6fd831f4e"
+            "4953a370e4800f29a8faeab525081b5d7a08de1be02f710f1e6c9b0fdd5e6b57",
+            "575769f0ee348b0b24d333c6e8ff988164d9d022a42ed7d9830002e8f367a4f0"
           ],
-          "reason": "Lines 1032: All six data-learning-area attributes are static checked-in values, not server/import data."
+          "reason": "Lines 1032: All six data-learning-area attributes are static checked-in values, not server/import data. Release 0.92.91 changes only the two version labels; all six attribute values and their surrounding markup are unchanged."
         }
       ]
     },
