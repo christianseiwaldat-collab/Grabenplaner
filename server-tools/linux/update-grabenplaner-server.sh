@@ -383,6 +383,7 @@ rollback_app_ok=1
 rollback_stop_ok=1
 schema_migration_result="$maintenance_root/schema-migration.json"
 school_migration_result="$maintenance_root/vocational-school-migration.json"
+session_security_migration_result="$maintenance_root/session-security-migration.json"
 declare -a deploy_timer_units=(
   apt-daily.timer
   apt-daily-upgrade.timer
@@ -425,9 +426,9 @@ write_receipt() {
   local receipt="$history_dir/update-$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N').json"
   "$node" - "$receipt" "$status" "$old_version" "$candidate_version" "$(basename -- "$package")" "$actual_package_sha256" \
     "$backup_database" "$error_text" "$rollback_stop_ok" "$rollback_app_ok" "$rollback_data_ok" "$rollback_public_ok" \
-    "$deploy_started_at" "$deploy_decision" "$deploy_phases_file" "$schema_migration_result" "$school_migration_result" <<'NODE'
+    "$deploy_started_at" "$deploy_decision" "$deploy_phases_file" "$schema_migration_result" "$school_migration_result" "$session_security_migration_result" <<'NODE'
 const fs = require("node:fs");
-const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop, rollbackApp, rollbackData, rollbackPublic, startedAt, decision, phasesFile, migrationFile, schoolMigrationFile] = process.argv.slice(2);
+const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop, rollbackApp, rollbackData, rollbackPublic, startedAt, decision, phasesFile, migrationFile, schoolMigrationFile, sessionSecurityMigrationFile] = process.argv.slice(2);
 let schemaMigration = null;
 if (fs.existsSync(migrationFile) && fs.statSync(migrationFile).size) {
   try { schemaMigration = JSON.parse(fs.readFileSync(migrationFile, "utf8")); } catch { schemaMigration = { verified: false }; }
@@ -435,6 +436,10 @@ if (fs.existsSync(migrationFile) && fs.statSync(migrationFile).size) {
 let schoolSchemaMigration = null;
 if (fs.existsSync(schoolMigrationFile) && fs.statSync(schoolMigrationFile).size) {
   try { schoolSchemaMigration = JSON.parse(fs.readFileSync(schoolMigrationFile, "utf8")); } catch { schoolSchemaMigration = { verified: false }; }
+}
+let sessionSecuritySchemaMigration = null;
+if (fs.existsSync(sessionSecurityMigrationFile) && fs.statSync(sessionSecurityMigrationFile).size) {
+  try { sessionSecuritySchemaMigration = JSON.parse(fs.readFileSync(sessionSecurityMigrationFile, "utf8")); } catch { sessionSecuritySchemaMigration = { verified: false }; }
 }
 const phases = fs.readFileSync(phasesFile, "utf8").trim().split("\n").filter(Boolean).map(line => {
   const [phase, seconds] = line.split("\t");
@@ -448,6 +453,7 @@ fs.writeFileSync(file, `${JSON.stringify({
   phases,
   schemaMigration,
   schoolSchemaMigration,
+  sessionSecuritySchemaMigration,
   completedAt: new Date().toISOString(),
   previousVersion,
   requestedVersion: requestedVersion || null,
@@ -1219,6 +1225,12 @@ begin_deploy_phase vocational-school-schema-migration
   || gp_die "Die Berufsschul-Erweiterung ist fehlgeschlagen; die neue App wird nicht gestartet."
 "$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$school_migration_result" \
   || gp_die "Der Berufsschul-Migrationsnachweis ist unvollstaendig."
+begin_deploy_phase session-security-schema-migration
+"$node" "$app_dir/server-tools/linux/lib/session-security-migrate.js" \
+  "$installed_manifest_sha256" --maintenance-lock-held >"$session_security_migration_result" \
+  || gp_die "Die Sitzungs- und Kennwortsicherheits-Erweiterung ist fehlgeschlagen; die neue App wird nicht gestartet."
+"$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$session_security_migration_result" \
+  || gp_die "Der Sitzungs-Sicherheitsmigrationsnachweis ist unvollstaendig."
 fi
 begin_deploy_phase application-start
 gp_start_service "$service"

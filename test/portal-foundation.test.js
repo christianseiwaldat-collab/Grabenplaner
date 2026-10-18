@@ -567,14 +567,14 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const setup = await fetch(`${url}/api/portal/v1/setup/admin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeNumber: "101", password: "987654" }),
+      body: JSON.stringify({ employeeNumber: "101", password: "LanAdminFixture-987654!" }),
     });
     assert.equal(setup.status, 201, await setup.clone().text());
 
     const adminLogin = await fetch(`${url}/api/portal/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeNumber: "101", password: "987654" }),
+      body: JSON.stringify({ employeeNumber: "101", password: "LanAdminFixture-987654!" }),
     });
     assert.equal(adminLogin.status, 200, await adminLogin.clone().text());
     const admin = sessionHeaders(adminLogin);
@@ -605,14 +605,14 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const createEmployeeAccess = await fetch(`${url}/api/portal/v1/users/102`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
-      body: JSON.stringify({ role: "employee", active: true, password: "654321", mustChangePassword: true }),
+      body: JSON.stringify({ role: "employee", active: true, password: "LanStartFixture-654321!", mustChangePassword: true }),
     });
     assert.equal(createEmployeeAccess.status, 200, await createEmployeeAccess.clone().text());
 
     const employeeLogin = await fetch(`${url}/api/portal/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeNumber: "102", password: "654321" }),
+      body: JSON.stringify({ employeeNumber: "102", password: "LanStartFixture-654321!" }),
     });
     assert.equal(employeeLogin.status, 200, await employeeLogin.clone().text());
     const employee = sessionHeaders(employeeLogin);
@@ -620,9 +620,10 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const passwordChange = await fetch(`${url}/api/portal/v1/me/password`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
-      body: JSON.stringify({ currentPassword: "654321", newPassword: "123456" }),
+      body: JSON.stringify({ currentPassword: "LanStartFixture-654321!", newPassword: "LanChangedFixture-123456!" }),
     });
     assert.equal(passwordChange.status, 200, await passwordChange.clone().text());
+    Object.assign(employee, sessionHeaders(passwordChange));
 
     const locationsResponse = await fetch(`${url}/api/locations`, { headers: { Cookie: admin.cookie } });
     assert.equal(locationsResponse.status, 200, await locationsResponse.clone().text());
@@ -663,7 +664,7 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const createManagerAccess = await fetch(`${url}/api/portal/v1/users/103`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
-      body: JSON.stringify({ role: "manager", active: true, password: "112233", mustChangePassword: true }),
+      body: JSON.stringify({ role: "manager", active: true, password: "LanLeadFixture-112233!", mustChangePassword: true }),
     });
     assert.equal(createManagerAccess.status, 200, await createManagerAccess.clone().text());
     const assignManagerScope = await fetch(`${url}/api/portal/v1/users/103/scopes`, {
@@ -678,21 +679,22 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const createHrAccess = await fetch(`${url}/api/portal/v1/users/103`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
-      body: JSON.stringify({ role: "hr", active: true, password: "112233", mustChangePassword: true }),
+      body: JSON.stringify({ role: "hr", active: true, password: "LanLeadFixture-112233!", mustChangePassword: true }),
     });
     assert.equal(createHrAccess.status, 200, await createHrAccess.clone().text());
     const hrLogin = await fetch(`${url}/api/portal/v1/auth/login`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeNumber: "103", password: "112233" }),
+      body: JSON.stringify({ employeeNumber: "103", password: "LanLeadFixture-112233!" }),
     });
     assert.equal(hrLogin.status, 200, await hrLogin.clone().text());
     const hr = sessionHeaders(hrLogin);
     const hrPasswordChange = await fetch(`${url}/api/portal/v1/me/password`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: hr.cookie, "X-CSRF-Token": hr.csrf },
-      body: JSON.stringify({ currentPassword: "112233", newPassword: "332211" }),
+      body: JSON.stringify({ currentPassword: "LanLeadFixture-112233!", newPassword: "LanLeadChanged-332211!" }),
     });
     assert.equal(hrPasswordChange.status, 200, await hrPasswordChange.clone().text());
+    Object.assign(hr, sessionHeaders(hrPasswordChange));
     const saturdaySlotsResponse = await fetch(`${url}/api/portal/v1/me/time-off-slots?date=2027-03-13`, { headers: { Cookie: employee.cookie } });
     assert.equal(saturdaySlotsResponse.status, 200, await saturdaySlotsResponse.clone().text());
     const saturdaySlots = await saturdaySlotsResponse.json();
@@ -1120,6 +1122,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       body: JSON.stringify({ currentPassword, newPassword }),
     });
     assert.equal(response.status, 200, await response.clone().text());
+    Object.assign(session, sessionHeaders(response));
   }
 
   try {
@@ -1127,10 +1130,10 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const setup = await fetch(`${url}/api/portal/v1/setup/admin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeNumber: "101", password: "987654" }),
+      body: JSON.stringify({ employeeNumber: "101", password: "LanAdminFixture-987654!" }),
     });
     assert.equal(setup.status, 201, await setup.clone().text());
-    const admin = await login("101", "987654");
+    const admin = await login("101", "LanAdminFixture-987654!");
 
     const initialLocationsResponse = await fetch(`${url}/api/locations`, { headers: { Cookie: admin.cookie } });
     assert.equal(initialLocationsResponse.status, 200, await initialLocationsResponse.clone().text());
@@ -1164,10 +1167,10 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     assert.ok(secondDepartment?.id);
 
     for (const [employeeNumber, role, password] of [
-      ["102", "employee", "223344"],
-      ["103", "hr", "334455"],
-      ["104", "manager", "445566"],
-      ["105", "department_manager", "556677"],
+      ["102", "employee", "ScopeEmployee-223344!"],
+      ["103", "hr", "ScopePersonnel-334455!"],
+      ["104", "manager", "ScopeManager-445566!"],
+      ["105", "department_manager", "ScopeDepartment-556677!"],
     ]) {
       const accessResponse = await fetch(`${url}/api/portal/v1/users/${employeeNumber}`, {
         method: "PUT",
@@ -1185,7 +1188,11 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
         ON CONFLICT(employee_number) DO UPDATE SET
           password_hash = excluded.password_hash, role = 'it_admin', active = 1,
           must_change_password = 1, password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-      `).run(await hashPortalPassword("667788"));
+      `).run((() => {
+        // Preserve a real pre-policy six-character hash to exercise legacy login/currentPassword.
+        const salt = crypto.randomBytes(16);
+        return ["scrypt-v1", salt.toString("base64url"), crypto.scryptSync("667788", salt, 64).toString("base64url")].join("$");
+      })());
     } finally {
       fixtureDatabase.close();
     }
@@ -1203,16 +1210,16 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     });
     assert.equal(departmentManagerScopeResponse.status, 200, await departmentManagerScopeResponse.clone().text());
 
-    let manager = await login("104", "445566");
-    await changePassword(manager, "445566", "665544");
-    const departmentManager = await login("105", "556677");
-    await changePassword(departmentManager, "556677", "776655");
-    let employee = await login("102", "223344");
-    await changePassword(employee, "223344", "554433");
-    let hr = await login("103", "334455");
-    await changePassword(hr, "334455", "887766");
+    let manager = await login("104", "ScopeManager-445566!");
+    await changePassword(manager, "ScopeManager-445566!", "ScopeManagerNew-665544!");
+    const departmentManager = await login("105", "ScopeDepartment-556677!");
+    await changePassword(departmentManager, "ScopeDepartment-556677!", "ScopeDepartmentNew-776655!");
+    let employee = await login("102", "ScopeEmployee-223344!");
+    await changePassword(employee, "ScopeEmployee-223344!", "ScopeEmployeeNew-554433!");
+    let hr = await login("103", "ScopePersonnel-334455!");
+    await changePassword(hr, "ScopePersonnel-334455!", "ScopePersonnelNew-887766!");
     const itAdmin = await login("106", "667788");
-    await changePassword(itAdmin, "667788", "998877");
+    await changePassword(itAdmin, "667788", "ScopeTechnicalNew-998877!");
 
     const managerRightsResponse = await fetch(`${url}/api/portal/v1/rights`, { headers: { Cookie: manager.cookie } });
     assert.equal(managerRightsResponse.status, 200, await managerRightsResponse.clone().text());
@@ -1342,7 +1349,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       body: JSON.stringify({ permissions: ["system:diagnostics:read"] }),
     });
     assert.equal(grantHrStatusRead.status, 200, await grantHrStatusRead.clone().text());
-    hr = await login("103", "887766");
+    hr = await login("103", "ScopePersonnelNew-887766!");
     const delegatedHrStatus = await fetch(`${url}/api/server-status`, { headers: { Cookie: hr.cookie } });
     assert.equal(delegatedHrStatus.status, 200, await delegatedHrStatus.clone().text());
     const delegatedHrTechnicalDenied = await fetch(`${url}/api/server-diagnostics`, { headers: { Cookie: hr.cookie } });
@@ -1353,7 +1360,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       body: JSON.stringify({ permissions: [] }),
     });
     assert.equal(clearHrStatusRead.status, 200, await clearHrStatusRead.clone().text());
-    hr = await login("103", "887766");
+    hr = await login("103", "ScopePersonnelNew-887766!");
 
     const itAdminStatusResponse = await fetch(`${url}/api/server-status`, { headers: { Cookie: itAdmin.cookie } });
     assert.equal(itAdminStatusResponse.status, 200, await itAdminStatusResponse.clone().text());
@@ -1393,7 +1400,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     assert.equal(grantEmployeeTechnicalRights.status, 200, await grantEmployeeTechnicalRights.clone().text());
     const employeeWithTechnicalRights = (await grantEmployeeTechnicalRights.json()).users.find((user) => user.employeeNumber === "102");
     assert.deepEqual(employeeWithTechnicalRights.grantedPermissions, ["backup:write", "branding:read", "branding:write", "employees:write", "hr:approve", "schedule:read", "system:write", "update:write"]);
-    employee = await login("102", "554433");
+    employee = await login("102", "ScopeEmployeeNew-554433!");
     const employeeSessionWithGrants = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: employee.cookie } });
     assert.equal(employeeSessionWithGrants.status, 200, await employeeSessionWithGrants.clone().text());
     const employeeEffectivePermissions = (await employeeSessionWithGrants.json()).user.permissions;
@@ -1437,7 +1444,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       body: JSON.stringify({ role: "hr", active: true }),
     });
     assert.equal(restoreHrByAdmin.status, 200, await restoreHrByAdmin.clone().text());
-    hr = await login("103", "887766");
+    hr = await login("103", "ScopePersonnelNew-887766!");
     const developerRoleCannotBeAssigned = await fetch(`${url}/api/portal/v1/users/106`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
@@ -1478,7 +1485,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const grantedManager = (await grantManagerTechnicalRights.json()).users.find((user) => user.employeeNumber === "104");
     assert.deepEqual(grantedManager.grantedPermissions, ["departments:write", "employees:display:write", "locations:write"]);
 
-    manager = await login("104", "665544");
+    manager = await login("104", "ScopeManagerNew-665544!");
     const managerSessionWithGrant = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: manager.cookie } });
     assert.equal(managerSessionWithGrant.status, 200, await managerSessionWithGrant.clone().text());
     const managerSessionPermissions = (await managerSessionWithGrant.json()).user.permissions;
@@ -1610,7 +1617,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       body: JSON.stringify({ permissions: [] }),
     });
     assert.equal(revokeManagerRights.status, 200, await revokeManagerRights.clone().text());
-    manager = await login("104", "665544");
+    manager = await login("104", "ScopeManagerNew-665544!");
     const updateAfterRevoke = await fetch(`${url}/api/employees/104/display`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
@@ -2005,7 +2012,7 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(statusResponse.headers.get("cross-origin-resource-policy"), "same-origin");
     assert.equal(statusResponse.headers.get("x-permitted-cross-domain-policies"), "none");
     const contentSecurityPolicy = statusResponse.headers.get("content-security-policy") || "";
-    for (const directive of ["object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"]) {
+    for (const directive of ["object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'"]) {
       assert.match(contentSecurityPolicy, new RegExp(directive.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
     assert.match(statusResponse.headers.get("x-request-id") || "", /^[a-f0-9-]{36}$/i);
@@ -2014,7 +2021,7 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(status.operationMode, "server");
     assert.equal(status.httpsRequired, true);
     assert.equal(status.publicUrl, publicAddress);
-    assert.equal(status.passwordMinLength, 10);
+    assert.equal(status.passwordMinLength, 15);
     const windowsUsbHost = process.platform === "win32";
     assert.equal(status.usbProvisioning.hostCapable, windowsUsbHost);
     assert.equal(status.usbProvisioning.available, false);
@@ -2227,9 +2234,9 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     });
     assert.equal(unlockedLogin.status, 200, await unlockedLogin.clone().text());
     const employeeCookies = typeof unlockedLogin.headers.getSetCookie === "function" ? unlockedLogin.headers.getSetCookie() : [unlockedLogin.headers.get("set-cookie")].filter(Boolean);
-    const employeeCookie = employeeCookies.map((value) => value.split(";", 1)[0]).join("; ");
+    let employeeCookie = employeeCookies.map((value) => value.split(";", 1)[0]).join("; ");
     const employeeCsrfCookie = employeeCookies.map((value) => value.split(";", 1)[0]).find((value) => value.startsWith("grabenplaner_csrf="));
-    const employeeCsrf = decodeURIComponent(employeeCsrfCookie.split("=").slice(1).join("="));
+    let employeeCsrf = decodeURIComponent(employeeCsrfCookie.split("=").slice(1).join("="));
     const deniedEmployeeUsbStatus = await fetch(`${url}/api/usb-provisioning/status`, {
       headers: { ...hostSecureHeaders, Cookie: employeeCookie },
     });
@@ -2240,6 +2247,10 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
       body: JSON.stringify({ currentPassword: employeePassword, newPassword: "MitarbeiterPasswortNeu!" }),
     });
     assert.equal(employeePasswordChange.status, 200, await employeePasswordChange.clone().text());
+    const rotatedEmployeeCookies = employeePasswordChange.headers.getSetCookie();
+    employeeCookie = rotatedEmployeeCookies.map(value => value.split(";", 1)[0]).join("; ");
+    employeeCsrf = decodeURIComponent(rotatedEmployeeCookies.map(value => value.split(";", 1)[0])
+      .find(value => value.startsWith("grabenplaner_csrf=")).split("=").slice(1).join("="));
     const deniedEmployeeExit = await fetch(`${url}/api/system/exit`, {
       method: "POST", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: employeeCookie, "X-CSRF-Token": employeeCsrf }, body: "{}",
     });

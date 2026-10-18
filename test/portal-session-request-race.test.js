@@ -27,7 +27,7 @@ test("Portal API: a delayed 401/error-body from the previous same-account sessio
   await new Promise(setImmediate);
   const replacement = session(); f.state.session = replacement;
   detail.resolve({ error: "BEISPIEL expired", code: "SESSION_EXPIRED" });
-  await assert.rejects(request, error => error.status === 401 && error.code === "SESSION_EXPIRED");
+  await assert.rejects(request, error => error.code === "PORTAL_SESSION_CHANGED");
   assert.notEqual(old, replacement);
   assert.equal(f.state.session, replacement);
   assert.deepEqual(f.logins, []);
@@ -50,7 +50,7 @@ function logoutFixture({ flush = null } = {}) {
   const workspace = flush ? { hasUnsaved: true, flush: () => flush.promise } : null;
   const context = vm.createContext({ portalState: state, el, AbortController, privatePortalWorkspaces: { synchronize: () => effects.push("privateSync") },
     portalVoiceAssistant: { reset: () => effects.push("voiceReset"), synchronize: () => effects.push("voiceSync") },
-    window: { setTimeout: () => 1, clearTimeout: () => {} }, branchPriceLabelsWorkspace: workspace,
+    window: { setTimeout: () => 1, clearTimeout: () => {}, GrabenplanerSessionLifecycle: { credentials: operation => operation(), advance() {}, publish() {} } }, branchPriceLabelsWorkspace: workspace,
     portalUser: () => state.session?.user, processTaskActorFingerprint: user => user?.employeeNumber || "",
     message: (_target, text, error) => messages.push({ text, error: Boolean(error) }),
     api: (url, options) => { calls.push({ url, options }); return replies[calls.length - 1].promise; },

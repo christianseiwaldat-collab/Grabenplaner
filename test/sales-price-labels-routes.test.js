@@ -79,7 +79,7 @@ async function readPdf(response) {
   assert.match(response.headers.get('content-type'), /application\/pdf/);
   assert.match(response.headers.get('cache-control'), /private, no-store/);
   assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
-  assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; sandbox allow-downloads");
+  assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; sandbox allow-downloads");
   const buffer = Buffer.from(await response.arrayBuffer()); assert.equal(buffer.subarray(0, 5).toString(), '%PDF-');
   const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const task = getDocument({ data: new Uint8Array(buffer), isEvalSupported: false }), document = await task.promise;

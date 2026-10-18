@@ -79,6 +79,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   // Three reviewed read-only adapters over existing tables; no driver or DDL grant.
   'lib/persistence/postgresql/core/workflow-studio.js',
   'lib/persistence/postgresql/sales/cash-customer-search.js',
+  'lib/persistence/postgresql/sales/cash-snapshot-pages.js',
   'lib/persistence/postgresql/operations/sql-runtime-statistics.js',
   'test/cash-customer-search-sql.test.js',
   'test/import-master-customer-reference.test.js',
@@ -93,6 +94,15 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   // Four reviewed authentication statements; historical locks and driver gates stay fixed.
   'lib/persistence/postgresql/contracts/authentication-catalog-v1.json',
   'test/authentication-catalog-qualification.test.js',
+  // Exact session extension artifacts; only the named maintenance CLI opens a driver.
+  'lib/persistence/postgresql/contracts/session-security-catalog-v1.json',
+  'lib/persistence/postgresql/core/session-security-catalog.js',
+  'lib/persistence/postgresql/core/session-security.js',
+  'server-tools/linux/lib/session-security-migrate.js',
+  'test/postgresql-session-security-cli.test.js',
+  'test/session-security-catalog-qualification.test.js',
+  'lib/persistence/postgresql/transfer/session-security.js',
+  'test/session-security-transfer.test.js',
   'lib/persistence/postgresql/core/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete.js',
@@ -305,6 +315,7 @@ const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
   // Only the installed maintenance-lease migration CLI opens the driver.
   'server-tools/linux/postgresql/storage-worker.js',
   'server-tools/linux/lib/vocational-school-migrate.js',
+  'server-tools/linux/lib/session-security-migrate.js',
   'server-tools/linux/lib/import-delete-migrate.js',
   'lib/persistence/postgresql/application-operations/system-health.js',
   'test-support/postgresql-recovery-performance-probe.js',
@@ -419,6 +430,9 @@ const PHASE_2_CLASSIFICATION = Object.freeze({
   laterPhase: "2-5",
 });
 const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
+  // Pure time policy and transactional additive SQLite migration; no driver grant.
+  "lib/portal-session-security.js",
+  "lib/persistence/sqlite/operations/session-security-schema.js",
   // Encrypted privacy metadata uses existing transaction-bound repositories.
   // The contract import validates the provider and its retry errors only;
   // this classification never permits driver imports or direct SQL access.
@@ -946,10 +960,10 @@ const PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS = Object.freeze([
   "workflow-studio.instances.page",
   "xoffi-snapshots.get-scoped",
 ]);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1503;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1507;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 46;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1457;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1384;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1461;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1388;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -1075,7 +1089,7 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1363;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1367;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 140;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
@@ -1334,6 +1348,26 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
 
 const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
   Object.freeze({
+    id: "security-sast-review-metadata",
+    files: Object.freeze(["scripts/security/sast-dispositions.json"]),
+    scope: "security-review-metadata",
+    owner: "security-review-evidence",
+    targetLayer: "non-executable JSON review records containing quoted source and SQL terminology",
+    risk: "low",
+    transitionException: "metadata classification only; no database driver, statement, connection or runtime activation grant",
+    laterPhase: "not-applicable",
+  }),
+  Object.freeze({
+    id: "security-release-component-inventory",
+    files: Object.freeze(["lib/security-release-inventory.js"]),
+    scope: "supported-linux-server-operations",
+    owner: "security-release-evidence",
+    targetLayer: "read-only package hashes and process runtime version metadata",
+    risk: "low",
+    transitionException: "SQLite version comes from process.versions; no database driver, connection or business data access is authorized",
+    laterPhase: "not-applicable",
+  }),
+  Object.freeze({
     id: "isolated-full-source-measurement",
     files: Object.freeze(["scripts/verify-tradefoto-full-import.mjs"]),
     scope: "isolated-test-only",
@@ -1553,6 +1587,14 @@ const TEST_SPECIAL_GROUPS = Object.freeze({
     "test-support/security-audit/login-concurrency-fixture.cjs",
     "test/portal-login-concurrency.test.js",
     "test/portal-login-concurrency-api.test.js",
+    "test/portal-session-security.test.js",
+    "test/session-security-persistence.test.js",
+    "test/session-security-migration.test.js",
+    "test/session-security-interruption.test.js",
+    "test/security-p2-authentication-api.test.js",
+    "test/security-reauthentication-api.test.js",
+    "test/security-csp-server.test.js",
+      "test/security-release-inventory.test.js",
     "test-support/security-audit/login-multiconnection-worker.cjs",
     "test/portal-login-multiconnection.test.js",
     "test-support/security-audit/linux-native-runtime.probe.cjs",
@@ -1569,6 +1611,8 @@ const TEST_SPECIAL_GROUPS = Object.freeze({
     "test-support/workflow-studio-editor-ui.js",
     "test-support/workflow-studio-persistence-ui.js",
     "test/gp-window-browser.test.js",
+    "test/gp-window-scroll-browser.test.js",
+    "test/cost-centers-workspace-browser.test.js",
     "test/gp-window-explicit-reopen-browser.test.js",
     "test/learning-catalog-workspace-browser.test.js",
     "test/learning-overview-workspace-browser.test.js",
@@ -2609,7 +2653,7 @@ function maskHashComments(text) {
 }
 
 function maskHtmlComments(text) {
-  return text.replace(/<!--[\s\S]*?-->/g, (comment) => comment.replace(/[^\r\n]/g, " "));
+  return text.replace(/\x3c!--[\s\S]*?--\x3e/g, (comment) => comment.replace(/[^\r\n]/g, " "));
 }
 
 function shellSegmentBefore(text, index) {

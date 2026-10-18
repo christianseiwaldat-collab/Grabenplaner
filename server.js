@@ -7,6 +7,10 @@ const path = require("node:path");
 const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const { loginFailureParameters, runLoginTransaction, acceptVerifiedLogin } = require("./lib/portal-login-security");
+const { POLICY_VERSION: PORTAL_PASSWORD_POLICY_VERSION, assertNewPassword,
+  assessExistingPassword, metadata: portalPasswordPolicyMetadata } = require("./lib/portal-password-policy");
+const { browserSessionLifetime, isSessionTimeValid, mobileSessionLifetime,
+  clampMobileAccessExpiry, isPrivilegedSession, instant: sessionInstant } = require("./lib/portal-session-security");
 const net = require("node:net");
 const zlib = require("node:zlib");
 const { promisify } = require("node:util");
@@ -903,8 +907,8 @@ function normalizeAppFontScalePercent(value, fallback = APP_FONT_SCALE_DEFAULT) 
     : fallback;
 }
 
-const LOCAL_PORTAL_PASSWORD_MIN_LENGTH = 6;
-const SERVER_PORTAL_PASSWORD_MIN_LENGTH = 10;
+const LOCAL_PORTAL_PASSWORD_MIN_LENGTH = 15;
+const SERVER_PORTAL_PASSWORD_MIN_LENGTH = 15;
 const PORTAL_SESSION_COOKIE = "grabenplaner_session";
 const PORTAL_CSRF_COOKIE = "grabenplaner_csrf";
 const MOBILE_ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -2362,9 +2366,7 @@ function requestOriginAllowed(request, origin) {
 if (serverModeActive) app.set("trust proxy", trustProxySetting);
 
 function portalPasswordMinLength() {
-  return serverModeActive || deploymentKind === "production"
-    ? SERVER_PORTAL_PASSWORD_MIN_LENGTH
-    : LOCAL_PORTAL_PASSWORD_MIN_LENGTH;
+  return LOCAL_PORTAL_PASSWORD_MIN_LENGTH;
 }
 
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
@@ -3557,6 +3559,7 @@ const {
   normalizeAppFontScalePercent,
   defaultPortalSettings,
   passwordMinLength: portalPasswordMinLength(),
+  passwordPolicy: { ...portalPasswordPolicyMetadata(), maxLength: portalPasswordPolicyMetadata().maxCodePoints },
   installationFeatureIds,
   preV063DefaultInstallationFeatures,
   preV085DefaultInstallationFeatures,
@@ -3781,6 +3784,12 @@ async function authorizePersistenceOperation({readOnly} = {}) {
   // Authentication and scheduled server work use their own existing checks.
   // An authenticated request must retain the same authority through commit.
   const previous = request?.portalSession;
+  if (request?.mobileSession) {
+    const application = await applicationPersistence.ready;
+    const current = await mobileSessionFromRequest(request, { touch: false, repository: application.authorizationRepositories.mobileAuth });
+    const mobileFields = ['id','employeeNumber','role','permissions','explicitScopes','permissionScopes','scopes','mustChangePassword'];
+    if (!current || JSON.stringify(mobileFields.map(key => current[key])) !== JSON.stringify(mobileFields.map(key => request.mobileSession[key]))) return false;
+  }
   if (!request?.portalSessionLoaded || !previous) return true;
   const application = await applicationPersistence.ready;
   const current = await loadPortalSessionFromRequest(request, {touch:false, repository:application.authorizationRepositories.portalAccess});
@@ -3880,7 +3889,7 @@ app.use((request, response, next) => {
   response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
   response.setHeader("X-Permitted-Cross-Domain-Policies", "none");
-  response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'${ocrClientAsset ? " 'wasm-unsafe-eval'" : ""}; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
+  response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'${ocrClientAsset ? " 'wasm-unsafe-eval'" : ""}; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
   if (request.secure) response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   if ((serverModeActive && request.path.startsWith("/api/"))
     || request.path.startsWith("/api/portal/") || request.path.startsWith("/api/mobile/")) {
@@ -3937,29 +3946,11 @@ app.use(async (request, response, next) => {
     await refreshPortalSettingsSnapshot();
     // A new login is authorized by its submitted credentials. An older cookie
     // must not veto the transaction that replaces that very session.
-    request.portalSession = request.path === "/api/portal/v1/auth/login"
+    request.portalSession = request.path === "/api/portal/v1/auth/login" || request.path.startsWith('/api/mobile/')
       ? null : await loadPortalSessionFromRequest(request);
     request.portalSessionLoaded = true;
-    if (request.portalSession) {
-      const cookies = parseCookies(request);
-      const maxAge = portalSessionTimeoutMinutes() * 60;
-      if (cookies[PORTAL_SESSION_COOKIE]) {
-        appendCookie(response, portalCookie(
-          PORTAL_SESSION_COOKIE,
-          cookies[PORTAL_SESSION_COOKIE],
-          request,
-          { httpOnly: true, maxAge },
-        ));
-      }
-      if (cookies[PORTAL_CSRF_COOKIE]) {
-        appendCookie(response, portalCookie(
-          PORTAL_CSRF_COOKIE,
-          cookies[PORTAL_CSRF_COOKIE],
-          request,
-          { maxAge },
-        ));
-      }
-    }
+    // Cookies are issued only by explicit authentication transitions. A late
+    // ordinary API response must never overwrite a freshly rotated credential.
     if (request.path.startsWith("/api/work-rules")
       || request.path.startsWith("/api/collective-agreements")) {
       await refreshPortalScopeProjectionSnapshot();
@@ -4450,12 +4441,9 @@ function parsePersonnelDocumentMultipart(request, { maxFileBytes = 15 * 1024 * 1
   });
 }
 
-async function hashPortalPassword(password) {
-  const value = String(password || "");
-  const minimum = portalPasswordMinLength();
-  if (value.length < minimum) {
-    throw httpError(400, `Das Passwort muss in diesem Betriebsmodus mindestens ${minimum} Zeichen lang sein.`, "PORTAL_PASSWORD_TOO_SHORT");
-  }
+async function hashPortalPassword(password, context = {}) {
+  assertNewPassword(password, context);
+  const value = password;
   const salt = crypto.randomBytes(16);
   const derivedKey = await scryptAsync(value, salt, 64);
   return `scrypt-v1$${salt.toString("base64url")}$${Buffer.from(derivedKey).toString("base64url")}`;
@@ -4521,7 +4509,7 @@ function backupAdminOriginAllowed(request) {
   return Boolean(origin && (!fetchSite || fetchSite === "same-origin") && requestOriginAllowed(request, origin));
 }
 
-async function requireBackupAdminReauthentication(request, {
+async function requireBackupAdminReauthentication(request, response, {
   permission = "backup:write",
   operation = "backup-administration",
 } = {}) {
@@ -4542,7 +4530,7 @@ async function requireBackupAdminReauthentication(request, {
   const rateKey = `${ipKey}:${session.employeeNumber}`;
   if (backupAdminGlobalRateLimits.get(ipKey, now).length >= 20
     || backupAdminAuthRateLimits.get(rateKey, now).length >= 5) {
-    (await auditPortal(session.employeeNumber, "backup.admin.reauthentication.rate-limited", "system", operation));
+    (await auditBackupAdministration(session.employeeNumber, "backup.admin.reauthentication.rate-limited", "system", operation));
     throw httpError(429, "Zu viele fehlgeschlagene Freigaben. Bitte 15 Minuten warten.", "BACKUP_ADMIN_RATE_LIMITED");
   }
 
@@ -4570,12 +4558,61 @@ async function requireBackupAdminReauthentication(request, {
   if (!allowed || !suppliedPassword || !passwordMatches) {
     backupAdminAuthRateLimits.record(rateKey, now);
     backupAdminGlobalRateLimits.record(ipKey, now);
-    (await auditPortal(session.employeeNumber, "backup.admin.reauthentication.denied", "system", operation));
+    (await auditBackupAdministration(session.employeeNumber, "backup.admin.reauthentication.denied", "system", operation));
     throw httpError(403, "Das aktuelle Passwort ist nicht korrekt.", "BACKUP_ADMIN_AUTH_FAILED");
   }
+  const rawToken = crypto.randomBytes(32).toString("base64url");
+  const replacement = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    // Password verification can overlap logout, reset or another reauthentication.
+    // Re-read both authority and the verified credential in the transaction that
+    // revokes the old token, creates its successor and records acceptance.
+    const repository = repositories.portalAccess;
+    const live = await loadPortalSessionFromRequest(request, { touch: false, repository });
+    const acceptedAt = new Date();
+    if (!live || live.id !== session.id || live.sessionKind !== "employee"
+      || live.employeeNumber !== session.employeeNumber) {
+      throw httpError(401, "Die Sitzung wurde geändert oder ist abgelaufen. Bitte erneut anmelden.", "PORTAL_AUTH_REQUIRED");
+    }
+    const current = await repository.getBackupAdminUser({ employeeNumber: live.employeeNumber });
+    if (!current?.active || !current.employee_active || current.password_hash !== user.password_hash
+      || current.role !== session.role || live.role !== current.role
+      || !BACKUP_ADMIN_ROLES.has(live.role) || !live.permissions.includes(permission)
+      || live.mustChangePassword
+      || (current.locked_until && !(new Date(current.locked_until).getTime() <= acceptedAt.getTime()))) {
+      throw httpError(403, "Der Zugang oder die Berechtigung wurde geändert. Bitte erneut anmelden.", "BACKUP_ADMIN_AUTH_CHANGED");
+    }
+    const lifetime = browserSessionLifetime({ now: acceptedAt, role: live.role, permissions: live.permissions,
+      idleMinutes: portalSessionTimeoutMinutes(), authenticatedAt: live.authenticatedAt,
+      absoluteExpiresAt: live.absoluteExpiresAt });
+    if (!lifetime) throw httpError(401, "Die Sitzung ist abgelaufen. Bitte erneut anmelden.", "PORTAL_AUTH_REQUIRED");
+    const revoked = await repository.revokeEmployeeSessionById({ id: live.id });
+    if (revoked.rowsAffected !== 1) throw httpError(401, "Bitte erneut anmelden.", "PORTAL_AUTH_REQUIRED");
+    const id = crypto.randomUUID();
+    await repository.insertEmployeeSession({ id, employeeNumber: live.employeeNumber, tokenHash: sha256(rawToken), ...lifetime });
+    await repositories.organizationPersonnel.insertAudit(
+      live.employeeNumber, "backup.admin.reauthentication.accepted", "system", operation,
+    );
+    return { session: { ...live, id, ...lifetime }, user: current };
+  });
+  // Only a committed transition may reach the browser. Adopt it before later
+  // guarded database operations, and retain it even if the requested operation
+  // subsequently fails (for example an unavailable offsite broker).
+  request.headers.cookie = `${PORTAL_SESSION_COOKIE}=${rawToken}; ${PORTAL_CSRF_COOKIE}=${portalCsrfToken(rawToken)}`;
+  request.portalSession = replacement.session;
+  issuePortalSessionCookies(request, response, rawToken, replacement.session.absoluteExpiresAt);
+  response.setHeader("X-GP-Session-Changed", "1");
   backupAdminAuthRateLimits.clear(rateKey);
-  (await auditPortal(session.employeeNumber, "backup.admin.reauthentication.accepted", "system", operation));
-  return { session, user };
+  return replacement;
+}
+
+async function auditBackupAdministration(actor, action, entityType = "", entityId = "", detail = "") {
+  // These requests can overlap a credential transaction. Use the provider queue
+  // instead of issuing a legacy SQLite write inside another request's transaction.
+  // Acceptance itself is recorded with the rotation's transaction repository.
+  return persistenceRequestContext.run({ auditOnly: true }, async () => {
+    const result = await organizationPersonnelRepository.insertAudit(actor, action, entityType, entityId, detail);
+    return result.rowsAffected;
+  });
 }
 
 function requireOffsiteTargetDeveloper(request) {
@@ -5141,19 +5178,13 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
   const now = currentDate.toISOString();
   const tokenHash = sha256(token);
   const timeoutMinutes = portalSessionTimeoutMinutes();
-  const refreshedExpiresAt = new Date(currentDate.getTime() + timeoutMinutes * 60000).toISOString();
   const session = await repository.getEmployeeSessionByToken({
     tokenHash,
     now,
     businessDate: viennaTodayIso(currentDate),
   });
   if (session) {
-    if (isReservedEmployeePrincipal(session.employee_number)) return null;
-    let effectiveExpiresAt = session.expires_at;
-    if (touch) {
-      effectiveExpiresAt = await renewPortalSession({ session, kind: 'employee', now: currentDate.getTime(), expiresAt: refreshedExpiresAt,
-        timeoutMinutes, write: value => repository.touchEmployeeSession(value) });
-    }
+    if (isReservedEmployeePrincipal(session.employee_number) || !isSessionTimeValid(session, currentDate)) return null;
     const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(session);
     const permissionState = effectivePortalPermissionState(
       session.employee_number,
@@ -5163,6 +5194,23 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
       session.denied_permissions,
       session.amu_local_access_mode,
     );
+    const lifetime = browserSessionLifetime({ now: currentDate, role: session.role,
+      permissions: permissionState.effectivePermissions, idleMinutes: timeoutMinutes,
+      authenticatedAt: session.authenticated_at, absoluteExpiresAt: session.absolute_expires_at });
+    if (!lifetime) return null;
+    const lastSeen = sessionInstant(session.last_seen_at);
+    if (!Number.isFinite(lastSeen) || lastSeen > currentDate.getTime()
+      || (lifetime.privileged && currentDate.getTime() - lastSeen >= 30 * 60000)) return null;
+    // Background reads never reset idle time; the browser sends a bounded,
+    // consumed activity signal after trusted user input. Absolute expiry is
+    // enforced independently even if a client keeps signalling activity.
+    let effectiveExpiresAt = session.expires_at;
+    if (touch && request.headers['x-gp-user-activity'] === '1'
+      && !String(request.originalUrl || request.url || '').split('?')[0].endsWith('/session')) {
+      effectiveExpiresAt = await renewPortalSession({ session, kind: 'employee', now: currentDate.getTime(), expiresAt: lifetime.expiresAt,
+        timeoutMinutes: lifetime.idleMinutes, write: value => repository.touchEmployeeSession(value) });
+      if (!effectiveExpiresAt) return null;
+    }
     return {
       id: session.id,
       sessionKind: "employee",
@@ -5193,16 +5241,13 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
       personnelFieldPermissions: parsePersonnelFieldPermissionProjection(session.personnel_field_permissions),
       mustChangePassword: Boolean(session.must_change_password),
       expiresAt: effectiveExpiresAt,
+      authenticatedAt: lifetime.authenticatedAt,
+      absoluteExpiresAt: lifetime.absoluteExpiresAt,
     };
   }
   const organizationSession = await repository
     .getOrganizationSessionByToken({ tokenHash, now });
-  if (!organizationSession) return null;
-  let organizationExpiresAt = organizationSession.expires_at;
-  if (touch) {
-    organizationExpiresAt = await renewPortalSession({ session: organizationSession, kind: 'organization', now: currentDate.getTime(), expiresAt: refreshedExpiresAt,
-      timeoutMinutes, write: value => repository.touchOrganizationSession(value) });
-  }
+  if (!organizationSession || !isSessionTimeValid(organizationSession, currentDate)) return null;
   const scopes = portalAccessScopesForPrincipal({
     role: "organization_account",
     scopesValue: organizationSession.access_scopes,
@@ -5211,6 +5256,20 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
     organizationSession.account_type,
     parsePortalPermissions(organizationSession.permissions),
   );
+  const lifetime = browserSessionLifetime({ now: currentDate, role: 'organization_account', permissions,
+    idleMinutes: timeoutMinutes, authenticatedAt: organizationSession.authenticated_at,
+    absoluteExpiresAt: organizationSession.absolute_expires_at });
+  if (!lifetime) return null;
+  const lastSeen = sessionInstant(organizationSession.last_seen_at);
+  if (!Number.isFinite(lastSeen) || lastSeen > currentDate.getTime()
+    || (lifetime.privileged && currentDate.getTime() - lastSeen >= 30 * 60000)) return null;
+  let organizationExpiresAt = organizationSession.expires_at;
+  if (touch && request.headers['x-gp-user-activity'] === '1'
+    && !String(request.originalUrl || request.url || '').split('?')[0].endsWith('/session')) {
+    organizationExpiresAt = await renewPortalSession({ session: organizationSession, kind: 'organization', now: currentDate.getTime(), expiresAt: lifetime.expiresAt,
+      timeoutMinutes: lifetime.idleMinutes, write: value => repository.touchOrganizationSession(value) });
+    if (!organizationExpiresAt) return null;
+  }
   return {
     id: organizationSession.id,
     sessionKind: "organization",
@@ -5238,6 +5297,8 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
     scopes,
     mustChangePassword: false,
     expiresAt: organizationExpiresAt,
+    authenticatedAt: lifetime.authenticatedAt,
+    absoluteExpiresAt: lifetime.absoluteExpiresAt,
   };
 }
 
@@ -5483,9 +5544,20 @@ function assertPortalCsrf(request) {
   const cookies = parseCookies(request);
   const cookieToken = String(cookies[PORTAL_CSRF_COOKIE] || "");
   const headerToken = String(request.headers["x-csrf-token"] || "");
-  const valid = cookieToken.length >= 24 && headerToken.length === cookieToken.length
-    && crypto.timingSafeEqual(Buffer.from(cookieToken), Buffer.from(headerToken));
+  const expected = portalCsrfToken(cookies[PORTAL_SESSION_COOKIE]);
+  const valid = cookieToken.length >= 24 && safeHashEquals(cookieToken, headerToken)
+    && safeHashEquals(cookieToken, expected);
   if (!valid) throw httpError(403, "Die Sicherheitsprüfung ist abgelaufen. Bitte die Seite neu laden.", "PORTAL_CSRF_INVALID");
+}
+
+function portalCsrfToken(rawToken) {
+  return rawToken ? sha256(`gp-browser-csrf-v2\0${rawToken}`) : "";
+}
+
+function issuePortalSessionCookies(request, response, rawToken, absoluteExpiresAt) {
+  const maxAge = Math.max(0, Math.floor((Date.parse(absoluteExpiresAt) - Date.now()) / 1000));
+  appendCookie(response, portalCookie(PORTAL_SESSION_COOKIE, rawToken, request, { httpOnly: true, maxAge }));
+  appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, portalCsrfToken(rawToken), request, { maxAge }));
 }
 
 function mobileNativeAuthenticationAvailable() {
@@ -5664,27 +5736,45 @@ async function mobileSessionRow(
   return repository.getSession({ sessionId, businessDate });
 }
 
-async function mobileSessionFromRequest(request, { touch = true } = {}) {
+function mobileSessionTimeBounds(row, now, { access = false } = {}) {
+  if (!row || row.revoked_at || !row.active || !row.employee_active) return null;
+  const principal = mobileSessionPrincipal(row);
+  if (!principal) return null;
+  const current = sessionInstant(now), origin = sessionInstant(row.created_at);
+  const storedEnd = sessionInstant(row.refresh_expires_at), lastSeen = sessionInstant(row.last_seen_at);
+  if (![current, origin, storedEnd, lastSeen].every(Number.isFinite)
+    || origin > current || lastSeen > current || storedEnd <= origin) return null;
+  const policy = mobileSessionLifetime({ now: new Date(origin), ...principal });
+  const end = Math.min(storedEnd, sessionInstant(policy.refreshExpiresAt));
+  if (current >= end || (isPrivilegedSession(principal) && current - lastSeen >= 30 * 60000)) return null;
+  if (access && (!Number.isFinite(sessionInstant(row.access_expires_at)) || sessionInstant(row.access_expires_at) <= current)) return null;
+  const refreshExpiresAt = new Date(end).toISOString();
+  return { principal: { ...principal, refreshExpiresAt }, refreshExpiresAt };
+}
+
+async function mobileSessionFromRequest(request, { touch = true, repository = mobileAuthRepository } = {}) {
   const parsed = parseMobileToken(mobileBearerToken(request), MOBILE_ACCESS_TOKEN_PREFIX);
   if (!parsed) return null;
   const currentDate = new Date();
   const row = await mobileSessionRow(
     parsed.sessionId,
-    mobileAuthRepository,
+    repository,
     viennaTodayIso(currentDate),
   );
-  const now = currentDate.toISOString();
-  if (!row || isReservedEmployeePrincipal(row.employee_number)
-    || row.revoked_at || !row.active || !row.employee_active || row.access_expires_at <= now
-    || !safeHashEquals(row.access_token_hash, sha256(parsed.token))) return null;
-  if (touch) await mobileAuthRepository.touchSession({ sessionId: row.id });
-  return mobileSessionPrincipal(row);
+  const bounds = mobileSessionTimeBounds(row, currentDate, { access: true });
+  if (!bounds || !safeHashEquals(row.access_token_hash, sha256(parsed.token))) return null;
+  if (touch && (request.headers['x-gp-user-activity'] === '1'
+    || !['GET', 'HEAD', 'OPTIONS'].includes(String(request.method || 'GET').toUpperCase()))) {
+    await repository.touchSession({ sessionId: row.id });
+  }
+  return bounds.principal;
 }
 
 async function requireMobileSession(request, permission = "", { allowPasswordChange = false } = {}) {
   requireMobileNativeAuthentication();
   const session = await mobileSessionFromRequest(request);
   if (!session) throw httpError(401, "Bitte erneut in der App anmelden.", "MOBILE_AUTH_REQUIRED");
+  request.mobileSession = session;
   if (!allowPasswordChange && session.mustChangePassword) {
     throw httpError(428, "Bitte zuerst das persoenliche Startpasswort aendern.", "MOBILE_PASSWORD_CHANGE_REQUIRED");
   }
@@ -5882,7 +5972,9 @@ async function revokePortalSessionsForEmployee(employeeNumber) {
   return result.rowsAffected;
 }
 
-async function createMobileSession(employeeNumber, device, now = new Date(), repository = mobileAuthRepository) {
+async function createMobileSession(employeeNumber, device, now = new Date(), repository = mobileAuthRepository, authority = null) {
+  if (!authority?.role || !Array.isArray(authority.permissions)) throw httpError(401, "Der App-Zugang wurde geändert. Bitte erneut anmelden.", "MOBILE_AUTH_REQUIRED");
+  const { accessExpiresAt, refreshExpiresAt, authenticatedAt } = mobileSessionLifetime({ now, ...authority });
   await repository.purgeExpiredSessions({ now: now.toISOString() });
   await repository.revokeDeviceSessions({
     employeeNumber,
@@ -5901,8 +5993,6 @@ async function createMobileSession(employeeNumber, device, now = new Date(), rep
   const id = crypto.randomUUID();
   const accessToken = createMobileToken(MOBILE_ACCESS_TOKEN_PREFIX, id);
   const refreshToken = createMobileToken(MOBILE_REFRESH_TOKEN_PREFIX, id);
-  const accessExpiresAt = new Date(now.getTime() + MOBILE_ACCESS_TOKEN_TTL_MS).toISOString();
-  const refreshExpiresAt = new Date(now.getTime() + MOBILE_REFRESH_TOKEN_TTL_MS).toISOString();
   await repository.insertSession({
     id,
     employeeNumber,
@@ -5910,6 +6000,7 @@ async function createMobileSession(employeeNumber, device, now = new Date(), rep
     accessExpiresAt,
     refreshTokenHash: sha256(refreshToken),
     refreshExpiresAt,
+    authenticatedAt,
     installationIdHash: device.installationIdHash,
     platform: device.platform,
     deviceLabel: device.label,
@@ -5924,13 +6015,13 @@ async function rotateAuthenticatedMobileSession(
   repository = mobileAuthRepository,
 ) {
   const row = await mobileSessionRow(sessionId, repository, viennaTodayIso(now));
-  if (!row || isReservedEmployeePrincipal(row.employee_number)
-    || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()) {
+  const bounds = mobileSessionTimeBounds(row, now);
+  if (!bounds) {
     throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_AUTH_REQUIRED");
   }
   const accessToken = createMobileToken(MOBILE_ACCESS_TOKEN_PREFIX, row.id);
   const refreshToken = createMobileToken(MOBILE_REFRESH_TOKEN_PREFIX, row.id);
-  const accessExpiresAt = new Date(now.getTime() + MOBILE_ACCESS_TOKEN_TTL_MS).toISOString();
+  const accessExpiresAt = clampMobileAccessExpiry(now, bounds.refreshExpiresAt);
   await repository.rememberRefreshToken({
     sessionId: row.id,
     tokenHash: row.refresh_token_hash,
@@ -5938,18 +6029,23 @@ async function rotateAuthenticatedMobileSession(
   });
   const result = await repository.rotateSession({
     sessionId: row.id,
+    now: now.toISOString(),
+    expectedRefreshTokenHash: row.refresh_token_hash,
     accessTokenHash: sha256(accessToken),
     accessExpiresAt,
     refreshTokenHash: sha256(refreshToken),
   });
   if (!result.rowsAffected) throw httpError(409, "Die App-Sitzung wurde gleichzeitig geändert.", "MOBILE_SESSION_CONFLICT");
-  return mobileTokenSet(accessToken, accessExpiresAt, refreshToken, row.refresh_expires_at);
+  return mobileTokenSet(accessToken, accessExpiresAt, refreshToken, bounds.refreshExpiresAt);
 }
 
 async function refreshMobileSession(rawRefreshToken, device, now = new Date()) {
   const parsed = parseMobileToken(rawRefreshToken, MOBILE_REFRESH_TOKEN_PREFIX);
   if (!parsed) throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_REFRESH_INVALID");
-  const outcome = await mobileAuthRepository.transaction(async (repository) => {
+  const outcome = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const repository = repositories.mobileAuth;
+    // Re-evaluate the clock for each safely rolled-back serialization retry.
+    const currentDate = new Date(Math.max(now.getTime(), Date.now()));
     const row = await mobileSessionRow(parsed.sessionId, repository, viennaTodayIso(now));
     const submittedHash = sha256(parsed.token);
     if (!row || isReservedEmployeePrincipal(row.employee_number)
@@ -5967,19 +6063,21 @@ async function refreshMobileSession(rawRefreshToken, device, now = new Date()) {
       await repository.revokeRefreshReuse({ sessionId: row.id });
       return { refreshReused: true };
     }
-    if (row.refresh_expires_at <= now.toISOString() || !safeHashEquals(row.refresh_token_hash, submittedHash)) {
+    const bounds = mobileSessionTimeBounds(row, currentDate);
+    if (!bounds || !safeHashEquals(row.refresh_token_hash, submittedHash)) {
       throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_REFRESH_INVALID");
     }
     const accessToken = createMobileToken(MOBILE_ACCESS_TOKEN_PREFIX, row.id);
     const refreshToken = createMobileToken(MOBILE_REFRESH_TOKEN_PREFIX, row.id);
-    const accessExpiresAt = new Date(now.getTime() + MOBILE_ACCESS_TOKEN_TTL_MS).toISOString();
+    const accessExpiresAt = clampMobileAccessExpiry(currentDate, bounds.refreshExpiresAt);
     await repository.rememberRefreshToken({
       sessionId: row.id,
       tokenHash: row.refresh_token_hash,
-      consumedAt: now.toISOString(),
+      consumedAt: currentDate.toISOString(),
     });
     const result = await repository.refreshSession({
       sessionId: row.id,
+      now: currentDate.toISOString(),
       expectedRefreshTokenHash: row.refresh_token_hash,
       accessTokenHash: sha256(accessToken),
       accessExpiresAt,
@@ -5990,7 +6088,7 @@ async function refreshMobileSession(rawRefreshToken, device, now = new Date()) {
     if (!result.rowsAffected) throw httpError(409, "Die App-Sitzung wurde gleichzeitig aktualisiert. Bitte erneut anmelden.", "MOBILE_REFRESH_CONFLICT");
     return {
       refreshReused: false,
-      tokenSet: mobileTokenSet(accessToken, accessExpiresAt, refreshToken, row.refresh_expires_at),
+      tokenSet: mobileTokenSet(accessToken, accessExpiresAt, refreshToken, bounds.refreshExpiresAt),
     };
   });
   if (outcome.refreshReused) {
@@ -6007,9 +6105,7 @@ async function mobileSessionRowFromRefreshToken(rawRefreshToken, now = new Date(
     mobileAuthRepository,
     viennaTodayIso(now),
   );
-  if (!row || isReservedEmployeePrincipal(row.employee_number)
-    || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()
-    || !safeHashEquals(row.refresh_token_hash, sha256(parsed.token))) return null;
+  if (!mobileSessionTimeBounds(row, now) || !safeHashEquals(row.refresh_token_hash, sha256(parsed.token))) return null;
   return row;
 }
 
@@ -10994,6 +11090,7 @@ function getPortalStatus(locationId = "", request = null) {
     installationFeatureCatalog,
     usbProvisioning: usbProvisioningAvailability(request),
     passwordMinLength: portalPasswordMinLength(),
+    passwordPolicy: { ...portalPasswordPolicyMetadata(), maxLength: portalPasswordPolicyMetadata().maxCodePoints },
     branding: locationId ? brandingForLocation(locationId, settings) : brandingFromSettings(settings),
     capabilities: {
       login: portalEnabled,
@@ -29119,12 +29216,12 @@ app.post("/api/backup/database-download", async (request, response, next) => {
     || body.confirmation !== "DATABASE_BACKUP_DOWNLOAD") {
     throw httpError(400, "Die ausdrückliche Download-Bestätigung fehlt.", "DATABASE_DOWNLOAD_CONFIRMATION_REQUIRED");
   }
-  const { session } = await requireBackupAdminReauthentication(request, {
+  const { session } = await requireBackupAdminReauthentication(request, response, {
     permission: "backup:write",
     operation: "database-download",
   });
   const requestId = crypto.randomUUID();
-  (await auditPortal(
+  (await auditBackupAdministration(
     session.employeeNumber,
     "backup.database-download.requested",
     "database",
@@ -29139,7 +29236,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
         ...persistenceConfiguration,directory:path.join(dataRootDirectory,'transient','database-exports')})
       : createDatabaseDownloadSnapshot();
   } catch (error) {
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "backup.database-download.failed",
       "database",
@@ -29175,7 +29272,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
       const errorCode = /^[A-Z0-9_]{1,80}$/.test(reportedCode) ? reportedCode : "CLEANUP_FAILED";
       console.error("Die temporäre Datenbankkopie konnte nicht vollständig entfernt werden:", errorCode);
       try {
-        (await auditPortal(
+        (await auditBackupAdministration(
           session.employeeNumber,
           "backup.database-download.cleanup-failed",
           "database",
@@ -29194,7 +29291,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
     settled = true;
     try {
       if (outcome === "completed") {
-        (await auditPortal(
+        (await auditBackupAdministration(
           session.employeeNumber,
           "backup.database-download.completed",
           "database",
@@ -29202,7 +29299,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
           JSON.stringify({ requestId, bytes: snapshot.size, sha256: snapshot.sha256 }),
         ));
       } else {
-        (await auditPortal(
+        (await auditBackupAdministration(
           session.employeeNumber,
           "backup.database-download.failed",
           "database",
@@ -29270,12 +29367,12 @@ app.post("/api/backup/offsite-folders", async (request, response) => {
     || !validManagedOffsiteFolderLabel(body.folderLabel)) {
     throw httpError(400, "Bitte einen gültigen verwalteten Ordnernamen und die ausdrückliche Bestätigung angeben.", "OFFSITE_FOLDER_REQUEST_INVALID");
   }
-  const { session } = await requireBackupAdminReauthentication(request, {
+  const { session } = await requireBackupAdminReauthentication(request, response, {
     permission: "system:offsite:configure",
     operation: "offsite-folder-create",
   });
   const requestId = crypto.randomUUID();
-  (await auditPortal(
+  (await auditBackupAdministration(
     session.employeeNumber,
     "backup.offsite-folder.create.requested",
     "offsite_folder",
@@ -29284,7 +29381,7 @@ app.post("/api/backup/offsite-folders", async (request, response) => {
   ));
   try {
     const result = await createManagedOffsiteFolder(body.folderLabel);
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "backup.offsite-folder.create.completed",
       "offsite_folder",
@@ -29297,7 +29394,7 @@ app.post("/api/backup/offsite-folders", async (request, response) => {
       requestId,
     });
   } catch (error) {
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "backup.offsite-folder.create.failed",
       "offsite_folder",
@@ -29322,12 +29419,12 @@ app.put("/api/backup/offsite-folders/active", async (request, response) => {
     || !validManagedOffsiteFolderLabel(body.folderLabel)) {
     throw httpError(400, "Bitte das neue Sicherungsziel und die ausdrückliche Bestätigung vollständig angeben.", "OFFSITE_TARGET_REQUEST_INVALID");
   }
-  const { session } = await requireBackupAdminReauthentication(request, {
+  const { session } = await requireBackupAdminReauthentication(request, response, {
     permission: "system:offsite:configure",
     operation: "offsite-folder-activate",
   });
   const requestId = crypto.randomUUID();
-  (await auditPortal(
+  (await auditBackupAdministration(
     session.employeeNumber,
     "backup.offsite-folder.activate.requested",
     "offsite_folder",
@@ -29336,7 +29433,7 @@ app.put("/api/backup/offsite-folders/active", async (request, response) => {
   ));
   try {
     const result = await activateManagedOffsiteFolder(body.folderLabel);
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "backup.offsite-folder.activate.completed",
       "offsite_folder",
@@ -29356,7 +29453,7 @@ app.put("/api/backup/offsite-folders/active", async (request, response) => {
       requestId,
     });
   } catch (error) {
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "backup.offsite-folder.activate.failed",
       "offsite_folder",
@@ -29678,7 +29775,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
     );
   }
 
-  const { session } = await requireBackupAdminReauthentication(request, {
+  const { session } = await requireBackupAdminReauthentication(request, response, {
     permission: "system:write",
     operation: "vps-reboot",
   });
@@ -29697,7 +29794,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
     result = await prepareControlledHostReboot({
       requestId,
       createBackup: () => createDatabaseBackup("vps-reboot"),
-      recordRequest: async () => (await auditPortal(
+      recordRequest: async () => (await auditBackupAdministration(
         session.employeeNumber,
         "system.host_reboot.requested",
         "system",
@@ -29709,7 +29806,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
   } catch (error) {
     hostManagedRebootRequested = false;
     try {
-      (await auditPortal(
+      (await auditBackupAdministration(
         session.employeeNumber,
         "system.host_reboot.failed",
         "system",
@@ -29733,7 +29830,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
     throw hostRebootHttpError(error, response);
   }
   try {
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "system.host_reboot.accepted",
       "system",
@@ -34464,6 +34561,17 @@ app.post("/api/mobile/v1/auth/branding", (request, response) => {
   response.json({ branding: mobileBrandingPayload({ role: "admin", homeLocationId: "" }) });
 });
 
+async function qualifyEmployeeLoginPassword(repository, user, password, now) {
+  const assessment = assessExistingPassword(password, { employeeNumber: user.employee_number,
+    loginName: user.employee_number, displayName: user.full_name });
+  if (assessment.reason === 'unavailable') throw httpError(503, 'Die lokale Kennwortprüfung ist vorübergehend nicht verfügbar.', 'PORTAL_PASSWORD_POLICY_UNAVAILABLE');
+  const result = await repository.recordEmployeePasswordPolicy({ employeeNumber: user.employee_number,
+    expectedPasswordHash: user.password_hash, passwordPolicyVersion: assessment.accepted ? PORTAL_PASSWORD_POLICY_VERSION : 0,
+    mustChangePassword: !assessment.accepted, now: now.toISOString() });
+  if (result.rowsAffected !== 1) throw httpError(409, 'Der Zugang wurde gleichzeitig geändert. Bitte erneut anmelden.', 'PORTAL_LOGIN_CHANGED');
+  return assessment;
+}
+
 async function requireVerifiedLogin(repository, user, organization, mobile, now) {
   const result = await acceptVerifiedLogin(repository, { user, organization, now });
   if (result === "locked") {
@@ -34501,7 +34609,14 @@ app.post("/api/mobile/v1/auth/login", async (request, response) => {
   const created = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
     const acceptedAt = new Date();
     await requireVerifiedLogin(repositories.portalAccess, user, false, true, acceptedAt);
-    return createMobileSession(employeeNumber, device, acceptedAt, repositories.mobileAuth);
+    await qualifyEmployeeLoginPassword(repositories.portalAccess, user, request.body?.password, acceptedAt);
+    const authority = mobileSessionPrincipal(await repositories.portalAccess.getReportPrincipal({
+      employeeNumber, businessDate: viennaTodayIso(acceptedAt),
+    }));
+    const result = await createMobileSession(employeeNumber, device, acceptedAt, repositories.mobileAuth, authority);
+    await repositories.organizationPersonnel.insertAudit(employeeNumber, "mobile.login.success", "mobile_session", result.id,
+      JSON.stringify({ platform: device.platform, appVersion: device.appVersion }));
+    return result;
   });
   clearLoginRate(request);
   const session = mobileSessionPrincipal(await mobileSessionRow(
@@ -34509,8 +34624,6 @@ app.post("/api/mobile/v1/auth/login", async (request, response) => {
     mobileAuthRepository,
     viennaTodayIso(now),
   ));
-  (await auditPortal(employeeNumber, "mobile.login.success", "mobile_session", created.id,
-    JSON.stringify({ platform: device.platform, appVersion: device.appVersion })));
   response.status(201).json({
     tokenSet: created.tokenSet,
     bootstrap: await mobileBootstrapPayload(session, request, now),
@@ -34799,11 +34912,6 @@ app.get("/api/portal/v1/session", (request, response) => {
   const publicStatus = getPortalStatus("", request);
   const session = publicStatus.portalEnabled ? portalSessionFromRequest(request) : null;
   const status = session ? portalStatusForSession(session, request) : publicStatus;
-  if (session && !parseCookies(request)[PORTAL_CSRF_COOKIE]) {
-    appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, crypto.randomBytes(24).toString("base64url"), request, {
-      maxAge: Math.max(60, Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000)),
-    }));
-  }
   response.json({
     apiVersion: PORTAL_API_VERSION,
     authenticated: Boolean(session),
@@ -34866,7 +34974,7 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
   const employee = (await organizationPersonnelRepository.listEmployees())
     .find((entry) => entry.personnel_number === employeeNumber && entry.active);
   if (!employee) throw httpError(404, "Das ausgewählte aktive Teammitglied wurde nicht gefunden.");
-  const passwordHash = await hashPortalPassword(request.body.password);
+  const passwordHash = await hashPortalPassword(request.body.password, { employeeNumber, loginName: employeeNumber, displayName: employee.full_name });
   await organizationPersonnelRepository.transaction(async (organization) => {
     await organization.upsertPortalUserAccount({
       employeeNumber,
@@ -34875,8 +34983,11 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
       active: true,
       mustChangePassword: false,
       passwordChanged: true,
+      passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION,
     });
     await organization.revokeMobileSessions(employeeNumber, "admin_setup_changed");
+    await organization.revokePortalSessions(employeeNumber);
+    await organization.revokePasswordResetTokens(employeeNumber);
     await organization.insertAudit(
       employeeNumber,
       "portal.admin.setup",
@@ -34926,36 +35037,49 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
     throw httpError(401, "Zugangskennung oder Passwort ist nicht korrekt.", "PORTAL_LOGIN_FAILED");
   }
   const rawToken = crypto.randomBytes(32).toString("base64url");
-  const csrfToken = crypto.randomBytes(24).toString("base64url");
   const timeoutMinutes = portalSessionTimeoutMinutes();
-  await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+  const lifetime = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
     const repository = repositories.portalAccess;
     const acceptedAt = new Date();
-    const expiresAt = new Date(acceptedAt.getTime() + timeoutMinutes * 60000).toISOString();
     await requireVerifiedLogin(repository, user, sessionKind === "organization", false, acceptedAt);
+    const principal = sessionKind === 'employee'
+      ? await repository.getReportPrincipal({ employeeNumber: user.employee_number, businessDate: viennaTodayIso(acceptedAt) }) : null;
+    if (sessionKind === 'employee' && !principal) throw httpError(401, 'Der Zugang wurde geändert. Bitte erneut anmelden.', 'PORTAL_LOGIN_CHANGED');
+    const permissionState = sessionKind === 'employee'
+      ? effectivePortalPermissionState(principal.employee_number, principal.role, principal.permissions, principal.granted_permissions, principal.denied_permissions, principal.amu_local_access_mode)
+      : { effectivePermissions: [] };
+    const lifetime = browserSessionLifetime({ now: acceptedAt, role: user.role,
+      permissions: permissionState.effectivePermissions, idleMinutes: timeoutMinutes });
     if (sessionKind === "organization") {
+      const assessment = assessExistingPassword(request.body.password, { loginName, displayName: user.full_name });
+      if (assessment.reason === 'unavailable') throw httpError(503, 'Die lokale Kennwortprüfung ist vorübergehend nicht verfügbar.', 'PORTAL_PASSWORD_POLICY_UNAVAILABLE');
+      if (!assessment.accepted) throw httpError(428, 'Bitte das Kennwort dieses Filial- oder Terminalkontos durch die zuständige Filialleitung oder Administration neu vergeben lassen.', 'PORTAL_ORGANIZATION_PASSWORD_POLICY_REQUIRED');
+      const qualified = await repository.recordOrganizationPasswordPolicy({ accountId: user.account_id,
+        expectedPasswordHash: user.password_hash, passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION, now: acceptedAt.toISOString() });
+      if (qualified.rowsAffected !== 1) throw httpError(409, 'Der Zugang wurde gleichzeitig geändert.', 'PORTAL_LOGIN_CHANGED');
       await repository.purgeExpiredOrganizationSessions({});
       await repository.revokeOrganizationSessionsForAccount({ accountId: user.account_id });
       await repository.insertOrganizationSession({
         id: crypto.randomUUID(),
         accountId: user.account_id,
         tokenHash: sha256(rawToken),
-        expiresAt,
+        ...lifetime,
       });
     } else {
+      await qualifyEmployeeLoginPassword(repository, user, request.body.password, acceptedAt);
       await repository.purgeExpiredEmployeeSessions({});
       await repository.revokeEmployeeSessionsForEmployee({ employeeNumber: loginName });
       await repository.insertEmployeeSession({
         id: crypto.randomUUID(),
         employeeNumber: loginName,
         tokenHash: sha256(rawToken),
-        expiresAt,
+        ...lifetime,
       });
     }
+    return lifetime;
   });
   clearLoginRate(request);
-  appendCookie(response, portalCookie(PORTAL_SESSION_COOKIE, rawToken, request, { httpOnly: true, maxAge: timeoutMinutes * 60 }));
-  appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, csrfToken, request, { maxAge: timeoutMinutes * 60 }));
+  issuePortalSessionCookies(request, response, rawToken, lifetime.absoluteExpiresAt);
   const session = await loadPortalSessionFromRequest({
     ...request,
     headers: { ...request.headers, cookie: `${PORTAL_SESSION_COOKIE}=${rawToken}` },
@@ -43765,8 +43889,8 @@ app.post("/api/portal/v1/organization-accounts", async (request, response) => {
   if (collision) {
     throw httpError(409, "Diese Zugangskennung ist bereits vergeben.", "PORTAL_ORGANIZATION_LOGIN_CONFLICT");
   }
-  const password = String(request.body?.password || "");
-  const passwordHash = password ? await hashPortalPassword(password) : "";
+  const password = request.body?.password ?? "";
+  const passwordHash = password ? await hashPortalPassword(password, { loginName: input.loginName, displayName: input.displayName }) : "";
   const accountId = crypto.randomUUID();
   const actorId = portalActorId(actor);
   await organizationPersonnelRepository.transaction(async (organization) => {
@@ -43776,6 +43900,7 @@ app.post("/api/portal/v1/organization-accounts", async (request, response) => {
       displayName: input.displayName,
       accountType: input.accountType,
       passwordHash,
+      passwordPolicyVersion: password ? PORTAL_PASSWORD_POLICY_VERSION : 0,
       active: input.active,
       mustChangePassword: false,
       passwordChanged: Boolean(password),
@@ -43812,8 +43937,8 @@ app.put("/api/portal/v1/organization-accounts/:accountId", async (request, respo
   const existing = await organizationPersonnelRepository.getOrganizationAccount(accountId);
   if (!existing) throw httpError(404, "Das Filial- oder Terminalkonto wurde nicht gefunden.");
   const input = await normalizedOrganizationAccountInput(request.body || {}, { existing });
-  const password = String(request.body?.password || "");
-  const passwordHash = password ? await hashPortalPassword(password) : existing.password_hash;
+  const password = request.body?.password ?? "";
+  const passwordHash = password ? await hashPortalPassword(password, { loginName: input.loginName || existing.login_name, displayName: input.displayName }) : existing.password_hash;
   const actorId = portalActorId(actor);
   const before = publicOrganizationAccount(existing);
   await organizationPersonnelRepository.transaction(async (organization) => {
@@ -43824,6 +43949,7 @@ app.put("/api/portal/v1/organization-accounts/:accountId", async (request, respo
       passwordHash,
       active: input.active,
       passwordChanged: Boolean(password),
+      passwordPolicyVersion: password ? PORTAL_PASSWORD_POLICY_VERSION : 0,
       actor: actorId,
     });
     await organization.deleteOrganizationAccountPermissions(accountId);
@@ -43949,11 +44075,11 @@ app.put("/api/portal/v1/branch-accounts/:accountId/password", async (request, re
   if (!account.active) {
     throw httpError(409, "Das Filialkonto ist deaktiviert und kann nicht neu angemeldet werden.", "PORTAL_ORGANIZATION_ACCOUNT_INACTIVE");
   }
-  const password = String(request.body?.password || "");
-  const passwordHash = await hashPortalPassword(password);
+  const password = request.body?.password ?? "";
+  const passwordHash = await hashPortalPassword(password, { loginName: account.login_name, displayName: account.display_name });
   const actorId = portalActorId(session);
   await organizationPersonnelRepository.transaction(async (organization) => {
-    await organization.updateOrganizationAccountPassword(accountId, passwordHash, actorId);
+    await organization.updateOrganizationAccountPassword(accountId, passwordHash, actorId, PORTAL_PASSWORD_POLICY_VERSION);
     await organization.revokeOrganizationSessions(accountId);
     await organization.insertAudit(actorId, "portal.organization-account.password.reset",
       "portal_organization_account", accountId, JSON.stringify({
@@ -45187,8 +45313,10 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       ? "Die Developer-Rolle kann ausschließlich mit dem lokalen Entwicklerwerkzeug gebunden werden."
       : "Diese Rolle darf durch den aktuellen Zugang nicht vergeben werden.", role === "developer" ? "PORTAL_DEVELOPER_PROTECTED" : "PORTAL_ROLE_HIERARCHY_DENIED");
   }
-  const password = String(request.body.password || "");
-  const passwordHash = password ? await hashPortalPassword(password) : existingUser?.password_hash || "";
+  const password = request.body.password ?? "";
+  const passwordTarget = password ? await organizationPersonnelRepository.getEmployeeForUpdate(employeeNumber) : null;
+  const passwordHash = password ? await hashPortalPassword(password, { employeeNumber, loginName: employeeNumber,
+    displayName: passwordTarget?.full_name }) : existingUser?.password_hash || "";
   const active = request.body.active !== false ? 1 : 0;
   const mustChangePassword = password
     ? Number(request.body.mustChangePassword !== false)
@@ -45342,6 +45470,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       active: Boolean(active),
       mustChangePassword: Boolean(mustChangePassword),
       passwordChanged: Boolean(password),
+      passwordPolicyVersion: password ? PORTAL_PASSWORD_POLICY_VERSION : 0,
     });
     if (liveUser?.role && liveUser.role !== role) {
       await organization.deletePersonnelLearningPermissionDenialAuthority(
@@ -45357,6 +45486,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       await organization.revokePortalSessions(employeeNumber);
     }
     await organization.revokeMobileSessions(employeeNumber, "account_changed");
+    if (password || !active) await organization.revokePasswordResetTokens(employeeNumber);
     await organization.insertAudit(
       liveLearningActor.employeeNumber,
       "portal.user.update",
@@ -46951,8 +47081,8 @@ async function completePersonalPasswordReset(request) {
   const browserSession = portalSessionFromRequest(request);
   const rawToken = String(request.body?.token || "").trim();
   if (!/^[A-Za-z0-9_-]{43}$/.test(rawToken)) throw invalidPasswordResetTokenError();
-  const newPassword = String(request.body?.newPassword || "");
-  const repeatPassword = String(request.body?.repeatPassword || "");
+  const newPassword = request.body?.newPassword ?? "";
+  const repeatPassword = request.body?.repeatPassword ?? "";
   if (!repeatPassword || newPassword !== repeatPassword) {
     throw httpError(400, "Die Passwortwiederholung stimmt nicht überein.", "PORTAL_PASSWORD_REPEAT_MISMATCH");
   }
@@ -46960,8 +47090,11 @@ async function completePersonalPasswordReset(request) {
   const now = new Date().toISOString();
   const available = await portalAccessRepository.getPasswordResetTokenByHash({ tokenHash, now });
   if (!available) throw invalidPasswordResetTokenError();
-  const passwordHash = await hashPortalPassword(newPassword);
-  const completed = await portalAccessRepository.transaction(async (repository) => {
+  const passwordHash = await hashPortalPassword(newPassword, { employeeNumber: available.employee_number,
+    loginName: available.employee_number, displayName: available.full_name });
+  const completed = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const repository = repositories.portalAccess;
+    const now = new Date().toISOString();
     const current = await repository.getPasswordResetTokenByHash({ tokenHash, now });
     if (!current) throw invalidPasswordResetTokenError();
     const consumed = await repository.consumePasswordResetToken({
@@ -46974,6 +47107,7 @@ async function completePersonalPasswordReset(request) {
       employeeNumber: current.employee_number,
       passwordHash,
       changedAt: now,
+      passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION,
     });
     if (!changed.rowsAffected) throw invalidPasswordResetTokenError();
     await repository.revokeEmployeeSessionsForEmployee({ employeeNumber: current.employee_number });
@@ -46989,19 +47123,14 @@ async function completePersonalPasswordReset(request) {
       employeeNumber: current.employee_number,
       exceptId: current.id,
     });
+    await repositories.organizationPersonnel.insertAudit(current.employee_number, 'portal.password-reset.completed', 'portal_user', current.employee_number);
+    if (browserSession?.id && (browserSession.sessionKind === 'organization' || browserSession.employeeNumber !== current.employee_number)) {
+      await repositories.organizationPersonnel.insertAudit(portalActorId(browserSession), 'portal.password-reset.browser-session-revoked',
+        browserSession.sessionKind === 'organization' ? 'portal_organization_account' : 'portal_user', browserSession.accountId || browserSession.employeeNumber);
+    }
     return current;
   });
-  (await auditPortal(completed.employee_number, "portal.password-reset.completed", "portal_user", completed.employee_number));
-  if (browserSession?.id
-    && (browserSession.sessionKind === "organization"
-      || browserSession.employeeNumber !== completed.employee_number)) {
-    (await auditPortal(
-      portalActorId(browserSession),
-      "portal.password-reset.browser-session-revoked",
-      browserSession.sessionKind === "organization" ? "portal_organization_account" : "portal_user",
-      browserSession.accountId || browserSession.employeeNumber,
-    ));
-  }
+  request.portalSession = null;
   return completed;
 }
 
@@ -50397,12 +50526,23 @@ app.post("/api/mobile/v1/me/password", async (request, response) => {
   if (!await verifyPortalPassword(request.body?.currentPassword, current?.password_hash)) {
     throw httpError(401, "Das bisherige Passwort ist nicht korrekt.", "MOBILE_PASSWORD_CURRENT_INVALID");
   }
-  const passwordHash = await hashPortalPassword(request.body?.newPassword);
-  const tokenSet = await mobileAuthRepository.transaction(async (repository) => {
-    await repository.updateMobilePassword({
+  const passwordHash = await hashPortalPassword(request.body?.newPassword, {
+    employeeNumber: session.employeeNumber, loginName: session.employeeNumber, displayName: session.fullName,
+  });
+  const verifiedAccessTokenHash = sha256(mobileBearerToken(request));
+  const completed = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const repository = repositories.mobileAuth, now = new Date();
+    const live = await mobileSessionRow(session.mobileSessionId, repository, viennaTodayIso(now));
+    if (!mobileSessionTimeBounds(live, now, { access: true }) || !safeHashEquals(live.access_token_hash, verifiedAccessTokenHash)) {
+      throw httpError(409, "Die App-Sitzung wurde gleichzeitig geändert. Bitte erneut anmelden.", "MOBILE_SESSION_CONFLICT");
+    }
+    const changed = await repository.updateMobilePassword({
       employeeNumber: session.employeeNumber,
       passwordHash,
+      expectedPasswordHash: current.password_hash,
+      passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION,
     });
+    if (changed.rowsAffected !== 1) throw httpError(409, "Das Passwort wurde gleichzeitig geändert. Bitte erneut anmelden.", "MOBILE_PASSWORD_CHANGED");
     await repository.revokeEmployeePortalSessions({
       employeeNumber: session.employeeNumber,
     });
@@ -50411,10 +50551,15 @@ app.post("/api/mobile/v1/me/password", async (request, response) => {
       reason: "password_changed",
       exceptSessionId: session.mobileSessionId,
     });
-    return rotateAuthenticatedMobileSession(session.mobileSessionId, new Date(), repository);
+    await repositories.portalAccess.revokePasswordResetTokensForEmployee({ employeeNumber: session.employeeNumber, exceptId: "" });
+    const tokenSet = await rotateAuthenticatedMobileSession(session.mobileSessionId, now, repository);
+    await repositories.organizationPersonnel.insertAudit(session.employeeNumber, "mobile.password.change", "portal_user", session.employeeNumber);
+    const replacement = mobileSessionPrincipal(await mobileSessionRow(session.mobileSessionId, repository, viennaTodayIso(now)));
+    return { tokenSet, replacement };
   });
-  (await auditPortal(session.employeeNumber, "mobile.password.change", "portal_user", session.employeeNumber));
-  response.json({ ok: true, tokenSet });
+  request.headers.authorization = `Bearer ${completed.tokenSet.accessToken}`;
+  request.mobileSession = completed.replacement;
+  response.json({ ok: true, tokenSet: completed.tokenSet });
 });
 
 app.get("/api/mobile/v1/me/schedule", async (request, response) => {
@@ -50438,18 +50583,39 @@ app.put("/api/portal/v1/me/password", async (request, response) => {
   if (!await verifyPortalPassword(request.body.currentPassword, current?.password_hash)) {
     throw httpError(401, "Das bisherige Passwort ist nicht korrekt.");
   }
-  const passwordHash = await hashPortalPassword(request.body.newPassword);
-  await organizationPersonnelRepository.transaction(async (organization) => {
-    await organization.updatePortalUserPassword(session.employeeNumber, passwordHash);
-    await organization.revokeMobileSessions(session.employeeNumber, "password_changed");
-    await organization.insertAudit(
+  const passwordHash = await hashPortalPassword(request.body.newPassword, { employeeNumber: session.employeeNumber,
+    loginName: session.loginName, displayName: session.fullName });
+  const rawToken = crypto.randomBytes(32).toString('base64url');
+  const lifetime = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const now = new Date();
+    const live = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+    if (!live || live.id !== session.id) throw httpError(401, 'Bitte erneut anmelden.', 'PORTAL_AUTH_REQUIRED');
+    const lifetime = browserSessionLifetime({ now, role: live.role, permissions: live.permissions,
+      idleMinutes: portalSessionTimeoutMinutes(), authenticatedAt: live.authenticatedAt, absoluteExpiresAt: live.absoluteExpiresAt });
+    if (!lifetime) throw httpError(401, 'Die Sitzung ist abgelaufen.', 'PORTAL_AUTH_REQUIRED');
+    const changed = await repositories.portalAccess.changeEmployeePassword({ employeeNumber: session.employeeNumber,
+      expectedPasswordHash: current.password_hash, passwordHash, passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION, now: now.toISOString() });
+    if (changed.rowsAffected !== 1) throw httpError(409, 'Das Kennwort wurde gleichzeitig geändert. Bitte erneut anmelden.', 'PORTAL_PASSWORD_CONFLICT');
+    await repositories.portalAccess.revokeEmployeeSessionsForEmployee({ employeeNumber: session.employeeNumber });
+    await repositories.organizationPersonnel.revokeMobileSessions(session.employeeNumber, 'password_changed');
+    await repositories.portalAccess.revokePasswordResetTokensForEmployee({ employeeNumber: session.employeeNumber, exceptId: '' });
+    const replacementId = crypto.randomUUID();
+    await repositories.portalAccess.insertEmployeeSession({ id: replacementId, employeeNumber: session.employeeNumber,
+      tokenHash: sha256(rawToken), ...lifetime });
+    await repositories.organizationPersonnel.insertAudit(
       portalActorId(session),
       "portal.password.change",
       "portal_user",
       session.employeeNumber,
     );
+    return { ...lifetime, replacementId };
   });
-  response.json({ ok: true });
+  // Adopt the committed credential before any subsequent guarded persistence access.
+  request.headers.cookie = `${PORTAL_SESSION_COOKIE}=${rawToken}; ${PORTAL_CSRF_COOKIE}=${portalCsrfToken(rawToken)}`;
+  request.portalSession = { ...session, id: lifetime.replacementId, mustChangePassword: false, ...lifetime };
+  request.portalSession = await loadPortalSessionFromRequest(request, { touch: false });
+  issuePortalSessionCookies(request, response, rawToken, lifetime.absoluteExpiresAt);
+  response.json({ ok: true, sessionChanged: true, user: publicPortalUser(request.portalSession) });
 });
 
 async function ownPortalSchedule(session, weekStart) {
@@ -60983,6 +61149,7 @@ async function verifyUsbCreator(request, employeeNumber, password) {
     throw httpError(403, "Das Passwort des Erstellerkontos ist nicht korrekt.", "USB_CREATOR_AUTH_FAILED");
   }
   usbCreatorAuthRateLimits.clear(rateKey);
+  assertNewPassword(password, { employeeNumber: number, loginName: number, displayName: row.full_name });
   const [roleProjection, grantedPermissions, deniedPermissions] = await Promise.all([
     organizationPersonnelRepository.getPortalAccessProjection(row.employee_number),
     portalPermissionGrantsForEmployee(row.employee_number, row.role),
@@ -61175,7 +61342,7 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
       }
       await validateDepartmentExists(departmentId, String(employee.home_location_id || ""));
     }
-    const password = String(input.startPassword || "");
+    const password = input.startPassword ?? "";
     const additionalPermissions = [...new Set((Array.isArray(input.additionalPermissions) ? input.additionalPermissions : [])
       .map(String).filter((permission) => delegablePortalPermissions.has(permission)))];
     const rolePermissions = new Set(portalRoles.find((entry) => entry.id === role)?.permissions || []);
@@ -61266,7 +61433,7 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
       ...employee,
       personnelNumber,
       role,
-      passwordHash: password ? await hashPortalPassword(password) : "",
+      passwordHash: password ? await hashPortalPassword(password, { employeeNumber: personnelNumber, loginName: personnelNumber, displayName: employee.full_name }) : "",
       additionalPermissions,
       deniedPermissions: [...deniedPermissions],
       scopes,
@@ -66081,6 +66248,12 @@ app.get("/api/portal/v1/private-workspaces", (request, response) => {
   const actor = requirePortalSession(request);
   if (actor.mustChangePassword) throw httpError(428, "Bitte zuerst das Startpasswort ändern.");
   response.json({ workspaces: privateWorkspaces ? privateWorkspaces.list(actor) : [] });
+});
+
+// Keep the global security policy on unmatched responses instead of handing
+// them to Express's final handler, which replaces CSP with default-src only.
+app.use((_request, response) => {
+  response.status(404).type("text/plain").send("Nicht gefunden.");
 });
 
 app.use(async (error, request, response, _next) => {

@@ -2710,7 +2710,7 @@
                   <label class="field"><span>Bezeichnung</span><input id="organizationAccountDisplayName" maxlength="100" placeholder="z. B. Filiale Nordpark" required /></label>
                   <label class="field"><span>Kontotyp</span><select id="organizationAccountType"><option value="branch">Filialkonto</option><option value="terminal">Terminalkonto</option></select></label>
                   <label class="field"><span>Filiale</span><select id="organizationAccountLocation" required></select></label>
-                  <label class="field"><span>Passwort neu vergeben</span><span class="password-field"><input id="organizationAccountPassword" type="password" autocomplete="new-password" placeholder="Beim Bearbeiten optional" /><button class="password-toggle" type="button" data-password-toggle="organizationAccountPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+                  <label class="field"><span>Passwort neu vergeben</span><span class="password-field"><input data-gp-new-password id="organizationAccountPassword" type="password" autocomplete="new-password" placeholder="Beim Bearbeiten optional" /><button class="password-toggle" type="button" data-password-toggle="organizationAccountPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
                 </div>
                 <div class="organization-account-permissions" aria-label="Freigegebene Filialfunktionen">
                   <label class="switch-row"><span><strong>Offene Leihen ansehen</strong><small>Name der ausleihenden Person sowie die in der Leihverwaltung für das Filialkonto freigegebenen Gerätedaten.</small></span><input id="organizationAccountLoanOverview" type="checkbox" checked /></label>
@@ -3181,7 +3181,7 @@
           <label class="field"><span>Standort</span><select id="usbDraftLocation" required></select></label>
           <label class="field"><span>Abteilung</span><select id="usbDraftDepartment"><option value="">Keine Abteilung</option></select></label>
           <label class="field"><span>App-Rolle</span><select id="usbDraftRole"><option value="employee">Mitarbeiter</option><option value="department_manager">Abteilungsleitung</option><option value="manager">Filialleitung</option><option value="hr">Personalleitung</option><option value="admin">Admin</option></select></label>
-          <label class="field"><span>Startpasswort (optional)</span><span class="password-field"><input id="usbDraftPassword" type="password" minlength="6" autocomplete="new-password" /><button type="button" data-password-toggle="usbDraftPassword">Anzeigen</button></span><small>Ohne Startpasswort wird noch kein Portalzugang aktiviert.</small></label>
+          <label class="field"><span>Startpasswort (optional)</span><span class="password-field"><input data-gp-new-password id="usbDraftPassword" type="password" autocomplete="new-password" /><button type="button" data-password-toggle="usbDraftPassword">Anzeigen</button></span><small>Ohne Startpasswort wird noch kein Portalzugang aktiviert.</small></label>
         </div>
         <div class="modal-actions"><span></span><button type="button" class="secondary-button" data-close="usbEmployeeDraftModal">Abbrechen</button><button type="submit" class="primary-button">Entwurf übernehmen</button></div>
       </form>
@@ -4024,8 +4024,8 @@
         <div class="modal-header"><div><span class="eyebrow">Geschützter Zugang</span><h2>Admin-Ersteinrichtung</h2><p>Der erste Admin wird direkt am Grabenplaner-PC eingerichtet.</p></div><button type="button" class="close-button" data-close="adminSetupModal">×</button></div>
         <div class="form-grid">
           <label class="field full-width"><span>Teammitglied</span><select id="adminSetupEmployee" name="username" autocomplete="username" required></select></label>
-          <label class="field"><span>Passwort</span><span class="password-field"><input id="adminSetupPassword" name="new-password" type="password" minlength="6" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
-          <label class="field"><span>Passwort wiederholen</span><span class="password-field"><input id="adminSetupPasswordRepeat" name="new-password-repeat" type="password" minlength="6" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+          <label class="field"><span>Passwort</span><span class="password-field"><input data-gp-new-password id="adminSetupPassword" name="new-password" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+          <label class="field"><span>Passwort wiederholen</span><span class="password-field"><input data-gp-new-password id="adminSetupPasswordRepeat" name="new-password-repeat" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
           <p class="calculation-note full-width">Mindestens 6 Zeichen; auch nur Ziffern sind möglich. Ein starkes Passwort wird empfohlen. Dieses Konto darf Zugänge, Einstellungen und Dienstpläne verwalten.</p>
         </div>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="adminSetupModal">Abbrechen</button><button type="submit" class="primary-button">Admin einrichten</button></div>
@@ -4461,11 +4461,11 @@
         </label>
         <label class="field">
           <span>Neues Passwort</span>
-          <span class="password-field"><input id="branchAccountPasswordNew" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="branchAccountPasswordNew" aria-label="Passwort anzeigen">Anzeigen</button></span>
+          <span class="password-field"><input data-gp-new-password id="branchAccountPasswordNew" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="branchAccountPasswordNew" aria-label="Passwort anzeigen">Anzeigen</button></span>
         </label>
         <label class="field">
           <span>Passwort wiederholen</span>
-          <span class="password-field"><input id="branchAccountPasswordRepeat" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="branchAccountPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span>
+          <span class="password-field"><input data-gp-new-password id="branchAccountPasswordRepeat" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="branchAccountPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span>
         </label>
         <p class="settings-note hidden" id="branchAccountPasswordMessage" role="status" aria-live="polite"></p>
         <div class="modal-actions">
@@ -4582,6 +4582,8 @@
     <script src="/function-search-ui.js"></script>
     <script src="/function-search-navigation.js"></script>
     <script src="/credential-boundaries.js"></script>
+    <script src="/password-policy.js"></script>
+    <script src="/session-lifecycle.js"></script>
     <script src="/schedule-duty.js"></script>
     <script src="/vocational-school.js"></script>
   <script src="/planning-protection.js"></script>

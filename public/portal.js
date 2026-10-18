@@ -410,22 +410,34 @@ function esc(value) {
   })[character]);
 }
 
+function safeCssColor(value, fallback = "#7b8983") {
+  const color = String(value ?? "").trim();
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+  return /^#[0-9a-f]{6}$/i.test(fallback) ? fallback : "#7b8983";
+}
+
 function csrf() {
   const part = document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("grabenplaner_csrf="));
   return part ? decodeURIComponent(part.split("=").slice(1).join("=")) : "";
 }
 
 async function api(url, options = {}) {
+  options = window.GrabenplanerSessionLifecycle?.credentialOptions?.(url, options) || options;
   const requestSession = portalState.session;
+  const requestGeneration = window.GrabenplanerSessionLifecycle?.generation;
   const { responseType, ...fetchOptions } = options;
   const formData = options.body instanceof FormData;
   const headers = { ...(formData ? {} : { "Content-Type": "application/json" }), ...options.headers };
+  Object.assign(headers, window.GrabenplanerSessionLifecycle?.activityHeaders?.(url, requestSession?.authenticated === true));
   const token = csrf();
   if (token && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase())) headers["X-CSRF-Token"] = token;
   let response;
   try {
     response = await fetch(url, { ...fetchOptions, headers });
   } catch (error) {
+    if (portalState.session !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+      throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+    }
     throw window.GrabenplanerApiErrors?.fromNetwork
       ? window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname })
       : new Error("Die Verbindung zum Grabenplaner ist vorübergehend unterbrochen. Bitte erneut versuchen.");
@@ -435,13 +447,20 @@ async function api(url, options = {}) {
       hostname: location.hostname,
       fallback: "Die Aktion konnte nicht ausgeführt werden.",
     }) : await response.json().then(data => ({message: data.error || "Die Anmeldung oder Aktion ist vorübergehend nicht möglich. Bitte erneut versuchen.", code: data.code || ""})).catch(() => ({message: "Der Grabenplaner ist vorübergehend nicht erreichbar. Bitte erneut versuchen.", code: ""}));
+    if (portalState.session !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+      throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+    }
     const error = new Error(detail.message);
     error.status = response.status;
     error.code = detail.code;
     if (response.status === 401 && portalState.session === requestSession) showLogin("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
-  return responseType === "response" ? response : response.status === 204 ? null : responseType === "blob" ? response.blob() : response.json();
+  const result = responseType === "response" ? response : response.status === 204 ? null : responseType === "blob" ? await response.blob() : await response.json();
+  if (portalState.session !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+    throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+  }
+  return result;
 }
 
 const branchSalesWorkspaces = new Map();
@@ -1895,9 +1914,7 @@ async function initialize() {
     applyPortalBranding(status.branding);
     el.portalDeploymentBanner?.classList.toggle("hidden", status.deploymentKind !== "codespaces-test");
     applyPortalCapabilities();
-    const minimum = Number(status.passwordMinLength || 6);
-    [el.loginPassword, el.newPassword, el.repeatPassword, el.passwordResetNewPassword, el.passwordResetRepeatPassword]
-      .forEach((input) => { if (input) input.minLength = minimum; });
+    window.GrabenplanerPasswordPolicy?.configure(status);
     if (el.portalAccessModeLabel) el.portalAccessModeLabel.textContent = status.operationMode === "server" ? "Mitarbeiterportal · HTTPS" : "Mitarbeiterportal";
     if (!status.portalEnabled) {
       showLogin("Das Mitarbeiterportal ist für diese Installation nicht freigeschaltet.");
@@ -1920,6 +1937,7 @@ async function initialize() {
     }
     openPasswordResetConfirm();
   } catch (error) {
+    if (error.code === "PORTAL_SESSION_CHANGED") return;
     showLogin(error.message);
   }
 }
@@ -2496,6 +2514,7 @@ function neutralizeCredentialDialogsForLogin() {
 }
 
 function showLogin(error = "") {
+  window.GrabenplanerSessionLifecycle?.advance();
   neutralizeBirthdayPresentation();
   document.body.classList.remove("session-pending");
   portalVoiceAssistant?.reset();
@@ -2619,6 +2638,7 @@ function populateVacationAccountYears() {
 }
 
 function showPortal(session) {
+  window.GrabenplanerSessionLifecycle?.advance();
   const processTaskSessionChanged = portalState.session !== session;
   if (window.GrabenplanerBranchSales?.owner(portalUser()) !== window.GrabenplanerBranchSales?.owner(session?.user)
     || branchPriceLabelsOwner() !== branchPriceLabelsOwner(session?.user)) resetBranchSalesWorkspaces();
@@ -2700,22 +2720,27 @@ function showPortal(session) {
 
 async function login(event) {
   event.preventDefault();
+  const credentialsInput = { loginName: el.loginPersonnelNumber.value, password: el.loginPassword.value };
   try {
-    const result = await api("/api/portal/v1/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ loginName: el.loginPersonnelNumber.value, password: el.loginPassword.value }),
-    });
-    el.loginPassword.value = "";
-    showPortal(result);
-    if (!result.user.mustChangePassword) {
-      if (await redirectToPendingCandidateEvaluation(result.user)) return;
-      await loadMobileLayout();
-      chooseInitialPortalTab();
-      await loadPortalData();
-      await refreshBirthdayPresentationTheme();
-      await claimBirthdayPresentation();
-    }
+    await window.GrabenplanerSessionLifecycle.credentials(async () => {
+      const result = await api("/api/portal/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify(credentialsInput),
+      });
+      el.loginPassword.value = "";
+      showPortal(result);
+      window.GrabenplanerSessionLifecycle?.publish();
+      if (!result.user.mustChangePassword) {
+        if (await redirectToPendingCandidateEvaluation(result.user)) return;
+        await loadMobileLayout();
+        chooseInitialPortalTab();
+        await loadPortalData();
+        await refreshBirthdayPresentationTheme();
+        await claimBirthdayPresentation();
+      }
+    }, { allowAccountChange: true });
   } catch (error) {
+    if (error.code === "PORTAL_SESSION_CHANGED") return;
     message(el.loginError, error.message, true);
   }
 }
@@ -2794,21 +2819,24 @@ async function confirmPasswordReset(event) {
   el.passwordResetConfirmSubmit.disabled = true;
   message(el.passwordResetConfirmMessage, "Das neue Passwort wird gespeichert.");
   try {
-    await api("/api/portal/v1/auth/password-reset/confirm", {
-      method: "POST",
-      body: JSON.stringify({
-        token: el.passwordResetToken.value,
-        newPassword,
-        repeatPassword,
-      }),
+    await window.GrabenplanerSessionLifecycle.credentials(async () => {
+      await api("/api/portal/v1/auth/password-reset/confirm", {
+        method: "POST",
+        body: JSON.stringify({
+          token: el.passwordResetToken.value,
+          newPassword,
+          repeatPassword,
+        }),
+      });
+      clearPasswordResetHash();
+      setPasswordResetConfirmControlsEnabled(false);
+      el.passwordResetConfirmDialog.close();
+      showLogin();
+      window.GrabenplanerSessionLifecycle?.publish();
+      el.loginPassword.value = "";
+      message(el.loginError, "Das Passwort wurde geändert. Bitte melde dich mit dem neuen Passwort an.");
+      el.loginPersonnelNumber.focus();
     });
-    clearPasswordResetHash();
-    setPasswordResetConfirmControlsEnabled(false);
-    el.passwordResetConfirmDialog.close();
-    showLogin();
-    el.loginPassword.value = "";
-    message(el.loginError, "Das Passwort wurde geändert. Bitte melde dich mit dem neuen Passwort an.");
-    el.loginPersonnelNumber.focus();
   } catch (error) {
     message(el.passwordResetConfirmMessage, error.message, true);
   } finally {
@@ -2846,38 +2874,41 @@ async function logout() {
   el.logoutButton.textContent = "Abmelden…";
   message(el.portalLogoutStatus, "");
   try {
-    if (branchPriceLabelsWorkspace?.hasUnsaved) {
-      savingDraft = true;
-      await branchPriceLabelsWorkspace.flush();
-      savingDraft = false;
-      if (!current()) return;
+    await window.GrabenplanerSessionLifecycle.credentials(async () => {
       if (branchPriceLabelsWorkspace?.hasUnsaved) {
-        message(el.portalLogoutStatus, "Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden.", true);
-        return;
+        savingDraft = true;
+        await branchPriceLabelsWorkspace.flush();
+        savingDraft = false;
+        if (!current()) return;
+        if (branchPriceLabelsWorkspace?.hasUnsaved) {
+          message(el.portalLogoutStatus, "Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden.", true);
+          return;
+        }
       }
-    }
-    if (!current()) return;
-    logoutRequestStarted = true;
-    neutralizeBirthdayPresentationTheme();
-    timeout = window.setTimeout(() => controller.abort(), 15000);
-    await api("/api/portal/v1/auth/logout", {
-      method: "POST",
-      body: "{}",
-      keepalive: true,
-      signal: controller.signal,
+      if (!current()) return;
+      logoutRequestStarted = true;
+      neutralizeBirthdayPresentationTheme();
+      timeout = window.setTimeout(() => controller.abort(), 15000);
+      await api("/api/portal/v1/auth/logout", {
+        method: "POST",
+        body: "{}",
+        keepalive: true,
+        signal: controller.signal,
+      });
+      if (!current()) return;
+      window.GrabenplanerSessionLifecycle?.publish();
+      portalVoiceAssistant?.reset();
+      portalState.session = null;
+      void privatePortalWorkspaces?.synchronize();
+      syncPortalWindows();
+      stopBranchOrderAutosave();
+      clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
+      portalState.processTasksOwnerFingerprint = "";
+      clearRememberedPortalTab();
+      showLogin();
+      el.loginPassword.value = "";
+      el.loginPersonnelNumber.focus();
     });
-    if (!current()) return;
-    portalVoiceAssistant?.reset();
-    portalState.session = null;
-    void privatePortalWorkspaces?.synchronize();
-    syncPortalWindows();
-    stopBranchOrderAutosave();
-    clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
-    portalState.processTasksOwnerFingerprint = "";
-    clearRememberedPortalTab();
-    showLogin();
-    el.loginPassword.value = "";
-    el.loginPersonnelNumber.focus();
   } catch (error) {
     if (!current()) return;
     const detail = savingDraft
@@ -3506,7 +3537,7 @@ function renderMobileHome() {
       <span><strong>${esc(tile.label)}</strong><small>${esc(tile.description)}</small></span>
       <b aria-hidden="true">›</b>
     </button>
-  `).join("") + launches.map(item => `<button type="button" class="gp-private-launch" data-private-workspace="${esc(item.id)}" style="--private-launch-color:${esc(item.launch.color)};--mobile-home-tile-color:${esc(item.launch.color)}"><span class="mobile-home-tile-accent" aria-hidden="true"></span><span><strong>${esc(item.launch.label)}</strong></span><b aria-hidden="true">›</b></button>`).join("");
+  `).join("") + launches.map(item => `<button type="button" class="gp-private-launch" data-private-workspace="${esc(item.id)}" style="--private-launch-color:${safeCssColor(item.launch.color)};--mobile-home-tile-color:${safeCssColor(item.launch.color)}"><span class="mobile-home-tile-accent" aria-hidden="true"></span><span><strong>${esc(item.launch.label)}</strong></span><b aria-hidden="true">›</b></button>`).join("");
 }
 
 function renderBranchMobileActionBar() {
@@ -4562,7 +4593,7 @@ function renderLeadershipPresence() {
   el.leadershipPresenceList.innerHTML = employees.length ? employees.map((employee) => {
     const state = employee.state || "off";
     const entries = (employee.entries || []).map((entry) => `${timeEntryLabels[entry.type || entry.entry_type] || entry.type}: ${entry.time || timeText(timeEntryTimestamp(entry))}`).join(" · ");
-    return `<article class="leadership-person"><span class="leadership-person-dot" style="--person-color:${esc(employee.color || "#7b8983")}"></span><div><strong>${esc(employee.employeeNumber || employee.employee_number)} · ${esc(employee.nickname || employee.fullName || employee.full_name)}</strong><small>${esc(entries || "Heute noch keine Buchung")} · Soll ${durationText(employee.plannedMinutes ?? employee.planned_minutes)} · Ist ${durationText(employee.actualMinutes ?? employee.actual_minutes)}</small></div><span class="leadership-person-state ${esc(state)}">${esc(timeStateLabels[state] || "Nicht da")}</span></article>`;
+    return `<article class="leadership-person"><span class="leadership-person-dot" style="--person-color:${safeCssColor(employee.color)}"></span><div><strong>${esc(employee.employeeNumber || employee.employee_number)} · ${esc(employee.nickname || employee.fullName || employee.full_name)}</strong><small>${esc(entries || "Heute noch keine Buchung")} · Soll ${durationText(employee.plannedMinutes ?? employee.planned_minutes)} · Ist ${durationText(employee.actualMinutes ?? employee.actual_minutes)}</small></div><span class="leadership-person-state ${esc(state)}">${esc(timeStateLabels[state] || "Nicht da")}</span></article>`;
   }).join("") : '<p class="empty-state">Für diesen Bereich sind heute keine Teamdaten vorhanden.</p>';
 }
 
@@ -7064,31 +7095,52 @@ async function submitVacationChange(event) {
   } catch (error) { message(el.vacationChangeMessage, error.message, true); }
 }
 
+let passwordChangeRequest = null;
 async function changePassword(event) {
   event.preventDefault();
+  const session = portalState.session;
+  if (!session?.authenticated || passwordChangeRequest?.session === session) return;
+  if (window.GrabenplanerPasswordPolicy && (!window.GrabenplanerPasswordPolicy.validate(el.newPassword, { report: true })
+    || !window.GrabenplanerPasswordPolicy.validate(el.repeatPassword, { report: true }))) return;
   if (el.newPassword.value !== el.repeatPassword.value) {
     message(el.passwordMessage, "Die neuen Passwörter stimmen nicht überein.", true);
     return;
   }
+  const ticket = { session }, current = () => passwordChangeRequest === ticket && portalState.session === session;
+  passwordChangeRequest = ticket;
   try {
-    await api("/api/portal/v1/me/password", {
-      method: "PUT",
-      body: JSON.stringify({ currentPassword: el.currentPassword.value, newPassword: el.newPassword.value }),
-    });
-    el.passwordDialog.dataset.required = "false";
-    if (portalState.session?.user) portalState.session.user.mustChangePassword = false;
-    el.passwordForm.reset();
-    message(el.passwordMessage, "Passwort wurde geändert.");
-    setTimeout(async () => {
+    await window.GrabenplanerSessionLifecycle.credentials(async () => {
+      await api("/api/portal/v1/me/password", {
+        method: "PUT",
+        body: JSON.stringify({ currentPassword: el.currentPassword.value, newPassword: el.newPassword.value }),
+      });
+      if (!current()) return;
+      const replacement = await api("/api/portal/v1/session");
+      if (!current()) return;
+      if (!replacement?.authenticated) {
+        showLogin("Das Passwort wurde geändert. Bitte erneut anmelden.");
+        window.GrabenplanerSessionLifecycle?.publish();
+        return;
+      }
       closePasswordChangeDialog({ force: true });
-      if (await redirectToPendingCandidateEvaluation(portalState.session?.user)) return;
+      showPortal(replacement);
+      window.GrabenplanerSessionLifecycle?.publish();
+      if (replacement.user?.mustChangePassword) return;
+      if (await redirectToPendingCandidateEvaluation(replacement.user)) return;
+      if (portalState.session !== replacement) return;
       await loadMobileLayout();
+      if (portalState.session !== replacement) return;
       chooseInitialPortalTab();
       await loadPortalData();
+      if (portalState.session !== replacement) return;
       await refreshBirthdayPresentationTheme();
-      await claimBirthdayPresentation();
-    }, 700);
-  } catch (error) { message(el.passwordMessage, error.message, true); }
+      if (portalState.session === replacement) await claimBirthdayPresentation();
+    });
+  } catch (error) {
+    if (current() && error.code !== "PORTAL_SESSION_CHANGED") message(el.passwordMessage, error.message, true);
+  } finally {
+    if (passwordChangeRequest === ticket) passwordChangeRequest = null;
+  }
 }
 
 function togglePassword(button) {
@@ -8681,6 +8733,10 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
 initializeDateRangeCalendar();
 portalVoiceAssistant=window.GpVoiceAssistant?.mount({ api, getSession: () => portalState.session,
   onSubmitted: () => Promise.allSettled([loadVacationRequests(), loadTimeOffRequests(), loadAbsenceHistory(), loadNotifications()]) });
+window.GrabenplanerSessionLifecycle?.listen(() => {
+  showLogin("Die Anmeldung wurde in einem anderen Fenster geändert. Die Sitzung wird neu geprüft.");
+  void initialize();
+});
 initialize();
 
 portalLearningAssessmentPanel=GrabenplanerLearningAssessment.init({api,printPdf:openPortalLearningConfirmation});

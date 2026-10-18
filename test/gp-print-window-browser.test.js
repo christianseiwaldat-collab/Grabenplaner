@@ -29,7 +29,7 @@ test('standard print window uses real PDF bytes and isolates malformed outputs, 
     const loanPrintLifecycle=['clearLoanConfirmationPrintState','loanConfirmationPrintSignature','portalLoanDocumentPrintBridge'].map(portalFunction).join('\n');
     server=http.createServer((request,response)=>{
       const url=new URL(request.url,'http://127.0.0.1');
-      response.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'"+(url.pathname.startsWith('/vendor/pdfjs-v6.2.108/')?" 'wasm-unsafe-eval'":"")+"; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");
+      response.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'"+(url.pathname.startsWith('/vendor/pdfjs-v6.2.108/')?" 'wasm-unsafe-eval'":"")+"; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
       response.setHeader('X-Content-Type-Options','nosniff');response.setHeader('Cross-Origin-Opener-Policy','same-origin');response.setHeader('Cross-Origin-Resource-Policy','same-origin');
       if(url.pathname==='/'){response.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});response.end(html);return;}
       if(url.pathname==='/usb-app-lifecycle.js'){response.writeHead(200,{'Content-Type':'application/javascript'});response.end(usbAppLifecycle);return;}

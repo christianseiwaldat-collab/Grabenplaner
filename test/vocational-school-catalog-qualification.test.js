@@ -11,6 +11,8 @@ const baseline = catalogRequire("../contracts/block-4-catalog.json");
 const inventory = catalogRequire("../contracts/block-1-inventory.json");
 const extension = catalogRequire("../contracts/vocational-school-catalog-v1.json");
 const authenticationExtension = catalogRequire("../contracts/authentication-catalog-v1.json");
+const sessionSecurityExtension = catalogRequire("../contracts/session-security-catalog-v1.json");
+const SESSION_IDS = sessionSecurityExtension.entries.filter(entry=>!entry.added).map(entry=>entry.statementId);
 const AUTHENTICATION_IDS = Object.freeze([
   "portal-access.employee-login.failure", "portal-access.organization-login.failure",
   "portal-access.employee-login.success", "portal-access.organization-login.success",
@@ -54,10 +56,11 @@ test("frozen source schema, inventory and Block 4 catalog retain their independe
   assert.equal(catalogRequire("./schema").createSchemaPlan().digest, "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e");
 });
 
-test("exactly five school and four authentication statements extend the baseline; the other 1116 contracts remain identical", () => {
+test("reviewed school, authentication and session statements extend the baseline; all other contracts remain identical", () => {
   const reviewed = new Map(extension.entries.map(entry => [entry.statementId, entry]));
   const authenticationReviewed = new Map(authenticationExtension.entries.map(entry => [entry.statementId, entry]));
-  const extensionIds = [...SCHOOL_IDS, ...AUTHENTICATION_IDS].sort();
+  const sessionReviewed = new Map(sessionSecurityExtension.entries.map(entry=>[entry.statementId,entry]));
+  const extensionIds = [...SCHOOL_IDS, ...AUTHENTICATION_IDS, ...SESSION_IDS].sort();
   assert.deepEqual([...reviewed.keys()].sort(), [...SCHOOL_IDS].sort());
   assert.equal(extension.entries.length, 5);
   assert.equal(extension.baseCatalog, "block-4-catalog.json");
@@ -73,7 +76,7 @@ test("exactly five school and four authentication statements extend the baseline
   const changedCompiledIds = [];
   let preserved = 0;
   for (const provenance of qualified.provenance) {
-    const old = originalCompiled.get(provenance.statementId), current = reviewed.get(provenance.statementId) || authenticationReviewed.get(provenance.statementId);
+    const old = originalCompiled.get(provenance.statementId), current = sessionReviewed.get(provenance.statementId) || reviewed.get(provenance.statementId) || authenticationReviewed.get(provenance.statementId);
     assert.ok(old, provenance.statementId);
     if (current) {
       assert.equal(current.baseSourceContract, old.sourceContract);
@@ -89,7 +92,7 @@ test("exactly five school and four authentication statements extend the baseline
       preserved++;
     }
   }
-  assert.equal(preserved, 1116);
+  assert.equal(preserved, 1125 - extensionIds.length);
   assert.deepEqual(changedCompiledIds.sort(), extensionIds);
 });
 

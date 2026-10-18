@@ -25,7 +25,7 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1503 Statements genau einmal ab", () => {
+test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1507 Statements genau einmal ab", () => {
   const plan = POSTGRESQL_APPLICATION_DIALECT_PLAN;
   const sqliteEntries = SQLITE_APPLICATION_DIALECT_MANIFEST.entries;
 
@@ -34,8 +34,8 @@ test("Block 5/7: der nicht ausführbare PostgreSQL-Plan deckt alle 1503 Statemen
   assert.equal(plan.status, "implementation-in-progress");
   assert.equal(plan.executable, false);
   assert.match(plan.fingerprint, /^[a-f0-9]{64}$/);
-  assert.equal(plan.entries.length, 1503);
-  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1503);
+  assert.equal(plan.entries.length, 1507);
+  assert.equal(new Set(plan.entries.map((entry) => entry.statementId)).size, 1507);
 
   for (let index = 0; index < sqliteEntries.length; index += 1) {
     const source = sqliteEntries[index];
@@ -62,8 +62,8 @@ test("Block 5/7: nur portable Einträge enthalten kompiliertes PostgreSQL-SQL", 
   const portable = entries.filter((entry) => entry.strategy === "portable-generated");
   const blocked = entries.filter((entry) => entry.strategy === "requires-override");
 
-  assert.equal(summary.statementCount, 1503);
-  assert.equal(summary.portableGeneratedCount, 1363);
+  assert.equal(summary.statementCount, 1507);
+  assert.equal(summary.portableGeneratedCount, 1367);
   assert.equal(summary.requiresOverrideCount, 140);
   assert.equal(portable.length, summary.portableGeneratedCount);
   assert.equal(blocked.length, summary.requiresOverrideCount);
@@ -221,8 +221,8 @@ test("Workflow-Studio, Xoffi und Importfreigaben ergänzen genau fünf portable 
   assert.deepEqual(additions.map((statement) => statement.id).sort(), ids);
   const retained = POSTGRESQL_APPLICATION_DIALECT_PLAN.entries
     .filter((entry) => !ids.includes(entry.statementId));
-  assert.equal(retained.length, 1498);
-  assert.equal(retained.filter((entry) => entry.strategy === "portable-generated").length, 1358);
+  assert.equal(retained.length, 1502);
+  assert.equal(retained.filter((entry) => entry.strategy === "portable-generated").length, 1362);
   assert.equal(retained.filter((entry) => entry.strategy === "requires-override").length, 140);
 
   for (const statement of additions) {
@@ -316,7 +316,7 @@ test("Block 5/7: die Block-4-Plan-Fixture bleibt unverändert nicht ausführbar"
 
   assert.equal(fixture.status, "contract-only");
   assert.equal(fixture.executable, false);
-  assert.equal(fixture.entries.length, 1503);
+  assert.equal(fixture.entries.length, 1507);
   assert.equal(fixture.sourceFingerprint, SQLITE_APPLICATION_DIALECT_MANIFEST.fingerprint);
   for (const entry of fixture.entries) {
     assert.equal(entry.status, "contract-only");

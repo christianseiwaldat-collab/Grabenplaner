@@ -269,6 +269,16 @@ test("Security-Audit-Store darf den Providervertrag prüfen, aber keine Statemen
     'require("./persistence/contract")').some(entry => entry.kind === "provider-contract-runtime-import"));
 });
 
+test("Security-Releaseinventar erfasst Runtime-Metadaten ohne Datenbankzugriff", () => {
+  const file = "lib/security-release-inventory.js";
+  assert.deepEqual(architectureBoundaryViolationsForText(file, read(file)), []);
+  for (const [source, kind] of [
+    ["definePersistenceStatement({})", "provider-statement-outside-boundary"],
+    ['require("node:sqlite")', "sqlite-driver-import-outside-boundary"],
+    ['require("pg")', "postgresql-driver-import"],
+  ]) assert.ok(architectureBoundaryViolationsForText(file, source).some(entry => entry.kind === kind), kind);
+});
+
 test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben auditierbar", () => {
   const report = scanRepository(root);
 
@@ -365,14 +375,29 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // their exact classifications grant no raw SQL or driver capabilities.
   // Seven named browser modules and the already classified app.js only prepare
   // DOM windows; these lexical signals grant no SQL, drivers or activation.
-  assert.equal(report.summary.productionDirectFiles, 107);
+  // The additive session schema and exact historical-transfer policy use their
+  // already bounded database handles; neither receives a driver-import grant.
+  assert.equal(report.summary.productionDirectFiles, 109);
   // Five archive/child operating adapters and one read-only recovery-key
   // verifier and isolated full-source measurement extend the existing indirect
   // inventory; no raw business access or productive import activation.
   // The workspace lease reuses the existing lock adapter; Offsite staging
   // reads only the configured database path, not business records.
   // The named deploy preflight only reads the installed provider and paths.
-  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 19);
+  // The release inventory reads only component version metadata and package bytes.
+  // The exact SAST review JSON contains quoted SQL terminology, not executable persistence.
+  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 21);
+  const sastMetadata = report.findings.filter(entry => entry.file === "scripts/security/sast-dispositions.json");
+  assert.ok(sastMetadata.length > 0);
+  assert.ok(sastMetadata.every(entry => entry.owner === "security-review-evidence"));
+  assert.ok(Array.isArray(JSON.parse(read("scripts/security/sast-dispositions.json")).dispositions));
+  // Renaming the metadata to executable code does not inherit its classification.
+  for (const [source, kind] of [
+    ['require("node:sqlite")', "sqlite-driver-import-outside-boundary"],
+    ['require("pg")', "postgresql-driver-import"],
+    ["definePersistenceStatement({})", "provider-statement-outside-boundary"],
+  ]) assert.ok(architectureBoundaryViolationsForText("scripts/security/sast-dispositions.js", source)
+    .some(entry => entry.kind === kind), kind);
   // Session fixtures, deferred PostgreSQL startup and the three named CRM/
   // article qualifications are classified; no new production access is allowed.
   // Twenty-four named workspace fixtures exercise DOM preparation or isolated
@@ -380,9 +405,14 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // Ranked employee preferences add one explicitly classified API fixture.
   // Nine named synthetic audit/remediation fixtures add no production database capability.
   // Six contain directly discovered calls, including the Linux in-memory SQLite inventory.
-  // The current total also includes the
-  // two existing unclassified browser fixtures; their errors remain enforced above.
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 53);
+  // The two existing browser fixtures now have explicit UI-only classification;
+  // the session migration, process interruption, historical transfer and P2 HTTP
+  // tests use isolated synthetic data. The CSP server/browser fixture adds one
+  // explicitly classified synthetic account and database fixture. Release
+  // inventory fixtures inspect runtime metadata without adding a direct
+  // persistence candidate or opening a database.
+  // Reauthentication adds one explicitly named synthetic HTTP/database fixture.
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 59);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
   assert.equal(report.summary.productionJavaScriptDriverFiles, 15);
@@ -507,7 +537,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
   assert.equal(report.phase5Progress.dialectPlanValid, true);
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1503);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1507);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -524,7 +554,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1503,
+    requiredReceiptCount: 1507,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {

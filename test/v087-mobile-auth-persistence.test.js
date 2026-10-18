@@ -240,12 +240,15 @@ test("Block 3/7: Refresh-Rotation und Mutation-Receipt rollen atomar zurück", a
           tokenHash: "b".repeat(64),
           consumedAt: "2026-07-29T10:00:00.000Z",
         });
-        await repository.rotateSession({
+        const rotated = await repository.rotateSession({
           sessionId: "mobile-session",
           accessTokenHash: "d".repeat(64),
           accessExpiresAt: "2026-07-29T13:00:00.000Z",
           refreshTokenHash: "e".repeat(64),
+          expectedRefreshTokenHash: "b".repeat(64),
+          now: "2026-07-29T10:00:00.000Z",
         });
+        assert.equal(rotated.rowsAffected, 1);
         await repository.insertMutationReceipt({
           employeeNumber: "E18",
           idempotencyKey: "receipt-1",

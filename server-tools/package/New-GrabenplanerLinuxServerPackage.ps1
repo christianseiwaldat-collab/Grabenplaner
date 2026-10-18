@@ -301,6 +301,8 @@ try {
         'scripts\run-background-backup.js',
         'scripts\manage-local-backup-archive.js',
         'lib\backup-workspace.js',
+        'lib\security-release-inventory.js',
+        'server-tools\linux\security-release-inventory.js',
         'services\planning-optimizer\service.py',
         'services\planning-optimizer\requirements.txt',
         'lib\background-backup-process.js',
@@ -480,6 +482,16 @@ try {
     foreach ($forbidden in @('node_modules', 'runtime', 'data', 'backups', '.env')) {
         if (Test-Path -LiteralPath (Join-Path $buildRoot $forbidden)) { throw "Verbotener Paketinhalt erkannt: $forbidden" }
     }
+
+    # Bind the deterministic source inventory through the existing file/hash
+    # contract. It excludes itself and the outer manifest to avoid a hash cycle.
+    $inventoryNode = (Get-Command node -ErrorAction Stop).Source
+    $inventoryCli = Join-Path $buildRoot 'server-tools\linux\security-release-inventory.js'
+    $sourceInventoryPath = Join-Path $buildRoot 'lib\security-release-inventory.source.json'
+    & $inventoryNode $inventoryCli generate --mode source --root $buildRoot --source-commit $sourceCommit --created-at $sourceTimestamp --output $sourceInventoryPath
+    if ($LASTEXITCODE -ne 0) { throw 'Das versionsgebundene Quellinventar konnte nicht erstellt werden.' }
+    & $inventoryNode $inventoryCli verify --root $buildRoot --input $sourceInventoryPath
+    if ($LASTEXITCODE -ne 0) { throw 'Das versionsgebundene Quellinventar konnte nicht verifiziert werden.' }
 
     $buildPrefix = $buildRoot.TrimEnd('\') + '\'
     $manifestFiles = @(Get-ChildItem -LiteralPath $buildRoot -Recurse -File -Force |

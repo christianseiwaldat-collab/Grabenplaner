@@ -8,6 +8,7 @@ Object.assign(process.env, { DB_PATH: path.join(root, 'synthetic.db'), BACKUP_DI
 const { app, db, initializeApplicationPersistence, releaseInstanceLockForTests } = require('../server');
 const { KEY } = require('../lib/security-audit-store');
 const { syntheticRun } = require('../test-support/security-audit-fixture');
+const { browserSessionLifetime } = require('../lib/portal-session-security');
 let server, url; const users = {};
 async function request(route = '/api/security-audits', { method = 'GET', auth = users.developer, body, csrf = true } = {}) {
   const headers = { Accept: 'application/json' }; if (auth) headers.Cookie = auth.cookie;
@@ -21,10 +22,14 @@ const post = (body, opts = {}) => request('/api/security-audits/commands', { met
 test.before(async () => {
   await initializeApplicationPersistence(); const location = db.prepare('SELECT id,cost_center_id FROM locations LIMIT 1').get();
   for (const role of ['developer', 'admin', 'it_admin', 'hr', 'manager', 'employee']) {
-    const id = `audit-synthetic-${role}`, token = crypto.randomBytes(32).toString('hex'), csrf = crypto.randomBytes(24).toString('hex');
+    const id = `audit-synthetic-${role}`, token = crypto.randomBytes(32).toString('hex');
+    const csrf = crypto.createHash('sha256').update(`gp-browser-csrf-v2\0${token}`).digest('hex');
+    const lifetime = browserSessionLifetime({ now: new Date(), role });
     db.prepare("INSERT INTO employees(personnel_number,full_name,nickname,color,contracted_hours,target_workdays_per_week,home_location_id,cost_center_id,active) VALUES (?,?,?,'#25705d',38.5,5,?,?,1)").run(id, id, id, location.id, location.cost_center_id);
     db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password,password_changed_at) VALUES (?,'synthetic',?,1,0,CURRENT_TIMESTAMP)").run(id, role);
-    db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES (?,?,?,'2099-12-31T23:59:59.000Z')").run(crypto.randomUUID(), id, crypto.createHash('sha256').update(token).digest('hex'));
+    db.prepare('INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at,authenticated_at,absolute_expires_at,last_seen_at) VALUES (?,?,?,?,?,?,?)')
+      .run(crypto.randomUUID(), id, crypto.createHash('sha256').update(token).digest('hex'), lifetime.expiresAt,
+        lifetime.authenticatedAt, lifetime.absoluteExpiresAt, lifetime.authenticatedAt);
     users[role] = { id, cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
   }
   server = app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve)); url = `http://127.0.0.1:${server.address().port}`;

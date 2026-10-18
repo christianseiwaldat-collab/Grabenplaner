@@ -6,7 +6,8 @@ const key = Buffer.alloc(32, 57);
 Object.assign(process.env, { DB_PATH: path.join(root, "demo.db"), BACKUP_DIR: path.join(root, "backups"),
   GRABENPLANER_DATA_DIR: path.join(root, "data"), GRABENPLANER_HOST: "127.0.0.1", GRABENPLANER_FORCE_PORTAL: "1", GRABENPLANER_SEED_DEMO: "1",
   GRABENPLANER_INTEGRATION_KEY_ID: "branch-sales-test", GRABENPLANER_INTEGRATION_KEY: key.toString("base64"), NODE_ENV: "test" });
-const { app, db, releaseInstanceLockForTests, installationFeaturesForApiPath } = require("../server");
+const { app, db, initializeApplicationPersistence, releaseInstanceLockForTests, installationFeaturesForApiPath } = require("../server");
+const { browserSessionLifetime } = require("../lib/portal-session-security");
 const { createIntegrationSecretVault } = require("../lib/integration-secret-vault");
 const { BRANCH_ARTICLES_PERMISSION: A, BRANCH_RECEIPTS_PERMISSION: R } = require("../lib/branch-sales-access");
 const vault = createIntegrationSecretVault({ activeKeyId: "branch-sales-test", keys: { "branch-sales-test": key } });
@@ -33,12 +34,16 @@ async function enable(permissions, extra = {}) {
   return result.data.account;
 }
 test.before(async () => {
+  await initializeApplicationPersistence();
   for (const id of ["93", "94"]) db.prepare("INSERT INTO locations (id,name,min_staff,active) VALUES (?,?,0,1)").run(id, "Demo-Filiale " + id);
   db.exec("INSERT INTO employees (personnel_number,full_name,nickname,color,contracted_hours,home_location_id,active) VALUES ('sales-hr','Demo Leitung','Demo','#287a67',38.5,'93',1)");
   db.exec("INSERT INTO portal_users (employee_number,password_hash,role,active,must_change_password) VALUES ('sales-hr','test-only','hr',1,0)");
-  const token = crypto.randomBytes(32).toString("hex"), csrf = crypto.randomBytes(24).toString("hex");
-  db.prepare("INSERT INTO portal_sessions (id,employee_number,token_hash,expires_at) VALUES (?,'sales-hr',?,'2099-12-31T23:59:59.000Z')")
-    .run(crypto.randomUUID(), crypto.createHash("sha256").update(token).digest("hex"));
+  const token = crypto.randomBytes(32).toString("hex");
+  const csrf = crypto.createHash("sha256").update(`gp-browser-csrf-v2\0${token}`).digest("hex");
+  const lifetime = browserSessionLifetime({ now: new Date(), role: 'hr' });
+  db.prepare("INSERT INTO portal_sessions (id,employee_number,token_hash,expires_at,authenticated_at,absolute_expires_at,last_seen_at) VALUES (?,'sales-hr',?,?,?,?,?)")
+    .run(crypto.randomUUID(), crypto.createHash("sha256").update(token).digest("hex"), lifetime.expiresAt,
+      lifetime.authenticatedAt, lifetime.absoluteExpiresAt, lifetime.authenticatedAt);
   hr = { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
   await new Promise(resolve => { server = app.listen(0, "127.0.0.1", resolve); }); url = "http://127.0.0.1:" + server.address().port;
   const created = await request("/api/portal/v1/organization-accounts", { method: "POST", session: hr, body: account([]) });

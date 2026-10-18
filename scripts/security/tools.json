@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-18",
+  "integrityBasis": "Official upstream GitHub release asset digest and published SHA256SUMS/checksums over HTTPS; no detached signature claim.",
+  "tools": {
+    "gitleaks": {
+      "version": "8.30.1",
+      "releaseUrl": "https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1",
+      "assets": {
+        "windows": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip",
+          "sha256": "d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e",
+          "bytes": 8438883,
+          "filename": "gitleaks_8.30.1_windows_x64.zip",
+          "member": "gitleaks.exe"
+        },
+        "linux": {
+          "url": "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz",
+          "sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+          "bytes": 8230402,
+          "filename": "gitleaks_8.30.1_linux_x64.tar.gz",
+          "member": "gitleaks"
+        }
+      }
+    },
+    "syft": {
+      "version": "1.54.1",
+      "releaseUrl": "https://github.com/anchore/syft/releases/tag/v1.54.1",
+      "assets": {
+        "windows": {
+          "url": "https://github.com/anchore/syft/releases/download/v1.54.1/syft_1.54.1_windows_amd64.zip",
+          "sha256": "8b56e8285e295e0bbed26eeea9b16ed51c493be97ccdf42dae6326c84fe8e19f",
+          "bytes": 29839434,
+          "filename": "syft_1.54.1_windows_amd64.zip",
+          "member": "syft.exe"
+        },
+        "linux": {
+          "url": "https://github.com/anchore/syft/releases/download/v1.54.1/syft_1.54.1_linux_amd64.tar.gz",
+          "sha256": "c069905b391cc4c20a5ba65ad5c10be2a7ba074f8ea6ad203e24d14e303dad47",
+          "bytes": 30968256,
+          "filename": "syft_1.54.1_linux_amd64.tar.gz",
+          "member": "syft"
+        }
+      }
+    },
+    "osv-scanner": {
+      "version": "2.7.0",
+      "releaseUrl": "https://github.com/google/osv-scanner/releases/tag/v2.7.0",
+      "assets": {
+        "windows": {
+          "url": "https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_windows_amd64.exe",
+          "sha256": "9964ed64ec9a387391eb4cc006ad5c531154821aef29b793e02c448de4686438",
+          "bytes": 58999296,
+          "filename": "osv-scanner_windows_amd64.exe",
+          "member": "osv-scanner.exe"
+        },
+        "linux": {
+          "url": "https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64",
+          "sha256": "160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b",
+          "bytes": 57725088,
+          "filename": "osv-scanner_linux_amd64",
+          "member": "osv-scanner"
+        }
+      }
+    }
+  },
+  "rules": {
+    "commit": "17e31e11ebac99fb7dfe1cd288f7a32151b6f3f9",
+    "url": "https://codeload.github.com/semgrep/semgrep-rules/tar.gz/17e31e11ebac99fb7dfe1cd288f7a32151b6f3f9",
+    "sha256": "9dfe6866fbecd557f507078cb79721a9eb8f4764fc2f6163648ea1320be25933",
+    "bytes": 1214304,
+    "scope": "All JavaScript security directories plus TypeScript language security; first-party JS/TS source including complete server.js.",
+    "license": "https://github.com/semgrep/semgrep-rules/blob/17e31e11ebac99fb7dfe1cd288f7a32151b6f3f9/LICENSE"
+  },
+  "semgrep": {
+    "version": "1.181.0",
+    "requirements": "scripts/security/requirements.txt",
+    "releaseUrl": "https://github.com/semgrep/semgrep/releases/tag/v1.181.0"
+  },
+  "actions": {
+    "actions/checkout": {
+      "ref": "v7",
+      "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+    },
+    "actions/setup-node": {
+      "ref": "v7",
+      "sha": "949feb2413d6458794dcd2491c4babbbce0c15c1"
+    },
+    "pnpm/action-setup": {
+      "ref": "v6",
+      "sha": "0977fd99725f1db4007ccb2928dbb4e90d06cc86"
+    },
+    "actions/upload-artifact": {
+      "ref": "v4",
+      "sha": "ea165f8d65b6e75b540449e92b4886f43607fa02"
+    },
+    "actions/setup-python": {
+      "ref": "v6",
+      "sha": "ece7cb06caefa5fff74198d8649806c4678c61a1"
+    }
+  }
+}

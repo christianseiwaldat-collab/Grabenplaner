@@ -7,11 +7,17 @@ async function prepareRestoredSchema({config,connect}){
  if(!core)throw new Error('PG_RECOVERY_CORE_MISSING');
  // connect belongs to restorePair's private Unix-socket cluster. Source
  // checkpoints and protected data have already been verified by restorePair;
- // this additive upgrade changes only the disposable application test copy.
+ // These upgrades change only the disposable application test copy. Session
+ // security also revokes copied credentials once; the verified source pair
+ // remains untouched and is never opened by the target application.
  const client=connect(core.database,'gp_core_migrator');
  try{
   await client.connect();await client.query("SET lock_timeout='5s';SET statement_timeout='30s'");
-  return {xoffi:await require('../../../../lib/persistence/postgresql/core/xoffi-snapshots').migrate(client,{binding:config.binding})};
+  const xoffi=await require('../../../../lib/persistence/postgresql/core/xoffi-snapshots').migrate(client,{binding:config.binding});
+  const vocationalSchool=await require('../../../../lib/persistence/postgresql/core/vocational-school').migrate(client,{binding:config.binding});
+  const sessionSecurity=await require('../../../../lib/persistence/postgresql/core/session-security').migrate(client,{binding:config.binding});
+  await require('../../../../lib/persistence/postgresql/boundary/migrate').verifyCoreSchema(client,{requireVocationalSchool:true,requireSessionSecurity:true});
+  return {xoffi,vocationalSchool,sessionSecurity};
  }finally{await client.end();}
 }
 async function main(){

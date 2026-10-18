@@ -68,9 +68,10 @@ async function model(provider, execute, all) {
       if (status !== "accepted") return status;
       const id = randomUUID();
       const expiresAt = "2026-10-18T20:00:00.000Z";
+      const origin = { authenticatedAt: NOW.toISOString(), absoluteExpiresAt: "2026-10-19T00:00:00.000Z" };
       if (channel === "organization") {
         await repos.portalAccess.revokeOrganizationSessionsForAccount({ accountId: user.account_id });
-        await repos.portalAccess.insertOrganizationSession({ id, accountId: user.account_id, tokenHash: id, expiresAt });
+        await repos.portalAccess.insertOrganizationSession({ id, accountId: user.account_id, tokenHash: id, expiresAt, ...origin });
       } else if (channel === "mobile") {
         await repos.mobileAuth.revokeDeviceSessions({ employeeNumber: user.employee_number, installationIdHash: "synthetic-device" });
         await repos.mobileAuth.insertSession({ id, employeeNumber: user.employee_number, accessTokenHash: id,
@@ -78,7 +79,7 @@ async function model(provider, execute, all) {
           installationIdHash: "synthetic-device", platform: "android", deviceLabel: "Synthetic", appVersion: "1.0" });
       } else {
         await repos.portalAccess.revokeEmployeeSessionsForEmployee({ employeeNumber: user.employee_number });
-        await repos.portalAccess.insertEmployeeSession({ id, employeeNumber: user.employee_number, tokenHash: id, expiresAt });
+        await repos.portalAccess.insertEmployeeSession({ id, employeeNumber: user.employee_number, tokenHash: id, expiresAt, ...origin });
       }
       if (failInsert) throw new Error("synthetic session failure");
       await beforeCommit?.();
