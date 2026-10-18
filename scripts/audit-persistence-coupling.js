@@ -90,6 +90,9 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'server-tools/linux/lib/vocational-school-migrate.js',
   'test/postgresql-vocational-school-migration.test.js',
   'test/vocational-school-catalog-qualification.test.js',
+  // Four reviewed authentication statements; historical locks and driver gates stay fixed.
+  'lib/persistence/postgresql/contracts/authentication-catalog-v1.json',
+  'test/authentication-catalog-qualification.test.js',
   'lib/persistence/postgresql/core/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete.js',
@@ -1542,6 +1545,18 @@ const BASELINE_TEST_FILES = Object.freeze([
 ]);
 
 const TEST_SPECIAL_GROUPS = Object.freeze({
+  "security-audit-synthetic-fixtures": new Set([
+    // Explicit opt-in probes and isolated integration data; no product database access.
+    "test-support/security-audit/session-audit.probe.cjs",
+    "test-support/security-audit/ui-audit.probe.cjs",
+    "test/security-audit-integration.test.js",
+    "test-support/security-audit/login-concurrency-fixture.cjs",
+    "test/portal-login-concurrency.test.js",
+    "test/portal-login-concurrency-api.test.js",
+    "test-support/security-audit/login-multiconnection-worker.cjs",
+    "test/portal-login-multiconnection.test.js",
+    "test-support/security-audit/linux-native-runtime.probe.cjs",
+  ]),
   "employee-preferences-api-fixtures": new Set([
     // Isolated synthetic API qualification; no new product database access.
     "test/employee-preferred-days-api.test.js",
@@ -2863,6 +2878,9 @@ function architectureBoundaryViolationsForText(file, text) {
     // Existing managed readers accept only a branded executor so source hints
     // can join the action CAS transaction. This grants contract assertions only.
     'lib/data-import-managed-protection.js',
+    // The audit ledger asserts the branded provider and reads shared error codes;
+    // all operations use existing repositories. This permits no driver or raw SQL.
+    'lib/security-audit-store.js',
     'lib/persistence/repositories/trade-insights.js',
     'lib/persistence/repositories/sales-bwl-abc-workspace.js',
     ...PHASE_2_CONTRACT_FILES,
@@ -4476,6 +4494,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
     ...TEST_SPECIAL_GROUPS["deployment-operations-verification"],
     ...TEST_SPECIAL_GROUPS["learning-and-workflow-workspace-fixtures"],
     ...TEST_SPECIAL_GROUPS["employee-preferences-api-fixtures"],
+    ...TEST_SPECIAL_GROUPS["security-audit-synthetic-fixtures"],
   ]);
   const classificationDuplicates = [
     ...directGroups.duplicates,

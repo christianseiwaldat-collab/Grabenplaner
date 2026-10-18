@@ -2,9 +2,15 @@ allowBuilds:
   sharp: true
   tesseract.js: false
 
+minimumReleaseAgeExclude:
+  # Reviewed security update; keep this exception scoped to the exact release.
+  - nodemailer@10.1.6
+
 overrides:
-  brace-expansion: 5.0.9
+  brace-expansion: 5.0.12
+  proxy-addr: 2.0.8
+  qs: 6.16.1
   uuid: 11.1.1
 
 patchedDependencies:
-  brace-expansion@5.0.9: lib/vendor-patches/brace-expansion@5.0.9.patch
+  brace-expansion@5.0.12: lib/vendor-patches/brace-expansion@5.0.12.patch

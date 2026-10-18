@@ -256,6 +256,19 @@ test("Studio-Statementregistrierung bleibt exakt benannt und erlaubt keinen Trei
     .some((entry) => entry.kind === "postgresql-driver-import"));
 });
 
+test("Security-Audit-Store darf den Providervertrag prüfen, aber keine Statements oder Treiber einführen", () => {
+  const file = "lib/security-audit-store.js";
+  assert.deepEqual(architectureBoundaryViolationsForText(file,
+    'const { assertPersistenceProvider, PERSISTENCE_ERROR_CODES } = require("./persistence/contract");'), []);
+  for (const [source, kind] of [
+    ["definePersistenceStatement({})", "provider-statement-outside-boundary"],
+    ['require("node:sqlite")', "sqlite-driver-import-outside-boundary"],
+    ['require("pg")', "postgresql-driver-import"],
+  ]) assert.ok(architectureBoundaryViolationsForText(file, source).some(entry => entry.kind === kind), kind);
+  assert.ok(architectureBoundaryViolationsForText("lib/unregistered-audit-store.js",
+    'require("./persistence/contract")').some(entry => entry.kind === "provider-contract-runtime-import"));
+});
+
 test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben auditierbar", () => {
   const report = scanRepository(root);
 
@@ -365,7 +378,11 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // Twenty-four named workspace fixtures exercise DOM preparation or isolated
   // application persistence; the historical baseline and driver lists stay fixed.
   // Ranked employee preferences add one explicitly classified API fixture.
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 45);
+  // Nine named synthetic audit/remediation fixtures add no production database capability.
+  // Six contain directly discovered calls, including the Linux in-memory SQLite inventory.
+  // The current total also includes the
+  // two existing unclassified browser fixtures; their errors remain enforced above.
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 53);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
   assert.equal(report.summary.productionJavaScriptDriverFiles, 15);

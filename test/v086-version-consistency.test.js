@@ -9,11 +9,11 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 test("v0.92.90: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", () => {
   const packageJson = JSON.parse(read("package.json"));
   assert.equal(packageJson.version, "0.92.90-beta");
-  assert.equal(packageJson.dependencies.sharp, "0.35.3");
+  assert.equal(packageJson.dependencies.sharp, "0.35.5");
   assert.equal(packageJson.dependencies["pdfjs-dist"], "6.2.108");
-  assert.match(read("pnpm-workspace.yaml"), /brace-expansion:\s*5\.0\.9/);
-  assert.match(read("pnpm-workspace.yaml"), /brace-expansion@5\.0\.9:\s*lib\/vendor-patches\/brace-expansion@5\.0\.9\.patch/);
-  assert.match(read("lib/vendor-patches/brace-expansion@5.0.9.patch"), /module\.exports = expand/);
+  assert.match(read("pnpm-workspace.yaml"), /brace-expansion:\s*5\.0\.12/);
+  assert.match(read("pnpm-workspace.yaml"), /brace-expansion@5\.0\.12:\s*lib\/vendor-patches\/brace-expansion@5\.0\.12\.patch/);
+  assert.match(read("lib/vendor-patches/brace-expansion@5.0.12.patch"), /module\.exports = expand/);
 
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.86 Beta starten.cmd")), true);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.85 Beta starten.cmd")), false);

@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "scope": "authentication-application-extension",
+  "baseCatalog": "block-4-catalog.json",
+  "baseSchemaPlanSha256": "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e",
+  "productActivation": false,
+  "entries": [
+    {
+      "statementId": "portal-access.employee-login.failure",
+      "sourceContract": "47a19fab86bd2cc769d3847cbcfe716165d2d79727fd36f8efc495eed1ad35c5",
+      "sqlSha256": "602bb25069ae8b1066731ba5f1fdb728efbadfd58fec564578c64c772f1a6014",
+      "baseSourceContract": "dff8ffb8a39f87407d4a6c366ed5aaaf9375a6dde21abd36f2cc17ac48a5579a",
+      "baseSqlSha256": "ef574aad54df063e659e26296e908cff762a4840c00aa7ff65918f272511c31c",
+      "parameterBindingsSha256": "18b0fdd9ca18cebfaeb4d3f33c2c5734a4fdd30510f6488b3eb5ab61e1b04cc0",
+      "parameterOrderSha256": "8dcdf4ea2f1af90a9a1dac9830e3d632084587532c7dac6e3927e849d34a48dd"
+    },
+    {
+      "statementId": "portal-access.organization-login.failure",
+      "sourceContract": "9adbaa440e47f110c9f4cf38f2bfd9dfd46ad01b4911a44298e1f890e3210d10",
+      "sqlSha256": "d489504faebe33affd0447b5a05a9bf7e56ecf8b80b59361e018a01f9ac35caf",
+      "baseSourceContract": "7fe4711600988710a1ca0e365e67c80788862e10385f204ad255e8a90eb5d6da",
+      "baseSqlSha256": "c05c3474fba6aecaf69598b807df8c8fec64d91fac6fd958875fae415ed18835",
+      "parameterBindingsSha256": "a7cc94314190ea9a4944b930502fa1379fd7e23c9032c3ad8c3b064ee4836e18",
+      "parameterOrderSha256": "8dcdf4ea2f1af90a9a1dac9830e3d632084587532c7dac6e3927e849d34a48dd"
+    },
+    {
+      "statementId": "portal-access.organization-login.success",
+      "sourceContract": "b5c9f1bcfa57188798aa72f23a15daeb17097b5b621f5b1869cca44e79f80250",
+      "sqlSha256": "c7c07decad5acefdd79edfaf8c2167b00a8805f85e2969eeed121f99b8bf7b16",
+      "baseSourceContract": "9c7c66096f5ffbcc61070f4c849c15330f56c2baaf709eb224dca6c61cfd9338",
+      "baseSqlSha256": "c1c348b1df016a98059f5153b4b9ad8c4a684ba3494e7a03c35189d8c8424bfd",
+      "parameterBindingsSha256": "421ff393cd0067bcd97b1ab191c2d6e7930e656a6a070a408dbc0363cfed7714",
+      "parameterOrderSha256": "8dcdf4ea2f1af90a9a1dac9830e3d632084587532c7dac6e3927e849d34a48dd"
+    },
+    {
+      "statementId": "portal-access.employee-login.success",
+      "sourceContract": "1a4986da12242120e09fb60e5e33767f14fa8902445e593545a41116c3dbf064",
+      "sqlSha256": "14fa7d8f79345c2573a2cf10ddbf28702b71c9119ecd4774a004161a1b020387",
+      "baseSourceContract": "4b8a4173f88131bb17228cd16604dc0cb1e5d948f99c4adc26a5002ccaee3c68",
+      "baseSqlSha256": "b20ffbfe4642a7bd7d2ef5c43683bc6fa0ffe0e4bf9a4c5cdf6ba4c5f7f73c42",
+      "parameterBindingsSha256": "4d25a5c993e80cc979328fde7b5947bdaa7d249258c15edc6259986e8cf060c0",
+      "parameterOrderSha256": "8dcdf4ea2f1af90a9a1dac9830e3d632084587532c7dac6e3927e849d34a48dd"
+    }
+  ]
+}

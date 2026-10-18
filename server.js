@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
+const { loginFailureParameters, runLoginTransaction, acceptVerifiedLogin } = require("./lib/portal-login-security");
 const net = require("node:net");
 const zlib = require("node:zlib");
 const { promisify } = require("node:util");
@@ -708,6 +709,7 @@ const {
 } = require("./lib/privacy-requests");
 const { PRIVACY_ORGANIZATION_CATALOG } = require("./lib/privacy-organization");
 const { createPrivacyOrganizationStore } = require("./lib/privacy-organization-store");
+const { createSecurityAuditStore } = require("./lib/security-audit-store");
 const { isPrivacyOrganizationSettingKey, publicSettingsRows } = require("./lib/privacy-organization-settings");
 const { isSystemNotificationReceiptSettingKey } = require("./lib/system-notification-receipt-settings");
 const notificationReceiptModule = require("./lib/system-notification-receipt-store");
@@ -993,6 +995,8 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "retention:read", label: "Aufbewahrungsregeln und Vorschau lesen", description: "Kategoriebezogene Fristen, Prüfhinweise und Legal Holds lesen.", group: "Datenschutz", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "privacy_organization:read", label: "Datenschutzorganisation lesen", description: "Verarbeitungsverzeichnis, DSFA, Datenpannen und Zustimmungsprozesse ausschließlich über persönliche HR-/Admin-/Developer-Konten lesen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "privacy_organization:manage", label: "Datenschutzorganisation bearbeiten", description: "Datensparsame Prozessfälle versionieren und externe Meldebelege dokumentieren.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "security_audits:read", label: "Security Audits lesen", description: "Vertrauliche Sicherheitsprüfungen und Maßnahmen über ein berechtigtes persönliches Konto lesen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
+  { id: "security_audits:manage", label: "Security Audits verwalten", description: "Prüfberichte importieren und Befundmaßnahmen mit Nachweisen dokumentieren; benötigt zusätzlich das Leserecht.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
   { id: "privacy_organization:approve", label: "Datenschutzorganisation unabhängig prüfen", description: "Eine fremde eingereichte Fassung fachlich prüfen; keine Behördenmeldung oder Zustimmung von Beschäftigten ersetzen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "retention:manage", label: "Aufbewahrungsregeln versioniert verwalten", description: "Neue Regelversionen und Legal Holds anlegen; kein direkter Löschlauf.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "data_subject_requests:read", label: "Betroffenenanfragen lesen", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -1269,6 +1273,7 @@ function assertPortalPermissionDependencies(permissions) {
       throw httpError(400, message, "PORTAL_PERMISSION_DEPENDENCY");
     }
   };
+  requirePermission("security_audits:manage", "security_audits:read", "Security Audits verwalten benötigt zusätzlich das Audit-Leserecht.");
   const requireAnyPermission = (permission, dependencies, message) => {
     if (projected.has(permission) && !dependencies.some((dependency) => projected.has(dependency))) {
       throw httpError(400, message, "PORTAL_PERMISSION_DEPENDENCY");
@@ -1604,6 +1609,7 @@ const portalGlobalPermissionIds = new Set([
   "vacation_accounts:read", "vacation_accounts:manage",
   "retention:read", "retention:manage",
   "privacy_organization:read", "privacy_organization:manage", "privacy_organization:approve",
+  "security_audits:read", "security_audits:manage",
   "data_subject_requests:read", "data_subject_requests:manage", "data_subject_requests:export",
   "personnel:candidates:write", "personnel:candidates:confidential:read",
   "personnel:candidates:confidential:write", "personnel:candidates:convert", "personnel:candidates:delegate",
@@ -3821,6 +3827,7 @@ function initializeApplicationPersistence({ onProgress } = {}) {
       await backfillVacationAccountsFromEntitlements("system");
       await verifyProtectedGovernanceRecords();
       await requirePrivacyOrganizationStore().verifyIntegrity();
+      await requireSecurityAuditStore().verifyIntegrity();
       await requirePersonnelLifecycleService().verifyIntegrity();
       await backfillCustomProcessRevisionSnapshots();
       await refreshLoanProtectedStorageSnapshot();
@@ -5875,18 +5882,18 @@ async function revokePortalSessionsForEmployee(employeeNumber) {
   return result.rowsAffected;
 }
 
-async function createMobileSession(employeeNumber, device, now = new Date()) {
-  await mobileAuthRepository.purgeExpiredSessions({ now: now.toISOString() });
-  await mobileAuthRepository.revokeDeviceSessions({
+async function createMobileSession(employeeNumber, device, now = new Date(), repository = mobileAuthRepository) {
+  await repository.purgeExpiredSessions({ now: now.toISOString() });
+  await repository.revokeDeviceSessions({
     employeeNumber,
     installationIdHash: device.installationIdHash,
   });
-  const active = await mobileAuthRepository.listActiveSessionIds({
+  const active = await repository.listActiveSessionIds({
     employeeNumber,
     now: now.toISOString(),
   });
   for (const stale of active.slice(Math.max(0, MOBILE_MAX_ACTIVE_SESSIONS - 1))) {
-    await mobileAuthRepository.revokeSession({
+    await repository.revokeSession({
       sessionId: stale.id,
       reason: "device_limit",
     });
@@ -5896,7 +5903,7 @@ async function createMobileSession(employeeNumber, device, now = new Date()) {
   const refreshToken = createMobileToken(MOBILE_REFRESH_TOKEN_PREFIX, id);
   const accessExpiresAt = new Date(now.getTime() + MOBILE_ACCESS_TOKEN_TTL_MS).toISOString();
   const refreshExpiresAt = new Date(now.getTime() + MOBILE_REFRESH_TOKEN_TTL_MS).toISOString();
-  await mobileAuthRepository.insertSession({
+  await repository.insertSession({
     id,
     employeeNumber,
     accessTokenHash: sha256(accessToken),
@@ -6009,6 +6016,12 @@ async function mobileSessionRowFromRefreshToken(rawRefreshToken, now = new Date(
 function enforceAdminApiAccess(request, _response, next) {
   try {
     if (["/health", "/health/live", "/health/ready", "/service/stop", "/integrations/wifi/events"].includes(request.path)) return next();
+    if (/^\/security-audits(?:\/|$)/.test(request.path)) {
+      const write = !["GET", "HEAD", "OPTIONS"].includes(request.method);
+      request.portalSession = requireSecurityAuditActor(request, write ? "security_audits:manage" : "security_audits:read");
+      if (write) assertPortalCsrf(request);
+      return next();
+    }
     if (/^\/privacy-organization(?:\/|$)/.test(request.path)) {
       const permission = ["GET", "HEAD", "OPTIONS"].includes(request.method)
         ? "privacy_organization:read"
@@ -30537,6 +30550,61 @@ function governanceRouteError(error, fallbackStatus = 400) {
 }
 
 let privacyOrganizationStore = null;
+let securityAuditStore = null;
+
+function assertSecurityAuditActor(session, permission = "security_audits:read") {
+  if (!session || isLocalSystemSession(session) || session.sessionKind !== "employee"
+    || session.isEmployee !== true || session.accountType !== "employee"
+    || !["admin", "it_admin", "developer"].includes(session.role) || !session.employeeNumber
+    || isReservedEmployeePrincipal(session.employeeNumber)
+    || !session.permissions?.includes("security_audits:read") || !session.permissions?.includes(permission)) {
+    throw httpError(403, "Security Audits benötigen ein persönliches Admin-/IT-Admin-/Developer-Konto mit entsprechendem Auditrecht.", "SECURITY_AUDIT_ACCESS_DENIED");
+  }
+  if (session.mustChangePassword) throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  return session;
+}
+
+function requireSecurityAuditActor(request, permission = "security_audits:read") {
+  return assertSecurityAuditActor(requirePortalSession(request), permission);
+}
+
+function requireSecurityAuditStore() {
+  if (!securityAuditStore) securityAuditStore = createSecurityAuditStore({
+    provider: persistenceProvider, protectJson,
+    parseProtectedJson(value, context) { return JSON.parse(requireAmuStorage().unprotectRecord(value, context)); },
+    async revalidateActor(request, repositories, command) {
+      const session = assertSecurityAuditActor(await loadPortalSessionFromRequest(request, {
+        touch: false, repository: repositories.portalAccess,
+      }), command.action === "read" ? "security_audits:read" : "security_audits:manage");
+      return { employeeNumber: session.employeeNumber, role: session.role, personal: true, permissions: [...session.permissions] };
+    },
+  });
+  return securityAuditStore;
+}
+
+function securityAuditRouteError(error, response) {
+  if (String(error.code || "").startsWith("SECURITY_AUDIT_")) {
+    const status = Number(error.statusCode || 400);
+    response.status(status >= 400 && status <= 599 ? status : 400).json({ error: error.message, code: error.code });
+    return;
+  }
+  throw error;
+}
+
+app.get("/api/security-audits", async (request, response) => {
+  requireSecurityAuditActor(request);
+  response.set("Cache-Control", "no-store");
+  try { response.json(await requireSecurityAuditStore().read(request)); }
+  catch (error) { securityAuditRouteError(error, response); }
+});
+
+app.post("/api/security-audits/commands", async (request, response) => {
+  requireSecurityAuditActor(request, "security_audits:manage");
+  assertPortalCsrf(request);
+  response.set("Cache-Control", "no-store");
+  try { response.status(request.body?.action === "import" ? 201 : 200).json(await requireSecurityAuditStore().command(request.body, request)); }
+  catch (error) { securityAuditRouteError(error, response); }
+});
 
 function assertPrivacyOrganizationActor(session, permission) {
   if (!session || isLocalSystemSession(session) || session.sessionKind !== "employee"
@@ -34396,6 +34464,18 @@ app.post("/api/mobile/v1/auth/branding", (request, response) => {
   response.json({ branding: mobileBrandingPayload({ role: "admin", homeLocationId: "" }) });
 });
 
+async function requireVerifiedLogin(repository, user, organization, mobile, now) {
+  const result = await acceptVerifiedLogin(repository, { user, organization, now });
+  if (result === "locked") {
+    throw httpError(429, "Der Zugang ist vorübergehend gesperrt. Bitte später erneut versuchen.",
+      mobile ? "MOBILE_ACCOUNT_LOCKED" : "PORTAL_ACCOUNT_LOCKED");
+  }
+  if (result !== "accepted") {
+    throw httpError(401, "Zugangskennung oder Passwort ist nicht korrekt.",
+      mobile ? "MOBILE_LOGIN_FAILED" : "PORTAL_LOGIN_FAILED");
+  }
+}
+
 app.post("/api/mobile/v1/auth/login", async (request, response) => {
   requireMobileNativeAuthentication();
   assertLoginRateLimit(request);
@@ -34413,24 +34493,17 @@ app.post("/api/mobile/v1/auth/login", async (request, response) => {
   if (!valid) {
     registerFailedLogin(request);
     if (user) {
-      const portalSettings = getPortalSettings();
-      const attempts = Number(user.failed_login_attempts || 0) + 1;
-      const maximum = Number(portalSettings.max_failed_login_attempts || 5);
-      const lockUntil = attempts >= maximum
-        ? new Date(now.getTime() + Number(portalSettings.account_lock_minutes || 15) * 60000).toISOString()
-        : null;
-      await portalAccessRepository.updateEmployeeLoginFailure({
-        attempts: lockUntil ? 0 : attempts,
-        lockedUntil: lockUntil,
-        employeeNumber,
-      });
+      await portalAccessRepository.updateEmployeeLoginFailure(loginFailureParameters(user, getPortalSettings()));
     }
     (await auditPortal(employeeNumber, "mobile.login.failed", "portal_user", employeeNumber, `ip=${loginRateKey(request)}`));
     throw httpError(401, "Personalnummer oder Passwort ist nicht korrekt.", "MOBILE_LOGIN_FAILED");
   }
+  const created = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const acceptedAt = new Date();
+    await requireVerifiedLogin(repositories.portalAccess, user, false, true, acceptedAt);
+    return createMobileSession(employeeNumber, device, acceptedAt, repositories.mobileAuth);
+  });
   clearLoginRate(request);
-  await portalAccessRepository.markEmployeeLoginSuccess({ employeeNumber });
-  const created = await createMobileSession(employeeNumber, device, now);
   const session = mobileSessionPrincipal(await mobileSessionRow(
     created.id,
     mobileAuthRepository,
@@ -34836,24 +34909,11 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
   if (!valid) {
     registerFailedLogin(request);
     if (user) {
-      const portalSettings = getPortalSettings();
-      const attempts = Number(user.failed_login_attempts || 0) + 1;
-      const maximum = Number(portalSettings.max_failed_login_attempts || 5);
-      const lockUntil = attempts >= maximum
-        ? new Date(now.getTime() + Number(portalSettings.account_lock_minutes || 15) * 60000).toISOString()
-        : null;
+      const failure = loginFailureParameters(user, getPortalSettings());
       if (sessionKind === "organization") {
-        await portalAccessRepository.updateOrganizationLoginFailure({
-          attempts: lockUntil ? 0 : attempts,
-          lockedUntil: lockUntil,
-          accountId: user.account_id,
-        });
+        await portalAccessRepository.updateOrganizationLoginFailure(failure);
       } else {
-        await portalAccessRepository.updateEmployeeLoginFailure({
-          attempts: lockUntil ? 0 : attempts,
-          lockedUntil: lockUntil,
-          employeeNumber: loginName,
-        });
+        await portalAccessRepository.updateEmployeeLoginFailure(failure);
       }
     }
     (await auditPortal(
@@ -34865,13 +34925,15 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
     ));
     throw httpError(401, "Zugangskennung oder Passwort ist nicht korrekt.", "PORTAL_LOGIN_FAILED");
   }
-  clearLoginRate(request);
   const rawToken = crypto.randomBytes(32).toString("base64url");
   const csrfToken = crypto.randomBytes(24).toString("base64url");
   const timeoutMinutes = portalSessionTimeoutMinutes();
-  const expiresAt = new Date(now.getTime() + timeoutMinutes * 60000).toISOString();
-  if (sessionKind === "organization") {
-    await portalAccessRepository.transaction(async (repository) => {
+  await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const repository = repositories.portalAccess;
+    const acceptedAt = new Date();
+    const expiresAt = new Date(acceptedAt.getTime() + timeoutMinutes * 60000).toISOString();
+    await requireVerifiedLogin(repository, user, sessionKind === "organization", false, acceptedAt);
+    if (sessionKind === "organization") {
       await repository.purgeExpiredOrganizationSessions({});
       await repository.revokeOrganizationSessionsForAccount({ accountId: user.account_id });
       await repository.insertOrganizationSession({
@@ -34880,10 +34942,7 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
         tokenHash: sha256(rawToken),
         expiresAt,
       });
-      await repository.markOrganizationLoginSuccess({ accountId: user.account_id });
-    });
-  } else {
-    await portalAccessRepository.transaction(async (repository) => {
+    } else {
       await repository.purgeExpiredEmployeeSessions({});
       await repository.revokeEmployeeSessionsForEmployee({ employeeNumber: loginName });
       await repository.insertEmployeeSession({
@@ -34892,9 +34951,9 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
         tokenHash: sha256(rawToken),
         expiresAt,
       });
-      await repository.markEmployeeLoginSuccess({ employeeNumber: loginName });
-    });
-  }
+    }
+  });
+  clearLoginRate(request);
   appendCookie(response, portalCookie(PORTAL_SESSION_COOKIE, rawToken, request, { httpOnly: true, maxAge: timeoutMinutes * 60 }));
   appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, csrfToken, request, { maxAge: timeoutMinutes * 60 }));
   const session = await loadPortalSessionFromRequest({

@@ -10,6 +10,11 @@ const { SQLITE_APPLICATION_CATALOG } = catalogRequire("../../sqlite/application-
 const baseline = catalogRequire("../contracts/block-4-catalog.json");
 const inventory = catalogRequire("../contracts/block-1-inventory.json");
 const extension = catalogRequire("../contracts/vocational-school-catalog-v1.json");
+const authenticationExtension = catalogRequire("../contracts/authentication-catalog-v1.json");
+const AUTHENTICATION_IDS = Object.freeze([
+  "portal-access.employee-login.failure", "portal-access.organization-login.failure",
+  "portal-access.employee-login.success", "portal-access.organization-login.success",
+]);
 const SCHOOL_IDS = Object.freeze([
   "planning-settings.validation.overlapping-week-options",
   "planning-settings.schedule.week-options",
@@ -49,8 +54,10 @@ test("frozen source schema, inventory and Block 4 catalog retain their independe
   assert.equal(catalogRequire("./schema").createSchemaPlan().digest, "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e");
 });
 
-test("exactly five school statements extend the baseline; the other 1120 source and compiled contracts remain identical", () => {
+test("exactly five school and four authentication statements extend the baseline; the other 1116 contracts remain identical", () => {
   const reviewed = new Map(extension.entries.map(entry => [entry.statementId, entry]));
+  const authenticationReviewed = new Map(authenticationExtension.entries.map(entry => [entry.statementId, entry]));
+  const extensionIds = [...SCHOOL_IDS, ...AUTHENTICATION_IDS].sort();
   assert.deepEqual([...reviewed.keys()].sort(), [...SCHOOL_IDS].sort());
   assert.equal(extension.entries.length, 5);
   assert.equal(extension.baseCatalog, "block-4-catalog.json");
@@ -62,11 +69,11 @@ test("exactly five school statements extend the baseline; the other 1120 source 
   assert.equal(currentSources.length, 1125);
   assert.equal(new Set(currentSources.map(entry => entry.statement.id)).size, 1125);
   const changedSourceIds = currentSources.filter(entry => sha(entry.sql) !== originalSources.get(entry.statement.id).sourceSha256).map(entry => entry.statement.id);
-  assert.deepEqual(changedSourceIds.sort(), [...SCHOOL_IDS].sort());
+  assert.deepEqual(changedSourceIds.sort(), extensionIds);
   const changedCompiledIds = [];
   let preserved = 0;
   for (const provenance of qualified.provenance) {
-    const old = originalCompiled.get(provenance.statementId), current = reviewed.get(provenance.statementId);
+    const old = originalCompiled.get(provenance.statementId), current = reviewed.get(provenance.statementId) || authenticationReviewed.get(provenance.statementId);
     assert.ok(old, provenance.statementId);
     if (current) {
       assert.equal(current.baseSourceContract, old.sourceContract);
@@ -82,8 +89,8 @@ test("exactly five school statements extend the baseline; the other 1120 source 
       preserved++;
     }
   }
-  assert.equal(preserved, 1120);
-  assert.deepEqual(changedCompiledIds.sort(), [...SCHOOL_IDS].sort());
+  assert.equal(preserved, 1116);
+  assert.deepEqual(changedCompiledIds.sort(), extensionIds);
 });
 
 test("qualified school SQL reads the new field and inserts/updates it through its explicit payload binding", () => {

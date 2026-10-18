@@ -24098,6 +24098,13 @@ function lifecycleRightsDependency(permissionId, requiredPermissionId, label) {
 
 const permissionDependencyRules = Object.freeze([
   Object.freeze({
+    permissionId: "security_audits:manage",
+    requiredPermissionId: "security_audits:read",
+    removedMessage: "Security Audits bearbeiten wurde ebenfalls entzogen, weil das Leserecht fehlt.",
+    unavailableMessage: "Security Audits können ohne verwaltbares Leserecht nicht bearbeitet werden.",
+    addedMessage: "Security Audits lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
     permissionId: "personnel:candidates:create",
     requiredPermissionId: "personnel:candidates:read",
     deferredRoleDefault: true,
@@ -35404,6 +35411,7 @@ function activateSalesArticleReport() {
   return salesArticleReportWorkspace?.activate();
 }
 let privacyOrganizationWorkspace = null;
+let securityAuditsWorkspace = null;
 let privacyOrganizationActorKey = "";
 let privacyOrganizationTab = "overview";
 
@@ -35412,36 +35420,45 @@ function canReadPrivacyOrganizationWorkspace() {
 }
 
 function canAccessPrivacyOrganization() {
-  return canReadPrivacyOrganizationWorkspace() || canReadDataSubjectRequests();
+  return canReadPrivacyOrganizationWorkspace() || canReadDataSubjectRequests() || canReadSecurityAuditsWorkspace();
+}
+
+function canReadSecurityAuditsWorkspace() {
+  return window.GrabenplanerSecurityAudits?.accessAllowed(state.portalSession?.user) === true;
 }
 
 function normalizePrivacyOrganizationTab(tab) {
-  return tab === "dataRequests" ? tab : window.GrabenplanerPrivacyOrganization.normalizeTab(tab);
+  return ["dataRequests", "security-audits"].includes(tab) ? tab : window.GrabenplanerPrivacyOrganization.normalizeTab(tab);
 }
 
 function firstAccessiblePrivacyOrganizationTab() {
-  return canReadPrivacyOrganizationWorkspace() ? "overview" : "dataRequests";
+  return canReadPrivacyOrganizationWorkspace() ? "overview" : canReadDataSubjectRequests() ? "dataRequests" : "security-audits";
 }
 
 function canOpenPrivacyOrganizationTab(tab) {
+  if (tab === "security-audits") return canReadSecurityAuditsWorkspace();
   return tab === "dataRequests" ? canReadDataSubjectRequests() : canReadPrivacyOrganizationWorkspace();
 }
 
 function activatePrivacyOrganizationView() {
   const active = state.currentView === "privacyOrganization";
   const dataRequestsActive = active && privacyOrganizationTab === "dataRequests" && canReadDataSubjectRequests();
-  document.getElementById("privacyOrganizationWorkspaceHost")?.classList.toggle("hidden", dataRequestsActive);
+  const securityAuditsActive = active && privacyOrganizationTab === "security-audits" && canReadSecurityAuditsWorkspace();
+  document.getElementById("privacyOrganizationWorkspaceHost")?.classList.toggle("hidden", dataRequestsActive || securityAuditsActive);
+  document.getElementById("securityAuditsWorkspaceHost")?.classList.toggle("hidden", !securityAuditsActive);
   elements.dataSubjectRequestsSection?.classList.toggle("hidden", !dataRequestsActive);
-  if (active && !dataRequestsActive && canReadPrivacyOrganizationWorkspace()) {
+  if (active && !dataRequestsActive && !securityAuditsActive && canReadPrivacyOrganizationWorkspace()) {
     void privacyOrganizationWorkspace?.activate(privacyOrganizationTab, { notify: false });
   } else privacyOrganizationWorkspace?.suspend();
+  if (securityAuditsActive) void securityAuditsWorkspace?.activate();
+  else securityAuditsWorkspace?.suspend();
   if (dataRequestsActive) loadDataSubjectRequests().catch((error) => showToast(error.message, true));
 }
 
 function privacyOrganizationAccessKey() {
   const user = state.portalSession?.user;
   return user ? JSON.stringify([user.employeeNumber, user.accountId, user.sessionKind, user.accountType,
-    user.isEmployee, user.role, user.permissions]) : "";
+    user.isEmployee, user.role, user.permissions, user.localSystem, user.mustChangePassword]) : "";
 }
 
 function syncPrivacyOrganizationAccess() {
@@ -35458,6 +35475,13 @@ function syncPrivacyOrganizationAccess() {
   privacyOrganizationActorKey = key;
   privacyOrganizationWorkspace?.destroy();
   privacyOrganizationWorkspace = null;
+  securityAuditsWorkspace?.destroy();
+  securityAuditsWorkspace = null;
+  const securityHost = document.getElementById("securityAuditsWorkspaceHost");
+  securityHost?.replaceChildren();
+  if (canReadSecurityAuditsWorkspace()) securityAuditsWorkspace = window.GrabenplanerSecurityAudits.mount(securityHost, {
+    api, user: () => state.portalSession?.user, accessKey: privacyOrganizationAccessKey,
+  });
   const host = document.getElementById("privacyOrganizationWorkspaceHost");
   host?.replaceChildren();
   if (allowed) privacyOrganizationWorkspace = window.GrabenplanerPrivacyOrganization.mount(host, {

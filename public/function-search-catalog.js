@@ -62,7 +62,7 @@
   ]);
   const SUPPORTED_DASHBOARD_MODES = new Set(["locations", "rights", "personnelRules", "processes"]);
   const SUPPORTED_REQUEST_KINDS = new Set(["vacation", "time_off", "amu"]);
-  const SUPPORTED_PRIVACY_ORGANIZATION_TABS = new Set(["overview", "data-map", "dpia", "breaches", "agreements", "dataRequests"]);
+  const SUPPORTED_PRIVACY_ORGANIZATION_TABS = new Set(["overview", "data-map", "dpia", "breaches", "agreements", "dataRequests", "security-audits"]);
   const ALLOWED_ENTRY_KEYS = new Set(["id", "label", "path", "description", "synonyms", "access", "target"]);
   const ALLOWED_TARGET_KEYS = new Set([
     "kind",
@@ -616,9 +616,10 @@
       ["dpia", "Datenschutz-Folgenabschätzung öffnen", "DSFA", "privacyOrganizationDpiaNavButton", ["dsfa", "folgenabschätzung", "risikoanalyse", "dpia"]],
       ["breaches", "Datenpannenprozess öffnen", "Datenpannen", "privacyOrganizationBreachesNavButton", ["datenpanne", "data breach", "72 stunden", "meldepflicht"]],
       ["agreements", "Betriebliche Zustimmungen prüfen", "Betriebliche Zustimmungen", "privacyOrganizationAgreementsNavButton", ["betriebsvereinbarung", "betriebsrat", "zustimmung", "avrag"]],
+      ["security-audits", "Security Audits öffnen", "Security Audits", "securityAuditsNavButton", ["security audit", "sicherheitsaudit", "sicherheitsprüfung", "asvs", "schwachstellen", "maßnahmenplan"]],
     ].map(([tab, label, path, gate, synonyms]) => entry(`privacy-organization.${tab}`, label,
       ["Datenschutz", path], "Öffnet den geschützten, versionierten Datenschutzprozess für persönliche berechtigte Konten.", synonyms,
-      [gate], { view: "privacyOrganization", privacyOrganizationTab: tab, focusId: "privacyOrganizationWorkspaceHost" })),
+      [gate], { view: "privacyOrganization", privacyOrganizationTab: tab, focusId: tab === "security-audits" ? "securityAuditsWorkspaceHost" : "privacyOrganizationWorkspaceHost" })),
     entry(
       "sales.price-labels",
       "Preisschilder gestalten",

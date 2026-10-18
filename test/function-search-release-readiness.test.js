@@ -35,6 +35,7 @@ const RIGHTS_WINDOW_CASES = Object.freeze([
   { id: "settings.personnel-field-rights", gateId: "openPersonnelFieldRightsWindowButton", focusId: "personnelFieldRightsWindow" },
 ]);
 const VPS_STORAGE_GATE_IDS = Object.freeze(["vpsStorageSettingsCard", "openVpsStorage"]);
+const SECURITY_AUDIT_GATE_IDS = Object.freeze(["securityAuditsNavButton"]);
 
 const FEATURE_CASES = Object.freeze([
   {
@@ -136,7 +137,8 @@ function availableIds(availableGateIds) {
 test("Block 5: alle Portalrollen bleiben vollständig an die projizierten UI-Gates gebunden", () => {
   assert.ok(catalogApi.FUNCTION_SEARCH_CATALOG.length > 0);
   // Every additional technical window keeps its own projected visibility gates.
-  assert.equal(ALL_GATE_IDS.size, 107 + RIGHTS_WINDOW_CASES.length + VPS_STORAGE_GATE_IDS.length);
+  assert.equal(ALL_GATE_IDS.size, 107 + RIGHTS_WINDOW_CASES.length + VPS_STORAGE_GATE_IDS.length + SECURITY_AUDIT_GATE_IDS.length);
+  for (const gateId of SECURITY_AUDIT_GATE_IDS) assert.ok(ALL_GATE_IDS.has(gateId), gateId);
   assert.doesNotMatch(catalogSource, /options\?\.role|options\.role|role\s*===\s*["']/);
   assert.match(appSource, /isGateAvailable: functionSearchGateAvailable/);
 

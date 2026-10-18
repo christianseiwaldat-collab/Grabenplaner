@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="/workflow-studio.css" />
     <link rel="stylesheet" href="/workflow-studio-editor.css" />
     <link rel="stylesheet" href="/privacy-organization.css" />
+    <link rel="stylesheet" href="/security-audits.css" />
     <link rel="stylesheet" href="/sales-history.css" />
     <link rel="stylesheet" href="/gp-data-quality.css" />
     <link rel="stylesheet" href="/table-layout.css" />
@@ -261,6 +262,7 @@
               <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="dpia" id="privacyOrganizationDpiaNavButton"><span>DSFA</span></button>
               <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="breaches" id="privacyOrganizationBreachesNavButton"><span>Datenpannen</span></button>
               <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="agreements" id="privacyOrganizationAgreementsNavButton"><span>Betriebliche Zustimmungen</span></button>
+              <button class="nav-item nav-module-route hidden" type="button" data-view="privacyOrganization" data-privacy-organization-tab="security-audits" id="securityAuditsNavButton"><span>Security Audits</span></button>
               <button class="nav-item nav-module-route hidden" type="button" data-view="privacyOrganization" data-privacy-organization-tab="dataRequests" id="dataSubjectRequestsNavButton"><span class="nav-symbol" aria-hidden="true">§</span><span>Daten&shy;anfragen</span><strong class="nav-count hidden" id="dataSubjectRequestsNavCount">0</strong></button>
             </div>
           </section>
@@ -1673,6 +1675,7 @@
         <section id="privacyOrganizationView" class="view" aria-labelledby="privacyOrganizationTitle">
           <header class="topbar privacy-org-page-header"><div class="privacy-org-page-title"><span class="privacy-org-page-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.2c0 4.5 3.1 7.8 7.5 9.8 4.4-2 7.5-5.3 7.5-9.8V6L12 3Z"/><path d="m8.5 12 2.3 2.3 4.7-4.7"/></svg></span><div><span class="eyebrow">Organisation</span><h1 id="privacyOrganizationTitle">Datenschutz</h1><p class="subtitle">Verarbeitungen, Risikoprüfungen und Vorfälle nachvollziehbar organisieren.</p></div></div></header>
           <div id="privacyOrganizationWorkspaceHost" tabindex="-1"></div>
+          <div id="securityAuditsWorkspaceHost" class="hidden" tabindex="-1"></div>
           <section class="card privacy-data-requests-section hidden" id="dataSubjectRequestsSection" aria-labelledby="dataSubjectRequestsTitle" tabindex="-1">
             <div class="employee-toolbar data-subject-request-toolbar">
               <div><h2 id="dataSubjectRequestsTitle">Datenanfragen</h2><p>Betroffenenanfragen mit Status und Frist nachvollziehbar bearbeiten. Die Oberfläche unterstützt die Prüfung, ersetzt aber keine rechtliche Einzelfallbewertung.</p></div>
@@ -4614,6 +4617,7 @@
     <script src="/sidebar-notepad-preferences.js"></script>
     <script src="/sidebar-notepad.js"></script>
     <script src="/privacy-organization.js"></script>
+    <script src="/security-audits.js"></script>
     <script src="/learning-library.js"></script>
     <script src="/learning-assessment.js"></script>
     <script src="/learning-team.js"></script>
