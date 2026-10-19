@@ -1,0 +1,44 @@
+name: Security control negative fixture
+on:
+  push:
+    branches: ["security-gate-negative-fixture-review-20261019"]
+permissions:
+  contents: read
+jobs:
+  security-sca:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - run: exit 0
+  security-sast:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - run: exit 0
+  security-secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - run: exit 0
+  security-sbom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - run: exit 0
+  security-gates:
+    if: always()
+    needs: [security-sca, security-sast, security-secrets, security-sbom]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require every security job to succeed
+        env:
+          SCA: ${{ needs.security-sca.result }}
+          SAST: ${{ needs.security-sast.result }}
+          SECRETS: ${{ needs.security-secrets.result }}
+          SBOM: ${{ needs.security-sbom.result }}
+        run: |
+          for result in "$SCA" "$SAST" "$SECRETS" "$SBOM"; do
+            test "$result" = success || { echo 'A mandatory security gate did not succeed.'; exit 1; }
+          done
