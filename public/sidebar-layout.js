@@ -8,7 +8,7 @@
   const DEFAULT_WIDTH = 240, MIN_WIDTH = 200, MAX_WIDTH = 380;
   const STORAGE_KEY = "grabenplaner-sidebar-width";
   const GROUPS_STORAGE_KEY = "grabenplaner:sidebar-groups-v1:";
-  const GROUP_KEYS = ["filialManagement", "planning", "vacations", "personnelAdministration", "salesAdministration", "logistics", "privacyOrganization"];
+  const GROUP_KEYS = ["filialManagement", "planning", "vacations", "personnelAdministration", "salesAdministration", "logistics", "privacyOrganization", "technicalSecurity"];
 
   function navigationPath(view) {
     if (["filialAdministration", "personnel", "planning", "vacations", "loans", "branchOrders"].includes(view)) {
@@ -17,6 +17,7 @@
     if (["personnelAdministration", "requests", "timeTracking"].includes(view)) return ["personnelAdministration"];
     if (view === "logistics") return ["logistics"];
     if (view === "privacyOrganization") return ["privacyOrganization"];
+    if (view === "technicalSecurity") return ["technicalSecurity"];
     if (["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "articleReport", "salesBwl", "priceLabels", "crm"].includes(view)) return ["salesAdministration"];
     return [];
   }

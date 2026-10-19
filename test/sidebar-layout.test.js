@@ -26,7 +26,7 @@ test("Every declared sidebar child route reveals all its ancestor groups", () =>
       checked++;
     }
   }
-  assert.equal(toggles.length, 7);
+  assert.equal(toggles.length, 8);
   assert.ok(checked >= 35, "Audit all current groups, subsections and dynamic branches");
 });
 

@@ -1,4 +1,8 @@
-#securityAuditsWorkspaceHost { min-width:0; max-width:100%; }
+#securityAuditsWorkspaceHost, #securitySastWorkspaceHost { min-width:0; max-width:100%; }
+#securitySastWorkspaceHost .security-audits-summary { grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); }
+#securitySastWorkspaceHost [data-sast-content], #securitySastWorkspaceHost [data-sast-table] { min-width:0; max-width:100%; }
+#securitySastWorkspaceHost .rights-settings-table { min-width:1050px; }
+#securitySastWorkspaceHost .security-audits-link { border:0; padding:4px 2px; background:transparent; color:var(--green); text-decoration:underline; font:inherit; cursor:pointer; text-align:left; }
 .security-audits-workspace { display:grid; grid-template-columns:minmax(0,1fr); gap:15px; width:100%; max-width:1440px; min-width:0; color:var(--ink); }
 .security-audits-workspace > *, .security-audits-workspace :is([data-sa-content],[data-sa-results],[data-sa-table]) { min-width:0; max-width:100%; }
 .security-audits-workspace *, .security-audits-workspace *::before, .security-audits-workspace *::after { box-sizing:border-box; }

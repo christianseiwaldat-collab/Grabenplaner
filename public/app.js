@@ -1910,6 +1910,7 @@ function applyFunctionSearchNavigationState(target) {
   if (target.requestKind) state.requestKindTab = target.requestKind;
   if (target.salesAnalyticsTab) state.salesAnalytics.tab = target.salesAnalyticsTab;
   if (target.privacyOrganizationTab) privacyOrganizationTab = normalizePrivacyOrganizationTab(target.privacyOrganizationTab);
+  if (target.technicalSecurityTab) technicalSecurityTab = normalizeTechnicalSecurityTab(target.technicalSecurityTab);
 
   const contextChanged = restoreRememberedOverallContext(target.view);
   setView(target.view);
@@ -5328,6 +5329,7 @@ function navigationGroups() {
     salesAdministration: { toggle: elements.salesAdministrationToggle, children: elements.salesAdministrationNavChildren },
     logistics: { toggle: document.getElementById("logisticsToggle"), children: document.getElementById("logisticsNavChildren") },
     privacyOrganization: { toggle: document.getElementById("privacyOrganizationToggle"), children: document.getElementById("privacyOrganizationNavChildren") },
+    technicalSecurity: { toggle: document.getElementById("technicalSecurityToggle"), children: document.getElementById("technicalSecurityNavChildren") },
   };
 }
 
@@ -5432,6 +5434,13 @@ function renderContextNavigation() {
     setNavigationCurrent(button, state.currentView === "privacyOrganization"
       && button.dataset.privacyOrganizationTab === privacyOrganizationTab
       && !button.classList.contains("nav-module-main"));
+  }
+  const technicalNav = document.getElementById("technicalSecurityNav");
+  technicalNav?.classList.toggle("contains-active", activePath.includes("technicalSecurity"));
+  applyNavigationGroupState("technicalSecurity", !technicalNav?.classList.contains("hidden"));
+  for (const button of technicalNav?.querySelectorAll("[data-technical-security-tab]") || []) {
+    setNavigationCurrent(button, state.currentView === "technicalSecurity"
+      && button.dataset.technicalSecurityTab === technicalSecurityTab && !button.classList.contains("nav-module-main"));
   }
   setNavigationCurrent(elements.salesArticleCatalogNavButton, state.currentView === "articleCatalog");
   setNavigationCurrent(document.getElementById("salesPriceLabelsNavButton"), state.currentView === "priceLabels");
@@ -26030,6 +26039,7 @@ function pageViewElement(view) {
     tradeInsights: elements.tradeInsightsView,
     logistics: elements.logisticsView,
     privacyOrganization: document.getElementById("privacyOrganizationView"),
+    technicalSecurity: document.getElementById("technicalSecurityView"),
     priceLabels: document.getElementById("salesPriceLabelsView"),
     articleCatalog: elements.salesArticleCatalogView,
     articleReport: document.getElementById('salesArticleReportView'),
@@ -35500,6 +35510,9 @@ function activateSalesArticleReport() {
 }
 let privacyOrganizationWorkspace = null;
 let securityAuditsWorkspace = null;
+let securitySastWorkspace = null;
+let technicalSecurityActorKey = "";
+let technicalSecurityTab = "sast";
 let privacyOrganizationActorKey = "";
 let privacyOrganizationTab = "overview";
 
@@ -35508,7 +35521,7 @@ function canReadPrivacyOrganizationWorkspace() {
 }
 
 function canAccessPrivacyOrganization() {
-  return canReadPrivacyOrganizationWorkspace() || canReadDataSubjectRequests() || canReadSecurityAuditsWorkspace();
+  return canReadPrivacyOrganizationWorkspace() || canReadDataSubjectRequests();
 }
 
 function canReadSecurityAuditsWorkspace() {
@@ -35531,16 +35544,41 @@ function canOpenPrivacyOrganizationTab(tab) {
 function activatePrivacyOrganizationView() {
   const active = state.currentView === "privacyOrganization";
   const dataRequestsActive = active && privacyOrganizationTab === "dataRequests" && canReadDataSubjectRequests();
-  const securityAuditsActive = active && privacyOrganizationTab === "security-audits" && canReadSecurityAuditsWorkspace();
-  document.getElementById("privacyOrganizationWorkspaceHost")?.classList.toggle("hidden", dataRequestsActive || securityAuditsActive);
-  document.getElementById("securityAuditsWorkspaceHost")?.classList.toggle("hidden", !securityAuditsActive);
+  document.getElementById("privacyOrganizationWorkspaceHost")?.classList.toggle("hidden", dataRequestsActive);
   elements.dataSubjectRequestsSection?.classList.toggle("hidden", !dataRequestsActive);
-  if (active && !dataRequestsActive && !securityAuditsActive && canReadPrivacyOrganizationWorkspace()) {
-    void privacyOrganizationWorkspace?.activate(privacyOrganizationTab, { notify: false });
-  } else privacyOrganizationWorkspace?.suspend();
-  if (securityAuditsActive) void securityAuditsWorkspace?.activate();
-  else securityAuditsWorkspace?.suspend();
-  if (dataRequestsActive) loadDataSubjectRequests().catch((error) => showToast(error.message, true));
+  if (active && !dataRequestsActive && canReadPrivacyOrganizationWorkspace()) void privacyOrganizationWorkspace?.activate(privacyOrganizationTab, { notify: false });
+  else privacyOrganizationWorkspace?.suspend();
+  if (dataRequestsActive) loadDataSubjectRequests().catch(error => showToast(error.message, true));
+}
+
+function normalizeTechnicalSecurityTab(tab) {
+  return tab === "security-audits" ? tab : "sast";
+}
+function activateTechnicalSecurityView() {
+  const active = state.currentView === "technicalSecurity" && canReadSecurityAuditsWorkspace();
+  const auditActive = active && technicalSecurityTab === "security-audits";
+  document.getElementById("securityAuditsWorkspaceHost")?.classList.toggle("hidden", !auditActive);
+  document.getElementById("securitySastWorkspaceHost")?.classList.toggle("hidden", !active || auditActive);
+  if (auditActive) void securityAuditsWorkspace?.activate(); else securityAuditsWorkspace?.suspend();
+  if (active && !auditActive) void securitySastWorkspace?.activate(); else securitySastWorkspace?.suspend();
+}
+function syncTechnicalSecurityAccess() {
+  const key = privacyOrganizationAccessKey(), allowed = canReadSecurityAuditsWorkspace();
+  document.getElementById("technicalSecurityNav")?.classList.toggle("hidden", !allowed);
+  if (key === technicalSecurityActorKey) return;
+  technicalSecurityActorKey = key;
+  securityAuditsWorkspace?.destroy(); securityAuditsWorkspace = null;
+  securitySastWorkspace?.destroy(); securitySastWorkspace = null;
+  const auditHost = document.getElementById("securityAuditsWorkspaceHost"), sastHost = document.getElementById("securitySastWorkspaceHost");
+  auditHost?.replaceChildren(); sastHost?.replaceChildren();
+  const options = { api, user: () => state.portalSession?.user, accessKey: privacyOrganizationAccessKey };
+  if (allowed) {
+    securityAuditsWorkspace = window.GrabenplanerSecurityAudits.mount(auditHost, options);
+    securitySastWorkspace = window.GrabenplanerSecuritySast.mount(sastHost, options);
+  }
+  if (state.currentView === "technicalSecurity") {
+    if (allowed) activateTechnicalSecurityView(); else setView("startDashboard");
+  }
 }
 
 function privacyOrganizationAccessKey() {
@@ -35550,6 +35588,7 @@ function privacyOrganizationAccessKey() {
 }
 
 function syncPrivacyOrganizationAccess() {
+  syncTechnicalSecurityAccess();
   const key = privacyOrganizationAccessKey();
   const allowed = canReadPrivacyOrganizationWorkspace();
   const nav = document.getElementById("privacyOrganizationNav");
@@ -35563,13 +35602,6 @@ function syncPrivacyOrganizationAccess() {
   privacyOrganizationActorKey = key;
   privacyOrganizationWorkspace?.destroy();
   privacyOrganizationWorkspace = null;
-  securityAuditsWorkspace?.destroy();
-  securityAuditsWorkspace = null;
-  const securityHost = document.getElementById("securityAuditsWorkspaceHost");
-  securityHost?.replaceChildren();
-  if (canReadSecurityAuditsWorkspace()) securityAuditsWorkspace = window.GrabenplanerSecurityAudits.mount(securityHost, {
-    api, user: () => state.portalSession?.user, accessKey: privacyOrganizationAccessKey,
-  });
   const host = document.getElementById("privacyOrganizationWorkspaceHost");
   host?.replaceChildren();
   if (allowed) privacyOrganizationWorkspace = window.GrabenplanerPrivacyOrganization.mount(host, {
@@ -38030,6 +38062,9 @@ async function analyzeSalesReportSeries() {
 }
 
 function setView(view) {
+  if (view === "privacyOrganization" && privacyOrganizationTab === "security-audits") {
+    view = "technicalSecurity"; technicalSecurityTab = "security-audits";
+  }
   if (view === 'gpDefinitions' && state.currentView !== 'gpDefinitions') privateWorkspaceReturnRoute = currentAdministrationRoute();
   if (view === "personnelAdministration" && state.personnelAdministrationTab === "dataRequests") {
     view = "privacyOrganization";
@@ -38048,6 +38083,7 @@ function setView(view) {
     || (view === "tradeInsights" && !canAccessTradeInsights())
     || (view === "logistics" && !canReadTradeMovements())
     || (view === "privacyOrganization" && (!canAccessPrivacyOrganization() || !canOpenPrivacyOrganizationTab(privacyOrganizationTab)))
+    || (view === "technicalSecurity" && !canReadSecurityAuditsWorkspace())
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "articleCatalog" && !canAccessSalesArticleCatalog())
     || (view === 'articleReport' && !canReadSalesArticleReport())
@@ -38090,7 +38126,8 @@ function setView(view) {
     const privacyRoute = button.dataset.privacyOrganizationTab;
     const active = button.dataset.view === view
       && (!personnelRoute || personnelRoute === state.personnelAdministrationTab)
-      && (!privacyRoute || privacyRoute === privacyOrganizationTab);
+      && (!privacyRoute || privacyRoute === privacyOrganizationTab)
+      && (!button.dataset.technicalSecurityTab || button.dataset.technicalSecurityTab === technicalSecurityTab);
     setNavigationCurrent(button, active);
   });
   renderContextNavigation();
@@ -38109,6 +38146,8 @@ function setView(view) {
   elements.logisticsView?.classList.toggle("active", view === "logistics");
   document.getElementById("privacyOrganizationView")?.classList.toggle("active", view === "privacyOrganization");
   activatePrivacyOrganizationView();
+  document.getElementById("technicalSecurityView")?.classList.toggle("active", view === "technicalSecurity");
+  activateTechnicalSecurityView();
   if (["tradeInsights","logistics"].includes(view)) void activateTradeArea(view); else {tradeInsightsWorkspace?.suspend();tradeOrdersWorkspace?.suspend();}
   elements.salesArticleCatalogView?.classList.toggle("active", view === "articleCatalog");
   document.getElementById('salesArticleReportView')?.classList.toggle('active', view === 'articleReport');
@@ -38176,7 +38215,7 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     if (fromHistory) closeMobileNavigation({ restoreFocus: false });
     return;
   }
-  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "logistics", "privacyOrganization", "articleCatalog", "articleReport", "salesBwl", "gpDefinitions", "priceLabels", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
+  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "logistics", "privacyOrganization", "technicalSecurity", "articleCatalog", "articleReport", "salesBwl", "gpDefinitions", "priceLabels", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
     setView("startDashboard");
     return;
   }
@@ -38195,6 +38234,7 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     const requestedSection = parameters.get("section");
     if (["create", "reports", "graphics", "pdf"].includes(requestedSection)) state.salesAnalytics.tab = requestedSection;
   }
+  if (requestedView === "technicalSecurity") technicalSecurityTab = normalizeTechnicalSecurityTab(parameters.get("section"));
   if (requestedView === "privacyOrganization") {
     privacyOrganizationTab = parameters.has("section")
       ? normalizePrivacyOrganizationTab(parameters.get("section")) : firstAccessiblePrivacyOrganizationTab();
@@ -38270,6 +38310,7 @@ function currentAdministrationRoute() {
     if (logisticsTab === 'orders' && globalThis.gpSelectedOrderNumber) {route.order=globalThis.gpSelectedOrderNumber;route.orderId=globalThis.gpSelectedOrderId||'';}
   }
   if (view === "privacyOrganization") route.section = privacyOrganizationTab;
+  if (view === "technicalSecurity") route.section = technicalSecurityTab;
   if (view === "requests") route.kind = state.requestKindTab;
   if (view === "rightsDashboard") {
     route.dashboard = state.rightsDashboardMode;
@@ -42327,6 +42368,7 @@ document.querySelectorAll(".nav-item").forEach((button) => button.addEventListen
   if (button.dataset.personnelAdministrationRoute) {
     setPersonnelAdministrationTab(button.dataset.personnelAdministrationRoute);
   }
+  if (button.dataset.technicalSecurityTab) technicalSecurityTab = normalizeTechnicalSecurityTab(button.dataset.technicalSecurityTab);
   if (button.dataset.privacyOrganizationTab) {
     privacyOrganizationTab = normalizePrivacyOrganizationTab(button.dataset.privacyOrganizationTab);
   }

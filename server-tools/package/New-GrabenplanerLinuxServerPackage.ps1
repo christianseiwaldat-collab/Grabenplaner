@@ -483,6 +483,13 @@ try {
         if (Test-Path -LiteralPath (Join-Path $buildRoot $forbidden)) { throw "Verbotener Paketinhalt erkannt: $forbidden" }
     }
 
+    # The review UI reads a private server-side policy snapshot, never a public asset.
+    if (Test-Path -LiteralPath (Join-Path $buildRoot 'lib\security-sast-reviews.js')) {
+        $sastPolicySource = Join-Path $sourceRoot 'scripts\security\sast-dispositions.json'
+        if (-not (Test-Path -LiteralPath $sastPolicySource -PathType Leaf)) { throw 'Die gebundenen SAST-Bewertungen fehlen.' }
+        Copy-Item -LiteralPath $sastPolicySource -Destination (Join-Path $buildRoot 'lib\security-audits\sast-dispositions.json') -Force
+    }
+
     # Bind the deterministic source inventory through the existing file/hash
     # contract. It excludes itself and the outer manifest to avoid a hash cycle.
     $inventoryNode = (Get-Command node -ErrorAction Stop).Source

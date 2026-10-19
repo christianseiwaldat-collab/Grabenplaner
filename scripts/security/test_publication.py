@@ -52,10 +52,10 @@ class PublicationTests(unittest.TestCase):
 
     def test_real_exception_file_is_bounded_and_no_new_fingerprint_matches(self):
         policy=json.loads((Path(__file__).with_name('exceptions.json')).read_text())
-        items=validate_exceptions(policy,dt.date(2026,10,18))
-        self.assertEqual(len(items),28)
+        items=validate_exceptions(policy,dt.date(2026,10,19))
+        self.assertEqual(len(items),34)
         self.assertEqual({e['scanner'] for e in items},{'secrets'})
-        self.assertEqual({e['expiresOn'] for e in items},{'2026-11-01'})
+        self.assertEqual({e['expiresOn'] for e in items},{'2026-11-01','2026-11-02'})
         for e in items:
             for change in ('fingerprint','sourceSha256'):
                 finding={'fingerprint':e['fingerprint'],'sourceSha256':e['sourceSha256']}

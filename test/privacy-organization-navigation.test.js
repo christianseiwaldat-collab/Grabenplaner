@@ -12,7 +12,7 @@ const app=fs.readFileSync(path.join(__dirname,"../public/app.js"),"utf8");
 test("privacy main section follows logistics and offers every privacy workflow",()=>{
   const navigation=html.slice(html.indexOf('id="logisticsNav"'),html.indexOf('</nav>',html.indexOf('id="logisticsNav"')));
   assert.ok(navigation.indexOf('id="privacyOrganizationNav"')>navigation.indexOf('id="logisticsNav"'));
-  for(const tab of ["overview","data-map","dpia","breaches","agreements","dataRequests","security-audits"]) assert.match(navigation,new RegExp(`data-privacy-organization-tab="${tab}"`));
+  for(const tab of ["overview","data-map","dpia","breaches","agreements","dataRequests"]) assert.match(navigation,new RegExp(`data-privacy-organization-tab="${tab}"`));
   assert.ok(html.indexOf('src="/privacy-organization.js"')<html.indexOf('src="/app.js"'));
 });
 test("privacy browser destination opens its own sidebar group",()=>{
@@ -23,8 +23,8 @@ test("privacy browser destination opens its own sidebar group",()=>{
 test("function search exposes the organization destinations and independent data requests",()=>{
   assert.deepEqual(validateFunctionSearchCatalog(),{valid:true,errors:[]});
   const entries=FUNCTION_SEARCH_CATALOG.filter(e=>e.target.view==="privacyOrganization");
-  assert.equal(entries.length,7);
-  assert.deepEqual(entries.map(e=>e.target.privacyOrganizationTab).sort(),["agreements","breaches","data-map","dataRequests","dpia","overview","security-audits"]);
+  assert.equal(entries.length,6);
+  assert.deepEqual(entries.map(e=>e.target.privacyOrganizationTab).sort(),["agreements","breaches","data-map","dataRequests","dpia","overview"]);
   assert.ok(entries.every(e=>e.access.gateIds.every(id=>html.includes(`id="${id}"`))));
   const requests=entries.find(e=>e.target.privacyOrganizationTab==="dataRequests");
   assert.deepEqual(requests.path,["Datenschutz","Datenanfragen"]);
@@ -56,13 +56,13 @@ test("privacy visibility keeps DSAR independent and chooses an accessible main d
     const value={dataset,classes,replaceChildren(){},classList:{toggle(name,on){on?classes.add(name):classes.delete(name);}}};
     nodes.set(id,value); return value;
   };
-  const routes=["overview","data-map","dpia","breaches","agreements","security-audits","dataRequests"].map(tab=>node(tab,{privacyOrganizationTab:tab}));
+  const routes=["overview","data-map","dpia","breaches","agreements","dataRequests"].map(tab=>node(tab,{privacyOrganizationTab:tab}));
   const nav=node("privacyOrganizationNav");nav.querySelectorAll=()=>routes;
   const main=node("privacyOrganizationNavButton");
   const user={employeeNumber:"SYNTHETIC-DSAR",role:"hr",isEmployee:true,accountType:"employee",sessionKind:"employee",permissions:["data_subject_requests:read"]};
   const context={state:{currentView:"startDashboard",portalStatus:{portalEnabled:true},portalSession:{user}},document:{getElementById:id=>nodes.get(id)},
     window:{GrabenplanerPrivacyOrganization:require("../public/privacy-organization"),GrabenplanerSecurityAudits:require("../public/security-audits")},
-    privacyOrganizationActorKey:"actor",privacyOrganizationAccessKey:()=>"actor",
+    privacyOrganizationActorKey:"actor",privacyOrganizationAccessKey:()=>"actor",syncTechnicalSecurityAccess:()=>{},
   };
   vm.createContext(context);
   vm.runInContext(["hasGovernancePermission","canReadDataSubjectRequests","canReadPrivacyOrganizationWorkspace","canReadSecurityAuditsWorkspace","canAccessPrivacyOrganization","firstAccessiblePrivacyOrganizationTab","canOpenPrivacyOrganizationTab","syncPrivacyOrganizationAccess"].map(source).join('\n'),context);
@@ -76,12 +76,9 @@ test("privacy visibility keeps DSAR independent and chooses an accessible main d
   assert.equal(main.dataset.privacyOrganizationTab,"overview");
   assert.equal(routes.at(-1).classes.has("hidden"),true);
   assert.ok(routes.slice(0,5).every(route=>!route.classes.has("hidden")));
-  assert.equal(routes[5].classes.has("hidden"),true);
   user.role="it_admin"; user.permissions=["security_audits:read"];
   context.syncPrivacyOrganizationAccess();
-  assert.equal(main.dataset.privacyOrganizationTab,"security-audits");
-  assert.equal(routes[5].classes.has("hidden"),false);
-  assert.ok(routes.filter((_,index)=>index!==5).every(route=>route.classes.has("hidden")));
+  assert.equal(nav.classes.has("hidden"),true);
   user.permissions=[];
   context.syncPrivacyOrganizationAccess();
   assert.equal(nav.classes.has("hidden"),true);
@@ -98,25 +95,33 @@ test("price label overview tile and sidebar always use the same fresh access dec
   assert.match(html,/<button(?=[^>]*id="salesPriceLabelsDashboardCard")(?=[^>]*data-sales-dashboard-view="priceLabels")[^>]*>/);
 });
 
-test("security audit navigation activates only its independently authorized workspace",()=>{
+test("technical security activates only the chosen authorized workspace",()=>{
   const visibility=new Map(),calls=[];
   const node=id=>({classList:{toggle(_name,hidden){visibility.set(id,hidden);}}});
-  const context={state:{currentView:"privacyOrganization"},privacyOrganizationTab:"security-audits",
-    document:{getElementById:id=>node(id)},elements:{dataSubjectRequestsSection:node("requests")},
-    canReadDataSubjectRequests:()=>false,canReadPrivacyOrganizationWorkspace:()=>true,canReadSecurityAuditsWorkspace:()=>true,
-    privacyOrganizationWorkspace:{activate:tab=>calls.push("privacy:"+tab),suspend:()=>calls.push("privacy:suspend")},
+  const context={state:{currentView:"technicalSecurity"},technicalSecurityTab:"security-audits",
+    document:{getElementById:id=>node(id)},canReadSecurityAuditsWorkspace:()=>true,
     securityAuditsWorkspace:{activate:()=>calls.push("audit:activate"),suspend:()=>calls.push("audit:suspend")},
-    loadDataSubjectRequests:()=>{throw Error("unexpected DSAR load");},showToast:()=>{},
-  };
-  vm.createContext(context);vm.runInContext(source("activatePrivacyOrganizationView"),context);
-  context.activatePrivacyOrganizationView();
-  assert.deepEqual(calls,["privacy:suspend","audit:activate"]);
-  assert.equal(visibility.get("privacyOrganizationWorkspaceHost"),true);
-  assert.equal(visibility.get("securityAuditsWorkspaceHost"),false);
-  calls.length=0;context.privacyOrganizationTab="overview";context.activatePrivacyOrganizationView();
-  assert.deepEqual(calls,["privacy:overview","audit:suspend"]);
-  calls.length=0;context.state.currentView="startDashboard";context.activatePrivacyOrganizationView();
-  assert.deepEqual(calls,["privacy:suspend","audit:suspend"]);
+    securitySastWorkspace:{activate:()=>calls.push("sast:activate"),suspend:()=>calls.push("sast:suspend")}};
+  vm.createContext(context);vm.runInContext(source("activateTechnicalSecurityView"),context);
+  context.activateTechnicalSecurityView();assert.deepEqual(calls,["audit:activate","sast:suspend"]);
+  assert.equal(visibility.get("securityAuditsWorkspaceHost"),false);assert.equal(visibility.get("securitySastWorkspaceHost"),true);
+  calls.length=0;context.technicalSecurityTab="sast";context.activateTechnicalSecurityView();
+  assert.deepEqual(calls,["audit:suspend","sast:activate"]);
+  calls.length=0;context.canReadSecurityAuditsWorkspace=()=>false;context.activateTechnicalSecurityView();
+  assert.deepEqual(calls,["audit:suspend","sast:suspend"]);
+});
+
+test("technical security follows privacy, SAST is first and audit content has moved",()=>{
+  const nodes=[];const visit=node=>{nodes.push(node);for(const child of node.children||[])visit(child);};visit(parseDocument(html));
+  const byId=id=>nodes.find(node=>node.attribs?.id===id);
+  const within=(node,id)=>{for(let p=node.parent;p;p=p.parent)if(p.attribs?.id===id)return true;return false;};
+  assert.ok(html.indexOf('id="technicalSecurityNav"')>html.indexOf('id="privacyOrganizationNav"'));
+  assert.ok(html.indexOf('id="securitySastNavButton"')<html.indexOf('id="securityAuditsNavButton"'));
+  for(const id of ["securitySastNavButton","securityAuditsNavButton"])assert.equal(within(byId(id),"technicalSecurityNav"),true);
+  for(const id of ["securitySastWorkspaceHost","securityAuditsWorkspaceHost"])assert.equal(within(byId(id),"technicalSecurityView"),true);
+  const entries=FUNCTION_SEARCH_CATALOG.filter(row=>row.target.view==="technicalSecurity");
+  assert.deepEqual(entries.map(row=>row.target.technicalSecurityTab),["sast","security-audits"]);
+  assert.ok(entries.every(row=>row.path[0]==="Technische Sicherheit"));
 });
 
 test("sensitive privacy workspace identity changes when account restrictions change",()=>{

@@ -281,6 +281,66 @@
       "reviewedOn": "2026-10-18",
       "expiresOn": "2026-11-01",
       "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "0fb9a27c40647f20f4e57b4dcf54cc9dc36faf57d84476f97fb8509350d1bf3e",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic SQLite/PostgreSQL fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "0fb9a27c40647f20f4e57b4dcf54cc9dc36faf57d84476f97fb8509350d1bf3e",
+      "sourceSha256": "dbb6908b6a236fc74f72bb1c12323ef6beded621dcff5f340d6fa2e700eebd49",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic SQLite/PostgreSQL fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "7b84578ad7dbba8ff64fed9c9d44adf60f4143911772399d0f6f06b35ab5c8c0",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic SQLite/PostgreSQL fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "7b84578ad7dbba8ff64fed9c9d44adf60f4143911772399d0f6f06b35ab5c8c0",
+      "sourceSha256": "dbb6908b6a236fc74f72bb1c12323ef6beded621dcff5f340d6fa2e700eebd49",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic SQLite/PostgreSQL fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "2a3fe27c586928638a075ec2ec73274aceafad499b75e6d9dcf033903d1831d0",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic SQLite/PostgreSQL fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "95d16169993b1b04189743b031756e70faedbebfe9d94c914eadb88b49b571f4",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic SQLite/PostgreSQL fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
     }
   ]
 }

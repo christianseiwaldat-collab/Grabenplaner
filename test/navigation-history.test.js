@@ -116,7 +116,7 @@ function administration() {
   const settings = ['general', 'rights', 'schedule', 'developer', 'systemCenter'].map(settingsTab => element({ settingsTab }));
   settings[0].classList.toggle('active', true); settings[3].classList.toggle('hidden', true);
   const win = browser(), calls = [], elements = new Proxy({}, { get(target, key) { return target[key] ||= element(); } });
-  const documentElements = new Map(['salesPriceLabelsView', 'tradeInsightsWorkspace', 'logisticsWorkspaceHost', 'privacyOrganizationView', 'privacyOrganizationWorkspaceHost', 'securityAuditsWorkspaceHost'].map(id => [id, element()]));
+  const documentElements = new Map(['salesPriceLabelsView', 'tradeInsightsWorkspace', 'logisticsWorkspaceHost', 'privacyOrganizationView', 'privacyOrganizationWorkspaceHost', 'technicalSecurityView', 'securitySastWorkspaceHost', 'securityAuditsWorkspaceHost'].map(id => [id, element()]));
   win.GrabenplanerTradeInsights = require('../public/trade-insights');
   win.GrabenplanerPrivacyOrganization = require('../public/privacy-organization');
   win.GrabenplanerSecurityAudits = require('../public/security-audits');
@@ -125,7 +125,7 @@ function administration() {
     requestKindTab: 'vacation', rightsDashboardMode: 'rights', locationId: '18', departmentId: '',
     locations: [{ id: '18', active: true, departments: [{ id: 1, active: true }] }, { id: '20', active: true, departments: [{ id: 2, active: true }] }] },
     elements, timePresenceRefreshTimer: null, receiptSearchWorkspace: null, salesArticleReportWorkspace: null, salesBwlWorkspace: null, gpDefinitionsWorkspace: null, renderGpDefinitionsAccess: () => {}, tradeInsightsTab: 'repairs',
-    privacyOrganizationTab: 'overview',
+    privacyOrganizationTab: 'overview', technicalSecurityTab: 'sast', securitySastWorkspace: null,
     privacyOrganizationWorkspace: {activate: tab => calls.push({privacy: tab}), suspend: () => calls.push('suspendPrivacy')},
     securityAuditsWorkspace: {activate: () => calls.push('activateSecurityAudits'), suspend: () => calls.push('suspendSecurityAudits')},
     tradeInsightsWorkspace: { activate: tab => calls.push({ insights: tab }), setArea: area => calls.push({ area }), suspend: () => calls.push('suspendInsights') },
@@ -155,7 +155,7 @@ function administration() {
   for (const name of ['clearUsbProvisioningPasswords', 'clearPersonnelLifecycleEditorState', 'pausePersonnelLifecycleEditor', 'pauseEmployeeProfile', 'resumeEmployeeProfile', 'clearPersonnelLifecycleAutomationState', 'renderContextNavigation', 'applyActivePageAppearance', 'syncSalesArticleSearchWindow', 'syncGpWindows', 'syncStartDashboardVps', 'loadStartDashboard', 'loadRightsDashboard', 'ensureAccessibleManagerRequestTab', 'loadManagerVacationRequests', 'loadLoanManagement', 'loadBranchOrdersManagement', 'renderSalesArticleCatalogResults', 'loadSalesArticleCatalogDetail', 'syncCrmCustomerWorkspace']) ctx[name] = () => {};
   for (const name of ['loadSalesArticleTablePreferences', 'loadSalesArticleLastImport', 'loadCrmPreferences']) ctx[name] = async () => {};
   vm.createContext(ctx);
-  vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'activateTradeArea', 'canAccessPrivacyOrganization', 'normalizePrivacyOrganizationTab', 'firstAccessiblePrivacyOrganizationTab', 'canOpenPrivacyOrganizationTab', 'activatePrivacyOrganizationView', 'setNavigationCurrent', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
+  vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'activateTradeArea', 'canAccessPrivacyOrganization', 'normalizePrivacyOrganizationTab', 'firstAccessiblePrivacyOrganizationTab', 'canOpenPrivacyOrganizationTab', 'activatePrivacyOrganizationView', 'normalizeTechnicalSecurityTab', 'activateTechnicalSecurityView', 'setNavigationCurrent', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
   ctx.grabenplanerNavigation = create({ window: win, app: 'admin', keys: ['view', 'section', 'kind', 'dashboard', 'process', 'location', 'department'],
     read: ctx.currentAdministrationRoute, apply: () => ctx.applyRequestedView({ fromHistory: true }) });
   ctx.grabenplanerNavigation.start(); return { ctx, win, calls, navigation };
@@ -217,15 +217,15 @@ test('Administration: audit-only navigation restores Back/Forward and denies rev
   assert.equal(ctx.canReadDataSubjectRequests(), false);
   win.history.replaceState(null, '', '?view=privacyOrganization');
   ctx.applyRequestedView({ fromHistory: true }); win.flush();
-  assert.equal(win.location.search, '?view=privacyOrganization&section=security-audits');
+  assert.equal(win.location.search, '?view=technicalSecurity&section=security-audits');
   assert.deepEqual(JSON.parse(JSON.stringify(ctx.currentAdministrationRoute())), {
-    view: 'privacyOrganization', section: 'security-audits',
+    view: 'technicalSecurity', section: 'security-audits',
   });
   assert.ok(calls.includes('activateSecurityAudits'));
   assert.equal(calls.some(call => call.privacy), false);
   assert.equal(calls.includes('loadDataRequests'), false);
   assert.equal(ctx.document.getElementById('securityAuditsWorkspaceHost').classList.contains('hidden'), false);
-  assert.equal(ctx.document.getElementById('privacyOrganizationWorkspaceHost').classList.contains('hidden'), true);
+  assert.equal(ctx.document.getElementById('technicalSecurityView').classList.contains('active'), true);
   assert.equal(ctx.elements.dataSubjectRequestsSection.classList.contains('hidden'), true);
   ctx.setView('settings'); win.flush();
   assert.ok(calls.includes('suspendSecurityAudits'));

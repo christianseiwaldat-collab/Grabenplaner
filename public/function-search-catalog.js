@@ -25,6 +25,7 @@
     "tradeInsights",
     "logistics",
     "privacyOrganization",
+    "technicalSecurity",
     "priceLabels",
     "articleCatalog",
     "crm",
@@ -72,6 +73,7 @@
     "settingsTab",
     "salesAnalyticsTab",
     "privacyOrganizationTab",
+    "technicalSecurityTab",
     "dashboardMode",
     "requestKind",
     "revealIds",
@@ -616,10 +618,15 @@
       ["dpia", "Datenschutz-Folgenabschätzung öffnen", "DSFA", "privacyOrganizationDpiaNavButton", ["dsfa", "folgenabschätzung", "risikoanalyse", "dpia"]],
       ["breaches", "Datenpannenprozess öffnen", "Datenpannen", "privacyOrganizationBreachesNavButton", ["datenpanne", "data breach", "72 stunden", "meldepflicht"]],
       ["agreements", "Betriebliche Zustimmungen prüfen", "Betriebliche Zustimmungen", "privacyOrganizationAgreementsNavButton", ["betriebsvereinbarung", "betriebsrat", "zustimmung", "avrag"]],
-      ["security-audits", "Security Audits öffnen", "Security Audits", "securityAuditsNavButton", ["security audit", "sicherheitsaudit", "sicherheitsprüfung", "asvs", "schwachstellen", "maßnahmenplan"]],
     ].map(([tab, label, path, gate, synonyms]) => entry(`privacy-organization.${tab}`, label,
       ["Datenschutz", path], "Öffnet den geschützten, versionierten Datenschutzprozess für persönliche berechtigte Konten.", synonyms,
       [gate], { view: "privacyOrganization", privacyOrganizationTab: tab, focusId: tab === "security-audits" ? "securityAuditsWorkspaceHost" : "privacyOrganizationWorkspaceHost" })),
+    ...[
+      ["sast", "SAST-Bewertungen", "securitySastNavButton", "securitySastWorkspaceHost", ["sast", "quellcodeprüfung", "fehlalarm", "ablaufdatum", "nachprüfung"]],
+      ["security-audits", "Security Audits", "securityAuditsNavButton", "securityAuditsWorkspaceHost", ["security audit", "sicherheitsaudit", "asvs", "schwachstellen", "maßnahmenplan"]],
+    ].map(([tab, label, gate, focusId, synonyms]) => entry('technical-security.' + tab, label + ' öffnen',
+      ["Technische Sicherheit", label], "Geschützte Sicherheitsbewertungen, Fristen und Nachweise für berechtigte persönliche Konten.", synonyms,
+      [gate], { view: "technicalSecurity", technicalSecurityTab: tab, focusId })),
     entry(
       "sales.price-labels",
       "Preisschilder gestalten",
@@ -1171,6 +1178,9 @@
     if (target.salesAnalyticsTab && (
       target.view !== "salesAnalytics" || !SUPPORTED_SALES_ANALYTICS_TABS.has(target.salesAnalyticsTab)
     )) errors.push(`${entryId}: salesAnalyticsTab passt nicht zum Ziel.`);
+    if (target.technicalSecurityTab !== undefined && (
+      target.view !== "technicalSecurity" || !["sast", "security-audits"].includes(target.technicalSecurityTab)
+    )) errors.push(`${entryId}: technicalSecurityTab passt nicht zum Ziel.`);
     if (target.privacyOrganizationTab !== undefined && (
       target.view !== "privacyOrganization" || !SUPPORTED_PRIVACY_ORGANIZATION_TABS.has(target.privacyOrganizationTab)
     )) errors.push(`${entryId}: privacyOrganizationTab passt nicht zum Ziel.`);

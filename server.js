@@ -999,8 +999,8 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "retention:read", label: "Aufbewahrungsregeln und Vorschau lesen", description: "Kategoriebezogene Fristen, Prüfhinweise und Legal Holds lesen.", group: "Datenschutz", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "privacy_organization:read", label: "Datenschutzorganisation lesen", description: "Verarbeitungsverzeichnis, DSFA, Datenpannen und Zustimmungsprozesse ausschließlich über persönliche HR-/Admin-/Developer-Konten lesen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "privacy_organization:manage", label: "Datenschutzorganisation bearbeiten", description: "Datensparsame Prozessfälle versionieren und externe Meldebelege dokumentieren.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
-  { id: "security_audits:read", label: "Security Audits lesen", description: "Vertrauliche Sicherheitsprüfungen und Maßnahmen über ein berechtigtes persönliches Konto lesen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
-  { id: "security_audits:manage", label: "Security Audits verwalten", description: "Prüfberichte importieren und Befundmaßnahmen mit Nachweisen dokumentieren; benötigt zusätzlich das Leserecht.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
+  { id: "security_audits:read", label: "Security Audits lesen", description: "Vertrauliche Sicherheitsprüfungen und Maßnahmen über ein berechtigtes persönliches Konto lesen.", group: "Technische Sicherheit", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
+  { id: "security_audits:manage", label: "Security Audits verwalten", description: "Prüfberichte importieren und Befundmaßnahmen mit Nachweisen dokumentieren; benötigt zusätzlich das Leserecht.", group: "Technische Sicherheit", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
   { id: "privacy_organization:approve", label: "Datenschutzorganisation unabhängig prüfen", description: "Eine fremde eingereichte Fassung fachlich prüfen; keine Behördenmeldung oder Zustimmung von Beschäftigten ersetzen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "retention:manage", label: "Aufbewahrungsregeln versioniert verwalten", description: "Neue Regelversionen und Legal Holds anlegen; kein direkter Löschlauf.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "data_subject_requests:read", label: "Betroffenenanfragen lesen", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -30687,6 +30687,15 @@ function securityAuditRouteError(error, response) {
   }
   throw error;
 }
+
+app.get("/api/security-audits/sast", async (request, response) => {
+  requireSecurityAuditActor(request);
+  response.set("Cache-Control", "no-store");
+  try {
+    await requireSecurityAuditStore().read(request);
+    response.json(require("./lib/security-sast-reviews").readSastReviews());
+  } catch (error) { securityAuditRouteError(error, response); }
+});
 
 app.get("/api/security-audits", async (request, response) => {
   requireSecurityAuditActor(request);

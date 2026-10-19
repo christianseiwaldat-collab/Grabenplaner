@@ -3,7 +3,7 @@ const test = require("node:test"), assert = require("node:assert/strict"), fs = 
 const { root, read, functionSource, screenshotDirectory } = require("../test-support/learning-workspace-ui");
 const options = { skip: process.env.GP_WINDOW_BROWSER_TEST !== "1", timeout: 90000 };
 const app = read("app.js");
-const names = ["navigationGroups", "setNavigationCurrent", "applyNavigationGroupState", "renderContextNavigation", "pageViewElement", "setView", "applyRequestedView", "currentAdministrationRoute", "mobileNavigationFocusableElements", "openMobileNavigation", "closeMobileNavigation"];
+const names = ["navigationGroups", "setNavigationCurrent", "applyNavigationGroupState", "renderContextNavigation", "pageViewElement", "setView", "applyRequestedView", "currentAdministrationRoute", "normalizeTechnicalSecurityTab", "mobileNavigationFocusableElements", "openMobileNavigation", "closeMobileNavigation"];
 const top = app.slice(app.indexOf("const sidebarNavigationGroups"), app.indexOf("let sidebarLayout"));
 function handler(start, end) {
   const from = app.indexOf(start), to = app.indexOf(end, from);
@@ -45,13 +45,14 @@ async function fixture({ mobile = false, width = mobile ? 390 : 1440 } = {}) {
       window.locationsForTest = [{ id: "18", name: "Beispiel Nord" }, { id: "23", name: "Beispiel Süd" }];
       window.activeLocations = () => locationsForTest;
       window.escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
-      window.logisticsTab = "purchasing"; window.privacyOrganizationTab = "overview"; window.tradeInsightsTab = "repairs";
+      window.logisticsTab = "purchasing"; window.privacyOrganizationTab = "overview"; window.technicalSecurityTab = "sast"; window.tradeInsightsTab = "repairs";
       window.mobileNavigationMedia = matchMedia("(max-width: 820px), (max-width: 1100px) and (pointer: coarse)");
       window.mobileNavigationPreviousFocus = null; window.timePresenceRefreshTimer = null;
       for (const name of ["receiptSearchWorkspace", "salesArticleReportWorkspace", "salesBwlWorkspace", "gpDefinitionsWorkspace", "tradeInsightsWorkspace", "tradeOrdersWorkspace", "salesPriceLabelsWorkspace"]) window[name] = null;
       window.denied = new Set();
+      window.canReadSecurityAuditsWorkspace = () => !denied.has('canReadSecurityAuditsWorkspace');
       for (const name of ["canReadManagerRequests", "canReadManagedTimeTracking", "canOpenPersonnelAdministrationModule", "canAccessTeamManagement", "canOpenSalesAdministrationModule", "canAccessSalesAnalytics", "canAccessSalesArticleCatalog", "canReadSalesArticleReport", "canReadSalesBwl", "canUseGpDefinitions", "canUseSalesPriceLabels", "canAccessCrm", "canAccessTradeInsights", "canReadTradeMovements", "canReadLoanManagement", "canManageBranchOrders", "canAccessPrivacyOrganization", "canOpenPrivacyOrganizationTab", "canReadSystemCenter"]) window[name] = () => !denied.has(name);
-      for (const name of ["clearUsbProvisioningPasswords", "pausePersonnelLifecycleEditor", "pauseEmployeeProfile", "resumeEmployeeProfile", "clearPersonnelLifecycleAutomationState", "applyActivePageAppearance", "syncSalesArticleSearchWindow", "syncGpWindows", "syncStartDashboardVps", "loadStartDashboard", "loadRightsDashboard", "ensureAccessibleManagerRequestTab", "loadManagerVacationRequests", "loadLoanManagement", "loadBranchOrdersManagement", "renderSalesArticleCatalogResults", "loadSalesArticleCatalogDetail", "syncCrmCustomerWorkspace", "activatePrivacyOrganizationView", "activateTradeArea", "activateSalesArticleReport", "activateSalesBwl", "activateGpDefinitions", "renderGpDefinitionsAccess", "loadPlanningView", "refreshTimeTrackingView", "initializeTimeSummaryDates", "initializeTimeReviewDate"]) window[name] = () => {};
+      for (const name of ["clearUsbProvisioningPasswords", "pausePersonnelLifecycleEditor", "pauseEmployeeProfile", "resumeEmployeeProfile", "clearPersonnelLifecycleAutomationState", "applyActivePageAppearance", "syncSalesArticleSearchWindow", "syncGpWindows", "syncStartDashboardVps", "loadStartDashboard", "loadRightsDashboard", "ensureAccessibleManagerRequestTab", "loadManagerVacationRequests", "loadLoanManagement", "loadBranchOrdersManagement", "renderSalesArticleCatalogResults", "loadSalesArticleCatalogDetail", "syncCrmCustomerWorkspace", "activatePrivacyOrganizationView", "activateTechnicalSecurityView", "activateTradeArea", "activateSalesArticleReport", "activateSalesBwl", "activateGpDefinitions", "renderGpDefinitionsAccess", "loadPlanningView", "refreshTimeTrackingView", "initializeTimeSummaryDates", "initializeTimeReviewDate"]) window[name] = () => {};
       for (const name of ["loadSalesArticleTablePreferences", "loadSalesArticleLastImport", "loadCrmPreferences"]) window[name] = async () => {};
       window.restoreRememberedOverallContext = window.planningContextNeedsReload = window.employeeProfileIsOpen = () => false;
       window.accessibleDashboardModes = () => ["rights"];
@@ -84,7 +85,7 @@ async function fixture({ mobile = false, width = mobile ? 390 : 1440 } = {}) {
 }
 async function current(page, selector) {
   assert.equal(await page.locator('.main-nav [aria-current="page"]').count(), 1);
-  assert.equal(await page.locator(selector).getAttribute("aria-current"), "page");
+  assert.equal(await page.locator(selector).getAttribute("aria-current"), "page", selector);
   const marker = await page.locator(selector).evaluate(element => {
     if (!element.matches(".nav-module-route,.nav-child")) return null;
     const probe = document.createElement("span"); probe.style.color = "var(--coral)"; element.append(probe);
@@ -132,6 +133,7 @@ test("Sidebar desktop: Verkauf, all module leaves, direct entry, history and per
       await f.click("#" + route.id);
       if (route.view === "logistics") await current(f.page, route.id === "logisticsOrdersNavButton" ? "#logisticsOrdersNavButton" : "#logisticsPurchasingNavButton");
       else if (route.id === "privacyOrganizationNavButton") await current(f.page, "#privacyOrganizationOverviewNavButton");
+      else if (route.id === "technicalSecurityNavButton") await current(f.page, "#securitySastNavButton");
       else if (route.view === "planning") await current(f.page, '.nav-child[data-context-view="planning"][data-location-id="18"]');
       else if (route.view === "vacations") await current(f.page, '.nav-child[data-context-view="vacations"][data-location-id="18"]');
       else await current(f.page, "#" + route.id);

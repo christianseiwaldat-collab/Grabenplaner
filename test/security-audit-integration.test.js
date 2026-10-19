@@ -19,6 +19,13 @@ async function request(route = '/api/security-audits', { method = 'GET', auth = 
 }
 const importCommand = (revision = 0) => ({ action: 'import', expectedRevision: revision, run: syntheticRun() });
 const post = (body, opts = {}) => request('/api/security-audits/commands', { method: 'POST', body, ...opts });
+test('SAST metadata requires the same live personal audit permission and is never publicly cached', async () => {
+  assert.equal((await request('/api/security-audits/sast', { auth: null })).status, 401);
+  for (const role of ['hr', 'manager', 'employee']) assert.equal((await request('/api/security-audits/sast', { auth: users[role] })).status, 403);
+  const result = await request('/api/security-audits/sast');
+  assert.equal(result.status, 200, JSON.stringify(result.body)); assert.equal(result.headers.get('cache-control'), 'no-store');
+  assert.ok(result.body.reviews.length > 0); assert.equal(result.body.capabilities.managePolicy, false);
+});
 test.before(async () => {
   await initializeApplicationPersistence(); const location = db.prepare('SELECT id,cost_center_id FROM locations LIMIT 1').get();
   for (const role of ['developer', 'admin', 'it_admin', 'hr', 'manager', 'employee']) {

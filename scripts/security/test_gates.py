@@ -99,10 +99,13 @@ class GateContractTests(unittest.TestCase):
         if not bash and Path(r'C:\Program Files\Git\bin\bash.exe').is_file():bash=r'C:\Program Files\Git\bin\bash.exe'
         self.assertIsNotNone(bash,'Bash is required to test the actual aggregate step')
         import os
-        for value in ('success','failure','cancelled','skipped','','success; exit 0'):
-            env={**os.environ,'SCA':value,'SAST':'success','SECRETS':'success','SBOM':'success'}
-            result=subprocess.run([bash,'-c',script],env=env,capture_output=True)
-            self.assertEqual(result.returncode==0,value=='success',value)
+        names=('SCA','SAST','SECRETS','SBOM')
+        for name in names:
+            for value in ('success','failure','cancelled','skipped','pending','neutral','timed_out','','success; exit 0'):
+                with self.subTest(gate=name,result=value):
+                    env={**os.environ,**dict.fromkeys(names,'success'),name:value}
+                    result=subprocess.run([bash,'-c',script],env=env,capture_output=True)
+                    self.assertEqual(result.returncode==0,value=='success',value)
 
 
 if __name__=='__main__':unittest.main()

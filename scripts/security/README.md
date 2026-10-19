@@ -131,14 +131,23 @@ Publikation neu sein. Exitcodes: 0 bestanden, 1 blockierende Befunde,
 2 Werkzeug-/Vollständigkeitsfehler. Ein Scannerfund ist vor der individuellen
 Bewertung weder automatisch ein Exploit noch automatisch ein Fehlalarm.
 
-Roh-JSON und stdout/stderr bleiben ausschließlich im privaten lokalen bzw.
-flüchtigen Runner-Ausgabeverzeichnis. Sie werden **nicht** hochgeladen.
+Roh-JSON und stdout/stderr werden niemals im Klartext veröffentlicht.
 `publish_artifacts.py` erzeugt separat ausschließlich ausgewählte Zähler,
 Status und Hashes sowie ein minimiertes CycloneDX mit Bibliotheksidentitäten.
 Keine Quellauszüge, beliebigen Fehlermeldungen, Befehlszeilen, Secret-Werte,
 Dateipfade oder SBOM-Properties gelangen in diese öffentlichen Artefakte.
-Nur diese explizit benannten Dateien werden 14 Tage als Actions-Artefakte
-aufbewahrt. Das volle Runner-Inventar wird lediglich per Hash referenziert;
-ein dauerhaft benötigter Detailbeleg ist lokal bzw. am Releasehost privat
-zu archivieren. Ein fehlgeschlagener Scanner bleibt auch nach erfolgreicher
-Bereinigung fehlgeschlagen.
+Zusätzlich versiegelt `seal-evidence.cjs` die direkten JSON-Prüfbelege samt
+Scanner-Version für die private Nachprüfung. AES-256-GCM authentifiziert den
+Inhalt; ein zufälliger Einmalschlüssel wird mit RSA-OAEP/SHA-256 für den
+öffentlichen Empfängerschlüssel in `.github/security-evidence-public-key.pem`
+verschlüsselt. Der private Schlüssel verbleibt außerhalb des Repositorys bei
+der Sicherheitsverantwortung. Das Archiv enthält weder Quellbäume noch
+Umgebungsvariablen oder installierte Pakete. Änderungen am Empfängerschlüssel
+benötigen eine unabhängige Prüfung.
+
+Nur die ausdrücklich benannten bereinigten Dateien und der verschlüsselte
+Detailbeleg werden 14 Tage als Actions-Artefakte aufbewahrt. Dauerhaft benötigte
+Belege sind rechtzeitig privat abzurufen, zu entschlüsseln und anhand der
+Dateihashes und des Lauf-Commits zu verifizieren. Verlust des privaten
+Schlüssels bedeutet Verlust der Entschlüsselungsmöglichkeit. Fehlgeschlagene
+Scans oder eine fehlgeschlagene Versiegelung bleiben blockierend.

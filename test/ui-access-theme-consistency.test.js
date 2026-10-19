@@ -84,7 +84,7 @@ function navigationContext(permissions, options = {}) {
     querySelector: () => settingsTab,
   };
   Object.assign(context, {
-    window: {}, privacyOrganizationTab: "overview", timePresenceRefreshTimer: null,
+    window: {}, privacyOrganizationTab: "overview", technicalSecurityTab: "sast", activateTechnicalSecurityView: () => {}, timePresenceRefreshTimer: null,
     receiptSearchWorkspace: null, tradeInsightsWorkspace: null, salesPriceLabelsWorkspace: null, tradeOrdersWorkspace: null,
     salesArticleReportWorkspace: null, salesBwlWorkspace: null, gpDefinitionsWorkspace: null,
     employeeProfileIsOpen: () => false, accessibleDashboardModes: () => ["rights"],
@@ -229,7 +229,7 @@ test("Global theme reaches every actual main view while the persisted UI/API pre
   const viewIds = allNodes.filter(node => /(?:^|\s)view(?:\s|$)/.test(node.attribs?.class || "")
     && /(?:^|\s)main-content(?:\s|$)/.test(node.parent?.attribs?.class || ""))
     .map(node => node.attribs.id);
-  assert.equal(viewIds.length, 24);
+  assert.equal(viewIds.length, 25);
   const nodes = new Map(viewIds.map(id => [id, element(id)]));
   const main = element("main"), toggle = element("sidebarDarkmodeToggle");
   const choices = [element("lightChoice", { globalThemeChoice: "light" }), element("darkChoice", { globalThemeChoice: "dark" })];

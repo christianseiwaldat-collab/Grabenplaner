@@ -262,8 +262,17 @@
               <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="dpia" id="privacyOrganizationDpiaNavButton"><span>DSFA</span></button>
               <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="breaches" id="privacyOrganizationBreachesNavButton"><span>Datenpannen</span></button>
               <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="agreements" id="privacyOrganizationAgreementsNavButton"><span>Betriebliche Zustimmungen</span></button>
-              <button class="nav-item nav-module-route hidden" type="button" data-view="privacyOrganization" data-privacy-organization-tab="security-audits" id="securityAuditsNavButton"><span>Security Audits</span></button>
               <button class="nav-item nav-module-route hidden" type="button" data-view="privacyOrganization" data-privacy-organization-tab="dataRequests" id="dataSubjectRequestsNavButton"><span class="nav-symbol" aria-hidden="true">§</span><span>Daten&shy;anfragen</span><strong class="nav-count hidden" id="dataSubjectRequestsNavCount">0</strong></button>
+            </div>
+          </section>
+          <section class="nav-module hidden" id="technicalSecurityNav" aria-label="Technische Sicherheit">
+            <div class="nav-branch nav-module-heading">
+              <button type="button" class="nav-disclosure" id="technicalSecurityToggle" data-nav-toggle="technicalSecurity" aria-controls="technicalSecurityNavChildren" aria-label="Unterpunkte der technischen Sicherheit ein- oder ausklappen" aria-expanded="false"><span aria-hidden="true"></span></button>
+              <button class="nav-item nav-module-main" type="button" data-view="technicalSecurity" data-technical-security-tab="sast" id="technicalSecurityNavButton"><span class="nav-symbol" aria-hidden="true">◇</span><span>Technische Sicherheit</span></button>
+            </div>
+            <div class="nav-module-children hidden" id="technicalSecurityNavChildren">
+              <button class="nav-item nav-module-route" type="button" data-view="technicalSecurity" data-technical-security-tab="sast" id="securitySastNavButton"><span>SAST-Bewertungen</span></button>
+              <button class="nav-item nav-module-route" type="button" data-view="technicalSecurity" data-technical-security-tab="security-audits" id="securityAuditsNavButton"><span>Security Audits</span></button>
             </div>
           </section>
         </nav>
@@ -1672,10 +1681,14 @@
 
         <section id="salesPriceLabelsView" class="view" aria-labelledby="salesPriceLabelsTitle"><header class="topbar"><div><span class="eyebrow">Verkauf · Präsentation</span><h1 id="salesPriceLabelsTitle">Preisschilder</h1><p class="subtitle">Artikelpreise übernehmen, Schilder gestalten und druckfertige PDFs erstellen.</p></div></header><div id="salesPriceLabelsWorkspace"></div></section>
         <section id="logisticsView" class="view" aria-labelledby="logisticsTitle"><header class="topbar"><div><span class="eyebrow">Logistik · Anlieferung</span><h1 id="logisticsTitle">Logistik</h1><p class="subtitle">Einkauf, Bestellungen und gespeicherte Lieferstände.</p></div></header><div id="logisticsWorkspaceHost"></div><div id="tradeOrdersWorkspace" class="hidden"></div></section>
+        <section id="technicalSecurityView" class="view" aria-labelledby="technicalSecurityTitle">
+          <header class="topbar"><div><span class="eyebrow">Organisation</span><h1 id="technicalSecurityTitle">Technische Sicherheit</h1><p class="subtitle">Bewertungen, Nachweise und Maßnahmen im Blick behalten.</p></div></header>
+          <div id="securitySastWorkspaceHost" tabindex="-1"></div>
+          <div id="securityAuditsWorkspaceHost" class="hidden" tabindex="-1"></div>
+        </section>
         <section id="privacyOrganizationView" class="view" aria-labelledby="privacyOrganizationTitle">
           <header class="topbar privacy-org-page-header"><div class="privacy-org-page-title"><span class="privacy-org-page-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.2c0 4.5 3.1 7.8 7.5 9.8 4.4-2 7.5-5.3 7.5-9.8V6L12 3Z"/><path d="m8.5 12 2.3 2.3 4.7-4.7"/></svg></span><div><span class="eyebrow">Organisation</span><h1 id="privacyOrganizationTitle">Datenschutz</h1><p class="subtitle">Verarbeitungen, Risikoprüfungen und Vorfälle nachvollziehbar organisieren.</p></div></div></header>
           <div id="privacyOrganizationWorkspaceHost" tabindex="-1"></div>
-          <div id="securityAuditsWorkspaceHost" class="hidden" tabindex="-1"></div>
           <section class="card privacy-data-requests-section hidden" id="dataSubjectRequestsSection" aria-labelledby="dataSubjectRequestsTitle" tabindex="-1">
             <div class="employee-toolbar data-subject-request-toolbar">
               <div><h2 id="dataSubjectRequestsTitle">Datenanfragen</h2><p>Betroffenenanfragen mit Status und Frist nachvollziehbar bearbeiten. Die Oberfläche unterstützt die Prüfung, ersetzt aber keine rechtliche Einzelfallbewertung.</p></div>
@@ -4620,6 +4633,7 @@
     <script src="/sidebar-notepad.js"></script>
     <script src="/privacy-organization.js"></script>
     <script src="/security-audits.js"></script>
+    <script src="/security-sast.js"></script>
     <script src="/learning-library.js"></script>
     <script src="/learning-assessment.js"></script>
     <script src="/learning-team.js"></script>
