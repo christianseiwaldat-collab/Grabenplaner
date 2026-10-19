@@ -15,7 +15,7 @@ function seal(source, destination, publicKeyFile, metadata = {}) {
   let bytes = 0;
   // No source trees, package installations, credentials or runner environment.
   for (const name of fs.readdirSync(root).sort()) {
-    if (!/^(?:[a-z][a-z0-9.-]*\.json|semgrep-version\.stdout)$/.test(name)) continue;
+    if (!/^(?:[a-z][a-z0-9._-]*\.json|semgrep-version\.stdout)$/.test(name)) continue;
     const file = path.join(root, name), stat = fs.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink()) throw Error('Unexpected evidence file type');
     bytes += stat.size;
@@ -24,6 +24,12 @@ function seal(source, destination, publicKeyFile, metadata = {}) {
     files.push({ name, sha256: hash(content), content: content.toString('base64') });
   }
   if (!files.some(file => file.name === 'gate-result.json')) throw Error('The scanner receipt is missing');
+  const receipt = JSON.parse(Buffer.from(files.find(file => file.name === 'gate-result.json').content, 'base64'));
+  for (const command of receipt.commands || []) {
+    if (!/^semgrep-(?:common|express|script_tag|express_property|express_response)$/.test(command.label || '')) continue;
+    const name = 'sast-' + command.label.slice('semgrep-'.length) + '.json';
+    if (!files.some(file => file.name === name)) throw Error('A recorded SAST profile result is missing from the archive');
+  }
   const plaintext = zlib.gzipSync(Buffer.from(JSON.stringify({ metadata, files })));
   const dataKey = crypto.randomBytes(32), iv = crypto.randomBytes(12);
   const header = { format: FORMAT, recipientSha256: keySha256 };

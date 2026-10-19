@@ -12,6 +12,7 @@
   function filtered(reviews, deadline, source, pending) {
     return (reviews || []).filter(row => (!deadline || row.deadlineState === deadline) && (!source || row.sourceState === source) && (!pending || row.requiresReview));
   }
+  const searchText = row => [row.rule, row.path, row.reason, row.reviewer, row.fingerprint].join(' ');
   function detailMarkup(row) {
     const fields = [['Regel', row.rule], ['Fundstelle', `${row.path}:${row.start?.line}:${row.start?.column}`], ['Einordnung', 'Geprüfter Fehlalarm'],
       ['Priorität', row.priority], ['Frist', DEADLINES[row.deadlineState]], ['Quellbindung', SOURCES[row.sourceState]],
@@ -41,7 +42,11 @@
       dialog.innerHTML = `<div class="privacy-org-dialog-shell"><div class="privacy-org-editor-heading"><div><span class="privacy-org-kicker">Technische Sicherheit</span><h2>SAST-Bewertung</h2></div><button type="button" class="privacy-org-close" data-sast-action="close" aria-label="Bewertung schließen">×</button></div><div class="privacy-org-editor-body">${detailMarkup(row)}</div><div class="privacy-org-editor-actions"><span>Änderungen benötigen Quellprüfung und erneuten Scan.</span><button type="button" class="secondary-button" data-sast-action="close">Schließen</button></div></div>`;
       dialog.hidden = false; dialog.showModal?.();
     }
-    function rows() { return filtered(payload?.reviews, deadline, source, pending); }
+    function rows(includeSearch = false) {
+      const result = filtered(payload?.reviews, deadline, source, pending);
+      const query = includeSearch ? (el('[data-sast-table] input[type="search"]')?.value || '').trim().toLocaleLowerCase('de-AT') : '';
+      return query ? result.filter(row => searchText(row).toLocaleLowerCase('de-AT').includes(query)) : result;
+    }
     function renderTable() {
       table?.destroy(); table = null;
       const target = el('[data-sast-table]'); if (!target) return;
@@ -49,7 +54,7 @@
       if (typeof factory !== 'function') { target.textContent = 'Die Tabellenansicht konnte nicht geladen werden.'; return; }
       table = factory({ host: target, tableId: 'security-sast-reviews', identity: () => JSON.stringify([user()?.accountId || '', user()?.employeeNumber || '']),
         canUse: () => active && current(), rows: rows(), label: 'SAST-Bewertungen', searchLabel: 'Regel, Datei oder Begründung suchen',
-        emptyText: 'Keine Bewertungen für diese Filter.', searchText: row => [row.rule, row.path, row.reason, row.reviewer, row.fingerprint].join(' '),
+        emptyText: 'Keine Bewertungen für diese Filter.', searchText,
         columns: [
           { id: 'rule', label: 'Regel / Bewertung', cell: (row, doc) => { const button = doc.createElement('button'); button.type = 'button'; button.className = 'security-audits-link'; button.textContent = row.rule; button.addEventListener('click', () => openDetail(row)); return button; } },
           { id: 'path', label: 'Datei', cell: row => `${row.path}:${row.start.line}` },
@@ -88,7 +93,7 @@
     }
     function exportReview() {
       if (!active || !current() || !payload) return;
-      const document = host.ownerDocument, blob = new Blob([JSON.stringify({ schemaVersion: 1, kind: 'sast-review-worklist', exportedAt: new Date().toISOString(), policySha256: payload.policySha256, reviews: rows(), limits: payload.limits }, null, 2)], { type: 'application/json' });
+      const document = host.ownerDocument, blob = new Blob([JSON.stringify({ schemaVersion: 1, kind: 'sast-review-worklist', exportedAt: new Date().toISOString(), policySha256: payload.policySha256, reviews: rows(true), limits: payload.limits }, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'SAST-Pruefauftrag.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 0);
     }
     function click(event) { const action = event.target.closest('[data-sast-action]')?.dataset.sastAction; if (action === 'close') closeDetail(); else if (action === 'refresh') void load(); else if (action === 'export') exportReview(); }

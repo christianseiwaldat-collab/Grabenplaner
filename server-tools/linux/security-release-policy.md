@@ -7,8 +7,9 @@ USB-, Einzelplatz- und LAN-Pakete sind nicht Gegenstand dieser Richtlinie.
 
 ## Zuständigkeiten
 
-Für jedes Release und jeden betriebenen Server ist ein verantwortlicher Name
-mit Vertretung im privaten Freigabenachweis festzuhalten:
+Für jedes Release und jeden betriebenen Server ist eine eindeutig benannte Person
+(Name oder internes Personalkonto) mit Vertretung im privaten Freigabenachweis
+festzuhalten:
 
 | Rolle | Pflicht |
 | --- | --- |

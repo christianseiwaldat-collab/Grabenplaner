@@ -39,6 +39,21 @@ for (const width of [1440, 390]) test(`SAST reviews ${width}px: details, filters
     assert.equal(exported.policySha256, 'c'.repeat(64));
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'The table scrolls within its container');
     await page.screenshot({ path: path.join(screenshotDirectory(), `sast-reviews-${width}.png`), fullPage: true });
+    await page.locator('[data-sast-filter="pending"]').uncheck();
+    await page.evaluate(() => {
+      const base = payload.reviews[0];
+      payload.reviews = Array.from({ length: 3000 }, (_, index) => ({ ...base, path: `public/synthetic-${index}.js`, fingerprint: String(index).padStart(64, '0') }));
+      payload.summary = { ...payload.summary, total: 3000, expired: 0, sourceChanged: 0 };
+    });
+    await page.locator('[data-sast-action="refresh"]').click();
+    await page.waitForFunction(() => document.querySelectorAll('.security-audits-link').length === 3000);
+    await page.locator('[data-sast-table] input[type="search"]').fill('synthetic-2999.js');
+    assert.equal(await page.locator('.security-audits-link').count(), 1);
+    const selectedDownload = page.waitForEvent('download');
+    await page.locator('[data-sast-action="export"]').click();
+    const selectedExport = JSON.parse(fs.readFileSync(await (await selectedDownload).path()));
+    assert.equal(selectedExport.reviews.length, 1, 'Export must honor the visible text search as well as the explicit filters.');
+    assert.equal(selectedExport.reviews[0].path, 'public/synthetic-2999.js');
     await page.evaluate(() => { hold = true; document.querySelector('[data-sast-action="refresh"]').click(); });
     await page.waitForFunction(() => typeof release === 'function');
     await page.evaluate(() => { actor = { ...actor, employeeNumber: 'SYNTHETIC-B', accountId: 'B' }; release(); });

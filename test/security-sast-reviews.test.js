@@ -49,6 +49,30 @@ test('Policy loader distinguishes source checkout and shipped policy, and reject
   fs.mkdirSync(path.join(root, 'lib/security-audits')); fs.writeFileSync(path.join(root, 'lib/security-audits/sast-dispositions.json'), '{');
   assert.throws(() => readSastReviews(options), e => e.statusCode === 503);
 });
+
+test('Linux package builder ships the exact private review snapshot and refuses a missing source', {
+  skip: process.platform !== 'win32',
+}, t => {
+  const { root, policy, options } = fixture(t);
+  const sourceRoot = path.join(root, 'source'), buildRoot = path.join(root, 'package');
+  for (const directory of ['source/scripts/security', 'package/lib/security-audits']) fs.mkdirSync(path.join(root, directory), { recursive: true });
+  fs.writeFileSync(path.join(sourceRoot, 'scripts/security/sast-dispositions.json'), JSON.stringify(policy));
+  fs.writeFileSync(path.join(buildRoot, 'lib/security-sast-reviews.js'), '// Synthetic package marker\n');
+  fs.copyFileSync(path.join(root, 'lib/fixture.js'), path.join(buildRoot, 'lib/fixture.js'));
+  const builder = fs.readFileSync(path.join(__dirname, '../server-tools/package/New-GrabenplanerLinuxServerPackage.ps1'), 'utf8');
+  const copy = builder.match(/^    if \(Test-Path -LiteralPath \(Join-Path \$buildRoot 'lib\\security-sast-reviews\.js'\)\) \{[\s\S]*?^    \}/m)?.[0];
+  assert.ok(copy, 'The production builder must carry its private review snapshot.');
+  assert.ok(builder.indexOf(copy) < builder.indexOf('$inventoryCli generate --mode source'));
+  const quote = value => "'" + value.replace(/'/g, "''") + "'";
+  const script = `$ErrorActionPreference = 'Stop'\n$sourceRoot = ${quote(sourceRoot)}\n$buildRoot = ${quote(buildRoot)}\n${copy}`;
+  const run = () => require('node:child_process').spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+  const result = run(); assert.equal(result.status, 0, result.stderr);
+  assert.equal(readSastReviews({ ...options, root: buildRoot }).summary.requiresReview, 0);
+  assert.deepEqual(fs.readFileSync(path.join(buildRoot, 'lib/security-audits/sast-dispositions.json')), fs.readFileSync(path.join(sourceRoot, 'scripts/security/sast-dispositions.json')));
+  assert.equal(fs.existsSync(path.join(buildRoot, 'public/sast-dispositions.json')), false);
+  fs.unlinkSync(path.join(sourceRoot, 'scripts/security/sast-dispositions.json'));
+  assert.notEqual(run().status, 0, 'A stale copied file must not hide a missing policy source.');
+});
 test('Hostile SAST text is escaped; filters keep expired and changed entries distinguishable', t => {
   const { row } = fixture(t); const hostile = '<img src=x onerror=alert(1)>';
   const html = UI.detailMarkup({ ...row, reason: hostile, reviewer: hostile, context: [{ path: hostile, reason: hostile }] });
