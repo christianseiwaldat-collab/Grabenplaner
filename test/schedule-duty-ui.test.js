@@ -63,6 +63,7 @@ function fixture() {
   };
   vm.createContext(sandbox);
   vm.runInContext([
+    between("function safeCssColor(", "function contrastColor("),
     "let shiftMutation=null, shiftEditorGeneration=0, shiftRulePreviewTimer=null, shiftRulePreviewRequest=null;",
     between("function departmentsForLocation(", "function currentLocation("),
     between("function currentShiftDuty()", "function scheduleShiftRulePreview()"),

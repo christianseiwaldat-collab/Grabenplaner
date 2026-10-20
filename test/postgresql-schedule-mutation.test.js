@@ -1,4 +1,5 @@
 'use strict';
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -75,7 +76,6 @@ test('native PostgreSQL: shift preview and mutations keep HTTP authority, fresh 
     return Object.freeze({ ...app, readSnapshot: work => { snapshots++; return app.readSnapshot(work); } });
   };
   const tokens = Object.fromEntries(['00001', '00002', '00003'].map(id => [id, crypto.randomBytes(32).toString('hex')]));
-  const csrf = crypto.randomBytes(24).toString('hex');
   const shift = {
     employeeNumber: 'perf-18', locationId: '18', departmentId: 1, dutyCode: 'department',
     date: '2032-01-05', startTime: '09:00', endTime: '13:00', area: 'Test', note: 'Synthetic mutation fixture',
@@ -92,8 +92,8 @@ test('native PostgreSQL: shift preview and mutations keep HTTP authority, fresh 
         WHERE NOT(n=18 AND d='2032-01-05'::date)`);
       await core.migrator.query('UPDATE gp.portal_users SET must_change_password=0');
       for (const [employee, token] of Object.entries(tokens)) {
-        await core.migrator.query(`INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at)
-          VALUES($1,$2,$3,'2099-01-01T00:00:00.000Z')`,
+        await core.migrator.query(`INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at,authenticated_at,absolute_expires_at)
+          VALUES($1,$2,$3,'2099-01-01T00:00:00.000Z',to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),to_char((clock_timestamp() + interval '8 hours') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))`,
         [crypto.randomUUID(), employee, crypto.createHash('sha256').update(token).digest('hex')]);
       }
     });
@@ -113,6 +113,7 @@ test('native PostgreSQL: shift preview and mutations keep HTTP authority, fresh 
       if (revokeAuthority) headers['X-GP-Native-Revocation'] = revocationMarker;
       if (actor) headers.Cookie = 'grabenplaner_session=' + tokens[actor];
       if (withCsrf) {
+        const csrf = actor ? sessionCsrf(tokens[actor]) : 'anonymous-test-token';
         headers.Cookie = (headers.Cookie ? headers.Cookie + '; ' : '') + 'grabenplaner_csrf=' + csrf;
         headers['X-CSRF-Token'] = csrf;
       }
@@ -197,8 +198,8 @@ test('native PostgreSQL: shift preview and mutations keep HTTP authority, fresh 
       // Normal login replaces the previous fixture session. Use a new real
       // session so the remaining check still exercises mid-request revocation.
       tokens['00001'] = crypto.randomBytes(32).toString('hex');
-      await ownerWrite(() => core.migrator.query(`INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at)
-        VALUES($1,'00001',$2,'2099-01-01T00:00:00.000Z')`,
+      await ownerWrite(() => core.migrator.query(`INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at,authenticated_at,absolute_expires_at)
+        VALUES($1,'00001',$2,'2099-01-01T00:00:00.000Z',to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),to_char((clock_timestamp() + interval '8 hours') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))`,
       [crypto.randomUUID(), crypto.createHash('sha256').update(tokens['00001']).digest('hex')]));
       await canonical(-1, null, 'browser-cleanup-refresh');
     }

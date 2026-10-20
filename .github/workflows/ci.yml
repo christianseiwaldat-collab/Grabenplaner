@@ -37,6 +37,7 @@ jobs:
 
   postgresql-provider-development-contract:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/grabenplaner_test
       TEST_POSTGRESQL_BIN: /usr/lib/postgresql/18/bin
@@ -106,10 +107,11 @@ jobs:
           test/v087-database-block6-postgresql-tools.test.js
           test/v087-database-block6-recovery-assurance.test.js
           test/v087-database-block6-no-cutover.test.js
-      - name: Native two-database workflow checks
-        run: node test-support/postgresql-migration/ci-stock-import-delete.js
+      - name: Full application suite with native PostgreSQL fixtures
+        run: node test-support/postgresql-migration/ci-stock-import-delete.js --full
 
   test:
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -131,6 +133,7 @@ jobs:
       - if: runner.os == 'Linux'
         name: Linux server scripts syntax
         run: find server-tools/linux -type f \( -name '*.sh' -o -name '*.sh.in' \) -print0 | xargs -0 -n1 bash -n
-      - run: pnpm test
+      - name: Full application suite with SQLite fixtures
+        run: node --test --test-concurrency=1 --test-reporter=tap --test-timeout=180000
       - name: Reboot module maintenance rollback (isolated temporary files)
         run: sudo python3 test/reboot-module-maintenance.test.py

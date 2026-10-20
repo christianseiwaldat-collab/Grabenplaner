@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrfFromCookie } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -66,8 +67,8 @@ function insertPortalUser(employeeNumber, role) {
 function session(employeeNumber) {
   const token = crypto.randomBytes(32).toString("hex");
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(
     crypto.randomUUID(),
     employeeNumber,
@@ -87,7 +88,7 @@ async function request(route, cookie = "") {
 }
 
 async function mutate(route, cookie, body) {
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrfFromCookie(cookie);
   const response = await fetch(`${baseUrl}${route}`, {
     method: "POST",
     headers: {
@@ -105,7 +106,7 @@ async function mutate(route, cookie, body) {
 }
 
 async function mutateWithMethod(route, cookie, body, method = "PUT") {
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrfFromCookie(cookie);
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers: {

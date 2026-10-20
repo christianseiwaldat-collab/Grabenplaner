@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf, sessionCsrfFromCookie } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -39,8 +40,8 @@ let baseUrl;
 function createSession(employeeNumber = EMPLOYEE_NUMBER) {
   const token = crypto.randomBytes(32).toString("hex");
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(
     crypto.randomUUID(),
     employeeNumber,
@@ -97,10 +98,11 @@ async function requestMutationJson(route, {
   employeeNumber = EMPLOYEE_NUMBER,
   csrfHeader,
 } = {}) {
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const cookie = createSession(employeeNumber);
+  const csrf = sessionCsrfFromCookie(cookie);
   const headers = {
     Accept: "application/json",
-    Cookie: `${createSession(employeeNumber)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
+    Cookie: `${cookie}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
   };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (includeCsrf && !["GET", "HEAD"].includes(method)) headers["X-CSRF-Token"] = csrfHeader === undefined ? csrf : csrfHeader;
@@ -419,11 +421,11 @@ test('Filialansicht speichert pro persönlichem Lesekonto und hält andere Präf
 test('Filialpräferenzen sperren fehlende, widerrufene und eingeschränkte Sitzungen und behandeln beschädigte Werte',async()=>{
   const model=require('../public/sales-article-detail-preferences'),route='/api/sales/articles/detail-preferences';
   assert.equal((await fetch(baseUrl+route)).status,401);
-  const accountId=crypto.randomUUID(),token=crypto.randomBytes(32).toString('hex'),csrf=crypto.randomBytes(24).toString('hex');
+  const accountId=crypto.randomUUID(),token=crypto.randomBytes(32).toString('hex'),csrf=sessionCsrf(token);
   db.prepare(`INSERT INTO portal_organization_accounts (id, login_name, display_name, account_type, password_hash, active,
     must_change_password, created_by, updated_by) VALUES (?, ?, 'Synthetic branch preferences', 'branch', 'test-only', 1, 0, 'test', 'test')`)
     .run(accountId,'stock-pref-'+accountId.slice(0,8));
-  db.prepare("INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')")
+  db.prepare("INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at, authenticated_at, absolute_expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(crypto.randomUUID(),accountId,crypto.createHash('sha256').update(token).digest('hex'));
   const organizationHeaders={Cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,'X-CSRF-Token':csrf,'Content-Type':'application/json'};
   assert.equal((await fetch(baseUrl+route,{headers:organizationHeaders})).status,403);
@@ -948,9 +950,10 @@ test('Eigene Bilder folgen echten Portalrechten und bleiben nach Artikelbearbeit
   assert.equal(created.payload.article.image.present, false);
   const input = await require('sharp')({ create: { width: 32, height: 16, channels: 3, background: '#287c64' } }).png().toBuffer();
   const upload = async (csrf = true) => {
-    const token = crypto.randomBytes(24).toString('hex');
+    const cookie = createSession();
+    const token = sessionCsrfFromCookie(cookie);
     return fetch(`${baseUrl}/api/sales/articles/image?articleNumber=${articleNumber}`, { method: 'PUT', body: input, headers: {
-      'Content-Type': 'image/png', Cookie: `${createSession()}; grabenplaner_csrf=${token}`,
+      'Content-Type': 'image/png', Cookie: `${cookie}; grabenplaner_csrf=${token}`,
       'X-Article-Image-Revision': 'none', ...(csrf ? { 'X-CSRF-Token': token } : {}),
     } });
   };

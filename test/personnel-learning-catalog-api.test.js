@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -72,10 +73,10 @@ function employee(personnelNumber, name, role, locationId, departmentId = null) 
 
 function session(employeeNumber) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(
     crypto.randomUUID(),
     employeeNumber,
@@ -105,8 +106,10 @@ async function request(route, {
   auth = null,
   body,
   csrfToken = undefined,
+  userActivity = false,
 } = {}) {
   const headers = { Accept: "application/json" };
+  if (userActivity) headers["X-GP-User-Activity"] = "1";
   if (auth) headers.Cookie = auth.cookie;
   if (auth && !["GET", "HEAD"].includes(method) && csrfToken !== null) {
     headers["X-CSRF-Token"] = csrfToken === undefined ? auth.csrf : String(csrfToken);
@@ -1944,7 +1947,7 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
   try {
     disabledDuringRequest = await request(
       `/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignmentId)}/progress`,
-      { method: "PUT", auth: branch, body: securityMutationBody },
+      { method: "PUT", auth: branch, body: securityMutationBody, userActivity: true },
     );
   } finally {
     db.exec("DROP TRIGGER test_block8_learning_branch_live_account");
@@ -1973,7 +1976,7 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
   try {
     scopeRemovedDuringRequest = await request(
       `/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignmentId)}/progress`,
-      { method: "PUT", auth: branch, body: securityMutationBody },
+      { method: "PUT", auth: branch, body: securityMutationBody, userActivity: true },
     );
   } finally {
     db.exec("DROP TRIGGER test_block8_learning_branch_live_scope");

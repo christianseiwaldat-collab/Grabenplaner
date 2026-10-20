@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test"), assert = require("node:assert/strict"), crypto = require("node:crypto");
 const fs = require("node:fs"), path = require("node:path"), os = require("node:os");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-assistant-management-"));
@@ -10,8 +11,8 @@ const LOCATION = "97", OTHER = "98", DEV = "assistant-developer", MANAGER = "ass
 const VOICE = "/api/portal/v1/developer/voice-assistants", WEEK = "2031-04-07";
 const sessions = new Map(); let server, origin, department;
 function auth(id) {
-  const token = crypto.randomBytes(24).toString("hex"), csrf = crypto.randomBytes(24).toString("hex");
-  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES(?,?,?,'2099-01-01T00:00:00Z')").run(crypto.randomUUID(), id, crypto.createHash("sha256").update(token).digest("hex"));
+  const token = crypto.randomBytes(24).toString("hex"), csrf = sessionCsrf(token);
+  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,?,?,'2099-01-01T00:00:00Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(crypto.randomUUID(), id, crypto.createHash("sha256").update(token).digest("hex"));
   return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }
 async function api(route, { actor = DEV, method = "GET", body, csrf = true } = {}) {

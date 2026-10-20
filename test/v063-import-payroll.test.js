@@ -434,8 +434,8 @@ test("Live-Entzug von employees:import stoppt die vorbereitete Mutation atomar",
   `).run(employeeNumber);
   const targetSessionId = crypto.randomUUID();
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(targetSessionId, employeeNumber, crypto.createHash("sha256").update(targetSessionId).digest("hex"));
 
   const hr = session("103", "hr");
@@ -791,8 +791,8 @@ test("Learning-Organisationsscope ist im Personalimport vorgeprueft und live geg
 
     const targetSessionId = crypto.randomUUID();
     db.prepare(`
-      INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-      VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+      INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+      VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
     `).run(targetSessionId, employeeNumber, crypto.createHash("sha256").update(targetSessionId).digest("hex"));
     const auditBefore = db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count;
     const runsBefore = db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count;

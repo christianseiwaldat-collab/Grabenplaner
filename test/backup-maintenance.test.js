@@ -57,11 +57,12 @@ test("updater-owned shutdown still drains work and closes persistence before rel
   const start = source.indexOf("function shutdown("), end = source.indexOf("if (require.main === module)", start);
   for (const assuranceFirst of [false, true]) {
   const events = [];
-  let finishScanner, finishAssurance, finishUpdates, finishHealth;
+  let finishScanner, finishAssurance, finishUpdates, finishPlanning, finishHealth;
   const amuScannerProbe = new Promise(resolve => { finishScanner = resolve; });
   const assuranceDrain = new Promise(resolve => { finishAssurance = resolve; });
   const updateDrain = new Promise(resolve => { finishUpdates = resolve; });
   const healthDrain = new Promise(resolve => { finishHealth = resolve; });
+  const planningDrain = new Promise(resolve => { finishPlanning = resolve; });
   const dependencies = { postgresqlActive: false, shutdownStarted: false, server: null, databaseClosed: false,
     amuScannerProbe,
     dataImportJobs: { stop: async () => events.push("imports-stop") },
@@ -69,6 +70,7 @@ test("updater-owned shutdown still drains work and closes persistence before rel
     recoveryAssuranceStatusReader: { close: () => { events.push("assurance-stop"); return assuranceDrain; } },
     updateRequestLifecycle: { close: () => { events.push("updates-stop"); return updateDrain; } },
     systemCenterHealthSyncInFlight: healthDrain,
+    planningDerivedRefresh: { close: () => { events.push("planning-stop"); return planningDrain; } },
     tradeInsightJobs: { stop: async () => events.push("trade-insights-stop") },
     salesReportJobs: { stop: async () => events.push("reports-stop") },
     postgresqlReceiptWorkers: {close:async()=>events.push('receipt-workers-stop')},
@@ -90,6 +92,10 @@ test("updater-owned shutdown still drains work and closes persistence before rel
   (assuranceFirst ? finishScanner : finishAssurance)(); await new Promise(setImmediate);
   assert.deepEqual(events, stoppedReaders, "an update request still owns work");
   finishUpdates(); await new Promise(setImmediate);
+  stoppedReaders.push("planning-stop");
+  assert.deepEqual(events, stoppedReaders, "derived planning writes must finish before persistence cleanup");
+  assert.equal(dependencies.databaseClosed, false);
+  finishPlanning(); await new Promise(setImmediate);
   assert.deepEqual(events, stoppedReaders, "System-Center may still write its completed health state");
   assert.equal(dependencies.databaseClosed, false);
   finishHealth(); await new Promise(setImmediate);

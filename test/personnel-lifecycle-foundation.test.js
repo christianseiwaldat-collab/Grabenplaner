@@ -88,7 +88,8 @@ test("Personalmodul-Fundament: M5- und O8-Ansichten kommunizieren ihre Wirkungsg
   assert.match(workflowSection, /personnelWorkflowInstanceWorkspace/);
   assert.match(workflowSection, /personnelWorkflowInstanceList/);
   const taskSection = between(html, 'id="personnelTasksSection"', "</section>");
-  assert.match(taskSection, /Datensparsame Projektion/);
+  assert.match(taskSection, /Dein freigegebener Bereich/);
+  assert.match(taskSection, /aria-label="Aufgaben im freigegebenen Bereich"/);
   assert.match(taskSection, /personnelWorkflowTaskList/);
   assert.doesNotMatch(`${workflowSection}\n${taskSection}`, /Prozess starten|Workflow starten|Aufgabe abschließen/);
   const candidateSection = between(html, 'id="candidatePreboardingSection"', "</section>");

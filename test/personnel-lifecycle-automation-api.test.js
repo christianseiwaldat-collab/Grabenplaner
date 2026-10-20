@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -126,7 +127,7 @@ function insertEmployee(employeeNumber, fullName) {
 
 function createEmployeeSession(employeeNumber, role) {
   const rawToken = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(rawToken);
   db.prepare(`
     INSERT INTO portal_users (
       employee_number, password_hash, role, role_locked, active,
@@ -134,8 +135,8 @@ function createEmployeeSession(employeeNumber, role) {
     ) VALUES (?, 'test-only', ?, 0, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
   `).run(employeeNumber, role);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, sha256(rawToken));
   return Object.freeze({
     cookie: `grabenplaner_session=${rawToken}; grabenplaner_csrf=${csrf}`,
@@ -160,8 +161,8 @@ function createOrganizationSession() {
     `).run(accountId, permission);
   }
   db.prepare(`
-    INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), accountId, sha256(rawToken));
   return Object.freeze({ cookie: `grabenplaner_session=${rawToken}` });
 }

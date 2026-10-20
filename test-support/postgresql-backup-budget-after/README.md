@@ -7,3 +7,8 @@ The frozen `lib/persistence/sqlite/data-import-catalog.js` and `lib/persistence/
 The twelve fixtures added after the stock-snapshot and nightly-deploy changes are exact Git blobs from `e4cf9fde0ab91ec459ada98d3223b1f561587c19`: PostgreSQL `sales/import-delete.js` and `sales/layout.js`; SQLite `branch-article-stock-catalog.js`, `import-history-catalog.js`, `operations/import-history-schema.js`, `sales-article-workspace-catalog.js` and `trade-insights-catalog.js`; statements `branch-article-stock.js` and `trade-insights.js`; `lib/tradefoto-full-import-source.js`, `lib/tradefoto-history-profiles.js` and `server-tools/linux/lib/common.sh`. Every blob matches its existing `after` pin. The 240 predecessor and 244 candidate file selections were checked against the complete unchanged contract; the existing `before` fixtures still supply differing predecessor bytes.
 
 Only modules that have since changed are duplicated here. The existing `before` fixture and the unchanged pinned dependency files complete the isolated trees. The test verifies every assembled file against the original before/after contract before exercising the bridge. These text files are test data, never product modules or an expanded release bridge. Future incompatible source changes need their original pinned text fixture rather than new bridge pins.
+
+The session-security and dependency updates also changed ten formerly shared
+files. Their frozen Git blobs are recorded in `session-security-source-pins.json`.
+Each normalized SHA-256 still matches the existing bridge contract. The original
+version, dependency, complete-tree, and rejection checks remain unchanged.

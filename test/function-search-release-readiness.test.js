@@ -35,7 +35,7 @@ const RIGHTS_WINDOW_CASES = Object.freeze([
   { id: "settings.personnel-field-rights", gateId: "openPersonnelFieldRightsWindowButton", focusId: "personnelFieldRightsWindow" },
 ]);
 const VPS_STORAGE_GATE_IDS = Object.freeze(["vpsStorageSettingsCard", "openVpsStorage"]);
-const SECURITY_AUDIT_GATE_IDS = Object.freeze(["securityAuditsNavButton"]);
+const SECURITY_AUDIT_GATE_IDS = Object.freeze(["securityAuditsNavButton", "securitySastNavButton"]);
 
 const FEATURE_CASES = Object.freeze([
   {

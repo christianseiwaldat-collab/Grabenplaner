@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -83,11 +84,11 @@ function employee(personnelNumber, fullName, role, locationId, departmentId = nu
 
 function session(employeeNumber) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   const id = crypto.randomUUID();
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(id, employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     id,
@@ -119,6 +120,7 @@ function mobileSession(employeeNumber) {
 
 async function request(route, { method = "GET", auth = null, body } = {}) {
   const headers = { Accept: "application/json" };
+  if (auth?.userActivity) headers["X-GP-User-Activity"] = "1";
   if (auth) headers.Cookie = auth.cookie;
   if (auth && !["GET", "HEAD"].includes(method)) headers["X-CSRF-Token"] = auth.csrf;
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -434,6 +436,8 @@ function sqliteText(value) {
 }
 
 function installSessionTouchRaceMutation(auth, statements) {
+  const previousActivity = auth.userActivity;
+  auth.userActivity = true;
   const triggerName = `test_learning_actor_race_${crypto.randomBytes(8).toString("hex")}`;
   // Force renewal: ordinary requests deliberately coalesce expiry writes.
   db.prepare("UPDATE portal_sessions SET expires_at = ? WHERE id = ?")
@@ -449,6 +453,7 @@ function installSessionTouchRaceMutation(auth, statements) {
     END
   `);
   return () => {
+    auth.userActivity = previousActivity;
     const fired = db.prepare(`SELECT COUNT(*) AS count FROM ${triggerName}_proof`).get().count;
     db.exec(`DROP TRIGGER IF EXISTS ${triggerName}; DROP TABLE ${triggerName}_proof`);
     assert.ok(fired > 0, "The concurrent actor mutation must actually execute");

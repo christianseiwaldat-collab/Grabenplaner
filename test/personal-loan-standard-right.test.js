@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -17,8 +18,8 @@ const USE = "loans:self:use";
 let server, base, local;
 const roleByNumber = { "loan-ma":"employee", "loan-other":"employee", "loan-fl":"manager", "loan-al":"department_manager", "loan-hr":"hr" };
 function auth(number) {
-  const token = crypto.randomBytes(32).toString("hex"), csrf = crypto.randomBytes(24).toString("hex"), id=crypto.randomUUID();
-  db.prepare("INSERT INTO portal_sessions (id,employee_number,token_hash,expires_at) VALUES (?,?,?,'2099-01-01T00:00:00.000Z')")
+  const token = crypto.randomBytes(32).toString("hex"), csrf = sessionCsrf(token), id=crypto.randomUUID();
+  db.prepare("INSERT INTO portal_sessions (id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES (?,?,?,'2099-01-01T00:00:00.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(id,number,crypto.createHash("sha256").update(token).digest("hex"));
   return {id,csrf,cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`};
 }

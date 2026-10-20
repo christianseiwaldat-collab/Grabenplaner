@@ -1,4 +1,5 @@
 'use strict';
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), crypto = require('node:crypto');
 const start = require('../public/start-dashboard-workspace-preferences');
@@ -12,12 +13,12 @@ const {app, db, releaseInstanceLockForTests} = require('../server');
 const route = '/api/portal/v1/ui-preferences';
 let httpServer, baseUrl, accountA, accountB;
 function session(employeeNumber) {
-  const token = 'dashboard-' + crypto.randomBytes(24).toString('hex'), csrf = crypto.randomBytes(24).toString('hex');
+  const token = 'dashboard-' + crypto.randomBytes(24).toString('hex'), csrf = sessionCsrf(token);
   db.prepare(`INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
     VALUES (?, 'test-only', 'admin', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     ON CONFLICT(employee_number) DO UPDATE SET active=1, must_change_password=0`).run(employeeNumber);
-  db.prepare(`INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')`).run(crypto.randomUUID(), employeeNumber, crypto.createHash('sha256').update(token).digest('hex'));
+  db.prepare(`INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))`).run(crypto.randomUUID(), employeeNumber, crypto.createHash('sha256').update(token).digest('hex'));
   return {cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf};
 }
 async function request({method='GET', session:actor, body, csrf=true}={}) {

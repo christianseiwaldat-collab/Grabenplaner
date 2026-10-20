@@ -9,7 +9,7 @@ test('actual rawApi old401 detail cannot end a newly authenticated same-actor se
  vm.runInContext(functionSource('csrfHeader')+functionSource('rawApi'),context);
  const old=context.rawApi('/api/synthetic/private-read');await turn();
  state.portalSession=null;state.portalSession={authenticated:true,user:{employeeNumber:'SYNTHETIC-A'}};const fresh=state.portalSession;
- details.shift()({message:'expired',code:'EXPIRED'});await assert.rejects(old,e=>e.status===401&&e.code==='EXPIRED');assert.equal(logins,0,'old async401 must not expire new same-actor login');assert.equal(state.portalSession,fresh);
+ details.shift()({message:'expired',code:'EXPIRED'});await assert.rejects(old,e=>e.code==='PORTAL_SESSION_CHANGED');assert.equal(logins,0,'old async401 must not expire new same-actor login');assert.equal(state.portalSession,fresh);
  const current=context.rawApi('/api/synthetic/current-read');await turn();details.shift()({message:'expired',code:'EXPIRED'});await assert.rejects(current,e=>e.status===401);assert.equal(logins,1,'current401 must still open login');
 });
 test('actual rawApi forwards original raw response and current mutation CSRF/header behavior',async()=>{

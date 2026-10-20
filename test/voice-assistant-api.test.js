@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test"), assert = require("node:assert/strict"), crypto = require("node:crypto");
 const fs = require("node:fs"), path = require("node:path"), os = require("node:os");
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "gp-voice-api-"));
@@ -21,8 +22,8 @@ const subject = require("../server"), { app, db, releaseInstanceLockForTests } =
 const A = "voice-example-A", B = "voice-example-B", E = "voice-example-employee", LOCATION = "voice-example-branch", BASE = "/api/portal/v1/me/assistant";
 const sessions = new Map(); let server, origin;
 function authentication(number) {
-  const token = crypto.randomBytes(24).toString("hex"), csrf = crypto.randomBytes(24).toString("hex");
-  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES(?,?,?,'2099-01-01T00:00:00Z')")
+  const token = crypto.randomBytes(24).toString("hex"), csrf = sessionCsrf(token);
+  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,?,?,'2099-01-01T00:00:00Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(crypto.randomUUID(), number, crypto.createHash("sha256").update(token).digest("hex"));
   return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }
@@ -58,7 +59,7 @@ test.before(async () => {
   db.prepare("INSERT INTO portal_organization_accounts(id,login_name,display_name,account_type,password_hash,active,must_change_password,created_by,updated_by) VALUES('voice-org','voice-org','BEISPIEL Filialkonto','branch','test',1,0,?,?)").run(A, A);
   db.prepare("INSERT INTO portal_organization_account_scopes(account_id,location_id,department_id,assigned_by) VALUES('voice-org',?,0,?)").run(LOCATION, A);
   const organizationToken = crypto.randomBytes(24).toString("hex"), organizationCsrf = crypto.randomBytes(24).toString("hex");
-  db.prepare("INSERT INTO portal_organization_sessions(id,account_id,token_hash,expires_at) VALUES(?,'voice-org',?,'2099-01-01T00:00:00Z')")
+  db.prepare("INSERT INTO portal_organization_sessions(id,account_id,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,'voice-org',?,'2099-01-01T00:00:00Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(crypto.randomUUID(), crypto.createHash("sha256").update(organizationToken).digest("hex"));
   sessions.set("voice-org", { cookie: `grabenplaner_session=${organizationToken}; grabenplaner_csrf=${organizationCsrf}`, csrf: organizationCsrf });
   await new Promise(resolve => { server = app.listen(0, "127.0.0.1", resolve); }); origin = `http://127.0.0.1:${server.address().port}`;

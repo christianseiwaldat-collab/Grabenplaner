@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test"), assert = require("node:assert/strict"), crypto = require("node:crypto");
 const fs = require("node:fs"), path = require("node:path"), os = require("node:os");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-optimizer-"));
@@ -22,8 +23,8 @@ test.before(async () => {
   for (const [id, role] of [[DEV, "developer"], [MANAGER, "manager"], [STAFF, "employee"]]) {
     db.prepare("INSERT INTO employees(personnel_number,full_name,nickname,home_location_id,cost_center_id,position_id,contracted_hours,active) VALUES(?,?,?,?,?,'verkaufsmitarbeiter',4,1)").run(id, "BEISPIEL " + id, "BEISPIEL " + id, LOCATION, LOCATION);
     db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,role_locked,active,must_change_password,password_changed_at) VALUES(?,'test',?,1,1,0,CURRENT_TIMESTAMP)").run(id, role);
-    const token = crypto.randomBytes(24).toString("hex"), csrf = crypto.randomBytes(24).toString("hex");
-    db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES(?,?,?,'2099-01-01T00:00:00Z')").run(crypto.randomUUID(), id, crypto.createHash("sha256").update(token).digest("hex"));
+    const token = crypto.randomBytes(24).toString("hex"), csrf = sessionCsrf(token);
+    db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,?,?,'2099-01-01T00:00:00Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(crypto.randomUUID(), id, crypto.createHash("sha256").update(token).digest("hex"));
     sessions.set(id, { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf });
   }
   db.prepare("INSERT INTO shifts(employee_number,location_id,shift_date,start_time,end_time,duty_code) VALUES(?,?,?,'09:00','13:00','general')").run(STAFF, LOCATION, WEEK);

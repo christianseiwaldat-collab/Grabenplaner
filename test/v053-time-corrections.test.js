@@ -130,6 +130,7 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
       body: { currentPassword, newPassword },
     });
     assert.equal(response.status, 200, JSON.stringify(payload));
+    Object.assign(session, sessionHeaders(response));
   }
 
   async function configureUser(employeeNumber, role, password) {
@@ -147,10 +148,10 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
 
     const setup = await requestJson(baseUrl, "/api/portal/v1/setup/admin", {
       method: "POST",
-      body: { employeeNumber: "101", password: "987654" },
+      body: { employeeNumber: "101", password: "Synthetic-Time-987654!" },
     });
     assert.equal(setup.response.status, 201, JSON.stringify(setup.payload));
-    admin = await login("101", "987654");
+    admin = await login("101", "Synthetic-Time-987654!");
 
     const locations = await requestJson(baseUrl, "/api/locations", { session: admin });
     assert.equal(locations.response.status, 200, JSON.stringify(locations.payload));
@@ -185,9 +186,9 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
       fixtureDb.close();
     }
 
-    await configureUser("102", "employee", "654321");
-    await configureUser("104", "manager", "445566");
-    await configureUser("105", "employee", "556677");
+    await configureUser("102", "employee", "Synthetic-Time-654321!");
+    await configureUser("104", "manager", "Synthetic-Time-445566!");
+    await configureUser("105", "employee", "Synthetic-Time-556677!");
     const managerScope = await requestJson(baseUrl, "/api/portal/v1/users/104/scopes", {
       method: "PUT",
       session: admin,
@@ -195,12 +196,12 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
     });
     assert.equal(managerScope.response.status, 200, JSON.stringify(managerScope.payload));
 
-    const employee = await login("102", "654321");
-    await changePassword(employee, "654321", "123456");
-    const manager = await login("104", "445566");
-    await changePassword(manager, "445566", "665544");
-    const remoteEmployee = await login("105", "556677");
-    await changePassword(remoteEmployee, "556677", "776655");
+    const employee = await login("102", "Synthetic-Time-654321!");
+    await changePassword(employee, "Synthetic-Time-654321!", "Synthetic-Time-123456!");
+    const manager = await login("104", "Synthetic-Time-445566!");
+    await changePassword(manager, "Synthetic-Time-445566!", "Synthetic-Time-665544!");
+    const remoteEmployee = await login("105", "Synthetic-Time-556677!");
+    await changePassword(remoteEmployee, "Synthetic-Time-556677!", "Synthetic-Time-776655!");
 
     const dataDb = new DatabaseSync(databasePath);
     dataDb.exec("PRAGMA busy_timeout = 5000");

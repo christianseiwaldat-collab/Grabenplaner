@@ -176,8 +176,8 @@ test("v0.62: native Anmeldung liefert ausschließlich gehashte Gerätesitzungen 
 
   const portalToken = crypto.randomBytes(32).toString("base64url");
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(portalToken).digest("hex"));
   const cookieOnly = await request("/api/mobile/v1/bootstrap", { cookie: `grabenplaner_session=${portalToken}` });
   assert.equal(cookieOnly.response.status, 401, JSON.stringify(cookieOnly.payload));
