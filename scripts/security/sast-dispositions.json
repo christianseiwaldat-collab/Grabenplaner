@@ -37841,8 +37841,8 @@
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "The loaders map contains six local functions; data-learning-area is emitted only as static known values. Server or imported learning data does not supply this attribute. Calling inherited properties requires already modifying the DOM and does not establish a privilege boundary bypass. Reachability boundary: Client opens one of six learning areas defined in static index.html.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval; Codex source-context continuity review 2026-10-19 (automated; no human approval)",
-      "reviewedOn": "2026-10-19",
+      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval; Codex source-context continuity review 2026-10-19 (automated; no human approval); Codex release-context continuity review 2026-10-20 (automated; no human approval)",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -37856,12 +37856,12 @@
         },
         {
           "path": "public/index.html",
-          "sha256": "5de51c5b31da1b7d2545f1e1da1a9c0f9be0d8e45a87f9f397ad7e2dbcbd6fdd",
+          "sha256": "6d77f9e4284df221876f63891b7a97b2d136c1bd41843fbd9b1375f971ebc185",
           "sha256Variants": [
-            "5a517965bc32b0428c99d62b7add9e4caca1f3c657c2700ccd02146b1aed7c39",
-            "5de51c5b31da1b7d2545f1e1da1a9c0f9be0d8e45a87f9f397ad7e2dbcbd6fdd"
+            "6d77f9e4284df221876f63891b7a97b2d136c1bd41843fbd9b1375f971ebc185",
+            "b96ae21ceb505a373f04716a373619c896fb2623f8f65ae9c22467bb3cf01c73"
           ],
-          "reason": "Lines 1032: All six data-learning-area attributes are static checked-in values, not server/import data. Release 0.92.91 changes only the two version labels; all six attribute values and their surrounding markup are unchanged. Context continuity review 2026-10-19 (Codex, automated review; no human approval): Static navigation, section hosts and the fixed same-origin security-sast.js script reference changed. No inline script, untrusted interpolation or external source was added."
+          "reason": "Lines 1032: All six data-learning-area attributes are static checked-in values, not server/import data. Release 0.92.91 changes only the two version labels; all six attribute values and their surrounding markup are unchanged. Context continuity review 2026-10-19 (Codex, automated review; no human approval): Static navigation, section hosts and the fixed same-origin security-sast.js script reference changed. No inline script, untrusted interpolation or external source was added. Release 0.92.92 continuity review 2026-10-20 (Codex, automated; no human approval): comparison with the previously qualified b63774c source proves that exactly two version labels changed. The six static data-learning-area values, loader map, finding source, navigation and script references remain byte-identical."
         }
       ]
     },
