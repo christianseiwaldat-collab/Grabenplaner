@@ -19,6 +19,7 @@ test('Actual API keeps a fresh same-account session when an older 401 error deta
  vm.runInContext(functionSource('api'),ctx);
  const old=ctx.api('/api/portal/v1/workflow-studio/catalog');await turn();
  state.portalSession=null;state.portalSession={authenticated:true,user:{employeeNumber:'A'}};
- details.shift()({message:'expired',code:'EXPIRED'});await assert.rejects(old,error=>error.status===401);assert.equal(loginCalls,0);
+ const replacement=state.portalSession;
+ details.shift()({message:'expired',code:'EXPIRED'});await assert.rejects(old,error=>error.code==='PORTAL_SESSION_CHANGED');assert.equal(loginCalls,0);assert.equal(state.portalSession,replacement);
  const current=ctx.api('/api/portal/v1/workflow-studio/catalog');await turn();details.shift()({message:'expired',code:'EXPIRED'});await assert.rejects(current,error=>error.status===401);assert.equal(loginCalls,1);
 });

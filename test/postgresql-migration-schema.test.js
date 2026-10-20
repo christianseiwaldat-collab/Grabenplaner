@@ -22,7 +22,10 @@ test('Live Core schema and organization rules preserve the SQLite business const
     await verifyEnvironment(client,{purpose:'migrator'});
     const tables=(await client.query("SELECT tablename FROM pg_tables WHERE schemaname='gp'")).rows.map(r=>r.tablename);
     assert.ok(inventory.tables.filter(t=>t.database==='core').every(t=>tables.includes(t.name)));
-    assert.equal((await client.query("SELECT count(*)::integer n FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='gp' AND NOT t.tgisinternal")).rows[0].n,299);
+    const triggers=(await client.query("SELECT t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='gp' AND NOT t.tgisinternal")).rows;
+    const historicalTriggers=source.objects.filter(o=>o.type==='trigger'&&inventory.objects.some(i=>i.database==='core'&&i.name===o.name));
+    assert.equal(historicalTriggers.length,299);
+    assert.ok(historicalTriggers.every(t=>triggers.some(r=>r.tgname===identifier(t.name))), 'Every historical Core trigger remains installed alongside additive migrations');
     await client.query('BEGIN');await client.query('SET LOCAL ROLE gp_core_owner');await client.query('SET LOCAL search_path=pg_catalog,gp');
     const operations=[];
     const proxy={exec(sql){operations.push([sql,[]]);},prepare(sql){return{run(...params){operations.push([sql,params]);}};}};
@@ -106,7 +109,7 @@ test('Live migrations reject changed target rules and refuse to rebuild occupied
     await client.query('SET ROLE gp_core_owner');
     await client.query('ALTER TABLE gp.settings ADD CONSTRAINT development_drift_probe CHECK (true)');
     await client.query('RESET ROLE');
-    await assert.rejects(migrateCoreDevelopment(client),/target schema drift/);
+    await assert.rejects(migrateCoreDevelopment(client),/Core development schema contract mismatch/);
     await client.query('SET ROLE gp_core_owner');
     await client.query('ALTER TABLE gp.settings DROP CONSTRAINT development_drift_probe');
     await client.query("INSERT INTO gp.settings(key,value) VALUES ('migration-preserve-probe','keep-me')");

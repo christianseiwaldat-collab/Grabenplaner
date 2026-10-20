@@ -4,6 +4,10 @@ const {withCoreFixture}=require('../test-support/postgresql-migration/core-fixtu
 const {parameters}=require('../test-support/postgresql-migration/query-inputs');
 const {createCoreCatalog}=require('../lib/persistence/postgresql/core/catalog');
 const lock=require('../test-support/postgresql-migration-doc-fixtures/block-4-catalog.json');
+const reviewedExtensions=[
+  'vocational-school-catalog-v1.json','authentication-catalog-v1.json',
+  'session-security-catalog-v1.json','onboarding-json-catalog-v1.json',
+].flatMap(name=>require('../lib/persistence/postgresql/contracts/'+name).entries);
 const coreTables=new Set(require('../test-support/postgresql-migration-doc-fixtures/block-1-inventory.json').tables.filter(t=>t.database==='core').map(t=>t.name));
 test('Live entire Core read catalog executes with bound synthetic inputs and compares SQLite results',{skip:!process.env.GP_PG_MIGRATION_LIVE},async()=>withCoreFixture(async f=>{
   const catalog=createCoreCatalog(),reads=catalog.entries.filter(e=>e.statement.operation!=='execute');
@@ -11,7 +15,8 @@ test('Live entire Core read catalog executes with bound synthetic inputs and com
   async function run(){
     while(cursor<reads.length){
       const entry=reads[cursor++],id=entry.statement.id,contract=lock.entries.find(e=>e.statementId===id);
-      assert.equal(contract.sqlSha256,catalog.provenance.find(e=>e.statementId===id).sqlSha256);
+      const reviewed=reviewedExtensions.findLast(e=>e.statementId===id&&!e.added);
+      assert.equal(reviewed?.sqlSha256||contract.sqlSha256,catalog.provenance.find(e=>e.statementId===id).sqlSha256);
       const input=parameters(entry,contract.parameterTypes);
       const values=await Promise.allSettled([f.sqliteProvider[entry.statement.operation](entry.statement,input),f.postgres[entry.statement.operation](entry.statement,input)]);
       try {

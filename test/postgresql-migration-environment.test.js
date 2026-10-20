@@ -39,6 +39,15 @@ test('Live environment enforces bounded queries and recovers its connection afte
     await assert.rejects(pool.query('SELECT pg_sleep(2)'),{code:'57014'});
     assert.equal((await pool.query('SELECT 42 value')).rows[0].value,42);
     const session=(await pool.query("SELECT current_setting('listen_addresses') host,current_setting('max_connections') maximum,current_setting('shared_buffers') buffers")).rows[0];
-    assert.equal(session.host,'127.0.0.1');assert.equal(session.maximum,'20');assert.equal(session.buffers,'64MB');
+    if(process.env.GP_CI_POSTGRESQL_FIXTURE==='github-actions-service-v1'){
+      require('../test-support/postgresql-migration/ci-endpoint').assertSyntheticEndpoint(process.env.GP_CORE_APP_URL,'core',[]);
+      // Docker listens on its container interface; the workflow publishes only
+      // runner loopback. Application/reader role limits remain separately bounded.
+      assert.equal(session.host,'*');assert.equal(session.maximum,'100');assert.equal(session.buffers,'128MB');
+      const roles=(await pool.query("SELECT rolname,rolconnlimit FROM pg_roles WHERE rolname IN ('gp_core_app','gp_sales_app') ORDER BY rolname")).rows;
+      assert.deepEqual(roles,[{rolname:'gp_core_app',rolconnlimit:8},{rolname:'gp_sales_app',rolconnlimit:7}]);
+    }else{
+      assert.equal(session.host,'127.0.0.1');assert.equal(session.maximum,'20');assert.equal(session.buffers,'64MB');
+    }
   } finally {await pool.end();}
 });

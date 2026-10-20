@@ -600,13 +600,16 @@ test("Personalmodul R1: Repositories und Sessions liefern nur die vereinbarten A
     }]);
 
     application.database.prepare(`
-      INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-      VALUES ('session-r1', ?, 'token-r1', '2027-08-01T12:00:00.000Z')
+      INSERT INTO portal_sessions
+        (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+      VALUES ('session-r1', ?, 'token-r1', '2026-08-01T12:30:00.000Z',
+        '2026-08-01T12:00:00.000Z', '2026-08-01T20:00:00.000Z')
     `).run(fixture.employeeNumber);
     const session = await portalAccess.getEmployeeSessionByToken({
       tokenHash: "token-r1",
       now: "2026-08-01T12:00:00.000Z",
     });
+    assert.ok(session, "the access projection requires a valid bounded session");
     assert.deepEqual(session.permission_scopes, [{
       permission: "personnel:candidates:read",
       locationId: fixture.locationId,

@@ -74,7 +74,9 @@ function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout
       loginPassword: { value: "secret" },
       loginPersonnelNumber: { focus() { this.focused = true; } },
     },
-    window: { setTimeout: timerImplementation, clearTimeout },
+    window: { setTimeout: timerImplementation, clearTimeout,
+      GrabenplanerSessionLifecycle: { credentials: operation => operation(), advance() {}, publish() {} },
+    },
     api: async (...args) => {
       calls.api += 1;
       return apiImplementation(...args);

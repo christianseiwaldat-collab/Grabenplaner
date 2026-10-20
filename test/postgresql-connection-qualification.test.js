@@ -66,6 +66,7 @@ for(const domain of ['core','sales'])for(const failReplacement of [false,true]){
    './layout':{SCHEMAS:['gp'],SEARCH_PATH:'pg_catalog,gp'},
    './import-work-queues':{indexedImportWorkQueues:entries=>entries},
    './cash-reference-pages':{indexedCashReferencePages:entries=>entries},
+   './cash-snapshot-pages':{indexedCashSnapshotPages:entries=>entries},
    './import-delete':{target:async(_client,base)=>base},
   };
   modules['../core/environment']=modules['./environment'];modules['../core/fingerprint']=modules['./fingerprint'];

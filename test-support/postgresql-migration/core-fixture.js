@@ -43,6 +43,9 @@ async function withCoreFixture(work){
     await migrator.query("SELECT setval(pg_get_serial_sequence('gp.departments','id'),1,true)");
     await migrator.query('COMMIT');owned=true;
     sqlite=createSqliteSource();
+    // The comparison side starts from the frozen historical schema, then gains
+    // the same reviewed additive column as the PostgreSQL application fixture.
+    sqlite.exec('ALTER TABLE week_options ADD COLUMN school_details_json TEXT');
     require('../../lib/persistence/sqlite/operations/session-security-schema').ensureSqliteSessionSecuritySchema(sqlite);
     seedCoreFixture(sqlite,3);sqlite.exec(baseSql);
     const additional=require('../../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG.filter(entry=>entry.statement.id.includes('.security.'));

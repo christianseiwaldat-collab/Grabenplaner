@@ -7,6 +7,23 @@ const I = require('../lib/persistence/postgresql/operations/import-retention');
 const { definitions } = require('../lib/tradefoto-full-import-source');
 const { createDataImportProtection } = require('../lib/data-import-protection');
 const uuid = () => crypto.randomUUID();
+
+function privilegedStorageTest(name, run) {
+  test(name, async t => {
+    if (process.platform === 'linux' && process.getuid() !== 0) {
+      // The real cleanup accepts only root-owned private entries. Keep that
+      // boundary intact and execute this exact temporary-file test as root.
+      const pattern = '^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$';
+      const result = require('node:child_process').spawnSync('sudo',
+        ['-n', '--', process.execPath, '--test', '--test-name-pattern=' + pattern, __filename],
+        { encoding: 'utf8', timeout: 30000 });
+      assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
+      assert.match(result.stdout, /# pass 1\b/);
+      return;
+    }
+    await run(t);
+  });
+}
 test('storage requests reject arbitrary paths, weak policy and missing technical role', () => {
   assert.throws(() => C.validateRequest({ format:C.FORMAT,action:'cleanup',requestId:uuid(),planSha256:'f'.repeat(64),path:'/tmp' }));
   assert.throws(() => C.validateRequest({ format:C.FORMAT,action:'cleanup',requestId:uuid() }));
@@ -29,14 +46,14 @@ async function fixture(t, count = 2) {
   fs.writeFileSync(path.join(orphan,'core.dump'),'PGDMP-partial-core',{mode:0o600});fs.writeFileSync(path.join(orphan,'sales.dump'),'PGDMP-partial-sales',{mode:0o600});
   return {root,orphan,now};
 }
-test('residual cleanup removes only the exact preview, preserving complete backups and unknown directories', async t => {
+privilegedStorageTest('residual cleanup removes only the exact preview, preserving complete backups and unknown directories', async t => {
   const f = await fixture(t), unknown = path.join(f.root,uuid()+'.pair');fs.mkdirSync(unknown,{mode:0o700});fs.writeFileSync(path.join(unknown,'notes'),'do not remove');
   const plan = await R.inspectResiduals(f.root,{now:f.now});assert.equal(plan.candidates.length,1);assert.equal(plan.complete.length,2);assert.equal(plan.unknown.length,1);
   const proofs=[];const result=await R.removeResiduals(f.root,plan.planSha256,{now:f.now,assertUnused:()=>{},record:p=>proofs.push(p)});
   assert.equal(result.removed.length,1);assert.equal(fs.existsSync(f.orphan),false);assert.equal(fs.existsSync(unknown),true);
   assert.equal((await R.inspectResiduals(f.root,{now:f.now})).complete.length,2);assert.equal(proofs[0].retained.length,2);assert.equal(proofs[0].files[0].files.length,2);
 });
-test('cleanup refuses changed previews, active users and fewer than two recovery points', async t => {
+privilegedStorageTest('cleanup refuses changed previews, active users and fewer than two recovery points', async t => {
   const f = await fixture(t,1), plan=await R.inspectResiduals(f.root,{now:f.now});
   await assert.rejects(R.removeResiduals(f.root,plan.planSha256,{now:f.now,assertUnused:()=>{}}),/TWO_BACKUPS_REQUIRED/);
   assert.equal(fs.existsSync(f.orphan),true);
@@ -46,12 +63,12 @@ test('cleanup refuses changed previews, active users and fewer than two recovery
   await assert.rejects(R.removeResiduals(g.root,preview.planSha256,{now:g.now,assertUnused:()=>{}}),/PLAN_CHANGED/);
   assert.equal(fs.existsSync(g.orphan),true);
 });
-test('a damaged sealed backup blocks cleanup before the first deletion', async t => {
+privilegedStorageTest('a damaged sealed backup blocks cleanup before the first deletion', async t => {
   const f = await fixture(t), preview=await R.inspectResiduals(f.root,{now:f.now});
   const point=path.join(f.root,preview.complete[0].name,'sales.dump');const bytes=fs.readFileSync(point);bytes[0]^=1;fs.writeFileSync(point,bytes);
   await assert.rejects(R.removeResiduals(f.root,preview.planSha256,{now:f.now,assertUnused:()=>{}}),/COMPONENT_HASH/);assert.equal(fs.existsSync(f.orphan),true);
 });
-test('a single leftover dump is recognized while unknown dump contents are protected',async t=>{
+privilegedStorageTest('a single leftover dump is recognized while unknown dump contents are protected',async t=>{
  const f=await fixture(t);fs.unlinkSync(path.join(f.orphan,'core.dump'));
  const plan=await R.inspectResiduals(f.root,{now:f.now});assert.equal(plan.candidates.length,1);assert.equal(plan.candidates[0].files.length,1);
  await R.removeResiduals(f.root,plan.planSha256,{now:f.now,assertUnused:()=>{}});assert.equal(fs.existsSync(f.orphan),false);

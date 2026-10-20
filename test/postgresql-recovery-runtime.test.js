@@ -37,10 +37,8 @@ test('native restored-schema verification survives migration commits with a rest
   skip:!process.env.GP_CORE_MIGRATOR_URL,timeout:45000,
 },async()=>{
   const {Client}=require('pg');
-  const url=new URL(process.env.GP_CORE_MIGRATOR_URL);
-  assert.equal(url.hostname,'127.0.0.1');
-  assert.ok(['55482','55483'].includes(url.port));
-  assert.equal(url.pathname,'/gp_migration_core');
+  const url=require('../test-support/postgresql-migration/ci-endpoint').assertSyntheticEndpoint(
+    process.env.GP_CORE_MIGRATOR_URL,'core',['55482','55483']);
   assert.equal(url.username,'gp_core_migrator');
   const {prepareRestoredSchema}=require('../server-tools/linux/recovery/lib/postgresql-recovery-worker');
   const config={domains:[{domain:'core',database:'gp_migration_core'}]};

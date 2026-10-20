@@ -425,34 +425,34 @@
       "rule": "javascript.lang.security.audit.detect-redos",
       "path": "lib/persistence/postgresql/core/catalog.js",
       "start": {
-        "line": 47,
+        "line": 52,
         "column": 13
       },
       "end": {
-        "line": 47,
+        "line": 52,
         "column": 64
       },
-      "fingerprint": "5fe49ebfe3499b497143733cd29dd8abc845eb85dc262078fa0ab1439010ee98",
-      "sourceSha256": "44788e4737912fca53932b36c66de767de5c5cb956991d1015eac6182319d8cf",
+      "fingerprint": "2412a2bb7a874d875295c413f305854da1bca04248e6380badba8e9cc68f6488",
+      "sourceSha256": "bb5f6bdac12bfaa2bf4ad0276feca8fbaa2e76f38f260e2c3898083c3024baa8",
       "sourceSha256Variants": [
-        "44788e4737912fca53932b36c66de767de5c5cb956991d1015eac6182319d8cf",
-        "534a8b027a5e737f15cc78dac9b56c8dcde01fac38da9a6e3540a2ea8f9f2110"
+        "4683fdb870afdf94b044feba6576280d48cc167d39bbd8ee436100b34750045c",
+        "bb5f6bdac12bfaa2bf4ad0276feca8fbaa2e76f38f260e2c3898083c3024baa8"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "The JSON-path regex permits only dot-prefixed identifiers or bracketed digit indices. Dot/brackets cannot be consumed by the identifier/digit runs, so there is no ambiguous nested repetition. The parsed path becomes a typed binding descriptor. Reachability boundary: The PostgreSQL compiler processes checked-in SQL catalogue entries, not request SQL.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval; Codex bounded-JSON source continuity review 2026-10-20, no human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "lib/persistence/postgresql/core/catalog.js",
-          "sha256": "44788e4737912fca53932b36c66de767de5c5cb956991d1015eac6182319d8cf",
+          "sha256": "bb5f6bdac12bfaa2bf4ad0276feca8fbaa2e76f38f260e2c3898083c3024baa8",
           "sha256Variants": [
-            "44788e4737912fca53932b36c66de767de5c5cb956991d1015eac6182319d8cf",
-            "534a8b027a5e737f15cc78dac9b56c8dcde01fac38da9a6e3540a2ea8f9f2110"
+            "4683fdb870afdf94b044feba6576280d48cc167d39bbd8ee436100b34750045c",
+            "bb5f6bdac12bfaa2bf4ad0276feca8fbaa2e76f38f260e2c3898083c3024baa8"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 47: rejects every unsupported path"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 47: rejects every unsupported path Continuity 2026-10-20: the exact JSON-path regex and its checked-in source boundary are unchanged. Two reviewed SQLite constructors are flattened to the byte-identical historical PostgreSQL SQL; explicit source and binding hashes reject other inputs."
         }
       ]
     },
@@ -111518,6 +111518,59 @@
             "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
           ],
           "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.express.security.audit.xss.direct-response-write",
+      "path": "server.js",
+      "start": {
+        "line": 28690,
+        "column": 17
+      },
+      "end": {
+        "line": 28690,
+        "column": 23
+      },
+      "fingerprint": "f92701640656b44a37779929aec8f2921a701ba9a6bb75f260ba983011c3fac4",
+      "sourceSha256": "141e4e6d184d6502ab104a3c9e20c7fccdb19513f285046d4edb6db01e6f57f6",
+      "sourceSha256Variants": [
+        "141e4e6d184d6502ab104a3c9e20c7fccdb19513f285046d4edb6db01e6f57f6",
+        "d95ef3738d2aa92d7177f58a2f99ba91ebe5d060241a2a3c665a7f6d03c7fc08"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P2",
+      "reason": "The payroll export returns a generated CSV or XLSX Buffer, never an HTML document. Before send(output), the route sets a fixed non-HTML MIME type selected from those two formats, Content-Disposition attachment with a sanitized/encoded filename, and global X-Content-Type-Options nosniff. Request-derived fields cannot alter those headers. The upstream XSS rule does not recognize the conditional MIME selection. Existing real HTTP regressions verify both format branches, attachment and nosniff; storage-payroll-retest.tap passes 37/37 tests. This decision covers only this exact source-bound sink; CSV formula safety is separately enforced in tabular-data.js.",
+      "reviewer": "Codex exact source and real HTTP regression review 2026-10-20; automated review, no human approval",
+      "reviewedOn": "2026-10-20",
+      "expiresOn": "2026-11-19",
+      "context": [
+        {
+          "path": "server.js",
+          "sha256": "141e4e6d184d6502ab104a3c9e20c7fccdb19513f285046d4edb6db01e6f57f6",
+          "sha256Variants": [
+            "141e4e6d184d6502ab104a3c9e20c7fccdb19513f285046d4edb6db01e6f57f6",
+            "d95ef3738d2aa92d7177f58a2f99ba91ebe5d060241a2a3c665a7f6d03c7fc08"
+          ],
+          "reason": "POST /api/integrations/payroll-export/file checks payroll:export and preflight; the CSV/XLSX branch sets one of two fixed non-HTML Content-Types, attachment via contentDispositionHeader, Content-Length and global nosniff before response.send(output)."
+        },
+        {
+          "path": "lib/tabular-data.js",
+          "sha256": "12e747eec339efb214aba5af4aa2642a6a9bb4c2d80167c0d0479cc5c5afb9ce",
+          "sha256Variants": [
+            "12e747eec339efb214aba5af4aa2642a6a9bb4c2d80167c0d0479cc5c5afb9ce",
+            "6f177000943709a55173dcdd81774d757275dde7d1aa9b3e20c4d5a9faa08232"
+          ],
+          "reason": "createCsvBuffer and createXlsxBuffer both return Buffer values. CSV quotes delimiter/newlines and prefixes formula-shaped text; XLSX uses scalar cell values and returns the workbook buffer, never HTML."
+        },
+        {
+          "path": "lib/payroll-export.js",
+          "sha256": "6b79b52e7d648d01360915e03961133f6f11681930f17883ba64ebc682bf47a5",
+          "sha256Variants": [
+            "610ca130ffc1f2ed58f4de84f630dbc1ca6fc417198d8b427e332a38da7b2e84",
+            "6b79b52e7d648d01360915e03961133f6f11681930f17883ba64ebc682bf47a5"
+          ],
+          "reason": "normalizePayrollConfiguration restricts format to xlsx or csv, so no input can select text/html or replace a response header."
         }
       ]
     }

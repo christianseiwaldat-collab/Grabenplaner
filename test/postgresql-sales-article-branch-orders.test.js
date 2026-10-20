@@ -3,8 +3,8 @@ const test = require('node:test'), assert = require('node:assert/strict');
 test('Native PostgreSQL branch orders: narrow authenticated batches, demand branches and current purchasing scope',
   {skip:process.env.GP_PG_MIGRATION_LIVE !== '1'}, async () => {
   for (const area of ['CORE','SALES']) for (const role of ['MIGRATOR','APP']) {
-    const url = new URL(process.env['GP_'+area+'_'+role+'_URL']);
-    assert.ok(['127.0.0.1','localhost'].includes(url.hostname) && url.port==='25475' && url.pathname==='/gp_migration_'+area.toLowerCase(), 'Only guarded synthetic local cluster');
+    require('../test-support/postgresql-migration/ci-endpoint').assertSyntheticEndpoint(
+      process.env['GP_'+area+'_'+role+'_URL'], area.toLowerCase(), ['25475']);
   }
   await require('../test-support/postgresql-migration/report-fixture').withReportFixture(async f => {
     await f.core.migrator.query('SET ROLE gp_core_owner');

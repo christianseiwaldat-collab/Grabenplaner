@@ -95,9 +95,8 @@ test('native PostgreSQL article branch order SQL follows the same bounded select
   { skip: process.env.GP_PG_MIGRATION_LIVE !== '1', timeout: 90000 }, async () => {
     // This qualification is restricted to the existing isolated local fixture.
     for (const name of ['GP_SALES_MIGRATOR_URL', 'GP_SALES_APP_URL']) {
-      const url = new URL(process.env[name]);
-      assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname));
-      assert.equal(url.port, '25475'); assert.equal(url.pathname, '/gp_migration_sales');
+      require('../test-support/postgresql-migration/ci-endpoint').assertSyntheticEndpoint(
+        process.env[name], 'sales', ['25475']);
     }
     await require('../test-support/postgresql-migration/sales-fixture').withSalesFixture(8, async fixture => {
       await seed(fixture.postgres); await check(fixture.postgres);
