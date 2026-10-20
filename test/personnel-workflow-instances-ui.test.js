@@ -166,8 +166,8 @@ test("M5-Audit-Inventar klassifiziert das neue SQLite-Schema und den erweiterten
     "PHASE_4_EXPECTED_STATEMENT_COUNT = 1507",
     "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1461",
     "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1388",
-    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1367",
-    "PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 140",
+    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1365",
+    "PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 142",
   ]) assert.match(persistenceAudit, new RegExp(expected));
   const readExtensions = between(
     persistenceAudit,

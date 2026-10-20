@@ -12,3 +12,8 @@ The session-security and dependency updates also changed ten formerly shared
 files. Their frozen Git blobs are recorded in `session-security-source-pins.json`.
 Each normalized SHA-256 still matches the existing bridge contract. The original
 version, dependency, complete-tree, and rejection checks remain unchanged.
+
+The bounded onboarding JSON change also requires the original
+`custom-process-management-catalog.js` text. `onboarding-source-pin.json`
+records its exact Git blob and unchanged shared before/after digest. The
+historical bridge does not accept the current implementation in its place.

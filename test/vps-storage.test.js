@@ -15,7 +15,7 @@ function privilegedStorageTest(name, run) {
       // boundary intact and execute this exact temporary-file test as root.
       const pattern = '^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$';
       const result = require('node:child_process').spawnSync('sudo',
-        ['-n', '--', process.execPath, '--test', '--test-name-pattern=' + pattern, __filename],
+        ['-n', '--', process.execPath, '--test', '--test-reporter=tap', '--test-name-pattern=' + pattern, __filename],
         { encoding: 'utf8', timeout: 30000 });
       assert.equal(result.status, 0, result.error?.message || result.stdout + result.stderr);
       assert.match(result.stdout, /# pass 1\b/);
