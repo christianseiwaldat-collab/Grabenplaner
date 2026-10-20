@@ -90,11 +90,28 @@ test('native PostgreSQL: complete weeks keep parity, fresh writes and rights wit
         optimized=enabled;queries=[];authorizations=0;
         const result=await request(route);
         if(!enabled)baseline=result.body;else assert.deepEqual(result.body,baseline);
-        evidence.push({optimized:enabled,milliseconds:result.milliseconds,queries:queries.length,authorizations,
-          topQueries:Object.entries(queries.reduce((m,id)=>(m[id]=(m[id]||0)+1,m),{})).sort((a,b)=>b[1]-a[1]).slice(0,8)});
+        const queryCounts=queries.reduce((m,id)=>(m[id]=(m[id]||0)+1,m),{});
+        evidence.push({optimized:enabled,milliseconds:result.milliseconds,queries:queries.length,authorizations,queryCounts,
+          topQueries:Object.entries(queryCounts).sort((a,b)=>b[1]-a[1]).slice(0,8)});
       }
       assert.ok(evidence[1].authorizations<evidence[0].authorizations/4,JSON.stringify(evidence));
-      assert.ok(evidence[1].queries<evidence[0].queries/2,JSON.stringify(evidence));
+      // The current complete model includes distinct protection/school reads
+      // for all 21 employees and Saturday reads for 18 working employees.
+      // These must not disappear to satisfy the older relative cache budget.
+      const distinctReads={
+        'planning-settings.validation.overlapping-week-options':21,
+        'organization-personnel.personnel-sensitive-record.get':21,
+        'time-tracking.list-planned-day-shifts':18,
+        'saturday-credit.assignment-on-date':18,
+      };
+      for(const sample of evidence)for(const [id,count] of Object.entries(distinctReads))
+        assert.equal(sample.queryCounts[id],count,JSON.stringify(sample));
+      // Bound the remaining model work and verify the actual duplicated cutover
+      // reads, independently of the number of mandatory employee-specific reads.
+      assert.equal(evidence[0].queryCounts['saturday-credit.get'],19);
+      assert.equal(evidence[1].queryCounts['saturday-credit.get'],1);
+      assert.ok(evidence[1].queries<=Object.values(distinctReads).reduce((a,b)=>a+b,0)+30,JSON.stringify(evidence));
+      assert.ok(evidence[0].queries-evidence[1].queries>=18,JSON.stringify(evidence));
       for(const week of ['2026-09-07','2026-09-21','2026-09-14']){
         const result=await request('/api/schedule?location=18&week='+week);
         assert.equal(result.body.weekStart,week);assert.equal(result.body.shifts.length,108+(week==='2026-09-07'?1:0));

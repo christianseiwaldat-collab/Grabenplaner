@@ -28680,9 +28680,11 @@ app.post("/api/integrations/payroll-export/file", async (request, response) => {
   });
   (await auditPortal(actor.employeeNumber, "integration.payroll.export", "integration_run", runId,
     JSON.stringify({ profileId: preflight.profileId, format: preflight.configuration.format, rows: preflight.rowCount, draft, contentSha256 })));
-  response.setHeader("Content-Type", preflight.configuration.format === "xlsx"
-    ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    : "text/csv; charset=utf-8");
+  if (preflight.configuration.format === "xlsx") {
+    response.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  } else {
+    response.setHeader("Content-Type", "text/csv; charset=utf-8");
+  }
   response.setHeader("Content-Disposition", contentDispositionHeader(payrollFileName(preflight, draft)));
   response.setHeader("X-Grabenplaner-Export-Status", draft ? "draft" : "final");
   response.setHeader("Content-Length", output.length);

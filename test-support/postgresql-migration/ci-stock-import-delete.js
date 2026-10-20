@@ -16,7 +16,10 @@ async function main(){
    await client.query(`CREATE ROLE ${owner} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`);
    for(const purpose of ['migrator','app','reader']){
     const role='gp_'+domain+'_'+purpose,password=crypto.randomBytes(32).toString('hex');
-    const limit=purpose==='app'?(domain==='core'?8:7):5;
+    // Match the bounded reader budget used by transfer/staging: the server's
+    // three receipt workers and authorization reader coexist with the fixture's
+    // independent authority reader and a report worker. Five is insufficient.
+    const limit=purpose==='reader'?8:purpose==='app'?(domain==='core'?8:7):5;
     await client.query(`CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS CONNECTION LIMIT ${limit}`);
     await client.query(`ALTER ROLE ${role} SET search_path TO pg_catalog`);
     await client.query(`ALTER ROLE ${role} SET lock_timeout TO '2s'`);
@@ -41,10 +44,12 @@ async function main(){
  }finally{await client.end();}
  const commands=[['scripts/postgresql/mark-development-environment.js'],['scripts/postgresql/apply-core-schema.js'],['scripts/postgresql/apply-sales-schema.js','5'],['scripts/postgresql/apply-sales-schema.js','6'],['scripts/postgresql/apply-boundary-schema.js'],['scripts/postgresql/apply-sales-schema.js','8'],
  ['-e',"const {Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.GP_CORE_MIGRATOR_URL});await c.connect();try{for(const name of ['trade-annotations','personnel-learning-runs','xoffi-snapshots','vocational-school','session-security'])await require('./lib/persistence/postgresql/core/'+name).migrate(c);}finally{await c.end();}})().catch(e=>{console.error(e.code||e.message);process.exitCode=1;})"],
+ // Qualify the rollback/upgrade path against the fresh schema first. This also
+ // installs the snapshot extension required by imports earlier in discovery order.
+ ['--test','--test-concurrency=1','--test-reporter=tap','test/postgresql-stock-import-delete.test.js'],
  ...(process.argv.includes('--full')
    ? [['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000']]
-   : [['--test','--test-concurrency=1','test/postgresql-stock-import-delete.test.js'],
-     ['--test','--test-concurrency=1','test/postgresql-cash-takeover.test.js']])];
+   : [['--test','--test-concurrency=1','test/postgresql-cash-takeover.test.js']])];
  for(const args of commands){const result=spawnSync(process.execPath,args,{env,stdio:'inherit'});if(result.status!==0)throw new Error('Synthetic migration qualification failed: '+args[0]);}
 }
 main().catch(error=>{console.error(error.code||error.message);process.exitCode=1;});

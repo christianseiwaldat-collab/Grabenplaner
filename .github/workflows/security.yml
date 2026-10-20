@@ -91,6 +91,9 @@ jobs:
         run: python -m unittest discover -s scripts/security -p 'test_*.py' -v
       - name: Run sast gate
         run: python scripts/security/gates.py sast --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
+      - name: Verify response rule with actual route and unsafe controls
+        if: success() || failure()
+        run: python scripts/security/check_payroll_response.py --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
       - name: Prepare sanitized public metadata
         if: always()
         run: python scripts/security/publish_artifacts.py --gate sast --input "$RUNNER_TEMP/security-results" --output "$RUNNER_TEMP/security-public"

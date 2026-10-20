@@ -44,8 +44,8 @@ test('Live environment enforces bounded queries and recovers its connection afte
       // Docker listens on its container interface; the workflow publishes only
       // runner loopback. Application/reader role limits remain separately bounded.
       assert.equal(session.host,'*');assert.equal(session.maximum,'100');assert.equal(session.buffers,'128MB');
-      const roles=(await pool.query("SELECT rolname,rolconnlimit FROM pg_roles WHERE rolname IN ('gp_core_app','gp_sales_app') ORDER BY rolname")).rows;
-      assert.deepEqual(roles,[{rolname:'gp_core_app',rolconnlimit:8},{rolname:'gp_sales_app',rolconnlimit:7}]);
+      const roles=(await pool.query("SELECT rolname,rolconnlimit FROM pg_roles WHERE rolname IN ('gp_core_app','gp_core_reader','gp_sales_app','gp_sales_reader') ORDER BY rolname")).rows;
+      assert.deepEqual(roles,[{rolname:'gp_core_app',rolconnlimit:8},{rolname:'gp_core_reader',rolconnlimit:8},{rolname:'gp_sales_app',rolconnlimit:7},{rolname:'gp_sales_reader',rolconnlimit:8}]);
     }else{
       assert.equal(session.host,'127.0.0.1');assert.equal(session.maximum,'20');assert.equal(session.buffers,'64MB');
     }
