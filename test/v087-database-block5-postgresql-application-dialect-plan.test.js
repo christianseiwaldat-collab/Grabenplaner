@@ -63,8 +63,8 @@ test("Block 5/7: nur portable Einträge enthalten kompiliertes PostgreSQL-SQL", 
   const blocked = entries.filter((entry) => entry.strategy === "requires-override");
 
   assert.equal(summary.statementCount, 1507);
-  assert.equal(summary.portableGeneratedCount, 1367);
-  assert.equal(summary.requiresOverrideCount, 140);
+  assert.equal(summary.portableGeneratedCount, 1365);
+  assert.equal(summary.requiresOverrideCount, 142);
   assert.equal(portable.length, summary.portableGeneratedCount);
   assert.equal(blocked.length, summary.requiresOverrideCount);
 
@@ -222,8 +222,8 @@ test("Workflow-Studio, Xoffi und Importfreigaben ergänzen genau fünf portable 
   const retained = POSTGRESQL_APPLICATION_DIALECT_PLAN.entries
     .filter((entry) => !ids.includes(entry.statementId));
   assert.equal(retained.length, 1502);
-  assert.equal(retained.filter((entry) => entry.strategy === "portable-generated").length, 1362);
-  assert.equal(retained.filter((entry) => entry.strategy === "requires-override").length, 140);
+  assert.equal(retained.filter((entry) => entry.strategy === "portable-generated").length, 1360);
+  assert.equal(retained.filter((entry) => entry.strategy === "requires-override").length, 142);
 
   for (const statement of additions) {
     const sources = SQLITE_APPLICATION_DIALECT_MANIFEST.entries
@@ -267,10 +267,25 @@ test("History snapshots add ten declarations with a guarded JSON bulk override a
   assert.equal(POSTGRESQL_APPLICATION_DIALECT_PLAN.executable, false);
 });
 
+test("bounded onboarding JSON uses exactly the two explicitly qualified Core overrides", () => {
+  const extension = require("../lib/persistence/postgresql/contracts/onboarding-json-catalog-v1.json");
+  const { createCoreCatalog } = require("../lib/persistence/postgresql/core/catalog");
+  const catalog = createCoreCatalog();
+  assert.equal(extension.entries.length, 2);
+  for (const item of extension.entries) {
+    const plan = POSTGRESQL_APPLICATION_DIALECT_PLAN.entries.find(entry => entry.statementId === item.statementId);
+    assert.equal(plan.strategy, "requires-override");
+    assert.ok(plan.blockingFeatures.includes("sqlite.json-functions"));
+    const qualified = catalog.entries.find(entry => entry.statement.id === item.statementId);
+    assert.equal(sha256(qualified.sql), item.baseSqlSha256);
+    assert.equal(item.sqlSha256, item.baseSqlSha256);
+  }
+});
+
 test("Block 5/7: Summary erfasst die bekannten Override-Grenzen stabil", () => {
   const counts = POSTGRESQL_APPLICATION_DIALECT_PLAN.summary.blockingFeatureCounts;
 
-  assert.equal(counts["sqlite.json-functions"], 53);
+  assert.equal(counts["sqlite.json-functions"], 55);
   assert.equal(counts["sqlite.insert-or-ignore"], 18);
   assert.equal(counts["sqlite.collate-nocase"], 27);
   assert.equal(counts["sqlite.like-operator"], 13);

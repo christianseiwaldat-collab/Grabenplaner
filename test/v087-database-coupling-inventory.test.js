@@ -412,7 +412,8 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // inventory fixtures inspect runtime metadata without adding a direct
   // persistence candidate or opening a database.
   // Reauthentication adds one explicitly named synthetic HTTP/database fixture.
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 59);
+  // Bounded onboarding JSON adds one in-memory fixture through the existing provider.
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 60);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);
   assert.equal(report.summary.productionJavaScriptDriverFiles, 15);

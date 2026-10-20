@@ -3,14 +3,14 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const vm = require("node:vm");
 const crypto = require("node:crypto");
-const { DatabaseSync } = require("node:sqlite");
+const { openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider");
 const { functionSource } = require("../test-support/learning-workspace-ui");
 const context = vm.createContext({});
 vm.runInContext(functionSource("jsonObject", "../lib/persistence/sqlite/custom-process-management-catalog.js"), context);
 
 for (const count of [63, 64, 126, 127, 190]) {
   test(`bounded onboarding JSON preserves ${count} fields, explicit nulls and nested values`, () => {
-    const database = new DatabaseSync(":memory:");
+    const database = openSqliteLegacyDatabase(":memory:");
     try {
       const fields = {}, expected = {};
       for (let n = 0; n < count; n++) {

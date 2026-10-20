@@ -109712,34 +109712,34 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2519,
+        "line": 2522,
         "column": 42
       },
       "end": {
-        "line": 2522,
+        "line": 2525,
         "column": 16
       },
-      "fingerprint": "ae9b3f0c6719cef1f5f9f0af20386132a0568e427d68d76b8280d89d49f9f83b",
-      "sourceSha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+      "fingerprint": "d89476c8e16ec28db4db9143d5770d2934c35159c68f6efb225ed12a0dbd818f",
+      "sourceSha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
       "sourceSha256Variants": [
-        "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-        "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+        "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+        "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "argumentIdentifier is produced by readJavaScriptIdentifier, whose grammar permits only identifier characters. Its only regex metacharacter ($) is escaped before constructing the declaration matcher. Checked-in source text is the subject. Reachability boundary: Repository coupling scanner resolves JavaScript variable declarations.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex; exact unchanged finding spans and static inventory/count changes reviewed; not human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+          "sha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
           "sha256Variants": [
-            "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-            "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+            "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+            "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2519: identifier escape Lines 1935: identifier lexer"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2522: identifier escape Lines 1938: identifier lexer"
         }
       ]
     },
@@ -109747,34 +109747,34 @@
       "rule": "javascript.lang.security.audit.detect-redos",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2666,
+        "line": 2669,
         "column": 10
       },
       "end": {
-        "line": 2666,
+        "line": 2669,
         "column": 150
       },
-      "fingerprint": "134a988e4119bc0b502b97fa56e31a5b6d52783c66804e35bb856b3fe5e1fb79",
-      "sourceSha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+      "fingerprint": "25c41eaffe9badf36ded932ec2d61600ab92307753ad45e01dbeab83acb94aff",
+      "sourceSha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
       "sourceSha256Variants": [
-        "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-        "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+        "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+        "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "The fixed expression recognizes optional command prefixes, whitespace-delimited environment assignments and one optional executable-directory component. Whitespace separates assignment iterations; no input-defined regex or recursively ambiguous repetition is present. Malicious repository code is already executable by CI tests and is not a runtime HTTP input. Reachability boundary: The developer/CI coupling scanner inspects trusted checkout shell text.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex; exact unchanged finding spans and static inventory/count changes reviewed; not human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+          "sha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
           "sha256Variants": [
-            "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-            "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+            "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+            "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2665: reviewed exact recognizer"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2668: reviewed exact recognizer"
         }
       ]
     },
@@ -109782,34 +109782,34 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2677,
+        "line": 2680,
         "column": 21
       },
       "end": {
-        "line": 2677,
+        "line": 2680,
         "column": 77
       },
-      "fingerprint": "cf838bedc284f7082ac098deaa03547f600151745440afb4b754977a2fc120ba",
-      "sourceSha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+      "fingerprint": "d34c19286294e2ac9c0b3114ecb66af86ce5071f4e69e9c2761fee85b0a35552",
+      "sourceSha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
       "sourceSha256Variants": [
-        "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-        "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+        "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+        "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "delimiter is capture2 of a fixed identifier-only opener ([A-Za-z_][A-Za-z0-9_]*). It cannot include regex operators. The closing expression adds only fixed whitespace/anchors. Reachability boundary: Repository coupling scanner reads shell heredoc delimiters.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex; exact unchanged finding spans and static inventory/count changes reviewed; not human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+          "sha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
           "sha256Variants": [
-            "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-            "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+            "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+            "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2670: opener grammar precedes constructor"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2673: opener grammar precedes constructor"
         }
       ]
     },
@@ -109817,34 +109817,34 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2695,
+        "line": 2698,
         "column": 21
       },
       "end": {
-        "line": 2695,
+        "line": 2698,
         "column": 74
       },
-      "fingerprint": "97979aae7253d6af00b4640a79d5bae76ce00741ed7f1fe17992219c9a99bd84",
-      "sourceSha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+      "fingerprint": "a07a2cba898436b8f4ed57ed47f90394b1ed0af69f4f90bab10ce9e75258850c",
+      "sourceSha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
       "sourceSha256Variants": [
-        "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-        "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+        "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+        "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "quote is one of two quote characters captured by the fixed opener, then passed through regex escaping. No arbitrary source text is included in the regex. Reachability boundary: Repository coupling scanner reads PowerShell here-string endings.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex; exact unchanged finding spans and static inventory/count changes reviewed; not human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+          "sha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
           "sha256Variants": [
-            "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-            "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+            "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+            "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2689: two-value quote source and escaping"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2692: two-value quote source and escaping"
         }
       ]
     },
@@ -109852,34 +109852,34 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2815,
+        "line": 2818,
         "column": 18
       },
       "end": {
-        "line": 2815,
+        "line": 2818,
         "column": 94
       },
-      "fingerprint": "dfb786dd89bf3560208cc2bca8fd7cfe97f133bf2fb4c180801570b8cc06129a",
-      "sourceSha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+      "fingerprint": "c8d4cc075637367c5603968f6943951e5b498c810f8aec9be9eda45ecb896f36",
+      "sourceSha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
       "sourceSha256Variants": [
-        "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-        "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+        "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+        "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "functionName is supplied by literal internal audit function lists/call sites. Runtime/HTTP input does not select the regex pattern. This is not a generic public search API. Reachability boundary: The internal audit extracts known JavaScript functions from checked-in source.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex; exact unchanged finding spans and static inventory/count changes reviewed; not human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+          "sha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
           "sha256Variants": [
-            "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-            "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+            "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+            "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2814: constructor Lines 4791: fixed literal invocation"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2817: constructor Lines 4794: fixed literal invocation"
         }
       ]
     },
@@ -109887,34 +109887,34 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2828,
+        "line": 2831,
         "column": 42
       },
       "end": {
-        "line": 2828,
+        "line": 2831,
         "column": 83
       },
-      "fingerprint": "969a51137dafdc23104eb1a11d281089130dc056d01843fa2251d7efd3ed4247",
-      "sourceSha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+      "fingerprint": "96ca46c1f137202232dc19c285cba9d396ee136d475c6742c79cfec2f2e22b61",
+      "sourceSha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
       "sourceSha256Variants": [
-        "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-        "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+        "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+        "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "countMatches clones pattern.source/flags; each caller supplies an internal RegExp literal/object, not a request string. This preserves a known matcher rather than compiling external syntax. Reachability boundary: The internal audit counts matches from RegExp objects passed by its own code.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex; exact unchanged finding spans and static inventory/count changes reviewed; not human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+          "sha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
           "sha256Variants": [
-            "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-            "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+            "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+            "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2827: internal regex clone"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2830: internal regex clone"
         }
       ]
     },
@@ -109922,34 +109922,34 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3126,
+        "line": 3129,
         "column": 14
       },
       "end": {
-        "line": 3126,
+        "line": 3129,
         "column": 52
       },
-      "fingerprint": "594731b987c18fb936e3e5cb73eb6c9523fb8976d4455e54d12aca835672a536",
-      "sourceSha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+      "fingerprint": "291934a4c5b3890fefb6f0ef30d51d106adda25b4d5ded2a4ce3d5b6245ae516",
+      "sourceSha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
       "sourceSha256Variants": [
-        "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-        "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+        "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+        "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "safeRequire is a local tool helper; its current callers use fixed repository-relative paths. No HTTP handler exposes root/relativeFile and no imported backup/application data determines executable module paths. Reachability boundary: Phase4 repository audit imports fixed persistence modules from its selected checkout root.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex; exact unchanged finding spans and static inventory/count changes reviewed; not human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+          "sha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
           "sha256Variants": [
-            "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-            "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+            "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+            "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3124: local tool wrapper"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3127: local tool wrapper"
         }
       ]
     },
@@ -109957,34 +109957,34 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3379,
+        "line": 3382,
         "column": 30
       },
       "end": {
-        "line": 3379,
+        "line": 3382,
         "column": 57
       },
-      "fingerprint": "f5247e6474e63b62e729cf47f903f8ac184d8a6a8f4d9a5956e997d8800e55d7",
-      "sourceSha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+      "fingerprint": "317cde118bd885ac8000ebd32711af2d46c7524034e8a4827d5b442fc0d730cf",
+      "sourceSha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
       "sourceSha256Variants": [
-        "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-        "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+        "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+        "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "implementationPath is resolved below the reviewed SQLite operations root and rejected unless it stays within that root. binding.modulePath/exportName are checked-in migration descriptors. This is intentional audit execution of repository code, not untrusted runtime loading. Reachability boundary: Phase4 audit verifies SQLite migration bindings from an internal catalogue.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex; exact unchanged finding spans and static inventory/count changes reviewed; not human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+          "sha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
           "sha256Variants": [
-            "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-            "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+            "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+            "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3369: containment check Lines 3379: require after containment"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3372: containment check Lines 3382: require after containment"
         }
       ]
     },
@@ -109992,34 +109992,34 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3531,
+        "line": 3534,
         "column": 14
       },
       "end": {
-        "line": 3531,
+        "line": 3534,
         "column": 52
       },
-      "fingerprint": "84af1b51bcd299ecf6da97b6d00843e2f25f44638d245e8d987d173d34dfbf98",
-      "sourceSha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+      "fingerprint": "0857ac6fed6d1ca0754b519e5d51947becf0429400de054ae9de49031bc00a29",
+      "sourceSha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
       "sourceSha256Variants": [
-        "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-        "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+        "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+        "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "The helper is scoped to inspectPhase5Persistence and called with static module filenames. Root is the checkout being audited; executing repository source is the purpose of this developer/CI tool. Reachability boundary: Phase5 audit loads checked-in development persistence modules.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex; exact unchanged finding spans and static inventory/count changes reviewed; not human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+          "sha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
           "sha256Variants": [
-            "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-            "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+            "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+            "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3513: tool scope"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3516: tool scope"
         }
       ]
     },
@@ -110027,34 +110027,34 @@
       "rule": "javascript.lang.security.audit.unsafe-dynamic-method",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3605,
+        "line": 3608,
         "column": 14
       },
       "end": {
-        "line": 3607,
+        "line": 3610,
         "column": 9
       },
-      "fingerprint": "3f027b98d61917d2d96740cb6bdddc89d75dffb5c29fd502eac2843671afe8d7",
-      "sourceSha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+      "fingerprint": "7fb0eb9249b2dd73cfc82e45bb7fdf79d063311f75c1047d79023172304e8e75",
+      "sourceSha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
       "sourceSha256Variants": [
-        "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-        "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+        "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+        "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "module comes from a fixed internal source file and factoryName is a literal at the call sites. typeof is checked before invocation. This is repository-tool execution, not an application request method. Reachability boundary: Coupling audit creates development-only persistence adapters in its own process.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex; exact unchanged finding spans and static inventory/count changes reviewed; not human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+          "sha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
           "sha256Variants": [
-            "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-            "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+            "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+            "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3602: fixed internal factory dispatcher"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3605: fixed internal factory dispatcher"
         }
       ]
     },
@@ -110062,34 +110062,34 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 4307,
+        "line": 4310,
         "column": 22
       },
       "end": {
-        "line": 4307,
+        "line": 4310,
         "column": 60
       },
-      "fingerprint": "36121d170a244c65f4386e419020d78f8a29756cca9e0447a3471fddebc9b2bf",
-      "sourceSha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+      "fingerprint": "47ebb716e63ff4a956f945fda49cc2e1ee1d529bfbe59c1c09aef8475efa3a26",
+      "sourceSha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
       "sourceSha256Variants": [
-        "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-        "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+        "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+        "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
       "reason": "safeRequire iterates PHASE_6_POSTGRESQL_OPERATIONS_FILES, a fixed repository list, and records module/export errors. No request or database value becomes a module path. Reachability boundary: Phase6 audit imports an explicit list of PostgreSQL operation contract modules.",
-      "reviewer": "Codex audit_plan_review; source continuity and actual common-profile identity review, not human approval",
-      "reviewedOn": "2026-10-18",
+      "reviewer": "Codex; exact unchanged finding spans and static inventory/count changes reviewed; not human approval",
+      "reviewedOn": "2026-10-20",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
+          "sha256": "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1",
           "sha256Variants": [
-            "62508ab077c834452e952f5748bd1ddd3dd80d0969d64f87ae9784d73a5be941",
-            "8397c9c0158146875dc7edfbb836dafe04883be4e965038f9c4ae4b1aa80274f"
+            "081e032a8ecabd9d67027901c81ef9a5203f2f98e2fc48679237afdf4953b639",
+            "f513880137de695f8b69297fdc163bf27e22ebf14443988e0d3ba799dc3486a1"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 4293: tool scope"
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 4296: tool scope"
         }
       ]
     },

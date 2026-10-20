@@ -94,6 +94,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   // Four reviewed authentication statements; historical locks and driver gates stay fixed.
   'lib/persistence/postgresql/contracts/authentication-catalog-v1.json',
   'test/authentication-catalog-qualification.test.js',
+  // Two bounded SQLite projections retain the exact historical PostgreSQL SQL.
+  'lib/persistence/postgresql/contracts/onboarding-json-catalog-v1.json',
   // Exact session extension artifacts; only the named maintenance CLI opens a driver.
   'lib/persistence/postgresql/contracts/session-security-catalog-v1.json',
   'lib/persistence/postgresql/core/session-security-catalog.js',
@@ -1089,8 +1091,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1367;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 140;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1365;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 142;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",
@@ -1580,6 +1582,7 @@ const BASELINE_TEST_FILES = Object.freeze([
 
 const TEST_SPECIAL_GROUPS = Object.freeze({
   "security-audit-synthetic-fixtures": new Set([
+    "test/onboarding-json-compatibility.test.js",
     // Explicit opt-in probes and isolated integration data; no product database access.
     "test-support/security-audit/session-audit.probe.cjs",
     "test-support/security-audit/ui-audit.probe.cjs",
