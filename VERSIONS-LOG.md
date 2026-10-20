@@ -1,6 +1,6 @@
 # Versionsstatus
 
-## v0.92.91 Beta · Quellstand
+## v0.92.92 Beta · Quellstand
 
 Verbesserte Konten-, Kennwort- und Sitzungssicherheit.
 Erweiterte Sicherheitsprüfungen und nachvollziehbare Auditübersicht.
