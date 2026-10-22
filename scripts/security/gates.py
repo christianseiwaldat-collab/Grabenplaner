@@ -265,9 +265,13 @@ class Gate:
         components={(str(p.get('group','')).rstrip('/')+'/'+p['name'] if p.get('group') else p['name'],p.get('version')) for p in data['components']}
         if not lock_packages(self.root/'pnpm-lock.yaml').issubset(components):raise ValueError('SBOM omits locked dependency versions')
         if not any(p.get('name')=='brace-expansion' and p.get('version')=='5.0.12' for p in data['components']):raise ValueError('SBOM missing required transitive dependency')
-        self.command(['node',self.root/'scripts/security-release-inventory.js','generate','--root',self.root,'--output',self.output/'release-inventory.json'],'release-inventory')
-        self.command(['node',self.root/'scripts/security-release-inventory.js','verify','--root',self.root,'--input',self.output/'release-inventory.json'],'verify-inventory')
-        return {'components':len(data['components']),'sbomSha256':sha(path),'inventorySha256':sha(self.output/'release-inventory.json'),'scope':'CycloneDX source SBOM from the exact package/lock/workspace manifests. Separate release-inventory.json verifies the active runner installation/native dependencies. Not a built release or production host inventory.','blockingFindings':[]}
+        # Linux Node can legitimately resolve a declared package from Debian's
+        # managed module trees. Opt into the CLI's fixed-root/dpkg policy rather
+        # than changing the runner's global lookup or suppressing an escape.
+        host_policy=['--host-policy','debian-nodejs-v1'] if sys.platform=='linux' else []
+        self.command(['node',self.root/'scripts/security-release-inventory.js','generate','--root',self.root,'--output',self.output/'release-inventory.json',*host_policy],'release-inventory')
+        self.command(['node',self.root/'scripts/security-release-inventory.js','verify','--root',self.root,'--input',self.output/'release-inventory.json',*host_policy],'verify-inventory')
+        return {'components':len(data['components']),'sbomSha256':sha(path),'inventorySha256':sha(self.output/'release-inventory.json'),'inventoryHostPolicy':'debian-nodejs-v1' if host_policy else None,'scope':'CycloneDX source SBOM from the exact package/lock/workspace manifests. Separate release-inventory.json verifies the active runner installation/native dependencies and, on Linux, its declared resolution under the explicit fixed-root/dpkg host policy. This observes the CI process, not a production service; not a built release, full system SBOM, upstream authenticity or vulnerability clearance.','blockingFindings':[]}
 
 
 def main():

@@ -169,6 +169,8 @@ jobs:
         run: python scripts/security/install_tools.py --tool syft --directory "$RUNNER_TEMP/security-tools"
       - name: Fail-closed security gate contract tests
         run: python -m unittest discover -s scripts/security -p 'test_*.py' -v
+      - name: Native inventory Linux positive and negative tests
+        run: node --test test/security-release-inventory.test.js test/security-release-host-inventory.test.js test/security-release-inventory-host-cli.test.js
       - name: Run sbom gate
         run: python scripts/security/gates.py sbom --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
       - name: Prepare sanitized public metadata

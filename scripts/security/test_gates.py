@@ -6,7 +6,8 @@ import shutil
 import subprocess
 import tempfile
 import unittest
-from gates import validate_exceptions, remaining_findings, check_sast_result, check_sca_result, lock_packages, registry_vulnerability_count
+from unittest.mock import patch
+from gates import Gate, validate_exceptions, remaining_findings, check_sast_result, check_sca_result, lock_packages, registry_vulnerability_count
 from install_tools import verified_download
 
 
@@ -90,6 +91,59 @@ class GateContractTests(unittest.TestCase):
 
     def test_missing_scanner_never_passes(self):
         with self.assertRaises(FileNotFoundError):subprocess.run(['gp-missing-security-scanner-fixture-01910'],check=True,capture_output=True)
+
+    def inventory_gate(self, directory, fail_label=None):
+        # Exercise the real SBOM gate ordering/arguments without executing a
+        # scanner or inventory process; those have separate Linux CLI tests.
+        root=Path(directory);output=root/'evidence';output.mkdir()
+        for name in ('package.json','pnpm-lock.yaml','pnpm-workspace.yaml'):
+            (root/name).write_text('synthetic input\n')
+        gate=Gate.__new__(Gate);gate.root=root;gate.output=output
+        gate.tool=lambda name: root/('verified-'+name)
+        commands=[]
+        def command(args,label,*unused,**options):
+            commands.append((label,[str(value) for value in args]))
+            if label==fail_label:raise ValueError(label+' failed with exit 1')
+            if label=='syft':
+                (output/'sbom.cdx.json').write_text(json.dumps({'bomFormat':'CycloneDX','components':[{'name':'brace-expansion','version':'5.0.12'}]}))
+            if label=='release-inventory':(output/'release-inventory.json').write_text('{}\n')
+        gate.command=command
+        return gate,commands
+
+    def test_sbom_runs_and_verifies_explicit_linux_host_policy_without_changing_other_platforms(self):
+        for platform in ('linux','win32'):
+            with self.subTest(platform=platform), tempfile.TemporaryDirectory() as directory:
+                gate,commands=self.inventory_gate(directory)
+                with patch('gates.sys.platform',platform), patch('gates.lock_packages',return_value={('brace-expansion','5.0.12')}):
+                    result=gate.sbom()
+                self.assertEqual([label for label,argv in commands],['syft','release-inventory','verify-inventory'])
+                for label,argv in commands[1:]:
+                    self.assertEqual(argv[2],'generate' if label=='release-inventory' else 'verify')
+                    if platform=='linux':self.assertEqual(argv[-2:],['--host-policy','debian-nodejs-v1'])
+                    else:self.assertNotIn('--host-policy',argv)
+                self.assertEqual(result['inventoryHostPolicy'],'debian-nodejs-v1' if platform=='linux' else None)
+                self.assertEqual(result['blockingFindings'],[])
+
+    def test_sbom_inventory_generation_or_verification_error_never_falls_back_to_strict_or_passes(self):
+        for failure in ('release-inventory','verify-inventory'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+                gate,commands=self.inventory_gate(directory,failure)
+                with patch('gates.sys.platform','linux'), patch('gates.lock_packages',return_value={('brace-expansion','5.0.12')}):
+                    with self.assertRaisesRegex(ValueError,failure+' failed'):gate.sbom()
+                expected=['syft','release-inventory']+(['verify-inventory'] if failure=='verify-inventory' else [])
+                self.assertEqual([label for label,argv in commands],expected)
+                for label,argv in commands[1:]:self.assertEqual(argv[-2:],['--host-policy','debian-nodejs-v1'])
+
+    def test_linux_sbom_job_requires_native_inventory_positive_and_negative_tests_before_gate(self):
+        workflow=(Path(__file__).resolve().parents[2]/'.github/workflows/security.yml').read_text()
+        job=workflow.split('\n  security-sbom:\n',1)[1].split('\n  security-gates:\n',1)[0]
+        self.assertIn('runs-on: ubuntu-24.04',job)
+        expected='node --test test/security-release-inventory.test.js test/security-release-host-inventory.test.js test/security-release-inventory-host-cli.test.js'
+        self.assertIn(expected,job)
+        self.assertLess(job.index(expected),job.index('python scripts/security/gates.py sbom'))
+        test_step=job[job.index('      - name: Native inventory Linux positive and negative tests'):job.index('      - name: Run sbom gate')]
+        self.assertNotIn('continue-on-error:',test_step)
+        self.assertNotIn('if:',test_step)
 
     def test_actual_aggregate_shell_rejects_every_non_success(self):
         workflow=(Path(__file__).resolve().parents[2]/'.github/workflows/security.yml').read_text()
