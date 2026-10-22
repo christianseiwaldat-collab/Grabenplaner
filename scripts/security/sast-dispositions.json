@@ -37856,12 +37856,12 @@
         },
         {
           "path": "public/index.html",
-          "sha256": "6d77f9e4284df221876f63891b7a97b2d136c1bd41843fbd9b1375f971ebc185",
+          "sha256": "d4eaeea37a5042bc127eceb11d0534ffe890c02bb6d3a50ff3f65066e36d3d53",
           "sha256Variants": [
-            "6d77f9e4284df221876f63891b7a97b2d136c1bd41843fbd9b1375f971ebc185",
-            "b96ae21ceb505a373f04716a373619c896fb2623f8f65ae9c22467bb3cf01c73"
+            "64c120712b0ab29cf215af2c9a18545262e4a380e8aa0bd4751beea010e4d854",
+            "d4eaeea37a5042bc127eceb11d0534ffe890c02bb6d3a50ff3f65066e36d3d53"
           ],
-          "reason": "Lines 1032: All six data-learning-area attributes are static checked-in values, not server/import data. Release 0.92.91 changes only the two version labels; all six attribute values and their surrounding markup are unchanged. Context continuity review 2026-10-19 (Codex, automated review; no human approval): Static navigation, section hosts and the fixed same-origin security-sast.js script reference changed. No inline script, untrusted interpolation or external source was added. Release 0.92.92 continuity review 2026-10-20 (Codex, automated; no human approval): comparison with the previously qualified b63774c source proves that exactly two version labels changed. The six static data-learning-area values, loader map, finding source, navigation and script references remain byte-identical."
+          "reason": "Lines 1032: All six data-learning-area attributes are static checked-in values, not server/import data. Release 0.92.91 changes only the two version labels; all six attribute values and their surrounding markup are unchanged. Context continuity review 2026-10-19 (Codex, automated review; no human approval): Static navigation, section hosts and the fixed same-origin security-sast.js script reference changed. No inline script, untrusted interpolation or external source was added. Release 0.92.92 continuity review 2026-10-20 (Codex, automated; no human approval): comparison with the previously qualified b63774c source proves that exactly two version labels changed. The six static data-learning-area values, loader map, finding source, navigation and script references remain byte-identical. Release 0.92.93 continuity review 2026-10-22 (Codex, automated review; no human approval): Exact comparison with committed 7e19e1b proves that only the two sidebar/footer version labels change from v0.92.92 Beta to v0.92.93 Beta. All six static data-learning-area attribute values, the dynamic-method allowlist/loader, finding source span, navigation, markup structure and script references are unchanged. Only this context file is rebound to its explicitly reviewed current LF/CRLF raw hashes; the original finding identity, review authority and expiry are retained."
         }
       ]
     },
