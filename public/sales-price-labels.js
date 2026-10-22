@@ -789,8 +789,36 @@
           return false;
         }
       }, suspend,
-      async flush(){recordDraft();return draftStore.flush();},
+      async flush(){
+        let deadline, preparationExpired = false;
+        const flushOwner = owner, flushDraft = workingDraftId;
+        const current = () => !preparationExpired && !destroyed && owner === flushOwner && accessKey() === flushOwner && workingDraftId === flushDraft;
+        if (!current()) return false;
+        recordDraft();
+        const save = (async () => {
+          let saved = await draftStore.flush({canContinue: current});
+          if (!current()) return false;
+          if (!saved && draftStore.hasUnsaved) saved = await draftStore.retry({canContinue: current});
+          if (!current()) return false;
+          if (!saved && draftStore.hasUnsaved) {
+            const cause = draftStore.error;
+            throw Object.assign(new Error(cause?.message || 'Der Arbeitsentwurf konnte nicht bestätigt werden. Bitte das Speichern erneut versuchen.'),
+              {code: cause?.code || 'PRICE_LABEL_DRAFT_UNSAVED', status: cause?.status});
+          }
+          return saved;
+        })();
+        try {
+          return await Promise.race([save, new Promise((_, reject) => {
+            deadline = setTimeout(() => {
+              preparationExpired = true;
+              reject(Object.assign(new Error('Der Preisschildentwurf wird noch gesichert. Bitte anschließend erneut abmelden.'),
+                {code: 'PRICE_LABEL_DRAFT_PENDING'}));
+            }, 15000);
+          })]);
+        } finally { clearTimeout(deadline); }
+      },
       get hasUnsaved(){return draftStore.hasUnsaved||imageUploading;},
+      get hasPendingUpload(){return imageUploading;},
       syncPrint(){pdfPrint?.sync();},
       destroy() { suspend();destroyed=true;pdfPrint?.destroy();searchWindow?.destroy();for(const controller of uploadControllers)controller.abort();uploadControllers.clear();draftStore.invalidate();stopDraftSubscription();for (const off of listeners) off(); elementEditor.destroy(); root.replaceChildren(); },
     };

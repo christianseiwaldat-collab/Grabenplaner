@@ -3496,15 +3496,20 @@ async function loginToAdministration(event) {
   }
 }
 
+let adminLogoutInProgress = null;
+
 async function logoutPortal() {
+  if (!state.portalSession || adminLogoutInProgress?.session === state.portalSession) return;
+  const operation = { session: state.portalSession };
+  adminLogoutInProgress = operation;
+  const actor = () => JSON.stringify([state.portalSession?.user?.employeeNumber, state.portalSession?.user?.accountId]);
+  const logoutActor = actor();
+  const current = () => state.portalSession === operation.session && actor() === logoutActor;
   try {
     await window.GrabenplanerSessionLifecycle.credentials(async () => {
+      if (!current()) return;
       if (salesPriceLabelsWorkspace?.hasUnsaved) {
-        try {await salesPriceLabelsWorkspace.flush();} catch(error) {showToast('Der Preisschildentwurf konnte noch nicht gespeichert werden: '+error.message,true);return;}
-        if(salesPriceLabelsWorkspace.hasUnsaved){showToast('Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden.',true);return;}
-      }
-      if (sidebarNotepad && !await sidebarNotepad.prepareLogout()) {
-        showToast("Deine Notizen konnten noch nicht gespeichert werden. Bitte im Notizblock erneut versuchen und danach abmelden.",true);
+        showToast('Der Preisschildentwurf wurde inzwischen geändert. Bitte erneut abmelden, damit die Änderungen zuerst gesichert werden.', true);
         return;
       }
       clearEmployeeOnboardingStartState();
@@ -3514,10 +3519,30 @@ async function logoutPortal() {
       try {
         await api("/api/portal/v1/auth/logout", { method: "POST", body: "{}" });
         window.GrabenplanerSessionLifecycle?.publish();
-      } catch (error) { showToast(error.message, true); return; }
+      } catch (error) { if (current()) showToast(error.message, true); return; }
+      if (!current()) return;
       window.location.reload();
-    });
-  } catch (error) { showToast(error.message, true); }
+    }, { prepare: async () => {
+      if (!current()) return false;
+      if (salesPriceLabelsWorkspace?.hasUnsaved) {
+        try { await salesPriceLabelsWorkspace.flush(); }
+        catch (error) { if (current()) showToast('Der Preisschildentwurf konnte noch nicht gespeichert werden: ' + error.message, true); return false; }
+        if (!current()) return false;
+        if (salesPriceLabelsWorkspace.hasUnsaved) {
+          showToast(salesPriceLabelsWorkspace.hasPendingUpload
+            ? 'Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden.'
+            : 'Der Preisschildentwurf ist noch nicht gesichert. Bitte unter Preisschilder das Speichern erneut versuchen.', true);
+          return false;
+        }
+      }
+      if (sidebarNotepad && !await sidebarNotepad.prepareLogout()) {
+        if (current()) showToast("Deine Notizen konnten noch nicht gespeichert werden. Bitte im Notizblock erneut versuchen und danach abmelden.", true);
+        return false;
+      }
+      return current();
+    } });
+  } catch (error) { if (current()) showToast(error.message, true); }
+  finally { if (adminLogoutInProgress === operation) adminLogoutInProgress = null; }
 }
 
 function openAdminSetup() {

@@ -56,7 +56,7 @@
       };
     });
   }
-  async function credentials(operation, { allowAccountChange = false } = {}) {
+  async function credentials(operation, { allowAccountChange = false, prepare } = {}) {
     const expectedGeneration = generation;
     const csrfCookie = () => String(root.document?.cookie || "").split(";").map(value => value.trim())
       .find(value => value.startsWith("grabenplaner_csrf=")) || "";
@@ -69,10 +69,22 @@
         throw credentialError("Die Anmeldung wurde in einem anderen Fenster geändert. Bitte die gewünschte Aktion erneut aufrufen.");
       }
       if (controller.signal.aborted) throw credentialError();
-      advance();
       credentialChanged = false;
       credentialController = controller;
-      try { return await operation(); }
+      try {
+        // Finish existing saves under the same cross-tab lock before their
+        // response generation is invalidated by the credential transition.
+        if (prepare) {
+          const prepared = await prepare();
+          if (controller.signal.aborted) throw credentialError();
+          if (!allowAccountChange && (generation !== expectedGeneration || csrfCookie() !== expectedCsrfCookie)) {
+            throw credentialError("Die Anmeldung wurde in einem anderen Fenster geändert. Bitte die gewünschte Aktion erneut aufrufen.");
+          }
+          if (prepared === false) return false;
+        }
+        advance();
+        return await operation();
+      }
       finally { if (credentialController === controller) credentialController = null; }
     };
     try {

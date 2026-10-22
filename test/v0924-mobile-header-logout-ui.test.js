@@ -75,7 +75,10 @@ function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout
       loginPersonnelNumber: { focus() { this.focused = true; } },
     },
     window: { setTimeout: timerImplementation, clearTimeout,
-      GrabenplanerSessionLifecycle: { credentials: operation => operation(), advance() {}, publish() {} },
+      GrabenplanerSessionLifecycle: { credentials: async (operation, {prepare} = {}) => {
+        if (prepare && await prepare() === false) return false;
+        return operation();
+      }, advance() {}, publish() {} },
     },
     api: async (...args) => {
       calls.api += 1;
@@ -184,7 +187,7 @@ test('Portal logout saves a pending price draft before logout and ignores double
 
 test('Portal logout keeps the account and draft when saving fails or an upload is still pending', async t => {
   for(const failing of [true,false])await t.test(failing?'draft save failed':'image upload pending',async()=>{
-    const workspace={hasUnsaved:true,flush:async()=>{if(failing)throw new Error('Synthetic save error');}};
+    const workspace={hasUnsaved:true,hasPendingUpload:!failing,flush:async()=>{if(failing)throw new Error('Synthetic save error');}};
     const runtime=createLogoutRuntime(async()=>({ok:true}),setTimeout,workspace);
     await runtime.context.runLogout();
     assert.equal(runtime.calls.api,0);assert.equal(runtime.calls.showLogin,0);assert.notEqual(runtime.context.portalState.session,null);

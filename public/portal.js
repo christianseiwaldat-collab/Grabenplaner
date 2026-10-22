@@ -2875,17 +2875,11 @@ async function logout() {
   message(el.portalLogoutStatus, "");
   try {
     await window.GrabenplanerSessionLifecycle.credentials(async () => {
-      if (branchPriceLabelsWorkspace?.hasUnsaved) {
-        savingDraft = true;
-        await branchPriceLabelsWorkspace.flush();
-        savingDraft = false;
-        if (!current()) return;
-        if (branchPriceLabelsWorkspace?.hasUnsaved) {
-          message(el.portalLogoutStatus, "Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden.", true);
-          return;
-        }
-      }
       if (!current()) return;
+      if (branchPriceLabelsWorkspace?.hasUnsaved) {
+        message(el.portalLogoutStatus, "Der Preisschildentwurf wurde inzwischen geändert. Bitte erneut abmelden, damit die Änderungen zuerst gesichert werden.", true);
+        return;
+      }
       logoutRequestStarted = true;
       neutralizeBirthdayPresentationTheme();
       timeout = window.setTimeout(() => controller.abort(), 15000);
@@ -2908,7 +2902,25 @@ async function logout() {
       showLogin();
       el.loginPassword.value = "";
       el.loginPersonnelNumber.focus();
-    });
+    }, { prepare: async () => {
+      if (!current()) return false;
+      if (branchPriceLabelsWorkspace?.hasUnsaved) {
+        savingDraft = true;
+        try { await branchPriceLabelsWorkspace.flush(); }
+        catch (error) {
+          if (current()) message(el.portalLogoutStatus, `Der Preisschildentwurf konnte noch nicht gespeichert werden: ${error.message}`, true);
+          return false;
+        } finally { savingDraft = false; }
+        if (!current()) return false;
+        if (branchPriceLabelsWorkspace?.hasUnsaved) {
+          message(el.portalLogoutStatus, branchPriceLabelsWorkspace.hasPendingUpload
+            ? "Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden."
+            : "Der Preisschildentwurf ist noch nicht gesichert. Bitte unter Preisschilder das Speichern erneut versuchen.", true);
+          return false;
+        }
+      }
+      return current();
+    } });
   } catch (error) {
     if (!current()) return;
     const detail = savingDraft

@@ -50,7 +50,10 @@ function logoutFixture({ flush = null } = {}) {
   const workspace = flush ? { hasUnsaved: true, flush: () => flush.promise } : null;
   const context = vm.createContext({ portalState: state, el, AbortController, privatePortalWorkspaces: { synchronize: () => effects.push("privateSync") },
     portalVoiceAssistant: { reset: () => effects.push("voiceReset"), synchronize: () => effects.push("voiceSync") },
-    window: { setTimeout: () => 1, clearTimeout: () => {}, GrabenplanerSessionLifecycle: { credentials: operation => operation(), advance() {}, publish() {} } }, branchPriceLabelsWorkspace: workspace,
+    window: { setTimeout: () => 1, clearTimeout: () => {}, GrabenplanerSessionLifecycle: { credentials: async (operation, {prepare} = {}) => {
+      if (prepare && await prepare() === false) return false;
+      return operation();
+    }, advance() {}, publish() {} } }, branchPriceLabelsWorkspace: workspace,
     portalUser: () => state.session?.user, processTaskActorFingerprint: user => user?.employeeNumber || "",
     message: (_target, text, error) => messages.push({ text, error: Boolean(error) }),
     api: (url, options) => { calls.push({ url, options }); return replies[calls.length - 1].promise; },
@@ -78,6 +81,7 @@ function logoutFixture({ flush = null } = {}) {
 }
 for (const reject of [false, true]) test("Portal logout: late " + (reject ? "error" : "success") + " preserves a replacement same-account session and its controls", async () => {
   const f = logoutFixture(), request = f.logout();
+  await new Promise(setImmediate);
   assert.equal(f.calls.length, 1);
   const replacement = f.replaceSession();
   if (reject) f.reply.reject(new Error("BEISPIEL disconnected")); else f.reply.resolve(null);
@@ -106,11 +110,13 @@ test("Portal logout: current success clears tasks/tab and current failure keeps 
 });
 test("Actual showPortal session initialization frees inherited logout controls; an older finally cannot clear a new pending logout", async () => {
   const f = logoutFixture(), oldRequest = f.logout();
+  await new Promise(setImmediate);
   assert.equal(f.button.disabled, true);
   const replacement = session(); f.showPortal(replacement);
   assert.equal(f.state.session, replacement); assert.equal(f.button.disabled, false);
   assert.equal(f.attributes.has("aria-busy"), false); assert.equal(f.button.textContent, "Abmelden");
-  const newRequest = f.logout(); assert.equal(f.calls.length, 2); assert.equal(f.button.disabled, true);
+  const newRequest = f.logout(); await new Promise(setImmediate);
+  assert.equal(f.calls.length, 2); assert.equal(f.button.disabled, true);
   f.reply.resolve(); await oldRequest;
   assert.equal(f.state.session, replacement); assert.equal(f.button.disabled, true);
   assert.equal(f.attributes.get("aria-busy"), "true"); assert.equal(f.button.textContent, "Abmelden…");
