@@ -25,6 +25,7 @@ let rightsSettingsWindows = null, permissionDefaultsUI = null;
 let rightsEditorGeneration = 0, rightsEditorSaveContext = null, rightsEditorSnapshot = null;
 let gpDefinitionsWorkspace = null, privateWorkspaceReturnRoute = null;
 let planningAssistantWorkspace = null;
+let systemUtilizationWorkspace = null;
 (() => {
   const storageKey = "grabenplaner-bootstrap-token";
   const parameters = new URLSearchParams(window.location.search);
@@ -849,7 +850,7 @@ const elements = Object.fromEntries(
     "mobilePortalLocationDisplayCard", "mobilePortalLocationDisplayLocation", "mobilePortalLocationDisplayModules", "mobilePortalLocationDisplayHint", "saveMobilePortalLocationDisplayButton",
     "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountLearningDashboard", "organizationAccountLearningDashboardRow", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountArticles", "organizationAccountArticlesRow", "organizationAccountReceipts", "organizationAccountReceiptsRow", "organizationAccountTimeOff", "organizationAccountTimeOffRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "personnelViewSettingsCard", "trustLevelSettingsCard",
-    "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
+    "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "systemCenterUtilization", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
@@ -1466,6 +1467,7 @@ function showLoginGate(message = "") {
   resetAdminPersonalActionsState("");
   state.portalSession = null;
   planningAssistantWorkspace?.reset();
+  syncSystemUtilizationWorkspace();
   syncWorkflowStudio();
   personnelDashboardInformation?.clear();
   syncPersonnelDashboardWorkspace();
@@ -3034,6 +3036,7 @@ function applyRoleVisibility() {
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   const systemCenterAccess = diagnosticsReadAccess || diagnosticsTechnicalAccess;
   elements.systemCenterPanel?.classList.toggle("hidden", !systemCenterAccess);
+  syncSystemUtilizationWorkspace();
   const updateAccess = !lanActive || permissions.includes("update:write");
   const personnelRulesDashboardAccess = canReadPersonnelRulesDashboard();
   document.querySelectorAll('[data-dashboard-capability="rights"]').forEach((button) => button.classList.toggle("hidden", !rightsAccess));
@@ -27224,13 +27227,55 @@ function systemCenterUptimeLabel(seconds) {
 
 function systemCenterResourceCards(resources) {
   if (!resources || typeof resources !== "object") return "";
+  const percent = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100
+    ? new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 }).format(value) + " %" : null;
   const metrics = [
     { label: "Serverlaufzeit", value: systemCenterUptimeLabel(resources.uptimeSeconds), detail: "Seit dem letzten App-Start" },
-    { label: "CPU", value: Number.isFinite(resources.cpu?.loadAverageOneMinute) ? `${resources.cpu.loadAverageOneMinute} Last` : "Aktiv", detail: Number.isInteger(resources.cpu?.logicalProcessors) && resources.cpu.logicalProcessors > 0 ? `${resources.cpu.logicalProcessors} logische Prozessoren` : "Prozessoranzahl nicht verfügbar" },
-    { label: "Arbeitsspeicher", value: Number.isFinite(resources.memory?.usedPercent) ? `${resources.memory.usedPercent}% belegt` : "Nicht verfügbar", detail: `${systemCenterByteLabel(resources.memory?.availableBytes ?? resources.memory?.freeBytes)} verfügbar` },
+    { id: "cpu", label: "CPU", value: percent(resources.cpu?.usedPercent) || (resources.cpu?.status === "warming-up" ? "Messung läuft" : "Nicht verfügbar"), detail: Number.isInteger(resources.cpu?.logicalProcessors) && resources.cpu.logicalProcessors > 0 ? `Gesamter Server · ${resources.cpu.logicalProcessors} logische Prozessoren` : "Gesamter Server" },
+    { id: "memory", label: "Arbeitsspeicher", value: percent(resources.memory?.usedPercent) ? `${percent(resources.memory.usedPercent)} belegt` : "Nicht verfügbar", detail: `${systemCenterByteLabel(resources.memory?.availableBytes ?? resources.memory?.freeBytes)} verfügbar` },
     { label: "Freier Speicher", value: systemCenterByteLabel(resources.storage?.freeBytes), detail: `Datenbank ${systemCenterByteLabel(resources.storage?.databaseBytes)}` },
   ];
-  return `<section class="system-center-resources" aria-label="Aktuelle technische Ressourcen">${metrics.map((metric) => `<article><small>${escapeHtml(metric.label)}</small><strong>${escapeHtml(metric.value)}</strong><span>${escapeHtml(metric.detail)}</span></article>`).join("")}</section>`;
+  return `<section class="system-center-resources" aria-label="Aktuelle technische Ressourcen">${metrics.map((metric) => `<article${metric.id ? ` data-system-utilization-resource="${metric.id}"` : ""}><small>${escapeHtml(metric.label)}</small><strong>${escapeHtml(metric.value)}</strong><span>${escapeHtml(metric.detail)}</span></article>`).join("")}</section>`;
+}
+
+function systemUtilizationAllowed() {
+  if (state.portalStatus?.portalEnabled === false) return true;
+  return state.portalSession?.authenticated === true && !state.portalSession.user?.mustChangePassword
+    && state.portalSession.user?.permissions?.includes("system:diagnostics:technical") === true;
+}
+
+function systemUtilizationActive() {
+  return systemUtilizationAllowed() && state.currentView === "settings"
+    && elements.systemCenterPanel?.classList.contains("active") === true;
+}
+
+function updateSystemUtilizationSnapshot(snapshot) {
+  if (!systemUtilizationActive() || !snapshot?.current || !state.systemCenter?.resources) return;
+  const resources = state.systemCenter.resources;
+  resources.cpu = { ...resources.cpu, ...snapshot.current.cpu };
+  resources.memory = { ...resources.memory, ...snapshot.current.memory };
+  const template = document.createElement("div");
+  template.innerHTML = systemCenterResourceCards(resources);
+  for (const id of ["cpu", "memory"]) {
+    const selector = `[data-system-utilization-resource="${id}"]`;
+    const current = elements.systemCenterContent.querySelector(selector), next = template.querySelector(selector);
+    if (current && next) current.replaceChildren(...next.childNodes);
+  }
+}
+
+function syncSystemUtilizationWorkspace() {
+  const host = elements.systemCenterUtilization;
+  if (!host || !globalThis.GpSystemUtilization) return;
+  const slot = elements.systemCenterContent?.querySelector("[data-system-utilization-slot]");
+  if (slot) slot.replaceWith(host);
+  const allowed = systemUtilizationAllowed();
+  if (!systemUtilizationWorkspace && allowed) systemUtilizationWorkspace = globalThis.GpSystemUtilization.mount(host, {
+    api, isActive: systemUtilizationActive, onSnapshot: updateSystemUtilizationSnapshot,
+  });
+  const user = state.portalSession?.user;
+  const actorKey = !allowed ? "" : state.portalStatus?.portalEnabled === false ? "local"
+    : JSON.stringify([user?.accountId, user?.employeeNumber, user?.sessionKind, user?.permissions, user?.scopes]);
+  systemUtilizationWorkspace?.synchronize({ active: systemUtilizationActive(), actorKey });
 }
 
 function renderSystemCenterOffsiteProvider(status) {
@@ -27531,6 +27576,7 @@ function renderSystemCenter(payload) {
     }).join("")}</section>` : ""}
     ${renderSystemCenterOffsiteProvider(payload?.status)}
     ${systemCenterResourceCards(payload?.resources)}
+    <div data-system-utilization-slot></div>
     ${renderSystemCenterOperations(payload?.automation, payload?.notifications)}
     ${renderSystemCenterTrends(payload?.trends, payload?.resources, score)}
     ${renderProductReadiness(payload?.productReadiness)}
@@ -27567,6 +27613,7 @@ function renderSystemCenter(payload) {
       <div class="system-center-section-heading"><div><span class="eyebrow">Signierte Prüfhistorie</span><h2>Recovery-Assurance-Läufe</h2><p>Die angezeigten Läufe wurden serverseitig aus der vollständig geprüften Signaturkette zusammengefasst.</p></div><span>${Number(assurance.eventCount || 0)} bestätigte Ereignisse</span></div>
       <div class="system-center-run-list">${runs.length ? runs.map(renderSystemCenterRun).join("") : '<div class="system-center-empty"><strong>Noch kein vollständiger Lauf</strong><p>Sobald ein Recovery-Assurance-Test ausgeführt wurde, erscheint hier sein nachvollziehbarer Ablauf.</p></div>'}</div>
     </section>`;
+  if (globalThis.GpSystemUtilization) syncSystemUtilizationWorkspace();
 }
 
 function applySystemCenterControls(payload) {
@@ -38236,6 +38283,7 @@ function setView(view) {
   syncSalesArticleSearchWindow();
   syncGpWindows();
   syncStartDashboardVps();
+  syncSystemUtilizationWorkspace();
   state.salesArticleCatalog.tools?.syncPrint();
   if (view === "settings") {
     const activeSettingsTab = document.querySelector("[data-settings-tab].active:not(.hidden)");
@@ -38497,6 +38545,7 @@ function setSettingsTab(tab) {
     loadRightsManagement();
   } else syncRightsWorkspace();
   if (activeTab === "systemCenter") loadSystemCenter();
+  syncSystemUtilizationWorkspace();
   if (activeTab === "integrations") loadIntegrations().catch((error) => showToast(error.message, true));
   if (activeTab === "dataProtection") {
     if (elements.retentionPreviewAsOf && !elements.retentionPreviewAsOf.value) {

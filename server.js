@@ -40178,6 +40178,9 @@ async function systemCenterUpdateStatus() {
 const databaseSizeHistory = require("./lib/database-size-history").createDatabaseSizeHistory(
   path.join(dataDirectory, "system-center-database-sizes.json"),
 );
+const systemUtilization = require("./lib/system-utilization").createSystemUtilizationRecorder({
+  file: path.join(dataDirectory, "system-center-utilization.json"),
+});
 
 function systemCenterResourceSummary(diagnostics) {
   let databaseBytes = null;
@@ -40189,7 +40192,7 @@ function systemCenterResourceSummary(diagnostics) {
   return {
     uptimeSeconds: Math.max(0, Math.floor(process.uptime())),
     cpu: {
-      logicalProcessors: os.cpus().length,
+      ...systemUtilization.snapshot().cpu,
       loadAverageOneMinute: process.platform === "linux" ? Number(os.loadavg()[0].toFixed(2)) : null,
     },
     memory: require('./lib/system-memory').systemMemorySummary(),
@@ -40567,6 +40570,15 @@ app.get("/api/portal/v1/system-center", async (request, response) => {
   const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
   response.setHeader("Cache-Control", "private, no-store");
   response.json(await systemCenterPayload(actor));
+});
+
+app.get("/api/portal/v1/system-center/utilization", (request, response) => {
+  requirePortalAnyPermission(request, ["system:diagnostics:technical"]);
+  response.setHeader("Cache-Control", "private, no-store");
+  const value = request.query.hours;
+  const invalidKeys = Object.keys(request.query).some(key => key !== "hours");
+  const hours = invalidKeys ? NaN : value === undefined ? 24 : typeof value === "string" && /^(1|6|24|72|168|720|2160|4320)$/.test(value) ? Number(value) : NaN;
+  response.json(systemUtilization.read(hours));
 });
 
 let systemNotificationReceiptStore;
@@ -66424,6 +66436,7 @@ async function startServer() {
       for (const url of getLanUrls(listeningPort)) console.log(`LAN-Zugriff: ${url}`);
     }
     scheduleAutomaticBackups();
+    if (process.env.GRABENPLANER_DEPLOYMENT_KIND !== "recovery-smoke") systemUtilization.start();
     if (process.env.GRABENPLANER_DEPLOYMENT_KIND !== 'recovery-smoke') {salesReportJobs.start();tradeInsightJobs.start();dataImportJobs.start();}
     try { await reconcileInterruptedIntegrationDeliveries(); } catch (error) { console.error("Unterbrochene Lohnübergaben konnten nicht abgeglichen werden:", error); }
     try { await reconcileOrphanAmuBlobs(); } catch (error) { console.error("AUM-Abgleich fehlgeschlagen:", error); }
@@ -66569,6 +66582,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
   if (notificationDispatchInterval) clearInterval(notificationDispatchInterval);
   if (rateLimitCleanupInterval) clearInterval(rateLimitCleanupInterval);
   if (systemCenterHealthInterval) clearInterval(systemCenterHealthInterval);
+  systemUtilization.stop();
   if (!server) {
     void finish();
     return;
