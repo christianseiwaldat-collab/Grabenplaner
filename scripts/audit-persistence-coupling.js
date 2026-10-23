@@ -760,6 +760,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  "test/planning-assistant-preferences-api.test.js",
   "test-support/postgresql-api/ownership.js",
   "test/postgresql-api-native-fixture.test.js",
   "test/portal-foundation-https.test.js",

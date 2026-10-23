@@ -32,6 +32,9 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
     assert.equal(digest((await sales.query("SELECT * FROM gp.import_delete_performance_history ORDER BY version")).rows), before);
     await core.query("DROP TABLE gp.unreviewed_migration_history"); created = false;
     const database = databaseForCurrentTest();
+    const department = database.prepare("INSERT INTO departments(location_id,name) VALUES('01','Synthetic identity proof')").run();
+    assert.ok(Number.isSafeInteger(department.lastInsertRowid) && department.lastInsertRowid > 0);
+    assert.equal(database.prepare("SELECT name FROM departments WHERE id=?").get(department.lastInsertRowid).name, "Synthetic identity proof");
     database.prepare("INSERT INTO settings(key,value) VALUES(?,?)").run("synthetic-api-fixture-proof", "00001");
     assert.equal(database.prepare("SELECT value AS actualValue FROM settings WHERE key=?").get("synthetic-api-fixture-proof").actualValue, "00001");
     const reader = databaseForCurrentTest(undefined, { readOnly: true });

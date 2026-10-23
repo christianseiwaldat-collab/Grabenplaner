@@ -33,6 +33,7 @@
     "test/personnel-profile-overview-api.test.js",
     "test/personnel-workflow-api.test.js",
     "test/personnel-workflow-instances-api.test.js",
+    "test/planning-assistant-preferences-api.test.js",
     "test/planning-optimizer-api.test.js",
     "test/portal-birthday-presentation-claim-api.test.js",
     "test/portal-birthday-presentation-settings-api.test.js",

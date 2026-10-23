@@ -699,7 +699,8 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
   "server-tools/linux/offsite/lib/application-smoke.js",
   "server-tools/linux/recovery/lib/recovery-apply.js",
-  "server-tools/linux/recovery/lib/recovery-verify.js"
+  "server-tools/linux/recovery/lib/recovery-verify.js",
+  "server-tools/linux/test-grabenplaner-server.sh"
 ]);
   assert.deepEqual(report.resolvedTestFiles, ["test/database-lock.test.js"]);
   assert.deepEqual(report.missingIndirectFiles, []);

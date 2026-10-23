@@ -29,7 +29,9 @@ Dateien vorbereitet sein:
 Der Installer prüft die Dokumente vor Änderungen an Installationsverzeichnissen,
 Benutzern oder Diensten. Nach der Paketprüfung und Abhängigkeitsinstallation prüft
 er alle vier Anwendungs-/Lesekonten mit schreibgeschützten Transaktionen, bevor
-er die Anwendung austauscht oder Dienste beendet. Überprivilegierte Konten oder
+er die Anwendung austauscht oder Dienste beendet. Das getrennte, nicht
+privilegierte Monitorkonto prüft zusätzlich die tatsächliche Clusterkennung.
+Überprivilegierte Konten oder
 abweichende Datenbank-/Umgebungsbindungen verhindern die Installation. Fehlt ein
 Administratorkonto, ist ein unverbrauchter Bootstrap-Token erforderlich. Der
 Bootstrap prüft Konten ebenfalls über PostgreSQL.

@@ -100,8 +100,8 @@ async function executeOne(sql, values, mode) {
   let returning = false;
   if (mode === "run" && /^INSERT\b/i.test(text) && !/\bRETURNING\b/i.test(text) && translated.relations.length === 1) {
     const table = translated.relations[0];
-    const columns = (await client.query("SELECT column_name,column_default FROM information_schema.columns WHERE table_name=$1 AND table_schema IN ('gp','kassa','integration','trade','reporting') AND column_name='id'", [table])).rows;
-    if (columns.length === 1 && /nextval/.test(columns[0].column_default || "")) { text += " RETURNING id"; returning = true; }
+    const columns = (await client.query("SELECT column_name,column_default,is_identity FROM information_schema.columns WHERE table_name=$1 AND table_schema IN ('gp','kassa','integration','trade','reporting') AND column_name='id'", [table])).rows;
+    if (columns.length === 1 && (columns[0].is_identity === "YES" || /nextval/.test(columns[0].column_default || ""))) { text += " RETURNING id"; returning = true; }
   }
   const result = await client.query(text, translated.values.map(value => ArrayBuffer.isView(value) && !Buffer.isBuffer(value) ? Buffer.from(value.buffer, value.byteOffset, value.byteLength) : value));
   const aliases = new Map([...String(sql).matchAll(/\bAS\s+([A-Za-z_][A-Za-z_0-9]*)/gi)].map(match => [match[1].toLowerCase(), match[1]]));
