@@ -17,7 +17,14 @@ function cssRule(selector) {
 test("Admin-Pop-ups kapseln horizontales Überlaufen am Dialog und Formular", () => {
   const dialogs = [...html.matchAll(/<dialog\b[^>]*>/g)].map((match) => match[0]);
   assert.ok(dialogs.length >= 20, "Die erwarteten Admin-Dialoge wurden nicht gefunden.");
-  dialogs.forEach((dialog) => assert.match(dialog, /class="[^"]*\bmodal\b/));
+  // Workspace dialogs use the common GP window body instead of modal forms.
+  const windows = dialogs.filter(dialog => /data-gp-window-mode="workspace"/.test(dialog));
+  dialogs.filter(dialog => !windows.includes(dialog))
+    .forEach((dialog) => assert.match(dialog, /class="[^"]*\bmodal\b/));
+  assert.ok(windows.length > 0);
+  const windowStyles = fs.readFileSync(path.join(root, "public", "gp-window.css"), "utf8");
+  assert.match(windowStyles, /dialog\.gp-window\.gp-dialog\[open\][^{]*\{[^}]*overflow:hidden/);
+  assert.match(windowStyles, /\.gp-window\.gp-dialog > \.gp-dialog-body \{[^}]*min-width:0;[^}]*overflow:auto/);
 
   assert.match(cssRule(".modal"), /container-name:popup/);
   assert.match(cssRule(".modal"), /overflow:hidden/);

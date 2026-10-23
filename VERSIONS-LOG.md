@@ -1,8 +1,12 @@
 # Versionsstatus
 
-## v0.92.80 Beta · Quellstand
+## v0.92.93 Beta · Quellstand
 
-Datenqualität, gemeinsame Druckvorschau und verlässliche Speicherzustände.
+Verbesserte Konten-, Kennwort- und Sitzungssicherheit.
+Erweiterte Sicherheitsprüfungen und nachvollziehbare Auditübersicht.
+Aktualisierte Abhängigkeiten und abgesicherte Betriebsübergänge.
+Verbesserte native Inventarprüfung und abgesicherte Abmeldung.
+
 Der installierte Serverstand wird im GP angezeigt.
 
 ## v0.92.72 Beta · GitHub-Serverrelease

@@ -110,11 +110,14 @@ async function createActor(employeeNumber, role, {
     `).run(employeeNumber);
   }
   const token = `v0862-${employeeNumber}-${crypto.randomBytes(24).toString("hex")}`;
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = crypto.createHash("sha256").update(`gp-browser-csrf-v2\0${token}`).digest("hex");
+  const now = new Date();
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
-  `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"),
+    new Date(now.getTime() + 30 * 60000).toISOString(), now.toISOString(),
+    new Date(now.getTime() + 8 * 3600000).toISOString());
   return {
     employeeNumber,
     role,
@@ -150,6 +153,15 @@ async function requestJson(method, route, actor, body, options = {}) {
     headers: requestHeaders(actor, options),
     body: JSON.stringify(body),
   });
+  if (response.headers.get("X-GP-Session-Changed") === "1") {
+    const cookies = response.headers.getSetCookie();
+    const csrf = cookies.find(value => value.startsWith("grabenplaner_csrf="));
+    assert.ok(cookies.some(value => value.startsWith("grabenplaner_session=")) && csrf);
+    const previousCsrf = actor.csrf;
+    actor.cookie = cookies.map(value => value.split(";")[0]).join("; ");
+    actor.csrf = decodeURIComponent(csrf.split(";")[0].slice("grabenplaner_csrf=".length));
+    assert.notEqual(actor.csrf, previousCsrf);
+  }
   return response;
 }
 

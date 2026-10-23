@@ -40,6 +40,8 @@ function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
     $normalized = $RelativePath.Replace('\', '/')
     if ($normalized -in @(
         'server.js',
+        'services/planning-optimizer/service.py',
+        'services/planning-optimizer/requirements.txt',
         'backup.js',
         'scripts/run-background-backup.js',
         'scripts/manage-local-backup-archive.js',
@@ -299,6 +301,10 @@ try {
         'scripts\run-background-backup.js',
         'scripts\manage-local-backup-archive.js',
         'lib\backup-workspace.js',
+        'lib\security-release-inventory.js',
+        'server-tools\linux\security-release-inventory.js',
+        'services\planning-optimizer\service.py',
+        'services\planning-optimizer\requirements.txt',
         'lib\background-backup-process.js',
         'lib\local-backup-archive.js',
         'package.json',
@@ -327,6 +333,7 @@ try {
         'server-tools\linux\offsite\lib\assurance-history.js',
         'server-tools\linux\offsite\lib\assurance-control-broker.js',
         'server-tools\linux\offsite\lib\maintenance-schedule-broker.js',
+        'server-tools\linux\offsite\lib\deploy-deferral.js',
         'server-tools\linux\offsite\lib\offsite-rclone-policy.js',
         'server-tools\linux\offsite\lib\offsite-restore-verify.js',
         'server-tools\linux\offsite\lib\offsite-retention-verify.js',
@@ -475,6 +482,23 @@ try {
     foreach ($forbidden in @('node_modules', 'runtime', 'data', 'backups', '.env')) {
         if (Test-Path -LiteralPath (Join-Path $buildRoot $forbidden)) { throw "Verbotener Paketinhalt erkannt: $forbidden" }
     }
+
+    # The review UI reads a private server-side policy snapshot, never a public asset.
+    if (Test-Path -LiteralPath (Join-Path $buildRoot 'lib\security-sast-reviews.js')) {
+        $sastPolicySource = Join-Path $sourceRoot 'scripts\security\sast-dispositions.json'
+        if (-not (Test-Path -LiteralPath $sastPolicySource -PathType Leaf)) { throw 'Die gebundenen SAST-Bewertungen fehlen.' }
+        Copy-Item -LiteralPath $sastPolicySource -Destination (Join-Path $buildRoot 'lib\security-audits\sast-dispositions.json') -Force
+    }
+
+    # Bind the deterministic source inventory through the existing file/hash
+    # contract. It excludes itself and the outer manifest to avoid a hash cycle.
+    $inventoryNode = (Get-Command node -ErrorAction Stop).Source
+    $inventoryCli = Join-Path $buildRoot 'server-tools\linux\security-release-inventory.js'
+    $sourceInventoryPath = Join-Path $buildRoot 'lib\security-release-inventory.source.json'
+    & $inventoryNode $inventoryCli generate --mode source --root $buildRoot --source-commit $sourceCommit --created-at $sourceTimestamp --output $sourceInventoryPath
+    if ($LASTEXITCODE -ne 0) { throw 'Das versionsgebundene Quellinventar konnte nicht erstellt werden.' }
+    & $inventoryNode $inventoryCli verify --root $buildRoot --input $sourceInventoryPath
+    if ($LASTEXITCODE -ne 0) { throw 'Das versionsgebundene Quellinventar konnte nicht verifiziert werden.' }
 
     $buildPrefix = $buildRoot.TrimEnd('\') + '\'
     $manifestFiles = @(Get-ChildItem -LiteralPath $buildRoot -Recurse -File -Force |

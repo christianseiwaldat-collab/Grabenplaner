@@ -1,12 +1,13 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test=require('node:test'), assert=require('node:assert/strict'), fs=require('node:fs'), os=require('node:os'), path=require('node:path'), crypto=require('node:crypto');
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-permission-defaults-'));
 Object.assign(process.env,{DB_PATH:path.join(root,'test.db'),BACKUP_DIR:path.join(root,'backups'),GRABENPLANER_DATA_DIR:path.join(root,'data'),GRABENPLANER_FORCE_PORTAL:'1',GRABENPLANER_SEED_DEMO:'1',GRABENPLANER_TEST_AMU_SCANNER:'clean',NODE_ENV:'test'});
 const subject=require('../server'),{app,db}=subject;
 let server,url;
 function session(number) {
- const token=crypto.randomBytes(32).toString('hex'),csrf=crypto.randomBytes(24).toString('hex'),id=crypto.randomUUID();
- db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES (?,?,?,'2099-01-01T00:00:00.000Z')").run(id,number,crypto.createHash('sha256').update(token).digest('hex'));
+ const token=crypto.randomBytes(32).toString('hex'),csrf=sessionCsrf(token),id=crypto.randomUUID();
+ db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES (?,?,?,'2099-01-01T00:00:00.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(id,number,crypto.createHash('sha256').update(token).digest('hex'));
  return {id,cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,csrf};
 }
 async function request(route,actor,body) {

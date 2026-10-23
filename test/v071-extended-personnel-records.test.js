@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -6,6 +7,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const vm = require("node:vm");
 const { spawnSync } = require("node:child_process");
 const { createAmuStorage } = require("../lib/amu-storage");
 
@@ -37,7 +39,7 @@ let positionId;
 
 function session(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, role_locked, active, must_change_password,
@@ -52,8 +54,8 @@ function session(employeeNumber, role) {
   `).run(employeeNumber, role, role === "developer" ? 1 : 0);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }
@@ -312,7 +314,9 @@ test("v0.71 Block 4: Personalakt wird vollständig, partiell und ohne Klartext-L
   });
   assert.equal(created.response.status, 201, created.text);
   assert.equal(Object.hasOwn(created.payload, "personnelRecord"), false);
-  assert.doesNotMatch(JSON.stringify(created.payload), new RegExp(marker, "i"));
+  assert.equal(created.payload.fullName, `${personnelRecord.sensitive.identity.firstName} ${personnelRecord.sensitive.identity.lastName}`);
+  const { fullName: publicName, ...nonNameResponse } = created.payload;
+  assert.doesNotMatch(JSON.stringify(nonNameResponse), new RegExp(marker, "i"));
 
   const loaded = await request("/api/portal/v1/personnel-records/8711", { auth: hr });
   assert.equal(loaded.response.status, 200, loaded.text);
@@ -811,5 +815,12 @@ test("v0.71 Block 4: geschützte Formulare vermeiden Autofill und senden nur Fel
   assert.doesNotMatch(protectedForm, /autocomplete="(?:given-name|family-name|tel|email|street-address|postal-code|address-level|country-name|bday|honorific-prefix)"/);
   assert.match(appSource, /function personnelRecordPatch\(/);
   assert.match(appSource, /body\.personnelRecord = isEdit \? recordPatch : currentPersonnelRecord/);
-  assert.match(appSource, /elements\.employeeModal\?\.addEventListener\("close", clearEmployeeProtectedRecord\)/);
+  const closeRegistration = appSource.match(/^elements\.employeeModal\?\.addEventListener\("close",[^\n]+/m)?.[0];
+  assert.ok(closeRegistration, "The actual employee close listener must be installed");
+  let onClose, cleared = 0;
+  const employeeModal = { open: false, addEventListener(type, listener) { assert.equal(type, "close"); onClose = listener; } };
+  vm.runInNewContext(closeRegistration, { elements: { employeeModal }, clearEmployeeProtectedRecord() { cleared++; } });
+  onClose(); assert.equal(cleared, 1, "A completed close clears protected profile fields");
+  employeeModal.open = true; onClose();
+  assert.equal(cleared, 1, "A queued old close must preserve the newly opened employee form");
 });

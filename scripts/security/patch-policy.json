@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "package": "brace-expansion",
+  "version": "5.0.12",
+  "patch": "lib/vendor-patches/brace-expansion@5.0.12.patch",
+  "patchSha256": "69ec08fa5a76dd9b3e6394e64db12101aa4ac38ca484ad5eccd7974d2aa51c46",
+  "installedCommonJsSha256": "7fa22cfa4ef077835051b862a1d8dfbb0e350b0e8e0a91c62a84dc688b05a54c",
+  "reviewedOn": "2026-10-18",
+  "expiresOn": "2026-11-17",
+  "owner": "Grabenplaner dependency maintainers",
+  "reason": "Temporary CommonJS callable-export compatibility for ExcelJS minimatch3/5 consumers. Upstream5.0.12 security limits and parsing are unchanged. This is a compatibility-patch approval, not an advisory waiver.",
+  "removalCondition": "Revalidate or remove when upstream consumers support the modern named-export shape, when any pinned bytes/version change, or before expiry.",
+  "advisoryExceptions": []
+}

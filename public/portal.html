@@ -2,12 +2,13 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#edf2ee" />
     <title>Grabenplaner · Mitarbeiterportal</title>
     <link rel="icon" type="image/svg+xml" href="/assets/webicon.svg" data-brand-icon />
     <link rel="stylesheet" href="/portal.css" />
     <link rel="stylesheet" href="/learning-library.css" />
+    <link rel="stylesheet" href="/personnel-learning-workspace.css" />
     <link rel="stylesheet" href="/mobile-refinements.css" />
     <link rel="stylesheet" href="/sales-price-labels.css" />
     <link rel="stylesheet" href="/sales-price-label-editor.css" />
@@ -15,8 +16,11 @@
     <link rel="stylesheet" href="/sales-price-label-search-window.css" />
     <link rel="stylesheet" href="/gp-window.css" />
     <link rel="stylesheet" href="/gp-print-window.css" />
+    <link rel="stylesheet" href="/session-entry.css" />
   </head>
-  <body>
+  <body class="session-pending">
+    <p class="session-entry-status" role="status">Grabenplaner wird geöffnet …</p>
+    <noscript>Bitte JavaScript aktivieren, um den Grabenplaner zu öffnen.</noscript>
     <div class="deployment-banner hidden" id="portalDeploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
     <section class="portal-login" id="portalLogin">
       <form class="portal-card login-card" id="portalLoginForm">
@@ -25,7 +29,7 @@
         <h1>Anmelden</h1>
         <p>Mit Personalnummer oder Zugangskennung und Passwort.</p>
         <label><span>Zugangskennung</span><input id="loginPersonnelNumber" name="username" autocomplete="username" placeholder="Personalnummer oder Kontokennung" required disabled /></label>
-        <label><span>Passwort</span><span class="password-field"><input id="loginPassword" name="password" type="password" autocomplete="current-password" minlength="6" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Passwort</span><span class="password-field"><input id="loginPassword" name="password" type="password" autocomplete="current-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
         <button class="login-forgot-password" id="forgotPasswordButton" type="button">Passwort vergessen?</button>
         <p class="message error hidden" id="loginError"></p>
         <button class="primary" type="submit">Anmelden</button>
@@ -41,10 +45,21 @@
           <button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button>
           <button class="text-button header-action portal-settings-shortcut hidden" id="portalSettingsShortcut" type="button" aria-label="Einstellungen öffnen"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 8.2A3.8 3.8 0 1 0 12 15.8 3.8 3.8 0 0 0 12 8.2ZM19 12a7.2 7.2 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7.7 7.7 0 0 0-2.1-1.2L14 3h-4l-.4 2.7a7.7 7.7 0 0 0-2.1 1.2l-2.4-1-2 3.4 2 1.5A7.2 7.2 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.4-1a7.7 7.7 0 0 0 2.1 1.2L10 21h4l.4-2.7a7.7 7.7 0 0 0 2.1-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" /></svg><span class="portal-settings-shortcut-label">Einstellungen</span></button>
           <button class="text-button header-action personal-actions-shortcut" id="personalActionsButton" type="button" aria-label="Meine letzten Aktionen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 7v5l3 2M21 12a9 9 0 1 1-2.64-6.36M18 3v4h-4" /></svg><span>Meine Aktionen</span></button>
+          <button class="text-button header-action hidden" id="voiceAssistantLaunch" type="button" aria-label="GP-Assistent öffnen" aria-controls="voiceAssistantPanel" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11v1a7 7 0 0 0 14 0v-1M12 19v3M8 22h8"/></svg><span>GP-Assistent</span></button>
           <button class="text-button header-action" id="logoutButton" data-gp-print-fallback type="button">Abmelden</button>
         </div>
       </header>
       <p class="portal-logout-status message error hidden" id="portalLogoutStatus" role="alert"></p>
+
+      <section class="voice-assistant-panel hidden" id="voiceAssistantPanel" aria-labelledby="voiceAssistantTitle">
+        <div class="voice-assistant-heading"><div><span class="eyebrow" id="voiceAssistantScope">Administrator-Testbetrieb</span><h2 id="voiceAssistantTitle">Dein GP-Assistent</h2><p>Eigene Salden, Dienstplan und Anträge – per Sprache oder Text.</p></div></div>
+        <p class="voice-assistant-privacy">Du sprichst mit einer KI. Bei Sprachbetrieb werden Audio und ausgewählte eigene GP-Angaben an OpenAI übertragen; bei Texteingabe die erforderlichen Gesprächsinhalte. Der GP speichert keine Sprachaufnahmen oder Gesprächsprotokolle. Ein Antrag wird erst nach deiner ausdrücklichen Bestätigung unten eingereicht. Prüfe besonders Datum, Stunden und Tage.</p>
+        <div class="voice-assistant-controls"><button class="primary" id="voiceAssistantMic" type="button">🎙 Mit dem GP sprechen</button><button class="text-button" id="voiceAssistantEnd" type="button" disabled>Gespräch beenden</button><span class="voice-assistant-status" id="voiceAssistantStatus" role="status" aria-live="polite">Bereit · Mikrofon aus</span></div>
+        <div class="voice-assistant-log" id="voiceAssistantLog" role="log" aria-live="polite" aria-label="Gespräch"></div>
+        <form class="voice-assistant-form" id="voiceAssistantForm"><label for="voiceAssistantInput"><span>Frage an deinen GP</span><input id="voiceAssistantInput" type="text" maxlength="1600" autocomplete="off" placeholder="Wie arbeite ich nächste Woche?" /></label><button class="primary" id="voiceAssistantSend" type="submit">Senden</button></form>
+        <article class="voice-assistant-draft hidden" id="voiceAssistantDraft" aria-labelledby="voiceAssistantDraftTitle"><h3 id="voiceAssistantDraftTitle">Antragsentwurf prüfen</h3><div id="voiceAssistantDraftSummary"></div><p>Mit dem Absenden bestätigst du den angezeigten Zeitraum und die Angaben. Ein gesprochenes „Ja“ sendet keinen Antrag ab.</p><div class="voice-assistant-draft-actions"><button class="primary" id="voiceAssistantConfirm" type="button" disabled>Antrag verbindlich absenden</button><button class="text-button" id="voiceAssistantDiscard" type="button">Entwurf verwerfen</button></div></article>
+        <audio class="voice-assistant-audio" id="voiceAssistantAudio" autoplay controls aria-label="Sprachausgabe des GP-Assistenten"></audio>
+      </section>
 
       <main>
         <aside class="portal-candidate-evaluation-notice hidden" id="pendingCandidateEvaluationNotice" aria-labelledby="pendingCandidateEvaluationTitle">
@@ -354,19 +369,20 @@
         <section class="portal-view portal-learning-dashboard-view" id="personnelLearningDashboardView" role="tabpanel" aria-labelledby="personnelLearningDashboardTab">
           <div class="view-heading portal-learning-dashboard-heading"><div><span class="eyebrow">Transparentes Lernen</span><h1>Schulungen &amp; Fähigkeiten</h1><p id="portalLearningDashboardScope">Sichtbar sind ausschließlich deine eigenen oder die im aktuell freigegebenen Bereich liegenden Schulungen.</p></div><button class="text-button" id="refreshPortalLearningDashboard" type="button">Aktualisieren</button></div>
           <p class="message hidden" id="portalLearningDashboardMessage" role="status" aria-live="polite"></p>
-          <details class="portal-card" id="portalKnowledgeArea"><summary><strong>Wissensbibliothek</strong></summary><section id="portalKnowledgeLibrary"></section></details>
+          <p class="portal-learning-metric-scope">Kennzahlen im freigegebenen Bereich</p>
           <div class="portal-learning-summary" id="portalLearningDashboardSummary" aria-label="Zusammenfassung der Schulungen"></div>
           <div class="portal-learning-grid">
             <section class="portal-card portal-learning-assignments" aria-labelledby="portalLearningAssignmentsTitle">
-              <div class="list-heading"><div><span class="eyebrow">Durchführung</span><h2 id="portalLearningAssignmentsTitle">Schulungsfortschritte</h2></div></div>
+              <div class="list-heading"><div><h2 id="portalLearningAssignmentsTitle">Schulungsstände</h2></div></div>
               <p class="portal-learning-transparency">Erledigte Schritte und Bewertungen werden revisionsgebunden dokumentiert. Im Filialkonto sind Schritte erfassbar; Abschlüsse und Korrekturen bleiben persönlichen berechtigten Konten vorbehalten.</p>
               <div class="portal-learning-assignment-list" id="portalLearningDashboardAssignments"><p class="empty-state">Schulungsstände werden geladen.</p></div>
             </section>
             <section class="portal-card portal-learning-skills" aria-labelledby="portalLearningSkillsTitle">
-              <div class="portal-learning-skills-heading"><div><span class="eyebrow">Fähigkeitsprofil</span><h2 id="portalLearningSkillsTitle">Fähigkeitsbaum · Stufen 1–10</h2></div><label><span>Mitarbeiter</span><select id="portalLearningDashboardEmployee"><option value="">Profile werden geladen</option></select></label></div>
+              <div class="portal-learning-skills-heading"><div><h2 id="portalLearningSkillsTitle">Fähigkeiten · Stufen 1–10</h2></div><label><span>Mitarbeiter</span><select id="portalLearningDashboardEmployee"><option value="">Profile werden geladen</option></select></label></div>
               <div class="portal-learning-skill-tree" id="portalLearningSkillTree"><p class="empty-state">Fähigkeitsprofil wird geladen.</p></div>
             </section>
           </div>
+          <details class="portal-card" id="portalKnowledgeArea"><summary><strong>Wissensbibliothek</strong><span>Wissen lesen und passende Fassungen ansehen</span></summary><section id="portalKnowledgeLibrary"></section></details>
         </section>
 
         <section class="portal-view leadership-view" id="leadershipMoreView" role="tabpanel" aria-labelledby="leadershipMoreTab">
@@ -622,8 +638,8 @@
       <form id="passwordResetConfirmForm">
         <div class="dialog-heading"><div><span class="eyebrow">Zugang</span><h2 id="passwordResetConfirmTitle">Neues Passwort festlegen</h2></div><button type="button" data-close-password-reset-confirm aria-label="Dialog schließen">×</button></div>
         <input id="passwordResetToken" type="hidden" />
-        <label><span>Neues Passwort</span><span class="password-field"><input id="passwordResetNewPassword" name="new-password" type="password" minlength="6" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
-        <label><span>Neues Passwort wiederholen</span><span class="password-field"><input id="passwordResetRepeatPassword" name="new-password-repeat" type="password" minlength="6" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Neues Passwort</span><span class="password-field"><input data-gp-new-password id="passwordResetNewPassword" name="new-password" type="password" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Neues Passwort wiederholen</span><span class="password-field"><input data-gp-new-password id="passwordResetRepeatPassword" name="new-password-repeat" type="password" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
         <p class="password-recommendation">Verwende ein langes, nur hier eingesetztes Passwort. Nach dem Speichern werden alle bestehenden Portal- und App-Sitzungen dieses Zugangs beendet.</p>
         <p class="message hidden" id="passwordResetConfirmMessage" role="status" aria-live="polite"></p>
         <div class="dialog-actions"><button type="button" data-close-password-reset-confirm>Abbrechen</button><button class="primary" id="passwordResetConfirmSubmit" type="submit">Passwort speichern</button></div>
@@ -634,9 +650,9 @@
       <form id="passwordForm">
         <div class="dialog-heading"><div><span class="eyebrow">Sicherheit</span><h2>Passwort ändern</h2></div><button type="button" data-close-dialog>×</button></div>
         <label class="visually-hidden"><span>Zugangskennung</span><input id="passwordChangeUsername" name="username" autocomplete="username" readonly disabled tabindex="-1" /></label>
-        <label><span>Bisheriges Passwort</span><span class="password-field"><input id="currentPassword" name="current-password" type="password" autocomplete="current-password" minlength="6" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
-        <label><span>Neues Passwort</span><span class="password-field"><input id="newPassword" name="new-password" type="password" minlength="6" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
-        <label><span>Neues Passwort wiederholen</span><span class="password-field"><input id="repeatPassword" name="new-password-repeat" type="password" minlength="6" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Bisheriges Passwort</span><span class="password-field"><input id="currentPassword" name="current-password" type="password" autocomplete="current-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Neues Passwort</span><span class="password-field"><input data-gp-new-password id="newPassword" name="new-password" type="password" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Neues Passwort wiederholen</span><span class="password-field"><input data-gp-new-password id="repeatPassword" name="new-password-repeat" type="password" autocomplete="new-password" required disabled /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
         <p class="password-recommendation">Mindestens 6 Zeichen; Ziffern sind erlaubt. Ein längeres, schwer zu erratendes Passwort wird empfohlen.</p>
         <p class="message hidden" id="passwordMessage"></p>
         <div class="dialog-actions"><button type="button" data-close-dialog>Abbrechen</button><button class="primary" type="submit">Passwort speichern</button></div>
@@ -751,7 +767,7 @@
         <div class="dialog-actions"><button type="button" data-close-time-off-change>Abbrechen</button><button class="primary" type="submit">Antrag absenden</button></div>
       </form>
     </dialog>
-    <dialog id="historyDetailDialog">
+    <dialog id="historyDetailDialog" data-gp-window-mode="workspace">
       <form method="dialog">
         <div class="dialog-heading"><div><span class="eyebrow">Antragsverlauf</span><h2 id="historyDetailTitle">Antrag</h2></div><button type="button" data-close-history-detail>×</button></div>
         <div class="history-detail-summary" id="historyDetailSummary"></div>
@@ -791,7 +807,7 @@
         <div class="dialog-actions leadership-request-actions" id="leadershipRequestActions"></div>
       </form>
     </dialog>
-    <dialog class="personal-actions-dialog" id="personalActionsDialog" aria-labelledby="personalActionsTitle">
+    <dialog class="personal-actions-dialog" id="personalActionsDialog" data-gp-window-mode="workspace" aria-labelledby="personalActionsTitle">
       <form>
         <div class="dialog-heading"><div><span class="eyebrow">Persönlich &amp; revisionssicher</span><h2 id="personalActionsTitle">Meine letzten Aktionen</h2></div><button type="button" data-close-personal-actions aria-label="Dialog schließen">×</button></div>
         <p class="personal-actions-intro">Hier erscheinen ausschließlich deine eigenen protokollierten Aktionen. Rückgängig wird nur angeboten, wenn der aktuelle Stand unverändert ist und eine sichere Gegenaktion existiert.</p>
@@ -800,7 +816,7 @@
         <div class="dialog-actions personal-actions-dialog-actions"><button class="text-button hidden" id="personalActionsLoadMore" type="button">Ältere Aktionen laden</button><button type="button" data-close-personal-actions>Schließen</button></div>
       </form>
     </dialog>
-    <dialog id="notificationsDialog">
+    <dialog id="notificationsDialog" data-gp-window-mode="workspace">
       <form method="dialog">
         <div class="dialog-heading"><div><span class="eyebrow">Mitarbeiterportal</span><h2>Benachrichtigungen</h2></div><button type="button" data-close-notifications>×</button></div>
         <div class="notification-toolbar"><button class="text-button" id="markAllNotificationsRead" type="button">Alle als gelesen markieren</button></div>
@@ -820,7 +836,7 @@
         <button class="primary birthday-presentation-confirm" id="birthdayPresentationConfirm" type="button">Schließen</button>
       </div>
     </dialog>
-    <dialog class="portal-learning-progress-dialog" id="portalLearningProgressDialog" aria-labelledby="portalLearningProgressTitle">
+    <dialog class="portal-learning-progress-dialog" id="portalLearningProgressDialog" data-gp-window-mode="workspace" aria-labelledby="portalLearningProgressTitle">
       <form id="portalLearningProgressForm">
         <div class="dialog-heading"><div><span class="eyebrow">Schulungsdurchführung</span><h2 id="portalLearningProgressTitle">Fortschritt erfassen</h2></div><button type="button" data-close-portal-learning-progress aria-label="Dialog schließen">×</button></div>
         <input id="portalLearningProgressAssignmentId" type="hidden" />
@@ -846,6 +862,8 @@
     <script src="/amu-pdf-client.js"></script>
     <script src="/date-range-calendar.js"></script>
     <script src="/credential-boundaries.js"></script>
+    <script src="/password-policy.js"></script>
+    <script src="/session-lifecycle.js"></script>
     <script src="/navigation-history.js"></script>
     <script src="/receipt-line-format.js"></script>
     <script src="/branch-article-calculation.js"></script>
@@ -873,6 +891,10 @@
     <script src="/portal-branch-time-off.js"></script>
     <script src="/learning-library.js"></script>
     <script src="/learning-assessment.js"></script>
+    <link rel="stylesheet" href="/gp-private-workspaces.css" />
+    <script src="/gp-private-workspaces.js"></script>
+    <link rel="stylesheet" href="/voice-assistant.css" />
+    <script src="/voice-assistant.js"></script>
     <script src="/portal.js"></script>
   </body>
 </html>

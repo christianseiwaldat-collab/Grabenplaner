@@ -38,3 +38,36 @@ test('invalid dates, future dates and unreviewed reason codes are not presented 
   assert.equal(evidence.timestamp('2026-10-09T12:00:00+02:00', NOW), '2026-10-09T12:00:00+02:00');
   assert.equal(evidence.check({reasonCode: '<img onerror=alert(1)>'}).reasonCode, null);
 });
+
+test('deploy explanations preserve the original recovery proof and distinguish a timely start from success', () => {
+  const observedAt = '2026-10-08T14:00:00Z';
+  for (const reasonCode of ['RECOVERY_FULL_RUN_DEPLOY_DEFERRED', 'RECOVERY_ISOLATED_RESTORE_DEPLOY_DEFERRED', 'RECOVERY_APPLICATION_SMOKE_DEPLOY_DEFERRED']) {
+    const input = {state: 'pass', points: 5, earnedPoints: 5, observedAt, reasonCode};
+    const result = evidence.check(input, NOW);
+    assert.equal(result.observedAt, observedAt);
+    assert.equal(result.state, 'pass');
+    assert.equal(result.deduction, 0);
+    assert.match(result.reason, /bei Fälligkeit noch aktuell/);
+    assert.match(result.reason, /Drei-Stunden-Frist/);
+    assert.match(result.reason, /Nachweiszeitpunkt bleibt unverändert/);
+    assert.deepEqual(input, {state: 'pass', points: 5, earnedPoints: 5, observedAt, reasonCode});
+  }
+  assert.match(evidence.check({state: 'pass', reasonCode: 'AUTOMATION_DEPLOY_DEFERRED'}).reason, /nachweislich aktiven Deployments pausiert/);
+  const running = evidence.check({state: 'pass', reasonCode: 'AUTOMATION_DEPLOY_CATCHUP_RUNNING'});
+  assert.match(running.reason, /innerhalb der Drei-Stunden-Frist begonnen/);
+  assert.match(running.reason, /erfolgreicher Wiederherstellungstest ist damit noch nicht belegt/);
+});
+
+test('expired and interrupted deploy explanations keep critical failures and deductions visible', () => {
+  for (const [reasonCode, explanation] of [
+    ['AUTOMATION_DEPLOY_DEFERRAL_EXPIRED', /Frist ist abgelaufen/],
+    ['AUTOMATION_DEPLOY_ABORTED', /Deployment wurde abgebrochen/],
+    ['AUTOMATION_DEPLOY_ABANDONED', /nicht mehr nachweislich aktiv/]
+  ]) {
+    const result = evidence.check({state: 'fail', points: 5, earnedPoints: 0, critical: true, reasonCode});
+    assert.match(result.reason, explanation);
+    assert.equal(result.state, 'fail');
+    assert.equal(result.critical, true);
+    assert.equal(result.deduction, 5);
+  }
+});

@@ -1,0 +1,4 @@
+# Scanner runtime only; independent of the application dependencies.
+# Resolve with uv 0.9.5: uv pip compile --universal --python-version 3.12
+#   --generate-hashes requirements.in -o requirements.txt
+semgrep==1.181.0

@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -65,8 +66,8 @@ test.before(async () => {
     db.prepare("INSERT OR IGNORE INTO portal_permission_grants(employee_number,permission,granted_by) VALUES(?,?,'synthetic')").run(ACTOR, permission);
   for (const location of [LOCATION, OTHER]) db.prepare(`INSERT INTO portal_access_scopes(employee_number,location_id,department_id,assigned_by)
     VALUES(?,?,0,'synthetic')`).run(ACTOR, location);
-  const token = crypto.randomBytes(32).toString("hex"); csrf = crypto.randomBytes(24).toString("hex");
-  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z')")
+  const token = crypto.randomBytes(32).toString("hex"); csrf = sessionCsrf(token);
+  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(crypto.randomUUID(), ACTOR, crypto.createHash("sha256").update(token).digest("hex"));
   cookie = `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`;
   await new Promise(resolve => { httpServer = app.listen(0, "127.0.0.1", resolve); });

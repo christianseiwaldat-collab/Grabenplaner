@@ -18,6 +18,9 @@ public/assets/*-private.*
 output/pdf/Grabenplaner-Prospekt-*.pdf
 output/pdf/Bewerbungsbewertung-Muster.pdf
 output/pdf/260901_Bewerbungsbewertung-Muster_*.pdf
+/output/voice-assistant-*/
+/output/planning-assistant-*/
+/.venv-planning/
 /tmp/
 /GRABENPLANER-HANDOFF-*.md
 /coverage/

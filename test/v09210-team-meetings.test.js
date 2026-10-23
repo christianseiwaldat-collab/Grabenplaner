@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -51,7 +52,7 @@ function ensureEmployee(personnelNumber, positionId) {
 
 function session(employeeNumber, role = "developer") {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, role_locked, active, must_change_password,
@@ -63,8 +64,8 @@ function session(employeeNumber, role = "developer") {
   `).run(employeeNumber, role);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     cookie: `grabenplaner_session=${encodeURIComponent(token)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
@@ -189,6 +190,24 @@ test.after(async () => {
   try { db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
+});
+
+test('Dienstplan-Druckauswahl begrenzt beide PDF-Routen und Designs auf den berechtigten Bereich',async()=>{
+  const auth=session(DEVELOPER),before=db.prepare('SELECT personnel_number, active FROM employees ORDER BY personnel_number').all();
+  const designs=await request('/api/portal/v1/schedule-pdf-settings',{method:'PUT',auth,body:{locationId:LOCATION,schedulePdfDesignIds:['timeline','matrix']}});
+  assert.equal(designs.response.status,200,designs.text);
+  for(const route of ['schedule.pdf','schedule-preview.pdf'])for(const design of ['matrix','timeline']){
+    const selected=await request(`/api/${route}?week=${WEEK_START}&locationId=${LOCATION}&design=${design}&employees=${DEVELOPER},999999`,{auth,binary:true});
+    assert.equal(selected.response.status,200);const details=await pdfTextDetails(selected.payload);
+    assert.match(details.text,/TS0/);assert.doesNotMatch(details.text,/TS1|TS2/);
+  }
+  for(const value of ['',MEMBER_SICK_WITH_SHIFT+',','999999']){
+    const invalid=await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&design=matrix&employees=${encodeURIComponent(value)}`,{auth});
+    assert.equal(invalid.response.status,400);assert.equal(invalid.payload.code,'SCHEDULE_PRINT_EMPLOYEES_INVALID');
+  }
+  const anonymous=await request(`/api/schedule.pdf?week=${WEEK_START}&locationId=${LOCATION}&employees=${DEVELOPER}`);
+  assert.equal(anonymous.response.status,401);
+  assert.deepEqual(db.prepare('SELECT personnel_number, active FROM employees ORDER BY personnel_number').all(),before,'Printing never changes active staff');
 });
 
 test("v0.92.10: teamweite Teamsitzung ist atomar, krankheitsverträglich und bis 20 Uhr planbar", async () => {

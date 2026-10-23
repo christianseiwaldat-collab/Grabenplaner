@@ -1,3 +1,4 @@
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -26,14 +27,14 @@ let locationId;
 
 function session(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
     VALUES (?, 'test-only', ?, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     ON CONFLICT(employee_number) DO UPDATE SET role = excluded.role, active = 1, must_change_password = 0, updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, role);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
-  db.prepare("INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')")
+  db.prepare("INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }

@@ -14,10 +14,22 @@
   return {set(value){questions=value?.questions?JSON.parse(JSON.stringify(value.questions)):[];el('[data-pass]').value=value?.passingPercent??80;el('[data-attempts]').value=value?.maxAttempts??3;el('[data-evidence-required]').checked=value?.requireEvidence===true;render();},get(){sync();if(!questions.length&&!el('[data-evidence-required]').checked)return null;return {questions:questions.map(q=>({...q,options:q.options.filter(o=>o.text.trim())})),passingPercent:Number(el('[data-pass]').value),maxAttempts:Number(el('[data-attempts]').value),requireEvidence:el('[data-evidence-required]').checked};}};
  }
  function init({api,printPdf}){
-  const dialog=document.createElement('dialog');dialog.className='learning-library-dialog';dialog.setAttribute('aria-label','Prüfungen und Nachweise');document.body.append(dialog);
-  let data=null,id='',generation=0,busy=false,opener=null;
+  const dialog=document.createElement('dialog');dialog.className='learning-library-dialog';dialog.setAttribute('aria-label','Prüfungen und Nachweise');dialog.setAttribute('data-learning-assessment','');document.body.append(dialog);
+  root.GpWindow?.prepare?.(dialog);
+  let data=null,id='',generation=0,busy=false,opener=null,sessionContext=null,mutationOwner=null;
   const endpoint=()=>'/api/portal/v1/personnel-learning/assignments/'+encodeURIComponent(id);
-  async function open(assignmentId,target=null){id=assignmentId;opener=target;data=null;const gen=++generation;dialog.innerHTML='<p>Prüfungen werden geladen …</p><button type="button" data-close>Schließen</button>';if(!dialog.open)dialog.showModal();try{const loaded=await api(endpoint()+'/assessment');if(gen!==generation)return;data=loaded;render();}catch(error){if(gen===generation)dialog.querySelector('p').textContent=error.message;}}
+  const contextCurrent=context=>!context||root.GpWindow.currentContext(context);
+  const capture=()=>({generation,id,data,context:sessionContext});
+  const current=(ticket,requireOpen=true)=>ticket.generation===generation&&ticket.id===id&&ticket.data===data&&contextCurrent(ticket.context)&&(!requireOpen||dialog.open);
+  async function open(assignmentId,target=null){
+   const context=root.GpWindow?.captureContext?.(document);if(!contextCurrent(context))return;
+   id=assignmentId;opener=target;data=null;sessionContext=context;busy=false;mutationOwner=null;
+   const ticket={generation:++generation,id,data,context},url=endpoint()+'/assessment';
+   dialog.innerHTML='<p>Prüfungen werden geladen …</p><button type="button" data-close>Schließen</button>';
+   if(!dialog.open)dialog.showModal();
+   try{const loaded=await api(url);if(!current(ticket))return;if(loaded?.assignmentId!==ticket.id)throw new Error('Die Prüfung gehört nicht zur geöffneten Schulung.');data=loaded;render();}
+   catch(error){if(current(ticket))dialog.querySelector('p').textContent=error.message;}
+  }
   function render(){
    const a=data.assessment;
    dialog.innerHTML=`<header><div><h2>${esc(data.title)}</h2><p>${esc(data.learner)}</p></div><button type="button" data-close aria-label="Schließen">×</button></header><h3>Wissenstest</h3>${a?.questions.length?`<p>${data.passed?'Bestanden':`${data.attempts.length} von ${a.maxAttempts} Versuchen verwendet`} · Bestehensgrenze ${a.passingPercent} %</p><form data-exam>${a.questions.map((q,i)=>`<fieldset class="learning-question"><legend>${i+1}. ${esc(q.prompt)}</legend>${q.options.map(o=>`<label class="learning-answer"><input type="radio" name="${esc(q.id)}" value="${esc(o.id)}" required ${data.canAttempt?'':'disabled'}><span>${esc(o.text)}</span></label>`).join('')}</fieldset>`).join('')}${data.canAttempt?'<button type="submit">Antworten abgeben</button>':''}</form>`:'<p>Für diese Fassung ist kein Fragenkatalog hinterlegt. Die fachliche Bewertung erfolgt über den Schulungsabschluss.</p>'}
@@ -28,14 +40,33 @@
    ${data.canUpload?'<label>Nachweis auswählen<input type="file" data-file accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg"></label><button type="button" data-action="upload">Nachweis hochladen</button>':''}
    ${data.canConfirm?`<p><a class="secondary-button" data-learning-confirmation-pdf href="${endpoint()}/confirmation.pdf" download>PDF-Bestätigung herunterladen</a></p>`:''}<p role="status" data-status></p><button type="button" data-close>Schließen</button>`;
   }
-  async function mutate(path,body){const gen=generation,targetId=id;if(!data||!targetId)return;await api(endpoint()+path,{method:'POST',body:JSON.stringify({...body,expectedReceipt:data.expectedReceipt})});if(gen===generation&&id===targetId)await open(targetId,opener);}
+  async function mutate(ticket,path,body){
+   if(!ticket.data||!ticket.id||!current(ticket))return;
+   const target=opener,url=endpoint()+path,payload={...body,expectedReceipt:ticket.data.expectedReceipt};
+   await api(url,{method:'POST',body:JSON.stringify(payload)});
+   if(current(ticket))await open(ticket.id,target);
+  }
+  function beginMutation(){
+   const ticket=capture();if(busy||!current(ticket))return null;
+   const owner=Symbol('learning-assessment-mutation');mutationOwner=owner;busy=true;
+   const fields=[...(dialog.querySelectorAll?.('input,select,textarea,[data-action],[type="submit"]')||[])].map(field=>({field,disabled:field.disabled}));
+   for(const entry of fields)entry.field.disabled=true;
+   return {ticket,owner,fields};
+  }
+  function endMutation(operation){
+   if(mutationOwner!==operation.owner||!current(operation.ticket))return;
+   busy=false;mutationOwner=null;for(const entry of operation.fields)entry.field.disabled=entry.disabled;
+  }
+  function mutationError(operation,error){
+   if(!current(operation.ticket))return;const status=dialog.querySelector('[data-status]');if(status)status.textContent=error.message;
+  }
   dialog.addEventListener('click',async event=>{
    const confirmation=event.target.closest('[data-learning-confirmation-pdf]');
    if(confirmation&&typeof printPdf==='function'){
     if(event.defaultPrevented||event.button>0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
     event.preventDefault();if(busy||!data?.canConfirm||!id)return;
-    const gen=generation,assignmentId=id,receipt=JSON.stringify(data.expectedReceipt??null);
-    const canUse=()=>gen===generation&&id===assignmentId&&data?.canConfirm===true&&JSON.stringify(data.expectedReceipt??null)===receipt;
+    const ticket=capture(),receipt=JSON.stringify(data.expectedReceipt??null);
+    const canUse=()=>current(ticket,false)&&data?.canConfirm===true&&JSON.stringify(data.expectedReceipt??null)===receipt;
     const target=opener?.isConnected&&(!opener.getClientRects||opener.getClientRects().length>0)?opener:null;
     const url=endpoint()+'/confirmation.pdf',title='Schulungsbestätigung';
     dialog.close();
@@ -43,14 +74,22 @@
     catch(error){if(canUse()){if(!dialog.open)dialog.showModal();const status=dialog.querySelector('[data-status]');if(status)status.textContent=error.message||'Die PDF-Vorschau konnte nicht geöffnet werden.';}}
     return;
    }
-   if(event.target.closest('[data-close]')){clear();return;}const button=event.target.closest('[data-action]');if(!button||busy)return;busy=true;button.disabled=true;
-   try{const action=button.dataset.action;
-    if(action==='reset'||action==='withdraw'){const reason=root.prompt('Bitte die Änderung begründen:');if(reason==null)return;await mutate(action==='reset'?'/assessment/reset':`/evidence/${encodeURIComponent(button.dataset.id)}/withdraw`,{reason});}
-    if(action==='upload'){const file=dialog.querySelector('[data-file]').files[0];if(!file||file.size>2*1024*1024)throw new Error('Bitte eine Datei bis 2 MiB auswählen.');const gen=generation;const bytes=new Uint8Array(await file.arrayBuffer());if(gen!==generation)return;let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));await mutate('/evidence',{fileName:file.name,data:root.btoa(binary)});}
-   }catch(error){const status=dialog.querySelector('[data-status]');if(status)status.textContent=error.message;}finally{busy=false;button.disabled=false;}
+   if(event.target.closest('[data-close]')){clear();return;}
+   const button=event.target.closest('[data-action]');if(!button)return;
+   const action=button.dataset.action;if((action==='reset'&&!data?.canReset)||(['upload','withdraw'].includes(action)&&!data?.canUpload))return;
+   const operation=beginMutation();if(!operation)return;
+   try{
+    if(action==='reset'||action==='withdraw'){const reason=root.prompt('Bitte die Änderung begründen:');if(reason==null)return;await mutate(operation.ticket,action==='reset'?'/assessment/reset':`/evidence/${encodeURIComponent(button.dataset.id)}/withdraw`,{reason});}
+    if(action==='upload'){const file=dialog.querySelector('[data-file]').files[0];if(!file||file.size>2*1024*1024)throw new Error('Bitte eine Datei bis 2 MiB auswählen.');const bytes=new Uint8Array(await file.arrayBuffer());if(!current(operation.ticket))return;let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));await mutate(operation.ticket,'/evidence',{fileName:file.name,data:root.btoa(binary)});}
+   }catch(error){mutationError(operation,error);}finally{endMutation(operation);}
   });
-  dialog.addEventListener('submit',async event=>{event.preventDefault();if(busy)return;busy=true;try{await mutate('/assessment/attempt',{answers:Object.fromEntries(new FormData(event.target))});}catch(error){const status=dialog.querySelector('[data-status]');if(status)status.textContent=error.message;}finally{busy=false;}});
-  function clear(){generation++;id='';data=null;opener=null;dialog.close();dialog.replaceChildren();}
+  dialog.addEventListener('submit',async event=>{
+   event.preventDefault();if(!data?.canAttempt)return;
+   const answers=Object.fromEntries(new FormData(event.target)),operation=beginMutation();if(!operation)return;
+   try{await mutate(operation.ticket,'/assessment/attempt',{answers});}catch(error){mutationError(operation,error);}finally{endMutation(operation);}
+  });
+  function clear(){generation++;id='';data=null;opener=null;sessionContext=null;busy=false;mutationOwner=null;dialog.close();dialog.replaceChildren();}
+  dialog.addEventListener('cancel',()=>clear());
   document.addEventListener('click',event=>{const button=event.target.closest('[data-learning-proof]');if(button)open(button.dataset.learningProof,button);});
   return {open,clear};
  }

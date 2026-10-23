@@ -36,7 +36,7 @@ test("UI Block 1: Dashboard ist persönlich anpassbar und zeigt nur erlaubte Arb
   const section = between(
     html,
     '<section class="personnel-administration-section personnel-dashboard-section active"',
-    '<div class="settings-tabs personnel-administration-tabs"',
+    '<section class="personnel-administration-section active" id="personnelDirectorySection"',
   );
   for (const id of [
     "personnelDashboardGrid",
@@ -87,7 +87,9 @@ test("UI Block 1: Präferenz nutzt den bestehenden UI-Pfad ohne neue Datenbankko
   assert.doesNotMatch(`${readPreferences}\n${savePreferences}`, /\bdb\.(?:prepare|exec)\b|portal_user_preferences|store\.run/);
   assert.match(server, /function validatePersonnelDashboardLayout\(value\)/);
   assert.match(server, /personnelDashboardLayout,/);
-  assert.match(app, /api\("\/api\/portal\/v1\/ui-preferences",\s*\{[\s\S]*?personnelDashboardLayout: normalized/);
+  assert.match(app, /property: "personnelDashboardWorkspace"/);
+  assert.match(app, /extraPreferences: value => \(\{ personnelDashboardLayout: window\.PersonnelDashboardWorkspacePreferences\.layout\(value\) \}\)/);
+  assert.match(app, /await personnelDashboardWorkspace\.store\.change\(value\)/);
 });
 
 test("UI Block 1: schmale Ansichten verwenden einen vertikalen, zugänglichen Drawer", () => {

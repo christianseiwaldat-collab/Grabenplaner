@@ -128,13 +128,15 @@ function createActiveSessions(employeeNumber) {
   const portalSessionId = crypto.randomUUID();
   const portalToken = crypto.randomBytes(32).toString("base64url");
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, ?, ?, ?)
   `).run(
     portalSessionId,
     employeeNumber,
     crypto.createHash("sha256").update(portalToken).digest("hex"),
-    new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    new Date(Date.now() - 1000).toISOString(),
+    new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
   );
   const mobileSessionId = crypto.randomUUID();
   db.prepare(`

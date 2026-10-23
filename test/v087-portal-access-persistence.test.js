@@ -46,9 +46,9 @@ function fixture() {
       employee_number, permission, location_id, department_id, approved_by
     ) VALUES ('E18', 'personnel:candidates:read', '18', 0, 'PL-PLUS');
     INSERT INTO portal_sessions (
-      id, employee_number, token_hash, expires_at
+      id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at
     ) VALUES (
-      'browser-session', 'E18', 'token-hash', '2099-01-01T00:00:00.000Z'
+      'browser-session', 'E18', 'token-hash', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z'
     );
   `);
   return {
@@ -80,7 +80,7 @@ test('report principal reads the same current rights without a browser session a
   const f = fixture();
   try {
     const session = { ...await f.repository.getEmployeeSessionByToken({ tokenHash: 'token-hash', now: '2026-09-09T12:00:00.000Z', businessDate: '2026-09-09' }) };
-    for (const key of ['id', 'expires_at', 'revoked_at']) delete session[key];
+    for (const key of ['id', 'expires_at', 'revoked_at', 'authenticated_at', 'absolute_expires_at', 'last_seen_at']) delete session[key];
     const input = { employeeNumber: 'E18', businessDate: '2026-09-09' };
     assert.deepEqual(await f.repository.getReportPrincipal(input), session);
     f.database.exec("DELETE FROM portal_sessions; INSERT INTO portal_permission_denials(employee_number,permission,denied_by) VALUES('E18','sales:history:read','tester');");
@@ -253,10 +253,10 @@ test("Personalmodul R1: Organisationssitzungen blenden inaktive Standortscopes a
         account_id, location_id, department_id, assigned_by
       ) VALUES ('organization-r1', '18', 0, 'test');
       INSERT INTO portal_organization_sessions (
-        id, account_id, token_hash, expires_at
+        id, account_id, token_hash, expires_at, authenticated_at, absolute_expires_at
       ) VALUES (
         'organization-session-r1', 'organization-r1', 'organization-token-r1',
-        '2099-01-01T00:00:00.000Z'
+        '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z'
       );
     `);
     const loadSession = async () => context.repository.getOrganizationSessionByToken({

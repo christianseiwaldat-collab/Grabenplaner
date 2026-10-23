@@ -95,5 +95,8 @@ test("v0.75 environment files require an unlinked root-only regular file", () =>
 test("v0.75 internal-error logs use a query-free request path", () => {
   const server = read("server.js");
   assert.match(server, /status >= 500\) console\.error\(`\[\$\{requestId\}\] \$\{request\.method\} \$\{request\.path\}`/);
-  assert.doesNotMatch(server, /request\.originalUrl/);
+  const errorHandler = server.slice(server.indexOf("app.use(async (error, request, response, _next) => {"),
+    server.indexOf("async function closePersistenceForTests()"));
+  assert.ok(errorHandler.length > 0);
+  assert.doesNotMatch(errorHandler, /request\.(?:originalUrl|url)\b/);
 });

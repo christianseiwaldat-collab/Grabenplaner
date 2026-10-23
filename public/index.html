@@ -2,15 +2,26 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#f4f1e9" />
     <title>Grabenplaner · Dienstplan</title>
     <link rel="icon" type="image/svg+xml" href="/assets/webicon.svg" data-brand-icon />
     <link rel="apple-touch-icon" href="/assets/webicon.svg" data-brand-icon />
     <link rel="stylesheet" href="/vendor/quill/quill.snow.css" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/gp-xoffi-import.css" />
+    <link rel="stylesheet" href="/assistant-management.css" />
+    <link rel="stylesheet" href="/system-utilization.css" />
     <link rel="stylesheet" href="/learning-library.css" />
+    <link rel="stylesheet" href="/personnel-learning-workspace.css" />
+    <link rel="stylesheet" href="/personnel-dashboard-workspace.css" />
+    <link rel="stylesheet" href="/personnel-directory-workspace.css" />
+    <link rel="stylesheet" href="/cost-centers-workspace.css" />
+    <link rel="stylesheet" href="/personnel-tasks-workspace.css" />
+    <link rel="stylesheet" href="/workflow-studio.css" />
+    <link rel="stylesheet" href="/workflow-studio-editor.css" />
     <link rel="stylesheet" href="/privacy-organization.css" />
+    <link rel="stylesheet" href="/security-audits.css" />
     <link rel="stylesheet" href="/sales-history.css" />
     <link rel="stylesheet" href="/gp-data-quality.css" />
     <link rel="stylesheet" href="/table-layout.css" />
@@ -29,19 +40,24 @@
     <link rel="stylesheet" href="/mobile-refinements.css" />
     <link rel="stylesheet" href="/sidebar-notepad.css" />
     <link rel="stylesheet" href="/gp-window.css" />
+    <link rel="stylesheet" href="/vps-storage.css" />
     <link rel="stylesheet" href="/gp-save-status.css" />
     <link rel="stylesheet" href="/loan-location-settings.css" />
     <link rel="stylesheet" href="/sales-recent-articles.css" />
     <link rel="stylesheet" href="/sales-article-search-window.css" />
     <link rel="stylesheet" href="/start-dashboard-workspace.css" />
+    <link rel="stylesheet" href="/gp-dashboard-boards.css" />
     <link rel="stylesheet" href="/rights-management-workspace.css" />
     <link rel="stylesheet" href="/sales-analytics-workspace.css" />
     <link rel="stylesheet" href="/sales-article-report.css" />
     <link rel="stylesheet" href="/sales-bwl.css" />
     <link rel="stylesheet" href="/gp-print-window.css" />
     <link rel="stylesheet" href="/gp-definitions.css" />
+    <link rel="stylesheet" href="/session-entry.css" />
   </head>
-  <body>
+  <body class="session-pending">
+    <p class="session-entry-status" role="status">Grabenplaner wird geöffnet …</p>
+    <noscript>Bitte JavaScript aktivieren, um den Grabenplaner zu öffnen.</noscript>
     <div class="deployment-banner hidden" id="deploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
     <section class="login-gate hidden" id="loginGate" aria-live="polite">
       <form class="login-card" id="adminLoginForm">
@@ -64,7 +80,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" data-gp-print-fallback type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.80 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.93 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -136,7 +152,7 @@
                 <span class="nav-symbol">▣</span><span>Leih&shy;verwaltung</span><strong class="nav-count hidden" id="loanManagementNavCount">0</strong>
               </button>
               <button class="nav-item nav-module-route hidden" id="branchOrdersManagementNavButton" type="button" data-view="branchOrders">
-                <span class="nav-symbol">▤</span><span>Filial&shy;bestellungen</span>
+                <span class="nav-symbol">▤</span><span>Filialbestellungen</span>
               </button>
               <div class="nav-submodule">
                 <div class="nav-branch">
@@ -219,7 +235,7 @@
               </button>
               <button class="nav-item nav-module-route hidden" type="button" data-view="priceLabels" id="salesPriceLabelsNavButton"><span class="nav-symbol" aria-hidden="true">▱</span><span>Preisschilder</span></button>
               <button class="nav-item nav-module-route hidden" type="button" data-view="articleReport" id="salesArticleReportNavButton"><span class="nav-symbol" aria-hidden="true">▥</span><span>Artikel-Auswertung</span></button>
-              <button class="nav-item nav-module-route hidden" type="button" data-view="salesBwl" id="salesBwlNavButton"><span class="nav-symbol" aria-hidden="true">▤</span><span>BWL-Werkzeuge</span></button>
+              <button class="nav-item nav-module-route hidden" type="button" data-view="salesBwl" id="salesBwlNavButton"><span class="nav-symbol" aria-hidden="true">▤</span><span>BWL-Tools</span></button>
               <button class="nav-item nav-module-route hidden" type="button" data-view="tradeInsights" id="tradeInsightsNavButton"><span class="nav-symbol" aria-hidden="true">▦</span><span>Einkauf &amp; Bestand</span></button>
               <button class="nav-item nav-module-route hidden" data-view="crm" id="crmNavButton">
                 <span class="nav-symbol crm-nav-symbol" aria-hidden="true">CRM</span><span>CRM</span>
@@ -232,7 +248,8 @@
               <button class="nav-item nav-module-main" type="button" data-view="logistics" id="logisticsNavButton"><span class="nav-symbol" aria-hidden="true">⇄</span><span>Logistik</span></button>
             </div>
             <div class="nav-module-children hidden" id="logisticsNavChildren">
-              <button class="nav-item nav-module-route" type="button" data-view="logistics" id="logisticsPurchasingNavButton"><span class="nav-symbol" aria-hidden="true">▦</span><span>Einkauf / Liefer&shy;stände</span></button>
+              <button class="nav-item nav-module-route" type="button" data-view="logistics" data-logistics-tab="purchasing" id="logisticsPurchasingNavButton"><span class="nav-symbol" aria-hidden="true">▦</span><span>Einkauf / Liefer&shy;stände</span></button>
+              <button class="nav-item nav-module-route" type="button" data-view="logistics" data-logistics-tab="orders" id="logisticsOrdersNavButton"><span class="nav-symbol" aria-hidden="true">≡</span><span>Bestellungen</span></button>
             </div>
           </section>
           <section class="nav-module hidden" id="privacyOrganizationNav" aria-label="Datenschutz">
@@ -247,6 +264,16 @@
               <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="breaches" id="privacyOrganizationBreachesNavButton"><span>Datenpannen</span></button>
               <button class="nav-item nav-module-route" type="button" data-view="privacyOrganization" data-privacy-organization-tab="agreements" id="privacyOrganizationAgreementsNavButton"><span>Betriebliche Zustimmungen</span></button>
               <button class="nav-item nav-module-route hidden" type="button" data-view="privacyOrganization" data-privacy-organization-tab="dataRequests" id="dataSubjectRequestsNavButton"><span class="nav-symbol" aria-hidden="true">§</span><span>Daten&shy;anfragen</span><strong class="nav-count hidden" id="dataSubjectRequestsNavCount">0</strong></button>
+            </div>
+          </section>
+          <section class="nav-module hidden" id="technicalSecurityNav" aria-label="Technische Sicherheit">
+            <div class="nav-branch nav-module-heading">
+              <button type="button" class="nav-disclosure" id="technicalSecurityToggle" data-nav-toggle="technicalSecurity" aria-controls="technicalSecurityNavChildren" aria-label="Unterpunkte der technischen Sicherheit ein- oder ausklappen" aria-expanded="false"><span aria-hidden="true"></span></button>
+              <button class="nav-item nav-module-main" type="button" data-view="technicalSecurity" data-technical-security-tab="sast" id="technicalSecurityNavButton"><span class="nav-symbol" aria-hidden="true">◇</span><span>Technische Sicherheit</span></button>
+            </div>
+            <div class="nav-module-children hidden" id="technicalSecurityNavChildren">
+              <button class="nav-item nav-module-route" type="button" data-view="technicalSecurity" data-technical-security-tab="sast" id="securitySastNavButton"><span>SAST-Bewertungen</span></button>
+              <button class="nav-item nav-module-route" type="button" data-view="technicalSecurity" data-technical-security-tab="security-audits" id="securityAuditsNavButton"><span>Security Audits</span></button>
             </div>
           </section>
         </nav>
@@ -268,7 +295,7 @@
         </button>
         <section id="gpDefinitionsView" class="view gp-definitions-view" aria-labelledby="gpDefinitionsTitle">
           <header class="topbar">
-            <div><span class="eyebrow">Developer · Standards</span><h1 id="gpDefinitionsTitle">GP-Definitionen</h1><p>Die gemeinsamen Regeln für Fenster, Druck, Tabellen, gespeicherte Ansichten, Gestaltung und Galerien.</p></div>
+            <div><span class="eyebrow">Developer</span><h1 id="gpDefinitionsTitle">Developer</h1><p>GP-Standards, Module und Assistenten verwalten.</p></div>
             <span class="gp-definitions-access-badge">Nur Developer</span>
           </header>
           <div id="gpDefinitionsWorkspace" hidden></div>
@@ -410,7 +437,7 @@
             </div>
           </details>
 
-          <dialog class="modal date-range-dialog" id="scheduleSearchDateRangeDialog" aria-labelledby="scheduleSearchDateRangeDialogTitle">
+          <dialog class="modal date-range-dialog" id="scheduleSearchDateRangeDialog" aria-labelledby="scheduleSearchDateRangeDialogTitle" data-gp-window-mode="workspace">
             <form id="scheduleSearchDateRangeForm">
               <div class="modal-header"><div><span class="eyebrow">Dienstsuche</span><h2 id="scheduleSearchDateRangeDialogTitle">Suchzeitraum auswählen</h2><p>Der Zeitraum kann in der Vergangenheit oder Zukunft liegen und höchstens 731 Tage umfassen.</p></div><button class="close-button" id="scheduleSearchDateRangeClose" type="button" aria-label="Kalender schließen">×</button></div>
               <div class="date-range-selection" aria-live="polite"><div><span>Beginn</span><strong id="scheduleSearchDateRangeStartText">Noch nicht gewählt</strong></div><div><span>Ende</span><strong id="scheduleSearchDateRangeEndText">Noch nicht gewählt</strong></div></div>
@@ -493,7 +520,7 @@
             <div class="cross-location-schedule-scroll" id="crossLocationScheduleGrid" aria-live="polite"></div>
           </section>
 
-          <dialog class="modal staff-assignment-request-dialog" id="staffAssignmentRequestDialog" aria-labelledby="staffAssignmentRequestTitle">
+          <dialog class="modal staff-assignment-request-dialog" id="staffAssignmentRequestDialog" aria-labelledby="staffAssignmentRequestTitle" data-gp-window-mode="workspace">
             <form id="staffAssignmentRequestForm">
               <div class="modal-header">
                 <div><span class="eyebrow">Standortübergreifender Einsatz</span><h2 id="staffAssignmentRequestTitle">Einsatzanfrage stellen</h2><p>Die Anfrage geht an die zuständige Leitung der Quellfiliale. Ein gewünschtes Teammitglied ist noch keine Zusage.</p></div>
@@ -526,7 +553,7 @@
             </form>
           </dialog>
 
-          <dialog class="modal staff-assignment-review-dialog" id="staffAssignmentRequestReviewDialog" aria-labelledby="staffAssignmentRequestReviewTitle">
+          <dialog class="modal staff-assignment-review-dialog" id="staffAssignmentRequestReviewDialog" aria-labelledby="staffAssignmentRequestReviewTitle" data-gp-window-mode="workspace">
             <div class="modal-header">
               <div><span class="eyebrow">Temporärer Filialeinsatz</span><h2 id="staffAssignmentRequestReviewTitle">Einsatzanfragen prüfen</h2><p>Die Anfrage bleibt bis zur Entscheidung unverändert. Eine Genehmigung legt den bestätigten temporären Filialeinsatz verbindlich an und macht das Teammitglied in der Zielfiliale einplanbar.</p></div>
               <button class="close-button" id="staffAssignmentRequestReviewClose" type="button" aria-label="Prüfansicht schließen">×</button>
@@ -539,7 +566,7 @@
             <div class="modal-actions"><span></span><button class="secondary-button" id="staffAssignmentRequestReviewCancel" type="button">Schließen</button></div>
           </dialog>
 
-          <dialog class="modal date-range-dialog" id="staffAssignmentRequestDateRangeDialog" aria-labelledby="staffAssignmentRequestDateRangeDialogTitle">
+          <dialog class="modal date-range-dialog" id="staffAssignmentRequestDateRangeDialog" aria-labelledby="staffAssignmentRequestDateRangeDialogTitle" data-gp-window-mode="workspace">
             <form id="staffAssignmentRequestDateRangeForm">
               <div class="modal-header"><div><span class="eyebrow">Einsatzanfrage</span><h2 id="staffAssignmentRequestDateRangeDialogTitle">Zeitraum auswählen</h2><p>Für einen einzelnen Tag denselben Tag als Beginn und Ende auswählen.</p></div><button class="close-button" id="staffAssignmentRequestDateRangeClose" type="button" aria-label="Kalender schließen">×</button></div>
               <div class="date-range-selection" aria-live="polite"><div><span>Beginn</span><strong id="staffAssignmentRequestDateRangeStartText">Noch nicht gewählt</strong></div><div><span>Ende</span><strong id="staffAssignmentRequestDateRangeEndText">Noch nicht gewählt</strong></div></div>
@@ -566,6 +593,7 @@
 
           </details>
 
+          <section id="planningAssistantPanel" hidden aria-label="Planungsassistent"></section>
           <details class="work-rule-assessment branch-supervision-assessment hidden" id="branchSupervisionAssessmentPanel">
             <summary>
               <span class="work-rule-assessment-icon" aria-hidden="true">FL</span>
@@ -629,14 +657,14 @@
           </section>
         </section>
 
-        <dialog class="modal xoffi-import-modal" id="xoffiImportDialog">
+        <dialog class="modal xoffi-import-modal" id="xoffiImportDialog" data-gp-window-mode="workspace" data-gp-window-rich aria-labelledby="xoffiImportTitle">
           <form id="xoffiImportForm">
             <div class="modal-header">
-              <div><span class="eyebrow">Abgeschlossene Kalenderwoche</span><h2>xoffi-Zeiterfassung importieren</h2><p>Die gespeicherte Xoffi-Seite als einzelne MHTML-Datei hochladen. Namen, Kalenderwoche und Stichtagswerte werden automatisch erkannt. Nach Prüfung übernehmen; die Quelldatei wird nicht aufbewahrt.</p></div>
+              <div><span class="eyebrow">Abgeschlossene Kalenderwoche</span><h2 id="xoffiImportTitle">xoffi-Zeiterfassung importieren</h2><p>Datei auslesen, Quelle und Review prüfen, anschließend übernehmen. Die Quelldatei wird nicht aufbewahrt.</p></div>
               <button type="button" class="close-button" id="xoffiImportClose" aria-label="Dialog schließen">×</button>
             </div>
             <div class="xoffi-import-source">
-              <label>Xoffi-Datei<input type="file" id="xoffiImportFile" accept=".mhtml,.mht,message/rfc822,multipart/related,image/jpeg,image/png,image/webp" /></label>
+              <label>1 · Xoffi-Datei auswählen<input type="file" id="xoffiImportFile" accept=".mhtml,.mht,message/rfc822,multipart/related,image/jpeg,image/png,image/webp" /><small>MHTML: Woche automatisch erkannt. Bilder: zuerst die passende GP-Woche öffnen.</small></label>
               <button type="button" class="secondary-button" id="xoffiInspectButton">Datei auslesen</button>
             </div>
             <div class="xoffi-import-preview" id="xoffiImportPreview"></div>
@@ -651,8 +679,8 @@
             </div>
             <p class="settings-note" id="xoffiImportStatus" role="status" aria-live="polite" tabindex="-1">MHTML erkennt die Woche automatisch. Für Bilder zuerst die betreffende vergangene Woche im Dienstplan öffnen.</p>
             <div class="modal-actions">
-              <button type="button" class="secondary-button" id="xoffiImportCancel">Abbrechen</button>
-              <button type="submit" class="primary-button" id="xoffiApplyButton" disabled>Geprüfte Werte importieren</button>
+              <button type="button" class="secondary-button" id="xoffiImportCancel">Schließen</button>
+              <button type="submit" class="primary-button" id="xoffiApplyButton" disabled>3 · Geprüfte Werte importieren</button>
             </div>
           </form>
         </dialog>
@@ -699,7 +727,7 @@
             </form></details>
             <div id="xoffiComparisonList" class="xoffi-comparison-list"><p class="settings-note">Zeitraum auswählen.</p></div>
           </section>
-          <dialog class="modal date-range-dialog" id="xoffiComparisonRangeDialog" aria-labelledby="xoffiComparisonRangeDialogTitle">
+          <dialog class="modal date-range-dialog" id="xoffiComparisonRangeDialog" aria-labelledby="xoffiComparisonRangeDialogTitle" data-gp-window-mode="workspace">
             <form id="xoffiComparisonRangeForm">
               <div class="modal-header"><div><span class="eyebrow">Zeiterfassung</span><h2 id="xoffiComparisonRangeDialogTitle">Zeitraum auswählen</h2><p>Beginn und Ende im Kalender wählen. Bis zu 370 Tage, auch über Monats- und Jahresgrenzen hinweg.</p></div><button class="close-button" id="xoffiComparisonRangeClose" type="button" aria-label="Kalender schließen">×</button></div>
               <div class="date-range-selection" aria-live="polite"><div><span>Beginn</span><strong id="xoffiComparisonRangeStartText">Noch nicht gewählt</strong></div><div><span>Ende</span><strong id="xoffiComparisonRangeEndText">Noch nicht gewählt</strong></div></div>
@@ -808,7 +836,7 @@
           </details>
         </section>
 
-        <dialog class="modal date-range-dialog" id="requestBlackoutDateRangeDialog" aria-labelledby="requestBlackoutDateRangeDialogTitle">
+        <dialog class="modal date-range-dialog" id="requestBlackoutDateRangeDialog" aria-labelledby="requestBlackoutDateRangeDialogTitle" data-gp-window-mode="workspace">
           <form id="requestBlackoutDateRangeForm">
             <div class="modal-header"><div><span class="eyebrow">Antragssperre</span><h2 id="requestBlackoutDateRangeDialogTitle">Zeitraum auswählen</h2><p>Für einen einzelnen Tag denselben Tag als Beginn und Ende auswählen.</p></div><button class="close-button" id="requestBlackoutDateRangeClose" type="button" aria-label="Kalender schließen">×</button></div>
             <div class="date-range-selection" aria-live="polite"><div><span>Beginn</span><strong id="requestBlackoutDateRangeStartText">Noch nicht gewählt</strong></div><div><span>Ende</span><strong id="requestBlackoutDateRangeEndText">Noch nicht gewählt</strong></div></div>
@@ -823,21 +851,24 @@
         <section id="personnelAdministrationView" class="view">
           <header class="settings-header">
             <div><span class="eyebrow">Zentrale Stammdaten</span><h1>Personalverwaltung</h1><p class="subtitle">Mitarbeitende, Organisation, Abwesenheiten und fachliche Regelgrundlagen geschützt verwalten.</p></div>
-            <div class="settings-header-actions"><button class="display-columns-button" id="personnelDisplayColumnsButton" type="button">Anzeigespalten</button><div class="page-theme-switch" role="group" aria-label="Darstellung der Personalverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
+            <div class="settings-header-actions"><div class="page-theme-switch" role="group" aria-label="Darstellung der Personalverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
           </header>
 
-          <section class="personnel-administration-section personnel-dashboard-section active" id="personnelDashboardSection" aria-labelledby="personnelDashboardTitle">
+          <section class="personnel-administration-section personnel-dashboard-section active" id="personnelDashboardSection" role="region" aria-labelledby="personnelDashboardTitle">
             <div class="personnel-dashboard-heading">
               <div>
                 <span class="eyebrow">Arbeitsbereiche</span>
                 <h2 id="personnelDashboardTitle">Personalverwaltung im Überblick</h2>
-                <p>Öffne genau die Bereiche, die für deine Rolle und den aktivierten Funktionsumfang verfügbar sind.</p>
+                <p>Deine freigegebenen Arbeitsbereiche und ihr aktueller Datenstand. Jede Kennzahl nennt ihren Bereich und Zeitraum; unvollständige Quellen bleiben als Teilstand erkennbar.</p>
               </div>
-              <button class="secondary-button" id="personnelDashboardCustomizeButton" type="button" aria-controls="personnelDashboardCustomizer" aria-expanded="false">Dashboard anpassen</button>
+              <div class="personnel-dashboard-actions">
+                <button class="secondary-button" id="personnelDashboardRefreshButton" type="button">Kennzahlen neu laden</button>
+                <button class="secondary-button" id="personnelDashboardCustomizeButton" type="button" aria-controls="personnelDashboardCustomizer" aria-expanded="false">Dashboard anpassen</button>
+              </div>
             </div>
             <section class="personnel-dashboard-customizer hidden" id="personnelDashboardCustomizer" aria-labelledby="personnelDashboardCustomizerTitle">
               <div class="personnel-dashboard-customizer-heading">
-                <div><span class="eyebrow">Persönliche Ansicht</span><h3 id="personnelDashboardCustomizerTitle">Kacheln anordnen und ausblenden</h3><p>Die Auswahl gilt nur für dein Benutzerkonto. Nicht erlaubte Bereiche bleiben unabhängig davon verborgen.</p></div>
+                <div><span class="eyebrow">Persönliche Ansicht</span><h3 id="personnelDashboardCustomizerTitle">Informationsfelder anordnen und einblenden</h3><p>Reihenfolge und Auswahl gelten nur für dein Konto. Über das Feldmenü änderst du Beschriftung und Farbe; am Desktop kannst du Titelbereiche verschieben und alle Kanten zur Größenänderung verwenden.</p></div>
                 <button class="close-button" id="personnelDashboardCustomizerClose" type="button" aria-label="Dashboard-Anpassung schließen">×</button>
               </div>
               <div class="personnel-dashboard-customizer-list" id="personnelDashboardCustomizerList"></div>
@@ -850,33 +881,24 @@
             <div class="personnel-dashboard-grid" id="personnelDashboardGrid" aria-live="polite"></div>
           </section>
 
-          <div class="settings-tabs personnel-administration-tabs" role="tablist">
-            <button class="settings-tab active" id="personnelDirectoryTab" type="button" role="tab" aria-controls="personnelDirectorySection" aria-selected="true" data-personnel-administration-tab="employees">Mitarbeitende</button>
-            <button class="settings-tab hidden" id="positionManagementTab" type="button" role="tab" aria-controls="positionManagementSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="positions">Positionsverwaltung</button>
-            <button class="settings-tab hidden" id="candidatePreboardingTab" type="button" role="tab" aria-controls="candidatePreboardingSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="applications">Bewerbungen &amp; Preboarding</button>
-            <button class="settings-tab hidden" id="workflowCenterTab" type="button" role="tab" aria-controls="workflowCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="workflows">Workflow-Center</button>
-            <button class="settings-tab hidden" id="personnelLearningTab" type="button" role="tab" aria-controls="personnelLearningSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="learning">Schulung &amp; Wissen</button>
-            <button class="settings-tab hidden" id="personnelTasksTab" type="button" role="tab" aria-controls="personnelTasksSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="tasks">Personalaufgaben</button>
-            <button class="settings-tab" id="costCentersTab" type="button" role="tab" aria-controls="costCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="costCenters">Kostenstellen</button>
-            <button class="settings-tab hidden" id="customWorkRulesTab" type="button" role="tab" aria-controls="customWorkRulesSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="ruleDrafts">Regelwerk</button>
-            <button class="settings-tab hidden" id="collectiveAgreementsTab" type="button" role="tab" aria-controls="collectiveAgreementsSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="collectiveAgreements">Kollektivverträge</button>
-            <button class="settings-tab hidden" id="centralVacationsTab" type="button" role="tab" aria-controls="centralVacationSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="vacations">Urlaube</button>
-          </div>
-
-          <section class="personnel-administration-section active" id="personnelDirectorySection" role="tabpanel" aria-labelledby="personnelDirectoryTab">
+          <section class="personnel-administration-section active" id="personnelDirectorySection" role="region" aria-labelledby="personnelDirectoryTitle">
             <div class="personnel-directory-workspace" id="personnelDirectoryWorkspace">
-            <div class="personnel-administration-summary" id="personnelAdministrationSummary" aria-live="polite"></div>
             <div class="employee-toolbar personnel-directory-toolbar">
-              <div><h2>Mitarbeitende</h2><p>Unternehmensweite Übersicht mit ausschließlich freigegebenen Angaben. Die Spaltenauswahl gilt auch für die Teamansicht.</p></div>
-              <button class="primary-button hidden" id="addCentralEmployeeButton" type="button">+ Mitarbeiter anlegen</button>
+              <div><span class="eyebrow">Personalverzeichnis</span><h2 id="personnelDirectoryTitle">Mitarbeitende</h2><p>Freigegebene Personal- und Organisationsdaten finden, Profile öffnen und Zuordnungen prüfen.</p></div>
+              <div class="personnel-directory-actions"><button class="secondary-button" id="refreshPersonnelDirectoryButton" type="button">Aktualisieren</button><button class="display-columns-button" id="personnelDisplayColumnsButton" type="button">Anzeigespalten</button><button class="primary-button hidden" id="addCentralEmployeeButton" type="button">+ Mitarbeiter anlegen</button></div>
             </div>
-            <div class="personnel-directory-filters">
+            <p class="personnel-directory-scope">Gesamtbestand im freigegebenen Personalverzeichnis · unabhängig von den Filtern</p>
+            <div class="personnel-administration-summary" id="personnelAdministrationSummary" aria-live="polite"></div>
+            <div class="personnel-directory-filters" role="search" aria-label="Mitarbeitende filtern">
               <label class="field"><span>Suchen</span><input id="personnelDirectorySearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Name" /></label>
               <label class="field"><span>Kostenstelle</span><select id="personnelDirectoryCostCenterFilter"><option value="">Alle Kostenstellen</option></select></label>
               <label class="field"><span>Status</span><select id="personnelDirectoryStatusFilter"><option value="active">Aktiv</option><option value="inactive">Inaktiv</option><option value="unassigned">Ohne Kostenstelle</option><option value="all">Alle</option></select></label>
+              <button class="secondary-button" id="resetPersonnelDirectoryFiltersButton" type="button">Filter zurücksetzen</button>
             </div>
+            <div class="personnel-directory-result-heading"><h3>Suchergebnisse</h3><p id="personnelDirectoryResultCount" role="status" aria-live="polite">Noch kein Personalverzeichnis geladen.</p></div>
             <div class="personnel-directory-table-wrap">
               <table class="personnel-directory-table" id="personnelDirectoryTable">
+                <caption class="visually-hidden">Mitarbeitende passend zur aktuellen Suche und Filterauswahl. Spalten und Sortierung gelten für dein Konto.</caption>
                 <thead id="personnelDirectoryHead"><tr><th>Personalnr.</th><th>Name</th><th>Position</th><th>Kostenstelle</th><th>Filiale / Abteilung</th><th>Wochen-Soll</th><th>Status</th><th></th></tr></thead>
                 <tbody id="personnelDirectoryBody"><tr><td colspan="8">Personalstammdaten werden geladen.</td></tr></tbody>
               </table>
@@ -914,9 +936,9 @@
             </div>
           </section>
 
-          <section class="personnel-administration-section personnel-candidates" id="candidatePreboardingSection" role="tabpanel" aria-labelledby="candidatePreboardingTab">
+          <section class="personnel-administration-section personnel-candidates" id="candidatePreboardingSection" role="region" aria-labelledby="candidatePreboardingTitle">
             <div class="employee-toolbar personnel-lifecycle-foundation-heading">
-              <div><span class="eyebrow">Bewerbungsübersicht</span><h2>Bewerbungen &amp; Preboarding</h2><p>Datensparsame Übersicht innerhalb des serverseitig freigegebenen Standorts beziehungsweise der freigegebenen Abteilung.</p></div>
+              <div><span class="eyebrow">Bewerbungsübersicht</span><h2 id="candidatePreboardingTitle">Bewerbungen &amp; Preboarding</h2><p>Datensparsame Übersicht innerhalb des serverseitig freigegebenen Standorts beziehungsweise der freigegebenen Abteilung.</p></div>
               <span class="status-badge inactive" id="personnelCandidateScopeBadge">Bereich wird geladen</span>
             </div>
             <div class="personnel-candidate-toolbar" aria-label="Bewerbungen filtern">
@@ -961,23 +983,21 @@
             </div>
           </section>
 
-          <section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-instances" id="workflowCenterSection" role="tabpanel" aria-labelledby="workflowCenterTab">
+          <section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-instances" id="workflowCenterSection" role="region" aria-labelledby="workflowCenterTitle">
             <div class="employee-toolbar personnel-lifecycle-foundation-heading">
-              <div><span class="eyebrow">Versionsgebundene Ausführung</span><h2>Workflow-Center</h2><p>Neue Personalprozess-Instanzen bleiben dauerhaft an genau die beim Start veröffentlichte Version gebunden.</p></div>
-              <span class="status-badge">M5 / O8 · kontrolliert</span>
+              <div><span class="eyebrow">Abläufe &amp; Zusammenarbeit</span><h2 id="workflowCenterTitle">Workflow-Center</h2><p>Vorlagen überblicken, veröffentlichte Versionen nachvollziehen und freigegebene Abläufe begleiten.</p></div>
             </div>
-            <article class="personnel-lifecycle-boundary">
-              <strong>Vorlage, Arbeitsentwurf, Veröffentlichung und Instanz bleiben getrennt</strong>
-              <p>Die Instanzliste zeigt ausschließlich serverseitig freigegebene Metadaten. Der grafische O8-Arbeitsentwurf lebt nur im Arbeitsspeicher des Browsers: Er veröffentlicht und startet keinen Prozess, ändert keine Aufgabe und übernimmt keine bestehenden Läufe automatisch.</p>
-            </article>
+            <p class="workflow-center-note">Jede gestartete Instanz bleibt an ihre veröffentlichte Version gebunden. Änderungen an einer Vorlage verändern bestehende Läufe nicht.</p>
+            <section id="workflowStudioWorkspace" aria-label="ERP-Workflow-Studio" hidden></section>
             <section class="personnel-lifecycle-editor-entry hidden" id="personnelLifecycleEditorSection" aria-labelledby="personnelLifecycleEditorEntryTitle">
               <header>
-                <div><span class="eyebrow">O8 · grafischer Arbeitsentwurf</span><h3 id="personnelLifecycleEditorEntryTitle">Linearen Personalprozess entwerfen</h3><p>Eine freigegebene Quelle kann lokal als lineare Arbeitskopie angeordnet und serverseitig geprüft werden. Der Entwurf wird weder gespeichert noch veröffentlicht.</p></div>
+                <div><span class="eyebrow">Personalprozesse</span><h3 id="personnelLifecycleEditorEntryTitle">Personalprozess skizzieren</h3><p>Eine freigegebene Quelle als Arbeitskopie im Browser anordnen und prüfen. Diese Skizze wird weder gespeichert noch veröffentlicht.</p></div>
                 <button class="primary-button" id="openPersonnelLifecycleEditorButton" type="button" aria-haspopup="dialog" aria-controls="personnelLifecycleEditorDialog">Grafischen Editor öffnen</button>
               </header>
               <p class="personnel-lifecycle-editor-entry-status" id="personnelLifecycleEditorEntryStatus" role="status" aria-live="polite">O8-Katalog wird erst beim Öffnen geladen.</p>
             </section>
             <div class="hidden" id="personnelWorkflowInstanceWorkspace">
+              <h3 class="workflow-center-personnel-title">Personalprozesse · freigegebene Instanzen</h3>
               <div class="personnel-workflow-toolbar">
                 <label class="field"><span>Status</span><select id="personnelWorkflowInstanceStatusFilter">
                   <option value="all">Alle sichtbaren Instanzen</option>
@@ -994,69 +1014,57 @@
             </div>
           </section>
 
-          <section class="personnel-administration-section personnel-learning-catalog" id="personnelLearningSection" role="tabpanel" aria-labelledby="personnelLearningTab">
+          <section class="personnel-administration-section personnel-learning-catalog" id="personnelLearningSection" role="region" aria-labelledby="personnelLearningSectionTitle">
             <div class="employee-toolbar personnel-learning-heading">
-              <div><span class="eyebrow">Transparente Lernorganisation</span><h2>Schulung &amp; Wissen</h2><p>Prozessvorlagen und definierte Fähigkeiten nachvollziehbar und versioniert verwalten.</p></div>
-
+              <div class="learning-workspace-title"><span class="eyebrow">Personalentwicklung</span><h2 id="personnelLearningSectionTitle">Schulung &amp; Wissen</h2><p>Schulungen begleiten, Fähigkeiten entwickeln und Wissen im Team teilen.</p></div>
+              <span class="learning-workspace-symbol" aria-hidden="true"><svg viewBox="0 0 32 32" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 26V9M16 9C12 5 6 5 3 7v18c4-2 9-2 13 1 4-3 9-3 13-1V7c-3-2-9-2-13 2Z"/><path d="M7 12c2-.3 4 0 5 1M20 13c1-1 3-1.3 5-1M7 17c2-.3 4 0 5 1M20 18c1-1 3-1.3 5-1"/></svg></span>
             </div>
-            <p class="personnel-learning-introduction">Schulungen vorbereiten, Wissen nachschlagen und Lernfortschritte begleiten. Veröffentlichte Fassungen und bisherige Abschlüsse bleiben nachvollziehbar erhalten.</p>
             <section class="personnel-learning-dashboard" id="personnelLearningDashboardPanel" aria-labelledby="personnelLearningDashboardTitle">
               <header class="personnel-learning-dashboard-heading">
-                <div><span class="eyebrow">Übersicht</span><h3 id="personnelLearningDashboardTitle">Schulungsdashboard &amp; Fähigkeitsbaum</h3><p>Fortschritte, Klärungsbedarf und vorhandene Fähigkeiten im aktuell freigegebenen Bereich.</p></div>
-                <button class="secondary-button" id="refreshPersonnelLearningDashboardButton" type="button">Dashboard aktualisieren</button>
+                <div><h3 id="personnelLearningDashboardTitle">Lernen im Überblick</h3><p>Schulungen, Klärungsbedarf und Fähigkeiten im freigegebenen Bereich.</p></div>
+                <button class="secondary-button" id="refreshPersonnelLearningDashboardButton" type="button">Übersicht aktualisieren</button>
               </header>
               <p class="personnel-learning-status" id="personnelLearningDashboardStatus" role="status" aria-live="polite">Das Schulungsdashboard wird beim Öffnen geladen.</p>
+              <p class="personnel-learning-metric-scope">Kennzahlen im freigegebenen Bereich</p>
               <div class="personnel-learning-dashboard-summary" id="personnelLearningDashboardSummary" aria-label="Zusammenfassung der Schulungsfortschritte"></div>
               <div class="personnel-learning-dashboard-grid">
                 <section class="personnel-learning-dashboard-column" aria-labelledby="personnelLearningDashboardAssignmentsTitle">
-                  <div class="personnel-learning-dashboard-section-heading"><div><span class="eyebrow">Durchführung</span><h4 id="personnelLearningDashboardAssignmentsTitle">Aktuelle Schulungsstände</h4></div><span id="personnelLearningDashboardScope"></span></div>
+                  <div class="personnel-learning-dashboard-section-heading"><div><h4 id="personnelLearningDashboardAssignmentsTitle">Aktuelle Schulungen</h4></div><span id="personnelLearningDashboardScope"></span></div>
                   <div class="personnel-learning-dashboard-assignment-list" id="personnelLearningDashboardAssignments"><p class="personnel-workflow-empty">Noch keine Schulungsstände geladen.</p></div>
                 </section>
                 <section class="personnel-learning-dashboard-column personnel-learning-skill-tree-panel" aria-labelledby="personnelLearningSkillTreeTitle">
-                  <div class="personnel-learning-dashboard-section-heading"><div><span class="eyebrow">Professionelles Fähigkeitsprofil</span><h4 id="personnelLearningSkillTreeTitle">Fähigkeitsbaum · Stufen 1–10</h4></div><label class="field personnel-learning-dashboard-person"><span>Mitarbeiter</span><select id="personnelLearningDashboardEmployee"><option value="">Noch keine Profile geladen</option></select></label></div>
+                  <div class="personnel-learning-dashboard-section-heading"><div><h4 id="personnelLearningSkillTreeTitle">Fähigkeitsprofil</h4><p>Verbindliche Stufen von 1 bis 10</p></div><label class="field personnel-learning-dashboard-person"><span>Person auswählen</span><select id="personnelLearningDashboardEmployee"><option value="">Noch keine Profile geladen</option></select></label></div>
                   <div class="personnel-learning-skill-tree" id="personnelLearningSkillTree"><p class="personnel-workflow-empty">Noch kein Fähigkeitsprofil geladen.</p></div>
                 </section>
               </div>
             </section>
+            <header class="learning-workspace-group"><span aria-hidden="true">01</span><div><h3>Schulungen begleiten</h3><p>Zuweisungen, Fortschritt und Anforderungen im Team.</p></div></header>
+            <details class="personnel-learning-area" data-learning-area="assignments">
+              <summary><strong>Schulungen</strong><span>Zuweisen und Fortschritt begleiten</span></summary>
+            <section class="personnel-learning-catalog-panel personnel-learning-assignment-panel" id="personnelLearningAssignmentsPanel" aria-labelledby="personnelLearningAssignmentsTitle">
+              <div class="personnel-learning-subheading"><div><h3 id="personnelLearningAssignmentsTitle">Schulungen im Team</h3></div><p>Zuweisungen, Schritte und Abschlüsse begleiten. Frühere Fassungen und begründete Korrekturen bleiben nachvollziehbar.</p></div>
+              <p class="personnel-learning-metric-scope">Gesamter freigegebener Bereich · die Filter gelten für die Liste darunter</p>
+              <div class="personnel-learning-summary" id="personnelLearningAssignmentSummary" aria-label="Zusammenfassung der Schulungszuweisungen"></div>
+              <div class="personnel-learning-toolbar personnel-learning-assignment-toolbar" aria-label="Schulungszuweisungen filtern">
+                <label class="field"><span>Suche</span><input id="personnelLearningAssignmentSearch" type="search" autocomplete="off" placeholder="Lernende, Prozess, Trainer, Fähigkeit oder Filiale" /></label>
+                <label class="field"><span>Lernende Person</span><select id="personnelLearningAssignmentLearnerFilter"><option value="all">Alle sichtbaren Lernenden</option></select></label>
+                <label class="field"><span>Status</span><select id="personnelLearningAssignmentStatusFilter"><option value="active">Aktive Zuweisungen</option><option value="not_started">Noch nicht begonnen</option><option value="in_progress">In Durchführung</option><option value="completed">Abgeschlossen</option><option value="attention">Klärungsbedarf</option><option value="cancelled">Abgebrochene Zuweisungen</option><option value="all">Alle Revisionsstände</option></select></label>
+                <button class="secondary-button" id="refreshPersonnelLearningAssignmentsButton" type="button">Aktualisieren</button>
+                <button class="primary-button hidden" id="addPersonnelLearningAssignmentButton" type="button">+ Schulung zuweisen</button>
+              </div>
+              <p class="personnel-learning-status" id="personnelLearningAssignmentStatus" role="status" aria-live="polite">Schulungszuweisungen werden beim Öffnen geladen.</p>
+              <div class="personnel-learning-list personnel-learning-assignment-list" id="personnelLearningAssignmentList">
+                <p class="personnel-workflow-empty">Noch keine Schulungszuweisungen geladen.</p>
+              </div>
+            </section>
+            </details>
             <details class="personnel-learning-area" data-learning-area="team"><summary><strong>Team · Soll und Ist</strong><span>Kompetenzmatrix und Pflichtschulungen</span></summary><section class="personnel-learning-catalog-panel" id="personnelLearningTeam"></section></details>
-            <details class="personnel-learning-area" data-learning-area="knowledge"><summary><strong>Wissensbibliothek</strong><span>Nachschlagen, suchen und Wissen pflegen</span></summary><section class="personnel-learning-catalog-panel" id="personnelKnowledgeLibrary"></section></details>
-            <details class="personnel-learning-area" data-learning-area="processes">
-              <summary><strong>Vorlagen</strong><span>Schulungen und Lernschritte vorbereiten</span></summary>
-            <section class="personnel-learning-catalog-panel" id="personnelLearningProcessesPanel" aria-labelledby="personnelLearningProcessesTitle">
-              <div class="personnel-learning-subheading"><div><span class="eyebrow">Versionierte Abläufe</span><h3 id="personnelLearningProcessesTitle">Prozessvorlagen</h3><button class="primary-button hidden" id="addPersonnelLearningModuleButton" type="button">+ Prozess anlegen</button></div><p>Schulungs- und Wissensabläufe mit geordneten Schritten.</p></div>
-              <div class="personnel-learning-summary" id="personnelLearningSummary" aria-label="Zusammenfassung des Schulungs- und Wissenskatalogs"></div>
-              <div class="personnel-learning-toolbar" aria-label="Schulungs- und Wissensprozesse filtern">
-                <label class="field"><span>Suche</span><input id="personnelLearningSearch" type="search" autocomplete="off" placeholder="Titel, Code, Lernziel oder Schlagwort" /></label>
-                <label class="field"><span>Art</span><select id="personnelLearningTypeFilter"><option value="all">Alle Arten</option><option value="training">Schulungsprozess</option><option value="knowledge">Wissensprozess</option></select></label>
-                <label class="field"><span>Status</span><select id="personnelLearningStatusFilter"><option value="all">Alle Status</option><option value="draft">Entwurf</option><option value="published">Veröffentlicht</option><option value="published_with_draft">Veröffentlicht mit neuer Version</option><option value="archived">Archiviert</option></select></label>
-                <button class="secondary-button" id="refreshPersonnelLearningButton" type="button">Aktualisieren</button>
-              </div>
-              <p class="personnel-learning-status" id="personnelLearningStatus" role="status" aria-live="polite">Der Prozesskatalog wird beim Öffnen geladen.</p>
-              <div class="personnel-learning-list" id="personnelLearningList">
-                <p class="personnel-workflow-empty">Noch keine Prozessvorlagen geladen.</p>
-              </div>
-            </section>
-            </details>
-            <details class="personnel-learning-area" data-learning-area="skills">
-              <summary><strong>Fähigkeiten</strong><span>Stufen und Lernziele definieren</span></summary>
-            <section class="personnel-learning-catalog-panel personnel-learning-skills-panel" id="personnelLearningSkillsPanel" aria-labelledby="personnelLearningSkillsTitle">
-              <div class="personnel-learning-subheading"><div><span class="eyebrow">Fähigkeiten</span><h3 id="personnelLearningSkillsTitle">Fähigkeitskatalog</h3><button class="secondary-button hidden" id="addPersonnelLearningSkillButton" type="button">+ Fähigkeit anlegen</button></div><p>Jede Version definiert die vollständige Entwicklung von Stufe 1 bis Stufe 10.</p></div>
-              <div class="personnel-learning-summary" id="personnelLearningSkillSummary" aria-label="Zusammenfassung des Fähigkeitskatalogs"></div>
-              <div class="personnel-learning-toolbar personnel-learning-skill-toolbar" aria-label="Fähigkeiten filtern">
-                <label class="field"><span>Suche</span><input id="personnelLearningSkillSearch" type="search" autocomplete="off" placeholder="Fähigkeit, Kategorie, Code oder Schlagwort" /></label>
-                <label class="field"><span>Status</span><select id="personnelLearningSkillStatusFilter"><option value="all">Alle Status</option><option value="draft">Entwurf</option><option value="published">Veröffentlicht</option><option value="published_with_draft">Veröffentlicht mit neuer Version</option><option value="archived">Archiviert</option></select></label>
-                <button class="secondary-button" id="refreshPersonnelLearningSkillsButton" type="button">Aktualisieren</button>
-              </div>
-              <p class="personnel-learning-status" id="personnelLearningSkillStatus" role="status" aria-live="polite">Der Fähigkeitskatalog wird beim Öffnen geladen.</p>
-              <div class="personnel-learning-list personnel-learning-skill-list" id="personnelLearningSkillList">
-                <p class="personnel-workflow-empty">Noch keine Fähigkeiten geladen.</p>
-              </div>
-            </section>
-            </details>
+            <header class="learning-workspace-group"><span aria-hidden="true">02</span><div><h3>Fähigkeiten entwickeln</h3><p>Kompetenzen zuordnen, Trainerfreigaben und Stufen pflegen.</p></div></header>
             <details class="personnel-learning-area" data-learning-area="competencies">
               <summary><strong>Kompetenzprofile</strong><span>Fähigkeiten und Trainerfreigaben zuordnen</span></summary>
             <section class="personnel-learning-catalog-panel personnel-learning-competency-panel" id="personnelLearningCompetenciesPanel" aria-labelledby="personnelLearningCompetenciesTitle">
-              <div class="personnel-learning-subheading"><div><span class="eyebrow">Mitarbeiterprofile</span><h3 id="personnelLearningCompetenciesTitle">Kompetenzprofile &amp; Trainerfreigaben</h3></div><p>Mehrere Fähigkeiten je Mitarbeiter mit verbindlicher Stufe und transparenter Trainerfreigabe.</p></div>
+              <div class="personnel-learning-subheading"><div><h3 id="personnelLearningCompetenciesTitle">Kompetenzprofile &amp; Trainerfreigaben</h3></div><p>Dokumentierte Fähigkeiten je Person mit verbindlicher Stufe und fachbezogener Trainerfreigabe.</p></div>
+              <p class="personnel-learning-metric-scope">Kompetenzen im freigegebenen Bereich</p>
               <div class="personnel-learning-summary" id="personnelLearningCompetencySummary" aria-label="Zusammenfassung der Kompetenzprofile"></div>
               <div class="personnel-learning-toolbar personnel-learning-competency-toolbar" aria-label="Kompetenzprofile filtern">
                 <label class="field"><span>Suche</span><input id="personnelLearningCompetencySearch" type="search" autocomplete="off" placeholder="Mitarbeiter, Fähigkeit, Kategorie oder Filiale" /></label>
@@ -1072,53 +1080,84 @@
               </div>
             </section>
             </details>
-            <details class="personnel-learning-area" data-learning-area="assignments">
-              <summary><strong>Schulungen</strong><span>Zuweisen und Fortschritt begleiten</span></summary>
-            <section class="personnel-learning-catalog-panel personnel-learning-assignment-panel" id="personnelLearningAssignmentsPanel" aria-labelledby="personnelLearningAssignmentsTitle">
-              <div class="personnel-learning-subheading"><div><span class="eyebrow">Durchführung</span><h3 id="personnelLearningAssignmentsTitle">Schulungen zuordnen &amp; durchführen</h3></div><p>Lernende und Trainer verbinden, Schrittfortschritt erfassen sowie Abschlüsse und begründete Korrekturen revisionssicher dokumentieren.</p></div>
-              <div class="personnel-learning-summary" id="personnelLearningAssignmentSummary" aria-label="Zusammenfassung der Schulungszuweisungen"></div>
-              <div class="personnel-learning-toolbar personnel-learning-assignment-toolbar" aria-label="Schulungszuweisungen filtern">
-                <label class="field"><span>Suche</span><input id="personnelLearningAssignmentSearch" type="search" autocomplete="off" placeholder="Lernende, Prozess, Trainer, Fähigkeit oder Filiale" /></label>
-                <label class="field"><span>Lernende Person</span><select id="personnelLearningAssignmentLearnerFilter"><option value="all">Alle sichtbaren Lernenden</option></select></label>
-                <label class="field"><span>Status</span><select id="personnelLearningAssignmentStatusFilter"><option value="active">Aktive Zuweisungen</option><option value="not_started">Noch nicht begonnen</option><option value="in_progress">In Durchführung</option><option value="completed">Abgeschlossen</option><option value="attention">Klärungsbedarf</option><option value="cancelled">Abgebrochene Zuweisungen</option><option value="all">Alle Revisionsstände</option></select></label>
-                <button class="secondary-button" id="refreshPersonnelLearningAssignmentsButton" type="button">Aktualisieren</button>
-                <button class="primary-button hidden" id="addPersonnelLearningAssignmentButton" type="button">+ Schulung zuweisen</button>
+            <details class="personnel-learning-area" data-learning-area="skills">
+              <summary><strong>Fähigkeiten</strong><span>Stufen und Lernziele definieren</span></summary>
+            <section class="personnel-learning-catalog-panel personnel-learning-skills-panel" id="personnelLearningSkillsPanel" aria-labelledby="personnelLearningSkillsTitle">
+              <div class="personnel-learning-subheading"><div><h3 id="personnelLearningSkillsTitle">Fähigkeitskatalog</h3><button class="secondary-button hidden" id="addPersonnelLearningSkillButton" type="button">+ Fähigkeit anlegen</button></div><p>Beschreibe die Entwicklung von Stufe 1 bis 10. Jede veröffentlichte Fassung bleibt erhalten.</p></div>
+              <p class="personnel-learning-metric-scope">Gesamter Katalog im freigegebenen Bereich</p>
+              <div class="personnel-learning-summary" id="personnelLearningSkillSummary" aria-label="Zusammenfassung des Fähigkeitskatalogs"></div>
+              <div class="personnel-learning-toolbar personnel-learning-skill-toolbar" aria-label="Fähigkeiten filtern">
+                <label class="field"><span>Suche</span><input id="personnelLearningSkillSearch" type="search" autocomplete="off" placeholder="Fähigkeit, Kategorie, Code oder Schlagwort" /></label>
+                <label class="field"><span>Status</span><select id="personnelLearningSkillStatusFilter"><option value="all">Alle Status</option><option value="draft">Entwurf</option><option value="published">Veröffentlicht</option><option value="published_with_draft">Veröffentlicht mit neuer Version</option><option value="archived">Archiviert</option></select></label>
+                <button class="secondary-button" id="refreshPersonnelLearningSkillsButton" type="button">Aktualisieren</button>
               </div>
-              <p class="personnel-learning-status" id="personnelLearningAssignmentStatus" role="status" aria-live="polite">Schulungszuweisungen werden beim Öffnen geladen.</p>
-              <div class="personnel-learning-list personnel-learning-assignment-list" id="personnelLearningAssignmentList">
-                <p class="personnel-workflow-empty">Noch keine Schulungszuweisungen geladen.</p>
+              <p class="personnel-learning-status" id="personnelLearningSkillStatus" role="status" aria-live="polite">Der Fähigkeitskatalog wird beim Öffnen geladen.</p>
+              <div class="personnel-learning-list personnel-learning-skill-list" id="personnelLearningSkillList">
+                <p class="personnel-workflow-empty">Noch keine Fähigkeiten geladen.</p>
               </div>
             </section>
             </details>
+            <header class="learning-workspace-group"><span aria-hidden="true">03</span><div><h3>Wissen &amp; Vorlagen</h3><p>Wiederverwendbare Lerninhalte und Wissen zum Nachschlagen.</p></div></header>
+            <details class="personnel-learning-area" data-learning-area="processes">
+              <summary><strong>Schulungs- &amp; Wissensvorlagen</strong><span>Abläufe und Lernschritte vorbereiten</span></summary>
+            <section class="personnel-learning-catalog-panel" id="personnelLearningProcessesPanel" aria-labelledby="personnelLearningProcessesTitle">
+              <div class="personnel-learning-subheading"><div><h3 id="personnelLearningProcessesTitle">Prozessvorlagen</h3><button class="primary-button hidden" id="addPersonnelLearningModuleButton" type="button">+ Prozess anlegen</button></div><p>Veröffentlichte Schulungs- und Wissensabläufe sowie neue Entwürfe mit geordneten Lernschritten.</p></div>
+              <p class="personnel-learning-metric-scope">Gesamter Katalog im freigegebenen Bereich</p>
+              <div class="personnel-learning-summary" id="personnelLearningSummary" aria-label="Zusammenfassung des Schulungs- und Wissenskatalogs"></div>
+              <div class="personnel-learning-toolbar" aria-label="Schulungs- und Wissensprozesse filtern">
+                <label class="field"><span>Suche</span><input id="personnelLearningSearch" type="search" autocomplete="off" placeholder="Titel, Code, Lernziel oder Schlagwort" /></label>
+                <label class="field"><span>Art</span><select id="personnelLearningTypeFilter"><option value="all">Alle Arten</option><option value="training">Schulungsprozess</option><option value="knowledge">Wissensprozess</option></select></label>
+                <label class="field"><span>Status</span><select id="personnelLearningStatusFilter"><option value="all">Alle Status</option><option value="draft">Entwurf</option><option value="published">Veröffentlicht</option><option value="published_with_draft">Veröffentlicht mit neuer Version</option><option value="archived">Archiviert</option></select></label>
+                <button class="secondary-button" id="refreshPersonnelLearningButton" type="button">Aktualisieren</button>
+              </div>
+              <p class="personnel-learning-status" id="personnelLearningStatus" role="status" aria-live="polite">Der Prozesskatalog wird beim Öffnen geladen.</p>
+              <div class="personnel-learning-list" id="personnelLearningList">
+                <p class="personnel-workflow-empty">Noch keine Prozessvorlagen geladen.</p>
+              </div>
+            </section>
+            </details>
+            <details class="personnel-learning-area" data-learning-area="knowledge"><summary><strong>Wissenskatalog</strong><span>Nachschlagen, suchen und Wissen pflegen</span></summary><section class="personnel-learning-catalog-panel" id="personnelKnowledgeLibrary"></section></details>
           </section>
 
-          <section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks" id="personnelTasksSection" role="tabpanel" aria-labelledby="personnelTasksTab">
+          <section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks" id="personnelTasksSection" role="region" aria-labelledby="personnelTasksTitle">
             <div class="employee-toolbar personnel-lifecycle-foundation-heading">
-              <div><span class="eyebrow">Datensparsame Projektion</span><h2>Personalaufgaben</h2><p>Die sichtbaren Aufgaben stammen aus denselben versionsgebundenen Instanzen und werden nicht als zweite Wahrheit dupliziert.</p></div>
-              <span class="status-badge" data-pre-o6-stage="M5 / O4 / O5 · kontrolliert" data-pre-o7-stage="M5 / O4 / O5 / O6 · kontrolliert">M5 / O4 / O5 / O6 / O7 · kontrolliert</span>
+              <div><span class="eyebrow">Personal · Aufgaben</span><h2 id="personnelTasksTitle">Was steht als Nächstes an?</h2><p>Persönliche Aufgaben erledigen, offene Schritte überblicken und Fristen im Blick behalten.</p></div>
+              <span class="status-badge" data-pre-o6-stage="M5 / O4 / O5 · kontrolliert" data-pre-o7-stage="M5 / O4 / O5 / O6 · kontrolliert" data-stage="M5 / O4 / O5 / O6 / O7 · kontrolliert">Dein freigegebener Bereich</span>
             </div>
-            <article class="personnel-lifecycle-boundary">
-              <strong>Serverfreigabe statt Client-Ableitung</strong>
-              <p>Gezeigt werden nur bereits berechtigte Aufgabenschritte. O4 und O5 erlauben ausschließlich die bewusst bestätigte Erledigung persönlich zugewiesener Aufgaben. Fristen und Eskalationen werden nicht automatisiert: O7 zeigt Fristen, Klärungsbedarf, Erinnerungs- und Eskalationszustände nur als serverseitig berechnete Vorschau; der Browser ergänzt keine Fristannahmen und löst keine Folgeaktion aus. Vertrauliche Offboarding-Fälle bleiben vor der Kommunikationsfreigabe vollständig unsichtbar.</p>
-            </article>
+            <div class="personnel-tasks-summary" id="personnelTasksSummary" aria-label="Aufgaben im freigegebenen Bereich"></div>
+            <div class="personnel-tasks-filters" aria-label="Personalaufgaben filtern">
+              <label class="field"><span>Aufgabe suchen</span><input type="search" data-personnel-task-filter="search" placeholder="Aufgabe, Prozess oder zugeordnete Person" autocomplete="off" /></label>
+              <label class="field"><span>Aufgabenart</span><select data-personnel-task-filter="kind"><option value="all">Alle Arten</option><option value="onboarding">Onboarding</option><option value="offboarding">Offboarding</option><option value="workflow">Weitere Prozesse</option></select></label>
+              <label class="field"><span>Status</span><select data-personnel-task-filter="status"><option value="all">Alle Status</option><option value="actionable">Bearbeitbar</option><option value="pending">Vorgemerkt</option><option value="readonly">Nur Lesen</option></select></label>
+              <label class="field"><span>Fristvorschau</span><select data-personnel-task-filter="due"><option value="all">Alle Fristen</option><option value="attention">Frist beachten</option><option value="unknown">Ohne Fristbewertung</option></select></label>
+            </div>
             <div class="personnel-workflow-task-heading">
               <p class="personnel-workflow-status" id="personnelWorkflowTaskStatus" role="status" aria-live="polite">Aufgaben werden beim Öffnen geladen.</p>
+              <button class="secondary-button" type="button" data-personnel-task-reset>Filter zurücksetzen</button>
               <button class="secondary-button" id="refreshPersonnelWorkflowTasksButton" type="button">Aktualisieren</button>
             </div>
             <div class="personnel-workflow-task-list" id="personnelWorkflowTaskList">
               <p class="personnel-workflow-empty">Noch keine Aufgaben geladen.</p>
             </div>
+            <p class="personnel-tasks-note">Persönliche Aufgaben werden erst nach deiner ausdrücklichen Bestätigung erledigt. Fristen und Eskalationen werden nicht automatisiert.</p>
+            <dialog class="personnel-task-detail-dialog" id="personnelTaskDetailDialog" aria-labelledby="personnelTaskDetailTitle" data-gp-window-mode="workspace" data-gp-window-width="680" data-gp-window-rich>
+              <header class="modal-header"><h2 id="personnelTaskDetailTitle">Aufgabendetails</h2><button type="button" class="close-button" aria-label="Aufgabendetails schließen" data-personnel-task-close>×</button></header>
+              <div id="personnelTaskDetailContent"></div>
+            </dialog>
             <section class="personnel-lifecycle-interface-catalog hidden" id="personnelLifecycleInterfacesSection" aria-labelledby="personnelLifecycleInterfacesTitle">
+              <details class="personnel-tasks-reference"><summary>Schulungen, Arbeitsmittel und Zugänge <span>Verfügbare Aufgabenbereiche ansehen</span></summary>
               <header>
-                <div><span class="eyebrow">O6 · kontrollierte Schnittstellengrenze</span><h3 id="personnelLifecycleInterfacesTitle">Schulungen, Arbeitsmittel und Zugänge</h3><p>Der Katalog zeigt ausschließlich die für das angemeldete Konto freigegebenen Domänen. Er löst keine Aktion in einem Zielsystem aus.</p></div>
+                <div><h3 id="personnelLifecycleInterfacesTitle">Verfügbare Aufgabenbereiche</h3><p>Hier siehst du die für dich freigegebenen Bereiche. Aktionen in anderen Systemen werden nicht ausgeführt.</p></div>
                 <span class="status-badge inactive">Außenwirkung gesperrt</span>
               </header>
               <p class="personnel-lifecycle-interface-status" id="personnelLifecycleInterfacesStatus" role="status" aria-live="polite">Schnittstellenstatus wird beim Öffnen geladen.</p>
               <div class="personnel-lifecycle-interface-list" id="personnelLifecycleInterfacesList"></div>
+              </details>
             </section>
             <section class="personnel-lifecycle-automation hidden" id="personnelLifecycleAutomationSection" aria-labelledby="personnelLifecycleAutomationTitle">
+              <details class="personnel-tasks-reference"><summary>Fristen und Zuständigkeit <span>Vorschau und Klärungsbedarf ansehen</span></summary>
               <header>
-                <div><span class="eyebrow">O7 · kontrollierte Vorschau</span><h3 id="personnelLifecycleAutomationTitle">Fristen, Vertretung, Erinnerungen und Eskalationen</h3><p>Der Katalog und die persönliche Aufgabenansicht zeigen ausschließlich serverseitig freigegebene Domänen und Zustände. Es wird keine Automatik aktiviert.</p></div>
+                <div><h3 id="personnelLifecycleAutomationTitle">Fristen, Vertretung, Erinnerungen und Eskalationen</h3><p>Die freigegebene Vorschau hilft bei der Abstimmung. Erinnerungen werden nicht versendet und Vertretungen nicht automatisch geändert.</p></div>
                 <span class="status-badge warning">Nur Vorschau</span>
               </header>
               <p class="personnel-lifecycle-automation-status" id="personnelLifecycleAutomationStatus" role="status" aria-live="polite">O7-Katalog und Vorschau werden beim Öffnen geladen.</p>
@@ -1130,14 +1169,15 @@
                 <li><strong>Keine Erinnerung versendet.</strong> Interne und externe Benachrichtigungen bleiben gesperrt.</li>
                 <li><strong>Keine automatische Vertretung/Eskalation.</strong> Klärungen bleiben bewusst bei der Personalstelle.</li>
               </ul>
+              </details>
             </section>
           </section>
 
-          <section class="personnel-administration-section position-management-section" id="positionManagementSection" role="tabpanel" aria-labelledby="positionManagementTab">
+          <section class="personnel-administration-section position-management-section" id="positionManagementSection" role="region" aria-labelledby="positionManagementTitle">
             <div class="employee-toolbar position-management-toolbar">
               <div>
                 <span class="eyebrow">Unternehmensweiter Katalog</span>
-                <h2>Positionsverwaltung</h2>
+                <h2 id="positionManagementTitle">Positionsverwaltung</h2>
                 <p>Positionen kompakt suchen, sortieren und revisionssicher verwalten. Eine Position vermittelt keine Benutzerrechte.</p>
               </div>
               <form id="positionForm" class="position-form" autocomplete="off" data-gp-noncredential-form="true">
@@ -1166,33 +1206,47 @@
             </div>
           </section>
 
-          <section class="personnel-administration-section" id="costCenterSection" role="tabpanel" aria-labelledby="costCentersTab">
+          <section class="personnel-administration-section" id="costCenterSection" role="region" aria-labelledby="costCentersTitle">
             <div class="employee-toolbar cost-center-toolbar">
-              <div><h2>Kostenstellen</h2><p>Verwaltung, Filialen, Produktion und weitere Unternehmensbereiche eindeutig zuordnen.</p></div>
+              <div><span class="eyebrow">Organisation</span><h2 id="costCentersTitle">Kostenstellen</h2><p>Bereiche finden, Zuordnungen überblicken und Stammdaten pflegen.</p></div>
               <div class="cost-center-toolbar-actions">
-                <button class="secondary-button hidden" id="addCostCenterTypeButton" type="button">+ Typ anlegen</button>
                 <button class="primary-button hidden" id="addCostCenterButton" type="button">+ Kostenstelle anlegen</button>
               </div>
             </div>
-            <p class="calculation-note">Kostenstellen werden nicht endgültig gelöscht. Vor der Deaktivierung müssen bestehende Zuordnungen verschoben werden; historische Daten bleiben erhalten.</p>
-            <section class="cost-center-types-panel" aria-labelledby="costCenterTypesTitle">
-              <div class="cost-center-subheading">
-                <div><span class="eyebrow">Organisationsmodell</span><h3 id="costCenterTypesTitle">Typen und erlaubte Positionen</h3></div>
-                <p>Typen legen fest, ob eine Kostenstelle eine Filiale abbildet und welche Positionen dort später auswählbar sind.</p>
-              </div>
-              <div class="cost-center-type-list" id="costCenterTypeList"><p class="settings-note">Kostenstellentypen werden geladen.</p></div>
+            <dl class="cost-center-overview" aria-label="Kostenstellen im Überblick">
+              <div><dt>Aktive Kostenstellen</dt><dd id="costCenterActiveCount">–</dd></div>
+              <div><dt>Inaktive Kostenstellen</dt><dd id="costCenterInactiveCount">–</dd></div>
+              <div><dt>Aktive Typen</dt><dd id="costCenterTypeCount">–</dd></div>
+            </dl>
+            <section class="cost-center-directory" aria-labelledby="costCenterDirectoryTitle">
+              <div class="cost-center-subheading"><div><span class="eyebrow">Zuordnungen</span><h3 id="costCenterDirectoryTitle">Alle Kostenstellen</h3></div></div>
+              <form class="cost-center-filters" id="costCenterFilterForm" role="search" aria-label="Kostenstellen filtern">
+                <label class="field cost-center-search"><span>Kostenstelle suchen</span><input type="search" id="costCenterSearch" placeholder="Code, Name oder Beschreibung" autocomplete="off" /></label>
+                <label class="field"><span>Typ</span><select id="costCenterFilterType"><option value="">Alle Typen</option></select></label>
+                <label class="field"><span>Status</span><select id="costCenterFilterStatus"><option value="">Alle</option><option value="active">Aktiv</option><option value="inactive">Inaktiv</option></select></label>
+                <button class="secondary-button" id="costCenterFilterReset" type="reset">Zurücksetzen</button>
+              </form>
+              <p class="cost-center-result-count" id="costCenterResultCount" role="status" aria-live="polite"></p>
+              <div class="cost-center-list" id="costCenterList"><p class="settings-note">Kostenstellen werden geladen.</p></div>
             </section>
-            <div class="cost-center-subheading cost-center-subheading-concrete">
-              <div><span class="eyebrow">Konkrete Zuordnung</span><h3>Kostenstellen</h3></div>
-            </div>
-            <div class="cost-center-list" id="costCenterList"><p class="settings-note">Kostenstellen werden geladen.</p></div>
+            <details class="cost-center-types-panel">
+              <summary><span><strong id="costCenterTypesTitle">Typen &amp; erlaubte Positionen</strong><small>Grundlagen für Filialen, Verwaltung und weitere Bereiche</small></span></summary>
+              <div class="cost-center-type-settings">
+                <div class="cost-center-subheading">
+                  <p>Ein Typ legt fest, ob eine Kostenstelle eine Filiale abbildet und welche Positionen zugeordnet werden können.</p>
+                  <button class="secondary-button hidden" id="addCostCenterTypeButton" type="button">+ Typ anlegen</button>
+                </div>
+                <div class="cost-center-type-list" id="costCenterTypeList"><p class="settings-note">Kostenstellentypen werden geladen.</p></div>
+              </div>
+            </details>
+            <p class="cost-center-history-note">Historische Zuordnungen bleiben erhalten. Vor dem Deaktivieren einer Kostenstelle müssen bestehende Zuordnungen verschoben werden.</p>
           </section>
 
-          <section class="personnel-administration-section custom-work-rules-section" id="customWorkRulesSection" role="tabpanel" aria-labelledby="customWorkRulesTab">
+          <section class="personnel-administration-section custom-work-rules-section" id="customWorkRulesSection" role="region" aria-labelledby="customWorkRulesTitle">
             <div class="employee-toolbar custom-work-rules-toolbar">
               <div>
                 <span class="eyebrow">Geführter Regelbaukasten</span>
-                <h2>Eigene Regeln</h2>
+                <h2 id="customWorkRulesTitle">Eigene Regeln</h2>
                 <p>Regeln vorbereiten, fachlich prüfen, im Vier-Augen-Prinzip freigeben und kontrolliert einem Geltungsbereich zuordnen.</p>
               </div>
               <div class="custom-work-rules-actions">
@@ -1225,10 +1279,10 @@
             </div>
           </section>
 
-          <section class="personnel-administration-section collective-agreements-section" id="collectiveAgreementsSection" role="tabpanel" aria-labelledby="collectiveAgreementsTab">
+          <section class="personnel-administration-section collective-agreements-section" id="collectiveAgreementsSection" role="region" aria-labelledby="collectiveAgreementsTitle">
             <div class="employee-toolbar collective-agreements-toolbar">
               <div>
-                <h2>Kollektivvertragsregister</h2>
+                <h2 id="collectiveAgreementsTitle">Kollektivvertragsregister</h2>
                 <p>Externe Fassungen, genaue Fundstellen, Betriebsteile und prüfpflichtige Zuordnungsvorschläge nachvollziehbar dokumentieren.</p>
               </div>
               <div class="collective-agreements-actions">
@@ -1284,9 +1338,9 @@
             </div>
           </section>
 
-          <section class="personnel-administration-section" id="centralVacationSection" role="tabpanel" aria-labelledby="centralVacationsTab">
+          <section class="personnel-administration-section" id="centralVacationSection" role="region" aria-labelledby="centralVacationsTitle">
             <div class="employee-toolbar central-vacation-toolbar">
-              <div><h2>Urlaube im Unternehmen</h2><p>Genehmigte und direkt erfasste Urlaube aller Kostenstellen – ohne die Planungsregeln der Filialen zu umgehen.</p></div>
+              <div><h2 id="centralVacationsTitle">Urlaube im Unternehmen</h2><p>Genehmigte und direkt erfasste Urlaube aller Kostenstellen – ohne die Planungsregeln der Filialen zu umgehen.</p></div>
               <button class="secondary-button hidden" id="vacationAccountsButton" type="button">Urlaubskonten</button>
             </div>
             <div class="personnel-administration-summary central-vacation-summary" id="centralVacationSummary" aria-live="polite"></div>
@@ -1305,7 +1359,7 @@
 
         </section>
 
-        <dialog class="modal collective-agreement-modal" id="collectiveAgreementModal">
+        <dialog class="modal collective-agreement-modal" id="collectiveAgreementModal" data-gp-window-mode="workspace">
           <form class="modal-card collective-agreement-modal-card" id="collectiveAgreementForm">
             <div class="modal-header">
               <div>
@@ -1348,7 +1402,7 @@
           </form>
         </dialog>
 
-        <dialog class="modal collective-agreement-modal" id="collectiveAgreementBusinessUnitModal">
+        <dialog class="modal collective-agreement-modal" id="collectiveAgreementBusinessUnitModal" data-gp-window-mode="workspace">
           <form class="modal-card collective-agreement-modal-card compact" id="collectiveAgreementBusinessUnitForm">
             <div class="modal-header">
               <div><span class="eyebrow">KV-Register · Organisationsmodell</span><h2 id="collectiveAgreementBusinessUnitModalTitle">Betriebsteil anlegen</h2><p>Der Betriebsteil fasst tatsächliche organisatorische Bereiche unter einem Rechtsträger zusammen.</p></div>
@@ -1370,7 +1424,7 @@
           </form>
         </dialog>
 
-        <dialog class="modal collective-agreement-modal" id="collectiveAgreementAssignmentModal">
+        <dialog class="modal collective-agreement-modal" id="collectiveAgreementAssignmentModal" data-gp-window-mode="workspace">
           <form class="modal-card collective-agreement-modal-card compact" id="collectiveAgreementAssignmentForm">
             <div class="modal-header">
               <div><span class="eyebrow">KV-Register · Zuordnung</span><h2>Zuordnung vorbereiten</h2><p>Der Vorschlag bleibt bis zur getrennten Vier-Augen-Freigabe rechtlich und fachlich ungeprüft und ohne Wirkung.</p></div>
@@ -1389,7 +1443,7 @@
           </form>
         </dialog>
 
-        <dialog class="modal custom-work-rule-modal" id="customWorkRuleModal">
+        <dialog class="modal custom-work-rule-modal" id="customWorkRuleModal" data-gp-window-mode="workspace">
           <form class="modal-card custom-work-rule-modal-card" id="customWorkRuleForm">
             <div class="modal-header">
               <div>
@@ -1526,7 +1580,7 @@
           </form>
         </dialog>
 
-        <dialog class="modal custom-work-rule-governance-dialog" id="workRuleAssignmentModal">
+        <dialog class="modal custom-work-rule-governance-dialog" id="workRuleAssignmentModal" data-gp-window-mode="workspace">
           <form class="modal-card custom-work-rule-governance-card" id="workRuleAssignmentForm">
             <div class="modal-header">
               <div>
@@ -1615,7 +1669,7 @@
               <button class="personnel-dashboard-card hidden" id="receiptSearchDashboardCard" type="button" data-sales-dashboard-view="receiptSearch"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▤</span><span class="personnel-dashboard-card-copy"><small>Belege &amp; Kassenbuchungen</small><strong>Kassenberichte &amp; Belegsuche</strong><span>Belege suchen, Spalten anpassen und Beleginformationen als PDF speichern.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
               <button class="personnel-dashboard-card hidden" id="salesPriceLabelsDashboardCard" type="button" data-sales-dashboard-view="priceLabels"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▱</span><span class="personnel-dashboard-card-copy"><small>Gestaltung &amp; Druck</small><strong>Preisschilder</strong><span>Artikelpreise übernehmen, Schilder gestalten und druckfertige PDFs erstellen.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
               <button class="personnel-dashboard-card hidden" id="salesArticleReportDashboardCard" type="button" data-sales-dashboard-view="articleReport"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▥</span><span class="personnel-dashboard-card-copy"><small>Sortiment &amp; Filialbestand</small><strong>Artikel-Auswertung</strong><span>Sortimente und Filialen kombinieren, Bestände vergleichen und als PDF exportieren.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
-              <button class="personnel-dashboard-card hidden" id="salesBwlDashboardCard" type="button" data-sales-dashboard-view="salesBwl"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▤</span><span class="personnel-dashboard-card-copy"><small>Bewerten &amp; Planen</small><strong>BWL-Werkzeuge</strong><span>ABC-Analyse, Abverkaufsvarianten und Maßnahmen für den Filialbestand.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
+              <button class="personnel-dashboard-card hidden" id="salesBwlDashboardCard" type="button" data-sales-dashboard-view="salesBwl"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▤</span><span class="personnel-dashboard-card-copy"><small>Bewerten &amp; Planen</small><strong>BWL-Tools</strong><span>ABC-Analyse, Abverkaufsvarianten und Maßnahmen für den Filialbestand.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
               <button class="personnel-dashboard-card hidden" id="tradeInsightsDashboardCard" type="button" data-sales-dashboard-view="tradeInsights"><span class="personnel-dashboard-card-symbol" aria-hidden="true">▦</span><span class="personnel-dashboard-card-copy"><small>Einkauf &amp; Warenbewegungen</small><strong>Einkauf &amp; Bestand</strong><span>Lieferstände, Filialversorgung, Bestände und Gerätehistorien auswerten.</span></span><span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span></button>
               <button class="personnel-dashboard-card hidden" id="crmDashboardCard" type="button" data-sales-dashboard-view="crm">
                 <span class="personnel-dashboard-card-symbol" aria-hidden="true">CRM</span>
@@ -1627,7 +1681,12 @@
         </section>
 
         <section id="salesPriceLabelsView" class="view" aria-labelledby="salesPriceLabelsTitle"><header class="topbar"><div><span class="eyebrow">Verkauf · Präsentation</span><h1 id="salesPriceLabelsTitle">Preisschilder</h1><p class="subtitle">Artikelpreise übernehmen, Schilder gestalten und druckfertige PDFs erstellen.</p></div></header><div id="salesPriceLabelsWorkspace"></div></section>
-        <section id="logisticsView" class="view" aria-labelledby="logisticsTitle"><header class="topbar"><div><span class="eyebrow">Logistik · Anlieferung</span><h1 id="logisticsTitle">Logistik</h1><p class="subtitle">Einkauf / Lieferstände der zentral belieferten Stellen.</p></div></header><div id="logisticsWorkspaceHost"></div></section>
+        <section id="logisticsView" class="view" aria-labelledby="logisticsTitle"><header class="topbar"><div><span class="eyebrow">Logistik · Anlieferung</span><h1 id="logisticsTitle">Logistik</h1><p class="subtitle">Einkauf, Bestellungen und gespeicherte Lieferstände.</p></div></header><div id="logisticsWorkspaceHost"></div><div id="tradeOrdersWorkspace" class="hidden"></div></section>
+        <section id="technicalSecurityView" class="view" aria-labelledby="technicalSecurityTitle">
+          <header class="topbar"><div><span class="eyebrow">Organisation</span><h1 id="technicalSecurityTitle">Technische Sicherheit</h1><p class="subtitle">Bewertungen, Nachweise und Maßnahmen im Blick behalten.</p></div></header>
+          <div id="securitySastWorkspaceHost" tabindex="-1"></div>
+          <div id="securityAuditsWorkspaceHost" class="hidden" tabindex="-1"></div>
+        </section>
         <section id="privacyOrganizationView" class="view" aria-labelledby="privacyOrganizationTitle">
           <header class="topbar privacy-org-page-header"><div class="privacy-org-page-title"><span class="privacy-org-page-symbol" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.2c0 4.5 3.1 7.8 7.5 9.8 4.4-2 7.5-5.3 7.5-9.8V6L12 3Z"/><path d="m8.5 12 2.3 2.3 4.7-4.7"/></svg></span><div><span class="eyebrow">Organisation</span><h1 id="privacyOrganizationTitle">Datenschutz</h1><p class="subtitle">Verarbeitungen, Risikoprüfungen und Vorfälle nachvollziehbar organisieren.</p></div></div></header>
           <div id="privacyOrganizationWorkspaceHost" tabindex="-1"></div>
@@ -1656,7 +1715,7 @@
         </section>
 
         <section id="salesBwlView" class="view sales-bwl-view" aria-labelledby="salesBwlTitle">
-          <header class="topbar"><div><span class="eyebrow">Verkauf · Betriebswirtschaft</span><h1 id="salesBwlTitle">BWL-Werkzeuge</h1><p class="subtitle">Wertbeiträge bewerten, Abverkauf planen und Maßnahmen verfolgen.</p></div></header>
+          <header class="topbar"><div><span class="eyebrow">Verkauf · Betriebswirtschaft</span><h1 id="salesBwlTitle">BWL-Tools</h1><p class="subtitle">Wertbeiträge bewerten, Abverkauf planen und Maßnahmen verfolgen.</p></div></header>
           <div id="salesBwlWorkspace"></div>
         </section>
 
@@ -1675,7 +1734,7 @@
             <button type="button" id="sidebarRecentArticlesButton" hidden title="Letzte Artikel öffnen" aria-label="Letzte Artikel öffnen">◷</button>
           </div>
           <header class="topbar sales-article-catalog-topbar">
-            <div class="sales-article-catalog-heading"><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesArticleCatalogTitle">Artikelstamm</h1><p class="subtitle">Zentrale Artikeldaten schnell und übersichtlich finden.</p><p class="sales-article-last-import" id="salesArticleLastImport" aria-live="polite"><span>Letzter TradeFoto-Import</span><time id="salesArticleLastImportValue">Wird geladen …</time></p></div>
+            <div class="sales-article-catalog-heading"><span class="eyebrow">Verkaufsverwaltung</span><h1 id="salesArticleCatalogTitle">Artikelstamm</h1><p class="subtitle">Zentrale Artikeldaten schnell und übersichtlich finden.</p><p class="sales-article-last-import" id="salesArticleLastImport" aria-live="polite"><span>Datenstand:</span><time id="salesArticleLastImportValue">Wird geladen …</time></p></div>
             <div class="topbar-actions sales-article-topbar-actions">
               <button class="secondary-button hidden" id="salesArticleActionsLogButton" type="button" aria-haspopup="dialog" aria-controls="personalActionsAdminDialog">Meine Aktionen</button>
               <button class="secondary-button hidden" id="salesArticleMovementsButton" type="button">Warenbewegungen</button>
@@ -1737,11 +1796,16 @@
             <section class="sales-article-detail" id="salesArticleDetail" aria-labelledby="salesArticleDetailTitle" aria-busy="false">
               <header class="sales-article-detail-heading">
                 <div class="sales-article-detail-heading-copy">
-                  <span class="eyebrow">Artikelansicht</span>
                   <h2 id="salesArticleDetailTitle" tabindex="-1">Artikelstamm im Detail</h2>
                   <p id="salesArticleDetailSubtitle">Einen Treffer auswählen, um die freigegebenen Artikeldaten zu öffnen.</p>
                 </div>
                 <div class="sales-article-detail-heading-meta hidden" id="salesArticleDetailMeta" aria-label="Status des ausgewählten Artikels"></div>
+              <div class="sales-article-detail-actions hidden" id="salesArticleDetailActions" aria-label="Aktionen für den ausgewählten Artikel">
+                <button class="text-button hidden" id="salesArticlePdfButton" type="button">Stammblatt als PDF</button>
+                <button class="text-button" id="salesArticleEditButton" type="button" data-sales-article-action="edit" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">Bearbeiten</button>
+                <button class="text-button" id="salesArticleCopyButton" type="button" data-sales-article-action="copy" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">Kopieren</button>
+                <button class="text-button danger" id="salesArticleArchiveButton" type="button" data-sales-article-action="archive" aria-haspopup="dialog" aria-controls="salesArticleArchiveDialog">Archivieren</button>
+              </div>
               </header>
               <section class="sales-article-photo-card hidden" id="salesArticlePhotoCard" aria-label="Artikelfoto">
                 <h3>Artikelfoto</h3>
@@ -1749,20 +1813,16 @@
                 <div class="sales-article-image-links"><a id="salesArticleImageSearch" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="Google-Bildersuche zur EAN öffnen">get image</a><button type="button" id="salesArticleImageEdit" class="hidden" aria-haspopup="dialog">edit</button></div>
                 <p id="salesArticleImageSearchStatus" class="sales-article-image-search-status" role="status"></p>
               </section>
-              <div class="sales-article-detail-actions hidden" id="salesArticleDetailActions" aria-label="Aktionen für den ausgewählten Artikel">
-                <button class="text-button hidden" id="salesArticlePdfButton" type="button">Stammblatt als PDF</button>
-                <button class="text-button" id="salesArticleEditButton" type="button" data-sales-article-action="edit" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">Bearbeiten</button>
-                <button class="text-button" id="salesArticleCopyButton" type="button" data-sales-article-action="copy" aria-haspopup="dialog" aria-controls="salesArticleEditorDialog">Kopieren</button>
-                <button class="text-button danger" id="salesArticleArchiveButton" type="button" data-sales-article-action="archive" aria-haspopup="dialog" aria-controls="salesArticleArchiveDialog">Archivieren</button>
-              </div>
+
               <nav class="sales-article-detail-navigation hidden" id="salesArticleDetailNavigation" aria-label="Bereiche der Artikelansicht">
                 <a href="#salesArticleMasterDataSection">Stammdaten</a>
                 <a href="#salesArticlePricesSection">Preise</a>
                 <a href="#salesArticleNotesSection">Notizen</a>
-                <a href="#salesArticleIdentifiersSection">Kennungen &amp; Verlauf</a>
+                <a href="#salesArticleOrdersSection">Bestellungen</a>
                 <a href="#salesArticleMovementsSection">Umlagerungen</a>
                 <a href="#salesArticleSalesSection">Verkäufe</a>
-                <a href="#salesArticlePriceLabelsSection">Preisschild</a>
+                <a href="#salesArticlePriceLabelsSection">Preisschilder</a>
+                <a href="#salesArticleIdentifiersSection">Kennungen &amp; Verlauf</a>
               </nav>
               <div class="sales-article-detail-body" id="salesArticleDetailBody">
                 <div class="sales-article-detail-empty">
@@ -2020,7 +2080,7 @@
               <div class="location-list" id="locationList"></div>
             </div>
 
-            <dialog class="modal location-editor-modal" id="locationEditorModal">
+            <dialog class="modal location-editor-modal" id="locationEditorModal" data-gp-window-mode="workspace">
               <div id="locationFormCard">
                 <form id="locationForm">
                   <div class="modal-header"><div><span class="eyebrow">Standortverwaltung</span><h2>Filiale bearbeiten</h2><p>Filial-ID ist zweistellig und wird manuell vergeben, z. B. 01 für Hauptstandort.</p></div><button type="button" class="close-button" data-close="locationEditorModal">×</button></div>
@@ -2056,7 +2116,7 @@
               </div>
             </dialog>
 
-            <dialog class="modal" id="departmentEditorModal">
+            <dialog class="modal" id="departmentEditorModal" data-gp-window-mode="workspace">
               <div id="departmentFormCard">
                 <form id="departmentForm">
                   <div class="modal-header"><div><span class="eyebrow">Standortverwaltung</span><h2>Abteilung bearbeiten</h2><p>Bis zu 3 Abteilungen je Filiale. Dienstplanung kann dann je Abteilung getrennt angezeigt werden.</p></div><button type="button" class="close-button" data-close="departmentEditorModal">×</button></div>
@@ -2534,6 +2594,13 @@
                 <p class="settings-note" id="currentWeekLockHint"></p>
               </div>
             </div>
+            <div class="settings-card planning-assistant-settings-card" id="planningAssistantSettingsCard">
+              <div class="card-heading"><div class="card-icon">PA</div><div><h2>Planungsassistent</h2><p>Prüft gespeicherte Dienstpläne und unterstützt bei der Planung.</p><span class="planning-assistant-setting-state" id="planningAssistantSettingsState" aria-live="polite">Aktiv · Automatisch</span></div></div>
+              <label class="switch-row"><span><strong>Planungsassistent aktivieren</strong><small>Gilt für alle Filialen und Abteilungen. Arbeitsregeln und Filialaufsicht gelten unabhängig davon weiter.</small></span><input id="planningAssistantEnabled" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Gespeicherte Pläne automatisch prüfen</strong><small>Prüft beim Laden und nach Planänderungen. Ausgeschaltet startest du die Prüfung bei Bedarf im Dienstplan.</small></span><input id="planningAssistantAutoCheck" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Zusätzliche Hinweise anzeigen</strong><small>Zeigt Hinweise und nicht prüfbare Punkte in der Ergebnisliste. Konflikte und Warnungen bleiben immer sichtbar.</small></span><input id="planningAssistantShowInformational" type="checkbox" /></label>
+              <p class="settings-note">Besetzung, Schlüsselpersonen und Sollstunden-Toleranz legst du weiterhin im Planungsassistenten unter „Prüfeinstellungen für diesen Bereich“ fest.</p>
+            </div>
           </section>
 
           <section id="vacationSettings" class="settings-section settings-two-column">
@@ -2664,7 +2731,7 @@
                   <label class="field"><span>Bezeichnung</span><input id="organizationAccountDisplayName" maxlength="100" placeholder="z. B. Filiale Nordpark" required /></label>
                   <label class="field"><span>Kontotyp</span><select id="organizationAccountType"><option value="branch">Filialkonto</option><option value="terminal">Terminalkonto</option></select></label>
                   <label class="field"><span>Filiale</span><select id="organizationAccountLocation" required></select></label>
-                  <label class="field"><span>Passwort neu vergeben</span><span class="password-field"><input id="organizationAccountPassword" type="password" autocomplete="new-password" placeholder="Beim Bearbeiten optional" /><button class="password-toggle" type="button" data-password-toggle="organizationAccountPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+                  <label class="field"><span>Passwort neu vergeben</span><span class="password-field"><input data-gp-new-password id="organizationAccountPassword" type="password" autocomplete="new-password" placeholder="Beim Bearbeiten optional" /><button class="password-toggle" type="button" data-password-toggle="organizationAccountPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
                 </div>
                 <div class="organization-account-permissions" aria-label="Freigegebene Filialfunktionen">
                   <label class="switch-row"><span><strong>Offene Leihen ansehen</strong><small>Name der ausleihenden Person sowie die in der Leihverwaltung für das Filialkonto freigegebenen Gerätedaten.</small></span><input id="organizationAccountLoanOverview" type="checkbox" checked /></label>
@@ -2825,7 +2892,7 @@
                 </section>
               </div>
             </div>
-            <dialog id="payrollHandoffProtocolModal" class="modal">
+            <dialog id="payrollHandoffProtocolModal" class="modal" data-gp-window-mode="workspace">
               <form id="payrollHandoffProtocolForm" class="modal-card compact-modal">
                 <div class="modal-heading"><div><p class="eyebrow">EXTERNER NACHWEIS</p><h2>Übertragungsprotokoll erfassen</h2></div><button type="button" class="icon-button" data-close="payrollHandoffProtocolModal" aria-label="Schließen">×</button></div>
                 <input id="payrollHandoffProtocolId" type="hidden" />
@@ -2866,6 +2933,10 @@
           </section>
 
           <section id="backupSettings" class="settings-section settings-two-column" role="tabpanel" aria-labelledby="settingsBackupTab">
+            <div class="settings-card full-settings-card hidden" id="vpsStorageSettingsCard">
+              <div class="card-heading"><div class="card-icon">VPS</div><div><h2>VPS-Speicher</h2><p>Speicherbelegung, Restore-Reserve und alte Sicherungs- oder Importreste prüfen.</p></div></div>
+              <button type="button" class="secondary-button" id="openVpsStorage" aria-haspopup="dialog" aria-expanded="false">VPS-Speicher öffnen</button>
+            </div>
             <details class="settings-accordion full-settings-card hidden" id="databaseImportSettings">
               <summary><span class="card-icon">Import</span><span class="settings-accordion-copy"><strong>Datenbankimporte</strong><small>Kasse, Stammdaten und Bestelldaten sicher aktualisieren.</small></span><span class="settings-accordion-chevron" aria-hidden="true">›</span></summary>
               <div class="settings-accordion-body">
@@ -2962,6 +3033,7 @@
               <div class="system-center-content" id="systemCenterContent" aria-live="polite" aria-busy="true">
                 <p class="settings-note">System-Center wird geladen.</p>
               </div>
+              <div id="systemCenterUtilization" hidden></div>
             </div>
           </section>
 
@@ -3067,7 +3139,7 @@
                 <section class="usb-panel-card usb-guide-preview-card">
                   <div class="usb-panel-heading"><span class="usb-panel-number">PDF</span><div><h3>Vorschau</h3><p>Logo und Farben stammen automatisch aus dem Haupt-Branding.</p></div></div>
                   <button class="secondary-button" id="usbGuidePreviewButton" type="button">PDF-Vorschau erzeugen</button>
-                  <iframe id="usbGuidePreviewFrame" title="Vorschau der Erste-Schritte-PDF"></iframe>
+                  <p class="settings-note">Die Vorschau öffnet im GP-Druckfenster.</p>
                 </section>
               </div>
 
@@ -3111,14 +3183,14 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.80 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.93 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
       </main>
     </div>
 
-    <dialog class="modal" id="usbEmployeeDraftModal">
+    <dialog class="modal" id="usbEmployeeDraftModal" data-gp-window-mode="workspace">
       <form method="dialog" id="usbEmployeeDraftForm">
         <div class="modal-header"><div><span class="eyebrow">Nur für den neuen Stick</span><h2>Teammitglied vorbereiten</h2><p>Der Entwurf verändert die laufende Datenbank nicht.</p></div><button type="button" class="close-button" data-close="usbEmployeeDraftModal">×</button></div>
         <div class="form-grid">
@@ -3131,13 +3203,13 @@
           <label class="field"><span>Standort</span><select id="usbDraftLocation" required></select></label>
           <label class="field"><span>Abteilung</span><select id="usbDraftDepartment"><option value="">Keine Abteilung</option></select></label>
           <label class="field"><span>App-Rolle</span><select id="usbDraftRole"><option value="employee">Mitarbeiter</option><option value="department_manager">Abteilungsleitung</option><option value="manager">Filialleitung</option><option value="hr">Personalleitung</option><option value="admin">Admin</option></select></label>
-          <label class="field"><span>Startpasswort (optional)</span><span class="password-field"><input id="usbDraftPassword" type="password" minlength="6" autocomplete="new-password" /><button type="button" data-password-toggle="usbDraftPassword">Anzeigen</button></span><small>Ohne Startpasswort wird noch kein Portalzugang aktiviert.</small></label>
+          <label class="field"><span>Startpasswort (optional)</span><span class="password-field"><input data-gp-new-password id="usbDraftPassword" type="password" autocomplete="new-password" /><button type="button" data-password-toggle="usbDraftPassword">Anzeigen</button></span><small>Ohne Startpasswort wird noch kein Portalzugang aktiviert.</small></label>
         </div>
         <div class="modal-actions"><span></span><button type="button" class="secondary-button" data-close="usbEmployeeDraftModal">Abbrechen</button><button type="submit" class="primary-button">Entwurf übernehmen</button></div>
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal employee-columns-modal" id="employeeColumnsModal">
+    <dialog class="modal wide-modal employee-columns-modal" id="employeeColumnsModal" data-gp-window-mode="workspace">
       <form id="employeeColumnsForm">
         <div class="modal-header"><div><span class="eyebrow">Mitarbeitendenansicht</span><h2>Anzeigespalten auswählen</h2><p>Es werden nur Felder angeboten, die du mit deinem aktuellen Zugang lesen darfst.</p></div><button type="button" class="close-button" data-close="employeeColumnsModal">×</button></div>
         <div class="employee-column-options" id="employeeColumnOptions"></div>
@@ -3146,7 +3218,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal crm-columns-dialog" id="crmColumnsDialog" aria-labelledby="crmColumnsTitle">
+    <dialog class="modal crm-columns-dialog" id="crmColumnsDialog" aria-labelledby="crmColumnsTitle" data-gp-window-mode="workspace">
       <form id="crmColumnsForm">
         <div class="modal-header"><div><span class="eyebrow">CRM-Ergebnisliste</span><h2 id="crmColumnsTitle">Anzeigespalten auswählen und ordnen</h2><p>Die Auswahl und Reihenfolge gelten nur für dein Benutzerkonto.</p></div><button type="button" class="close-button" data-close="crmColumnsDialog" aria-label="Spaltenauswahl schließen">×</button></div>
         <div class="crm-column-options" id="crmColumnOptions"></div>
@@ -3155,7 +3227,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal sales-article-image-dialog" id="salesArticleImageDialog" aria-labelledby="salesArticleImageTitle" aria-describedby="salesArticleImageArticle">
+    <dialog class="modal sales-article-image-dialog" id="salesArticleImageDialog" aria-labelledby="salesArticleImageTitle" aria-describedby="salesArticleImageArticle" data-gp-window-mode="workspace">
       <form id="salesArticleImageForm">
         <header class="sales-article-image-heading"><div><h2 id="salesArticleImageTitle">Artikelbild festlegen</h2><p id="salesArticleImageArticle"></p></div><button type="button" class="text-button" data-close-article-image aria-label="Bilddialog schließen">×</button></header>
         <img id="salesArticleImagePreview" class="sales-article-image-preview hidden" alt="Vorschau des Artikelbildes" />
@@ -3172,7 +3244,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal sales-article-editor-dialog" id="salesArticleEditorDialog" aria-labelledby="salesArticleEditorTitle" aria-describedby="salesArticleEditorDescription">
+    <dialog class="modal sales-article-editor-dialog" id="salesArticleEditorDialog" aria-labelledby="salesArticleEditorTitle" aria-describedby="salesArticleEditorDescription" data-gp-window-mode="workspace">
       <form id="salesArticleEditorForm">
         <div class="modal-header">
           <div><span class="eyebrow">Artikelstamm</span><h2 id="salesArticleEditorTitle">Artikel anlegen</h2><p id="salesArticleEditorDescription">Stammdaten und freigegebene Preisbereiche revisionssicher erfassen.</p></div>
@@ -3222,7 +3294,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal sales-article-import-dialog" id="salesArticleImportDialog" aria-labelledby="salesArticleImportTitle" aria-describedby="salesArticleImportDescription">
+    <dialog class="modal sales-article-import-dialog" id="salesArticleImportDialog" aria-labelledby="salesArticleImportTitle" aria-describedby="salesArticleImportDescription" data-gp-window-mode="workspace">
       <form id="salesArticleImportForm">
         <div class="modal-header">
           <div><span class="eyebrow">Kontrollierter Datenabgleich</span><h2 id="salesArticleImportTitle">Artikelimport prüfen</h2><p id="salesArticleImportDescription">Die Quelldatenbank oder eine vorbereitete Exportdatei wird zuerst vollständig geprüft. Ohne ausdrückliche Bestätigung werden keine Artikeldaten verändert.</p></div>
@@ -3266,7 +3338,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal employee-modal" id="employeeModal">
+    <dialog class="modal wide-modal employee-modal" id="employeeModal" data-gp-window-mode="workspace">
       <form method="dialog" id="employeeForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Personalstammdaten</span><h2 id="employeeModalTitle">Teammitglied anlegen</h2></div><button type="button" class="close-button" data-close="employeeModal">×</button></div>
         <div class="form-grid employee-form-accordion">
@@ -3275,7 +3347,7 @@
             <summary><span><strong>Person &amp; Organisation</strong><small>Kostenstelle, Position und organisatorische Zuordnung</small></span><span class="status-badge">Stammdaten</span></summary>
             <div class="form-grid employee-form-section-grid">
               <label class="field"><span>Personalnummer</span><input id="employeeNumber" required /></label>
-              <label class="field"><span>Name</span><input id="employeeName" required /></label>
+              <label class="field"><span>Name</span><input id="employeeName" required aria-describedby="employeeNameSource" /><small id="employeeNameSource">Wird bei vollständigem Namen aus dem Personalakt übernommen.</small></label>
               <label class="field"><span>Kostenstelle</span><select id="employeeCostCenter" required></select><small id="employeeCostCenterHint">Die Kostenstelle bestimmt Standort und auswählbare Positionen.</small></label>
               <label class="field"><span>Position</span><select id="employeePosition" required></select><small id="employeePositionHint">Nach Auswahl der Kostenstelle erscheinen nur freigegebene Positionen.</small></label>
               <label class="field"><span>Bevorzugte Abteilung</span><select id="employeePreferredDepartment"><option value="">Keine Abteilung</option></select><small id="employeePreferredDepartmentHint">Nur für Kostenstellen mit zugeordnetem Standort.</small></label>
@@ -3297,7 +3369,12 @@
               <label class="field"><span>Soll-Arbeitstage pro Woche</span><div class="unit-input"><input id="employeeTargetWorkdays" type="number" min="1" max="6" step="1" required /><em>Tage</em></div><small>Grundlage für die unveränderlich gespeicherte Krankenstandszeit je vorgesehenem Arbeitstag.</small></label>
               <label class="field" id="employeeTimeConfirmationLevelField"><span>Vertrauensstufe</span><select id="employeeTimeConfirmationLevel" required><option value="A">Stufe A · Wochenabschluss</option><option value="B">Stufe B · spätestens nach 3 Tagen</option><option value="C">Stufe C · täglich bis 12:00 Uhr</option></select><small>Unabhängig von Position und Rolle; steuert künftig die Bestätigungsfrist automatischer Zeitvorschläge.</small></label>
               <label class="switch-row full-width hidden" id="employeeSicknessWithoutAumField"><span><strong>Persönliches Kontingent ohne AUM freischalten</strong><small id="employeeSicknessWithoutAumHint">Wirksam nur bei Vertrauensstufe A und aktivierter Unternehmensregel.</small></span><input id="employeeSicknessWithoutAumEnabled" type="checkbox" /></label>
-              <label class="field modal-span-2"><span>Bevorzugter freier Tag</span><select id="employeePreferredDay"><option value="">Kein bevorzugter Tag</option><option value="monday">Montag</option><option value="tuesday">Dienstag</option><option value="wednesday">Mittwoch</option><option value="thursday">Donnerstag</option><option value="friday">Freitag</option></select></label>
+              <fieldset class="field modal-span-2 employee-preferred-days-field"><legend>Bevorzugte freie Tage</legend>
+                <input type="hidden" id="employeePreferredDay" />
+                <div class="employee-preferred-days" id="employeePreferredDays" aria-label="Bevorzugte freie Tage wählen"></div>
+                <ol class="employee-preferred-days-order" id="employeePreferredDaysOrder" aria-label="Prioritäten ändern"></ol>
+                <small id="employeePreferredDaysHint" aria-live="polite"></small>
+              </fieldset>
               <div class="field modal-span-3"><span>Dienstvertraglich vereinbarte fixe Arbeitstage</span>
                 <div class="weekday-checks">
                   <label><input type="checkbox" name="employeeFixedWorkday" value="monday" /> Mo</label>
@@ -3407,7 +3484,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal personnel-candidate-create-modal" id="personnelCandidateCreateModal" aria-labelledby="personnelCandidateCreateTitle" aria-describedby="personnelCandidateCreateDescription">
+    <dialog class="modal wide-modal personnel-candidate-create-modal" id="personnelCandidateCreateModal" aria-labelledby="personnelCandidateCreateTitle" aria-describedby="personnelCandidateCreateDescription" data-gp-window-mode="workspace">
       <form id="personnelCandidateCreateForm" autocomplete="off">
         <div class="modal-header">
           <div><h2 id="personnelCandidateCreateTitle">Bewerber anlegen</h2><p id="personnelCandidateCreateDescription">Grundprofil und auf Wunsch gleich die erste Bewerbung strukturiert erfassen.</p></div>
@@ -3482,7 +3559,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal date-range-dialog" id="personnelCandidateTrialDateRangeDialog" aria-labelledby="personnelCandidateTrialDateRangeDialogTitle">
+    <dialog class="modal date-range-dialog" id="personnelCandidateTrialDateRangeDialog" aria-labelledby="personnelCandidateTrialDateRangeDialogTitle" data-gp-window-mode="workspace">
       <form id="personnelCandidateTrialDateRangeForm">
         <div class="modal-header"><div><span class="eyebrow">Bewerbung &amp; Preboarding</span><h2 id="personnelCandidateTrialDateRangeDialogTitle">Schnupperzeitraum auswählen</h2><p>Für einen einzelnen Schnuppertag denselben Tag als Beginn und Ende auswählen.</p></div><button class="close-button" id="personnelCandidateTrialDateRangeClose" type="button" aria-label="Kalender schließen">×</button></div>
         <div class="date-range-selection" aria-live="polite"><div><span>Beginn</span><strong id="personnelCandidateTrialDateRangeStartText">Noch nicht gewählt</strong></div><div><span>Ende</span><strong id="personnelCandidateTrialDateRangeEndText">Noch nicht gewählt</strong></div></div>
@@ -3494,9 +3571,9 @@
       </form>
     </dialog>
 
-    <dialog class="modal" id="costCenterModal">
+    <dialog class="modal" id="costCenterModal" data-gp-window-mode="workspace" aria-labelledby="costCenterModalTitle">
       <form id="costCenterForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Personalverwaltung</span><h2 id="costCenterModalTitle">Kostenstelle anlegen</h2><p>Der Code bleibt nach der Anlage unveränderbar, damit Auswertungen und Exporte eindeutig bleiben.</p></div><button type="button" class="close-button" data-close="costCenterModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Organisation</span><h2 id="costCenterModalTitle">Kostenstelle anlegen</h2><p>Der Code bleibt nach der Anlage unveränderbar, damit Auswertungen und Exporte eindeutig bleiben.</p></div><button type="button" class="close-button" data-close="costCenterModal" aria-label="Kostenstelle schließen">×</button></div>
         <input id="costCenterId" type="hidden" />
         <div class="form-grid">
           <label class="field"><span>Code</span><input id="costCenterCode" maxlength="30" pattern="[A-Za-z0-9._-]+" placeholder="z. B. VERW" required /></label>
@@ -3509,9 +3586,9 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal" id="costCenterTypeModal">
+    <dialog class="modal wide-modal" id="costCenterTypeModal" data-gp-window-mode="workspace" aria-labelledby="costCenterTypeModalTitle">
       <form id="costCenterTypeForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Organisationsmodell</span><h2 id="costCenterTypeModalTitle">Kostenstellentyp anlegen</h2><p>Der technische Code bleibt unveränderlich. Bezeichnung, Filialstatus und erlaubte Positionen können später angepasst werden.</p></div><button type="button" class="close-button" data-close="costCenterTypeModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Typen &amp; Positionen</span><h2 id="costCenterTypeModalTitle">Kostenstellentyp anlegen</h2><p>Der Code bleibt nach der Anlage fest. Name, Filialstatus und erlaubte Positionen lassen sich später ändern.</p></div><button type="button" class="close-button" data-close="costCenterTypeModal" aria-label="Kostenstellentyp schließen">×</button></div>
         <input id="costCenterTypeId" type="hidden" />
         <div class="form-grid cost-center-type-form-grid">
           <label class="field"><span>Technischer Code</span><input id="costCenterTypeCode" maxlength="40" pattern="[A-Za-z0-9._-]+" placeholder="z. B. lager-logistik" required /><small>Kleinbuchstaben, Zahlen, Punkt, Strich oder Unterstrich.</small></label>
@@ -3522,12 +3599,12 @@
         </div>
         <section class="cost-center-type-positions" aria-labelledby="costCenterTypePositionsTitle">
           <div class="cost-center-type-position-heading">
-            <div><strong id="costCenterTypePositionsTitle">Erlaubte Positionen</strong><small>Die Einschränkung der Mitarbeiteranlage erfolgt im nächsten Block. Hier wird bereits das verbindliche Positionsset gepflegt.</small></div>
+            <div><strong id="costCenterTypePositionsTitle">Erlaubte Positionen</strong><small>Diese Positionen stehen für Mitarbeitende in Kostenstellen dieses Typs zur Auswahl.</small></div>
             <span class="status-badge" id="costCenterTypePositionCount">0 ausgewählt</span>
           </div>
           <label class="field"><span>Positionen durchsuchen</span><input id="costCenterTypePositionSearch" type="search" inputmode="search" autocomplete="off" placeholder="Position suchen" /></label>
           <div class="cost-center-type-position-options" id="costCenterTypePositionOptions"></div>
-          <p class="calculation-note" id="costCenterTypePositionHint">Ohne Auswahl steht für diesen Typ später keine Position zur Verfügung.</p>
+          <p class="calculation-note" id="costCenterTypePositionHint">Ohne Auswahl steht für diesen Typ keine Position zur Verfügung.</p>
         </section>
         <div class="modal-actions"><button type="button" class="danger-button hidden" id="deactivateCostCenterTypeButton">Deaktivieren</button><span></span><button type="button" class="secondary-button" data-close="costCenterTypeModal">Abbrechen</button><button type="submit" class="primary-button" id="costCenterTypeSubmitButton">Typ anlegen</button></div>
       </form>
@@ -3550,7 +3627,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal" id="shiftModal">
+    <dialog class="modal" id="shiftModal" data-gp-window-mode="workspace">
       <form method="dialog" id="shiftForm">
         <div class="modal-header"><div><span class="eyebrow">Wochenplanung</span><h2 id="shiftModalTitle">Dienst eintragen</h2></div><button type="button" class="close-button" data-close="shiftModal">×</button></div>
         <input id="shiftId" type="hidden" />
@@ -3572,7 +3649,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal employee-lending-modal" id="employeeLendingModal">
+    <dialog class="modal wide-modal employee-lending-modal" id="employeeLendingModal" data-gp-window-mode="workspace">
       <form method="dialog" id="employeeLendingForm">
         <div class="modal-header"><div><span class="eyebrow">Standortübergreifende Planung</span><h2>Temporären Filialeinsatz zuweisen</h2><p>Die Stammfiliale legt den verbindlichen Einsatzzeitraum fest. Genehmigter Urlaub und ZA haben Vorrang.</p></div><button type="button" class="close-button" data-close="employeeLendingModal">×</button></div>
         <input id="employeeLendingId" type="hidden" />
@@ -3610,7 +3687,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal date-range-dialog" id="employeeLendingDateRangeDialog" aria-labelledby="employeeLendingDateRangeTitle">
+    <dialog class="modal date-range-dialog" id="employeeLendingDateRangeDialog" aria-labelledby="employeeLendingDateRangeTitle" data-gp-window-mode="workspace">
       <form id="employeeLendingDateRangeForm">
         <div class="modal-header"><div><span class="eyebrow">Filialeinsatz</span><h2 id="employeeLendingDateRangeTitle">Einsatzzeitraum auswählen</h2><p>Für einen einzelnen Tag denselben Tag als Beginn und Ende auswählen.</p></div><button class="close-button" id="employeeLendingDateRangeClose" type="button" aria-label="Kalender schließen">×</button></div>
         <div class="date-range-selection" aria-live="polite"><div><span>Beginn</span><strong id="employeeLendingDateRangeStartText">Noch nicht gewählt</strong></div><div><span>Ende</span><strong id="employeeLendingDateRangeEndText">Noch nicht gewählt</strong></div></div>
@@ -3622,7 +3699,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal" id="optionsModal" tabindex="-1">
+    <dialog class="modal wide-modal" id="optionsModal" tabindex="-1" data-gp-window-mode="workspace">
       <form method="dialog" id="optionForm">
         <div class="modal-header"><div><span class="eyebrow">Vor der Planerstellung</span><h2>Planungsoptionen · <span id="optionsWeekLabel"></span></h2><div class="option-week-switch"><button type="button" class="nav-button" id="optionPreviousWeek" aria-label="Vorherige Kalenderwoche">←</button><span id="optionsWeekRange"></span><button type="button" class="nav-button" id="optionNextWeek" aria-label="Nächste Kalenderwoche">→</button></div><p id="optionsScopeHint">Urlaub, Krankenstand, andere Filiale oder weitere Sonderfälle für diese Woche.</p></div><button type="button" class="close-button" data-close="optionsModal">×</button></div>
         <div class="global-block-entry">
@@ -3668,7 +3745,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal date-range-dialog" id="optionDateRangeDialog" aria-labelledby="optionDateRangeDialogTitle">
+    <dialog class="modal date-range-dialog" id="optionDateRangeDialog" aria-labelledby="optionDateRangeDialogTitle" data-gp-window-mode="workspace">
       <form id="optionDateRangeForm">
         <div class="modal-header"><div><span class="eyebrow">Planungsoptionen</span><h2 id="optionDateRangeDialogTitle">Zeitraum auswählen</h2><p>Beginn und Ende innerhalb der ausgewählten Planungswoche wählen. Für einen einzelnen Tag zweimal dasselbe Datum auswählen.</p></div><button class="close-button" id="optionDateRangeClose" type="button" aria-label="Kalender schließen">×</button></div>
         <div class="date-range-selection" aria-live="polite"><div><span>Beginn</span><strong id="optionDateRangeStartText">Noch nicht gewählt</strong></div><div><span>Ende</span><strong id="optionDateRangeEndText">Noch nicht gewählt</strong></div></div>
@@ -3707,7 +3784,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal" id="scheduleNoteModal">
+    <dialog class="modal" id="scheduleNoteModal" data-gp-window-mode="workspace">
       <form method="dialog" id="scheduleNoteForm">
         <div class="modal-header"><div><span class="eyebrow">Dienstplan-PDF</span><h2>Besondere Bemerkung</h2><p>Dieser Hinweis erscheint nur auf der PDF dieser Kalenderwoche.</p></div><button type="button" class="close-button" data-close="scheduleNoteModal">×</button></div>
         <div class="form-grid">
@@ -3737,7 +3814,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal integration-import-modal" id="personnelImportModal">
+    <dialog class="modal wide-modal integration-import-modal" id="personnelImportModal" data-gp-window-mode="workspace">
       <form method="dialog" id="personnelImportForm">
         <div class="modal-header"><div><span class="eyebrow">CSV- und Excel-Assistent</span><h2>Personalstammdaten importieren</h2><p>Datei auswählen, Spalten zuordnen und Änderungen vor der Übernahme prüfen.</p></div><button type="button" class="close-button" data-close="personnelImportModal">×</button></div>
         <div class="integration-wizard-progress" id="personnelImportProgress"><span class="active">1 · Quelle</span><span>2 · Zuordnung</span><span>3 · Vorschau</span></div>
@@ -3841,7 +3918,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal" id="vacationModal">
+    <dialog class="modal" id="vacationModal" data-gp-window-mode="workspace">
       <form method="dialog" id="vacationForm">
         <div class="modal-header"><div><span class="eyebrow">Urlaubsplanung</span><h2 id="vacationModalTitle">Urlaub eintragen</h2><p>Der Eintrag sperrt den Zeitraum automatisch in der Wochenplanung.</p></div><button type="button" class="close-button" data-close="vacationModal">×</button></div>
         <div class="form-grid">
@@ -3855,7 +3932,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal governance-dialog" id="vacationAccountsModal">
+    <dialog class="modal wide-modal governance-dialog" id="vacationAccountsModal" data-gp-window-mode="workspace">
       <form method="dialog">
         <div class="modal-header"><div><span class="eyebrow">Zentrale Urlaubsverwaltung</span><h2>Urlaubskonten</h2><p>Ansprüche, Verbrauch und mögliche Verfallsprüfungen für ein Kalenderjahr nachvollziehen.</p></div><button type="button" class="close-button" data-close="vacationAccountsModal" aria-label="Urlaubskonten schließen">×</button></div>
         <div class="governance-dialog-toolbar"><label class="field"><span>Jahr</span><input id="vacationAccountsYear" type="number" min="2000" max="2100" step="1" /></label><button class="secondary-button" id="loadVacationAccountsButton" type="button">Konten laden</button></div>
@@ -3866,7 +3943,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal governance-dialog" id="monthlyTimeRecordsModal">
+    <dialog class="modal wide-modal governance-dialog" id="monthlyTimeRecordsModal" data-gp-window-mode="workspace">
       <form method="dialog">
         <div class="modal-header"><div><span class="eyebrow">Geprüfte Arbeitszeit</span><h2>Monatsnachweise</h2><p>Monatliche Nachweise beruhen auf erfassten und geprüften Ist-Zeiten. Eine geplante Dienstzeit wird nicht als Ist-Arbeitszeit übernommen.</p></div><button type="button" class="close-button" data-close="monthlyTimeRecordsModal" aria-label="Monatsnachweise schließen">×</button></div>
         <div class="governance-dialog-toolbar"><label class="field"><span>Monat</span><input id="monthlyTimeRecordsMonth" type="month" /></label><button class="secondary-button" id="loadMonthlyTimeRecordsButton" type="button">Nachweise laden</button><button class="primary-button hidden" id="generateMonthlyTimeRecordsButton" type="button">Nachweise erzeugen</button></div>
@@ -3890,7 +3967,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal governance-dialog" id="retentionRuleModal">
+    <dialog class="modal wide-modal governance-dialog" id="retentionRuleModal" data-gp-window-mode="workspace">
       <form id="retentionRuleForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Datenschutz · Aufbewahrung</span><h2 id="retentionRuleModalTitle">Regelversion anlegen</h2><p>Jede gespeicherte Version bleibt unveränderlich. Eine spätere Korrektur erfolgt als weitere Version.</p></div><button type="button" class="close-button" data-close="retentionRuleModal" aria-label="Regelversion schließen">×</button></div>
         <div class="form-grid">
@@ -3939,7 +4016,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal governance-dialog" id="dataSubjectRequestModal">
+    <dialog class="modal wide-modal governance-dialog" id="dataSubjectRequestModal" data-gp-window-mode="workspace">
       <form id="dataSubjectRequestForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Datenschutz</span><h2 id="dataSubjectRequestModalTitle">Datenanfrage erfassen</h2><p>Identität, Umfang, Frist und Bearbeitungsschritte nachvollziehbar dokumentieren.</p></div><button type="button" class="close-button" data-close="dataSubjectRequestModal" aria-label="Datenanfrage schließen">×</button></div>
         <input id="dataSubjectRequestId" type="hidden" />
@@ -3969,8 +4046,8 @@
         <div class="modal-header"><div><span class="eyebrow">Geschützter Zugang</span><h2>Admin-Ersteinrichtung</h2><p>Der erste Admin wird direkt am Grabenplaner-PC eingerichtet.</p></div><button type="button" class="close-button" data-close="adminSetupModal">×</button></div>
         <div class="form-grid">
           <label class="field full-width"><span>Teammitglied</span><select id="adminSetupEmployee" name="username" autocomplete="username" required></select></label>
-          <label class="field"><span>Passwort</span><span class="password-field"><input id="adminSetupPassword" name="new-password" type="password" minlength="6" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
-          <label class="field"><span>Passwort wiederholen</span><span class="password-field"><input id="adminSetupPasswordRepeat" name="new-password-repeat" type="password" minlength="6" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+          <label class="field"><span>Passwort</span><span class="password-field"><input data-gp-new-password id="adminSetupPassword" name="new-password" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+          <label class="field"><span>Passwort wiederholen</span><span class="password-field"><input data-gp-new-password id="adminSetupPasswordRepeat" name="new-password-repeat" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
           <p class="calculation-note full-width">Mindestens 6 Zeichen; auch nur Ziffern sind möglich. Ein starkes Passwort wird empfohlen. Dieses Konto darf Zugänge, Einstellungen und Dienstpläne verwalten.</p>
         </div>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="adminSetupModal">Abbrechen</button><button type="submit" class="primary-button">Admin einrichten</button></div>
@@ -4040,7 +4117,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal personnel-learning-modal" id="personnelLearningModal">
+    <dialog class="modal wide-modal personnel-learning-modal" id="personnelLearningModal" data-gp-window-mode="workspace">
       <form method="dialog" id="personnelLearningForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Versionierte Prozessvorlage</span><h2 id="personnelLearningModalTitle">Schulungsprozess anlegen</h2><p>Änderungen an bestehenden Prozessen werden als neue, unveränderliche Version gespeichert.</p></div><button type="button" class="close-button" data-close="personnelLearningModal">×</button></div>
         <input id="personnelLearningModuleId" type="hidden" />
@@ -4071,7 +4148,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal personnel-learning-modal personnel-learning-skill-modal" id="personnelLearningSkillModal">
+    <dialog class="modal wide-modal personnel-learning-modal personnel-learning-skill-modal" id="personnelLearningSkillModal" data-gp-window-mode="workspace">
       <form method="dialog" id="personnelLearningSkillForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Versionierte Fähigkeitsdefinition</span><h2 id="personnelLearningSkillModalTitle">Fähigkeit anlegen</h2><p>Alle zehn Stufen werden gemeinsam als neue, unveränderliche Version gespeichert.</p></div><button type="button" class="close-button" data-close="personnelLearningSkillModal">×</button></div>
         <input id="personnelLearningSkillId" type="hidden" />
@@ -4094,9 +4171,9 @@
       </form>
     </dialog>
 
-    <dialog class="modal personnel-learning-modal personnel-learning-competency-modal" id="personnelLearningCompetencyModal">
+    <dialog class="modal personnel-learning-modal personnel-learning-competency-modal" id="personnelLearningCompetencyModal" data-gp-window-mode="workspace">
       <form method="dialog" id="personnelLearningCompetencyForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Revisionsgebundenes Mitarbeiterprofil</span><h2 id="personnelLearningCompetencyModalTitle">Kompetenz zuordnen</h2><p>Die Auswahl wird an die aktuell veröffentlichte Fähigkeitsversion gebunden.</p></div><button type="button" class="close-button" data-close="personnelLearningCompetencyModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Persönliche Entwicklung</span><h2 id="personnelLearningCompetencyModalTitle">Kompetenz zuordnen</h2><p>Fähigkeit und Stufe auswählen; die veröffentlichte Fassung bleibt zugeordnet.</p></div><button type="button" class="close-button" data-close="personnelLearningCompetencyModal">×</button></div>
         <input id="personnelLearningCompetencyId" type="hidden" />
         <input id="personnelLearningCompetencyExpectedReceipt" type="hidden" />
         <input id="personnelLearningCompetencyEmployeeNumber" type="hidden" />
@@ -4112,9 +4189,9 @@
       </form>
     </dialog>
 
-    <dialog class="modal personnel-learning-modal personnel-learning-assignment-modal" id="personnelLearningAssignmentModal">
+    <dialog class="modal personnel-learning-modal personnel-learning-assignment-modal" id="personnelLearningAssignmentModal" data-gp-window-mode="workspace">
       <form method="dialog" id="personnelLearningAssignmentForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Revisionsgebundene Durchführungsvorbereitung</span><h2 id="personnelLearningAssignmentModalTitle">Schulung zuweisen</h2><p>Die Prozessversion und jede ausgewählte Trainerfähigkeit werden exakt mit ihrem aktuellen Revisionsbeleg gespeichert.</p></div><button type="button" class="close-button" data-close="personnelLearningAssignmentModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Schulung planen</span><h2 id="personnelLearningAssignmentModalTitle">Schulung zuweisen</h2><p>Lernende, Ablauf und passende Trainer auswählen. Die gewählten Fassungen bleiben nachvollziehbar.</p></div><button type="button" class="close-button" data-close="personnelLearningAssignmentModal">×</button></div>
         <input id="personnelLearningAssignmentId" type="hidden" />
         <input id="personnelLearningAssignmentExpectedReceipt" type="hidden" />
         <div class="modal-grid personnel-learning-assignment-form-grid">
@@ -4136,9 +4213,9 @@
       </form>
     </dialog>
 
-    <dialog class="modal personnel-learning-modal personnel-learning-progress-modal" id="personnelLearningProgressModal">
+    <dialog class="modal personnel-learning-modal personnel-learning-progress-modal" id="personnelLearningProgressModal" data-gp-window-mode="workspace">
       <form method="dialog" id="personnelLearningProgressForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Revisionsgebundene Durchführung</span><h2 id="personnelLearningProgressModalTitle">Schulungsfortschritt</h2><p>Der Fortschritt wird ausschließlich aus den erledigten Schritten der gebundenen Prozessversion berechnet.</p></div><button type="button" class="close-button" data-close="personnelLearningProgressModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Lernfortschritt</span><h2 id="personnelLearningProgressModalTitle">Schulungsfortschritt</h2><p>Der Fortschritt ergibt sich ausschließlich aus den erledigten Schritten. Anschließend die Schulung abschließen und bewerten.</p></div><button type="button" class="close-button" data-close="personnelLearningProgressModal">×</button></div>
         <input id="personnelLearningProgressAssignmentId" type="hidden" />
         <input id="personnelLearningProgressAssignmentReceipt" type="hidden" />
         <input id="personnelLearningProgressExpectedReceipt" type="hidden" />
@@ -4161,7 +4238,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal wide-modal custom-process-modal" id="customProcessModal">
+    <dialog class="modal wide-modal custom-process-modal" id="customProcessModal" data-gp-window-mode="workspace">
       <form method="dialog" id="customProcessForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Eigener Ablauf</span><h2 id="customProcessModalTitle">Ablauf anlegen</h2><p>Ablauf, Zuständigkeiten und Benachrichtigungswege nachvollziehbar festlegen.</p></div><button type="button" class="close-button" data-close="customProcessModal">×</button></div>
         <input id="customProcessId" type="hidden" />
@@ -4189,10 +4266,10 @@
       </form>
     </dialog>
 
-    <dialog class="modal personnel-lifecycle-editor-dialog" id="personnelLifecycleEditorDialog" aria-labelledby="personnelLifecycleEditorTitle" aria-describedby="personnelLifecycleEditorBoundary">
-      <div class="personnel-lifecycle-editor-shell">
+    <dialog class="modal personnel-lifecycle-editor-dialog gp-linear-editor" id="personnelLifecycleEditorDialog" aria-labelledby="personnelLifecycleEditorTitle" aria-describedby="personnelLifecycleEditorBoundary" data-gp-window-mode="workspace" data-gp-window-width="1240">
+      <div class="personnel-lifecycle-editor-shell gp-linear-shell">
         <div class="modal-header personnel-lifecycle-editor-header">
-          <div><span class="eyebrow">O8 · grafischer Editor</span><h2 id="personnelLifecycleEditorTitle">Linearen Personalprozess entwerfen</h2><p>Arbeitsentwurf – nicht gespeichert</p></div>
+          <div><span class="eyebrow">Personalprozess · Arbeitskopie</span><h2 id="personnelLifecycleEditorTitle">Personalprozess entwerfen</h2><p>Arbeitsentwurf – nicht gespeichert</p></div>
           <button type="button" class="close-button" id="closePersonnelLifecycleEditorButton" aria-label="Grafischen Editor schließen">×</button>
         </div>
         <article class="personnel-lifecycle-editor-boundary" id="personnelLifecycleEditorBoundary">
@@ -4201,8 +4278,8 @@
         </article>
         <p class="personnel-lifecycle-editor-status" id="personnelLifecycleEditorStatus" role="status" aria-live="polite" aria-atomic="true">Der O8-Katalog wird beim Öffnen geladen.</p>
 
-        <div class="personnel-lifecycle-editor-workspace" id="personnelLifecycleEditorWorkspace">
-          <aside class="personnel-lifecycle-editor-basics" aria-labelledby="personnelLifecycleEditorBasicsTitle">
+        <div class="personnel-lifecycle-editor-workspace gp-linear-workspace" id="personnelLifecycleEditorWorkspace">
+          <aside class="personnel-lifecycle-editor-basics gp-linear-panel" aria-labelledby="personnelLifecycleEditorBasicsTitle">
             <div class="personnel-lifecycle-editor-panel-heading"><span class="eyebrow">Arbeitskopie</span><h3 id="personnelLifecycleEditorBasicsTitle">Grunddaten</h3></div>
             <label class="field"><span>Prozessart</span><select id="personnelLifecycleEditorWorkflowType" aria-describedby="personnelLifecycleEditorCatalogHint"><option value="">Katalog wird geladen</option></select></label>
             <p class="personnel-lifecycle-editor-hint" id="personnelLifecycleEditorCatalogHint">Sichtbar sind nur die serverseitig und fachrechtlich freigegebenen Prozessarten.</p>
@@ -4213,12 +4290,12 @@
             <label class="field"><span>Pflichtart</span><select id="personnelLifecycleEditorRequirementKind"><option value="">Katalog wird geladen</option></select></label>
           </aside>
 
-          <section class="personnel-lifecycle-editor-flow-panel" aria-labelledby="personnelLifecycleEditorFlowTitle">
+          <section class="personnel-lifecycle-editor-flow-panel gp-linear-panel gp-linear-canvas" aria-labelledby="personnelLifecycleEditorFlowTitle">
             <div class="personnel-lifecycle-editor-panel-heading personnel-lifecycle-editor-flow-heading"><div><span class="eyebrow">Linearer Ablauf</span><h3 id="personnelLifecycleEditorFlowTitle">Schrittreihenfolge</h3></div><button class="secondary-button" id="addPersonnelLifecycleEditorStepButton" type="button">Schritt hinzufügen</button></div>
-            <ol class="personnel-lifecycle-editor-flow" id="personnelLifecycleEditorFlow" aria-label="Lineare Schrittreihenfolge"></ol>
+            <ol class="personnel-lifecycle-editor-flow gp-linear-flow" id="personnelLifecycleEditorFlow" aria-label="Lineare Schrittreihenfolge"></ol>
           </section>
 
-          <aside class="personnel-lifecycle-editor-inspector" aria-labelledby="personnelLifecycleEditorInspectorTitle">
+          <aside class="personnel-lifecycle-editor-inspector gp-linear-panel" aria-labelledby="personnelLifecycleEditorInspectorTitle">
             <div class="personnel-lifecycle-editor-panel-heading"><span class="eyebrow">Auswahl</span><h3 id="personnelLifecycleEditorInspectorTitle">Schritt bearbeiten</h3></div>
             <form id="personnelLifecycleEditorInspectorForm" autocomplete="off" novalidate>
               <fieldset id="personnelLifecycleEditorInspectorFields" disabled>
@@ -4233,6 +4310,7 @@
             <div class="personnel-lifecycle-editor-step-actions" role="group" aria-label="Ausgewählten Schritt anordnen">
               <button type="button" id="movePersonnelLifecycleEditorStepUpButton">Nach oben</button>
               <button type="button" id="movePersonnelLifecycleEditorStepDownButton">Nach unten</button>
+              <button type="button" id="duplicatePersonnelLifecycleEditorStepButton">Duplizieren</button>
               <button type="button" class="danger" id="removePersonnelLifecycleEditorStepButton">Entfernen</button>
             </div>
           </aside>
@@ -4268,7 +4346,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal personnel-record-modal" id="personnelRecordModal">
+    <dialog class="modal personnel-record-modal" id="personnelRecordModal" data-gp-window-mode="workspace">
       <form method="dialog" id="personnelRecordForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Personalakt</span><h2 id="personnelRecordTitle">Personalakt</h2><p>Geschützte Stammdaten und Arbeitsunfähigkeitsmeldungen.</p></div><button type="button" class="close-button" data-close="personnelRecordModal">×</button></div>
         <div class="personnel-record-content" id="personnelRecordContent"><p class="settings-note">Einträge werden geladen.</p></div>
@@ -4277,7 +4355,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal" id="timeCorrectionModal">
+    <dialog class="modal" id="timeCorrectionModal" data-gp-window-mode="workspace">
       <form method="dialog" id="timeCorrectionForm">
         <div class="modal-header"><div><span class="eyebrow">Zeiterfassung</span><h2 id="timeCorrectionTitle">Offene Altbuchung abschließen</h2><p>Die Abschlusszeit wird nachvollziehbar als Korrektur durch die Leitung protokolliert.</p></div><button type="button" class="close-button" data-close="timeCorrectionModal">×</button></div>
         <input id="timeCorrectionEmployee" type="hidden" />
@@ -4306,7 +4384,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal time-day-review-modal" id="timeDayReviewModal">
+    <dialog class="modal time-day-review-modal" id="timeDayReviewModal" data-gp-window-mode="workspace">
       <form method="dialog" id="timeDayReviewForm">
         <div class="modal-header"><div><span class="eyebrow">Zeiterfassung</span><h2 id="timeDayReviewTitle">Arbeitstag prüfen</h2><p id="timeDayReviewDetail">Plan und erfasste Arbeitszeit im Vergleich.</p></div><button type="button" class="close-button" data-close="timeDayReviewModal">×</button></div>
         <input id="timeDayReviewEmployee" type="hidden" />
@@ -4319,7 +4397,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal offsite-folder-modal" id="offsiteFolderManagementModal" aria-labelledby="offsiteFolderManagementTitle" aria-describedby="offsiteFolderManagementDescription">
+    <dialog class="modal offsite-folder-modal" id="offsiteFolderManagementModal" aria-labelledby="offsiteFolderManagementTitle" aria-describedby="offsiteFolderManagementDescription" data-gp-window-mode="workspace">
       <form method="dialog" id="offsiteFolderManagementForm">
         <div class="modal-header">
           <div>
@@ -4362,7 +4440,7 @@
       </form>
     </dialog>
 
-    <dialog class="modal loan-overview-columns-modal" id="loanOverviewColumnsDialog" aria-labelledby="loanOverviewColumnsTitle" aria-describedby="loanOverviewColumnsDescription">
+    <dialog class="modal loan-overview-columns-modal" id="loanOverviewColumnsDialog" aria-labelledby="loanOverviewColumnsTitle" aria-describedby="loanOverviewColumnsDescription" data-gp-window-mode="workspace">
       <form id="loanOverviewColumnsForm">
         <div class="modal-header">
           <div>
@@ -4405,11 +4483,11 @@
         </label>
         <label class="field">
           <span>Neues Passwort</span>
-          <span class="password-field"><input id="branchAccountPasswordNew" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="branchAccountPasswordNew" aria-label="Passwort anzeigen">Anzeigen</button></span>
+          <span class="password-field"><input data-gp-new-password id="branchAccountPasswordNew" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="branchAccountPasswordNew" aria-label="Passwort anzeigen">Anzeigen</button></span>
         </label>
         <label class="field">
           <span>Passwort wiederholen</span>
-          <span class="password-field"><input id="branchAccountPasswordRepeat" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="branchAccountPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span>
+          <span class="password-field"><input data-gp-new-password id="branchAccountPasswordRepeat" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="branchAccountPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span>
         </label>
         <p class="settings-note hidden" id="branchAccountPasswordMessage" role="status" aria-live="polite"></p>
         <div class="modal-actions">
@@ -4515,6 +4593,8 @@
   <script src="/trade-suggestions.js"></script>
   <script src="/trade-period.js"></script>
   <script src="/trade-insights.js"></script>
+  <link rel="stylesheet" href="/trade-orders.css">
+  <script src="/trade-orders.js"></script>
     <script src="/data-import-progress.js"></script>
     <script src="/data-import.js"></script>
     <script src="/cash-publication.js"></script>
@@ -4524,6 +4604,8 @@
     <script src="/function-search-ui.js"></script>
     <script src="/function-search-navigation.js"></script>
     <script src="/credential-boundaries.js"></script>
+    <script src="/password-policy.js"></script>
+    <script src="/session-lifecycle.js"></script>
     <script src="/schedule-duty.js"></script>
     <script src="/vocational-school.js"></script>
   <script src="/planning-protection.js"></script>
@@ -4534,6 +4616,7 @@
     <script src="/sales-dashboard-metrics.js"></script>
     <script src="/sales-report-jobs.js"></script>
     <script src="/sales-article-image.js"></script>
+    <script src="/sales-article-orders.js"></script>
     <script src="/sales-article-tools.js"></script>
     <script src="/sales-price-label-fonts.js"></script>
     <script src="/sales-price-label-layout.js"></script>
@@ -4558,12 +4641,20 @@
     <script src="/sidebar-notepad-preferences.js"></script>
     <script src="/sidebar-notepad.js"></script>
     <script src="/privacy-organization.js"></script>
+    <script src="/security-audits.js"></script>
+    <script src="/security-sast.js"></script>
     <script src="/learning-library.js"></script>
     <script src="/learning-assessment.js"></script>
     <script src="/learning-team.js"></script>
     <script src="/start-dashboard-workspace-preferences.js"></script>
+    <script src="/personnel-dashboard-workspace-preferences.js"></script>
     <script src="/start-dashboard-workspace-geometry.js"></script>
+    <script src="/gp-dashboard-boards.js"></script>
     <script src="/start-dashboard-workspace.js"></script>
+    <script src="/personnel-dashboard-info.js"></script>
+    <script src="/workflow-studio-editor.js"></script>
+    <script src="/workflow-studio-runs.js"></script>
+    <script src="/workflow-studio.js"></script>
     <script src="/start-dashboard-vps.js"></script>
     <script src="/form-draft-guard.js"></script>
     <script src="/gp-save-status.js"></script>
@@ -4578,6 +4669,7 @@
     <script src="/gp-price-label-pdf.js"></script>
     <script src="/gp-branch-order-pdf-window.js"></script>
     <script src="/gp-planning-print.js"></script>
+    <script src="/gp-usb-guide-print.js"></script>
     <script src="/gp-sales-analytics-print.js"></script>
     <script src="/gp-receipt-print.js"></script>
     <script src="/sales-article-report.js"></script>
@@ -4588,7 +4680,20 @@
   <script src="/sales-bwl-actions.js"></script>
   <script src="/sales-bwl.js"></script>
     <script src="/gp-definitions-registry.js"></script>
+    <script src="/voice-assistant-settings.js"></script>
+    <script src="/planning-optimizer.js"></script>
+    <script src="/planning-assistant.js"></script>
+    <script src="/system-utilization.js"></script>
     <script src="/gp-definitions.js"></script>
+    <script src="/gp-xoffi-import.js"></script>
+    <dialog id="vpsStorageDialog" class="modal vps-storage-modal" data-gp-window-id="settings:vps-storage" data-gp-window-mode="workspace" data-gp-window-rich aria-label="VPS-Speicher">
+      <header class="modal-header"><h2>VPS-Speicher</h2><button type="button" data-storage-close aria-label="VPS-Speicher schließen">×</button></header>
+      <div class="vps-storage-shell"><div class="vps-storage-toolbar"><p data-storage-status role="status" aria-live="polite">Noch nicht geprüft</p><button class="secondary-button" type="button" data-storage-inspect>Speicher prüfen</button></div>
+        <nav class="vps-storage-tabs" role="tablist" aria-label="VPS-Speicher"><button role="tab" type="button" aria-selected="true" data-storage-tab="overview" aria-controls="vpsStorageContent">Übersicht</button><button role="tab" type="button" aria-selected="false" tabindex="-1" data-storage-tab="backups" aria-controls="vpsStorageContent">Sicherungsreste</button><button role="tab" type="button" aria-selected="false" tabindex="-1" data-storage-tab="imports" aria-controls="vpsStorageContent">Importstände</button><button role="tab" type="button" aria-selected="false" tabindex="-1" data-storage-tab="settings" aria-controls="vpsStorageContent">Optionen</button></nav>
+        <div id="vpsStorageContent" data-storage-content role="tabpanel"></div>
+      </div>
+    </dialog>
+    <script src="/vps-storage.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

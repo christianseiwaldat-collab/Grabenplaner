@@ -57,7 +57,7 @@ test("v0.63: vollständig freigeschaltete Altinstallationen erhalten das neue In
 
 function session(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = crypto.createHash("sha256").update(`gp-browser-csrf-v2\0${token}`).digest("hex");
   const id = crypto.randomUUID();
   db.prepare(`
     INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
@@ -65,8 +65,10 @@ function session(employeeNumber, role) {
     ON CONFLICT(employee_number) DO UPDATE SET role = excluded.role, active = 1, must_change_password = 0, updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, role);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
-  db.prepare("INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')")
-    .run(id, employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
+  const lifetime = require("../lib/portal-session-security").browserSessionLifetime({ role });
+  db.prepare("INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(id, employeeNumber, crypto.createHash("sha256").update(token).digest("hex"),
+      lifetime.expiresAt, lifetime.authenticatedAt, lifetime.absoluteExpiresAt);
   return { id, cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }
 
@@ -93,7 +95,11 @@ function mobileSession(employeeNumber) {
 
 async function request(route, { method = "GET", auth = null, body, raw = false, contentType = "application/json", fileName = "" } = {}) {
   const headers = { Accept: raw ? "*/*" : "application/json" };
-  if (auth) headers.Cookie = auth.cookie;
+  if (auth) {
+    headers.Cookie = auth.cookie;
+    // These requests represent foreground actions, including the session-touch races below.
+    headers["X-GP-User-Activity"] = "1";
+  }
   if (auth && !["GET", "HEAD"].includes(method)) headers["X-CSRF-Token"] = auth.csrf;
   if (body !== undefined) headers["Content-Type"] = contentType;
   if (fileName) headers["X-Import-Filename"] = encodeURIComponent(fileName);
@@ -428,8 +434,8 @@ test("Live-Entzug von employees:import stoppt die vorbereitete Mutation atomar",
   `).run(employeeNumber);
   const targetSessionId = crypto.randomUUID();
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(targetSessionId, employeeNumber, crypto.createHash("sha256").update(targetSessionId).digest("hex"));
 
   const hr = session("103", "hr");
@@ -785,8 +791,8 @@ test("Learning-Organisationsscope ist im Personalimport vorgeprueft und live geg
 
     const targetSessionId = crypto.randomUUID();
     db.prepare(`
-      INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-      VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+      INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+      VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
     `).run(targetSessionId, employeeNumber, crypto.createHash("sha256").update(targetSessionId).digest("hex"));
     const auditBefore = db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count;
     const runsBefore = db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count;
@@ -1431,6 +1437,8 @@ test("v0.63: finaler Ist-Lohnexport verlangt aktuelle Tagesprüfung und liefert 
   assert.equal(draft.response.status, 200);
   assert.equal(draft.response.headers.get("x-grabenplaner-export-status"), "draft");
   assert.match(draft.response.headers.get("content-disposition"), /ENTWURF-/i);
+  assert.match(draft.response.headers.get("content-disposition"), /^attachment;/);
+  assert.equal(draft.response.headers.get("x-content-type-options"), "nosniff");
   assert.match(draft.payload.toString("utf8"), /# ENTWURF/);
 
   const evaluation = await evaluateTimeDay("101", date, new Date("2026-07-14T12:00:00Z"));
@@ -1449,6 +1457,8 @@ test("v0.63: finaler Ist-Lohnexport verlangt aktuelle Tagesprüfung und liefert 
   });
   assert.equal(exported.response.status, 200);
   assert.match(exported.response.headers.get("content-type"), /text\/csv/);
+  assert.match(exported.response.headers.get("content-disposition"), /^attachment;/);
+  assert.equal(exported.response.headers.get("x-content-type-options"), "nosniff");
   assert.match(exported.payload.toString("utf8"), /Personalnummer/);
   const run = db.prepare("SELECT content_sha256, options_json, result_json FROM integration_runs WHERE direction = 'export' ORDER BY started_at DESC, id DESC LIMIT 1").get();
   assert.match(run.content_sha256, /^[a-f0-9]{64}$/);
@@ -1476,6 +1486,8 @@ test("v0.63: geplanter Lohnartenexport zählt Urlaub über ein Wochenende nur an
   });
   assert.equal(exported.response.status, 200);
   assert.match(exported.response.headers.get("content-type"), /spreadsheetml/);
+  assert.match(exported.response.headers.get("content-disposition"), /^attachment;/);
+  assert.equal(exported.response.headers.get("x-content-type-options"), "nosniff");
   const inspected = await inspectTabularBuffer(exported.payload, { fileName: "lohnarten.xlsx" });
   assert.equal(inspected.sheets[0].rows.length, 6);
   const codeColumn = inspected.sheets[0].rows[0].findIndex((cell) => cell.text === "Interner Code");

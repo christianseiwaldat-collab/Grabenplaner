@@ -1,3 +1,4 @@
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -56,11 +57,11 @@ function ensureTestUser(employeeNumber, role) {
       must_change_password = 0, password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, role);
   const token = `v077-${employeeNumber}-${crypto.randomBytes(24).toString("hex")}`;
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     cookie: `grabenplaner_session=${encodeURIComponent(token)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
@@ -165,6 +166,24 @@ test("v0.78: reine Leseberechtigung bleibt redigiert und GET ist nebenwirkungsfr
   assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM system_center_trust_metrics").get().count), metricsBefore);
   assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM portal_notifications").get().count), notificationsBefore);
   assert.match(serverSource, /createAbsencePortalNotification\(\s*absenceManagementRepository,\s*employeeNumber,\s*"system\.recovery\.alert",[\s\S]{0,1000}?reactivate:\s*true/);
+});
+
+test("CPU/RAM-Verlauf ist separat geschützt und benötigt keine vollständige Diagnose", async () => {
+  const route = "/api/portal/v1/system-center/utilization";
+  const admin = ensureTestUser("9701", "admin");
+  const result = await requestJson(`${route}?hours=24`, { session: admin });
+  assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+  assert.equal(result.response.headers.get("cache-control"), "private, no-store");
+  assert.equal(result.payload.schemaVersion, 1); assert.equal(result.payload.scope, "host");
+  assert(result.payload.points.length > 0 && result.payload.points.length <= 1200);
+  assert.equal(result.payload.current.cpu.usedPercent, null); // app.listen does not start background workers.
+  assert.equal((await requestJson(route)).response.status, 401);
+  const hr = ensureTestUser("9704", "hr");
+  assert.equal((await requestJson(route, { session: hr })).response.status, 403);
+  for (const query of ["hours=2", "hours=24&hours=1", "hours=024", "hours=Infinity", "hours[]=24"])
+    assert.equal((await requestJson(`${route}?${query}`, { session: admin })).response.status, 400, query);
+  assert.equal((await requestJson(route, { session: admin })).payload.hours, 24);
+  assert.match(serverSource, /app\.get\("\/api\/portal\/v1\/system-center\/utilization",[\s\S]{0,650}response\.json\(systemUtilization\.read\(hours\)\)/);
 });
 
 test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer begrenzt", async () => {

@@ -176,8 +176,8 @@ test("v0.62: native Anmeldung liefert ausschließlich gehashte Gerätesitzungen 
 
   const portalToken = crypto.randomBytes(32).toString("base64url");
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(portalToken).digest("hex"));
   const cookieOnly = await request("/api/mobile/v1/bootstrap", { cookie: `grabenplaner_session=${portalToken}` });
   assert.equal(cookieOnly.response.status, 401, JSON.stringify(cookieOnly.payload));
@@ -469,17 +469,95 @@ test("v0.62: Installation-Feature sperrt mobile Zeiterfassung und Passwortwechse
   assert.equal(disabled.payload.error.code, "FEATURE_DISABLED");
   db.prepare("UPDATE settings SET value = ? WHERE key = 'installation_features'").run(oldFeatures || JSON.stringify(["schedule", "vacation", "requests", "employeePortal", "timeTracking", "sicknessAmu", "wifiSuggestions"]));
 
-  const portalToken = crypto.randomBytes(32).toString("base64url");
-  const csrf = crypto.randomBytes(24).toString("base64url");
-  db.prepare(`INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')`)
-    .run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(portalToken).digest("hex"));
+  const browserLogin = await request("/api/portal/v1/auth/login", {
+    method: "POST", body: { loginName: employeeNumber, password },
+  });
+  assert.equal(browserLogin.response.status, 200, JSON.stringify(browserLogin.payload));
+  const cookie = browserLogin.response.headers.getSetCookie().map(value => value.split(";", 1)[0]).join("; ");
+  const csrf = decodeURIComponent(cookie.split("; ").find(value => value.startsWith("grabenplaner_csrf=")).slice("grabenplaner_csrf=".length));
   const changed = await request("/api/portal/v1/me/password", {
     method: "PUT",
-    cookie: `grabenplaner_session=${portalToken}; grabenplaner_csrf=${csrf}`,
+    cookie,
     csrf,
     body: { currentPassword: password, newPassword: "NochSichererMobilPass!" },
   });
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
   const revoked = await request("/api/mobile/v1/bootstrap", { accessToken });
   assert.equal(revoked.response.status, 401, JSON.stringify(revoked.payload));
+});
+
+test("P2: mobile access and refresh enforce the fixed end, including invalid original timestamps", async () => {
+  // The preceding browser change intentionally replaced this shared fixture password.
+  const loginPassword = "NochSichererMobilPass!";
+  const device = mobileDevice(`boundary-${crypto.randomUUID()}`);
+  const loggedIn = await request("/api/mobile/v1/auth/login", {
+    method: "POST", body: { employeeNumber, password: loginPassword, device },
+  });
+  assert.equal(loggedIn.response.status, 201, JSON.stringify(loggedIn.payload));
+  const tokenSet = loggedIn.payload.tokenSet, id = tokenSet.accessToken.split(".")[1];
+  const fixedEnd = new Date(Date.now() + 120000).toISOString();
+  db.prepare("UPDATE mobile_sessions SET refresh_expires_at=? WHERE id=?").run(fixedEnd, id);
+  const refreshed = await request("/api/mobile/v1/auth/refresh", {
+    method: "POST", body: { refreshToken: tokenSet.refreshToken, device },
+  });
+  assert.equal(refreshed.response.status, 200, JSON.stringify(refreshed.payload));
+  assert.equal(refreshed.payload.tokenSet.refreshTokenExpiresAt, fixedEnd);
+  assert.equal(refreshed.payload.tokenSet.accessTokenExpiresAt, fixedEnd);
+  const valid = await request("/api/mobile/v1/bootstrap", { accessToken: refreshed.payload.tokenSet.accessToken });
+  assert.equal(valid.response.status, 200, JSON.stringify(valid.payload));
+  db.prepare("UPDATE mobile_sessions SET refresh_expires_at=?, access_expires_at=? WHERE id=?")
+    .run(new Date(Date.now() - 1000).toISOString(), new Date(Date.now() + 600000).toISOString(), id);
+  const expired = await request("/api/mobile/v1/bootstrap", { accessToken: refreshed.payload.tokenSet.accessToken });
+  assert.equal(expired.response.status, 401, JSON.stringify(expired.payload));
+  db.prepare("UPDATE mobile_sessions SET refresh_expires_at=?, created_at='not-a-timestamp' WHERE id=?").run(fixedEnd, id);
+  const malformed = await request("/api/mobile/v1/auth/refresh", {
+    method: "POST", body: { refreshToken: refreshed.payload.tokenSet.refreshToken, device },
+  });
+  assert.equal(malformed.response.status, 401, JSON.stringify(malformed.payload));
+});
+
+test("P2: privileged mobile sessions have an eight-hour end and reject thirty minutes of inactivity", async () => {
+  const beforeRole = db.prepare("SELECT role FROM portal_users WHERE employee_number=?").get(employeeNumber).role;
+  db.prepare("UPDATE portal_users SET role='admin' WHERE employee_number=?").run(employeeNumber);
+  try {
+    const started = Date.now();
+    const loggedIn = await mobileLoginFor(employeeNumber, "NochSichererMobilPass!");
+    assert.equal(loggedIn.response.status, 201, JSON.stringify(loggedIn.payload));
+    const tokens = loggedIn.payload.tokenSet, id = tokens.accessToken.split(".")[1];
+    const duration = Date.parse(tokens.refreshTokenExpiresAt) - started;
+    assert.ok(duration >= 8 * 3600000 && duration < 8 * 3600000 + 10000);
+    db.prepare("UPDATE mobile_sessions SET last_seen_at=? WHERE id=?")
+      .run(new Date(Date.now() - 30 * 60000 - 1000).toISOString(), id);
+    const expired = await request("/api/mobile/v1/bootstrap", { accessToken: tokens.accessToken });
+    assert.equal(expired.response.status, 401, JSON.stringify(expired.payload));
+  } finally {
+    db.prepare("UPDATE portal_users SET role=? WHERE employee_number=?").run(beforeRole, employeeNumber);
+  }
+});
+
+test("P2: a mobile password change preserves its fixed end, replaces tokens and revokes a second device", async () => {
+  const number = "979", initialPassword = "Synthetic mobile migration phrase", nextPassword = "Synthetic changed mobile phrase";
+  db.prepare("INSERT INTO employees(personnel_number,full_name,nickname,color,contracted_hours,home_location_id,active) VALUES(?,?,?,'#287a67',38.5,?,1)")
+    .run(number, "Synthetic mobile", "Synthetic", locationId);
+  db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password) VALUES(?,?,'employee',1,0)")
+    .run(number, await hashPortalPassword(initialPassword));
+  const first = await mobileLoginFor(number, initialPassword), second = await mobileLoginFor(number, initialPassword);
+  assert.equal(first.response.status, 201, JSON.stringify(first.payload));
+  assert.equal(second.response.status, 201, JSON.stringify(second.payload));
+  const tokens = first.payload.tokenSet, id = tokens.accessToken.split(".")[1];
+  const fixedEnd = new Date(Date.now() + 120000).toISOString();
+  db.prepare("UPDATE mobile_sessions SET refresh_expires_at=? WHERE id=?").run(fixedEnd, id);
+  const changed = await request("/api/mobile/v1/me/password", {
+    method: "POST", accessToken: tokens.accessToken,
+    body: { currentPassword: initialPassword, newPassword: nextPassword },
+  });
+  assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
+  assert.equal(changed.payload.tokenSet.refreshTokenExpiresAt, fixedEnd);
+  assert.equal(changed.payload.tokenSet.accessTokenExpiresAt, fixedEnd);
+  assert.notEqual(changed.payload.tokenSet.accessToken, tokens.accessToken);
+  assert.equal((await request("/api/mobile/v1/bootstrap", { accessToken: tokens.accessToken })).response.status, 401);
+  assert.equal((await request("/api/mobile/v1/bootstrap", { accessToken: second.payload.tokenSet.accessToken })).response.status, 401);
+  assert.equal((await request("/api/mobile/v1/bootstrap", { accessToken: changed.payload.tokenSet.accessToken })).response.status, 200);
+  const stored = db.prepare("SELECT refresh_expires_at FROM mobile_sessions WHERE id=?").get(id);
+  assert.equal(stored.refresh_expires_at, fixedEnd);
 });

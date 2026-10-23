@@ -1,10 +1,16 @@
 const express = require("express");
+const { preferredDaysOff, preferredDaysLimit, validatePreferredDays, preferredDayCost, protectedPersonnelName } = require("./lib/employee-preferences");
 const PDFDocument = require("pdfkit");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
+const { loginFailureParameters, runLoginTransaction, acceptVerifiedLogin } = require("./lib/portal-login-security");
+const { POLICY_VERSION: PORTAL_PASSWORD_POLICY_VERSION, assertNewPassword,
+  assessExistingPassword, metadata: portalPasswordPolicyMetadata } = require("./lib/portal-password-policy");
+const { browserSessionLifetime, isSessionTimeValid, mobileSessionLifetime,
+  clampMobileAccessExpiry, isPrivilegedSession, instant: sessionInstant } = require("./lib/portal-session-security");
 const net = require("node:net");
 const zlib = require("node:zlib");
 const { promisify } = require("node:util");
@@ -12,10 +18,18 @@ const updateRequestLifecycle = require("./lib/update-request-lifecycle").createU
 const { executeUpdateCommand } = require("./lib/update-command");
 const { completeProcessShutdown } = require("./lib/complete-process-shutdown");
 const startDashboardWorkspaceModel = require("./public/start-dashboard-workspace-preferences");
+const personnelDashboardWorkspaceModel = require("./public/personnel-dashboard-workspace-preferences");
 const sidebarNotepadModel = require("./public/sidebar-notepad-preferences");
 const gpWindowsModel = require('./public/gp-window-preferences');
 const { personalAbsenceRequestPeriod, absenceRequestSubmissionAllowed,
   absenceRequestSubmissionAssessment } = require('./lib/absence-request-policy');
+const { createOpenAiVoiceProvider } = require('./lib/voice-assistant-openai');
+const voiceAssistantSettings = require('./lib/voice-assistant-settings');
+const planningAssistantSettings = require('./lib/planning-assistant-settings');
+const planningAssistantPreferences = require('./lib/planning-assistant-preferences');
+const assistantPilotAccess = require('./lib/assistant-pilot-access');
+const { createPlanningAssistantReader } = require('./lib/planning-assistant-gp');
+const { createVoiceAssistant } = require('./lib/voice-assistant');
 const { resolveScheduleDuty, defaultScheduleDutyCode, manualPlanningHours, PLANNING_DAY_COUNT,
   DEFAULT_DUTY_COLORS, normalizeScheduleDutyColors, scheduleDutyColor, scheduleDutyTextColor } = require("./public/schedule-duty");
 const {
@@ -34,6 +48,7 @@ const { registerSalesReportJobRoutes } = require('./lib/sales-report-jobs-routes
 const { createCashPublicationRuntime } = require("./lib/persistence/repositories/cash-publication-runtime");
 const { CASH_SOURCE_POLICIES } = require("./lib/cash-source-policies");
 const { registerDataImportRoutes } = require("./lib/data-import-routes");
+const { installImportUploadTimeouts } = require("./lib/data-import-upload-timeout");
 const {
   CRM_PERMISSIONS,
   CRM_PERMISSION_IDS,
@@ -72,6 +87,7 @@ const {
   inspectXoffiImageBuffer,
 } = require("./lib/xoffi-time-import");
 const { inspectXoffiMhtmlBuffer, matchEmployee: matchXoffiEmployee } = require("./lib/xoffi-mhtml-import");
+const { createReviewedXoffiSnapshot, XoffiWeekReconciliationError } = require("./lib/xoffi-week-reconciliation");
 const {
   SalesAnalyticsReportSeriesError,
   aggregateSalesAnalyticsReportSeries,
@@ -146,6 +162,10 @@ const {
 const recoveryAssuranceStatusReader = require("./lib/recovery-assurance-status-reader")
   .createRecoveryAssuranceStatusReader();
 const readRecoveryAssuranceStatus = options => recoveryAssuranceStatusReader.read(options);
+const {
+  DEFAULT_STATE_PATH: DEFAULT_DEPLOY_DEFERRAL_PATH,
+  readDeployDeferral,
+} = require("./server-tools/linux/offsite/lib/deploy-deferral");
 const { buildSystemTrustIndex } = require("./lib/system-trust-index");
 const {
   buildSystemCenterTrendPayload,
@@ -694,6 +714,7 @@ const {
 } = require("./lib/privacy-requests");
 const { PRIVACY_ORGANIZATION_CATALOG } = require("./lib/privacy-organization");
 const { createPrivacyOrganizationStore } = require("./lib/privacy-organization-store");
+const { createSecurityAuditStore } = require("./lib/security-audit-store");
 const { isPrivacyOrganizationSettingKey, publicSettingsRows } = require("./lib/privacy-organization-settings");
 const { isSystemNotificationReceiptSettingKey } = require("./lib/system-notification-receipt-settings");
 const notificationReceiptModule = require("./lib/system-notification-receipt-store");
@@ -887,8 +908,8 @@ function normalizeAppFontScalePercent(value, fallback = APP_FONT_SCALE_DEFAULT) 
     : fallback;
 }
 
-const LOCAL_PORTAL_PASSWORD_MIN_LENGTH = 6;
-const SERVER_PORTAL_PASSWORD_MIN_LENGTH = 10;
+const LOCAL_PORTAL_PASSWORD_MIN_LENGTH = 15;
+const SERVER_PORTAL_PASSWORD_MIN_LENGTH = 15;
 const PORTAL_SESSION_COOKIE = "grabenplaner_session";
 const PORTAL_CSRF_COOKIE = "grabenplaner_csrf";
 const MOBILE_ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -979,6 +1000,8 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "retention:read", label: "Aufbewahrungsregeln und Vorschau lesen", description: "Kategoriebezogene Fristen, Prüfhinweise und Legal Holds lesen.", group: "Datenschutz", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "privacy_organization:read", label: "Datenschutzorganisation lesen", description: "Verarbeitungsverzeichnis, DSFA, Datenpannen und Zustimmungsprozesse ausschließlich über persönliche HR-/Admin-/Developer-Konten lesen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "privacy_organization:manage", label: "Datenschutzorganisation bearbeiten", description: "Datensparsame Prozessfälle versionieren und externe Meldebelege dokumentieren.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "security_audits:read", label: "Security Audits lesen", description: "Vertrauliche Sicherheitsprüfungen und Maßnahmen über ein berechtigtes persönliches Konto lesen.", group: "Technische Sicherheit", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
+  { id: "security_audits:manage", label: "Security Audits verwalten", description: "Prüfberichte importieren und Befundmaßnahmen mit Nachweisen dokumentieren; benötigt zusätzlich das Leserecht.", group: "Technische Sicherheit", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
   { id: "privacy_organization:approve", label: "Datenschutzorganisation unabhängig prüfen", description: "Eine fremde eingereichte Fassung fachlich prüfen; keine Behördenmeldung oder Zustimmung von Beschäftigten ersetzen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "retention:manage", label: "Aufbewahrungsregeln versioniert verwalten", description: "Neue Regelversionen und Legal Holds anlegen; kein direkter Löschlauf.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "data_subject_requests:read", label: "Betroffenenanfragen lesen", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -1255,6 +1278,7 @@ function assertPortalPermissionDependencies(permissions) {
       throw httpError(400, message, "PORTAL_PERMISSION_DEPENDENCY");
     }
   };
+  requirePermission("security_audits:manage", "security_audits:read", "Security Audits verwalten benötigt zusätzlich das Audit-Leserecht.");
   const requireAnyPermission = (permission, dependencies, message) => {
     if (projected.has(permission) && !dependencies.some((dependency) => projected.has(dependency))) {
       throw httpError(400, message, "PORTAL_PERMISSION_DEPENDENCY");
@@ -1590,6 +1614,7 @@ const portalGlobalPermissionIds = new Set([
   "vacation_accounts:read", "vacation_accounts:manage",
   "retention:read", "retention:manage",
   "privacy_organization:read", "privacy_organization:manage", "privacy_organization:approve",
+  "security_audits:read", "security_audits:manage",
   "data_subject_requests:read", "data_subject_requests:manage", "data_subject_requests:export",
   "personnel:candidates:write", "personnel:candidates:confidential:read",
   "personnel:candidates:confidential:write", "personnel:candidates:convert", "personnel:candidates:delegate",
@@ -2342,9 +2367,7 @@ function requestOriginAllowed(request, origin) {
 if (serverModeActive) app.set("trust proxy", trustProxySetting);
 
 function portalPasswordMinLength() {
-  return serverModeActive || deploymentKind === "production"
-    ? SERVER_PORTAL_PASSWORD_MIN_LENGTH
-    : LOCAL_PORTAL_PASSWORD_MIN_LENGTH;
+  return LOCAL_PORTAL_PASSWORD_MIN_LENGTH;
 }
 
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
@@ -3537,6 +3560,7 @@ const {
   normalizeAppFontScalePercent,
   defaultPortalSettings,
   passwordMinLength: portalPasswordMinLength(),
+  passwordPolicy: { ...portalPasswordPolicyMetadata(), maxLength: portalPasswordPolicyMetadata().maxCodePoints },
   installationFeatureIds,
   preV063DefaultInstallationFeatures,
   preV085DefaultInstallationFeatures,
@@ -3761,6 +3785,12 @@ async function authorizePersistenceOperation({readOnly} = {}) {
   // Authentication and scheduled server work use their own existing checks.
   // An authenticated request must retain the same authority through commit.
   const previous = request?.portalSession;
+  if (request?.mobileSession) {
+    const application = await applicationPersistence.ready;
+    const current = await mobileSessionFromRequest(request, { touch: false, repository: application.authorizationRepositories.mobileAuth });
+    const mobileFields = ['id','employeeNumber','role','permissions','explicitScopes','permissionScopes','scopes','mustChangePassword'];
+    if (!current || JSON.stringify(mobileFields.map(key => current[key])) !== JSON.stringify(mobileFields.map(key => request.mobileSession[key]))) return false;
+  }
   if (!request?.portalSessionLoaded || !previous) return true;
   const application = await applicationPersistence.ready;
   const current = await loadPortalSessionFromRequest(request, {touch:false, repository:application.authorizationRepositories.portalAccess});
@@ -3807,6 +3837,7 @@ function initializeApplicationPersistence({ onProgress } = {}) {
       await backfillVacationAccountsFromEntitlements("system");
       await verifyProtectedGovernanceRecords();
       await requirePrivacyOrganizationStore().verifyIntegrity();
+      await requireSecurityAuditStore().verifyIntegrity();
       await requirePersonnelLifecycleService().verifyIntegrity();
       await backfillCustomProcessRevisionSnapshots();
       await refreshLoanProtectedStorageSnapshot();
@@ -3854,11 +3885,12 @@ app.use((request, response, next) => {
   response.setHeader("X-Frame-Options", embeddedPdfPreview ? "SAMEORIGIN" : "DENY");
   response.setHeader("Referrer-Policy", "no-referrer");
   const portalCamera=request.path==='/'||request.path==='/index.html'||request.path==='/portal'||request.path==='/portal/'||request.path==='/portal.html'||request.path.startsWith('/api/portal/v1/private-workspaces/');
-  response.setHeader("Permissions-Policy", `camera=(${portalCamera?'self':''}), microphone=(), geolocation=()`);
+  const voicePortal = voiceAssistantConfig().enabled && ['/portal', '/portal/', '/portal.html'].includes(request.path);
+  response.setHeader("Permissions-Policy", `camera=(${portalCamera?'self':''}), microphone=(${voicePortal?'self':''}), geolocation=()`);
   response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
   response.setHeader("X-Permitted-Cross-Domain-Policies", "none");
-  response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'${ocrClientAsset ? " 'wasm-unsafe-eval'" : ""}; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
+  response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'${ocrClientAsset ? " 'wasm-unsafe-eval'" : ""}; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
   if (request.secure) response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   if ((serverModeActive && request.path.startsWith("/api/"))
     || request.path.startsWith("/api/portal/") || request.path.startsWith("/api/mobile/")) {
@@ -3915,29 +3947,11 @@ app.use(async (request, response, next) => {
     await refreshPortalSettingsSnapshot();
     // A new login is authorized by its submitted credentials. An older cookie
     // must not veto the transaction that replaces that very session.
-    request.portalSession = request.path === "/api/portal/v1/auth/login"
+    request.portalSession = request.path === "/api/portal/v1/auth/login" || request.path.startsWith('/api/mobile/')
       ? null : await loadPortalSessionFromRequest(request);
     request.portalSessionLoaded = true;
-    if (request.portalSession) {
-      const cookies = parseCookies(request);
-      const maxAge = portalSessionTimeoutMinutes() * 60;
-      if (cookies[PORTAL_SESSION_COOKIE]) {
-        appendCookie(response, portalCookie(
-          PORTAL_SESSION_COOKIE,
-          cookies[PORTAL_SESSION_COOKIE],
-          request,
-          { httpOnly: true, maxAge },
-        ));
-      }
-      if (cookies[PORTAL_CSRF_COOKIE]) {
-        appendCookie(response, portalCookie(
-          PORTAL_CSRF_COOKIE,
-          cookies[PORTAL_CSRF_COOKIE],
-          request,
-          { maxAge },
-        ));
-      }
-    }
+    // Cookies are issued only by explicit authentication transitions. A late
+    // ordinary API response must never overwrite a freshly rotated credential.
     if (request.path.startsWith("/api/work-rules")
       || request.path.startsWith("/api/collective-agreements")) {
       await refreshPortalScopeProjectionSnapshot();
@@ -4428,12 +4442,9 @@ function parsePersonnelDocumentMultipart(request, { maxFileBytes = 15 * 1024 * 1
   });
 }
 
-async function hashPortalPassword(password) {
-  const value = String(password || "");
-  const minimum = portalPasswordMinLength();
-  if (value.length < minimum) {
-    throw httpError(400, `Das Passwort muss in diesem Betriebsmodus mindestens ${minimum} Zeichen lang sein.`, "PORTAL_PASSWORD_TOO_SHORT");
-  }
+async function hashPortalPassword(password, context = {}) {
+  assertNewPassword(password, context);
+  const value = password;
   const salt = crypto.randomBytes(16);
   const derivedKey = await scryptAsync(value, salt, 64);
   return `scrypt-v1$${salt.toString("base64url")}$${Buffer.from(derivedKey).toString("base64url")}`;
@@ -4499,7 +4510,7 @@ function backupAdminOriginAllowed(request) {
   return Boolean(origin && (!fetchSite || fetchSite === "same-origin") && requestOriginAllowed(request, origin));
 }
 
-async function requireBackupAdminReauthentication(request, {
+async function requireBackupAdminReauthentication(request, response, {
   permission = "backup:write",
   operation = "backup-administration",
 } = {}) {
@@ -4520,7 +4531,7 @@ async function requireBackupAdminReauthentication(request, {
   const rateKey = `${ipKey}:${session.employeeNumber}`;
   if (backupAdminGlobalRateLimits.get(ipKey, now).length >= 20
     || backupAdminAuthRateLimits.get(rateKey, now).length >= 5) {
-    (await auditPortal(session.employeeNumber, "backup.admin.reauthentication.rate-limited", "system", operation));
+    (await auditBackupAdministration(session.employeeNumber, "backup.admin.reauthentication.rate-limited", "system", operation));
     throw httpError(429, "Zu viele fehlgeschlagene Freigaben. Bitte 15 Minuten warten.", "BACKUP_ADMIN_RATE_LIMITED");
   }
 
@@ -4548,12 +4559,61 @@ async function requireBackupAdminReauthentication(request, {
   if (!allowed || !suppliedPassword || !passwordMatches) {
     backupAdminAuthRateLimits.record(rateKey, now);
     backupAdminGlobalRateLimits.record(ipKey, now);
-    (await auditPortal(session.employeeNumber, "backup.admin.reauthentication.denied", "system", operation));
+    (await auditBackupAdministration(session.employeeNumber, "backup.admin.reauthentication.denied", "system", operation));
     throw httpError(403, "Das aktuelle Passwort ist nicht korrekt.", "BACKUP_ADMIN_AUTH_FAILED");
   }
+  const rawToken = crypto.randomBytes(32).toString("base64url");
+  const replacement = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    // Password verification can overlap logout, reset or another reauthentication.
+    // Re-read both authority and the verified credential in the transaction that
+    // revokes the old token, creates its successor and records acceptance.
+    const repository = repositories.portalAccess;
+    const live = await loadPortalSessionFromRequest(request, { touch: false, repository });
+    const acceptedAt = new Date();
+    if (!live || live.id !== session.id || live.sessionKind !== "employee"
+      || live.employeeNumber !== session.employeeNumber) {
+      throw httpError(401, "Die Sitzung wurde geändert oder ist abgelaufen. Bitte erneut anmelden.", "PORTAL_AUTH_REQUIRED");
+    }
+    const current = await repository.getBackupAdminUser({ employeeNumber: live.employeeNumber });
+    if (!current?.active || !current.employee_active || current.password_hash !== user.password_hash
+      || current.role !== session.role || live.role !== current.role
+      || !BACKUP_ADMIN_ROLES.has(live.role) || !live.permissions.includes(permission)
+      || live.mustChangePassword
+      || (current.locked_until && !(new Date(current.locked_until).getTime() <= acceptedAt.getTime()))) {
+      throw httpError(403, "Der Zugang oder die Berechtigung wurde geändert. Bitte erneut anmelden.", "BACKUP_ADMIN_AUTH_CHANGED");
+    }
+    const lifetime = browserSessionLifetime({ now: acceptedAt, role: live.role, permissions: live.permissions,
+      idleMinutes: portalSessionTimeoutMinutes(), authenticatedAt: live.authenticatedAt,
+      absoluteExpiresAt: live.absoluteExpiresAt });
+    if (!lifetime) throw httpError(401, "Die Sitzung ist abgelaufen. Bitte erneut anmelden.", "PORTAL_AUTH_REQUIRED");
+    const revoked = await repository.revokeEmployeeSessionById({ id: live.id });
+    if (revoked.rowsAffected !== 1) throw httpError(401, "Bitte erneut anmelden.", "PORTAL_AUTH_REQUIRED");
+    const id = crypto.randomUUID();
+    await repository.insertEmployeeSession({ id, employeeNumber: live.employeeNumber, tokenHash: sha256(rawToken), ...lifetime });
+    await repositories.organizationPersonnel.insertAudit(
+      live.employeeNumber, "backup.admin.reauthentication.accepted", "system", operation,
+    );
+    return { session: { ...live, id, ...lifetime }, user: current };
+  });
+  // Only a committed transition may reach the browser. Adopt it before later
+  // guarded database operations, and retain it even if the requested operation
+  // subsequently fails (for example an unavailable offsite broker).
+  request.headers.cookie = `${PORTAL_SESSION_COOKIE}=${rawToken}; ${PORTAL_CSRF_COOKIE}=${portalCsrfToken(rawToken)}`;
+  request.portalSession = replacement.session;
+  issuePortalSessionCookies(request, response, rawToken, replacement.session.absoluteExpiresAt);
+  response.setHeader("X-GP-Session-Changed", "1");
   backupAdminAuthRateLimits.clear(rateKey);
-  (await auditPortal(session.employeeNumber, "backup.admin.reauthentication.accepted", "system", operation));
-  return { session, user };
+  return replacement;
+}
+
+async function auditBackupAdministration(actor, action, entityType = "", entityId = "", detail = "") {
+  // These requests can overlap a credential transaction. Use the provider queue
+  // instead of issuing a legacy SQLite write inside another request's transaction.
+  // Acceptance itself is recorded with the rotation's transaction repository.
+  return persistenceRequestContext.run({ auditOnly: true }, async () => {
+    const result = await organizationPersonnelRepository.insertAudit(actor, action, entityType, entityId, detail);
+    return result.rowsAffected;
+  });
 }
 
 function requireOffsiteTargetDeveloper(request) {
@@ -5119,19 +5179,13 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
   const now = currentDate.toISOString();
   const tokenHash = sha256(token);
   const timeoutMinutes = portalSessionTimeoutMinutes();
-  const refreshedExpiresAt = new Date(currentDate.getTime() + timeoutMinutes * 60000).toISOString();
   const session = await repository.getEmployeeSessionByToken({
     tokenHash,
     now,
     businessDate: viennaTodayIso(currentDate),
   });
   if (session) {
-    if (isReservedEmployeePrincipal(session.employee_number)) return null;
-    let effectiveExpiresAt = session.expires_at;
-    if (touch) {
-      effectiveExpiresAt = await renewPortalSession({ session, kind: 'employee', now: currentDate.getTime(), expiresAt: refreshedExpiresAt,
-        timeoutMinutes, write: value => repository.touchEmployeeSession(value) });
-    }
+    if (isReservedEmployeePrincipal(session.employee_number) || !isSessionTimeValid(session, currentDate)) return null;
     const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(session);
     const permissionState = effectivePortalPermissionState(
       session.employee_number,
@@ -5141,6 +5195,23 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
       session.denied_permissions,
       session.amu_local_access_mode,
     );
+    const lifetime = browserSessionLifetime({ now: currentDate, role: session.role,
+      permissions: permissionState.effectivePermissions, idleMinutes: timeoutMinutes,
+      authenticatedAt: session.authenticated_at, absoluteExpiresAt: session.absolute_expires_at });
+    if (!lifetime) return null;
+    const lastSeen = sessionInstant(session.last_seen_at);
+    if (!Number.isFinite(lastSeen) || lastSeen > currentDate.getTime()
+      || (lifetime.privileged && currentDate.getTime() - lastSeen >= 30 * 60000)) return null;
+    // Background reads never reset idle time; the browser sends a bounded,
+    // consumed activity signal after trusted user input. Absolute expiry is
+    // enforced independently even if a client keeps signalling activity.
+    let effectiveExpiresAt = session.expires_at;
+    if (touch && request.headers['x-gp-user-activity'] === '1'
+      && !String(request.originalUrl || request.url || '').split('?')[0].endsWith('/session')) {
+      effectiveExpiresAt = await renewPortalSession({ session, kind: 'employee', now: currentDate.getTime(), expiresAt: lifetime.expiresAt,
+        timeoutMinutes: lifetime.idleMinutes, write: value => repository.touchEmployeeSession(value) });
+      if (!effectiveExpiresAt) return null;
+    }
     return {
       id: session.id,
       sessionKind: "employee",
@@ -5171,16 +5242,13 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
       personnelFieldPermissions: parsePersonnelFieldPermissionProjection(session.personnel_field_permissions),
       mustChangePassword: Boolean(session.must_change_password),
       expiresAt: effectiveExpiresAt,
+      authenticatedAt: lifetime.authenticatedAt,
+      absoluteExpiresAt: lifetime.absoluteExpiresAt,
     };
   }
   const organizationSession = await repository
     .getOrganizationSessionByToken({ tokenHash, now });
-  if (!organizationSession) return null;
-  let organizationExpiresAt = organizationSession.expires_at;
-  if (touch) {
-    organizationExpiresAt = await renewPortalSession({ session: organizationSession, kind: 'organization', now: currentDate.getTime(), expiresAt: refreshedExpiresAt,
-      timeoutMinutes, write: value => repository.touchOrganizationSession(value) });
-  }
+  if (!organizationSession || !isSessionTimeValid(organizationSession, currentDate)) return null;
   const scopes = portalAccessScopesForPrincipal({
     role: "organization_account",
     scopesValue: organizationSession.access_scopes,
@@ -5189,6 +5257,20 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
     organizationSession.account_type,
     parsePortalPermissions(organizationSession.permissions),
   );
+  const lifetime = browserSessionLifetime({ now: currentDate, role: 'organization_account', permissions,
+    idleMinutes: timeoutMinutes, authenticatedAt: organizationSession.authenticated_at,
+    absoluteExpiresAt: organizationSession.absolute_expires_at });
+  if (!lifetime) return null;
+  const lastSeen = sessionInstant(organizationSession.last_seen_at);
+  if (!Number.isFinite(lastSeen) || lastSeen > currentDate.getTime()
+    || (lifetime.privileged && currentDate.getTime() - lastSeen >= 30 * 60000)) return null;
+  let organizationExpiresAt = organizationSession.expires_at;
+  if (touch && request.headers['x-gp-user-activity'] === '1'
+    && !String(request.originalUrl || request.url || '').split('?')[0].endsWith('/session')) {
+    organizationExpiresAt = await renewPortalSession({ session: organizationSession, kind: 'organization', now: currentDate.getTime(), expiresAt: lifetime.expiresAt,
+      timeoutMinutes: lifetime.idleMinutes, write: value => repository.touchOrganizationSession(value) });
+    if (!organizationExpiresAt) return null;
+  }
   return {
     id: organizationSession.id,
     sessionKind: "organization",
@@ -5216,6 +5298,8 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
     scopes,
     mustChangePassword: false,
     expiresAt: organizationExpiresAt,
+    authenticatedAt: lifetime.authenticatedAt,
+    absoluteExpiresAt: lifetime.absoluteExpiresAt,
   };
 }
 
@@ -5461,9 +5545,20 @@ function assertPortalCsrf(request) {
   const cookies = parseCookies(request);
   const cookieToken = String(cookies[PORTAL_CSRF_COOKIE] || "");
   const headerToken = String(request.headers["x-csrf-token"] || "");
-  const valid = cookieToken.length >= 24 && headerToken.length === cookieToken.length
-    && crypto.timingSafeEqual(Buffer.from(cookieToken), Buffer.from(headerToken));
+  const expected = portalCsrfToken(cookies[PORTAL_SESSION_COOKIE]);
+  const valid = cookieToken.length >= 24 && safeHashEquals(cookieToken, headerToken)
+    && safeHashEquals(cookieToken, expected);
   if (!valid) throw httpError(403, "Die Sicherheitsprüfung ist abgelaufen. Bitte die Seite neu laden.", "PORTAL_CSRF_INVALID");
+}
+
+function portalCsrfToken(rawToken) {
+  return rawToken ? sha256(`gp-browser-csrf-v2\0${rawToken}`) : "";
+}
+
+function issuePortalSessionCookies(request, response, rawToken, absoluteExpiresAt) {
+  const maxAge = Math.max(0, Math.floor((Date.parse(absoluteExpiresAt) - Date.now()) / 1000));
+  appendCookie(response, portalCookie(PORTAL_SESSION_COOKIE, rawToken, request, { httpOnly: true, maxAge }));
+  appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, portalCsrfToken(rawToken), request, { maxAge }));
 }
 
 function mobileNativeAuthenticationAvailable() {
@@ -5642,27 +5737,45 @@ async function mobileSessionRow(
   return repository.getSession({ sessionId, businessDate });
 }
 
-async function mobileSessionFromRequest(request, { touch = true } = {}) {
+function mobileSessionTimeBounds(row, now, { access = false } = {}) {
+  if (!row || row.revoked_at || !row.active || !row.employee_active) return null;
+  const principal = mobileSessionPrincipal(row);
+  if (!principal) return null;
+  const current = sessionInstant(now), origin = sessionInstant(row.created_at);
+  const storedEnd = sessionInstant(row.refresh_expires_at), lastSeen = sessionInstant(row.last_seen_at);
+  if (![current, origin, storedEnd, lastSeen].every(Number.isFinite)
+    || origin > current || lastSeen > current || storedEnd <= origin) return null;
+  const policy = mobileSessionLifetime({ now: new Date(origin), ...principal });
+  const end = Math.min(storedEnd, sessionInstant(policy.refreshExpiresAt));
+  if (current >= end || (isPrivilegedSession(principal) && current - lastSeen >= 30 * 60000)) return null;
+  if (access && (!Number.isFinite(sessionInstant(row.access_expires_at)) || sessionInstant(row.access_expires_at) <= current)) return null;
+  const refreshExpiresAt = new Date(end).toISOString();
+  return { principal: { ...principal, refreshExpiresAt }, refreshExpiresAt };
+}
+
+async function mobileSessionFromRequest(request, { touch = true, repository = mobileAuthRepository } = {}) {
   const parsed = parseMobileToken(mobileBearerToken(request), MOBILE_ACCESS_TOKEN_PREFIX);
   if (!parsed) return null;
   const currentDate = new Date();
   const row = await mobileSessionRow(
     parsed.sessionId,
-    mobileAuthRepository,
+    repository,
     viennaTodayIso(currentDate),
   );
-  const now = currentDate.toISOString();
-  if (!row || isReservedEmployeePrincipal(row.employee_number)
-    || row.revoked_at || !row.active || !row.employee_active || row.access_expires_at <= now
-    || !safeHashEquals(row.access_token_hash, sha256(parsed.token))) return null;
-  if (touch) await mobileAuthRepository.touchSession({ sessionId: row.id });
-  return mobileSessionPrincipal(row);
+  const bounds = mobileSessionTimeBounds(row, currentDate, { access: true });
+  if (!bounds || !safeHashEquals(row.access_token_hash, sha256(parsed.token))) return null;
+  if (touch && (request.headers['x-gp-user-activity'] === '1'
+    || !['GET', 'HEAD', 'OPTIONS'].includes(String(request.method || 'GET').toUpperCase()))) {
+    await repository.touchSession({ sessionId: row.id });
+  }
+  return bounds.principal;
 }
 
 async function requireMobileSession(request, permission = "", { allowPasswordChange = false } = {}) {
   requireMobileNativeAuthentication();
   const session = await mobileSessionFromRequest(request);
   if (!session) throw httpError(401, "Bitte erneut in der App anmelden.", "MOBILE_AUTH_REQUIRED");
+  request.mobileSession = session;
   if (!allowPasswordChange && session.mustChangePassword) {
     throw httpError(428, "Bitte zuerst das persoenliche Startpasswort aendern.", "MOBILE_PASSWORD_CHANGE_REQUIRED");
   }
@@ -5860,18 +5973,20 @@ async function revokePortalSessionsForEmployee(employeeNumber) {
   return result.rowsAffected;
 }
 
-async function createMobileSession(employeeNumber, device, now = new Date()) {
-  await mobileAuthRepository.purgeExpiredSessions({ now: now.toISOString() });
-  await mobileAuthRepository.revokeDeviceSessions({
+async function createMobileSession(employeeNumber, device, now = new Date(), repository = mobileAuthRepository, authority = null) {
+  if (!authority?.role || !Array.isArray(authority.permissions)) throw httpError(401, "Der App-Zugang wurde geändert. Bitte erneut anmelden.", "MOBILE_AUTH_REQUIRED");
+  const { accessExpiresAt, refreshExpiresAt, authenticatedAt } = mobileSessionLifetime({ now, ...authority });
+  await repository.purgeExpiredSessions({ now: now.toISOString() });
+  await repository.revokeDeviceSessions({
     employeeNumber,
     installationIdHash: device.installationIdHash,
   });
-  const active = await mobileAuthRepository.listActiveSessionIds({
+  const active = await repository.listActiveSessionIds({
     employeeNumber,
     now: now.toISOString(),
   });
   for (const stale of active.slice(Math.max(0, MOBILE_MAX_ACTIVE_SESSIONS - 1))) {
-    await mobileAuthRepository.revokeSession({
+    await repository.revokeSession({
       sessionId: stale.id,
       reason: "device_limit",
     });
@@ -5879,15 +5994,14 @@ async function createMobileSession(employeeNumber, device, now = new Date()) {
   const id = crypto.randomUUID();
   const accessToken = createMobileToken(MOBILE_ACCESS_TOKEN_PREFIX, id);
   const refreshToken = createMobileToken(MOBILE_REFRESH_TOKEN_PREFIX, id);
-  const accessExpiresAt = new Date(now.getTime() + MOBILE_ACCESS_TOKEN_TTL_MS).toISOString();
-  const refreshExpiresAt = new Date(now.getTime() + MOBILE_REFRESH_TOKEN_TTL_MS).toISOString();
-  await mobileAuthRepository.insertSession({
+  await repository.insertSession({
     id,
     employeeNumber,
     accessTokenHash: sha256(accessToken),
     accessExpiresAt,
     refreshTokenHash: sha256(refreshToken),
     refreshExpiresAt,
+    authenticatedAt,
     installationIdHash: device.installationIdHash,
     platform: device.platform,
     deviceLabel: device.label,
@@ -5902,13 +6016,13 @@ async function rotateAuthenticatedMobileSession(
   repository = mobileAuthRepository,
 ) {
   const row = await mobileSessionRow(sessionId, repository, viennaTodayIso(now));
-  if (!row || isReservedEmployeePrincipal(row.employee_number)
-    || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()) {
+  const bounds = mobileSessionTimeBounds(row, now);
+  if (!bounds) {
     throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_AUTH_REQUIRED");
   }
   const accessToken = createMobileToken(MOBILE_ACCESS_TOKEN_PREFIX, row.id);
   const refreshToken = createMobileToken(MOBILE_REFRESH_TOKEN_PREFIX, row.id);
-  const accessExpiresAt = new Date(now.getTime() + MOBILE_ACCESS_TOKEN_TTL_MS).toISOString();
+  const accessExpiresAt = clampMobileAccessExpiry(now, bounds.refreshExpiresAt);
   await repository.rememberRefreshToken({
     sessionId: row.id,
     tokenHash: row.refresh_token_hash,
@@ -5916,18 +6030,23 @@ async function rotateAuthenticatedMobileSession(
   });
   const result = await repository.rotateSession({
     sessionId: row.id,
+    now: now.toISOString(),
+    expectedRefreshTokenHash: row.refresh_token_hash,
     accessTokenHash: sha256(accessToken),
     accessExpiresAt,
     refreshTokenHash: sha256(refreshToken),
   });
   if (!result.rowsAffected) throw httpError(409, "Die App-Sitzung wurde gleichzeitig geändert.", "MOBILE_SESSION_CONFLICT");
-  return mobileTokenSet(accessToken, accessExpiresAt, refreshToken, row.refresh_expires_at);
+  return mobileTokenSet(accessToken, accessExpiresAt, refreshToken, bounds.refreshExpiresAt);
 }
 
 async function refreshMobileSession(rawRefreshToken, device, now = new Date()) {
   const parsed = parseMobileToken(rawRefreshToken, MOBILE_REFRESH_TOKEN_PREFIX);
   if (!parsed) throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_REFRESH_INVALID");
-  const outcome = await mobileAuthRepository.transaction(async (repository) => {
+  const outcome = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const repository = repositories.mobileAuth;
+    // Re-evaluate the clock for each safely rolled-back serialization retry.
+    const currentDate = new Date(Math.max(now.getTime(), Date.now()));
     const row = await mobileSessionRow(parsed.sessionId, repository, viennaTodayIso(now));
     const submittedHash = sha256(parsed.token);
     if (!row || isReservedEmployeePrincipal(row.employee_number)
@@ -5945,19 +6064,21 @@ async function refreshMobileSession(rawRefreshToken, device, now = new Date()) {
       await repository.revokeRefreshReuse({ sessionId: row.id });
       return { refreshReused: true };
     }
-    if (row.refresh_expires_at <= now.toISOString() || !safeHashEquals(row.refresh_token_hash, submittedHash)) {
+    const bounds = mobileSessionTimeBounds(row, currentDate);
+    if (!bounds || !safeHashEquals(row.refresh_token_hash, submittedHash)) {
       throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_REFRESH_INVALID");
     }
     const accessToken = createMobileToken(MOBILE_ACCESS_TOKEN_PREFIX, row.id);
     const refreshToken = createMobileToken(MOBILE_REFRESH_TOKEN_PREFIX, row.id);
-    const accessExpiresAt = new Date(now.getTime() + MOBILE_ACCESS_TOKEN_TTL_MS).toISOString();
+    const accessExpiresAt = clampMobileAccessExpiry(currentDate, bounds.refreshExpiresAt);
     await repository.rememberRefreshToken({
       sessionId: row.id,
       tokenHash: row.refresh_token_hash,
-      consumedAt: now.toISOString(),
+      consumedAt: currentDate.toISOString(),
     });
     const result = await repository.refreshSession({
       sessionId: row.id,
+      now: currentDate.toISOString(),
       expectedRefreshTokenHash: row.refresh_token_hash,
       accessTokenHash: sha256(accessToken),
       accessExpiresAt,
@@ -5968,7 +6089,7 @@ async function refreshMobileSession(rawRefreshToken, device, now = new Date()) {
     if (!result.rowsAffected) throw httpError(409, "Die App-Sitzung wurde gleichzeitig aktualisiert. Bitte erneut anmelden.", "MOBILE_REFRESH_CONFLICT");
     return {
       refreshReused: false,
-      tokenSet: mobileTokenSet(accessToken, accessExpiresAt, refreshToken, row.refresh_expires_at),
+      tokenSet: mobileTokenSet(accessToken, accessExpiresAt, refreshToken, bounds.refreshExpiresAt),
     };
   });
   if (outcome.refreshReused) {
@@ -5985,15 +6106,19 @@ async function mobileSessionRowFromRefreshToken(rawRefreshToken, now = new Date(
     mobileAuthRepository,
     viennaTodayIso(now),
   );
-  if (!row || isReservedEmployeePrincipal(row.employee_number)
-    || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()
-    || !safeHashEquals(row.refresh_token_hash, sha256(parsed.token))) return null;
+  if (!mobileSessionTimeBounds(row, now) || !safeHashEquals(row.refresh_token_hash, sha256(parsed.token))) return null;
   return row;
 }
 
 function enforceAdminApiAccess(request, _response, next) {
   try {
     if (["/health", "/health/live", "/health/ready", "/service/stop", "/integrations/wifi/events"].includes(request.path)) return next();
+    if (/^\/security-audits(?:\/|$)/.test(request.path)) {
+      const write = !["GET", "HEAD", "OPTIONS"].includes(request.method);
+      request.portalSession = requireSecurityAuditActor(request, write ? "security_audits:manage" : "security_audits:read");
+      if (write) assertPortalCsrf(request);
+      return next();
+    }
     if (/^\/privacy-organization(?:\/|$)/.test(request.path)) {
       const permission = ["GET", "HEAD", "OPTIONS"].includes(request.method)
         ? "privacy_organization:read"
@@ -6486,6 +6611,10 @@ function getSettings() {
   return { ...applicationSettingsSnapshot };
 }
 
+function voiceAssistantConfig() {
+  return voiceAssistantSettings.runtimeConfig(getSettings());
+}
+
 function installationFeaturesForApiPath(apiPath) {
   const requestPath = String(apiPath || "").toLowerCase();
   const required = new Set();
@@ -6562,6 +6691,12 @@ async function daySettingsFromLocation(locationId, repository = null) {
 
 async function settingsForLocation(locationId, repository = null) {
   const settings = getSettings();
+  Object.assign(settings, planningAssistantPreferences.values(settings));
+  // These scoped/developer values are served only by their authorized routes,
+  // never through the generic settings included in every schedule response.
+  for (const key of Object.keys(settings)) {
+    if (key === "voice_assistants" || key.startsWith("planning_assistant:")) delete settings[key];
+  }
   const branding = brandingForLocation(locationId, settings);
   settings.branding_company_name = branding.companyName;
   settings.branding_logo_url = branding.logoUrl;
@@ -7951,6 +8086,19 @@ async function refreshSicknessStaffingAfterPlanningChange(now = new Date()) {
     console.error("Eigene Prozessauslöser nach Dienstplanänderung fehlgeschlagen:", error);
   }
   return result;
+}
+
+const planningDerivedRefresh = require("./lib/planning-derived-refresh").createPlanningDerivedRefresh({
+  work: () => persistenceRequestContext.exit(() => refreshSicknessStaffingAfterPlanningChange()),
+  onError: error => console.error("Dienstplan-Folgeprüfung fehlgeschlagen:", error),
+});
+
+async function refreshPlanningDerivedStateAfterCommit() {
+  // Only a running server has the startup/periodic recovery path. Embedded
+  // callers without that scheduler keep the synchronous completion contract.
+  if (!sicknessSweepInterval) return refreshSicknessStaffingAfterPlanningChange();
+  // No request/session is retained by the system worker after the HTTP reply.
+  persistenceRequestContext.exit(() => planningDerivedRefresh.request());
 }
 
 const SICKNESS_NOTIFICATION_CHANNELS = Object.freeze(["email", "sms", "whatsapp"]);
@@ -9841,6 +9989,29 @@ async function persistPersonnelRecordMutationWithRepository(repository, prepared
   prepared.before = before;
   prepared.next = next;
   prepared.changedFields = changedFields;
+  if (prepared.submittedFields.some(key => ["identity.firstName", "identity.lastName"].includes(key))) {
+    const fullName = protectedPersonnelName(next);
+    if (fullName) {
+      const current = await repository.getEmployeeForUpdate(prepared.employeeNumber);
+      if (current && fullName !== current.full_name) {
+        // Copy only the name. Every other field comes from the fresh row in
+        // this same serializable transaction; encrypted identity stays private.
+        await repository.updateEmployee({
+          personnelNumber: current.personnel_number, fullName, nickname: current.nickname,
+          color: current.color, contractedHours: Number(current.contracted_hours),
+          targetWorkdaysPerWeek: normalizeTargetWorkdays(current.target_workdays_per_week),
+          preferredDaysOff: preferredDaysOff(current), fixedWorkdays: current.fixed_workdays || "",
+          positionId: current.position_id, timeConfirmationLevel: current.time_confirmation_level || "C",
+          sicknessWithoutAumEnabled: Boolean(current.sickness_without_aum_enabled),
+          homeLocationId: current.home_location_id, preferredDepartmentId: current.preferred_department_id,
+          costCenterId: current.cost_center_id, active: Boolean(current.active),
+        });
+        await repository.insertAudit(prepared.session.employeeNumber, "employee.name-from-personnel-record",
+          "employee", prepared.employeeNumber, JSON.stringify({ fields: ["fullName"] }));
+      }
+      prepared.publicName = fullName;
+    }
+  }
   if (!changedFields.length) return [];
   const socialSecurityLookup = next.socialSecurityNumber
     ? personnelSensitiveLookup("social-security-number", next.socialSecurityNumber) : "";
@@ -10130,9 +10301,9 @@ function actorCanManagePermissionGrants(actor, target) {
   return managedLocations.has(String(target.homeLocationId || ""));
 }
 
-async function getPortalRoles() {
+async function getPortalRoles(repository = organizationPersonnelRepository) {
   const builtinDefinitions = new Map(builtinPortalRoles.map((role) => [role.id, role]));
-  return (await organizationPersonnelRepository.listPortalRoles()).map((role) => {
+  return (await repository.listPortalRoles()).map((role) => {
     const definition = builtinDefinitions.get(role.id);
     const protectedRole = PROTECTED_PORTAL_ROLES.has(role.id);
     return {
@@ -10635,7 +10806,7 @@ function employeeMutationConcurrencySignature(employee = {}) {
     targetWorkdaysPerWeek: Number(
       employee.target_workdays_per_week ?? employee.targetWorkdaysPerWeek ?? 0,
     ),
-    preferredDayOff: String(employee.preferred_day_off ?? employee.preferredDayOff ?? ""),
+    preferredDaysOff: preferredDaysOff(employee),
     fixedWorkdays: String(employee.fixed_workdays ?? employee.fixedWorkdays ?? ""),
     positionId: String(employee.position_id ?? employee.positionId ?? ""),
     timeConfirmationLevel: String(
@@ -10921,6 +11092,7 @@ function getPortalStatus(locationId = "", request = null) {
     installationFeatureCatalog,
     usbProvisioning: usbProvisioningAvailability(request),
     passwordMinLength: portalPasswordMinLength(),
+    passwordPolicy: { ...portalPasswordPolicyMetadata(), maxLength: portalPasswordPolicyMetadata().maxCodePoints },
     branding: locationId ? brandingForLocation(locationId, settings) : brandingFromSettings(settings),
     capabilities: {
       login: portalEnabled,
@@ -16230,6 +16402,7 @@ async function evaluateWorkRuleChanges(
   shiftRows,
   planningChange = null,
   repository = absenceManagementRepository,
+  evaluate = evaluateScheduleWorkRules,
 ) {
   const targets = new Map();
   for (const shift of Array.isArray(shiftRows) ? shiftRows : []) {
@@ -16250,7 +16423,7 @@ async function evaluateWorkRuleChanges(
       locationId: target.locationId,
       departmentId: target.departmentId,
     });
-    const evaluated = await evaluateScheduleWorkRules(
+    const evaluated = await evaluate(
       target.weekStart,
       context,
       [employee],
@@ -18254,10 +18427,10 @@ async function getPositions(repository = organizationPersonnelRepository, includ
   return includeInactive ? positions : positions.filter((position) => position.active);
 }
 
-async function getLocations(includeInactive = true) {
+async function getLocations(includeInactive = true, repository = organizationPersonnelRepository) {
   const [locationRows, departmentRows] = await Promise.all([
-    organizationPersonnelRepository.listLocations(includeInactive),
-    organizationPersonnelRepository.listDepartments(includeInactive),
+    repository.listLocations(includeInactive),
+    repository.listDepartments(includeInactive),
   ]);
   const serializedDepartments = departmentRows.map(serializeDepartment);
   return locationRows.map((location) =>
@@ -18477,7 +18650,8 @@ async function resolvePlanningContext(input = {}) {
   let locationId = String(input.locationId || input.location || "").trim();
   if (!locationId) locationId = fallbackLocation?.id || "01";
   locationId = normalizeLocationId(locationId);
-  const location = await validateLocationExists(locationId);
+  const location = locations.find((entry) => String(entry.id) === String(locationId));
+  if (!location) throw httpError(404, "Die Filiale wurde nicht gefunden.");
   let departmentId = normalizeDepartmentId(input.departmentId ?? input.department, true);
   const department = await validateDepartmentExists(departmentId, locationId);
   return {
@@ -19543,17 +19717,25 @@ async function evaluateBranchSupervisionMutation(
   planningChange,
   dates,
 ) {
+  const planningQuery = { locationId: String(locationId), departmentId: null,
+    weekStart, weekEnd: addDays(weekStart, 6) };
+  const [settings, employees, shifts] = await Promise.all([
+    settingsForLocation(locationId),
+    planningSettingsRepository.listScheduleEmployees(planningQuery),
+    planningSettingsRepository.listScheduleShifts(planningQuery),
+  ]);
+  const snapshot = { settings, employees, shifts };
   const before = await branchSupervisionAssessmentForSchedule(
     weekStart,
     locationId,
     null,
-    { dates },
+    { dates, snapshot },
   );
   const after = await branchSupervisionAssessmentForSchedule(
     weekStart,
     locationId,
     planningChange,
-    { dates },
+    { dates, snapshot },
   );
   return { before, after };
 }
@@ -19859,6 +20041,8 @@ function serializeEmployee(row, options = {}) {
   const serialized = {
     ...row,
     target_workdays_per_week: normalizeTargetWorkdays(row.target_workdays_per_week),
+    preferred_day_off: preferredDaysOff(row)[0] || null,
+    preferred_days_off: preferredDaysOff(row),
     fixed_workdays: row.fixed_workdays || "",
     position_id: row.position_id || "verkaufsmitarbeiter",
     position_name: row.position_name || "Verkaufsmitarbeiter",
@@ -19914,16 +20098,27 @@ async function assertEmployeePrincipalLoginAvailable(
   }
 }
 
+function employeePreferenceMutationInput(body, existing) {
+  if (Object.hasOwn(body, "preferredDaysOff")) return body.preferredDaysOff;
+  if (Object.hasOwn(body, "preferred_days_off")) return body.preferred_days_off;
+  const previous = preferredDaysOff(existing);
+  if (!Object.hasOwn(body, "preferredDayOff") || String(body.preferredDayOff || "") === (previous[0] || "")) return previous;
+  return body.preferredDayOff;
+}
+
 async function validateEmployee(body, isNew, options = {}) {
   const personnelNumber = String(body.personnelNumber || "").trim();
   assertEmployeePrincipalNotReserved(personnelNumber);
-  const fullName = String(body.fullName || "").trim();
+  const repository = options.repository || organizationPersonnelRepository;
+  const protectedName = !isNew && personnelNumber
+    ? protectedPersonnelName(await personnelSensitiveProfile(personnelNumber, repository)) : "";
+  const fullName = protectedName || String(body.fullName || "").trim();
   const nickname = String(body.nickname || "").trim();
   const color = /^#[0-9a-f]{6}$/i.test(body.color || "") ? body.color : "#0b84c6";
   const contractedHours = Number(body.contractedHours);
   const submittedTargetWorkdays = Number(body.targetWorkdaysPerWeek ?? body.target_workdays_per_week ?? 5);
   const targetWorkdaysPerWeek = normalizeTargetWorkdays(submittedTargetWorkdays);
-  const preferredDayOff = String(body.preferredDayOff || "").trim();
+  const submittedPreferredDays = body.preferredDaysOff ?? body.preferred_days_off ?? body.preferredDayOff ?? "";
   const fixedWorkdays = normalizeFixedWorkdays(body.fixedWorkdays ?? body.fixed_workdays);
   const requestedPositionId = String(body.positionId || body.position_id || "").trim();
   let positionId = requestedPositionId;
@@ -19933,7 +20128,6 @@ async function validateEmployee(body, isNew, options = {}) {
   const timeConfirmationLevel = String(submittedTimeConfirmationLevel).trim().toUpperCase();
   const sicknessWithoutAumEnabled = body.sicknessWithoutAumEnabled === true
     || body.sickness_without_aum_enabled === true || Number(body.sickness_without_aum_enabled) === 1;
-  const allowedPreferredDays = ["", "monday", "tuesday", "wednesday", "thursday", "friday"];
   const costCenterSubmitted = own(body, "costCenterId") || own(body, "cost_center_id");
   const costCenterId = costCenterSubmitted
     ? String(body.costCenterId ?? body.cost_center_id ?? "").trim()
@@ -20007,9 +20201,8 @@ async function validateEmployee(body, isNew, options = {}) {
   if (!Number.isInteger(submittedTargetWorkdays) || submittedTargetWorkdays < 1 || submittedTargetWorkdays > 6) {
     throw httpError(400, "Die vertraglichen Soll-Arbeitstage müssen zwischen 1 und 6 liegen.", "EMPLOYEE_TARGET_WORKDAYS_INVALID");
   }
-  if (!allowedPreferredDays.includes(preferredDayOff)) {
-    throw httpError(400, "Der bevorzugte freie Tag ist ungültig.");
-  }
+  const orderedPreferredDays = validatePreferredDays(submittedPreferredDays,
+    preferredDaysLimit({ isBranch: assignment.isBranch, positionId }));
   if (!["A", "B", "C"].includes(timeConfirmationLevel)) {
     throw httpError(400, "Bitte eine gültige Vertrauensstufe A, B oder C auswählen.", "EMPLOYEE_CONFIRMATION_LEVEL_INVALID");
   }
@@ -20021,7 +20214,8 @@ async function validateEmployee(body, isNew, options = {}) {
     color,
     contractedHours,
     targetWorkdaysPerWeek,
-    preferredDayOff: preferredDayOff || null,
+    preferredDayOff: orderedPreferredDays[0] || null,
+    preferredDaysOff: orderedPreferredDays,
     fixedWorkdays: fixedWorkdays.join(","),
     positionId,
     timeConfirmationLevel,
@@ -20054,32 +20248,35 @@ async function validateShift(body, contextInput = {}, actor = null) {
   if (!employeeNumber) throw httpError(400, "Bitte ein Teammitglied auswählen.");
   if (!isIsoDate(shiftDate)) throw httpError(400, "Das Datum ist ungültig.");
   if (!isTime(startTime) || !isTime(endTime)) throw httpError(400, "Die Arbeitszeit ist ungültig.");
-  const employee = await planningSettingsRepository.getPlanningEmployee({ employeeNumber });
-  if (!employee) {
-    throw httpError(404, "Die ausgewählte Person wurde nicht gefunden.");
-  }
-  const hasDutyInput = Object.hasOwn(body, "dutyCode") || Object.hasOwn(body, "duty_code");
-  const rawDutyCode = body.dutyCode ?? body.duty_code;
-  if (hasDutyInput && (typeof rawDutyCode !== "string"
-    || !["", "branch_supervision", "department", "general"].includes(rawDutyCode))) {
-    throw httpError(400, "Die Dienstzuordnung ist ungültig.", "SHIFT_DUTY_INVALID");
-  }
-  const departmentChanged = existing && hasDepartmentInput
-    && Number(departmentId || 0) !== Number(existing.department_id || 0);
-  const dutyCode = !hasDutyInput && existing && !departmentChanged
-    ? String(existing.duty_code || "")
-    : (rawDutyCode || (departmentId ? "department" : defaultScheduleDutyCode(employee)));
-  if ((dutyCode === "department" && !departmentId)
-    || (["branch_supervision", "general"].includes(dutyCode) && departmentId)) {
-    throw httpError(400, "Dienstzuordnung und Abteilung passen nicht zusammen.", "SHIFT_DUTY_DEPARTMENT_MISMATCH");
-  }
-  const department = departmentId ? await validateDepartmentExists(departmentId) : null;
-  const locationId = submittedLocationId
-    ? normalizeLocationId(submittedLocationId)
-    : String(department?.location_id || employee.home_location_id || "").trim();
-  if (!locationId) throw httpError(400, "Bitte eine Einsatzfiliale auswählen.", "SHIFT_LOCATION_REQUIRED");
-  await validateLocationExists(locationId);
-  if (department) await validateDepartmentExists(departmentId, locationId);
+  const { employee, dutyCode, locationId } = await readPlanningMutation(async () => {
+    const employee = await planningSettingsRepository.getPlanningEmployee({ employeeNumber });
+    if (!employee) {
+      throw httpError(404, "Die ausgewählte Person wurde nicht gefunden.");
+    }
+    const hasDutyInput = Object.hasOwn(body, "dutyCode") || Object.hasOwn(body, "duty_code");
+    const rawDutyCode = body.dutyCode ?? body.duty_code;
+    if (hasDutyInput && (typeof rawDutyCode !== "string"
+      || !["", "branch_supervision", "department", "general"].includes(rawDutyCode))) {
+      throw httpError(400, "Die Dienstzuordnung ist ungültig.", "SHIFT_DUTY_INVALID");
+    }
+    const departmentChanged = existing && hasDepartmentInput
+      && Number(departmentId || 0) !== Number(existing.department_id || 0);
+    const dutyCode = !hasDutyInput && existing && !departmentChanged
+      ? String(existing.duty_code || "")
+      : (rawDutyCode || (departmentId ? "department" : defaultScheduleDutyCode(employee)));
+    if ((dutyCode === "department" && !departmentId)
+      || (["branch_supervision", "general"].includes(dutyCode) && departmentId)) {
+      throw httpError(400, "Dienstzuordnung und Abteilung passen nicht zusammen.", "SHIFT_DUTY_DEPARTMENT_MISMATCH");
+    }
+    const department = departmentId ? await validateDepartmentExists(departmentId) : null;
+    const locationId = submittedLocationId
+      ? normalizeLocationId(submittedLocationId)
+      : String(department?.location_id || employee.home_location_id || "").trim();
+    if (!locationId) throw httpError(400, "Bitte eine Einsatzfiliale auswählen.", "SHIFT_LOCATION_REQUIRED");
+    await validateLocationExists(locationId);
+    if (department) await validateDepartmentExists(departmentId, locationId);
+    return { employee, dutyCode, locationId };
+  });
   const homeLocationId = String(employee.home_location_id || "").trim();
   if (locationId === homeLocationId) {
     const awayAssignment = (await sqliteEmployeeLocationLendingOperations.overlapForShift(
@@ -20126,56 +20323,63 @@ async function validateShift(body, contextInput = {}, actor = null) {
       );
     }
   }
-  if (!employeeCanWorkOnDate(employee, shiftDate)) {
-    throw httpError(409, `${employee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`);
-  }
-  const settings = await settingsForLocation(locationId);
-  await assertDateEditable(shiftDate, settings, actor, locationId);
-  const globalBlock = getGlobalDayBlockForDate(shiftDate, locationId);
-  if (globalBlock) {
-    throw httpError(409, `Dieser Tag ist für alle gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.`);
-  }
-  const hours = manualPlanningHours();
-  if (startTime < hours.start || endTime > hours.end || endTime <= startTime) {
-    throw httpError(
-      400,
-      `Der Dienst muss innerhalb der Dienstzeit ${hours.start}–${hours.end} Uhr liegen.`,
-      "SHIFT_PLANNING_WINDOW_INVALID",
-    );
-  }
-  const dayConfig = await dayConfiguration(shiftDate, settings);
-  if (
-    dayConfig?.lunchEnabled &&
-    startTime >= dayConfig.lunchStart &&
-    endTime <= dayConfig.lunchEnd
-  ) {
-    throw httpError(400, "Der Dienst liegt vollständig innerhalb der eingestellten Mittagspause.");
-  }
-  const conflict = await overlappingWeekOption(employeeNumber, shiftDate, startTime, endTime);
-  if (conflict) {
-    throw httpError(
-      409,
-      `${conflict.nickname} ist zu dieser Zeit bereits als „${optionLabel(conflict.option_type)}“ eingetragen.`,
-    );
-  }
-  if ((await activeSicknessEmployeeNumbers(shiftDate)).has(employeeNumber)) {
-    throw httpError(409, `${employee.nickname} ist an diesem Tag krankgemeldet.`, "SICKNESS_SHIFT_CONFLICT");
-  }
-  const overlappingShift = await planningSettingsRepository.getOverlappingShift({
-    employeeNumber,
-    shiftDate,
-    existingId,
-    endTime,
-    startTime,
+  // Only catalog reads share these snapshots; the lending checks above use
+  // their own legacy connection and must remain outside the read scope.
+  await readPlanningMutation(async () => {
+    if (!employeeCanWorkOnDate(employee, shiftDate)) {
+      throw httpError(409, `${employee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`);
+    }
+    const settings = await settingsForLocation(locationId);
+    await assertDateEditable(shiftDate, settings, actor, locationId);
+    const globalBlock = getGlobalDayBlockForDate(shiftDate, locationId);
+    if (globalBlock) {
+      throw httpError(409, `Dieser Tag ist für alle gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.`);
+    }
+    const hours = manualPlanningHours();
+    if (startTime < hours.start || endTime > hours.end || endTime <= startTime) {
+      throw httpError(
+        400,
+        `Der Dienst muss innerhalb der Dienstzeit ${hours.start}–${hours.end} Uhr liegen.`,
+        "SHIFT_PLANNING_WINDOW_INVALID",
+      );
+    }
+    const dayConfig = await dayConfiguration(shiftDate, settings);
+    if (
+      dayConfig?.lunchEnabled &&
+      startTime >= dayConfig.lunchStart &&
+      endTime <= dayConfig.lunchEnd
+    ) {
+      throw httpError(400, "Der Dienst liegt vollständig innerhalb der eingestellten Mittagspause.");
+    }
+    const conflict = await overlappingWeekOption(employeeNumber, shiftDate, startTime, endTime);
+    if (conflict) {
+      throw httpError(
+        409,
+        `${conflict.nickname} ist zu dieser Zeit bereits als „${optionLabel(conflict.option_type)}“ eingetragen.`,
+      );
+    }
+    if ((await activeSicknessEmployeeNumbers(shiftDate)).has(employeeNumber)) {
+      throw httpError(409, `${employee.nickname} ist an diesem Tag krankgemeldet.`, "SICKNESS_SHIFT_CONFLICT");
+    }
+    const overlappingShift = contextInput.ignoredShiftIds instanceof Set
+      ? (await planningSettingsRepository.listWorkRuleShiftsForRange({ dateFrom: shiftDate, dateTo: shiftDate })).find(row =>
+        row.employee_number === employeeNumber && !contextInput.ignoredShiftIds.has(String(row.id)) && row.start_time < endTime && row.end_time > startTime)
+      : await planningSettingsRepository.getOverlappingShift({
+      employeeNumber,
+      shiftDate,
+      existingId,
+      endTime,
+      startTime,
+    });
+    if (overlappingShift) {
+      const locationText = overlappingShift.location_name ? ` in ${overlappingShift.location_name}` : "";
+      throw httpError(
+        409,
+        `${employee.nickname} ist von ${overlappingShift.start_time} bis ${overlappingShift.end_time} Uhr bereits${locationText} eingeteilt.`,
+        "SHIFT_TIME_CONFLICT",
+      );
+    }
   });
-  if (overlappingShift) {
-    const locationText = overlappingShift.location_name ? ` in ${overlappingShift.location_name}` : "";
-    throw httpError(
-      409,
-      `${employee.nickname} ist von ${overlappingShift.start_time} bis ${overlappingShift.end_time} Uhr bereits${locationText} eingeteilt.`,
-      "SHIFT_TIME_CONFLICT",
-    );
-  }
 
   return { employeeNumber, locationId, departmentId, dutyCode, shiftDate, startTime, endTime, area, note };
 }
@@ -20630,9 +20834,20 @@ function saturdayShiftFilterSql(context, prefix = "s") {
 }
 
 async function buildSaturdayServiceStats(weekStart, context, employees, currentWeekShifts, settings) {
+  const coverageQuery = { locationId: context.locationId, departmentId: context.departmentId || null,
+    weekStart: addDays(weekStart, -84), weekEnd: addDays(weekStart, -1) };
+  const [coverageShifts, coverageOptions, coverageBlocks] = await Promise.all([
+    planningSettingsRepository.listScheduleShifts(coverageQuery),
+    planningSettingsRepository.listScheduleWeekOptions(coverageQuery),
+    planningSettingsRepository.listGlobalDayBlocks(),
+  ]);
+  const historicalCoverage = require("./lib/schedule-history-coverage").planningHistoryCoverage({
+    weekStart, shifts: coverageShifts, options: coverageOptions,
+    dayBlocks: coverageBlocks.filter(block => String(block.location_id) === String(context.locationId)),
+  });
   const employeeNumbers = employees.map((employee) => employee.personnel_number);
   if (!employeeNumbers.length || !settingEnabled(settings, "show_saturday_service_stats")) {
-    return { byEmployee: {}, estimated: false };
+    return { byEmployee: {}, estimated: false, historicalCoverage };
   }
   const employeeNumberSet = new Set(employeeNumbers);
   const history = (await planningSettingsRepository.listSaturdayServiceShifts({
@@ -20702,6 +20917,7 @@ async function buildSaturdayServiceStats(weekStart, context, employees, currentW
       ]),
     ),
     estimated: fourWeeks.estimated || threeMonths.estimated,
+    historicalCoverage,
   };
 }
 
@@ -20918,6 +21134,43 @@ function workRuleEvaluationEmployees(employees, candidateShift = null) {
   ));
   if (candidateEmployee) result.push(candidateEmployee);
   return result;
+}
+
+async function planningMutationEmployees(weekStart, context, session) {
+  assertSessionContextScope(session, context);
+  const rows = await planningSettingsRepository.listScheduleEmployees({
+    locationId: context.locationId,
+    departmentId: context.departmentId || null,
+    weekStart,
+    weekEnd: addDays(weekStart, 6),
+  });
+  return rows.map(serializeEmployee);
+}
+
+function readPlanningMutation(build) {
+  // Legacy lending validation stays outside this catalog-only read snapshot.
+  // It ends (including reauthorization) before the separate write transaction.
+  return postgresqlActive ? applicationPersistence.readSnapshot(build) : build();
+}
+
+function createPlanningWorkRuleEvaluator() {
+  // One mutation only. Reuse an entire assessment only for the same effective
+  // employee inputs, context and proposed change, never a team result for one person.
+  const pending = new Map();
+  return (weekStart, context, employees, candidateShift = null) => {
+    const effectiveEmployees = workRuleEvaluationEmployees(employees, candidateShift);
+    const key = workRuleSha256({ weekStart, context, candidateShift,
+      employees: effectiveEmployees.map(employee => ({
+        employeeNumber: String(employee.personnel_number),
+        name: employee.nickname || employee.full_name || String(employee.personnel_number),
+        positionId: employee.position_id || null,
+        employmentClassification: employee.position_employment_classification || "",
+      })),
+    });
+    if (!pending.has(key)) pending.set(key,
+      evaluateScheduleWorkRules(weekStart, context, effectiveEmployees, candidateShift));
+    return pending.get(key);
+  };
 }
 
 function workRuleAssignmentGroups(facts, context, employeeNumber, assignments, birthDate = "") {
@@ -24986,7 +25239,8 @@ async function resolvePersonnelImportCandidate(incoming, mapping, existing, acto
     color: existing.color,
     contractedHours: Number(existing.contracted_hours),
     targetWorkdaysPerWeek: normalizeTargetWorkdays(existing.target_workdays_per_week),
-    preferredDayOff: existing.preferred_day_off || "",
+    preferredDaysOff: preferredDaysOff(existing),
+    preferredDayOff: preferredDaysOff(existing)[0] || "",
     fixedWorkdays: String(existing.fixed_workdays || "").split(",").filter(Boolean),
     positionId: existing.position_id,
     timeConfirmationLevel: existing.time_confirmation_level || "C",
@@ -25002,6 +25256,7 @@ async function resolvePersonnelImportCandidate(incoming, mapping, existing, acto
     color: incoming.color,
     contractedHours: incoming.contractedHours,
     targetWorkdaysPerWeek: 5,
+    preferredDaysOff: incoming.preferredDaysOff,
     preferredDayOff: incoming.preferredDayOff,
     fixedWorkdays: incoming.fixedWorkdays,
     positionId: incoming.positionId,
@@ -25017,7 +25272,10 @@ async function resolvePersonnelImportCandidate(incoming, mapping, existing, acto
   if (use("nickname")) base.nickname = incoming.nickname;
   if (use("color")) base.color = incoming.color;
   if (use("contractedHours")) base.contractedHours = incoming.contractedHours;
-  if (use("preferredDayOff")) base.preferredDayOff = incoming.preferredDayOff;
+  if (use("preferredDayOff") || importFieldMapped(mapping, "preferredDaysOff")) {
+    base.preferredDaysOff = incoming.preferredDaysOff;
+    base.preferredDayOff = incoming.preferredDayOff;
+  }
   if (use("fixedWorkdays")) base.fixedWorkdays = incoming.fixedWorkdays;
   if (use("active")) base.active = incoming.active;
 
@@ -25181,7 +25439,7 @@ async function personnelImportPreview(actor, inspection, body = {}) {
           color: candidate.color,
           contracted_hours: candidate.contractedHours,
           target_workdays_per_week: candidate.targetWorkdaysPerWeek,
-          preferred_day_off: candidate.preferredDayOff,
+          preferred_day_off: preferredDaysOff(candidate).join(",") || null,
           fixed_workdays: candidate.fixedWorkdays,
           position_id: candidate.positionId,
           time_confirmation_level: candidate.timeConfirmationLevel,
@@ -25402,7 +25660,7 @@ async function applyPersonnelImport(actor, preview) {
           color: candidate.color,
           contractedHours: candidate.contractedHours,
           targetWorkdaysPerWeek: candidate.targetWorkdaysPerWeek,
-          preferredDayOff: candidate.preferredDayOff,
+          preferredDayOff: preferredDaysOff(candidate).join(",") || null,
           fixedWorkdays: candidate.fixedWorkdays,
           positionId: candidate.positionId,
           timeConfirmationLevel: candidate.timeConfirmationLevel,
@@ -26332,6 +26590,7 @@ const dataImportJobs=require('./lib/data-import-jobs').createDataImportJobs({
 const dataImportRoutes=registerDataImportRoutes(app, {
   lifecycle:dataImportLifecycle,
   runtime:dataImportRuntime,jobs:dataImportJobs,
+  preferences:uiPreferencesRepository,
   mappings: createDataImportMappingRuntime({ access: persistenceProvider, vault: integrationSecretVault, allowMapping: false }),
   cashPublications: cashPublicationRuntime,
   requireSession: requireEmployeePortalSession,
@@ -26869,6 +27128,9 @@ function validateXoffiReviewedRows(inputRows, preview) {
     const employeeNumber = String(row?.employeeNumber || "").trim();
     const original = preview.employees[rowIndex];
     if (sourceName === original?.sourceName && row?.excluded === true && !employeeNumber) return null;
+    if (original?.reviewStatus === "invalid") {
+      throw httpError(400, "Eine fehlerhafte Quellzeile muss ausdrücklich ausgeschlossen werden.", "XOFFI_SOURCE_ROW_INVALID");
+    }
     if (sourceName !== original?.sourceName || !candidates.has(employeeNumber) || employeeNumbers.has(employeeNumber)) {
       throw httpError(400, "Jede xoffi-Zeile muss genau einem Teammitglied des ausgewählten Bereichs zugeordnet sein.", "XOFFI_EMPLOYEE_MAPPING_INVALID");
     }
@@ -26920,11 +27182,13 @@ function validateXoffiReviewedRows(inputRows, preview) {
       const invalidDay = days.some((day) => day.actualMinutes !== day.intervals.reduce((sum, value) =>
         sum + clockMinutes(value.slice(6)) - clockMinutes(value.slice(0, 5)), 0)
         || day.actualMinutes + day.surchargeMinutes > day.valuedMinutes + 2);
-      const invalidWeek = [["actualMinutes", "weeklyActualMinutes"], ["valuedMinutes", "weeklyValuedMinutes"],
-        ["surchargeMinutes", "weeklySurchargeMinutes"]].some(([dayKey, weekKey]) =>
-        Math.abs(days.reduce((sum, day) => sum + day[dayKey], 0) - reviewed[weekKey]) > 7);
-      if (invalidDay || invalidWeek) throw httpError(400,
+      if (invalidDay) throw httpError(400,
         "Die Tagesintervalle, Tagesstunden und Wochensummen passen nicht zusammen. Bitte die geänderten Werte prüfen.", "XOFFI_REVIEW_INVALID");
+      try { reviewed.snapshot = createReviewedXoffiSnapshot(original.snapshot, reviewed); }
+      catch (error) {
+        if (!(error instanceof XoffiWeekReconciliationError)) throw error;
+        throw httpError(400, "Die Tageswerte, Wochensummen und belegten Wochenposten passen nicht zusammen.", "XOFFI_REVIEW_INVALID");
+      }
     }
     return reviewed;
   }).filter(Boolean);
@@ -26940,8 +27204,10 @@ function assertXoffiScreenshotWeekConfirmation(preview, input = {}) {
     && preview.weekEnd === addDays(preview.weekStart, 6)
     && resolution.detectedWeekStart === preview.weekStart && resolution.detectedWeekEnd === preview.weekEnd
     && resolution.selectedWeekStart === preview.weekStart && resolution.selectedWeekEnd === preview.weekEnd
-    && preview.employees.length > 0 && preview.employees.every((row) => row.snapshot?.kind === "mhtml"
-      && row.snapshot.balanceDate === addDays(preview.weekStart, -1))) return resolution;
+    && preview.employees.length > 0 && preview.employees.some(row => row.reviewStatus !== "invalid")
+    && preview.employees.every((row) => (row.reviewStatus === "invalid"
+      ? row.weekStart === preview.weekStart && row.balanceDate === addDays(preview.weekStart, -1)
+      : row.snapshot?.kind === "mhtml" && row.snapshot.balanceDate === addDays(preview.weekStart, -1)))) return resolution;
   const selectedWeekValid = isIsoDate(preview?.weekStart)
     && getMonday(preview.weekStart) === preview.weekStart
     && preview.weekEnd === addDays(preview.weekStart, 6)
@@ -28416,9 +28682,11 @@ app.post("/api/integrations/payroll-export/file", async (request, response) => {
   });
   (await auditPortal(actor.employeeNumber, "integration.payroll.export", "integration_run", runId,
     JSON.stringify({ profileId: preflight.profileId, format: preflight.configuration.format, rows: preflight.rowCount, draft, contentSha256 })));
-  response.setHeader("Content-Type", preflight.configuration.format === "xlsx"
-    ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    : "text/csv; charset=utf-8");
+  if (preflight.configuration.format === "xlsx") {
+    response.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  } else {
+    response.setHeader("Content-Type", "text/csv; charset=utf-8");
+  }
   response.setHeader("Content-Disposition", contentDispositionHeader(payrollFileName(preflight, draft)));
   response.setHeader("X-Grabenplaner-Export-Status", draft ? "draft" : "final");
   response.setHeader("Content-Length", output.length);
@@ -28952,12 +29220,12 @@ app.post("/api/backup/database-download", async (request, response, next) => {
     || body.confirmation !== "DATABASE_BACKUP_DOWNLOAD") {
     throw httpError(400, "Die ausdrückliche Download-Bestätigung fehlt.", "DATABASE_DOWNLOAD_CONFIRMATION_REQUIRED");
   }
-  const { session } = await requireBackupAdminReauthentication(request, {
+  const { session } = await requireBackupAdminReauthentication(request, response, {
     permission: "backup:write",
     operation: "database-download",
   });
   const requestId = crypto.randomUUID();
-  (await auditPortal(
+  (await auditBackupAdministration(
     session.employeeNumber,
     "backup.database-download.requested",
     "database",
@@ -28972,7 +29240,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
         ...persistenceConfiguration,directory:path.join(dataRootDirectory,'transient','database-exports')})
       : createDatabaseDownloadSnapshot();
   } catch (error) {
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "backup.database-download.failed",
       "database",
@@ -29008,7 +29276,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
       const errorCode = /^[A-Z0-9_]{1,80}$/.test(reportedCode) ? reportedCode : "CLEANUP_FAILED";
       console.error("Die temporäre Datenbankkopie konnte nicht vollständig entfernt werden:", errorCode);
       try {
-        (await auditPortal(
+        (await auditBackupAdministration(
           session.employeeNumber,
           "backup.database-download.cleanup-failed",
           "database",
@@ -29027,7 +29295,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
     settled = true;
     try {
       if (outcome === "completed") {
-        (await auditPortal(
+        (await auditBackupAdministration(
           session.employeeNumber,
           "backup.database-download.completed",
           "database",
@@ -29035,7 +29303,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
           JSON.stringify({ requestId, bytes: snapshot.size, sha256: snapshot.sha256 }),
         ));
       } else {
-        (await auditPortal(
+        (await auditBackupAdministration(
           session.employeeNumber,
           "backup.database-download.failed",
           "database",
@@ -29103,12 +29371,12 @@ app.post("/api/backup/offsite-folders", async (request, response) => {
     || !validManagedOffsiteFolderLabel(body.folderLabel)) {
     throw httpError(400, "Bitte einen gültigen verwalteten Ordnernamen und die ausdrückliche Bestätigung angeben.", "OFFSITE_FOLDER_REQUEST_INVALID");
   }
-  const { session } = await requireBackupAdminReauthentication(request, {
+  const { session } = await requireBackupAdminReauthentication(request, response, {
     permission: "system:offsite:configure",
     operation: "offsite-folder-create",
   });
   const requestId = crypto.randomUUID();
-  (await auditPortal(
+  (await auditBackupAdministration(
     session.employeeNumber,
     "backup.offsite-folder.create.requested",
     "offsite_folder",
@@ -29117,7 +29385,7 @@ app.post("/api/backup/offsite-folders", async (request, response) => {
   ));
   try {
     const result = await createManagedOffsiteFolder(body.folderLabel);
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "backup.offsite-folder.create.completed",
       "offsite_folder",
@@ -29130,7 +29398,7 @@ app.post("/api/backup/offsite-folders", async (request, response) => {
       requestId,
     });
   } catch (error) {
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "backup.offsite-folder.create.failed",
       "offsite_folder",
@@ -29155,12 +29423,12 @@ app.put("/api/backup/offsite-folders/active", async (request, response) => {
     || !validManagedOffsiteFolderLabel(body.folderLabel)) {
     throw httpError(400, "Bitte das neue Sicherungsziel und die ausdrückliche Bestätigung vollständig angeben.", "OFFSITE_TARGET_REQUEST_INVALID");
   }
-  const { session } = await requireBackupAdminReauthentication(request, {
+  const { session } = await requireBackupAdminReauthentication(request, response, {
     permission: "system:offsite:configure",
     operation: "offsite-folder-activate",
   });
   const requestId = crypto.randomUUID();
-  (await auditPortal(
+  (await auditBackupAdministration(
     session.employeeNumber,
     "backup.offsite-folder.activate.requested",
     "offsite_folder",
@@ -29169,7 +29437,7 @@ app.put("/api/backup/offsite-folders/active", async (request, response) => {
   ));
   try {
     const result = await activateManagedOffsiteFolder(body.folderLabel);
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "backup.offsite-folder.activate.completed",
       "offsite_folder",
@@ -29189,7 +29457,7 @@ app.put("/api/backup/offsite-folders/active", async (request, response) => {
       requestId,
     });
   } catch (error) {
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "backup.offsite-folder.activate.failed",
       "offsite_folder",
@@ -29511,7 +29779,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
     );
   }
 
-  const { session } = await requireBackupAdminReauthentication(request, {
+  const { session } = await requireBackupAdminReauthentication(request, response, {
     permission: "system:write",
     operation: "vps-reboot",
   });
@@ -29530,7 +29798,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
     result = await prepareControlledHostReboot({
       requestId,
       createBackup: () => createDatabaseBackup("vps-reboot"),
-      recordRequest: async () => (await auditPortal(
+      recordRequest: async () => (await auditBackupAdministration(
         session.employeeNumber,
         "system.host_reboot.requested",
         "system",
@@ -29542,7 +29810,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
   } catch (error) {
     hostManagedRebootRequested = false;
     try {
-      (await auditPortal(
+      (await auditBackupAdministration(
         session.employeeNumber,
         "system.host_reboot.failed",
         "system",
@@ -29566,7 +29834,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
     throw hostRebootHttpError(error, response);
   }
   try {
-    (await auditPortal(
+    (await auditBackupAdministration(
       session.employeeNumber,
       "system.host_reboot.accepted",
       "system",
@@ -30383,6 +30651,70 @@ function governanceRouteError(error, fallbackStatus = 400) {
 }
 
 let privacyOrganizationStore = null;
+let securityAuditStore = null;
+
+function assertSecurityAuditActor(session, permission = "security_audits:read") {
+  if (!session || isLocalSystemSession(session) || session.sessionKind !== "employee"
+    || session.isEmployee !== true || session.accountType !== "employee"
+    || !["admin", "it_admin", "developer"].includes(session.role) || !session.employeeNumber
+    || isReservedEmployeePrincipal(session.employeeNumber)
+    || !session.permissions?.includes("security_audits:read") || !session.permissions?.includes(permission)) {
+    throw httpError(403, "Security Audits benötigen ein persönliches Admin-/IT-Admin-/Developer-Konto mit entsprechendem Auditrecht.", "SECURITY_AUDIT_ACCESS_DENIED");
+  }
+  if (session.mustChangePassword) throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  return session;
+}
+
+function requireSecurityAuditActor(request, permission = "security_audits:read") {
+  return assertSecurityAuditActor(requirePortalSession(request), permission);
+}
+
+function requireSecurityAuditStore() {
+  if (!securityAuditStore) securityAuditStore = createSecurityAuditStore({
+    provider: persistenceProvider, protectJson,
+    parseProtectedJson(value, context) { return JSON.parse(requireAmuStorage().unprotectRecord(value, context)); },
+    async revalidateActor(request, repositories, command) {
+      const session = assertSecurityAuditActor(await loadPortalSessionFromRequest(request, {
+        touch: false, repository: repositories.portalAccess,
+      }), command.action === "read" ? "security_audits:read" : "security_audits:manage");
+      return { employeeNumber: session.employeeNumber, role: session.role, personal: true, permissions: [...session.permissions] };
+    },
+  });
+  return securityAuditStore;
+}
+
+function securityAuditRouteError(error, response) {
+  if (String(error.code || "").startsWith("SECURITY_AUDIT_")) {
+    const status = Number(error.statusCode || 400);
+    response.status(status >= 400 && status <= 599 ? status : 400).json({ error: error.message, code: error.code });
+    return;
+  }
+  throw error;
+}
+
+app.get("/api/security-audits/sast", async (request, response) => {
+  requireSecurityAuditActor(request);
+  response.set("Cache-Control", "no-store");
+  try {
+    await requireSecurityAuditStore().read(request);
+    response.json(require("./lib/security-sast-reviews").readSastReviews());
+  } catch (error) { securityAuditRouteError(error, response); }
+});
+
+app.get("/api/security-audits", async (request, response) => {
+  requireSecurityAuditActor(request);
+  response.set("Cache-Control", "no-store");
+  try { response.json(await requireSecurityAuditStore().read(request)); }
+  catch (error) { securityAuditRouteError(error, response); }
+});
+
+app.post("/api/security-audits/commands", async (request, response) => {
+  requireSecurityAuditActor(request, "security_audits:manage");
+  assertPortalCsrf(request);
+  response.set("Cache-Control", "no-store");
+  try { response.status(request.body?.action === "import" ? 201 : 200).json(await requireSecurityAuditStore().command(request.body, request)); }
+  catch (error) { securityAuditRouteError(error, response); }
+});
 
 function assertPrivacyOrganizationActor(session, permission) {
   if (!session || isLocalSystemSession(session) || session.sessionKind !== "employee"
@@ -32307,7 +32639,6 @@ app.post("/api/work-rules/evaluate", async (request, response) => {
   const weekStart = getMonday(isIsoDate(request.body.weekStart) ? request.body.weekStart : request.body?.shift?.date);
   const context = await resolvePlanningContext(request.body);
   assertSessionContextScope(request.portalSession, context);
-  const schedule = await getSchedule(weekStart, context, request.portalSession);
   const submittedValue = request.body.shift ?? request.body.candidateShift;
   const submitted = submittedValue && typeof submittedValue === "object" ? submittedValue : null;
   let candidate = null;
@@ -32338,12 +32669,10 @@ app.post("/api/work-rules/evaluate", async (request, response) => {
     assertSessionContextScope(request.portalSession, { locationId: candidate.locationId, departmentId: candidate.departmentId });
     await assertShiftEmployeeAssignmentScope(request.portalSession, candidate, existing);
   }
-  const evaluated = await evaluateScheduleWorkRules(
-    weekStart,
-    context,
-    schedule.employees,
-    candidate,
-  );
+  const evaluated = await readPlanningMutation(async () => {
+    const employees = await planningMutationEmployees(weekStart, context, request.portalSession);
+    return evaluateScheduleWorkRules(weekStart, context, employees, candidate);
+  });
   response.json({
     ...evaluated.assessment,
     candidate: candidate ? {
@@ -32453,6 +32782,194 @@ app.get("/api/schedule", readModelResponse(request =>
 
 app.get("/api/schedule/enrichment", readModelResponse(request =>
   getScheduleEnrichment(request.query.week, request.query, request.portalSession)));
+
+const readPlanningQualifications = require('./lib/planning-qualifications').createQualificationReader({
+  actor: session => personnelLearningCatalogActor(session || { localSystem: true, sessionKind: "local", employeeNumber: "local" }),
+  employeeAllowed: personnelLearningCompetencyEmployeeAllowed,
+  repository: personnelLearningRepository, bundles: personnelLearningModuleBundles,
+  competencyState: personnelLearningCompetencyStateOrUnavailable,
+  assignmentState: personnelLearningAssignmentStateOrUnavailable, progressState: personnelLearningProgressStateOrUnavailable,
+  roles: ids => Promise.all(ids.map(id => organizationPersonnelRepository.getPortalUserAccountProjection(id))).then(rows => rows.filter(Boolean)),
+});
+const readPlanningAssistant = createPlanningAssistantReader({
+  getSchedule, settings: getSettings, settingsForLocation, plannedShiftBreaks, dayConfiguration,
+  optionIsAllDay, optionLabel, employeeCanWorkOnDate, assessBranchSupervision,
+  loadShifts: (dateFrom, dateTo) => planningSettingsRepository.listWorkRuleShiftsForRange({ dateFrom, dateTo }),
+  loadOptions: (employeeNumber, dateFrom, dateTo) => planningSettingsRepository.listOverlappingWeekOptions({ employeeNumber, dateFrom, dateTo, existingId: 0, excludedGroupId: null }),
+  loadPositions: () => organizationPersonnelRepository.listPositions(),
+  loadDepartments: () => organizationPersonnelRepository.listDepartments(true), loadQualifications: readPlanningQualifications,
+});
+
+const planningOptimizerService = require('./lib/planning-optimizer-service').createOptimizerService();
+function assertPlanningAssistantPilot(actor) {
+  const numbers = assistantPilotAccess.fromEnv(process.env.GRABENPLANER_PLANNING_ASSISTANT_PILOT_EMPLOYEES);
+  if (!assistantPilotAccess.allows(actor, numbers)) throw httpError(403, 'Der Planungsassistent ist für diesen Zugang noch nicht freigegeben.', 'PLANNING_ASSISTANT_PILOT_DENIED');
+}
+const planningOptimizerModel = require('./lib/planning-optimizer');
+const planningOptimizerRevision = require('./lib/planning-optimizer-revision').sourceRevision;
+const planningOptimizer = planningOptimizerModel.createPlanningOptimizer({
+  service: planningOptimizerService, refresh: refreshPlanningSettingsReadModel,
+  authorize: async (options, actor) => assertSessionContextScope(actor, await resolvePlanningContext(options)),
+  read: (options, actor) => readPlanningAssistant(options.week, options, actor, { includeFacts: true }),
+  stamp: async (options, repositories = applicationRepositories) => planningOptimizerRevision(repositories,
+    { locationId: options.locationId, departmentId: options.departmentId }, getMonday(options.week)),
+  day: dayConfiguration,
+  history: async (week, ids) => {
+    const rows = await planningSettingsRepository.listWorkRuleShiftsForRange({ dateFrom: addDays(week, -56), dateTo: addDays(week, -1) });
+    return Object.fromEntries(ids.map(id => [id, new Set(rows.filter(r => String(r.employee_number) === id && new Date(r.shift_date + 'T12:00:00Z').getUTCDay() === 6).map(r => r.shift_date)).size]));
+  },
+  candidate: planningOptimizerCandidate, validate: validatePlanningOptimizerSelection,
+  commit: async (entry, scenario, preview, actor, request) => {
+    const result = await persistenceProvider.transaction(async executor => {
+      const repositories = createApplicationRepositories(executor);
+      const fresh = isLocalSystemSession(actor) || !actor ? actor : await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+      if (planningOptimizerAuthority(fresh) !== planningOptimizerAuthority(actor)) throw httpError(403, 'Anmeldung oder Berechtigungen haben sich geändert.', 'PORTAL_PERMISSION_DENIED');
+      if (fresh?.mustChangePassword) throw httpError(428, 'Bitte zuerst das Startpasswort ändern.', 'PORTAL_PASSWORD_CHANGE_REQUIRED');
+      assertPlanningAssistantPilot(fresh);
+      assertSessionContextScope(fresh, entry.snapshot.facts.context);
+      planningAssistantPreferences.assertEnabled(settingsObjectFromRows(await repositories.planningSettings.listSettings()));
+      if (entry.sourceStamp !== await planningOptimizerRevision(repositories, entry.snapshot.facts.context, entry.snapshot.facts.period.from)) {
+        throw httpError(409, 'Die Planungsgrundlage wurde geändert. Bitte neue Vorschläge berechnen.', 'OPTIMIZER_PLAN_CHANGED');
+      }
+      const repository = repositories.workRules;
+      for (const change of scenario.changes) if (change.kind === 'remove') {
+        const removed = await repository.deletePlanningShift(Number(change.shift.existingId));
+        if (!removed.rowsAffected) throw httpError(409, 'Ein Dienst wurde zwischenzeitlich geändert.', 'OPTIMIZER_PLAN_CHANGED');
+      }
+      const addedIds = [];
+      for (const change of scenario.changes) if (change.kind === 'add') {
+        const inserted = await repository.insertPlanningShift(change.shift); addedIds.push(inserted.returnedRows[0]?.id);
+      }
+      for (const change of scenario.changes) await repository.invalidatePlanningDayReview(change.shift.employeeNumber, change.shift.shiftDate);
+      await recordEvaluatedWorkRuleEvaluation(repository, preview.evaluated, entry.snapshot.facts.context, actor?.employeeNumber || 'local');
+      await repositories.organizationPersonnel.insertAudit(actor?.employeeNumber || 'local', 'planning.assistant.proposal.apply', 'schedule', entry.id,
+        JSON.stringify({ scenarioId: scenario.id, context: entry.snapshot.facts.context, week: entry.snapshot.facts.period.from, sourceStamp: entry.sourceStamp,
+          engine: scenario.engine, engineVersion: scenario.engineVersion, removedIds: scenario.changes.filter(c => c.kind === 'remove').map(c => c.shift.existingId), addedIds }));
+      return { applied: true, changedShifts: scenario.changes.length, proposalId: entry.id };
+    }, { isolation: 'serializable' });
+    try { await refreshSicknessStaffingAfterPlanningChange(); } catch { result.refreshRequired = true; }
+    return result;
+  },
+});
+function planningOptimizerAuthority(actor) { return JSON.stringify([actor?.id, actor?.employeeNumber, actor?.accountId, actor?.permissions, actor?.scopes, actor?.role, actor?.mustChangePassword]); }
+async function planningOptimizerActor(request) {
+  if (request.portalSession && !isLocalSystemSession(request.portalSession)) request.portalSession = await loadPortalSessionFromRequest(request, { touch: false });
+  const actor = requirePortalAnyPermissionOrLocal(request, ['schedule:write'], { csrf: true });
+  assertPlanningAssistantPilot(actor);
+  planningAssistantPreferences.assertEnabled(getSettings());
+  if (actor && !isLocalSystemSession(actor) && (!actor.permissions.includes('schedule:read') || !actor.permissions.includes('work_rules:read'))) {
+    throw httpError(403, 'Für Vorschläge werden Dienstplan- und Arbeitsregelrechte benötigt.', 'PORTAL_PERMISSION_DENIED');
+  }
+  return actor;
+}
+async function planningOptimizerCandidate(proposed, actor, ignored, settings) {
+  const shift = await validateShift({ ...proposed, date: proposed.shiftDate }, { locationId: proposed.locationId, ignoredShiftIds: ignored }, actor);
+  await assertShiftEmployeeAssignmentScope(actor, shift);
+  const pause = await plannedShiftBreaks({ employee_number: shift.employeeNumber, location_id: shift.locationId,
+    shift_date: shift.shiftDate, start_time: shift.startTime, end_time: shift.endTime }, settings);
+  const model = require('./lib/planning-assistant'), breaks = pause.lunchBreakMinutes > 0 ? [{ start: Math.max(pause.start, model.minutes(pause.dayConfig.lunchStart)), end: Math.min(pause.end, model.minutes(pause.dayConfig.lunchEnd)) }] : [];
+  const unlocated = Math.max(0, pause.breakMinutes - pause.lunchBreakMinutes);
+  return { shift, minutes: pause.end - pause.start - pause.breakMinutes,
+    coverage: unlocated ? [] : model.subtract([{ start: pause.start, end: pause.end }], breaks),
+    projection: { id: proposed.existingId || 'candidate-' + planningOptimizerModel.hash(shift).slice(0, 20), employeeId: shift.employeeNumber,
+      date: shift.shiftDate, startTime: shift.startTime, endTime: shift.endTime, locationId: shift.locationId, departmentId: shift.departmentId,
+      dutyCode: shift.dutyCode, visible: true, breaks: breaks.map(b => ({ startTime: model.clock(b.start), endTime: model.clock(b.end) })), unlocatedBreakMinutes: unlocated } };
+}
+async function validatePlanningOptimizerSelection(snapshot, selected, actor) {
+  const { facts, schedule, rawShifts } = snapshot;
+  const localRows = rawShifts.filter(r => String(r.location_id) === facts.context.locationId && (!facts.context.departmentId || Number(r.department_id) === facts.context.departmentId));
+  const ignored = new Set(localRows.map(r => String(r.id))), checked = [];
+  try {
+    for (const candidate of selected) checked.push(await planningOptimizerCandidate({ ...candidate.shift, existingId: candidate.originalId }, actor, ignored, schedule.settings));
+    for (const row of localRows) await assertDateEditable(row.shift_date, schedule.settings, actor, facts.context.locationId);
+    const changes = planningOptimizerModel.diff(localRows.map(r => ({ ...planningOptimizerModel.fromRow(r), existingId: String(r.id) })), selected);
+    const planningChange = { deletedShiftIds: changes.filter(c => c.kind === 'remove').map(c => c.shift.existingId), addedShifts: changes.filter(c => c.kind === 'add').map(c => c.shift) };
+    const evaluated = await evaluateScheduleWorkRules(facts.period.from, facts.context, schedule.employees, planningChange);
+    assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
+    const supervision = await evaluateBranchSupervisionMutation(facts.period.from, facts.context.locationId, planningChange, Array.from({ length: 7 }, (_, i) => addDays(facts.period.from, i)));
+    assertBranchSupervisionComplete(supervision);
+    const report = require('./lib/planning-assistant').assessPlanning({ ...facts, shifts: [...facts.shifts.filter(s => !s.visible), ...checked.map(c => c.projection)],
+      workRuleAssessment: evaluated.assessment, supervision: supervision.after });
+    const blocked = report.findings.filter(f => f.constraint === 'hard' && f.severity !== 'info');
+    const findings = report.findings.filter(f => f.ruleId !== 'gp.planning.weekly_target').map(({ title, message, severity, date }) => ({ title, message, severity, date }));
+    return { allowed: !blocked.length, reasons: blocked.slice(0, 8).map(f => f.title + ': ' + f.message), evaluated,
+      review: { outcome: evaluated.assessment.outcome, counts: Object.fromEntries(['error', 'warning', 'unknown', 'info'].map(key => [key, findings.filter(f => f.severity === key).length])), findings } };
+  } catch (error) { if ([400, 409, 423].includes(error.status)) return { allowed: false, reasons: [error.message] }; throw error; }
+}
+for (const action of ['proposals', 'apply']) app.post('/api/schedule/assistant/' + action, async (request, response) => {
+  response.setHeader('Cache-Control', 'no-store');
+  const actor = await planningOptimizerActor(request), authority = planningOptimizerAuthority(actor);
+  const computation = new AbortController();
+  const disconnected = () => { if (!response.writableEnded) computation.abort(); };
+  response.once('close', disconnected);
+  let result;
+  try { result = action === 'proposals' ? await planningOptimizer.prepare(actor, request.body, { signal: computation.signal }) : await planningOptimizer.apply(actor, request.body, request); }
+  finally { response.removeListener('close', disconnected); }
+  const fresh = await planningOptimizerActor(request);
+  if (authority !== planningOptimizerAuthority(fresh)) throw httpError(403, 'Die Berechtigungen haben sich geändert.', 'PORTAL_PERMISSION_DENIED');
+  response.json(result);
+});
+
+app.get("/api/schedule/assistant", (_request, response, next) => {
+  response.setHeader("Cache-Control", "no-store"); next();
+}, readModelResponse(async request => {
+  const actor = requirePortalAnyPermissionOrLocal(request, ["schedule:read"]);
+  assertPlanningAssistantPilot(actor);
+  planningAssistantPreferences.assertEnabled(getSettings());
+  if (Object.keys(request.query).some(key => !["week", "location", "locationId", "department", "departmentId"].includes(key))
+    || typeof request.query.week !== "string" || !isIsoDate(request.query.week)) throw httpError(400, "Bitte eine gültige Planungswoche auswählen.", "PLANNING_ASSISTANT_INPUT_INVALID");
+  const authority = value => JSON.stringify([value?.id, value?.employeeNumber, value?.accountId, value?.permissions, value?.scopes, value?.role, value?.mustChangePassword]);
+  const before = authority(actor);
+  const result = await readPlanningAssistant(request.query.week, request.query, actor);
+  const optimizer = await planningOptimizerService.health();
+  if (!isLocalSystemSession(actor) && actor) {
+    const fresh = await loadPortalSessionFromRequest(request, { touch: false });
+    if (!fresh || authority(fresh) !== before) throw httpError(403, "Die Anmeldung oder Berechtigungen haben sich geändert. Bitte erneut laden.", "PORTAL_PERMISSION_DENIED");
+    assertSessionContextScope(fresh, result.assessment.context);
+  }
+  const canOptimize = optimizer.available && (!actor || isLocalSystemSession(actor) || actor.permissions?.includes('schedule:write') && actor.permissions?.includes('work_rules:read'));
+  planningAssistantPreferences.assertEnabled(getSettings());
+  result.assessment.optimization.available = Boolean(canOptimize);
+  return { ...result, optimizer, canOptimize,
+    canConfigure: !actor || isLocalSystemSession(actor) || actor.permissions?.includes("settings:write") === true };
+}));
+
+app.put("/api/settings/planning-assistant", async (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(request, ["settings:write"], { csrf: true });
+  assertPlanningAssistantPilot(actor);
+  const body = request.body;
+  if (!body || Object.keys(body).some(key => !["locationId", "departmentId", "week", "revision", "configuration"].includes(key))
+    || !isIsoDate(body.week) || typeof body.revision !== "string") throw httpError(400, "Bitte vollständige Prüfeinstellungen übermitteln.", "PLANNING_ASSISTANT_INPUT_INVALID");
+  const context = await resolvePlanningContext(body);
+  assertSessionContextScope(actor, context);
+  const configuration = planningAssistantSettings.validateSettings(body.configuration);
+  await persistenceProvider.transaction(async executor => {
+    const repositories = createApplicationRepositories(executor);
+    let liveActor = actor;
+    if (actor && !isLocalSystemSession(actor)) {
+      liveActor = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+      if (!liveActor || liveActor.id !== actor.id) throw httpError(401, "Bitte erneut anmelden.", "PORTAL_LOGIN_REQUIRED");
+      if (liveActor.mustChangePassword) throw httpError(428, "Bitte zuerst das Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+      assertLivePortalRoutePermission(liveActor, "settings:write");
+      assertSessionContextScope(liveActor, context);
+    }
+    const [employees, positions, rows] = await Promise.all([
+      repositories.planningSettings.listScheduleEmployees({ ...context, weekStart: getMonday(body.week), weekEnd: addDays(getMonday(body.week), 6) }),
+      repositories.organizationPersonnel.listPositions(), repositories.planningSettings.listSettings(),
+    ]);
+    if (configuration.keyPersonNumbers.some(id => !employees.some(item => item.personnel_number === id))
+      || configuration.requiredPositions.some(entry => !positions.some(item => item.id === entry.positionId && item.active))) {
+      throw httpError(400, "Bitte aktive Positionen und Personen aus dem freigegebenen Planungsbereich auswählen.", "PLANNING_ASSISTANT_SETTINGS_INVALID");
+    }
+    const current = planningAssistantSettings.read(settingsObjectFromRows(rows), context);
+    if (current.revision !== body.revision) throw httpError(409, "Die Prüfeinstellungen wurden inzwischen geändert. Bitte neu laden.", "PLANNING_ASSISTANT_SETTINGS_CHANGED");
+    await repositories.planningSettings.upsertSetting({ key: planningAssistantSettings.key(context), value: JSON.stringify(configuration) });
+    await repositories.organizationPersonnel.insertAudit(liveActor?.employeeNumber || "local", "planning.assistant.settings.update", "schedule_settings", context.locationId,
+      JSON.stringify({ departmentId: context.departmentId, before: current.configuration, after: configuration }));
+  }, { isolation: "serializable" });
+  await refreshPlanningSettingsReadModel();
+  response.json(planningAssistantSettings.read(getSettings(), context));
+});
 
 app.put("/api/schedule/manual-lock", async (request, response) => {
   const requestedLocationId = String(
@@ -33636,6 +34153,7 @@ app.post("/api/employees", async (request, response) => {
   await reconcileOpenAmuResponsibilities(responseProjectionActor?.employeeNumber || "local");
   const responseEmployee = {
     ...employee,
+    fullName: personnelRecordMutation?.publicName || employee.fullName,
     active: Boolean(employee.active),
     portal_access: await publicPortalAccessProfileForEmployee(
       employee.personnelNumber,
@@ -33672,6 +34190,7 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
   let employee = await validateEmployee({
     ...request.body,
     personnelNumber,
+    preferredDaysOff: employeePreferenceMutationInput(request.body, existing),
     targetWorkdaysPerWeek: request.body.targetWorkdaysPerWeek ?? request.body.target_workdays_per_week
       ?? existing.target_workdays_per_week ?? 5,
     ...(canManageTimeConfirmationLevel ? {} : { timeConfirmationLevel: existing.time_confirmation_level || "C" }),
@@ -33748,6 +34267,7 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
     const liveValidatedEmployee = await validateEmployee({
       ...request.body,
       personnelNumber,
+      preferredDaysOff: employeePreferenceMutationInput(request.body, liveEmployee),
       targetWorkdaysPerWeek: request.body.targetWorkdaysPerWeek
         ?? request.body.target_workdays_per_week
         ?? liveEmployee.target_workdays_per_week
@@ -33884,6 +34404,7 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
   }
   const responseEmployee = {
     ...employee,
+    fullName: personnelRecordMutation?.publicName || employee.fullName,
     personnelNumber,
     active: Boolean(employee.active),
     portal_access: await publicPortalAccessProfileForEmployee(
@@ -34057,6 +34578,29 @@ app.post("/api/mobile/v1/auth/branding", (request, response) => {
   response.json({ branding: mobileBrandingPayload({ role: "admin", homeLocationId: "" }) });
 });
 
+async function qualifyEmployeeLoginPassword(repository, user, password, now) {
+  const assessment = assessExistingPassword(password, { employeeNumber: user.employee_number,
+    loginName: user.employee_number, displayName: user.full_name });
+  if (assessment.reason === 'unavailable') throw httpError(503, 'Die lokale Kennwortprüfung ist vorübergehend nicht verfügbar.', 'PORTAL_PASSWORD_POLICY_UNAVAILABLE');
+  const result = await repository.recordEmployeePasswordPolicy({ employeeNumber: user.employee_number,
+    expectedPasswordHash: user.password_hash, passwordPolicyVersion: assessment.accepted ? PORTAL_PASSWORD_POLICY_VERSION : 0,
+    mustChangePassword: !assessment.accepted, now: now.toISOString() });
+  if (result.rowsAffected !== 1) throw httpError(409, 'Der Zugang wurde gleichzeitig geändert. Bitte erneut anmelden.', 'PORTAL_LOGIN_CHANGED');
+  return assessment;
+}
+
+async function requireVerifiedLogin(repository, user, organization, mobile, now) {
+  const result = await acceptVerifiedLogin(repository, { user, organization, now });
+  if (result === "locked") {
+    throw httpError(429, "Der Zugang ist vorübergehend gesperrt. Bitte später erneut versuchen.",
+      mobile ? "MOBILE_ACCOUNT_LOCKED" : "PORTAL_ACCOUNT_LOCKED");
+  }
+  if (result !== "accepted") {
+    throw httpError(401, "Zugangskennung oder Passwort ist nicht korrekt.",
+      mobile ? "MOBILE_LOGIN_FAILED" : "PORTAL_LOGIN_FAILED");
+  }
+}
+
 app.post("/api/mobile/v1/auth/login", async (request, response) => {
   requireMobileNativeAuthentication();
   assertLoginRateLimit(request);
@@ -34074,31 +34618,29 @@ app.post("/api/mobile/v1/auth/login", async (request, response) => {
   if (!valid) {
     registerFailedLogin(request);
     if (user) {
-      const portalSettings = getPortalSettings();
-      const attempts = Number(user.failed_login_attempts || 0) + 1;
-      const maximum = Number(portalSettings.max_failed_login_attempts || 5);
-      const lockUntil = attempts >= maximum
-        ? new Date(now.getTime() + Number(portalSettings.account_lock_minutes || 15) * 60000).toISOString()
-        : null;
-      await portalAccessRepository.updateEmployeeLoginFailure({
-        attempts: lockUntil ? 0 : attempts,
-        lockedUntil: lockUntil,
-        employeeNumber,
-      });
+      await portalAccessRepository.updateEmployeeLoginFailure(loginFailureParameters(user, getPortalSettings()));
     }
     (await auditPortal(employeeNumber, "mobile.login.failed", "portal_user", employeeNumber, `ip=${loginRateKey(request)}`));
     throw httpError(401, "Personalnummer oder Passwort ist nicht korrekt.", "MOBILE_LOGIN_FAILED");
   }
+  const created = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const acceptedAt = new Date();
+    await requireVerifiedLogin(repositories.portalAccess, user, false, true, acceptedAt);
+    await qualifyEmployeeLoginPassword(repositories.portalAccess, user, request.body?.password, acceptedAt);
+    const authority = mobileSessionPrincipal(await repositories.portalAccess.getReportPrincipal({
+      employeeNumber, businessDate: viennaTodayIso(acceptedAt),
+    }));
+    const result = await createMobileSession(employeeNumber, device, acceptedAt, repositories.mobileAuth, authority);
+    await repositories.organizationPersonnel.insertAudit(employeeNumber, "mobile.login.success", "mobile_session", result.id,
+      JSON.stringify({ platform: device.platform, appVersion: device.appVersion }));
+    return result;
+  });
   clearLoginRate(request);
-  await portalAccessRepository.markEmployeeLoginSuccess({ employeeNumber });
-  const created = await createMobileSession(employeeNumber, device, now);
   const session = mobileSessionPrincipal(await mobileSessionRow(
     created.id,
     mobileAuthRepository,
     viennaTodayIso(now),
   ));
-  (await auditPortal(employeeNumber, "mobile.login.success", "mobile_session", created.id,
-    JSON.stringify({ platform: device.platform, appVersion: device.appVersion })));
   response.status(201).json({
     tokenSet: created.tokenSet,
     bootstrap: await mobileBootstrapPayload(session, request, now),
@@ -34387,11 +34929,6 @@ app.get("/api/portal/v1/session", (request, response) => {
   const publicStatus = getPortalStatus("", request);
   const session = publicStatus.portalEnabled ? portalSessionFromRequest(request) : null;
   const status = session ? portalStatusForSession(session, request) : publicStatus;
-  if (session && !parseCookies(request)[PORTAL_CSRF_COOKIE]) {
-    appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, crypto.randomBytes(24).toString("base64url"), request, {
-      maxAge: Math.max(60, Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000)),
-    }));
-  }
   response.json({
     apiVersion: PORTAL_API_VERSION,
     authenticated: Boolean(session),
@@ -34454,7 +34991,7 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
   const employee = (await organizationPersonnelRepository.listEmployees())
     .find((entry) => entry.personnel_number === employeeNumber && entry.active);
   if (!employee) throw httpError(404, "Das ausgewählte aktive Teammitglied wurde nicht gefunden.");
-  const passwordHash = await hashPortalPassword(request.body.password);
+  const passwordHash = await hashPortalPassword(request.body.password, { employeeNumber, loginName: employeeNumber, displayName: employee.full_name });
   await organizationPersonnelRepository.transaction(async (organization) => {
     await organization.upsertPortalUserAccount({
       employeeNumber,
@@ -34463,8 +35000,11 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
       active: true,
       mustChangePassword: false,
       passwordChanged: true,
+      passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION,
     });
     await organization.revokeMobileSessions(employeeNumber, "admin_setup_changed");
+    await organization.revokePortalSessions(employeeNumber);
+    await organization.revokePasswordResetTokens(employeeNumber);
     await organization.insertAudit(
       employeeNumber,
       "portal.admin.setup",
@@ -34497,24 +35037,11 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
   if (!valid) {
     registerFailedLogin(request);
     if (user) {
-      const portalSettings = getPortalSettings();
-      const attempts = Number(user.failed_login_attempts || 0) + 1;
-      const maximum = Number(portalSettings.max_failed_login_attempts || 5);
-      const lockUntil = attempts >= maximum
-        ? new Date(now.getTime() + Number(portalSettings.account_lock_minutes || 15) * 60000).toISOString()
-        : null;
+      const failure = loginFailureParameters(user, getPortalSettings());
       if (sessionKind === "organization") {
-        await portalAccessRepository.updateOrganizationLoginFailure({
-          attempts: lockUntil ? 0 : attempts,
-          lockedUntil: lockUntil,
-          accountId: user.account_id,
-        });
+        await portalAccessRepository.updateOrganizationLoginFailure(failure);
       } else {
-        await portalAccessRepository.updateEmployeeLoginFailure({
-          attempts: lockUntil ? 0 : attempts,
-          lockedUntil: lockUntil,
-          employeeNumber: loginName,
-        });
+        await portalAccessRepository.updateEmployeeLoginFailure(failure);
       }
     }
     (await auditPortal(
@@ -34526,38 +35053,50 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
     ));
     throw httpError(401, "Zugangskennung oder Passwort ist nicht korrekt.", "PORTAL_LOGIN_FAILED");
   }
-  clearLoginRate(request);
   const rawToken = crypto.randomBytes(32).toString("base64url");
-  const csrfToken = crypto.randomBytes(24).toString("base64url");
   const timeoutMinutes = portalSessionTimeoutMinutes();
-  const expiresAt = new Date(now.getTime() + timeoutMinutes * 60000).toISOString();
-  if (sessionKind === "organization") {
-    await portalAccessRepository.transaction(async (repository) => {
+  const lifetime = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const repository = repositories.portalAccess;
+    const acceptedAt = new Date();
+    await requireVerifiedLogin(repository, user, sessionKind === "organization", false, acceptedAt);
+    const principal = sessionKind === 'employee'
+      ? await repository.getReportPrincipal({ employeeNumber: user.employee_number, businessDate: viennaTodayIso(acceptedAt) }) : null;
+    if (sessionKind === 'employee' && !principal) throw httpError(401, 'Der Zugang wurde geändert. Bitte erneut anmelden.', 'PORTAL_LOGIN_CHANGED');
+    const permissionState = sessionKind === 'employee'
+      ? effectivePortalPermissionState(principal.employee_number, principal.role, principal.permissions, principal.granted_permissions, principal.denied_permissions, principal.amu_local_access_mode)
+      : { effectivePermissions: [] };
+    const lifetime = browserSessionLifetime({ now: acceptedAt, role: user.role,
+      permissions: permissionState.effectivePermissions, idleMinutes: timeoutMinutes });
+    if (sessionKind === "organization") {
+      const assessment = assessExistingPassword(request.body.password, { loginName, displayName: user.full_name });
+      if (assessment.reason === 'unavailable') throw httpError(503, 'Die lokale Kennwortprüfung ist vorübergehend nicht verfügbar.', 'PORTAL_PASSWORD_POLICY_UNAVAILABLE');
+      if (!assessment.accepted) throw httpError(428, 'Bitte das Kennwort dieses Filial- oder Terminalkontos durch die zuständige Filialleitung oder Administration neu vergeben lassen.', 'PORTAL_ORGANIZATION_PASSWORD_POLICY_REQUIRED');
+      const qualified = await repository.recordOrganizationPasswordPolicy({ accountId: user.account_id,
+        expectedPasswordHash: user.password_hash, passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION, now: acceptedAt.toISOString() });
+      if (qualified.rowsAffected !== 1) throw httpError(409, 'Der Zugang wurde gleichzeitig geändert.', 'PORTAL_LOGIN_CHANGED');
       await repository.purgeExpiredOrganizationSessions({});
       await repository.revokeOrganizationSessionsForAccount({ accountId: user.account_id });
       await repository.insertOrganizationSession({
         id: crypto.randomUUID(),
         accountId: user.account_id,
         tokenHash: sha256(rawToken),
-        expiresAt,
+        ...lifetime,
       });
-      await repository.markOrganizationLoginSuccess({ accountId: user.account_id });
-    });
-  } else {
-    await portalAccessRepository.transaction(async (repository) => {
+    } else {
+      await qualifyEmployeeLoginPassword(repository, user, request.body.password, acceptedAt);
       await repository.purgeExpiredEmployeeSessions({});
       await repository.revokeEmployeeSessionsForEmployee({ employeeNumber: loginName });
       await repository.insertEmployeeSession({
         id: crypto.randomUUID(),
         employeeNumber: loginName,
         tokenHash: sha256(rawToken),
-        expiresAt,
+        ...lifetime,
       });
-      await repository.markEmployeeLoginSuccess({ employeeNumber: loginName });
-    });
-  }
-  appendCookie(response, portalCookie(PORTAL_SESSION_COOKIE, rawToken, request, { httpOnly: true, maxAge: timeoutMinutes * 60 }));
-  appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, csrfToken, request, { maxAge: timeoutMinutes * 60 }));
+    }
+    return lifetime;
+  });
+  clearLoginRate(request);
+  issuePortalSessionCookies(request, response, rawToken, lifetime.absoluteExpiresAt);
   const session = await loadPortalSessionFromRequest({
     ...request,
     headers: { ...request.headers, cookie: `${PORTAL_SESSION_COOKIE}=${rawToken}` },
@@ -34717,6 +35256,7 @@ const UI_PERSONNEL_DASHBOARD_ITEMS = Object.freeze([
   "positions",
   "applications",
   "workflows",
+  "learning",
   "tasks",
   "requests",
   "timeTracking",
@@ -34724,9 +35264,9 @@ const UI_PERSONNEL_DASHBOARD_ITEMS = Object.freeze([
   "ruleDrafts",
   "collectiveAgreements",
   "vacations",
-  "dataRequests",
 ]);
 const UI_PERSONNEL_DASHBOARD_ITEM_SET = new Set(UI_PERSONNEL_DASHBOARD_ITEMS);
+const UI_PERSONNEL_DASHBOARD_LEGACY_ITEM_SET = new Set([...UI_PERSONNEL_DASHBOARD_ITEMS, "dataRequests"]);
 const UI_START_DASHBOARD_WIDGETS = Object.freeze([
   "branchOnDuty",
   "branchAbsences",
@@ -34847,12 +35387,12 @@ function normalizePersonnelDashboardLayout(value) {
 function validatePersonnelDashboardLayout(value) {
   if (!value || typeof value !== "object" || Array.isArray(value) || value.version !== 1
     || !Array.isArray(value.order) || !Array.isArray(value.hidden)
-    || value.order.length > UI_PERSONNEL_DASHBOARD_ITEMS.length
-    || value.hidden.length > UI_PERSONNEL_DASHBOARD_ITEMS.length
+    || value.order.length > UI_PERSONNEL_DASHBOARD_LEGACY_ITEM_SET.size
+    || value.hidden.length > UI_PERSONNEL_DASHBOARD_LEGACY_ITEM_SET.size
     || new Set(value.order.map(String)).size !== value.order.length
     || new Set(value.hidden.map(String)).size !== value.hidden.length
-    || value.order.some((id) => !UI_PERSONNEL_DASHBOARD_ITEM_SET.has(String(id)))
-    || value.hidden.some((id) => !UI_PERSONNEL_DASHBOARD_ITEM_SET.has(String(id)))) {
+    || value.order.some((id) => !UI_PERSONNEL_DASHBOARD_LEGACY_ITEM_SET.has(String(id)))
+    || value.hidden.some((id) => !UI_PERSONNEL_DASHBOARD_LEGACY_ITEM_SET.has(String(id)))) {
     throw httpError(400, "Bitte eine gültige Dashboard-Anordnung übermitteln.", "UI_PREFERENCES_INVALID");
   }
   return normalizePersonnelDashboardLayout(value);
@@ -35172,6 +35712,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
   let startDashboardPreferences = defaultStartDashboardPreferences();
   let startDashboardWorkspace = startDashboardWorkspaceModel.empty();
+  let personnelDashboardWorkspace = null;
   let gpWindows = gpWindowsModel.empty();
   let sidebarNotepad = sidebarNotepadModel.isPersonalActor(actor) ? sidebarNotepadModel.empty() : null;
   let mobilePortalNavigation = defaultMobilePortalNavigation();
@@ -35239,6 +35780,10 @@ async function uiPreferencesForActor(actor, overrides = {}) {
         );
       }
     } catch {}
+    if (!actor.mustChangePassword && lookup.has(personnelDashboardWorkspaceModel.KEY)) {
+      try { personnelDashboardWorkspace = personnelDashboardWorkspaceModel.validate(JSON.parse(lookup.get(personnelDashboardWorkspaceModel.KEY))); }
+      catch { personnelDashboardWorkspace = personnelDashboardWorkspaceModel.empty(); }
+    }
     try {
       mobilePortalNavigation = normalizeMobilePortalNavigation(
         JSON.parse(lookup.get("mobile_portal_navigation_v1") || "null"),
@@ -35288,6 +35833,9 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   if (overrides.startDashboardWorkspace && !actor?.mustChangePassword) {
     startDashboardWorkspace = startDashboardWorkspaceModel.normalize(overrides.startDashboardWorkspace);
   }
+  if (overrides.personnelDashboardWorkspace && !actor?.mustChangePassword) {
+    personnelDashboardWorkspace = personnelDashboardWorkspaceModel.normalize(overrides.personnelDashboardWorkspace);
+  }
   if (overrides.sidebarNotepad && sidebarNotepadModel.isPersonalActor(actor)) sidebarNotepad = sidebarNotepadModel.validate(overrides.sidebarNotepad);
   if (overrides.gpWindows && !actor?.mustChangePassword) gpWindows = gpWindowsModel.validate(overrides.gpWindows);
   if (overrides.mobilePortalNavigation) {
@@ -35319,6 +35867,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     personnelDashboardLayout,
     startDashboardPreferences,
     startDashboardWorkspace,
+    personnelDashboardWorkspace,
     gpWindows,
     sidebarNotepad,
     mobilePortalNavigation,
@@ -35407,6 +35956,12 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     catch (error) { throw httpError(400, error.message, "UI_PREFERENCES_INVALID"); }
   }
   let gpWindows;
+  let personnelDashboardWorkspace;
+  if (input.personnelDashboardWorkspace !== undefined) {
+    if (actor?.mustChangePassword) throw httpError(428,"Bitte zuerst das persönliche Passwort ändern.","PORTAL_PASSWORD_CHANGE_REQUIRED");
+    try { personnelDashboardWorkspace = personnelDashboardWorkspaceModel.validate(input.personnelDashboardWorkspace); }
+    catch(error) { throw httpError(400,error.message,"UI_PREFERENCES_INVALID"); }
+  }
   if (input.gpWindows !== undefined) {
     if (actor?.mustChangePassword) throw httpError(428,'Bitte zuerst das persönliche Passwort ändern.','PORTAL_PASSWORD_CHANGE_REQUIRED');
     try { gpWindows = gpWindowsModel.validate(input.gpWindows); }
@@ -35439,7 +35994,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     && allowPastWeekEditing === undefined
     && vacationCalendarView === undefined
     && personnelDashboardLayout === undefined && startDashboardPreferences === undefined
-    && startDashboardWorkspace === undefined && sidebarNotepad === undefined && gpWindows === undefined
+    && startDashboardWorkspace === undefined && personnelDashboardWorkspace === undefined && sidebarNotepad === undefined && gpWindows === undefined
     && mobilePortalNavigation === undefined
     && mobilePortalAppearance === undefined && mobilePortalHome === undefined
     && candidateEvaluationPdfPreferences === undefined) {
@@ -35503,6 +36058,9 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     }
     if (startDashboardWorkspace !== undefined) {
       upserts.push({preferenceKey: startDashboardWorkspaceModel.KEY, value: JSON.stringify(startDashboardWorkspace)});
+    }
+    if (personnelDashboardWorkspace !== undefined) {
+      upserts.push({preferenceKey: personnelDashboardWorkspaceModel.KEY, value: JSON.stringify(personnelDashboardWorkspace)});
     }
     if (gpWindows !== undefined) upserts.push({preferenceKey:gpWindowsModel.KEY,value:JSON.stringify(gpWindows)});
     if (sidebarNotepad !== undefined) {
@@ -35576,6 +36134,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     personnelDashboardLayout,
     startDashboardPreferences,
     startDashboardWorkspace,
+    personnelDashboardWorkspace,
     gpWindows,
     sidebarNotepad,
     mobilePortalNavigation,
@@ -36207,6 +36766,9 @@ async function assertCustomProcessStepIdsAvailable(
   repository = customProcessRepository,
 ) {
   const ids = [...new Set((steps || []).map((step) => String(step?.id || "").trim()).filter(Boolean))];
+  if (ids.some(id => id.startsWith("studio-"))) {
+    throw httpError(409, "Studio-Schrittkennungen können nur im Workflow-Studio verwendet werden.", "CUSTOM_PROCESS_STUDIO_REQUIRED");
+  }
   if (!ids.length) return;
   const conflict = await repository.conflictingStep({
     stepIds: ids,
@@ -36349,7 +36911,14 @@ async function createCustomProcess(actor, body) {
   });
 }
 
+function assertLegacyCustomProcess(id) {
+  if (String(id || "").startsWith("studio-")) {
+    throw httpError(409, "Dieser Entwurf wird ausschließlich im Workflow-Studio bearbeitet.", "CUSTOM_PROCESS_STUDIO_REQUIRED");
+  }
+}
+
 async function updateCustomProcess(actor, id, body) {
+  assertLegacyCustomProcess(id);
   const revision = Number(body?.revision);
   if (!Number.isInteger(revision) || revision < 1) throw httpError(400, "Die Prozessrevision fehlt.", "CUSTOM_PROCESS_REVISION_REQUIRED");
   const existing = await customProcessById(id);
@@ -36396,6 +36965,7 @@ async function updateCustomProcess(actor, id, body) {
 }
 
 async function setCustomProcessStatus(actor, id, body = {}) {
+  assertLegacyCustomProcess(id);
   const status = String(body.status || "").trim();
   const revision = Number(body.revision);
   if (!CUSTOM_PROCESS_STATUS.has(status) || !Number.isInteger(revision) || revision < 1) {
@@ -36625,6 +37195,7 @@ async function ensureCustomProcessRunProgress(
   run,
   repository = customProcessRepository,
 ) {
+  assertLegacyCustomProcess(run.process_id);
   const freshRun = await repository.openRunById({ id: run.id });
   if (!freshRun) return { completed: true, notifications: { internal: 0, external: 0, blocked: 0 } };
   const bundle = await customProcessRunBundle(freshRun, repository);
@@ -36688,6 +37259,7 @@ async function createOrReopenCustomProcessRun(bundle, {
   departmentId = null,
   reopenResolved = true,
 }, repository = customProcessRepository) {
+  assertLegacyCustomProcess(bundle.process.id);
   const existing = await repository.runByTriggerKey({ triggerKey });
   if (existing) {
     if (existing.process_id !== bundle.process.id || Number(existing.process_revision) !== Number(bundle.process.revision)) {
@@ -36733,6 +37305,7 @@ async function createOrReopenCustomProcessRun(bundle, {
 }
 
 async function triggerCustomProcess(actor, id, body = {}) {
+  assertLegacyCustomProcess(id);
   const input = customProcessInputObject(body, "Die Prozessauslösung");
   assertCustomProcessKeys(input, new Set(["idempotencyKey"]), "Die Prozessauslösung");
   const bundle = await customProcessById(id);
@@ -36923,6 +37496,7 @@ async function reconcileCustomProcessTriggers(now = new Date()) {
   let retried = 0;
   const remainingRuns = await customProcessRepository.listOpenRuns();
   for (const run of remainingRuns) {
+    if (run.trigger_type === "manual_studio" || String(run.process_id).startsWith("studio-")) continue;
     const result = await customProcessRepository.transaction(async (repository) => {
       const currentRun = await repository.openRunById({ id: run.id });
       if (!currentRun) return { resolved: false, retried: 0 };
@@ -36960,6 +37534,7 @@ async function customProcessTasksForEmployee(
   const runs = await repository.listActiveTaskRuns();
   const items = [];
   for (const run of runs) {
+    if (run.trigger_type === "manual_studio" || String(run.process_id).startsWith("studio-")) continue;
     const bundle = await customProcessRunBundle(run, repository);
     if (!bundle) continue;
     const step = bundle.dto.steps.find((entry) => entry.id === run.step_id);
@@ -37041,17 +37616,20 @@ function personnelWorkflowPortalTask(item) {
   });
 }
 
-async function processTasksForPortalSession(session) {
-  const legacyItems = await customProcessTasksForEmployee(session.employeeNumber);
-  if (!installationFeatureEnabled("personnelLifecycle")) return legacyItems;
+async function processTasksForPortalSession(session, request = null) {
+  const studioContext = workflowStudioParticipantContext(session, request);
+  const studioItems = (await workflowStudioService.tasks(studioContext)).items;
+  const legacyItems = [...studioItems, ...await customProcessTasksForEmployee(session.employeeNumber)];
+  if (!installationFeatureEnabled("personnelLifecycle")) { await studioContext.current(); return legacyItems; }
   const workflowAccess = createPersonnelWorkflowAccessSnapshot(session);
-  if (workflowAccess.canReadInstances !== true) return legacyItems;
+  if (workflowAccess.canReadInstances !== true) { await studioContext.current(); return legacyItems; }
   const result = await requirePersonnelWorkflowInstanceService().tasksForEmployee(
     session.employeeNumber,
     {
       access: personnelWorkflowInstanceAccessForSession(session, workflowAccess),
     },
   );
+  await studioContext.current();
   return [...legacyItems, ...result.items.map(personnelWorkflowPortalTask)]
     .sort((left, right) => (
       String(right.assignedAt || right.createdAt || "")
@@ -37079,6 +37657,7 @@ async function completeCustomProcessTask(actor, runId, stepId, body = {}) {
   return customProcessRepository.transaction(async (repository) => {
     const run = await repository.runById({ id: String(runId || "") });
     if (!run) throw httpError(404, "Die Prozessaufgabe wurde nicht gefunden.", "CUSTOM_PROCESS_TASK_NOT_FOUND");
+    assertLegacyCustomProcess(run.process_id);
     if (Math.max(1, Number(run.activation_count || 1)) !== activationCount) {
       throw httpError(409, "Diese Prozessaufgabe gehört zu einer früheren Aktivierung.", "CUSTOM_PROCESS_TASK_ACTIVATION_CONFLICT");
     }
@@ -37145,6 +37724,7 @@ async function customProcessTaskOwnedByActor(
 ) {
   const run = await repository.runById({ id: String(runId || "") });
   if (!run) return false;
+  if (run.trigger_type === "manual_studio" || String(run.process_id).startsWith("studio-")) return false;
   const bundle = await customProcessRunBundle(run, repository);
   const step = bundle?.dto.steps.find((entry) => entry.id === String(stepId || ""));
   const state = await repository.runStepById({
@@ -39598,6 +40178,9 @@ async function systemCenterUpdateStatus() {
 const databaseSizeHistory = require("./lib/database-size-history").createDatabaseSizeHistory(
   path.join(dataDirectory, "system-center-database-sizes.json"),
 );
+const systemUtilization = require("./lib/system-utilization").createSystemUtilizationRecorder({
+  file: path.join(dataDirectory, "system-center-utilization.json"),
+});
 
 function systemCenterResourceSummary(diagnostics) {
   let databaseBytes = null;
@@ -39609,7 +40192,7 @@ function systemCenterResourceSummary(diagnostics) {
   return {
     uptimeSeconds: Math.max(0, Math.floor(process.uptime())),
     cpu: {
-      logicalProcessors: os.cpus().length,
+      ...systemUtilization.snapshot().cpu,
       loadAverageOneMinute: process.platform === "linux" ? Number(os.loadavg()[0].toFixed(2)) : null,
     },
     memory: require('./lib/system-memory').systemMemorySummary(),
@@ -39637,6 +40220,7 @@ function systemCenterTechnicalFingerprint() {
     process.env.GRABENPLANER_MONITOR_STATUS_FILE || DEFAULT_MONITOR_STATUS_PATH,
     process.env.GRABENPLANER_HOST_SECURITY_STATUS_FILE || DEFAULT_HOST_SECURITY_STATUS_PATH,
     DEFAULT_ASSURANCE_HEAD_PATH,
+    DEFAULT_DEPLOY_DEFERRAL_PATH,
   ];
   return watched.map((candidate) => `${candidate}:${systemCenterFileStamp(candidate)}`).join("|")
     + `|email:${externalNotificationAdapter.getEmailConfigurationFingerprint()}`;
@@ -39660,7 +40244,15 @@ const systemCenterTechnicalCache = createSystemCenterTechnicalCache({
       systemCenterUpdateStatus(),
       systemCenterControlCache.read(),
     ]);
-    diagnostics.recoveryAssurance = { ...diagnostics.recoveryAssurance, scheduler: control.scheduler };
+    const deployDeferral = readDeployDeferral({ now: Date.now() });
+    diagnostics.recoveryAssurance = {
+      ...diagnostics.recoveryAssurance,
+      // The control broker shares the maintenance lock. During an update only
+      // the fresh, root-verified heartbeat can supply its scheduler evidence.
+      scheduler: control.scheduler?.evidenceTrusted === true
+        ? control.scheduler : deployDeferral.scheduler || control.scheduler,
+      deployDeferral,
+    };
     const automation = deriveAutomationStatus(diagnostics.recoveryAssurance, { now: new Date() });
     const resources = systemCenterResourceSummary(diagnostics);
     let databaseHistoryWriteFailed = false;
@@ -39965,10 +40557,28 @@ async function systemCenterPayload(actor) {
   };
 }
 
+require('./lib/vps-storage-routes').install(app, {
+  actor: request => requirePortalSession(request, 'system:diagnostics:technical'),
+  freshActor: request => loadPortalSessionFromRequest(request, { touch: false }),
+  csrf: assertPortalCsrf,
+  eligible: () => serverModeActive && process.platform === 'linux' && deploymentKind !== 'recovery-smoke'
+    && !process.env.GRABENPLANER_POSTGRESQL_REHEARSAL && !process.env.GRABENPLANER_RESTORE_ROOT,
+  audit: (actor, action, requestId) => auditPortal(actor.employeeNumber, 'system.storage.' + action, 'system', requestId, JSON.stringify({ action })),
+});
+
 app.get("/api/portal/v1/system-center", async (request, response) => {
   const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
   response.setHeader("Cache-Control", "private, no-store");
   response.json(await systemCenterPayload(actor));
+});
+
+app.get("/api/portal/v1/system-center/utilization", (request, response) => {
+  requirePortalAnyPermission(request, ["system:diagnostics:technical"]);
+  response.setHeader("Cache-Control", "private, no-store");
+  const value = request.query.hours;
+  const invalidKeys = Object.keys(request.query).some(key => key !== "hours");
+  const hours = invalidKeys ? NaN : value === undefined ? 24 : typeof value === "string" && /^(1|6|24|72|168|720|2160|4320)$/.test(value) ? Number(value) : NaN;
+  response.json(systemUtilization.read(hours));
 });
 
 let systemNotificationReceiptStore;
@@ -40071,6 +40681,57 @@ app.post("/api/portal/v1/system-center/recovery-assurance/run", async (request, 
 app.get("/api/portal/v1/rights-dashboard", async (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:read");
   response.json(await rightsDashboardPayload(actor));
+});
+
+const workflowStudioCatalog = async (executor) => {
+  const repository = executor ? createOrganizationPersonnelRepository(executor) : organizationPersonnelRepository;
+  return { roles: await getPortalRoles(repository), locations: await getLocations(false, repository) };
+};
+const workflowStudioDraftService = require("./lib/workflow-studio-drafts").createWorkflowStudioDraftService(customProcessRepository, { catalog: workflowStudioCatalog, vault: integrationSecretVault });
+const workflowStudioService = Object.freeze({
+  ...require("./lib/workflow-studio").createWorkflowStudioService(customProcessRepository, { catalog: workflowStudioCatalog }),
+  ...workflowStudioDraftService,
+  ...require("./lib/workflow-studio-instances").createWorkflowStudioInstanceService(customProcessRepository, { catalog: workflowStudioCatalog, vault: integrationSecretVault, drafts: workflowStudioDraftService }),
+});
+function workflowStudioParticipantContext(session, request = null) {
+  const identity = require("./lib/workflow-studio-routes").identity;
+  const owner = identity(session);
+  return {
+    actorId: session.employeeNumber, actorRole: session.role, actorBinding: owner,
+    access: { canRead: true, canManage: false, canReadScope: () => false, canAssignUser: customProcessPortalUserInScope },
+    current: async (executor) => {
+      if (!request) return;
+      const freshRequest = Object.create(request);
+      freshRequest.portalSession = await loadPortalSessionFromRequest(request, { touch: false, ...(executor ? { repository: require("./lib/persistence/repositories/portal-access").createPortalAccessRepository(executor) } : {}) });
+      const fresh = requireEmployeePortalSession(freshRequest);
+      if (identity(fresh) !== owner) throw httpError(403, "Die Sitzung der Prozessaufgabe hat sich geändert.", "WORKFLOW_STUDIO_SESSION_CHANGED");
+    },
+  };
+}
+require("./lib/workflow-studio-routes").registerWorkflowStudioRoutes(app, {
+  service: workflowStudioService,
+  requireActor: (request, permission) => {
+    const actor = requireAdminHrOrLocal(request, "rights:read");
+    if (permission === "processes:write") requireAdminHrOrLocal(request, "processes:write");
+    return actor;
+  },
+  refreshActor: async (request, original, permission, executor) => {
+    if (isLocalSystemSession(original)) return original;
+    const freshRequest = Object.create(request);
+    freshRequest.portalSession = await loadPortalSessionFromRequest(request, { touch: false, ...(executor ? { repository: require("./lib/persistence/repositories/portal-access").createPortalAccessRepository(executor) } : {}) });
+    const actor = requireAdminHrOrLocal(freshRequest, "rights:read");
+    if (permission === "processes:write") requireAdminHrOrLocal(freshRequest, "processes:write");
+    return actor;
+  },
+  accessFor: actor => ({
+    canRead: true, global: sessionHasGlobalScope(actor),
+    canManage: isLocalSystemSession(actor) || actor.permissions?.includes("processes:write") === true,
+    canReadScope: scope => {
+      if (scope.type === "company") return sessionHasGlobalScope(actor);
+      try { assertSessionContextScope(actor, scope); return true; } catch { return false; }
+    },
+    canAssignUser: (user, scope) => customProcessPortalUserInScope(user, scope),
+  }),
 });
 
 app.get("/api/portal/v1/custom-processes", async (request, response) => {
@@ -43257,8 +43918,8 @@ app.post("/api/portal/v1/organization-accounts", async (request, response) => {
   if (collision) {
     throw httpError(409, "Diese Zugangskennung ist bereits vergeben.", "PORTAL_ORGANIZATION_LOGIN_CONFLICT");
   }
-  const password = String(request.body?.password || "");
-  const passwordHash = password ? await hashPortalPassword(password) : "";
+  const password = request.body?.password ?? "";
+  const passwordHash = password ? await hashPortalPassword(password, { loginName: input.loginName, displayName: input.displayName }) : "";
   const accountId = crypto.randomUUID();
   const actorId = portalActorId(actor);
   await organizationPersonnelRepository.transaction(async (organization) => {
@@ -43268,6 +43929,7 @@ app.post("/api/portal/v1/organization-accounts", async (request, response) => {
       displayName: input.displayName,
       accountType: input.accountType,
       passwordHash,
+      passwordPolicyVersion: password ? PORTAL_PASSWORD_POLICY_VERSION : 0,
       active: input.active,
       mustChangePassword: false,
       passwordChanged: Boolean(password),
@@ -43304,8 +43966,8 @@ app.put("/api/portal/v1/organization-accounts/:accountId", async (request, respo
   const existing = await organizationPersonnelRepository.getOrganizationAccount(accountId);
   if (!existing) throw httpError(404, "Das Filial- oder Terminalkonto wurde nicht gefunden.");
   const input = await normalizedOrganizationAccountInput(request.body || {}, { existing });
-  const password = String(request.body?.password || "");
-  const passwordHash = password ? await hashPortalPassword(password) : existing.password_hash;
+  const password = request.body?.password ?? "";
+  const passwordHash = password ? await hashPortalPassword(password, { loginName: input.loginName || existing.login_name, displayName: input.displayName }) : existing.password_hash;
   const actorId = portalActorId(actor);
   const before = publicOrganizationAccount(existing);
   await organizationPersonnelRepository.transaction(async (organization) => {
@@ -43316,6 +43978,7 @@ app.put("/api/portal/v1/organization-accounts/:accountId", async (request, respo
       passwordHash,
       active: input.active,
       passwordChanged: Boolean(password),
+      passwordPolicyVersion: password ? PORTAL_PASSWORD_POLICY_VERSION : 0,
       actor: actorId,
     });
     await organization.deleteOrganizationAccountPermissions(accountId);
@@ -43441,11 +44104,11 @@ app.put("/api/portal/v1/branch-accounts/:accountId/password", async (request, re
   if (!account.active) {
     throw httpError(409, "Das Filialkonto ist deaktiviert und kann nicht neu angemeldet werden.", "PORTAL_ORGANIZATION_ACCOUNT_INACTIVE");
   }
-  const password = String(request.body?.password || "");
-  const passwordHash = await hashPortalPassword(password);
+  const password = request.body?.password ?? "";
+  const passwordHash = await hashPortalPassword(password, { loginName: account.login_name, displayName: account.display_name });
   const actorId = portalActorId(session);
   await organizationPersonnelRepository.transaction(async (organization) => {
-    await organization.updateOrganizationAccountPassword(accountId, passwordHash, actorId);
+    await organization.updateOrganizationAccountPassword(accountId, passwordHash, actorId, PORTAL_PASSWORD_POLICY_VERSION);
     await organization.revokeOrganizationSessions(accountId);
     await organization.insertAudit(actorId, "portal.organization-account.password.reset",
       "portal_organization_account", accountId, JSON.stringify({
@@ -44679,8 +45342,10 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       ? "Die Developer-Rolle kann ausschließlich mit dem lokalen Entwicklerwerkzeug gebunden werden."
       : "Diese Rolle darf durch den aktuellen Zugang nicht vergeben werden.", role === "developer" ? "PORTAL_DEVELOPER_PROTECTED" : "PORTAL_ROLE_HIERARCHY_DENIED");
   }
-  const password = String(request.body.password || "");
-  const passwordHash = password ? await hashPortalPassword(password) : existingUser?.password_hash || "";
+  const password = request.body.password ?? "";
+  const passwordTarget = password ? await organizationPersonnelRepository.getEmployeeForUpdate(employeeNumber) : null;
+  const passwordHash = password ? await hashPortalPassword(password, { employeeNumber, loginName: employeeNumber,
+    displayName: passwordTarget?.full_name }) : existingUser?.password_hash || "";
   const active = request.body.active !== false ? 1 : 0;
   const mustChangePassword = password
     ? Number(request.body.mustChangePassword !== false)
@@ -44834,6 +45499,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       active: Boolean(active),
       mustChangePassword: Boolean(mustChangePassword),
       passwordChanged: Boolean(password),
+      passwordPolicyVersion: password ? PORTAL_PASSWORD_POLICY_VERSION : 0,
     });
     if (liveUser?.role && liveUser.role !== role) {
       await organization.deletePersonnelLearningPermissionDenialAuthority(
@@ -44849,6 +45515,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       await organization.revokePortalSessions(employeeNumber);
     }
     await organization.revokeMobileSessions(employeeNumber, "account_changed");
+    if (password || !active) await organization.revokePasswordResetTokens(employeeNumber);
     await organization.insertAudit(
       liveLearningActor.employeeNumber,
       "portal.user.update",
@@ -46443,8 +47110,8 @@ async function completePersonalPasswordReset(request) {
   const browserSession = portalSessionFromRequest(request);
   const rawToken = String(request.body?.token || "").trim();
   if (!/^[A-Za-z0-9_-]{43}$/.test(rawToken)) throw invalidPasswordResetTokenError();
-  const newPassword = String(request.body?.newPassword || "");
-  const repeatPassword = String(request.body?.repeatPassword || "");
+  const newPassword = request.body?.newPassword ?? "";
+  const repeatPassword = request.body?.repeatPassword ?? "";
   if (!repeatPassword || newPassword !== repeatPassword) {
     throw httpError(400, "Die Passwortwiederholung stimmt nicht überein.", "PORTAL_PASSWORD_REPEAT_MISMATCH");
   }
@@ -46452,8 +47119,11 @@ async function completePersonalPasswordReset(request) {
   const now = new Date().toISOString();
   const available = await portalAccessRepository.getPasswordResetTokenByHash({ tokenHash, now });
   if (!available) throw invalidPasswordResetTokenError();
-  const passwordHash = await hashPortalPassword(newPassword);
-  const completed = await portalAccessRepository.transaction(async (repository) => {
+  const passwordHash = await hashPortalPassword(newPassword, { employeeNumber: available.employee_number,
+    loginName: available.employee_number, displayName: available.full_name });
+  const completed = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const repository = repositories.portalAccess;
+    const now = new Date().toISOString();
     const current = await repository.getPasswordResetTokenByHash({ tokenHash, now });
     if (!current) throw invalidPasswordResetTokenError();
     const consumed = await repository.consumePasswordResetToken({
@@ -46466,6 +47136,7 @@ async function completePersonalPasswordReset(request) {
       employeeNumber: current.employee_number,
       passwordHash,
       changedAt: now,
+      passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION,
     });
     if (!changed.rowsAffected) throw invalidPasswordResetTokenError();
     await repository.revokeEmployeeSessionsForEmployee({ employeeNumber: current.employee_number });
@@ -46481,19 +47152,14 @@ async function completePersonalPasswordReset(request) {
       employeeNumber: current.employee_number,
       exceptId: current.id,
     });
+    await repositories.organizationPersonnel.insertAudit(current.employee_number, 'portal.password-reset.completed', 'portal_user', current.employee_number);
+    if (browserSession?.id && (browserSession.sessionKind === 'organization' || browserSession.employeeNumber !== current.employee_number)) {
+      await repositories.organizationPersonnel.insertAudit(portalActorId(browserSession), 'portal.password-reset.browser-session-revoked',
+        browserSession.sessionKind === 'organization' ? 'portal_organization_account' : 'portal_user', browserSession.accountId || browserSession.employeeNumber);
+    }
     return current;
   });
-  (await auditPortal(completed.employee_number, "portal.password-reset.completed", "portal_user", completed.employee_number));
-  if (browserSession?.id
-    && (browserSession.sessionKind === "organization"
-      || browserSession.employeeNumber !== completed.employee_number)) {
-    (await auditPortal(
-      portalActorId(browserSession),
-      "portal.password-reset.browser-session-revoked",
-      browserSession.sessionKind === "organization" ? "portal_organization_account" : "portal_user",
-      browserSession.accountId || browserSession.employeeNumber,
-    ));
-  }
+  request.portalSession = null;
   return completed;
 }
 
@@ -49889,12 +50555,23 @@ app.post("/api/mobile/v1/me/password", async (request, response) => {
   if (!await verifyPortalPassword(request.body?.currentPassword, current?.password_hash)) {
     throw httpError(401, "Das bisherige Passwort ist nicht korrekt.", "MOBILE_PASSWORD_CURRENT_INVALID");
   }
-  const passwordHash = await hashPortalPassword(request.body?.newPassword);
-  const tokenSet = await mobileAuthRepository.transaction(async (repository) => {
-    await repository.updateMobilePassword({
+  const passwordHash = await hashPortalPassword(request.body?.newPassword, {
+    employeeNumber: session.employeeNumber, loginName: session.employeeNumber, displayName: session.fullName,
+  });
+  const verifiedAccessTokenHash = sha256(mobileBearerToken(request));
+  const completed = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const repository = repositories.mobileAuth, now = new Date();
+    const live = await mobileSessionRow(session.mobileSessionId, repository, viennaTodayIso(now));
+    if (!mobileSessionTimeBounds(live, now, { access: true }) || !safeHashEquals(live.access_token_hash, verifiedAccessTokenHash)) {
+      throw httpError(409, "Die App-Sitzung wurde gleichzeitig geändert. Bitte erneut anmelden.", "MOBILE_SESSION_CONFLICT");
+    }
+    const changed = await repository.updateMobilePassword({
       employeeNumber: session.employeeNumber,
       passwordHash,
+      expectedPasswordHash: current.password_hash,
+      passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION,
     });
+    if (changed.rowsAffected !== 1) throw httpError(409, "Das Passwort wurde gleichzeitig geändert. Bitte erneut anmelden.", "MOBILE_PASSWORD_CHANGED");
     await repository.revokeEmployeePortalSessions({
       employeeNumber: session.employeeNumber,
     });
@@ -49903,10 +50580,15 @@ app.post("/api/mobile/v1/me/password", async (request, response) => {
       reason: "password_changed",
       exceptSessionId: session.mobileSessionId,
     });
-    return rotateAuthenticatedMobileSession(session.mobileSessionId, new Date(), repository);
+    await repositories.portalAccess.revokePasswordResetTokensForEmployee({ employeeNumber: session.employeeNumber, exceptId: "" });
+    const tokenSet = await rotateAuthenticatedMobileSession(session.mobileSessionId, now, repository);
+    await repositories.organizationPersonnel.insertAudit(session.employeeNumber, "mobile.password.change", "portal_user", session.employeeNumber);
+    const replacement = mobileSessionPrincipal(await mobileSessionRow(session.mobileSessionId, repository, viennaTodayIso(now)));
+    return { tokenSet, replacement };
   });
-  (await auditPortal(session.employeeNumber, "mobile.password.change", "portal_user", session.employeeNumber));
-  response.json({ ok: true, tokenSet });
+  request.headers.authorization = `Bearer ${completed.tokenSet.accessToken}`;
+  request.mobileSession = completed.replacement;
+  response.json({ ok: true, tokenSet: completed.tokenSet });
 });
 
 app.get("/api/mobile/v1/me/schedule", async (request, response) => {
@@ -49930,23 +50612,42 @@ app.put("/api/portal/v1/me/password", async (request, response) => {
   if (!await verifyPortalPassword(request.body.currentPassword, current?.password_hash)) {
     throw httpError(401, "Das bisherige Passwort ist nicht korrekt.");
   }
-  const passwordHash = await hashPortalPassword(request.body.newPassword);
-  await organizationPersonnelRepository.transaction(async (organization) => {
-    await organization.updatePortalUserPassword(session.employeeNumber, passwordHash);
-    await organization.revokeMobileSessions(session.employeeNumber, "password_changed");
-    await organization.insertAudit(
+  const passwordHash = await hashPortalPassword(request.body.newPassword, { employeeNumber: session.employeeNumber,
+    loginName: session.loginName, displayName: session.fullName });
+  const rawToken = crypto.randomBytes(32).toString('base64url');
+  const lifetime = await runLoginTransaction(persistenceProvider, createApplicationRepositories, async repositories => {
+    const now = new Date();
+    const live = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+    if (!live || live.id !== session.id) throw httpError(401, 'Bitte erneut anmelden.', 'PORTAL_AUTH_REQUIRED');
+    const lifetime = browserSessionLifetime({ now, role: live.role, permissions: live.permissions,
+      idleMinutes: portalSessionTimeoutMinutes(), authenticatedAt: live.authenticatedAt, absoluteExpiresAt: live.absoluteExpiresAt });
+    if (!lifetime) throw httpError(401, 'Die Sitzung ist abgelaufen.', 'PORTAL_AUTH_REQUIRED');
+    const changed = await repositories.portalAccess.changeEmployeePassword({ employeeNumber: session.employeeNumber,
+      expectedPasswordHash: current.password_hash, passwordHash, passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION, now: now.toISOString() });
+    if (changed.rowsAffected !== 1) throw httpError(409, 'Das Kennwort wurde gleichzeitig geändert. Bitte erneut anmelden.', 'PORTAL_PASSWORD_CONFLICT');
+    await repositories.portalAccess.revokeEmployeeSessionsForEmployee({ employeeNumber: session.employeeNumber });
+    await repositories.organizationPersonnel.revokeMobileSessions(session.employeeNumber, 'password_changed');
+    await repositories.portalAccess.revokePasswordResetTokensForEmployee({ employeeNumber: session.employeeNumber, exceptId: '' });
+    const replacementId = crypto.randomUUID();
+    await repositories.portalAccess.insertEmployeeSession({ id: replacementId, employeeNumber: session.employeeNumber,
+      tokenHash: sha256(rawToken), ...lifetime });
+    await repositories.organizationPersonnel.insertAudit(
       portalActorId(session),
       "portal.password.change",
       "portal_user",
       session.employeeNumber,
     );
+    return { ...lifetime, replacementId };
   });
-  response.json({ ok: true });
+  // Adopt the committed credential before any subsequent guarded persistence access.
+  request.headers.cookie = `${PORTAL_SESSION_COOKIE}=${rawToken}; ${PORTAL_CSRF_COOKIE}=${portalCsrfToken(rawToken)}`;
+  request.portalSession = { ...session, id: lifetime.replacementId, mustChangePassword: false, ...lifetime };
+  request.portalSession = await loadPortalSessionFromRequest(request, { touch: false });
+  issuePortalSessionCookies(request, response, rawToken, lifetime.absoluteExpiresAt);
+  response.json({ ok: true, sessionChanged: true, user: publicPortalUser(request.portalSession) });
 });
 
-app.get("/api/portal/v1/me/schedule", async (request, response) => {
-  const session = requireEmployeePortalSession(request, "own_schedule:read");
-  const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
+async function ownPortalSchedule(session, weekStart) {
   const weekEnd = addDays(weekStart, 6);
   const [shifts, options] = await Promise.all([
     planningSettingsRepository.listMobileScheduleShifts({
@@ -49960,7 +50661,13 @@ app.get("/api/portal/v1/me/schedule", async (request, response) => {
       weekEnd,
     }),
   ]);
-  response.json({ weekStart, weekEnd, calendarWeek: getIsoWeek(weekStart), shifts, options, user: publicPortalUser(session) });
+  return { weekStart, weekEnd, calendarWeek: getIsoWeek(weekStart), shifts, options, user: publicPortalUser(session) };
+}
+
+app.get("/api/portal/v1/me/schedule", async (request, response) => {
+  const session = requireEmployeePortalSession(request, "own_schedule:read");
+  const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
+  response.json(await ownPortalSchedule(session, weekStart));
 });
 
 app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) => {
@@ -49977,7 +50684,21 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
   );
   assertSessionContextScope(session, { locationId });
   const location = await validateLocationExists(locationId);
-  const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
+  let weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
+  let focusDate = null;
+  if (request.query.focus === "current") {
+    const today = viennaTodayIso();
+    const upcoming = await planningSettingsRepository.listLocationDashboardScheduleShifts({
+      locationId, weekStart: today, weekEnd: addDays(today, 35),
+    });
+    const settings = await settingsForLocation(locationId);
+    focusDate = await require("./lib/mobile-schedule-focus").mobileScheduleFocus({
+      today, time: viennaNowLocal().slice(11), shifts: upcoming,
+      opening: date => operatingHours(date, settings),
+      isClosed: date => Boolean(publicHolidayName(date) || getGlobalDayBlockForDate(date, locationId)),
+    });
+    weekStart = getMonday(focusDate || today);
+  }
   const weekEnd = addDays(weekStart, 6);
   const shifts = (await planningSettingsRepository.listLocationDashboardScheduleShifts({
     locationId,
@@ -49999,6 +50720,7 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
     calendarWeek: getIsoWeek(weekStart),
     shifts,
     displaySettings: (await sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId)),
+    ...(request.query.focus === "current" ? { focusDate } : {}),
   });
 });
 
@@ -50044,7 +50766,7 @@ app.get(["/api/portal/v1/me/absence-history", "/api/portal/v1/me/absence-request
 app.get("/api/portal/v1/me/process-tasks", async (request, response) => {
   const session = requireEmployeePortalSession(request);
   try {
-    const items = await processTasksForPortalSession(session);
+    const items = await processTasksForPortalSession(session, request);
     response.json({
       available: true,
       items,
@@ -50061,6 +50783,13 @@ app.post("/api/portal/v1/me/process-tasks/:runId/:stepId/complete", async (reque
   assertPortalCsrf(request);
   const runId = String(request.params.runId || "");
   const stepId = String(request.params.stepId || "");
+  const studioRun = await customProcessRepository.runById({ id: runId });
+  if (studioRun && (studioRun.trigger_type === "manual_studio" || String(studioRun.process_id).startsWith("studio-"))) {
+    const result = await workflowStudioService.complete(runId, stepId, request.body, workflowStudioParticipantContext(session, request));
+    if (result.replayed) response.setHeader("Idempotency-Replayed", "true");
+    response.json(result);
+    return;
+  }
   const boundInstance = await customProcessRepository.personnelWorkflowInstanceById({ id: runId });
   if (boundInstance && installationFeatureEnabled("personnelLifecycle")) {
     const workflowAccess = createPersonnelWorkflowAccessSnapshot(session);
@@ -53137,6 +53866,7 @@ function personnelLifecycleConversionInput(value) {
     "contractedHours",
     "targetWorkdaysPerWeek",
     "preferredDayOff",
+    "preferredDaysOff",
     "fixedWorkdays",
     "positionId",
     "costCenterId",
@@ -53167,6 +53897,8 @@ function personnelLifecycleConversionInput(value) {
     contractedHours: Number(submittedEmployee.contractedHours),
     targetWorkdaysPerWeek: Number(submittedEmployee.targetWorkdaysPerWeek),
     preferredDayOff: String(submittedEmployee.preferredDayOff || "").trim(),
+    ...(Object.hasOwn(submittedEmployee, "preferredDaysOff")
+      ? { preferredDaysOff: validatePreferredDays(submittedEmployee.preferredDaysOff) } : {}),
     fixedWorkdays,
     positionId: String(submittedEmployee.positionId || "").trim(),
     costCenterId: String(submittedEmployee.costCenterId || "").trim(),
@@ -54920,6 +55652,7 @@ app.get("/api/portal/v1/personnel-lifecycle/workflow-publications/resolve", asyn
 app.post("/api/portal/v1/personnel-lifecycle/workflows/:processId/publish", async (request, response) => {
   const accessContext = (await requirePersonnelWorkflowAccess(request, { action: "publish" }));
   try {
+    assertLegacyCustomProcess(request.params.processId);
     const publication = await requirePersonnelWorkflowPublicationService().publish(
       request.params.processId,
       request.body,
@@ -54938,6 +55671,8 @@ app.post("/api/portal/v1/personnel-lifecycle/workflows/:processId/publish", asyn
 app.post("/api/portal/v1/personnel-lifecycle/workflow-publications/:publicationId/archive", async (request, response) => {
   const accessContext = (await requirePersonnelWorkflowAccess(request, { action: "publish" }));
   try {
+    const source = await customProcessRepository.workflowPublicationById({ publicationId: request.params.publicationId });
+    if (source) assertLegacyCustomProcess(source.process_id);
     const publication = await requirePersonnelWorkflowPublicationService().archive(
       request.params.publicationId,
       request.body,
@@ -57360,6 +58095,121 @@ app.delete("/api/portal/v1/amu-reports/:reportId/documents/:documentId", async (
   }
   response.status(204).end();
 });
+
+function assertAssistantFeatures(...features) {
+  if (features.some(feature => !installationFeatureEnabled(feature))) {
+    throw httpError(403, "Diese Funktion ist für diese Grabenplaner-Installation nicht freigeschaltet.", "FEATURE_DISABLED");
+  }
+}
+
+async function ownAssistantBalances(session, kind, year) {
+  const result = {};
+  if (kind !== "time_off") {
+    assertAssistantFeatures("vacation");
+    const account = (await vacationAccountsForYear(year, session.employeeNumber, session.employeeNumber, session))[0];
+    result.vacation = account ? { year, remainingDays: account.remainingDays, totalDays: account.totalDays,
+      plannedDays: account.plannedDays, revision: account.revision, status: account.status } : null;
+  }
+  if (kind !== "vacation") {
+    assertAssistantFeatures("timeTracking");
+    // Reuse the GP's imported closing balance. A weekly actual/planned
+    // difference must never be presented as a cumulative ZA account.
+    const rows = await timeTrackingRepository.listLatestXoffiBalances({ locationId: session.homeLocationId,
+      departmentId: null, filterDepartment: 0, weekStart: currentWeekStart() });
+    const row = rows.find(item => item.employee_number === session.employeeNumber);
+    result.timeOff = row ? { minutes: Number(row.closing_balance_minutes), weekStart: row.balance_week_start,
+      source: "imported_closing_balance" } : null;
+  }
+  return result;
+}
+
+async function ownAssistantPreview(session, kind, parameters) {
+  assertAssistantFeatures("requests", ...(kind === "vacation" ? ["vacation"] : []));
+  let assessment = kind === "vacation" ? await evaluateVacationRequest(session.employeeNumber, parameters)
+    : await evaluateTimeOffRequest(session.employeeNumber, parameters);
+  if (kind === "vacation" && absenceRequestSubmissionAllowed(assessment)) {
+    try { await validateVacationRequestDates(session.employeeNumber, parameters); }
+    catch (error) {
+      if (![400, 409].includes(error.status)) throw error;
+      assessment = { ...assessment, trafficLight: "red", allowed: false, submissionAllowed: false,
+        reason: error.message, code: error.code || "VACATION_REQUEST_INVALID" };
+    }
+  }
+  const facts = { check: { trafficLight: assessment.trafficLight, code: assessment.code || "",
+    submissionAllowed: absenceRequestSubmissionAllowed(assessment), reason: assessment.reason || "",
+    manualReview: Boolean(assessment.manualReview) }, warnings: [], workDates: [], days: null, minutes: null };
+  if (kind === "vacation") {
+    facts.days = vacationDayCount(parameters.dateFrom, parameters.dateTo, session.homeLocationId);
+    facts.balancesByYear = [];
+    for (let year = Number(parameters.dateFrom.slice(0, 4)); year <= Number(parameters.dateTo.slice(0, 4)); year++) {
+      const from = parameters.dateFrom < `${year}-01-01` ? `${year}-01-01` : parameters.dateFrom;
+      const to = parameters.dateTo > `${year}-12-31` ? `${year}-12-31` : parameters.dateTo;
+      const days = vacationDayCount(from, to, session.homeLocationId);
+      const balance = (await ownAssistantBalances(session, "vacation", year)).vacation;
+      facts.balancesByYear.push({ year, days, remainingDays: balance?.remainingDays ?? null, revision: balance?.revision ?? null });
+      if (!balance) facts.warnings.push(`Für ${year} fehlt ein Urlaubskonto; der Saldo muss im Freigabeprozess geprüft werden.`);
+      else if (days > balance.remainingDays) facts.warnings.push(`Für ${year} übersteigt der Entwurf den verfügbaren Saldo (${balance.remainingDays} Tage). Die zuständige Leitung muss das prüfen.`);
+    }
+    for (let date = parameters.dateFrom; date <= parameters.dateTo; date = addDays(date, 1)) {
+      if (vacationDayCount(date, date, session.homeLocationId) > 0) facts.workDates.push(date);
+    }
+    if (facts.workDates.length !== facts.days) facts.warnings.push("Die GP-Urlaubsbewertung berücksichtigt zusätzlich Feiertage im Zeitraum; maßgeblich ist die angezeigte Gesamtzahl der Urlaubstage.");
+  } else {
+    const balances = await ownAssistantBalances(session, "time_off", Number(parameters.dateFrom.slice(0, 4)));
+    facts.timeOffBalance = balances.timeOff;
+    if (!balances.timeOff) facts.warnings.push("Kein bestätigter ZA-Saldo hinterlegt; manuelle Prüfung im bestehenden Freigabeprozess erforderlich.");
+    else facts.warnings.push(`Letzter importierter ZA-Saldo: ${balances.timeOff.minutes / 60} Stunden, Woche ab ${balances.timeOff.weekStart}; kein laufend aktualisiertes Konto.`);
+    if (parameters.allDay) {
+      let minutes = 0, missingPlan = false;
+      for (let date = parameters.dateFrom; date <= parameters.dateTo; date = addDays(date, 1)) {
+        const day = await plannedDayMetrics(session.employeeNumber, date, session.homeLocationId);
+        if (!day.blocks.length) missingPlan = true;
+        else { facts.workDates.push(date); minutes += day.netMinutes; }
+      }
+      facts.minutes = missingPlan ? null : minutes;
+      if (missingPlan) facts.warnings.push("Der Dienstplan ist unvollständig; der genaue Stundenumfang wird bei der Freigabe geprüft.");
+    } else {
+      facts.workDates = [parameters.dateFrom];
+      facts.minutes = timeToMinutes(parameters.endTime) - timeToMinutes(parameters.startTime);
+      facts.warnings.push("Der Stundenwert beschreibt das beantragte Zeitfenster; die endgültige ZA-Bewertung erfolgt im bestehenden Freigabeprozess.");
+    }
+    if (Number.isFinite(facts.minutes) && balances.timeOff && facts.minutes > balances.timeOff.minutes) facts.warnings.push("Das beantragte Zeitfenster übersteigt den letzten importierten ZA-Saldo; manuelle Prüfung erforderlich.");
+  }
+  return facts;
+}
+
+const voiceAssistant = createVoiceAssistant({
+  config: voiceAssistantConfig, provider: createOpenAiVoiceProvider({ config: voiceAssistantConfig }), today: viennaTodayIso,
+  authorize: async request => {
+    const session = await loadPortalSessionFromRequest(request, { touch: false });
+    return requireEmployeePortalSession({ portalSession: session });
+  },
+  balances: ownAssistantBalances, preview: ownAssistantPreview,
+  schedule: async (session, weekStart) => {
+    assertAssistantFeatures("schedule");
+    const data = await ownPortalSchedule(session, weekStart);
+    return { weekStart: data.weekStart, weekEnd: data.weekEnd,
+      shifts: data.shifts.map(item => ({ date: item.shift_date, startTime: item.start_time,
+        endTime: item.end_time, location: item.location_name || "", department: item.department_name || "" })),
+      options: data.options.map(item => ({ kind: optionLabel(item.option_type), dateFrom: item.date_from, dateTo: item.date_to })) };
+  },
+  requests: async (session, kind) => {
+    assertAssistantFeatures("requests", ...(kind !== "time_off" ? ["vacation"] : []));
+    const data = await absenceHistoryForEmployee(session.employeeNumber, {
+      vacationRead: kind !== "time_off", timeOffRead: kind !== "vacation" });
+    const labels = { pending: "offen", pending_local: "lokale Prüfung offen", preliminary_local: "vorläufig lokal genehmigt",
+      pending_hr: "Personalprüfung offen", approved: "genehmigt", rejected: "abgelehnt", withdrawn: "zurückgenommen", cancelled: "storniert" };
+    return data.filter(item => ["vacation", "time_off"].includes(item.kind)).map(item => ({ id: item.id, kind: item.kind,
+      dateFrom: item.date_from || item.request_date, dateTo: item.date_to || item.request_date,
+      status: item.status, statusLabel: labels[item.status] || item.status }));
+  },
+  submit: (session, kind, parameters) => {
+    assertAssistantFeatures("requests", ...(kind === "vacation" ? ["vacation"] : []));
+    return kind === "vacation" ? createOwnVacationRequest(session, parameters) : createOwnTimeOffRequest(session, parameters);
+  },
+  audit: (session, action, id, details) => auditPortal(session.employeeNumber, action, "assistant", id, JSON.stringify(details)),
+});
+require('./lib/voice-assistant-routes').registerVoiceAssistantRoutes(app, { assistant: voiceAssistant, assertCsrf: assertPortalCsrf });
 
 app.post("/api/portal/v1/me/vacation-check", async (request, response) => {
   const session = requirePortalSession(request, "own_vacation:request");
@@ -59907,14 +60757,18 @@ app.get("/api/portal/v1/xoffi-plan-comparison", async (request, response) => {
       timeTrackingRepository.listActiveXoffiWeekRows(query), timeTrackingRepository.listActiveXoffiWeekDays(query),
       planningSettingsRepository.listScheduleWeekOptions(query),
     ]);
-    snapshots.push({ query, employees, shifts, imports, importDays, weekOptions });
+    const importSnapshots = (await Promise.all(comparison.selectImports({ employees, shifts, imports, departmentId: context.departmentId })
+      .map(entry => timeTrackingRepository.getScopedXoffiSnapshot({ importId: entry.import_id,
+        employeeNumber: String(entry.employee_number), locationId: context.locationId,
+        departmentId: Number(context.departmentId || 0), weekStart: start })))).filter(Boolean);
+    snapshots.push({ query, employees, shifts, imports, importDays, weekOptions, importSnapshots });
   }
   const allSicknessCredits = await sicknessCreditsForEmployeesInRange(
     [...new Set(snapshots.flatMap(snapshot => snapshot.employees.map(employee => employee.personnel_number)))],
     getMonday(dateFrom), addDays(getMonday(dateTo), 6),
   );
   const weeks = [];
-  for (const { query, employees, shifts, imports, importDays, weekOptions } of snapshots) {
+  for (const { query, employees, shifts, imports, importDays, weekOptions, importSnapshots } of snapshots) {
     const visible = new Set(employees.map(employee => String(employee.personnel_number)));
     const sicknessCredits = allSicknessCredits.filter(credit => visible.has(String(credit.employee_number))
       && credit.date >= query.weekStart && credit.date <= query.weekEnd);
@@ -59923,7 +60777,7 @@ app.get("/api/portal/v1/xoffi-plan-comparison", async (request, response) => {
     })));
     const planCredits = await xoffiPlannedOptionCredits(weekOptions, shifts, query, sicknessCredits);
     weeks.push(comparison.buildComparison({ dates: Array.from({ length: 7 }, (_, day) => addDays(query.weekStart, day)),
-      employees, shifts: measuredShifts, planCredits, imports, importDays, limits, departmentId: context.departmentId }));
+      employees, shifts: measuredShifts, planCredits, imports, importDays, importSnapshots, limits, departmentId: context.departmentId }));
   }
   const dates = Array.from({ length: daysBetweenInclusive(dateFrom, dateTo) }, (_, day) => addDays(dateFrom, day));
   response.json({ weekStart: getMonday(dateFrom), weekEnd: addDays(getMonday(dateTo), 6), dateFrom, dateTo, limits,
@@ -60020,7 +60874,7 @@ app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
     for (const row of inspected.employees) {
       row.employeeNumber = matchXoffiEmployee(row.sourceName, candidateRows);
       row.matchConfidence = row.employeeNumber ? 100 : 0;
-      if (row.employeeNumber) row.warnings = [];
+      if (row.employeeNumber) row.warnings = (row.warnings || []).filter(warning => !warning.startsWith("Kein eindeutiger vollständiger Namensabgleich."));
     }
   } else {
     try { inspected = await inspectXoffiImageBuffer(request.body, { fileName, selectedWeekStart: expectedWeekStart, employees: candidateRows }); }
@@ -60064,6 +60918,7 @@ app.post("/api/portal/v1/xoffi-time-import/inspect", express.raw({
     employees: inspected.employees,
     candidates,
     warnings: inspected.warnings,
+    reviewSummary: inspected.reviewSummary || null,
   });
 });
 
@@ -60323,6 +61178,7 @@ async function verifyUsbCreator(request, employeeNumber, password) {
     throw httpError(403, "Das Passwort des Erstellerkontos ist nicht korrekt.", "USB_CREATOR_AUTH_FAILED");
   }
   usbCreatorAuthRateLimits.clear(rateKey);
+  assertNewPassword(password, { employeeNumber: number, loginName: number, displayName: row.full_name });
   const [roleProjection, grantedPermissions, deniedPermissions] = await Promise.all([
     organizationPersonnelRepository.getPortalAccessProjection(row.employee_number),
     portalPermissionGrantsForEmployee(row.employee_number, row.role),
@@ -60515,7 +61371,7 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
       }
       await validateDepartmentExists(departmentId, String(employee.home_location_id || ""));
     }
-    const password = String(input.startPassword || "");
+    const password = input.startPassword ?? "";
     const additionalPermissions = [...new Set((Array.isArray(input.additionalPermissions) ? input.additionalPermissions : [])
       .map(String).filter((permission) => delegablePortalPermissions.has(permission)))];
     const rolePermissions = new Set(portalRoles.find((entry) => entry.id === role)?.permissions || []);
@@ -60606,7 +61462,7 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
       ...employee,
       personnelNumber,
       role,
-      passwordHash: password ? await hashPortalPassword(password) : "",
+      passwordHash: password ? await hashPortalPassword(password, { employeeNumber: personnelNumber, loginName: personnelNumber, displayName: employee.full_name }) : "",
       additionalPermissions,
       deniedPermissions: [...deniedPermissions],
       scopes,
@@ -60872,6 +61728,43 @@ app.post("/api/usb-provisioning/create", async (request, response) => {
     usbProvisioningActive = false;
     if (stage?.stageRoot) fs.rmSync(stage.stageRoot, { recursive: true, force: true });
   }
+});
+
+async function voiceSettingsDeveloper(request) {
+  const fresh = await loadPortalSessionFromRequest(request, { touch: false });
+  const actor = requireEmployeePortalSession({ portalSession: fresh }, "settings:write");
+  if (actor.role !== "developer") throw httpError(403, "Dieser Bereich ist dem Developer vorbehalten.", "VOICE_SETTINGS_DENIED");
+  return actor;
+}
+
+app.get("/api/portal/v1/developer/voice-assistants", async (request, response) => {
+  await voiceSettingsDeveloper(request);
+  await refreshApplicationSettingsSnapshot();
+  await voiceSettingsDeveloper(request);
+  response.json(voiceAssistantSettings.settingsPayload(getSettings()));
+});
+
+app.put("/api/portal/v1/developer/voice-assistants", async (request, response) => {
+  const actor = await voiceSettingsDeveloper(request);
+  assertPortalCsrf(request);
+  const body = request.body;
+  if (!body || Object.keys(body).some(key => !["settings", "revision"].includes(key)) || typeof body.revision !== "string") {
+    throw httpError(400, "Die Einstellungen benötigen ihren zuletzt geladenen Stand.", "VOICE_SETTINGS_INVALID");
+  }
+  const settings = voiceAssistantSettings.validateSettings(body.settings);
+  await persistenceProvider.transaction(async executor => {
+    const repositories = createApplicationRepositories(executor);
+    const liveActor = await livePersonnelLearningRoleAdministrationActor(actor, repositories.organizationPersonnel);
+    assertLivePortalRoutePermission(liveActor, "settings:write", { allowedRoles: new Set(["developer"]) });
+    if (liveActor.mustChangePassword) throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+    const current = settingsObjectFromRows(await repositories.planningSettings.listSettings());
+    if (voiceAssistantSettings.revision(current) !== body.revision) throw httpError(409, "Die Einstellungen wurden inzwischen geändert. Bitte neu laden.", "VOICE_SETTINGS_CHANGED");
+    const before = voiceAssistantSettings.storedSettings(current);
+    await repositories.planningSettings.upsertSetting({ key: voiceAssistantSettings.SETTINGS_KEY, value: JSON.stringify(settings) });
+    await repositories.organizationPersonnel.insertAudit(liveActor.employeeNumber, "voice.assistants.settings.update", "settings", "voice.assistants", JSON.stringify({ before, after: settings }));
+  }, { isolation: "serializable" });
+  await refreshPlanningSettingsReadModel();
+  response.json(voiceAssistantSettings.settingsPayload(getSettings()));
 });
 
 // Duty badge colors are company-wide, never a location/department PDF override.
@@ -61292,6 +62185,13 @@ app.put("/api/settings", async (request, response) => {
   }
   const body = request.body;
   const currentSettings = getSettings();
+  const planningAssistantSubmitted = body.planningAssistant !== undefined;
+  const planningAssistantValues = planningAssistantSubmitted
+    ? planningAssistantPreferences.validate(body.planningAssistant)
+    : null;
+  const planningAssistantActor = planningAssistantSubmitted
+    ? requirePortalAnyPermissionOrLocal(request, ["settings:write"], { csrf: true })
+    : null;
   const branchSupervisionSettingsSubmitted = body.branchSupervision !== undefined;
   let branchSupervisionValues = null;
   if (branchSupervisionSettingsSubmitted) {
@@ -61479,6 +62379,7 @@ app.put("/api/settings", async (request, response) => {
     remember_last_vacation_overall_plan: rememberLastVacationOverallPlan ? "1" : "0",
     ...(branchSupervisionValues || {}),
     ...(crossLocationScheduleValues || {}),
+    ...(planningAssistantValues || {}),
   };
   if (!getPortalStatus().portalEnabled) {
     values.allow_past_week_editing = body.allowPastWeekEditing === true ? "1" : "0";
@@ -61486,6 +62387,17 @@ app.put("/api/settings", async (request, response) => {
   await persistenceProvider.transaction(async (executor) => {
     const repositories = createApplicationRepositories(executor);
     const repository = repositories.planningSettings;
+    let livePlanningAssistantActor = planningAssistantActor;
+    if (planningAssistantSubmitted && !isLocalSystemSession(planningAssistantActor)) {
+      livePlanningAssistantActor = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+      if (!livePlanningAssistantActor || livePlanningAssistantActor.id !== planningAssistantActor.id) throw httpError(401, "Bitte erneut anmelden.", "PORTAL_LOGIN_REQUIRED");
+      if (livePlanningAssistantActor.mustChangePassword) throw httpError(428, "Bitte zuerst das Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+      assertLivePortalRoutePermission(livePlanningAssistantActor, "settings:write");
+      assertSessionContextScope(livePlanningAssistantActor, scheduleContext);
+    }
+    const livePlanningAssistantSettings = planningAssistantSubmitted
+      ? settingsObjectFromRows(await repository.listSettings())
+      : null;
     let liveCrossLocationScheduleSettingsSession = crossLocationScheduleSettingsSession;
     if (crossLocationScheduleSettingsSubmitted
       && !isLocalSystemSession(crossLocationScheduleSettingsSession)) {
@@ -61516,6 +62428,17 @@ app.put("/api/settings", async (request, response) => {
       : [];
     for (const [key, value] of Object.entries(values)) {
       await repository.upsertSetting({ key, value });
+    }
+    if (planningAssistantSubmitted) {
+      const before = planningAssistantPreferences.read(livePlanningAssistantSettings);
+      const after = planningAssistantPreferences.read(planningAssistantValues);
+      const changedKeys = Object.keys(planningAssistantValues).filter(key => (
+        planningAssistantPreferences.values(livePlanningAssistantSettings)[key] !== planningAssistantValues[key]
+      ));
+      if (changedKeys.length) await repositories.organizationPersonnel.insertAudit(
+        livePlanningAssistantActor?.employeeNumber || "local", "planning.assistant.preferences.update", "schedule_settings", "planning_assistant",
+        JSON.stringify({ changedKeys: changedKeys.sort(), before, after }),
+      );
     }
     if (branchSupervisionValues) {
       const changedKeys = Object.keys(branchSupervisionValues).filter((key) => (
@@ -61605,24 +62528,16 @@ app.post("/api/shifts", async (request, response) => {
   const weekStart = getMonday(shift.shiftDate);
   assertSessionContextScope(request.portalSession, context);
   await assertShiftEmployeeAssignmentScope(request.portalSession, shift);
-  const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
-  const evaluationEmployees = workRuleEvaluationEmployees(scheduleBefore.employees, shift);
-  const [evaluated, branchSupervision] = await Promise.all([
-    evaluateScheduleWorkRules(
-      weekStart,
-      context,
-      evaluationEmployees,
-      shift,
-    ),
-    evaluateBranchSupervisionMutation(
-      weekStart,
-      shift.locationId,
-      shift,
-      [shift.shiftDate],
-    ),
-  ]);
-  assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
-  assertBranchSupervisionAllowsMutation(branchSupervision);
+  const [evaluated, branchSupervision] = await readPlanningMutation(async () => {
+    const employees = await planningMutationEmployees(weekStart, context, request.portalSession);
+    const results = await Promise.all([
+      evaluateScheduleWorkRules(weekStart, context, employees, shift),
+      evaluateBranchSupervisionMutation(weekStart, shift.locationId, shift, [shift.shiftDate]),
+    ]);
+    assertWorkRuleAssessmentAllowsMutation(results[0].assessment);
+    assertBranchSupervisionAllowsMutation(results[1]);
+    return results;
+  });
   let saved;
   try {
     saved = await runWorkRuleMutationTransaction(async (repository) => {
@@ -61652,7 +62567,7 @@ app.post("/api/shifts", async (request, response) => {
   } catch (error) {
     throw staffAssignmentShiftConstraintError(error);
   }
-  await refreshSicknessStaffingAfterPlanningChange();
+  await refreshPlanningDerivedStateAfterCommit();
   response.status(201).json({
     id: saved.id,
     ...shift,
@@ -61681,21 +62596,18 @@ app.put("/api/shifts/:id", async (request, response) => {
   const weekStart = getMonday(shift.shiftDate);
   assertSessionContextScope(request.portalSession, context);
   await assertShiftEmployeeAssignmentScope(request.portalSession, shift, existing);
-  const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
-  const evaluationEmployees = workRuleEvaluationEmployees(scheduleBefore.employees, shift);
   const planningChange = { id, ...shift };
-  const preview = await evaluateScheduleWorkRules(
-    weekStart,
-    context,
-    evaluationEmployees,
-    planningChange,
-  );
-  assertWorkRuleAssessmentAllowsMutation(preview.assessment);
-  const branchSupervisionAssessment = await evaluateBranchSupervisionShiftUpdate(existing, shift, id);
-  const preparedEvaluations = await evaluateWorkRuleChanges(
-    [existing, shift],
-    planningChange,
-  );
+  const { preview, branchSupervisionAssessment, preparedEvaluations } = await readPlanningMutation(async () => {
+    const employees = await planningMutationEmployees(weekStart, context, request.portalSession);
+    const evaluate = createPlanningWorkRuleEvaluator();
+    const preview = await evaluate(weekStart, context, employees, planningChange);
+    assertWorkRuleAssessmentAllowsMutation(preview.assessment);
+    const branchSupervisionAssessment = await evaluateBranchSupervisionShiftUpdate(existing, shift, id);
+    const preparedEvaluations = await evaluateWorkRuleChanges(
+      [existing, shift], planningChange, absenceManagementRepository, evaluate,
+    );
+    return { preview, branchSupervisionAssessment, preparedEvaluations };
+  });
   let workRuleAssessment;
   try {
     workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
@@ -61736,7 +62648,7 @@ app.put("/api/shifts/:id", async (request, response) => {
   } catch (error) {
     throw staffAssignmentShiftConstraintError(error);
   }
-  await refreshSicknessStaffingAfterPlanningChange();
+  await refreshPlanningDerivedStateAfterCommit();
   response.json({
     id,
     ...shift,
@@ -61758,23 +62670,16 @@ app.delete("/api/shifts/:id", async (request, response) => {
   );
   const context = await resolvePlanningContext({ locationId: existing.location_id, departmentId: existing.department_id });
   const weekStart = getMonday(existing.shift_date);
-  const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
-  const [evaluated, branchSupervision] = await Promise.all([
-    evaluateScheduleWorkRules(
-      weekStart,
-      context,
-      scheduleBefore.employees,
-      { id, deleted: true },
-    ),
-    evaluateBranchSupervisionMutation(
-      weekStart,
-      existing.location_id,
-      { id, deleted: true },
-      [existing.shift_date],
-    ),
-  ]);
-  assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
-  assertBranchSupervisionAllowsMutation(branchSupervision);
+  const [evaluated, branchSupervision] = await readPlanningMutation(async () => {
+    const employees = await planningMutationEmployees(weekStart, context, request.portalSession);
+    const results = await Promise.all([
+      evaluateScheduleWorkRules(weekStart, context, employees, { id, deleted: true }),
+      evaluateBranchSupervisionMutation(weekStart, existing.location_id, { id, deleted: true }, [existing.shift_date]),
+    ]);
+    assertWorkRuleAssessmentAllowsMutation(results[0].assessment);
+    assertBranchSupervisionAllowsMutation(results[1]);
+    return results;
+  });
   await runWorkRuleMutationTransaction(async (repository) => {
     const result = await repository.deletePlanningShift(id);
     if (!result.rowsAffected) throw httpError(404, "Der Dienst wurde nicht gefunden.");
@@ -61786,7 +62691,7 @@ app.delete("/api/shifts/:id", async (request, response) => {
       request.portalSession?.employeeNumber || "local",
     );
   });
-  await refreshSicknessStaffingAfterPlanningChange();
+  await refreshPlanningDerivedStateAfterCommit();
   response.status(204).end();
 });
 
@@ -62722,8 +63627,8 @@ app.post("/api/schedule/auto", async (request, response) => {
           .filter((employee) => !unavailable.has(`${employee.personnel_number}|${date}`))
           .filter((employee) => employeeCanWorkOnDate(employee, date))
           .sort((a, b) => {
-            const aPreferred = a.preferred_day_off === config.key ? 1 : 0;
-            const bPreferred = b.preferred_day_off === config.key ? 1 : 0;
+            const aPreferred = preferredDayCost(a, config.key);
+            const bPreferred = preferredDayCost(b, config.key);
             if (aPreferred !== bPreferred) return aPreferred - bPreferred;
             return remainingByEmployee[b.personnel_number] - remainingByEmployee[a.personnel_number];
           });
@@ -62800,8 +63705,8 @@ app.post("/api/schedule/auto", async (request, response) => {
       while (remaining >= 30 && availableDates.length) {
         availableDates.sort((a, b) => {
           const preferredDifference =
-            Number(dayKeyForDate(a) === employee.preferred_day_off) -
-            Number(dayKeyForDate(b) === employee.preferred_day_off);
+            preferredDayCost(employee, dayKeyForDate(a)) -
+            preferredDayCost(employee, dayKeyForDate(b));
           if (preferredDifference) return preferredDifference;
           const loadDifference = dayLoads[a] - dayLoads[b];
           if (loadDifference) return loadDifference;
@@ -64398,6 +65303,7 @@ const {
   paginateScheduleMatrixNote,
   wrapScheduleMatrixNote,
 } = require("./lib/schedule-matrix-layout");
+const { selectSchedulePrintEmployees } = require("./lib/schedule-print-selection");
 
 function scheduleMatrixOptionStyle(optionType) {
   if (optionType === "team_meeting") {
@@ -64580,10 +65486,10 @@ function scheduleMatrixFittedFontSize(doc, text, font, preferredSize, width, min
 }
 
 function scheduleMatrixMinimumRowHeight(timeFontSize, detailFontSize) {
-  if (timeFontSize >= 18) return 70;
-  if (timeFontSize >= 14.5) return 58;
-  if (timeFontSize >= 11) return 52;
-  if (timeFontSize >= 8.5) return 43;
+  if (timeFontSize >= 18) return 54;
+  if (timeFontSize >= 14.5) return 48;
+  if (timeFontSize >= 11) return 44;
+  if (timeFontSize >= 8.5) return 40;
   return Math.max(35, Math.ceil(timeFontSize + detailFontSize + 19));
 }
 
@@ -64960,7 +65866,7 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const showEmployeePosition = settingEnabled(schedule.settings, "pdf_schedule_matrix_show_position");
   const matrixHeaderText = normalizeScheduleMatrixHeaderText(schedule.settings.pdf_schedule_matrix_header_text);
   const tableTop = 58;
-  const noteAreaHeight = 80;
+  const noteAreaHeight = 64;
   const postTableHeight = 25 + noteAreaHeight + (meetings.length ? 33 : 0);
   const tableBottom = 556 - postTableHeight;
   const headerHeight = 42;
@@ -65323,7 +66229,7 @@ async function drawSchedulePdf(schedule, response, createdAt = new Date(), desig
 }
 
 app.get("/api/schedule.pdf", async (request, response) => {
-  const schedule = await getSchedule(request.query.week, request.query, request.portalSession);
+  const schedule = selectSchedulePrintEmployees(await getSchedule(request.query.week, request.query, request.portalSession), request.query.employees);
   const designId = schedulePdfDesignForRequest(schedule, request.query.design);
   const createdAt = new Date();
   const filename = buildPdfFilename(schedule, createdAt);
@@ -65342,7 +66248,7 @@ app.get("/api/vacations.pdf", async (request, response) => {
 });
 
 app.get("/api/schedule-preview.pdf", async (request, response) => {
-  const schedule = await getSchedule(request.query.week, request.query, request.portalSession);
+  const schedule = selectSchedulePrintEmployees(await getSchedule(request.query.week, request.query, request.portalSession), request.query.employees);
   const designId = schedulePdfDesignForRequest(schedule, request.query.design);
   response.setHeader("Content-Type", "application/pdf");
   response.setHeader("Content-Disposition", "inline");
@@ -65374,16 +66280,39 @@ if (privateWorkspaceModulePath) {
     throw new Error("PRIVATE_WORKSPACE_EXTERNAL_MODULE_REQUIRED");
   }
   privateWorkspaces = require(privateWorkspaceModulePath).mount(app, {
-    requireActor: request => requireEmployeePortalSession(request, "system:write"),
+    requireActor: request => requirePortalSession(request),
     assertCsrf: assertPortalCsrf,
+    listPrincipals: async () => {
+      const [users, accounts] = await Promise.all([
+        organizationPersonnelRepository.listPortalUsersForAdmin(),
+        organizationPersonnelRepository.listOrganizationAccounts(),
+      ]);
+      return [
+        ...users.filter(row => [true, 1, "1"].includes(row.active) && [true, 1, "1"].includes(row.employee_active)).map(row => ({
+          id: `employee:${row.personnel_number}`,
+          name: `${row.personnel_number} · ${row.full_name || row.nickname || row.personnel_number}`,
+          kind: "employee",
+        })),
+        ...accounts.filter(row => [true, 1, "1"].includes(row.active)).map(row => ({
+          id: `account:${row.id}`, name: `${row.login_name} · ${row.display_name || row.login_name}`,
+          loginName: row.login_name, kind: "account",
+        })),
+      ];
+    },
     vault: integrationSecretVault,
     applicationDirectory: __dirname,
   });
 }
 app.get("/api/portal/v1/private-workspaces", (request, response) => {
-  const actor = requireEmployeePortalSession(request);
-  if (actor.role !== "developer" || actor.mustChangePassword) throw httpError(403, "Dieser Bereich ist nicht freigegeben.");
+  const actor = requirePortalSession(request);
+  if (actor.mustChangePassword) throw httpError(428, "Bitte zuerst das Startpasswort ändern.");
   response.json({ workspaces: privateWorkspaces ? privateWorkspaces.list(actor) : [] });
+});
+
+// Keep the global security policy on unmatched responses instead of handing
+// them to Express's final handler, which replaces CSP with default-src only.
+app.use((_request, response) => {
+  response.status(404).type("text/plain").send("Nicht gefunden.");
 });
 
 app.use(async (error, request, response, _next) => {
@@ -65507,11 +66436,11 @@ async function startServer() {
       for (const url of getLanUrls(listeningPort)) console.log(`LAN-Zugriff: ${url}`);
     }
     scheduleAutomaticBackups();
+    if (process.env.GRABENPLANER_DEPLOYMENT_KIND !== "recovery-smoke") systemUtilization.start();
     if (process.env.GRABENPLANER_DEPLOYMENT_KIND !== 'recovery-smoke') {salesReportJobs.start();tradeInsightJobs.start();dataImportJobs.start();}
     try { await reconcileInterruptedIntegrationDeliveries(); } catch (error) { console.error("Unterbrochene Lohnübergaben konnten nicht abgeglichen werden:", error); }
     try { await reconcileOrphanAmuBlobs(); } catch (error) { console.error("AUM-Abgleich fehlgeschlagen:", error); }
-    try { await runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
-    try { await reconcileCustomProcessTriggers(); } catch (error) { console.error("Eigene Prozessauslöser konnten nicht geprüft werden:", error); }
+    await planningDerivedRefresh.run();
     try {
       const interrupted = (
         await runtimeRecoveryRepository.markInterruptedNotifications()
@@ -65534,9 +66463,8 @@ async function startServer() {
       try { await reconcileOrphanAmuBlobs(); } catch (error) { console.error("Dokumentenabgleich fehlgeschlagen:", error); }
     }, 24 * 60 * 60 * 1000);
     retentionInterval.unref();
-    sicknessSweepInterval = setInterval(async () => {
-      try { await runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
-      try { await reconcileCustomProcessTriggers(); } catch (error) { console.error("Eigene Prozessauslöser konnten nicht geprüft werden:", error); }
+    sicknessSweepInterval = setInterval(() => {
+      void planningDerivedRefresh.run();
     }, 60 * 1000);
     sicknessSweepInterval.unref();
     notificationDispatchInterval = setInterval(() => {
@@ -65585,6 +66513,7 @@ async function startServer() {
       }
     }, 1500);
   });
+  installImportUploadTimeouts(server);
   server.once("error", () => releaseInstanceLock());
   return server;
 }
@@ -65610,6 +66539,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
     await importDrain;
     await assuranceDrain;
     await updateDrain;
+    await planningDerivedRefresh.close();
     await systemCenterHealthSyncInFlight?.catch(() => {});
     await amuScannerProbe.catch(() => {});
     await tradeInsightJobs.stop().catch(() => {});
@@ -65652,6 +66582,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
   if (notificationDispatchInterval) clearInterval(notificationDispatchInterval);
   if (rateLimitCleanupInterval) clearInterval(rateLimitCleanupInterval);
   if (systemCenterHealthInterval) clearInterval(systemCenterHealthInterval);
+  systemUtilization.stop();
   if (!server) {
     void finish();
     return;

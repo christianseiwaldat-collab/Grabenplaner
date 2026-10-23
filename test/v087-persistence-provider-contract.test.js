@@ -509,7 +509,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     report.phase5Progress.compilerVersion,
     PHASE_5_EXPECTED_COMPILER_VERSION,
   );
-  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1485);
+  assert.equal(report.phase5Progress.dialectPlanStatementCount, 1507);
   assert.equal(
     report.phase5Progress.portableDialectCount,
     PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT,
@@ -527,7 +527,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     applicationExecutable: false,
     fullApplicationCatalog: false,
     acceptanceStatus: "closed",
-    requiredReceiptCount: 1485,
+    requiredReceiptCount: 1507,
     acceptedReceiptCount: 0,
   });
   assert.deepEqual(report.phase5Progress.uiPreferencesSlice, {
@@ -642,6 +642,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
 
 test("CRM, article and statistics registration grants no additional provider capabilities", () => {
   const modules = [
+    "lib/persistence/postgresql/sales/import-source-tolerance-catalog.js",
     "lib/persistence/postgresql/core/import-master-customer-reference.js",
     "lib/persistence/postgresql/sales/cash-customer-search.js",
     "lib/persistence/postgresql/operations/sql-runtime-statistics.js",
@@ -702,6 +703,20 @@ test("School migration inventory permits only the named CLI driver and keeps dom
   }
   for (const file of ["test/youth-profile-integration.test.js", "test/vocational-school-mutation-guard.test.js"]) {
     assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.filter(entry => entry === file).length, 1, file);
+  }
+});
+
+test("Session migration inventory permits only its named CLI driver", () => {
+  const cli = "server-tools/linux/lib/session-security-migrate.js";
+  const files = [cli, "lib/persistence/postgresql/core/session-security.js", "lib/persistence/postgresql/core/session-security-catalog.js", "lib/portal-session-security.js"];
+  for (const file of files) {
+    assert.deepEqual(architectureBoundaryViolationsForText(file, fs.readFileSync(path.join(root, file), "utf8")), [], file);
+    assert.equal(architectureBoundaryViolationsForText(file, "const driver = require('node:" + "sqlite');")
+      .some(entry => entry.kind === "sqlite-driver-import-outside-boundary"), true, file);
+  }
+  for (const file of [...files, "server-tools/linux/lib/session-security-other-migrate.js"]) {
+    assert.equal(architectureBoundaryViolationsForText(file, "const driver = require('pg');")
+      .some(entry => entry.kind === "postgresql-driver-import"), file !== cli, file);
   }
 });
 

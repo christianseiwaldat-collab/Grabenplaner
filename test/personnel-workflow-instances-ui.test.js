@@ -42,7 +42,7 @@ test("M5-UI zeigt Workflow-Instanzen und Aufgaben ausschließlich read-only", ()
     "personnelWorkflowTaskList",
   ]) assert.match(`${workflow}\n${tasks}`, new RegExp(`id="${id}"`));
   assert.doesNotMatch(`${workflow}\n${tasks}`, /<form\b|type="submit"|Prozess starten|Workflow starten|Aufgabe abschließen/i);
-  assert.match(workflow, /übernimmt keine bestehenden Läufe automatisch/);
+  assert.match(workflow, /Änderungen an einer Vorlage verändern bestehende Läufe nicht/);
   assert.match(tasks, /Fristen und Eskalationen werden nicht automatisiert/);
 });
 
@@ -50,12 +50,13 @@ test("M5-Aufgabenzugang nutzt nur Workflow-Leserecht und Server-Capability", () 
   const access = between(
     app,
     "function canReadPersonnelWorkflowInstances()",
-    "function canReadLifecycleOnboardingTasks()",
+    "function canReadWorkflowStudioCatalog()",
   );
   assert.match(access, /hasGovernancePermission\("personnel:workflows:read"\)/);
   assert.match(access, /personnelWorkflowInstanceCapabilities\.canRead !== false/);
-  assert.match(access, /return canReadPersonnelWorkflowInstances\(\) \|\| canReadPersonnelLifecycleEditorCatalog\(\)/);
   assert.doesNotMatch(access, /processes:write|personnel:central:read|canReadCentralPersonnel/);
+  const centerAccess = between(app, "function canOpenWorkflowCenter()", "function syncWorkflowStudio()");
+  assert.match(centerAccess, /return canReadPersonnelWorkflowInstances\(\) \|\| canReadPersonnelLifecycleEditorCatalog\(\) \|\| canReadWorkflowStudioCatalog\(\)/);
 
   const taskAccess = between(
     app,
@@ -162,10 +163,22 @@ test("M5-Audit-Inventar klassifiziert das neue SQLite-Schema und den erweiterten
     /"lib\/persistence\/sqlite\/operations\/personnel-workflow-instance-schema\.js"/,
   );
   for (const expected of [
-    "PHASE_4_EXPECTED_STATEMENT_COUNT = 1485",
-    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1439",
-    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1366",
-    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1347",
-    "PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 138",
+    "PHASE_4_EXPECTED_STATEMENT_COUNT = 1507",
+    "PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1461",
+    "PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1388",
+    "PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1365",
+    "PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 142",
   ]) assert.match(persistenceAudit, new RegExp(expected));
+  const readExtensions = between(
+    persistenceAudit,
+    "const PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS = Object.freeze([",
+    "]);",
+  );
+  assert.deepEqual([...readExtensions.matchAll(/"([^"]+)"/g)].map((match) => match[1]), [
+    "data-import.events.source-tolerances",
+    "workflow-studio.completion.lookup",
+    "workflow-studio.instance.steps",
+    "workflow-studio.instances.page",
+    "xoffi-snapshots.get-scoped",
+  ]);
 });

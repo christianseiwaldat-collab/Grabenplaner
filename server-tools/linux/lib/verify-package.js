@@ -34,6 +34,7 @@ const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/lib/assurance-history.js",
   "server-tools/linux/offsite/lib/assurance-control-broker.js",
   "server-tools/linux/offsite/lib/maintenance-schedule-broker.js",
+  "server-tools/linux/offsite/lib/deploy-deferral.js",
   "server-tools/linux/offsite/lib/offsite-target-broker.js",
   "server-tools/linux/offsite/lib/offsite-rclone-policy.js",
   "server-tools/linux/offsite/lib/offsite-restore-verify.js",
@@ -120,6 +121,8 @@ function isAllowedRuntimePath(relative) {
   ]);
   return topLevelFiles.has(relative)
     || backupRuntimeScripts.has(relative)
+    || relative === "services/planning-optimizer/service.py"
+    || relative === "services/planning-optimizer/requirements.txt"
     || relative.startsWith("lib/")
     || relative.startsWith("public/")
     || relative.startsWith("server-tools/");
@@ -300,10 +303,11 @@ function readOffsiteModuleContract() {
   const stat = fs.lstatSync(offsiteSchemaPath);
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der optionale Offsite-Modulvertrag fehlt oder ist unzulaessig.");
   const contract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, ""));
+  const expected = expectedOffsiteArtifacts.filter(relative => contract?.moduleVersion >= 12 || !relative.endsWith("/deploy-deferral.js"));
   if (contract?.format !== "grabenplaner-linux-offsite-module-contract" || contract?.schemaVersion !== 1
-    || !(runtimeOnly ? [6, 7, 8, 9, 10, 11] : [11]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
-    || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expectedOffsiteArtifacts.length
-    || expectedOffsiteArtifacts.some((relative) => !contract.managedArtifacts.includes(relative))) {
+    || !(runtimeOnly ? [6, 7, 8, 9, 10, 11, 12] : [12]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
+    || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expected.length
+    || expected.some((relative) => !contract.managedArtifacts.includes(relative))) {
     throw new Error("Der optionale Offsite-Modulvertrag wird nicht unterstuetzt.");
   }
   const artifacts = new Map();
@@ -442,7 +446,9 @@ function main() {
     'server-tools/linux/recovery/lib/postgresql-recovery-activity.js',
     'server-tools/linux/recovery/lib/postgresql-recovery-control.js',
     'server-tools/linux/recovery/lib/postgresql-recovery-diagnostics.js',
-    ...['control-worker.js', 'host-reboot.js', 'lifecycle-run.js', 'lifecycle-status.js', 'lifecycle-maintenance.sh',
+    'lib/vps-storage-contract.js', 'lib/vps-storage-control.js', 'lib/vps-storage-routes.js',
+    'lib/persistence/postgresql/operations/storage-residuals.js', 'lib/persistence/postgresql/operations/import-retention.js',
+    ...['control-worker.js', 'storage-worker.js', 'storage-import-run.js', 'storage-import-maintenance.sh', 'host-reboot.js', 'lifecycle-run.js', 'lifecycle-status.js', 'lifecycle-maintenance.sh',
       'migration-host.js', 'managed-contract.js', 'migrate-grabenplaner-postgresql.sh', 'capture-final-source.py',
       'grabenplaner-postgresql.service.in', 'grabenplaner-application.conf.in',
       'grabenplaner-postgresql-maintenance-recover.service.in', 'recover-maintenance.sh',

@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test"), assert = require("node:assert/strict");
 const crypto = require("node:crypto"), fs = require("node:fs"), os = require("node:os"), path = require("node:path");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-receipt-api-"));
@@ -44,10 +45,10 @@ test.before(async () => {
   await subject.initializeApplicationPersistence();
   const location = db.prepare("SELECT id FROM locations WHERE active=1 ORDER BY id LIMIT 1").get();
   for (const role of ["admin", "it_admin", "developer", "hr", "manager"]) {
-    const id = `receipt-${role}`, token = crypto.randomBytes(32).toString("hex"), csrf = crypto.randomBytes(24).toString("hex");
+    const id = `receipt-${role}`, token = crypto.randomBytes(32).toString("hex"), csrf = sessionCsrf(token);
     db.prepare("INSERT INTO employees(personnel_number,full_name,nickname,home_location_id,active) VALUES (?,?,?,?,1)").run(id,id,id,location.id);
     db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password,password_changed_at) VALUES (?,'synthetic',?,1,0,CURRENT_TIMESTAMP)").run(id,role);
-    db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES (?,?,?,'2099-12-31T23:59:59.000Z')").run(crypto.randomUUID(),id,crypto.createHash("sha256").update(token).digest("hex"));
+    db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES (?,?,?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(crypto.randomUUID(),id,crypto.createHash("sha256").update(token).digest("hex"));
     users[role] = {id, cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf};
   }
   server = app.listen(0, "127.0.0.1"); await new Promise(resolve => server.once("listening", resolve));

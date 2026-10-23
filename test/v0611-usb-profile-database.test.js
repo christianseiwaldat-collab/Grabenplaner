@@ -133,6 +133,8 @@ test("USB-Profil erzeugt nur Stammdaten und setzt den Ersteller als Admin", () =
     nickname: "Demo",
     color: "#654321",
     contractedHours: 30,
+    preferredDayOff: "wednesday",
+    preferredDaysOff: ["wednesday", "saturday", "monday", "friday"],
     positionId: "verkaufsmitarbeiter",
     homeLocationId: "18",
     preferredDepartmentId: 1,
@@ -151,6 +153,7 @@ test("USB-Profil erzeugt nur Stammdaten und setzt den Ersteller als Admin", () =
       nickname: "Alex",
       color: "#123456",
       contracted_hours: 40,
+      preferred_day_off: "tuesday",
       fixed_workdays: "",
       position_id: "verkaufsmitarbeiter",
       time_confirmation_level: "A",
@@ -214,6 +217,8 @@ test("USB-Profil erzeugt nur Stammdaten und setzt den Ersteller als Admin", () =
   ]);
   assert.equal(check.prepare("SELECT COUNT(*) AS count FROM employees WHERE cost_center_id = 'cc18'").get().count, 2);
   assert.equal(check.prepare("SELECT COUNT(*) AS count FROM employees").get().count, 2);
+  assert.equal(check.prepare("SELECT preferred_day_off FROM employees WHERE personnel_number = '500'").get().preferred_day_off, "wednesday,saturday,monday,friday");
+  assert.equal(check.prepare("SELECT preferred_day_off FROM employees WHERE personnel_number = '101'").get().preferred_day_off, "tuesday");
   assert.deepEqual(check.prepare("SELECT employee_number, role, password_hash, active FROM portal_users ORDER BY employee_number").all().map((row) => ({ ...row })), [
     { employee_number: "101", role: "admin", password_hash: "scrypt-v1$creator$hash", active: 1 },
     { employee_number: "500", role: "department_manager", password_hash: "scrypt-v1$demo$hash", active: 1 },

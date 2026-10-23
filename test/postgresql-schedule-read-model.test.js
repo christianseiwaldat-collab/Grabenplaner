@@ -1,4 +1,5 @@
 'use strict';
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
 const {withCoreFixture}=require('../test-support/postgresql-migration/core-fixture');
@@ -53,7 +54,7 @@ test('native PostgreSQL: complete weeks keep parity, fresh writes and rights wit
         FROM gp.employees CROSS JOIN generate_series('2026-06-01'::date,'2026-06-22'::date,'7 days'::interval) d`);
       let token=crypto.randomBytes(32).toString('hex');
       await core.migrator.query(`UPDATE gp.portal_users SET must_change_password=0 WHERE employee_number='00001'`);
-      await core.migrator.query(`INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at) VALUES($1,'00001',$2,'2099-01-01T00:00:00.000Z')`,[crypto.randomUUID(),crypto.createHash('sha256').update(token).digest('hex')]);
+      await core.migrator.query(`INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at,authenticated_at,absolute_expires_at) VALUES($1,'00001',$2,'2099-01-01T00:00:00.000Z',to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),to_char((clock_timestamp() + interval '8 hours') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))`,[crypto.randomUUID(),crypto.createHash('sha256').update(token).digest('hex')]);
       await core.migrator.query('COMMIT');
       subject=require('../server');await subject.initializeApplicationPersistence();
       const protection=require('../lib/amu-storage').createAmuStorage({rootDirectory:path.join(root,'synthetic-protection'),
@@ -89,11 +90,28 @@ test('native PostgreSQL: complete weeks keep parity, fresh writes and rights wit
         optimized=enabled;queries=[];authorizations=0;
         const result=await request(route);
         if(!enabled)baseline=result.body;else assert.deepEqual(result.body,baseline);
-        evidence.push({optimized:enabled,milliseconds:result.milliseconds,queries:queries.length,authorizations,
-          topQueries:Object.entries(queries.reduce((m,id)=>(m[id]=(m[id]||0)+1,m),{})).sort((a,b)=>b[1]-a[1]).slice(0,8)});
+        const queryCounts=queries.reduce((m,id)=>(m[id]=(m[id]||0)+1,m),{});
+        evidence.push({optimized:enabled,milliseconds:result.milliseconds,queries:queries.length,authorizations,queryCounts,
+          topQueries:Object.entries(queryCounts).sort((a,b)=>b[1]-a[1]).slice(0,8)});
       }
       assert.ok(evidence[1].authorizations<evidence[0].authorizations/4,JSON.stringify(evidence));
-      assert.ok(evidence[1].queries<evidence[0].queries/2,JSON.stringify(evidence));
+      // The current complete model includes distinct protection/school reads
+      // for all 21 employees and Saturday reads for 18 working employees.
+      // These must not disappear to satisfy the older relative cache budget.
+      const distinctReads={
+        'planning-settings.validation.overlapping-week-options':21,
+        'organization-personnel.personnel-sensitive-record.get':21,
+        'time-tracking.list-planned-day-shifts':18,
+        'saturday-credit.assignment-on-date':18,
+      };
+      for(const sample of evidence)for(const [id,count] of Object.entries(distinctReads))
+        assert.equal(sample.queryCounts[id],count,JSON.stringify(sample));
+      // Bound the remaining model work and verify the actual duplicated cutover
+      // reads, independently of the number of mandatory employee-specific reads.
+      assert.equal(evidence[0].queryCounts['saturday-credit.get'],19);
+      assert.equal(evidence[1].queryCounts['saturday-credit.get'],1);
+      assert.ok(evidence[1].queries<=Object.values(distinctReads).reduce((a,b)=>a+b,0)+30,JSON.stringify(evidence));
+      assert.ok(evidence[0].queries-evidence[1].queries>=18,JSON.stringify(evidence));
       for(const week of ['2026-09-07','2026-09-21','2026-09-14']){
         const result=await request('/api/schedule?location=18&week='+week);
         assert.equal(result.body.weekStart,week);assert.equal(result.body.shifts.length,108+(week==='2026-09-07'?1:0));
@@ -134,7 +152,7 @@ test('native PostgreSQL: complete weeks keep parity, fresh writes and rights wit
       const reports=[];
       for(const month of [7,8]) reports.push(await repository.recordConfirmedTradeFotoReport({preview:require('../test-support/postgresql-migration/aggregate-fixture').aggregatePreview({month}),locationId:'18',currency:'EUR',confirmed:true,actor:'00001',timestamp:'2026-09-17T12:00:00.000Z'}));
       const selection={version:1,reportId:reports[0].report.id,locationFilter:'18',dateFrom:'2026-01-01',dateTo:'2026-12-31',horizon:'period',chartType:'pareto',chartMetric:'grossMargin'};
-      const csrf=crypto.randomBytes(24).toString('hex');
+      const csrf=sessionCsrf(token);
       const saveSelection=await fetch(url+'/api/sales-analytics/selection',{method:'PUT',headers:{Cookie:'grabenplaner_session='+token+'; grabenplaner_csrf='+csrf,'X-CSRF-Token':csrf,'Content-Type':'application/json'},body:JSON.stringify(selection)});
       assert.equal(saveSelection.status,200,await saveSelection.text());
       assert.deepEqual((await request('/api/sales-analytics/selection')).body.selection,selection);
@@ -143,7 +161,7 @@ test('native PostgreSQL: complete weeks keep parity, fresh writes and rights wit
       const otherToken=crypto.randomBytes(32).toString('hex');
       await core.migrator.query('BEGIN');await core.migrator.query('SET LOCAL ROLE gp_core_owner');
       await core.migrator.query("UPDATE gp.portal_users SET role='developer',must_change_password=0 WHERE employee_number='00003'");
-      await core.migrator.query(`INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at) VALUES($1,'00003',$2,'2099-01-01T00:00:00.000Z')`,[crypto.randomUUID(),crypto.createHash('sha256').update(otherToken).digest('hex')]);
+      await core.migrator.query(`INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at,authenticated_at,absolute_expires_at) VALUES($1,'00003',$2,'2099-01-01T00:00:00.000Z',to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),to_char((clock_timestamp() + interval '8 hours') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))`,[crypto.randomUUID(),crypto.createHash('sha256').update(otherToken).digest('hex')]);
       await core.migrator.query('COMMIT');
       const otherSelection=await fetch(url+'/api/sales-analytics/selection',{headers:{Cookie:'grabenplaner_session='+otherToken}});
       assert.equal(otherSelection.status,200);assert.equal((await otherSelection.json()).selection,null);
@@ -162,7 +180,7 @@ test('native PostgreSQL: complete weeks keep parity, fresh writes and rights wit
         // fresh synthetic session so the next check reaches mid-read revocation.
         token=crypto.randomBytes(32).toString('hex');
         await core.migrator.query('BEGIN');await core.migrator.query('SET LOCAL ROLE gp_core_owner');
-        await core.migrator.query(`INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at) VALUES($1,'00001',$2,'2099-01-01T00:00:00.000Z')`,[crypto.randomUUID(),crypto.createHash('sha256').update(token).digest('hex')]);
+        await core.migrator.query(`INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at,authenticated_at,absolute_expires_at) VALUES($1,'00001',$2,'2099-01-01T00:00:00.000Z',to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),to_char((clock_timestamp() + interval '8 hours') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))`,[crypto.randomUUID(),crypto.createHash('sha256').update(token).digest('hex')]);
         await core.migrator.query('COMMIT');
         await request(route);
       }

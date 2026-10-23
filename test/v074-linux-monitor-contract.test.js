@@ -171,42 +171,44 @@ test("v0.86 Linux diagnostics enforce the complete public security-header contra
   ]) {
     assert.ok(health.includes(expected), `Headerpruefung fehlt: ${expected}`);
   }
-  for (const directive of ["object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"]) {
+  for (const directive of ["object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'"]) {
     assert.ok(health.includes(directive), `Content-Security-Policy prueft ${directive} nicht.`);
   }
 });
 
-test("v0.86 Linux diagnostics reject CSP directive substring appendages", {
-  skip: !bash,
-}, () => {
+test("security CSP: native Bash monitor rejects self, duplicate names and policy appendages", { skip: !bash }, () => {
   const health = read("server-tools/linux/test-grabenplaner-server.sh").replace(/\r\n/g, "\n");
   const functionStart = health.indexOf("csp_has_exact_directive()");
   const functionEnd = health.indexOf("\n}", functionStart);
-  assert.notEqual(functionStart, -1, "Exakte CSP-Prueffunktion fehlt.");
-  assert.notEqual(functionEnd, -1, "Ende der CSP-Prueffunktion fehlt.");
-  const functionSource = health.slice(functionStart, functionEnd + 2).trim();
-  const harness = [
-    functionSource,
-    "valid=\"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\"",
-    "frame_suffix=\"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none' https://evil.example\"",
-    "form_suffix=\"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://evil.example; frame-ancestors 'none'\"",
-    "if csp_has_exact_directive \"$valid\" \"frame-ancestors 'none'\"; then printf 'valid=accepted\\n'; else printf 'valid=rejected\\n'; fi",
-    "if csp_has_exact_directive \"$frame_suffix\" \"frame-ancestors 'none'\"; then printf 'frame=accepted\\n'; else printf 'frame=rejected\\n'; fi",
-    "if csp_has_exact_directive \"$form_suffix\" \"form-action 'self'\"; then printf 'form=accepted\\n'; else printf 'form=rejected\\n'; fi",
-    "",
-  ].join("\n");
-  const result = spawnSync(bash, ["-s"], {
-    input: harness,
-    encoding: "utf8",
-  });
+  assert.ok(functionStart >= 0 && functionEnd > functionStart);
+  assert.match(health, /grep -Eic '\^Content-Security-Policy:'/);
+  const valid = "default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+  const cases = [
+    ['valid', valid, true],
+    ['whitespace', valid.replace("base-uri 'none'", "BASE-URI\t  'none'"), true],
+    ['self', valid.replace("base-uri 'none'", "base-uri 'self'"), false],
+    ['missing', valid.replace("base-uri 'none'; ", ''), false],
+    ['baseSuffix', valid.replace("base-uri 'none'", "base-uri 'none' https://evil.example"), false],
+    ['frameSuffix', valid.replace("frame-ancestors 'none'", "frame-ancestors 'none' https://evil.example"), false],
+    ['formSuffix', valid.replace("form-action 'self'", "form-action 'self' https://evil.example"), false],
+    ['weakFirst', "base-uri 'self'; " + valid, false],
+    ['weakLast', valid + "; base-uri 'self'", false],
+    ['duplicateExact', valid + "; base-uri 'none'", false],
+    ['duplicateMixedCase', valid + "; BaSe-UrI 'self'", false],
+    ['otherDuplicate', valid + "; SCRIPT-src 'self'; script-SRC *", false],
+    ['comma', valid + ", default-src *", false],
+    ['combinedHeaders', valid + ', ' + valid, false],
+    ['embeddedNewline', valid.replace('; base-uri', ';\nbase-uri'), false],
+    ['substring', valid.replace("base-uri 'none'", "not-base-uri 'none'"), false],
+  ];
+  const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
+  const required = ["object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'"];
+  const harness = [health.slice(functionStart, functionEnd + 2), ...cases.map(([name,policy]) =>
+    'if ' + required.map(value=>'csp_has_exact_directive '+quote(policy)+' '+quote(value)).join(' && ') + '; then echo '+name+'=true; else echo '+name+'=false; fi'), ''].join('\n');
+  const result = spawnSync(bash, ['-s'], { input: harness, encoding: 'utf8', timeout: 15000, windowsHide: true });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout.trim(), [
-    "valid=accepted",
-    "frame=rejected",
-    "form=rejected",
-  ].join("\n"));
+  assert.equal(result.stdout.trim(), cases.map(([name,,expected])=>name+'='+expected).join('\n'));
 });
-
 test("v0.74 rejects backup timestamps more than five minutes in the future", () => {
   const health = read("server-tools/linux/test-grabenplaner-server.sh");
   assert.match(health, /age_seconds < -300/);

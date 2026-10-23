@@ -365,6 +365,10 @@ new_service_started=0
 update_committed=0
 maintenance_lock_held=0
 deploy_timer_state_captured=0
+deploy_deferral_generation=""
+deploy_deferral_pid=""
+deploy_deferral_helper="/opt/grabenplaner-offsite/module/lib/deploy-deferral.js"
+deploy_deferral_helper_sha256=""
 clamav_scan_pid=""
 database_lock_pid=""
 database_lock_runner_pid=""
@@ -379,6 +383,7 @@ rollback_app_ok=1
 rollback_stop_ok=1
 schema_migration_result="$maintenance_root/schema-migration.json"
 school_migration_result="$maintenance_root/vocational-school-migration.json"
+session_security_migration_result="$maintenance_root/session-security-migration.json"
 declare -a deploy_timer_units=(
   apt-daily.timer
   apt-daily-upgrade.timer
@@ -421,9 +426,9 @@ write_receipt() {
   local receipt="$history_dir/update-$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N').json"
   "$node" - "$receipt" "$status" "$old_version" "$candidate_version" "$(basename -- "$package")" "$actual_package_sha256" \
     "$backup_database" "$error_text" "$rollback_stop_ok" "$rollback_app_ok" "$rollback_data_ok" "$rollback_public_ok" \
-    "$deploy_started_at" "$deploy_decision" "$deploy_phases_file" "$schema_migration_result" "$school_migration_result" <<'NODE'
+    "$deploy_started_at" "$deploy_decision" "$deploy_phases_file" "$schema_migration_result" "$school_migration_result" "$session_security_migration_result" <<'NODE'
 const fs = require("node:fs");
-const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop, rollbackApp, rollbackData, rollbackPublic, startedAt, decision, phasesFile, migrationFile, schoolMigrationFile] = process.argv.slice(2);
+const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop, rollbackApp, rollbackData, rollbackPublic, startedAt, decision, phasesFile, migrationFile, schoolMigrationFile, sessionSecurityMigrationFile] = process.argv.slice(2);
 let schemaMigration = null;
 if (fs.existsSync(migrationFile) && fs.statSync(migrationFile).size) {
   try { schemaMigration = JSON.parse(fs.readFileSync(migrationFile, "utf8")); } catch { schemaMigration = { verified: false }; }
@@ -431,6 +436,10 @@ if (fs.existsSync(migrationFile) && fs.statSync(migrationFile).size) {
 let schoolSchemaMigration = null;
 if (fs.existsSync(schoolMigrationFile) && fs.statSync(schoolMigrationFile).size) {
   try { schoolSchemaMigration = JSON.parse(fs.readFileSync(schoolMigrationFile, "utf8")); } catch { schoolSchemaMigration = { verified: false }; }
+}
+let sessionSecuritySchemaMigration = null;
+if (fs.existsSync(sessionSecurityMigrationFile) && fs.statSync(sessionSecurityMigrationFile).size) {
+  try { sessionSecuritySchemaMigration = JSON.parse(fs.readFileSync(sessionSecurityMigrationFile, "utf8")); } catch { sessionSecuritySchemaMigration = { verified: false }; }
 }
 const phases = fs.readFileSync(phasesFile, "utf8").trim().split("\n").filter(Boolean).map(line => {
   const [phase, seconds] = line.split("\t");
@@ -444,6 +453,7 @@ fs.writeFileSync(file, `${JSON.stringify({
   phases,
   schemaMigration,
   schoolSchemaMigration,
+  sessionSecuritySchemaMigration,
   completedAt: new Date().toISOString(),
   previousVersion,
   requestedVersion: requestedVersion || null,
@@ -528,6 +538,51 @@ restore_deploy_timers() {
   fi
 }
 
+begin_deploy_deferral() {
+  [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 \
+    && "${deploy_timer_was_active[grabenplaner-offsite-assurance.timer]:-0}" == 1 \
+    && "${deploy_timer_was_enabled[grabenplaner-offsite-assurance.timer]:-0}" == 1 ]] || return 0
+  local module_root="/opt/grabenplaner-offsite/module" contract="/etc/grabenplaner/offsite/installed-contract.json"
+  [[ -f "$contract" && ! -L "$contract" && "$(stat --format='%u:%g:%a:%h' -- "$contract")" == "0:0:600:1" ]] \
+    || gp_die "Der Offsite-Vertrag fuer den Nachtlaufaufschub ist unsicher."
+  # The installed module is stable across application rename and rollback.
+  deploy_deferral_helper_sha256="$("$node" - "$contract" "$module_root" <<'NODE'
+const fs=require('node:fs'),crypto=require('node:crypto');
+const [file,root]=process.argv.slice(2),receipt=JSON.parse(fs.readFileSync(file,'utf8'));
+if(receipt.moduleVersion!==12)throw new Error('DEPLOY_DEFERRAL_MODULE_MIGRATION_REQUIRED');
+for(const name of ['lib/offsite-contract.js','lib/deploy-deferral.js']){
+ const target=root+'/'+name,st=fs.lstatSync(target),item=receipt.files.find(v=>v.path===name);
+ if(!st.isFile()||st.isSymbolicLink()||st.uid!==0||st.gid!==0||st.nlink!==1||(st.mode&0o022)!==0||!item||crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex')!==item.sha256)throw new Error('DEPLOY_DEFERRAL_MODULE_PROTECTION');
+}
+process.stdout.write(receipt.files.find(v=>v.path==='lib/deploy-deferral.js').sha256);
+NODE
+)" || gp_die "Der Nachtlaufaufschub benoetigt das zuvor geprueft installierte Offsite-Modul 12."
+  "$node" "$module_root/lib/offsite-contract.js" verify-installed-bound "$module_root" "$contract" >/dev/null \
+    || gp_die "Der installierte Offsite-Vertrag fuer den Nachtlaufaufschub stimmt nicht."
+  flock --nonblock 9 || gp_die "Die eigene Wartungssperre fuer den Nachtlaufaufschub fehlt."
+  deploy_deferral_generation="$("$node" "$deploy_deferral_helper" begin "$$" "${sha256_arg,,}")" \
+    || gp_die "Der begrenzte Nachtlaufaufschub konnte nicht belegt werden."
+  # Direct Node child: close all inherited maintenance descriptors before exec.
+  "$node" "$deploy_deferral_helper" heartbeat "$$" "$deploy_deferral_generation" 5>&- 6>&- 7>&- 8>&- 9>&- &
+  deploy_deferral_pid=$!
+}
+
+finish_deploy_deferral() {
+  [[ -n "${deploy_deferral_generation:-}" ]] || return 0
+  if [[ -n "$deploy_deferral_pid" ]]; then
+    kill -TERM "$deploy_deferral_pid" 2>/dev/null || true
+    wait "$deploy_deferral_pid" 2>/dev/null || true
+    deploy_deferral_pid=""
+  fi
+  [[ "$(gp_sha256 "$deploy_deferral_helper")" == "$deploy_deferral_helper_sha256" ]] || return 1
+  local outcome=aborted due
+  (( update_committed == 1 )) && outcome=completed
+  due="$("$node" "$deploy_deferral_helper" finish "$$" "$deploy_deferral_generation" "$outcome")" || return 1
+  if [[ "$due" == due ]]; then
+    systemctl start --no-block grabenplaner-offsite-assurance@scheduled-nightly.service >/dev/null || return 1
+  fi
+}
+
 pause_deploy_timers() {
   local timer unit next_elapse active_state schedule_state
   for timer in "${deploy_blocking_timer_units[@]}"; do
@@ -550,7 +605,9 @@ pause_deploy_timers() {
     fi
   done
   deploy_timer_state_captured=1
+  begin_deploy_deferral
   for timer in "${deploy_timer_units[@]}"; do
+    if [[ "$timer" == grabenplaner-offsite-assurance.timer && -n "$deploy_deferral_generation" ]]; then continue; fi
     if [[ "${deploy_timer_was_active[$timer]:-0}" == 1 ]]; then
       systemctl stop "$timer" >/dev/null \
         || gp_die "Der Wartungstimer $timer konnte vor dem Deploy nicht sicher pausiert werden."
@@ -561,6 +618,9 @@ pause_deploy_timers() {
   for unit in "${deploy_maintenance_units[@]}"; do
     gp_systemd_unit_exists "$unit" || continue
     active_state="$(systemctl show --property=ActiveState --value "$unit" 2>/dev/null || true)"
+    # Only the exact scheduled service may now be waiting behind our FD 9.
+    if [[ "$unit" == grabenplaner-offsite-assurance@scheduled-nightly.service && -n "$deploy_deferral_generation" \
+      && "$("$node" "$deploy_deferral_helper" due)" == due ]]; then continue; fi
     case "$active_state" in
       inactive|failed) ;;
       *) gp_die "Die Wartung $unit ist bereits aktiv oder im Zustandswechsel ($active_state). Der Deploy wird vor Paketinstallation und Virenscan beendet." ;;
@@ -729,6 +789,10 @@ cleanup() {
     if (( update_committed == 1 || (old_app_moved == 0 && rollback_app_ok == 1) )); then rm -rf -- "$maintenance_root"; fi
   fi
   restore_deploy_timers || exit_code=1
+  if ! finish_deploy_deferral; then
+    gp_warn "Der Nachtlaufaufschub konnte nicht abgeschlossen bzw. nachgeholt werden; der Fehler bleibt im Status sichtbar."
+    exit_code=1
+  fi
   exit "$exit_code"
 }
 trap cleanup EXIT
@@ -1161,6 +1225,12 @@ begin_deploy_phase vocational-school-schema-migration
   || gp_die "Die Berufsschul-Erweiterung ist fehlgeschlagen; die neue App wird nicht gestartet."
 "$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$school_migration_result" \
   || gp_die "Der Berufsschul-Migrationsnachweis ist unvollstaendig."
+begin_deploy_phase session-security-schema-migration
+"$node" "$app_dir/server-tools/linux/lib/session-security-migrate.js" \
+  "$installed_manifest_sha256" --maintenance-lock-held >"$session_security_migration_result" \
+  || gp_die "Die Sitzungs- und Kennwortsicherheits-Erweiterung ist fehlgeschlagen; die neue App wird nicht gestartet."
+"$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$session_security_migration_result" \
+  || gp_die "Der Sitzungs-Sicherheitsmigrationsnachweis ist unvollstaendig."
 fi
 begin_deploy_phase application-start
 gp_start_service "$service"
@@ -1197,7 +1267,9 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transiti
   ); then
     gp_warn "Das erfolgreiche App-Update konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden."
   fi
-  if [[ "$deploy_mode" == short ]]; then
+  if [[ -n "${deploy_deferral_generation:-}" && "$("$node" "$deploy_deferral_helper" due)" == due ]]; then
+    gp_info "Der bereits faellige Nachtlauf prueft die neue Version unmittelbar nach Freigabe der Wartungssperre."
+  elif [[ "$deploy_mode" == short ]]; then
     gp_info "Der vollstaendige Recovery-Nachweis fuer die neue Version folgt im aktivierten Nachtlauf."
   elif ! systemctl start --no-block grabenplaner-offsite-assurance@app-updated.service >/dev/null; then
     gp_warn "Die Recovery-Assurance-Pruefung nach dem App-Update konnte nicht eingeplant werden."

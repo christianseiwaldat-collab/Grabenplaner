@@ -350,7 +350,7 @@ try {
   if(!fs.existsSync(installed)){process.stdout.write('none');process.exit(0);}
   function read(file){const s=fs.lstatSync(file);if(!s.isFile()||s.isSymbolicLink()||s.uid!==0||s.nlink!==1||(s.mode&0o022)||s.size>131072||fs.realpathSync(file)!==file)throw Error();return JSON.parse(fs.readFileSync(file,'utf8'));}
   const core=read(path.join(process.argv[2],'server-tools/linux/offsite/module-schema.json')),module=read(installed);
-  if(core.format!=='grabenplaner-linux-offsite-module-contract'||core.schemaVersion!==1||module.format!=='grabenplaner-linux-offsite-installed-contract'||module.schemaVersion!==1||![7,8,9,10,11].includes(core.moduleVersion)||![7,8,9,10,11].includes(module.moduleVersion))throw Error();
+  if(core.format!=='grabenplaner-linux-offsite-module-contract'||core.schemaVersion!==1||module.format!=='grabenplaner-linux-offsite-installed-contract'||module.schemaVersion!==1||![7,8,9,10,11,12].includes(core.moduleVersion)||![7,8,9,10,11,12].includes(module.moduleVersion))throw Error();
   process.stdout.write(core.moduleVersion>=10&&module.moduleVersion>=10?'single':'legacy');
 }catch{process.stderr.write('Der Sicherungszeitplan konnte nicht verifiziert werden.\n');process.exitCode=1;}
 NODE

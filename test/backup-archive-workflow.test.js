@@ -160,6 +160,7 @@ test("shutdown shares one deadline with drain and does not release the instance 
       dataImportJobs: { stop: async () => {} }, dataImportRoutes: { stop: async () => {} },
       recoveryAssuranceStatusReader: { close: () => { events.push("assurance-close"); return assuranceDrain; } },
       updateRequestLifecycle: { close: async () => {} }, systemCenterHealthSyncInFlight: null,
+      planningDerivedRefresh: { close: async () => {} },
       tradeInsightJobs: { stop: async () => {} },
       salesReportJobs: { stop: async () => {} },
       postgresqlReceiptWorkers: null,

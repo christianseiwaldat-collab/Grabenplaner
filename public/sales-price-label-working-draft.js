@@ -56,11 +56,13 @@
       finally{if(read===request)read=null;}})();return request.promise;
     }
     function change(next){sync();if(!loaded||!canUse())return false;value=normalize(next,normalizeOptions);if(!uncertain)error=null;notify();schedule();return true;}
-    function flush(){
-      sync();clearTimer();if(!loaded||!canUse())return Promise.resolve(false);if(write)return write.promise;if(!dirty())return Promise.resolve(true);
+    function flush({canContinue=()=>true}={}){
+      sync();clearTimer();if(!loaded||!canUse()||!canContinue())return Promise.resolve(false);
+      if(write){const previous=write.canContinue;write.canContinue=()=>previous()&&canContinue();return write.promise;}
+      if(!dirty())return Promise.resolve(true);
       if(uncertain||error?.status===409)return Promise.resolve(false);
-      const owner=actor,ticket=epoch,controller=new AbortController(),request={controller};write=request;notify();
-      request.promise=(async()=>{while(current(owner,ticket)&&dirty()){
+      const owner=actor,ticket=epoch,controller=new AbortController(),request={controller,canContinue};write=request;notify();
+      request.promise=(async()=>{while(current(owner,ticket)&&request.canContinue()&&dirty()){
         const snapshot=clone(value),mutationId=globalThis.crypto.randomUUID();lastSent={snapshot,mutationId,revision};
         try{const saved=await api('/api/sales/price-labels/draft',{method:'PUT',signal:controller.signal,body:JSON.stringify({revision,mutationId,draft:snapshot})});
           if(controller.signal.aborted||!current(owner,ticket))return false;
@@ -69,15 +71,15 @@
         }catch(cause){if(!controller.signal.aborted&&current(owner,ticket)){error=cause;uncertain=true;notify();onError(cause);}return false;}
       }return current(owner,ticket)&&!dirty();})().finally(()=>{if(write===request){write=null;notify();}});return request.promise;
     }
-    async function retry(){
-      sync();if(!loaded)return activate();if(write)return write.promise;
+    async function retry({canContinue=()=>true}={}){
+      sync();if(!canContinue())return false;if(!loaded)return activate();if(write)return flush({canContinue});
       const owner=actor,ticket=epoch;
-      try{const saved=await api('/api/sales/price-labels/draft');if(!current(owner,ticket))return false;
+      try{const saved=await api('/api/sales/price-labels/draft');if(!current(owner,ticket)||!canContinue())return false;
         const server=saved.draft===null?null:normalize(saved.draft,normalizeOptions);
         if(!Number.isSafeInteger(saved.revision)||saved.revision<revision)throw new Error('Die Entwurfsrevision ist ungültig.');
         const ownAcknowledgment=lastSent&&saved.lastMutationId===lastSent.mutationId&&saved.revision===lastSent.revision+1&&same(server,lastSent.snapshot);
         if(saved.revision!==revision&&!same(server,value)&&!same(server,baseline)&&!ownAcknowledgment){const conflict=new Error('Ein anderes Fenster hat den Entwurf geändert. Deine Eingaben bleiben erhalten. Öffne den gespeicherten Stand oder speichere später eine Projektkopie.');conflict.status=409;throw conflict;}
-        revision=saved.revision;baseline=clone(server);error=null;uncertain=false;lastSent=null;notify();return flush();
+        revision=saved.revision;baseline=clone(server);error=null;uncertain=false;lastSent=null;notify();return flush({canContinue});
       }catch(cause){if(current(owner,ticket)){error=cause;uncertain=true;notify();onError(cause);}return false;}
     }
     return {activate,change,flush,retry,invalidate,subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn);},get ready(){sync();return loaded&&canUse();},

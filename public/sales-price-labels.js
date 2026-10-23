@@ -147,7 +147,7 @@
     return whole + ',' + String(cents % 100n).padStart(2, '0');
   }
   function projectPagePreview(project,plan,page){const labels=new Map(project.labels.map(label=>[label.id,label]));return '<svg class="spl-paper-page" viewBox="0 0 '+plan.width+' '+plan.height+'" role="img" aria-label="Papierbelegung des Projekts, Seite '+(page+1)+'"><rect width="'+plan.width+'" height="'+plan.height+'" fill="white"/>'+plan.cells.filter(cell=>cell.page===page).map(cell=>{
-    const label=labels.get(cell.labelId),o=label.options,cut=PaperGrid.cutsVisible(o),b=PaperGrid.shapeBounds(o.shape,cell.x,cell.y,cell.width,cell.height,o.showBorder?.18:cut?.12:0),shape=b.kind==='circle'?'<circle cx="'+(b.x+b.radius)+'" cy="'+(b.y+b.radius)+'" r="'+b.radius+'"':'<rect x="'+b.x+'" y="'+b.y+'" width="'+b.width+'" height="'+b.height+'" rx="'+b.radius+'"';return '<g><title>'+escape(label.articleNumber+' · Kopie '+(cell.copyIndex+1))+'</title>'+shape+' fill="#DFECE4" stroke="'+(o.showBorder?o.color:cut?'#79877F':'none')+'" stroke-width="'+(o.showBorder?.18:cut?.12:0)+'"'+(cut?' stroke-dasharray="2 1"':'')+'/></g>';}).join('')+'</svg>';}
+    const label=labels.get(cell.labelId),o=label.options,cut=PaperGrid.cutsVisible(o),b=PaperGrid.shapeBounds(o.shape,cell.x,cell.y,cell.width,cell.height,o.showBorder ? 0.18 : cut ? 0.12 : 0),shape=b.kind==='circle'?'<circle cx="'+(b.x+b.radius)+'" cy="'+(b.y+b.radius)+'" r="'+b.radius+'"':'<rect x="'+b.x+'" y="'+b.y+'" width="'+b.width+'" height="'+b.height+'" rx="'+b.radius+'"';return '<g><title>'+escape(label.articleNumber+' · Kopie '+(cell.copyIndex+1))+'</title>'+shape+' fill="#DFECE4" stroke="'+(o.showBorder?o.color:cut?'#79877F':'none')+'" stroke-width="'+(o.showBorder ? 0.18 : cut ? 0.12 : 0)+'"'+(cut?' stroke-dasharray="2 1"':'')+'/></g>';}).join('')+'</svg>';}
   function filename(name, options) {
     const model = globalThis.GrabenplanerTradeExportOptions || globalThis.GrabenplanerTradeExport;
     if (model?.filename) return model.filename(name, options);
@@ -789,8 +789,36 @@
           return false;
         }
       }, suspend,
-      async flush(){recordDraft();return draftStore.flush();},
+      async flush(){
+        let deadline, preparationExpired = false;
+        const flushOwner = owner, flushDraft = workingDraftId;
+        const current = () => !preparationExpired && !destroyed && owner === flushOwner && accessKey() === flushOwner && workingDraftId === flushDraft;
+        if (!current()) return false;
+        recordDraft();
+        const save = (async () => {
+          let saved = await draftStore.flush({canContinue: current});
+          if (!current()) return false;
+          if (!saved && draftStore.hasUnsaved) saved = await draftStore.retry({canContinue: current});
+          if (!current()) return false;
+          if (!saved && draftStore.hasUnsaved) {
+            const cause = draftStore.error;
+            throw Object.assign(new Error(cause?.message || 'Der Arbeitsentwurf konnte nicht bestätigt werden. Bitte das Speichern erneut versuchen.'),
+              {code: cause?.code || 'PRICE_LABEL_DRAFT_UNSAVED', status: cause?.status});
+          }
+          return saved;
+        })();
+        try {
+          return await Promise.race([save, new Promise((_, reject) => {
+            deadline = setTimeout(() => {
+              preparationExpired = true;
+              reject(Object.assign(new Error('Der Preisschildentwurf wird noch gesichert. Bitte anschließend erneut abmelden.'),
+                {code: 'PRICE_LABEL_DRAFT_PENDING'}));
+            }, 15000);
+          })]);
+        } finally { clearTimeout(deadline); }
+      },
       get hasUnsaved(){return draftStore.hasUnsaved||imageUploading;},
+      get hasPendingUpload(){return imageUploading;},
       syncPrint(){pdfPrint?.sync();},
       destroy() { suspend();destroyed=true;pdfPrint?.destroy();searchWindow?.destroy();for(const controller of uploadControllers)controller.abort();uploadControllers.clear();draftStore.invalidate();stopDraftSubscription();for (const off of listeners) off(); elementEditor.destroy(); root.replaceChildren(); },
     };

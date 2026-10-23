@@ -61,11 +61,11 @@ test('article branch order SQL isolates source, article, current revision and in
   require('../lib/persistence/sqlite/operations/import-history-schema').ensureSqliteImportHistorySchema(app.database);
   t.after(async () => { await app.provider.close(); app.database.close(); });
   await seed(app.provider); await check(app.provider);
-  const plan = app.database.prepare('EXPLAIN QUERY PLAN ' + sqliteCatalog[0].sql)
+  const plan = app.database.prepare('EXPLAIN QUERY PLAN ' + sqliteCatalog.find(entry => entry.statement === S.candidates).sql)
     .all({ scopeId, articleMaster, limit: 401 }).map(row => row.detail).join('\n');
   assert.match(plan, /SEARCH q USING COVERING INDEX import_history_reference_master \(master_record_id=\? AND role=\?\)/);
   assert.doesNotMatch(plan, /SCAN r\b/);
-  const segmentPlan = app.database.prepare('EXPLAIN QUERY PLAN ' + sqliteCatalog[1].sql)
+  const segmentPlan = app.database.prepare('EXPLAIN QUERY PLAN ' + sqliteCatalog.find(entry => entry.statement === S.internalSegments).sql)
     .all({ requests: JSON.stringify([{ recordId: 'a-detail', revision: 1 }]) }).map(row => row.detail).join('\n');
   assert.match(segmentPlan, /SEARCH s USING INDEX [^\n]*\(record_id=\? AND revision=\? AND data_class=\?\)/);
 });
@@ -76,17 +76,18 @@ test('article branch order reads register once and qualify wholly in Sales witho
   const sqlite = require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG;
   const reporting = require('../lib/persistence/postgresql/reporting/branch-article-catalog').BRANCH_ARTICLE_CATALOG;
   const catalog = require('../lib/persistence/postgresql/reporting/sales-article-branch-orders-catalog').ARTICLE_BRANCH_ORDERS_CATALOG;
-  assert.equal(catalog.length, 2);
+  assert.equal(catalog.length, Object.keys(S).length);
   for (const statement of Object.values(S)) {
     assert.equal(sqlite.filter(entry => entry.statement === statement).length, 1);
     assert.equal(reporting.filter(entry => entry.statement === statement).length, 1);
     assert.equal(pinned.entries.some(entry => entry.statement.id === statement.id), false);
   }
-  assert.match(catalog[0].sql, /integration\."import_history_references"/);
-  assert.match(catalog[0].sql, /integration\."import_history_records"/);
-  assert.match(catalog[1].sql, /integration\."import_history_segments"/);
-  assert.match(catalog[1].sql, /WITH ORDINALITY/);
-  assert.match(catalog[1].sql, /data_class='internal_business'/);
+  const candidates = catalog.find(entry => entry.statement === S.candidates), segments = catalog.find(entry => entry.statement === S.internalSegments);
+  assert.match(candidates.sql, /integration\."import_history_references"/);
+  assert.match(candidates.sql, /integration\."import_history_records"/);
+  assert.match(segments.sql, /integration\."import_history_segments"/);
+  assert.match(segments.sql, /WITH ORDINALITY/);
+  assert.match(segments.sql, /data_class='internal_business'/);
   assert.doesNotMatch(catalog.map(entry => entry.sql).join('\n'), /file_sha256|customer_restricted|INDEXED BY/);
 });
 
@@ -94,9 +95,8 @@ test('native PostgreSQL article branch order SQL follows the same bounded select
   { skip: process.env.GP_PG_MIGRATION_LIVE !== '1', timeout: 90000 }, async () => {
     // This qualification is restricted to the existing isolated local fixture.
     for (const name of ['GP_SALES_MIGRATOR_URL', 'GP_SALES_APP_URL']) {
-      const url = new URL(process.env[name]);
-      assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname));
-      assert.equal(url.port, '25475'); assert.equal(url.pathname, '/gp_migration_sales');
+      require('../test-support/postgresql-migration/ci-endpoint').assertSyntheticEndpoint(
+        process.env[name], 'sales', ['25475']);
     }
     await require('../test-support/postgresql-migration/sales-fixture').withSalesFixture(8, async fixture => {
       await seed(fixture.postgres); await check(fixture.postgres);

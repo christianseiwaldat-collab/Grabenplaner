@@ -21,6 +21,19 @@ test('department output preserves selected departmentId while source context is 
  assert.equal(url.searchParams.get('departmentId'),'7');assert.equal(url.searchParams.has('department'),false);assert.equal(f.context.query.department,'3','Source context is not mutated');
  f.change({query:{...f.context.query,location:'19'}});assert.equal(f.config.canUse(),false);assert.throws(()=>f.config.request({payload:f.input.payload,options:{design:'matrix'}}),/Planungsstand/);
 });
+
+test('schedule employee choices apply to both designs and never turn an empty selection into everyone',()=>{
+ const f=fixture();f.change({employees:[{number:'420',name:'Example A'},{number:'434',name:'Example B'}]});f.print.open();
+ assert.deepEqual(f.config.commonFields,{title:false,filename:true,orientation:false});
+ for(const design of ['matrix','timeline']){
+  const request=f.config.request({payload:f.input.payload,options:{design,employeeNumbers:['420']}});
+  assert.equal(new URL(request.url,'https://gp.example.test').searchParams.get('employees'),'420');
+ }
+ assert.equal(new URL(f.config.request({payload:f.input.payload,options:{design:'matrix',employeeNumbers:['420','434']}}).url,'https://gp.example.test').searchParams.get('employees'),'420,434','All selected employees remain an explicit snapshot; later additions cannot silently join the PDF');
+ assert.throws(()=>f.config.request({payload:f.input.payload,options:{design:'matrix',employeeNumbers:[]}}),/mindestens eine/);
+ assert.throws(()=>f.config.request({payload:f.input.payload,options:{design:'matrix',employeeNumbers:['foreign']}}),/verfügbare Person/);
+ f.change({employees:[{number:'434',name:'Example B'}]});assert.equal(f.config.canUse(),false,'A changed employee scope invalidates old print choices');
+});
 test('vacation retains year/view/quarter/month and fixed paper controls',()=>{
  const f=fixture('vacation');assert.equal(f.print.open(),true);const request=f.config.request({payload:f.input.payload,options:{}});
  assert.deepEqual(Object.fromEntries(new URL(request.url,'https://gp.example.test').searchParams),{year:'2026',view:'quarter',quarter:'4',month:'10',location:'18'});
@@ -62,7 +75,7 @@ test('application navigation deactivates unavailable pages without resetting ret
 test('real shell sync reaches Planning before dependency early-return and logout clears it after session withdrawal',()=>{
  const source=fs.readFileSync(require.resolve('../public/app'),'utf8'),take=name=>{const begin=source.indexOf('function '+name+'('),end=source.indexOf('\n}',begin)+2;return source.slice(begin,end);};
  const calls=[],state={currentView:'planning',portalStatus:{portalEnabled:true},portalSession:{authenticated:true,user:{}}},print={activate:()=>calls.push('activate'),deactivate:()=>calls.push('deactivate'),sync:()=>calls.push('sync')};
- const sandbox={state,window:{},syncSettingsSaveScopes(){},planningPrintWindows:{schedule:print},canReadStartDashboardSchedule:()=>true,canReadStartDashboardVacations:()=>true};vm.createContext(sandbox);vm.runInContext(['canUsePlanningPrint','planningPrintPageAllowed','syncPlanningPrintWindows','syncGpWindows'].map(take).join('\n'),sandbox);
+ const sandbox={state,window:{},planningAssistantWorkspace:null,usbGuidePrint:null,syncUsbGuidePrint(){},syncXoffiImport(){},syncWorkflowStudio(){},syncPersonnelDashboardWorkspace(){},syncPersonnelDashboardInformation(){},personnelDashboardInformation:{clear(){assert.equal(state.portalSession,null);}},syncSettingsSaveScopes(){},planningPrintWindows:{schedule:print},canReadStartDashboardSchedule:()=>true,canReadStartDashboardVacations:()=>true};vm.createContext(sandbox);vm.runInContext(['canUsePlanningPrint','planningPrintPageAllowed','syncPlanningPrintWindows','syncGpWindows'].map(take).join('\n'),sandbox);
  sandbox.syncGpWindows();state.currentView='sales';sandbox.syncGpWindows();assert.deepEqual(calls,['activate','sync','deactivate','sync']);
  const logout=take('showLoginGate');assert.ok(logout.indexOf('syncPlanningPrintWindows();')>logout.indexOf('state.portalSession = null;'));
  vm.runInContext(logout.slice(logout.indexOf('  state.portalSession = null;'),logout.indexOf('  gpDocumentPrint?.reset();')),sandbox);assert.equal(state.portalSession,null);assert.deepEqual(calls.slice(-2),['deactivate','sync']);

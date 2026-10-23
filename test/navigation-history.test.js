@@ -104,28 +104,35 @@ function functionSource(source, name) {
   assert.ok(match, name); return source.slice(match.index, source.indexOf('\n}', match.index) + 2);
 }
 function element(dataset = {}) {
-  const classes = new Set();
-  return { dataset, append() {}, classList: { contains: value => classes.has(value), toggle(value, on) { if (on) classes.add(value); else classes.delete(value); } } };
+  const classes = new Set(), attributes = new Map();
+  return { dataset, append() {}, setAttribute: (name, value) => attributes.set(name, String(value)),
+    getAttribute: name => attributes.get(name) ?? null, removeAttribute: name => attributes.delete(name),
+    classList: { contains: value => classes.has(value), toggle(value, on) { if (on) classes.add(value); else classes.delete(value); } } };
 }
 
 function administration() {
+  const navigation = [element({ view: 'startDashboard' }), element({ view: 'settings' }),
+    element({ view: 'personnelAdministration', personnelAdministrationRoute: 'workflows' })];
   const settings = ['general', 'rights', 'schedule', 'developer', 'systemCenter'].map(settingsTab => element({ settingsTab }));
   settings[0].classList.toggle('active', true); settings[3].classList.toggle('hidden', true);
   const win = browser(), calls = [], elements = new Proxy({}, { get(target, key) { return target[key] ||= element(); } });
-  const documentElements = new Map(['salesPriceLabelsView', 'tradeInsightsWorkspace', 'logisticsWorkspaceHost', 'privacyOrganizationView'].map(id => [id, element()]));
+  const documentElements = new Map(['salesPriceLabelsView', 'tradeInsightsWorkspace', 'logisticsWorkspaceHost', 'privacyOrganizationView', 'privacyOrganizationWorkspaceHost', 'technicalSecurityView', 'securitySastWorkspaceHost', 'securityAuditsWorkspaceHost'].map(id => [id, element()]));
   win.GrabenplanerTradeInsights = require('../public/trade-insights');
   win.GrabenplanerPrivacyOrganization = require('../public/privacy-organization');
+  win.GrabenplanerSecurityAudits = require('../public/security-audits');
   const ctx = { window: win, URLSearchParams, state: { currentView: 'startDashboard', portalStatus: {}, crm: {}, salesArticleCatalog: {},
     salesAnalytics: { tab: 'create' }, personnelAdministrationTab: 'dashboard', personnelTab: 'employees',
     requestKindTab: 'vacation', rightsDashboardMode: 'rights', locationId: '18', departmentId: '',
     locations: [{ id: '18', active: true, departments: [{ id: 1, active: true }] }, { id: '20', active: true, departments: [{ id: 2, active: true }] }] },
     elements, timePresenceRefreshTimer: null, receiptSearchWorkspace: null, salesArticleReportWorkspace: null, salesBwlWorkspace: null, gpDefinitionsWorkspace: null, renderGpDefinitionsAccess: () => {}, tradeInsightsTab: 'repairs',
-    privacyOrganizationTab: 'overview',
+    privacyOrganizationTab: 'overview', technicalSecurityTab: 'sast', securitySastWorkspace: null,
     privacyOrganizationWorkspace: {activate: tab => calls.push({privacy: tab}), suspend: () => calls.push('suspendPrivacy')},
+    securityAuditsWorkspace: {activate: () => calls.push('activateSecurityAudits'), suspend: () => calls.push('suspendSecurityAudits')},
     tradeInsightsWorkspace: { activate: tab => calls.push({ insights: tab }), setArea: area => calls.push({ area }), suspend: () => calls.push('suspendInsights') },
     salesPriceLabelsWorkspace: { load: () => calls.push('loadPriceLabels'), suspend: () => calls.push('suspendPriceLabels') },
+    tradeOrdersWorkspace: null,
     document: { hidden: false, getElementById: id => documentElements.get(id) || null,
-      querySelectorAll: selector => selector.includes('data-settings-tab') ? settings : [],
+      querySelectorAll: selector => selector.includes('data-settings-tab') ? settings : selector === '.nav-item' ? navigation : [],
       querySelector: selector => settings.find(item => (!selector.includes('.active') || item.classList.contains('active')) && !item.classList.contains('hidden')) },
     setSettingsTab(tab) { settings.forEach(item => item.classList.toggle('active', item.dataset.settingsTab === tab)); },
     employeeProfileIsOpen: () => false, accessibleDashboardModes: () => ['rights', 'processes'],
@@ -138,26 +145,45 @@ function administration() {
     setRightsDashboardMode: mode => { ctx.state.rightsDashboardMode = mode; },
     canReadSystemCenter: () => true,
     canReadPrivacyOrganizationWorkspace: () => true,
+    canReadSecurityAuditsWorkspace: () => true,
     canReadDataSubjectRequests: () => true,
     loadDataSubjectRequests: async () => { calls.push('loadDataRequests'); },
     showToast: () => {},
     loadSystemCenter: () => calls.push('loadSystemCenter'),
   };
-  for (const name of ['canReadManagerRequests', 'canReadManagedTimeTracking', 'canOpenPersonnelAdministrationModule', 'canAccessTeamManagement', 'canOpenSalesAdministrationModule', 'canAccessSalesAnalytics', 'canAccessSalesArticleCatalog', 'canUseSalesPriceLabels', 'canAccessCrm', 'canAccessTradeInsights', 'canReadLoanManagement', 'canManageBranchOrders', 'canAccessPrivacyOrganization']) ctx[name] = () => true;
+  for (const name of ['canReadManagerRequests', 'canReadManagedTimeTracking', 'canOpenPersonnelAdministrationModule', 'canAccessTeamManagement', 'canOpenSalesAdministrationModule', 'canAccessSalesAnalytics', 'canAccessSalesArticleCatalog', 'canUseSalesPriceLabels', 'canAccessCrm', 'canAccessTradeInsights', 'canReadTradeMovements', 'canReadLoanManagement', 'canManageBranchOrders', 'canAccessPrivacyOrganization']) ctx[name] = () => true;
   for (const name of ['clearUsbProvisioningPasswords', 'clearPersonnelLifecycleEditorState', 'pausePersonnelLifecycleEditor', 'pauseEmployeeProfile', 'resumeEmployeeProfile', 'clearPersonnelLifecycleAutomationState', 'renderContextNavigation', 'applyActivePageAppearance', 'syncSalesArticleSearchWindow', 'syncGpWindows', 'syncStartDashboardVps', 'loadStartDashboard', 'loadRightsDashboard', 'ensureAccessibleManagerRequestTab', 'loadManagerVacationRequests', 'loadLoanManagement', 'loadBranchOrdersManagement', 'renderSalesArticleCatalogResults', 'loadSalesArticleCatalogDetail', 'syncCrmCustomerWorkspace']) ctx[name] = () => {};
   for (const name of ['loadSalesArticleTablePreferences', 'loadSalesArticleLastImport', 'loadCrmPreferences']) ctx[name] = async () => {};
   vm.createContext(ctx);
-  vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'activateTradeArea', 'canAccessPrivacyOrganization', 'normalizePrivacyOrganizationTab', 'firstAccessiblePrivacyOrganizationTab', 'canOpenPrivacyOrganizationTab', 'activatePrivacyOrganizationView', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
+  vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'activateTradeArea', 'canAccessPrivacyOrganization', 'normalizePrivacyOrganizationTab', 'firstAccessiblePrivacyOrganizationTab', 'canOpenPrivacyOrganizationTab', 'activatePrivacyOrganizationView', 'normalizeTechnicalSecurityTab', 'activateTechnicalSecurityView', 'setNavigationCurrent', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
   ctx.grabenplanerNavigation = create({ window: win, app: 'admin', keys: ['view', 'section', 'kind', 'dashboard', 'process', 'location', 'department'],
     read: ctx.currentAdministrationRoute, apply: () => ctx.applyRequestedView({ fromHistory: true }) });
-  ctx.grabenplanerNavigation.start(); return { ctx, win, calls };
+  ctx.grabenplanerNavigation.start(); return { ctx, win, calls, navigation };
 }
 
-function installPrivacyPrincipal(ctx, permissions) {
+test('Administration actual navigation keeps aria-current and active leaves aligned through Home, Settings and Back/Forward', () => {
+  const {ctx,win,navigation} = administration();
+  ctx.setView('startDashboard'); win.flush();
+  assert.equal(navigation[0].getAttribute('aria-current'), 'page');
+  ctx.setView('settings'); win.flush();
+  assert.equal(navigation[0].getAttribute('aria-current'), null);
+  assert.equal(navigation[1].getAttribute('aria-current'), 'page');
+  ctx.state.personnelAdministrationTab = 'workflows'; ctx.setView('personnelAdministration'); win.flush();
+  assert.equal(navigation[1].getAttribute('aria-current'), null);
+  assert.equal(navigation[2].getAttribute('aria-current'), 'page');
+  win.history.go(-1); win.flush();
+  assert.equal(navigation[1].getAttribute('aria-current'), 'page');
+  assert.equal(navigation[2].getAttribute('aria-current'), null);
+  win.history.go(-1); win.flush();
+  assert.equal(navigation[0].getAttribute('aria-current'), 'page');
+  assert.equal(navigation.filter(node => node.classList.contains('active')).length, 1);
+});
+
+function installPrivacyPrincipal(ctx, permissions, role = 'hr') {
   ctx.state.portalStatus.portalEnabled = true;
   ctx.state.portalSession = { user: { employeeNumber: 'SYNTHETIC-DSAR', accountId: 'synthetic',
-    role: 'hr', isEmployee: true, accountType: 'employee', sessionKind: 'employee', permissions } };
-  vm.runInContext(['hasGovernancePermission', 'canReadDataSubjectRequests', 'canReadPrivacyOrganizationWorkspace']
+    role, isEmployee: true, accountType: 'employee', sessionKind: 'employee', permissions } };
+  vm.runInContext(['hasGovernancePermission', 'canReadDataSubjectRequests', 'canReadPrivacyOrganizationWorkspace', 'canReadSecurityAuditsWorkspace']
     .map(name => functionSource(appSource, name)).join('\n'), ctx);
 }
 
@@ -181,6 +207,45 @@ test('Administration: unknown privacy sections normalize to overview', () => {
   win.history.replaceState(null,'','?view=privacyOrganization&section=not-a-section');
   ctx.applyRequestedView({fromHistory:true}); win.flush();
   assert.equal(ctx.currentAdministrationRoute().section,'overview');
+});
+
+test('Administration: audit-only navigation restores Back/Forward and denies revoked or unrelated privacy access', () => {
+  const { ctx, win, calls } = administration();
+  installPrivacyPrincipal(ctx, ['security_audits:read'], 'it_admin');
+  assert.equal(ctx.canReadSecurityAuditsWorkspace(), true);
+  assert.equal(ctx.canReadPrivacyOrganizationWorkspace(), false);
+  assert.equal(ctx.canReadDataSubjectRequests(), false);
+  win.history.replaceState(null, '', '?view=privacyOrganization');
+  ctx.applyRequestedView({ fromHistory: true }); win.flush();
+  assert.equal(win.location.search, '?view=technicalSecurity&section=security-audits');
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.currentAdministrationRoute())), {
+    view: 'technicalSecurity', section: 'security-audits',
+  });
+  assert.ok(calls.includes('activateSecurityAudits'));
+  assert.equal(calls.some(call => call.privacy), false);
+  assert.equal(calls.includes('loadDataRequests'), false);
+  assert.equal(ctx.document.getElementById('securityAuditsWorkspaceHost').classList.contains('hidden'), false);
+  assert.equal(ctx.document.getElementById('technicalSecurityView').classList.contains('active'), true);
+  assert.equal(ctx.elements.dataSubjectRequestsSection.classList.contains('hidden'), true);
+  ctx.setView('settings'); win.flush();
+  assert.ok(calls.includes('suspendSecurityAudits'));
+  assert.equal(ctx.document.getElementById('securityAuditsWorkspaceHost').classList.contains('hidden'), true);
+  win.history.go(-1); win.flush();
+  assert.equal(ctx.currentAdministrationRoute().section, 'security-audits');
+  win.history.go(1); win.flush();
+  assert.equal(ctx.state.currentView, 'settings');
+  ctx.state.portalSession.user.permissions = [];
+  win.history.go(-1); win.flush();
+  assert.equal(ctx.state.currentView, 'startDashboard');
+  assert.equal(win.location.search, '?view=startDashboard');
+  assert.equal(ctx.document.getElementById('securityAuditsWorkspaceHost').classList.contains('hidden'), true);
+  ctx.state.portalSession.user.permissions = ['security_audits:read'];
+  for (const section of ['overview', 'dataRequests']) {
+    win.history.replaceState(null, '', `?view=privacyOrganization&section=${section}`);
+    ctx.applyRequestedView({ fromHistory: true }); ctx.grabenplanerNavigation.replace(); win.flush();
+    assert.equal(ctx.state.currentView, 'startDashboard');
+    assert.equal(win.location.search, '?view=startDashboard');
+  }
 });
 
 test('Administration: legacy data requests move to privacy, retain DSAR-only access and restore Back/Forward', () => {
@@ -286,6 +351,7 @@ test('Administration: legacy purchasing links redirect to logistics and preserve
   assert.equal(ctx.currentAdministrationRoute().section, 'inventory');
   ctx.setView('salesAdministration'); win.flush();
   ctx.canAccessTradeInsights = () => false;
+  ctx.canReadTradeMovements = () => false;
   win.history.go(-1); win.flush();
   assert.equal(ctx.state.currentView, 'startDashboard');
   assert.equal(win.location.searchParams.get('view'), 'startDashboard');
@@ -380,6 +446,7 @@ test('Administration: late context responses cannot replace the most recent bran
   ctx.canReadManagerRequests = ctx.canReadLoanManagement = ctx.canManageBranchOrders = () => false;
   ctx.enrichLoadedSchedule = () => Promise.resolve(false);
   ctx.syncSettingsSaveScopes = () => {};
+  ctx.syncXoffiImport = () => {};
   ctx.settingsSaveKey = () => JSON.stringify([ctx.state.locationId, ctx.state.departmentId]);
   ctx.settingsConfirmationReadToken = () => ({key:ctx.settingsSaveKey(),revision:0});
   ctx.acknowledgeSettingsRead = () => false;

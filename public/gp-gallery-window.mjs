@@ -1,6 +1,45 @@
 const EDGES = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const studioWindows = [];
+let portal = null;
+function updatePortalVisibility() {
+  if (portal) portal.host.hidden = !studioWindows.some(dialog => dialog.open);
+}
+
+export function workspaceElements(selector) {
+  return [...new Set([...document.querySelectorAll(selector), ...studioWindows.flatMap(dialog => [ ...(dialog.matches(selector) ? [dialog] : []), ...dialog.querySelectorAll(selector)])])];
+}
+
+function adoptWindow(dialog) {
+  const source = dialog.ownerDocument, sourceWindow = source.defaultView;
+  try {
+    if (sourceWindow.parent === sourceWindow || !sourceWindow.frameElement?.isConnected
+      || sourceWindow.parent.location.origin !== sourceWindow.location.origin
+      || !sourceWindow.location.pathname.startsWith('/api/portal/v1/private-workspaces/')) return;
+    if (!portal) {
+      const target = sourceWindow.parent.document, host = target.createElement('div');
+      host.className = 'gp-private-window-portal';
+      host.hidden = true;
+      Object.assign(host.style, {position:'fixed',inset:'0',zIndex:'60000',pointerEvents:'none'});
+      const shadow = host.attachShadow({mode:'open'});
+      for (const sheet of source.styleSheets) {
+        const style = target.createElement('style');
+        style.textContent = [...sheet.cssRules].map(rule=>rule.cssText).join('\n')
+          .replace(/\b(?:html|body)(\[[^\]]+\])/g, ':host($1)')
+          .replace(/:root|\bhtml(?=\s|\{|,)|\bbody(?=\s|\{|,)/g, ':host');
+        shadow.append(style);
+      }
+      const style = target.createElement('style');
+      style.textContent = ':host{background:transparent!important;border:0!important;margin:0!important;padding:0!important;box-shadow:none!important;pointer-events:none!important}:host([hidden]){display:none!important}:host::before,:host::after{display:none!important}dialog{pointer-events:auto;position:fixed!important;inset:auto;margin:0!important;max-width:none!important;max-height:none!important}dialog:not([open]){display:none!important}dialog[open]{display:flex!important;flex-direction:column!important;overflow:hidden!important}dialog [data-window-title]{height:44px!important;min-height:44px!important;box-sizing:border-box!important;flex:none!important;padding:3px 7px!important}dialog [data-window-title] h2{font-size:12px!important}dialog.window-minimized>:not([data-window-title]){display:none!important}dialog::backdrop{backdrop-filter:none!important}';
+      shadow.append(style);target.body.append(host);portal={host,shadow};
+      const theme=()=>{Object.assign(host.dataset,source.body.dataset);host.dataset.theme=source.documentElement.dataset.theme||'light';const css=sourceWindow.getComputedStyle(source.body);for(let i=0;i<css.length;i++){const name=css[i];if(name.startsWith('--'))host.style.setProperty(name,css.getPropertyValue(name));}};
+      theme();const observer=new sourceWindow.MutationObserver(theme);observer.observe(source.documentElement,{attributes:true});
+      sourceWindow.addEventListener('pagehide',()=>{observer.disconnect();host.remove();portal=null;},{once:true});
+      sourceWindow.addEventListener('message',event=>{if(event.source===sourceWindow.parent&&event.origin===sourceWindow.location.origin&&event.data?.type==='gp-private-workspace-visibility'&&event.data.active===false)for(const dialog of studioWindows)if(dialog.open)dialog.close();});
+    }
+    portal.shadow.append(dialog);
+  } catch { /* A standalone module keeps its own viewport. */ }
+}
 
 function bringToFront(dialog) {
   const index = studioWindows.indexOf(dialog);
@@ -38,17 +77,23 @@ export function adjustWindow(value, edge, dx, dy, bounds, minimized = false, min
 }
 
 export function attachStudioWindow(dialog, { key = 'gp.gallery.window.v1', width = 680, height = 630, canClose = () => true } = {}) {
+  const sourceWindow = dialog.ownerDocument.defaultView;
+  adoptWindow(dialog);
+  const doc=dialog.ownerDocument, win=doc.defaultView;
   if (!studioWindows.includes(dialog)) studioWindows.push(dialog);
   studioWindows.forEach((item, position) => { item.style.zIndex = String(5 + position); });
   dialog.addEventListener('pointerdown', () => bringToFront(dialog), { capture: true });
   dialog.addEventListener('focusin', () => bringToFront(dialog));
   const title = dialog.querySelector('[data-window-title]');
   const toggle = dialog.querySelector('[data-window-toggle]');
-  const windowTitle = document.getElementById(dialog.getAttribute('aria-labelledby'))?.textContent || 'Fenster';
-  const minimizedWidth = clamp(windowTitle.length * 8 + 140, 250, 380);
-  const bounds = () => {let height=window.innerHeight,offsetY=0;try {if(parent!==window&&window.frameElement){const frame=window.frameElement.getBoundingClientRect(),bar=window.frameElement.closest('.view')?.querySelector(':scope > .topbar'),mobile=parent.document.getElementById('mobileNavigationToggle')?.getBoundingClientRect(),top=Math.max(0,bar?.getBoundingClientRect().bottom||0,mobile?.width&&mobile.height?mobile.bottom+8:0,frame.top);offsetY=Math.max(0,top-frame.top);height=Math.min(Math.max(1,height-offsetY),Math.max(1,parent.innerHeight-top-12));}}catch{}return {width:window.innerWidth,height,offsetY};};
+  const windowTitle = dialog.querySelector('[id="'+dialog.getAttribute('aria-labelledby')+'"]')?.textContent || 'Fenster';
+  title.tabIndex = 0;
+  if (!title.hasAttribute('aria-label')) title.setAttribute('aria-label', windowTitle + ' verschieben');
+  const minimizedWidth = 260;
+  const scale = () => Number.parseFloat(win.getComputedStyle(doc.body).zoom) || 1;
+  const bounds = () => ({width:(win.visualViewport?.width||win.innerWidth)/scale(),height:(win.visualViewport?.height||win.innerHeight)/scale(),offsetX:(win.visualViewport?.offsetLeft||0)/scale(),offsetY:(win.visualViewport?.offsetTop||0)/scale()});
   let preferred, minimized = false, minimizedPosition = null, gesture = null, opener = null;
-  const initial = () => ({ width, height, x: (window.innerWidth - width) / 2, y: (window.innerHeight - height) / 2 });
+  const initial = () => ({ width, height, x: (bounds().width - width) / 2, y: (bounds().height - height) / 2 });
   try { preferred = { ...initial(), ...JSON.parse(localStorage.getItem(key) || '{}') }; } catch { preferred = initial(); }
   for (const name of ['width', 'height', 'x', 'y']) if (!Number.isFinite(preferred[name])) preferred[name] = initial()[name];
   function save() { try { localStorage.setItem(key, JSON.stringify(preferred)); } catch {} }
@@ -56,7 +101,7 @@ export function attachStudioWindow(dialog, { key = 'gp.gallery.window.v1', width
   function applyGeometry(geometry) { if (minimized) minimizedPosition = { x: geometry.x, y: geometry.y }; else preferred = geometry; }
   function render() {
     const geometry = currentGeometry();
-    Object.assign(dialog.style, { left: geometry.x + 'px', top: (geometry.y + bounds().offsetY) + 'px', width: geometry.width + 'px', height: geometry.height + 'px' });
+    Object.assign(dialog.style, { boxSizing: 'border-box', position: 'fixed', inset: 'auto', margin: '0', left: (geometry.x + bounds().offsetX) + 'px', top: (geometry.y + bounds().offsetY) + 'px', width: geometry.width + 'px', height: geometry.height + 'px' });
     dialog.classList.toggle('window-minimized', minimized);
     toggle.textContent = minimized ? '▢' : '−';
     toggle.setAttribute('aria-label', windowTitle + (minimized ? ' wiederherstellen' : ' minimieren'));
@@ -76,7 +121,7 @@ export function attachStudioWindow(dialog, { key = 'gp.gallery.window.v1', width
     if (event.button !== 0 || (edge === 'move' && event.target.closest('button, input, select, a'))) return;
     if (minimized && edge !== 'move') return;
     event.preventDefault();
-    gesture = { target: event.currentTarget, pointerId: event.pointerId, edge, x: event.clientX, y: event.clientY,
+    gesture = { target: event.currentTarget, pointerId: event.pointerId, edge, x: event.clientX, y: event.clientY, scale: scale(),
       preferred: { ...preferred }, minimizedPosition: minimizedPosition ? { ...minimizedPosition } : null, geometry: currentGeometry() };
     gesture.target.setPointerCapture(event.pointerId);
     gesture.target.focus({ preventScroll: true });
@@ -84,7 +129,7 @@ export function attachStudioWindow(dialog, { key = 'gp.gallery.window.v1', width
   }
   function move(event) {
     if (!gesture || gesture.pointerId !== event.pointerId) return;
-    applyGeometry(adjustWindow(gesture.geometry, gesture.edge, event.clientX - gesture.x, event.clientY - gesture.y, bounds(), minimized, minimizedWidth));
+    applyGeometry(adjustWindow(gesture.geometry, gesture.edge, (event.clientX - gesture.x)/gesture.scale, (event.clientY - gesture.y)/gesture.scale, bounds(), minimized, minimizedWidth));
     render();
   }
   function keyboard(event, edge) {
@@ -112,21 +157,23 @@ export function attachStudioWindow(dialog, { key = 'gp.gallery.window.v1', width
   wire(title, 'move');
   const labels = { n: 'oben', ne: 'oben rechts', e: 'rechts', se: 'unten rechts', s: 'unten', sw: 'unten links', w: 'links', nw: 'oben links' };
   for (const edge of EDGES) {
-    const handle = document.createElement('button'); handle.type = 'button';
+    const handle = doc.createElement('button'); handle.type = 'button';
     handle.className = 'window-resize-handle window-resize-' + edge;
     handle.dataset.windowResize = edge; handle.setAttribute('aria-label', 'Fenstergröße ändern: ' + labels[edge]);
     handle.setAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight ArrowUp ArrowDown');
     dialog.append(handle); wire(handle, edge);
   }
   toggle.addEventListener('click', () => { finish(); if (!minimized) { const current = currentGeometry(); minimizedPosition = { x: current.x, y: current.y }; } minimized = !minimized; render(); title.focus({ preventScroll: true }); });
-  window.addEventListener('resize', render);
-  const parentScroll=()=>{if(dialog.open)render();};
-  try {if(parent!==window){parent.addEventListener('scroll',parentScroll,{capture:true,passive:true});window.addEventListener('pagehide',()=>parent.removeEventListener('scroll',parentScroll,true),{once:true});}}catch{}
-  window.addEventListener('blur', () => finish());
+  win.addEventListener('resize', render);
+  const resizeVisible=()=>{render();const focused=dialog.getRootNode().activeElement;if(dialog.open&&focused?.matches('input,textarea,select')&&dialog.contains(focused))focused.scrollIntoView({block:'nearest',inline:'nearest'});};
+  win.visualViewport?.addEventListener('resize',resizeVisible);win.visualViewport?.addEventListener('scroll',resizeVisible);
+  const blur=()=>finish();win.addEventListener('blur',blur);
+  const sizeObserver=win.ResizeObserver?new win.ResizeObserver(render):null;sizeObserver?.observe(doc.body);
+  sourceWindow.addEventListener('pagehide',()=>{sizeObserver?.disconnect();win.removeEventListener('resize',render);win.visualViewport?.removeEventListener('resize',resizeVisible);win.visualViewport?.removeEventListener('scroll',resizeVisible);win.removeEventListener('blur',blur);dialog.remove();const i=studioWindows.indexOf(dialog);if(i>=0)studioWindows.splice(i,1);},{once:true});
   dialog.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     event.preventDefault(); if (gesture) finish(true); else if(canClose())dialog.close();
   });
-  dialog.addEventListener('close', () => { finish(); minimized = false; opener?.focus({ preventScroll: true }); });
-  return { show() { if (!dialog.open) { opener = document.activeElement; minimized = false; try { window.frameElement?.scrollIntoView({block:'start'}); } catch {} dialog.show(); } bringToFront(dialog); render(); }, restore() { minimized = false; bringToFront(dialog); render(); } };
+  dialog.addEventListener('close', () => { finish(); minimized = false; updatePortalVisibility(); opener?.focus({ preventScroll: true }); });
+  return { show() { if (!dialog.open) { opener = sourceWindow.document.activeElement; minimized = false; dialog.show(); } updatePortalVisibility(); bringToFront(dialog); render(); }, restore() { minimized = false; updatePortalVisibility(); bringToFront(dialog); render(); } };
 }

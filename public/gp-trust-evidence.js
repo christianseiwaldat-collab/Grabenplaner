@@ -25,6 +25,14 @@
     const reasonCode = code(value.reasonCode);
     const reasons = {
       RECOVERY_AUTOMATION_FAILED_LATER_PROOF: 'Ein neuerer Wiederherstellungsnachweis liegt vor; die zuvor fehlgeschlagene Automatik bleibt sichtbar.',
+      AUTOMATION_DEPLOY_DEFERRED: 'Der Nachtlauf ist wegen eines nachweislich aktiven Deployments pausiert. Sein Start darf höchstens drei Stunden nach der ursprünglichen Fälligkeit liegen.',
+      AUTOMATION_DEPLOY_CATCHUP_RUNNING: 'Der nachgeholte Nachtlauf hat nachweislich innerhalb der Drei-Stunden-Frist begonnen und läuft noch. Ein erfolgreicher Wiederherstellungstest ist damit noch nicht belegt.',
+      AUTOMATION_DEPLOY_DEFERRAL_EXPIRED: 'Die Drei-Stunden-Frist ist abgelaufen. Ein rechtzeitig gestarteter, weiterhin gültiger Nachtlauf oder ein neuer erfolgreicher Gesamtnachweis fehlt.',
+      AUTOMATION_DEPLOY_ABORTED: 'Das Deployment wurde abgebrochen, nachdem der Nachtlauf fällig war. Der Aufschub gilt nicht mehr; ein ausreichender neuer Nachweis fehlt.',
+      AUTOMATION_DEPLOY_ABANDONED: 'Das Deployment ist nach Fälligkeit des Nachtlaufs nicht mehr nachweislich aktiv. Der Aufschub gilt nicht mehr; ein ausreichender neuer Nachweis fehlt.',
+      RECOVERY_FULL_RUN_DEPLOY_DEFERRED: 'Der letzte vollständige Assurance-Nachweis war bei Fälligkeit noch aktuell. Er bleibt während des validierten Deploy-Aufschubs bis zu dessen Drei-Stunden-Frist gültig; sein Nachweiszeitpunkt bleibt unverändert.',
+      RECOVERY_ISOLATED_RESTORE_DEPLOY_DEFERRED: 'Der letzte erfolgreiche Test-Restore war bei Fälligkeit noch aktuell. Er bleibt während des validierten Deploy-Aufschubs bis zu dessen Drei-Stunden-Frist gültig; sein Nachweiszeitpunkt bleibt unverändert.',
+      RECOVERY_APPLICATION_SMOKE_DEPLOY_DEFERRED: 'Der letzte erfolgreiche Anwendungsstart nach Restore war bei Fälligkeit noch aktuell. Er bleibt während des validierten Deploy-Aufschubs bis zu dessen Drei-Stunden-Frist gültig; sein Nachweiszeitpunkt bleibt unverändert.',
       NOTIFICATIONS_NOT_CONFIGURED: 'Externe Benachrichtigungen sind nicht eingerichtet.',
       EVIDENCE_UNAVAILABLE: 'Für diese Prüfung liegt kein ausreichender Nachweis vor.'
     };

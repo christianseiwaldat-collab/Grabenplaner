@@ -209,8 +209,8 @@
       const file=imageInput.files?.[0];imageInput.value='';if(!file || !editable() || uploading)return;
       if(file.size>10*1024*1024){imageStatus.textContent='Die Datei ist größer als 10 MB.';return;}
       if(read().imageBoxes.length>=3){imageStatus.textContent='Höchstens drei eigene Bilder sind möglich.';return;}
-      const ticket=context();uploading=true;imageStatus.textContent='Bild wird geprüft und geladen …';onUploadState(true);render(state);
-      try{const asset=await upload(file);
+      const ticket=context();uploading=true;
+      try{imageStatus.textContent='Bild wird geprüft und geladen …';onUploadState(true);render(state);const asset=await upload(file);
         if(commitUpload){const inserted=await commitUpload(asset,ticket);if(!destroyed)imageStatus.textContent=inserted?'Bild eingefügt. Der Arbeitsentwurf wird automatisch gesichert.':'Bild fertig hochgeladen. Über „Hochgeladene Bilder“ wieder einfügen.';return;}
         if(destroyed || !editable() || context()!==ticket)return;const base=read();if(base.imageBoxes.length>=3)throw new Error('Höchstens drei eigene Bilder sind möglich.');
         const width=Math.min(base.labelWidthMm/3,30),height=Math.min(base.labelHeightMm/3,width/(asset.width/asset.height));

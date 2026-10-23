@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -36,7 +37,7 @@ let departmentId;
 
 function session(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   const id = crypto.randomUUID();
   db.prepare(`
     INSERT INTO portal_users (employee_number, password_hash, role, role_locked, active, must_change_password, password_changed_at, updated_at)
@@ -45,7 +46,7 @@ function session(employeeNumber, role) {
       active = 1, must_change_password = 0, updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, role, role === "developer" ? 1 : 0);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
-  db.prepare("INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')")
+  db.prepare("INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(id, employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return { id, cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }
@@ -73,6 +74,7 @@ function mobileSession(employeeNumber) {
 
 async function request(route, { method = "GET", auth = null, body } = {}) {
   const headers = { Accept: "application/json" };
+  if (auth?.userActivity) headers["X-GP-User-Activity"] = "1";
   if (auth) headers.Cookie = auth.cookie;
   if (auth && !["GET", "HEAD"].includes(method)) headers["X-CSRF-Token"] = auth.csrf;
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -89,6 +91,7 @@ async function request(route, { method = "GET", auth = null, body } = {}) {
 
 async function requestRaw(route, { auth = null, body }) {
   const headers = { Accept: "application/json", "Content-Type": "application/octet-stream" };
+  if (auth?.userActivity) headers["X-GP-User-Activity"] = "1";
   if (auth) {
     headers.Cookie = auth.cookie;
     headers["X-CSRF-Token"] = auth.csrf;

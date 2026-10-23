@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -142,7 +143,7 @@ function setMasterTargets(employeeNumber, targets = {}) {
 function createSession(employeeNumber, { role = "employee", mustChangePassword = false } = {}) {
   ensureEmployee(employeeNumber);
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, role_locked, active, must_change_password,
@@ -156,8 +157,8 @@ function createSession(employeeNumber, { role = "employee", mustChangePassword =
       updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, role, Number(role === "developer"), Number(Boolean(mustChangePassword)));
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(
     crypto.randomUUID(),
     employeeNumber,
@@ -174,7 +175,7 @@ function createSession(employeeNumber, { role = "employee", mustChangePassword =
 function createOrganizationSession() {
   const accountId = crypto.randomUUID();
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_organization_accounts
       (id, login_name, display_name, account_type, password_hash, active,
@@ -182,8 +183,8 @@ function createOrganizationSession() {
     VALUES (?, ?, 'Testfiliale', 'branch', 'test-only', 1, 0, 'test', 'test')
   `).run(accountId, `notification-org-${accountId}`);
   db.prepare(`
-    INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), accountId, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,

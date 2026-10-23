@@ -1,0 +1,346 @@
+{
+  "schemaVersion": 1,
+  "advisoryExceptions": [],
+  "findingExceptions": [
+    {
+      "scanner": "secrets",
+      "fingerprint": "22dea58d3398ee38e7b65e6ae62c62cee18ae3fdd58834982ca7a77d758923cc",
+      "sourceSha256": "ef76fbb589da9d23488d4266b6d4b4cafa9f8a9014da0cc3bcd637862c42334e",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Empty shell variable initialization followed by a numeric state flag; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "de4c1b8ed5c7ec22aaf723f3c94a7126544f6d38614862c87fb29eaa149d8cdf",
+      "sourceSha256": "cdbd8bd3d283a295edf136de24d196d3c9f314f5629451398578f87eaaa6be1f",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "ea01b0063f2041e717dc64faaadf3770d3727ce072afe0c2a441416e5bf6f7c3",
+      "sourceSha256": "cdbd8bd3d283a295edf136de24d196d3c9f314f5629451398578f87eaaa6be1f",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "312f9b7a9cb188c1d05943440894ea9c96933a1e5fdb962b50950b1459796c31",
+      "sourceSha256": "cdbd8bd3d283a295edf136de24d196d3c9f314f5629451398578f87eaaa6be1f",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "82ca2c415a3777be082d99c1b3429ed1b3dcb21adc5da3126a94e9735ff8dce7",
+      "sourceSha256": "1d8555038ccca0494936261ba1253b8012aad94c5da3f3fc85158c4029656304",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Assertion on a source article identifier inserted by the immediately preceding synthetic catalog-import fixture, not an authentication secret.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "0fb9a27c40647f20f4e57b4dcf54cc9dc36faf57d84476f97fb8509350d1bf3e",
+      "sourceSha256": "d64db66ff69f3b90d5528fb814807fdd88fa90ddbfca92b1c5748dbc13c63689",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Fixed marker seeded by the local BASE SQL fixture and checked unchanged after migration; no real account credential.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "7b84578ad7dbba8ff64fed9c9d44adf60f4143911772399d0f6f06b35ab5c8c0",
+      "sourceSha256": "d64db66ff69f3b90d5528fb814807fdd88fa90ddbfca92b1c5748dbc13c63689",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Fixed marker seeded by the local BASE SQL fixture and checked unchanged after migration; no real account credential.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "ea6679352c885c370eaec8952411d85fd2653676e1dd46e3767d0dd9685ea10c",
+      "sourceSha256": "07f8da0da71398c7524e88ed95e7427b3225a8eb1bd22c5de6412a58605a9506",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Locally declared fixture value passed to a configuration-validation error case and checked absent from rendered errors; no network authentication in the reviewed case.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "768ea7ee8f27811fc3e2bf87603c4181fcd307a0646509b69a68bf2e12176754",
+      "sourceSha256": "7fea774726f147b59e1805a1bc4c8d5b7b6cde1d0a125cafebbfbaad0c7142b8",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Assertion on a source article identifier inserted by the immediately preceding synthetic catalog-import fixture, not an authentication secret.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "121926c59720dbe489f05c6c5ee754d42a344256fa75148509cbc1c3e2827af6",
+      "sourceSha256": "7fea774726f147b59e1805a1bc4c8d5b7b6cde1d0a125cafebbfbaad0c7142b8",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Assertion on a source article identifier inserted by the immediately preceding synthetic catalog-import fixture, not an authentication secret.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "4409a8564e7cedad60fb27100ea7d3e4c93667cc643464947b795d73327743e2",
+      "sourceSha256": "7fea774726f147b59e1805a1bc4c8d5b7b6cde1d0a125cafebbfbaad0c7142b8",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Assertion on a source article identifier inserted by the immediately preceding synthetic catalog-import fixture, not an authentication secret.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "edbd4733ca42794af92bf8944e041beb7b57cd16d18fc283ba510a8dcdcf6662",
+      "sourceSha256": "4c8366b17ddc1e7ff7c45944ea4ca8f545ea782bc43ace48c64f33a368150f9b",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Locally declared fixture value passed to a configuration-validation error case and checked absent from rendered errors; no network authentication in the reviewed case.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "64049e8c364fa6ab3dbadc9e29c98cea0e1126211c13fba884daebfaf961e470",
+      "sourceSha256": "4c8366b17ddc1e7ff7c45944ea4ca8f545ea782bc43ace48c64f33a368150f9b",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Locally declared fixture value passed to a configuration-validation error case and checked absent from rendered errors; no network authentication in the reviewed case.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "7eb479091d503289d94e6a7c3bf79bf382853d5299b0fe5a113f26b503d2bda1",
+      "sourceSha256": "4c8366b17ddc1e7ff7c45944ea4ca8f545ea782bc43ace48c64f33a368150f9b",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Locally declared fixture value passed to a configuration-validation error case and checked absent from rendered errors; no network authentication in the reviewed case.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "b96422a79688206bd33861299b6856978209c5e2c52c6816cae4b2ea5848286a",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "8f703b9b2c6f101d4dc6f2ffda827ff6c642c6e48fadea1cf32447018dff3cd1",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "e11bafdd2a9cd05dd59ca9d7e856a768090997125c9464deb336f43321e6e8ca",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "41dcfad91c3d0cf78739de3b3475bb97320566d71e02a0862a6c8b4722b9ce95",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "20dacb75f3a9cca90c56323aaea3deb9237352805128a43a69f9e15f962fe252",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "12defeb41e1474a2e561750eda2f823ec6f6c816d926388f13f69aef168345ee",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "15a1dc715958ce63135a5b4e1e83cb665388a57c389bd11093c8c57e28732303",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "0d69da10cfd9784fdb4e6bb5c4a0c952bad96a1581b2ec97e5ccb3b53c5b3496",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "f6f5955119998229eed48fc461f3db22a49964d14ec07daf3e3b4c600f60b349",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Rollback helper initializes empty variables or passes variable-expanded filesystem paths to install/sync; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "b9c983306ecde1f0dfb49e437bb356e32f58e704183abcff2bdbd662ff4ad232",
+      "sourceSha256": "ef76fbb589da9d23488d4266b6d4b4cafa9f8a9014da0cc3bcd637862c42334e",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Empty shell variable initialization followed by a numeric state flag; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "6156662af16bfbaf2af7944922f358ddd9b348e41b02542f6bdc7705eca52db4",
+      "sourceSha256": "ef76fbb589da9d23488d4266b6d4b4cafa9f8a9014da0cc3bcd637862c42334e",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Empty shell variable initialization followed by a numeric state flag; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "90becb22e5eb74c76c68918a9ad7beab30ca170440528c704f7a9ba4adba6b25",
+      "sourceSha256": "ef76fbb589da9d23488d4266b6d4b4cafa9f8a9014da0cc3bcd637862c42334e",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Empty shell variable initialization followed by a numeric state flag; no credential literal.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "82ca2c415a3777be082d99c1b3429ed1b3dcb21adc5da3126a94e9735ff8dce7",
+      "sourceSha256": "02e9571c37979d3a51439be045cffc9d1590a396029d702bb68fd32e7303a586",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Assertion on a source article identifier inserted by the immediately preceding synthetic catalog-import fixture, not an authentication secret. Exact LF checkout variant; only CRLF-to-LF differs from independently reviewed bytes.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "ea6679352c885c370eaec8952411d85fd2653676e1dd46e3767d0dd9685ea10c",
+      "sourceSha256": "4c8366b17ddc1e7ff7c45944ea4ca8f545ea782bc43ace48c64f33a368150f9b",
+      "owner": "GP security maintainers (two independent code reviews)",
+      "reason": "Locally declared fixture value passed to a configuration-validation error case and checked absent from rendered errors; no network authentication in the reviewed case. Exact LF checkout variant; only CRLF-to-LF differs from independently reviewed bytes.",
+      "reviewedOn": "2026-10-18",
+      "expiresOn": "2026-11-01",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "0fb9a27c40647f20f4e57b4dcf54cc9dc36faf57d84476f97fb8509350d1bf3e",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic migration fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "0fb9a27c40647f20f4e57b4dcf54cc9dc36faf57d84476f97fb8509350d1bf3e",
+      "sourceSha256": "dbb6908b6a236fc74f72bb1c12323ef6beded621dcff5f340d6fa2e700eebd49",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic migration fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "7b84578ad7dbba8ff64fed9c9d44adf60f4143911772399d0f6f06b35ab5c8c0",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic migration fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "7b84578ad7dbba8ff64fed9c9d44adf60f4143911772399d0f6f06b35ab5c8c0",
+      "sourceSha256": "dbb6908b6a236fc74f72bb1c12323ef6beded621dcff5f340d6fa2e700eebd49",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic migration fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "2a3fe27c586928638a075ec2ec73274aceafad499b75e6d9dcf033903d1831d0",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic migration fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "95d16169993b1b04189743b031756e70faedbebfe9d94c914eadb88b49b571f4",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "GP security maintenance; code-based false-positive review",
+      "reason": "Migration regression assertion compares a deliberately nonfunctional legacy password-hash marker in an isolated synthetic migration fixture. The marker is not a password, credential, token or valid scrypt hash. Exact source bytes, line, scan mode and historical commit are bound; no test-directory exclusion.",
+      "reviewedOn": "2026-10-19",
+      "expiresOn": "2026-11-02",
+      "priority": "P3"
+    }
+  ]
+}

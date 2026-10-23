@@ -1,3 +1,4 @@
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -25,7 +26,7 @@ let locationId;
 function createPortalSession() {
   const employeeNumber = "v068-admin";
   const token = `v068-${crypto.randomBytes(32).toString("hex")}`;
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO employees (personnel_number, full_name, nickname, home_location_id, active)
     VALUES (?, 'Vera Validierung', 'Vera', ?, 1)
@@ -41,8 +42,8 @@ function createPortalSession() {
   `).run(employeeNumber);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return { cookie: `grabenplaner_session=${encodeURIComponent(token)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`, csrf };
 }

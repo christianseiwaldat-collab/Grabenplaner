@@ -21,7 +21,7 @@ function between(source, start, end) {
 
 test("v0.92.20 Positionsverwaltung ist ein eigener berechtigter Personalbereich", () => {
   assert.match(html, /<button(?=[^>]*id="positionManagementNavButton")(?=[^>]*data-personnel-administration-route="positions")[^>]*>/);
-  assert.match(html, /id="positionManagementTab"[^>]*data-personnel-administration-tab="positions"/);
+  assert.match(html, /id="positionManagementSection"[^>]*role="region"[^>]*aria-labelledby="positionManagementTitle"/);
   const section = between(html, '<section class="personnel-administration-section position-management-section"', '<section class="personnel-administration-section" id="costCenterSection"');
   for (const id of ["positionForm", "positionSearch", "positionTableHead", "positionList"]) {
     assert.match(section, new RegExp(`id="${id}"`));
@@ -36,7 +36,6 @@ test("v0.92.20 Positionsverwaltung ist ein eigener berechtigter Personalbereich"
   assert.match(access, /function canManagePositions\(\)[\s\S]*?positions:write/);
   const visibility = between(app, "function applyRoleVisibility()", "async function bootstrapApplication()");
   assert.match(visibility, /positionManagementNavButton\?\.classList\.toggle\("hidden", !positionWriteAccess\)/);
-  assert.match(visibility, /positionManagementTab\?\.classList\.toggle\("hidden", !positionWriteAccess\)/);
   assert.doesNotMatch(visibility, /positionSettingsCard/);
   assert.match(server, /id: "positions:write"[\s\S]*?group: "Personalverwaltung"/);
   assert.match(server, /Positionen selbst vergeben keine Benutzerrechte/);

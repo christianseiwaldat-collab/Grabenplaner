@@ -1,9 +1,15 @@
 let personnelLearningAssessmentEditor=null, personnelLearningAssessmentPanel=null, personnelLearningTeam=null;
-const sidebarNavigationGroups = window.GrabenplanerSidebarLayout.createGroups();
+const sidebarNavigationGroups = window.GrabenplanerSidebarLayout.createGroups({
+  storage: { getItem: key => window.localStorage.getItem(key), setItem: (key, value) => window.localStorage.setItem(key, value) },
+  account: () => state.portalSession?.authenticated === true
+    ? JSON.stringify([state.portalSession.user?.accountId || "", state.portalSession.user?.employeeNumber || ""])
+    : state.portalStatus?.portalEnabled === false ? "local" : "",
+});
 let salesPriceLabelsWorkspace = null;
+let workflowStudioWorkspace = null;
 let sidebarLayout = null;
 let sidebarNotepad = null;
-let gpWindowManager = null, gpWindowActor = '', recentArticlesWindow = null;
+let gpWindowManager = null, gpWindowActor = '', gpWindowSession = null, recentArticlesWindow = null;
 let gpDocumentPrint = null, documentPrintModelRevision = 0;
 const documentPrintModels = new WeakMap();
 const settingsSaveStatuses = new Map(), settingsSaveStatusHosts = new Map();
@@ -17,7 +23,9 @@ let personalActionsWindow = null, personalActionsOpener = null;
 let rightsWorkspace = null, rightsWorkspaceActor = '', rightsLoadController = null, rightsLoadGeneration = 0;
 let rightsSettingsWindows = null, permissionDefaultsUI = null;
 let rightsEditorGeneration = 0, rightsEditorSaveContext = null, rightsEditorSnapshot = null;
-let gpDefinitionsWorkspace = null;
+let gpDefinitionsWorkspace = null, privateWorkspaceReturnRoute = null;
+let planningAssistantWorkspace = null;
+let systemUtilizationWorkspace = null;
 (() => {
   const storageKey = "grabenplaner-bootstrap-token";
   const parameters = new URLSearchParams(window.location.search);
@@ -618,6 +626,9 @@ const state = {
   personnelDirectorySearch: "",
   personnelDirectoryCostCenterFilter: "",
   personnelDirectoryStatusFilter: "active",
+  personnelDirectorySourceStatus: "idle",
+  personnelDirectorySourceContext: null,
+  personnelDirectorySourceError: "",
   employeeProfile: null,
   employeeProfileEmployeeNumber: "",
   employeeProfileTab: "overview",
@@ -668,6 +679,8 @@ const state = {
   personnelLifecycleEditorLoading: false,
   personnelLifecycleEditorError: "",
   personnelLifecycleEditorActorAccessKey: "",
+  personnelLifecycleEditorSession: null,
+  personnelLifecycleEditorWindowContext: null,
   personnelLifecycleEditorRequestToken: null,
   personnelLifecycleEditorDraft: null,
   personnelLifecycleEditorPristineDraft: null,
@@ -728,6 +741,7 @@ const state = {
     payrollHandoffPreflight: null,
   },
   employeeEditMode: "full",
+  employeePreferredDays: [],
   personnelTab: "employees",
   editingLocationId: null,
   editingDepartmentId: null,
@@ -768,6 +782,8 @@ let scheduleNoteQuill = null;
 let scheduleNoteSanitizing = false;
 let shiftRulePreviewTimer = null;
 let shiftRulePreviewRequest = null;
+let shiftMutation = null;
+let shiftEditorGeneration = 0;
 let workRuleAssessmentPreferenceRequestId = 0;
 let vacationCalendarPreferenceRequestId = 0;
 let vacationCalendarPreferenceSave = Promise.resolve();
@@ -788,7 +804,7 @@ const TEAM_MEETING_GROUP_PREFIX = "team-meeting:";
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const planningDayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const dayKeyByNumber = { 0: "sunday", 1: "monday", 2: "tuesday", 3: "wednesday", 4: "thursday", 5: "friday", 6: "saturday" };
-const preferredDayLabels = { monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag", friday: "Freitag" };
+const preferredDayLabels = { monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag", friday: "Freitag", saturday: "Samstag" };
 const fixedDayLabels = { ...preferredDayLabels, saturday: "Samstag" };
 const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thursday: "Do", friday: "Fr", saturday: "Sa" };
 const fallbackSchedulePdfDesignCatalog = Object.freeze([
@@ -801,6 +817,7 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 const elements = Object.fromEntries(
   [
     "staffAssignmentRequestDeadline",
+    "costCenterActiveCount", "costCenterInactiveCount", "costCenterTypeCount", "costCenterFilterForm", "costCenterSearch", "costCenterFilterType", "costCenterFilterStatus", "costCenterFilterReset", "costCenterResultCount",
     "optionDateRangeButton", "optionDateRangeText", "optionDateRangeDialog", "optionDateRangeForm", "optionDateRangeGrid", "optionDateRangeMonthLabel", "optionDateRangeStartText", "optionDateRangeEndText",
     "optionDateRangePreviousMonth", "optionDateRangeNextMonth", "optionDateRangeOpenEnd", "optionDateRangeApply", "optionDateRangeClose", "optionDateRangeCancel",
     "xoffiComparisonMode", "xoffiComparisonPeriod", "xoffiComparisonDescription", "xoffiComparisonRangeButton", "xoffiComparisonRangeText", "xoffiComparisonRangeLabel",
@@ -817,9 +834,9 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutDateRangeButton", "requestBlackoutDateRangeText", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList", "requestBlackoutDateRangeDialog", "requestBlackoutDateRangeForm", "requestBlackoutDateRangeStartText", "requestBlackoutDateRangeEndText", "requestBlackoutDateRangePreviousMonth", "requestBlackoutDateRangeMonthLabel", "requestBlackoutDateRangeNextMonth", "requestBlackoutDateRangeGrid", "requestBlackoutDateRangeOpenEnd", "requestBlackoutDateRangeClose", "requestBlackoutDateRangeCancel", "requestBlackoutDateRangeApply",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "positionManagementTab", "positionManagementSection", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "addPersonnelCandidateButton", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "personnelCandidateCreateModal", "personnelCandidateCreateForm", "personnelCandidateCreateApplication", "personnelCandidateCreateLocation", "personnelCandidateCreateDepartment", "personnelCandidateAuthorizationCheck", "personnelCandidateAuthorizationConfirmed", "personnelCandidateAuthorizationState", "personnelCandidateCreateMessage", "personnelCandidateCreateSubmit", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectoryWorkspace", "teamDirectoryWorkspace", "employeeProfileAdministrationMount", "employeeProfileTeamMount", "employeeProfileWorkspace", "employeeProfileBackButton", "employeeProfileShell", "employeeProfileAvatar", "employeeProfileName", "employeeProfileIdentity", "employeeProfileStatus", "employeeProfileMessage", "employeeProfileContent", "positionManagementSection", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "addPersonnelCandidateButton", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "personnelCandidateCreateModal", "personnelCandidateCreateForm", "personnelCandidateCreateApplication", "personnelCandidateCreateLocation", "personnelCandidateCreateDepartment", "personnelCandidateAuthorizationCheck", "personnelCandidateAuthorizationConfirmed", "personnelCandidateAuthorizationState", "personnelCandidateCreateMessage", "personnelCandidateCreateSubmit", "workflowCenterSection", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryResultCount", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "personnelCandidateCreatePhotoField", "personnelCandidateCreatePhoto", "personnelCandidateCreatePhotoPreview", "personnelCandidateCreateTargetAreas", "personnelCandidateCreateAddTargetArea", "personnelCandidateCreateTrialAppointments", "personnelCandidateCreateAddTrialAppointment", "personnelCandidateCreateCompetencyRatings", "personnelCandidateCreateAddCompetencyRating", "personnelCandidateTrialDateRangeDialog", "personnelCandidateTrialDateRangeForm", "personnelCandidateTrialDateRangeStartText", "personnelCandidateTrialDateRangeEndText", "personnelCandidateTrialDateRangePreviousMonth", "personnelCandidateTrialDateRangeMonthLabel", "personnelCandidateTrialDateRangeNextMonth", "personnelCandidateTrialDateRangeGrid", "personnelCandidateTrialDateRangeOpenEnd", "personnelCandidateTrialDateRangeClose", "personnelCandidateTrialDateRangeCancel", "personnelCandidateTrialDateRangeApply",
-    "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelLearningTab", "personnelLearningSection", "personnelLearningDashboardPanel", "refreshPersonnelLearningDashboardButton", "personnelLearningDashboardStatus", "personnelLearningDashboardSummary", "personnelLearningDashboardScope", "personnelLearningDashboardAssignments", "personnelLearningDashboardEmployee", "personnelLearningSkillTree", "personnelLearningProcessesPanel", "personnelLearningSummary", "personnelLearningSearch", "personnelLearningTypeFilter", "personnelLearningStatusFilter", "refreshPersonnelLearningButton", "personnelLearningStatus", "personnelLearningList", "addPersonnelLearningModuleButton", "personnelLearningModal", "personnelLearningForm", "personnelLearningModalTitle", "personnelLearningModuleId", "personnelLearningExpectedReceipt", "personnelLearningModuleCode", "personnelLearningModuleType", "personnelLearningScope", "personnelLearningTitle", "personnelLearningSummaryInput", "personnelLearningObjective", "personnelLearningEstimatedMinutes", "personnelLearningVerificationMode", "personnelLearningTags", "personnelLearningVersionNote", "personnelLearningSteps", "addPersonnelLearningStepButton", "personnelLearningMessage", "savePersonnelLearningButton", "personnelLearningSkillsPanel", "personnelLearningSkillSummary", "personnelLearningSkillSearch", "personnelLearningSkillStatusFilter", "refreshPersonnelLearningSkillsButton", "personnelLearningSkillStatus", "personnelLearningSkillList", "addPersonnelLearningSkillButton", "personnelLearningSkillModal", "personnelLearningSkillForm", "personnelLearningSkillModalTitle", "personnelLearningSkillId", "personnelLearningSkillExpectedReceipt", "personnelLearningSkillCode", "personnelLearningSkillCategory", "personnelLearningSkillScope", "personnelLearningSkillTitle", "personnelLearningSkillSummaryInput", "personnelLearningSkillTags", "personnelLearningSkillVersionNote", "personnelLearningSkillLevels", "personnelLearningSkillMessage", "savePersonnelLearningSkillButton", "personnelLearningCompetenciesPanel", "personnelLearningCompetencySummary", "personnelLearningCompetencySearch", "personnelLearningCompetencyEmployee", "personnelLearningCompetencyStatusFilter", "refreshPersonnelLearningCompetenciesButton", "addPersonnelLearningCompetencyButton", "personnelLearningCompetencyStatus", "personnelLearningCompetencyEmployeeSummary", "personnelLearningCompetencyList", "personnelLearningCompetencyModal", "personnelLearningCompetencyForm", "personnelLearningCompetencyModalTitle", "personnelLearningCompetencyId", "personnelLearningCompetencyExpectedReceipt", "personnelLearningCompetencyEmployeeNumber", "personnelLearningCompetencyPerson", "personnelLearningCompetencySkill", "personnelLearningCompetencyLevel", "personnelLearningCompetencyTrainer", "personnelLearningCompetencyLevelPreview", "personnelLearningCompetencyMessage", "savePersonnelLearningCompetencyButton", "personnelLearningAssignmentsPanel", "personnelLearningAssignmentSummary", "personnelLearningAssignmentSearch", "personnelLearningAssignmentLearnerFilter", "personnelLearningAssignmentStatusFilter", "refreshPersonnelLearningAssignmentsButton", "addPersonnelLearningAssignmentButton", "personnelLearningAssignmentStatus", "personnelLearningAssignmentList", "personnelLearningAssignmentModal", "personnelLearningAssignmentForm", "personnelLearningAssignmentModalTitle", "personnelLearningAssignmentId", "personnelLearningAssignmentExpectedReceipt", "personnelLearningAssignmentProcess", "personnelLearningAssignmentLearner", "personnelLearningAssignmentTrainerSearch", "personnelLearningAssignmentTrainerCount", "personnelLearningAssignmentTrainerList", "personnelLearningAssignmentBindingPreview", "personnelLearningAssignmentMessage", "savePersonnelLearningAssignmentButton", "personnelLearningProgressModal", "personnelLearningProgressForm", "personnelLearningProgressModalTitle", "personnelLearningProgressAssignmentId", "personnelLearningProgressAssignmentReceipt", "personnelLearningProgressExpectedReceipt", "personnelLearningProgressSummary", "personnelLearningProgressCount", "personnelLearningProgressStepList", "personnelLearningProgressFinalized", "personnelLearningProgressResult", "personnelLearningProgressAssessmentNote", "personnelLearningProgressCorrectionReasonField", "personnelLearningProgressCorrectionReason", "personnelLearningProgressHistoryDetails", "personnelLearningProgressHistory", "personnelLearningProgressMessage", "savePersonnelLearningProgressButton", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList", "personnelLifecycleInterfacesSection", "personnelLifecycleInterfacesStatus", "personnelLifecycleInterfacesList", "personnelLifecycleAutomationSection", "personnelLifecycleAutomationStatus", "personnelLifecycleAutomationCatalog", "personnelLifecycleAutomationSummary", "personnelLifecycleAutomationList",
+    "personnelWorkflowInstanceStatusFilter", "refreshPersonnelWorkflowInstancesButton", "personnelWorkflowInstanceStatus", "personnelWorkflowInstanceSummary", "personnelWorkflowInstanceList", "personnelLearningSection", "personnelLearningDashboardPanel", "refreshPersonnelLearningDashboardButton", "personnelLearningDashboardStatus", "personnelLearningDashboardSummary", "personnelLearningDashboardScope", "personnelLearningDashboardAssignments", "personnelLearningDashboardEmployee", "personnelLearningSkillTree", "personnelLearningProcessesPanel", "personnelLearningSummary", "personnelLearningSearch", "personnelLearningTypeFilter", "personnelLearningStatusFilter", "refreshPersonnelLearningButton", "personnelLearningStatus", "personnelLearningList", "addPersonnelLearningModuleButton", "personnelLearningModal", "personnelLearningForm", "personnelLearningModalTitle", "personnelLearningModuleId", "personnelLearningExpectedReceipt", "personnelLearningModuleCode", "personnelLearningModuleType", "personnelLearningScope", "personnelLearningTitle", "personnelLearningSummaryInput", "personnelLearningObjective", "personnelLearningEstimatedMinutes", "personnelLearningVerificationMode", "personnelLearningTags", "personnelLearningVersionNote", "personnelLearningSteps", "addPersonnelLearningStepButton", "personnelLearningMessage", "savePersonnelLearningButton", "personnelLearningSkillsPanel", "personnelLearningSkillSummary", "personnelLearningSkillSearch", "personnelLearningSkillStatusFilter", "refreshPersonnelLearningSkillsButton", "personnelLearningSkillStatus", "personnelLearningSkillList", "addPersonnelLearningSkillButton", "personnelLearningSkillModal", "personnelLearningSkillForm", "personnelLearningSkillModalTitle", "personnelLearningSkillId", "personnelLearningSkillExpectedReceipt", "personnelLearningSkillCode", "personnelLearningSkillCategory", "personnelLearningSkillScope", "personnelLearningSkillTitle", "personnelLearningSkillSummaryInput", "personnelLearningSkillTags", "personnelLearningSkillVersionNote", "personnelLearningSkillLevels", "personnelLearningSkillMessage", "savePersonnelLearningSkillButton", "personnelLearningCompetenciesPanel", "personnelLearningCompetencySummary", "personnelLearningCompetencySearch", "personnelLearningCompetencyEmployee", "personnelLearningCompetencyStatusFilter", "refreshPersonnelLearningCompetenciesButton", "addPersonnelLearningCompetencyButton", "personnelLearningCompetencyStatus", "personnelLearningCompetencyEmployeeSummary", "personnelLearningCompetencyList", "personnelLearningCompetencyModal", "personnelLearningCompetencyForm", "personnelLearningCompetencyModalTitle", "personnelLearningCompetencyId", "personnelLearningCompetencyExpectedReceipt", "personnelLearningCompetencyEmployeeNumber", "personnelLearningCompetencyPerson", "personnelLearningCompetencySkill", "personnelLearningCompetencyLevel", "personnelLearningCompetencyTrainer", "personnelLearningCompetencyLevelPreview", "personnelLearningCompetencyMessage", "savePersonnelLearningCompetencyButton", "personnelLearningAssignmentsPanel", "personnelLearningAssignmentSummary", "personnelLearningAssignmentSearch", "personnelLearningAssignmentLearnerFilter", "personnelLearningAssignmentStatusFilter", "refreshPersonnelLearningAssignmentsButton", "addPersonnelLearningAssignmentButton", "personnelLearningAssignmentStatus", "personnelLearningAssignmentList", "personnelLearningAssignmentModal", "personnelLearningAssignmentForm", "personnelLearningAssignmentModalTitle", "personnelLearningAssignmentId", "personnelLearningAssignmentExpectedReceipt", "personnelLearningAssignmentProcess", "personnelLearningAssignmentLearner", "personnelLearningAssignmentTrainerSearch", "personnelLearningAssignmentTrainerCount", "personnelLearningAssignmentTrainerList", "personnelLearningAssignmentBindingPreview", "personnelLearningAssignmentMessage", "savePersonnelLearningAssignmentButton", "personnelLearningProgressModal", "personnelLearningProgressForm", "personnelLearningProgressModalTitle", "personnelLearningProgressAssignmentId", "personnelLearningProgressAssignmentReceipt", "personnelLearningProgressExpectedReceipt", "personnelLearningProgressSummary", "personnelLearningProgressCount", "personnelLearningProgressStepList", "personnelLearningProgressFinalized", "personnelLearningProgressResult", "personnelLearningProgressAssessmentNote", "personnelLearningProgressCorrectionReasonField", "personnelLearningProgressCorrectionReason", "personnelLearningProgressHistoryDetails", "personnelLearningProgressHistory", "personnelLearningProgressMessage", "savePersonnelLearningProgressButton", "personnelWorkflowTaskStatus", "refreshPersonnelWorkflowTasksButton", "personnelWorkflowTaskList", "personnelLifecycleInterfacesSection", "personnelLifecycleInterfacesStatus", "personnelLifecycleInterfacesList", "personnelLifecycleAutomationSection", "personnelLifecycleAutomationStatus", "personnelLifecycleAutomationCatalog", "personnelLifecycleAutomationSummary", "personnelLifecycleAutomationList",
     "personnelWorkflowInstanceWorkspace", "personnelLifecycleEditorSection", "personnelLifecycleEditorEntryTitle", "openPersonnelLifecycleEditorButton", "personnelLifecycleEditorEntryStatus", "personnelLifecycleEditorDialog", "personnelLifecycleEditorTitle", "closePersonnelLifecycleEditorButton", "personnelLifecycleEditorStatus", "personnelLifecycleEditorWorkspace", "personnelLifecycleEditorWorkflowType", "personnelLifecycleEditorCatalogHint", "personnelLifecycleEditorWorkflowCode", "personnelLifecycleEditorDraftTitle", "personnelLifecycleEditorDraftDescription", "personnelLifecycleEditorScopeType", "personnelLifecycleEditorRequirementKind", "addPersonnelLifecycleEditorStepButton", "personnelLifecycleEditorFlow", "personnelLifecycleEditorInspectorForm", "personnelLifecycleEditorInspectorFields", "personnelLifecycleEditorStepType", "personnelLifecycleEditorStepTitle", "personnelLifecycleEditorStepDescription", "personnelLifecycleEditorResponsibilityClass", "personnelLifecycleEditorStepRequired", "movePersonnelLifecycleEditorStepUpButton", "movePersonnelLifecycleEditorStepDownButton", "removePersonnelLifecycleEditorStepButton", "personnelLifecycleEditorValidation", "personnelLifecycleEditorValidationTitle", "personnelLifecycleEditorValidationResult", "resetPersonnelLifecycleEditorButton", "validatePersonnelLifecycleEditorButton",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
@@ -833,13 +850,13 @@ const elements = Object.fromEntries(
     "mobilePortalLocationDisplayCard", "mobilePortalLocationDisplayLocation", "mobilePortalLocationDisplayModules", "mobilePortalLocationDisplayHint", "saveMobilePortalLocationDisplayButton",
     "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountLearningDashboard", "organizationAccountLearningDashboardRow", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountArticles", "organizationAccountArticlesRow", "organizationAccountReceipts", "organizationAccountReceiptsRow", "organizationAccountTimeOff", "organizationAccountTimeOffRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "personnelViewSettingsCard", "trustLevelSettingsCard",
-    "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
+    "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "systemCenterUtilization", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "vpsRebootModal", "vpsRebootForm", "vpsRebootCloseButton", "vpsRebootCancelButton", "vpsRebootConfirmButton", "vpsRebootCurrentPassword", "vpsRebootMessage", "maintenanceScheduleCard", "maintenanceScheduleStatus", "maintenanceScheduleForm", "maintenanceScheduleRows", "reloadMaintenanceSchedulesButton", "saveMaintenanceSchedulesButton", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "offsiteProviderSelect", "offsiteProviderPolicyHint", "googleDriveManagementStatus", "googleDriveFolderControls", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
-    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "branchSupervisionSettingsCard", "branchSupervisionMode", "branchSupervisionIntensity", "branchSupervisionThresholds", "branchSupervisionPrimaryCoveragePercent", "branchSupervisionDepartmentGapMinutes", "branchSupervisionSettingsHint", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
+    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "planningAssistantSettingsCard", "planningAssistantEnabled", "planningAssistantAutoCheck", "planningAssistantShowInformational", "planningAssistantSettingsState", "branchSupervisionSettingsCard", "branchSupervisionMode", "branchSupervisionIntensity", "branchSupervisionThresholds", "branchSupervisionPrimaryCoveragePercent", "branchSupervisionDepartmentGapMinutes", "branchSupervisionSettingsHint", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "birthdayPresentationSettingsCard", "birthdayPresentationScope", "birthdayPresentationCatalogSection", "birthdayPresentationCatalog", "birthdayPresentationDeveloperPreviewSection", "birthdayPresentationDeveloperPreviewEnabled", "birthdayPresentationDeveloperPreviewDesign", "birthdayPresentationDeveloperPreviewHint", "saveBirthdayPresentationDeveloperPreviewButton", "openBirthdayPresentationDeveloperPreviewButton", "birthdayPresentationGlobalSection", "birthdayPresentationEnabled", "birthdayPresentationTeamSection", "birthdayPresentationEmployeeSearch", "birthdayPresentationLocationFilter", "birthdayPresentationEmployeeList", "birthdayPresentationDelegatesSection", "birthdayPresentationDelegateList", "birthdayPresentationSettingsHint", "saveBirthdayPresentationSettingsButton",
@@ -1203,9 +1220,9 @@ function vacationEntriesInRange(start, end) {
 }
 
 function escapeHtml(value) {
-  const node = document.createElement("span");
-  node.textContent = value ?? "";
-  return node.innerHTML;
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]);
 }
 
 function escapeHtmlAttribute(value) {
@@ -1260,8 +1277,14 @@ function setDefaultContext(locations) {
   }
 }
 
+function safeCssColor(value, fallback = "#0b84c6") {
+  const color = String(value ?? "").trim();
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+  return /^#[0-9a-f]{6}$/i.test(fallback) ? fallback : "#0b84c6";
+}
+
 function contrastColor(hex) {
-  const value = hex.replace("#", "");
+  const value = safeCssColor(hex).replace("#", "");
   const r = parseInt(value.slice(0, 2), 16);
   const g = parseInt(value.slice(2, 4), 16);
   const b = parseInt(value.slice(4, 6), 16);
@@ -1269,8 +1292,12 @@ function contrastColor(hex) {
 }
 
 async function api(url, options = {}) {
+  options = window.GrabenplanerSessionLifecycle?.credentialOptions?.(url, options) || options;
+  const requestSession = state.portalSession;
+  const requestGeneration = window.GrabenplanerSessionLifecycle?.generation;
   const csrfToken = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("grabenplaner_csrf="))?.split("=").slice(1).join("=");
   const headers = { "Content-Type": "application/json", ...options.headers };
+  Object.assign(headers, window.GrabenplanerSessionLifecycle?.activityHeaders?.(url, requestSession?.authenticated === true));
   if (csrfToken && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase())) {
     headers["X-CSRF-Token"] = decodeURIComponent(csrfToken);
   }
@@ -1278,48 +1305,110 @@ async function api(url, options = {}) {
   try {
     response = await fetch(url, { ...options, headers });
   } catch (error) {
+    if (state.portalSession !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+      throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+    }
     throw window.GrabenplanerApiErrors?.fromNetwork
       ? window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname })
       : new Error("Die Verbindung zum Grabenplaner ist vorübergehend unterbrochen. Bitte erneut versuchen.");
   }
+  window.GrabenplanerSessionLifecycle?.observeCredentialResponse?.(response);
   if (!response.ok) {
     const detail = window.GrabenplanerApiErrors?.fromResponse ? await window.GrabenplanerApiErrors.fromResponse(response, {
       hostname: location.hostname,
       fallback: "Die Aktion konnte nicht ausgeführt werden.",
     }) : await response.json().then(data => ({message: data.error || "Die Anmeldung oder Aktion ist vorübergehend nicht möglich. Bitte erneut versuchen.", code: data.code || ""})).catch(() => ({message: "Der Grabenplaner ist vorübergehend nicht erreichbar. Bitte erneut versuchen.", code: ""}));
+    if (state.portalSession !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+      throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+    }
     const error = new Error(detail.message);
     error.status = response.status;
     error.code = detail.code;
-    if (response.status === 401 && elements.loginGate) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
+    if (response.status === 401 && elements.loginGate && state.portalSession === requestSession) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
-  return response.status === 204 ? null : response.json();
+  const result = response.status === 204 ? null : await response.json();
+  if (state.portalSession !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+    throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+  }
+  return result;
 }
 
 async function rawApi(url, options = {}) {
+  options = window.GrabenplanerSessionLifecycle?.credentialOptions?.(url, options) || options;
+  const requestSession = state.portalSession;
+  const requestGeneration = window.GrabenplanerSessionLifecycle?.generation;
   const headers = { ...(options.headers || {}) };
+  Object.assign(headers, window.GrabenplanerSessionLifecycle?.activityHeaders?.(url, requestSession?.authenticated === true));
   const method = String(options.method || "GET").toUpperCase();
   if (!["GET", "HEAD"].includes(method)) Object.assign(headers, csrfHeader());
   let response;
   try {
     response = await fetch(url, { ...options, method, headers });
   } catch (error) {
+    if (state.portalSession !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+      throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+    }
     throw window.GrabenplanerApiErrors?.fromNetwork
       ? window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname })
       : new Error("Die Verbindung zum Grabenplaner ist vorübergehend unterbrochen. Bitte erneut versuchen.");
   }
+  window.GrabenplanerSessionLifecycle?.observeCredentialResponse?.(response);
   if (!response.ok) {
     const detail = window.GrabenplanerApiErrors?.fromResponse ? await window.GrabenplanerApiErrors.fromResponse(response, {
       hostname: location.hostname,
       fallback: "Die Aktion konnte nicht ausgef\u00fchrt werden.",
     }) : await response.json().then(data => ({message: data.error || "Die Anmeldung oder Aktion ist vorübergehend nicht möglich. Bitte erneut versuchen.", code: data.code || ""})).catch(() => ({message: "Der Grabenplaner ist vorübergehend nicht erreichbar. Bitte erneut versuchen.", code: ""}));
+    if (state.portalSession !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+      throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+    }
     const error = new Error(detail.message);
     error.status = response.status;
     error.code = detail.code;
-    if (response.status === 401 && elements.loginGate) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
+    if (response.status === 401 && state.portalSession === requestSession && elements.loginGate) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
+  if (state.portalSession !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+    throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+  }
   return response;
+}
+
+async function withAdminReauthentication(operation) {
+  const lifecycle = window.GrabenplanerSessionLifecycle;
+  if (!lifecycle?.credentials) throw new Error("Dieser Browser kann die Sicherheitsfreigabe nicht sicher abstimmen. Bitte die Seite in einem aktuellen Browser erneut öffnen.");
+  return lifecycle.credentials(async () => {
+    const originalSession = state.portalSession;
+    const originalGeneration = lifecycle.generation;
+    const csrfCookie = () => String(document.cookie || "").split(";").map(value => value.trim())
+      .find(value => value.startsWith("grabenplaner_csrf=")) || "";
+    const originalCsrfCookie = csrfCookie();
+    try {
+      return await operation();
+    } finally {
+      if (lifecycle.credentialChanged || csrfCookie() !== originalCsrfCookie) {
+        // Rotation may already have committed even if the protected operation
+        // subsequently failed. Adopt the new cookie's projection before another
+        // tab can authenticate. A restarting server may no longer answer.
+        try {
+          const session = await api("/api/portal/v1/session");
+          if (state.portalSession === originalSession && lifecycle.generation === originalGeneration) {
+            if (!session?.authenticated || !session.user?.employeeNumber
+              || session.user.employeeNumber !== originalSession?.user?.employeeNumber) throw new Error("Die Sitzung ist nicht mehr verfügbar.");
+            state.portalSession = session;
+            lifecycle.advance();
+            applyRoleVisibility();
+          }
+        } catch {
+          if (state.portalSession === originalSession && lifecycle.generation === originalGeneration) {
+            showLoginGate("Die Sicherheitsfreigabe wurde verarbeitet. Bitte die Sitzung nach Wiederherstellung der Verbindung erneut prüfen.");
+          }
+        } finally {
+          lifecycle.publish();
+        }
+      }
+    }
+  });
 }
 
 function csrfHeader() {
@@ -1364,6 +1453,8 @@ function closeAdminCredentialDialogsForLogin() {
 }
 
 function showLoginGate(message = "") {
+  window.GrabenplanerSessionLifecycle?.advance();
+  document.body.classList.remove("session-pending");
   syncSettingsSaveScopes({ force: true });
   gpWindowManager?.synchronize();
   recentArticlesWindow?.sync();
@@ -1375,8 +1466,15 @@ function showLoginGate(message = "") {
   clearUsbProvisioningPasswords();
   resetAdminPersonalActionsState("");
   state.portalSession = null;
+  planningAssistantWorkspace?.reset();
+  syncSystemUtilizationWorkspace();
+  syncWorkflowStudio();
+  personnelDashboardInformation?.clear();
+  syncPersonnelDashboardWorkspace();
+  syncXoffiImport();
   syncPlanningPrintWindows();
   gpDocumentPrint?.reset();
+  usbGuidePrint?.reset();
   gpDefinitionsWorkspace?.synchronize();
   syncPersonnelLearningAccessState();
   syncStartDashboardWorkspace();
@@ -1407,6 +1505,7 @@ function showLoginGate(message = "") {
 }
 
 function hideLoginGate() {
+  document.body.classList.remove("session-pending");
   if (elements.adminLoginPassword) {
     elements.adminLoginPassword.value = "";
     resetAdminCredentialVisibility(elements.adminLoginPassword);
@@ -1437,8 +1536,14 @@ function renderGpDefinitionsAccess() {
 function activateGpDefinitions() {
   if (!canUseGpDefinitions() || !window.GpDefinitions) return;
   if (!gpDefinitionsWorkspace) gpDefinitionsWorkspace = window.GpDefinitions.mount(document.getElementById('gpDefinitionsWorkspace'), {
+    api,
     canUse: canUseGpDefinitions, key: () => String(state.portalSession?.user?.employeeNumber || ''),
     loadWorkspaces: async () => (await api('/api/portal/v1/private-workspaces')).workspaces,
+    onExit: () => {
+      const route = privateWorkspaceReturnRoute || { view: 'startDashboard' };
+      history.pushState({}, '', location.pathname + '?' + new URLSearchParams(route));
+      applyRequestedView({ fromHistory: true });
+    },
   });
   gpDefinitionsWorkspace.activate();
 }
@@ -1807,6 +1912,7 @@ function applyFunctionSearchNavigationState(target) {
   if (target.requestKind) state.requestKindTab = target.requestKind;
   if (target.salesAnalyticsTab) state.salesAnalytics.tab = target.salesAnalyticsTab;
   if (target.privacyOrganizationTab) privacyOrganizationTab = normalizePrivacyOrganizationTab(target.privacyOrganizationTab);
+  if (target.technicalSecurityTab) technicalSecurityTab = normalizeTechnicalSecurityTab(target.technicalSecurityTab);
 
   const contextChanged = restoreRememberedOverallContext(target.view);
   setView(target.view);
@@ -2372,8 +2478,36 @@ function canReadPersonnelWorkflowInstances() {
     && state.personnelWorkflowInstanceCapabilities.canRead !== false;
 }
 
+function canReadWorkflowStudioCatalog() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  const user = state.portalSession?.user;
+  return state.portalSession?.authenticated === true && user?.mustChangePassword !== true && user?.active !== false
+    && ["developer", "it_admin", "admin", "hr"].includes(user?.role) && hasGovernancePermission("rights:read");
+}
+
 function canOpenWorkflowCenter() {
-  return canReadPersonnelWorkflowInstances() || canReadPersonnelLifecycleEditorCatalog();
+  return canReadPersonnelWorkflowInstances() || canReadPersonnelLifecycleEditorCatalog() || canReadWorkflowStudioCatalog();
+}
+
+function syncWorkflowStudio() {
+  if (state.personnelLifecycleEditorActorAccessKey && state.personnelLifecycleEditorSession !== state.portalSession) clearPersonnelLifecycleEditorState();
+  const context = state.personnelWorkflowInstancesContext;
+  if (context && !gpContextCurrent(context)) {
+    state.personnelWorkflowInstancesRequest = Symbol("workflow-context-changed");
+    state.personnelWorkflowInstancesContext = null;
+    clearPersonnelWorkflowInstanceState();
+    state.personnelWorkflowInstanceCapabilities = defaultPersonnelWorkflowInstanceCapabilities();
+  }
+  const host = document.getElementById("workflowStudioWorkspace");
+  if (!host || !window.GrabenplanerWorkflowStudio) return;
+  if (!workflowStudioWorkspace) workflowStudioWorkspace = window.GrabenplanerWorkflowStudio.mount(host, {
+    api, key: startDashboardWorkspaceActorKey, session: () => state.portalSession,
+    canUse: canReadWorkflowStudioCatalog,
+    canManage: () => !state.portalStatus?.portalEnabled || hasGovernancePermission("processes:write"),
+    active: () => state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "workflows",
+    scope: () => JSON.stringify([state.locationId, state.departmentId]),
+  });
+  workflowStudioWorkspace.sync();
 }
 
 function canReadPersonnelLearningCatalog() {
@@ -2629,7 +2763,9 @@ function canReadPersonnelLifecycleEditorCatalog() {
 
 function canWritePersonnelLifecycleEditorDraft() {
   return canReadPersonnelLifecycleEditorCatalog()
-    && hasGovernancePermission("personnel:lifecycle:editor:draft:write");
+    && hasGovernancePermission("personnel:lifecycle:editor:draft:write")
+    && !state.personnelLifecycleEditorLoading
+    && (!state.personnelLifecycleEditorWindowContext || gpEditorCurrent(state.personnelLifecycleEditorWindowContext));
 }
 
 function canValidatePersonnelLifecycleEditorDraft() {
@@ -2717,6 +2853,12 @@ function canReadSystemCenter() {
   if (!state.portalStatus?.portalEnabled) return true;
   const permissions = state.portalSession?.user?.permissions || [];
   return permissions.includes("system:diagnostics:read") || permissions.includes("system:diagnostics:technical");
+}
+
+function canReadVpsStorage() {
+  const user = state.portalSession?.user;
+  return state.portalSession?.authenticated === true && ['developer', 'it_admin', 'admin'].includes(user?.role)
+    && user.permissions?.includes('system:diagnostics:technical') && !user.mustChangePassword;
 }
 
 function canReadPersonnelRulesDashboard() {
@@ -2894,6 +3036,7 @@ function applyRoleVisibility() {
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   const systemCenterAccess = diagnosticsReadAccess || diagnosticsTechnicalAccess;
   elements.systemCenterPanel?.classList.toggle("hidden", !systemCenterAccess);
+  syncSystemUtilizationWorkspace();
   const updateAccess = !lanActive || permissions.includes("update:write");
   const personnelRulesDashboardAccess = canReadPersonnelRulesDashboard();
   document.querySelectorAll('[data-dashboard-capability="rights"]').forEach((button) => button.classList.toggle("hidden", !rightsAccess));
@@ -2935,11 +3078,14 @@ function applyRoleVisibility() {
     if (!allowed) group.open = false;
   });
   document.getElementById("databaseImportSettings")?.classList.toggle("hidden", !databaseImportAccess);
+  document.getElementById('vpsStorageSettingsCard')?.classList.toggle('hidden', !canReadVpsStorage());
   elements.crossLocationScheduleSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
   elements.staffAssignmentNotificationSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
   elements.staffAssignmentChangeSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
   elements.scheduleLockSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.branchSupervisionSettingsCard?.classList.toggle("hidden", !settingsAccess);
+  elements.planningAssistantSettingsCard?.classList.toggle("hidden", !settingsAccess);
+  updatePlanningAssistantSettings();
   document.querySelector("#legacyUsbProvisioning")?.classList.toggle("hidden", !usbProvisioningAccess);
   const timeTrackingTabActive = document.querySelector('[data-settings-tab="timeTracking"]')?.classList.contains("active");
   const scheduleTabActive = document.querySelector('[data-settings-tab="schedule"]')?.classList.contains("active");
@@ -2963,10 +3109,6 @@ function applyRoleVisibility() {
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !(employeeWriteAccess && centralPersonnelWriteAccess));
   elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
   document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
-  elements.positionManagementTab?.classList.toggle("hidden", !positionWriteAccess);
-  elements.candidatePreboardingTab?.classList.toggle("hidden", !candidatePreboardingAccess);
-  elements.workflowCenterTab?.classList.toggle("hidden", !workflowCenterAccess);
-  elements.personnelLearningTab?.classList.toggle("hidden", !personnelLearningAccess);
   document.querySelector('[data-learning-area="team"]')?.classList.toggle("hidden", !personnelLearningCompetencyAccess);
   elements.addPersonnelLearningModuleButton?.classList.toggle(
     "hidden",
@@ -2999,14 +3141,10 @@ function applyRoleVisibility() {
       || state.personnelLearningAssignmentCatalog?.capabilities?.canWriteAssignments !== true,
   );
   elements.personnelWorkflowInstanceWorkspace?.classList.toggle("hidden", !workflowInstanceAccess);
-  elements.personnelTasksTab?.classList.toggle("hidden", !personnelTasksAccess);
   elements.personnelLifecycleInterfacesSection?.classList.toggle("hidden", !lifecycleInterfacesAccess);
   elements.personnelLifecycleAutomationSection?.classList.toggle("hidden", !lifecycleAutomationAccess);
   elements.personnelLifecycleEditorSection?.classList.toggle("hidden", !lifecycleEditorAccess);
   document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
-  elements.customWorkRulesTab?.classList.toggle("hidden", !customWorkRulesAccess);
-  elements.collectiveAgreementsTab?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
-  elements.centralVacationsTab?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
   elements.addCostCenterTypeButton?.classList.toggle("hidden", !costCenterWriteAccess);
   elements.addCustomWorkRuleButton?.classList.toggle("hidden", !canDraftCustomWorkRules());
@@ -3210,7 +3348,8 @@ function applyRoleVisibility() {
   );
   const lifecycleEditorActorAccessChanged = Boolean(
     state.personnelLifecycleEditorActorAccessKey
-    && state.personnelLifecycleEditorActorAccessKey !== personnelLifecycleEditorActorAccessKey(),
+    && (state.personnelLifecycleEditorActorAccessKey !== personnelLifecycleEditorActorAccessKey()
+      || state.personnelLifecycleEditorSession !== state.portalSession),
   );
   if ((!lifecycleEditorAccess || lifecycleEditorActorAccessChanged) && (
     state.personnelLifecycleEditorCatalog
@@ -3285,12 +3424,12 @@ async function bootstrapApplication() {
     state.portalStatus = status;
     applyBranding(status.branding || {});
     elements.deploymentBanner?.classList.toggle("hidden", status.deploymentKind !== "codespaces-test");
-    const passwordMinimum = Number(status.passwordMinLength || 6);
-    [elements.adminLoginPassword, elements.adminSetupPassword, elements.adminSetupPasswordRepeat].forEach((input) => { if (input) input.minLength = passwordMinimum; });
+    window.GrabenplanerPasswordPolicy?.configure(status);
     if (elements.adminAccessModeLabel) elements.adminAccessModeLabel.textContent = "Geschützter Zugang";
     if (status.portalEnabled) {
       const session = await sessionRequest;
       if (session.sessionError) throw session.sessionError;
+      window.GrabenplanerSessionLifecycle?.advance();
       state.portalSession = session;
       if (!session.authenticated) {
         showLoginGate();
@@ -3319,62 +3458,96 @@ async function bootstrapApplication() {
     globalThis.grabenplanerNavigation?.start();
     setTimeout(() => checkForUpdates(false), 1800);
   } catch (error) {
+    if (error.code === "PORTAL_SESSION_CHANGED") return;
     showLoginGate(error.message);
   }
 }
 
 async function loginToAdministration(event) {
   event.preventDefault();
+  const credentialsInput = { employeeNumber: elements.adminLoginPersonnelNumber.value, password: elements.adminLoginPassword.value };
   try {
-    const result = await api("/api/portal/v1/auth/login", {
-      method: "POST",
-      body: JSON.stringify({
-        employeeNumber: elements.adminLoginPersonnelNumber.value,
-        password: elements.adminLoginPassword.value,
-      }),
-    });
-    if (result.user?.role === "employee"
-      || result.user?.mustChangePassword
-      || result.user?.isEmployee === false) {
+    await window.GrabenplanerSessionLifecycle.credentials(async () => {
+      const result = await api("/api/portal/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify(credentialsInput),
+      });
+      window.GrabenplanerSessionLifecycle?.publish();
+      if (result.user?.role === "employee"
+        || result.user?.mustChangePassword
+        || result.user?.isEmployee === false) {
+        if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
+        window.location.replace("/portal.html");
+        return;
+      }
       if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
-      window.location.replace("/portal.html");
-      return;
-    }
-    void redirectAdministrationToCandidateEvaluation(result.user).catch((error) => {
-      if (error?.status === 401) window.location.reload();
-    });
-    elements.adminLoginPassword.value = "";
-    state.portalSession = result;
-    applyShellBranding(result.status?.branding || result.branding || {});
-    hideLoginGate();
-    applyRoleVisibility();
-    await Promise.all([
-      loadUiPreferences(),
-      loadAll({ applyInitialView: true, reusePortalStatus: true }),
-    ]);
-    void loadManagementBrandingPreference().catch(() => {});
-    loadSystemInfo();
-    globalThis.grabenplanerNavigation?.start();
+      elements.adminLoginPassword.value = "";
+      window.GrabenplanerSessionLifecycle?.advance();
+      state.portalSession = result;
+      applyShellBranding(result.status?.branding || result.branding || {});
+      hideLoginGate();
+      applyRoleVisibility();
+      await Promise.all([
+        loadUiPreferences(),
+        loadAll({ applyInitialView: true, reusePortalStatus: true }),
+      ]);
+      void loadManagementBrandingPreference().catch(() => {});
+      loadSystemInfo();
+      globalThis.grabenplanerNavigation?.start();
+    }, { allowAccountChange: true });
   } catch (error) {
+    if (error.code === "PORTAL_SESSION_CHANGED") return;
     showLoginGate(error.message);
   }
 }
 
+let adminLogoutInProgress = null;
+
 async function logoutPortal() {
-  if (salesPriceLabelsWorkspace?.hasUnsaved) {
-    try {await salesPriceLabelsWorkspace.flush();} catch(error) {showToast('Der Preisschildentwurf konnte noch nicht gespeichert werden: '+error.message,true);return;}
-    if(salesPriceLabelsWorkspace.hasUnsaved){showToast('Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden.',true);return;}
-  }
-  if (sidebarNotepad && !await sidebarNotepad.prepareLogout()) {
-    showToast("Deine Notizen konnten noch nicht gespeichert werden. Bitte im Notizblock erneut versuchen und danach abmelden.",true);
-    return;
-  }
-  clearEmployeeOnboardingStartState();
-  clearPersonnelLifecycleInterfacesState();
-  clearPersonnelLifecycleAutomationState();
-  clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus: false });
-  try { await api("/api/portal/v1/auth/logout", { method: "POST", body: "{}" }); } catch {}
-  window.location.reload();
+  if (!state.portalSession || adminLogoutInProgress?.session === state.portalSession) return;
+  const operation = { session: state.portalSession };
+  adminLogoutInProgress = operation;
+  const actor = () => JSON.stringify([state.portalSession?.user?.employeeNumber, state.portalSession?.user?.accountId]);
+  const logoutActor = actor();
+  const current = () => state.portalSession === operation.session && actor() === logoutActor;
+  try {
+    await window.GrabenplanerSessionLifecycle.credentials(async () => {
+      if (!current()) return;
+      if (salesPriceLabelsWorkspace?.hasUnsaved) {
+        showToast('Der Preisschildentwurf wurde inzwischen geändert. Bitte erneut abmelden, damit die Änderungen zuerst gesichert werden.', true);
+        return;
+      }
+      clearEmployeeOnboardingStartState();
+      clearPersonnelLifecycleInterfacesState();
+      clearPersonnelLifecycleAutomationState();
+      clearPersonnelLifecycleEditorState("", { closeDialog: true, restoreFocus: false });
+      try {
+        await api("/api/portal/v1/auth/logout", { method: "POST", body: "{}" });
+        window.GrabenplanerSessionLifecycle?.publish();
+      } catch (error) { if (current()) showToast(error.message, true); return; }
+      if (!current()) return;
+      window.location.reload();
+    }, { prepare: async () => {
+      if (!current()) return false;
+      if (salesPriceLabelsWorkspace?.hasUnsaved) {
+        try { await salesPriceLabelsWorkspace.flush(); }
+        catch (error) { if (current()) showToast('Der Preisschildentwurf konnte noch nicht gespeichert werden: ' + error.message, true); return false; }
+        if (!current()) return false;
+        if (salesPriceLabelsWorkspace.hasUnsaved) {
+          showToast(salesPriceLabelsWorkspace.hasPendingUpload
+            ? 'Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden.'
+            : 'Der Preisschildentwurf ist noch nicht gesichert. Bitte unter Preisschilder das Speichern erneut versuchen.', true);
+          return false;
+        }
+      }
+      if (sidebarNotepad && !await sidebarNotepad.prepareLogout()) {
+        if (current()) showToast("Deine Notizen konnten noch nicht gespeichert werden. Bitte im Notizblock erneut versuchen und danach abmelden.", true);
+        return false;
+      }
+      return current();
+    } });
+  } catch (error) { if (current()) showToast(error.message, true); }
+  finally { if (adminLogoutInProgress === operation) adminLogoutInProgress = null; }
 }
 
 function openAdminSetup() {
@@ -3401,19 +3574,23 @@ async function setupPortalAdmin(event) {
     return;
   }
   try {
-    const result = await api("/api/portal/v1/setup/admin", {
-      method: "POST",
-      body: JSON.stringify({ employeeNumber: elements.adminSetupEmployee.value, password: elements.adminSetupPassword.value }),
-    });
-    state.portalStatus = result.status;
-    elements.adminSetupModal.close();
-    renderPortalAccessState();
-    await loadPortalUsers();
-    showToast("Admin-Zugang wurde eingerichtet.");
+    await window.GrabenplanerSessionLifecycle.credentials(async () => {
+      const result = await api("/api/portal/v1/setup/admin", {
+        method: "POST",
+        body: JSON.stringify({ employeeNumber: elements.adminSetupEmployee.value, password: elements.adminSetupPassword.value }),
+      });
+      state.portalStatus = result.status;
+      window.GrabenplanerSessionLifecycle.publish();
+      elements.adminSetupModal.close();
+      renderPortalAccessState();
+      await loadPortalUsers();
+      showToast("Admin-Zugang wurde eingerichtet.");
+    }, { allowAccountChange: true });
   } catch (error) { showToast(error.message, true); }
 }
 
 async function savePortalUser(row) {
+  if (window.GrabenplanerPasswordPolicy && !window.GrabenplanerPasswordPolicy.validate(row.querySelector("[data-portal-password]"), { report: true })) return;
   const employeeNumber = row.dataset.portalUser;
   try {
     const mayManageUsers = state.portalSession?.user?.permissions?.includes("users:write") || !state.portalStatus?.portalEnabled;
@@ -3563,7 +3740,7 @@ async function enrichLoadedSchedule(url, {
       || state.locationId !== expectedLocationId
       || String(state.departmentId || "") !== String(expectedDepartmentId || "")) return false;
     state.data = { ...state.data, ...schedule, enrichmentPending: false };
-    render({ period: "schedule" });
+    render({ period: "schedule-enrichment" });
     return true;
   } catch (error) {
     if (generation === loadAllGeneration && !signal?.aborted) {
@@ -3574,6 +3751,7 @@ async function enrichLoadedSchedule(url, {
 }
 
 async function loadAll({ restoreContext = true, applyInitialView = false, reusePortalStatus = false } = {}) {
+  syncXoffiImport();
   syncSettingsSaveScopes();
   const generation = ++loadAllGeneration;
   const session = state.portalSession;
@@ -3622,7 +3800,9 @@ async function loadAll({ restoreContext = true, applyInitialView = false, reuseP
       vacationEnabled
         ? api(`/api/vacations?year=${state.vacationYear}${vacationContext}`)
         : Promise.resolve({ year: state.vacationYear, vacations: [], entitlements: [], publicHolidays: [] }),
-      api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || []),
+      portalStatus?.portalEnabled === false || session?.user?.permissions?.includes("branding:read")
+        ? api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || [])
+        : Promise.resolve([]),
     ]);
     if (!isCurrent() || settingsRead.key !== settingsSaveKey("main")) return;
     if (positions.status === "fulfilled") state.positions = positions.value;
@@ -3668,7 +3848,8 @@ function loadPlanningView(view) {
     : loadAll({ restoreContext: false });
 }
 
-async function loadPlanningPeriod(kind = "schedule") {
+async function loadPlanningPeriod(kind = "schedule", { errorPrefix = "" } = {}) {
+  syncXoffiImport();
   if (!state.data || (kind === "vacation" && !state.vacationData) || !state.locations?.length) return loadAll();
   const generation = ++loadAllGeneration;
   const started = globalThis.performance?.now();
@@ -3721,13 +3902,21 @@ async function loadPlanningPeriod(kind = "schedule") {
       });
     }
   } catch (error) {
-    if (generation === loadAllGeneration && !controller.signal.aborted) showToast(error.message, true);
+    if (generation === loadAllGeneration && !controller.signal.aborted) showToast(`${errorPrefix}${error.message}`, true);
   } finally {
     if (planningPeriodController === controller) planningPeriodController = null;
   }
 }
 
 function render({ period = null } = {}) {
+  if (period === "schedule-enrichment") {
+    renderBranchSupervisionAssessment();
+    renderWorkRuleAssessment();
+    renderHoursOverview();
+    planningAssistantWorkspace?.synchronize({ data: state.data, session: state.portalSession, allowed: canReadStartDashboardSchedule() });
+    return;
+  }
+  syncXoffiImport();
   if (period === "vacation") {
     applyShellBranding(hasManagementBrandingAccess() ? {} : state.vacationData?.settings || {});
     renderContextNavigation();
@@ -3742,6 +3931,8 @@ function render({ period = null } = {}) {
   renderSummary();
   renderBranchSupervisionAssessment();
   renderWorkRuleAssessment();
+  if (!planningAssistantWorkspace && window.GpPlanningAssistant) planningAssistantWorkspace = window.GpPlanningAssistant.mount(document.getElementById('planningAssistantPanel'), { api, onApplied: () => loadPlanningPeriod('schedule') });
+  planningAssistantWorkspace?.synchronize({ data: state.data, session: state.portalSession, allowed: canReadStartDashboardSchedule() });
   renderTimeline();
   renderRemarks();
   renderHoursOverview();
@@ -5019,7 +5210,7 @@ async function openBranchAccountPasswordDialog() {
     if (input) {
       input.value = "";
       resetAdminCredentialVisibility(input);
-      input.minLength = Number(state.portalStatus?.passwordMinLength || 6);
+      window.GrabenplanerPasswordPolicy?.validate(input);
     }
   });
   if (elements.branchAccountPasswordMessage) {
@@ -5168,6 +5359,7 @@ function navigationGroups() {
     salesAdministration: { toggle: elements.salesAdministrationToggle, children: elements.salesAdministrationNavChildren },
     logistics: { toggle: document.getElementById("logisticsToggle"), children: document.getElementById("logisticsNavChildren") },
     privacyOrganization: { toggle: document.getElementById("privacyOrganizationToggle"), children: document.getElementById("privacyOrganizationNavChildren") },
+    technicalSecurity: { toggle: document.getElementById("technicalSecurityToggle"), children: document.getElementById("technicalSecurityNavChildren") },
   };
 }
 
@@ -5191,34 +5383,37 @@ function applyNavigationGroupState(key, visible = true) {
 
 function renderContextNavigation() {
   const routeChanged = sidebarNavigationGroups.sync(JSON.stringify(currentAdministrationRoute()), state.currentView);
+  const activePath = sidebarNavigationGroups.navigationPath(state.currentView);
   const locations = activeLocations();
   const departmentOnly = state.portalSession?.user?.role === "department_manager";
-  const filialViewActive = ["filialAdministration", "personnel", "planning", "vacations", "loans", "branchOrders"].includes(state.currentView);
+  const filialViewActive = activePath.includes("filialManagement");
   elements.filialManagementNav?.classList.toggle("contains-active", filialViewActive);
   applyNavigationGroupState("filialManagement", true);
   setNavigationCurrent(elements.filialDashboardNavButton, state.currentView === "filialAdministration");
   setNavigationCurrent(elements.filialTeamsNavButton, state.currentView === "personnel");
   setNavigationCurrent(elements.loanManagementNavButton, state.currentView === "loans");
   setNavigationCurrent(elements.branchOrdersManagementNavButton, state.currentView === "branchOrders");
-  setNavigationCurrent(elements.planningNavButton, state.currentView === "planning");
-  setNavigationCurrent(elements.vacationsNavButton, state.currentView === "vacations");
   const planningContexts = locations.flatMap((location) => departmentOnly
-    ? (location.departments || []).map((department) => ({ locationId: location.id, departmentId: String(department.id), label: `${location.name} · ${department.name}` }))
-    : [{ locationId: location.id, departmentId: "", label: `${location.name} · Gesamtplan` }]);
+    ? (location.departments || []).map((department) => ({ locationId: location.id, departmentId: String(department.id), locationName: location.name, planLabel: department.name }))
+    : [{ locationId: location.id, departmentId: "", locationName: location.name, planLabel: "Gesamtplan" }]);
   const showPlanningChildren = planningContexts.length > 1;
+  setNavigationCurrent(elements.planningNavButton, state.currentView === "planning" && !showPlanningChildren);
+  elements.planningNavButton?.classList.toggle("contains-active", state.currentView === "planning" && showPlanningChildren);
   applyNavigationGroupState("planning", showPlanningChildren);
   elements.planningNavChildren.innerHTML = showPlanningChildren ? planningContexts.map((item) => `
-    <button type="button" class="nav-child ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? "active" : ""}" ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? 'aria-current="page"' : ""} data-context-view="planning" data-location-id="${escapeHtml(item.locationId)}" data-department-id="${escapeHtml(item.departmentId)}">${escapeHtml(item.label)}</button>
+    <button type="button" class="nav-child nav-planning-context ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? "active" : ""}" ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? 'aria-current="page"' : ""} data-context-view="planning" data-location-id="${escapeHtml(item.locationId)}" data-department-id="${escapeHtml(item.departmentId)}" title="${escapeHtml(`${item.locationName} · ${item.planLabel}`)}"><strong>${escapeHtml(item.locationName)}</strong><small>${escapeHtml(item.planLabel)}</small></button>
   `).join("") : "";
 
   const showVacationChildren = locations.length > 1;
+  setNavigationCurrent(elements.vacationsNavButton, state.currentView === "vacations" && !showVacationChildren);
+  elements.vacationsNavButton?.classList.toggle("contains-active", state.currentView === "vacations" && showVacationChildren);
   applyNavigationGroupState("vacations", showVacationChildren);
   elements.vacationNavChildren.innerHTML = showVacationChildren ? locations.map((location) => `
     <button type="button" class="nav-child ${state.currentView === "vacations" && location.id === state.locationId ? "active" : ""}" ${state.currentView === "vacations" && location.id === state.locationId ? 'aria-current="page"' : ""} data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="${departmentOnly ? escapeHtml(String(location.departments?.[0]?.id || "")) : ""}">${escapeHtml(location.name)}</button>
   `).join("") : "";
 
   const personnelModuleVisible = !elements.personnelAdministrationNav?.classList.contains("hidden");
-  const personnelViewActive = ["personnelAdministration", "requests", "timeTracking"].includes(state.currentView);
+  const personnelViewActive = activePath.includes("personnelAdministration");
   elements.personnelAdministrationNav?.classList.toggle("contains-active", personnelViewActive);
   applyNavigationGroupState("personnelAdministration", personnelModuleVisible);
   setNavigationCurrent(elements.personnelDashboardNavButton,
@@ -5247,7 +5442,7 @@ function renderContextNavigation() {
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 
   const salesAdministrationVisible = !elements.salesAdministrationNav?.classList.contains("hidden");
-  const salesAdministrationActive = ["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "articleReport", "salesBwl", "priceLabels", "crm"].includes(state.currentView);
+  const salesAdministrationActive = activePath.includes("salesAdministration");
   elements.salesAdministrationNav?.classList.toggle("contains-active", salesAdministrationActive);
   applyNavigationGroupState("salesAdministration", salesAdministrationVisible);
   setNavigationCurrent(elements.salesDashboardNavButton, state.currentView === "salesAdministration");
@@ -5258,16 +5453,24 @@ function renderContextNavigation() {
   setNavigationCurrent(document.getElementById('salesBwlNavButton'),state.currentView==='salesBwl');
   setNavigationCurrent(elements.logisticsNavButton, false);
   const logisticsNav = document.getElementById("logisticsNav");
-  logisticsNav?.classList.toggle("contains-active", state.currentView === "logistics");
+  logisticsNav?.classList.toggle("contains-active", activePath.includes("logistics"));
   applyNavigationGroupState("logistics", !logisticsNav?.classList.contains("hidden"));
-  setNavigationCurrent(document.getElementById("logisticsPurchasingNavButton"), state.currentView === "logistics");
+  setNavigationCurrent(document.getElementById("logisticsPurchasingNavButton"), state.currentView === "logistics" && logisticsTab === "purchasing");
+  setNavigationCurrent(document.getElementById("logisticsOrdersNavButton"), state.currentView === "logistics" && logisticsTab === "orders");
   const privacyNav = document.getElementById("privacyOrganizationNav");
-  privacyNav?.classList.toggle("contains-active", state.currentView === "privacyOrganization");
+  privacyNav?.classList.toggle("contains-active", activePath.includes("privacyOrganization"));
   applyNavigationGroupState("privacyOrganization", !privacyNav?.classList.contains("hidden"));
   for (const button of privacyNav?.querySelectorAll("[data-privacy-organization-tab]") || []) {
     setNavigationCurrent(button, state.currentView === "privacyOrganization"
       && button.dataset.privacyOrganizationTab === privacyOrganizationTab
       && !button.classList.contains("nav-module-main"));
+  }
+  const technicalNav = document.getElementById("technicalSecurityNav");
+  technicalNav?.classList.toggle("contains-active", activePath.includes("technicalSecurity"));
+  applyNavigationGroupState("technicalSecurity", !technicalNav?.classList.contains("hidden"));
+  for (const button of technicalNav?.querySelectorAll("[data-technical-security-tab]") || []) {
+    setNavigationCurrent(button, state.currentView === "technicalSecurity"
+      && button.dataset.technicalSecurityTab === technicalSecurityTab && !button.classList.contains("nav-module-main"));
   }
   setNavigationCurrent(elements.salesArticleCatalogNavButton, state.currentView === "articleCatalog");
   setNavigationCurrent(document.getElementById("salesPriceLabelsNavButton"), state.currentView === "priceLabels");
@@ -5348,6 +5551,7 @@ function closeSchedulePdfDesignMenu() {
 }
 
 const planningPrintWindows={schedule:null,vacation:null};
+let usbGuidePrint=null;
 const planningPrintModelIds=new WeakMap();let planningPrintModelSerial=0;
 function planningPrintContext(kind){
   const params=contextSearchParams(kind==='schedule'||state.portalSession?.user?.role==='department_manager');
@@ -5359,6 +5563,7 @@ function planningPrintContext(kind){
   return {page:state.currentView,query:Object.fromEntries(params),modelRevision:model?planningPrintModelIds.get(model):0,
     departmentChoice:kind==='schedule'?String(elements.departmentPdfSelect?.value||''):'',
     settings:Object.fromEntries(Object.entries(settings).filter(([key])=>/^(?:pdf_|schedule_pdf_|vacation_pdf_|schedule_duty_colors$)/.test(key)).sort(([a],[b])=>a.localeCompare(b))),
+    employees:kind==='schedule'?(model?.employees||[]).map(employee=>({number:String(employee.personnel_number),name:String(employee.nickname||employee.full_name||employee.personnel_number)})):[],
     designs:kind==='schedule'?schedulePdfDesignIdsFromSettings().map(id=>schedulePdfDesignCatalog().find(design=>design.id===id)).filter(Boolean):[]};
 }
 function canUsePlanningPrint(kind){
@@ -5387,7 +5592,7 @@ function renderSchedulePdfExportControl() {
   const catalog = schedulePdfDesignCatalog();
   const catalogById = new Map(catalog.map((design) => [design.id, design]));
   const activeIds = schedulePdfDesignIdsFromSettings();
-  const baseUrl = `/api/schedule.pdf?week=${state.weekStart}${contextQuery(true)}`;
+  const baseUrl = `/api/schedule.pdf?week=${encodeURIComponent(state.weekStart)}${contextQuery(true)}`;
   elements.pdfButton.href = `${baseUrl}&design=${encodeURIComponent(activeIds[0])}`;
   if (!elements.schedulePdfDesignMenu) return;
   if (activeIds.length <= 1) {
@@ -5399,7 +5604,7 @@ function renderSchedulePdfExportControl() {
   elements.pdfButton.setAttribute("aria-haspopup", "menu");
   elements.schedulePdfDesignMenu.innerHTML = activeIds.map((id, index) => {
     const design = catalogById.get(id) || { label: id, description: "" };
-    return `<a href="${baseUrl}&design=${encodeURIComponent(id)}" role="menuitem" data-schedule-pdf-design-export="${escapeHtml(id)}"><strong>Rang ${index + 1} · ${escapeHtml(design.label)}</strong>${design.description ? `<small>${escapeHtml(design.description)}</small>` : ""}</a>`;
+    return `<a href="${escapeHtmlAttribute(`${baseUrl}&design=${encodeURIComponent(id)}`)}" role="menuitem" data-schedule-pdf-design-export="${escapeHtml(id)}"><strong>Rang ${index + 1} · ${escapeHtml(design.label)}</strong>${design.description ? `<small>${escapeHtml(design.description)}</small>` : ""}</a>`;
   }).join("");
   closeSchedulePdfDesignMenu();
 }
@@ -5828,7 +6033,7 @@ function renderCrossLocationScheduleGrid(schedule) {
   const { minimum: requestMinimum, maximum: requestMaximum } = staffAssignmentRequestCalendarBounds();
   const rows = (schedule.teamMembers || []).map((teamMember) => `
     <div class="cross-location-team-member">
-      <span class="cross-location-person-color" style="background:${escapeHtmlAttribute(teamMember.color || "#87948f")}"></span>
+      <span class="cross-location-person-color" style="background:${safeCssColor(teamMember.color, "#87948f")}"></span>
       <strong>${escapeHtml(teamMember.displayName)}</strong>
       <small>${escapeHtml(teamMember.employeeNumber)}${teamMember.departmentName ? ` · ${escapeHtml(teamMember.departmentName)}` : ""}</small>
     </div>
@@ -5929,7 +6134,7 @@ function renderSummary() {
   elements.departmentPdfControl?.classList.toggle("hidden", !showDepartmentPdf);
   if (showDepartmentPdf) {
     elements.departmentPdfSelect.innerHTML = departments.map((department) =>
-      `<option value="${department.id}">${escapeHtml(department.name)}</option>`,
+      `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`,
     ).join("");
     const selectedDepartment = elements.departmentPdfSelect.value || String(departments[0].id);
     elements.departmentPdfButton.href = `/api/schedule.pdf?week=${state.weekStart}&location=${encodeURIComponent(state.locationId)}&departmentId=${encodeURIComponent(selectedDepartment)}`;
@@ -6341,7 +6546,7 @@ function renderTimeline() {
       }).join("");
     const headers = dayEmployees.length
       ? dayEmployees.map((employee) => `
-          <div class="employee-strip" style="background:${employee.color};color:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" aria-label="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" tabindex="0">
+          <div class="employee-strip" style="background:${safeCssColor(employee.color)};color:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" aria-label="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" tabindex="0">
             <strong>${escapeHtml(window.GPScheduleDuty.scheduleEmployeeInitials(employee))}${xoffiImportedBadge(employee.personnel_number)}</strong><small>${escapeHtml(employee.personnel_number)}</small>
           </div>`).join("")
       : '<div class="employee-strip" style="background:#d7ddda;color:#65716c"><strong>Kein Team</strong></div>';
@@ -6403,7 +6608,7 @@ function renderTimeline() {
             const dutyColor = window.GPScheduleDuty.scheduleDutyColor(duty.code, settings.schedule_duty_colors);
             const dutyContrast = window.GPScheduleDuty.scheduleDutyTextColor(dutyColor);
             const title = `${scheduleEmployeeAccessibleLabel(employee)} · ${shift.start_time}–${shift.end_time} · ${formatHours(shift.counted_minutes)} · ${duty.label}${shift.area ? ` · ${shift.area}` : ""}`;
-            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${employee.color};--employee-contrast:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(title)}" aria-label="${escapeHtmlAttribute(title)}"><span class="shift-duty-badge" style="--duty-color:${dutyColor};--duty-contrast:${dutyContrast}" aria-hidden="true">${escapeHtml(duty.code)}</span></button>`;
+            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${safeCssColor(employee.color)};--employee-contrast:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(title)}" aria-label="${escapeHtmlAttribute(title)}"><span class="shift-duty-badge" style="--duty-color:${dutyColor};--duty-contrast:${dutyContrast}" aria-hidden="true">${escapeHtml(duty.code)}</span></button>`;
           }).join("");
           const unavailableLabel = locked
             ? "gesperrt"
@@ -6439,7 +6644,7 @@ function renderRemarks() {
           <div class="remark-item"><span class="remark-color" style="background:#9aa2a4"></span>
           <span><strong>Alle:</strong> ${escapeHtml(block.reason || block.holiday_name || "Tag gesperrt")} · ${formatDate(block.block_date, { day: "2-digit", month: "2-digit" })}${block.is_public_holiday ? " · Feiertag" : ""}</span></div>`);
   const optionRemarks = options.map((option) => `
-          <div class="remark-item"><span class="remark-color" style="background:${isTeamWideMeetingOption(option) ? "#76529a" : option.color}"></span>
+          <div class="remark-item"><span class="remark-color" style="background:${isTeamWideMeetingOption(option) ? "#76529a" : safeCssColor(option.color, "#26785f")}"></span>
           <span><strong>${isTeamWideMeetingOption(option) ? "Ganzes Team" : escapeHtml(option.nickname)}:</strong> ${optionLabels[option.option_type]} · ${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` – ${escapeHtml(option.note)}` : ""}</span></div>`);
   const remarks = [...globalRemarks, ...optionRemarks];
   elements.remarks.innerHTML = `<h3>Bemerkungen / Sonderfälle</h3>${
@@ -6503,7 +6708,7 @@ function renderHoursOverview() {
     const balanceHtml = effectiveBalance ? `<div class="hours-xoffi-balance"><small>Stundenkonto laut xoffi${effectiveBalance.weekStart ? ` · Stand KW ${getIsoWeek(effectiveBalance.weekStart)}` : ""}</small><strong class="${effectiveBalance.minutes < 0 ? "negative" : "positive"}">${effectiveBalance.minutes > 0 ? "+" : ""}${formatHours(effectiveBalance.minutes)}</strong></div>` : "";
     return `<article class="hours-card">
       <div class="hours-person">
-        <span class="hours-color" style="background:${employee.color}"></span>
+        <span class="hours-color" style="background:${safeCssColor(employee.color)}"></span>
         <div><strong>${escapeHtml(employee.nickname)} ${xoffiImportedBadge(employee.personnel_number)}</strong><small>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.full_name)}</small></div>
       </div>
       <div class="hours-values">
@@ -6514,17 +6719,26 @@ function renderHoursOverview() {
         <span class="${difference === null ? "hours-under" : difference > 0 ? "hours-over" : difference < 0 ? "hours-under" : "hours-exact"}"><small>Differenz</small><strong>${difference === null ? '<span class="status-badge danger">Berechnungsfehler</span>' : `${difference > 0 ? "+" : ""}${formatHours(difference)}`}</strong></span>
       </div>
       ${calculationError ? '<p class="calculation-note">Die Wochenstunden konnten nicht vollständig berechnet werden. Bitte den Dienstplan neu laden.</p>' : ""}
-      ${xoffiHtml}
-      ${xoffiSnapshot ? `<div class="xoffi-source-snapshot"><strong>xoffi · Stand ${formatDate(xoffiSnapshot.balanceDate)}</strong><span>Zeitkonto: ${formatHours(xoffiSnapshot.openingBalanceMinutes)}</span><span>Resturlaub: ${Number(xoffiSnapshot.remainingVacationDays).toLocaleString("de-AT")} Tage</span><small>Ohne künftig fixierte Urlaube · separater Quellenstand</small>${xoffi?.snapshot ? `<span>Mehrstunden dieser Woche: ${formatHours(xoffiSnapshot.weeklyBalanceDeltaMinutes)}</span>` : ""}</div>` : balanceHtml}
+      ${xoffiSnapshot || xoffi || effectiveBalance ? `<details class="xoffi-source-snapshot"><summary>xoffi-Stand</summary>
+        ${xoffiHtml}${balanceHtml}
+        ${xoffiSnapshot ? `<dl><div><dt>Datenstand</dt><dd>${formatDate(xoffiSnapshot.balanceDate)}</dd></div><div><dt>Zeitkonto am Datenstand</dt><dd>${formatHours(xoffiSnapshot.openingBalanceMinutes)}</dd></div><div><dt>Resturlaub</dt><dd>${Number(xoffiSnapshot.remainingVacationDays).toLocaleString("de-AT")} Tage</dd></div>${xoffi?.snapshot ? `<div><dt>Mehrstunden dieser Woche</dt><dd>${formatHours(xoffiSnapshot.weeklyBalanceDeltaMinutes)}</dd></div>` : ""}</dl><small>Ohne künftig fixierte Urlaube · separater Quellenstand</small>` : ""}
+      </details>` : ""}
       ${saturdayStatsHtml}
-      <div class="hours-progress"><span style="width:${percentage}%;background:${employee.color}"></span></div>
+      <div class="hours-progress"><span style="width:${percentage}%;background:${safeCssColor(employee.color)}"></span></div>
     </article>`;
   }).join("");
-  if (showSaturdayStats && hasEstimatedSaturdayStats) {
-    elements.hoursOverview.insertAdjacentHTML(
-      "beforeend",
-      '<div class="hours-estimate-note">* Errechneter Wert, da noch nicht ausreichend vergangene Dienstplandaten zur Verfügung stehen.</div>',
-    );
+  const coverage = state.data.saturdayStats?.historicalCoverage;
+  const missing = coverage?.missing || [];
+  const links = missing.map(week => {
+    const query = new URLSearchParams({view:"planning", location:String(state.locationId || ""), department:String(state.departmentId || ""), week:week.weekStart});
+    const selectedYear = new Date(state.weekStart + "T12:00:00").getFullYear();
+    return `<a href="?${escapeHtmlAttribute(query.toString())}" data-missing-planning-week="${escapeHtmlAttribute(week.weekStart)}" title="${escapeHtmlAttribute(formatDate(week.weekStart))}">KW${week.week}${week.year !== selectedYear ? `/${week.year}` : ""}</a>`;
+  }).join(", ");
+  if (showSaturdayStats && hasEstimatedSaturdayStats || missing.length) {
+    elements.hoursOverview.insertAdjacentHTML("beforeend", `<div class="hours-estimate-note">
+      ${showSaturdayStats && hasEstimatedSaturdayStats ? "<span>* Errechneter Wert, da noch nicht ausreichend vergangene Dienstplandaten zur Verfügung stehen.</span>" : ""}
+      ${missing.length ? `<span>Fehlend letzte 12W: ${links}</span>` : ""}
+    </div>`);
   }
 }
 
@@ -6585,8 +6799,8 @@ function renderVacationMonthCard(month) {
       const visibleVacations = dayVacations.slice(0, compact ? 5 : 3);
       const overflow = dayVacations.length - visibleVacations.length;
       const markers = compact
-        ? `<div class="vacation-dot-row">${visibleVacations.map((vacation) => `<span class="vacation-dot" style="background:${vacation.color}" title="${escapeHtml(vacation.nickname)}"></span>`).join("")}${overflow > 0 ? `<span class="vacation-more">+${overflow}</span>` : ""}</div>`
-        : `<div class="vacation-day-tags">${visibleVacations.map((vacation) => `<span class="vacation-tag" style="background:${vacation.color};color:${contrastColor(vacation.color)}" title="${escapeHtml(vacation.nickname)}">${escapeHtml(vacation.nickname)}</span>`).join("")}${overflow > 0 ? `<span class="vacation-more">+${overflow}</span>` : ""}</div>`;
+        ? `<div class="vacation-dot-row">${visibleVacations.map((vacation) => `<span class="vacation-dot" style="background:${safeCssColor(vacation.color, "#9aa2a4")}" title="${escapeHtml(vacation.nickname)}"></span>`).join("")}${overflow > 0 ? `<span class="vacation-more">+${overflow}</span>` : ""}</div>`
+        : `<div class="vacation-day-tags">${visibleVacations.map((vacation) => `<span class="vacation-tag" style="background:${safeCssColor(vacation.color, "#9aa2a4")};color:${contrastColor(vacation.color)}" title="${escapeHtml(vacation.nickname)}">${escapeHtml(vacation.nickname)}</span>`).join("")}${overflow > 0 ? `<span class="vacation-more">+${overflow}</span>` : ""}</div>`;
       return `<div class="vacation-day ${inMonth ? "" : "outside-month"}">
         <span class="vacation-day-number">${Number(date.slice(-2))}</span>
         ${holiday ? '<span class="vacation-holiday">Feiertag</span>' : ""}
@@ -6604,7 +6818,7 @@ function renderVacationMonthCard(month) {
             const clippedTo = vacation.date_to > end ? end : vacation.date_to;
             const days = vacationDayCount(clippedFrom, clippedTo);
             return `<div class="vacation-item">
-              <span class="vacation-item-color" style="background:${vacation.color}"></span>
+              <span class="vacation-item-color" style="background:${safeCssColor(vacation.color, "#9aa2a4")}"></span>
               <div><strong>${escapeHtml(vacation.nickname)}</strong><small>${formatVacationDateRange(vacation, start, end)} · ${formatDays(days)}${vacation.note ? ` · ${escapeHtml(vacation.note)}` : ""}</small></div>
               <div class="vacation-actions-inline ${canWriteApprovedAbsenceEntries() ? "" : "hidden"}">
                 <button type="button" class="edit-vacation" data-edit-vacation="${escapeHtml(vacation.group_id)}">Bearbeiten</button>
@@ -6625,7 +6839,7 @@ function renderVacationEmployeeOverview(range) {
       .sort((a, b) => a.date_from.localeCompare(b.date_from));
     const totals = state.vacationData.totals[employee.personnel_number] || { entitlement: 0, planned: 0, used: 0, consumed: 0, remaining: 0 };
     return `<article class="vacation-employee-card">
-      <div class="vacation-employee-head" style="background:${employee.color};color:${contrastColor(employee.color)}">
+      <div class="vacation-employee-head" style="background:${safeCssColor(employee.color)};color:${contrastColor(employee.color)}">
         <strong>${escapeHtml(employee.personnel_number)} ${escapeHtml(employee.nickname)}</strong>
         <small><strong>Resturlaub: ${formatDaysLong(totals.remaining)}</strong> · geplant ${formatDaysLong(totals.planned ?? totals.used)} · konsumiert ${formatDaysLong(totals.consumed || 0)}</small>
       </div>
@@ -6634,7 +6848,7 @@ function renderVacationEmployeeOverview(range) {
           ? employeeVacations.map((vacation) => {
               const days = vacationDayCount(vacation.date_from, vacation.date_to);
               return `<div class="vacation-item">
-                <span class="vacation-item-color" style="background:${employee.color}"></span>
+                <span class="vacation-item-color" style="background:${safeCssColor(employee.color)}"></span>
                 <div><strong>${formatVacationDateRange(vacation)}</strong><small>${formatDays(days)}${vacation.note ? ` · ${escapeHtml(vacation.note)}` : ""}</small></div>
                 <div class="vacation-actions-inline ${canWriteApprovedAbsenceEntries() ? "" : "hidden"}">
                   <button type="button" class="edit-vacation" data-edit-vacation="${escapeHtml(vacation.group_id)}">Bearbeiten</button>
@@ -6668,7 +6882,7 @@ function renderVacations() {
     const xoffi = state.vacationData.xoffiVacationByEmployee?.[employee.personnel_number];
     return `<article class="vacation-summary-card">
       <div class="vacation-summary-head">
-        <span class="vacation-color" style="background:${employee.color}"></span>
+        <span class="vacation-color" style="background:${safeCssColor(employee.color)}"></span>
         <div><strong>${escapeHtml(employee.nickname)}</strong><small>${escapeHtml(employee.full_name)} · ${escapeHtml(employee.personnel_number)}</small></div>
       </div>
       <div class="vacation-stats">
@@ -7822,20 +8036,22 @@ async function submitVpsReboot(event) {
   if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
 
   try {
-    const result = await api("/api/portal/v1/server-monitor/vps-reboot", {
-      method: "POST",
-      body: JSON.stringify({ confirmation: "VPS_REBOOT", currentPassword }),
+    await withAdminReauthentication(async () => {
+      const result = await api("/api/portal/v1/server-monitor/vps-reboot", {
+        method: "POST",
+        body: JSON.stringify({ confirmation: "VPS_REBOOT", currentPassword }),
+      });
+      state.vpsRebootPreviousHostBootGeneration = String(
+        result?.previousHostBootGeneration || "",
+      );
+      const successMessage = result?.message
+        || "Der verifizierte Sicherungspunkt wurde erstellt. Der VPS wird kontrolliert neu gestartet.";
+      state.vpsRebootAccepted = true;
+      if (elements.vpsRebootCurrentPassword) elements.vpsRebootCurrentPassword.value = "";
+      elements.vpsRebootModal?.close();
+      showToast(`${successMessage} Die Verbindung wird vorübergehend unterbrochen.`);
+      waitForServerReadinessAfterVpsReboot();
     });
-    state.vpsRebootPreviousHostBootGeneration = String(
-      result?.previousHostBootGeneration || "",
-    );
-    const successMessage = result?.message
-      || "Der verifizierte Sicherungspunkt wurde erstellt. Der VPS wird kontrolliert neu gestartet.";
-    state.vpsRebootAccepted = true;
-    if (elements.vpsRebootCurrentPassword) elements.vpsRebootCurrentPassword.value = "";
-    elements.vpsRebootModal?.close();
-    showToast(`${successMessage} Die Verbindung wird vorübergehend unterbrochen.`);
-    waitForServerReadinessAfterVpsReboot();
   } catch (error) {
     const errorMessage = `${error.message} Es wurde keine erfolgreiche VPS-Neustartbestätigung empfangen. Bitte den Hoststatus prüfen, bevor Sie die Aktion wiederholen.`;
     state.serverMonitorActionFeedback = { kind: "error", message: errorMessage };
@@ -7941,7 +8157,7 @@ const EMPLOYEE_DISPLAY_COLUMNS = Object.freeze([
   { id: "location", label: "Filiale", group: "Zuordnung" },
   { id: "department", label: "Abteilung", group: "Zuordnung" },
   { id: "workload", label: "Wochen-Soll / Tage", group: "Arbeitszeit" },
-  { id: "preferred_day", label: "Freier Tag", group: "Arbeitszeit" },
+  { id: "preferred_day", label: "Freie Tage · Priorität", group: "Arbeitszeit" },
   { id: "fixed_days", label: "Fixe Tage", group: "Arbeitszeit" },
   { id: "status", label: "Status", group: "Stammdaten" },
   { id: "phone", label: "Telefonnummer", group: "Freigegebener Personalakt", fieldKey: "phone" },
@@ -8000,7 +8216,7 @@ function employeeDisplayRawValue(employee, columnId) {
   if (columnId === "location") return employee.home_location_name || employee.home_location_id || "";
   if (columnId === "department") return employee.preferred_department_name || "";
   if (columnId === "workload") return Number(employee.contracted_hours || 0);
-  if (columnId === "preferred_day") return preferredDayLabels[employee.preferred_day_off] || "";
+  if (columnId === "preferred_day") return employeePreferredDaysValue(employee).map((day, index) => `${index + 1}. ${preferredDayLabels[day]}`).join(" · ");
   if (columnId === "fixed_days") return formatFixedWorkdays(employee.fixed_workdays);
   if (columnId === "status") return employee.active ? "Aktiv" : "Inaktiv";
   return "";
@@ -8008,7 +8224,7 @@ function employeeDisplayRawValue(employee, columnId) {
 
 function employeeDisplayCell(employee, column) {
   const raw = employeeDisplayRawValue(employee, column.id);
-  if (column.id === "color") return `<span class="employee-color" style="background:${escapeHtmlAttribute(employee.color || "#6b7b75")}"></span>`;
+  if (column.id === "color") return `<span class="employee-color" style="background:${safeCssColor(employee.color, "#6b7b75")}"></span>`;
   if (column.id === "personnel_number") return `<strong>${escapeHtml(raw || "–")}</strong>`;
   if (column.id === "status") return `<span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span>`;
   if (column.id === "cost_center") return `<span class="status-badge ${employee.cost_center_id ? "" : "warning"}">${escapeHtml(raw || "Nicht zugeordnet")}</span>`;
@@ -8167,12 +8383,20 @@ function costCenterTypeLabel(type) {
 }
 
 async function loadPersonnelAdministration({ force = false } = {}) {
-  if (!canOpenPersonnelAdministrationView() || state.personnelAdministrationLoading) return;
-  if (state.personnelAdministrationLoaded && !force) {
+  if (!canOpenPersonnelAdministrationView() || (state.personnelAdministrationLoading && gpContextCurrent(state.loadPersonnelAdministrationContext))) return;
+  if (state.personnelAdministrationLoaded && !force && (!canReadCentralPersonnel() || personnelDirectorySource().status === "succeeded")) {
     renderPersonnelAdministration();
     return;
   }
+  const requestToken = Symbol("loadPersonnelAdministration");
+  state.loadPersonnelAdministrationRequest = requestToken;
+  const contextTicket = captureGpContext(canOpenPersonnelAdministrationView, () => state.loadPersonnelAdministrationRequest);
+  state.loadPersonnelAdministrationContext = contextTicket;
   state.personnelAdministrationLoading = true;
+  state.personnelDirectorySourceStatus = canReadCentralPersonnel() ? "loading" : "denied";
+  state.personnelDirectorySourceContext = canReadCentralPersonnel() ? captureGpContext(canReadCentralPersonnel) : null;
+  state.personnelDirectorySourceError = "";
+  if (elements.personnelAdministrationSummary) renderPersonnelAdministrationSummary();
   if (elements.personnelDirectoryBody) elements.personnelDirectoryBody.innerHTML = '<tr><td colspan="8">Personalstammdaten werden geladen.</td></tr>';
   try {
     const [directoryPayload, costCenterPayload] = await Promise.all([
@@ -8184,6 +8408,7 @@ async function loadPersonnelAdministration({ force = false } = {}) {
         })
         : Promise.resolve([]),
     ]);
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelDirectory = apiList(directoryPayload, ["employees", "items", "personnel"])
       .map(normalizePersonnelDirectoryEmployee);
     state.costCenters = apiList(costCenterPayload, ["costCenters", "cost_centers", "items"])
@@ -8197,13 +8422,18 @@ async function loadPersonnelAdministration({ force = false } = {}) {
       : apiList(costCenterPayload, ["positions"]);
     if (positionItems.length) state.positions = positionItems;
     state.personnelAdministrationLoaded = true;
-    renderPersonnelAdministration();
+    state.personnelDirectorySourceStatus = canReadCentralPersonnel() ? "succeeded" : "denied";
+    if (gpContextCurrent(contextTicket)) renderPersonnelAdministration();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
+    state.personnelDirectorySourceStatus = "failed";
+    state.personnelDirectorySourceError = error.message;
+    if (elements.personnelAdministrationSummary) renderPersonnelAdministrationSummary();
     if (elements.personnelDirectoryBody) elements.personnelDirectoryBody.innerHTML = `<tr><td colspan="8">${escapeHtml(error.message)}</td></tr>`;
     if (elements.costCenterList) elements.costCenterList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
     showToast(error.message, true);
   } finally {
-    state.personnelAdministrationLoading = false;
+    if (state.loadPersonnelAdministrationRequest === requestToken) state.personnelAdministrationLoading = false;
   }
 }
 
@@ -8223,18 +8453,30 @@ function filteredPersonnelDirectory() {
   }).sort((left, right) => String(left.personnel_number).localeCompare(String(right.personnel_number), "de-AT", { numeric: true, sensitivity: "base" }));
 }
 
+function personnelDirectorySource() {
+  if (!canReadCentralPersonnel()) return { status: "denied", message: "Kein Zugriff auf das Personalverzeichnis." };
+  if (!state.personnelDirectorySourceContext || !gpContextCurrent(state.personnelDirectorySourceContext)) return { status: "idle", message: "Noch kein Personalverzeichnis für die aktuelle Sitzung geladen." };
+  const status = state.personnelDirectorySourceStatus;
+  return { status, message: status === "loading" ? "Personalverzeichnis wird geladen." : status === "failed" ? "Das Personalverzeichnis konnte nicht geladen werden. Bitte erneut aktualisieren." : "" };
+}
+
 function renderPersonnelAdministrationSummary() {
   if (!elements.personnelAdministrationSummary) return;
   const total = state.personnelDirectory.length;
   const active = state.personnelDirectory.filter((employee) => employee.active).length;
   const inactive = total - active;
   const unassigned = state.personnelDirectory.filter((employee) => !employee.cost_center_id).length;
+  const source = personnelDirectorySource(), known = source.status === "succeeded";
+  elements.personnelAdministrationSummary.dataset.sourceStatus = source.status;
+  elements.personnelAdministrationSummary.setAttribute("aria-busy", String(source.status === "loading"));
+  elements.personnelDirectoryTable?.setAttribute("aria-busy", String(source.status === "loading"));
+  if (elements.personnelDirectoryResultCount && !known) elements.personnelDirectoryResultCount.textContent = source.message;
   elements.personnelAdministrationSummary.innerHTML = [
-    ["Beschäftigte", total, "gesamt"],
+    ["Mitarbeitende", total, "freigegebener Gesamtbestand"],
     ["Aktiv", active, "aktuelle Personalstämme"],
     ["Inaktiv", inactive, "historisch erhalten"],
     ["Ohne Kostenstelle", unassigned, unassigned ? "Zuordnung nachpflegen" : "vollständig zugeordnet"],
-  ].map(([label, value, note], index) => `<article class="personnel-administration-stat ${index === 3 && value ? "warning" : ""}"><span>${escapeHtml(label)}</span><strong>${Number(value)}</strong><small>${escapeHtml(note)}</small></article>`).join("");
+  ].map(([label, value, note], index) => `<article class="personnel-administration-stat ${known && index === 3 && value ? "warning" : ""}"><span>${escapeHtml(label)}</span><strong>${known ? Number(value) : "–"}</strong><small>${escapeHtml(known ? note : source.message)}</small></article>`).join("");
 }
 
 function renderPersonnelDirectory() {
@@ -8254,7 +8496,11 @@ function renderPersonnelDirectory() {
   state.employeeDisplayColumns = columns.map((column) => column.id);
   if (elements.personnelDirectoryHead) elements.personnelDirectoryHead.innerHTML = employeeDisplayHeader(columns);
   applyEmployeeDisplayTableLayout(elements.personnelDirectoryTable, columns);
-  const rows = sortedEmployeesForDisplay(filteredPersonnelDirectory());
+  const source = personnelDirectorySource();
+  const rows = source.status === "succeeded" ? sortedEmployeesForDisplay(filteredPersonnelDirectory()) : [];
+  if (elements.personnelDirectoryResultCount) elements.personnelDirectoryResultCount.textContent = source.status === "succeeded"
+    ? `${rows.length} Treffer · ${state.personnelDirectory.length} Personen im freigegebenen Gesamtbestand` : source.message;
+  elements.personnelDirectoryTable?.setAttribute("aria-busy", String(source.status === "loading"));
   const canEdit = canWriteCentralPersonnel();
   const canOpenRecord = personnelRecordAvailableInUi();
   const canOpenProfile = canOpenEmployeeProfileFoundation();
@@ -8268,7 +8514,7 @@ function renderPersonnelDirectory() {
       ${columns.map((column) => `<td data-label="${escapeHtmlAttribute(column.label)}">${employeeDisplayCell(employee, column)}</td>`).join("")}
       <td data-label="Aktionen"><span class="table-actions">${actions || "–"}</span></td>
     </tr>`;
-  }).join("") : `<tr><td colspan="${columns.length + 1}" class="personnel-directory-empty">Keine passenden Mitarbeitenden gefunden.</td></tr>`;
+  }).join("") : `<tr><td colspan="${columns.length + 1}" class="personnel-directory-empty">${escapeHtml(source.status === "succeeded" ? "Keine passenden Mitarbeitenden gefunden. Passe die Suche oder Filterauswahl an." : source.message)}</td></tr>`;
 }
 
 const EMPLOYEE_PROFILE_TABS = Object.freeze([
@@ -10473,15 +10719,15 @@ function renderCostCenterTypes() {
       <div class="cost-center-type-card-meta">
         <span>${type.active ? "Aktiv" : "Archiviert"}</span>
         <span>${type.builtin ? "Standardtyp" : "Eigener Typ"}</span>
-        <span>${Number(type.costCenterCount)} Kostenstelle(n)</span>
-        ${type.isBranch ? `<span>${Number(type.locationCount)} Standort(e)</span>` : ""}
+        <span>${Number(type.costCenterCount)} ${Number(type.costCenterCount) === 1 ? "Kostenstelle" : "Kostenstellen"}</span>
+        ${type.isBranch ? `<span>${Number(type.locationCount)} ${Number(type.locationCount) === 1 ? "Standort" : "Standorte"}</span>` : ""}
       </div>
       <div class="cost-center-type-card-positions">${
         visiblePositions.length
           ? visiblePositions.map((position) => `<span>${escapeHtml(position.name || position.id)}</span>`).join("")
           : "<span>Keine Positionen zugeordnet</span>"
       }${remainingPositions ? `<span>+ ${remainingPositions} weitere</span>` : ""}</div>
-      ${canEdit ? `<button type="button" class="edit-button" data-edit-cost-center-type="${escapeHtmlAttribute(type.id)}">Bearbeiten</button>` : ""}
+      ${canEdit ? `<button type="button" class="edit-button" data-edit-cost-center-type="${escapeHtmlAttribute(type.id)}" aria-label="${escapeHtmlAttribute(`Typ ${type.name || type.code} bearbeiten`)}">Bearbeiten</button>` : ""}
     </article>`;
   }).join("") : '<p class="settings-note">Noch keine Kostenstellentypen angelegt.</p>';
 }
@@ -10489,14 +10735,52 @@ function renderCostCenterTypes() {
 function renderCostCenters() {
   if (!elements.costCenterList) return;
   const canEdit = canWriteCostCenters();
-  const centers = state.costCenters.slice().sort((left, right) => left.code.localeCompare(right.code, "de-AT", { numeric: true, sensitivity: "base" }));
+  const allCenters = state.costCenters.slice().sort((left, right) => left.code.localeCompare(right.code, "de-AT", { numeric: true, sensitivity: "base" }));
+  const typeKey = (center) => String(costCenterTypeByKey(center.typeId || center.typeCode || center.type)?.id || center.typeId || center.typeCode || center.type || "other");
+  if (elements.costCenterActiveCount) elements.costCenterActiveCount.textContent = allCenters.filter((center) => center.active).length;
+  if (elements.costCenterInactiveCount) elements.costCenterInactiveCount.textContent = allCenters.filter((center) => !center.active).length;
+  if (elements.costCenterTypeCount) elements.costCenterTypeCount.textContent = state.costCenterTypes.filter((type) => type.active).length;
+  if (elements.costCenterFilterType) {
+    const selected = elements.costCenterFilterType.value;
+    const types = new Map(state.costCenterTypes.map((type) => [String(type.id), type.name]));
+    allCenters.forEach((center) => types.set(typeKey(center), costCenterTypeLabel(center)));
+    const options = '<option value="">Alle Typen</option>' + [...types].sort((a, b) => a[1].localeCompare(b[1], "de-AT")).map(([id, label]) => `<option value="${escapeHtmlAttribute(id)}">${escapeHtml(label)}</option>`).join("");
+    if (elements.costCenterFilterType.innerHTML !== options) {
+      elements.costCenterFilterType.innerHTML = options;
+      elements.costCenterFilterType.value = types.has(selected) ? selected : "";
+    }
+  }
+  const terms = String(elements.costCenterSearch?.value || "").trim().toLocaleLowerCase("de-AT").split(/\s+/).filter(Boolean);
+  const selectedType = elements.costCenterFilterType?.value || "";
+  const status = elements.costCenterFilterStatus?.value || "";
+  const centers = allCenters.filter((center) => {
+    const text = [center.code, center.name, center.description, costCenterTypeLabel(center)].join(" ").toLocaleLowerCase("de-AT");
+    return terms.every((term) => text.includes(term)) && (!selectedType || typeKey(center) === selectedType)
+      && (!status || (status === "active" ? center.active : !center.active));
+  });
+  if (elements.costCenterResultCount) elements.costCenterResultCount.textContent = `${centers.length} von ${allCenters.length} Kostenstellen`;
   elements.costCenterList.innerHTML = centers.length ? centers.map((center) => `
     <article class="cost-center-card ${center.active ? "" : "inactive"}">
       <div class="cost-center-card-code"><strong>${escapeHtml(center.code || "–")}</strong><span class="status-badge ${center.active ? "" : "inactive"}">${center.active ? "Aktiv" : "Inaktiv"}</span></div>
       <div class="cost-center-card-copy"><span class="eyebrow">${escapeHtml(costCenterTypeLabel(center))}</span><h3>${escapeHtml(center.name || center.code || "Kostenstelle")}</h3>${center.description ? `<p>${escapeHtml(center.description)}</p>` : ""}</div>
       <div class="cost-center-card-counts"><span><strong>${Number(center.employee_count)}</strong> Beschäftigte</span><span><strong>${Number(center.location_count)}</strong> Standorte</span></div>
-      ${canEdit ? `<button type="button" class="edit-button" data-edit-cost-center="${escapeHtmlAttribute(String(center.id))}">Bearbeiten</button>` : ""}
-    </article>`).join("") : '<p class="settings-note">Noch keine Kostenstelle angelegt.</p>';
+      ${canEdit ? `<button type="button" class="edit-button" data-edit-cost-center="${escapeHtmlAttribute(String(center.id))}" aria-label="${escapeHtmlAttribute(`Kostenstelle ${center.code || center.name} bearbeiten`)}">Bearbeiten <span aria-hidden="true">↗</span></button>` : ""}
+    </article>`).join("") : `<div class="cost-center-empty"><strong>${allCenters.length ? "Keine passende Kostenstelle" : "Noch keine Kostenstellen"}</strong><p>${allCenters.length ? "Suchbegriff oder Filter ändern, um weitere Kostenstellen anzuzeigen." : canEdit ? "Lege die erste Kostenstelle über „Kostenstelle anlegen“ an." : "Hier erscheinen die für dich verfügbaren Kostenstellen."}</p></div>`;
+}
+
+function setupCostCenterFilters() {
+  elements.costCenterSearch?.addEventListener("input", renderCostCenters);
+  elements.costCenterFilterType?.addEventListener("change", renderCostCenters);
+  elements.costCenterFilterStatus?.addEventListener("change", renderCostCenters);
+  elements.costCenterFilterForm?.addEventListener("submit", (event) => event.preventDefault());
+  elements.costCenterFilterForm?.addEventListener("reset", (event) => {
+    event.preventDefault();
+    for (const input of [elements.costCenterSearch, elements.costCenterFilterType, elements.costCenterFilterStatus]) {
+      if (input) input.value = "";
+    }
+    renderCostCenters();
+    elements.costCenterSearch?.focus();
+  });
 }
 
 function normalizeCentralVacation(item = {}) {
@@ -10694,10 +10978,14 @@ async function loadVacationAccounts({ force = false } = {}) {
   }
   state.vacationAccountsLoading = true;
   if (elements.vacationAccountsList) elements.vacationAccountsList.innerHTML = '<p class="settings-note">Urlaubskonten werden geladen.</p>';
+  const contextTicket = captureGpContext(canReadVacationAccounts, () => elements.vacationAccountsYear?.value);
   try {
-    state.vacationAccounts = await api(`/api/vacation-accounts?year=${encodeURIComponent(year)}`);
+    const result = await api(`/api/vacation-accounts?year=${encodeURIComponent(year)}`);
+    if (!gpContextCurrent(contextTicket)) return;
+    state.vacationAccounts = result;
     renderVacationAccounts();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     if (elements.vacationAccountsList) elements.vacationAccountsList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
     showToast(error.message, true);
   } finally {
@@ -10794,10 +11082,14 @@ async function loadMonthlyTimeRecords({ force = false } = {}) {
   }
   state.monthlyTimeRecordsLoading = true;
   if (elements.monthlyTimeRecordsList) elements.monthlyTimeRecordsList.innerHTML = '<p class="settings-note">Monatsnachweise werden geladen.</p>';
+  const contextTicket = captureGpContext(canReadMonthlyTimeRecords, () => elements.monthlyTimeRecordsMonth?.value);
   try {
-    state.monthlyTimeRecords = await api(`/api/time-record-statements?month=${encodeURIComponent(month)}`);
+    const result = await api(`/api/time-record-statements?month=${encodeURIComponent(month)}`);
+    if (!gpContextCurrent(contextTicket)) return;
+    state.monthlyTimeRecords = result;
     renderMonthlyTimeRecords();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     if (elements.monthlyTimeRecordsList) elements.monthlyTimeRecordsList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
     showToast(error.message, true);
   } finally {
@@ -11547,6 +11839,9 @@ async function loadCustomWorkRuleRegistry({ force = false } = {}) {
     renderCustomWorkRuleRegistry();
     return;
   }
+  const requestToken = Symbol("loadCustomWorkRuleRegistry");
+  state.loadCustomWorkRuleRegistryRequest = requestToken;
+  const contextTicket = captureGpContext(canAccessCustomWorkRuleGovernance, () => state.loadCustomWorkRuleRegistryRequest);
   state.customWorkRulesLoading = true;
   if (elements.customWorkRuleList) {
     elements.customWorkRuleList.innerHTML = '<p class="settings-note">Regelwerk und offene Aufgaben werden geladen.</p>';
@@ -11556,6 +11851,7 @@ async function loadCustomWorkRuleRegistry({ force = false } = {}) {
       api("/api/work-rules/drafts"),
       api("/api/work-rules/governance"),
     ]);
+    if (!gpContextCurrent(contextTicket)) return;
     if (registryResult.status === "rejected" && governanceResult.status === "rejected") {
       throw registryResult.reason;
     }
@@ -11584,15 +11880,16 @@ async function loadCustomWorkRuleRegistry({ force = false } = {}) {
     if (!ids.has(state.selectedCustomWorkRuleId)) {
       state.selectedCustomWorkRuleId = state.customWorkRuleRegistry.drafts?.[0]?.id || "";
     }
-    renderCustomWorkRuleRegistry();
+    if (gpContextCurrent(contextTicket)) renderCustomWorkRuleRegistry();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.customWorkRuleRegistry = null;
     if (elements.customWorkRuleList) {
       elements.customWorkRuleList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
     }
     showToast(error.message, true);
   } finally {
-    state.customWorkRulesLoading = false;
+    if (state.loadCustomWorkRuleRegistryRequest === requestToken) state.customWorkRulesLoading = false;
   }
 }
 
@@ -12341,10 +12638,16 @@ function openCustomWorkRuleModal(draft = null) {
   elements.customWorkRuleModalTitle.textContent = draft ? "Neue Entwurfsfassung" : "Regelentwurf anlegen";
   elements.customWorkRuleSubmitButton.textContent = draft ? "Neue Fassung speichern" : "Entwurf speichern";
   resetCustomWorkRuleSimulation();
+  elements.customWorkRuleSubmitButton.disabled = false;
+  elements.simulateCustomWorkRuleButton.disabled = false;
   elements.customWorkRuleModal.showModal();
 }
 
 async function simulateCustomWorkRuleDraft() {
+  const ticket = captureGpEditor(elements.customWorkRuleModal, canDraftCustomWorkRules);
+  const payload = JSON.stringify(customWorkRulePayload());
+  const current = () => gpEditorCurrent(ticket) && payload === JSON.stringify(customWorkRulePayload());
+  if (!current()) return false;
   if (!elements.customWorkRuleForm.reportValidity()) return false;
   elements.simulateCustomWorkRuleButton.disabled = true;
   elements.customWorkRuleTestResult.className = "custom-work-rule-test-result";
@@ -12352,8 +12655,9 @@ async function simulateCustomWorkRuleDraft() {
   try {
     const result = await api("/api/work-rules/drafts/simulate", {
       method: "POST",
-      body: JSON.stringify(customWorkRulePayload()),
+      body: payload,
     });
+    if (!current()) return false;
     const simulation = result.simulation || {};
     state.customWorkRuleSimulationValid = simulation.valid === true;
     elements.customWorkRuleTestResult.className = `custom-work-rule-test-result ${state.customWorkRuleSimulationValid ? "valid" : "invalid"}`;
@@ -12362,39 +12666,47 @@ async function simulateCustomWorkRuleDraft() {
       : "<strong>Die Testfälle passen noch nicht.</strong>";
     return state.customWorkRuleSimulationValid;
   } catch (error) {
+    if (!current()) return false;
     state.customWorkRuleSimulationValid = false;
     elements.customWorkRuleTestResult.className = "custom-work-rule-test-result invalid";
     elements.customWorkRuleTestResult.textContent = error.message;
     showToast(error.message, true);
     return false;
   } finally {
-    elements.simulateCustomWorkRuleButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.simulateCustomWorkRuleButton.disabled = false;
   }
 }
 
 async function saveCustomWorkRule(event) {
   event.preventDefault();
   if (!canDraftCustomWorkRules()) return;
-  if (!state.customWorkRuleSimulationValid && !(await simulateCustomWorkRuleDraft())) return;
+  const ticket = captureGpEditor(elements.customWorkRuleModal, canDraftCustomWorkRules);
   const draftId = elements.customWorkRuleId.value;
+  const payload = JSON.stringify(customWorkRulePayload());
+  if (!gpEditorCurrent(ticket)) return;
+  if (!state.customWorkRuleSimulationValid && !(await simulateCustomWorkRuleDraft())) return;
+  if (!gpEditorCurrent(ticket) || payload !== JSON.stringify(customWorkRulePayload())) return;
   elements.customWorkRuleSubmitButton.disabled = true;
   try {
     const result = await api(draftId
       ? `/api/work-rules/drafts/${encodeURIComponent(draftId)}/revisions`
       : "/api/work-rules/drafts", {
       method: "POST",
-      body: JSON.stringify(customWorkRulePayload()),
+      body: payload,
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.customWorkRuleModal.close();
     state.selectedCustomWorkRuleId = result.draft?.id || draftId;
     await loadCustomWorkRuleRegistry({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(draftId
       ? "Die neue unveränderliche Entwurfsfassung wurde gespeichert."
       : "Der Regelentwurf wurde ohne Dienstplanwirkung gespeichert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.customWorkRuleSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.customWorkRuleSubmitButton.disabled = false;
   }
 }
 
@@ -12748,6 +13060,12 @@ function openWorkRuleAssignmentModal(publicationId) {
 }
 
 async function previewWorkRuleAssignment() {
+  const ticket = captureGpEditor(elements.workRuleAssignmentModal, canAssignCustomWorkRules);
+  const publicationId = elements.workRuleAssignmentPublicationId.value;
+  const payload = workRuleAssignmentPayload();
+  const signature = JSON.stringify(payload);
+  const current = () => gpEditorCurrent(ticket) && publicationId === elements.workRuleAssignmentPublicationId.value && signature === JSON.stringify(workRuleAssignmentPayload());
+  if (!current()) return;
   if (!elements.workRuleAssignmentForm.reportValidity()) return;
   if (!elements.workRuleAssignmentApplicabilityConfirmed.checked) {
     showToast("Vor jeder Zuordnung muss die fachliche Anwendbarkeit bestätigt sein.", true);
@@ -12757,9 +13075,10 @@ async function previewWorkRuleAssignment() {
   try {
     const preview = await previewWorkRuleGovernance(
       "activate_assignment",
-      elements.workRuleAssignmentPublicationId.value,
-      workRuleAssignmentPayload(),
+      publicationId,
+      payload,
     );
+    if (!current()) return;
     state.workRuleGovernancePreview = preview;
     state.workRuleAssignmentPreviewValid = workRuleConflict(preview).outcome !== "blocked";
     elements.workRuleAssignmentBasisSha256.value = preview.basisSha256 || "";
@@ -12769,6 +13088,7 @@ async function previewWorkRuleAssignment() {
       : "Blockierender Konflikt";
     elements.workRuleAssignmentSubmitButton.disabled = !state.workRuleAssignmentPreviewValid;
   } catch (error) {
+    if (!current()) return;
     elements.workRuleAssignmentConflict.innerHTML = workRuleConflictMarkup({
       outcome: "blocked",
       title: "Konfliktprüfung fehlgeschlagen",
@@ -12776,11 +13096,13 @@ async function previewWorkRuleAssignment() {
     });
     showToast(error.message, true);
   } finally {
-    elements.previewWorkRuleAssignmentButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.previewWorkRuleAssignmentButton.disabled = false;
   }
 }
 
 async function saveWorkRuleAssignment(event) {
+  const ticket = captureGpEditor(elements.workRuleAssignmentModal, canAssignCustomWorkRules);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!state.workRuleAssignmentPreviewValid) {
     showToast("Bitte die Zuordnung nach der letzten Änderung erneut prüfen.", true);
@@ -12797,13 +13119,16 @@ async function saveWorkRuleAssignment(event) {
       basisSha256: elements.workRuleAssignmentBasisSha256.value,
       conflictRunId: state.workRuleGovernancePreview?.conflictRunId,
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.workRuleAssignmentModal.close();
     await loadCustomWorkRuleRegistry({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast("Der datierte Zuordnungsantrag wurde zur unabhängigen Freigabe eingereicht.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.workRuleAssignmentSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.workRuleAssignmentSubmitButton.disabled = false;
   }
 }
 
@@ -12967,6 +13292,9 @@ async function loadCollectiveAgreementRegistry({ force = false } = {}) {
     renderCollectiveAgreementRegistry();
     return;
   }
+  const requestToken = Symbol("loadCollectiveAgreementRegistry");
+  state.loadCollectiveAgreementRegistryRequest = requestToken;
+  const contextTicket = captureGpContext(canReadCollectiveAgreements, () => state.loadCollectiveAgreementRegistryRequest);
   state.collectiveAgreementsLoading = true;
   if (elements.collectiveAgreementList) {
     elements.collectiveAgreementList.innerHTML = '<p class="settings-note">KV-Fassungen werden geladen.</p>';
@@ -12976,6 +13304,7 @@ async function loadCollectiveAgreementRegistry({ force = false } = {}) {
       api("/api/collective-agreements/registry"),
       api("/api/work-rules/governance"),
     ]);
+    if (!gpContextCurrent(contextTicket)) return;
     if (registryResult.status === "rejected") throw registryResult.reason;
     state.collectiveAgreementRegistry = registryResult.value;
     if (governanceResult.status === "fulfilled") state.workRuleGovernance = governanceResult.value;
@@ -12983,15 +13312,16 @@ async function loadCollectiveAgreementRegistry({ force = false } = {}) {
     if (!agreementIds.has(state.selectedCollectiveAgreementId)) {
       state.selectedCollectiveAgreementId = state.collectiveAgreementRegistry.agreements?.[0]?.id || "";
     }
-    renderCollectiveAgreementRegistry();
+    if (gpContextCurrent(contextTicket)) renderCollectiveAgreementRegistry();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.collectiveAgreementRegistry = null;
     if (elements.collectiveAgreementList) {
       elements.collectiveAgreementList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
     }
     throw error;
   } finally {
-    state.collectiveAgreementsLoading = false;
+    if (state.loadCollectiveAgreementRegistryRequest === requestToken) state.collectiveAgreementsLoading = false;
   }
 }
 
@@ -13070,6 +13400,7 @@ function renderCollectiveAgreementDetail(registry) {
     ? displayedVersion.contractingParties.join(" · ")
     : "Noch nicht dokumentiert";
   const sourceHash = displayedVersion.source.sha256 || displayedVersion.contentSha256;
+  const sourceUrl = safeWorkRuleSourceUrl(displayedVersion.source.url);
   const versionHistory = agreement.versions.map((version) => `
     <article class="${version.id === agreement.currentVersionId ? "current" : ""}">
       <div><strong>${escapeHtml(version.versionLabel)}</strong><small>${escapeHtml(collectiveAgreementValidity(version.validFrom, version.validTo))}</small></div>
@@ -13091,7 +13422,7 @@ function renderCollectiveAgreementDetail(registry) {
     <div class="collective-agreement-source-card">
       <div><span>${current ? "Fassung" : "Sichtbare Fassung"}</span><strong>${escapeHtml(displayedVersion.versionLabel)}</strong><small>${escapeHtml(collectiveAgreementValidity(displayedVersion.validFrom, displayedVersion.validTo))}</small></div>
       <div><span>Vertragsparteien</span><strong>${escapeHtml(parties)}</strong><small>${displayedVersion.externalPublishedOn ? `extern veröffentlicht ${escapeHtml(formatDate(displayedVersion.externalPublishedOn))}` : "Veröffentlichungsdatum offen"}</small></div>
-      <div class="source-wide"><span>Dokumentierte Quelle</span><strong><a href="${escapeHtmlAttribute(displayedVersion.source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displayedVersion.source.title)}</a></strong><small>abgerufen ${escapeHtml(formatDate(displayedVersion.source.retrievedOn))} · Integritätswert ${escapeHtml(sourceHash.slice(0, 16))}…</small></div>
+      <div class="source-wide"><span>Dokumentierte Quelle</span><strong>${sourceUrl ? `<a href="${escapeHtmlAttribute(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displayedVersion.source.title)}</a>` : escapeHtml(displayedVersion.source.title)}</strong><small>abgerufen ${escapeHtml(formatDate(displayedVersion.source.retrievedOn))} · Integritätswert ${escapeHtml(sourceHash.slice(0, 16))}…</small></div>
     </div>
     <dl class="collective-agreement-applicability">${collectiveAgreementDefinitionList(displayedVersion)}</dl>
     ${displayedVersion.linkedProfileVersionId ? `<p class="collective-agreement-profile-link">Verknüpfte Regelprofil-Fassung: <strong>${escapeHtml(displayedVersion.linkedProfileVersionId)}</strong>. Die Dienstplanung verwendet sie nur mit ausführbaren Regeln, bestätigter persönlicher Gruppe und unabhängig freigegebener KV-Zuordnung.</p>` : ""}
@@ -13222,6 +13553,7 @@ function openCollectiveAgreementModal(agreement = null) {
     .forEach((input) => { input.disabled = newVersion; });
   document.querySelectorAll(".new-collective-agreement-only").forEach((field) => field.classList.toggle("hidden", newVersion));
   populateCollectiveAgreementProfileOptions();
+  elements.collectiveAgreementSubmitButton.disabled = false;
   elements.collectiveAgreementModal.showModal();
 }
 
@@ -13251,6 +13583,8 @@ function collectiveAgreementVersionPayload() {
 }
 
 async function saveCollectiveAgreement(event) {
+  const ticket = captureGpEditor(elements.collectiveAgreementModal, canManageCollectiveAgreements);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!canManageCollectiveAgreements()) return;
   const agreementId = elements.collectiveAgreementId.value;
@@ -13271,14 +13605,17 @@ async function saveCollectiveAgreement(event) {
         : "/api/collective-agreements",
       { method: "POST", body: JSON.stringify(body) },
     );
+    if (!gpEditorCurrent(ticket)) return;
     elements.collectiveAgreementModal.close();
     state.selectedCollectiveAgreementId = result.agreement?.id || agreementId;
     await loadCollectiveAgreementRegistry({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(agreementId ? "Die neue KV-Fassung wurde unveränderlich ergänzt." : "Der KV-Registereintrag wurde angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.collectiveAgreementSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.collectiveAgreementSubmitButton.disabled = false;
   }
 }
 
@@ -13332,10 +13669,13 @@ function openCollectiveAgreementBusinessUnitModal(unit = null) {
   elements.collectiveAgreementBusinessUnitModalTitle.textContent = unit ? "Betriebsteil um Bereiche ergänzen" : "Betriebsteil anlegen";
   elements.collectiveAgreementBusinessUnitSubmitButton.textContent = unit ? "Bereiche ergänzen" : "Betriebsteil speichern";
   renderCollectiveAgreementScopeOptions(unit);
+  elements.collectiveAgreementBusinessUnitSubmitButton.disabled = false;
   elements.collectiveAgreementBusinessUnitModal.showModal();
 }
 
 async function saveCollectiveAgreementBusinessUnit(event) {
+  const ticket = captureGpEditor(elements.collectiveAgreementBusinessUnitModal, canManageCollectiveAgreements);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!canManageCollectiveAgreements()) return;
   const businessUnitId = elements.collectiveAgreementBusinessUnitId.value;
@@ -13366,13 +13706,16 @@ async function saveCollectiveAgreementBusinessUnit(event) {
       body: JSON.stringify(body),
       },
     );
+    if (!gpEditorCurrent(ticket)) return;
     elements.collectiveAgreementBusinessUnitModal.close();
     await loadCollectiveAgreementRegistry({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(businessUnitId ? "Die Bereiche wurden unveränderlich ergänzt." : "Der Betriebsteil wurde angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.collectiveAgreementBusinessUnitSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.collectiveAgreementBusinessUnitSubmitButton.disabled = false;
   }
 }
 
@@ -13412,10 +13755,13 @@ function openCollectiveAgreementAssignmentModal() {
     <option value="${escapeHtmlAttribute(unit.id)}">${escapeHtml(`${unit.code} · ${unit.name}`)}</option>
   `).join("");
   updateCollectiveAgreementAssignmentDates();
+  elements.collectiveAgreementAssignmentSubmitButton.disabled = false;
   elements.collectiveAgreementAssignmentModal.showModal();
 }
 
 async function saveCollectiveAgreementAssignment(event) {
+  const ticket = captureGpEditor(elements.collectiveAgreementAssignmentModal, canPrepareCollectiveAgreementAssignments);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!canPrepareCollectiveAgreementAssignments()) return;
   const body = {
@@ -13433,13 +13779,16 @@ async function saveCollectiveAgreementAssignment(event) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.collectiveAgreementAssignmentModal.close();
     await loadCollectiveAgreementRegistry({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast("Der Zuordnungsvorschlag wurde mit Status „Prüfung offen“ gespeichert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.collectiveAgreementAssignmentSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.collectiveAgreementAssignmentSubmitButton.disabled = false;
   }
 }
 
@@ -14913,6 +15262,8 @@ function openPersonnelCandidateCreateModal() {
   );
   populatePersonnelCandidateCreateLocations();
   setPersonnelCandidateCreateMessage();
+  state.personnelCandidateCreatePendingOwner = null;
+  state.personnelCandidateCreatePending = false;
   syncPersonnelCandidateAuthorizationState();
   elements.personnelCandidateCreateModal.showModal();
   queueMicrotask(() => elements.personnelCandidateCreateForm.elements.firstName?.focus());
@@ -14920,6 +15271,8 @@ function openPersonnelCandidateCreateModal() {
 
 async function savePersonnelCandidate(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.personnelCandidateCreateModal, () => canReadCandidatePreboarding() && state.personnelCandidateCapabilities.canCreateCandidates);
+  if (!gpEditorCurrent(ticket)) return;
   const form = elements.personnelCandidateCreateForm;
   if (!form || state.personnelCandidateCreatePending
     || !state.personnelCandidateCapabilities.canCreateCandidates) return;
@@ -15006,6 +15359,8 @@ async function savePersonnelCandidate(event) {
   if (!validatePersonnelCandidateTrialRows(form)) return;
   if (!form.reportValidity()) return;
 
+  const mutationOwner = Symbol("personnelCandidateCreatePending");
+  state.personnelCandidateCreatePendingOwner = mutationOwner;
   state.personnelCandidateCreatePending = true;
   setPersonnelCandidateCreateMessage("Bewerber wird angelegt.");
   syncPersonnelCandidateAuthorizationState();
@@ -15015,6 +15370,7 @@ async function savePersonnelCandidate(event) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     const candidateId = String(result?.candidate?.id || "");
     let photoError = "";
     if (candidateId && photo) {
@@ -15024,15 +15380,19 @@ async function savePersonnelCandidate(event) {
         photoError = error.message || "Das Bewerberfoto konnte nicht gespeichert werden.";
       }
     }
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelCandidateCreateModal.close();
     await loadPersonnelCandidates({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     if (candidateId && state.personnelCandidateCapabilities.canReadCandidates) {
       await loadPersonnelCandidateDetail(candidateId);
     }
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(photoError
       ? `Der Bewerber wurde angelegt; ${photoError}`
       : "Der Bewerber wurde angelegt und die EDV-Erlaubnis revisionssicher bestätigt.", Boolean(photoError));
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     if ([401, 403].includes(error.status)) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
       return;
@@ -15042,13 +15402,13 @@ async function savePersonnelCandidate(event) {
       true,
     );
   } finally {
-    state.personnelCandidateCreatePending = false;
-    syncPersonnelCandidateAuthorizationState();
-    renderPersonnelCandidateOverview();
+    if (state.personnelCandidateCreatePendingOwner === mutationOwner) state.personnelCandidateCreatePending = false;
+    if (gpEditorCurrent(ticket, true)) { syncPersonnelCandidateAuthorizationState(); renderPersonnelCandidateOverview(); }
   }
 }
 
 async function loadPersonnelCandidates({ force = false } = {}) {
+  const contextTicket = captureGpContext(canReadCandidatePreboarding);
   if (!canReadCandidatePreboarding() || state.personnelCandidatesLoading) return;
   if (state.personnelCandidatesLoaded && !force) {
     renderPersonnelCandidateOverview();
@@ -15059,6 +15419,7 @@ async function loadPersonnelCandidates({ force = false } = {}) {
   renderPersonnelCandidateOverview();
   try {
     const result = await api("/api/portal/v1/personnel-lifecycle/candidates?limit=50&offset=0");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!canReadCandidatePreboarding()) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff wurde während des Ladens entzogen.");
       return;
@@ -15086,6 +15447,7 @@ async function loadPersonnelCandidates({ force = false } = {}) {
       state.personnelCandidateDetailError = "";
     }
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     if ([401, 403].includes(error.status)) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
       return;
@@ -15100,6 +15462,7 @@ async function loadPersonnelCandidates({ force = false } = {}) {
 }
 
 async function loadPersonnelCandidateEvaluatorOptions(candidate) {
+  const contextTicket = captureGpContext(canReadCandidatePreboarding, () => state.selectedPersonnelCandidate);
   const writableApplications = personnelCandidateApplications(candidate)
     .filter((application) => canWritePersonnelCandidateApplication(application));
   state.personnelCandidateEvaluatorOptions = Object.fromEntries(writableApplications.map((application) => ([
@@ -15123,14 +15486,17 @@ async function loadPersonnelCandidateEvaluatorOptions(candidate) {
       }];
     }
   }));
-  if (state.selectedPersonnelCandidateId !== candidate.id) return;
+  if (!gpContextCurrent(contextTicket) || state.selectedPersonnelCandidateId !== candidate.id) return;
   state.personnelCandidateEvaluatorOptions = Object.fromEntries(results);
   renderPersonnelCandidateOverview();
 }
 
 async function loadPersonnelCandidateDetail(candidateId) {
+  const contextTicket = captureGpContext(canReadCandidatePreboarding);
   const id = String(candidateId || "").trim();
   if (!id || !canReadCandidatePreboarding() || !state.personnelCandidateCapabilities.canReadCandidates) return;
+  const requestToken = Symbol("candidate-detail");
+  state.personnelCandidateDetailRequestToken = requestToken;
   state.selectedPersonnelCandidateId = id;
   state.selectedPersonnelCandidate = null;
   state.personnelCandidateEvaluatorOptions = {};
@@ -15139,7 +15505,8 @@ async function loadPersonnelCandidateDetail(candidateId) {
   renderPersonnelCandidateOverview();
   try {
     const result = await api(`/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(id)}`);
-    if (state.selectedPersonnelCandidateId !== id) return;
+    if (!gpContextCurrent(contextTicket)) return;
+    if (state.personnelCandidateDetailRequestToken !== requestToken || state.selectedPersonnelCandidateId !== id) return;
     if (!canReadCandidatePreboarding()) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff wurde während des Ladens entzogen.");
       return;
@@ -15156,16 +15523,17 @@ async function loadPersonnelCandidateDetail(candidateId) {
     renderPersonnelCandidateOverview();
     await loadPersonnelCandidateEvaluatorOptions(candidate);
   } catch (error) {
+    if (!gpContextCurrent(contextTicket) || state.personnelCandidateDetailRequestToken !== requestToken) return;
     if ([401, 403].includes(error.status)) {
       clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
       return;
     }
-    if (state.selectedPersonnelCandidateId === id) {
+    if (gpContextCurrent(contextTicket) && state.personnelCandidateDetailRequestToken === requestToken && state.selectedPersonnelCandidateId === id) {
       state.personnelCandidateDetailError = error.message || "Die Bewerbungsdetails konnten nicht geladen werden.";
     }
   } finally {
-    if (state.selectedPersonnelCandidateId === id) state.personnelCandidateDetailLoading = false;
-    renderPersonnelCandidateOverview();
+    if (gpContextCurrent(contextTicket) && state.personnelCandidateDetailRequestToken === requestToken && state.selectedPersonnelCandidateId === id) state.personnelCandidateDetailLoading = false;
+    if (gpContextCurrent(contextTicket) && state.personnelCandidateDetailRequestToken === requestToken) renderPersonnelCandidateOverview();
   }
 }
 
@@ -17306,13 +17674,14 @@ function personnelWorkflowStatusBadge(status, task = false) {
 
 function renderPersonnelWorkflowInstanceSummary() {
   if (!elements.personnelWorkflowInstanceSummary) return;
+  const ready = state.personnelWorkflowInstancesLoaded && !state.personnelWorkflowInstancesLoading && !state.personnelWorkflowInstanceLoadError && canReadPersonnelWorkflowInstances();
   const open = state.personnelWorkflowInstances.filter((instance) => instance.status === "open").length;
   const resolved = state.personnelWorkflowInstances.filter((instance) => instance.status === "resolved").length;
   elements.personnelWorkflowInstanceSummary.innerHTML = [
     ["Sichtbar", state.personnelWorkflowInstances.length, "serverseitig freigegebene Instanzen"],
     ["Offen", open, "laufende versionsgebundene Ausführungen"],
     ["Abgeschlossen", resolved, "unverändert historisch gebunden"],
-  ].map(([label, value, detail]) => `<article><span>${escapeHtml(label)}</span><strong>${value}</strong><small>${escapeHtml(detail)}</small></article>`).join("");
+  ].map(([label, value, detail]) => `<article><span>${escapeHtml(label)}</span><strong>${ready ? value : "–"}</strong><small>${escapeHtml(detail)}</small></article>`).join("");
 }
 
 function renderPersonnelWorkflowInstanceList() {
@@ -17373,7 +17742,7 @@ function renderPersonnelLifecycleOnboardingTasksMarkup() {
         ? `Standort ${task.scope.locationId} · Abteilung ${task.scope.departmentId}`
         : `Standort ${task.scope.locationId}`;
       return `<article class="personnel-workflow-task-card personnel-lifecycle-onboarding-task-card">
-        <div><span class="eyebrow">Schritt ${task.position} · ${escapeHtml(task.workflowCode)}</span><h3>${escapeHtml(task.title)}</h3><p><strong>Einschulung für:</strong> ${escapeHtml(task.subject.displayName)} · Personalnummer ${escapeHtml(task.subject.employeeNumber)}</p><p>${escapeHtml(task.workflowTitle)} · ${escapeHtml(scopeLabel)}</p><small>Aktiv seit ${escapeHtml(personnelWorkflowTimestamp(task.activatedAt))}</small></div>
+        <div><span class="eyebrow">Schritt ${task.position} · Onboarding</span><h3>${escapeHtml(task.title)}</h3><p><strong>Einschulung für:</strong> ${escapeHtml(task.subject.displayName)} · Personalnummer ${escapeHtml(task.subject.employeeNumber)}</p><p>${escapeHtml(task.workflowTitle)} · ${escapeHtml(scopeLabel)}</p><small>Aktiv seit ${escapeHtml(personnelWorkflowTimestamp(task.activatedAt))}</small></div>
         ${canComplete ? `<form data-personnel-lifecycle-onboarding-task-complete data-run-id="${escapeHtmlAttribute(task.runId)}" data-step-id="${escapeHtmlAttribute(task.stepId)}">
           <label><input type="checkbox" required data-onboarding-task-confirm${pending ? " disabled" : ""}><span>Ich bestätige, dass diese Aufgabe tatsächlich erledigt ist.</span></label>
           <button type="submit" class="primary-button"${pending ? " disabled" : ""}>${pending ? "Wird sicher bestätigt …" : "Erledigung bestätigen"}</button>
@@ -17412,12 +17781,13 @@ function renderPersonnelLifecycleOffboardingTasksMarkup() {
         .map((field) => `<span><small>${escapeHtml(PERSONNEL_LIFECYCLE_OFFBOARDING_TASK_FIELD_LABELS[field])}</small><strong>${escapeHtml(task[field])}</strong></span>`)
         .join("");
       const completable = canComplete && task.status === "active";
+      const projectionLabel = { leadership_task: "Führungskraft", it_security_task: "IT und Zugänge", asset_task: "Arbeitsmittel", payroll_task: "Lohnverrechnung" }[task.projection] || "Persönlicher Auftrag";
       return `<article class="personnel-workflow-task-card personnel-lifecycle-onboarding-task-card employee-offboarding-task-card">
-        <div><span class="eyebrow">${escapeHtml(task.projection)}</span><h3>${escapeHtml(task.title)}</h3>${details ? `<div class="employee-offboarding-task-details">${details}</div>` : ""}</div>
+        <div><span class="eyebrow">${escapeHtml(projectionLabel)}</span><h3>${escapeHtml(task.title)}</h3>${details ? `<div class="employee-offboarding-task-details">${details}</div>` : ""}</div>
         ${completable ? `<form data-personnel-lifecycle-offboarding-task-complete data-run-id="${escapeHtmlAttribute(task.runId)}" data-step-id="${escapeHtmlAttribute(task.stepId)}">
           <label><input type="checkbox" required data-offboarding-task-confirm${pending ? " disabled" : ""}><span>Ich bestätige, dass dieser Auftrag tatsächlich erledigt ist.</span></label>
           <button type="submit" class="primary-button"${pending ? " disabled" : ""}>${pending ? "Wird sicher bestätigt …" : "Erledigung bestätigen"}</button>
-        </form>` : '<span class="status-badge inactive">Bis zur Aktivierung nur Lesen</span>'}
+        </form>` : `<span class="status-badge inactive">${task.status === "active" ? "Nur Lesen" : "Bis zur Aktivierung nur Lesen"}</span>`}
       </article>`;
     }).join("")}</div>
     <p class="employee-profile-boundary">O5 erlaubt nur die ausdrückliche Erledigung aktiver Aufträge. Überspringen, „nicht anwendbar“, freie Nachweise und externe Kontoaktionen sind nicht freigegeben.</p>
@@ -17912,7 +18282,7 @@ function renderPersonnelLifecycleEditorFlow() {
       ? PERSONNEL_LIFECYCLE_EDITOR_LABELS.responsibilityClasses[step.responsibilityClass]
       : "Verantwortung noch nicht festgelegt";
     return `<li data-editor-step-type="${escapeHtmlAttribute(step.type)}">
-      <button type="button" data-personnel-lifecycle-editor-step="${escapeHtmlAttribute(step.id)}" ${selected ? 'aria-current="step"' : ""} aria-label="Schritt ${index + 1} von ${draft.steps.length}: ${escapeHtmlAttribute(step.title || typeLabel)}">
+      <button type="button" data-personnel-lifecycle-editor-step="${escapeHtmlAttribute(step.id)}" draggable="${step.type !== "finish"}" ${selected ? 'aria-current="step"' : ""} aria-label="Schritt ${index + 1} von ${draft.steps.length}: ${escapeHtmlAttribute(step.title || typeLabel)}">
         <span class="personnel-lifecycle-editor-node-number" aria-hidden="true">${index + 1}</span>
         <span class="personnel-lifecycle-editor-node-copy"><strong>${escapeHtml(step.title || `Unbenannter ${typeLabel}`)}</strong><small>${escapeHtml(typeLabel)} · ${escapeHtml(step.required ? "Pflichtschritt" : "Optional")}</small><span>${escapeHtml(responsibilityLabel)}</span></span>
       </button>
@@ -17929,6 +18299,10 @@ function renderPersonnelLifecycleEditorInspector() {
   }
   if (step) {
     if (elements.personnelLifecycleEditorStepType) elements.personnelLifecycleEditorStepType.value = step.type;
+    if (elements.personnelLifecycleEditorStepType) {
+      elements.personnelLifecycleEditorStepType.disabled = !interactive || step.type === "finish";
+      elements.personnelLifecycleEditorStepType.querySelector('option[value="finish"]').disabled = step.type !== "finish";
+    }
     if (elements.personnelLifecycleEditorStepTitle) elements.personnelLifecycleEditorStepTitle.value = step.title;
     if (elements.personnelLifecycleEditorStepDescription) elements.personnelLifecycleEditorStepDescription.value = step.description;
     if (elements.personnelLifecycleEditorResponsibilityClass) {
@@ -17936,6 +18310,7 @@ function renderPersonnelLifecycleEditorInspector() {
     }
     if (elements.personnelLifecycleEditorStepRequired) {
       elements.personnelLifecycleEditorStepRequired.value = String(step.required);
+      elements.personnelLifecycleEditorStepRequired.disabled = !interactive || step.type === "finish";
     }
   } else {
     if (elements.personnelLifecycleEditorStepTitle) elements.personnelLifecycleEditorStepTitle.value = "";
@@ -17945,16 +18320,18 @@ function renderPersonnelLifecycleEditorInspector() {
   const steps = state.personnelLifecycleEditorDraft?.steps || [];
   const index = step ? steps.findIndex(({ id }) => id === step.id) : -1;
   if (elements.movePersonnelLifecycleEditorStepUpButton) {
-    elements.movePersonnelLifecycleEditorStepUpButton.disabled = !interactive || index <= 0;
+    elements.movePersonnelLifecycleEditorStepUpButton.disabled = !interactive || index <= 0 || step?.type === "finish";
   }
   if (elements.movePersonnelLifecycleEditorStepDownButton) {
     elements.movePersonnelLifecycleEditorStepDownButton.disabled = !interactive
-      || index < 0 || index >= steps.length - 1;
+      || index < 0 || index >= steps.length - 2 || step?.type === "finish";
   }
   if (elements.removePersonnelLifecycleEditorStepButton) {
     elements.removePersonnelLifecycleEditorStepButton.disabled = !interactive
-      || index < 0 || steps.length <= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.minimumSteps;
+      || index < 0 || steps.length <= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.minimumSteps || step?.type === "finish";
   }
+  const duplicateButton = typeof document !== "undefined" && document.getElementById("duplicatePersonnelLifecycleEditorStepButton");
+  if (duplicateButton) duplicateButton.disabled = !interactive || !step || step.type === "finish" || steps.length >= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps;
 }
 
 function renderPersonnelLifecycleEditorValidation() {
@@ -18095,6 +18472,9 @@ function clearPersonnelLifecycleEditorState(message = "", {
   state.personnelLifecycleEditorLoading = false;
   state.personnelLifecycleEditorError = String(message || "");
   state.personnelLifecycleEditorActorAccessKey = "";
+  state.personnelLifecycleEditorSession = null;
+  state.personnelLifecycleEditorWindowContext = null;
+  state.personnelLifecycleEditorDrag = null;
   state.personnelLifecycleEditorDraft = null;
   state.personnelLifecycleEditorPristineDraft = null;
   state.personnelLifecycleEditorSelectedStepId = "";
@@ -18143,15 +18523,17 @@ async function loadPersonnelLifecycleEditorCatalog() {
     return;
   }
   const requestToken = {};
+  const requestContext = captureGpEditor(elements.personnelLifecycleEditorDialog, canReadPersonnelLifecycleEditorCatalog);
   state.personnelLifecycleEditorRequestToken = requestToken;
   state.personnelLifecycleEditorLoading = true;
   state.personnelLifecycleEditorError = "";
   state.personnelLifecycleEditorActorAccessKey = actorAccessKey;
+  state.personnelLifecycleEditorSession = state.portalSession;
   setPersonnelLifecycleEditorStatus("Der O8-Katalog wird geladen …");
   renderPersonnelLifecycleEditor();
   try {
     const result = await api("/api/portal/v1/personnel-lifecycle/editor/catalog");
-    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    if (state.personnelLifecycleEditorRequestToken !== requestToken || !gpEditorCurrent(requestContext)) return;
     if (!elements.personnelLifecycleEditorDialog?.open
       || !canReadPersonnelLifecycleEditorCatalog()
       || personnelLifecycleEditorActorAccessKey() !== actorAccessKey) {
@@ -18174,13 +18556,8 @@ async function loadPersonnelLifecycleEditorCatalog() {
       state.personnelLifecycleEditorDirty = false;
     }
     state.personnelLifecycleEditorValidation = null;
-    setPersonnelLifecycleEditorStatus(
-      canWritePersonnelLifecycleEditorDraft()
-        ? "Arbeitsentwurf – nicht gespeichert. Änderungen bleiben ausschließlich in diesem Dialog."
-        : "Nur Lesen. Für lokale Änderungen fehlt das Entwurfsrecht.",
-    );
   } catch (error) {
-    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    if (state.personnelLifecycleEditorRequestToken !== requestToken || !gpEditorCurrent(requestContext)) return;
     const denied = [401, 403].includes(error.status);
     if(denied){
       clearPersonnelLifecycleEditorState("Der O8-Editorzugriff ist nicht mehr verfügbar.",{closeDialog:true,restoreFocus:false});
@@ -18191,10 +18568,17 @@ async function loadPersonnelLifecycleEditorCatalog() {
     }
     return;
   } finally {
-    if (state.personnelLifecycleEditorRequestToken === requestToken) {
+    if (state.personnelLifecycleEditorRequestToken === requestToken && gpEditorCurrent(requestContext)) {
       state.personnelLifecycleEditorRequestToken = null;
       state.personnelLifecycleEditorLoading = false;
       renderPersonnelLifecycleEditor();
+      if (state.personnelLifecycleEditorCatalogLoaded && !state.personnelLifecycleEditorError) {
+        setPersonnelLifecycleEditorStatus(
+          canWritePersonnelLifecycleEditorDraft()
+            ? "Arbeitsentwurf – nicht gespeichert. Änderungen bleiben ausschließlich in diesem Dialog."
+            : "Nur Lesen. Für lokale Änderungen fehlt das Entwurfsrecht.",
+        );
+      }
       if (state.personnelLifecycleEditorCatalogLoaded) {
         elements.personnelLifecycleEditorFlow
           ?.querySelector("[data-personnel-lifecycle-editor-step]")?.focus();
@@ -18206,23 +18590,34 @@ async function loadPersonnelLifecycleEditorCatalog() {
 function openPersonnelLifecycleEditor(opener) {
   if (!canReadPersonnelLifecycleEditorCatalog() || !elements.personnelLifecycleEditorDialog) return;
   const retained = state.personnelLifecycleEditorDraft
-    && state.personnelLifecycleEditorActorAccessKey === personnelLifecycleEditorActorAccessKey();
+    && state.personnelLifecycleEditorActorAccessKey === personnelLifecycleEditorActorAccessKey()
+    && state.personnelLifecycleEditorSession === state.portalSession;
   if (!retained) clearPersonnelLifecycleEditorState("", { closeDialog: false });
+  state.personnelLifecycleEditorRequestToken = null;
+  state.personnelLifecycleEditorLoading = false;
+  state.personnelLifecycleEditorValidating = false;
+  state.personnelLifecycleEditorValidation = null;
+  state.personnelLifecycleEditorSession = state.portalSession;
   state.personnelLifecycleEditorReturnFocus = opener || null;
+  window.GpWindow?.prepare(elements.personnelLifecycleEditorDialog);
+  window.GpWindow?.begin(elements.personnelLifecycleEditorDialog);
   elements.personnelLifecycleEditorDialog.showModal();
+  state.personnelLifecycleEditorWindowContext = captureGpEditor(elements.personnelLifecycleEditorDialog, canReadPersonnelLifecycleEditorCatalog);
   renderPersonnelLifecycleEditor();
   loadPersonnelLifecycleEditorCatalog().catch(() => {});
 }
 
 function pausePersonnelLifecycleEditor() {
   if (state.personnelLifecycleEditorActorAccessKey
-    && state.personnelLifecycleEditorActorAccessKey !== personnelLifecycleEditorActorAccessKey()) {
+    && (state.personnelLifecycleEditorActorAccessKey !== personnelLifecycleEditorActorAccessKey()
+      || state.personnelLifecycleEditorSession !== state.portalSession)) {
     clearPersonnelLifecycleEditorState('', {closeDialog: true, restoreFocus: false}); return;
   }
   state.personnelLifecycleEditorRequestToken = null;
   state.personnelLifecycleEditorLoading = false;
   state.personnelLifecycleEditorValidating = false;
   state.personnelLifecycleEditorValidation = null;
+  state.personnelLifecycleEditorDrag = null;
   if (elements.personnelLifecycleEditorDialog?.open) {
     state.personnelLifecycleEditorDiscardBypass = true;
     elements.personnelLifecycleEditorDialog.close();
@@ -18241,6 +18636,7 @@ function setPersonnelLifecycleEditorStepField(field, value) {
   const step = selectedPersonnelLifecycleEditorStep();
   if (!step || state.personnelLifecycleEditorValidating
     || !canWritePersonnelLifecycleEditorDraft()) return;
+  if ((step.type === "finish" && ["type", "required"].includes(field)) || (field === "type" && value === "finish")) return;
   step[field] = value;
   markPersonnelLifecycleEditorDirty();
   renderPersonnelLifecycleEditorFlow();
@@ -18260,8 +18656,8 @@ function movePersonnelLifecycleEditorStep(direction) {
     || !canWritePersonnelLifecycleEditorDraft()) return;
   const index = draft.steps.findIndex(({ id }) => id === selectedId);
   const target = index + direction;
-  if (index < 0 || target < 0 || target >= draft.steps.length) return;
-  [draft.steps[index], draft.steps[target]] = [draft.steps[target], draft.steps[index]];
+  if (index < 0 || target < 0 || target >= draft.steps.length - 1 || draft.steps[index].type === "finish") return;
+  draft.steps.splice(target, 0, draft.steps.splice(index, 1)[0]);
   markPersonnelLifecycleEditorDirty();
   renderPersonnelLifecycleEditor();
   setPersonnelLifecycleEditorStatus(`Schritt ${target + 1} von ${draft.steps.length}. Lokale Reihenfolge geändert.`);
@@ -18297,7 +18693,7 @@ function removePersonnelLifecycleEditorStep() {
     || !canWritePersonnelLifecycleEditorDraft()
     || draft.steps.length <= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.minimumSteps) return;
   const index = draft.steps.findIndex(({ id }) => id === selectedId);
-  if (index < 0) return;
+  if (index < 0 || draft.steps[index].type === "finish") return;
   draft.steps.splice(index, 1);
   const next = draft.steps[Math.min(index, draft.steps.length - 1)];
   state.personnelLifecycleEditorSelectedStepId = next?.id || "";
@@ -18305,6 +18701,16 @@ function removePersonnelLifecycleEditorStep() {
   renderPersonnelLifecycleEditor();
   setPersonnelLifecycleEditorStatus(`Schritt entfernt. ${draft.steps.length} Schritte verbleiben.`);
   if (next) focusPersonnelLifecycleEditorStep(next.id);
+}
+
+function duplicatePersonnelLifecycleEditorStep() {
+  const draft = state.personnelLifecycleEditorDraft, step = selectedPersonnelLifecycleEditorStep();
+  if (!draft || !step || step.type === "finish" || !canWritePersonnelLifecycleEditorDraft()
+    || state.personnelLifecycleEditorValidating || draft.steps.length >= PERSONNEL_LIFECYCLE_EDITOR_LIMITS.maximumSteps) return;
+  const duplicate = { ...step, id: nextPersonnelLifecycleEditorStepId(draft.steps) };
+  draft.steps.splice(draft.steps.indexOf(step) + 1, 0, duplicate);
+  state.personnelLifecycleEditorSelectedStepId = duplicate.id;
+  markPersonnelLifecycleEditorDirty(); renderPersonnelLifecycleEditor(); focusPersonnelLifecycleEditorStep(duplicate.id);
 }
 
 function resetPersonnelLifecycleEditorDraft() {
@@ -18349,6 +18755,7 @@ async function validatePersonnelLifecycleEditorDraft() {
   }
   const body = JSON.stringify(draft);
   const requestToken = {};
+  const requestContext = captureGpEditor(elements.personnelLifecycleEditorDialog, canValidatePersonnelLifecycleEditorDraft);
   state.personnelLifecycleEditorRequestToken = requestToken;
   state.personnelLifecycleEditorValidating = true;
   state.personnelLifecycleEditorValidation = null;
@@ -18359,7 +18766,7 @@ async function validatePersonnelLifecycleEditorDraft() {
       method: "POST",
       body,
     });
-    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    if (state.personnelLifecycleEditorRequestToken !== requestToken || !gpEditorCurrent(requestContext)) return;
     if (!elements.personnelLifecycleEditorDialog?.open
       || !canValidatePersonnelLifecycleEditorDraft()
       || personnelLifecycleEditorActorAccessKey() !== actorAccessKey) {
@@ -18389,18 +18796,18 @@ async function validatePersonnelLifecycleEditorDraft() {
       !validation.valid,
     );
   } catch (error) {
-    if (state.personnelLifecycleEditorRequestToken !== requestToken) return;
+    if (state.personnelLifecycleEditorRequestToken !== requestToken || !gpEditorCurrent(requestContext)) return;
     const denied = [401, 403].includes(error.status);
-    clearPersonnelLifecycleEditorState(
-      denied
-        ? "Der O8-Editorzugriff ist nicht mehr verfügbar."
-        : "Die O8-Serverprüfung konnte nicht sicher verarbeitet werden; der lokale Entwurf wurde entfernt.",
-      { closeDialog: denied, restoreFocus: false },
-    );
-    if (denied) applyRoleVisibility();
+    if (denied) {
+      clearPersonnelLifecycleEditorState("Der O8-Editorzugriff ist nicht mehr verfügbar.", { closeDialog: true, restoreFocus: false });
+      applyRoleVisibility();
+    } else {
+      state.personnelLifecycleEditorValidation = null;
+      setPersonnelLifecycleEditorStatus("Die Serverprüfung konnte nicht abgeschlossen werden. Der lokale Arbeitsentwurf bleibt erhalten; bitte erneut prüfen.", true);
+    }
     return;
   } finally {
-    if (state.personnelLifecycleEditorRequestToken === requestToken) {
+    if (state.personnelLifecycleEditorRequestToken === requestToken && gpEditorCurrent(requestContext)) {
       state.personnelLifecycleEditorRequestToken = null;
       state.personnelLifecycleEditorValidating = false;
       renderPersonnelLifecycleEditor();
@@ -18408,12 +18815,151 @@ async function validatePersonnelLifecycleEditorDraft() {
   }
 }
 
+function personnelTaskWorkspaceRecords() {
+  const preview = canReadLifecycleAutomationPreview()
+    && state.personnelLifecycleAutomationPreviewLoaded
+    && !state.personnelLifecycleAutomationLoading && !state.personnelLifecycleAutomationError
+    ? state.personnelLifecycleAutomationPreview?.items || [] : [];
+  const records = [];
+  const add = (task, kind, index) => {
+    const personal = kind !== "workflow";
+    const projected = personal ? preview.find(item => item.source === kind
+      && item.runId === task.runId && item.stepId === task.stepId) : null;
+    const pending = task.status === "pending";
+    const actionable = personal && !pending && (kind === "onboarding"
+      ? state.personnelLifecycleOnboardingTaskCapabilities.canComplete === true
+      : task.status === "active" && state.personnelLifecycleOffboardingTaskCapabilities.canComplete === true);
+    records.push({ task, kind, index, personal, actionable, pending,
+      key: JSON.stringify(personal ? [kind, task.runId, task.stepId] : [kind, index, task.workflowTitle, task.title]),
+      kindLabel: kind === "onboarding" ? "Onboarding" : kind === "offboarding" ? "Offboarding" : "Personalprozess",
+      context: kind === "onboarding" ? task.subject.displayName : kind === "offboarding"
+        ? task.displayName || task.assetIdentifier || task.targetSystem || "Persönlich zugewiesener Auftrag"
+        : task.workflowTitle,
+      statusLabel: pending ? "Vorgemerkt" : actionable ? "Bearbeitbar" : "Nur Lesen",
+      dueState: projected?.dueState || "not_configured",
+      dueAt: projected?.dueAt || (kind === "offboarding" ? task.dueAt : null) || null,
+      dueLabel: projected && projected.dueState !== "not_configured"
+        ? PERSONNEL_LIFECYCLE_AUTOMATION_DUE_STATE_LABELS[projected.dueState] : "Ohne Fristbewertung",
+    });
+  };
+  if (canReadPersonnelWorkflowInstances()) state.personnelWorkflowTasks.forEach((task, index) => add(task, "workflow", index));
+  if (canReadLifecycleOnboardingTasks()) state.personnelLifecycleOnboardingTasks.forEach((task, index) => add(task, "onboarding", index));
+  if (canReadLifecycleOffboardingTasks()) state.personnelLifecycleOffboardingTasks.forEach((task, index) => add(task, "offboarding", index));
+  const rank = { overdue: 0, due_today: 1, due_soon: 2, not_due: 3, not_configured: 4 };
+  return records.sort((a, b) => (rank[a.dueState] ?? 4) - (rank[b.dueState] ?? 4)
+    || Number(b.actionable) - Number(a.actionable) || a.task.title.localeCompare(b.task.title, "de"));
+}
+
+function filterPersonnelTaskWorkspaceRecords(records, filters) {
+  const search = String(filters.search || "").trim().toLocaleLowerCase("de");
+  return records.filter(record => (!search || [record.task.title, record.task.workflowTitle, record.context]
+    .filter(Boolean).join(" ").toLocaleLowerCase("de").includes(search))
+    && (filters.kind === "all" || record.kind === filters.kind)
+    && (filters.status === "all" || (filters.status === "actionable" && record.actionable)
+      || (filters.status === "pending" && record.pending) || (filters.status === "readonly" && !record.actionable && !record.pending))
+    && (filters.due === "all" || (filters.due === "attention" && ["overdue", "due_today", "due_soon"].includes(record.dueState))
+      || (filters.due === "unknown" && record.dueState === "not_configured")));
+}
+
+function personnelTaskDueDateLabel(value) {
+  if (!value) return "Keine Frist angegeben";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value.split("-").reverse().join(".");
+  return personnelWorkflowTimestamp(value);
+}
+
+function closePersonnelTaskWorkspaceDetail() {
+  const dialog = document.getElementById("personnelTaskDetailDialog");
+  if (!dialog) return;
+  if (dialog.open) dialog.close();
+  delete dialog.dataset.taskKey;
+  dialog.personnelTaskContext = null;
+  const content = document.getElementById("personnelTaskDetailContent");
+  content.replaceChildren(); content.personnelTaskRevision = null;
+}
+
+function renderPersonnelTaskWorkspaceDetail(record) {
+  const content = document.getElementById("personnelTaskDetailContent");
+  if (!content) return;
+  const revision = JSON.stringify(record);
+  const confirmed = content.personnelTaskRevision === revision
+    && content.querySelector('input[type="checkbox"]')?.checked === true;
+  const metadata = `<div class="personnel-task-detail-meta"><span>${escapeHtml(record.kindLabel)} · ${escapeHtml(record.statusLabel)}</span>
+    <p><strong>Zuständigkeit:</strong> ${record.personal ? "Dir persönlich zugewiesen" : "Nicht in dieser Ansicht angegeben"}</p>
+    <p><strong>Fälligkeit:</strong> ${escapeHtml(personnelTaskDueDateLabel(record.dueAt))}${record.dueState !== "not_configured" ? ` · ${escapeHtml(record.dueLabel)} (Vorschau)` : ""}</p></div>`;
+  const template = document.createElement("template");
+  template.innerHTML = record.kind === "onboarding" ? renderPersonnelLifecycleOnboardingTasksMarkup()
+    : record.kind === "offboarding" ? renderPersonnelLifecycleOffboardingTasksMarkup()
+      : `<article class="personnel-workflow-task-card"><div><h3>${escapeHtml(record.task.title)}</h3><p>${escapeHtml(record.task.workflowTitle)}</p><p>Dieser Schritt dient der Übersicht. Eine Erledigungsaktion ist hier nicht freigegeben.</p></div></article>`;
+  const detail = template.content.querySelectorAll("article.personnel-workflow-task-card")[record.personal ? record.index : 0];
+  content.innerHTML = metadata;
+  content.personnelTaskRevision = revision;
+  if (detail) content.append(detail);
+  const checkbox = content.querySelector('input[type="checkbox"]');
+  if (checkbox) checkbox.checked = confirmed;
+}
+
+function bindPersonnelTaskWorkspace() {
+  const section = elements.personnelTasksSection, dialog = document.getElementById("personnelTaskDetailDialog");
+  if (!section || !dialog || section.dataset.taskWorkspaceBound === "true") return;
+  section.dataset.taskWorkspaceBound = "true";
+  const filter = event => { if (event.target.matches("[data-personnel-task-filter]")) renderPersonnelWorkflowTasksImpl(); };
+  section.addEventListener("input", filter);
+  section.addEventListener("change", filter);
+  section.addEventListener("click", event => {
+    if (event.target.closest("[data-personnel-task-reset]")) {
+      for (const input of section.querySelectorAll("[data-personnel-task-filter]")) input.value = input.type === "search" ? "" : "all";
+      renderPersonnelWorkflowTasksImpl();
+      return;
+    }
+    const button = event.target.closest("[data-personnel-task-open]");
+    if (!button || !canReadPersonnelTasks()) return;
+    const record = personnelTaskWorkspaceRecords().find(item => item.key === button.dataset.personnelTaskOpen);
+    if (!record) return;
+    closePersonnelTaskWorkspaceDetail();
+    dialog.dataset.taskKey = record.key;
+    dialog.personnelTaskContext = captureGpContext(canReadPersonnelTasks);
+    renderPersonnelTaskWorkspaceDetail(record);
+    window.GpWindow?.prepare(dialog);
+    window.GpWindow?.begin(dialog);
+    const scroll = { left: window.scrollX, top: window.scrollY, behavior: "instant" };
+    dialog.showModal();
+    window.scrollTo(scroll);
+  });
+  dialog.querySelector("[data-personnel-task-close]")?.addEventListener("click", closePersonnelTaskWorkspaceDetail);
+  dialog.addEventListener("close", () => {
+    if (dialog.open) return;
+    delete dialog.dataset.taskKey; dialog.personnelTaskContext = null;
+    document.getElementById("personnelTaskDetailContent").replaceChildren();
+  });
+  dialog.addEventListener("submit", event => {
+    event.preventDefault();
+    if (!dialog.open || !gpContextCurrent(dialog.personnelTaskContext) || !canReadPersonnelTasks()) {
+      closePersonnelTaskWorkspaceDetail(); return;
+    }
+    if (dialog.classList.contains("is-minimized") || !event.target.getClientRects().length) return;
+    if (event.target.closest("[data-personnel-lifecycle-offboarding-task-complete]")) {
+      void submitPersonnelLifecycleOffboardingTaskCompletion(event);
+    } else if (event.target.closest("[data-personnel-lifecycle-onboarding-task-complete]")) {
+      void submitPersonnelLifecycleOnboardingTaskCompletion(event);
+    }
+  });
+}
+
 function renderPersonnelWorkflowTasksImpl() {
   if (!elements.personnelWorkflowTaskList) return;
+  bindPersonnelTaskWorkspace();
+  const summary = document.getElementById("personnelTasksSummary");
+  if (summary) summary.replaceChildren();
+  if (!canReadPersonnelTasks()) {
+    elements.personnelWorkflowTaskList.replaceChildren();
+    closePersonnelTaskWorkspaceDetail();
+    return;
+  }
   if (state.personnelWorkflowInstancesLoading
     || state.personnelLifecycleOnboardingTasksLoading
     || state.personnelLifecycleOffboardingTasksLoading) {
-    elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Die freigegebenen Aufgaben werden geladen …</p>';
+    closePersonnelTaskWorkspaceDetail();
+    elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Deine Aufgaben werden geladen …</p>';
     return;
   }
   const loadErrors = [
@@ -18422,27 +18968,44 @@ function renderPersonnelWorkflowTasksImpl() {
     state.personnelLifecycleOffboardingTasksError,
   ].filter(Boolean);
   if (loadErrors.length) {
+    closePersonnelTaskWorkspaceDetail();
     elements.personnelWorkflowTaskList.innerHTML = `<div class="personnel-workflow-empty error"><strong>Aufgaben konnten nicht vollständig geladen werden</strong><p>${escapeHtml(loadErrors.join(" "))}</p></div>`;
     return;
   }
   if (!state.personnelWorkflowInstancesLoaded
     && !state.personnelLifecycleOnboardingTasksLoaded
     && !state.personnelLifecycleOffboardingTasksLoaded) {
-    elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Noch keine Aufgaben geladen.</p>';
+    closePersonnelTaskWorkspaceDetail();
+    elements.personnelWorkflowTaskList.innerHTML = '<p class="personnel-workflow-empty">Noch keine Aufgaben geladen. Öffne die Seite erneut oder wähle „Aktualisieren“.</p>';
     return;
   }
-  if (!state.personnelWorkflowTasks.length
-    && !state.personnelLifecycleOnboardingTasks.length
-    && !state.personnelLifecycleOffboardingTasks.length) {
-    elements.personnelWorkflowTaskList.innerHTML = '<div class="personnel-workflow-empty"><strong>Keine sichtbaren Aufgaben</strong><p>Der Server hat derzeit keine Aufgabenschritte für diese geschützte Projektion freigegeben.</p></div>';
-    return;
+  const records = personnelTaskWorkspaceRecords();
+  const filters = { search: "", kind: "all", status: "all", due: "all" };
+  for (const input of elements.personnelTasksSection?.querySelectorAll("[data-personnel-task-filter]") || []) filters[input.dataset.personnelTaskFilter] = input.value;
+  const visible = filterPersonnelTaskWorkspaceRecords(records, filters);
+  const deadlinesReady = canReadLifecycleAutomationPreview() && state.personnelLifecycleAutomationPreviewLoaded
+    && !state.personnelLifecycleAutomationLoading && !state.personnelLifecycleAutomationError;
+  if (summary) summary.innerHTML = [
+    [records.length, "Sichtbare Aufgaben", "Im freigegebenen Bereich"],
+    [records.filter(record => record.actionable).length, "Bearbeitbar", "Dir persönlich zugewiesen"],
+    [deadlinesReady ? records.filter(record => ["overdue", "due_today", "due_soon"].includes(record.dueState)).length : "–", "Frist beachten", deadlinesReady ? "Laut freigegebener Vorschau" : "Fristvorschau nicht verfügbar"],
+    [records.filter(record => record.pending).length, "Vorgemerkt", "Noch nicht zur Erledigung aktiv"],
+  ].map(([count, title, hint]) => `<article><strong>${count}</strong><span>${title}</span><small>${hint}</small></article>`).join("");
+  if (elements.personnelWorkflowTaskStatus) elements.personnelWorkflowTaskStatus.textContent = `${visible.length} von ${records.length} Aufgaben · Fristen zuerst, danach bearbeitbare Aufgaben`;
+  elements.personnelWorkflowTaskList.innerHTML = visible.length ? visible.map(record => `
+    <article class="personnel-task-workspace-card" data-task-kind="${record.kind}">
+      <div class="personnel-task-workspace-main"><span class="eyebrow">${escapeHtml(record.kindLabel)}</span><h3>${escapeHtml(record.task.title)}</h3><p>${escapeHtml(record.context)}</p></div>
+      <dl><div><dt>Zuständigkeit</dt><dd>${record.personal ? "Dir zugewiesen" : "Nicht angegeben"}</dd></div><div><dt>Fälligkeit</dt><dd>${escapeHtml(personnelTaskDueDateLabel(record.dueAt))}</dd>${record.dueState !== "not_configured" ? `<dd class="personnel-task-due due-${escapeHtmlAttribute(record.dueState)}">${escapeHtml(record.dueLabel)} · Vorschau</dd>` : ""}</div></dl>
+      <div class="personnel-task-workspace-action"><span class="status-badge ${record.pending ? "inactive" : record.actionable ? "active" : ""}">${escapeHtml(record.statusLabel)}</span><button type="button" class="secondary-button" data-personnel-task-open="${escapeHtmlAttribute(record.key)}" aria-label="Details: ${escapeHtmlAttribute(record.task.title)}">Details öffnen <span aria-hidden="true">↗</span></button></div>
+    </article>`).join("") : records.length
+    ? '<div class="personnel-workflow-empty"><strong>Keine passenden Aufgaben</strong><p>Ändere die Suche oder setze die Filter zurück.</p></div>'
+    : '<div class="personnel-workflow-empty"><strong>Aktuell keine Aufgaben</strong><p>Für dich sind derzeit keine Aufgaben freigegeben. Neue Zuweisungen erscheinen nach dem Aktualisieren.</p></div>';
+  const dialog = document.getElementById("personnelTaskDetailDialog");
+  if (dialog?.open) {
+    const record = records.find(item => item.key === dialog.dataset.taskKey);
+    if (!record || !gpContextCurrent(dialog.personnelTaskContext)) closePersonnelTaskWorkspaceDetail();
+    else renderPersonnelTaskWorkspaceDetail(record);
   }
-  const genericTasks = state.personnelWorkflowTasks.map((task) => `
-      <article class="personnel-workflow-task-card">
-        <div><span class="eyebrow">Freigegebener Aktivschritt</span><h3>${escapeHtml(task.title)}</h3><p>${escapeHtml(task.workflowTitle)}</p></div>
-        ${personnelWorkflowStatusBadge(task.status, true)}
-      </article>`).join("");
-  elements.personnelWorkflowTaskList.innerHTML = `${genericTasks}${renderPersonnelLifecycleOnboardingTasksMarkup()}${renderPersonnelLifecycleOffboardingTasksMarkup()}`;
 }
 
 function renderPersonnelWorkflowInstanceOverview() {
@@ -18511,6 +19074,10 @@ function clearPersonnelWorkflowInstanceState(message = "") {
 }
 
 async function loadPersonnelWorkflowInstances({ force = false } = {}) {
+  if (state.personnelWorkflowInstancesContext && !gpContextCurrent(state.personnelWorkflowInstancesContext)) {
+    clearPersonnelWorkflowInstanceState();
+    state.personnelWorkflowInstanceCapabilities = defaultPersonnelWorkflowInstanceCapabilities();
+  }
   if (!canReadPersonnelWorkflowInstances()
     || state.personnelWorkflowInstancesLoading) return;
   if (state.personnelWorkflowInstancesLoaded && !force) {
@@ -18518,10 +19085,15 @@ async function loadPersonnelWorkflowInstances({ force = false } = {}) {
     return;
   }
   state.personnelWorkflowInstancesLoading = true;
+  const requestToken = Symbol("workflow-instance-list");
+  state.personnelWorkflowInstancesRequest = requestToken;
+  const context = captureGpContext(() => personnelLifecycleFoundationEnabled() && hasGovernancePermission("personnel:workflows:read"), () => state.personnelWorkflowInstancesRequest);
+  state.personnelWorkflowInstancesContext = context;
   state.personnelWorkflowInstanceLoadError = "";
   renderPersonnelWorkflowInstanceOverview();
   try {
     const result = await api("/api/portal/v1/personnel-lifecycle/workflow-instances");
+    if (!gpContextCurrent(context)) return;
     if (!personnelLifecycleFoundationEnabled()
       || !hasGovernancePermission("personnel:workflows:read")) {
       clearPersonnelWorkflowInstanceState("Der Workflow-Zugriff wurde während des Ladens entzogen.");
@@ -18543,6 +19115,7 @@ async function loadPersonnelWorkflowInstances({ force = false } = {}) {
       .flatMap((instance) => instance.tasks);
     state.personnelWorkflowInstancesLoaded = true;
   } catch (error) {
+    if (!gpContextCurrent(context)) return;
     if ([401, 403].includes(error.status)) {
       clearPersonnelWorkflowInstanceState("Der Workflow-Zugriff ist nicht mehr verfügbar.");
       applyRoleVisibility();
@@ -18553,8 +19126,10 @@ async function loadPersonnelWorkflowInstances({ force = false } = {}) {
     state.personnelWorkflowInstancesLoaded = false;
     state.personnelWorkflowInstanceLoadError = error.message || "Die Workflow-Instanzen konnten nicht geladen werden.";
   } finally {
-    state.personnelWorkflowInstancesLoading = false;
-    renderPersonnelWorkflowInstanceOverview();
+    if (gpContextCurrent(context)) {
+      state.personnelWorkflowInstancesLoading = false;
+      renderPersonnelWorkflowInstanceOverview();
+    }
   }
 }
 
@@ -18712,11 +19287,15 @@ async function loadPersonnelLearningCatalog({ force = false } = {}) {
     renderPersonnelLearningCatalog();
     return;
   }
+  const requestToken = Symbol("loadPersonnelLearningCatalog");
+  state.loadPersonnelLearningCatalogRequest = requestToken;
+  const contextTicket = captureGpContext(canReadPersonnelLearningCatalog, () => state.loadPersonnelLearningCatalogRequest);
   state.personnelLearningLoading = true;
   state.personnelLearningLoadError = "";
   renderPersonnelLearningCatalog();
   try {
     const result = await api("/api/portal/v1/personnel-learning/modules");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!canReadPersonnelLearningCatalog()) {
       state.personnelLearningCatalog = null;
       state.personnelLearningLoadError = "Der Katalogzugriff wurde während des Ladens entzogen.";
@@ -18728,13 +19307,14 @@ async function loadPersonnelLearningCatalog({ force = false } = {}) {
     }
     state.personnelLearningCatalog = result;
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningCatalog = null;
     state.personnelLearningLoadError = error.message
       || "Der Schulungs- und Wissenskatalog konnte nicht geladen werden.";
     if ([401, 403].includes(error.status)) applyRoleVisibility();
   } finally {
-    state.personnelLearningLoading = false;
-    renderPersonnelLearningCatalog();
+    if (state.loadPersonnelLearningCatalogRequest === requestToken) state.personnelLearningLoading = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningCatalog();
   }
 }
 
@@ -18747,6 +19327,7 @@ function populatePersonnelLearningScopes(selectedScope = null) {
   const scopes = Array.isArray(state.personnelLearningCatalog?.scopes)
     ? state.personnelLearningCatalog.scopes
     : [];
+  state.personnelLearningEditorScopes = scopes.map(scope => ({ ...scope }));
   elements.personnelLearningScope.innerHTML = scopes.length
     ? scopes.map((scope, index) => `<option value="${index}">${escapeHtml(scope.label || "Freigegebener Bereich")}</option>`).join("")
     : '<option value="">Kein bearbeitbarer Bereich verfügbar</option>';
@@ -18764,6 +19345,19 @@ function newPersonnelLearningStep(index = 0) {
     completionCriteria: "",
     required: true,
   };
+}
+
+function restorePersonnelLearningEditorFields(dialog) {
+  for (const entry of dialog?.gpLearningSavingFields || []) entry.field.disabled = entry.disabled;
+  if (dialog) dialog.gpLearningSavingFields = null;
+}
+
+function lockPersonnelLearningEditorFields(dialog) {
+  restorePersonnelLearningEditorFields(dialog);
+  dialog.gpLearningSavingFields = [...dialog.querySelectorAll("input,select,textarea,button")]
+    .filter(field => !field.matches("[data-close],[data-gp-window-close],[data-gp-window-toggle]"))
+    .map(field => ({ field, disabled: field.disabled }));
+  for (const { field } of dialog.gpLearningSavingFields) field.disabled = true;
 }
 
 function syncPersonnelLearningStepsFromEditor() {
@@ -18821,8 +19415,13 @@ function personnelLearningTargetInput() {
 }
 
 async function openPersonnelLearningEditor(module = null) {
+  window.GpWindow?.begin?.(elements.personnelLearningModal);
+  state.openPersonnelLearningEditorIntent = Symbol("openPersonnelLearningEditor");
+  const contextTicket = captureGpContext(canManagePersonnelLearningCatalog, () => state.openPersonnelLearningEditorIntent);
   await loadPersonnelLearningSkillCatalog();
+  if (!gpContextCurrent(contextTicket)) return;
   if (!elements.personnelLearningModal || !state.personnelLearningCatalog) return;
+  restorePersonnelLearningEditorFields(elements.personnelLearningModal);
   const version = module?.latestVersion || null;
   const content = version?.content || {};
   elements.personnelLearningModuleId.value = module?.id || "";
@@ -18852,13 +19451,16 @@ async function openPersonnelLearningEditor(module = null) {
     ? "Neue Version speichern"
     : "Prozess anlegen";
   setPersonnelLearningMessage();
+  state.personnelLearningMutationPendingOwner = null;
+  state.personnelLearningMutationPending = false;
+  elements.savePersonnelLearningButton.disabled = false;
   elements.personnelLearningModal.showModal();
   elements.personnelLearningTitle.focus();
 }
 
 function personnelLearningEditorPayload() {
   syncPersonnelLearningStepsFromEditor();
-  const scopes = state.personnelLearningCatalog?.scopes || [];
+  const scopes = state.personnelLearningEditorScopes || [];
   const scope = scopes[Number(elements.personnelLearningScope.value)];
   if (!scope) throw new Error("Bitte einen gültigen Geltungsbereich auswählen.");
   return {
@@ -18883,6 +19485,8 @@ function personnelLearningEditorPayload() {
 }
 
 async function savePersonnelLearningModule(event) {
+  const ticket = captureGpEditor(elements.personnelLearningModal, canManagePersonnelLearningCatalog);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (state.personnelLearningMutationPending) return;
   const moduleId = elements.personnelLearningModuleId.value;
@@ -18894,8 +19498,11 @@ async function savePersonnelLearningModule(event) {
     return;
   }
   if (moduleId) body.expectedEventReceipt = elements.personnelLearningExpectedReceipt.value;
+  const mutationOwner = Symbol("personnelLearningMutationPending");
+  state.personnelLearningMutationPendingOwner = mutationOwner;
   state.personnelLearningMutationPending = true;
   elements.savePersonnelLearningButton.disabled = true;
+  lockPersonnelLearningEditorFields(elements.personnelLearningModal);
   setPersonnelLearningMessage(moduleId
     ? "Die neue Version wird revisionssicher angelegt …"
     : "Der Prozess wird revisionssicher angelegt …");
@@ -18906,32 +19513,39 @@ async function savePersonnelLearningModule(event) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelLearningModal.close();
     state.personnelLearningCatalog = null;
     await loadPersonnelLearningCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(moduleId
       ? "Die neue Prozessversion wurde angelegt. Eine bestehende Veröffentlichung blieb unverändert."
       : "Der Prozess wurde als Entwurf angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setPersonnelLearningMessage(error.message, true);
     if (error.status === 409) {
       state.personnelLearningCatalog = null;
       await loadPersonnelLearningCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     }
   } finally {
-    state.personnelLearningMutationPending = false;
-    elements.savePersonnelLearningButton.disabled = false;
+    if (state.personnelLearningMutationPendingOwner === mutationOwner) state.personnelLearningMutationPending = false;
+    if (gpEditorCurrent(ticket, true)) { restorePersonnelLearningEditorFields(elements.personnelLearningModal); elements.savePersonnelLearningButton.disabled = false; }
   }
 }
 
 async function mutatePersonnelLearningModule(module, action) {
-  if (!module || state.personnelLearningMutationPending) return;
+  if (!module || state.personnelLearningMutationPending || !canManagePersonnelLearningCatalog()) return;
   const confirmations = {
     publish: `Version ${module.latestVersionNumber} jetzt veröffentlichen?`,
     archive: "Diesen Prozess archivieren? Alle Versionen und Prüfbelege bleiben erhalten.",
   };
   if (confirmations[action] && !window.confirm(confirmations[action])) return;
+  const mutationOwner = Symbol("personnelLearningMutationPending");
+  state.personnelLearningMutationPendingOwner = mutationOwner;
   state.personnelLearningMutationPending = true;
+  const contextTicket = captureGpContext(canManagePersonnelLearningCatalog, () => state.personnelLearningMutationPendingOwner);
   renderPersonnelLearningCatalog();
   try {
     const body = { expectedEventReceipt: module.currentEventReceipt };
@@ -18940,22 +19554,25 @@ async function mutatePersonnelLearningModule(module, action) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningCatalog = null;
     await loadPersonnelLearningCatalog({ force: true });
+    if (!gpContextCurrent(contextTicket)) return;
     showToast({
       publish: "Die aktuelle Prozessversion wurde veröffentlicht.",
       archive: "Der Prozess wurde archiviert; die vollständige Historie bleibt erhalten.",
       restore: "Der Prozess wurde wiederhergestellt.",
     }[action]);
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     showToast(error.message, true);
     if (error.status === 409) {
       state.personnelLearningCatalog = null;
       await loadPersonnelLearningCatalog({ force: true });
     }
   } finally {
-    state.personnelLearningMutationPending = false;
-    renderPersonnelLearningCatalog();
+    if (state.personnelLearningMutationPendingOwner === mutationOwner) state.personnelLearningMutationPending = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningCatalog();
   }
 }
 
@@ -19101,11 +19718,15 @@ async function loadPersonnelLearningSkillCatalog({ force = false } = {}) {
     renderPersonnelLearningSkillCatalog();
     return;
   }
+  const requestToken = Symbol("loadPersonnelLearningSkillCatalog");
+  state.loadPersonnelLearningSkillCatalogRequest = requestToken;
+  const contextTicket = captureGpContext(canReadPersonnelLearningCatalog, () => state.loadPersonnelLearningSkillCatalogRequest);
   state.personnelLearningSkillsLoading = true;
   state.personnelLearningSkillLoadError = "";
   renderPersonnelLearningSkillCatalog();
   try {
     const result = await api("/api/portal/v1/personnel-learning/skills");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!canReadPersonnelLearningCatalog()) {
       state.personnelLearningSkillCatalog = null;
       state.personnelLearningSkillLoadError = "Der Katalogzugriff wurde während des Ladens entzogen.";
@@ -19117,13 +19738,14 @@ async function loadPersonnelLearningSkillCatalog({ force = false } = {}) {
     }
     state.personnelLearningSkillCatalog = result;
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningSkillCatalog = null;
     state.personnelLearningSkillLoadError = error.message
       || "Der Fähigkeitskatalog konnte nicht geladen werden.";
     if ([401, 403].includes(error.status)) applyRoleVisibility();
   } finally {
-    state.personnelLearningSkillsLoading = false;
-    renderPersonnelLearningSkillCatalog();
+    if (state.loadPersonnelLearningSkillCatalogRequest === requestToken) state.personnelLearningSkillsLoading = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningSkillCatalog();
   }
 }
 
@@ -19132,6 +19754,7 @@ function populatePersonnelLearningSkillScopes(selectedScope = null) {
   const scopes = Array.isArray(state.personnelLearningSkillCatalog?.scopes)
     ? state.personnelLearningSkillCatalog.scopes
     : [];
+  state.personnelLearningSkillEditorScopes = scopes.map(scope => ({ ...scope }));
   elements.personnelLearningSkillScope.innerHTML = scopes.length
     ? scopes.map((scope, index) => `<option value="${index}">${escapeHtml(scope.label || "Freigegebener Bereich")}</option>`).join("")
     : '<option value="">Kein bearbeitbarer Bereich verfügbar</option>';
@@ -19184,6 +19807,7 @@ function setPersonnelLearningSkillMessage(message = "", error = false) {
 
 function openPersonnelLearningSkillEditor(skill = null) {
   if (!elements.personnelLearningSkillModal || !state.personnelLearningSkillCatalog) return;
+  restorePersonnelLearningEditorFields(elements.personnelLearningSkillModal);
   const version = skill?.latestVersion || null;
   const content = version?.content || {};
   elements.personnelLearningSkillId.value = skill?.id || "";
@@ -19209,13 +19833,16 @@ function openPersonnelLearningSkillEditor(skill = null) {
     ? "Neue Version speichern"
     : "Fähigkeit anlegen";
   setPersonnelLearningSkillMessage();
+  state.personnelLearningSkillMutationPendingOwner = null;
+  state.personnelLearningSkillMutationPending = false;
+  elements.savePersonnelLearningSkillButton.disabled = false;
   elements.personnelLearningSkillModal.showModal();
   elements.personnelLearningSkillTitle.focus();
 }
 
 function personnelLearningSkillEditorPayload() {
   syncPersonnelLearningSkillLevelsFromEditor();
-  const scopes = state.personnelLearningSkillCatalog?.scopes || [];
+  const scopes = state.personnelLearningSkillEditorScopes || [];
   const scope = scopes[Number(elements.personnelLearningSkillScope.value)];
   if (!scope) throw new Error("Bitte einen gültigen Geltungsbereich auswählen.");
   return {
@@ -19236,6 +19863,8 @@ function personnelLearningSkillEditorPayload() {
 }
 
 async function savePersonnelLearningSkill(event) {
+  const ticket = captureGpEditor(elements.personnelLearningSkillModal, canManagePersonnelLearningCatalog);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (state.personnelLearningSkillMutationPending) return;
   const skillId = elements.personnelLearningSkillId.value;
@@ -19247,8 +19876,11 @@ async function savePersonnelLearningSkill(event) {
     return;
   }
   if (skillId) body.expectedEventReceipt = elements.personnelLearningSkillExpectedReceipt.value;
+  const mutationOwner = Symbol("personnelLearningSkillMutationPending");
+  state.personnelLearningSkillMutationPendingOwner = mutationOwner;
   state.personnelLearningSkillMutationPending = true;
   elements.savePersonnelLearningSkillButton.disabled = true;
+  lockPersonnelLearningEditorFields(elements.personnelLearningSkillModal);
   setPersonnelLearningSkillMessage(skillId
     ? "Die neue Fähigkeitsversion wird revisionssicher angelegt …"
     : "Die Fähigkeit wird mit allen zehn Stufen revisionssicher angelegt …");
@@ -19259,32 +19891,39 @@ async function savePersonnelLearningSkill(event) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelLearningSkillModal.close();
     state.personnelLearningSkillCatalog = null;
     await loadPersonnelLearningSkillCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(skillId
       ? "Die neue Fähigkeitsversion wurde angelegt. Die veröffentlichte Fassung blieb unverändert."
       : "Die Fähigkeit wurde mit zehn definierten Stufen als Entwurf angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setPersonnelLearningSkillMessage(error.message, true);
     if (error.status === 409) {
       state.personnelLearningSkillCatalog = null;
       await loadPersonnelLearningSkillCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     }
   } finally {
-    state.personnelLearningSkillMutationPending = false;
-    elements.savePersonnelLearningSkillButton.disabled = false;
+    if (state.personnelLearningSkillMutationPendingOwner === mutationOwner) state.personnelLearningSkillMutationPending = false;
+    if (gpEditorCurrent(ticket, true)) { restorePersonnelLearningEditorFields(elements.personnelLearningSkillModal); elements.savePersonnelLearningSkillButton.disabled = false; }
   }
 }
 
 async function mutatePersonnelLearningSkill(skill, action) {
-  if (!skill || state.personnelLearningSkillMutationPending) return;
+  if (!skill || state.personnelLearningSkillMutationPending || !canManagePersonnelLearningCatalog()) return;
   const confirmations = {
     publish: `Fähigkeitsversion ${skill.latestVersionNumber} jetzt veröffentlichen?`,
     archive: "Diese Fähigkeit archivieren? Alle Versionen und Prüfbelege bleiben erhalten.",
   };
   if (confirmations[action] && !window.confirm(confirmations[action])) return;
+  const mutationOwner = Symbol("personnelLearningSkillMutationPending");
+  state.personnelLearningSkillMutationPendingOwner = mutationOwner;
   state.personnelLearningSkillMutationPending = true;
+  const contextTicket = captureGpContext(canManagePersonnelLearningCatalog, () => state.personnelLearningSkillMutationPendingOwner);
   renderPersonnelLearningSkillCatalog();
   try {
     const body = { expectedEventReceipt: skill.currentEventReceipt };
@@ -19293,22 +19932,25 @@ async function mutatePersonnelLearningSkill(skill, action) {
       method: "POST",
       body: JSON.stringify(body),
     });
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningSkillCatalog = null;
     await loadPersonnelLearningSkillCatalog({ force: true });
+    if (!gpContextCurrent(contextTicket)) return;
     showToast({
       publish: "Die aktuelle Fähigkeitsversion wurde veröffentlicht.",
       archive: "Die Fähigkeit wurde archiviert; ihre Historie bleibt erhalten.",
       restore: "Die Fähigkeit wurde wiederhergestellt.",
     }[action]);
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     showToast(error.message, true);
     if (error.status === 409) {
       state.personnelLearningSkillCatalog = null;
       await loadPersonnelLearningSkillCatalog({ force: true });
     }
   } finally {
-    state.personnelLearningSkillMutationPending = false;
-    renderPersonnelLearningSkillCatalog();
+    if (state.personnelLearningSkillMutationPendingOwner === mutationOwner) state.personnelLearningSkillMutationPending = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningSkillCatalog();
   }
 }
 
@@ -19519,11 +20161,15 @@ async function loadPersonnelLearningCompetencyCatalog({ force = false } = {}) {
     renderPersonnelLearningCompetencyCatalog();
     return;
   }
+  const requestToken = Symbol("loadPersonnelLearningCompetencyCatalog");
+  state.loadPersonnelLearningCompetencyCatalogRequest = requestToken;
+  const contextTicket = captureGpContext(canWritePersonnelLearningCompetencies, () => state.loadPersonnelLearningCompetencyCatalogRequest);
   state.personnelLearningCompetenciesLoading = true;
   state.personnelLearningCompetencyLoadError = "";
   renderPersonnelLearningCompetencyCatalog();
   try {
     const result = await api("/api/portal/v1/personnel-learning/competencies");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!canWritePersonnelLearningCompetencies()) {
       state.personnelLearningCompetencyCatalog = null;
       state.personnelLearningCompetencyLoadError = "Der Zugriff wurde während des Ladens entzogen.";
@@ -19536,13 +20182,14 @@ async function loadPersonnelLearningCompetencyCatalog({ force = false } = {}) {
     }
     state.personnelLearningCompetencyCatalog = result;
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningCompetencyCatalog = null;
     state.personnelLearningCompetencyLoadError = error.message
       || "Die Kompetenzprofile konnten nicht geladen werden.";
     if ([401, 403].includes(error.status)) applyRoleVisibility();
   } finally {
-    state.personnelLearningCompetenciesLoading = false;
-    renderPersonnelLearningCompetencyCatalog();
+    if (state.loadPersonnelLearningCompetencyCatalogRequest === requestToken) state.personnelLearningCompetenciesLoading = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningCompetencyCatalog();
   }
 }
 
@@ -19596,6 +20243,7 @@ function openPersonnelLearningCompetencyEditor(competency = null) {
     showToast("Für diesen Mitarbeiter ist keine weitere veröffentlichte Fähigkeit verfügbar.", true);
     return;
   }
+  restorePersonnelLearningEditorFields(elements.personnelLearningCompetencyModal);
   elements.personnelLearningCompetencyId.value = competency?.id || "";
   elements.personnelLearningCompetencyExpectedReceipt.value = competency?.currentRevisionReceipt || "";
   elements.personnelLearningCompetencyEmployeeNumber.value = employee.employeeNumber;
@@ -19617,12 +20265,18 @@ function openPersonnelLearningCompetencyEditor(competency = null) {
     ? "Kompetenz speichern" : competency ? "Kompetenz wiederherstellen" : "Kompetenz zuordnen";
   setPersonnelLearningCompetencyMessage();
   renderPersonnelLearningCompetencyLevelPreview();
+  state.personnelLearningCompetencyMutationPendingOwner = null;
+  state.personnelLearningCompetencyMutationPending = false;
+  elements.savePersonnelLearningCompetencyButton.disabled = false;
   elements.personnelLearningCompetencyModal.showModal();
   (competency ? elements.personnelLearningCompetencyLevel
     : elements.personnelLearningCompetencySkill).focus();
+  return true;
 }
 
 async function savePersonnelLearningCompetency(event) {
+  const ticket = captureGpEditor(elements.personnelLearningCompetencyModal, canWritePersonnelLearningCompetencies);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (state.personnelLearningCompetencyMutationPending) return;
   const employeeNumber = elements.personnelLearningCompetencyEmployeeNumber.value;
@@ -19636,38 +20290,49 @@ async function savePersonnelLearningCompetency(event) {
   if (competencyId) {
     body.expectedRevisionReceipt = elements.personnelLearningCompetencyExpectedReceipt.value;
   }
+  const mutationOwner = Symbol("personnelLearningCompetencyMutationPending");
+  state.personnelLearningCompetencyMutationPendingOwner = mutationOwner;
   state.personnelLearningCompetencyMutationPending = true;
   elements.savePersonnelLearningCompetencyButton.disabled = true;
+  lockPersonnelLearningEditorFields(elements.personnelLearningCompetencyModal);
   setPersonnelLearningCompetencyMessage("Das Kompetenzprofil wird revisionssicher gespeichert …");
   try {
     await api(`/api/portal/v1/personnel-learning/competencies/${encodeURIComponent(employeeNumber)}/${encodeURIComponent(skillId)}`, {
       method: "PUT",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelLearningCompetencyModal.close();
     state.personnelLearningCompetencyCatalog = null;
     await loadPersonnelLearningCompetencyCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     state.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(competencyId
       ? "Kompetenzstufe und Trainerfreigabe wurden revisionssicher aktualisiert."
       : "Die Kompetenz wurde revisionssicher zugeordnet.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setPersonnelLearningCompetencyMessage(error.message, true);
     if (error.status === 409) {
       state.personnelLearningCompetencyCatalog = null;
       await loadPersonnelLearningCompetencyCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     }
   } finally {
-    state.personnelLearningCompetencyMutationPending = false;
-    elements.savePersonnelLearningCompetencyButton.disabled = false;
+    if (state.personnelLearningCompetencyMutationPendingOwner === mutationOwner) state.personnelLearningCompetencyMutationPending = false;
+    if (gpEditorCurrent(ticket, true)) { restorePersonnelLearningEditorFields(elements.personnelLearningCompetencyModal); elements.savePersonnelLearningCompetencyButton.disabled = false; }
   }
 }
 
 async function withdrawPersonnelLearningCompetency(competency) {
-  if (!competency || state.personnelLearningCompetencyMutationPending) return;
+  if (!competency || state.personnelLearningCompetencyMutationPending || !canWritePersonnelLearningCompetencies()) return;
   if (!window.confirm(`Kompetenz „${competency.skillTitle}“ entziehen? Die bisherige Historie bleibt erhalten.`)) return;
+  const mutationOwner = Symbol("personnelLearningCompetencyMutationPending");
+  state.personnelLearningCompetencyMutationPendingOwner = mutationOwner;
   state.personnelLearningCompetencyMutationPending = true;
+  const contextTicket = captureGpContext(canWritePersonnelLearningCompetencies, () => state.personnelLearningCompetencyMutationPendingOwner);
   renderPersonnelLearningCompetencyCatalog();
   try {
     await api(`/api/portal/v1/personnel-learning/competencies/${encodeURIComponent(competency.employeeNumber)}/${encodeURIComponent(competency.skillId)}`, {
@@ -19677,20 +20342,24 @@ async function withdrawPersonnelLearningCompetency(competency) {
         expectedRevisionReceipt: competency.currentRevisionReceipt,
       }),
     });
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningCompetencyCatalog = null;
     await loadPersonnelLearningCompetencyCatalog({ force: true });
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
+    if (!gpContextCurrent(contextTicket)) return;
     showToast("Die Kompetenz und ihre Trainerfreigabe wurden entzogen; die Historie bleibt erhalten.");
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     showToast(error.message, true);
     if (error.status === 409) {
       state.personnelLearningCompetencyCatalog = null;
       await loadPersonnelLearningCompetencyCatalog({ force: true });
     }
   } finally {
-    state.personnelLearningCompetencyMutationPending = false;
-    renderPersonnelLearningCompetencyCatalog();
+    if (state.personnelLearningCompetencyMutationPendingOwner === mutationOwner) state.personnelLearningCompetencyMutationPending = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningCompetencyCatalog();
   }
 }
 
@@ -19851,11 +20520,15 @@ async function loadPersonnelLearningDashboard({ force = false } = {}) {
     renderPersonnelLearningDashboard();
     return;
   }
+  const requestToken = Symbol("loadPersonnelLearningDashboard");
+  state.loadPersonnelLearningDashboardRequest = requestToken;
+  const contextTicket = captureGpContext(canReadPersonnelLearningCatalog, () => state.loadPersonnelLearningDashboardRequest);
   state.personnelLearningDashboardLoading = true;
   state.personnelLearningDashboardLoadError = "";
   renderPersonnelLearningDashboard();
   try {
     const result = await api("/api/portal/v1/personnel-learning/dashboard");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!result || !Array.isArray(result.assignments) || !Array.isArray(result.profiles)) {
       throw new Error("Der Server hat kein gültiges Schulungsdashboard geliefert.");
     }
@@ -19867,19 +20540,24 @@ async function loadPersonnelLearningDashboard({ force = false } = {}) {
       state.personnelLearningDashboardEmployeeNumber = profiles[0]?.employee?.employeeNumber || "";
     }
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningDashboard = null;
     state.personnelLearningDashboardLoadError = error.message
       || "Das Schulungsdashboard konnte nicht geladen werden.";
   } finally {
-    state.personnelLearningDashboardLoading = false;
-    renderPersonnelLearningDashboard();
+    if (state.loadPersonnelLearningDashboardRequest === requestToken) state.personnelLearningDashboardLoading = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningDashboard();
   }
 }
 
 async function openPersonnelLearningDashboardProgress(assignmentId) {
+  window.GpWindow?.begin?.(elements.personnelLearningProgressModal);
+  state.openPersonnelLearningDashboardProgressIntent = Symbol("openPersonnelLearningDashboardProgress");
+  const contextTicket = captureGpContext(canWritePersonnelLearningCompetencies, () => state.openPersonnelLearningDashboardProgressIntent);
   if (!state.personnelLearningAssignmentCatalog) {
     await loadPersonnelLearningAssignmentCatalog();
   }
+  if (!gpContextCurrent(contextTicket)) return;
   const assignment = personnelLearningAssignmentById(assignmentId);
   if (!assignment) {
     showToast("Die Schulungszuweisung ist im aktuellen Verantwortungsbereich nicht bearbeitbar.", true);
@@ -20066,11 +20744,15 @@ async function loadPersonnelLearningAssignmentCatalog({ force = false } = {}) {
     renderPersonnelLearningAssignmentCatalog();
     return;
   }
+  const requestToken = Symbol("loadPersonnelLearningAssignmentCatalog");
+  state.loadPersonnelLearningAssignmentCatalogRequest = requestToken;
+  const contextTicket = captureGpContext(canWritePersonnelLearningCompetencies, () => state.loadPersonnelLearningAssignmentCatalogRequest);
   state.personnelLearningAssignmentsLoading = true;
   state.personnelLearningAssignmentLoadError = "";
   renderPersonnelLearningAssignmentCatalog();
   try {
     const result = await api("/api/portal/v1/personnel-learning/assignments");
+    if (!gpContextCurrent(contextTicket)) return;
     if (!canWritePersonnelLearningCompetencies()) {
       state.personnelLearningAssignmentCatalog = null;
       state.personnelLearningAssignmentLoadError =
@@ -20084,13 +20766,14 @@ async function loadPersonnelLearningAssignmentCatalog({ force = false } = {}) {
     }
     state.personnelLearningAssignmentCatalog = result;
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     state.personnelLearningAssignmentCatalog = null;
     state.personnelLearningAssignmentLoadError = error.message
       || "Die Schulungszuweisungen konnten nicht geladen werden.";
     if ([401, 403].includes(error.status)) applyRoleVisibility();
   } finally {
-    state.personnelLearningAssignmentsLoading = false;
-    renderPersonnelLearningAssignmentCatalog();
+    if (state.loadPersonnelLearningAssignmentCatalogRequest === requestToken) state.personnelLearningAssignmentsLoading = false;
+    if (gpContextCurrent(contextTicket)) renderPersonnelLearningAssignmentCatalog();
   }
 }
 
@@ -20173,6 +20856,7 @@ function renderPersonnelLearningAssignmentTrainerOptions() {
 }
 
 function openPersonnelLearningAssignmentEditor(assignment = null) {
+  restorePersonnelLearningEditorFields(elements.personnelLearningAssignmentModal);
   document.getElementById("personnelLearningRepeatOf").value = "";
   document.getElementById("personnelLearningScheduleReceipt").value = assignment?.schedule?.receiptSha256 || "";
   document.getElementById("personnelLearningDueDate").value = assignment?.schedule?.dueDate || "";
@@ -20193,7 +20877,7 @@ function openPersonnelLearningAssignmentEditor(assignment = null) {
   elements.personnelLearningAssignmentExpectedReceipt.value =
     assignment?.currentRevisionReceipt || "";
   elements.personnelLearningAssignmentProcess.innerHTML = processes.map((process) => (
-    `<option value="${escapeHtmlAttribute(process.id)}">${escapeHtml(process.title)} · Version ${Number(process.publishedVersionNumber)}</option>`
+    `<option value="${escapeHtmlAttribute(process.id)}">${escapeHtml(process.title)} · Version ${Number(assignment?.processVersionNumber || process.publishedVersionNumber)}</option>`
   )).join("");
   elements.personnelLearningAssignmentProcess.value = assignment?.processId || processes[0].id;
   elements.personnelLearningAssignmentProcess.disabled = Boolean(assignment);
@@ -20215,11 +20899,16 @@ function openPersonnelLearningAssignmentEditor(assignment = null) {
     ? "Änderungen speichern" : assignment ? "Zuweisung wiederherstellen" : "Schulung zuweisen";
   setPersonnelLearningAssignmentMessage();
   renderPersonnelLearningAssignmentTrainerOptions();
+  state.personnelLearningAssignmentMutationPendingOwner = null;
+  state.personnelLearningAssignmentMutationPending = false;
+  elements.savePersonnelLearningAssignmentButton.disabled = false;
   elements.personnelLearningAssignmentModal.showModal();
   elements.personnelLearningAssignmentProcess.focus();
 }
 
 async function savePersonnelLearningAssignment(event) {
+  const ticket = captureGpEditor(elements.personnelLearningAssignmentModal, canWritePersonnelLearningCompetencies);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (state.personnelLearningAssignmentMutationPending) return;
   const assignmentId = elements.personnelLearningAssignmentId.value;
@@ -20241,8 +20930,11 @@ async function savePersonnelLearningAssignment(event) {
     body.learnerEmployeeNumbers = learners;
     body.repeatOfAssignmentId = document.getElementById("personnelLearningRepeatOf").value;
   }
+  const mutationOwner = Symbol("personnelLearningAssignmentMutationPending");
+  state.personnelLearningAssignmentMutationPendingOwner = mutationOwner;
   state.personnelLearningAssignmentMutationPending = true;
   elements.savePersonnelLearningAssignmentButton.disabled = true;
+  lockPersonnelLearningEditorFields(elements.personnelLearningAssignmentModal);
   setPersonnelLearningAssignmentMessage("Die Schulungszuweisung wird revisionssicher gespeichert …");
   try {
     await api(assignmentId
@@ -20251,23 +20943,31 @@ async function savePersonnelLearningAssignment(event) {
       method: assignmentId ? "PUT" : "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelLearningAssignmentModal.close();
     state.personnelLearningAssignmentCatalog = null;
     await loadPersonnelLearningAssignmentCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     state.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(assignmentId
       ? "Trainerbindung und Frist wurden gespeichert."
       : "Die Schulung wurde revisionssicher zugewiesen.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setPersonnelLearningAssignmentMessage(error.message, true);
     if (error.status === 409) {
       state.personnelLearningAssignmentCatalog = null;
       await loadPersonnelLearningAssignmentCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     }
   } finally {
-    state.personnelLearningAssignmentMutationPending = false;
-    elements.savePersonnelLearningAssignmentButton.disabled = false;
+    if (state.personnelLearningAssignmentMutationPendingOwner === mutationOwner) state.personnelLearningAssignmentMutationPending = false;
+    if (gpEditorCurrent(ticket, true)) {
+      restorePersonnelLearningEditorFields(elements.personnelLearningAssignmentModal);
+      elements.savePersonnelLearningAssignmentButton.disabled = false;
+    }
   }
 }
 
@@ -20339,6 +21039,7 @@ function openPersonnelLearningProgressEditor(assignment) {
     showToast("Für diesen Schulungsfortschritt fehlt die aktuell wirksame Zuständigkeit.", true);
     return;
   }
+  restorePersonnelLearningEditorFields(elements.personnelLearningProgressModal);
   elements.personnelLearningProgressAssignmentId.value = assignment.id;
   elements.personnelLearningProgressAssignmentReceipt.value =
     assignment.currentRevisionReceipt || "";
@@ -20371,6 +21072,8 @@ function openPersonnelLearningProgressEditor(assignment) {
   elements.personnelLearningProgressHistoryDetails.classList.toggle("hidden", !history.length);
   elements.personnelLearningProgressHistory.innerHTML = history.map((revision) => `<span><strong>${escapeHtml(({ progress_recorded: "Fortschritt erfasst", completed: "Abschluss bewertet", corrected: "Korrektur dokumentiert" })[revision.changeType] || revision.changeType)}</strong><small>${Number(revision.completedStepCount)} von ${Number(revision.totalStepCount)} Schritten · ${escapeHtml(personnelLearningProgressResultLabel(revision.result))} · ${escapeHtml(personnelWorkflowTimestamp(revision.changedAt))}</small>${revision.correctionReason ? `<small>Begründung: ${escapeHtml(revision.correctionReason)}</small>` : ""}${revision.receiptSha256 ? `<code>${escapeHtml(String(revision.receiptSha256).slice(0, 16))}…</code>` : ""}</span>`).join("");
   setPersonnelLearningProgressMessage();
+  state.personnelLearningProgressMutationPendingOwner = null;
+  state.personnelLearningProgressMutationPending = false;
   renderPersonnelLearningProgressEditorState();
   elements.personnelLearningProgressModal.showModal();
   elements.personnelLearningProgressStepList.querySelector("input")?.focus();
@@ -20381,6 +21084,12 @@ async function savePersonnelLearningProgress(event) {
   if (state.personnelLearningProgressMutationPending) return;
   const assignment = personnelLearningProgressEditorAssignment();
   if (!assignment) return;
+  const ticket = captureGpEditor(elements.personnelLearningProgressModal, () => {
+    const live = personnelLearningProgressEditorAssignment();
+    const capabilities = live?.progress?.capabilities || {};
+    return live?.id === assignment.id && (capabilities.canRecord || capabilities.canCorrect);
+  });
+  if (!gpEditorCurrent(ticket)) return;
   const completedStepIds = [...elements.personnelLearningProgressStepList
     .querySelectorAll('input[type="checkbox"][data-progress-step-id]:checked')]
     .map((checkbox) => checkbox.dataset.progressStepId);
@@ -20389,53 +21098,67 @@ async function savePersonnelLearningProgress(event) {
     setPersonnelLearningProgressMessage("Bitte ein Abschlussergebnis auswählen.", true);
     return;
   }
+  const body = {
+    expectedAssignmentRevisionReceipt: elements.personnelLearningProgressAssignmentReceipt.value,
+    expectedProgressRevisionReceipt: elements.personnelLearningProgressExpectedReceipt.value,
+    completedStepIds,
+    finalized,
+    result: finalized ? elements.personnelLearningProgressResult.value : "pending",
+    assessmentNote: finalized ? elements.personnelLearningProgressAssessmentNote.value : "",
+    correctionReason: assignment.progress?.hasFinalizedRevision
+      ? elements.personnelLearningProgressCorrectionReason.value : "",
+  };
+  const mutationOwner = Symbol("personnelLearningProgressMutationPending");
+  state.personnelLearningProgressMutationPendingOwner = mutationOwner;
   state.personnelLearningProgressMutationPending = true;
   renderPersonnelLearningProgressEditorState();
+  lockPersonnelLearningEditorFields(elements.personnelLearningProgressModal);
   setPersonnelLearningProgressMessage(
     "Der Fortschritt wird als neuer unveränderlicher Revisionsstand gespeichert …",
   );
   try {
     await api(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignment.id)}/progress`, {
       method: "PUT",
-      body: JSON.stringify({
-        expectedAssignmentRevisionReceipt:
-          elements.personnelLearningProgressAssignmentReceipt.value,
-        expectedProgressRevisionReceipt:
-          elements.personnelLearningProgressExpectedReceipt.value,
-        completedStepIds,
-        finalized,
-        result: finalized ? elements.personnelLearningProgressResult.value : "pending",
-        assessmentNote: finalized
-          ? elements.personnelLearningProgressAssessmentNote.value : "",
-        correctionReason: assignment.progress?.hasFinalizedRevision
-          ? elements.personnelLearningProgressCorrectionReason.value : "",
-      }),
+      body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.personnelLearningProgressModal.close();
     state.personnelLearningAssignmentCatalog = null;
     await loadPersonnelLearningAssignmentCatalog({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     state.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(assignment.progress?.hasFinalizedRevision
       ? "Die begründete Korrektur wurde als neue Revision gespeichert."
       : finalized
         ? "Der Schulungsabschluss wurde revisionssicher bewertet."
         : "Der Schulungsfortschritt wurde revisionssicher gespeichert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setPersonnelLearningProgressMessage(error.message, true);
     if (error.status === 409) {
       state.personnelLearningAssignmentCatalog = null;
       await loadPersonnelLearningAssignmentCatalog({ force: true });
     }
   } finally {
-    state.personnelLearningProgressMutationPending = false;
-    renderPersonnelLearningProgressEditorState();
+    if (state.personnelLearningProgressMutationPendingOwner === mutationOwner) state.personnelLearningProgressMutationPending = false;
+    if (gpEditorCurrent(ticket, true)) {
+      restorePersonnelLearningEditorFields(elements.personnelLearningProgressModal);
+      renderPersonnelLearningProgressEditorState();
+    }
   }
 }
 
 async function cancelPersonnelLearningAssignment(assignment) {
-  if (!assignment || state.personnelLearningAssignmentMutationPending) return;
+  if (!assignment || state.personnelLearningAssignmentMutationPending
+    || !assignment.capabilities?.canCancel || !canWritePersonnelLearningCompetencies()) return;
   if (!window.confirm(`Schulungszuweisung „${assignment.processTitle}“ für ${assignment.learner.fullName} abbrechen? Die Historie bleibt erhalten.`)) return;
+  const mutationOwner = Symbol("personnelLearningAssignmentMutationPending");
+  state.personnelLearningAssignmentMutationPendingOwner = mutationOwner;
+  const context = captureGpContext(canWritePersonnelLearningCompetencies,
+    () => state.personnelLearningAssignmentMutationPendingOwner);
+  if (!gpContextCurrent(context)) return;
   state.personnelLearningAssignmentMutationPending = true;
   renderPersonnelLearningAssignmentCatalog();
   try {
@@ -20446,20 +21169,24 @@ async function cancelPersonnelLearningAssignment(assignment) {
         expectedRevisionReceipt: assignment.currentRevisionReceipt,
       }),
     });
+    if (!gpContextCurrent(context)) return;
     state.personnelLearningAssignmentCatalog = null;
     await loadPersonnelLearningAssignmentCatalog({ force: true });
+    if (!gpContextCurrent(context)) return;
     state.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
+    if (!gpContextCurrent(context)) return;
     showToast("Die Schulungszuweisung wurde abgebrochen; alle bisherigen Belege bleiben erhalten.");
   } catch (error) {
+    if (!gpContextCurrent(context)) return;
     showToast(error.message, true);
     if (error.status === 409) {
       state.personnelLearningAssignmentCatalog = null;
       await loadPersonnelLearningAssignmentCatalog({ force: true });
     }
   } finally {
-    state.personnelLearningAssignmentMutationPending = false;
-    renderPersonnelLearningAssignmentCatalog();
+    if (state.personnelLearningAssignmentMutationPendingOwner === mutationOwner) state.personnelLearningAssignmentMutationPending = false;
+    if (gpContextCurrent(context)) renderPersonnelLearningAssignmentCatalog();
   }
 }
 
@@ -20473,6 +21200,9 @@ function handlePersonnelLearningAssignmentListAction(event) {
     if (!elements.personnelLearningAssignmentModal?.open) return;
     elements.personnelLearningAssignmentId.value="";
     elements.personnelLearningAssignmentExpectedReceipt.value="";
+    const process = selectedPersonnelLearningAssignmentProcess();
+    const option = elements.personnelLearningAssignmentProcess.selectedOptions[0];
+    if (process && option) option.textContent = `${process.title} · Version ${Number(process.publishedVersionNumber)}`;
     document.getElementById("personnelLearningScheduleReceipt").value="";
     document.getElementById("personnelLearningRepeatOf").value=assignment.id;
     renderPersonnelLearningAssignmentTrainerOptions();
@@ -20507,18 +21237,30 @@ function handlePersonnelLearningAssignmentListAction(event) {
 }
 
 async function reviewPersonnelLearningTarget(assignment) {
-  if (!assignment.learningTarget || assignment.progress?.result !== "passed" || !assignment.capabilities?.canEdit) return;
-  await loadPersonnelLearningCompetencyCatalog({ force:true });
+  if (!assignment.learningTarget || assignment.progress?.result !== "passed"
+    || !assignment.capabilities?.canEdit || !canWritePersonnelLearningCompetencies()) return;
+  const intent = Symbol("personnel-learning-target-review");
+  state.personnelLearningTargetReviewIntent = intent;
+  const context = captureGpContext(canWritePersonnelLearningCompetencies,
+    () => state.personnelLearningTargetReviewIntent);
+  if (!gpContextCurrent(context)) return;
   const employeeNumber = assignment.learner.employeeNumber;
-  const target = assignment.learningTarget;
+  const target = { ...assignment.learningTarget };
+  await loadPersonnelLearningCompetencyCatalog({ force:true });
+  if (!gpContextCurrent(context)) return;
   const existing = state.personnelLearningCompetencyCatalog?.competencies?.find(c => c.employeeNumber === employeeNumber && c.skillId === target.skillModuleId);
   const skill = personnelLearningCompetencySkill(target.skillModuleId);
   if (!skill || Number(skill.publishedVersionNumber) !== target.skillVersionNumber) {
     throw new Error("Die Fähigkeitsfassung hat sich geändert. Bitte die Zielkompetenz im Kompetenzprofil fachlich prüfen.");
   }
   state.personnelLearningCompetencyEmployeeNumber = employeeNumber;
-  openPersonnelLearningCompetencyEditor(existing || null);
+  if (openPersonnelLearningCompetencyEditor(existing || null) !== true
+    || !elements.personnelLearningCompetencyModal.open
+    || elements.personnelLearningCompetencyEmployeeNumber.value !== employeeNumber) return;
+  if (![...elements.personnelLearningCompetencySkill.options]
+    .some(option => option.value === target.skillModuleId)) return;
   elements.personnelLearningCompetencySkill.value = target.skillModuleId;
+  if (elements.personnelLearningCompetencySkill.value !== target.skillModuleId) return;
   populatePersonnelLearningCompetencyLevels(skill, Math.max(existing?.active ? existing.level : 0, target.targetLevel));
   renderPersonnelLearningCompetencyLevelPreview();
   setPersonnelLearningCompetencyMessage("Vorschlag aus dem bestandenen Kurs. Die tatsächliche Stufe prüfen und bewusst speichern. Die Trainerfreigabe bleibt eine eigene Entscheidung.");
@@ -20859,14 +21601,31 @@ function startDashboardWorkspaceFieldAllowed(id) {
   if (!canUseStartDashboardWorkspace()) return false;
   if (id === "control:center") return accessibleDashboardModes().length > 0;
   if (id === "control:vps") return canReadStartDashboardVps();
-  const preferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
-  const visibleCard = cardId => startDashboardCardAccessible(cardId) && !preferences.hidden.includes(cardId);
+  const visibleCard = cardId => startDashboardCardAccessible(cardId);
   if (id.startsWith("card:")) return visibleCard(id.slice(5));
   if (id.startsWith("group:")) {
     return START_DASHBOARD_GROUPS.find(group => group.id === id.slice(6))?.cardIds.some(visibleCard) === true;
   }
   const widget = START_DASHBOARD_WIDGETS.find(entry => `widget:${entry.id}` === id);
-  return Boolean(widget && visibleCard(widget.cardId) && !preferences.hiddenWidgets.includes(widget.id));
+  return Boolean(widget && visibleCard(widget.cardId));
+}
+
+function migrateStartDashboardWorkspace(source, unused, payload) {
+  const model = window.StartDashboardWorkspacePreferences;
+  const workspace = model.normalize(source);
+  if (workspace.version === 2) return workspace;
+  const legacy = normalizeStartDashboardPreferences(payload?.startDashboardPreferences || state.startDashboardPreferences);
+  for (const id of [...legacy.hidden.map(id => `card:${id}`), ...legacy.hiddenWidgets.map(id => `widget:${id}`)]) {
+    if (model.IDS.includes(id) && workspace.fields[id]?.hidden === undefined) workspace.fields[id] = { ...workspace.fields[id], hidden: true };
+  }
+  return workspace;
+}
+
+function applyStartDashboardWorkspace({ fields, store }) {
+  for (const field of fields.values()) if (!field.id.startsWith("custom:")) field.element.classList.toggle("hidden", !startDashboardWorkspaceFieldAllowed(field.id));
+  if (elements.startDashboardResetButton) elements.startDashboardResetButton.disabled = !store.ready;
+  if (elements.startDashboardCustomizeButton) elements.startDashboardCustomizeButton.disabled = !store.ready;
+  syncStartDashboardControlChoices();startDashboardVps?.sync();
 }
 
 function syncStartDashboardWorkspace() {
@@ -20881,10 +21640,14 @@ function syncStartDashboardWorkspace() {
   if (!startDashboardWorkspace) {
     startDashboardWorkspace = window.StartDashboardWorkspace.create({
       root: elements.startDashboardView, key: startDashboardWorkspaceActorKey,
+      sessionReference: () => state.portalSession,
       canUse: canUseStartDashboardWorkspace, allowed: startDashboardWorkspaceFieldAllowed,
+      boards: true, closeHidesField: true, awaitEditorSave: true, hideable: () => true, editLabel: "Feld anpassen",
+      onFieldHidden: () => elements.startDashboardCustomizeButton?.focus({ preventScroll: true }),
+      migrate: migrateStartDashboardWorkspace,
       localOnly: isLocalStartDashboardWorkspace,
       storage: {getItem: key => window.localStorage.getItem(key), setItem: (key, value) => window.localStorage.setItem(key, value)}, api,
-      onApply: ({store}) => {if (elements.startDashboardResetButton) elements.startDashboardResetButton.disabled = !store.ready;syncStartDashboardControlChoices();startDashboardVps?.sync();},
+      onApply: applyStartDashboardWorkspace,
       error: error => showToast(`Dashboard-Einstellungen konnten nicht gespeichert oder geladen werden: ${error.message}`, true),
     });
   } else startDashboardWorkspace.sync();
@@ -20982,22 +21745,33 @@ function openPersonnelLearningConfirmation(input) {
     {target, canUse:input.canUse, onClose:input.onClose, onDiscard:input.onDiscard}) || false;
 }
 
+let vpsStorageWorkspace = null;
 function syncGpWindows() {
+  syncXoffiImport();
+  syncWorkflowStudio();
   syncSettingsSaveScopes();
   syncPlanningPrintWindows();
-  if (!window.GpWindow) return;
+  syncUsbGuidePrint();
+  if (!window.GpWindow) { syncPersonnelDashboardWorkspace(); syncPersonnelDashboardInformation(); return; }
   const key = state.portalSession?.authenticated ? startDashboardWorkspaceActorKey() : '';
   const canUse=()=>Boolean(state.portalSession?.authenticated && !state.portalSession?.user?.mustChangePassword);
   if (!gpWindowManager) gpWindowManager=window.GpWindow.installDocument(document,{actorKey:()=>gpWindowActor,canUse,api,
     scale:salesArticleSearchWindowScale,error:error=>showToast('Fenstereinstellungen: '+error.message,true)});
-  if (key !== gpWindowActor) {
-    gpWindowActor=key;gpWindowManager.synchronize();personalActionsWindow?.destroy();personalActionsWindow=null;
+  if (!vpsStorageWorkspace && window.VpsStorage && document.getElementById('vpsStorageDialog')) vpsStorageWorkspace = window.VpsStorage.mount({
+    opener:document.getElementById('openVpsStorage'),dialog:document.getElementById('vpsStorageDialog'),api,
+    key:startDashboardWorkspaceActorKey,canUse:canReadVpsStorage,active:()=>state.currentView==='settings',
+  });
+  vpsStorageWorkspace?.sync();
+  if (key !== gpWindowActor || gpWindowSession !== state.portalSession) {
+    gpWindowActor=key;gpWindowSession=state.portalSession;gpWindowManager.synchronize();personalActionsWindow?.destroy();personalActionsWindow=null;
     branchOrderViewStates.clear();branchOrderViewActor=startDashboardWorkspaceActorKey();
     state.branchOrdersManagementRequestId++;state.branchOrdersManagement=null;state.branchOrdersManagementDraft=null;state.branchOrdersManagementBaseline='';state.branchOrdersManagementDraftLocationId='';state.branchOrdersManagementHistory=[];state.branchOrdersManagementLoading=false;state.branchOrdersManagementSaving=false;state.branchOrdersManagementSaveContext=null;
     state.loanManagementReturnContext=null;state.loanManagementReturnLoanId='';state.loanManagementReturnSaving=false;state.loanManagementReturnSavingContext=null;
     if (elements.personalActionsAdminDialog?.open) elements.personalActionsAdminDialog.close();
     settingsDraftGuard?.clear();employeeProfileBookmark=null;state.birthdayPresentationSettingsSavingContext=null;
   }
+  syncPersonnelDashboardInformation();
+  syncPersonnelDashboardWorkspace();
   if (!recentArticlesWindow && window.SalesRecentArticles) recentArticlesWindow=window.SalesRecentArticles.mount({
     dock:document.getElementById('sidebarRecentArticlesButton'),key:currentSalesArticleCatalogDetailAccessKey,
     canUse:()=>canReadSalesArticles() && state.portalSession?.user?.isEmployee !== false,
@@ -21481,6 +22255,7 @@ function renderStartDashboardCustomizer() {
 }
 
 function openStartDashboardCustomizer() {
+  if (startDashboardWorkspace && window.GpDashboardBoards) { startDashboardWorkspace.openSettings(); return; }
   state.startDashboardDraftPreferences = normalizeStartDashboardPreferences(state.startDashboardPreferences);
   elements.startDashboardCustomizer?.classList.remove("hidden");
   elements.startDashboardCustomizeButton?.setAttribute("aria-expanded", "true");
@@ -22190,18 +22965,167 @@ function orderedPersonnelDashboardItems(layout = state.personnelDashboardLayout)
   return normalized.order.map((id) => catalog.get(id)).filter((item) => item?.available);
 }
 
+let personnelDashboardInformation = null;
+let personnelDashboardWorkspace = null;
+let personnelDashboardWorkspaceApplying = false;
+let personnelDashboardWorkspaceOwner = null;
+let personnelDashboardCustomizerRevision = 0;
+let personnelDashboardConfigurationSaveContext = null;
+
+function canUsePersonnelDashboardWorkspace() {
+  return canUseStartDashboardWorkspace() && canOpenPersonnelAdministrationModule()
+    && state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "dashboard";
+}
+
+function personnelDashboardWorkspaceFieldAllowed(id) {
+  return canUsePersonnelDashboardWorkspace() && personnelDashboardCatalog().some(item => `card:${item.id}` === id && item.available);
+}
+
+function personnelDashboardWorkspaceFields(root) {
+  return [...root.querySelectorAll("[data-personnel-dashboard-field]")].map(element => ({
+    id: `card:${element.dataset.personnelDashboardField}`, element,
+    title: element.querySelector("h3"), description: element.querySelector(".personnel-dashboard-card-copy p"),
+  }));
+}
+
+function applyPersonnelDashboardWorkspace({ preferences, store }) {
+  if (personnelDashboardWorkspaceApplying) return;
+  personnelDashboardWorkspaceApplying = true;
+  try {
+    state.personnelDashboardLayout = store.ready ? window.PersonnelDashboardWorkspacePreferences.layout(preferences) : defaultPersonnelDashboardLayout();
+    if (elements.personnelDashboardCustomizeButton) elements.personnelDashboardCustomizeButton.disabled = !store.ready;
+    renderPersonnelDashboard();
+    personnelDashboardWorkspace?.geometry?.reorder(preferences.order);
+  } finally { personnelDashboardWorkspaceApplying = false; }
+}
+
+function syncPersonnelDashboardWorkspace() {
+  if (personnelDashboardWorkspaceApplying || !elements.personnelDashboardSection || !window.StartDashboardWorkspace || !window.PersonnelDashboardWorkspacePreferences) return;
+  const owner = { key: startDashboardWorkspaceActorKey(), session: state.portalSession };
+  if (personnelDashboardWorkspaceOwner?.key !== owner.key || personnelDashboardWorkspaceOwner?.session !== owner.session || !canUsePersonnelDashboardWorkspace()) {
+    personnelDashboardWorkspaceOwner = owner;
+    closePersonnelDashboardCustomizer({ restoreFocus: false });
+    personnelDashboardConfigurationSaveContext = null;
+    if (elements.savePersonnelDashboardLayout) elements.savePersonnelDashboardLayout.disabled = false;
+  }
+  if (!personnelDashboardWorkspace) personnelDashboardWorkspace = window.StartDashboardWorkspace.create({
+    root: elements.personnelDashboardSection, grid: elements.personnelDashboardGrid,
+    model: window.PersonnelDashboardWorkspacePreferences, property: "personnelDashboardWorkspace", cachePrefix: "gp.personnel.dashboard.workspace.v1.",
+    key: startDashboardWorkspaceActorKey, sessionReference: () => state.portalSession,
+    canUse: canUsePersonnelDashboardWorkspace, allowed: personnelDashboardWorkspaceFieldAllowed,
+    discover: personnelDashboardWorkspaceFields, editorWindowId: "personnel-dashboard-field-editor", scopeName: "personnel",
+    boards: true,
+    hideable: id => window.PersonnelDashboardWorkspacePreferences.IDS.includes(id),
+    closeHidesField: true, awaitEditorSave: true, editLabel: "Feld anpassen",
+    onFieldHidden: () => elements.personnelDashboardCustomizeButton?.focus({ preventScroll: true }),
+    contentOptions: id => window.PersonnelDashboardWorkspacePreferences.contentOptions(id),
+    contentSelection: (id, value) => window.PersonnelDashboardWorkspacePreferences.content(value, id),
+    migrate: window.PersonnelDashboardWorkspacePreferences.migrate,
+    extraPreferences: value => ({ personnelDashboardLayout: window.PersonnelDashboardWorkspacePreferences.layout(value) }),
+    localPreferences: payload => localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(payload.personnelDashboardLayout)),
+    localOnly: isLocalStartDashboardWorkspace,
+    legacy: () => { try { return JSON.parse(localStorage.getItem(personnelDashboardLayoutStorageKey()) || "null"); } catch { return null; } },
+    storage: { getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) },
+    api, onApply: applyPersonnelDashboardWorkspace,
+    error: error => showToast(`Personal-Dashboard: ${error.message}`, true),
+  });
+  else personnelDashboardWorkspace.sync();
+}
+
+function canUsePersonnelDashboardInformation() {
+  return canOpenPersonnelAdministrationModule()
+    && (!state.portalStatus?.portalEnabled || (state.portalSession?.authenticated === true && !state.portalSession?.user?.mustChangePassword))
+    && state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "dashboard";
+}
+
+function personnelDashboardInformationSources() {
+  const catalog = new Map(personnelDashboardCatalog().map(item => [item.id, item.available]));
+  const hidden = new Set(normalizePersonnelDashboardLayout(state.personnelDashboardLayout).hidden);
+  const visible = id => catalog.get(id) && !hidden.has(id);
+  const date = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const scope = { date, year: Number(state.centralVacationYear || date.slice(0, 4)), locationId: String(state.locationId || ""), departmentId: String(state.departmentId || "") };
+  const preferences = personnelDashboardWorkspace?.store.value;
+  const contentFor = card => window.PersonnelDashboardWorkspacePreferences?.content(preferences, `card:${card}`);
+  const source = (card, type, url, allowed = true, note = "") => ({ id: type, card, type, url, allowed: Boolean(allowed), scope, note, content: contentFor(card)?.filter(id => id.startsWith(type + ".")) });
+  const requests = managerRequestTabAvailability();
+  const query = new URLSearchParams({ locationId: scope.locationId, date });
+  if (scope.departmentId) query.set("departmentId", scope.departmentId);
+  return [
+    source("employees", "employees", "/api/personnel-directory", canReadCentralPersonnel()),
+    source("positions", "positions", "/api/positions?includeInactive=1", canManagePositions()),
+    source("applications", "candidates", "/api/portal/v1/personnel-lifecycle/candidates?limit=50&offset=0", canReadCandidatePreboarding()),
+    source("workflows", "workflows", "/api/portal/v1/personnel-lifecycle/workflow-instances", canReadPersonnelWorkflowInstances()),
+    source("learning", "learning", "/api/portal/v1/personnel-learning/modules", canReadPersonnelLearningCatalog()),
+    source("tasks", "onboarding", "/api/portal/v1/personnel-lifecycle/onboarding/tasks", canReadLifecycleOnboardingTasks()),
+    source("tasks", "offboarding", "/api/portal/v1/personnel-lifecycle/offboarding/tasks", canReadLifecycleOffboardingTasks()),
+    source("requests", "absence", "/api/portal/v1/absence-requests", requests.vacation),
+    source("requests", "amu", "/api/portal/v1/amu-reports", requests.amu && (!state.portalStatus?.portalEnabled || hasGovernancePermission("sickness:read"))),
+    source("requests", "sickness", "/api/portal/v1/sickness-cases", requests.amu && (!state.portalStatus?.portalEnabled || hasGovernancePermission("sickness:read"))),
+    source("timeTracking", "timeTracking", `/api/portal/v1/time-presence?${query}`, canReadManagedTimeTracking() && (!state.portalStatus?.portalEnabled || hasGovernancePermission("time:read")) && Boolean(scope.locationId), scope.locationId ? "Heutiger Tagesbereich" : "Für die Kennzahl bitte einen Standort im GP auswählen."),
+    source("costCenters", "costCenters", "/api/cost-centers?includeInactive=1", canReadCostCenters()),
+    source("ruleDrafts", "ruleDrafts", "/api/work-rules/drafts", canAccessCustomWorkRuleGovernance()),
+    source("collectiveAgreements", "collectiveAgreements", "/api/collective-agreements/registry", canReadCollectiveAgreements()),
+    source("vacations", "vacations", `/api/personnel-vacations?year=${scope.year}`, canReadCentralVacations()),
+  ].filter(item => visible(item.card) && (item.content === undefined || item.content.length > 0));
+}
+
+function syncPersonnelDashboardInformation(options = {}) {
+  if (!window.PersonnelDashboardInfo || !elements.personnelDashboardGrid) return;
+  if (!personnelDashboardInformation) personnelDashboardInformation = window.PersonnelDashboardInfo.create({
+    sources: personnelDashboardInformationSources,
+    capture: () => captureGpContext(canUsePersonnelDashboardInformation), current: gpContextCurrent,
+    active: canUsePersonnelDashboardInformation, api, onChange: renderPersonnelDashboardInformation,
+  });
+  return personnelDashboardInformation.sync(options);
+}
+
+function renderPersonnelDashboardInformation() {
+  const records = Object.values(personnelDashboardInformation?.records || {});
+  for (const card of elements.personnelDashboardSection?.querySelectorAll("[data-personnel-dashboard-field]") || []) {
+    const rows = records.filter(row => row.card === card.dataset.personnelDashboardField);
+    const target = card.querySelector(".personnel-dashboard-info");
+    const content = window.PersonnelDashboardWorkspacePreferences?.content(personnelDashboardWorkspace?.store.value, `card:${card.dataset.personnelDashboardField}`);
+    const sources = rows.length ? rows : [{ status: "idle", metrics: [], caption: content?.length === 0 ? "Keine Kennzahlen ausgewählt. Wähle die Inhalte im Feldmenü unter „Feld anpassen“." : "Kennzahlen werden beim Öffnen dieser Übersicht geladen." }];
+    target.innerHTML = sources.map(row => `<section class="personnel-dashboard-source" data-source-status="${escapeHtmlAttribute(row.status)}"${row.id ? ` data-personnel-dashboard-source="${escapeHtmlAttribute(row.id)}"` : ""}>
+      ${rows.length > 1 || (row.id === "absence" && row.title !== "Urlaub & Zeitausgleich") ? `<h4>${escapeHtml(row.title || window.PersonnelDashboardInfo?.sourceLabels[row.id] || row.id)}</h4>` : ""}
+      <span class="personnel-dashboard-source-state">${escapeHtml(window.PersonnelDashboardInfo?.labels[row.status] || row.status)}</span>
+      ${row.metrics?.length ? `<dl class="personnel-dashboard-metrics">${row.metrics.map(metric => `<div class="personnel-dashboard-metric"><dt>${escapeHtml(metric.label)}</dt><dd>${metric.value === null ? "–" : escapeHtml(metric.value)}</dd></div>`).join("")}</dl>` : ""}
+      <p class="personnel-dashboard-source-caption">${escapeHtml(row.caption)}</p></section>`).join("");
+  }
+}
+
 function renderPersonnelDashboard() {
   if (!elements.personnelDashboardGrid) return;
   state.personnelDashboardLayout = normalizePersonnelDashboardLayout(state.personnelDashboardLayout);
   const hidden = new Set(state.personnelDashboardLayout.hidden);
   const items = orderedPersonnelDashboardItems().filter((item) => !hidden.has(item.id));
-  elements.personnelDashboardGrid.innerHTML = items.length
-    ? items.map((item) => `<button class="personnel-dashboard-card" type="button" data-personnel-dashboard-item="${escapeHtmlAttribute(item.id)}">
-        <span class="personnel-dashboard-card-symbol" aria-hidden="true">${escapeHtml(item.symbol)}</span>
-        <span class="personnel-dashboard-card-copy"><small>${escapeHtml(item.eyebrow)}</small><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.description)}</span></span>
-        <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
-      </button>`).join("")
-    : '<div class="personnel-dashboard-empty"><strong>Keine Kachel eingeblendet</strong><p>Öffne „Dashboard anpassen“, um mindestens einen verfügbaren Arbeitsbereich einzublenden.</p></div>';
+  const grid = elements.personnelDashboardGrid;
+  const all = personnelDashboardCatalog();
+  for (const item of all) {
+    let card = elements.personnelDashboardSection.querySelector(`[data-personnel-dashboard-field="${CSS.escape(item.id)}"]`);
+    if (!item.available) { card?.remove(); continue; }
+    if (!card) {
+      card = document.createElement("article"); card.className = "personnel-dashboard-card";
+      card.dataset.personnelDashboardField = item.id;
+      card.setAttribute("aria-labelledby", `personnel-dashboard-title-${item.id}`);
+      card.innerHTML = `<header class="personnel-dashboard-card-header"><span class="personnel-dashboard-card-symbol" aria-hidden="true">${escapeHtml(item.symbol)}</span>
+        <div class="personnel-dashboard-card-copy"><small>${escapeHtml(item.eyebrow)}</small><h3 id="personnel-dashboard-title-${escapeHtmlAttribute(item.id)}">${escapeHtml(item.label)}</h3><p>${escapeHtml(item.description)}</p></div></header>
+        <div class="personnel-dashboard-info"></div><button class="secondary-button personnel-dashboard-open" type="button" data-personnel-dashboard-item="${escapeHtmlAttribute(item.id)}" aria-label="${escapeHtmlAttribute(item.label + " öffnen")}">Bereich öffnen <span aria-hidden="true">→</span></button>`;
+      grid.append(card);
+    }
+    card.hidden = hidden.has(item.id);
+  }
+  if (!personnelDashboardWorkspace?.geometry) orderedPersonnelDashboardItems().forEach((item, index) => {
+    const card = grid.querySelector(`[data-personnel-dashboard-field="${CSS.escape(item.id)}"]`);
+    if (grid.children[index] !== card) grid.insertBefore(card, grid.children[index] || null);
+  });
+  let empty = grid.querySelector(".personnel-dashboard-empty");
+  const hasOwnFields = personnelDashboardWorkspace?.store.value.customFields?.some(field => personnelDashboardWorkspace.isVisible(field.id)) === true;
+  if (!items.length && !hasOwnFields && !empty) { empty = document.createElement("div"); empty.className = "personnel-dashboard-empty"; empty.innerHTML = '<strong>Keine Kachel eingeblendet</strong><p>Öffne „Dashboard anpassen“, um einen Arbeitsbereich einzublenden, oder lege ein eigenes Feld an.</p>'; grid.append(empty); }
+  if (items.length || hasOwnFields) empty?.remove();
+  renderPersonnelDashboardInformation();
+  syncPersonnelDashboardInformation();
+  syncPersonnelDashboardWorkspace();
 }
 
 function renderPersonnelDashboardCustomizer() {
@@ -22231,6 +23155,11 @@ function updatePersonnelDashboardCustomizerStatus(layout = state.personnelDashbo
 }
 
 function openPersonnelDashboardCustomizer() {
+  if (personnelDashboardWorkspace && window.GpDashboardBoards) { personnelDashboardWorkspace.openSettings(); return; }
+  if (!personnelDashboardWorkspace?.store.ready || !canUsePersonnelDashboardWorkspace()) return;
+  personnelDashboardCustomizerRevision++;
+  state.personnelDashboardResetDraft = false;
+  if (elements.savePersonnelDashboardLayout) elements.savePersonnelDashboardLayout.disabled = false;
   state.personnelDashboardDraftLayout = normalizePersonnelDashboardLayout(state.personnelDashboardLayout);
   elements.personnelDashboardCustomizer?.classList.remove("hidden");
   elements.personnelDashboardCustomizeButton?.setAttribute("aria-expanded", "true");
@@ -22239,6 +23168,8 @@ function openPersonnelDashboardCustomizer() {
 }
 
 function closePersonnelDashboardCustomizer({ restoreFocus = true } = {}) {
+  personnelDashboardCustomizerRevision++;
+  state.personnelDashboardResetDraft = false;
   state.personnelDashboardDraftLayout = null;
   elements.personnelDashboardCustomizer?.classList.add("hidden");
   elements.personnelDashboardCustomizeButton?.setAttribute("aria-expanded", "false");
@@ -22316,13 +23247,6 @@ function setPersonnelAdministrationTab(tab) {
   if (normalized !== "employees" && employeeProfileIsOpen()) pauseEmployeeProfile();
   if (normalized === "employees" && state.currentView === 'personnelAdministration') resumeEmployeeProfile('administration');
   state.personnelAdministrationTab = normalized;
-  document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => {
-    const active = button.dataset.personnelAdministrationTab === normalized;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-selected", String(active));
-    button.tabIndex = active ? 0 : -1;
-  });
-  document.querySelector(".personnel-administration-tabs")?.classList.toggle("hidden", normalized === "dashboard");
   elements.personnelDashboardSection?.classList.toggle("active", normalized === "dashboard");
   elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
   elements.positionManagementSection?.classList.toggle("active", normalized === "positions");
@@ -22335,7 +23259,9 @@ function setPersonnelAdministrationTab(tab) {
   elements.collectiveAgreementsSection?.classList.toggle("active", normalized === "collectiveAgreements");
   elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
   elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees" || employeeProfileIsOpen());
+  syncWorkflowStudio();
   if (normalized === "dashboard") renderPersonnelDashboard();
+  else syncPersonnelDashboardInformation();
   if (normalized === "positions") renderPositions();
   if (state.currentView === "personnelAdministration") renderContextNavigation();
   if (state.currentView === "personnelAdministration" && ["employees", "costCenters"].includes(normalized)) {
@@ -22398,6 +23324,38 @@ function syncCostCenterTypeHint() {
   elements.costCenterTypeHint.textContent = parts.join(" ");
 }
 
+function captureGpContext(canUse = () => true, source = () => "") {
+  return { actor: startDashboardWorkspaceActorKey(), session: state.portalSession, scope: window.GpWindow?.captureContext?.(document), canUse, source, value: source() };
+}
+
+function gpContextCurrent(ticket) {
+  return Boolean(ticket && ticket.session === state.portalSession && ticket.actor === startDashboardWorkspaceActorKey() && ticket.canUse()
+    && ticket.value === ticket.source() && (!ticket.scope || window.GpWindow?.currentContext?.(ticket.scope)));
+}
+
+function captureGpEditor(dialog, canUse = () => true) {
+  return { dialog, context: captureGpContext(canUse), window: window.GpWindow?.capture?.(dialog) };
+}
+
+function gpEditorCurrent(ticket, allowClosed = false) {
+  return Boolean(ticket && gpContextCurrent(ticket.context)
+    && (allowClosed || ticket.dialog?.open)
+    && (!ticket.window || window.GpWindow?.current?.(ticket.window, { allowClosed })));
+}
+
+function canEditEmployeeWindow() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  const permissions = state.portalSession?.user?.permissions || [];
+  return state.employeeEditMode === "display"
+    ? permissions.includes("employees:display:write") || permissions.includes("employees:nickname:write")
+    : state.currentView === "personnelAdministration" ? canWriteCentralPersonnel() : permissions.includes("employees:write");
+}
+
+function canEditLocationWindow() {
+  return canWriteLocationsFully() || canManageTimeTrackingSettings()
+    || state.portalSession?.user?.permissions?.includes("locations:operational:write") === true;
+}
+
 function openCostCenterModal(costCenter = null) {
   if (!canWriteCostCenters() || !elements.costCenterModal) return;
   state.editingCostCenterId = costCenter?.id ?? null;
@@ -22412,10 +23370,14 @@ function openCostCenterModal(costCenter = null) {
   elements.costCenterModalTitle.textContent = costCenter ? "Kostenstelle bearbeiten" : "Kostenstelle anlegen";
   elements.costCenterSubmitButton.textContent = costCenter ? "Kostenstelle speichern" : "Kostenstelle anlegen";
   elements.deactivateCostCenterButton.classList.toggle("hidden", !costCenter?.active);
+  elements.costCenterSubmitButton.disabled = false;
+  elements.deactivateCostCenterButton.disabled = false;
   elements.costCenterModal.showModal();
 }
 
 async function saveCostCenter(event) {
+  const ticket = captureGpEditor(elements.costCenterModal, canWriteCostCenters);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!canWriteCostCenters()) return;
   const id = state.editingCostCenterId;
@@ -22432,31 +23394,39 @@ async function saveCostCenter(event) {
       method: id === null ? "POST" : "PUT",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.costCenterModal.close();
     state.personnelAdministrationLoaded = false;
     await loadPersonnelAdministration({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(id === null ? "Kostenstelle wurde angelegt." : "Kostenstelle wurde gespeichert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.costCenterSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.costCenterSubmitButton.disabled = false;
   }
 }
 
 async function deactivateCostCenter() {
+  const ticket = captureGpEditor(elements.costCenterModal, canWriteCostCenters);
+  if (!gpEditorCurrent(ticket)) return;
   const id = state.editingCostCenterId;
   if (id === null || !canWriteCostCenters() || !confirm("Diese Kostenstelle deaktivieren? Bestehende Zuordnungen und historische Daten bleiben erhalten.")) return;
   elements.deactivateCostCenterButton.disabled = true;
   try {
     await api(`/api/cost-centers/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!gpEditorCurrent(ticket)) return;
     elements.costCenterModal.close();
     state.personnelAdministrationLoaded = false;
     await loadPersonnelAdministration({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast("Kostenstelle wurde deaktiviert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.deactivateCostCenterButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.deactivateCostCenterButton.disabled = false;
   }
 }
 
@@ -22506,10 +23476,14 @@ function openCostCenterTypeModal(type = null) {
   elements.costCenterTypeSubmitButton.textContent = type ? "Typ speichern" : "Typ anlegen";
   elements.deactivateCostCenterTypeButton.classList.toggle("hidden", !type?.active);
   renderCostCenterTypePositionOptions();
+  elements.costCenterTypeSubmitButton.disabled = false;
+  elements.deactivateCostCenterTypeButton.disabled = false;
   elements.costCenterTypeModal.showModal();
 }
 
 async function saveCostCenterType(event) {
+  const ticket = captureGpEditor(elements.costCenterTypeModal, canWriteCostCenters);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   if (!canWriteCostCenters()) return;
   const id = state.editingCostCenterTypeId;
@@ -22527,32 +23501,40 @@ async function saveCostCenterType(event) {
       method: id ? "PUT" : "POST",
       body: JSON.stringify(body),
     });
+    if (!gpEditorCurrent(ticket)) return;
     elements.costCenterTypeModal.close();
     state.personnelAdministrationLoaded = false;
     await loadPersonnelAdministration({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(id ? "Kostenstellentyp wurde gespeichert." : "Kostenstellentyp wurde angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.costCenterTypeSubmitButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.costCenterTypeSubmitButton.disabled = false;
   }
 }
 
 async function deactivateCostCenterType() {
+  const ticket = captureGpEditor(elements.costCenterTypeModal, canWriteCostCenters);
+  if (!gpEditorCurrent(ticket)) return;
   const id = state.editingCostCenterTypeId;
   if (!id || !canWriteCostCenters()
     || !confirm("Diesen Kostenstellentyp archivieren? Verwendete Typen müssen zuerst von allen aktiven Kostenstellen gelöst werden.")) return;
   elements.deactivateCostCenterTypeButton.disabled = true;
   try {
     await api(`/api/cost-center-types/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!gpEditorCurrent(ticket)) return;
     elements.costCenterTypeModal.close();
     state.personnelAdministrationLoaded = false;
     await loadPersonnelAdministration({ force: true });
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast("Kostenstellentyp wurde archiviert.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(error.message, true);
   } finally {
-    elements.deactivateCostCenterTypeButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.deactivateCostCenterTypeButton.disabled = false;
   }
 }
 
@@ -22812,6 +23794,35 @@ function updateBranchSupervisionSettings({ applyPreset = false } = {}) {
   elements.branchSupervisionSettingsHint.textContent = `${modeCopy} Die gesamte Öffnungszeit muss abgedeckt bleiben; Abteilungsleitungen zählen nur innerhalb der gewählten Überbrückungsgrenze.`;
 }
 
+function planningAssistantSettingsInput() {
+  return {
+    enabled: elements.planningAssistantEnabled.checked,
+    autoCheck: elements.planningAssistantAutoCheck.checked,
+    showInformational: elements.planningAssistantShowInformational.checked,
+  };
+}
+
+function updatePlanningAssistantSettings() {
+  if (!elements.planningAssistantEnabled) return;
+  const canManage = state.portalStatus?.portalEnabled !== true || state.portalSession?.user?.permissions?.includes("settings:write") === true;
+  const { enabled, autoCheck } = planningAssistantSettingsInput();
+  elements.planningAssistantEnabled.disabled = !canManage;
+  elements.planningAssistantAutoCheck.disabled = !canManage || !enabled;
+  elements.planningAssistantShowInformational.disabled = !canManage || !enabled;
+  if (elements.planningAssistantSettingsState) {
+    elements.planningAssistantSettingsState.textContent = !enabled ? "Deaktiviert" : autoCheck ? "Aktiv · Automatisch" : "Aktiv · Manuell";
+    elements.planningAssistantSettingsState.dataset.enabled = String(enabled);
+  }
+}
+
+function renderPlanningAssistantSettings(settings) {
+  if (!elements.planningAssistantEnabled) return;
+  elements.planningAssistantEnabled.checked = settings.planning_assistant_enabled !== "0";
+  elements.planningAssistantAutoCheck.checked = settings.planning_assistant_auto_check !== "0";
+  elements.planningAssistantShowInformational.checked = settings.planning_assistant_show_informational !== "0";
+  updatePlanningAssistantSettings();
+}
+
 function canManageScheduleDutyColors() {
   const user = state.portalSession?.user;
   return ["hr", "developer"].includes(user?.role) && user?.permissions?.includes("settings:write") === true;
@@ -23043,12 +24054,19 @@ function restoreSettingsFormDrafts() {
     const scope = { contains: node => ids.includes(node?.id) };
     restoreSettingsConfirmation(scope); settingsDraftGuard?.restore(scope);
   };
+  if (elements.planningAssistantEnabled && (state.portalStatus?.portalEnabled !== true || state.portalSession?.user?.permissions?.includes("settings:write") === true)) {
+    // Restore dependent drafts before applying the master switch's disabled state.
+    const ids = ["planningAssistantEnabled", "planningAssistantAutoCheck", "planningAssistantShowInformational"];
+    for (const id of ids) elements[id].disabled = false;
+    restore(ids);
+  }
   restore(["currentWeekAutoLock", "branchSupervisionMode"]);
   updateWeekLockSettings(); updateBranchSupervisionSettings();
   restore(["currentWeekLockMode", "currentWeekLockDay", "branchSupervisionIntensity"]);
   updateWeekLockSettings(); updateBranchSupervisionSettings();
   restoreSettingsConfirmation(); settingsDraftGuard?.restore();
   updateWeekLockSettings(); updateBranchSupervisionSettings();
+  updatePlanningAssistantSettings();
 }
 function trackSettingsSaveDraft(event) {
   const node = event.target;
@@ -23156,6 +24174,7 @@ function renderSettings() {
     Number(settings.branch_supervision_max_department_gap_minutes || 180),
   );
   updateBranchSupervisionSettings();
+  renderPlanningAssistantSettings(settings);
   if (elements.vacationHrApprovalRequired) {
     elements.vacationHrApprovalRequired.checked = Boolean(state.workflowSettings?.vacationHrApprovalRequired ?? state.portalStatus?.workflow?.vacationHrApprovalRequired);
     elements.workflowSettingsHint.textContent = "Die Einstellung kann von Personalleitung oder höher geändert werden.";
@@ -23241,6 +24260,13 @@ function lifecycleRightsDependency(permissionId, requiredPermissionId, label) {
 }
 
 const permissionDependencyRules = Object.freeze([
+  Object.freeze({
+    permissionId: "security_audits:manage",
+    requiredPermissionId: "security_audits:read",
+    removedMessage: "Security Audits bearbeiten wurde ebenfalls entzogen, weil das Leserecht fehlt.",
+    unavailableMessage: "Security Audits können ohne verwaltbares Leserecht nicht bearbeitet werden.",
+    addedMessage: "Security Audits lesen wurde automatisch ergänzt.",
+  }),
   Object.freeze({
     permissionId: "personnel:candidates:create",
     requiredPermissionId: "personnel:candidates:read",
@@ -23651,17 +24677,91 @@ function xoffiMinutesInput(input, { nullable = false } = {}) {
   return Math.round(hours * 60);
 }
 
-function resetXoffiImport() {
+let xoffiImportGeneration = 0;
+let xoffiImportOwner = null;
+let xoffiInspectTicket = null;
+let xoffiPendingApply = null;
+
+function xoffiImportContext() {
+  return { actor: startDashboardWorkspaceActorKey(), session: state.portalSession,
+    locationId: String(state.locationId || ""), departmentId: String(state.departmentId || ""),
+    weekStart: String(state.weekStart || "") };
+}
+
+function xoffiImportAllowed() {
+  return canImportXoffiTime() && state.portalStatus?.installationFeatures?.timeTracking !== false
+    && (state.portalStatus?.portalEnabled !== true || (state.portalSession?.authenticated === true
+      && state.portalSession.user?.active !== false && state.portalSession.user?.mustChangePassword !== true));
+}
+
+function xoffiImportContextMatches(owner) {
+  if (!owner || !xoffiImportAllowed()) return false;
+  const current = xoffiImportContext();
+  return owner.actor === current.actor && owner.session === current.session
+    && owner.locationId === current.locationId && owner.departmentId === current.departmentId
+    && owner.weekStart === current.weekStart;
+}
+
+function xoffiImportRequestCurrent(ticket) {
+  return ticket.generation === xoffiImportGeneration && ticket.owner === xoffiImportOwner
+    && elements.xoffiImportDialog?.open && xoffiImportContextMatches(ticket.owner);
+}
+
+function clearXoffiImportPreview() {
   state.xoffiImportPreview = null;
-  if (elements.xoffiImportForm) elements.xoffiImportForm.reset();
-  if (elements.xoffiUseAsActual) elements.xoffiUseAsActual.checked = true;
   if (elements.xoffiImportConfirmed) elements.xoffiImportConfirmed.checked = false;
   if (elements.xoffiScreenshotWeekConfirmed) elements.xoffiScreenshotWeekConfirmed.checked = false;
   elements.xoffiScreenshotWeekConfirmation?.classList.add("hidden");
   if (elements.xoffiImportPreview) elements.xoffiImportPreview.innerHTML = "";
   elements.xoffiImportConfirmation?.classList.add("hidden");
   if (elements.xoffiApplyButton) elements.xoffiApplyButton.disabled = true;
+}
+
+function resetXoffiImport() {
+  xoffiImportGeneration++;
+  xoffiInspectTicket?.controller.abort();
+  xoffiInspectTicket = null;
+  xoffiImportOwner = null;
+  if (elements.xoffiImportForm) elements.xoffiImportForm.reset();
+  elements.xoffiImportForm?.querySelectorAll("input,select").forEach(field => { field.disabled = Boolean(xoffiPendingApply); });
+  if (elements.xoffiUseAsActual) elements.xoffiUseAsActual.checked = true;
+  clearXoffiImportPreview();
+  if (elements.xoffiImportFile) elements.xoffiImportFile.disabled = Boolean(xoffiPendingApply);
+  if (elements.xoffiInspectButton) elements.xoffiInspectButton.disabled = Boolean(xoffiPendingApply);
   if (elements.xoffiImportStatus) elements.xoffiImportStatus.textContent = "MHTML-Datei auswählen. Mitarbeiter und Kalenderwoche werden automatisch erkannt. Die Übernahme ist ab dem letzten geplanten Dienstende im gewählten Bereich möglich.";
+}
+
+function syncXoffiImport() {
+  if (!xoffiImportOwner || xoffiImportContextMatches(xoffiImportOwner)) return;
+  resetXoffiImport();
+  if (elements.xoffiImportDialog?.open) elements.xoffiImportDialog.close();
+}
+
+function openXoffiImport() {
+  if (!xoffiImportAllowed()) return;
+  syncGpWindows();
+  resetXoffiImport();
+  xoffiImportOwner = xoffiImportContext();
+  if (xoffiPendingApply) elements.xoffiImportStatus.textContent = "Ein zuvor gestarteter Importauftrag wird noch abgeschlossen. Danach kann eine neue Datei ausgelesen werden.";
+  if (!elements.xoffiImportDialog.open) elements.xoffiImportDialog.show();
+}
+
+function closeXoffiImport() {
+  const pending = Boolean(xoffiPendingApply);
+  resetXoffiImport();
+  if (elements.xoffiImportDialog?.open) elements.xoffiImportDialog.close();
+  if (pending) showToast("Fenster geschlossen. Der bereits gestartete Importauftrag läuft weiter; sein Ergebnis wird geprüft.");
+}
+
+function changeXoffiImportFile() {
+  if (xoffiPendingApply) return;
+  xoffiImportGeneration++;
+  xoffiInspectTicket?.controller.abort();
+  xoffiInspectTicket = null;
+  clearXoffiImportPreview();
+  xoffiImportOwner = xoffiImportContext();
+  elements.xoffiInspectButton.disabled = false;
+  elements.xoffiImportStatus.textContent = "Datei ausgewählt. Auslesen und anschließend Quelle, Zuordnungen und Review-Werte prüfen.";
 }
 
 function xoffiWeekRangeLabel(weekStart, weekEnd = addDays(weekStart, 6)) {
@@ -23672,7 +24772,7 @@ function xoffiWeekConfirmationRequired() {
   return state.xoffiImportPreview?.weekResolution?.confirmationRequired === true;
 }
 
-function updateXoffiApplyAvailability() {
+function updateXoffiApplyAvailability({ preserveStatus = false } = {}) {
   if (!elements.xoffiApplyButton) return;
   const reviewed = Boolean(state.xoffiImportPreview && elements.xoffiImportConfirmed?.checked);
   const weekConfirmed = !xoffiWeekConfirmationRequired() || elements.xoffiScreenshotWeekConfirmed?.checked === true;
@@ -23682,24 +24782,29 @@ function updateXoffiApplyAvailability() {
     blocker.querySelector("[data-xoffi-mapping-message]").textContent = issue.replace(/^Import noch nicht möglich:\s*/, "");
     blocker.hidden = !issue;
   }
-  elements.xoffiApplyButton.disabled = !(reviewed && weekConfirmed) || Boolean(issue);
-  if (state.xoffiImportPreview) elements.xoffiImportStatus.textContent = issue
+  elements.xoffiApplyButton.disabled = Boolean(xoffiPendingApply || xoffiInspectTicket) || !(reviewed && weekConfirmed) || Boolean(issue);
+  if (!preserveStatus && state.xoffiImportPreview && !xoffiPendingApply && !xoffiInspectTicket) elements.xoffiImportStatus.textContent = issue
     || "Zuordnungen vollständig. Bitte Werte prüfen und die Übernahme bestätigen.";
 }
 
 function xoffiMappingIssue() {
   const rows = [...elements.xoffiImportPreview.querySelectorAll("[data-xoffi-row]")];
-  const selected = new Set(), missing = [], duplicate = [];
+  const selected = new Set(), missing = [], duplicate = [], sourceInvalid = [];
   for (const row of rows) {
     const input = row.querySelector("[data-xoffi-employee]"), value = input.value;
-    const invalid = !value || (value !== "__skip__" && selected.has(value));
+    const invalidSource = row.dataset.reviewStatus === "invalid" && value !== "__skip__";
+    const invalid = invalidSource || !value || (value !== "__skip__" && selected.has(value));
     input.setAttribute("aria-invalid", String(invalid));
-    if (!value) missing.push(row.dataset.sourceName);
+    row.classList?.toggle("xoffi-row-excluded", value === "__skip__");
+    row.querySelectorAll?.(".xoffi-row-review input").forEach(field => { field.disabled = value === "__skip__" || Boolean(xoffiPendingApply); });
+    if (invalidSource) sourceInvalid.push(row.dataset.sourceName);
+    else if (!value) missing.push(row.dataset.sourceName);
     else if (value !== "__skip__") {
       if (selected.has(value)) duplicate.push(row.dataset.sourceName);
       selected.add(value);
     }
   }
+  if (sourceInvalid.length) return `Import noch nicht möglich: ${sourceInvalid.length} ungeklärte ${sourceInvalid.length === 1 ? "Quellzeile muss" : "Quellzeilen müssen"} ausdrücklich ausgeschlossen werden: ${sourceInvalid.join(", ")}. Bitte „Diese Zeile nicht übernehmen“ wählen. Die übrigen gültigen Zuordnungen bleiben importierbar.`;
   if (missing.length) return `Import noch nicht möglich: ${missing.length === 1 ? "Diese xoffi-Person ist" : `Diese ${missing.length} xoffi-Personen sind`} keinem aktiven GP-Teammitglied zugeordnet: ${missing.join(", ")}. Bitte zuordnen oder in der jeweiligen Zeile „Diese Zeile nicht übernehmen“ wählen. Danach können die übrigen Personen übernommen werden.`;
   if (duplicate.length) return `Teammitglied mehrfach zugeordnet: ${duplicate.join(", ")}. Bitte korrigieren.`;
   if (rows.length && !selected.size) return "Bitte mindestens ein Teammitglied zur Übernahme auswählen.";
@@ -23711,35 +24816,7 @@ function renderXoffiImportPreview() {
   if (!preview || !elements.xoffiImportPreview) return;
   const weekResolution = preview.weekResolution || {};
   const targetWeek = xoffiWeekRangeLabel(preview.weekStart, preview.weekEnd);
-  const candidateOptions = (selected) => preview.candidates.map((employee) => `
-    <option value="${escapeHtmlAttribute(employee.employeeNumber)}" ${employee.employeeNumber === selected ? "selected" : ""}>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</option>
-  `).join("");
-  elements.xoffiImportPreview.innerHTML = `
-    <div class="xoffi-preview-heading"><strong>KW ${Number(preview.calendarWeek)} · ${escapeHtml(preview.context.locationName || preview.context.locationId)}</strong><span>${formatDate(preview.weekStart)}–${formatDate(preview.weekEnd)}</span></div>
-    ${(preview.warnings || []).map((warning) => `<p class="calculation-note">${escapeHtml(warning)}</p>`).join("")}
-    <aside class="xoffi-import-blocker" role="alert" aria-atomic="true" data-xoffi-mapping-blocker hidden><strong>Import noch nicht möglich</strong><p data-xoffi-mapping-message></p></aside>
-    <div class="xoffi-preview-rows">${preview.employees.map((employee, rowIndex) => `
-      <article class="xoffi-preview-row" data-xoffi-row="${rowIndex}" data-source-name="${escapeHtmlAttribute(employee.sourceName)}" data-match-confidence="${Number(employee.matchConfidence || 0)}">
-        <div class="xoffi-row-heading">
-          <div><strong>${escapeHtml(employee.sourceName)}</strong><small>${employee.employeeNumber ? "Namensvorschlag · bitte prüfen" : "Zuordnung erforderlich"}</small></div>
-          <label>Teammitglied<select data-xoffi-employee><option value="">Bitte zuordnen</option>${candidateOptions(employee.employeeNumber)}<option value="__skip__">Diese Zeile nicht übernehmen</option></select></label>
-        </div>
-        <div class="xoffi-week-values">
-          <label>Ist gesamt (h)<input data-xoffi-week-actual type="number" step="0.01" min="0" max="168" value="${xoffiHoursInput(employee.weeklyActualMinutes)}" /></label>
-          <label>Gewertet (h)<input data-xoffi-week-valued type="number" step="0.01" min="0" max="336" value="${xoffiHoursInput(employee.weeklyValuedMinutes)}" /></label>
-          <label>Zuschläge (h)<input data-xoffi-week-surcharge type="number" step="0.01" min="0" max="168" value="${xoffiHoursInput(employee.weeklySurchargeMinutes)}" /></label>
-          ${employee.snapshot ? `<div class="xoffi-source-snapshot"><strong>Stand ${formatDate(employee.snapshot.balanceDate)}</strong><span>Zeitkonto: ${xoffiHoursInput(employee.snapshot.openingBalanceMinutes)} h</span><span>Resturlaub: ${Number(employee.snapshot.remainingVacationDays).toLocaleString("de-AT")} Tage</span><span>Vertrag: ${employee.snapshot.workdaysPerWeek} × ${xoffiHoursInput(employee.snapshot.dailyTargetMinutes)} h = ${xoffiHoursInput(employee.snapshot.dailyTargetMinutes * employee.snapshot.workdaysPerWeek)} h/Woche</span><span>Mehrstunden dieser Woche: ${xoffiHoursInput(employee.snapshot.weeklyBalanceDeltaMinutes)} h</span><small>Resturlaub am Stichtag, ohne künftig fixierte Urlaube. Der GP-Urlaubsstand und der GP-Vertrag bleiben erhalten.</small></div>` : `<label>Stundenkonto (h)<input data-xoffi-balance type="number" step="0.01" min="-10000" max="10000" value="${xoffiHoursInput(employee.closingBalanceMinutes)}" /></label>`}
-        </div>
-        <div class="xoffi-days">${employee.days.map((day, dayIndex) => `
-          <div class="xoffi-day" data-xoffi-day="${dayIndex}" data-work-date="${escapeHtmlAttribute(day.workDate)}" data-confidence="${Number(day.confidence || 0)}">
-            <strong>${weekdayNames[dayIndex]} <small>${formatDate(day.workDate, { day: "2-digit", month: "2-digit" })}</small></strong>
-            <label>Zeiten<input data-xoffi-intervals type="text" value="${escapeHtmlAttribute((day.intervals || []).join(", "))}" placeholder="09:00-12:30, 13:00-17:00" /></label>
-            <label>Ist (h)<input data-xoffi-day-actual type="number" step="0.01" min="0" max="24" value="${xoffiHoursInput(day.actualMinutes)}" /></label>
-            <label>Gewertet (h)<input data-xoffi-day-valued type="number" step="0.01" min="0" max="48" value="${xoffiHoursInput(day.valuedMinutes)}" /></label>
-            <label>Zuschlag (h)<input data-xoffi-day-surcharge type="number" step="0.01" min="0" max="24" value="${xoffiHoursInput(day.surchargeMinutes)}" /></label>
-          </div>`).join("")}</div>
-        ${(employee.warnings || []).map((warning) => `<p class="settings-note">${escapeHtml(warning)}</p>`).join("")}
-      </article>`).join("")}</div>`;
+  elements.xoffiImportPreview.innerHTML = window.GpXoffiImport.render(preview);
   elements.xoffiImportConfirmation?.classList.remove("hidden");
   if (elements.xoffiScreenshotWeekConfirmed) elements.xoffiScreenshotWeekConfirmed.checked = false;
   elements.xoffiScreenshotWeekConfirmation?.classList.toggle("hidden", weekResolution.confirmationRequired !== true);
@@ -23756,20 +24833,31 @@ function renderXoffiImportPreview() {
 }
 
 async function inspectXoffiImportFile() {
+  syncXoffiImport();
+  if (xoffiPendingApply || !elements.xoffiImportDialog?.open || !xoffiImportContextMatches(xoffiImportOwner)) return;
+  if (state.data?.weekStart !== state.weekStart || String(state.data?.context?.locationId || "") !== String(state.locationId || "")
+    || String(state.data?.context?.departmentId || "") !== String(state.departmentId || "")) {
+    elements.xoffiImportStatus.textContent = "Der gewählte Bereich wird noch geladen. Bitte danach die Datei erneut auslesen.";
+    return;
+  }
   const file = elements.xoffiImportFile?.files?.[0];
   if (!file) {
     elements.xoffiImportStatus.textContent = "Bitte zuerst eine MHTML-Datei oder eine JPG-, PNG- oder WebP-Datei auswählen.";
     return;
   }
+  xoffiInspectTicket?.controller.abort();
+  const ticket = { owner: xoffiImportOwner, generation: ++xoffiImportGeneration, controller: new AbortController() };
+  xoffiInspectTicket = ticket;
+  clearXoffiImportPreview();
   elements.xoffiInspectButton.disabled = true;
   elements.xoffiApplyButton.disabled = true;
   elements.xoffiImportStatus.textContent = "Datei wird ausgelesen und der Kalenderwoche zugeordnet. Das letzte Dienstende wird geprüft.";
   try {
     const parameters = new URLSearchParams({
-      weekStart: state.data.weekStart,
-      locationId: state.data.context.locationId,
+      weekStart: ticket.owner.weekStart,
+      locationId: ticket.owner.locationId,
     });
-    if (state.data.context.departmentId) parameters.set("departmentId", state.data.context.departmentId);
+    if (ticket.owner.departmentId) parameters.set("departmentId", ticket.owner.departmentId);
     const response = await rawApi(`/api/portal/v1/xoffi-time-import/inspect?${parameters}`, {
       method: "POST",
       headers: {
@@ -23777,8 +24865,13 @@ async function inspectXoffiImportFile() {
         "X-Import-Filename": encodeURIComponent(file.name || "xoffi.png"),
       },
       body: file,
+      signal: ticket.controller.signal,
     });
-    state.xoffiImportPreview = await response.json();
+    const preview = await response.json();
+    if (!xoffiImportRequestCurrent(ticket)) return;
+    if (String(preview.context?.locationId || "") !== ticket.owner.locationId
+      || String(preview.context?.departmentId || "") !== ticket.owner.departmentId) throw new Error("Die Vorschau gehört nicht zum ausgewählten Bereich. Bitte die Datei erneut auslesen.");
+    state.xoffiImportPreview = { ...preview, clientFileName: String(file.name || "Xoffi-Datei").slice(0, 120) };
     elements.xoffiImportConfirmed.checked = false;
     renderXoffiImportPreview();
     elements.xoffiImportStatus.textContent = xoffiWeekConfirmationRequired()
@@ -23786,13 +24879,17 @@ async function inspectXoffiImportFile() {
       : "Mitarbeiter und Kalenderwoche erkannt. Bitte die Zuordnung und Werte vor der Übernahme prüfen.";
     updateXoffiApplyAvailability();
   } catch (error) {
-    state.xoffiImportPreview = null;
-    elements.xoffiImportPreview.innerHTML = "";
-    elements.xoffiImportConfirmation?.classList.add("hidden");
-    elements.xoffiScreenshotWeekConfirmation?.classList.add("hidden");
+    if (!xoffiImportRequestCurrent(ticket)) return;
+    clearXoffiImportPreview();
     elements.xoffiImportStatus.textContent = error.message;
   } finally {
-    elements.xoffiInspectButton.disabled = false;
+    if (xoffiInspectTicket === ticket) {
+      xoffiInspectTicket = null;
+      if (xoffiImportRequestCurrent(ticket)) {
+        elements.xoffiInspectButton.disabled = false;
+        if (state.xoffiImportPreview) updateXoffiApplyAvailability();
+      }
+    }
   }
 }
 
@@ -23822,6 +24919,8 @@ function collectXoffiReviewedRows() {
 
 async function applyXoffiImport(event) {
   event.preventDefault();
+  syncXoffiImport();
+  if (xoffiPendingApply || xoffiInspectTicket || !elements.xoffiImportDialog?.open || !xoffiImportContextMatches(xoffiImportOwner)) return;
   if (!state.xoffiImportPreview || !elements.xoffiImportConfirmed.checked
     || (xoffiWeekConfirmationRequired() && !elements.xoffiScreenshotWeekConfirmed?.checked)) return;
   const mappingIssue = xoffiMappingIssue();
@@ -23830,6 +24929,14 @@ async function applyXoffiImport(event) {
     elements.xoffiImportStatus.focus();
     return;
   }
+  let employees;
+  try { employees = collectXoffiReviewedRows(); }
+  catch (error) { elements.xoffiImportStatus.textContent = error.message;elements.xoffiImportStatus.focus();return; }
+  const preview = state.xoffiImportPreview;
+  const ticket = { owner: xoffiImportOwner, generation: xoffiImportGeneration, previewId: preview.previewId,
+    targetWeek: preview.weekStart, targetLocationId: String(preview.context.locationId), targetDepartmentId: String(preview.context.departmentId || "") };
+  xoffiPendingApply = ticket;
+  elements.xoffiImportForm.querySelectorAll("input,select").forEach(field => { field.disabled = true; });
   elements.xoffiApplyButton.disabled = true;
   elements.xoffiInspectButton.disabled = true;
   elements.xoffiImportStatus.textContent = "Geprüfte xoffi-Werte werden gespeichert.";
@@ -23837,25 +24944,44 @@ async function applyXoffiImport(event) {
     const result = await api("/api/portal/v1/xoffi-time-import/apply", {
       method: "POST",
       body: JSON.stringify({
-        previewId: state.xoffiImportPreview.previewId,
+        previewId: ticket.previewId,
         confirmed: true,
         screenshotWeekConfirmed: elements.xoffiScreenshotWeekConfirmed?.checked === true,
         useAsActual: elements.xoffiUseAsActual.checked,
-        employees: collectXoffiReviewedRows(),
+        employees,
       }),
     });
-    state.data = result.schedule;
-    state.weekStart = result.schedule.weekStart;
-    render();
+    if (result.schedule?.weekStart !== ticket.targetWeek || String(result.schedule?.context?.locationId || "") !== ticket.targetLocationId
+      || String(result.schedule?.context?.departmentId || "") !== ticket.targetDepartmentId) throw new Error("Der Import wurde beantwortet, aber der aktualisierte Dienstplan passt nicht zur geprüften Quelle. Bitte den Bereich neu laden.");
+    if (!xoffiImportRequestCurrent(ticket)) {
+      const current = xoffiImportContext();
+      if (ticket.owner.actor === current.actor && ticket.owner.session === current.session && xoffiImportAllowed()) showToast("Der zuvor gestartete xoffi-Import wurde abgeschlossen. Die aktuelle Ansicht bleibt erhalten; den betreffenden Bereich bei Bedarf neu laden.");
+      return;
+    }
     elements.xoffiImportDialog.close();
+    resetXoffiImport();
+    applyLoadedSchedule(result.schedule);
+    render();
     showToast("xoffi-Zeiterfassung wurde revisionssicher übernommen.");
   } catch (error) {
+    if (!xoffiImportRequestCurrent(ticket)) {
+      const current = xoffiImportContext();
+      if (ticket.owner.actor === current.actor && ticket.owner.session === current.session && xoffiImportAllowed()) showToast("Der zuvor gestartete Import konnte nicht vollständig bestätigt werden. Bitte den betreffenden Bereich prüfen.", true);
+      return;
+    }
     updateXoffiApplyAvailability();
     elements.xoffiImportStatus.textContent = error.message;
     elements.xoffiImportStatus.focus();
     showToast(error.message, true);
   } finally {
-    elements.xoffiInspectButton.disabled = false;
+    if (xoffiPendingApply === ticket) {
+      xoffiPendingApply = null;
+      if (elements.xoffiImportDialog?.open && xoffiImportContextMatches(xoffiImportOwner)) {
+        elements.xoffiImportForm.querySelectorAll("input,select").forEach(field => { field.disabled = false; });
+        elements.xoffiInspectButton.disabled = false;
+        updateXoffiApplyAvailability({ preserveStatus: true });
+      }
+    }
   }
 }
 
@@ -23915,7 +25041,7 @@ async function loadPortalUsers() {
         ${roleControl}
         <select data-scope-location aria-label="Zugewiesene Filiale" class="${["location_planner", "manager", "department_manager"].includes(user.role) ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${locations}</select>
         <select data-scope-department aria-label="Zugewiesene Abteilung" class="${user.role === "department_manager" ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${departments}</select>
-        <span class="password-field portal-user-password ${roleEditable ? "" : "hidden"}"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" minlength="${Number(state.portalStatus?.passwordMinLength || 6)}" placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
+        <span class="password-field portal-user-password ${roleEditable ? "" : "hidden"}"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" data-gp-new-password placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
         </div>
         <footer class="portal-user-actions">${roleEditable || scopeEditable ? '<button class="secondary-button" data-save-portal-user type="button">Speichern</button>' : ""}${(user.locked || user.failedLoginAttempts) && roleEditable ? '<button class="secondary-button" data-unlock-portal-user type="button">Entsperren</button>' : ""}</footer>
       </article>`;
@@ -23977,7 +25103,7 @@ function resetOrganizationAccountForm() {
   );
   elements.organizationAccountPassword.value = "";
   resetAdminCredentialVisibility(elements.organizationAccountPassword);
-  elements.organizationAccountPassword.minLength = Number(state.portalStatus?.passwordMinLength || 6);
+  window.GrabenplanerPasswordPolicy?.validate(elements.organizationAccountPassword);
   elements.organizationAccountLoanOverview.checked = true;
   elements.organizationAccountScheduleView.checked = true;
   elements.organizationAccountLearningDashboard.checked = true;
@@ -24980,6 +26106,7 @@ function pageViewElement(view) {
     tradeInsights: elements.tradeInsightsView,
     logistics: elements.logisticsView,
     privacyOrganization: document.getElementById("privacyOrganizationView"),
+    technicalSecurity: document.getElementById("technicalSecurityView"),
     priceLabels: document.getElementById("salesPriceLabelsView"),
     articleCatalog: elements.salesArticleCatalogView,
     articleReport: document.getElementById('salesArticleReportView'),
@@ -25360,27 +26487,43 @@ async function loadUiPreferences() {
 }
 
 async function persistPersonnelDashboardLayout(layout, { silent = false } = {}) {
-  const previous = normalizePersonnelDashboardLayout(state.personnelDashboardLayout);
   const normalized = normalizePersonnelDashboardLayout(layout);
-  state.personnelDashboardLayout = normalized;
-  localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(normalized));
-  renderPersonnelDashboard();
-  try {
-    const result = await api("/api/portal/v1/ui-preferences", {
-      method: "PUT",
-      body: JSON.stringify({ personnelDashboardLayout: normalized }),
-    });
-    state.personnelDashboardLayout = normalizePersonnelDashboardLayout(result.personnelDashboardLayout || normalized);
-    localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(state.personnelDashboardLayout));
-    renderPersonnelDashboard();
-    if (!silent) showToast("Das Personal-Dashboard wurde gespeichert.");
-    return true;
-  } catch (error) {
-    state.personnelDashboardLayout = previous;
-    localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(previous));
-    renderPersonnelDashboard();
-    if (!silent) showToast(error.message, true);
-    return false;
+  if (!personnelDashboardWorkspace?.store.ready || !canUsePersonnelDashboardWorkspace()) return false;
+  const ticket = captureGpContext(canUsePersonnelDashboardWorkspace, () => personnelDashboardCustomizerRevision);
+  const value = state.personnelDashboardResetDraft ? window.PersonnelDashboardWorkspacePreferences.empty() : personnelDashboardWorkspace.store.value;
+  value.order = normalized.order.map(id => `card:${id}`);
+  for (const id of window.PersonnelDashboardWorkspacePreferences.IDS) {
+    const field = { ...value.fields[id] };
+    if (normalized.hidden.includes(id.slice(5))) field.hidden = true;
+    else delete field.hidden;
+    if (Object.keys(field).length) value.fields[id] = field;
+    else delete value.fields[id];
+  }
+  const saved = await personnelDashboardWorkspace.store.change(value);
+  if (!gpContextCurrent(ticket)) return false;
+  if (saved && !silent) showToast("Das Personal-Dashboard wurde gespeichert.");
+  return saved === true;
+}
+
+async function savePersonnelDashboardConfiguration() {
+  if (!state.personnelDashboardDraftLayout || !personnelDashboardWorkspace?.store.ready || !canUsePersonnelDashboardWorkspace()) return;
+  const layout = normalizePersonnelDashboardLayout(state.personnelDashboardDraftLayout);
+  if (!orderedPersonnelDashboardItems(layout).some(item => !layout.hidden.includes(item.id))) {
+    if (elements.personnelDashboardCustomizerStatus) elements.personnelDashboardCustomizerStatus.textContent = "Bitte mindestens einen verfügbaren Arbeitsbereich einblenden.";
+    return;
+  }
+  const context = captureGpContext(canUsePersonnelDashboardWorkspace, () => personnelDashboardCustomizerRevision);
+  const signature = JSON.stringify([layout, state.personnelDashboardResetDraft === true]);
+  personnelDashboardConfigurationSaveContext = context;
+  elements.savePersonnelDashboardLayout.disabled = true;
+  const saved = await persistPersonnelDashboardLayout(layout, { silent: true });
+  if (!gpContextCurrent(context) || personnelDashboardConfigurationSaveContext !== context) return;
+  personnelDashboardConfigurationSaveContext = null;
+  elements.savePersonnelDashboardLayout.disabled = false;
+  if (saved && signature === JSON.stringify([normalizePersonnelDashboardLayout(state.personnelDashboardDraftLayout), state.personnelDashboardResetDraft === true])) {
+    closePersonnelDashboardCustomizer();showToast("Das Personal-Dashboard wurde gespeichert.");
+  } else if (elements.personnelDashboardCustomizerStatus) {
+    elements.personnelDashboardCustomizerStatus.textContent = saved ? "Die gesendete Anordnung ist gespeichert. Neuere Änderungen sind noch offen." : "Die Anordnung konnte nicht gespeichert werden. Deine Einstellungen bleiben zum erneuten Speichern erhalten.";
   }
 }
 
@@ -26084,13 +27227,55 @@ function systemCenterUptimeLabel(seconds) {
 
 function systemCenterResourceCards(resources) {
   if (!resources || typeof resources !== "object") return "";
+  const percent = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100
+    ? new Intl.NumberFormat("de-AT", { maximumFractionDigits: 1 }).format(value) + " %" : null;
   const metrics = [
     { label: "Serverlaufzeit", value: systemCenterUptimeLabel(resources.uptimeSeconds), detail: "Seit dem letzten App-Start" },
-    { label: "CPU", value: Number.isFinite(resources.cpu?.loadAverageOneMinute) ? `${resources.cpu.loadAverageOneMinute} Last` : "Aktiv", detail: Number.isInteger(resources.cpu?.logicalProcessors) && resources.cpu.logicalProcessors > 0 ? `${resources.cpu.logicalProcessors} logische Prozessoren` : "Prozessoranzahl nicht verfügbar" },
-    { label: "Arbeitsspeicher", value: Number.isFinite(resources.memory?.usedPercent) ? `${resources.memory.usedPercent}% belegt` : "Nicht verfügbar", detail: `${systemCenterByteLabel(resources.memory?.availableBytes ?? resources.memory?.freeBytes)} verfügbar` },
+    { id: "cpu", label: "CPU", value: percent(resources.cpu?.usedPercent) || (resources.cpu?.status === "warming-up" ? "Messung läuft" : "Nicht verfügbar"), detail: Number.isInteger(resources.cpu?.logicalProcessors) && resources.cpu.logicalProcessors > 0 ? `Gesamter Server · ${resources.cpu.logicalProcessors} logische Prozessoren` : "Gesamter Server" },
+    { id: "memory", label: "Arbeitsspeicher", value: percent(resources.memory?.usedPercent) ? `${percent(resources.memory.usedPercent)} belegt` : "Nicht verfügbar", detail: `${systemCenterByteLabel(resources.memory?.availableBytes ?? resources.memory?.freeBytes)} verfügbar` },
     { label: "Freier Speicher", value: systemCenterByteLabel(resources.storage?.freeBytes), detail: `Datenbank ${systemCenterByteLabel(resources.storage?.databaseBytes)}` },
   ];
-  return `<section class="system-center-resources" aria-label="Aktuelle technische Ressourcen">${metrics.map((metric) => `<article><small>${escapeHtml(metric.label)}</small><strong>${escapeHtml(metric.value)}</strong><span>${escapeHtml(metric.detail)}</span></article>`).join("")}</section>`;
+  return `<section class="system-center-resources" aria-label="Aktuelle technische Ressourcen">${metrics.map((metric) => `<article${metric.id ? ` data-system-utilization-resource="${metric.id}"` : ""}><small>${escapeHtml(metric.label)}</small><strong>${escapeHtml(metric.value)}</strong><span>${escapeHtml(metric.detail)}</span></article>`).join("")}</section>`;
+}
+
+function systemUtilizationAllowed() {
+  if (state.portalStatus?.portalEnabled === false) return true;
+  return state.portalSession?.authenticated === true && !state.portalSession.user?.mustChangePassword
+    && state.portalSession.user?.permissions?.includes("system:diagnostics:technical") === true;
+}
+
+function systemUtilizationActive() {
+  return systemUtilizationAllowed() && state.currentView === "settings"
+    && elements.systemCenterPanel?.classList.contains("active") === true;
+}
+
+function updateSystemUtilizationSnapshot(snapshot) {
+  if (!systemUtilizationActive() || !snapshot?.current || !state.systemCenter?.resources) return;
+  const resources = state.systemCenter.resources;
+  resources.cpu = { ...resources.cpu, ...snapshot.current.cpu };
+  resources.memory = { ...resources.memory, ...snapshot.current.memory };
+  const template = document.createElement("div");
+  template.innerHTML = systemCenterResourceCards(resources);
+  for (const id of ["cpu", "memory"]) {
+    const selector = `[data-system-utilization-resource="${id}"]`;
+    const current = elements.systemCenterContent.querySelector(selector), next = template.querySelector(selector);
+    if (current && next) current.replaceChildren(...next.childNodes);
+  }
+}
+
+function syncSystemUtilizationWorkspace() {
+  const host = elements.systemCenterUtilization;
+  if (!host || !globalThis.GpSystemUtilization) return;
+  const slot = elements.systemCenterContent?.querySelector("[data-system-utilization-slot]");
+  if (slot) slot.replaceWith(host);
+  const allowed = systemUtilizationAllowed();
+  if (!systemUtilizationWorkspace && allowed) systemUtilizationWorkspace = globalThis.GpSystemUtilization.mount(host, {
+    api, isActive: systemUtilizationActive, onSnapshot: updateSystemUtilizationSnapshot,
+  });
+  const user = state.portalSession?.user;
+  const actorKey = !allowed ? "" : state.portalStatus?.portalEnabled === false ? "local"
+    : JSON.stringify([user?.accountId, user?.employeeNumber, user?.sessionKind, user?.permissions, user?.scopes]);
+  systemUtilizationWorkspace?.synchronize({ active: systemUtilizationActive(), actorKey });
 }
 
 function renderSystemCenterOffsiteProvider(status) {
@@ -26133,10 +27318,19 @@ function systemCenterDurationLabel(seconds) {
 
 function renderSystemCenterOperations(automation, notifications) {
   const schedule = automation && typeof automation === "object" ? automation : {};
+  const deferred = schedule.state === "healthy" && schedule.paused === true
+    && schedule.reasonCode === "AUTOMATION_DEPLOY_DEFERRED";
+  const catchupRunning = schedule.state === "healthy"
+    && schedule.reasonCode === "AUTOMATION_DEPLOY_CATCHUP_RUNNING";
+  const deferral = schedule.deployDeferral && typeof schedule.deployDeferral === "object"
+    ? schedule.deployDeferral : {};
   const delivery = notifications && typeof notifications === "object" ? notifications : {};
   const automationState = systemCenterVisualState(schedule.overdue === true ? "critical" : schedule.state,
     schedule.enabled === false ? "neutral" : "warning");
-  const automationCopy = systemCenterStateCopy(automationState);
+  const automationCopy = deferred
+    ? { icon: "◷", label: "Wegen Deployment verschoben" }
+    : catchupRunning ? { icon: "◷", label: "Nachgeholte Prüfung läuft" }
+      : systemCenterStateCopy(automationState);
   const smokeState = systemCenterVisualState(schedule.applicationSmokeState, "neutral");
   const smokeCopy = systemCenterStateCopy(smokeState);
   const notificationState = systemCenterVisualState(delivery.state,
@@ -26151,7 +27345,9 @@ function renderSystemCenterOperations(automation, notifications) {
     <article class="system-center-operation ${automationState}">
       <header><div><span class="eyebrow">Automatische Prüfung</span><h2>Nächtliche Recovery Assurance</h2></div><span class="system-center-state ${automationState}"><i aria-hidden="true">${automationCopy.icon}</i>${escapeHtml(automationCopy.label)}</span></header>
       <p>${schedule.enabled === false ? "Die automatische Prüfung ist auf diesem System nicht aktiv." : escapeHtml(schedule.scheduleLabel || "Tägliche Ausführung mit zufälliger Startverzögerung und geschützter Parallelitätssperre.")}</p>
-      <dl><div><dt>Letzter Nachtlauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.lastRunAt))}</dd></div><div><dt>Nächster Lauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.nextRunAt))}</dd></div><div><dt>App-Start im letzten Nachtlauf</dt><dd><span class="system-center-inline-state ${smokeState}"><i aria-hidden="true">${smokeCopy.icon}</i>${escapeHtml(smokeCopy.label)}</span></dd></div>${schedule.latestFullProofAt ? `<div><dt>Letzter vollständiger Nachweis (alle Auslöser)</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.latestFullProofAt))}</dd></div>` : ""}</dl>
+      ${deferred ? `<p>Die Nachtprüfung startet nach dem laufenden Deployment. Ursprünglich fällig: ${escapeHtml(diagnosticTimestamp(deferral.dueAt))}. Aufschub bis spätestens ${escapeHtml(diagnosticTimestamp(deferral.deadlineAt))} (höchstens 3 Stunden). Der bestätigte Aufschub senkt den System-Index nicht.</p>` : ""}
+      ${catchupRunning ? '<p>Der verschobene Nachtlauf ist innerhalb der dreistündigen Frist gestartet. Das vollständige Prüfergebnis steht noch aus.</p>' : ""}
+      <dl><div><dt>Letzter Nachtlauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.lastRunAt))}</dd></div><div><dt>${deferred ? "Spätester Start" : catchupRunning ? "Aktueller Lauf" : "Nächster Lauf"}</dt><dd>${catchupRunning ? "Läuft" : escapeHtml(diagnosticTimestamp(deferred ? deferral.deadlineAt : schedule.nextRunAt))}</dd></div><div><dt>App-Start im letzten Nachtlauf</dt><dd><span class="system-center-inline-state ${smokeState}"><i aria-hidden="true">${smokeCopy.icon}</i>${escapeHtml(smokeCopy.label)}</span></dd></div>${schedule.latestFullProofAt ? `<div><dt>Letzter vollständiger Nachweis (alle Auslöser)</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.latestFullProofAt))}</dd></div>` : ""}</dl>
       ${schedule.state !== "healthy" ? '<a href="/?view=settings&amp;section=backup">Beheben</a>' : ""}
       ${schedule.reasonCode === "AUTOMATION_RUN_FAILED" && schedule.latestFullProofAt && Date.parse(schedule.latestFullProofAt) > Date.parse(schedule.lastRunAt) ? '<p>Ein späterer vollständiger Lauf hat die Wiederherstellbarkeit bestätigt. Der fehlgeschlagene Nachtlauf bleibt als Störung der Automatik sichtbar.</p>' : ""}
       ${schedule.overdue === true ? '<strong class="system-center-operation-warning">Der automatische Nachweis ist überfällig und benötigt Aufmerksamkeit.</strong>' : ""}
@@ -26299,11 +27495,12 @@ function renderProductReadiness(payload) {
     <div class="product-readiness-gates">
       ${technicalGates.map((gate) => {
         const copy = productReadinessStateCopy(gate.state);
+        const standardUrl = safeWorkRuleSourceUrl(gate.standard?.url);
         return `<article class="product-readiness-gate ${copy.state}">
           <header><div><strong>${escapeHtml(gate.label)}</strong><small>${escapeHtml(gate.standard?.label || "Technischer Nachweis")}</small></div><span class="system-center-state ${copy.state}"><i aria-hidden="true">${copy.icon}</i>${escapeHtml(copy.label)}</span></header>
           <p>${escapeHtml(gate.detail || "")}</p>
           ${copy.state !== "ok" ? `<a href="#system-center-factor-${escapeHtml(gate.repairFactorId || (gate.id === "security" ? "server" : "recovery"))}">Beheben – betroffene Prüfungen ansehen</a> · ` : ""}
-          ${gate.standard?.url ? `<a href="${escapeHtml(gate.standard.url)}" target="_blank" rel="noreferrer">OWASP-Referenz öffnen</a>` : ""}
+          ${standardUrl ? `<a href="${escapeHtmlAttribute(standardUrl)}" target="_blank" rel="noopener noreferrer">OWASP-Referenz öffnen</a>` : ""}
         </article>`;
       }).join("")}
       ${manualGates.map((gate) => {
@@ -26379,6 +27576,7 @@ function renderSystemCenter(payload) {
     }).join("")}</section>` : ""}
     ${renderSystemCenterOffsiteProvider(payload?.status)}
     ${systemCenterResourceCards(payload?.resources)}
+    <div data-system-utilization-slot></div>
     ${renderSystemCenterOperations(payload?.automation, payload?.notifications)}
     ${renderSystemCenterTrends(payload?.trends, payload?.resources, score)}
     ${renderProductReadiness(payload?.productReadiness)}
@@ -26415,6 +27613,7 @@ function renderSystemCenter(payload) {
       <div class="system-center-section-heading"><div><span class="eyebrow">Signierte Prüfhistorie</span><h2>Recovery-Assurance-Läufe</h2><p>Die angezeigten Läufe wurden serverseitig aus der vollständig geprüften Signaturkette zusammengefasst.</p></div><span>${Number(assurance.eventCount || 0)} bestätigte Ereignisse</span></div>
       <div class="system-center-run-list">${runs.length ? runs.map(renderSystemCenterRun).join("") : '<div class="system-center-empty"><strong>Noch kein vollständiger Lauf</strong><p>Sobald ein Recovery-Assurance-Test ausgeführt wurde, erscheint hier sein nachvollziehbarer Ablauf.</p></div>'}</div>
     </section>`;
+  if (globalThis.GpSystemUtilization) syncSystemUtilizationWorkspace();
 }
 
 function applySystemCenterControls(payload) {
@@ -26425,8 +27624,10 @@ function applySystemCenterControls(payload) {
   elements.startRecoveryAssurance?.classList.toggle("hidden", !allowed);
   if (elements.startRecoveryAssurance) {
     elements.startRecoveryAssurance.disabled = busy || manualRun.available === false;
-    elements.startRecoveryAssurance.textContent = manualRun.busy ? "Recovery-Test läuft" : "Recovery-Test starten";
-    elements.startRecoveryAssurance.title = String(manualRun.reason || "Startet eine vollständige, isolierte Wiederherstellungsprüfung.");
+    elements.startRecoveryAssurance.textContent = manualRun.busy ? "Sicherung oder Wartung läuft" : "Recovery-Test starten";
+    elements.startRecoveryAssurance.title = manualRun.busy
+      ? "Eine Sicherung oder Wartung läuft bereits. Eine weitere Wiederherstellungsprüfung kann danach gestartet werden."
+      : String(manualRun.reason || "Startet eine vollständige, isolierte Wiederherstellungsprüfung.");
   }
   if (elements.refreshSystemCenter) elements.refreshSystemCenter.disabled = state.systemCenterLoading;
 }
@@ -27402,6 +28603,8 @@ function customProcessPayload() {
 }
 
 async function saveCustomProcess(event) {
+  const ticket = captureGpEditor(elements.customProcessModal, canManageCustomProcesses);
+  if (!gpEditorCurrent(ticket)) return;
   event.preventDefault();
   const payload = customProcessPayload();
   if (payload.steps.length < 2) return setCustomProcessMessage("Bitte mindestens zwei Prozessschritte hinzufügen.", true);
@@ -27417,18 +28620,22 @@ async function saveCustomProcess(event) {
       method: id ? "PUT" : "POST",
       body: JSON.stringify(payload),
     });
+    if (!gpEditorCurrent(ticket)) return;
     const saved = result?.process || result;
     if (saved?.id) {
       state.rightsDashboardSelectedProcessId = String(saved.id);
       state.rightsProcessCategoryId = String(saved.category || "all");
     }
+    if (!gpEditorCurrent(ticket)) return;
     elements.customProcessModal.close();
     await loadRightsDashboard();
+    if (!gpEditorCurrent(ticket, true)) return;
     showToast(id ? "Der eigene Ablauf wurde gespeichert." : "Der eigene Ablauf wurde angelegt.");
   } catch (error) {
+    if (!gpEditorCurrent(ticket, true)) return;
     setCustomProcessMessage(error.message, true);
   } finally {
-    elements.saveCustomProcessButton.disabled = false;
+    if (gpEditorCurrent(ticket, true)) elements.saveCustomProcessButton.disabled = false;
   }
 }
 
@@ -28508,7 +29715,7 @@ async function loadApprovalDelegations() {
     state.approvalDelegations = result.delegations || [];
     elements.delegationLocation.innerHTML = state.locations.map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.name)}</option>`).join("");
     refreshDelegationEmployees();
-    elements.delegationList.innerHTML = state.approvalDelegations.length ? state.approvalDelegations.map((item) => `<div class="delegation-row" data-delegation-id="${item.id}"><div><strong>${escapeHtml(item.location_name)} · ${escapeHtml(item.delegate_employee_number)} · ${escapeHtml(item.nickname || item.full_name)}</strong><small>${formatDate(item.date_from)}–${formatDate(item.date_to)}${item.note ? ` · ${escapeHtml(item.note)}` : ""}</small></div><button class="danger-button" data-delete-delegation type="button">Löschen</button></div>`).join("") : '<p class="settings-note">Keine zeitlich begrenzte Vertretung hinterlegt.</p>';
+    elements.delegationList.innerHTML = state.approvalDelegations.length ? state.approvalDelegations.map((item) => `<div class="delegation-row" data-delegation-id="${escapeHtmlAttribute(item.id)}"><div><strong>${escapeHtml(item.location_name)} · ${escapeHtml(item.delegate_employee_number)} · ${escapeHtml(item.nickname || item.full_name)}</strong><small>${formatDate(item.date_from)}–${formatDate(item.date_to)}${item.note ? ` · ${escapeHtml(item.note)}` : ""}</small></div><button class="danger-button" data-delete-delegation type="button">Löschen</button></div>`).join("") : '<p class="settings-note">Keine zeitlich begrenzte Vertretung hinterlegt.</p>';
   } catch (error) {
     elements.delegationSettingsCard.classList.toggle("hidden", error.status === 403);
   }
@@ -28529,7 +29736,7 @@ let managerRequestsInFlight = null;
 let managerRequestsLastRefresh = 0;
 async function loadManagerVacationRequests({ background = false } = {}) {
   if (!elements.managerVacationRequestList) return;
-  if (background && (document.hidden || planningPeriodController || Date.now() - managerRequestsLastRefresh < 10000)) return;
+  if (background && (document.hidden || shiftMutation || planningPeriodController || Date.now() - managerRequestsLastRefresh < 10000)) return;
   const session = state.portalSession;
   if (managerRequestsInFlight?.session === session) return managerRequestsInFlight.pending;
   const pending = refreshManagerVacationRequests(session);
@@ -28666,7 +29873,10 @@ function xoffiDisplayComparison(row) {
   const valued = xoffiComparisonMode === "valued";
   const comparison = row[valued ? "valuedComparison" : "presenceComparison"];
   const partial = comparison.actualMinutes === null && row.coveredDays > 0 && !row.scopeMismatch;
-  return { ...row, presenceMinutes: row.actualMinutes, ...comparison, partial,
+  const valuationUnknown = valued && row.valuationAllocationIncomplete === true;
+  const weeklyProofMissing = valuationUnknown && (row.weeklyCredits || []).some(credit => credit.status !== "verified");
+  return { ...row, presenceMinutes: row.actualMinutes, ...comparison, partial, valuationUnknown, weeklyProofMissing,
+    comparisonComplete: comparison.actualMinutes != null,
     actualMinutes: partial ? (valued ? row.knownValuedMinutes : row.knownActualMinutes) : comparison.actualMinutes,
     planCredits: xoffiComparisonMode === "valued" ? row.planCredits : [],
   };
@@ -28679,7 +29889,7 @@ function xoffiDifference(row) {
 function xoffiComparisonCells(row) {
   const credit = !row.partial && row.actualMinutes !== null && xoffiComparisonMode === "valued" ? Math.max(0, row.valuedMinutes - row.presenceMinutes) : 0;
   return `<td class="xoffi-hours"><strong>${formatHours(row.plannedMinutes)}</strong>${(row.planCredits || []).map(item => `<small class="xoffi-plan-credit">${escapeHtml(item.label)} · ${formatHours(item.minutes)}</small>`).join("")}</td>
-    <td class="xoffi-hours"><strong>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</strong>${row.partial ? `<small>Teilstand · ${row.coveredDays}/${row.totalDays} Tage</small>` : ""}${credit ? `<small>${formatHours(row.presenceMinutes)} anwesend<br>+ ${formatHours(credit)} ${row.absence === "sick" ? "Krankenstand" : "Gutschrift / Zuschlag"}</small>` : ""}${row.intervals?.length ? `<small class="xoffi-intervals">${row.intervals.map(escapeHtml).join("<br>")}</small>` : ""}</td>
+    <td class="xoffi-hours"><strong>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</strong>${row.partial ? `<small>${row.valuationUnknown ? "Gesicherter Teilstand · Bewertung offen" : `Teilstand · ${row.coveredDays}/${row.totalDays} Tage`}</small>` : ""}${credit ? `<small>${formatHours(row.presenceMinutes)} anwesend<br>+ ${formatHours(credit)} ${row.absence === "sick" ? "Krankenstand" : "Gutschrift / Zuschlag"}</small>` : ""}${row.intervals?.length ? `<small class="xoffi-intervals">${row.intervals.map(escapeHtml).join("<br>")}</small>` : ""}</td>
     <td class="xoffi-hours xoffi-difference">${xoffiDifference(row)}</td><td><span class="xoffi-variance ${escapeHtml(row.severity)}">${escapeHtml(xoffiComparisonLabel(row))}</span></td>`;
 }
 
@@ -28691,6 +29901,7 @@ function renderXoffiPersonDays(details) {
   const imports = source.imports || [];
   const label = xoffiComparisonMode === "valued" ? "xoffi gewertet" : "Anwesenheit";
   details.querySelector(".xoffi-person-content").innerHTML = `
+    ${xoffiComparisonMode === "valued" ? window.GpXoffiImport.weeklyEvidence(source) : ""}
     <div class="xoffi-comparison-table ${row.days.length > 7 ? "long" : ""}" tabindex="0" role="region" aria-label="Tagesvergleich für MA ${escapeHtmlAttribute(row.employeeNumber)}"><table><caption class="sr-only">Tagesvergleich für MA ${escapeHtml(row.employeeNumber)} · ${label}</caption><thead><tr><th scope="col">Tag</th><th scope="col">GP-Plan</th><th scope="col">${label}</th><th scope="col">Differenz</th><th scope="col">Abweichung</th></tr></thead><tbody>${row.days.map(sourceDay => {
       const day = xoffiDisplayComparison(sourceDay);
       return `<tr class="${day.plannedMinutes === 0 && day.actualMinutes === 0 ? "xoffi-day-empty" : ""}"><th scope="row"><span class="xoffi-day-name">${escapeHtml(new Date(`${day.date}T12:00:00`).toLocaleDateString("de-AT", { weekday: "short" }))}</span> ${escapeHtml(formatDate(day.date))}${day.absence ? `<small>${escapeHtml(({sick:"Krankenstand",vacation:"Urlaub"})[day.absence] || day.absence)}</small>` : ""}</th>${xoffiComparisonCells(day)}</tr>`;
@@ -28700,7 +29911,11 @@ function renderXoffiPersonDays(details) {
 }
 
 function xoffiComparisonLabel(row) {
-  if (row.severity === "missing") return row.importState === "incomplete" ? "Import unvollständig" : "Nicht importiert";
+  if (row.severity === "missing") {
+    if (row.weeklyProofMissing) return "Bewertung ohne bestätigten Wochennachweis";
+    if (row.valuationUnknown) return "Wochenposten nicht im Zeitraum zuordenbar";
+    return row.importState === "incomplete" ? "Import unvollständig" : row.importState === "complete" ? "Bewertung unvollständig" : "Nicht importiert";
+  }
   if (row.severity === "scope") return "Importbereich abweichend · Bereich wählen";
   if (row.severity === "unplanned") return "Ohne Planstunden · prüfen";
   const percent = Math.abs(Number(row.percent)).toLocaleString("de-AT", { maximumFractionDigits: 1 });
@@ -28712,7 +29927,7 @@ function renderXoffiComparison(result) {
   updateXoffiComparisonControls();
   const opened = new Set([...elements.xoffiComparisonList.querySelectorAll("details[open]")].map(details => details.dataset.xoffiPerson));
   const employees = result.employees.map(xoffiDisplayComparison);
-  const complete = employees.filter(row => row.importState === "complete" && !row.scopeMismatch).length;
+  const complete = employees.filter(row => row.comparisonComplete && !row.scopeMismatch).length;
   const attention = employees.filter(row => ["yellow", "red", "unplanned"].includes(row.severity)).length;
   const inRange = employees.filter(row => row.severity === "green").length;
   const label = xoffiComparisonMode === "valued" ? "xoffi gewertet" : "Anwesenheit";
@@ -28724,7 +29939,7 @@ function renderXoffiComparison(result) {
   </div>`;
   elements.xoffiComparisonList.innerHTML = overview + (employees.length ? employees.map(row => `<details class="xoffi-comparison-person" data-xoffi-person="${escapeHtmlAttribute(row.employeeNumber)}" ${opened.has(row.employeeNumber) ? "open" : ""}><summary>
     <span class="xoffi-person-name"><small>MA ${escapeHtml(row.employeeNumber)}</small><strong>${escapeHtml(row.fullName)}</strong></span>
-    <span class="xoffi-person-metrics"><span><small>GP-Plan</small><strong>${formatHours(row.plannedMinutes)}</strong></span><span><small>${label}</small><strong>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</strong>${row.partial ? `<small>Teilstand · ${row.coveredDays}/${row.totalDays} Tage</small>` : ""}</span><span><small>Differenz</small><strong>${xoffiDifference(row)}</strong></span></span>
+    <span class="xoffi-person-metrics"><span><small>GP-Plan</small><strong>${formatHours(row.plannedMinutes)}</strong></span><span><small>${label}</small><strong>${row.actualMinutes === null ? "–" : formatHours(row.actualMinutes)}</strong>${row.partial ? `<small>${row.valuationUnknown ? "Gesicherter Teilstand · Bewertung offen" : `Teilstand · ${row.coveredDays}/${row.totalDays} Tage`}</small>` : ""}</span><span><small>Differenz</small><strong>${xoffiDifference(row)}</strong></span></span>
     <span class="xoffi-variance ${escapeHtml(row.severity)}">${escapeHtml(xoffiComparisonLabel(row))}</span></summary>
     <div class="xoffi-person-content"></div></details>`).join("") : '<p class="xoffi-comparison-empty">Keine Teammitglieder oder importierten Zeiten für diesen Bereich.</p>');
   elements.xoffiComparisonList.querySelectorAll("details[open]").forEach(renderXoffiPersonDays);
@@ -28775,7 +29990,7 @@ function refreshTimePresenceDepartments() {
     : allDepartments;
   const selected = elements.timeTrackingDepartment?.value || "";
   if (elements.timeTrackingDepartment) {
-    elements.timeTrackingDepartment.innerHTML = `${departmentManager ? "" : '<option value="">Gesamte Filiale</option>'}${departments.map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("")}`;
+    elements.timeTrackingDepartment.innerHTML = `${departmentManager ? "" : '<option value="">Gesamte Filiale</option>'}${departments.map((department) => `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`).join("")}`;
     elements.timeTrackingDepartment.value = departments.some((department) => String(department.id) === selected)
       ? selected
       : (departmentManager ? String(departments[0]?.id || "") : "");
@@ -28829,9 +30044,9 @@ function renderTimePresence() {
     const entries = (employee.entries || []).map((entry) => `${escapeHtml(entry.label)} ${formatClockTimestamp(entry.timestamp)}`).join(" · ");
     const issues = timeEvaluationIssues(employee).map((issue) => issue.label || issue.code).join(" · ");
     return `<article class="time-presence-row ${escapeHtml(employee.state)}">
-      <span class="employee-color" style="background:${escapeHtml(employee.color || "#748087")}"></span>
+      <span class="employee-color" style="background:${safeCssColor(employee.color, "#748087")}"></span>
       <div class="time-presence-person"><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${entries || "Heute noch keine Buchung"}${issues ? ` · ${escapeHtml(issues)}` : ""}</small></div>
-      <span class="time-state-badge ${escapeHtml(employee.state)}">${labels[employee.state] || employee.state}</span>
+      <span class="time-state-badge ${escapeHtml(employee.state)}">${escapeHtml(labels[employee.state] || employee.state)}</span>
       <div class="time-presence-hours"><span>Plan <strong>${formatHours(employee.plannedMinutes)}</strong></span><span>Ist <strong>${formatHours(employee.actualMinutes)}</strong></span><span>Gewertet <strong>${formatHours(employee.valuedMinutes ?? employee.actualValuedMinutes)}</strong></span><span>Pause <strong>${formatHours(employee.breakMinutes)}</strong></span><span>Diff. <strong class="${Number(employee.valuedDifferenceMinutes ?? employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.valuedDifferenceMinutes ?? employee.differenceMinutes)}</strong></span></div>
       ${(employee.staleEntry && canReviewTime) || canReadPersonnelRecord ? `<div class="time-presence-actions">
         ${employee.staleEntry && canReviewTime ? `<button type="button" class="secondary-button compact-button" data-resolve-stale="${escapeHtml(employee.employeeNumber)}">Altbuchung abschließen</button>` : ""}
@@ -28905,7 +30120,7 @@ function renderTimeDayReview() {
       ? issues.map((issue) => issue.label || issue.code).join(" · ")
       : entry.excused?.excused ? entry.excused.label : "Keine Auffälligkeit";
     return `<article class="time-day-review-row ${issues.some((issue) => issue.severity === "error") ? "has-error" : issues.length ? "has-warning" : ""}" data-time-day-employee="${escapeHtml(entry.employeeNumber)}">
-      <span class="employee-color" style="background:${escapeHtml(entry.color || "#748087")}"></span>
+      <span class="employee-color" style="background:${safeCssColor(entry.color, "#748087")}"></span>
       <div class="time-day-review-person"><strong>${escapeHtml(entry.employeeNumber)} · ${escapeHtml(entry.nickname || entry.fullName || "Teammitglied")}</strong><small>${escapeHtml(issueText)}</small></div>
       ${status}
       <div class="time-day-review-values">
@@ -29516,6 +30731,8 @@ function renderPersonnelDocuments(employeeNumber, result, access) {
 
 async function openPersonnelRecord(employeeNumber) {
   if (!elements.personnelRecordModal) return;
+  window.GpWindow?.begin?.(elements.personnelRecordModal);
+  const contextTicket = captureGpContext(personnelRecordAvailableInUi);
   const freshDialog = !elements.personnelRecordModal.open;
   if (freshDialog || String(state.personnelRecord?.employeeNumber || "") !== String(employeeNumber)) {
     state.personnelRecordOpenSections.clear();
@@ -29529,10 +30746,11 @@ async function openPersonnelRecord(employeeNumber) {
   elements.personnelRecordMessage.textContent = "";
   elements.personnelRecordMessage.classList.add("hidden");
   elements.savePersonnelRecordButton.classList.add("hidden");
+  elements.savePersonnelRecordButton.disabled = false;
   if (!elements.personnelRecordModal.open) elements.personnelRecordModal.showModal();
   try {
     const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}`);
-    if (!elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
+    if (!gpContextCurrent(contextTicket) || !elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
     state.personnelRecord = { employeeNumber, result };
     const employee = result.employee || {};
     const access = result.access || {};
@@ -29541,9 +30759,12 @@ async function openPersonnelRecord(employeeNumber) {
     const mode = (key) => personnelRecordAccessMode(access, key);
     const retailKvMode = mode("employment.retailKv");
     if (retailKvMode !== "hidden" && canReadCollectiveAgreements()) {
-      try { state.personnelRecord.kvRegistry = await api("/api/collective-agreements/registry"); }
-      catch { state.personnelRecord.kvRegistry = {}; }
-      if (!elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
+      try {
+        const kvRegistry = await api("/api/collective-agreements/registry");
+        if (!gpContextCurrent(contextTicket) || state.personnelRecordRequestToken !== requestToken) return;
+        state.personnelRecord.kvRegistry = kvRegistry;
+      } catch { if (!gpContextCurrent(contextTicket) || state.personnelRecordRequestToken !== requestToken) return; state.personnelRecord.kvRegistry = {}; }
+      if (!gpContextCurrent(contextTicket) || !elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
     }
     elements.personnelRecordTitle.textContent = `${employee.personnel_number || employeeNumber} · ${employee.nickname || employee.full_name || "Personalakt"}`;
 
@@ -29634,7 +30855,7 @@ async function openPersonnelRecord(employeeNumber) {
     const canWriteFormField = mode("phone") === "write" || protectionMode === "write" || retailKvMode === "write" || PERSONNEL_RECORD_FORM_FIELDS.some(([, fieldKey]) => mode(fieldKey) === "write");
     elements.savePersonnelRecordButton.classList.toggle("hidden", !canWriteFormField);
   } catch (error) {
-    if (!elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
+    if (!gpContextCurrent(contextTicket) || !elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
     state.personnelRecord = null;
     elements.personnelRecordContent.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
   }
@@ -29642,6 +30863,8 @@ async function openPersonnelRecord(employeeNumber) {
 
 async function savePersonnelRecord(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.personnelRecordModal, personnelRecordAvailableInUi);
+  if (!gpEditorCurrent(ticket)) return;
   const current = state.personnelRecord;
   if (!current) return;
   const access = current.result?.access || {};
@@ -29687,17 +30910,21 @@ async function savePersonnelRecord(event) {
   try {
     const submittedBody = withPersonnelPlanningStatusBasis(body, current.result?.planningStatusBasis || {});
     const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}`, { method: "PUT", body: JSON.stringify(submittedBody) });
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     showToast(result.changedFields?.length ? "Der Personalakt wurde verschlüsselt gespeichert." : "Es waren keine Änderungen zu speichern.");
     await openPersonnelRecord(current.employeeNumber);
   } catch (error) {
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     elements.personnelRecordMessage.textContent = error.message;
     elements.personnelRecordMessage.classList.remove("hidden");
   } finally {
-    elements.savePersonnelRecordButton.disabled = false;
+    if (gpEditorCurrent(ticket)) elements.savePersonnelRecordButton.disabled = false;
   }
 }
 
 async function uploadPersonnelDocument() {
+  const ticket = captureGpEditor(elements.personnelRecordModal, personnelRecordAvailableInUi);
+  if (!gpEditorCurrent(ticket)) return;
   const current = state.personnelRecord;
   if (!current) return;
   const fields = elements.personnelRecordForm.elements;
@@ -29717,23 +30944,29 @@ async function uploadPersonnelDocument() {
   try {
     const response = await rawApi(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}/documents`, { method: "POST", body: formData });
     await response.json().catch(() => ({}));
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     showToast("Das Dokument wurde geschützt gespeichert.");
     await openPersonnelRecord(current.employeeNumber);
   } catch (error) {
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     showToast(error.message, true);
   } finally {
-    if (button?.isConnected) button.disabled = false;
+    if (gpEditorCurrent(ticket) && button?.isConnected) button.disabled = false;
   }
 }
 
 async function archivePersonnelDocument(documentId) {
+  const ticket = captureGpEditor(elements.personnelRecordModal, personnelRecordAvailableInUi);
+  if (!gpEditorCurrent(ticket)) return;
   const current = state.personnelRecord;
   if (!current || !documentId || !confirm("Dieses Personalakt-Dokument archivieren? Alle Versionen bleiben geschützt erhalten.")) return;
   try {
     await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" });
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     showToast("Das Dokument wurde archiviert.");
     await openPersonnelRecord(current.employeeNumber);
   } catch (error) {
+    if (!gpEditorCurrent(ticket) || state.personnelRecord !== current) return;
     showToast(error.message, true);
   }
 }
@@ -29830,7 +31063,7 @@ function renderManagerRequests() {
       const aumLabels = { required: "AUM erforderlich", received: "AUM eingelangt", reviewed: "AUM geprüft", not_required: "AUM nicht erforderlich" };
       const risk = entry.staffing_risk?.atRisk ? ` · Mindestbesetzung gefährdet${entry.staffing_risk.worstShortfall ? ` (−${Number(entry.staffing_risk.worstShortfall)})` : ""}` : "";
       return `<article class="manager-request-row sickness-case-row" data-sickness-case="${entry.id}">
-        <span class="employee-dot" style="--employee-color:${escapeHtml(entry.color || "#507267")}"></span>
+        <span class="employee-dot" style="--employee-color:${safeCssColor(entry.color, "#507267")}"></span>
         <div><strong><span class="request-kind-badge sickness">Krank</span> ${escapeHtml(entry.employee_number)} · ${escapeHtml(entry.nickname || entry.full_name)}</strong><small>ab ${formatDate(entry.start_date)}${returnText} · ${escapeHtml(entry.location_name || "")}${entry.department_name ? ` · ${escapeHtml(entry.department_name)}` : ""}</small><small><span class="request-status ${escapeHtml(entry.status)}">${escapeHtml(requestStatusLabels[entry.status] || entry.status)}</span> · ${escapeHtml(aumLabels[entry.amu_status] || entry.amu_status || "AUM-Status offen")}${risk ? escapeHtml(risk) : ""}</small></div>
         ${capabilities.view === true ? '<button class="secondary-button" data-open-sickness-action type="button">Fall öffnen</button>' : ""}
       </article>`;
@@ -29844,7 +31077,7 @@ function renderManagerRequests() {
       const responsibility = report.responsibility || {};
       const reportCanOpen = capabilities.view === true;
       return `<article class="manager-request-row amu-request-row" data-amu-report="${report.id}">
-        <span class="employee-dot" style="--employee-color:${escapeHtml(report.color || "#507267")}"></span>
+        <span class="employee-dot" style="--employee-color:${safeCssColor(report.color, "#507267")}"></span>
         <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatAmuPeriod(report)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(amuReportStatusLabel(report))}</span>${responsibility.label ? ` · zuständig: ${escapeHtml(responsibility.label)}` : ""}${report.reviewed_by && report.review_mode !== "automatic" ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
         ${reportCanOpen ? '<button class="secondary-button" data-open-amu-action type="button">AUM öffnen</button>' : ""}
       </article>`;
@@ -29865,7 +31098,7 @@ function renderManagerRequests() {
       const canOpen = request.capabilities?.view === true;
       return `
       <article class="manager-request-row" data-manager-request="${request.id}" data-request-kind="${escapeHtml(request.kind)}">
-        <span class="employee-dot" style="--employee-color:${escapeHtml(request.color || "#507267")}"></span>
+        <span class="employee-dot" style="--employee-color:${safeCssColor(request.color, "#507267")}"></span>
         <div><strong><span class="request-kind-badge ${escapeHtml(request.kind)}">${escapeHtml(details.label)}</span> ${escapeHtml(request.employee_number)} · ${escapeHtml(request.nickname || request.full_name)}</strong><small>${details.text}${request.note ? ` · ${escapeHtml(request.note)}` : ""}</small><small><span class="request-status ${escapeHtml(request.status)}">${escapeHtml(requestStatusLabels[request.status] || request.status)}</span>${approvals ? ` · ${approvals}` : ""}${request.decision_note ? ` · ${escapeHtml(request.decision_note)}` : ""}</small></div>
         ${canOpen ? '<button class="secondary-button" data-open-request-action type="button">Antrag öffnen</button>' : ""}
       </article>
@@ -30778,7 +32011,7 @@ function renderPayrollDepartments() {
   if (!elements.payrollDepartment) return;
   const location = state.locations.find((item) => item.id === elements.payrollLocation.value);
   const selected = elements.payrollDepartment.value;
-  elements.payrollDepartment.innerHTML = `<option value="">Gesamter Standort</option>${(location?.departments || []).filter((department) => department.active !== false).map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("")}`;
+  elements.payrollDepartment.innerHTML = `<option value="">Gesamter Standort</option>${(location?.departments || []).filter((department) => department.active !== false).map((department) => `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`).join("")}`;
   if ((location?.departments || []).some((department) => String(department.id) === selected)) elements.payrollDepartment.value = selected;
 }
 
@@ -31863,8 +33096,8 @@ function changeSalesArticleColumns(id, move = 0) {
   if (sortChanged && catalog.searchStarted) void loadSalesArticleCatalog({ reset: true, preserveDetail: true });
 }
 function applySalesArticleDetailTabs() {
-  const panels = ['salesArticleOverviewPanel','salesArticlePricesSection','salesArticleNotesSection','salesArticleIdentifiersSection','salesArticleMovementsSection','salesArticleSalesSection','salesArticlePriceLabelsSection'];
-  const allowed = id => id !== 'salesArticlePriceLabelsSection' || canUseSalesPriceLabels();
+  const panels = ['salesArticleOverviewPanel','salesArticlePricesSection','salesArticleNotesSection','salesArticleOrdersSection','salesArticleMovementsSection','salesArticleSalesSection','salesArticlePriceLabelsSection','salesArticleIdentifiersSection'];
+  const allowed = id => id === 'salesArticleOrdersSection' ? canReadTradeMovements() : id !== 'salesArticlePriceLabelsSection' || canUseSalesPriceLabels();
   const active = panels.includes(state.salesArticleCatalog.detailTab) && allowed(state.salesArticleCatalog.detailTab) ? state.salesArticleCatalog.detailTab : panels[0];
   const nav = elements.salesArticleDetailNavigation; if (!nav) return;
   nav.setAttribute('role', 'tablist');
@@ -31874,6 +33107,7 @@ function applySalesArticleDetailTabs() {
     const panel = document.getElementById(id); if (panel) { panel.hidden = !selected; panel.setAttribute('role','tabpanel'); panel.setAttribute('aria-labelledby',a.id); if (panel.tagName === 'DETAILS' && selected) panel.open = true; }
   });
   state.salesArticleCatalog.tools?.activate(active);
+  if (active === 'salesArticleOrdersSection') void state.salesArticleCatalog.orders?.activate(); else state.salesArticleCatalog.orders?.suspend();
   if (active === 'salesArticlePriceLabelsSection') void state.salesArticleCatalog.priceLabels?.activate();
   else state.salesArticleCatalog.priceLabels?.suspend();
 }
@@ -31920,7 +33154,7 @@ function salesArticleCatalogSourceLabel(sourceSystem) {
   if (value === "manual.article-catalog") return "Manuelle Pflege";
   if (value === "legacy.loan_articles") return "Übernommene Leihartikel";
   if (value === "manual.loan") return "Manuell / Leihe";
-  if (value.startsWith("tradefoto")) return "TradeFoto";
+  if (value.startsWith("tradefoto")) return "Importierter Artikelbestand";
   if (value === "shopware.storefront") return "Shopware";
   return value;
 }
@@ -32666,6 +33900,7 @@ function setSalesArticleImportMessage(message = "", isError = false) {
 
 function captureSalesArticleImportContext() {
   return {
+    session: state.portalSession,
     actorKey: currentSalesArticleCatalogActorKey(),
     accessKey: currentSalesArticleCatalogDetailAccessKey(),
   };
@@ -32673,6 +33908,7 @@ function captureSalesArticleImportContext() {
 
 function salesArticleImportContextIsCurrent(context) {
   return Boolean(context)
+    && context.session === state.portalSession
     && context.actorKey === currentSalesArticleCatalogActorKey()
     && context.accessKey === currentSalesArticleCatalogDetailAccessKey()
     && canReadSalesArticles()
@@ -33145,6 +34381,7 @@ function invalidateAdminPersonalActionsAfterMutation() {
 
 function captureSalesArticleMutationContext() {
   return {
+    session: state.portalSession,
     actorKey: currentSalesArticleCatalogActorKey(),
     accessKey: currentSalesArticleCatalogDetailAccessKey(),
   };
@@ -33152,6 +34389,7 @@ function captureSalesArticleMutationContext() {
 
 function salesArticleMutationContextIsCurrent(context, { requireWrite = true } = {}) {
   return Boolean(context)
+    && context.session === state.portalSession
     && context.actorKey === currentSalesArticleCatalogActorKey()
     && context.accessKey === currentSalesArticleCatalogDetailAccessKey()
     && canReadSalesArticles()
@@ -33365,6 +34603,7 @@ function renderSalesArticleSourceFieldValue(field) {
 function renderSalesArticleCatalogDetail() {
   const catalog = state.salesArticleCatalog;
   catalog.stockPanel?.destroy(); catalog.stockPanel=null;
+  catalog.orders?.destroy(); catalog.orders=null;
   catalog.tools?.destroy(); catalog.tools=null;
   catalog.priceLabels?.destroy(); catalog.priceLabels=null;
   document.getElementById("salesArticlePdfButton")?.classList.add("hidden");
@@ -33470,6 +34709,10 @@ function renderSalesArticleCatalogDetail() {
   window.SalesArticlePriceControls.mount(elements.salesArticleDetailBody, article.priceMatrix, formats, {
     preferenceKey: 'gp.article-price-columns.v1.' + currentSalesArticleCatalogActorKey(),
   });
+  const ordersSection = document.createElement('section'); ordersSection.id = 'salesArticleOrdersSection'; ordersSection.className = 'sales-article-orders-panel'; ordersSection.hidden = true;
+  elements.salesArticleDetailBody.append(ordersSection);
+  if (canReadTradeMovements()) catalog.orders = window.SalesArticleOrders?.mount(ordersSection, { api, articleNumber:article.articleNumber,
+    key:currentSalesArticleCatalogDetailAccessKey, canUse:()=>canReadTradeMovements() && state.currentView === 'articleCatalog', onOrder:openArticleOrder });
   catalog.tools = window.SalesArticleTools?.mount(elements.salesArticleDetailBody, {api, rawApi, article, write:salesArticleDetailCanWrite(),
     accessKey:currentSalesArticleCatalogDetailAccessKey, windowPreferences:gpWindowManager?.preferences,
     scale:salesArticleSearchWindowScale, active:()=>state.currentView==='articleCatalog',
@@ -34336,6 +35579,23 @@ let importMappingWorkspace = null;
 let crmPurchaseWorkspace = null;
 let receiptSearchWorkspace = null;
 let tradeInsightsWorkspace = null;
+let tradeOrdersWorkspace = null;
+async function openRequestedOrder(number,orderId='') {
+  if (state.currentView !== 'logistics' || logisticsTab !== 'orders' || !canReadTradeMovements()) return;
+  await tradeOrdersWorkspace?.openExact(number,{orderId:orderId||undefined});
+}
+function openArticleOrder(row) {
+  if (!canReadTradeMovements()) return;
+  globalThis.gpSelectedOrderNumber = row.orderNumber;
+  globalThis.gpSelectedOrderId = row.orderId;
+  logisticsTab = 'orders'; setView('logistics');
+  void openRequestedOrder(row.orderNumber,row.orderId);
+}
+function openOrderArticle(articleNumber) {
+  if (!canReadSalesArticles()) return;
+  setView('articleCatalog');
+  void loadSalesArticleCatalogDetail(articleNumber,{moveFocus:true});
+}
 let salesArticleReportWorkspace = null;
 let salesBwlWorkspace = null;
 function activateSalesBwl() {
@@ -34360,6 +35620,10 @@ function activateSalesArticleReport() {
   return salesArticleReportWorkspace?.activate();
 }
 let privacyOrganizationWorkspace = null;
+let securityAuditsWorkspace = null;
+let securitySastWorkspace = null;
+let technicalSecurityActorKey = "";
+let technicalSecurityTab = "sast";
 let privacyOrganizationActorKey = "";
 let privacyOrganizationTab = "overview";
 
@@ -34371,15 +35635,20 @@ function canAccessPrivacyOrganization() {
   return canReadPrivacyOrganizationWorkspace() || canReadDataSubjectRequests();
 }
 
+function canReadSecurityAuditsWorkspace() {
+  return window.GrabenplanerSecurityAudits?.accessAllowed(state.portalSession?.user) === true;
+}
+
 function normalizePrivacyOrganizationTab(tab) {
-  return tab === "dataRequests" ? tab : window.GrabenplanerPrivacyOrganization.normalizeTab(tab);
+  return ["dataRequests", "security-audits"].includes(tab) ? tab : window.GrabenplanerPrivacyOrganization.normalizeTab(tab);
 }
 
 function firstAccessiblePrivacyOrganizationTab() {
-  return canReadPrivacyOrganizationWorkspace() ? "overview" : "dataRequests";
+  return canReadPrivacyOrganizationWorkspace() ? "overview" : canReadDataSubjectRequests() ? "dataRequests" : "security-audits";
 }
 
 function canOpenPrivacyOrganizationTab(tab) {
+  if (tab === "security-audits") return canReadSecurityAuditsWorkspace();
   return tab === "dataRequests" ? canReadDataSubjectRequests() : canReadPrivacyOrganizationWorkspace();
 }
 
@@ -34388,19 +35657,49 @@ function activatePrivacyOrganizationView() {
   const dataRequestsActive = active && privacyOrganizationTab === "dataRequests" && canReadDataSubjectRequests();
   document.getElementById("privacyOrganizationWorkspaceHost")?.classList.toggle("hidden", dataRequestsActive);
   elements.dataSubjectRequestsSection?.classList.toggle("hidden", !dataRequestsActive);
-  if (active && !dataRequestsActive && canReadPrivacyOrganizationWorkspace()) {
-    void privacyOrganizationWorkspace?.activate(privacyOrganizationTab, { notify: false });
-  } else privacyOrganizationWorkspace?.suspend();
-  if (dataRequestsActive) loadDataSubjectRequests().catch((error) => showToast(error.message, true));
+  if (active && !dataRequestsActive && canReadPrivacyOrganizationWorkspace()) void privacyOrganizationWorkspace?.activate(privacyOrganizationTab, { notify: false });
+  else privacyOrganizationWorkspace?.suspend();
+  if (dataRequestsActive) loadDataSubjectRequests().catch(error => showToast(error.message, true));
+}
+
+function normalizeTechnicalSecurityTab(tab) {
+  return tab === "security-audits" ? tab : "sast";
+}
+function activateTechnicalSecurityView() {
+  const active = state.currentView === "technicalSecurity" && canReadSecurityAuditsWorkspace();
+  const auditActive = active && technicalSecurityTab === "security-audits";
+  document.getElementById("securityAuditsWorkspaceHost")?.classList.toggle("hidden", !auditActive);
+  document.getElementById("securitySastWorkspaceHost")?.classList.toggle("hidden", !active || auditActive);
+  if (auditActive) void securityAuditsWorkspace?.activate(); else securityAuditsWorkspace?.suspend();
+  if (active && !auditActive) void securitySastWorkspace?.activate(); else securitySastWorkspace?.suspend();
+}
+function syncTechnicalSecurityAccess() {
+  const key = privacyOrganizationAccessKey(), allowed = canReadSecurityAuditsWorkspace();
+  document.getElementById("technicalSecurityNav")?.classList.toggle("hidden", !allowed);
+  if (key === technicalSecurityActorKey) return;
+  technicalSecurityActorKey = key;
+  securityAuditsWorkspace?.destroy(); securityAuditsWorkspace = null;
+  securitySastWorkspace?.destroy(); securitySastWorkspace = null;
+  const auditHost = document.getElementById("securityAuditsWorkspaceHost"), sastHost = document.getElementById("securitySastWorkspaceHost");
+  auditHost?.replaceChildren(); sastHost?.replaceChildren();
+  const options = { api, user: () => state.portalSession?.user, accessKey: privacyOrganizationAccessKey };
+  if (allowed) {
+    securityAuditsWorkspace = window.GrabenplanerSecurityAudits.mount(auditHost, options);
+    securitySastWorkspace = window.GrabenplanerSecuritySast.mount(sastHost, options);
+  }
+  if (state.currentView === "technicalSecurity") {
+    if (allowed) activateTechnicalSecurityView(); else setView("startDashboard");
+  }
 }
 
 function privacyOrganizationAccessKey() {
   const user = state.portalSession?.user;
   return user ? JSON.stringify([user.employeeNumber, user.accountId, user.sessionKind, user.accountType,
-    user.isEmployee, user.role, user.permissions]) : "";
+    user.isEmployee, user.role, user.permissions, user.localSystem, user.mustChangePassword]) : "";
 }
 
 function syncPrivacyOrganizationAccess() {
+  syncTechnicalSecurityAccess();
   const key = privacyOrganizationAccessKey();
   const allowed = canReadPrivacyOrganizationWorkspace();
   const nav = document.getElementById("privacyOrganizationNav");
@@ -34440,10 +35739,16 @@ function syncPrivacyOrganizationAccess() {
   }
 }
 let tradeInsightsTab = "repairs";
+let logisticsTab = "purchasing";
 function activateTradeArea(view) {
   const workspace=document.getElementById("tradeInsightsWorkspace");
   const host=view==="logistics"?document.getElementById("logisticsWorkspaceHost"):elements.tradeInsightsView;
   if(workspace&&host)host.append(workspace);
+  const ordersActive=view==="logistics"&&logisticsTab==="orders";
+  workspace?.classList.toggle("hidden",ordersActive);
+  document.getElementById("tradeOrdersWorkspace")?.classList.toggle("hidden",!ordersActive);
+  if(ordersActive){tradeInsightsWorkspace?.suspend();syncGpWindows();return tradeOrdersWorkspace?.activate();}
+  tradeOrdersWorkspace?.suspend();
   tradeInsightsWorkspace?.setArea(view==="logistics"?"logistics":"stock");
   return tradeInsightsWorkspace?.activate(view==="logistics"?"purchasing":tradeInsightsTab);
 }
@@ -34472,6 +35777,9 @@ function syncSalesHistoryAccess() {
   if (nextKey === salesHistoryActorKey) return;
   salesHistoryActorKey = nextKey;
   tradeInsightsWorkspace?.destroy(); tradeInsightsWorkspace = null;
+  tradeOrdersWorkspace?.destroy(); tradeOrdersWorkspace = null;
+  globalThis.gpSelectedOrderNumber = ""; globalThis.gpSelectedOrderId = "";
+  document.getElementById("tradeOrdersWorkspace")?.replaceChildren();
   if (typeof salesPriceLabelsWorkspace?.destroy === "function") salesPriceLabelsWorkspace.destroy();
   else salesPriceLabelsWorkspace?.suspend?.();
   salesPriceLabelsWorkspace = null;
@@ -34485,8 +35793,11 @@ function syncSalesHistoryAccess() {
   document.getElementById('salesArticleMovementsButton')?.classList.toggle('hidden', !canReadTradeMovements());
   document.getElementById('salesArticleHistoryButton')?.classList.toggle('hidden', !(user?.salesHistory?.read && canReadSalesArticles()));
   elements.tradeInsightsNavButton?.classList.toggle("hidden", !tradeInsightsAccess);
-  elements.logisticsNavButton?.classList.toggle("hidden", !(user?.salesHistory?.read && user.permissions?.includes("sales:purchasing:read")));
-  document.getElementById("logisticsNav")?.classList.toggle("hidden", !(user?.salesHistory?.read && user.permissions?.includes("sales:purchasing:read")));
+  elements.logisticsNavButton?.classList.toggle("hidden", !canReadTradeMovements());
+  document.getElementById("logisticsNav")?.classList.toggle("hidden", !canReadTradeMovements());
+  if(canReadTradeMovements())tradeOrdersWorkspace=window.GrabenplanerTradeOrders?.mount(document.getElementById("tradeOrdersWorkspace"),{api,key:startDashboardWorkspaceActorKey,session:()=>state.portalSession,
+    canUse:()=>state.portalSession?.authenticated===true&&!state.portalSession?.user?.mustChangePassword&&canReadTradeMovements(),active:()=>state.currentView==="logistics"&&logisticsTab==="orders",
+    onSelect:row=>{globalThis.gpSelectedOrderNumber=row.orderNumber;globalThis.gpSelectedOrderId=row.id;globalThis.grabenplanerNavigation?.record();},onArticle:openOrderArticle});
   elements.tradeInsightsDashboardCard?.classList.toggle("hidden", !tradeInsightsAccess);
   if (tradeInsightsAccess) tradeInsightsWorkspace = window.GrabenplanerTradeInsights?.mount(document.getElementById("tradeInsightsWorkspace"), {
     api, rawApi, accessKey: startDashboardWorkspaceActorKey, canUse: canAccessTradeInsights, windowPreferences: gpWindowManager?.preferences,
@@ -36862,6 +38173,10 @@ async function analyzeSalesReportSeries() {
 }
 
 function setView(view) {
+  if (view === "privacyOrganization" && privacyOrganizationTab === "security-audits") {
+    view = "technicalSecurity"; technicalSecurityTab = "security-audits";
+  }
+  if (view === 'gpDefinitions' && state.currentView !== 'gpDefinitions') privateWorkspaceReturnRoute = currentAdministrationRoute();
   if (view === "personnelAdministration" && state.personnelAdministrationTab === "dataRequests") {
     view = "privacyOrganization";
     privacyOrganizationTab = "dataRequests";
@@ -36876,8 +38191,10 @@ function setView(view) {
     || (view === "personnel" && !canAccessTeamManagement())
     || (view === "salesAdministration" && !canOpenSalesAdministrationModule())
     || (view === "receiptSearch" && !state.portalSession?.user?.salesHistory?.read)
-    || (["tradeInsights","logistics"].includes(view) && !canAccessTradeInsights())
+    || (view === "tradeInsights" && !canAccessTradeInsights())
+    || (view === "logistics" && !canReadTradeMovements())
     || (view === "privacyOrganization" && (!canAccessPrivacyOrganization() || !canOpenPrivacyOrganizationTab(privacyOrganizationTab)))
+    || (view === "technicalSecurity" && !canReadSecurityAuditsWorkspace())
     || (view === "salesAnalytics" && !canAccessSalesAnalytics())
     || (view === "articleCatalog" && !canAccessSalesArticleCatalog())
     || (view === 'articleReport' && !canReadSalesArticleReport())
@@ -36920,8 +38237,9 @@ function setView(view) {
     const privacyRoute = button.dataset.privacyOrganizationTab;
     const active = button.dataset.view === view
       && (!personnelRoute || personnelRoute === state.personnelAdministrationTab)
-      && (!privacyRoute || privacyRoute === privacyOrganizationTab);
-    button.classList.toggle("active", active);
+      && (!privacyRoute || privacyRoute === privacyOrganizationTab)
+      && (!button.dataset.technicalSecurityTab || button.dataset.technicalSecurityTab === technicalSecurityTab);
+    setNavigationCurrent(button, active);
   });
   renderContextNavigation();
   elements.startDashboardView?.classList.toggle("active", view === "startDashboard");
@@ -36939,7 +38257,9 @@ function setView(view) {
   elements.logisticsView?.classList.toggle("active", view === "logistics");
   document.getElementById("privacyOrganizationView")?.classList.toggle("active", view === "privacyOrganization");
   activatePrivacyOrganizationView();
-  if (["tradeInsights","logistics"].includes(view)) void activateTradeArea(view); else tradeInsightsWorkspace?.suspend();
+  document.getElementById("technicalSecurityView")?.classList.toggle("active", view === "technicalSecurity");
+  activateTechnicalSecurityView();
+  if (["tradeInsights","logistics"].includes(view)) void activateTradeArea(view); else {tradeInsightsWorkspace?.suspend();tradeOrdersWorkspace?.suspend();}
   elements.salesArticleCatalogView?.classList.toggle("active", view === "articleCatalog");
   document.getElementById('salesArticleReportView')?.classList.toggle('active', view === 'articleReport');
   if (view === 'articleReport') void activateSalesArticleReport(); else salesArticleReportWorkspace?.suspend();
@@ -36963,6 +38283,7 @@ function setView(view) {
   syncSalesArticleSearchWindow();
   syncGpWindows();
   syncStartDashboardVps();
+  syncSystemUtilizationWorkspace();
   state.salesArticleCatalog.tools?.syncPrint();
   if (view === "settings") {
     const activeSettingsTab = document.querySelector("[data-settings-tab].active:not(.hidden)");
@@ -37006,7 +38327,7 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     if (fromHistory) closeMobileNavigation({ restoreFocus: false });
     return;
   }
-  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "logistics", "privacyOrganization", "articleCatalog", "articleReport", "salesBwl", "gpDefinitions", "priceLabels", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
+  if (!["startDashboard", "filialAdministration", "planning", "requests", "timeTracking", "vacations", "personnelAdministration", "salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "logistics", "privacyOrganization", "technicalSecurity", "articleCatalog", "articleReport", "salesBwl", "gpDefinitions", "priceLabels", "crm", "personnel", "loans", "branchOrders", "rightsDashboard", "settings"].includes(requestedView)) {
     setView("startDashboard");
     return;
   }
@@ -37016,6 +38337,7 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
   }
   if (requestedView === "tradeInsights" && parameters.get("section") === "purchasing") requestedView = "logistics";
+  if (requestedView === "logistics") logisticsTab = parameters.get("section") === "orders" ? "orders" : "purchasing";
   if (requestedView === "tradeInsights") {
     const tab = window.GrabenplanerTradeInsights.normalizeTab(parameters.get("section") || "repairs");
     tradeInsightsTab = tab === "purchasing" ? "repairs" : tab;
@@ -37024,6 +38346,7 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     const requestedSection = parameters.get("section");
     if (["create", "reports", "graphics", "pdf"].includes(requestedSection)) state.salesAnalytics.tab = requestedSection;
   }
+  if (requestedView === "technicalSecurity") technicalSecurityTab = normalizeTechnicalSecurityTab(parameters.get("section"));
   if (requestedView === "privacyOrganization") {
     privacyOrganizationTab = parameters.has("section")
       ? normalizePrivacyOrganizationTab(parameters.get("section")) : firstAccessiblePrivacyOrganizationTab();
@@ -37057,6 +38380,15 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
       setDefaultContext(state.locations);
     }
   }
+  if (requestedView === "planning") {
+    const requestedWeek = parameters.get("week");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(requestedWeek || "")) {
+      const date = new Date(requestedWeek + "T12:00:00");
+      if (Number.isFinite(date.getTime()) && toIsoDate(date) === requestedWeek) {
+        const week = getMonday(date); contextChanged = contextChanged || week !== state.weekStart; state.weekStart = week;
+      }
+    }
+  }
   setView(requestedView);
   if (state.currentView === "settings") {
     const tab = functionSearchSettingsTabButton(parameters.get("section"));
@@ -37066,6 +38398,12 @@ function applyRequestedView({ fromHistory = false, loadContext = true } = {}) {
     const section = parameters.get("section");
     const tab = [...document.querySelectorAll('[data-personnel-tab]:not(.hidden)')].find(button => button.dataset.personnelTab === section);
     if (tab) setPersonnelTab(section);
+  }
+  if (state.currentView === 'logistics' && logisticsTab === 'orders' && parameters.get('order') && typeof openRequestedOrder === 'function') {
+    void openRequestedOrder(parameters.get('order'),parameters.get('orderId')||'');
+  }
+  if (state.currentView === 'articleCatalog' && parameters.get('article') && typeof openOrderArticle === 'function') {
+    void loadSalesArticleCatalogDetail(parameters.get('article'));
   }
   if (state.currentView === "rightsDashboard") setRightsDashboardMode(state.rightsDashboardMode);
   if (fromHistory) closeMobileNavigation({ restoreFocus: false });
@@ -37079,13 +38417,19 @@ function currentAdministrationRoute() {
   if (view === "personnel") route.section = state.personnelTab;
   if (view === "salesAnalytics") route.section = state.salesAnalytics.tab;
   if (view === "tradeInsights") route.section = tradeInsightsTab;
-  if (view === "logistics") route.section = "purchasing";
+  if (view === "logistics") {
+    route.section = logisticsTab;
+    if (logisticsTab === 'orders' && globalThis.gpSelectedOrderNumber) {route.order=globalThis.gpSelectedOrderNumber;route.orderId=globalThis.gpSelectedOrderId||'';}
+  }
   if (view === "privacyOrganization") route.section = privacyOrganizationTab;
+  if (view === "technicalSecurity") route.section = technicalSecurityTab;
   if (view === "requests") route.kind = state.requestKindTab;
   if (view === "rightsDashboard") {
     route.dashboard = state.rightsDashboardMode;
     if (route.dashboard === "processes") route.process = state.rightsDashboardSelectedProcessId;
   }
+  if (view === "articleCatalog" && state.salesArticleCatalog?.selectedArticleNumber) route.article = state.salesArticleCatalog.selectedArticleNumber;
+  if (view === "planning") route.week = state.weekStart;
   if (["planning", "vacations"].includes(view)) { route.location = String(state.locationId || ""); route.department = String(state.departmentId || ""); }
   return route;
 }
@@ -37201,6 +38545,7 @@ function setSettingsTab(tab) {
     loadRightsManagement();
   } else syncRightsWorkspace();
   if (activeTab === "systemCenter") loadSystemCenter();
+  syncSystemUtilizationWorkspace();
   if (activeTab === "integrations") loadIntegrations().catch((error) => showToast(error.message, true));
   if (activeTab === "dataProtection") {
     if (elements.retentionPreviewAsOf && !elements.retentionPreviewAsOf.value) {
@@ -37316,7 +38661,7 @@ function updateEmployeeDepartmentOptions(selectedDepartmentId = "", center = sel
   const locationId = String(location?.id || "");
   const departments = departmentsForLocation(locationId);
   elements.employeePreferredDepartment.innerHTML = `<option value="">Keine Abteilung</option>${departments.map((department) =>
-    `<option value="${department.id}">${escapeHtml(department.name)}</option>`,
+    `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`,
   ).join("")}`;
   elements.employeePreferredDepartment.disabled = !locationId || state.employeeEditMode === "display";
   if (elements.employeePreferredDepartmentHint) {
@@ -37366,6 +38711,7 @@ function updateEmployeeAssignmentOptions(selectedPositionId = "", selectedDepart
         : "Diese Kostenstelle ist keiner Filiale zugeordnet; ein Standort wird nicht benötigt.";
   }
   updateEmployeeDepartmentOptions(selectedDepartmentId, center);
+  renderEmployeePreferredDays();
 }
 
 function canEditEmployeeAccessProfile(employee = null) {
@@ -37761,24 +39107,89 @@ function collectEmployeeProtectedRecord() {
 }
 
 async function loadEmployeeProtectedRecord(employeeNumber) {
+  const ticket = captureGpEditor(elements.employeeModal, () => canEditEmployeeWindow() && canWriteSensitivePersonnelRecord());
+  if (!gpEditorCurrent(ticket)) return;
   const requestedEmployee = String(employeeNumber || "");
   state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: false };
   setEmployeeProtectedRecordDisabled(true);
   if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = "Geschützte Daten werden geladen …";
   try {
     const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(requestedEmployee)}`);
-    if (String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
+    if (!gpEditorCurrent(ticket) || String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
     const initial = normalizeProtectedPersonnelRecord(result.profile || {});
     fillEmployeeProtectedRecord(initial);
     fillEmployeeProtectionEditor(initial.sensitive.employment.protectionStatus, result.access || {});
     state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: true, initial, access: result.access || {}, planningStatusBasis: result.planningStatusBasis || {} };
     if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = "Die Angaben werden verschlüsselt im Personalakt gespeichert.";
     setEmployeeProtectedRecordDisabled(false);
+    syncEmployeeNameFromPersonnelRecord();
   } catch (error) {
-    if (String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
+    if (!gpEditorCurrent(ticket) || String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
     state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: false };
     if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = `Personalakt konnte nicht geladen werden: ${error.message}`;
   }
+}
+
+function employeePreferredDaysValue(employee) {
+  const value = employee?.preferred_days_off ?? employee?.preferredDaysOff ?? employee?.preferred_day_off ?? employee?.preferredDayOff ?? [];
+  return [...new Set((Array.isArray(value) ? value : String(value).split(","))
+    .map(day => String(day).trim()).filter(day => Object.hasOwn(preferredDayLabels, day)))].slice(0, 4);
+}
+
+function employeePreferredDaysLimit() {
+  const center = selectedEmployeeCostCenter();
+  const type = center ? costCenterTypeByKey(center.typeId || center.type) : null;
+  const branch = type?.isBranch === true || center?.isBranch === true || type?.id === "branch";
+  return branch && ["verkaufsmitarbeiter", "abteilungsleitung", "fl-stellvertretung", "teamleitung", "filialleitung", "lehrling"]
+    .includes(elements.employeePosition.value) ? 4 : 1;
+}
+
+function renderEmployeePreferredDays() {
+  const field = document.querySelector("#employeePreferredDays");
+  if (!field) return;
+  const days = state.employeePreferredDays || [], limit = employeePreferredDaysLimit();
+  const readOnly = state.employeeEditMode === "display";
+  field.innerHTML = Object.entries(preferredDayLabels).map(([day, label]) => {
+    const rank = days.indexOf(day) + 1;
+    return `<button type="button" class="employee-preferred-day${rank ? " selected" : ""}" data-preferred-day="${day}" aria-pressed="${rank > 0}" aria-label="${label}${rank ? `, Priorität ${rank}, entfernen` : ", auswählen"}"${readOnly || (!rank && days.length >= limit) ? " disabled" : ""}><span class="employee-preferred-day-rank" aria-hidden="true">${rank || ""}</span><span>${label.slice(0, 2)}</span></button>`;
+  }).join("");
+  document.querySelector("#employeePreferredDay").value = days[0] || "";
+  document.querySelector("#employeePreferredDaysOrder").innerHTML = days.map((day, index) =>
+    `<li><span>${index + 1}. ${preferredDayLabels[day]}</span><button class="secondary-button" type="button" data-preferred-promote="${day}" aria-label="${preferredDayLabels[day]}: höhere Priorität"${readOnly || index === 0 ? " disabled" : ""}>↑</button><button class="secondary-button" type="button" data-preferred-demote="${day}" aria-label="${preferredDayLabels[day]}: niedrigere Priorität"${readOnly || index === days.length - 1 ? " disabled" : ""}>↓</button></li>`).join("");
+  document.querySelector("#employeePreferredDaysHint").textContent =
+    `${days.length} von ${limit} Tagen · Auswahlreihenfolge = Priorität. Erneutes Antippen entfernt einen Tag. Fixe Arbeitstage und Mindestbesetzung haben Vorrang.`;
+}
+
+function changeEmployeePreferredDay(event) {
+  if (state.employeeEditMode === "display") return;
+  const button = event.target.closest("[data-preferred-day],[data-preferred-promote],[data-preferred-demote]");
+  if (!button || button.disabled) return;
+  const day = button.dataset.preferredDay || button.dataset.preferredPromote || button.dataset.preferredDemote;
+  const days = [...state.employeePreferredDays], index = days.indexOf(day);
+  if (button.dataset.preferredDay) {
+    if (index >= 0) days.splice(index, 1);
+    else if (days.length < employeePreferredDaysLimit()) days.push(day);
+  } else {
+    const next = index + (button.dataset.preferredPromote ? -1 : 1);
+    if (index >= 0 && next >= 0 && next < days.length) [days[index], days[next]] = [days[next], days[index]];
+  }
+  state.employeePreferredDays = days;
+  const selector = button.dataset.preferredDay ? `[data-preferred-day="${day}"]`
+    : button.dataset.preferredPromote ? `[data-preferred-promote="${day}"]` : `[data-preferred-demote="${day}"]`;
+  renderEmployeePreferredDays();
+  const updated = document.querySelector(selector);
+  if (updated && !updated.disabled) updated.focus();
+  else document.querySelector(`[data-preferred-day="${day}"]`)?.focus();
+}
+
+function syncEmployeeNameFromPersonnelRecord() {
+  const firstName = String(employeeRecordControl("employeeRecordFirstName")?.value || "").trim();
+  const lastName = String(employeeRecordControl("employeeRecordLastName")?.value || "").trim();
+  const input = document.querySelector("#employeeName");
+  if (!input || !firstName || !lastName) return;
+  input.value = `${firstName} ${lastName}`;
+  input.readOnly = true;
+  document.querySelector("#employeeNameSource").textContent = "Vor- und Nachname aus dem geschützten Personalakt. Der Dienstplan-Name bleibt separat.";
 }
 
 function openEmployeeModal(employee = null) {
@@ -37792,7 +39203,6 @@ function openEmployeeModal(employee = null) {
   if (!fullAccess && !displayAccess) return;
   const centralPersonnelWrite = canWriteCentralPersonnel();
   state.employeeEditMode = fullAccess ? "full" : "display";
-  loadEmployeeSaturdayCredit(employee, fullAccess);
   elements.employeeForm.reset();
   elements.employeeForm.querySelectorAll("details").forEach((section) => { section.open = false; });
   state.employeePersonnelRecord = null;
@@ -37827,6 +39237,8 @@ function openEmployeeModal(employee = null) {
   document.querySelector("#employeeNumber").value = employee?.personnel_number || "";
   document.querySelector("#employeeNumber").disabled = Boolean(employee);
   document.querySelector("#employeeName").value = employee?.full_name || "";
+  document.querySelector("#employeeName").readOnly = false;
+  document.querySelector("#employeeNameSource").textContent = "Wird bei vollständigem Namen aus dem Personalakt übernommen.";
   document.querySelector("#employeeNickname").value = employee?.nickname || "";
   document.querySelector("#employeeHours").value = employee?.contracted_hours ?? 38.5;
   elements.employeeTargetWorkdays.value = employee?.target_workdays_per_week ?? 5;
@@ -37839,7 +39251,8 @@ function openEmployeeModal(employee = null) {
     employee?.position_id || "verkaufsmitarbeiter",
     employee?.preferred_department_id || "",
   );
-  document.querySelector("#employeePreferredDay").value = employee?.preferred_day_off || "";
+  state.employeePreferredDays = employeePreferredDaysValue(employee);
+  renderEmployeePreferredDays();
   const fixedDays = fixedWorkdays(employee);
   document.querySelectorAll('[name="employeeFixedWorkday"]').forEach((checkbox) => {
     checkbox.checked = fixedDays.includes(checkbox.value);
@@ -37860,8 +39273,7 @@ function openEmployeeModal(employee = null) {
     control.setAttribute("data-lpignore", "true");
   });
   if (canEditProtectedRecord) {
-    if (employee) loadEmployeeProtectedRecord(employee.personnel_number);
-    else {
+    if (!employee) {
       const initial = normalizeProtectedPersonnelRecord({ sensitive: { address: { country: "Österreich" } } });
       fillEmployeeProtectedRecord(initial);
       const access = state.portalSession?.user?.personnelRecordAccess || {};
@@ -37894,6 +39306,8 @@ function openEmployeeModal(employee = null) {
   }
   elements.deleteEmployeeButton.classList.toggle("hidden", !employee || displayOnly);
   elements.employeeModal.showModal();
+  void loadEmployeeSaturdayCredit(employee, fullAccess);
+  if (canEditProtectedRecord && employee) void loadEmployeeProtectedRecord(employee.personnel_number);
 }
 
 function shiftRuleFindingsForCandidate(assessmentValue, employeeNumber, dateValue) {
@@ -38004,6 +39418,7 @@ function scheduleShiftRulePreview() {
   clearTimeout(shiftRulePreviewTimer);
   shiftRulePreviewRequest?.abort();
   shiftRulePreviewRequest = null;
+  if (shiftMutation && shiftMutationCurrent(shiftMutation)) return;
   const candidateShift = currentShiftRuleCandidate();
   renderShiftRulePreview(state.data?.workRuleAssessment, { loading: Boolean(candidateShift) });
   if (!candidateShift) return;
@@ -38175,6 +39590,7 @@ function initializeEmployeeLendingDateRangeCalendar() {
 }
 
 function resetEmployeeLendingEditor() {
+  window.GpWindow?.begin?.(elements.employeeLendingModal);
   elements.employeeLendingForm.reset();
   elements.employeeLendingEmployee.disabled = false;
   elements.employeeLendingId.value = "";
@@ -38197,6 +39613,7 @@ function resetEmployeeLendingEditor() {
   employeeLendingDestinationDepartments();
   syncEmployeeLendingTimeFields();
   elements.employeeLendingCancelEdit.classList.add("hidden");
+  elements.employeeLendingSave.disabled = false;
   elements.employeeLendingSave.textContent = "Filialeinsatz anlegen";
   elements.employeeLendingMessage.textContent = "Bestehende Dienste oder genehmigte Abwesenheiten werden nicht automatisch verändert.";
 }
@@ -38242,6 +39659,10 @@ function renderEmployeeLendingDelegates() {
 
 async function loadEmployeeLendings() {
   if (!canManageEmployeeLendings()) return;
+  const requestToken = Symbol("employee-lendings");
+  state.employeeLendingLoadRequest = requestToken;
+  const contextTicket = captureGpContext(canManageEmployeeLendings, () => JSON.stringify([state.locationId, state.weekStart]));
+  const current = () => gpContextCurrent(contextTicket) && state.employeeLendingLoadRequest === requestToken;
   state.employeeLendingLoading = true;
   elements.employeeLendingRefresh.disabled = true;
   try {
@@ -38253,6 +39674,7 @@ async function loadEmployeeLendings() {
         throw error;
       }),
     ]);
+    if (!current()) return;
     state.employeeLendings = Array.isArray(result) ? result : (result.assignments || result.lendings || []);
     state.employeeLendingCandidates = result.candidates || [];
     state.employeeLendingLocations = result.locations || [];
@@ -38261,22 +39683,29 @@ async function loadEmployeeLendings() {
     renderEmployeeLendingList();
     renderEmployeeLendingDelegates();
   } catch (error) {
+    if (!current()) return;
     elements.employeeLendingMessage.textContent = error.message;
     elements.employeeLendingList.innerHTML = `<p class="employee-lending-empty error">${escapeHtml(error.message)}</p>`;
   } finally {
-    state.employeeLendingLoading = false;
-    elements.employeeLendingRefresh.disabled = false;
+    if (state.employeeLendingLoadRequest === requestToken) state.employeeLendingLoading = false;
+    if (current()) elements.employeeLendingRefresh.disabled = false;
   }
 }
 
 async function openEmployeeLendingModal() {
   resetEmployeeLendingEditor();
   elements.employeeLendingModal.showModal();
+  const ticket = captureGpEditor(elements.employeeLendingModal, canManageEmployeeLendings);
+  const contextTicket = captureGpContext(canManageEmployeeLendings, () => JSON.stringify([state.locationId, state.weekStart]));
+  const signature = () => JSON.stringify([...elements.employeeLendingForm.querySelectorAll("input,select,textarea")]
+    .map(field => [field.name, field.value, field.checked]));
+  const initial = signature();
   await loadEmployeeLendings();
-  resetEmployeeLendingEditor();
+  if (gpEditorCurrent(ticket) && gpContextCurrent(contextTicket) && initial === signature()) resetEmployeeLendingEditor();
 }
 
 function editEmployeeLending(id) {
+  window.GpWindow?.begin?.(elements.employeeLendingModal);
   const lending = state.employeeLendings.find((entry) => String(entry.id) === String(id));
   if (!lending) return;
   elements.employeeLendingId.value = lending.id;
@@ -38294,12 +39723,16 @@ function editEmployeeLending(id) {
   syncEmployeeLendingTimeFields();
   elements.employeeLendingEmployee.disabled = true;
   elements.employeeLendingCancelEdit.classList.remove("hidden");
+  elements.employeeLendingSave.disabled = false;
   elements.employeeLendingSave.textContent = "Änderung speichern";
   elements.employeeLendingMessage.textContent = "Eine Verkürzung oder Stornierung ist nur möglich, wenn keine Zielschicht ohne gültige Abdeckung zurückbleibt.";
 }
 
 async function saveEmployeeLending(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.employeeLendingModal, canManageEmployeeLendings);
+  const contextTicket = captureGpContext(canManageEmployeeLendings, () => JSON.stringify([state.locationId, state.weekStart]));
+  if (!gpEditorCurrent(ticket)) return;
   const id = elements.employeeLendingId.value;
   const allDay = elements.employeeLendingAllDay.checked;
   const payload = {
@@ -38320,17 +39753,21 @@ async function saveEmployeeLending(event) {
       method: id ? "PUT" : "POST",
       body: JSON.stringify(payload),
     });
+    if (!gpEditorCurrent(ticket) || !gpContextCurrent(contextTicket)) return;
     showToast(id ? "Filialeinsatz wurde aktualisiert." : "Filialeinsatz wurde angelegt.");
     resetEmployeeLendingEditor();
     await Promise.all([loadEmployeeLendings(), loadAll()]);
   } catch (error) {
+    if (!gpEditorCurrent(ticket) || !gpContextCurrent(contextTicket)) return;
     elements.employeeLendingMessage.textContent = error.message;
   } finally {
-    elements.employeeLendingSave.disabled = false;
+    if (gpEditorCurrent(ticket)) elements.employeeLendingSave.disabled = false;
   }
 }
 
 async function cancelEmployeeLending(id) {
+  const contextTicket = captureGpContext(canManageEmployeeLendings, () => JSON.stringify([state.locationId, state.weekStart]));
+  if (!gpContextCurrent(contextTicket)) return;
   const lending = state.employeeLendings.find((entry) => String(entry.id) === String(id));
   const employeeName = lending?.employee_nickname || lending?.employeeNickname
     || lending?.employee_name || lending?.employeeName
@@ -38341,32 +39778,41 @@ async function cancelEmployeeLending(id) {
       method: "POST",
       body: JSON.stringify({ revision: Number(lending.revision || 1) }),
     });
+    if (!gpContextCurrent(contextTicket)) return;
     showToast("Filialeinsatz wurde storniert.");
     await Promise.all([loadEmployeeLendings(), loadAll()]);
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     elements.employeeLendingMessage.textContent = error.message;
   }
 }
 
 async function updateEmployeeLendingDelegate(employeeNumber, enabled, control) {
+  const contextTicket = captureGpContext(canManageEmployeeLendings, () => JSON.stringify([state.locationId, state.weekStart]));
+  if (!gpContextCurrent(contextTicket)) return;
   control.disabled = true;
   try {
     await api(`/api/portal/v1/staff-assignments/delegates/${encodeURIComponent(employeeNumber)}`, {
       method: "PUT",
       body: JSON.stringify({ enabled, locationId: state.locationId }),
     });
+    if (!gpContextCurrent(contextTicket)) return;
     showToast(enabled ? "Einsatzrecht wurde delegiert." : "Delegiertes Einsatzrecht wurde entzogen.");
     await loadEmployeeLendings();
   } catch (error) {
+    if (!gpContextCurrent(contextTicket)) return;
     control.checked = !enabled;
     elements.employeeLendingMessage.textContent = error.message;
   } finally {
-    control.disabled = false;
+    if (gpContextCurrent(contextTicket) && control.isConnected) control.disabled = false;
   }
 }
 
 function openShiftModal(employeeNumber, date, shift = null) {
   if (guardScheduleEditing()) return;
+  if (shiftMutation && shiftMutationCurrent(shiftMutation)) return;
+  finishShiftMutation(shiftMutation);
+  shiftEditorGeneration++;
   const planningHours = window.GPScheduleDuty.manualPlanningHours();
   const opening = operatingHours(shift?.shift_date || date);
   const hours = opening && opening.start >= planningHours.start && opening.end <= planningHours.end
@@ -38413,7 +39859,11 @@ function openShiftModal(employeeNumber, date, shift = null) {
   elements.shiftModalTitle.textContent = shift ? "Dienst bearbeiten" : "Dienst eintragen";
   elements.deleteShiftButton.classList.toggle("hidden", !shift);
   calculateShiftPreview();
+  // The workspace dialog focuses before GP positions it. Keep the plan in view
+  // when that native focus would otherwise scroll to the dialog's DOM location.
+  const viewportScroll = { left: window.scrollX, top: window.scrollY, behavior: "instant" };
   elements.shiftModal.showModal();
+  window.scrollTo(viewportScroll);
 }
 
 function openOptionsModal() {
@@ -38712,7 +40162,7 @@ function renderOptionList() {
     </div>`);
   const optionItems = options.map((option) => `
     <div class="option-item ${isTeamWideMeetingOption(option) ? "team-meeting-option-item" : ""}">
-      <span class="option-item-color" style="background:${isTeamWideMeetingOption(option) ? "#76529a" : option.color}"></span>
+      <span class="option-item-color" style="background:${isTeamWideMeetingOption(option) ? "#76529a" : safeCssColor(option.color, "#26785f")}"></span>
       <div><strong>${isTeamWideMeetingOption(option) ? `Ganzes Team (${option.team_member_count})` : `${escapeHtml(option.employee_number)} ${escapeHtml(option.nickname)}`} · ${optionLabels[option.option_type]}</strong>
       <small>${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` · ${escapeHtml(option.note)}` : ""}${isTeamWideMeetingOption(option) ? " · Krankmeldungen bleiben vorrangig" : ` · gerechnet ${formatHours(option.credited_minutes || 0)}`}</small>${option.option_type === "vocational_school" ? `<small>${escapeHtml(window.GPVocationalSchool.detailHint(window.GPVocationalSchool.readDetails(option)))}</small>` : ""}</div>
       <div class="option-actions ${isLocationPlannerSession() && !["vacation", "time_off"].includes(option.option_type) ? "hidden" : ""}">
@@ -38726,6 +40176,8 @@ function renderOptionList() {
 }
 
 async function loadEmployeeSaturdayCredit(employee, fullAccess) {
+  const ticket = captureGpEditor(elements.employeeModal, canEditEmployeeWindow);
+  if (!gpEditorCurrent(ticket)) return;
   const panel = document.querySelector('#employeeSaturdayCredit');
   if (!panel) return;
   const number = String(employee?.personnel_number || '');
@@ -38742,7 +40194,7 @@ async function loadEmployeeSaturdayCredit(employee, fullAccess) {
   if (!number || !fullAccess) return;
   try {
     const value = await api(`/api/employees/${encodeURIComponent(number)}/saturday-credit`);
-    if (state.employeeSaturdayCreditGeneration !== generation) return;
+    if (!gpEditorCurrent(ticket) || state.employeeSaturdayCreditGeneration !== generation) return;
     state.employeeSaturdayCredit = { ...value, employeeNumber: number };
     control('employeeSalesActivity').value = value.assignment?.activity || '';
     const today = toIsoDate(new Date());
@@ -38763,11 +40215,13 @@ async function loadEmployeeSaturdayCredit(employee, fullAccess) {
       control('employeeSalesHistory').append(item);
     }
   } catch (error) {
-    if (state.employeeSaturdayCreditGeneration === generation) control('employeeSaturdayCreditStatus').textContent = error.message;
+    if (gpEditorCurrent(ticket) && state.employeeSaturdayCreditGeneration === generation) control('employeeSaturdayCreditStatus').textContent = error.message;
   }
 }
 
 async function saveEmployeeSaturdayCredit(configure = false) {
+  const ticket = captureGpEditor(elements.employeeModal, canEditEmployeeWindow);
+  if (!gpEditorCurrent(ticket)) return;
   const current = state.employeeSaturdayCredit;
   if (!current || (configure ? !current.canConfigure : !current.canAssign)) return;
   const effectiveDate = document.querySelector('#employeeSalesEffectiveDate').value;
@@ -38781,17 +40235,20 @@ async function saveEmployeeSaturdayCredit(configure = false) {
     await api(configure ? '/api/saturday-credit/cutover' : `/api/employees/${encodeURIComponent(current.employeeNumber)}/saturday-credit`, {
       method: 'POST', body: JSON.stringify(configure ? { effectiveDate } : { effectiveDate, activity, reason, expectedPreviousId: current.history[0]?.id || '' }),
     });
-    if (generation !== state.employeeSaturdayCreditGeneration) return;
+    if (!gpEditorCurrent(ticket) || generation !== state.employeeSaturdayCreditGeneration) return;
     await loadEmployeeSaturdayCredit({ personnel_number: current.employeeNumber }, true);
+    if (!gpEditorCurrent(ticket)) return;
     showToast(configure ? 'Der Umstellungsstichtag wurde gespeichert.' : 'Die Verkaufszuordnung wurde gespeichert.');
   } catch (error) {
-    if (generation !== state.employeeSaturdayCreditGeneration) return;
+    if (!gpEditorCurrent(ticket) || generation !== state.employeeSaturdayCreditGeneration) return;
     button.disabled = false; showToast(error.message, true);
   }
 }
 
 async function saveEmployee(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.employeeModal, canEditEmployeeWindow);
+  if (!gpEditorCurrent(ticket)) return;
   const number = document.querySelector("#employeeNumber").value.trim();
   const isEdit = document.querySelector("#employeeNumber").disabled;
   if (isEdit && state.employeeEditMode === "display") {
@@ -38806,10 +40263,11 @@ async function saveEmployee(event) {
         method: "PATCH",
         body: JSON.stringify(displayPatch),
       });
+      if (!gpEditorCurrent(ticket)) return;
       elements.employeeModal.close();
       showToast("Die Teamdarstellung wurde aktualisiert.");
       await loadAll();
-    } catch (error) { showToast(error.message, true); }
+    } catch (error) { if (gpEditorCurrent(ticket, true)) showToast(error.message, true); }
     return;
   }
   if (!elements.employeeCostCenter.value) {
@@ -38831,7 +40289,8 @@ async function saveEmployee(event) {
     costCenterId: elements.employeeCostCenter.value,
     positionId: elements.employeePosition.value,
     preferredDepartmentId: elements.employeePreferredDepartment.value,
-    preferredDayOff: document.querySelector("#employeePreferredDay").value,
+    preferredDayOff: state.employeePreferredDays[0] || "",
+    preferredDaysOff: [...state.employeePreferredDays],
     fixedWorkdays: Array.from(document.querySelectorAll('[name="employeeFixedWorkday"]:checked')).map((input) => input.value),
     color: state.selectedColor,
     active: document.querySelector("#employeeActive").checked,
@@ -38874,8 +40333,9 @@ async function saveEmployee(event) {
     state.personnelAdministrationLoaded = false;
     showToast(isEdit ? "Teammitglied wurde aktualisiert." : "Teammitglied wurde angelegt.");
     await loadAll();
+    if (!gpEditorCurrent(ticket, true)) return;
     if (state.currentView === "personnelAdministration") await loadPersonnelAdministration({ force: true });
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { if (gpEditorCurrent(ticket, true)) showToast(error.message, true); }
 }
 
 function canManageTimeTrackingSettings() {
@@ -38901,7 +40361,9 @@ function syncLocationTimeTrackingFields() {
 
 async function ensureLocationCostCenters() {
   if (!canReadCostCenters() || state.costCenters.length) return;
+  const contextTicket = captureGpContext(canReadCostCenters);
   const payload = await api("/api/cost-centers?includeInactive=1");
+  if (!gpContextCurrent(contextTicket)) return;
   state.costCenters = apiList(payload, ["costCenters", "cost_centers", "items"]).map(normalizeCostCenter);
   if (!Array.isArray(payload)) {
     state.costCenterTypes = apiList(payload, ["types", "costCenterTypes", "cost_center_types"])
@@ -39009,6 +40471,8 @@ function readLocationDayFields() {
 
 async function saveLocation(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.locationEditorModal, canEditLocationWindow);
+  if (!gpEditorCurrent(ticket)) return;
   const isEdit = Boolean(state.editingLocationId);
   const id = isEdit ? state.editingLocationId : elements.locationId.value;
   try {
@@ -39019,7 +40483,7 @@ async function saveLocation(event) {
       timeTrackingVarianceMinutes: Number(elements.locationTimeTrackingVarianceMinutes.value || 15),
     } : {};
     const costCenterSettings = canWriteCostCenters() ? { costCenterId: elements.locationCostCenter.value } : {};
-    state.locations = await api(isEdit ? `/api/locations/${encodeURIComponent(id)}` : "/api/locations", {
+    const locations = await api(isEdit ? `/api/locations/${encodeURIComponent(id)}` : "/api/locations", {
       method: isEdit ? "PUT" : "POST",
       body: JSON.stringify({
         id,
@@ -39031,12 +40495,14 @@ async function saveLocation(event) {
         daySettings: readLocationDayFields(),
       }),
     });
+    if (!gpEditorCurrent(ticket)) return;
+    state.locations = locations;
     elements.locationEditorModal?.close();
     state.personnelAdministrationLoaded = false;
     resetLocationForm();
     showToast(isEdit ? "Filiale wurde gespeichert." : "Filiale wurde angelegt.");
     await loadAll();
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { if (gpEditorCurrent(ticket, true)) showToast(error.message, true); }
 }
 
 function resetDepartmentForm() {
@@ -39065,9 +40531,11 @@ function fillDepartmentForm(department) {
 
 async function saveDepartment(event) {
   event.preventDefault();
+  const ticket = captureGpEditor(elements.departmentEditorModal, () => !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("departments:write"));
+  if (!gpEditorCurrent(ticket)) return;
   const isEdit = Boolean(state.editingDepartmentId);
   try {
-    state.locations = await api(isEdit ? `/api/departments/${state.editingDepartmentId}` : "/api/departments", {
+    const locations = await api(isEdit ? `/api/departments/${state.editingDepartmentId}` : "/api/departments", {
       method: isEdit ? "PUT" : "POST",
       body: JSON.stringify({
         locationId: elements.departmentLocation.value,
@@ -39076,11 +40544,13 @@ async function saveDepartment(event) {
         active: elements.departmentActive.checked,
       }),
     });
+    if (!gpEditorCurrent(ticket)) return;
+    state.locations = locations;
     elements.departmentEditorModal?.close();
     resetDepartmentForm();
     showToast(isEdit ? "Abteilung wurde gespeichert." : "Abteilung wurde angelegt.");
     await loadAll();
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { if (gpEditorCurrent(ticket, true)) showToast(error.message, true); }
 }
 
 function resetPositionForm() {
@@ -39103,17 +40573,20 @@ function fillPositionForm(position) {
 async function savePosition(event) {
   event.preventDefault();
   if (!canManagePositions()) return;
+  const contextTicket = captureGpContext(canManagePositions, () => JSON.stringify([state.editingPositionId, elements.positionName.value]));
   const isEdit = Boolean(state.editingPositionId);
   try {
-    state.positions = await api(isEdit ? `/api/positions/${encodeURIComponent(state.editingPositionId)}` : "/api/positions", {
+    const positions = await api(isEdit ? `/api/positions/${encodeURIComponent(state.editingPositionId)}` : "/api/positions", {
       method: isEdit ? "PUT" : "POST",
       body: JSON.stringify({ name: elements.positionName.value }),
     });
+    if (!gpContextCurrent(contextTicket)) return;
+    state.positions = positions;
     resetPositionForm();
     state.personnelAdministrationLoaded = false;
     renderPositions();
     showToast(isEdit ? "Position wurde gespeichert." : "Position wurde hinzugefügt.");
-  } catch (error) { showToast(error.message, true); }
+  } catch (error) { if (gpContextCurrent(contextTicket)) showToast(error.message, true); }
 }
 
 function positionAssignmentCounts(position) {
@@ -39195,6 +40668,38 @@ async function confirmPositionDelete(event) {
   }
 }
 
+function shiftMutationScope() {
+  return JSON.stringify([state.currentView, state.locationId, state.departmentId, state.weekStart, shiftEditorGeneration]);
+}
+
+function shiftMutationCurrent(mutation) {
+  return Boolean(mutation && shiftMutation === mutation && mutation.scope === shiftMutationScope()
+    && gpEditorCurrent(mutation.editor, true));
+}
+
+function beginShiftMutation() {
+  if (shiftMutation && shiftMutationCurrent(shiftMutation)) return null;
+  finishShiftMutation(shiftMutation);
+  if (!elements.shiftModal.open) return null;
+  clearTimeout(shiftRulePreviewTimer);
+  shiftRulePreviewRequest?.abort();
+  shiftRulePreviewRequest = null;
+  const controls = [...elements.shiftForm.querySelectorAll('input, select, textarea, button[type="submit"], #deleteShiftButton')]
+    .map(control => ({ control, disabled: control.disabled }));
+  const mutation = { editor: captureGpEditor(elements.shiftModal), scope: shiftMutationScope(), controls };
+  shiftMutation = mutation;
+  for (const { control } of controls) control.disabled = true;
+  elements.shiftForm.setAttribute("aria-busy", "true");
+  return mutation;
+}
+
+function finishShiftMutation(mutation) {
+  if (!mutation || shiftMutation !== mutation) return;
+  for (const { control, disabled } of mutation.controls) control.disabled = disabled;
+  elements.shiftForm.removeAttribute("aria-busy");
+  shiftMutation = null;
+}
+
 async function saveShift(event) {
   event.preventDefault();
   if (guardScheduleEditing()) return;
@@ -39209,13 +40714,21 @@ async function saveShift(event) {
     area: document.querySelector("#shiftArea").value,
     note: document.querySelector("#shiftNote").value,
   };
+  const mutation = beginShiftMutation();
+  if (!mutation) return;
   try {
     await api(id ? `/api/shifts/${id}` : "/api/shifts", { method: id ? "PUT" : "POST", body: JSON.stringify(body) });
-    elements.shiftModal.close();
-    state.weekStart = getMonday(new Date(`${body.date}T12:00:00`));
-    showToast(id ? "Dienst wurde aktualisiert." : "Dienst wurde eingetragen.");
-    await loadAll();
-  } catch (error) { showToast(error.message, true); }
+    if (!shiftMutationCurrent(mutation)) return;
+  } catch (error) {
+    if (shiftMutationCurrent(mutation)) showToast(error.message, true);
+    return;
+  } finally {
+    finishShiftMutation(mutation);
+  }
+  elements.shiftModal.close();
+  state.weekStart = getMonday(new Date(`${body.date}T12:00:00`));
+  showToast(id ? "Dienst wurde aktualisiert." : "Dienst wurde eingetragen.");
+  await loadPlanningPeriod("schedule", { errorPrefix: "Dienst gespeichert. Die Ansicht konnte nicht aktualisiert werden: " });
 }
 
 async function saveOption(event) {
@@ -39339,6 +40852,30 @@ function stripEmoji(value) {
 function sanitizeScheduleNoteEditor() {
   const editorRoot = scheduleNoteQuill?.root || elements.scheduleNoteEditor;
   if (!editorRoot || scheduleNoteSanitizing) return;
+  if (!scheduleNoteQuill) {
+    // Remove emoji from text only. Re-parsing serialized HTML could turn an
+    // inert Unicode-containing attribute name into an active event handler.
+    const selection = window.getSelection();
+    const selectionInside = selection?.anchorNode && selection?.focusNode
+      && editorRoot.contains(selection.anchorNode) && editorRoot.contains(selection.focusNode);
+    const cleanOffset = (node, offset) => node.nodeType === 3
+      ? Math.min(stripEmoji(node.data.slice(0, offset)).length, stripEmoji(node.data).length) : offset;
+    const savedSelection = selectionInside ? {
+      anchorNode: selection.anchorNode, anchorOffset: cleanOffset(selection.anchorNode, selection.anchorOffset),
+      focusNode: selection.focusNode, focusOffset: cleanOffset(selection.focusNode, selection.focusOffset),
+    } : null;
+    const walker = document.createTreeWalker(editorRoot, 4);
+    let changed = false;
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const clean = stripEmoji(node.data);
+      if (clean !== node.data) { node.data = clean; changed = true; }
+    }
+    if (changed && savedSelection) selection.setBaseAndExtent(
+      savedSelection.anchorNode, savedSelection.anchorOffset, savedSelection.focusNode, savedSelection.focusOffset,
+    );
+    return;
+  }
   const before = editorRoot.innerHTML;
   const after = stripEmoji(before);
   if (before !== after) {
@@ -39348,14 +40885,6 @@ function sanitizeScheduleNoteEditor() {
       scheduleNoteQuill.clipboard.dangerouslyPasteHTML(after);
       if (selection) scheduleNoteQuill.setSelection(Math.min(selection.index, scheduleNoteQuill.getLength()), 0, "silent");
       scheduleNoteSanitizing = false;
-    } else {
-      editorRoot.innerHTML = after;
-      const range = document.createRange();
-      range.selectNodeContents(editorRoot);
-      range.collapse(false);
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
     }
   }
 }
@@ -39499,15 +41028,17 @@ async function downloadCompleteDatabase(event) {
   setDatabaseDownloadStatus("Eine konsistente und geprüfte Datenbankkopie wird sicher erstellt.", "pending");
   applyRoleVisibility();
   try {
-    const response = await rawApi("/api/backup/database-download", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirmation: "DATABASE_BACKUP_DOWNLOAD", currentPassword }),
+    await withAdminReauthentication(async () => {
+      const response = await rawApi("/api/backup/database-download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "DATABASE_BACKUP_DOWNLOAD", currentPassword }),
+      });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      await downloadFileResponse(response, `Grabenplaner-Datenbank-${timestamp}.db`);
+      setDatabaseDownloadStatus("Die geprüfte Datenbankkopie wurde heruntergeladen. Bitte lokal sicher verwahren.", "success");
+      showToast("Datenbankkopie wurde heruntergeladen.");
     });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    await downloadFileResponse(response, `Grabenplaner-Datenbank-${timestamp}.db`);
-    setDatabaseDownloadStatus("Die geprüfte Datenbankkopie wurde heruntergeladen. Bitte lokal sicher verwahren.", "success");
-    showToast("Datenbankkopie wurde heruntergeladen.");
   } catch (error) {
     setDatabaseDownloadStatus(error.message, "error");
     showToast(error.message, true);
@@ -39649,24 +41180,26 @@ async function createManagedOffsiteFolder() {
   renderManagedOffsiteFoldersDialog();
   applyRoleVisibility();
   try {
-    const result = await api("/api/backup/offsite-folders", {
-      method: "POST",
-      body: JSON.stringify({
-        confirmation: "CREATE_MANAGED_OFFSITE_FOLDER",
-        folderLabel,
-        currentPassword,
-      }),
+    await withAdminReauthentication(async () => {
+      const result = await api("/api/backup/offsite-folders", {
+        method: "POST",
+        body: JSON.stringify({
+          confirmation: "CREATE_MANAGED_OFFSITE_FOLDER",
+          folderLabel,
+          currentPassword,
+        }),
+      });
+      if (elements.offsiteNewFolderLabel) elements.offsiteNewFolderLabel.value = "";
+      const refreshed = await loadManagedOffsiteFolders({ force: true });
+      const createdFolder = validManagedOffsiteFolderLabel(result?.createdFolder) ? result.createdFolder : folderLabel;
+      setOffsiteFolderDialogStatus(
+        refreshed
+          ? `Der verwaltete Ordner „${createdFolder}“ wurde angelegt. Das aktive Sicherungsziel wurde nicht geändert.`
+          : `Der verwaltete Ordner „${createdFolder}“ wurde angelegt; die aktualisierte Ordnerliste konnte jedoch noch nicht geladen werden.`,
+        refreshed ? "success" : "warning",
+      );
+      showToast(`Verwalteter Sicherungsordner „${createdFolder}“ wurde angelegt.`);
     });
-    if (elements.offsiteNewFolderLabel) elements.offsiteNewFolderLabel.value = "";
-    const refreshed = await loadManagedOffsiteFolders({ force: true });
-    const createdFolder = validManagedOffsiteFolderLabel(result?.createdFolder) ? result.createdFolder : folderLabel;
-    setOffsiteFolderDialogStatus(
-      refreshed
-        ? `Der verwaltete Ordner „${createdFolder}“ wurde angelegt. Das aktive Sicherungsziel wurde nicht geändert.`
-        : `Der verwaltete Ordner „${createdFolder}“ wurde angelegt; die aktualisierte Ordnerliste konnte jedoch noch nicht geladen werden.`,
-      refreshed ? "success" : "warning",
-    );
-    showToast(`Verwalteter Sicherungsordner „${createdFolder}“ wurde angelegt.`);
   } catch (error) {
     const message = offsiteFolderMutationErrorMessage(error);
     setOffsiteFolderDialogStatus(message, "error");
@@ -39714,23 +41247,25 @@ async function activateManagedOffsiteFolder() {
   renderManagedOffsiteFoldersDialog();
   applyRoleVisibility();
   try {
-    const result = normalizedManagedOffsiteActivation(await api("/api/backup/offsite-folders/active", {
-      method: "PUT",
-      body: JSON.stringify({
-        confirmation: "ACTIVATE_MANAGED_OFFSITE_FOLDER",
-        folderLabel,
-        currentPassword,
-      }),
-    }), folderLabel);
-    const refreshed = await loadManagedOffsiteFolders({ force: true });
-    const recoveryConfirmation = "Recovery-Set für Offline-Transfer/-Prüfung vorbereitet; altes Repository bleibt Rückfallpunkt.";
-    setOffsiteFolderDialogStatus(
-      refreshed
-        ? `„${result.activeFolder}“ ist jetzt das aktive Ziel für künftige Offsite-Sicherungen. ${recoveryConfirmation}`
-        : `„${result.activeFolder}“ wurde aktiviert. ${recoveryConfirmation} Die aktualisierte Ordnerliste konnte jedoch noch nicht geladen werden.`,
-      refreshed ? "success" : "warning",
-    );
-    showToast(`Offsite-Sicherungsziel „${result.activeFolder}“ wurde aktiviert; Recovery-Set vorbereitet.`);
+    await withAdminReauthentication(async () => {
+      const result = normalizedManagedOffsiteActivation(await api("/api/backup/offsite-folders/active", {
+        method: "PUT",
+        body: JSON.stringify({
+          confirmation: "ACTIVATE_MANAGED_OFFSITE_FOLDER",
+          folderLabel,
+          currentPassword,
+        }),
+      }), folderLabel);
+      const refreshed = await loadManagedOffsiteFolders({ force: true });
+      const recoveryConfirmation = "Recovery-Set für Offline-Transfer/-Prüfung vorbereitet; altes Repository bleibt Rückfallpunkt.";
+      setOffsiteFolderDialogStatus(
+        refreshed
+          ? `„${result.activeFolder}“ ist jetzt das aktive Ziel für künftige Offsite-Sicherungen. ${recoveryConfirmation}`
+          : `„${result.activeFolder}“ wurde aktiviert. ${recoveryConfirmation} Die aktualisierte Ordnerliste konnte jedoch noch nicht geladen werden.`,
+        refreshed ? "success" : "warning",
+      );
+      showToast(`Offsite-Sicherungsziel „${result.activeFolder}“ wurde aktiviert; Recovery-Set vorbereitet.`);
+    });
   } catch (error) {
     const message = offsiteFolderMutationErrorMessage(error);
     setOffsiteFolderDialogStatus(message, "error");
@@ -40344,24 +41879,29 @@ function usbBasePayload() {
   };
 }
 
+function canUseUsbGuidePrint() {
+  const user=state.portalSession?.user;
+  return !state.portalStatus?.portalEnabled || Boolean(state.portalSession?.authenticated && !user?.mustChangePassword
+    && ['developer','admin','it_admin'].includes(user?.role) && user?.permissions?.includes('usb:provision'));
+}
+
+function syncUsbGuidePrint() {
+  if(!usbGuidePrint)return;
+  if(state.currentView==='settings' && canUseUsbGuidePrint())usbGuidePrint.activate();
+  else usbGuidePrint.deactivate();
+  usbGuidePrint.sync();
+}
+
 async function previewUsbFirstSteps() {
-  elements.usbGuidePreviewButton.disabled = true;
   try {
-    const response = await fetch("/api/usb-provisioning/first-steps.pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Grabenplaner-USB-Action": "provisioning", ...csrfHeader() },
-      body: JSON.stringify(usbBasePayload()),
+    syncGpWindows();
+    usbGuidePrint ||= window.GpUsbGuidePrint.mount({
+      document,rawApi,key:()=>state.portalStatus?.portalEnabled?startDashboardWorkspaceActorKey():'local',
+      canUse:canUseUsbGuidePrint,active:()=>state.currentView==='settings',context:usbBasePayload,
+      windowPreferences:gpWindowManager?.preferences,
     });
-    if (!response.ok) {
-      const detail = await response.json().catch(() => ({}));
-      throw new Error(detail.error || "Die PDF-Vorschau konnte nicht erstellt werden.");
-    }
-    const url = URL.createObjectURL(await response.blob());
-    const old = elements.usbGuidePreviewFrame.dataset.objectUrl;
-    elements.usbGuidePreviewFrame.src = url;
-    elements.usbGuidePreviewFrame.dataset.objectUrl = url;
-    if (old) URL.revokeObjectURL(old);
-  } finally { elements.usbGuidePreviewButton.disabled = false; }
+    return usbGuidePrint.open({target:elements.usbGuidePreviewButton});
+  } catch(error) { showToast(error.message || 'Die PDF-Vorschau konnte nicht geöffnet werden.',true); return false; }
 }
 
 async function importUsbBranding() {
@@ -40493,7 +42033,7 @@ function openUsbEmployeeDraft(personnelNumber = "") {
 
 function updateUsbDraftDepartments() {
   const departments = departmentsForLocation(elements.usbDraftLocation.value);
-  elements.usbDraftDepartment.innerHTML = `<option value="">Keine Abteilung</option>${departments.map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("")}`;
+  elements.usbDraftDepartment.innerHTML = `<option value="">Keine Abteilung</option>${departments.map((department) => `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`).join("")}`;
 }
 
 function updateUsbDraftRoleOptions(preferredRole = elements.usbDraftRole.value || "employee") {
@@ -40677,6 +42217,7 @@ async function saveSettings(silent = false) {
           minimumPrimaryCoveragePercent: Number(elements.branchSupervisionPrimaryCoveragePercent.value),
           maximumDepartmentGapMinutes: Number(elements.branchSupervisionDepartmentGapMinutes.value),
         },
+        planningAssistant: planningAssistantSettingsInput(),
         ...(activeSettingsTab === "schedule" && canSaveScheduleSettings ? {
           crossLocationSchedule: {
             enabled: elements.crossLocationScheduleEnabled.checked,
@@ -40705,6 +42246,7 @@ async function saveSettings(silent = false) {
     const crossIds = ['crossLocationScheduleEnabled','crossLocationScheduleHorizonWeeks','staffAssignmentManagerCreateEnabled','staffAssignmentDepartmentManagerCreateEnabled','staffAssignmentDepartmentManagerReviewEnabled','staffAssignmentEmailSubmittedEnabled','staffAssignmentEmailDecisionEnabled','staffAssignmentChangePolicy','staffAssignmentCancellationPolicy'];
     const pdfIds = [...Object.keys(schedulePdfPayload), 'pdfTitleSetting'];
     const generalIds = [...Object.keys(payload), 'pdfTitleSetting','vacationPdfTitleSetting','breakAfterHours','breakDuration','branchSupervisionMode','branchSupervisionIntensity','branchSupervisionPrimaryCoveragePercent','branchSupervisionDepartmentGapMinutes'];
+    generalIds.push("planningAssistantEnabled", "planningAssistantAutoCheck", "planningAssistantShowInformational");
     if (payload.crossLocationSchedule) generalIds.push(...crossIds);
     const saveFont = !silent && canSaveGeneralSettings && elements.appFontScalePercent;
     const fontValue = saveFont ? elements.appFontScalePercent.valueAsNumber : null;
@@ -40721,8 +42263,16 @@ async function saveSettings(silent = false) {
     };
     if (!current()) return false;
     if (canSaveGeneralSettings) {
-      await api("/api/settings", { method: "PUT", body: JSON.stringify(payload) });
+      const savedSettings = await api("/api/settings", { method: "PUT", body: JSON.stringify(payload) });
       if (!current()) return false;
+      if (state.data) {
+        const preferenceKeys = ["planning_assistant_enabled", "planning_assistant_auto_check", "planning_assistant_show_informational"];
+        const confirmedPreferences = Object.fromEntries(preferenceKeys
+          .filter(key => savedSettings?.[key] === "0" || savedSettings?.[key] === "1")
+          .map(key => [key, savedSettings[key]]));
+        state.data.settings = { ...state.data.settings, ...confirmedPreferences };
+        planningAssistantWorkspace?.synchronize({ data: state.data, session: state.portalSession, allowed: canReadStartDashboardSchedule() });
+      }
       confirm(generalIds); confirmDesign();
     }
     if (canSaveSchedulePdfSettings && !canSaveGeneralSettings) {
@@ -40788,14 +42338,23 @@ async function deleteEmployee() {
 
 async function deleteShift() {
   if (guardScheduleEditing()) return;
+  if (shiftMutation && shiftMutationCurrent(shiftMutation)) return;
   const id = document.querySelector("#shiftId").value;
   if (!id || !confirm("Diesen Dienst wirklich löschen?")) return;
+  const mutation = beginShiftMutation();
+  if (!mutation) return;
   try {
     await api(`/api/shifts/${id}`, { method: "DELETE" });
-    elements.shiftModal.close();
-    showToast("Dienst wurde gelöscht.");
-    await loadAll();
-  } catch (error) { showToast(error.message, true); }
+    if (!shiftMutationCurrent(mutation)) return;
+  } catch (error) {
+    if (shiftMutationCurrent(mutation)) showToast(error.message, true);
+    return;
+  } finally {
+    finishShiftMutation(mutation);
+  }
+  elements.shiftModal.close();
+  showToast("Dienst wurde gelöscht.");
+  await loadPlanningPeriod("schedule", { errorPrefix: "Dienst gelöscht. Die Ansicht konnte nicht aktualisiert werden: " });
 }
 
 function updatePdfPreview() {
@@ -40921,15 +42480,18 @@ function syncMobileNavigationMode() {
 document.getElementById('gpDefinitionsNavButton')?.addEventListener('click', () => {
   if (!canUseGpDefinitions()) return;
   closeMobileNavigation({ restoreFocus: false });
+  gpDefinitionsWorkspace?.overview();
   setView('gpDefinitions');
 });
 
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
   closeMobileNavigation({ restoreFocus: false });
   const view = button.dataset.view;
+  if(view==="logistics")logisticsTab=button.dataset.logisticsTab==="orders"?"orders":"purchasing";
   if (button.dataset.personnelAdministrationRoute) {
     setPersonnelAdministrationTab(button.dataset.personnelAdministrationRoute);
   }
+  if (button.dataset.technicalSecurityTab) technicalSecurityTab = normalizeTechnicalSecurityTab(button.dataset.technicalSecurityTab);
   if (button.dataset.privacyOrganizationTab) {
     privacyOrganizationTab = normalizePrivacyOrganizationTab(button.dataset.privacyOrganizationTab);
   }
@@ -41174,6 +42736,7 @@ elements.personnelLifecycleEditorDialog?.addEventListener("cancel", (event) => {
   requestClosePersonnelLifecycleEditor();
 });
 elements.personnelLifecycleEditorDialog?.addEventListener("close", () => {
+  if (elements.personnelLifecycleEditorDialog.open) return;
   if (state.personnelLifecycleEditorDiscardBypass) {
     state.personnelLifecycleEditorDiscardBypass = false;
     return;
@@ -41227,7 +42790,34 @@ elements.personnelLifecycleEditorFlow?.addEventListener("click", (event) => {
   renderPersonnelLifecycleEditorCatalogControls();
   renderPersonnelLifecycleEditorFlow();
   renderPersonnelLifecycleEditorInspector();
+  focusPersonnelLifecycleEditorStep(stepId);
 });
+elements.personnelLifecycleEditorFlow?.addEventListener("keydown", (event) => {
+  if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  const button = event.target.closest?.("[data-personnel-lifecycle-editor-step]");
+  if (!button || !canWritePersonnelLifecycleEditorDraft()) return;
+  event.preventDefault(); state.personnelLifecycleEditorSelectedStepId = button.dataset.personnelLifecycleEditorStep;
+  movePersonnelLifecycleEditorStep(event.key === "ArrowUp" ? -1 : 1);
+});
+elements.personnelLifecycleEditorFlow?.addEventListener("dragstart", (event) => {
+  const button = event.target.closest?.("[data-personnel-lifecycle-editor-step]");
+  const step = state.personnelLifecycleEditorDraft?.steps.find(item => item.id === button?.dataset.personnelLifecycleEditorStep);
+  if (!step || step.type === "finish" || !canWritePersonnelLifecycleEditorDraft()) { event.preventDefault(); return; }
+  state.personnelLifecycleEditorDrag = { id: step.id, context: captureGpEditor(elements.personnelLifecycleEditorDialog, canWritePersonnelLifecycleEditorDraft) };
+  event.dataTransfer?.setData("text/plain", step.id);
+});
+elements.personnelLifecycleEditorFlow?.addEventListener("dragover", (event) => {
+  if (state.personnelLifecycleEditorDrag && gpEditorCurrent(state.personnelLifecycleEditorDrag.context)) event.preventDefault();
+});
+elements.personnelLifecycleEditorFlow?.addEventListener("drop", (event) => {
+  event.preventDefault(); const dragged = state.personnelLifecycleEditorDrag; state.personnelLifecycleEditorDrag = null;
+  const button = event.target.closest?.("[data-personnel-lifecycle-editor-step]");
+  if (!dragged || !button || !gpEditorCurrent(dragged.context) || !state.personnelLifecycleEditorDraft) return;
+  const steps = state.personnelLifecycleEditorDraft.steps, from = steps.findIndex(step => step.id === dragged.id), target = steps.findIndex(step => step.id === button.dataset.personnelLifecycleEditorStep);
+  if (from < 0 || target < 0 || target === from) return;
+  state.personnelLifecycleEditorSelectedStepId = dragged.id; movePersonnelLifecycleEditorStep(target - from);
+});
+elements.personnelLifecycleEditorFlow?.addEventListener("dragend", () => { state.personnelLifecycleEditorDrag = null; });
 elements.personnelLifecycleEditorInspectorForm?.addEventListener("submit", (event) => {
   event.preventDefault();
 });
@@ -41254,6 +42844,7 @@ elements.movePersonnelLifecycleEditorStepDownButton?.addEventListener("click", (
   movePersonnelLifecycleEditorStep(1);
 });
 elements.removePersonnelLifecycleEditorStepButton?.addEventListener("click", removePersonnelLifecycleEditorStep);
+document.getElementById("duplicatePersonnelLifecycleEditorStepButton")?.addEventListener("click", duplicatePersonnelLifecycleEditorStep);
 elements.resetPersonnelLifecycleEditorButton?.addEventListener("click", resetPersonnelLifecycleEditorDraft);
 elements.validatePersonnelLifecycleEditorButton?.addEventListener("click", () => {
   validatePersonnelLifecycleEditorDraft().catch(() => {});
@@ -41305,6 +42896,8 @@ elements.currentWeekLockMode?.addEventListener("change", updateWeekLockSettings)
 elements.currentWeekLockDay?.addEventListener("change", updateWeekLockSettings);
 elements.branchSupervisionMode?.addEventListener("change", () => updateBranchSupervisionSettings());
 elements.branchSupervisionIntensity?.addEventListener("change", () => updateBranchSupervisionSettings({ applyPreset: true }));
+elements.planningAssistantEnabled?.addEventListener("change", updatePlanningAssistantSettings);
+elements.planningAssistantAutoCheck?.addEventListener("change", updatePlanningAssistantSettings);
 [elements.branchSupervisionPrimaryCoveragePercent, elements.branchSupervisionDepartmentGapMinutes].forEach((input) => {
   input?.addEventListener("input", () => {
     if (elements.branchSupervisionIntensity.value !== "custom") {
@@ -41331,7 +42924,7 @@ elements.portalUserList?.addEventListener("change", (event) => {
   row.querySelector("[data-scope-department]").classList.toggle("hidden", role !== "department_manager");
   if (event.target.matches("[data-scope-location]")) {
     const departments = state.locations.find((location) => location.id === event.target.value)?.departments || [];
-    row.querySelector("[data-scope-department]").innerHTML = departments.map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("");
+    row.querySelector("[data-scope-department]").innerHTML = departments.map((department) => `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`).join("");
   }
 });
 elements.organizationAccountForm?.addEventListener("submit", saveOrganizationAccount);
@@ -41355,13 +42948,12 @@ elements.delegationList?.addEventListener("click", async (event) => {
   try { await api(`/api/portal/v1/approval-delegations/${row.dataset.delegationId}`, { method: "DELETE" }); await loadApprovalDelegations(); } catch (error) { showToast(error.message, true); }
 });
 elements.refreshRequestsButton?.addEventListener("click", loadManagerVacationRequests);
-elements.xoffiImportButton?.addEventListener("click", () => {
-  if (!canImportXoffiTime()) return;
-  resetXoffiImport();
-  elements.xoffiImportDialog?.showModal();
-});
-elements.xoffiImportClose?.addEventListener("click", () => elements.xoffiImportDialog?.close());
-elements.xoffiImportCancel?.addEventListener("click", () => elements.xoffiImportDialog?.close());
+elements.xoffiImportButton?.addEventListener("click", openXoffiImport);
+elements.xoffiImportClose?.addEventListener("click", closeXoffiImport);
+elements.xoffiImportCancel?.addEventListener("click", closeXoffiImport);
+elements.xoffiImportDialog?.addEventListener("close", () => { if (!elements.xoffiImportDialog.open) resetXoffiImport(); });
+elements.xoffiImportDialog?.addEventListener("cancel", resetXoffiImport);
+elements.xoffiImportFile?.addEventListener("change", changeXoffiImportFile);
 elements.xoffiInspectButton?.addEventListener("click", inspectXoffiImportFile);
 elements.xoffiImportConfirmed?.addEventListener("change", () => {
   updateXoffiApplyAvailability();
@@ -42036,6 +43628,7 @@ elements.usbWizardNextButton?.addEventListener("click", () => {
   const index = usbWizardSteps.indexOf(state.usbProvisioning.step);
   setUsbWizardStep(usbWizardSteps[Math.min(usbWizardSteps.length - 1, index + 1)]);
 });
+for(const type of ['input','change'])elements.usbProvisioningWizard?.addEventListener(type,syncUsbGuidePrint);
 elements.usbInstallationProfile?.addEventListener("change", () => applyUsbProfile());
 elements.usbModuleSelection?.addEventListener("change", (event) => {
   if (!event.target.matches('input[type="checkbox"]')) return;
@@ -42277,8 +43870,14 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
   loadPlanningView(button.dataset.contextView);
 });
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.querySelector(`#${button.dataset.close}`).close()));
-elements.employeeModal?.addEventListener("close", clearEmployeeProtectedRecord);
-elements.personnelRecordModal?.addEventListener("close", clearPersonnelRecordDialog);
+elements.employeeModal?.addEventListener("close", () => { if (!elements.employeeModal.open) clearEmployeeProtectedRecord(); });
+elements.personnelRecordModal?.addEventListener("close", () => { if (!elements.personnelRecordModal.open) clearPersonnelRecordDialog(); });
+elements.hoursOverview?.addEventListener("click", event => {
+  const link = event.target.closest("[data-missing-planning-week]");
+  if (!link || event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  event.preventDefault(); state.weekStart = link.dataset.missingPlanningWeek;
+  globalThis.grabenplanerNavigation?.record(); loadPlanningPeriod();
+});
 document.querySelector("#previousWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, -7); loadPlanningPeriod(); });
 document.querySelector("#nextWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, 7); loadPlanningPeriod(); });
 document.querySelector("#todayButton").addEventListener("click", () => { state.weekStart = getMonday(new Date()); loadPlanningPeriod(); });
@@ -42877,10 +44476,11 @@ elements.crmCustomerDetail?.addEventListener("submit", (event) => {
 elements.crmCustomerDetail?.addEventListener("change", (event) => {
   if (event.target.matches('[data-crm-photo-form] input[name="photo"]')) updateCrmPhotoPreview(event.target);
 });
-elements.personnelDashboardGrid?.addEventListener("click", (event) => {
+elements.personnelDashboardSection?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-personnel-dashboard-item]");
   if (button) navigateFromPersonnelDashboard(button.dataset.personnelDashboardItem);
 });
+document.getElementById("personnelDashboardRefreshButton")?.addEventListener("click", () => syncPersonnelDashboardInformation({ force: true }));
 elements.personnelDashboardCustomizeButton?.addEventListener("click", () => {
   if (elements.personnelDashboardCustomizer?.classList.contains("hidden")) openPersonnelDashboardCustomizer();
   else closePersonnelDashboardCustomizer();
@@ -42902,27 +44502,14 @@ elements.personnelDashboardCustomizerList?.addEventListener("click", (event) => 
   if (button) movePersonnelDashboardDraft(button.dataset.personnelDashboardMove, Number(button.dataset.direction));
 });
 elements.resetPersonnelDashboardLayout?.addEventListener("click", () => {
+  state.personnelDashboardResetDraft = true;
   state.personnelDashboardDraftLayout = defaultPersonnelDashboardLayout();
   renderPersonnelDashboardCustomizer();
   if (elements.personnelDashboardCustomizerStatus) {
-    elements.personnelDashboardCustomizerStatus.textContent = "Die Standardanordnung ist vorbereitet. Zum Übernehmen bitte speichern.";
+    elements.personnelDashboardCustomizerStatus.textContent = "Standardanordnung, Beschriftungen, Farben und Größen sind vorbereitet. Zum Übernehmen bitte speichern.";
   }
 });
-elements.savePersonnelDashboardLayout?.addEventListener("click", async () => {
-  const layout = normalizePersonnelDashboardLayout(state.personnelDashboardDraftLayout || state.personnelDashboardLayout);
-  const hidden = new Set(layout.hidden);
-  if (!orderedPersonnelDashboardItems(layout).some((item) => !hidden.has(item.id))) {
-    if (elements.personnelDashboardCustomizerStatus) {
-      elements.personnelDashboardCustomizerStatus.textContent = "Bitte mindestens einen verfügbaren Arbeitsbereich einblenden.";
-    }
-    return;
-  }
-  elements.savePersonnelDashboardLayout.disabled = true;
-  const saved = await persistPersonnelDashboardLayout(layout);
-  elements.savePersonnelDashboardLayout.disabled = false;
-  if (saved) closePersonnelDashboardCustomizer();
-});
-document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => button.addEventListener("click", () => setPersonnelAdministrationTab(button.dataset.personnelAdministrationTab)));
+elements.savePersonnelDashboardLayout?.addEventListener("click", savePersonnelDashboardConfiguration);
 elements.personnelLearningSearch?.addEventListener("input", (event) => {
   state.personnelLearningSearch = event.target.value;
   renderPersonnelLearningCatalog();
@@ -43142,17 +44729,11 @@ elements.personnelLearningSteps?.addEventListener("click", (event) => {
     renderPersonnelLearningStepEditor();
   }
 });
-document.querySelector(".personnel-administration-tabs")?.addEventListener("keydown", (event) => {
-  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-  const tabs = [...document.querySelectorAll("[data-personnel-administration-tab]:not(.hidden)")];
-  if (!tabs.length) return;
-  const currentIndex = Math.max(0, tabs.indexOf(document.activeElement));
-  const targetIndex = event.key === "Home" ? 0
-    : event.key === "End" ? tabs.length - 1
-      : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-  event.preventDefault();
-  tabs[targetIndex].focus();
-  setPersonnelAdministrationTab(tabs[targetIndex].dataset.personnelAdministrationTab);
+document.getElementById("refreshPersonnelDirectoryButton")?.addEventListener("click", () => loadPersonnelAdministration({ force: true }));
+document.getElementById("resetPersonnelDirectoryFiltersButton")?.addEventListener("click", () => {
+  state.personnelDirectorySearch = ""; state.personnelDirectoryCostCenterFilter = ""; state.personnelDirectoryStatusFilter = "active";
+  elements.personnelDirectorySearch.value = ""; elements.personnelDirectoryCostCenterFilter.value = ""; elements.personnelDirectoryStatusFilter.value = "active";
+  renderPersonnelDirectory();
 });
 elements.personnelDirectorySearch?.addEventListener("input", (event) => {
   state.personnelDirectorySearch = event.target.value;
@@ -43245,6 +44826,7 @@ elements.personnelCandidateCreateForm?.addEventListener("input", () => {
 });
 elements.personnelCandidateCreateForm?.addEventListener("submit", savePersonnelCandidate);
 elements.personnelCandidateCreateModal?.addEventListener("close", () => {
+  if (elements.personnelCandidateCreateModal.open) return;
   elements.personnelCandidateCreateForm?.reset();
   resetPersonnelCandidateCreateEnhancements();
   setPersonnelCandidateCreateMessage();
@@ -43531,8 +45113,12 @@ document.querySelector("#saveSettingsButton").addEventListener("click", () => {
 elements.locationForm.addEventListener("submit", saveLocation);
 elements.departmentForm.addEventListener("submit", saveDepartment);
 elements.addLocationButton?.addEventListener("click", async () => {
+  const intent = Symbol("location-open");
+  state.locationEditorOpenIntent = intent;
+  const contextTicket = captureGpContext(canEditLocationWindow, () => state.locationEditorOpenIntent);
   try {
     await ensureLocationCostCenters();
+    if (!gpContextCurrent(contextTicket)) return;
     resetLocationForm();
     if (!state.costCenters.some((center) => center.active && center.isBranch && !center.locationId)) {
       showToast("Bitte zuerst eine freie, aktive Filialkostenstelle anlegen.", true);
@@ -43629,7 +45215,15 @@ salesArticleColumnResize = window.SalesArticleColumnWidths?.attach(elements.sale
   canResize:canReadSalesArticles, persist:() => queueSalesArticlePreferencesSave(0),
 });
 
-elements.employeePosition.addEventListener("change", () => renderEmployeeAccessProfile(employeeAccessCurrentEmployee()));
+document.querySelector("#employeePreferredDays").addEventListener("click", changeEmployeePreferredDay);
+document.querySelector("#employeePreferredDaysOrder").addEventListener("click", changeEmployeePreferredDay);
+["employeeRecordFirstName", "employeeRecordLastName"].forEach(name => {
+  employeeRecordControl(name)?.addEventListener("input", syncEmployeeNameFromPersonnelRecord);
+});
+elements.employeePosition.addEventListener("change", () => {
+  renderEmployeeAccessProfile(employeeAccessCurrentEmployee());
+  renderEmployeePreferredDays();
+});
 elements.employeeForm.addEventListener("invalid", (event) => {
   event.target.closest("details")?.setAttribute("open", "");
 }, true);
@@ -43869,6 +45463,7 @@ document.querySelectorAll("[data-employee-profile-tab]").forEach((button) => {
   });
 });
 
+setupCostCenterFilters();
 elements.costCenterList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-edit-cost-center]");
   if (!button) return;
@@ -43905,8 +45500,12 @@ elements.locationList.addEventListener("click", async (event) => {
   if (locationButton) {
     const location = (state.locations || []).find((item) => item.id === locationButton.dataset.editLocation);
     if (location) {
+      const intent = Symbol("location-open");
+      state.locationEditorOpenIntent = intent;
+      const contextTicket = captureGpContext(canEditLocationWindow, () => state.locationEditorOpenIntent);
       try {
         await ensureLocationCostCenters();
+        if (!gpContextCurrent(contextTicket)) return;
         fillLocationForm(location);
         elements.locationEditorModal?.showModal();
       } catch (error) {
@@ -44009,15 +45608,19 @@ sidebarLayout = window.GrabenplanerSidebarLayout.mount({
   handle: document.getElementById("sidebarResizeHandle"), mobileMedia: mobileNavigationMedia,
 });
 globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create({
-  window, app: "administration", keys: ["view", "section", "kind", "dashboard", "process", "location", "department"],
+  window, app: "administration", keys: ["view", "section", "kind", "dashboard", "process", "location", "department", "week", "order", "orderId", "article"],
   read: currentAdministrationRoute, apply: () => applyRequestedView({ fromHistory: true }),
   enabled: () => !document.body.classList.contains("portal-locked")
     && Boolean(state.portalStatus) && (!state.portalStatus.portalEnabled || state.portalSession?.authenticated === true),
   onError: () => showToast("Die Seitennavigation konnte nicht wiederhergestellt werden.", true),
 });
+window.GrabenplanerSessionLifecycle?.listen(() => {
+  showLoginGate("Die Anmeldung wurde in einem anderen Fenster geändert. Die Sitzung wird neu geprüft.");
+  void bootstrapApplication();
+});
 bootstrapApplication();
 setInterval(() => {
-  if (!document.hidden && !planningPeriodController && !document.body.classList.contains("portal-locked")) loadSystemInfo();
+  if (!document.hidden && !shiftMutation && !planningPeriodController && !document.body.classList.contains("portal-locked")) loadSystemInfo();
 }, 120000);
 setInterval(() => {
   if (!document.body.classList.contains("portal-locked") && state.portalStatus?.portalEnabled) loadManagerVacationRequests({ background: true });

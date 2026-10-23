@@ -109,3 +109,17 @@ test('account switch aborts active preference writes and rejects queued old-acco
   requests[1].resolve({});assert.deepEqual(await Promise.all([old,queued]),[false,false]);assert.equal(requests.length,3);
   assert.equal(prefs.value.windows.search.x,2);prefs.destroy();
 });
+
+test('rapid geometry edits coalesce while a later edit during a write gets its own final snapshot',async()=>{
+  const requests=[],prefs=createPreferences({actorKey:()=> 'A',canUse:()=>true,read:async()=>model.empty(),write:(value,signal)=>{
+    const request=deferred();requests.push({value,signal,...request});return request.promise;
+  }});
+  await prefs.activate();
+  const geometry={x:10,y:20,width:500,height:300,minimized:true};
+  const edits=Array.from({length:20},(_,index)=>prefs.change('editor',{...geometry,x:index}));
+  await tick();assert.equal(requests.length,1);assert.equal(requests[0].value.windows.editor.x,19);assert.equal(requests[0].value.windows.editor.minimized,true);
+  const later=prefs.change('editor',{...geometry,x:70});requests[0].resolve({});await tick();
+  assert.equal(requests.length,2);assert.equal(requests[1].value.windows.editor.x,70);requests[1].resolve({});
+  assert.equal((await Promise.all([...edits,later])).every(Boolean),true);assert.equal(requests.length,2);
+  await prefs.change('editor',{...geometry,x:70});assert.equal(requests.length,2);prefs.destroy();
+});

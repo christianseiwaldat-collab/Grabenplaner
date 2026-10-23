@@ -45,7 +45,7 @@ async function waitForServer(url, child) {
 }
 
 function waitForExit(child) {
-  if (child.exitCode !== null) return Promise.resolve(child.exitCode);
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(child.exitCode);
   return new Promise((resolve) => child.once("exit", resolve));
 }
 
@@ -149,7 +149,7 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
     await waitForServer(`${origin}/api/health/live`, child);
     const statusResponse = await fetch(`${origin}/api/portal/v1/status`);
     assert.equal(statusResponse.status, 200, await statusResponse.clone().text());
-    assert.equal((await statusResponse.json()).passwordMinLength, 10);
+    assert.equal((await statusResponse.json()).passwordMinLength, 15);
 
     const database = openFixtureDatabase(databasePath);
     try {
@@ -181,7 +181,7 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
       body: JSON.stringify({ employeeNumber: "900", password: "123456" }),
     });
     assert.equal(authorizedSetupResponse.status, 400, await authorizedSetupResponse.clone().text());
-    assert.match((await authorizedSetupResponse.json()).error, /mindestens 10 Zeichen/i);
+    assert.match((await authorizedSetupResponse.json()).error, /mindestens 15 Zeichen/i);
 
     const wrongOriginResponse = await fetch(`${origin}/api/portal/v1/setup/admin`, {
       method: "POST",
@@ -256,6 +256,8 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
     }
   } finally {
     if (child.exitCode === null) child.kill();
-    fs.rmSync(root, { recursive: true, force: true });
+    await waitForExit(child);
+    assert.equal(path.dirname(fs.realpathSync(root)), fs.realpathSync(os.tmpdir()));
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });

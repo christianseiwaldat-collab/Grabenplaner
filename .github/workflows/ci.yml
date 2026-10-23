@@ -12,12 +12,14 @@ jobs:
   sqlite-provider-node-minimum:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.7.0
           run_install: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.13.0
           cache: pnpm
@@ -32,9 +34,14 @@ jobs:
           test/v087-database-block4-migration-contract.test.js
           test/v087-database-block4-sqlite-migration-runner.test.js
           test/v087-database-block4-statement-dialects.test.js
+          test/personnel-lifecycle-onboarding-execution.test.js
+          test/personnel-lifecycle-onboarding-tasks.test.js
+          test/personnel-lifecycle-onboarding-tasks-api.test.js
+          test/onboarding-json-compatibility.test.js
 
   postgresql-provider-development-contract:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/grabenplaner_test
       TEST_POSTGRESQL_BIN: /usr/lib/postgresql/18/bin
@@ -46,19 +53,21 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: grabenplaner_test
         ports:
-          - 5432:5432
+          - 127.0.0.1:5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d grabenplaner_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.7.0
           run_install: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.13.0
           cache: pnpm
@@ -102,22 +111,25 @@ jobs:
           test/v087-database-block6-postgresql-tools.test.js
           test/v087-database-block6-recovery-assurance.test.js
           test/v087-database-block6-no-cutover.test.js
-      - name: Native two-database workflow checks
-        run: node test-support/postgresql-migration/ci-stock-import-delete.js
+      - name: Full application suite with native PostgreSQL fixtures
+        run: node test-support/postgresql-migration/ci-stock-import-delete.js --full
 
   test:
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.7.0
           run_install: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: pnpm
@@ -125,6 +137,7 @@ jobs:
       - if: runner.os == 'Linux'
         name: Linux server scripts syntax
         run: find server-tools/linux -type f \( -name '*.sh' -o -name '*.sh.in' \) -print0 | xargs -0 -n1 bash -n
-      - run: pnpm test
+      - name: Full application suite with SQLite fixtures
+        run: node --test --test-concurrency=1 --test-reporter=tap --test-timeout=180000
       - name: Reboot module maintenance rollback (isolated temporary files)
         run: sudo python3 test/reboot-module-maintenance.test.py

@@ -7,7 +7,10 @@ const {sourceEntries}=require('../../lib/persistence/postgresql/core/catalog');
 const {coreRepositories,openCoreDevelopmentApplication}=require('../../lib/persistence/postgresql/core/application');
 const {verifyEnvironment,PROFILE}=require('../../lib/persistence/postgresql/core/environment');
 const inventory=require('../postgresql-migration-doc-fixtures/block-1-inventory.json');
-const baseTableNames=[...inventory.tables.filter(t=>t.database==='core').map(t=>t.name),'article_reference_snapshots'];
+// The additive security migration ledger is infrastructure, not fixture data.
+// Preserve it across owned-data truncation so repeated fixtures cannot remove
+// the one-time upgrade marker used by export and recovery verification.
+const baseTableNames=[...inventory.tables.filter(t=>t.database==='core'&&t.name!=='schema_migrations').map(t=>t.name),'article_reference_snapshots'];
 const quote=value=>value===null?'NULL':typeof value==='number'?String(value):"'"+String(value).replace(/'/g,"''")+"'";
 const fixtureId='synthetic-core-parity-v1';
 const schema=require('./source-schema-v09237.json');
@@ -29,6 +32,7 @@ async function withCoreFixture(work){
   let sqlite,sqliteProvider,application,owned=false;const tableNames=[...baseTableNames];
   try {
     await verifyEnvironment(migrator,{purpose:'migrator'});
+    await require('../../lib/persistence/postgresql/core/session-security').migrate(migrator);
     if((await migrator.query("SELECT to_regclass('gp.boundary_migration_history') AS name")).rows[0].name)tableNames.push('import_master_bindings','import_master_events','import_master_holds','trade_source_references','trade_source_reference_versions','sales_audit_inbox');
     if((await migrator.query("SELECT to_regclass('gp.trade_annotations') AS name")).rows[0].name)tableNames.push('trade_annotations');
     const occupied=(await migrator.query(tableNames.map(t=>`SELECT EXISTS(SELECT 1 FROM gp."${t}") occupied`).join(' UNION ALL '))).rows;
@@ -38,8 +42,14 @@ async function withCoreFixture(work){
     await migrator.query(operations.join(';')+';'+baseSql);
     await migrator.query("SELECT setval(pg_get_serial_sequence('gp.departments','id'),1,true)");
     await migrator.query('COMMIT');owned=true;
-    sqlite=createSqliteSource();seedCoreFixture(sqlite,3);sqlite.exec(baseSql);
-    sqliteProvider=createSqlitePersistenceProvider({database:sqlite,catalog:sourceEntries(),closeDatabase:false});
+    sqlite=createSqliteSource();
+    // The comparison side starts from the frozen historical schema, then gains
+    // the same reviewed additive column as the PostgreSQL application fixture.
+    sqlite.exec('ALTER TABLE week_options ADD COLUMN school_details_json TEXT');
+    require('../../lib/persistence/sqlite/operations/session-security-schema').ensureSqliteSessionSecuritySchema(sqlite);
+    seedCoreFixture(sqlite,3);sqlite.exec(baseSql);
+    const additional=require('../../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG.filter(entry=>entry.statement.id.includes('.security.'));
+    sqliteProvider=createSqlitePersistenceProvider({database:sqlite,catalog:[...sourceEntries(),...additional],closeDatabase:false});
     application=await openCoreDevelopmentApplication({profile:PROFILE,databaseUrl:process.env.GP_CORE_APP_URL,tlsMode:'disable-local-only'});
     await work({sqlite,sqliteProvider,postgres:application.provider,sqliteRepositories:coreRepositories(sqliteProvider),postgresRepositories:application.repositories,application,migrator});
   }finally{

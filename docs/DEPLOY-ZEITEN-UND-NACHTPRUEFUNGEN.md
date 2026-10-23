@@ -17,6 +17,28 @@ Ergibt die tatsächliche Entscheidung einen längeren Pfad als angekündigt, wir
 Der Wunsch nach höchstens 90 Minuten darf weder einen ungültigen Kurzpfad erzwingen noch Sicherungs- oder Restoreprüfungen verkürzen.
 Ein aktiver Nachtlauf wird regulär abgewartet; seine Sperre wird weder umgangen noch durch Abbruch oder Neustart beseitigt.
 
+## Pflicht vor der ersten Änderung: tatsächliche Übergänge prüfen
+
+Zusätzliche Minuten für eine gezielte Vorprüfung haben Vorrang vor vermeidbaren Stunden beim Deployment und vor Ausfällen im Betrieb. Eine bestandene Kandidatensuite allein ist kein Nachweis für die geplante Update-Reihenfolge.
+
+Vor der ersten produktiven Änderung wird eine kurze Übergangsmatrix mit den echten installierten und vorgesehenen Versionen festgehalten: Ausgangsstand, jeder Zwischenstand und Zielstand. Bei einer getrennten Modulinstallation umfasst sie insbesondere **alte App + neues Modul**, anschließend **neue App + neues Modul** und den tatsächlich vorgesehenen Rollbackstand. Für jeden Zustand müssen die tatsächlich aufgerufenen Skripte, ihre importierten Helfer, Versionslisten, Verträge, Timer und Abschlussprüfungen passen. Ein neuer Kandidatenhelfer darf nicht stellvertretend für den noch installierten alten Helfer getestet werden.
+
+Die betroffenen Einstiegspunkte werden vorab in einer isolierten Linux-Testumgebung mit den exakten alten und neuen Dateien ausgeführt. Dazu gehören die abschließende Monitor-/Serverprüfung der Assurance und der Offsite-Selbsttest, nicht nur Paketvalidierung und frühe Preflight-Schritte. Die Regression muss den bekannten inkompatiblen Zwischenstand zurückweisen und die vorgesehene kompatible Reihenfolge bestehen lassen. Produktive Daten, Dienste und Sicherungen werden für diesen Vorabtest nicht angefasst. Wo eine echte Integrationsprüfung noch fehlt, wird die Lücke ausdrücklich festgehalten; sie darf nicht als bestanden gelten.
+
+**Abbruch vor der ersten Mutation**, wenn ein notwendiger Zwischenstand ungeprüft oder inkompatibel ist oder die Reihenfolge eine erfolgreiche Prüfung voraussetzt, deren Korrektur erst ein späterer Schritt installiert. Dann zuerst den Übergang oder die Reihenfolge korrigieren und gezielt erneut prüfen. Der Produktionslauf darf nicht als erster Test dieses Übergangs dienen.
+
+Auslöser am 15.10.2026: App 0.92.87 erkannte in ihrem abschließenden Zeitplanhelfer nur Offsite-Versionen bis 11. Die vorherige Installation von Modul 12 bestand die fünf Recovery-Phasen, scheiterte danach aber am alten App-Helfer. Die Prüfung der korrigierten App 0.92.88 hatte diesen Zwischenstand nicht abgedeckt. Der konkrete Übergangstest ist deshalb Pflicht; die allgemeine Anweisung zur gründlichen Prüfung bestand bereits und war hierfür nicht ausreichend umgesetzt.
+
+Vor Beginn sind außerdem der Abschlussweg und die benötigten Belege vorbereitet. Erwartete Ausfallzeit, Updatezeit und nachgelagerte Prüfzeit werden getrennt geschätzt. Eine bereits vollständig gleichwertig durchgeführte Prüfung wird nicht allein zum Leeren eines historischen Fehlerstatus erneut über Stunden gestartet. Gleichwertigkeit muss anhand derselben Skripte, Verträge und Prüfschritte belegt sein; frühere Fehler bleiben sichtbar und die echte erfolgreiche Wiederholungsprüfung wird zugeordnet. Keine Prüfung überspringen, keinen Fehler umetikettieren und keinen pauschalen Fehlerreset durchführen.
+
+## Nachtstart während eines Deployments
+
+Ab Offsite-Modul 12 bleibt der zuvor aktive und aktivierte GP-Nacht-Timer während eines regulären Deployments erreichbar. Wird seine Ausführung während der Bereitstellung fällig, wartet die Nachtprüfung auf die Wartungssperre. Der Start darf sich höchstens drei Stunden gegenüber der ursprünglichen Fälligkeit verschieben. Ein erneuter Deploy-Versuch verlängert diese Frist nicht. Die Frist beendet niemals ein laufendes transaktionales Update; eine Überschreitung wird als Störung gemeldet.
+
+Der Updater schreibt dafür einen geschützten Beleg mit ursprünglichem Termin, fester Frist und gebundener Prozessidentität. Der System-Index berücksichtigt den Aufschub nur bei gültigem Beleg und tatsächlich aktivem Deployment. Schon vorher fehlende oder fehlerhafte Nachweise, deaktivierte Timer, ein abgebrochener Deploy und überzogene Fristen werden weiterhin bewertet. Der Aufschub ist kein erfolgreicher Recovery-Nachweis. Sobald die Sperre frei ist, wird der fällige Nachtlauf nachgeholt; die drei Stunden begrenzen seinen Start, nicht die Dauer seiner vollständigen Prüfung.
+
+Das System-Center zeigt den bestätigten Aufschub einschließlich ursprünglichem Termin und spätestem Start. Andere Host-, APT- und Anwendungswartungen behalten ihre eigenen Zeitpläne. Für ältere separat installierte Offsite-Module gilt weiterhin der bisherige sichere Ablauf; die neue Funktion benötigt die reguläre Modulmigration.
+
 ## Aktualisierung und Beobachtung
 
 - Erst nach grünem Preflight folgen Paketbau, Manifest-/Hashprüfung und erforderliche Kandidatentests. Vor dem Update wird die Bereitschaft erneut geprüft.

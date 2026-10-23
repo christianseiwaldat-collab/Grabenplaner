@@ -74,6 +74,25 @@ function syntheticSchedule({ sevenDays = false, longNotes = false, manyEmployees
       admin_email: "", company_name: "Musterbetrieb", pdf_footer_contact: "Synthetische Vorschau" } };
 }
 
+function compactSixSchedule() {
+  const schedule = syntheticSchedule();
+  schedule.settings.pdf_schedule_matrix_time_font_size = "18";
+  schedule.settings.pdf_schedule_matrix_show_position = "1";
+  schedule.staffAssignments = [];
+  schedule.pdfStaffAssignmentShifts = [];
+  schedule.shifts = schedule.employees.flatMap((employee, index) => Array.from({ length: 6 }, (_, day) => ({
+    id: 100 + index * 6 + day, employee_number: employee.personnel_number, location_id: "demo-home",
+    shift_date: `2026-09-${14 + day}`, start_time: "09:00", end_time: "18:00", duty_code: "branch_supervision", department_id: null,
+  })));
+  schedule.weekOptions = schedule.employees.map((employee, index) => ({
+    id: `meeting-${index}`, group_id: "team-meeting:example", employee_number: employee.personnel_number,
+    option_type: "team_meeting", date_from: "2026-09-16", date_to: "2026-09-16", all_day: 0,
+    start_time: "18:00", end_time: "18:30", note: "Übergabe",
+  }));
+  schedule.scheduleNote.note_text = "Samstag: Übergabe der offenen Reservierungen.";
+  return schedule;
+}
+
 async function main() {
   const root = path.resolve(__dirname, "..");
   const output = path.resolve(root, process.argv[2] || "output/pdf/Wochenmatrix-Muster.pdf");
@@ -89,7 +108,7 @@ async function main() {
     fs.mkdirSync(path.dirname(output), { recursive: true });
     const stream = fs.createWriteStream(output);
     const completion = finished(stream);
-    await subject.drawSchedulePdfForTests(syntheticSchedule({ sevenDays: process.argv.includes("--seven-days"),
+    await subject.drawSchedulePdfForTests(process.argv.includes("--compact-six") ? compactSixSchedule() : syntheticSchedule({ sevenDays: process.argv.includes("--seven-days"),
       longNotes: process.argv.includes("--long-notes"), manyEmployees: process.argv.includes("--many-employees"),
       showDutyLabels: process.argv.includes("--duty-labels") }),
     stream, new Date("2026-09-06T14:00:00Z"), "matrix");
@@ -101,5 +120,5 @@ async function main() {
   }
 }
 
-module.exports = { syntheticSchedule };
+module.exports = { syntheticSchedule, compactSixSchedule };
 if (require.main === module) main().catch(error => { process.stderr.write(`${error.stack}\n`); process.exitCode = 1; });

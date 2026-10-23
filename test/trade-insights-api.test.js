@@ -1,4 +1,5 @@
 'use strict';
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const assert=require('node:assert/strict'),test=require('node:test'),crypto=require('node:crypto'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-trade-insights-api-')),key=Buffer.alloc(32,53);
 Object.assign(process.env,{DB_PATH:path.join(root,'demo.db'),BACKUP_DIR:path.join(root,'backups'),GRABENPLANER_DATA_DIR:path.join(root,'data'),GRABENPLANER_HOST:'127.0.0.1',GRABENPLANER_FORCE_PORTAL:'1',GRABENPLANER_SEED_DEMO:'1',GRABENPLANER_INTEGRATION_KEY_ID:'insights-test',GRABENPLANER_INTEGRATION_KEY:key.toString('base64'),NODE_ENV:'test'});
@@ -7,7 +8,7 @@ async function request(kind,body,session=auth){const response=await fetch(url+'/
 test.before(async()=>{
  for(const id of ['93','94'])db.prepare('INSERT OR IGNORE INTO locations(id,name,active) VALUES(?,?,1)').run(id,'Synthetic '+id);
  db.exec("INSERT INTO employees(personnel_number,full_name,nickname,color,contracted_hours,home_location_id,active) VALUES('insights-user','Synthetic Developer','Synthetic','#287a67',38.5,'93',1); INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password) VALUES('insights-user','test-only','developer',1,0)");
- const token=crypto.randomBytes(32).toString('hex'),csrf=crypto.randomBytes(24).toString('hex');db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES(?,'insights-user',?,'2099-12-31T23:59:59.000Z')").run(crypto.randomUUID(),crypto.createHash('sha256').update(token).digest('hex'));
+ const token=crypto.randomBytes(32).toString('hex'),csrf=sessionCsrf(token);db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,'insights-user',?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(crypto.randomUUID(),crypto.createHash('sha256').update(token).digest('hex'));
  auth={cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,csrf};
  storeApp=require('../lib/persistence/sqlite/provider').openSqliteApplicationPersistence({databasePath:process.env.DB_PATH,catalog:require('../lib/persistence/sqlite/application-catalog').SQLITE_APPLICATION_CATALOG});access=storeApp.provider;
  const vault=require('../lib/integration-secret-vault').createIntegrationSecretVault({activeKeyId:'insights-test',keys:{'insights-test':key}});protection=await require('../lib/data-import-managed-protection').loadManagedDataImportProtection({access,vault,create:true});
@@ -35,7 +36,18 @@ test('Trade views use actual session authority, CSRF and protected read/write co
  assert.equal((await request('repair-save',{id:r.id,state:'collected',expectedRevision:0},{...auth,csrf:'wrong'})).status,403);
  res=await request('repair-save',{id:r.id,state:'collected',expectedRevision:0});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.gpStatus,'collected');
  assert.equal((await request('repair-save',{id:r.id,state:'ready',expectedRevision:0})).status,409);
+ assert.equal((await request('orders',{query:'BE-1'},null)).status,401);
+ assert.equal((await request('orders',{query:'BE-1'},{...auth,csrf:'wrong'})).status,403);
+ assert.equal((await request('orders',{query:'1',pageSize:5000})).status,422);
+ res=await request('orders',{query:'BE-1'});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.rows[0].orderNumber,'1');assert.equal(res.data.rows[0].matchMode,'be_alias');
+ const order={orderId:res.data.rows[0].id,orderRevision:res.data.rows[0].revision,sourceRevision:res.data.sourceRevision};
+ assert.equal((await request('order-detail',{...order,part:'positions'},{...auth,csrf:'wrong'})).status,403);
+ res=await request('order-detail',{...order,part:'positions'});assert.equal(res.status,200,JSON.stringify(res.data));assert.equal(res.data.rows.length,60);assert.equal(res.data.coverage.complete,true);
+ res=await request('table-options/orders',null);assert.equal(res.status,200,JSON.stringify(res.data));assert.deepEqual(res.data.columns,['orderNumber','supplier','date','location','sourceDate']);
+ res=await request('table-options/orders',{columns:['orderNumber','supplier'],widths:{orderNumber:200}});assert.equal(res.status,200,JSON.stringify(res.data));
+ assert.equal((await request('table-options/orders',{columns:['BEmail'],widths:{}})).status,422);
  db.prepare("UPDATE portal_users SET active=0 WHERE employee_number='insights-user'").run();assert.ok([401,403].includes((await request('repair-detail',{id:r.id})).status));
+ assert.ok([401,403].includes((await request('order-detail',{...order,part:'header'})).status));
 });
 
 test('Legacy trade links enter the GP shell with the requested supported tab',async()=>{

@@ -58,7 +58,9 @@ const v6Artifacts = [
   "systemd/grabenplaner-offsite-target-control@.service.in",
 ];
 const v11Artifacts = ["lib/maintenance-schedule-broker.js"];
-const legacyV10Artifacts = relativeArtifacts.filter((relative) => !v11Artifacts.includes(relative));
+// Version 12 added deploy-deferral; older synthetic contracts must exclude it.
+const legacyV11Artifacts = relativeArtifacts.filter((relative) => relative !== "lib/deploy-deferral.js");
+const legacyV10Artifacts = legacyV11Artifacts.filter((relative) => !v11Artifacts.includes(relative));
 const legacyV5Artifacts = legacyV10Artifacts.filter((relative) => !v6Artifacts.includes(relative));
 const legacyV3Artifacts = legacyV5Artifacts.filter((relative) => !v4Artifacts.includes(relative));
 const legacyV2Artifacts = legacyV3Artifacts.filter((relative) => ![

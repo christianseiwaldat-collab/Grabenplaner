@@ -57,14 +57,14 @@ test("Importdialog bietet direkte ACCDB-Prüfung und bestätigten sicheren Teili
   assert.match(dialog, /id="salesArticleImportApplyButton"[^>]*disabled/);
 });
 
-test("Artikelstamm-Startseite zeigt den letzten TradeFoto-Import oben und aktualisiert ihn nach Apply", () => {
+test("Artikelstamm-Startseite zeigt den Datenstand oben und aktualisiert ihn nach Apply", () => {
   const view = between(
     html,
     '<section id="salesArticleCatalogView"',
     '<section id="crmView"',
   );
   assert.match(view, /id="salesArticleLastImport"[^>]*aria-live="polite"/);
-  assert.match(view, /Letzter TradeFoto-Import/);
+  assert.match(view, /Datenstand:/);
   assert.match(view, /id="salesArticleLastImportValue"/);
 
   const loader = between(

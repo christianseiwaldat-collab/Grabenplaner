@@ -1,4 +1,5 @@
 'use strict';
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), crypto = require('node:crypto');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gp-branch-windows-'));
@@ -34,8 +35,8 @@ test.before(async()=>{
   db.prepare('INSERT INTO locations (id,name,min_staff,active) VALUES (?,?,0,1)').run('93','Synthetic 93');
   db.exec("INSERT INTO employees (personnel_number,full_name,nickname,color,contracted_hours,home_location_id,active) VALUES ('window-admin','Synthetic admin','Admin','#287a67',38.5,'93',1)");
   db.exec("INSERT INTO portal_users (employee_number,password_hash,role,active,must_change_password) VALUES ('window-admin','test-only','hr',1,0)");
-  const token=crypto.randomBytes(32).toString('hex'),csrf=crypto.randomBytes(24).toString('hex');
-  db.prepare("INSERT INTO portal_sessions (id,employee_number,token_hash,expires_at) VALUES (?,'window-admin',?,'2099-12-31T23:59:59.000Z')")
+  const token=crypto.randomBytes(32).toString('hex'),csrf=sessionCsrf(token);
+  db.prepare("INSERT INTO portal_sessions (id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES (?,'window-admin',?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(crypto.randomUUID(),crypto.createHash('sha256').update(token).digest('hex'));
   admin={cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,csrf};
   await new Promise(resolve=>{server=app.listen(0,'127.0.0.1',resolve);});url='http://127.0.0.1:'+server.address().port;

@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -14,9 +15,9 @@ const FIELD = "employment.retailKv", SUBJECT = "kv-synthetic-subject", WEEK = "2
 let server, url, locationId, versionId, assignmentId, review;
 const users = {};
 function session(id, role) {
-  const token = crypto.randomBytes(32).toString("hex"), csrf = crypto.randomBytes(24).toString("hex");
+  const token = crypto.randomBytes(32).toString("hex"), csrf = sessionCsrf(token);
   db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password,password_changed_at) VALUES (?,'synthetic',?,1,0,CURRENT_TIMESTAMP)").run(id, role);
-  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES (?,?,?,'2099-12-31T23:59:59.000Z')").run(crypto.randomUUID(), id, crypto.createHash("sha256").update(token).digest("hex"));
+  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES (?,?,?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(crypto.randomUUID(), id, crypto.createHash("sha256").update(token).digest("hex"));
   return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }
 async function request(route, { method = "GET", body, auth = users.author, skipPlanningBasis = false } = {}) {

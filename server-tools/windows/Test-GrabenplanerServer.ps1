@@ -29,9 +29,22 @@ function Add-Check([string]$Name, [bool]$Ok, [string]$Detail) {
 
 function Test-ExactCspDirectives([string]$Policy) {
     if ([string]::IsNullOrWhiteSpace($Policy)) { return $false }
-    $directives = @($Policy -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    foreach ($required in @("object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'")) {
-        if ($directives -notcontains $required) { return $false }
+    $Policy = $Policy.Trim()
+    # This monitor expects one policy, with each directive occurring once.
+    # A later restrictive duplicate cannot repair a preceding permissive value.
+    if ($Policy -match '[,\r\n]') { return $false }
+    $directives = @{}
+    foreach ($directive in ($Policy -split ';')) {
+        $directive = $directive.Trim()
+        if (-not $directive) { continue }
+        $parts = $directive -split '[ \t]+', 2
+        $name = $parts[0].ToLowerInvariant()
+        if ($name -notmatch '^[a-z0-9-]+$' -or $directives.ContainsKey($name)) { return $false }
+        $directives[$name] = if ($parts.Count -eq 2) { $parts[1].Trim() } else { '' }
+    }
+    foreach ($required in @("object-src 'none'", "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'")) {
+        $parts = $required -split ' ', 2
+        if ($directives[$parts[0]] -cne $parts[1]) { return $false }
     }
     return $true
 }
@@ -61,8 +74,9 @@ $publicHealthUrl = "{0}/api/health/ready" -f $PublicUrl.TrimEnd('/')
 try {
     $response = Invoke-WebRequest -Uri $publicHealthUrl -TimeoutSec 15 -UseBasicParsing
     $hsts = [string]$response.Headers['Strict-Transport-Security']
-    $contentSecurityPolicy = [string]$response.Headers['Content-Security-Policy']
-    $contentSecurityPolicyComplete = Test-ExactCspDirectives $contentSecurityPolicy
+    $contentSecurityPolicyValues = @($response.Headers['Content-Security-Policy'])
+    $contentSecurityPolicy = $contentSecurityPolicyValues -join ', '
+    $contentSecurityPolicyComplete = ($contentSecurityPolicyValues.Count -eq 1) -and (Test-ExactCspDirectives $contentSecurityPolicy)
     Add-Check 'Oeffentlicher HTTPS-Healthcheck' ($response.StatusCode -eq 200) "HTTP $($response.StatusCode)"
     Add-Check 'HSTS' ($hsts -eq 'max-age=31536000; includeSubDomains') $(if ($hsts) { $hsts } else { 'Header fehlt.' })
     Add-Check 'Content-Security-Policy' $contentSecurityPolicyComplete $(if ($contentSecurityPolicy) { $contentSecurityPolicy } else { 'Header fehlt.' })

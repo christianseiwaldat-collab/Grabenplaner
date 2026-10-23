@@ -68,6 +68,12 @@ die verbindliche Entscheidung trifft weiterhin `--verification auto` anhand der 
 Eine grüne Bereitschaftsprüfung bestätigt die Durchführbarkeit, noch keine bestimmte Gesamtdauer.
 Prüfpfad, Begründung, mögliche Wartezeit und erwartete Gesamtdauer werden vor Beginn der teuren Arbeiten mitgeteilt.
 
+Vor der ersten produktiven Änderung müssen auch alle tatsächlichen Zwischenstände der Update-Reihenfolge geprüft sein,
+insbesondere alte App mit neuem Betriebsmodul einschließlich der abschließenden Assurance-/Monitorprüfung und des Rollbackstands.
+Eine grüne Testsuite des neuen Gesamtstands ersetzt diesen Nachweis nicht. Ein inkompatibler oder ungeprüfter Übergang stoppt
+den Ablauf vor der Mutation. Zusätzliche gezielte Vorprüfung hat Vorrang vor vermeidbaren Ausfällen und stundenlanger Nacharbeit;
+der verbindliche Ablauf steht unter „Pflicht vor der ersten Änderung“ in den verlinkten Deploy-Regeln.
+
 Vollständige Betriebs-Selbsttests starten erst nach erfolgreichem Abschluss der erforderlichen Assurance und Freigabe ihrer Sperren.
 Während eines laufenden Restore dienen lesende Live-/Ready-, Status- und Fortschrittsabfragen zur Beobachtung.
 Einzelne bestandene Phasen ersetzen weder das signierte erfolgreiche Gesamtergebnis noch das reguläre Dienstende.
@@ -115,6 +121,14 @@ Produktive Daten, Schlüssel und öffentliche Ports bleiben unzugänglich. Teilf
 Der Nachtablauf führt keine produktive Wiederherstellung durch; Zeitgrenzen und Aufräumen gelten auch bei Fehlern.
 Manuelle Webstarts benötigen das gesonderte Recovery-Recht und einen root-isolierten Broker mit festen Aktionen, Schema, Sperren und Sperrfrist.
 Browserwerte bestimmen keine Befehle, Pfade oder Unitnamen.
+Statusabfragen und Wartungszeitplan-Abfragen lesen auch bei aktiver Wartung.
+Der Broker serialisiert diese Momentaufnahmen weiterhin mit Zeitplanänderungen; eine belegte Brokersperre liefert sofort eine strukturierte Belegt-Antwort.
+Manuelle Prüfstarts und Zeitplanänderungen benötigen zusätzlich die exklusive Wartungssperre.
+Ist sie belegt, wird die Aktion ohne Änderung mit dem Status „belegt“ beantwortet; der erwartete Konflikt erzeugt keine fehlgeschlagene Steuerungs-Unit.
+Unlesbare oder unsichere Sperrdateien sowie tatsächliche Brokerfehler bleiben Fehler.
+Der kompatible Modulvertrag bleibt bei Version 12: Dateisatz, Nachrichten- und Zustandsschemas bleiben unverändert.
+Die geänderten Broker- und Unitdateien erhalten einen neuen Vertragsfingerprint und benötigen vor dem App-Update eine explizite Modulwartung.
+Vor der Freigabe sind die installierte App mit altem und neuem Modul sowie Kandidat und App-Rollback mit dem neuen Modul zu prüfen.
 
 Wartungszeiten werden anhand tatsächlicher systemd-Werte und Serverzeitzone angezeigt.
 Änderungen benötigen Rechte, aktuelle Revision und Wartungssperre; laufende Arbeiten werden nicht beendet.

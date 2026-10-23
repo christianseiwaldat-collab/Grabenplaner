@@ -26,7 +26,14 @@ async function main() {
         body += chunk.toString("utf8");
       }
     } finally { clearTimeout(timer); }
-    request = validateRequest(JSON.parse(body));
+    const value = JSON.parse(body);
+    if (value?.format === require('../../../lib/vps-storage-contract').FORMAT) {
+      try { await require('./storage-worker').serve(value, configuration); }
+      catch (error) { process.stdout.write(JSON.stringify({ format: value.format, action: value.action, requestId: value.requestId,
+        accepted: false, code: require('./storage-worker').safeCode(error) }) + '\n'); }
+      return;
+    }
+    request = validateRequest(value);
   } catch { throw new Error("PG_LIFECYCLE_REQUEST_INVALID"); }
   const script = "/opt/grabenplaner/app/server-tools/linux/postgresql/lifecycle-maintenance.sh";
   const stat = fs.lstatSync(script);

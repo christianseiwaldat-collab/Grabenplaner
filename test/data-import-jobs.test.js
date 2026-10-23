@@ -91,6 +91,27 @@ test('accepted file is encrypted and completes reading plus review with no brows
  assert.equal(f.sources.get(source.id).status,'ready');
 });
 
+test('encrypted import spool requires the complete canonical GCM envelope and authenticates before return',async t=>{
+ const f=await fixture(t);await f.store.init();
+ const source=sourceBuffer(),blob=await f.store.encrypt('a'.repeat(64),source);
+ assert.deepEqual(await f.store.decrypt(blob),source);
+ for(const length of [0,4,8,12,15,17]){
+   const tag=Buffer.alloc(length);Buffer.from(blob.tag,'base64').copy(tag);
+   await assert.rejects(f.store.decrypt({...blob,tag:tag.toString('base64')}),{code:'IMPORT_JOB_FILE_INVALID'});
+ }
+ for(const field of ['key','iv','tag']){
+   await assert.rejects(f.store.decrypt({...blob,[field]:null}),{code:'IMPORT_JOB_FILE_INVALID'});
+   await assert.rejects(f.store.decrypt({...blob,[field]:blob[field]+'\n'}),{code:'IMPORT_JOB_FILE_INVALID'});
+   await assert.rejects(f.store.decrypt({...blob,[field]:'invalid'}),{code:'IMPORT_JOB_FILE_INVALID'});
+ }
+ for(const length of [0,11,13])await assert.rejects(f.store.decrypt({...blob,iv:Buffer.alloc(length).toString('base64')}),{code:'IMPORT_JOB_FILE_INVALID'});
+ const changedTag=Buffer.from(blob.tag,'base64');changedTag[0]^=1;
+ await assert.rejects(f.store.decrypt({...blob,tag:changedTag.toString('base64')}),{code:'IMPORT_JOB_FILE_INVALID'});
+ const file=path.join(f.directory,blob.name),ciphertext=await fsp.readFile(file);ciphertext[0]^=1;
+ await fsp.writeFile(file,ciphertext);
+ await assert.rejects(f.store.decrypt(blob),{code:'IMPORT_JOB_FILE_INVALID'});
+});
+
 test('deleting a paused Access copy removes bytes and password, but never writes GP import state',async t=>{
  const f=await fixture(t),source=await f.enqueue();
  await assert.rejects(f.queue.deleteUpload(f.getSession,source.id,{expectedRevision:1}),{code:'IMPORT_SOURCE_BUSY'});

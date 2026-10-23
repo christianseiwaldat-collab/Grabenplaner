@@ -1,0 +1,388 @@
+/* Shared presentation for the learning workspace; domain and window styles remain separate. */
+#personnelLearningSection { font-size:16px; line-height:1.5; min-width:0; }
+#personnelLearningSection :is(p,small,span,strong,h2,h3,h4,h5,label) { overflow-wrap:anywhere; }
+#personnelLearningSection .eyebrow { font-size:13px; letter-spacing:.06em; }
+#personnelLearningSection .personnel-learning-heading { margin-bottom:24px; }
+#personnelLearningSection .personnel-learning-heading h2 { font-size:28px; line-height:1.2; margin:6px 0 10px; }
+#personnelLearningSection .personnel-learning-heading p { max-width:900px; font-size:15px; line-height:1.6; margin:0; }
+#personnelLearningSection :is(.field>span,.learning-team-filters label) { font-size:14px; font-weight:600; color:var(--muted); }
+#personnelLearningSection :is(input,select,textarea) { font-size:16px; min-width:0; }
+#personnelLearningSection :is(button,.learning-team-pagination a) { min-height:44px; font-size:14px; }
+#personnelLearningSection .personnel-learning-status { font-size:13px; margin:12px 0; }
+#personnelLearningSection .personnel-learning-area { border-radius:12px; background:var(--surface); margin-top:14px; }
+#personnelLearningSection .personnel-learning-area>summary { display:flex; align-items:center; gap:16px; padding:18px 20px; list-style:none; min-height:62px; box-sizing:border-box; }
+#personnelLearningSection .personnel-learning-area>summary::before { content:'›'; font-size:24px; line-height:1; color:var(--green); transition:transform .15s; }
+#personnelLearningSection .personnel-learning-area[open]>summary::before { transform:rotate(90deg); }
+#personnelLearningSection .personnel-learning-area>summary strong { font-size:17px; }
+#personnelLearningSection .personnel-learning-area>summary span { margin-left:auto; color:var(--muted); font-size:14px; }
+#personnelLearningSection .personnel-learning-area>section { padding:20px; }
+#personnelLearningSection .personnel-learning-dashboard { padding:22px; margin:0 0 24px; background:var(--surface); border-color:var(--line); border-radius:14px; }
+#personnelLearningSection .personnel-learning-dashboard-heading h3 { font-size:22px; margin:0 0 6px; }
+#personnelLearningSection .personnel-learning-dashboard-heading p { font-size:14px; line-height:1.5; }
+#personnelLearningSection .personnel-learning-metric-scope { font-size:13px; color:var(--muted); margin:20px 0 8px; }
+#personnelLearningSection .personnel-learning-dashboard-summary { gap:12px; margin:0 0 24px; }
+#personnelLearningSection .personnel-learning-dashboard-summary article { background:var(--surface-soft); border:0; border-radius:10px; padding:16px; }
+#personnelLearningSection .personnel-learning-dashboard-summary span { font-size:13px; text-transform:none; letter-spacing:0; }
+#personnelLearningSection .personnel-learning-dashboard-summary strong { font-size:28px; line-height:1.2; margin:8px 0; }
+#personnelLearningSection .personnel-learning-dashboard-summary small { font-size:13px; line-height:1.4; }
+#personnelLearningSection .personnel-learning-dashboard-grid { gap:24px; grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+#personnelLearningSection .personnel-learning-dashboard-column { padding:0; border:0; border-radius:0; }
+#personnelLearningSection .personnel-learning-dashboard-section-heading { flex-wrap:wrap; align-items:start; margin-bottom:16px; }
+#personnelLearningSection .personnel-learning-dashboard-section-heading h4 { font-size:18px; margin:0; }
+#personnelLearningSection .personnel-learning-dashboard-section-heading p { font-size:13px; color:var(--muted); margin:4px 0 0; }
+#personnelLearningSection .personnel-learning-dashboard-section-heading>span { font-size:13px; max-width:100%; text-align:left; }
+#personnelLearningSection .personnel-learning-dashboard-person { width:100%; }
+#personnelLearningSection .personnel-learning-dashboard-assignment-list { max-height:none; padding:0; gap:14px; overflow:visible; }
+#personnelLearningSection .personnel-learning-dashboard-assignment { padding:16px; background:var(--surface); border-radius:10px; }
+#personnelLearningSection .personnel-learning-dashboard-assignment :is(header,footer) { flex-wrap:wrap; }
+#personnelLearningSection .personnel-learning-dashboard-assignment header>div { flex:1 1 180px; }
+#personnelLearningSection .personnel-learning-dashboard-assignment header span { font-size:14px; }
+#personnelLearningSection .personnel-learning-dashboard-assignment h5 { font-size:17px; margin:5px 0 0; line-height:1.4; }
+#personnelLearningSection .personnel-learning-dashboard-assignment :is(header>strong,p,footer small) { font-size:13px; line-height:1.5; }
+#personnelLearningSection .personnel-learning-dashboard-assignment footer button { font-size:14px; min-height:44px; }
+#personnelLearningSection .personnel-learning-skill-branch { padding-left:0; }
+#personnelLearningSection .personnel-learning-skill-branch::before,#personnelLearningSection .personnel-learning-skill-node::before { display:none; }
+#personnelLearningSection .personnel-learning-skill-branch>header { margin:0 0 12px; }
+#personnelLearningSection .personnel-learning-skill-branch>header>span { display:none; }
+#personnelLearningSection .personnel-learning-skill-branch>header strong { font-size:16px; }
+#personnelLearningSection .personnel-learning-skill-branch>header small { font-size:13px; }
+#personnelLearningSection .personnel-learning-skill-node { padding:16px; border-radius:10px; background:var(--surface-soft); }
+#personnelLearningSection .personnel-learning-skill-node-heading { flex-wrap:wrap; }
+#personnelLearningSection .personnel-learning-skill-node-heading span { font-size:13px; }
+#personnelLearningSection .personnel-learning-skill-node-heading h5 { font-size:17px; line-height:1.4; }
+#personnelLearningSection .personnel-learning-skill-node-badges :is(strong,em) { font-size:13px; }
+#personnelLearningSection .personnel-learning-skill-level-rail span { min-height:32px; }
+#personnelLearningSection .personnel-learning-skill-level-rail b { font-size:13px; }
+#personnelLearningSection .personnel-learning-skill-current strong { font-size:15px; }
+#personnelLearningSection .personnel-learning-skill-current p { font-size:14px; line-height:1.6; }
+#personnelLearningSection .personnel-workflow-empty { font-size:14px; line-height:1.6; }
+#personnelLearningTeam>h3 { font-size:19px; margin:0 0 6px; }
+#personnelLearningTeam>p { color:var(--muted); font-size:14px; margin:0 0 20px; }
+#personnelLearningTeam .learning-team-filters { padding:16px; background:var(--surface-soft); border-radius:10px; gap:14px; }
+#personnelLearningTeam .learning-team-page-summary { margin:22px 0 6px; }
+#personnelLearningTeam .learning-team-page-summary>p { color:var(--muted); font-size:13px; }
+#personnelLearningTeam .learning-team-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+#personnelLearningTeam .learning-team-metrics article { padding:14px; border:1px solid var(--line); border-radius:10px; }
+#personnelLearningTeam .learning-team-metrics :is(span,strong) { display:block; }
+#personnelLearningTeam .learning-team-metrics span { font-size:13px; color:var(--muted); }
+#personnelLearningTeam .learning-team-metrics strong { font-size:24px; color:var(--green); margin-top:6px; }
+#personnelLearningTeam .learning-team-table { border-color:var(--line); border-radius:10px; }
+#personnelLearningTeam .learning-team-table :is(th,td) { font-size:14px; line-height:1.5; padding:16px; }
+#personnelLearningTeam .learning-team-table small { color:var(--muted); font-size:13px; }
+#personnelLearningTeam .learning-team-status { display:inline-block; border-radius:6px; padding:4px 7px; font-size:13px; background:var(--surface-soft); }
+#personnelLearningTeam .learning-team-status[data-status='fulfilled'] { background:#e7f3ed; color:#1d644d; }
+#personnelLearningTeam .learning-team-status:is([data-status='expired'],[data-status='missing'],[data-status='notPassed'],[data-status='lowerLevel']) { background:#fff0e8; color:#904321; }
+#personnelLearningTeam .learning-team-status:is([data-status='inProgress'],[data-status='dueSoon']) { background:#fff5d9; color:#795a12; }
+#personnelLearningTeam .learning-team-people { display:none; }
+#personnelLearningTeam .learning-team-pagination { font-size:14px; justify-content:start; }
+#personnelLearningTeam .learning-team-pagination a { display:inline-flex; align-items:center; color:var(--green); padding:0 8px; }
+#personnelLearningTeam .learning-team-rule :is(strong,small) { font-size:14px; }
+.learning-team-dialog :is(label,p,small) { font-size:14px; line-height:1.5; }
+.learning-team-dialog :is(input,select) { font-size:16px; }
+/* GP windows own the outer frame; spacing belongs to their scrollable body. */
+.learning-team-dialog.gp-dialog > .gp-dialog-body { padding:24px; box-sizing:border-box; }
+.learning-team-dialog .learning-team-fields { grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr)); gap:20px 16px; align-items:start; }
+.learning-team-dialog .learning-team-fields > label { gap:8px; align-content:start; color:var(--ink); font-weight:600; }
+.learning-team-dialog .learning-team-fields > [hidden] { display:none; }
+.learning-team-dialog .learning-team-fields :is(input,select) { color:var(--ink); font-weight:400; }
+.learning-team-dialog .learning-team-fields small { color:var(--muted); font-size:13px; font-weight:400; }
+.learning-team-dialog form > p { margin:20px 0 0; color:var(--muted); }
+.learning-team-dialog form > [data-dialog-error]:empty { display:none; }
+.learning-team-dialog form > [data-dialog-error] { color:var(--danger-ink,#a13122); }
+.learning-team-dialog form > .learning-team-pagination { margin:20px 0 0; padding-top:16px; border-top:1px solid var(--line); justify-content:flex-end; }
+.learning-team-dialog form > .learning-team-pagination button { color:var(--ink); border-color:var(--line); }
+.learning-team-dialog form > .learning-team-pagination button[type="submit"] { background:var(--green); border-color:var(--green); color:#fff; font-weight:600; }
+html[data-active-page-theme="dark"] .learning-team-dialog form > .learning-team-pagination button[type="submit"] { color:#10241d; }
+@media(max-width:600px) { .learning-team-dialog.gp-dialog > .gp-dialog-body { padding:16px; } }
+#personnelLearningSection .personnel-learning-subheading { margin-bottom:16px; }
+#personnelLearningSection .personnel-learning-subheading>div { width:100%; justify-content:space-between; }
+#personnelLearningSection .personnel-learning-subheading h3 { font-size:20px; margin:0; }
+#personnelLearningSection .personnel-learning-subheading>p { margin:8px 0 0; font-size:14px; line-height:1.6; }
+#personnelLearningSection .personnel-learning-summary { gap:12px; margin:0 0 20px; }
+#personnelLearningSection .personnel-learning-summary article { background:var(--surface-soft); border:0; padding:14px; box-shadow:none; border-radius:10px; }
+#personnelLearningSection .personnel-learning-summary span { font-size:13px; text-transform:none; letter-spacing:0; }
+#personnelLearningSection .personnel-learning-summary strong { font-size:26px; margin:6px 0; }
+#personnelLearningSection .personnel-learning-summary small { font-size:13px; line-height:1.5; }
+#personnelLearningSection .personnel-learning-toolbar { grid-template-columns:minmax(180px,2fr) repeat(2,minmax(130px,1fr)) auto; padding:16px; box-shadow:none; background:var(--surface-soft); border:0; border-radius:10px; gap:12px; }
+#personnelLearningSection .personnel-learning-skill-toolbar { grid-template-columns:minmax(180px,2fr) minmax(130px,1fr) auto; }
+#personnelLearningSection .personnel-learning-competency-toolbar { grid-template-columns:minmax(180px,2fr) repeat(2,minmax(130px,1fr)); }
+#personnelLearningSection .personnel-learning-toolbar button { margin:0; min-height:44px; }
+#personnelLearningSection .personnel-learning-card { padding:20px; border-radius:10px; box-shadow:none; }
+#personnelLearningSection .personnel-learning-card>header>div { flex:1 1 240px; }
+#personnelLearningSection .personnel-learning-card h3 { font-size:19px; line-height:1.4; margin:6px 0; }
+#personnelLearningSection .personnel-learning-card :is(header p,.personnel-learning-objective p) { font-size:14px; line-height:1.6; }
+#personnelLearningSection .personnel-learning-card .status-badge { font-size:13px; padding:6px 10px; }
+#personnelLearningSection .personnel-learning-facts { gap:10px; margin-top:16px; }
+#personnelLearningSection .personnel-learning-facts>span { padding:12px; border:0; border-radius:8px; }
+#personnelLearningSection .personnel-learning-facts small { font-size:13px; text-transform:none; letter-spacing:0; }
+#personnelLearningSection .personnel-learning-facts strong { font-size:14px; line-height:1.5; margin-top:5px; }
+#personnelLearningSection .personnel-learning-objective { padding:14px 16px; margin-top:16px; }
+#personnelLearningSection .personnel-learning-objective strong { font-size:15px; margin-bottom:6px; }
+#personnelLearningSection .personnel-learning-tags span { font-size:13px; padding:5px 9px; font-weight:600; }
+#personnelLearningSection .personnel-learning-details { margin-top:14px; background:var(--surface); }
+#personnelLearningSection .personnel-learning-details>summary { padding:14px; font-size:14px; min-height:44px; box-sizing:border-box; }
+#personnelLearningSection .personnel-learning-details li { font-size:14px; padding:12px; background:var(--surface-soft); line-height:1.6; }
+#personnelLearningSection .personnel-learning-details li small { font-size:13px; }
+#personnelLearningSection .personnel-learning-history { padding:0 14px 14px; gap:10px; }
+#personnelLearningSection .personnel-learning-history>span { background:var(--surface-soft); padding:12px; }
+#personnelLearningSection .personnel-learning-history strong { font-size:14px; }
+#personnelLearningSection .personnel-learning-history :is(small,code) { font-size:13px; line-height:1.5; }
+#personnelLearningSection .personnel-learning-level-track span { font-size:14px; min-height:36px; aspect-ratio:auto; padding:6px 0; }
+#personnelLearningSection .personnel-learning-competency-badge { font-size:13px; font-weight:600; }
+#personnelLearningSection .personnel-learning-competency-employee :is(strong,small) { font-size:14px; }
+#personnelKnowledgeLibrary .learning-library-toolbar { padding:16px; border-radius:10px; background:var(--surface-soft); }
+#personnelKnowledgeLibrary .learning-library-toolbar label { font-size:14px; font-weight:600; }
+#personnelKnowledgeLibrary [data-knowledge-status] { font-size:13px; color:var(--muted); margin:14px 0; }
+#personnelKnowledgeLibrary .learning-library-card { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:18px; padding:20px; margin:12px 0; border-color:var(--line); }
+#personnelKnowledgeLibrary .learning-library-card strong { display:block; font-size:18px; line-height:1.4; }
+#personnelKnowledgeLibrary .learning-library-card span { font-size:13px; color:var(--muted); }
+#personnelKnowledgeLibrary .learning-library-card p { font-size:14px; line-height:1.6; margin:10px 0 0; }
+#personnelKnowledgeLibrary .learning-library-card footer { max-width:360px; justify-content:end; }
+#personnelKnowledgeLibrary .learning-library-card [data-knowledge-action='read'] { color:white; background:var(--green); border-color:var(--green); }
+#personnelKnowledgeLibrary .learning-library-drafts { border-top:1px solid var(--line); padding-top:18px; font-size:14px; }
+#personnelKnowledgeLibrary .learning-library-drafts summary { min-height:44px; cursor:pointer; font-weight:600; }
+.personnel-learning-modal { font-size:16px; line-height:1.5; }
+.personnel-learning-modal .field { min-width:0; }
+.personnel-learning-modal .personnel-learning-trainer-toggle { display:flex; align-items:flex-start; gap:12px; }
+.personnel-learning-modal .personnel-learning-trainer-toggle>input { flex:0 0 22px; width:22px; height:22px; margin:2px 0 0; }
+.personnel-learning-modal .personnel-learning-trainer-toggle>span { flex:1; min-width:0; }
+.personnel-learning-modal .personnel-learning-trainer-toggle strong { font-size:14px; line-height:1.5; }
+.personnel-learning-modal :is(.field>span,.field>small,.calculation-note,.checkbox-field small,.personnel-learning-step-heading p,.personnel-learning-level-preview p) { font-size:14px; line-height:1.5; }
+.personnel-learning-modal .eyebrow { font-size:13px; }
+.personnel-learning-modal p { font-size:14px; line-height:1.6; }
+.personnel-learning-modal :is(input,textarea,select) { font-size:16px; }
+.personnel-learning-modal button { font-size:14px; min-height:44px; }
+.personnel-learning-modal .status-badge { font-size:13px; }
+.personnel-learning-modal .personnel-learning-step-heading { flex-wrap:wrap; gap:12px; }
+.personnel-learning-modal .personnel-learning-step-heading h3 { font-size:19px; }
+.personnel-learning-modal :is(.personnel-learning-step,.personnel-learning-level) { padding:16px; margin-bottom:12px; }
+.personnel-learning-modal .personnel-learning-step>header strong { font-size:16px; }
+.personnel-learning-modal .personnel-learning-step>header button { width:44px; min-height:44px; }
+.personnel-learning-modal .personnel-learning-level-number { font-size:16px; }
+.personnel-learning-modal .choice-row :is(strong,small) { font-size:14px; line-height:1.5; }
+.personnel-learning-modal .field-with-suffix>span { font-size:14px; }
+.personnel-learning-modal :is(.personnel-learning-competency-person small,.personnel-learning-competency-level-preview span,.personnel-learning-competency-level-preview p) { font-size:14px; line-height:1.6; }
+.personnel-learning-modal .personnel-learning-competency-level-preview strong { font-size:16px; }
+.learning-library-dialog { font-size:16px; line-height:1.6; color:var(--ink); border-color:var(--line); }
+.learning-library-dialog :is(label,p,small,[data-editor-status]) { font-size:14px; }
+.learning-library-dialog :is(input,textarea,select) { font-size:16px; }
+.learning-library-dialog .learning-library-text { font-size:16px; line-height:1.8; }
+.learning-library-dialog [data-reader-summary] { padding:14px; border-left:3px solid var(--green); background:var(--surface-soft); }
+#personnelLearningSection .personnel-learning-assignment-toolbar { grid-template-columns:minmax(180px,2fr) repeat(2,minmax(130px,1fr)); }
+#personnelLearningSection .personnel-learning-assignment-badge { font-size:13px; padding:6px 10px; }
+#personnelLearningSection .personnel-learning-assignment-trainer { padding:14px; }
+#personnelLearningSection .personnel-learning-assignment-trainer strong { font-size:15px; }
+#personnelLearningSection .personnel-learning-assignment-trainer span { font-size:14px; }
+#personnelLearningSection .personnel-learning-assignment-trainer small { font-size:13px; line-height:1.5; }
+#personnelLearningSection .personnel-learning-progress-card { margin-top:16px; padding:16px; background:var(--surface-soft); }
+#personnelLearningSection .personnel-learning-progress-card strong { font-size:16px; }
+#personnelLearningSection .personnel-learning-progress-card :is(small,.personnel-learning-progress-result) { font-size:13px; line-height:1.5; }
+#personnelLearningSection .learning-schedule-note { font-size:14px; line-height:1.5; margin:16px 0; }
+.personnel-learning-modal :is(.personnel-learning-assignment-trainer-list,.personnel-learning-progress-step-list) { max-height:none; overflow:visible; padding:0; gap:12px; }
+.personnel-learning-modal :is(.personnel-learning-assignment-trainer-option,.personnel-learning-progress-step) { padding:16px; align-items:start; }
+.personnel-learning-modal :is(.personnel-learning-assignment-trainer-option,.personnel-learning-progress-step) input { width:22px; height:22px; min-height:22px; margin:2px 0 0; }
+.personnel-learning-modal :is(.personnel-learning-assignment-trainer-option,.personnel-learning-progress-step) strong { font-size:15px; line-height:1.5; }
+.personnel-learning-modal :is(.personnel-learning-assignment-trainer-option,.personnel-learning-progress-step) small { font-size:14px; line-height:1.5; }
+.personnel-learning-modal :is(.personnel-learning-assignment-level,.personnel-learning-progress-step em) { font-size:13px; padding:5px 8px; }
+.personnel-learning-modal :is(.personnel-learning-assignment-binding-preview,.personnel-learning-progress-summary) { padding:16px; }
+.personnel-learning-modal :is(.personnel-learning-assignment-binding-preview,.personnel-learning-progress-summary) strong { font-size:16px; }
+.personnel-learning-modal :is(.personnel-learning-assignment-binding-preview,.personnel-learning-progress-summary) p { font-size:14px; line-height:1.6; }
+.personnel-learning-modal .personnel-learning-progress-finalize { display:flex; align-items:start; gap:12px; }
+.personnel-learning-modal .personnel-learning-progress-finalize>input { flex:0 0 22px; width:22px; height:22px; margin:2px 0 0; }
+.personnel-learning-modal .personnel-learning-progress-finalize>span { flex:1; min-width:0; }
+.personnel-learning-modal .personnel-learning-progress-finalize strong { font-size:15px; }
+.personnel-learning-modal .personnel-learning-progress-finalize :is(strong,small) { display:block; }
+.personnel-learning-modal .personnel-learning-progress-finalize small { margin-top:4px; }
+.personnel-learning-modal .personnel-learning-details summary { font-size:14px; min-height:44px; padding:14px; }
+.personnel-learning-modal .personnel-learning-history :is(strong,small,code) { font-size:13px; line-height:1.5; }
+.personnel-learning-modal .personnel-learning-history { gap:12px; padding:14px; }
+.personnel-learning-modal .personnel-learning-history>span { padding:12px; }
+.personnel-learning-modal [data-evidence-required] { width:22px; height:22px; margin:0; }
+.personnel-learning-modal label:has(>[data-evidence-required]) { display:flex; align-items:start; gap:12px; font-size:14px; line-height:1.5; }
+.learning-library-dialog[data-learning-assessment] { max-width:calc(100vw - 24px); }
+.learning-library-dialog[data-learning-assessment]:not(.gp-dialog) { height:min(680px,78dvh); }
+.learning-library-dialog[data-learning-assessment] .gp-dialog-body { padding:20px; box-sizing:border-box; }
+.learning-library-dialog[data-learning-assessment] :is(h3,legend) { font-size:17px; line-height:1.5; }
+.learning-library-dialog[data-learning-assessment] h3 { margin:24px 0 10px; }
+.learning-library-dialog[data-learning-assessment] :is(button,.secondary-button) { min-height:44px; font-size:14px; }
+.learning-library-dialog[data-learning-assessment] .learning-question { min-width:0; padding:16px; margin:12px 0; }
+.learning-library-dialog[data-learning-assessment] .learning-answer { display:flex; align-items:start; gap:12px; padding:12px; min-height:44px; box-sizing:border-box; }
+.learning-library-dialog[data-learning-assessment] .learning-answer input { flex:0 0 22px; width:22px; height:22px; margin:1px 0 0; }
+.learning-library-dialog[data-learning-assessment] .learning-answer span { min-width:0; overflow-wrap:anywhere; font-size:15px; line-height:1.5; }
+.learning-library-dialog[data-learning-assessment] .learning-evidence { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:14px; margin:10px 0; border:1px solid var(--line); border-radius:10px; }
+.learning-library-dialog[data-learning-assessment] .learning-evidence a { flex:1 1 180px; min-width:0; overflow-wrap:anywhere; font-size:14px; }
+#personnelLearningDashboardView { --surface:var(--paper); --surface-soft:#f4f7f5; font-size:16px; line-height:1.5; }
+#personnelLearningDashboardView :is(p,small,span,strong,h1,h2,h3,label) { overflow-wrap:anywhere; }
+#personnelLearningDashboardView .eyebrow { font-size:13px; }
+#personnelLearningDashboardView h1 { font-size:28px; line-height:1.25; }
+#personnelLearningDashboardView :is(button,select,input) { font-size:16px; min-height:44px; }
+#personnelLearningDashboardView :is(label,.view-heading p) { font-size:14px; }
+#personnelLearningDashboardView .portal-learning-dashboard-heading { align-items:start; gap:20px; margin-bottom:24px; }
+#personnelLearningDashboardView .portal-learning-metric-scope { font-size:13px; color:var(--muted); margin:0 0 8px; }
+#personnelLearningDashboardView .portal-learning-summary { gap:12px; margin-bottom:24px; }
+#personnelLearningDashboardView .portal-learning-summary article { padding:16px; border:0; border-radius:10px; background:var(--surface-soft); }
+#personnelLearningDashboardView .portal-learning-summary :is(span,small) { font-size:13px; line-height:1.5; }
+#personnelLearningDashboardView .portal-learning-summary strong { font-size:28px; margin:6px 0; }
+#personnelLearningDashboardView .portal-learning-grid { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; }
+#personnelLearningDashboardView .portal-card { padding:20px; border-radius:12px; box-shadow:none; }
+#personnelLearningDashboardView .portal-card h2 { font-size:21px; line-height:1.4; }
+#personnelLearningDashboardView .portal-learning-transparency { font-size:14px; line-height:1.6; padding:14px; margin:0 0 18px; }
+#personnelLearningDashboardView .portal-learning-assignment-list { gap:16px; }
+#personnelLearningDashboardView .portal-learning-assignment { padding:16px; gap:12px; }
+#personnelLearningDashboardView .portal-learning-assignment>header { flex-wrap:wrap; }
+#personnelLearningDashboardView .portal-learning-assignment>header>div { flex:1 1 180px; }
+#personnelLearningDashboardView .portal-learning-assignment>header span { font-size:14px; }
+#personnelLearningDashboardView .portal-learning-assignment h3 { font-size:18px; line-height:1.4; }
+#personnelLearningDashboardView .portal-learning-assignment :is(p,small,header>strong) { font-size:13px; line-height:1.5; }
+#personnelLearningDashboardView .portal-learning-assignment button { font-size:14px; min-height:44px; }
+#personnelLearningDashboardView .portal-learning-skills-heading { flex-wrap:wrap; align-items:start; }
+#personnelLearningDashboardView .portal-learning-skills-heading label { width:100%; }
+#personnelLearningDashboardView .portal-learning-skill-branch { grid-template-columns:1fr; gap:12px; }
+#personnelLearningDashboardView .portal-learning-skill-branch::before,#personnelLearningDashboardView .portal-learning-skill-branch>header>span { display:none; }
+#personnelLearningDashboardView .portal-learning-skill-branch>header strong { font-size:16px; }
+#personnelLearningDashboardView .portal-learning-skill-branch>header small { font-size:13px; }
+#personnelLearningDashboardView .portal-learning-skill-node { padding:16px; background:var(--surface-soft); border-radius:10px; }
+#personnelLearningDashboardView .portal-learning-skill-node-heading { flex-wrap:wrap; }
+#personnelLearningDashboardView .portal-learning-skill-node-heading span { font-size:13px; }
+#personnelLearningDashboardView .portal-learning-skill-node-heading h3 { font-size:18px; line-height:1.4; }
+#personnelLearningDashboardView .portal-learning-skill-node-heading em { font-size:13px; }
+#personnelLearningDashboardView .portal-learning-level-rail span { min-height:32px; }
+#personnelLearningDashboardView .portal-learning-level-rail b { font-size:13px; }
+#personnelLearningDashboardView .portal-learning-current-level { grid-template-columns:1fr; gap:6px; }
+#personnelLearningDashboardView .portal-learning-current-level strong { font-size:15px; }
+#personnelLearningDashboardView .portal-learning-current-level p { font-size:14px; line-height:1.6; }
+#portalKnowledgeArea { margin-top:24px; }
+#portalKnowledgeArea>summary { display:flex; align-items:center; flex-wrap:wrap; gap:12px; min-height:44px; cursor:pointer; }
+#portalKnowledgeArea>summary strong { font-size:18px; }
+#portalKnowledgeArea>summary span { font-size:14px; color:var(--muted); }
+#portalKnowledgeLibrary { padding-top:20px; }
+#portalKnowledgeLibrary :is(label,p,small,.learning-library-card span) { font-size:14px; }
+#portalKnowledgeLibrary .learning-library-card { padding:16px; margin-top:14px; gap:16px; }
+#portalKnowledgeLibrary .learning-library-card strong { font-size:18px; }
+#portalKnowledgeLibrary .learning-library-card footer { flex-wrap:wrap; }
+#portalLearningProgressDialog { font-size:16px; line-height:1.5; }
+#portalLearningProgressDialog .eyebrow { font-size:13px; }
+#portalLearningProgressDialog :is(label,p,small,legend) { font-size:14px; line-height:1.6; }
+#portalLearningProgressDialog :is(input,textarea,select) { font-size:16px; }
+#portalLearningProgressDialog button { font-size:14px; min-height:44px; }
+#portalLearningProgressDialog .portal-learning-progress-summary { padding:16px; }
+#portalLearningProgressDialog .portal-learning-progress-summary p { font-size:14px; }
+#portalLearningProgressDialog .portal-learning-progress-steps { gap:12px; }
+#portalLearningProgressDialog .portal-learning-progress-step { padding:16px; }
+#portalLearningProgressDialog .portal-learning-progress-step strong { font-size:15px; color:var(--ink); }
+#portalLearningProgressDialog .portal-learning-progress-step small { font-size:14px; }
+#portalLearningProgressDialog .portal-learning-progress-step em { font-size:13px; }
+#portalLearningProgressDialog .portal-learning-progress-assessment { gap:14px; padding:16px; }
+#portalLearningProgressDialog .portal-learning-progress-assessment legend { font-size:16px; }
+@media(max-width:1000px) { #personnelLearningSection .personnel-learning-toolbar { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:1000px) { #personnelLearningDashboardView .portal-learning-grid { grid-template-columns:1fr; } }
+@media(max-width:700px) {
+  #personnelLearningSection .personnel-learning-assignment-toolbar { grid-template-columns:1fr; }
+  .personnel-learning-modal .personnel-learning-progress-assessment-grid { grid-template-columns:1fr; }
+  #personnelLearningDashboardView .portal-learning-summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  #personnelLearningDashboardView .portal-learning-dashboard-heading { flex-direction:column; }
+  #personnelLearningDashboardView .portal-learning-dashboard-heading button { width:100%; }
+  #personnelLearningDashboardView .portal-card { padding:16px; }
+  #personnelLearningDashboardView .portal-learning-level-rail { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  #portalLearningProgressDialog .portal-learning-progress-step { grid-template-columns:22px minmax(0,1fr); }
+  #portalLearningProgressDialog .portal-learning-progress-step em { grid-column:2; justify-self:start; }
+  #portalLearningProgressDialog .portal-learning-progress-assessment { grid-template-columns:1fr; }
+  #personnelLearningSection .personnel-learning-summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  #personnelLearningSection .personnel-learning-toolbar { grid-template-columns:1fr; padding:12px; }
+  #personnelLearningSection .personnel-learning-card { padding:16px; }
+  #personnelLearningSection .personnel-learning-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #personnelLearningSection .personnel-learning-history { grid-template-columns:1fr; }
+  #personnelLearningSection .personnel-learning-level-track { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  #personnelKnowledgeLibrary .learning-library-card { grid-template-columns:1fr; padding:16px; gap:14px; }
+  #personnelKnowledgeLibrary .learning-library-card footer { max-width:none; justify-content:start; }
+  #personnelKnowledgeLibrary .learning-library-card footer button { flex:1 1 120px; }
+  .personnel-learning-modal .personnel-learning-form-grid,.personnel-learning-modal .personnel-learning-competency-form-grid { grid-template-columns:1fr; }
+}
+@media(max-width:1100px) { #personnelLearningSection .personnel-learning-dashboard-grid { grid-template-columns:1fr; } }
+@media(max-width:700px) {
+  #personnelLearningSection .personnel-learning-heading h2 { font-size:25px; }
+  #personnelLearningSection .personnel-learning-dashboard { padding:16px; }
+  #personnelLearningSection .personnel-learning-dashboard-heading { flex-direction:column; }
+  #personnelLearningSection .personnel-learning-dashboard-heading button { width:100%; }
+  #personnelLearningSection .personnel-learning-dashboard-summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  #personnelLearningSection .personnel-learning-dashboard-summary article { padding:12px; }
+  #personnelLearningSection .personnel-learning-area>summary { flex-wrap:wrap; gap:8px; padding:16px; }
+  #personnelLearningSection .personnel-learning-area>summary span { margin:0 0 0 20px; flex-basis:100%; }
+  #personnelLearningSection .personnel-learning-area>section { padding:16px; }
+  #personnelLearningTeam .learning-team-filters { grid-template-columns:1fr; padding:12px; }
+  #personnelLearningTeam .learning-team-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  #personnelLearningTeam .learning-team-table { display:none; }
+  #personnelLearningTeam .learning-team-people { display:grid; gap:14px; margin-top:18px; }
+  #personnelLearningTeam .learning-team-person { padding:16px; border:1px solid var(--line); border-radius:10px; min-width:0; }
+  #personnelLearningTeam .learning-team-person h4 { font-size:17px; margin:0 0 4px; }
+  #personnelLearningTeam .learning-team-person header>small { display:block; font-size:13px; color:var(--muted); }
+  #personnelLearningTeam .learning-team-person dl { margin:16px 0 0; }
+  #personnelLearningTeam .learning-team-person dl>div { padding:12px 0; border-top:1px solid var(--line); }
+  #personnelLearningTeam .learning-team-person dt { font-size:14px; font-weight:600; margin-bottom:8px; }
+  #personnelLearningTeam .learning-team-person dt small { display:block; font-size:13px; color:var(--muted); font-weight:400; margin-top:4px; }
+  #personnelLearningTeam .learning-team-person dd { margin:0; }
+  #personnelLearningTeam .learning-team-person dd small { display:block; font-size:13px; color:var(--muted); margin-top:4px; }
+}
+
+/* Administration workspace: overview first, reusable knowledge at the bottom. */
+html[data-active-page-theme="dark"] #personnelLearningSection .primary-button { color:#10241d; }
+#personnelLearningSection .personnel-learning-heading {
+  display:flex; align-items:center; justify-content:space-between; gap:24px;
+  padding:26px 28px; border:1px solid var(--line); border-radius:16px;
+  background:linear-gradient(115deg,color-mix(in srgb,var(--green) 9%,var(--surface)),var(--surface) 80%);
+}
+#personnelLearningSection .learning-workspace-title { min-width:0; }
+#personnelLearningSection .learning-workspace-title .eyebrow { color:var(--green); }
+#personnelLearningSection .learning-workspace-symbol {
+  display:grid; place-items:center; flex:0 0 72px; height:72px; border-radius:20px;
+  color:var(--green); background:color-mix(in srgb,var(--green) 9%,var(--surface));
+}
+#personnelLearningSection .learning-workspace-group { display:flex; align-items:center; gap:14px; margin:32px 0 12px; }
+#personnelLearningSection .learning-workspace-group>span {
+  display:grid; place-items:center; flex:0 0 38px; height:38px; border-radius:11px;
+  color:var(--green); background:color-mix(in srgb,var(--green) 9%,var(--surface)); font-weight:700; font-size:13px;
+}
+#personnelLearningSection .learning-workspace-group h3 { margin:0; font-size:19px; line-height:1.4; color:var(--ink); }
+#personnelLearningSection .learning-workspace-group p { margin:3px 0 0; font-size:14px; color:var(--muted); }
+#personnelLearningSection .personnel-learning-area {
+  --learning-accent:var(--green); border:1px solid var(--line); overflow:hidden;
+  border-inline-start:3px solid color-mix(in srgb,var(--learning-accent) 55%,var(--line));
+}
+#personnelLearningSection .personnel-learning-area[data-learning-area="assignments"] { --learning-accent:#a17b32; }
+#personnelLearningSection .personnel-learning-area[data-learning-area="team"] { --learning-accent:#527f91; }
+#personnelLearningSection .personnel-learning-area:is([data-learning-area="skills"],[data-learning-area="competencies"]) { --learning-accent:#7b6c9b; }
+#personnelLearningSection .personnel-learning-area>summary { background:color-mix(in srgb,var(--learning-accent) 5%,var(--surface)); }
+#personnelLearningSection .personnel-learning-area>summary::before { color:var(--learning-accent); }
+#personnelLearningSection .personnel-learning-area>summary:hover { background:color-mix(in srgb,var(--learning-accent) 9%,var(--surface)); }
+#personnelLearningSection .personnel-learning-area>summary:focus-visible { outline:2px solid var(--green); outline-offset:-4px; border-radius:9px; }
+#personnelLearningSection .personnel-learning-area[open]>summary { border-bottom:1px solid var(--line); }
+#personnelLearningSection .personnel-learning-dashboard { border-radius:16px; padding:24px; }
+#personnelLearningSection .personnel-learning-dashboard-summary article { border:1px solid var(--line); background:var(--surface); }
+#personnelLearningSection .personnel-learning-dashboard-summary article:nth-child(2) { background:color-mix(in srgb,#527f91 7%,var(--surface)); }
+#personnelLearningSection .personnel-learning-dashboard-summary article:nth-child(3) { background:color-mix(in srgb,var(--green) 7%,var(--surface)); }
+#personnelLearningSection .personnel-learning-dashboard-summary article:nth-child(4) { background:color-mix(in srgb,#b88c3b 8%,var(--surface)); }
+#personnelLearningSection .personnel-learning-dashboard-summary article:nth-child(5) { background:color-mix(in srgb,#7b6c9b 7%,var(--surface)); }
+#personnelLearningSection .personnel-learning-dashboard-column { padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+#personnelLearningSection .personnel-learning-dashboard-assignment { border:1px solid var(--line); }
+#personnelLearningSection .personnel-learning-dashboard-assignment.attention { border-color:color-mix(in srgb,#b88c3b 55%,var(--line)); }
+#personnelLearningSection .personnel-learning-skill-node { border:1px solid var(--line); background:var(--surface-soft); }
+#personnelLearningSection .personnel-workflow-empty { border:1px dashed var(--line); border-radius:10px; padding:20px; background:var(--surface-soft); }
+#personnelLearningSection .personnel-learning-card { border:1px solid var(--line); }
+#personnelLearningSection .personnel-learning-card>header { padding-bottom:14px; border-bottom:1px solid var(--line); }
+#personnelLearningSection .personnel-learning-toolbar { border:1px solid var(--line); }
+#personnelKnowledgeLibrary .learning-library-card { border-inline-start:3px solid color-mix(in srgb,var(--green) 55%,var(--line)); }
+.personnel-learning-modal :is(.personnel-learning-step-editor,.personnel-learning-assignment-trainers,.personnel-learning-progress-steps) { border:1px solid var(--line); border-radius:12px; padding:18px; margin-block:18px; }
+.personnel-learning-modal .personnel-learning-step-heading .eyebrow { color:var(--green); }
+.personnel-learning-modal :is(.personnel-learning-assignment-binding-preview,.personnel-learning-progress-summary,.personnel-learning-competency-level-preview) { border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); }
+@media(max-width:700px) {
+  #personnelLearningSection .personnel-learning-heading { padding:20px; gap:12px; flex-direction:row; }
+  #personnelLearningSection .learning-workspace-symbol { flex-basis:46px; height:46px; border-radius:14px; }
+  #personnelLearningSection .learning-workspace-symbol svg { width:28px; height:28px; }
+  #personnelLearningSection .personnel-learning-heading h2 { font-size:25px; }
+  #personnelLearningSection .personnel-learning-dashboard { padding:16px; }
+  #personnelLearningSection .personnel-learning-dashboard-column { padding:14px; }
+  #personnelLearningSection .learning-workspace-group { margin-top:26px; gap:10px; }
+  #personnelLearningSection .learning-workspace-group h3 { font-size:18px; }
+  #personnelLearningSection .personnel-learning-area>summary { padding:16px 14px; }
+  .personnel-learning-modal :is(.personnel-learning-step-editor,.personnel-learning-assignment-trainers,.personnel-learning-progress-steps) { padding:12px; }
+}

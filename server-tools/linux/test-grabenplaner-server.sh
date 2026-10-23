@@ -110,16 +110,32 @@ fi
 csp_has_exact_directive() {
   local policy="$1"
   local required="$2"
-  local directive
+  local directive raw_name name value found=0
+  local required_name="${required%% *}" required_value="${required#* }"
+  local -A seen=()
+  policy="${policy#"${policy%%[![:space:]]*}"}"
+  policy="${policy%"${policy##*[![:space:]]}"}"
+  # One policy only; duplicate names are case-insensitive in CSP parsing.
+  [[ "$policy" != *','* && "$policy" != *$'\r'* && "$policy" != *$'\n'* ]] || return 1
   local IFS=';'
   local -a directives=()
   read -r -a directives <<< "$policy"
   for directive in "${directives[@]}"; do
     directive="${directive#"${directive%%[![:space:]]*}"}"
     directive="${directive%"${directive##*[![:space:]]}"}"
-    [[ "$directive" == "$required" ]] && return 0
+    [[ -n "$directive" ]] || continue
+    raw_name="${directive%%[[:space:]]*}"
+    name="${raw_name,,}"
+    [[ "$name" =~ ^[a-z0-9-]+$ && -z "${seen[$name]:-}" ]] || return 1
+    seen[$name]=1
+    value="${directive#"$raw_name"}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    if [[ "$name" == "$required_name" ]]; then
+      [[ "$value" == "$required_value" ]] || return 1
+      found=1
+    fi
   done
-  return 1
+  [[ "$found" == 1 ]]
 }
 
 maintenance_schedule_state="$(gp_maintenance_schedule_state "$app_dir" "$node")" || maintenance_schedule_state=invalid
@@ -167,8 +183,9 @@ if curl --fail --silent --show-error --max-time 15 --dump-header "$headers_file"
   if grep -Eqi '^Strict-Transport-Security:[[:space:]]*max-age=31536000;[[:space:]]*includeSubDomains[[:space:]]*$' "$headers_file"; then check_ok "HSTS" "max-age=31536000; includeSubDomains"; else check_fail "HSTS" "Header fehlt oder ist falsch"; fi
   csp_header="$(grep -Eim1 '^Content-Security-Policy:' "$headers_file" || true)"
   csp_value="${csp_header#*:}"
-  if csp_has_exact_directive "$csp_value" "object-src 'none'" \
-    && csp_has_exact_directive "$csp_value" "base-uri 'self'" \
+  if [[ "$(grep -Eic '^Content-Security-Policy:' "$headers_file" || true)" == 1 ]] \
+    && csp_has_exact_directive "$csp_value" "object-src 'none'" \
+    && csp_has_exact_directive "$csp_value" "base-uri 'none'" \
     && csp_has_exact_directive "$csp_value" "form-action 'self'" \
     && csp_has_exact_directive "$csp_value" "frame-ancestors 'none'"; then
     check_ok "Content-Security-Policy" "kritische Direktiven gesetzt"

@@ -4,16 +4,31 @@ const Registry=require('../public/gp-definitions-registry');
 const repo=path.resolve(__dirname,'..'),app=fs.readFileSync(path.join(repo,'public/app.js'),'utf8'),html=fs.readFileSync(path.join(repo,'public/index.html'),'utf8');
 function appFunction(name){const start=app.indexOf('function '+name+'(');assert.ok(start>=0,name);const end=app.indexOf('\nfunction ',start+1);return app.slice(start,end<0?app.length:end);}
 
-test('registry provides six stable, immutable standards and existing implementation references',()=>{
-  assert.equal(Registry.VERSION,3);assert.equal(Registry.UPDATED,'2026-10-10');
-  assert.deepEqual(Registry.topics.map(topic=>topic.id),['windows','print','tables','views','design','galleries']);
+test('registry provides eight stable, immutable standards and existing implementation references',()=>{
+  assert.equal(Registry.VERSION,10);assert.equal(Registry.UPDATED,'2026-10-16');
+  assert.deepEqual(Registry.topics.map(topic=>topic.id),['sidebar','dashboard','windows','print','tables','views','design','galleries']);
   assert.ok(Object.isFrozen(Registry.topics));
   for(const topic of Registry.topics){
-    assert.ok(Object.isFrozen(topic)&&Object.isFrozen(topic.rules));assert.equal(topic.rules.length,topic.id==='galleries'?7:6);
+    assert.ok(Object.isFrozen(topic)&&Object.isFrozen(topic.rules));assert.equal(topic.rules.length,['dashboard','print','sidebar'].includes(topic.id)?9:topic.id==='windows'?8:topic.id==='galleries'?7:6);
     for(const rule of topic.rules)assert.ok(rule.title&&rule.text&&Object.isFrozen(rule));
     for(const reference of topic.references)assert.ok(fs.existsSync(path.join(repo,reference)),reference);
   }
   assert.throws(()=>Registry.topics[0].rules.push({title:'x',text:'y'}),TypeError);
+});
+
+test('dashboard standard defines named views, reversible hiding, group docking, safe notes, chosen contents and protected saves',()=>{
+  const dashboard=Registry.topics.find(topic=>topic.id==='dashboard'),rules=dashboard.rules.map(rule=>rule.text).join(' ');
+  assert.equal(dashboard.title,'GP-dashboard');
+  for(const term of ['Startdashboard','Personaldashboard','drei unabhängig','frei wählbaren Namen','je angemeldetem Konto','ausgeblendete Felder','wieder einblenden','alle acht Ränder','ursprüngliche Gruppe','wieder integriert','Notizfelder','HTML, Skripte','Zeitausgleich statt Urlaub','leere Auswahl','keine zusätzlichen Rechte','Desktop-Positionen','Pfeiltasten und Escape','Späte Antworten','Speicherfehler'])assert.ok(rules.includes(term),term);
+  assert.deepEqual(Registry.select({query:'dashboard notizfelder'}).map(topic=>topic.id),['dashboard']);
+  assert.deepEqual(Registry.select({topic:'dashboard',query:'ursprüngliche Gruppe'}).map(topic=>topic.id),['dashboard']);
+});
+
+test('sidebar standard explains ancestor navigation, personal disclosures, current destination, rights and mobile drawer',()=>{
+  const sidebar=Registry.topics.find(topic=>topic.id==='sidebar'),rules=sidebar.rules.map(rule=>rule.text).join(' ');
+  assert.equal(sidebar.title,'GP-sidebar');
+  for(const term of ['Unterpunkt','Zurück','Vorwärts','aria-current','aria-expanded','je angemeldetem Konto','Hintergrundaktualisierung','Rechtewechsel','mobile Menüfläche','44 Pixel','13 Pixel','GP-Standards','BWL-Tools'])assert.ok((rules+' '+sidebar.example).includes(term),term);
+  assert.deepEqual(Registry.select({query:'sidebar mobile'}).map(topic=>topic.id),['sidebar']);
 });
 
 test('definition search is accent-insensitive, uses all words, and respects topic scope',()=>{

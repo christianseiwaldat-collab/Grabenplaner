@@ -1,0 +1,52 @@
+[
+  {
+    "path": "lib/persistence/postgresql/boundary/migrate.js",
+    "commit": "d7b190825a92d2be3c3a6bb093f6bd927d9ec4ff",
+    "sha256LF": "be9f9d4b8fae39709ed1e399d486766da23a87b1866cd123dcc03f2dc26f552d"
+  },
+  {
+    "path": "lib/persistence/postgresql/core/catalog.js",
+    "commit": "d7b190825a92d2be3c3a6bb093f6bd927d9ec4ff",
+    "sha256LF": "04ef5e97b7197002d065ac6036190f9f46dd68b232fc4717ec997b3995d23232"
+  },
+  {
+    "path": "lib/persistence/sqlite/mobile-auth-catalog.js",
+    "commit": "d69bd63961799b252d87a900fa7e9f1ff8b352c8",
+    "sha256LF": "8de76d3a666b61cd895afdce4891420445a68f8668f8728a7e7c65b90e23e899"
+  },
+  {
+    "path": "lib/persistence/sqlite/operations/application-schema.js",
+    "commit": "d7b190825a92d2be3c3a6bb093f6bd927d9ec4ff",
+    "sha256LF": "4cdb9f4346875987d8dab66b97bb2ba647a203b3fbfbe99dda31c9eb1f8f7c23"
+  },
+  {
+    "path": "lib/persistence/sqlite/organization-personnel-catalog.js",
+    "commit": "d69bd63961799b252d87a900fa7e9f1ff8b352c8",
+    "sha256LF": "c0e8b1684590725e96f5c50fb7e5e4e96faf86b0ca07ee4812e687573038b391"
+  },
+  {
+    "path": "lib/persistence/sqlite/portal-access-catalog.js",
+    "commit": "d69bd63961799b252d87a900fa7e9f1ff8b352c8",
+    "sha256LF": "e75b611fbe78fcee5443ffc76703e4982c2df4ce5cf63e3abd0e6c7aa93c188e"
+  },
+  {
+    "path": "lib/persistence/statements/organization-personnel.js",
+    "commit": "d69bd63961799b252d87a900fa7e9f1ff8b352c8",
+    "sha256LF": "c516c9e2787c75fcbea01137ae398e6e8f3e03095b467d2e335caa2d42e82043"
+  },
+  {
+    "path": "lib/persistence/statements/portal-access.js",
+    "commit": "d69bd63961799b252d87a900fa7e9f1ff8b352c8",
+    "sha256LF": "3c125d1ba31eda95e4b44790249d4b94ae902b19fd80a2a4989e6c66dbfe03d7"
+  },
+  {
+    "path": "pnpm-lock.yaml",
+    "commit": "c00c9ef9d8ef300bf89c310c468c927b51f6b291",
+    "sha256LF": "3c58567950ef654051371f40b8c1248ca7b07b8db0681ce58e0360b690e76e66"
+  },
+  {
+    "path": "pnpm-workspace.yaml",
+    "commit": "f1a9ebe68c5251bc9bcdeaa5a93e9c4c178e095e",
+    "sha256LF": "eef3319877380de6dc8153ff06824cf502196422cc44985ce693f70d48b60d3a"
+  }
+]

@@ -1,0 +1,74 @@
+"use strict";
+const test = require("node:test"), assert = require("node:assert/strict"), path = require("node:path");
+const UI = require("../test-support/learning-workspace-ui");
+const options = { skip: process.env.GP_WINDOW_BROWSER_TEST !== "1", timeout: 60000 };
+
+for (const mobile of [false, true]) test(`ranked employee days: actual ${mobile ? "390px touch" : "desktop"} controls preserve order, enforce four and derive only the protected name`, options, async () => {
+  const { chromium } = require(process.env.GP_BROWSER_TEST_MODULE || "playwright");
+  const browser = await chromium.launch({ headless: true, ...(process.env.GP_BROWSER_EXECUTABLE ? { executablePath: process.env.GP_BROWSER_EXECUTABLE } : {}) });
+  try {
+    const page = await browser.newPage({ viewport: mobile ? { width: 390, height: 844 } : { width: 1400, height: 1100 }, isMobile: mobile, hasTouch: mobile });
+    const errors = []; page.on("pageerror", error => errors.push(error.message));
+    await page.route("**/*", route => route.abort());
+    await page.setContent('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' + UI.dialog("employeeModal") + '</body></html>');
+    for (const name of ["styles.css", "personnel-directory-workspace.css", "gp-window.css"]) await page.addStyleTag({ path: path.join(UI.root, "public", name) });
+    const names = ["employeePreferredDaysValue", "employeePreferredDaysLimit", "renderEmployeePreferredDays", "changeEmployeePreferredDay", "employeeRecordControl", "syncEmployeeNameFromPersonnelRecord"];
+    await page.evaluate(source => {
+      window.state = { employeeEditMode: "full", employeePreferredDays: ["wednesday"] };
+      window.elements = Object.fromEntries([...document.querySelectorAll("[id]")].map(node => [node.id, node]));
+      window.preferredDayLabels = { monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag", friday: "Freitag", saturday: "Samstag" };
+      window.selectedEmployeeCostCenter = () => ({ typeId: "branch" });
+      window.costCenterTypeByKey = () => ({ id: "branch", isBranch: true });
+      elements.employeePosition.innerHTML = '<option value="verkaufsmitarbeiter">Verkaufsmitarbeiter</option><option value="other">Andere Tätigkeit</option>';
+      elements.employeeNickname.value = "Plan-Spitzname";
+      elements.employeeNumber.value = "BEISPIEL-420";
+      elements.employeeName.value = "Alter Anzeigename";
+      elements.employeeHours.value = "32";
+      elements.employeeTargetWorkdays.value = "4";
+      elements.employeeCostCenter.innerHTML = '<option>FIL18 · Beispielfiliale</option>';
+      document.querySelector('[data-employee-form-section="planning"]').open = true;
+      document.querySelector('[name="employeeFixedWorkday"][value="monday"]').checked = true;
+      (0, eval)(source);
+      elements.employeePreferredDays.addEventListener("click", changeEmployeePreferredDay);
+      elements.employeePreferredDaysOrder.addEventListener("click", changeEmployeePreferredDay);
+      elements.employeePosition.addEventListener("change", renderEmployeePreferredDays);
+      renderEmployeePreferredDays();
+      elements.employeeModal.showModal();
+    }, names.map(name => UI.functionSource(name)).join("\n"));
+    assert.equal(await page.locator('[data-preferred-day="wednesday"] .employee-preferred-day-rank').textContent(), "1");
+    for (const day of ["saturday", "monday", "friday"]) await page.locator(`[data-preferred-day="${day}"]`).click();
+    assert.deepEqual(await page.evaluate(() => state.employeePreferredDays), ["wednesday", "saturday", "monday", "friday"]);
+    assert.equal(await page.locator('[data-preferred-day="tuesday"]').isDisabled(), true);
+    assert.equal(await page.locator('[data-preferred-day="thursday"]').isDisabled(), true);
+    await page.locator('[data-preferred-promote="saturday"]').click();
+    assert.deepEqual(await page.evaluate(() => state.employeePreferredDays), ["saturday", "wednesday", "monday", "friday"]);
+    assert.equal(await page.locator('#employeePreferredDay').inputValue(), "saturday");
+    const third = page.locator('[data-preferred-day="monday"]');
+    await third.focus(); await third.press("Space");
+    assert.deepEqual(await page.evaluate(() => state.employeePreferredDays), ["saturday", "wednesday", "friday"]);
+    assert.equal(await page.locator('[data-preferred-day="monday"]').getAttribute("aria-pressed"), "false");
+    await page.locator('[data-preferred-day="tuesday"]').click();
+    assert.equal(await page.locator('[data-preferred-day="tuesday"] .employee-preferred-day-rank').textContent(), "4");
+    assert.equal(await page.locator('[name="employeeFixedWorkday"][value="monday"]').isChecked(), true);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    const bounds = await page.locator('.employee-preferred-days-field').evaluate(node => ({ width: node.clientWidth, content: node.scrollWidth }));
+    assert(bounds.content <= bounds.width + 1, JSON.stringify(bounds));
+    assert(await page.locator('.employee-preferred-days-order button').first().evaluate(node => node.getBoundingClientRect().height >= 44));
+    await page.locator('.employee-preferred-days-field').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(UI.screenshotDirectory(), `employee-preferences-${mobile ? "mobile" : "desktop"}.png`), fullPage: true });
+    await page.evaluate(() => {
+      employeeRecordControl("employeeRecordFirstName").value = "Anna";
+      employeeRecordControl("employeeRecordLastName").value = "Beispiel";
+      syncEmployeeNameFromPersonnelRecord();
+    });
+    assert.equal(await page.locator('#employeeName').inputValue(), "Anna Beispiel");
+    assert.equal(await page.locator('#employeeName').getAttribute("readonly"), "");
+    assert.equal(await page.locator('#employeeNickname').inputValue(), "Plan-Spitzname");
+    await page.evaluate(() => { state.employeeEditMode = "display"; renderEmployeePreferredDays(); });
+    assert.equal(await page.locator('#employeePreferredDays button:enabled,#employeePreferredDaysOrder button:enabled').count(), 0);
+    await page.evaluate(() => { state.employeeEditMode = "full"; state.employeePreferredDays = ["monday"]; elements.employeePosition.value = "other"; renderEmployeePreferredDays(); });
+    assert.equal(await page.locator('[data-preferred-day="tuesday"]').isDisabled(), true);
+    assert.match(await page.locator('#employeePreferredDaysHint').textContent(), /1 von 1/);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});

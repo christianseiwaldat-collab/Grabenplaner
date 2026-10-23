@@ -1,4 +1,5 @@
 let portalLearningAssessmentPanel=null;
+let portalVoiceAssistant=null;
 const portalState = {
   session: null,
   weekStart: mondayOf(new Date()),
@@ -37,6 +38,14 @@ const portalState = {
   personnelLearningDashboardEmployeeNumber: "",
   personnelLearningProgressAssignment: null,
   personnelLearningProgressMutationPending: false,
+  personnelLearningProgressRequest: null,
+  personnelLearningProgressOpening: false,
+  personnelLearningProgressMutationOwner: null,
+  personnelLearningDashboardRequest: null,
+  absenceHistoryRequest: null,
+  notificationsRequest: null,
+  notificationMutationRequest: null,
+  notificationsOpenRequest: null,
   birthdayPresentationClaimGeneration: 0,
   birthdayPresentationClaimActor: "",
   birthdayPresentationReturnFocus: null,
@@ -401,21 +410,34 @@ function esc(value) {
   })[character]);
 }
 
+function safeCssColor(value, fallback = "#7b8983") {
+  const color = String(value ?? "").trim();
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+  return /^#[0-9a-f]{6}$/i.test(fallback) ? fallback : "#7b8983";
+}
+
 function csrf() {
   const part = document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("grabenplaner_csrf="));
   return part ? decodeURIComponent(part.split("=").slice(1).join("=")) : "";
 }
 
 async function api(url, options = {}) {
+  options = window.GrabenplanerSessionLifecycle?.credentialOptions?.(url, options) || options;
+  const requestSession = portalState.session;
+  const requestGeneration = window.GrabenplanerSessionLifecycle?.generation;
   const { responseType, ...fetchOptions } = options;
   const formData = options.body instanceof FormData;
   const headers = { ...(formData ? {} : { "Content-Type": "application/json" }), ...options.headers };
+  Object.assign(headers, window.GrabenplanerSessionLifecycle?.activityHeaders?.(url, requestSession?.authenticated === true));
   const token = csrf();
   if (token && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase())) headers["X-CSRF-Token"] = token;
   let response;
   try {
     response = await fetch(url, { ...fetchOptions, headers });
   } catch (error) {
+    if (portalState.session !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+      throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+    }
     throw window.GrabenplanerApiErrors?.fromNetwork
       ? window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname })
       : new Error("Die Verbindung zum Grabenplaner ist vorübergehend unterbrochen. Bitte erneut versuchen.");
@@ -425,24 +447,51 @@ async function api(url, options = {}) {
       hostname: location.hostname,
       fallback: "Die Aktion konnte nicht ausgeführt werden.",
     }) : await response.json().then(data => ({message: data.error || "Die Anmeldung oder Aktion ist vorübergehend nicht möglich. Bitte erneut versuchen.", code: data.code || ""})).catch(() => ({message: "Der Grabenplaner ist vorübergehend nicht erreichbar. Bitte erneut versuchen.", code: ""}));
+    if (portalState.session !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+      throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+    }
     const error = new Error(detail.message);
     error.status = response.status;
     error.code = detail.code;
-    if (response.status === 401) showLogin("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
+    if (response.status === 401 && portalState.session === requestSession) showLogin("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
-  return responseType === "response" ? response : response.status === 204 ? null : responseType === "blob" ? response.blob() : response.json();
+  const result = responseType === "response" ? response : response.status === 204 ? null : responseType === "blob" ? await response.blob() : await response.json();
+  if (portalState.session !== requestSession || window.GrabenplanerSessionLifecycle?.generation !== requestGeneration) {
+    throw Object.assign(new Error("Die Sitzung hat sich geändert. Bitte die aktuelle Ansicht verwenden."), { code: "PORTAL_SESSION_CHANGED" });
+  }
+  return result;
 }
 
 const branchSalesWorkspaces = new Map();
 const branchOrderPrintWindows = new Map(), branchOrderPdfOwners = new Map(), branchOrderPdfRequests = new Map();
-let portalWindowManager=null,portalWindowActor='';
+let portalWindowManager=null,portalWindowActor='',portalWindowSession=null;
 let portalDocumentPrint=null, portalDocumentOwner='', loanConfirmationPrintBridge=null, loanConfirmationRequestGeneration=0;
 
 function portalDocumentActorKey() {
   const user = portalUser();
   return portalState.session?.authenticated ? JSON.stringify([user?.employeeNumber, user?.accountId, user?.sessionKind, user?.accountType,
     user?.isEmployee, user?.role, user?.active, user?.permissions, user?.scopes, user?.mustChangePassword, user?.homeLocationId]) : '';
+}
+
+function capturePortalContext(canUse = () => true) {
+  return {actor:portalDocumentActorKey(),session:portalState.session,canUse,
+    scope:window.GpWindow?.captureContext?.(document)};
+}
+
+function portalContextCurrent(ticket) {
+  return Boolean(ticket && ticket.session === portalState.session && ticket.actor === portalDocumentActorKey()
+    && portalState.session?.authenticated && !portalUser()?.mustChangePassword && ticket.canUse()
+    && (!ticket.scope || window.GpWindow.currentContext(ticket.scope)));
+}
+
+function capturePortalEditor(dialog, canUse = () => true) {
+  return {dialog,context:capturePortalContext(canUse),window:window.GpWindow?.capture?.(dialog)};
+}
+
+function portalEditorCurrent(ticket, allowClosed = false) {
+  return Boolean(ticket && portalContextCurrent(ticket.context) && (allowClosed || ticket.dialog.open)
+    && (!ticket.window || window.GpWindow.current(ticket.window,{allowClosed})));
 }
 
 function portalDocumentPrintContext(url) {
@@ -465,14 +514,15 @@ function clearLoanConfirmationPrintState() {
 
 function loanConfirmationPrintSignature(value) {
   return JSON.stringify([value?.id,value?.loanId,value?.status,value?.expectedRevision,value?.expiresAt,value?.loan?.revision,
-    value?.witness?.employeeNumber,(value?.photoAttachments||value?.loan?.photoAttachments||[]).map(item=>[item.id,item.revision,item.downloadUrl])]);
+    value?.witness?.employeeNumber,(value?.photoAttachments||value?.loan?.photoAttachments||[]).map(item=>[item.id,item.revision,item.previewUrl,item.downloadUrl])]);
 }
 
 function portalLoanDocumentPrintBridge({url,target}) {
   const dialog=el.loanConfirmationDialog,confirmation=portalState.activeLoanConfirmation;
-  if(!dialog?.open || !dialog.contains(target) || !confirmation || !/^\/api\/portal\/v1\/loans\/photo-attachments\/[A-Za-z0-9_-]+\/download$/.test(url))return null;
+  const route=/^\/api\/portal\/v1\/loans\/photo-attachments\/([A-Za-z0-9_-]+)\/(preview|download)$/.exec(url);
+  if(!dialog?.open || !dialog.contains(target) || !confirmation || !route)return null;
   const attachments=confirmation.photoAttachments||confirmation.loan?.photoAttachments||[];
-  if(!attachments.some(item=>item.downloadUrl===url || '/api/portal/v1/loans/photo-attachments/'+encodeURIComponent(item.id)+'/download'===url))return null;
+  if(!attachments.some(item=>item[route[2]+'Url']===url || '/api/portal/v1/loans/photo-attachments/'+encodeURIComponent(item.id)+'/'+route[2]===url))return null;
   const actor=portalDocumentActorKey(),page=portalState.activeTab,signature=loanConfirmationPrintSignature(confirmation);
   const canUse=()=>actor===portalDocumentActorKey() && loanCapabilityEnabled()
     && Date.parse(confirmation.expiresAt)>Date.now()
@@ -521,7 +571,7 @@ function openPortalLearningConfirmation(input) {
 function syncPortalWindows(){
   if(!window.GpWindow)return;
   const user=portalUser();
-  const key=portalState.session?.authenticated ? JSON.stringify([user?.employeeNumber,user?.accountId,user?.sessionKind,user?.accountType,user?.permissions,user?.scopes,user?.mustChangePassword]) : '';
+  const key=portalDocumentActorKey();
   if(!portalWindowManager){
     let branchRevisionActor='',branchRevision=0;
     const branchActor=()=>portalUser()?.sessionKind==='organization' && portalUser()?.accountType==='branch' && portalUser()?.isEmployee===false;
@@ -542,7 +592,16 @@ function syncPortalWindows(){
       },
       error:error=>message(el.portalLogoutStatus,error.message,true)});
   }
-  if(key!==portalWindowActor){portalWindowActor=key;portalWindowManager.synchronize();}
+  if(key!==portalWindowActor || portalWindowSession!==portalState.session){
+    portalWindowActor=key;portalWindowSession=portalState.session;portalWindowManager.synchronize();
+    portalState.personnelLearningProgressRequest=null;portalState.personnelLearningProgressOpening=false;portalState.personnelLearningProgressMutationOwner=null;
+    portalState.personnelLearningProgressMutationPending=false;portalState.personnelLearningProgressAssignment=null;
+    portalState.personnelLearningDashboardRequest=null;portalState.personnelLearningDashboardLoading=false;
+    portalState.personnelLearningDashboard=null;portalState.personnelLearningDashboardAvailable=false;
+    portalState.absenceHistoryRequest=null;portalState.absenceHistory=[];
+    portalState.notificationsOpenRequest=null;portalState.notificationsRequest=null;portalState.notificationMutationRequest=null;
+    portalState.notifications=[];portalState.unreadNotifications=0;renderNotifications();
+  }
   for(const workspace of branchSalesWorkspaces.values())workspace.syncPrint();
   syncBranchOrderPrintWindows();
   branchPriceLabelsWorkspace?.syncPrint?.();
@@ -1855,12 +1914,10 @@ async function initialize() {
     applyPortalBranding(status.branding);
     el.portalDeploymentBanner?.classList.toggle("hidden", status.deploymentKind !== "codespaces-test");
     applyPortalCapabilities();
-    const minimum = Number(status.passwordMinLength || 6);
-    [el.loginPassword, el.newPassword, el.repeatPassword, el.passwordResetNewPassword, el.passwordResetRepeatPassword]
-      .forEach((input) => { if (input) input.minLength = minimum; });
+    window.GrabenplanerPasswordPolicy?.configure(status);
     if (el.portalAccessModeLabel) el.portalAccessModeLabel.textContent = status.operationMode === "server" ? "Mitarbeiterportal · HTTPS" : "Mitarbeiterportal";
     if (!status.portalEnabled) {
-      message(el.loginError, "Das Mitarbeiterportal ist für diese Installation nicht freigeschaltet.", true);
+      showLogin("Das Mitarbeiterportal ist für diese Installation nicht freigeschaltet.");
       return;
     }
     const session = await api("/api/portal/v1/session");
@@ -1880,6 +1937,7 @@ async function initialize() {
     }
     openPasswordResetConfirm();
   } catch (error) {
+    if (error.code === "PORTAL_SESSION_CHANGED") return;
     showLogin(error.message);
   }
 }
@@ -1888,7 +1946,7 @@ async function loadPortalData() {
   const requests = [];
   requests.push(loadPersonnelLearningDashboard());
   if (!isOrganizationAccount()) requests.push(loadPortalHome(), loadNotifications());
-  if (portalTabAllowed("schedule")) requests.push(loadSchedule());
+  if (portalTabAllowed("schedule")) requests.push(loadSchedule({ focus: portalState.activeTab === "schedule" && isBranchMobileAccount() }));
   if (portalTabAllowed("branchVacation")) requests.push(loadBranchVacationOverview());
   if (portalTabAllowed("vacation")) requests.push(loadVacationRequests(), loadApprovedVacations());
   if (portalTabAllowed("timeOff")) requests.push(loadTimeOffRequests());
@@ -2019,16 +2077,23 @@ document.getElementById("portalKnowledgeArea")?.addEventListener("toggle", async
 });
 
 async function loadPersonnelLearningDashboard({ force = false } = {}) {
+  if (!portalContextCurrent(capturePortalContext())) return;
   if (portalState.personnelLearningDashboardLoading) return;
   if (portalState.personnelLearningDashboard && !force) {
     renderPersonnelLearningDashboardPortal();
     return;
   }
+  const context = capturePortalContext();
+  if (!portalContextCurrent(context)) return;
+  const request = Symbol("learning-dashboard");
+  portalState.personnelLearningDashboardRequest = request;
+  const current = () => portalContextCurrent(context) && portalState.personnelLearningDashboardRequest === request;
   portalState.personnelLearningDashboardLoading = true;
   message(el.portalLearningDashboardMessage, "");
   renderPersonnelLearningDashboardPortal();
   try {
     const dashboard = await api("/api/portal/v1/personnel-learning/dashboard");
+    if (!current()) return;
     if (!dashboard || !Array.isArray(dashboard.assignments)
       || !Array.isArray(dashboard.profiles)) {
       throw new Error("Das Schulungsdashboard ist unvollständig.");
@@ -2043,12 +2108,14 @@ async function loadPersonnelLearningDashboard({ force = false } = {}) {
         profiles[0]?.employee?.employeeNumber || "";
     }
   } catch (error) {
+    if (!current()) return;
     portalState.personnelLearningDashboard = null;
     portalState.personnelLearningDashboardAvailable = false;
     if (![401, 403].includes(error.status)) {
       message(el.portalLearningDashboardMessage, error.message, true);
     }
   } finally {
+    if (!current()) return;
     portalState.personnelLearningDashboardLoading = false;
     renderPersonnelLearningDashboardPortal();
     applySelfServiceVisibility();
@@ -2111,28 +2178,53 @@ function updatePortalLearningProgressAvailability() {
     || el.portalLearningProgressCorrectionReason.value.trim().length > 0;
   el.portalLearningProgressResult.disabled = !assessmentWritable || !finalized;
   el.portalLearningProgressAssessmentNote.disabled = !assessmentWritable || !finalized;
-  el.savePortalLearningProgress.disabled = portalState.personnelLearningProgressMutationPending
+  el.savePortalLearningProgress.disabled = portalState.personnelLearningProgressOpening || portalState.personnelLearningProgressMutationPending
     || !mayWrite
     || (finalized && (!requiredComplete || !resultSelected))
     || (canCorrect && !correctionReasonPresent);
 }
 
 async function openPortalLearningProgress(assignmentId) {
+  const context = capturePortalContext(() => portalTabAllowed("learningDashboard"));
+  if (!portalContextCurrent(context)) return;
+  const request = Symbol("learning-progress");
+  portalState.personnelLearningProgressRequest = request;
+  portalState.personnelLearningProgressMutationOwner = null;
+  portalState.personnelLearningProgressMutationPending = false;
+  portalState.personnelLearningProgressOpening = true;
+  updatePortalLearningProgressAvailability();
+  window.GpWindow?.begin?.(el.portalLearningProgressDialog);
+  const current = () => portalContextCurrent(context) && portalState.personnelLearningProgressRequest === request;
   message(el.portalLearningProgressMessage, "");
-  const result = await api(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignmentId)}/progress`);
-  portalState.personnelLearningProgressAssignment = result.assignment || null;
-  if (!portalState.personnelLearningProgressAssignment) {
-    throw new Error("Der Schulungsfortschritt ist nicht verfügbar.");
+  try {
+    const result = await api(`/api/portal/v1/personnel-learning/assignments/${encodeURIComponent(assignmentId)}/progress`);
+    if (!current()) return;
+    if (!result.assignment || result.assignment.id !== assignmentId) throw new Error("Der Schulungsfortschritt ist nicht verfügbar.");
+    portalState.personnelLearningProgressAssignment = result.assignment;
+    portalState.personnelLearningProgressMutationOwner = null;
+    portalState.personnelLearningProgressMutationPending = false;
+    renderPortalLearningProgressDialog();
+    el.portalLearningProgressDialog.showModal();
+    el.portalLearningProgressSteps.querySelector("input:not(:disabled)")?.focus();
+  } catch (error) {
+    if (current()) message(el.portalLearningDashboardMessage, error.message, true);
+  } finally {
+    if (current()) {portalState.personnelLearningProgressOpening = false;updatePortalLearningProgressAvailability();}
   }
-  renderPortalLearningProgressDialog();
-  el.portalLearningProgressDialog.showModal();
-  el.portalLearningProgressSteps.querySelector("input:not(:disabled)")?.focus();
+}
+
+function portalLearningProgressSignature() {
+  return JSON.stringify([...el.portalLearningProgressForm.elements].map(field => [field.id,field.value,field.checked]));
 }
 
 async function savePortalLearningProgress(event) {
   event.preventDefault();
   const assignment = portalState.personnelLearningProgressAssignment;
-  if (!assignment || portalState.personnelLearningProgressMutationPending) return;
+  if (!assignment || portalState.personnelLearningProgressOpening || portalState.personnelLearningProgressMutationPending) return;
+  const ticket = capturePortalEditor(el.portalLearningProgressDialog, () => portalTabAllowed("learningDashboard")
+    && portalState.personnelLearningProgressAssignment?.id === assignment.id
+    && (assignment.progress?.capabilities?.canRecord === true || assignment.progress?.capabilities?.canCorrect === true));
+  if (!portalEditorCurrent(ticket)) return;
   const completedStepIds = [...el.portalLearningProgressSteps.querySelectorAll(
     'input[type="checkbox"][data-portal-learning-step]:checked',
   )].map((checkbox) => checkbox.dataset.portalLearningStep);
@@ -2149,6 +2241,9 @@ async function savePortalLearningProgress(event) {
     message(el.portalLearningProgressMessage, "Bitte ein Abschlussergebnis auswählen.", true);
     return;
   }
+  const owner = Symbol("learning-save"), signature = portalLearningProgressSignature();
+  portalState.personnelLearningProgressMutationOwner = owner;
+  const current = (allowClosed = false) => portalState.personnelLearningProgressMutationOwner === owner && portalEditorCurrent(ticket, allowClosed);
   portalState.personnelLearningProgressMutationPending = true;
   el.savePortalLearningProgress.disabled = true;
   message(el.portalLearningProgressMessage, "Der neue Fortschrittsstand wird revisionssicher gespeichert.");
@@ -2166,15 +2261,26 @@ async function savePortalLearningProgress(event) {
           ? el.portalLearningProgressCorrectionReason.value : "",
       }),
     });
+    if (!current()) return;
+    if (!result.assignment || result.assignment.id !== assignment.id) throw new Error("Die Antwort gehört nicht zur geöffneten Schulung.");
     portalState.personnelLearningProgressAssignment = result.assignment;
+    if (portalLearningProgressSignature() !== signature) {
+      el.portalLearningProgressAssignmentReceipt.value = result.assignment.currentAssignmentRevisionReceipt || "";
+      el.portalLearningProgressExpectedReceipt.value = result.assignment.progress?.currentRevisionReceipt || "";
+      message(el.portalLearningProgressMessage, "Der übermittelte Stand wurde gespeichert. Deine weiteren Änderungen bleiben im Fenster.");
+      return;
+    }
     el.portalLearningProgressDialog.close();
     portalState.personnelLearningDashboard = null;
     await loadPersonnelLearningDashboard({ force: true });
   } catch (error) {
-    message(el.portalLearningProgressMessage, error.message, true);
+    if (current()) message(el.portalLearningProgressMessage, error.message, true);
   } finally {
-    portalState.personnelLearningProgressMutationPending = false;
-    renderPortalLearningProgressDialog();
+    if (current(true)) {
+      portalState.personnelLearningProgressMutationOwner = null;
+      portalState.personnelLearningProgressMutationPending = false;
+      updatePortalLearningProgressAvailability();
+    }
   }
 }
 
@@ -2408,16 +2514,20 @@ function neutralizeCredentialDialogsForLogin() {
 }
 
 function showLogin(error = "") {
+  window.GrabenplanerSessionLifecycle?.advance();
+  neutralizeBirthdayPresentation();
+  document.body.classList.remove("session-pending");
+  portalVoiceAssistant?.reset();
   portalLearningAssessmentPanel?.clear();
   portalKnowledgeLibrary?.clear();
   globalThis.grabenplanerNavigation?.stop();
   const hadProcessTaskOwner = Boolean(
     portalState.processTasksOwnerFingerprint || processTaskActorFingerprint(portalUser()),
   );
-  neutralizeBirthdayPresentation();
   neutralizeBirthdayPresentationTheme();
   resetPersonalActionsState("");
   portalState.session = null;
+  void privatePortalWorkspaces?.synchronize();
   syncPortalWindows();
   resetBranchSalesWorkspaces();
   resetBranchTimeOffState();
@@ -2425,6 +2535,19 @@ function showLogin(error = "") {
   portalState.personnelLearningDashboard = null;
   portalState.personnelLearningDashboardAvailable = false;
   portalState.personnelLearningProgressAssignment = null;
+  portalState.personnelLearningProgressRequest = null;
+  portalState.personnelLearningProgressOpening = false;
+  portalState.personnelLearningProgressMutationOwner = null;
+  portalState.personnelLearningProgressMutationPending = false;
+  portalState.personnelLearningDashboardRequest = null;
+  portalState.personnelLearningDashboardLoading = false;
+  portalState.notificationsOpenRequest = null;
+  portalState.notificationsRequest = null;
+  portalState.notificationMutationRequest = null;
+  portalState.absenceHistoryRequest = null;
+  portalState.notifications = [];
+  portalState.unreadNotifications = 0;
+  renderNotifications();
   neutralizeCredentialDialogsForLogin();
   document.body.classList.remove("branch-organization-account", "branch-mobile-account");
   stopBranchOrderAutosave();
@@ -2515,13 +2638,15 @@ function populateVacationAccountYears() {
 }
 
 function showPortal(session) {
+  window.GrabenplanerSessionLifecycle?.advance();
+  const processTaskSessionChanged = portalState.session !== session;
   if (window.GrabenplanerBranchSales?.owner(portalUser()) !== window.GrabenplanerBranchSales?.owner(session?.user)
     || branchPriceLabelsOwner() !== branchPriceLabelsOwner(session?.user)) resetBranchSalesWorkspaces();
   if (timeOffOwnerKey() !== timeOffOwnerKey(session?.user)) resetBranchTimeOffState();
   const previousProcessTaskOwner = portalState.processTasksOwnerFingerprint
     || processTaskActorFingerprint(portalUser());
   const nextPersonalActionsActor = portalPersonalActionsActorKey(session?.user);
-  if (portalState.personalActionsActorKey !== nextPersonalActionsActor) {
+  if (portalState.personalActionsActorKey !== nextPersonalActionsActor || portalState.session !== session) {
     resetPersonalActionsState(nextPersonalActionsActor);
   }
   if (birthdayPresentationActor() !== birthdayPresentationActor(session?.user)) {
@@ -2529,6 +2654,9 @@ function showPortal(session) {
     neutralizeBirthdayPresentationTheme();
   }
   portalState.session = session;
+  void portalVoiceAssistant?.synchronize();
+  void privatePortalWorkspaces?.synchronize();
+  syncPortalLogoutControls();
   syncPortalWindows();
   clearCandidateEvaluationState();
   document.body.classList.toggle(
@@ -2538,13 +2666,14 @@ function showPortal(session) {
   document.body.classList.toggle("portal-mobile-session", isMobileUi());
   el.portalSettingsShortcut?.classList.toggle("hidden", !isMobileUi());
   const nextProcessTaskOwner = processTaskActorFingerprint(session?.user);
-  if (previousProcessTaskOwner !== nextProcessTaskOwner) {
+  if (previousProcessTaskOwner !== nextProcessTaskOwner || processTaskSessionChanged) {
     clearProcessTaskState({
       resetAvailability: true,
       clearRequest: Boolean(previousProcessTaskOwner),
     });
   }
   portalState.processTasksOwnerFingerprint = nextProcessTaskOwner;
+  portalState.processTasksOwnerSession = session;
   if (session.status) portalState.status = session.status;
   applyPortalBranding(session.status?.branding || session.branding || portalState.status?.branding || {});
   applyPortalCapabilities();
@@ -2584,27 +2713,34 @@ function showPortal(session) {
   populateVacationAccountYears();
   applySelfServiceVisibility();
   applyMobileLeadershipLayout();
+  setTab(normalizedPortalTab(new URLSearchParams(location.search).get("tab")) || (isMobileUi() ? "home" : requestedPortalTab() || defaultPortalTab()));
+  document.body.classList.remove("session-pending");
   if (session.user.mustChangePassword) setTimeout(openPasswordChangeDialog, 100);
 }
 
 async function login(event) {
   event.preventDefault();
+  const credentialsInput = { loginName: el.loginPersonnelNumber.value, password: el.loginPassword.value };
   try {
-    const result = await api("/api/portal/v1/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ loginName: el.loginPersonnelNumber.value, password: el.loginPassword.value }),
-    });
-    el.loginPassword.value = "";
-    showPortal(result);
-    if (!result.user.mustChangePassword) {
-      if (await redirectToPendingCandidateEvaluation(result.user)) return;
-      await loadMobileLayout();
-      chooseInitialPortalTab();
-      await loadPortalData();
-      await refreshBirthdayPresentationTheme();
-      await claimBirthdayPresentation();
-    }
+    await window.GrabenplanerSessionLifecycle.credentials(async () => {
+      const result = await api("/api/portal/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify(credentialsInput),
+      });
+      el.loginPassword.value = "";
+      showPortal(result);
+      window.GrabenplanerSessionLifecycle?.publish();
+      if (!result.user.mustChangePassword) {
+        if (await redirectToPendingCandidateEvaluation(result.user)) return;
+        await loadMobileLayout();
+        chooseInitialPortalTab();
+        await loadPortalData();
+        await refreshBirthdayPresentationTheme();
+        await claimBirthdayPresentation();
+      }
+    }, { allowAccountChange: true });
   } catch (error) {
+    if (error.code === "PORTAL_SESSION_CHANGED") return;
     message(el.loginError, error.message, true);
   }
 }
@@ -2683,21 +2819,24 @@ async function confirmPasswordReset(event) {
   el.passwordResetConfirmSubmit.disabled = true;
   message(el.passwordResetConfirmMessage, "Das neue Passwort wird gespeichert.");
   try {
-    await api("/api/portal/v1/auth/password-reset/confirm", {
-      method: "POST",
-      body: JSON.stringify({
-        token: el.passwordResetToken.value,
-        newPassword,
-        repeatPassword,
-      }),
+    await window.GrabenplanerSessionLifecycle.credentials(async () => {
+      await api("/api/portal/v1/auth/password-reset/confirm", {
+        method: "POST",
+        body: JSON.stringify({
+          token: el.passwordResetToken.value,
+          newPassword,
+          repeatPassword,
+        }),
+      });
+      clearPasswordResetHash();
+      setPasswordResetConfirmControlsEnabled(false);
+      el.passwordResetConfirmDialog.close();
+      showLogin();
+      window.GrabenplanerSessionLifecycle?.publish();
+      el.loginPassword.value = "";
+      message(el.loginError, "Das Passwort wurde geändert. Bitte melde dich mit dem neuen Passwort an.");
+      el.loginPersonnelNumber.focus();
     });
-    clearPasswordResetHash();
-    setPasswordResetConfirmControlsEnabled(false);
-    el.passwordResetConfirmDialog.close();
-    showLogin();
-    el.loginPassword.value = "";
-    message(el.loginError, "Das Passwort wurde geändert. Bitte melde dich mit dem neuen Passwort an.");
-    el.loginPersonnelNumber.focus();
   } catch (error) {
     message(el.passwordResetConfirmMessage, error.message, true);
   } finally {
@@ -2705,17 +2844,28 @@ async function confirmPasswordReset(event) {
   }
 }
 
-let logoutInProgress = false;
+let logoutInProgress = null;
+
+function syncPortalLogoutControls() {
+  const pending = Boolean(portalState.session && logoutInProgress?.session === portalState.session);
+  el.logoutButton.disabled = pending;
+  if (pending) el.logoutButton.setAttribute("aria-busy", "true");
+  else el.logoutButton.removeAttribute("aria-busy");
+  el.logoutButton.textContent = pending ? "Abmelden\u2026" : "Abmelden";
+}
 
 async function logout() {
-  if (logoutInProgress) return;
-  logoutInProgress = true;
+  if (logoutInProgress?.session === portalState.session) return;
+  const operation = { session: portalState.session };
+  logoutInProgress = operation;
   const controller = new AbortController();
   let timeout = null;
   let savingDraft = false;
   let logoutRequestStarted = false;
-  const originalLabel = el.logoutButton.textContent;
+  const logoutSession = portalState.session;
   const logoutActor = processTaskActorFingerprint(portalUser());
+  const current = () => Boolean(logoutSession && portalState.session === logoutSession
+    && processTaskActorFingerprint(portalUser()) === logoutActor);
   const hadProcessTaskOwner = Boolean(
     portalState.processTasksOwnerFingerprint || logoutActor,
   );
@@ -2724,37 +2874,55 @@ async function logout() {
   el.logoutButton.textContent = "Abmelden…";
   message(el.portalLogoutStatus, "");
   try {
-    if (branchPriceLabelsWorkspace?.hasUnsaved) {
-      savingDraft = true;
-      await branchPriceLabelsWorkspace.flush();
-      savingDraft = false;
+    await window.GrabenplanerSessionLifecycle.credentials(async () => {
+      if (!current()) return;
       if (branchPriceLabelsWorkspace?.hasUnsaved) {
-        message(el.portalLogoutStatus, "Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden.", true);
+        message(el.portalLogoutStatus, "Der Preisschildentwurf wurde inzwischen geändert. Bitte erneut abmelden, damit die Änderungen zuerst gesichert werden.", true);
         return;
       }
-    }
-    if (!portalState.session || processTaskActorFingerprint(portalUser()) !== logoutActor) return;
-    logoutRequestStarted = true;
-    neutralizeBirthdayPresentationTheme();
-    timeout = window.setTimeout(() => controller.abort(), 15000);
-    await api("/api/portal/v1/auth/logout", {
-      method: "POST",
-      body: "{}",
-      keepalive: true,
-      signal: controller.signal,
-    });
-    if (!portalState.session || processTaskActorFingerprint(portalUser()) !== logoutActor) return;
-    portalState.session = null;
-    syncPortalWindows();
-    stopBranchOrderAutosave();
-    clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
-    portalState.processTasksOwnerFingerprint = "";
-    clearRememberedPortalTab();
-    showLogin();
-    el.loginPassword.value = "";
-    el.loginPersonnelNumber.focus();
+      logoutRequestStarted = true;
+      neutralizeBirthdayPresentationTheme();
+      timeout = window.setTimeout(() => controller.abort(), 15000);
+      await api("/api/portal/v1/auth/logout", {
+        method: "POST",
+        body: "{}",
+        keepalive: true,
+        signal: controller.signal,
+      });
+      if (!current()) return;
+      window.GrabenplanerSessionLifecycle?.publish();
+      portalVoiceAssistant?.reset();
+      portalState.session = null;
+      void privatePortalWorkspaces?.synchronize();
+      syncPortalWindows();
+      stopBranchOrderAutosave();
+      clearProcessTaskState({ resetAvailability: true, clearRequest: hadProcessTaskOwner });
+      portalState.processTasksOwnerFingerprint = "";
+      clearRememberedPortalTab();
+      showLogin();
+      el.loginPassword.value = "";
+      el.loginPersonnelNumber.focus();
+    }, { prepare: async () => {
+      if (!current()) return false;
+      if (branchPriceLabelsWorkspace?.hasUnsaved) {
+        savingDraft = true;
+        try { await branchPriceLabelsWorkspace.flush(); }
+        catch (error) {
+          if (current()) message(el.portalLogoutStatus, `Der Preisschildentwurf konnte noch nicht gespeichert werden: ${error.message}`, true);
+          return false;
+        } finally { savingDraft = false; }
+        if (!current()) return false;
+        if (branchPriceLabelsWorkspace?.hasUnsaved) {
+          message(el.portalLogoutStatus, branchPriceLabelsWorkspace.hasPendingUpload
+            ? "Ein Preisschildbild wird noch geladen. Bitte anschließend abmelden."
+            : "Der Preisschildentwurf ist noch nicht gesichert. Bitte unter Preisschilder das Speichern erneut versuchen.", true);
+          return false;
+        }
+      }
+      return current();
+    } });
   } catch (error) {
-    if (!portalState.session || processTaskActorFingerprint(portalUser()) !== logoutActor) return;
+    if (!current()) return;
     const detail = savingDraft
       ? `Der Preisschildentwurf konnte noch nicht gespeichert werden: ${error.message}`
       : controller.signal.aborted
@@ -2764,14 +2932,16 @@ async function logout() {
     if (logoutRequestStarted) refreshBirthdayPresentationTheme();
   } finally {
     if (timeout !== null) window.clearTimeout(timeout);
-    logoutInProgress = false;
-    el.logoutButton.disabled = false;
-    el.logoutButton.removeAttribute("aria-busy");
-    el.logoutButton.textContent = originalLabel;
+    if (logoutInProgress === operation) {
+      logoutInProgress = null;
+      if (portalState.session === logoutSession || !portalState.session) syncPortalLogoutControls();
+    }
   }
 }
 
 function setTab(tab) {
+  privatePortalWorkspaces?.exit({ history: false, notify: false });
+  if (tab === 'home') void privatePortalWorkspaces?.synchronize();
   if (portalUser() && !portalTabAllowed(tab)) tab = defaultPortalTab();
   if (tab === "timeTracking" && !timeTrackingCapabilityEnabled()) tab = defaultPortalTab();
   if (tab === "loan" && !loanCapabilityEnabled()) tab = defaultPortalTab();
@@ -2810,6 +2980,7 @@ function setTab(tab) {
     if (branchPortalDisplaySettingsEnabled()) loadBranchPortalDisplaySettings();
     focusPortalSettingsSection();
   }
+  if (tab === "schedule" && tabChanged && isBranchMobileAccount()) void loadSchedule({ focus: true });
   if (tab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
   if (tab === "vacation") {
     loadVacationRequests();
@@ -3354,13 +3525,21 @@ function mobileHomeTilesForCurrentAccount() {
     .filter(Boolean);
 }
 
+const privatePortalWorkspaces = window.GpPrivateWorkspaces?.mount({
+  document, getActor: () => portalUser(),
+  load: async () => (await api('/api/portal/v1/private-workspaces')).workspaces,
+  onChange: () => renderMobileHome(),
+  onExit: () => { if (isMobileUi() && portalUser()) setTab("home"); },
+}) || null;
+
 function renderMobileHome() {
   if (!el.mobileHomeTiles) return;
   const visible = isMobileUi() && portalState.activeTab === "home";
   el.mobileHomeTiles.classList.toggle("hidden", !visible);
   if (!visible) return;
   const tiles = mobileHomeTilesForCurrentAccount();
-  if (!tiles.length) {
+  const launches = privatePortalWorkspaces?.launches || [];
+  if (!tiles.length && !launches.length) {
     el.mobileHomeTiles.innerHTML = '<p class="empty-state">Für dieses Konto ist derzeit kein Portalbereich freigeschaltet.</p>';
     return;
   }
@@ -3370,7 +3549,7 @@ function renderMobileHome() {
       <span><strong>${esc(tile.label)}</strong><small>${esc(tile.description)}</small></span>
       <b aria-hidden="true">›</b>
     </button>
-  `).join("");
+  `).join("") + launches.map(item => `<button type="button" class="gp-private-launch" data-private-workspace="${esc(item.id)}" style="--private-launch-color:${safeCssColor(item.launch.color)};--mobile-home-tile-color:${safeCssColor(item.launch.color)}"><span class="mobile-home-tile-accent" aria-hidden="true"></span><span><strong>${esc(item.launch.label)}</strong></span><b aria-hidden="true">›</b></button>`).join("");
 }
 
 function renderBranchMobileActionBar() {
@@ -3749,7 +3928,7 @@ function renderSchedule(data) {
   el.scheduleHeading.textContent = organizationView
     ? `${data.location?.name || "Standort"} · KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`
     : `KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`;
-  const today = iso(new Date());
+  const today = absenceTodayIso();
   const settings = data.displaySettings || {};
   const hideElapsedDays = organizationView
     && isBranchMobileAccount()
@@ -3764,7 +3943,7 @@ function renderSchedule(data) {
     const options = organizationView
       ? []
       : data.options.filter((item) => item.date_from <= date && item.date_to >= date);
-    return `<article class="schedule-day ${date === today ? "today" : ""} ${index > 4 ? "weekend" : ""}">
+    return `<article data-schedule-date="${date}" class="schedule-day ${date === today ? "today" : ""} ${index > 4 ? "weekend" : ""}">
       <header><strong>${weekdayNames[index]}</strong><span>${dateText(date, { day: "2-digit", month: "2-digit" })}</span></header>
       ${shifts.map((shift) => `<div class="shift-card${colored ? " shift-card-colored" : ""}"${colored ? ` style="--schedule-person-color:${schedulePersonColor(shift.employeeColor || shift.employeeName)}"` : ""}>${organizationView && shift.employeeName ? `<span>${esc(shift.employeeName)}</span><br>` : ""}<strong>${esc(shift.start_time || shift.startTime)}–${esc(shift.end_time || shift.endTime)}</strong>${shift.department_name || shift.departmentName ? `<br>${esc(shift.department_name || shift.departmentName)}` : ""}${shift.area ? `<br>${esc(shift.area)}` : ""}</div>`).join("")}
       ${options.map((option) => `<div class="option-card"><strong>${esc(optionNames[option.option_type] || option.option_type)}</strong>${!option.all_day && option.start_time ? `<br>${esc(option.start_time)}–${esc(option.end_time)}` : ""}${option.note ? `<br>${esc(option.note)}` : ""}</div>`).join("")}
@@ -3774,12 +3953,28 @@ function renderSchedule(data) {
   renderMobileHome();
 }
 
-async function loadSchedule() {
-  const organizationView = isOrganizationAccount();
+let scheduleRequestGeneration = 0;
+async function loadSchedule({ focus = false } = {}) {
+  const organizationView = isOrganizationAccount(), session = portalState.session;
+  const ticket = ++scheduleRequestGeneration;
+  const focusCurrent = focus && isBranchMobileAccount();
   const route = organizationView
-    ? `/api/portal/v1/location-dashboard/schedule?week=${portalState.weekStart}`
+    ? `/api/portal/v1/location-dashboard/schedule?week=${portalState.weekStart}${focusCurrent ? "&focus=current" : ""}`
     : `/api/portal/v1/me/schedule?week=${portalState.weekStart}`;
-  renderSchedule(await api(route));
+  try {
+    const data = await api(route);
+    if (ticket !== scheduleRequestGeneration || session !== portalState.session) return;
+    renderSchedule(data);
+    if (focusCurrent && data.focusDate) requestAnimationFrame(() => {
+      if (ticket !== scheduleRequestGeneration || portalState.activeTab !== "schedule" || session !== portalState.session) return;
+      const day = [...el.scheduleGrid.querySelectorAll("[data-schedule-date]")].find(item => item.dataset.scheduleDate === data.focusDate);
+      if (!day) return;
+      const header = document.querySelector(".portal-header")?.getBoundingClientRect().bottom || 0;
+      window.scrollTo({top:Math.max(0,window.scrollY+day.getBoundingClientRect().top-header-8),behavior:"instant"});
+    });
+  } catch (error) {
+    if (ticket === scheduleRequestGeneration && session === portalState.session) el.scheduleHeading.textContent = error.message;
+  }
 }
 
 function branchVacationDateRangeText(entry) {
@@ -4410,7 +4605,7 @@ function renderLeadershipPresence() {
   el.leadershipPresenceList.innerHTML = employees.length ? employees.map((employee) => {
     const state = employee.state || "off";
     const entries = (employee.entries || []).map((entry) => `${timeEntryLabels[entry.type || entry.entry_type] || entry.type}: ${entry.time || timeText(timeEntryTimestamp(entry))}`).join(" · ");
-    return `<article class="leadership-person"><span class="leadership-person-dot" style="--person-color:${esc(employee.color || "#7b8983")}"></span><div><strong>${esc(employee.employeeNumber || employee.employee_number)} · ${esc(employee.nickname || employee.fullName || employee.full_name)}</strong><small>${esc(entries || "Heute noch keine Buchung")} · Soll ${durationText(employee.plannedMinutes ?? employee.planned_minutes)} · Ist ${durationText(employee.actualMinutes ?? employee.actual_minutes)}</small></div><span class="leadership-person-state ${esc(state)}">${esc(timeStateLabels[state] || "Nicht da")}</span></article>`;
+    return `<article class="leadership-person"><span class="leadership-person-dot" style="--person-color:${safeCssColor(employee.color)}"></span><div><strong>${esc(employee.employeeNumber || employee.employee_number)} · ${esc(employee.nickname || employee.fullName || employee.full_name)}</strong><small>${esc(entries || "Heute noch keine Buchung")} · Soll ${durationText(employee.plannedMinutes ?? employee.planned_minutes)} · Ist ${durationText(employee.actualMinutes ?? employee.actual_minutes)}</small></div><span class="leadership-person-state ${esc(state)}">${esc(timeStateLabels[state] || "Nicht da")}</span></article>`;
   }).join("") : '<p class="empty-state">Für diesen Bereich sind heute keine Teamdaten vorhanden.</p>';
 }
 
@@ -5378,16 +5573,24 @@ async function runAbsenceHistoryAction(button) {
 }
 
 async function loadAbsenceHistory() {
+  const context = capturePortalContext(() => portalTabAllowed("history"));
+  if (!portalContextCurrent(context)) return;
+  const request = Symbol("absence-history");
+  portalState.absenceHistoryRequest = request;
+  const current = () => portalContextCurrent(context) && portalState.absenceHistoryRequest === request;
   try {
     const data = await api("/api/portal/v1/me/absence-history");
+    if (!current()) return;
     portalState.absenceHistory = data.items || [];
     renderAbsenceHistory();
   } catch (error) {
+    if (!current()) return;
     el.absenceHistoryList.innerHTML = `<p class="message error">${esc(error.message)}</p>`;
   }
 }
 
 function openHistoryDetail(id, kind) {
+  if (!portalContextCurrent(capturePortalContext(() => portalTabAllowed("history")))) return;
   const item = portalState.absenceHistory.find((entry) => Number(entry.id) === Number(id) && entry.kind === kind);
   if (!item) return;
   el.historyDetailTitle.textContent = requestKindText(item);
@@ -5411,7 +5614,7 @@ function personalActionTimestamp(value) {
 
 function portalPersonalActionsActorKey(user = portalUser()) {
   if (!user || isOrganizationAccount(user)) return "";
-  return String(user.employeeNumber || "").trim();
+  return JSON.stringify([user.employeeNumber,user.accountId,user.sessionKind,user.accountType,user.role,user.active,user.permissions,user.scopes,user.mustChangePassword,user.homeLocationId]);
 }
 
 function resetPersonalActionsState(actorKey = "") {
@@ -5498,6 +5701,8 @@ async function loadPersonalActions({ append = false } = {}) {
   if (portalState.personalActionsLoading) return;
   const actorKey = portalPersonalActionsActorKey();
   if (!actorKey || portalState.personalActionsActorKey !== actorKey) return;
+  const ticket = capturePortalEditor(el.personalActionsDialog, () => !isOrganizationAccount());
+  if (!portalEditorCurrent(ticket)) return;
   const requestId = ++portalState.personalActionsRequestId;
   portalState.personalActionsLoading = true;
   if (!append) {
@@ -5511,16 +5716,16 @@ async function loadPersonalActions({ append = false } = {}) {
     const query = new URLSearchParams({ limit: "25" });
     if (cursor) query.set("cursor", cursor);
     const result = await api(`/api/portal/v1/me/actions?${query}`);
-    if (!personalActionsRequestIsCurrent(actorKey, requestId)) return;
+    if (!(personalActionsRequestIsCurrent(actorKey, requestId) && portalEditorCurrent(ticket))) return;
     const actions = Array.isArray(result?.actions) ? result.actions : [];
     portalState.personalActions = append ? [...portalState.personalActions, ...actions] : actions;
     portalState.personalActionsCursor = String(result?.nextCursor || "");
   } catch (error) {
-    if (personalActionsRequestIsCurrent(actorKey, requestId)) {
+    if (personalActionsRequestIsCurrent(actorKey, requestId) && portalEditorCurrent(ticket)) {
       message(el.personalActionsMessage, error.message, true);
     }
   } finally {
-    if (personalActionsRequestIsCurrent(actorKey, requestId)) {
+    if (personalActionsRequestIsCurrent(actorKey, requestId) && portalEditorCurrent(ticket)) {
       portalState.personalActionsLoading = false;
       renderPersonalActions();
     }
@@ -5528,7 +5733,9 @@ async function loadPersonalActions({ append = false } = {}) {
 }
 
 async function openPersonalActions() {
-  if (!el.personalActionsDialog) return;
+  if (!el.personalActionsDialog || !portalContextCurrent(capturePortalContext(() => !isOrganizationAccount()))) return;
+  if (el.personalActionsDialog.open) {window.GpWindow?.prepare?.(el.personalActionsDialog)?.activate();return;}
+  portalState.personalActionsRequestId++;portalState.personalActionsLoading=false;portalState.personalActionUndoPending="";
   el.personalActionsButton?.setAttribute("aria-expanded", "true");
   el.personalActionsDialog.showModal();
   await loadPersonalActions();
@@ -5543,6 +5750,8 @@ async function undoPersonalAction(actionId) {
   if (!action || portalState.personalActionsLoading || portalState.personalActionUndoPending) return;
   const actorKey = portalPersonalActionsActorKey();
   if (!actorKey || portalState.personalActionsActorKey !== actorKey) return;
+  const ticket = capturePortalEditor(el.personalActionsDialog, () => !isOrganizationAccount());
+  if (!portalEditorCurrent(ticket)) return;
   const label = String(action.title || action.label || "diese Aktion");
   if (!window.confirm(`„${label}“ wirklich rückgängig machen? Die ursprüngliche Historie bleibt erhalten.`)) return;
   const requestId = ++portalState.personalActionsRequestId;
@@ -5554,17 +5763,17 @@ async function undoPersonalAction(actionId) {
       method: "POST",
       body: "{}",
     });
-    if (!personalActionsRequestIsCurrent(actorKey, requestId)) return;
+    if (!(personalActionsRequestIsCurrent(actorKey, requestId) && portalEditorCurrent(ticket))) return;
     await loadPersonalActions();
-    if (portalPersonalActionsActorKey() === actorKey) {
+    if (portalPersonalActionsActorKey() === actorKey && portalEditorCurrent(ticket)) {
       message(el.personalActionsMessage, "Die Gegenaktion wurde sicher protokolliert.");
     }
   } catch (error) {
-    if (personalActionsRequestIsCurrent(actorKey, requestId)) {
+    if (personalActionsRequestIsCurrent(actorKey, requestId) && portalEditorCurrent(ticket)) {
       message(el.personalActionsMessage, error.message, true);
     }
   } finally {
-    if (portalPersonalActionsActorKey() === actorKey) {
+    if (portalPersonalActionsActorKey() === actorKey && portalEditorCurrent(ticket)) {
       portalState.personalActionUndoPending = "";
       renderPersonalActions();
     }
@@ -5584,19 +5793,32 @@ function renderNotifications() {
 }
 
 async function loadNotifications() {
+  const context = capturePortalContext(() => !isOrganizationAccount());
+  if (!portalContextCurrent(context)) return;
+  const request = Symbol("notifications");
+  portalState.notificationsRequest = request;
+  const current = () => portalContextCurrent(context) && portalState.notificationsRequest === request;
   try {
     const data = await api("/api/portal/v1/me/notifications");
+    if (!current()) return;
     portalState.notifications = data.notifications || [];
     portalState.unreadNotifications = Number(data.unreadCount || 0);
     renderNotifications();
   } catch (error) {
-    if (error.status !== 401) el.notificationList.innerHTML = `<p class="message error">${esc(error.message)}</p>`;
+    if (current() && error.status !== 401) el.notificationList.innerHTML = `<p class="message error">${esc(error.message)}</p>`;
   }
 }
 
 async function readNotification(id) {
+  const ticket = capturePortalEditor(el.notificationsDialog, () => !isOrganizationAccount());
+  if (!portalEditorCurrent(ticket)) return;
+  const request = Symbol("notification-mutation");
+  portalState.notificationMutationRequest = request;
+  portalState.notificationsRequest = null;
+  const current = () => portalEditorCurrent(ticket) && portalState.notificationMutationRequest === request;
   try {
     await api(`/api/portal/v1/me/notifications/${encodeURIComponent(String(id))}/read`, { method: "PUT", body: "{}" });
+    if (!current()) return;
     const item = portalState.notifications.find((entry) => String(entry.id) === String(id));
     if (item && !notificationIsRead(item)) {
       item.read_at = new Date().toISOString();
@@ -5638,18 +5860,25 @@ async function readNotification(id) {
       setTab("history");
     }
   } catch (error) {
-    el.notificationList.insertAdjacentHTML("afterbegin", `<p class="message error">${esc(error.message)}</p>`);
+    if (current()) el.notificationList.insertAdjacentHTML("afterbegin", `<p class="message error">${esc(error.message)}</p>`);
   }
 }
 
 async function markAllNotificationsRead() {
+  const ticket = capturePortalEditor(el.notificationsDialog, () => !isOrganizationAccount());
+  if (!portalEditorCurrent(ticket)) return;
+  const request = Symbol("notification-mutation");
+  portalState.notificationMutationRequest = request;
+  portalState.notificationsRequest = null;
+  const current = () => portalEditorCurrent(ticket) && portalState.notificationMutationRequest === request;
   try {
     await api("/api/portal/v1/me/notifications/read-all", { method: "PUT", body: "{}" });
+    if (!current()) return;
     portalState.notifications.forEach((item) => { item.read_at ||= new Date().toISOString(); });
     portalState.unreadNotifications = 0;
     renderNotifications();
   } catch (error) {
-    el.notificationList.insertAdjacentHTML("afterbegin", `<p class="message error">${esc(error.message)}</p>`);
+    if (current()) el.notificationList.insertAdjacentHTML("afterbegin", `<p class="message error">${esc(error.message)}</p>`);
   }
 }
 
@@ -5661,12 +5890,25 @@ function processTaskValue(task, ...paths) {
   return "";
 }
 
+function processTaskSymbolMarkup(task) {
+  const symbols = {
+    workflow: { label: "Ablauf", path: '<path d="M3 3h6v6H3zM15 15h6v6h-6zM6 9v9h9M15 6h6M18 3v6"/>' },
+    check: { label: "Pr\u00fcfung", path: '<path d="m5 12 4 4L19 6"/>' },
+    package: { label: "Waren", path: '<path d="m3 7 9-4 9 4-9 4-9-4zm0 0v10l9 4 9-4V7M12 11v10M7 5l10 4"/>' },
+    people: { label: "Zusammenarbeit", path: '<circle cx="9" cy="7" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 4a3 3 0 0 1 0 6M21 21v-3a6 6 0 0 0-4-5"/>' },
+  };
+  const symbol = task.studioWorkflow && symbols[task.processSymbol];
+  return symbol ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="' + symbol.label + '">' + symbol.path + '</svg>'
+    : esc(task.studioWorkflow ? "AP" : task.processSymbol);
+}
+
 function normalizeProcessTask(task = {}) {
   const runId = String(processTaskValue(task, "runId", "run_id", "processRunId", "process_run_id"));
   const stepId = String(processTaskValue(task, "stepId", "step_id", "step.id"));
   const activationCount = Number(processTaskValue(task, "activationCount", "activation_count") || 1);
   const position = Number(processTaskValue(task, "position", "stepPosition", "step_position", "step.position", "step.sequence") || 1);
   const stepCount = Number(processTaskValue(task, "stepCount", "step_count", "totalSteps", "total_steps", "progress.total") || position);
+  const canComplete = processTaskValue(task, "canComplete", "can_complete") !== false && task.blocked !== true && task.current !== false;
   return {
     runId,
     stepId,
@@ -5674,7 +5916,7 @@ function normalizeProcessTask(task = {}) {
     key: `${runId}:${Number.isInteger(activationCount) && activationCount > 0 ? activationCount : 1}:${stepId}`,
     processId: String(processTaskValue(task, "processId", "process_id", "process.id")),
     processTitle: String(processTaskValue(task, "processTitle", "process_title", "process.title") || "Prozess"),
-    processSymbol: String(processTaskValue(task, "processSymbol", "process_symbol", "process.symbol") || "AP").slice(0, 5),
+    processSymbol: String(processTaskValue(task, "processSymbol", "process_symbol", "process.symbol") || "AP").slice(0, task.studioWorkflow === true ? 20 : 5),
     stepTitle: String(processTaskValue(task, "stepTitle", "step_title", "title", "step.title") || "Arbeitsschritt"),
     stepDescription: String(processTaskValue(task, "stepDescription", "step_description", "description", "step.description")),
     conditionText: String(processTaskValue(task, "conditionText", "condition_text", "condition.text", "step.conditionText", "step.condition.text")),
@@ -5684,9 +5926,13 @@ function normalizeProcessTask(task = {}) {
     status: String(processTaskValue(task, "status", "taskStatus", "task_status") || "open"),
     assignedAt: String(processTaskValue(task, "assignedAt", "assigned_at", "createdAt", "created_at")),
     dueAt: String(processTaskValue(task, "dueAt", "due_at")),
-    canComplete: processTaskValue(task, "canComplete", "can_complete") !== false && task.blocked !== true && task.current !== false,
+    canComplete,
     completionNoteRequired: processTaskValue(task, "completionNoteRequired", "completion_note_required") === true,
     personnelWorkflow: task.personnelWorkflow === true,
+    studioWorkflow: task.studioWorkflow === true,
+    canSkip: canComplete && task.studioWorkflow === true && task.canSkip === true,
+    versionNumber: Number(task.versionNumber) || null,
+    sourceRevision: Number(task.processRevision) || null,
   };
 }
 
@@ -5730,7 +5976,8 @@ function processTaskRequestContextCurrent(generation, actorFingerprint) {
       && actorFingerprint
       && portalState.processTasksRequestGeneration === generation
       && portalState.processTasksOwnerFingerprint === actorFingerprint
-      && processTaskActorFingerprint(portalUser()) === actorFingerprint,
+      && processTaskActorFingerprint(portalUser()) === actorFingerprint
+      && portalState.processTasksOwnerSession === portalState.session,
   );
 }
 
@@ -5804,11 +6051,12 @@ function renderProcessTasks() {
     const assigned = processTaskDateTime(task.assignedAt);
     const due = processTaskDateTime(task.dueAt);
     return `<article class="portal-card process-task-card ${highlighted ? "deep-linked" : ""}" data-process-task-key="${esc(task.key)}" data-process-run-id="${esc(task.runId)}" data-process-step-id="${esc(task.stepId)}">
-      <header><span class="process-task-symbol">${esc(task.processSymbol)}</span><div><span class="eyebrow">Schritt ${task.position} von ${task.stepCount}</span><h2>${esc(task.stepTitle)}</h2><p>${esc(task.processTitle)} · ${esc(task.scopeLabel)}</p></div><span class="status ${task.canComplete ? "pending" : "returned"}">${task.canComplete ? "Bereit" : "Wartet"}</span></header>
+      <header><span class="process-task-symbol">${processTaskSymbolMarkup(task)}</span><div><span class="eyebrow">Schritt ${task.position} von ${task.stepCount}</span><h2>${esc(task.stepTitle)}</h2><p>${esc(task.processTitle)} · ${esc(task.scopeLabel)}</p></div><span class="status ${task.canComplete ? "pending" : "returned"}">${task.canComplete ? "Bereit" : "Wartet"}</span></header>
       ${task.stepDescription ? `<p class="process-task-description">${esc(task.stepDescription)}</p>` : ""}
       ${task.conditionText ? `<aside class="process-task-condition"><strong>Gilt, wenn</strong><span>${esc(task.conditionText)}</span></aside>` : ""}
+      ${task.studioWorkflow ? `<p class="process-task-version">Manueller Ablauf · Version ${esc(task.versionNumber)} · gespeicherte Revision ${esc(task.sourceRevision)}</p>` : ""}
       ${(assigned || due) ? `<div class="process-task-meta">${assigned ? `<span>Zugewiesen ${esc(assigned)}</span>` : ""}${due ? `<span>Fällig ${esc(due)}</span>` : ""}</div>` : ""}
-      <div class="process-task-completion ${task.canComplete ? "" : "hidden"}">${task.personnelWorkflow ? '<p class="settings-note">Der Abschluss wird in M5 ohne Notiz gespeichert.</p>' : `<label><span>Abschlussnotiz${task.completionNoteRequired ? " · erforderlich" : " · optional"}${completionPayload ? " · Wiederholung unverändert" : ""}</span><textarea data-process-task-note rows="2" maxlength="500" ${task.completionNoteRequired ? "required" : ""} ${completionPayload ? "disabled" : ""} placeholder="Kurze, sachliche Rückmeldung">${esc(taskNote)}</textarea></label>`}<button class="primary" data-complete-process-task type="button" ${pending ? "disabled" : ""}>${pending ? "Wird gespeichert …" : completionPayload ? "Erneut versuchen" : "Schritt erledigen"}</button></div>
+      <div class="process-task-completion ${task.canComplete ? "" : "hidden"}">${task.personnelWorkflow ? '<p class="settings-note">Der Abschluss wird in M5 ohne Notiz gespeichert.</p>' : `<label><span>Abschlussnotiz${task.completionNoteRequired ? " · erforderlich" : " · optional"}${completionPayload ? " · Wiederholung unverändert" : ""}</span><textarea data-process-task-note rows="2" maxlength="500" ${task.completionNoteRequired ? "required" : ""} ${completionPayload ? "disabled" : ""} placeholder="Kurze, sachliche Rückmeldung">${esc(taskNote)}</textarea></label>`}<button class="primary" data-complete-process-task type="button" ${pending || completionPayload?.action === 'skip' ? "disabled" : ""}>${pending ? "Wird gespeichert …" : completionPayload ? "Erneut versuchen" : "Schritt erledigen"}</button>${task.studioWorkflow && task.canSkip ? `<button class="secondary" data-skip-process-task type="button" ${pending || completionPayload?.action === 'complete' ? 'disabled' : ''}>${completionPayload?.action === 'skip' ? 'Überspringen erneut bestätigen' : 'Optionalen Schritt überspringen'}</button>` : ''}</div>
       ${taskMessage ? `<p class="message error process-task-message">${esc(taskMessage)}</p>` : ""}
     </article>`;
   }).join("") : '<div class="portal-card process-task-empty"><span aria-hidden="true">✓</span><h2>Alles erledigt</h2><p>Derzeit ist dir kein offener Prozessschritt zugewiesen.</p></div>')}`;
@@ -5826,13 +6074,14 @@ async function loadProcessTasks(options = {}) {
   const afterCurrent = options?.afterCurrent === true;
   if (!portalState.session) return;
   const currentActorFingerprint = processTaskActorFingerprint(portalUser());
-  if (portalState.processTasksOwnerFingerprint !== currentActorFingerprint) {
+  if (portalState.processTasksOwnerFingerprint !== currentActorFingerprint || portalState.processTasksOwnerSession !== portalState.session) {
     const previousOwner = portalState.processTasksOwnerFingerprint;
     clearProcessTaskState({
       resetAvailability: true,
       clearRequest: Boolean(previousOwner),
     });
     portalState.processTasksOwnerFingerprint = currentActorFingerprint;
+    portalState.processTasksOwnerSession = portalState.session;
   }
   if (!currentActorFingerprint || !portalState.processTasksAvailable) return;
   if (!portalTabAllowed("processTasks")) {
@@ -5909,7 +6158,7 @@ async function loadProcessTasks(options = {}) {
   }
 }
 
-async function completeProcessTask(task, card) {
+async function completeProcessTask(task, card, action = "complete") {
   if (!task?.canComplete || portalState.processTaskCompletionPending.has(task.key)) return;
   const requestGeneration = portalState.processTasksRequestGeneration;
   const actorFingerprint = portalState.processTasksOwnerFingerprint;
@@ -5917,6 +6166,9 @@ async function completeProcessTask(task, card) {
       || !portalTabAllowed("processTasks")
       || !portalState.processTasks.some((entry) => entry.key === task.key)) return;
   const previousPayload = portalState.processTaskCompletionPayloads.get(task.key);
+  if (!['complete', 'skip'].includes(action) || action === 'skip' && !(task.studioWorkflow && task.canSkip)
+    || previousPayload?.action && previousPayload.action !== action) return;
+  if (action === 'skip' && !previousPayload && !globalThis.confirm('Diesen optionalen Arbeitsschritt ausdrücklich überspringen?')) return;
   const note = task.personnelWorkflow
     ? ""
     : previousPayload?.note ?? String(card?.querySelector("[data-process-task-note]")?.value || "").trim();
@@ -5927,7 +6179,7 @@ async function completeProcessTask(task, card) {
   }
   const existingKey = portalState.processTaskCompletionKeys.get(task.key);
   const generatedUuid = globalThis.crypto?.randomUUID?.() || "";
-  if (task.personnelWorkflow && !existingKey && !generatedUuid) {
+  if ((task.personnelWorkflow || task.studioWorkflow) && !existingKey && !generatedUuid) {
     portalState.processTaskMessages.set(
       task.key,
       "Dieser Browser kann keine sichere Vorgangs-ID erzeugen. Bitte aktualisieren oder einen anderen Browser verwenden.",
@@ -5939,13 +6191,15 @@ async function completeProcessTask(task, card) {
     || generatedUuid
     || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   portalState.processTaskCompletionKeys.set(task.key, idempotencyKey);
-  portalState.processTaskCompletionPayloads.set(task.key, { idempotencyKey, note });
+  portalState.processTaskCompletionPayloads.set(task.key, { idempotencyKey, note, action });
   portalState.processTaskCompletionPending.add(task.key);
   portalState.processTaskMessages.delete(task.key);
   portalState.processTaskFlash = "";
   renderProcessTasks();
   try {
-    const options = task.personnelWorkflow
+    const options = task.studioWorkflow
+      ? { method: "POST", body: JSON.stringify({ action, operationId: idempotencyKey, note }) }
+      : task.personnelWorkflow
       ? {
         method: "POST",
         body: JSON.stringify({ action: "complete", operationId: idempotencyKey }),
@@ -5967,7 +6221,7 @@ async function completeProcessTask(task, card) {
         && (!portalState.processTaskRequestedStepId || portalState.processTaskRequestedStepId === task.stepId)) {
       clearProcessTaskRequest();
     }
-    portalState.processTaskFlash = "Der Arbeitsschritt wurde nachvollziehbar abgeschlossen.";
+    portalState.processTaskFlash = action === 'skip' ? "Der optionale Arbeitsschritt wurde nachvollziehbar übersprungen." : "Der Arbeitsschritt wurde nachvollziehbar abgeschlossen.";
     await Promise.allSettled([loadProcessTasks({ afterCurrent: true }), loadNotifications()]);
   } catch (error) {
     if (!processTaskRequestContextCurrent(requestGeneration, actorFingerprint)) return;
@@ -6853,31 +7107,52 @@ async function submitVacationChange(event) {
   } catch (error) { message(el.vacationChangeMessage, error.message, true); }
 }
 
+let passwordChangeRequest = null;
 async function changePassword(event) {
   event.preventDefault();
+  const session = portalState.session;
+  if (!session?.authenticated || passwordChangeRequest?.session === session) return;
+  if (window.GrabenplanerPasswordPolicy && (!window.GrabenplanerPasswordPolicy.validate(el.newPassword, { report: true })
+    || !window.GrabenplanerPasswordPolicy.validate(el.repeatPassword, { report: true }))) return;
   if (el.newPassword.value !== el.repeatPassword.value) {
     message(el.passwordMessage, "Die neuen Passwörter stimmen nicht überein.", true);
     return;
   }
+  const ticket = { session }, current = () => passwordChangeRequest === ticket && portalState.session === session;
+  passwordChangeRequest = ticket;
   try {
-    await api("/api/portal/v1/me/password", {
-      method: "PUT",
-      body: JSON.stringify({ currentPassword: el.currentPassword.value, newPassword: el.newPassword.value }),
-    });
-    el.passwordDialog.dataset.required = "false";
-    if (portalState.session?.user) portalState.session.user.mustChangePassword = false;
-    el.passwordForm.reset();
-    message(el.passwordMessage, "Passwort wurde geändert.");
-    setTimeout(async () => {
+    await window.GrabenplanerSessionLifecycle.credentials(async () => {
+      await api("/api/portal/v1/me/password", {
+        method: "PUT",
+        body: JSON.stringify({ currentPassword: el.currentPassword.value, newPassword: el.newPassword.value }),
+      });
+      if (!current()) return;
+      const replacement = await api("/api/portal/v1/session");
+      if (!current()) return;
+      if (!replacement?.authenticated) {
+        showLogin("Das Passwort wurde geändert. Bitte erneut anmelden.");
+        window.GrabenplanerSessionLifecycle?.publish();
+        return;
+      }
       closePasswordChangeDialog({ force: true });
-      if (await redirectToPendingCandidateEvaluation(portalState.session?.user)) return;
+      showPortal(replacement);
+      window.GrabenplanerSessionLifecycle?.publish();
+      if (replacement.user?.mustChangePassword) return;
+      if (await redirectToPendingCandidateEvaluation(replacement.user)) return;
+      if (portalState.session !== replacement) return;
       await loadMobileLayout();
+      if (portalState.session !== replacement) return;
       chooseInitialPortalTab();
       await loadPortalData();
+      if (portalState.session !== replacement) return;
       await refreshBirthdayPresentationTheme();
-      await claimBirthdayPresentation();
-    }, 700);
-  } catch (error) { message(el.passwordMessage, error.message, true); }
+      if (portalState.session === replacement) await claimBirthdayPresentation();
+    });
+  } catch (error) {
+    if (current() && error.code !== "PORTAL_SESSION_CHANGED") message(el.passwordMessage, error.message, true);
+  } finally {
+    if (passwordChangeRequest === ticket) passwordChangeRequest = null;
+  }
 }
 
 function togglePassword(button) {
@@ -7692,9 +7967,11 @@ el.personalActionsList?.addEventListener("click", (event) => {
   if (button) undoPersonalAction(button.dataset.undoPersonalAction);
 });
 document.querySelectorAll("[data-close-personal-actions]").forEach((button) => button.addEventListener("click", closePersonalActions));
-el.personalActionsDialog?.addEventListener("close", () => el.personalActionsButton?.setAttribute("aria-expanded", "false"));
+el.personalActionsDialog?.addEventListener("close", () => {if (!el.personalActionsDialog.open) {portalState.personalActionsRequestId++;portalState.personalActionsLoading=false;portalState.personalActionUndoPending="";el.personalActionsButton?.setAttribute("aria-expanded", "false");}});
 el.mobileSettingsHome?.addEventListener("click", () => setTab("home"));
 el.mobileHomeTiles?.addEventListener("click", (event) => {
+  const workspace = event.target.closest('[data-private-workspace]');
+  if (workspace) { void privatePortalWorkspaces?.open(workspace.dataset.privateWorkspace); return; }
   const button = event.target.closest("[data-mobile-home-tab]");
   if (button) setTab(button.dataset.mobileHomeTab);
 });
@@ -7806,7 +8083,12 @@ document.querySelectorAll("[data-close-portal-learning-progress]").forEach((butt
   button.addEventListener("click", () => el.portalLearningProgressDialog.close());
 });
 el.portalLearningProgressDialog?.addEventListener("close", () => {
+  if (el.portalLearningProgressDialog.open) return;
+  portalState.personnelLearningProgressRequest = null;
+  portalState.personnelLearningProgressOpening = false;
   portalState.personnelLearningProgressAssignment = null;
+  portalState.personnelLearningProgressMutationPending = false;
+  portalState.personnelLearningProgressMutationOwner = null;
   message(el.portalLearningProgressMessage, "");
 });
 document.querySelector(".portal-tabs")?.addEventListener("keydown", (event) => {
@@ -7913,7 +8195,7 @@ document.querySelectorAll("[data-more-tab]").forEach((button) => button.addEvent
 document.querySelectorAll("[data-request-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.requestTab)));
 el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, -7); loadSchedule(); });
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
-el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
+el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule({ focus: true }); });
 el.branchVacationPrevious?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, -7); loadBranchVacationOverview(); });
 el.branchVacationNext?.addEventListener("click", () => { portalState.branchVacationWeekStart = addDays(portalState.branchVacationWeekStart, 7); loadBranchVacationOverview(); });
 el.branchVacationCurrent?.addEventListener("click", () => { portalState.branchVacationWeekStart = mondayOf(new Date()); loadBranchVacationOverview(); });
@@ -8357,12 +8639,19 @@ el.absenceHistoryList.addEventListener("click", (event) => {
   if (item) openHistoryDetail(item.dataset.historyId, item.dataset.historyKind);
 });
 document.querySelectorAll("[data-close-history-detail]").forEach((button) => button.addEventListener("click", () => el.historyDetailDialog.close()));
-el.notificationsButton.addEventListener("click", async () => {
+async function openNotifications() {
+  const context = capturePortalContext(() => !isOrganizationAccount());
+  if (!portalContextCurrent(context)) return;
+  if (el.notificationsDialog.open) {window.GpWindow?.prepare?.(el.notificationsDialog)?.activate();return;}
+  const request = Symbol("notification-open");
+  portalState.notificationsOpenRequest = request;
   await loadNotifications();
+  if (!portalContextCurrent(context) || portalState.notificationsOpenRequest !== request) return;
   el.notificationsButton.setAttribute("aria-expanded", "true");
   el.notificationsDialog.showModal();
-});
-el.notificationsDialog.addEventListener("close", () => el.notificationsButton.setAttribute("aria-expanded", "false"));
+}
+el.notificationsButton.addEventListener("click", openNotifications);
+el.notificationsDialog.addEventListener("close", () => {if (!el.notificationsDialog.open) {portalState.notificationsOpenRequest = null;el.notificationsButton.setAttribute("aria-expanded", "false");}});
 document.querySelectorAll("[data-close-notifications]").forEach((button) => button.addEventListener("click", () => el.notificationsDialog.close()));
 el.birthdayPresentationClose?.addEventListener("click", closeBirthdayPresentation);
 el.birthdayPresentationConfirm?.addEventListener("click", closeBirthdayPresentation);
@@ -8378,11 +8667,11 @@ el.notificationList.addEventListener("click", (event) => {
 el.markAllNotificationsRead.addEventListener("click", markAllNotificationsRead);
 el.refreshProcessTasks?.addEventListener("click", loadProcessTasks);
 el.processTaskList?.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-complete-process-task]");
+  const button = event.target.closest("[data-complete-process-task],[data-skip-process-task]");
   const card = button?.closest("[data-process-task-key]");
   if (!button || !card || button.disabled) return;
   const task = portalState.processTasks.find((entry) => entry.key === card.dataset.processTaskKey);
-  if (task) completeProcessTask(task, card);
+  if (task) completeProcessTask(task, card, button.hasAttribute('data-skip-process-task') ? 'skip' : 'complete');
 });
 el.processTaskList?.addEventListener("input", (event) => {
   const note = event.target.closest("[data-process-task-note]");
@@ -8454,6 +8743,12 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
   onError: () => message(el.portalLogoutStatus, "Die Seitennavigation konnte nicht wiederhergestellt werden.", true),
 });
 initializeDateRangeCalendar();
+portalVoiceAssistant=window.GpVoiceAssistant?.mount({ api, getSession: () => portalState.session,
+  onSubmitted: () => Promise.allSettled([loadVacationRequests(), loadTimeOffRequests(), loadAbsenceHistory(), loadNotifications()]) });
+window.GrabenplanerSessionLifecycle?.listen(() => {
+  showLogin("Die Anmeldung wurde in einem anderen Fenster geändert. Die Sitzung wird neu geprüft.");
+  void initialize();
+});
 initialize();
 
 portalLearningAssessmentPanel=GrabenplanerLearningAssessment.init({api,printPdf:openPortalLearningConfirmation});

@@ -76,7 +76,10 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   // Named CRM reads, article qualifications and protected administrative statistics.
   // Registration grants no driver import, statement declaration or activation.
   'lib/persistence/postgresql/core/import-master-customer-reference.js',
+  // Three reviewed read-only adapters over existing tables; no driver or DDL grant.
+  'lib/persistence/postgresql/core/workflow-studio.js',
   'lib/persistence/postgresql/sales/cash-customer-search.js',
+  'lib/persistence/postgresql/sales/cash-snapshot-pages.js',
   'lib/persistence/postgresql/operations/sql-runtime-statistics.js',
   'test/cash-customer-search-sql.test.js',
   'test/import-master-customer-reference.test.js',
@@ -88,11 +91,35 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'server-tools/linux/lib/vocational-school-migrate.js',
   'test/postgresql-vocational-school-migration.test.js',
   'test/vocational-school-catalog-qualification.test.js',
+  // Four reviewed authentication statements; historical locks and driver gates stay fixed.
+  'lib/persistence/postgresql/contracts/authentication-catalog-v1.json',
+  'test/authentication-catalog-qualification.test.js',
+  // Two bounded SQLite projections retain the exact historical PostgreSQL SQL.
+  'lib/persistence/postgresql/contracts/onboarding-json-catalog-v1.json',
+  // Exact session extension artifacts; only the named maintenance CLI opens a driver.
+  'lib/persistence/postgresql/contracts/session-security-catalog-v1.json',
+  'lib/persistence/postgresql/core/session-security-catalog.js',
+  'lib/persistence/postgresql/core/session-security.js',
+  'server-tools/linux/lib/session-security-migrate.js',
+  'test/postgresql-session-security-cli.test.js',
+  'test/session-security-catalog-qualification.test.js',
+  'lib/persistence/postgresql/transfer/session-security.js',
+  'test/session-security-transfer.test.js',
   'lib/persistence/postgresql/core/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete.js',
   'lib/persistence/postgresql/sales/import-delete-performance.js',
+  'lib/persistence/postgresql/sales/import-history-snapshots.js',
+  'lib/persistence/postgresql/sales/import-history-snapshots-catalog.js',
+  'test/postgresql-import-history-snapshots-migration.test.js',
   'lib/persistence/postgresql/operations/restore-capacity.js',
+  // Exact protected maintenance targets; import caches only, with paired backup.
+  'lib/persistence/postgresql/operations/import-retention.js',
+  'lib/persistence/postgresql/operations/storage-residuals.js',
+  'server-tools/linux/postgresql/storage-worker.js',
+  'server-tools/linux/postgresql/storage-import-run.js',
+  'server-tools/linux/postgresql/storage-import-maintenance.sh',
+  'test/vps-storage-postgresql.test.js',
   'server-tools/linux/lib/import-delete-migrate.js',
   'test/postgresql-stock-import-delete.test.js',
   'test/postgresql-trade-insights.test.js',
@@ -110,6 +137,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-cash-takeover.test.js',
   'test/postgresql-transaction-activity.test.js',
   'lib/persistence/postgresql/sales/import-recheck-catalog.js',
+  // Exact read-only audit receipt lookup; no driver, DDL or activation grant.
+  'lib/persistence/postgresql/sales/import-source-tolerance-catalog.js',
   'lib/persistence/postgresql/sales/import-work-queues.js',
   'lib/persistence/postgresql/import-reader-batches.js',
   'lib/persistence/postgresql/core/import-reader-batches.js',
@@ -286,7 +315,9 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
 ]);
 const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
   // Only the installed maintenance-lease migration CLI opens the driver.
+  'server-tools/linux/postgresql/storage-worker.js',
   'server-tools/linux/lib/vocational-school-migrate.js',
+  'server-tools/linux/lib/session-security-migrate.js',
   'server-tools/linux/lib/import-delete-migrate.js',
   'lib/persistence/postgresql/application-operations/system-health.js',
   'test-support/postgresql-recovery-performance-probe.js',
@@ -337,6 +368,11 @@ const ISOLATED_CASH_QUALIFICATION_CLI_FILES = new Set([
   "scripts/benchmark-sales-search.js",
   "scripts/measure-cash-history-snapshot.mjs",
   "scripts/verify-compact-cash-full.mjs",
+]);
+// Explicit paid-test opt-in, synthetic temporary database and loopback-only app.
+// This source-only harness is never an application persistence adapter.
+const ISOLATED_ASSISTANT_QUALIFICATION_CLI_FILES = new Set([
+  'scripts/verify-assistant-live.js',
 ]);
 
 const SCAN_ROOTS = Object.freeze([
@@ -396,6 +432,9 @@ const PHASE_2_CLASSIFICATION = Object.freeze({
   laterPhase: "2-5",
 });
 const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
+  // Pure time policy and transactional additive SQLite migration; no driver grant.
+  "lib/portal-session-security.js",
+  "lib/persistence/sqlite/operations/session-security-schema.js",
   // Encrypted privacy metadata uses existing transaction-bound repositories.
   // The contract import validates the provider and its retry errors only;
   // this classification never permits driver imports or direct SQL access.
@@ -408,6 +447,8 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/trade-annotations.js",
   "lib/persistence/statements/personnel-learning-runs.js",
   "lib/persistence/statements/xoffi-snapshots.js",
+  // Exactly three typed Studio reads over existing run tables; no driver or DDL grant.
+  "lib/persistence/statements/workflow-studio.js",
   "lib/persistence/statements/sales-article-workspace.js",
   "lib/persistence/sqlite/sales-article-workspace-catalog.js",
   "lib/persistence/repositories/sales-article-workspace.js",
@@ -454,6 +495,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/import-batches.js",
   "lib/persistence/statements/import-reader-batches.js",
   "lib/persistence/statements/data-import-recheck.js",
+  "lib/persistence/statements/data-import-source-tolerance.js",
   "lib/persistence/sqlite/personnel-learning-runs-catalog.js",
   "lib/persistence/sqlite/operations/personnel-learning-runs-schema.js",
   "lib/persistence/sqlite/branch-article-stock-catalog.js",
@@ -510,6 +552,10 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "scripts/verify-tradefoto-test-import.mjs",
   "lib/persistence/repositories/sales-history-workspace.js",
   "lib/persistence/repositories/import-history.js",
+  "lib/persistence/repositories/import-history-snapshots.js",
+  "lib/persistence/sqlite/import-history-snapshots-catalog.js",
+  "lib/persistence/sqlite/operations/import-history-snapshots-schema.js",
+  "lib/persistence/statements/import-history-snapshots.js",
   "lib/persistence/sqlite/import-history-catalog.js",
   "lib/persistence/sqlite/operations/import-history-schema.js",
   "lib/persistence/statements/import-history.js",
@@ -521,6 +567,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   // Isolated Block-2 import foundation; not part of the application startup catalog.
   "lib/persistence/repositories/data-import.js",
   "lib/persistence/sqlite/data-import-catalog.js",
+  "lib/persistence/sqlite/data-import-source-tolerance-catalog.js",
   "lib/persistence/sqlite/operations/data-import-schema.js",
   "lib/persistence/statements/data-import.js",
   "lib/persistence/application-repositories.js",
@@ -648,6 +695,11 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  'scripts/verify-assistant-live.js',
+  'test/assistant-management-api.test.js',
+  'test/planning-optimizer-api.test.js',
+  'test/planning-optimizer.test.js',
+  'test/voice-assistant-api.test.js',
   // These synthetic tests qualify encrypted status writes and neutral receipts
   // through the existing provider repositories; no product driver is added.
   "test/maternity-protection-integration.test.js",
@@ -720,6 +772,14 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/backup-recovery-keys.test.js",
   "test/full-source-backup-measurement.test.js",
   "test/data-import-runtime.test.js",
+  "test/article-stock-snapshots.test.js",
+  "test/article-stock-snapshot-integrity.test.js",
+  "test/article-stock-snapshot-retention.test.js",
+  "test/data-import-unchanged-review.test.js",
+  "test/import-history-snapshots-schema.test.js",
+  "test/history-snapshot-stock-read.test.js",
+  "test/import-master-reference-prefetch.test.js",
+  "test/sales-article-import-batch-read.test.js",
   "test/data-import-jobs.test.js",
   "test/data-import-state-counts.test.js",
   "test/saturday-credit-integration.test.js",
@@ -895,10 +955,17 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1485;
+const PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS = Object.freeze([
+  "data-import.events.source-tolerances",
+  "workflow-studio.completion.lookup",
+  "workflow-studio.instance.steps",
+  "workflow-studio.instances.page",
+  "xoffi-snapshots.get-scoped",
+]);
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1507;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 46;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1439;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1366;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1461;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1388;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -1024,8 +1091,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1347;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 138;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1365;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 142;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",
@@ -1125,6 +1192,25 @@ const PHASE_6_CLASSIFICATION = Object.freeze({
 });
 
 const PRODUCTION_DIRECT_GROUPS = Object.freeze([
+  Object.freeze({
+    id: "learning-and-workflow-workspace-ui",
+    files: Object.freeze([
+      "public/gp-window.js",
+      "public/vps-storage.js",
+      "public/learning-library.js",
+      "public/learning-team.js",
+      "public/trade-orders.js",
+      "public/workflow-studio-editor.js",
+      "public/workflow-studio-runs.js",
+    ]),
+    scope: "product-client-ui",
+    owner: "workspace-and-domain-ui",
+    targetLayer: "provider-neutral HTTP clients and account-bound DOM window preferences",
+    risk: "medium",
+    transactionContext: "server-owned persistence through existing authenticated HTTP contracts",
+    transitionException: "lexical prepare calls are DOM window preparation only; no SQL, database driver or provider activation grant",
+    laterPhase: "not-applicable",
+  }),
   Object.freeze({
     id: "scoped-crm-maintenance-import",
     files: Object.freeze(["scripts/import-tradefoto-crm.cjs"]),
@@ -1263,6 +1349,26 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
 ]);
 
 const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
+  Object.freeze({
+    id: "security-sast-review-metadata",
+    files: Object.freeze(["scripts/security/sast-dispositions.json"]),
+    scope: "security-review-metadata",
+    owner: "security-review-evidence",
+    targetLayer: "non-executable JSON review records containing quoted source and SQL terminology",
+    risk: "low",
+    transitionException: "metadata classification only; no database driver, statement, connection or runtime activation grant",
+    laterPhase: "not-applicable",
+  }),
+  Object.freeze({
+    id: "security-release-component-inventory",
+    files: Object.freeze(["lib/security-release-inventory.js"]),
+    scope: "supported-linux-server-operations",
+    owner: "security-release-evidence",
+    targetLayer: "read-only package hashes and process runtime version metadata",
+    risk: "low",
+    transitionException: "SQLite version comes from process.versions; no database driver, connection or business data access is authorized",
+    laterPhase: "not-applicable",
+  }),
   Object.freeze({
     id: "isolated-full-source-measurement",
     files: Object.freeze(["scripts/verify-tradefoto-full-import.mjs"]),
@@ -1475,6 +1581,59 @@ const BASELINE_TEST_FILES = Object.freeze([
 ]);
 
 const TEST_SPECIAL_GROUPS = Object.freeze({
+  "security-audit-synthetic-fixtures": new Set([
+    "test/onboarding-json-compatibility.test.js",
+    // Explicit opt-in probes and isolated integration data; no product database access.
+    "test-support/security-audit/session-audit.probe.cjs",
+    "test-support/security-audit/ui-audit.probe.cjs",
+    "test/security-audit-integration.test.js",
+    "test-support/security-audit/login-concurrency-fixture.cjs",
+    "test/portal-login-concurrency.test.js",
+    "test/portal-login-concurrency-api.test.js",
+    "test/portal-session-security.test.js",
+    "test/session-security-persistence.test.js",
+    "test/session-security-migration.test.js",
+    "test/session-security-interruption.test.js",
+    "test/security-p2-authentication-api.test.js",
+    "test/security-reauthentication-api.test.js",
+    "test/security-csp-server.test.js",
+      "test/security-release-inventory.test.js",
+    "test-support/security-audit/login-multiconnection-worker.cjs",
+    "test/portal-login-multiconnection.test.js",
+    "test-support/security-audit/linux-native-runtime.probe.cjs",
+  ]),
+  "employee-preferences-api-fixtures": new Set([
+    // Isolated synthetic API qualification; no new product database access.
+    "test/employee-preferred-days-api.test.js",
+  ]),
+  "learning-and-workflow-workspace-fixtures": new Set([
+    "test/dashboard-boards-api.test.js",
+    "test/gp-dashboard-boards-browser.test.js",
+    "test/personnel-dashboard-content-browser.test.js",
+    "test-support/learning-delivery-ui.js",
+    "test-support/workflow-studio-editor-ui.js",
+    "test-support/workflow-studio-persistence-ui.js",
+    "test/gp-window-browser.test.js",
+    "test/gp-window-scroll-browser.test.js",
+    "test/cost-centers-workspace-browser.test.js",
+    "test/gp-window-explicit-reopen-browser.test.js",
+    "test/learning-catalog-workspace-browser.test.js",
+    "test/learning-overview-workspace-browser.test.js",
+    "test/personnel-dashboard-layout-browser.test.js",
+    "test/personnel-dashboard-workspace-browser.test.js",
+    "test/personnel-directory-workspace-browser.test.js",
+    "test/workflow-studio-browser.test.js",
+    "test/workflow-studio-drafts-api.test.js",
+    "test/workflow-studio-drafts.test.js",
+    "test/workflow-studio-editor-browser.test.js",
+    "test/workflow-studio-executor.test.js",
+    "test/workflow-studio-instances.test.js",
+    "test/workflow-studio-persistence-browser.test.js",
+    "test/workflow-studio-portal-api.test.js",
+    "test/workflow-studio-portal-browser.test.js",
+    "test/workflow-studio-read.test.js",
+    "test/workflow-studio-runs-browser.test.js",
+  ]),
   "deployment-operations-verification": new Set([
     "test/deploy-startup.test.js",
     "test/deploy-workflow.test.js",
@@ -2497,7 +2656,7 @@ function maskHashComments(text) {
 }
 
 function maskHtmlComments(text) {
-  return text.replace(/<!--[\s\S]*?-->/g, (comment) => comment.replace(/[^\r\n]/g, " "));
+  return text.replace(/\x3c!--[\s\S]*?--\x3e/g, (comment) => comment.replace(/[^\r\n]/g, " "));
 }
 
 function shellSegmentBefore(text, index) {
@@ -2766,6 +2925,9 @@ function architectureBoundaryViolationsForText(file, text) {
     // Existing managed readers accept only a branded executor so source hints
     // can join the action CAS transaction. This grants contract assertions only.
     'lib/data-import-managed-protection.js',
+    // The audit ledger asserts the branded provider and reads shared error codes;
+    // all operations use existing repositories. This permits no driver or raw SQL.
+    'lib/security-audit-store.js',
     'lib/persistence/repositories/trade-insights.js',
     'lib/persistence/repositories/sales-bwl-abc-workspace.js',
     ...PHASE_2_CONTRACT_FILES,
@@ -2899,7 +3061,7 @@ function architectureBoundaryViolationsForText(file, text) {
 function scanPhaseBoundary(root, files) {
   const violations = [];
   for (const file of files) {
-    if (file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file) || EXCLUDED_FILES.has(file)) continue;
+    if (file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file) || ISOLATED_ASSISTANT_QUALIFICATION_CLI_FILES.has(file) || EXCLUDED_FILES.has(file)) continue;
     const text = fs.readFileSync(path.join(root, file), "utf8");
     violations.push(...architectureBoundaryViolationsForText(file, text));
   }
@@ -3020,6 +3182,16 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
   const extraSqliteStatementBindings = sortedDifference(sqliteStatementIds, statementIds);
   const missingPostgresqlStatementBindings = sortedDifference(statementIds, postgresqlStatementIds);
   const extraPostgresqlStatementBindings = sortedDifference(postgresqlStatementIds, statementIds);
+  const applicationReadExtensionStatementIds = statementIds
+    .filter((id) => PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS.includes(id)).sort();
+  const applicationReadExtensionViolations = PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS
+    .filter((id) => {
+      const entries = applicationCatalog.filter((entry) => entry?.statement?.id === id);
+      return entries.length !== 1
+        || !["queryOne", "queryAll"].includes(entries[0]?.statement?.operation)
+        || entries[0]?.returning !== false
+        || !/^\s*SELECT\b/i.test(entries[0]?.sql || "");
+    });
   const sqliteBaselineStatementCount = sqliteDialectEntries
     .filter((entry) => entry?.classification === "sqlite-baseline")
     .length;
@@ -3272,6 +3444,7 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
     && missingTestFiles.length === 0
     && moduleErrors.length === 0
     && statementIds.length === PHASE_4_EXPECTED_STATEMENT_COUNT
+    && applicationReadExtensionViolations.length === 0
     && duplicateStatementIds.length === 0
     && sqliteStatementIds.length === PHASE_4_EXPECTED_STATEMENT_COUNT
     && postgresqlStatementIds.length === PHASE_4_EXPECTED_STATEMENT_COUNT
@@ -3321,6 +3494,8 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
     extraSqliteStatementBindings,
     missingPostgresqlStatementBindings,
     extraPostgresqlStatementBindings,
+    applicationReadExtensionStatementIds,
+    applicationReadExtensionViolations,
     dialectMetadataViolations: [...new Set(dialectMetadataViolations)].sort(),
     duplicateMigrationOperationIds,
     duplicateSqliteMigrationBindings,
@@ -4364,6 +4539,9 @@ function scanRepository(root = REPOSITORY_ROOT) {
   const baselineTests = new Set([
     ...BASELINE_TEST_FILES,
     ...TEST_SPECIAL_GROUPS["deployment-operations-verification"],
+    ...TEST_SPECIAL_GROUPS["learning-and-workflow-workspace-fixtures"],
+    ...TEST_SPECIAL_GROUPS["employee-preferences-api-fixtures"],
+    ...TEST_SPECIAL_GROUPS["security-audit-synthetic-fixtures"],
   ]);
   const classificationDuplicates = [
     ...directGroups.duplicates,
@@ -4442,7 +4620,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
     .sort();
   const records = [];
   for (const file of files) {
-    const isTest = file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file);
+    const isTest = file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file) || ISOLATED_ASSISTANT_QUALIFICATION_CLI_FILES.has(file);
     const classification = MIGRATION_DEVELOPMENT_FILES.has(file) ? {
       ...PHASE_5_CLASSIFICATION,
       id: 'postgresql-core-migration-development',
@@ -4648,7 +4826,9 @@ function scanRepository(root = REPOSITORY_ROOT) {
   const providerNeutralServerPrepareCalls = countMatches(
     serverText,
     /\brequirePersonnelLifecycleOffboardingService\(\)\.prepare\s*\(/g,
-  );
+  ) + (/\bconst planningOptimizerModel\s*=\s*require\(['"]\.\/lib\/planning-optimizer['"]\)/.test(serverText)
+    && /\bconst planningOptimizer\s*=\s*planningOptimizerModel\.createPlanningOptimizer\(/.test(serverText)
+    ? countMatches(serverText, /\bplanningOptimizer\.prepare\s*\(/g) : 0);
   const remainingDomainRawAccess = productionDirect
     .filter((record) => domainRuntimeFiles.has(record.file))
     .reduce((sum, record) => (
@@ -4770,6 +4950,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
     || phase4Progress.sqliteBaselineStatementCount !== PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT
     || phase4Progress.dialectVariantStatementCount !== PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT
     || phase4Progress.namedDollarParameterStatementCount !== PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT
+    || phase4Progress.applicationReadExtensionViolations.length
     || phase4Progress.duplicateStatementIds.length
     || phase4Progress.duplicateSqliteStatementBindings.length
     || phase4Progress.duplicatePostgresqlStatementBindings.length
@@ -4964,6 +5145,7 @@ module.exports = {
   PHASE_3_SQLITE_PROVIDER_TEST_FILES,
   PHASE_3_SQLITE_RAW_ACCESS_FILES,
   PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT,
+  PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS,
   PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT,
   PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT,
   PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT,

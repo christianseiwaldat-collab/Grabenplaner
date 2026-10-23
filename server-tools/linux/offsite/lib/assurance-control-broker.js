@@ -22,6 +22,11 @@ const RATE_LIMIT_SECONDS = 15 * 60;
 const SYSTEMCTL = "/usr/bin/systemctl";
 const DATE = "/usr/bin/date";
 const FLOCK = "/usr/bin/flock";
+const LOCK_CONFLICT_EXIT = 75;
+const CONTROL_LOCKS = Object.freeze({
+  maintenance: "/run/grabenplaner/maintenance.lock",
+  broker: "/run/grabenplaner-assurance-control/broker.lock",
+});
 const ASSURANCE_UNIT = "grabenplaner-offsite-assurance@manual-admin-ui.service";
 const ASSURANCE_TIMER = "grabenplaner-offsite-assurance.timer";
 const ASSURANCE_TIMER_FRAGMENT = "/etc/systemd/system/grabenplaner-offsite-assurance.timer";
@@ -394,7 +399,7 @@ function handleRequest(buffer, options = {}) {
         maintenanceSchedules: applySchedules(request.schedules, { ...(options.scheduleOptions || options), expectedRevision: request.expectedRevision }),
       });
     }
-    const busy = assuranceUnitBusy(options);
+    const busy = options.maintenanceBusy === true || assuranceUnitBusy(options);
     if (request.action === "status") {
       return response(request.requestId, busy ? "ASSURANCE_REQUEST_BUSY" : "ASSURANCE_CONTROL_READY", responseOptions);
     }
@@ -447,6 +452,81 @@ function handleRequest(buffer, options = {}) {
   }
 }
 
+function openControlLock(lockPath, options = {}) {
+  const directory = assertStateDirectory(lockPath, options);
+  if (fs.realpathSync(directory) !== directory) fail("ASSURANCE_CONTROL_FAILED");
+  let descriptor;
+  try {
+    descriptor = fs.openSync(lockPath, fs.constants.O_RDWR | fs.constants.O_CREAT
+      | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0)
+      | (fs.constants.O_CLOEXEC || 0), 0o600);
+    const opened = fs.fstatSync(descriptor);
+    const named = fs.lstatSync(lockPath);
+    if (!opened.isFile() || named.isSymbolicLink() || opened.nlink !== 1
+      || named.dev !== opened.dev || named.ino !== opened.ino
+      || (process.platform !== "win32" && (opened.mode & 0o7777) !== 0o600)
+      || (options.requireRootOwner !== false && (opened.uid !== 0 || opened.gid !== 0))) {
+      fail("ASSURANCE_CONTROL_FAILED");
+    }
+    return descriptor;
+  } catch (error) {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+    throw error;
+  }
+}
+
+function tryControlLock(descriptor, options = {}) {
+  // flock locks the inherited open file description. The parent keeps that
+  // same descriptor open throughout the operation, even after flock exits.
+  const runner = options.lockSpawnSync || childProcess.spawnSync;
+  const result = runner(FLOCK, ["--exclusive", "--nonblock", "--conflict-exit-code", String(LOCK_CONFLICT_EXIT), "3"], {
+    timeout: 3000,
+    stdio: ["ignore", "ignore", "ignore", descriptor],
+    env: { LANG: "C", LC_ALL: "C", PATH: "/usr/bin:/bin" },
+  });
+  if (!result || result.error || result.signal) fail("ASSURANCE_CONTROL_FAILED");
+  if (result.status === 0) return true;
+  if (result.status === LOCK_CONFLICT_EXIT) return false;
+  fail("ASSURANCE_CONTROL_FAILED");
+}
+
+function dispatchRequest(buffer, options = {}) {
+  let request;
+  try { request = parseRequest(buffer); }
+  catch { return response(null, "ASSURANCE_REQUEST_INVALID"); }
+  const schedule = request.action.startsWith("maintenance-schedules-");
+  const busy = () => response(request.requestId, schedule ? "MAINTENANCE_SCHEDULES_BUSY" : "ASSURANCE_REQUEST_BUSY", {
+    schemaVersion: request.schemaVersion,
+  });
+  const descriptors = [];
+  const lockPaths = options.lockPaths || CONTROL_LOCKS;
+  const open = (key) => {
+    const descriptor = openControlLock(lockPaths[key], options);
+    descriptors.push(descriptor);
+    return descriptor;
+  };
+  try {
+    const readOnly = request.action === "status" || request.action === "maintenance-schedules-status";
+    if (!readOnly && !tryControlLock(open("maintenance"), options)) return busy();
+    // Serialize snapshots with schedule transactions, without queuing behind
+    // long maintenance. Contention is a protocol BUSY reply, not a failed unit.
+    if (!tryControlLock(open("broker"), options)) return busy();
+    let maintenanceBusy = false;
+    if (request.action === "status") {
+      const probe = openControlLock(lockPaths.maintenance, options);
+      try { maintenanceBusy = !tryControlLock(probe, options); }
+      finally { fs.closeSync(probe); }
+    }
+    return handleRequest(buffer, { ...options, maintenanceBusy });
+  } catch {
+    return response(request.requestId, schedule ? "MAINTENANCE_SCHEDULES_FAILED" : "ASSURANCE_CONTROL_FAILED", {
+      schemaVersion: request.schemaVersion,
+    });
+  } finally {
+    for (const descriptor of descriptors.reverse()) fs.closeSync(descriptor);
+  }
+}
+
 function readStandardInput() {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -495,7 +575,7 @@ async function main() {
     return;
   }
   let result;
-  try { result = handleRequest(await readStandardInput()); }
+  try { result = dispatchRequest(await readStandardInput()); }
   catch { result = response(null, "ASSURANCE_REQUEST_INVALID"); }
   if (!await writeResponse(process.stdout, result)) {
     process.stderr.write("ASSURANCE_RESPONSE_DISCONNECTED\n");
@@ -516,10 +596,15 @@ module.exports = {
   STATE_FORMAT,
   STATE_SCHEMA_VERSION,
   AssuranceControlBrokerError,
+  CONTROL_LOCKS,
+  LOCK_CONFLICT_EXIT,
   assertAssuranceLockBoundary,
   assuranceUnitBusy,
   globalAssuranceBusy,
   handleRequest,
+  dispatchRequest,
+  openControlLock,
+  tryControlLock,
   parseRequest,
   readRateLimitState,
   response,

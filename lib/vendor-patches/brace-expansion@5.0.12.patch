@@ -1,0 +1,13 @@
+diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
+--- a/dist/commonjs/index.js
++++ b/dist/commonjs/index.js
+@@ -330,4 +330,9 @@
+     }
+     return acc;
+ }
++// Compatibility for transitive minimatch 3/5 consumers in ExcelJS.
++// Preserve every modern named export, including the new safety limits, while
++// exposing the historical callable CommonJS shape. Parsing is unchanged.
++Object.assign(expand, exports);
++module.exports = expand;
+ //# sourceMappingURL=index.js.map

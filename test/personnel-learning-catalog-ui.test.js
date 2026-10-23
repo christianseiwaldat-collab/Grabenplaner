@@ -19,7 +19,6 @@ const styles = read("public/styles.css");
 test("Learning-Katalog ist als eigener berechtigungsgebundener Personalbereich verdrahtet", () => {
   for (const id of [
     "personnelLearningNavButton",
-    "personnelLearningTab",
     "personnelLearningSection",
     "personnelLearningList",
     "personnelLearningModal",
@@ -30,7 +29,7 @@ test("Learning-Katalog ist als eigener berechtigungsgebundener Personalbereich v
     assert.match(app, new RegExp(`"${id}"`), id);
   }
   assert.match(html, /data-personnel-administration-route="learning"/);
-  assert.match(html, /data-personnel-administration-tab="learning"/);
+  assert.match(html, /id="personnelLearningSection"[^>]*role="region"[^>]*aria-labelledby="personnelLearningSectionTitle"/);
   assert.match(app, /function canReadPersonnelLearningCatalog\(\)/);
   assert.match(app, /hasGovernancePermission\("personnel:learning:catalog:read"\)/);
   assert.match(app, /elements\.personnelLearningNavButton\?\.classList\.toggle\("hidden", !personnelLearningAccess\)/);
@@ -164,7 +163,7 @@ test("Block 5 verdrahtet revisionsgebundene und filialübergreifende Schulungszu
     assert.equal((html.match(new RegExp(`id="${id}"`, "g")) || []).length, 1, id);
     assert.match(app, new RegExp(`"${id}"`), id);
   }
-  assert.match(html, /Schulungen zuordnen &amp; durchführen/);
+  assert.match(html, /Schulungen im Team/);
   assert.match(html, /Mehrere Fähigkeiten und mehrere Trainerpersonen sind möglich/);
   assert.match(app, /\/api\/portal\/v1\/personnel-learning\/assignments/);
   assert.match(app, /trainerCompetencyIds/);

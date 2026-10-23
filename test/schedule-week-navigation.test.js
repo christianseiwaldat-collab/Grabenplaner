@@ -43,6 +43,7 @@ function fixture() {
     optionLabels: { time_off: "Zeitausgleich" }, TEAM_MEETING_GROUP_PREFIX: "team-meeting-",
   });
   vm.runInContext([
+    between("function safeCssColor(", "function contrastColor("),
     between("function timeToMinutes(", "function isAutomaticallyWeekLocked("),
     between("function optionIsAllDay(", "function fixedWorkdays("),
     between("function staffAssignmentsForDate(", "function renderRemarks("),
