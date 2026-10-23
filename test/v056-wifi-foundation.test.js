@@ -1,4 +1,5 @@
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -357,12 +358,8 @@ test("v0.56: WLAN-Regeln bleiben nach einem frischen App-Start erhalten", async 
   });
   assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
 
-  const restartDatabasePath = path.join(testRoot, "restart-dienstplan.db");
-  const escapedRestartDatabasePath = restartDatabasePath.replaceAll("\\", "/").replaceAll("'", "''");
-  db.exec(`VACUUM INTO '${escapedRestartDatabasePath}'`);
-
   const script = `
-    process.env.DB_PATH = ${JSON.stringify(restartDatabasePath)};
+    process.env.DB_PATH = ${JSON.stringify(databasePath)};
     process.env.BACKUP_DIR = ${JSON.stringify(path.join(testRoot, "restart-backups"))};
     process.env.GRABENPLANER_DATA_DIR = ${JSON.stringify(path.join(testRoot, "restart-data"))};
     process.env.GRABENPLANER_FORCE_PORTAL = "1";
@@ -370,7 +367,8 @@ test("v0.56: WLAN-Regeln bleiben nach einem frischen App-Start erhalten", async 
     process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
     process.env.NODE_ENV = "test";
     void (async () => {
-      const { db, closePersistenceForTests } = require("./server");
+      const { db, initializeApplicationPersistence, closePersistenceForTests } = require("./server");
+      await initializeApplicationPersistence();
       const rows = db.prepare("SELECT key, value FROM portal_settings WHERE key IN ('wifi_minimum_presence_minutes','wifi_absence_grace_minutes') ORDER BY key").all();
       process.stdout.write(JSON.stringify(rows));
       await closePersistenceForTests();
@@ -496,7 +494,7 @@ test("v0.56: Event-Inbox ist gehasht und idempotent, eine Session darf zwei Arbe
   insertEvent.run("event-1", providerId, externalEventHash, subjectHash, locationHash, "2026-07-14T21:55:00.000Z", payloadFingerprint);
   assert.throws(
     () => insertEvent.run("event-2", providerId, externalEventHash, subjectHash, locationHash, "2026-07-14T21:55:01.000Z", payloadFingerprint),
-    /UNIQUE constraint failed: wifi_event_inbox\.provider_id, wifi_event_inbox\.external_event_hash/,
+    error => error.code === "23505" && /wifi_event_inbox_provider_id_external_event_hash_key/.test(error.message),
   );
   const storedEvent = db.prepare("SELECT * FROM wifi_event_inbox WHERE id = 'event-1'").get();
   assert.match(storedEvent.external_event_hash, /^[a-f0-9]{64}$/);

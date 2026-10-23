@@ -24,7 +24,7 @@ def acquire(descriptor, start, length):
 
 try:
     if (sys.platform != "linux" or ctypes.sizeof(Flock) != 32
-            or os.uname().machine not in ("x86_64", "aarch64")
+            or os.uname().machine != "x86_64"
             or not hasattr(fcntl, "F_OFD_SETLK")):
         sys.exit(70)
     acquire(3, 0, 0)

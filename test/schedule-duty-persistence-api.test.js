@@ -129,10 +129,10 @@ test("Dienst wird getrennt gespeichert, gelesen und bei alten PUT-Clients bewahr
   assert.equal(assertStatus(await request(`/api/shifts/${created.id}`, "PUT", body()), 200).dutyCode, "branch_supervision");
   db.prepare("UPDATE shifts SET duty_code='' WHERE id=?").run(created.id);
   assert.equal(assertStatus(await request(`/api/shifts/${created.id}`, "PUT", body()), 200).dutyCode, "");
-  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='invalid' WHERE id=?").run(created.id), /CHECK/);
-  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='department',department_id=NULL WHERE id=?").run(created.id), /CHECK/);
-  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='branch_supervision',department_id=? WHERE id=?").run(departmentId, created.id), /CHECK/);
-  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='general',department_id=? WHERE id=?").run(departmentId, created.id), /CHECK/);
+  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='invalid' WHERE id=?").run(created.id), error => error.code === "23514" && /check constraint/i.test(error.message));
+  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='department',department_id=NULL WHERE id=?").run(created.id), error => error.code === "23514" && /check constraint/i.test(error.message));
+  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='branch_supervision',department_id=? WHERE id=?").run(departmentId, created.id), error => error.code === "23514" && /check constraint/i.test(error.message));
+  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='general',department_id=? WHERE id=?").run(departmentId, created.id), error => error.code === "23514" && /check constraint/i.test(error.message));
 });
 
 test("Duty-Validierung verhindert vermischte Abteilungen, verleiht aber keine Qualifikation", async () => {

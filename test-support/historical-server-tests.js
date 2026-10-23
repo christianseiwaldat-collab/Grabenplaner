@@ -6,6 +6,14 @@ const { spawnSync } = require("node:child_process");
 const { BASELINE, legacyPath, sourceRoot } = require("./legacy-baseline");
 const repository = path.resolve(__dirname, "..");
 const cases = Object.freeze({
+  "test/portal-foundation.test.js": {
+    pattern: "^(?:HTTPS-Serverfundament erzwingt Proxy-Sicherheit|LAN-Bereichsrechte trennen Filial- und Abteilungsdaten)",
+    minimumPass: 2,
+  },
+  "test/v058-personnel-rights-encryption.test.js": {
+    pattern: "^(?:v0\\.58: bestehende Klartext-Personalaktfelder|v0\\.58: Admin darf keine Datenbank|v0\\.87: unlesbarer DB-Import|v0\\.58: DB-Import|v0\\.70 Block 2: DB-Import|Personalmodul: DB-Import)",
+    minimumPass: 7,
+  },
   "test/cross-location-schedule-view-api.test.js": { pattern: "^Block 12: (fünf gleichzeitige|verifizierter Sicherungspunkt)", minimumPass: 2 },
   "test/sales-analytics-production-hardening.test.js": { pattern: "^Verkaufsanalysen: Sicherung und Wiederherstellung", minimumPass: 1 },
   "test/v081-work-rule-safety-regressions.test.js": { pattern: "^Regression: Legacy-Prüfbelege werden vor Aktivierung", minimumPass: 1 },

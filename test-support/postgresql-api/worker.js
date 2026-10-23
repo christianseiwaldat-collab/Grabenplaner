@@ -181,10 +181,18 @@ port.on("message", async message => {
     } else if (message.fixtureDdl) {
       const tokens = require("../../lib/persistence/postgresql/core/sql").tokens(message.sql);
       const fixtureSequence = /^(?:CREATE|DROP) SEQUENCE gp \. "test_attempt_[a-f0-9]{16}"$/.test(tokens.join(" "));
-      if ((!/^(?:CREATE|DROP) (?:FUNCTION|TRIGGER)\b/i.test(tokens.join(" ")) && !fixtureSequence) || tokens.includes(";")) {
+      const permissionCheck = message.catalogDomain === "core"
+        && /^ALTER TABLE gp \. "portal_permission_scope_grants" (?:(?:DROP|VALIDATE) CONSTRAINT "portal_permission_scope_grants_permission_check"|ADD CONSTRAINT "portal_permission_scope_grants_permission_check" CHECK [\s\S]+ NOT VALID)$/.test(tokens.join(" "));
+      if ((!/^(?:CREATE|DROP) (?:FUNCTION|TRIGGER)\b/i.test(tokens.join(" ")) && !fixtureSequence && !permissionCheck) || tokens.includes(";")) {
         throw new Error("PG_API_FIXTURE_DDL_KIND");
       }
       result = await executeOne(message.sql, [], "run", message.catalogDomain);
+    } else if (message.fixtureWrite) {
+      const tokens = require("../../lib/persistence/postgresql/core/sql").tokens(message.sql);
+      if (!/^(?:INSERT INTO|UPDATE|DELETE FROM) (?:gp|kassa|integration|trade|reporting) \./i.test(tokens.join(" ")) || tokens.includes(";")) {
+        throw new Error("PG_API_FIXTURE_WRITE_KIND");
+      }
+      result = await executeOne(message.sql, message.values || [], "run", message.catalogDomain);
     } else result = await executeOne(message.sql, message.values || [], message.operation);
     port.postMessage({ id: message.id, result });
   } catch (error) {

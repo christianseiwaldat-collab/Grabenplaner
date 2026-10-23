@@ -45,6 +45,14 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
     assert.deepEqual(schema.foreignKeyViolations(database), []);
     assert.throws(() => database.postgresqlCatalogQuery("unregistered", "SELECT 1"), /CATALOG_DOMAIN/);
     assert.throws(() => database.postgresqlCatalogQuery("core", "INSERT INTO settings(key,value) VALUES('synthetic-catalog-write-forbidden','value') RETURNING key"), /read-only transaction/);
+    database.postgresqlFixtureWrite("sales", "INSERT INTO integration.core_location_references(id,source_sha256) VALUES (?,?)",
+      ["synthetic-native-write", "b".repeat(64)]);
+    assert.equal(database.postgresqlCatalogQuery("sales", "SELECT id FROM integration.core_location_references WHERE id=?", ["synthetic-native-write"])[0].id, "synthetic-native-write");
+    assert.throws(() => databaseForCurrentTest(undefined, { readOnly: true }).postgresqlFixtureWrite("sales",
+      "DELETE FROM integration.core_location_references WHERE id=?", ["synthetic-native-write"]), /PG_API_FIXTURE_READ_ONLY/);
+    assert.throws(() => database.postgresqlFixtureWrite("core", "DROP TABLE gp.settings"), /PG_API_FIXTURE_WRITE_KIND/);
+    assert.throws(() => database.postgresqlFixtureWrite("core", "DELETE FROM gp.settings; DROP TABLE gp.settings"), /PG_API_FIXTURE_WRITE_KIND/);
+    assert.throws(() => database.postgresqlFixtureWrite("core", "DELETE FROM pg_catalog.pg_class"), /PG_API_FIXTURE_WRITE_KIND/);
     const days = JSON.parse(database.prepare("SELECT day_settings_json FROM locations WHERE id='01'").get().day_settings_json);
     assert.deepEqual(Object.keys(days), ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]);
     assert.deepEqual(days.monday, { open: true, start: "09:00", end: "18:00", lunchEnabled: false,
@@ -78,6 +86,35 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
       BEFORE INSERT ON sales_articles BEGIN SELECT RAISE(ABORT, 'synthetic expected Sales failure'); END`);
     assert.ok(schema.triggerByName(database, "test_native_sales_failure", { domain: "sales" }).definition.includes('trade.sales_articles'));
     removeSalesFailure();
+    const { installSalesOutboxFailure } = require("../test-support/postgresql-api/trigger-fixture");
+    for (const [index, failure] of [
+      { action: "sales.article-catalog.import" },
+      { action: "sales.article-catalog.import.undo" },
+      { receiptActionType: "sales.article-catalog.create" },
+    ].entries()) {
+      const name = "test_native_outbox_failure_" + index;
+      const remove = installSalesOutboxFailure(database, { name, ...failure });
+      try {
+        assert.ok(schema.triggerByName(database, name, { domain: "sales" }).definition.includes("integration.core_audit_outbox"));
+        const before = database.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_outbox")[0].count;
+        const insert = (action, detail) => database.postgresqlFixtureWrite("sales",
+          "INSERT INTO integration.core_audit_outbox(actor,action,entity_type,entity_id,detail,created_at) VALUES(?,?,?,?,?,?)",
+          ["synthetic-native", action, "synthetic", "native-outbox", JSON.stringify(detail), "2026-10-24T00:00:00.000Z"]);
+        database.exec("BEGIN");
+        try {
+          insert("synthetic.allowed-before-failure", {});
+          assert.throws(() => insert(failure.action || "database-boundary.personal-action-v1",
+            failure.receiptActionType ? { actionType: failure.receiptActionType } : {}), /synthetic Sales intent failure/);
+        } finally { database.exec("ROLLBACK"); }
+        assert.equal(database.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_outbox")[0].count, before,
+          "failure must roll back earlier writes in the same actual PostgreSQL transaction");
+        assert.equal(insert("synthetic.unrelated-action", {}).changes, 1);
+        if (failure.receiptActionType) assert.equal(insert("database-boundary.personal-action-v1", { actionType: "synthetic.other-receipt" }).changes, 1);
+      } finally { remove(); }
+      assert.equal(schema.triggerByName(database, name, { domain: "sales" }), undefined);
+    }
+    assert.throws(() => installSalesOutboxFailure(database, { name: "test_native_outbox_unknown", action: "arbitrary-action" }));
+    assert.equal(schema.triggerByName(database, "test_native_outbox_unknown", { domain: "sales" }), undefined);
     const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
     assert.equal(prepareLocationFixture(database, "INSERT INTO locations(id,name,active) VALUES(?,?,1),('native-extra-02','Synthetic second',1)")
       .run("native-extra-01", "Synthetic ? :literal").changes, 2);
@@ -90,6 +127,28 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
     const locationless = database.prepare("SELECT home_location_id,cost_center_id FROM employees WHERE personnel_number='synthetic-locationless-actor'").get();
     assert.equal(locationless.home_location_id, null);
     assert.equal(locationless.cost_center_id, "cc-administration");
+    const { installLegacyLearningScopeFixture, permissionCheck } = require("../test-support/postgresql-api/constraint-fixture");
+    database.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active) VALUES('synthetic-locationless-actor','synthetic-only','employee',1)").run();
+    database.prepare(`INSERT INTO portal_permission_grants(employee_number,permission,granted_by)
+      VALUES('synthetic-locationless-actor','personnel:learning:assignments:write','101'),
+      ('synthetic-locationless-actor','personnel:candidates:read','101')`).run();
+    database.prepare(`INSERT INTO portal_access_scopes(employee_number,location_id,department_id,assigned_by)
+      VALUES('synthetic-locationless-actor','01',0,'101'),('synthetic-locationless-actor','native-extra-01',0,'101')`).run();
+    const removeLegacyScope = installLegacyLearningScopeFixture(database, "synthetic-locationless-actor", "01");
+    try {
+      assert.equal(permissionCheck(database).validated, false);
+      assert.equal(database.prepare("SELECT COUNT(*) AS count FROM portal_permission_scope_grants WHERE permission='personnel:learning:assignments:write'").get().count, 1);
+      assert.throws(() => database.prepare(`INSERT INTO portal_permission_scope_grants
+        (employee_number,permission,location_id,department_id,approved_by)
+        VALUES('synthetic-locationless-actor','personnel:learning:assignments:write','native-extra-01',0,'101')`).run(), /portal_permission_scope_grants_permission_check/);
+      database.prepare(`INSERT INTO portal_permission_scope_grants
+        (employee_number,permission,location_id,department_id,approved_by)
+        VALUES('synthetic-locationless-actor','personnel:candidates:read','01',0,'101')`).run();
+    } finally { removeLegacyScope(); }
+    assert.equal(permissionCheck(database).validated, true);
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM portal_permission_scope_grants WHERE permission='personnel:learning:assignments:write'").get().count, 0);
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM portal_permission_scope_grants WHERE permission='personnel:candidates:read'").get().count, 1);
+    assert.throws(() => database.postgresqlFixtureDdl("core", 'ALTER TABLE gp."settings" DROP CONSTRAINT "arbitrary"'), /PG_API_FIXTURE_DDL_KIND/);
     const department = database.prepare("INSERT INTO departments(location_id,name) VALUES('01','Synthetic identity proof')").run();
     assert.ok(Number.isSafeInteger(department.lastInsertRowid) && department.lastInsertRowid > 0);
     assert.equal(database.prepare("SELECT name FROM departments WHERE id=?").get(department.lastInsertRowid).name, "Synthetic identity proof");

@@ -776,6 +776,7 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/postgresql-api-native-fixture.test.js",
   "test/root-postgresql-dependency-trust.test.js",
   "test/postgresql-startup-category-defaults.test.js",
+  "test/postgresql-startup-policy-defaults.test.js",
   "test/portal-foundation-https.test.js",
   "test/portal-foundation-lan-pilot.test.js",
   "test/portal-foundation-scope.test.js",

@@ -18,7 +18,7 @@ async function hashPortalPassword(password) {
   const salt = crypto.randomBytes(16);
   return ["scrypt-v1", salt.toString("base64url"), crypto.scryptSync(password, salt, 64).toString("base64url")].join("$");
 }
-test.after(() => { closeCurrentTestFixture(); fs.rmSync(testRoot, { recursive: true, force: true }); });
+test.after(async () => { await closeCurrentTestFixture(); fs.rmSync(testRoot, { recursive: true, force: true }); });
 
 async function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -31,11 +31,11 @@ async function getFreePort() {
   });
 }
 
-async function waitForJson(url, child, timeoutMs = 30000) {
+async function waitForJson(url, child, timeoutMs = 30000, diagnostics = () => "") {
   const deadline = Date.now() + timeoutMs;
   let lastHttpStatus = null;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`Serverprozess wurde vorzeitig mit Code ${child.exitCode} beendet.`);
+    if (child.exitCode !== null) throw new Error(`Serverprozess wurde vorzeitig mit Code ${child.exitCode} beendet. ${diagnostics().slice(-16384)}`);
     try {
       const response = await fetch(url);
       lastHttpStatus = response.status;
@@ -43,13 +43,13 @@ async function waitForJson(url, child, timeoutMs = 30000) {
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  throw new Error(`Server war nach ${timeoutMs} ms nicht erreichbar; letzter HTTP-Status: ${lastHttpStatus ?? "keine Antwort"}.`);
+  throw new Error(`Server war nach ${timeoutMs} ms nicht erreichbar; letzter HTTP-Status: ${lastHttpStatus ?? "keine Antwort"}. ${diagnostics().slice(-16384)}`);
 }
 
-async function waitForExit(child, timeoutMs = 8000) {
+async function waitForExit(child, timeoutMs = 8000, diagnostics = () => "") {
   if (child.exitCode !== null || child.signalCode !== null) return { code: child.exitCode, signal: child.signalCode };
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`Serverprozess wurde nach ${timeoutMs} ms nicht beendet.`)), timeoutMs);
+    const timer = setTimeout(() => reject(new Error(`Serverprozess wurde nach ${timeoutMs} ms nicht beendet. ${diagnostics().slice(-16384)}`)), timeoutMs);
     child.once("exit", (code, signal) => {
       clearTimeout(timer);
       resolve({ code, signal });
@@ -59,7 +59,7 @@ async function waitForExit(child, timeoutMs = 8000) {
 
 test("produktiver Start bleibt auf Loopback und blockiert externe Bindung", async () => {
   const childRoot = path.join(testRoot, "child-start");
-  fs.mkdirSync(childRoot, { recursive: true });
+  fs.mkdirSync(childRoot, { recursive: true, mode: 0o700 });
   const port = await getFreePort();
   const child = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
     cwd: path.join(__dirname, ".."),
@@ -79,7 +79,7 @@ test("produktiver Start bleibt auf Loopback und blockiert externe Bindung", asyn
   child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
   child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
   try {
-    const status = await waitForJson(`http://127.0.0.1:${port}/api/portal/v1/status`, child);
+    const status = await waitForJson(`http://127.0.0.1:${port}/api/portal/v1/status`, child, 30000, () => stderr);
     assert.equal(status.localOnly, true);
     assert.equal(status.portalEnabled, false);
     const exitResponse = await fetch(`http://127.0.0.1:${port}/api/system/exit`, {
@@ -88,11 +88,11 @@ test("produktiver Start bleibt auf Loopback und blockiert externe Bindung", asyn
       body: "{}",
     });
     assert.equal(exitResponse.status, 200);
-    const exit = await waitForExit(child);
+    const exit = await waitForExit(child, 8000, () => stderr);
     assert.equal(exit.code, 0, stderr);
     assert.match(stdout, new RegExp(`http://localhost:${port}`));
   } finally {
-    if (child.exitCode === null) { child.kill(); await waitForExit(child); }
+    if (child.exitCode === null) { child.kill(); await waitForExit(child, 8000, () => stderr); }
   }
 
   const blockedPort = await getFreePort();
@@ -110,7 +110,7 @@ test("produktiver Start bleibt auf Loopback und blockiert externe Bindung", asyn
   });
   let blockedError = "";
   blocked.stderr.on("data", (chunk) => { blockedError += chunk.toString(); });
-  const blockedExit = await waitForExit(blocked);
+  const blockedExit = await waitForExit(blocked, 8000, () => blockedError);
   assert.notEqual(blockedExit.code, 0);
   assert.match(blockedError, /LAN-Bindung/i);
 });

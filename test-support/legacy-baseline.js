@@ -21,10 +21,13 @@ function sourceRoot() {
   const archive = path.join(temporary, "baseline.tar"), source = path.join(temporary, "source");
   fs.mkdirSync(source, { mode: 0o700 });
   try {
-    command("git", ["archive", "--format=tar", "--output", archive, BASELINE,
+    // A Windows checkout may enable core.autocrlf globally. In particular the
+    // immutable password-corpus digest binds LF bytes, so archive extraction
+    // must not inherit that unrelated workstation conversion preference.
+    command("git", ["-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive", "--format=tar", "--output", archive, BASELINE,
       ".gitattributes", "backup.js", "server.js", "package.json", "pnpm-lock.yaml", "lib", "public", "demo", "services/planning-optimizer",
       "test/cross-location-schedule-view-api.test.js", "test/sales-analytics-production-hardening.test.js",
-      "test/v081-work-rule-safety-regressions.test.js",
+      "test/v081-work-rule-safety-regressions.test.js", "test/v058-personnel-rights-encryption.test.js",
       "test/portal-foundation.test.js", "test/portal-permission-defaults.test.js",
       "test/v082-immutable-trigger-migration.test.js", "test/v087-block5-loan-photo-migration.test.js",
       "test/v087-block8-cost-center-migration.test.js", "test/v087-block7-settings-appearance.test.js", "test/v072-production-bootstrap.test.js",

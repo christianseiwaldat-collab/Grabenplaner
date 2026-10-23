@@ -2,6 +2,14 @@
 // Fresh GitHub Actions service container only; never connects to a product DB.
 const crypto=require('node:crypto'),fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:child_process'),{Client}=require('pg');
 async function main(){
+ const diagnosticIndex=process.argv.indexOf('--diagnostic-api');
+ const diagnosticGroups=Object.freeze({
+  foundations:['test/portal-foundation-https.test.js','test/portal-foundation-loopback.test.js','test/portal-foundation-scope.test.js','test/v057-codespaces-demo.test.js'],
+  rights:['test/personnel-learning-rights-hierarchy.test.js','test/portal-birthday-presentation-claim-api.test.js','test/portal-birthday-presentation-settings-api.test.js','test/v058-personnel-rights-encryption.test.js','test/v059-sickness-integration.test.js','test/v060-portal-mobile-foundation.test.js'],
+  sales:['test/postgresql-api-native-fixture.test.js','test/postgresql-startup-category-defaults.test.js','test/postgresql-startup-policy-defaults.test.js','test/branch-sales-api.test.js','test/sales-analytics-production-hardening.test.js','test/sales-article-catalog-detail-route.test.js','test/sales-article-catalog-import-api.test.js','test/schedule-duty-persistence-api.test.js','test/v056-wifi-foundation.test.js'],
+ });
+ const diagnosticGroup=diagnosticIndex<0?null:process.argv[diagnosticIndex+1];
+ if(diagnosticIndex>=0&&(!Object.hasOwn(diagnosticGroups,diagnosticGroup)||process.argv.includes('--full')||process.argv.includes('--bootstrap-only')))throw new Error('Explicit bounded diagnostic API group required');
  const connection=new URL(process.env.TEST_POSTGRESQL_URL||'');
  const local=process.env.GP_CI_POSTGRESQL_FIXTURE==='owned-local-service-v1';
  let marker;
@@ -17,6 +25,10 @@ async function main(){
  const client=new Client({connectionString:connection.href});await client.connect();
  const env={...process.env,GP_PG_MIGRATION_LIVE:'1',GP_MIGRATION_ADMIN_URL:connection.href,
   GP_CI_POSTGRESQL_FIXTURE:local?'owned-local-service-v1':'github-actions-service-v1'};
+ if(diagnosticGroup){
+  env.GP_PG_API_DIAGNOSTIC='bounded-errors-v1';
+  env.NODE_OPTIONS=(env.NODE_OPTIONS||'')+' --require='+JSON.stringify(path.resolve(__dirname,'../postgresql-api/diagnostic-errors.js'));
+ }
  try {
   if(local&&(await client.query('SELECT system_identifier::text AS id FROM pg_control_system()')).rows[0].id!==marker.clusterId)throw new Error('Local fixture cluster identity changed');
   // Preserve the isolated development role contract on the service container.
@@ -58,7 +70,7 @@ async function main(){
  // Qualify the rollback/upgrade path against the fresh schema first. This also
  // installs the snapshot extension required by imports earlier in discovery order.
  ['--test','--test-concurrency=1','--test-reporter=tap','test/postgresql-stock-import-delete.test.js'],
- ...(process.argv.includes('--bootstrap-only')?[]:process.argv.includes('--full')
+ ...(diagnosticGroup?[['--require','./test-support/postgresql-api/diagnostic-errors.js','--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000',...diagnosticGroups[diagnosticGroup]]]:process.argv.includes('--bootstrap-only')?[]:process.argv.includes('--full')
    ? [['--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000']]
    : [['--test','--test-concurrency=1','test/postgresql-cash-takeover.test.js']])];
  for(const args of commands){const result=spawnSync(process.execPath,args,{env,stdio:'inherit'});if(result.status!==0)throw new Error('Synthetic migration qualification failed: '+args[0]);}

@@ -1,5 +1,5 @@
 "use strict";
-const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+const { installSalesOutboxFailure } = require("../test-support/postgresql-api/trigger-fixture");
 const { sessionCsrf, sessionCsrfFromCookie } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -656,25 +656,26 @@ test("Artikelmutationen sind CSRF-, Rechte-, Revisions-, Audit- und Undo-gesiche
     table,
     db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count,
   ]));
-  installFixtureTrigger(db, `
-    CREATE TRIGGER test_article_receipt_failure
-    BEFORE INSERT ON personal_action_receipts
-    WHEN NEW.action_type = 'sales.article-catalog.create'
-    BEGIN
-      SELECT RAISE(ABORT, 'synthetic article receipt failure');
-    END
-  `);
-  const receiptFailed = await requestMutationJson("/api/sales/articles", {
-    method: "POST",
-    body: {
-      articleNumber: "A/ROLLBACK",
-      description: "Muss vollständig zurückgerollt werden",
-      identifiers: [],
-    },
+  const outboxBefore = db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_outbox")[0].count;
+  const deliveryBefore = db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_delivery")[0].count;
+  const removeReceiptFailure = installSalesOutboxFailure(db, {
+    name: "test_article_receipt_failure", receiptActionType: "sales.article-catalog.create",
   });
-  dropFixtureTrigger(db, "test_article_receipt_failure");
+  let receiptFailed;
+  try {
+    receiptFailed = await requestMutationJson("/api/sales/articles", {
+      method: "POST",
+      body: {
+        articleNumber: "A/ROLLBACK",
+        description: "Muss vollständig zurückgerollt werden",
+        identifiers: [],
+      },
+    });
+  } finally { removeReceiptFailure(); }
   assert.equal(receiptFailed.response.status, 400, receiptFailed.text);
   assert.equal(receiptFailed.payload.code, "SALES_ARTICLE_MUTATION_INVALID");
+  assert.equal(db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_outbox")[0].count, outboxBefore);
+  assert.equal(db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_delivery")[0].count, deliveryBefore);
   for (const [table, before] of Object.entries(rollbackCounts)) {
     assert.equal(
       db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count,

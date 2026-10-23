@@ -64,6 +64,37 @@ function dropFixtureTrigger(db, name, { ifExists = false } = {}) {
   installed.get(db).delete(name);
 }
 
+// Sales writes commit their audit and receipt intent in the same database.
+// Core delivery happens only after that commit, so a Core-table failure cannot
+// simulate a failure of the original Sales transaction. Keep this injection
+// restricted to the three explicit rollback cases that exercise this boundary.
+function installSalesOutboxFailure(db, { name, action, receiptActionType } = {}) {
+  assert.equal(db.postgresqlTestFixture, true);
+  assert.match(name, /^test_[a-z0-9_]+$/);
+  const auditActions = new Set(["sales.article-catalog.import", "sales.article-catalog.import.undo"]);
+  assert.ok(receiptActionType === undefined ? auditActions.has(action)
+    : action === undefined && receiptActionType === "sales.article-catalog.create");
+  assert.equal(metadata.triggerByName(db, name, { domain: "sales" }), undefined);
+  assert.equal(db.postgresqlCatalogQuery("sales", "SELECT to_regclass('integration.core_audit_outbox') AS relation")[0].relation,
+    "integration.core_audit_outbox");
+  const functionName = "trigger_" + require("node:crypto").createHash("sha256").update(name).digest("hex").slice(0, 20);
+  const condition = receiptActionType === undefined ? "NEW.action = '" + action + "'"
+    : "NEW.action = 'database-boundary.personal-action-v1' AND NEW.detail::jsonb ->> 'actionType' = '" + receiptActionType + "'";
+  db.postgresqlFixtureDdl("sales", "CREATE FUNCTION gp." + quote(functionName)
+    + "() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,gp AS 'BEGIN IF "
+    + condition.replaceAll("'", "''") + " THEN RAISE EXCEPTION USING MESSAGE=''synthetic Sales intent failure'',ERRCODE=''23514''; END IF; RETURN NEW; END'");
+  try {
+    db.postgresqlFixtureDdl("sales", "CREATE TRIGGER " + quote(name)
+      + " BEFORE INSERT ON integration.core_audit_outbox FOR EACH ROW EXECUTE FUNCTION gp." + quote(functionName) + "()");
+  } catch (error) {
+    db.postgresqlFixtureDdl("sales", "DROP FUNCTION gp." + quote(functionName) + "()");
+    throw error;
+  }
+  if (!installed.has(db)) installed.set(db, new Map());
+  installed.get(db).set(name, { table: "core_audit_outbox", schema: "integration", domain: "sales", functionName });
+  return () => dropFixtureTrigger(db, name);
+}
+
 // Only explicit synthetic tamper/reset cases suspend a named existing guard.
 // Its actual PostgreSQL definition is restored byte-for-byte, never replaced by
 // a newly compiled approximation. Rollback of an enclosing fixture transaction
@@ -101,4 +132,4 @@ function createFixtureAttemptCounter(db) {
   });
 }
 
-module.exports = { createFixtureAttemptCounter, dropFixtureTrigger, installFixtureTrigger, suspendFixtureGuards };
+module.exports = { createFixtureAttemptCounter, dropFixtureTrigger, installFixtureTrigger, installSalesOutboxFailure, suspendFixtureGuards };

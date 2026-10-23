@@ -149,7 +149,7 @@ test("Verkaufsanalysen: große, aber erlaubte Berichtsmengen bleiben begrenzt ab
     .run("sales-volume-location", "Verkaufsanalyse Lastprüfung");
   // The two-database schema deliberately keeps a signed location reference in
   // Sales. This owned fixture seeds that boundary explicitly; no FK is disabled.
-  db.postgresqlCatalogQuery("sales", "INSERT INTO integration.core_location_references(id,source_sha256) VALUES (?,?)",
+  db.postgresqlFixtureWrite("sales", "INSERT INTO integration.core_location_references(id,source_sha256) VALUES (?,?)",
     ["sales-volume-location", digest("sales-volume-location")]);
   const repository = createSalesAnalyticsPersistenceRepository(application.provider);
   let selectedReportId;

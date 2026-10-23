@@ -7,7 +7,7 @@ const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const { once } = require("node:events");
 const lock = require("../lib/database-lock");
-const supported = process.platform === "linux" && ["x64", "arm64"].includes(process.arch);
+const supported = process.platform === "linux" && process.arch === "x64";
 const linux = { skip: !supported };
 const roots = [];
 function fixture(label) {
@@ -21,6 +21,13 @@ test.after(() => { for (const root of roots) fs.rmSync(root, { recursive: true, 
 
 test("PostgreSQL server lock fails closed outside supported Linux", { skip: supported }, () => {
   assert.throws(() => lock.acquireDatabaseLock({ databasePath: fixture("platform") }), { code: "DATABASE_LOCK_PLATFORM_UNSUPPORTED" });
+});
+
+test("unqualified Linux ARM64 cannot create paths or launch the lock helper", () => {
+  const databasePath = path.join(path.dirname(fixture("unqualified-arm")), "uncreated", "anchor");
+  const result = spawnSync(process.execPath, ["-e", `Object.defineProperty(process,'platform',{value:'linux'});Object.defineProperty(process,'arch',{value:'arm64'});try{require(${JSON.stringify(path.resolve(__dirname,"../lib/database-lock"))}).acquireDatabaseLock({databasePath:${JSON.stringify(databasePath)}});process.exitCode=2;}catch(error){process.stdout.write(error.code||'FAILED');process.exitCode=1;}`], { encoding: "utf8", timeout: 15000 });
+  assert.equal(result.status, 1, result.stderr); assert.equal(result.stdout, "DATABASE_LOCK_PLATFORM_UNSUPPORTED");
+  assert.equal(fs.existsSync(path.dirname(databasePath)), false);
 });
 test("no in-memory or missing path can disable the server singleton", () => {
   for (const databasePath of [undefined, "", ":memory:"]) assert.throws(() => lock.acquireDatabaseLock({ databasePath }), { code: "DATABASE_LOCK_PATH_REQUIRED" });

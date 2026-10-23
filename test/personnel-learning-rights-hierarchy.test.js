@@ -444,8 +444,10 @@ function installSessionTouchRaceMutation(auth, statements) {
   // Force renewal: ordinary requests deliberately coalesce expiry writes.
   db.prepare("UPDATE portal_sessions SET expires_at = ? WHERE id = ?")
     .run(new Date(Date.now() + 60000).toISOString(), auth.id);
-  db.exec(`CREATE TABLE ${triggerName}_proof (fired INTEGER NOT NULL)`);
-  const removeTrigger = installFixtureTrigger(db, `
+  db.exec(`CREATE TABLE gp.${triggerName}_proof (fired INTEGER NOT NULL)`);
+  let removeTrigger;
+  try {
+    removeTrigger = installFixtureTrigger(db, `
     CREATE TRIGGER ${triggerName}
     AFTER UPDATE OF expires_at ON portal_sessions
     WHEN NEW.id = ${sqliteText(auth.id)}
@@ -454,11 +456,16 @@ function installSessionTouchRaceMutation(auth, statements) {
       ${statements}
     END
   `);
+  } catch (error) {
+    auth.userActivity = previousActivity;
+    db.exec(`DROP TABLE gp.${triggerName}_proof`);
+    throw error;
+  }
   return () => {
     auth.userActivity = previousActivity;
     const fired = db.prepare(`SELECT COUNT(*) AS count FROM ${triggerName}_proof`).get().count;
     removeTrigger();
-    db.exec(`DROP TABLE ${triggerName}_proof`);
+    db.exec(`DROP TABLE gp.${triggerName}_proof`);
     assert.ok(fired > 0, "The concurrent actor mutation must actually execute");
   };
 }

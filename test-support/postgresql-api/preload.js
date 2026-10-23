@@ -113,6 +113,11 @@ function install() {
         if (!["core", "sales"].includes(domain)) throw new Error("PG_API_FIXTURE_CATALOG_DOMAIN");
         open(); return rpc("run", { sql, catalogDomain: domain, fixtureDdl: true });
       },
+      postgresqlFixtureWrite(domain, sql, values = []) {
+        if (readOnly) throw new Error("PG_API_FIXTURE_READ_ONLY");
+        if (!["core", "sales"].includes(domain)) throw new Error("PG_API_FIXTURE_CATALOG_DOMAIN");
+        open(); return rpc("run", { sql, values, catalogDomain: domain, fixtureWrite: true });
+      },
       exec(sql) { if (readOnly) throw new Error("PG_API_FIXTURE_READ_ONLY"); open(); return rpc("exec", { sql }); },
       prepare(sql) {
         const statement = {

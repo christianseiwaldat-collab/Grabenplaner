@@ -18,7 +18,7 @@ async function hashPortalPassword(password) {
   const salt = crypto.randomBytes(16);
   return ["scrypt-v1", salt.toString("base64url"), crypto.scryptSync(password, salt, 64).toString("base64url")].join("$");
 }
-test.after(() => { closeCurrentTestFixture(); fs.rmSync(testRoot, { recursive: true, force: true }); });
+test.after(async () => { await closeCurrentTestFixture(); fs.rmSync(testRoot, { recursive: true, force: true }); });
 
 async function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -31,11 +31,11 @@ async function getFreePort() {
   });
 }
 
-async function waitForJson(url, child, timeoutMs = 30000) {
+async function waitForJson(url, child, timeoutMs = 30000, diagnostics = () => "") {
   const deadline = Date.now() + timeoutMs;
   let lastHttpStatus = null;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`Serverprozess wurde vorzeitig mit Code ${child.exitCode} beendet.`);
+    if (child.exitCode !== null) throw new Error(`Serverprozess wurde vorzeitig mit Code ${child.exitCode} beendet. ${diagnostics().slice(-16384)}`);
     try {
       const response = await fetch(url);
       lastHttpStatus = response.status;
@@ -43,13 +43,13 @@ async function waitForJson(url, child, timeoutMs = 30000) {
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  throw new Error(`Server war nach ${timeoutMs} ms nicht erreichbar; letzter HTTP-Status: ${lastHttpStatus ?? "keine Antwort"}.`);
+  throw new Error(`Server war nach ${timeoutMs} ms nicht erreichbar; letzter HTTP-Status: ${lastHttpStatus ?? "keine Antwort"}. ${diagnostics().slice(-16384)}`);
 }
 
-async function waitForExit(child, timeoutMs = 8000) {
+async function waitForExit(child, timeoutMs = 8000, diagnostics = () => "") {
   if (child.exitCode !== null || child.signalCode !== null) return { code: child.exitCode, signal: child.signalCode };
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`Serverprozess wurde nach ${timeoutMs} ms nicht beendet.`)), timeoutMs);
+    const timer = setTimeout(() => reject(new Error(`Serverprozess wurde nach ${timeoutMs} ms nicht beendet. ${diagnostics().slice(-16384)}`)), timeoutMs);
     child.once("exit", (code, signal) => {
       clearTimeout(timer);
       resolve({ code, signal });
@@ -59,25 +59,12 @@ async function waitForExit(child, timeoutMs = 8000) {
 
 test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite Instanz", async () => {
   const childRoot = path.join(testRoot, "server-foundation");
-  fs.mkdirSync(childRoot, { recursive: true });
+  // The kernel lock requires its immediate directory to stay private even
+  // when the synthetic Linux SSH user has a group-writable default umask.
+  fs.mkdirSync(childRoot, { recursive: true, mode: 0o700 });
   const childDatabase = path.join(childRoot, "dienstplan.db");
-  const initPort = await getFreePort();
-  const initChild = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
-    cwd: path.join(__dirname, ".."), windowsHide: true,
-    env: { ...process.env, PORT: String(initPort), DB_PATH: childDatabase, BACKUP_DIR: path.join(childRoot, "backups"), GRABENPLANER_HOST: "127.0.0.1", GRABENPLANER_SEED_DEMO: "1" },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let initError = "";
-  initChild.stderr.on("data", (chunk) => { initError += chunk.toString(); });
-  try {
-    await waitForJson(`http://127.0.0.1:${initPort}/api/health`, initChild);
-    const exitResponse = await fetch(`http://127.0.0.1:${initPort}/api/system/exit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-    assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
-    assert.equal((await waitForExit(initChild)).code, 0, initError);
-  } finally {
-    if (initChild.exitCode === null) { initChild.kill(); await waitForExit(initChild); }
-  }
-
+  // Schema and demo rows are created by the explicitly owned PostgreSQL
+  // fixture. No SQLite/local application startup is required for provisioning.
   const adminPassword = "SicheresServerPasswort!";
   const prepared = databaseForCurrentTest(childDatabase);
   prepared.prepare(`
@@ -115,7 +102,7 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
   child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
   const url = `http://127.0.0.1:${port}`;
   try {
-    const health = await waitForJson(`${url}/api/health`, child);
+    const health = await waitForJson(`${url}/api/health`, child, 30000, () => stderr);
     const expectedHostBootGeneration = process.platform === "linux"
       ? health.hostBootGeneration
       : null;
@@ -162,15 +149,13 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(status.httpsRequired, true);
     assert.equal(status.publicUrl, publicAddress);
     assert.equal(status.passwordMinLength, 15);
-    const windowsUsbHost = process.platform === "win32";
-    assert.equal(status.usbProvisioning.hostCapable, windowsUsbHost);
     assert.equal(status.usbProvisioning.available, false);
-    assert.equal(status.usbProvisioning.reasonCode, windowsUsbHost ? "USB_HOST_CONSOLE_REQUIRED" : "USB_WINDOWS_REQUIRED");
+    assert.equal(status.usbProvisioning.reasonCode, "POSTGRESQL_SERVER_ONLY");
 
     const hostSecureHeaders = { ...secureHeaders, "X-Forwarded-For": "127.0.0.1" };
     const hostStatusResponse = await fetch(`${url}/api/portal/v1/status`, { headers: hostSecureHeaders });
     assert.equal(hostStatusResponse.status, 200, await hostStatusResponse.clone().text());
-    assert.equal((await hostStatusResponse.json()).usbProvisioning.available, windowsUsbHost);
+    assert.equal((await hostStatusResponse.json()).usbProvisioning.available, false);
     const remoteStatusResponse = await fetch(`${url}/api/portal/v1/status`, {
       headers: { ...secureHeaders, "X-Forwarded-For": "203.0.113.44" },
     });
@@ -189,129 +174,36 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     const csrfCookie = setCookies.map((value) => value.split(";", 1)[0]).find((value) => value.startsWith("grabenplaner_csrf="));
     const csrf = decodeURIComponent(csrfCookie.split("=").slice(1).join("="));
 
-    if (windowsUsbHost) {
-      const usbStatusResponse = await fetch(`${url}/api/usb-provisioning/status`, {
-        headers: {
-          ...hostSecureHeaders,
-          Cookie: cookie,
-          "X-Grabenplaner-USB-Action": "provisioning",
-        },
-      });
-      assert.equal(usbStatusResponse.status, 200, await usbStatusResponse.clone().text());
-      const usbStatus = await usbStatusResponse.json();
-      assert.ok(Array.isArray(usbStatus.creators));
-      assert.ok(usbStatus.creators.some((creator) => creator.employeeNumber === "101"));
-
-      const usbStatusWithoutActionHeader = await fetch(`${url}/api/usb-provisioning/status`, {
-        headers: { ...hostSecureHeaders, Cookie: cookie },
-      });
-      assert.equal(usbStatusWithoutActionHeader.status, 403, await usbStatusWithoutActionHeader.clone().text());
-      assert.equal((await usbStatusWithoutActionHeader.json()).code, "USB_ACTION_HEADER_REQUIRED");
-      const usbStatusCrossSite = await fetch(`${url}/api/usb-provisioning/status`, {
-        headers: {
-          ...hostSecureHeaders,
-          Cookie: cookie,
-          "Sec-Fetch-Site": "cross-site",
-          "X-Grabenplaner-USB-Action": "provisioning",
-        },
-      });
-      assert.equal(usbStatusCrossSite.status, 403, await usbStatusCrossSite.clone().text());
-      assert.equal((await usbStatusCrossSite.json()).code, "USB_ORIGIN_REQUIRED");
-
-      const usbGuideResponse = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-        method: "POST",
-        headers: {
-          ...hostSecureHeaders,
-          "Content-Type": "application/json",
-          Cookie: cookie,
-          "X-CSRF-Token": csrf,
-          "X-Grabenplaner-USB-Action": "provisioning",
-        },
-        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-      });
-      assert.equal(usbGuideResponse.status, 200, await usbGuideResponse.clone().text());
-      assert.equal(usbGuideResponse.headers.get("content-type"), "application/pdf");
-      assert.ok((await usbGuideResponse.arrayBuffer()).byteLength > 1000);
-
-      const usbGuideWithoutActionHeader = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-        method: "POST",
-        headers: { ...hostSecureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf },
-        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-      });
-      assert.equal(usbGuideWithoutActionHeader.status, 403, await usbGuideWithoutActionHeader.clone().text());
-      assert.equal((await usbGuideWithoutActionHeader.json()).code, "USB_ACTION_HEADER_REQUIRED");
-
-      const usbGuideWithoutCsrf = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-        method: "POST",
-        headers: {
-          ...hostSecureHeaders,
-          "Content-Type": "application/json",
-          Cookie: cookie,
-          "X-Grabenplaner-USB-Action": "provisioning",
-        },
-        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-      });
-      assert.equal(usbGuideWithoutCsrf.status, 403, await usbGuideWithoutCsrf.clone().text());
-      assert.equal((await usbGuideWithoutCsrf.json()).code, "PORTAL_CSRF_INVALID");
-
-      const usbGuideWithoutOrigin = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-        method: "POST",
-        headers: {
-          "X-Forwarded-Proto": "https",
-          "X-Forwarded-For": "127.0.0.1",
-          "Content-Type": "application/json",
-          Cookie: cookie,
-          "X-CSRF-Token": csrf,
-          "X-Grabenplaner-USB-Action": "provisioning",
-        },
-        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-      });
-      assert.equal(usbGuideWithoutOrigin.status, 403, await usbGuideWithoutOrigin.clone().text());
-      assert.equal((await usbGuideWithoutOrigin.json()).code, "USB_ORIGIN_REQUIRED");
-
-      const usbGuideCrossSite = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-        method: "POST",
-        headers: {
-          ...hostSecureHeaders,
-          "Sec-Fetch-Site": "cross-site",
-          "Content-Type": "application/json",
-          Cookie: cookie,
-          "X-CSRF-Token": csrf,
-          "X-Grabenplaner-USB-Action": "provisioning",
-        },
-        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-      });
-      assert.equal(usbGuideCrossSite.status, 403, await usbGuideCrossSite.clone().text());
-      assert.equal((await usbGuideCrossSite.json()).code, "USB_ORIGIN_REQUIRED");
-
-      const remoteUsbGuideResponse = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-        method: "POST",
-        headers: {
-          ...secureHeaders,
-          "X-Forwarded-For": "203.0.113.44",
-          "Content-Type": "application/json",
-          Cookie: cookie,
-          "X-CSRF-Token": csrf,
-          "X-Grabenplaner-USB-Action": "provisioning",
-        },
-        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-      });
-      assert.equal(remoteUsbGuideResponse.status, 403, await remoteUsbGuideResponse.clone().text());
-      assert.equal((await remoteUsbGuideResponse.json()).code, "USB_HOST_CONSOLE_REQUIRED");
-    } else {
-      const linuxUsbResponse = await fetch(`${url}/api/usb-provisioning/status`, {
-        headers: { ...hostSecureHeaders, Cookie: cookie, "X-Grabenplaner-USB-Action": "provisioning" },
-      });
-      assert.equal(linuxUsbResponse.status, 403, await linuxUsbResponse.clone().text());
-      assert.equal((await linuxUsbResponse.json()).code, "USB_WINDOWS_REQUIRED");
+    // Retired USB endpoints remain unavailable even to an authenticated admin
+    // at the host console, with or without former action/origin headers.
+    for (const headers of [
+      { ...hostSecureHeaders, Cookie: cookie, "X-Grabenplaner-USB-Action": "provisioning" },
+      { ...hostSecureHeaders, Cookie: cookie },
+      { ...hostSecureHeaders, Cookie: cookie, "Sec-Fetch-Site": "cross-site", "X-Grabenplaner-USB-Action": "provisioning" },
+    ]) {
+      const retired = await fetch(`${url}/api/usb-provisioning/status`, { headers });
+      assert.equal(retired.status, 403, await retired.clone().text());
+      assert.equal((await retired.json()).code, "POSTGRESQL_SERVER_ONLY");
     }
+    const retiredGuide = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
+      method: "POST", headers: { ...hostSecureHeaders, "Content-Type": "application/json", Cookie: cookie,
+        "X-CSRF-Token": csrf, "X-Grabenplaner-USB-Action": "provisioning" },
+      body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
+    });
+    assert.equal(retiredGuide.status, 403, await retiredGuide.clone().text());
+    assert.equal((await retiredGuide.json()).code, "POSTGRESQL_SERVER_ONLY");
 
     const diagnosticsResponse = await fetch(`${url}/api/server-diagnostics`, { headers: { ...secureHeaders, Cookie: cookie } });
     assert.equal(diagnosticsResponse.status, 200, await diagnosticsResponse.clone().text());
     const diagnostics = await diagnosticsResponse.json();
     assert.equal(diagnostics.ready, true);
-    assert.equal(diagnostics.database.journalMode, "wal");
-    assert.equal(diagnostics.database.busyTimeoutMs, 5000);
+    assert.equal(diagnostics.database.providerId, "postgresql");
+    assert.equal(diagnostics.database.journalMode, null);
+    assert.equal(diagnostics.database.synchronous, null);
+    assert.equal(diagnostics.database.busyTimeoutMs, 0);
+    assert.equal(diagnostics.database.integrity, "ok");
+    assert.equal(diagnostics.database.foreignKeys, true);
+    assert.ok(Number.isSafeInteger(diagnostics.database.bytes) && diagnostics.database.bytes > 0);
     assert.equal(diagnostics.instanceLock.held, true);
     const monitorCheck = diagnostics.productionChecks.find((check) => check.id === "monitor");
     const backupCheck = diagnostics.productionChecks.find((check) => check.id === "backup");
@@ -407,7 +299,7 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     });
     let secondError = "";
     second.stderr.on("data", (chunk) => { secondError += chunk.toString(); });
-    const secondExit = await waitForExit(second);
+    const secondExit = await waitForExit(second, 8000, () => secondError);
     assert.notEqual(secondExit.code, 0);
     assert.match(secondError, /zweite Serverinstanz|bereits in Prozess/i);
 
@@ -419,15 +311,25 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     const exitResponse = await fetch(`${url}/api/system/exit`, {
       method: "POST", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf }, body: "{}",
     });
-    assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
-    assert.equal((await exitResponse.json()).ok, true);
-    assert.equal((await waitForExit(child)).code, 0, stderr);
+    assert.equal(exitResponse.status, 503, await exitResponse.clone().text());
+    const refusedMaintenance = await exitResponse.json();
+    assert.equal(refusedMaintenance.code, "INTERNAL_ERROR");
+    assert.match(refusedMaintenance.requestId, /^[a-f0-9-]{36}$/i);
+    const failureAudit = prepared.prepare("SELECT detail FROM audit_log WHERE actor = ? AND action = ? AND entity_id = ? ORDER BY id DESC LIMIT 1")
+      .get("101", "system.postgresql.maintenance.failed", "shutdown");
+    assert.equal(JSON.parse(failureAudit.detail).code, "PG_LIFECYCLE_CONTROL_UNAVAILABLE");
+    // This fixture has no privileged native maintenance socket. A refused
+    // maintenance request must keep the existing service and pair available.
+    assert.equal(child.exitCode, null);
+    assert.equal((await fetch(`${url}/api/health/live`)).status, 200);
+    child.kill("SIGTERM");
+    assert.equal((await waitForExit(child, 8000, () => stderr)).code, 0, stderr);
     assert.equal(fs.existsSync(`${path.resolve(childDatabase)}.server.lock`), false);
     const { acquireDatabaseLock, releaseDatabaseLock } = require("../lib/database-lock");
     const afterExitLock = acquireDatabaseLock({ databasePath: childDatabase, kind: "post-shutdown-test", appVersion: "synthetic" });
     assert.equal(releaseDatabaseLock(afterExitLock), true);
     assert.equal(fs.lstatSync(`${path.resolve(childDatabase)}.server-lock`).isFile(), true);
   } finally {
-    if (child.exitCode === null) { child.kill(); await waitForExit(child); }
+    if (child.exitCode === null) { child.kill(); await waitForExit(child, 8000, () => stderr); }
   }
 });

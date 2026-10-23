@@ -1,5 +1,5 @@
 "use strict";
-const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+const { installSalesOutboxFailure } = require("../test-support/postgresql-api/trigger-fixture");
 const { sessionCsrfFromCookie } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -178,7 +178,7 @@ function exchange(catalog, articles, overrides = {}) {
 }
 
 function tableCounts() {
-  return Object.fromEntries([
+  const counts = Object.fromEntries([
     "sales_article_import_snapshots",
     "sales_article_import_findings",
     "sales_article_import_impacts",
@@ -193,6 +193,10 @@ function tableCounts() {
     table,
     Number(db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count),
   ]));
+  for (const table of ["core_audit_outbox", "core_audit_delivery"]) {
+    counts[table] = Number(db.postgresqlCatalogQuery("sales", `SELECT COUNT(*) AS count FROM integration.${table}`)[0].count);
+  }
+  return counts;
 }
 
 function currentArticleBusinessState(articleNumber) {
@@ -933,16 +937,12 @@ test("Apply koppelt Snapshot, Revisionen, Quellbindungen und Audit atomar", asyn
   ]);
   assert.equal(result.response.status, 201, result.text);
   const before = tableCounts();
-  installFixtureTrigger(db, `
-    CREATE TRIGGER test_article_import_audit_failure
-    BEFORE INSERT ON audit_log
-    WHEN NEW.action = 'sales.article-catalog.import'
-    BEGIN
-      SELECT RAISE(ABORT, 'synthetic article import audit failure');
-    END
-  `);
-  const failed = await applyPreview(result.payload);
-  dropFixtureTrigger(db, "test_article_import_audit_failure");
+  const removeAuditFailure = installSalesOutboxFailure(db, {
+    name: "test_article_import_audit_failure", action: "sales.article-catalog.import",
+  });
+  let failed;
+  try { failed = await applyPreview(result.payload); }
+  finally { removeAuditFailure(); }
   assert.notEqual(failed.response.status, 201, failed.text);
   assert.deepEqual(tableCounts(), before, "Ein Auditfehler muss den gesamten Import zurückrollen");
 
@@ -1035,19 +1035,16 @@ test("Import-Undo stellt Updates exakt wieder her, archiviert Neuanlagen additiv
   grant(IMPORTER, SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT);
 
   const beforeFailedUndo = tableCounts();
-  installFixtureTrigger(db, `
-    CREATE TRIGGER test_article_import_undo_audit_failure
-    BEFORE INSERT ON audit_log
-    WHEN NEW.action = 'sales.article-catalog.import.undo'
-    BEGIN
-      SELECT RAISE(ABORT, 'synthetic article import undo audit failure');
-    END
-  `);
-  const failedUndo = await requestJson(
-    `/api/portal/v1/me/actions/${encodeURIComponent(applied.payload.personalActionId)}/undo`,
-    { method: "POST", body: {} },
-  );
-  dropFixtureTrigger(db, "test_article_import_undo_audit_failure");
+  const removeUndoFailure = installSalesOutboxFailure(db, {
+    name: "test_article_import_undo_audit_failure", action: "sales.article-catalog.import.undo",
+  });
+  let failedUndo;
+  try {
+    failedUndo = await requestJson(
+      `/api/portal/v1/me/actions/${encodeURIComponent(applied.payload.personalActionId)}/undo`,
+      { method: "POST", body: {} },
+    );
+  } finally { removeUndoFailure(); }
   assert.notEqual(failedUndo.response.status, 200, failedUndo.text);
   assert.deepEqual(tableCounts(), beforeFailedUndo, "Undo-Auditfehler muss jede Gegenrevision zurückrollen");
   assert.equal(currentArticleBusinessState("093840").currentRevision, 2);

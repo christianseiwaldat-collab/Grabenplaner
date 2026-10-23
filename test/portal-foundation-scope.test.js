@@ -18,7 +18,7 @@ async function hashPortalPassword(password) {
   const salt = crypto.randomBytes(16);
   return ["scrypt-v1", salt.toString("base64url"), crypto.scryptSync(password, salt, 64).toString("base64url")].join("$");
 }
-test.after(() => { closeCurrentTestFixture(); fs.rmSync(testRoot, { recursive: true, force: true }); });
+test.after(async () => { await closeCurrentTestFixture(); fs.rmSync(testRoot, { recursive: true, force: true }); });
 
 async function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -31,11 +31,11 @@ async function getFreePort() {
   });
 }
 
-async function waitForJson(url, child, timeoutMs = 30000) {
+async function waitForJson(url, child, timeoutMs = 30000, diagnostics = () => "") {
   const deadline = Date.now() + timeoutMs;
   let lastHttpStatus = null;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`Serverprozess wurde vorzeitig mit Code ${child.exitCode} beendet.`);
+    if (child.exitCode !== null) throw new Error(`Serverprozess wurde vorzeitig mit Code ${child.exitCode} beendet. ${diagnostics().slice(-16384)}`);
     try {
       const response = await fetch(url);
       lastHttpStatus = response.status;
@@ -43,13 +43,13 @@ async function waitForJson(url, child, timeoutMs = 30000) {
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  throw new Error(`Server war nach ${timeoutMs} ms nicht erreichbar; letzter HTTP-Status: ${lastHttpStatus ?? "keine Antwort"}.`);
+  throw new Error(`Server war nach ${timeoutMs} ms nicht erreichbar; letzter HTTP-Status: ${lastHttpStatus ?? "keine Antwort"}. ${diagnostics().slice(-16384)}`);
 }
 
-async function waitForExit(child, timeoutMs = 8000) {
+async function waitForExit(child, timeoutMs = 8000, diagnostics = () => "") {
   if (child.exitCode !== null || child.signalCode !== null) return { code: child.exitCode, signal: child.signalCode };
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`Serverprozess wurde nach ${timeoutMs} ms nicht beendet.`)), timeoutMs);
+    const timer = setTimeout(() => reject(new Error(`Serverprozess wurde nach ${timeoutMs} ms nicht beendet. ${diagnostics().slice(-16384)}`)), timeoutMs);
     child.once("exit", (code, signal) => {
       clearTimeout(timer);
       resolve({ code, signal });
@@ -59,8 +59,9 @@ async function waitForExit(child, timeoutMs = 8000) {
 
 test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", async () => {
   const childRoot = path.join(testRoot, "lan-scope-isolation");
-  fs.mkdirSync(childRoot, { recursive: true });
+  fs.mkdirSync(childRoot, { recursive: true, mode: 0o700 });
   const childDatabase = path.join(childRoot, "dienstplan.db");
+  const databasePath = childDatabase, backupPath = path.join(childRoot, "backups");
   const port = await getFreePort();
   const child = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
     cwd: path.join(__dirname, ".."),
@@ -112,7 +113,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
   }
 
   try {
-    await waitForJson(`${url}/api/portal/v1/status`, child);
+    await waitForJson(`${url}/api/portal/v1/status`, child, 30000, () => stderr);
     const setup = await fetch(`${url}/api/portal/v1/setup/admin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -366,7 +367,8 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
       body: JSON.stringify({ externalBackupEnabled: true, backupDirectory: backupPath, backupIntervalHours: 2 }),
     });
-    assert.equal(itAdminBackupSettings.status, 200, await itAdminBackupSettings.clone().text());
+    assert.equal(itAdminBackupSettings.status, 409, await itAdminBackupSettings.clone().text());
+    assert.equal((await itAdminBackupSettings.json()).code, "SERVER_MANAGED_BACKUP");
     const hrBackupSettingsDenied = await fetch(`${url}/api/backup/settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: hr.cookie, "X-CSRF-Token": hr.csrf },
@@ -896,8 +898,8 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       body: "{}",
     });
     assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
-    assert.equal((await waitForExit(child)).code, 0, stderr);
+    assert.equal((await waitForExit(child, 8000, () => stderr)).code, 0, stderr);
   } finally {
-    if (child.exitCode === null) { child.kill(); await waitForExit(child); }
+    if (child.exitCode === null) { child.kill(); await waitForExit(child, 8000, () => stderr); }
   }
 });
