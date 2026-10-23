@@ -8,6 +8,7 @@ on:
       - '.github/workflows/sast-diagnostic.yml'
       - 'scripts/security/diagnose_sast_fixpoints.py'
       - 'scripts/security/test_sast_diagnostic.py'
+      - 'scripts/security/diagnose_opengrep.py'
 
 permissions:
   contents: read
@@ -49,7 +50,7 @@ jobs:
       - name: Test diagnostic completeness and publication boundaries
         run: python -m unittest discover -s scripts/security -p 'test_sast_diagnostic.py' -v
       - name: Run bounded experiments with exact complete source files
-        run: python scripts/security/diagnose_sast_fixpoints.py --root . --tools "$RUNNER_TEMP/sast-diagnostic-tools" --output "$RUNNER_TEMP/sast-diagnostic-private"
+        run: python scripts/security/diagnose_opengrep.py --root . --tools "$RUNNER_TEMP/sast-diagnostic-tools" --output "$RUNNER_TEMP/sast-diagnostic-private"
       - name: Seal private diagnostic evidence
         if: always()
         run: |
