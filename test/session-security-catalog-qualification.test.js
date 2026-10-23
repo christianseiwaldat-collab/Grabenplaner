@@ -4,7 +4,7 @@ const fs = require("node:fs"), path = require("node:path"), vm = require("node:v
 const { createHash } = require("node:crypto"), { createRequire } = require("node:module");
 const file = path.resolve(__dirname, "../lib/persistence/postgresql/core/catalog.js");
 const localRequire = createRequire(file), core = localRequire("./catalog");
-const { SQLITE_APPLICATION_CATALOG: sources } = localRequire("../../sqlite/application-catalog");
+const { SQLITE_APPLICATION_CATALOG: sources } = localRequire("../../catalogs/application-catalog");
 const receipt = localRequire("../contracts/session-security-catalog-v1.json");
 const baseline = localRequire("../contracts/block-4-catalog.json");
 const sha = value => createHash("sha256").update(value).digest("hex");
@@ -13,7 +13,7 @@ const compiled = qualified.entries.map((providerEntry, i) => ({ providerEntry, p
 function isolated({ sourceEntries = sources, contract = receipt, addition = false } = {}) {
   const target = addition ? path.join(path.dirname(file), "session-security-catalog.js") : file;
   const context = { module: { exports: {} }, __dirname: path.dirname(target), require(id) {
-    if (id === "../../sqlite/application-catalog") return { SQLITE_APPLICATION_CATALOG: sourceEntries };
+    if (id === "../../catalogs/application-catalog") return { SQLITE_APPLICATION_CATALOG: sourceEntries };
     if (id === "../contracts/session-security-catalog-v1.json") return contract;
     return localRequire(id);
   } };

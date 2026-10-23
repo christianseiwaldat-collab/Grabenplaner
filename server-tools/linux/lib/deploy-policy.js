@@ -5,7 +5,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { deploymentSchemaSnapshotFromFile } = require("../../../lib/persistence/sqlite/operations/maintenance");
 const { sha256File } = require("../../../lib/file-integrity");
 const FORMAT = "grabenplaner-deploy-verification";
 const MAX_AGE_MS = 36 * 60 * 60 * 1000;
@@ -64,13 +63,12 @@ function applicationContract(root) {
   }
   critical.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   return { appVersion: metadata.version, fingerprint: digest({ critical,
-    runtime: { engines: metadata.engines, packageManager: metadata.packageManager, dependencies: metadata.dependencies } }) };
+    runtime: { engines: metadata.engines, packageManager: metadata.packageManager, dependencies: metadata.dependencies,
+      databaseProviders: metadata.grabenplaner?.databaseProviders } }) };
 }
 
 function databaseIdentity(databasePath) {
-  const resolved = fs.realpathSync(databasePath), info = fs.lstatSync(databasePath);
-  if (!info.isFile() || info.isSymbolicLink()) throw new Error("DEPLOY_DATABASE_INVALID");
-  return { databasePath: resolved, schemaSha256: digest(deploymentSchemaSnapshotFromFile(resolved)) };
+  throw new Error("DEPLOY_SQLITE_RETIRED");
 }
 
 function postgresqlPairIdentity({ core, sales } = {}) {
@@ -90,9 +88,7 @@ function sameDatabaseIdentity(proof, identity) {
       && HASH.test(identity.databaseIdentitySha256 || "") && proof.databaseIdentitySha256 === identity.databaseIdentitySha256
       && proof.schemaSha256 === identity.schemaSha256;
   }
-  return proof.schemaVersion === 1 && (!proof.providerId || proof.providerId === "sqlite")
-    && (!identity?.providerId || identity.providerId === "sqlite")
-    && proof.databasePath === identity?.databasePath && proof.schemaSha256 === identity?.schemaSha256;
+  return false;
 }
 
 function configurationIdentity(envFile) {
@@ -137,8 +133,7 @@ function inspectedHistory() {
 
 async function configuredDatabaseIdentity(databasePath, envFile) {
   const environment = require("node:util").parseEnv(readRegular(envFile, 65536, { rootOnly: true }).toString("utf8"));
-  const provider = String(environment.DB_PROVIDER || "sqlite");
-  if (provider === "sqlite") return databaseIdentity(databasePath);
+  const provider = String(environment.DB_PROVIDER || "");
   if (provider !== "postgresql") throw new Error("DEPLOY_PROVIDER_INVALID");
   const operations = require("../../../lib/persistence/postgresql/operations/runtime");
   const configuration = operations.loadConfiguration("/etc/grabenplaner/postgresql-operations.json");

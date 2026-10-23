@@ -1,5 +1,8 @@
 "use strict";
 
+// Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
+// Other PostgreSQL and application assertions below still use current code.
+
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -120,7 +123,7 @@ test("backup markers reject malformed or mismatched protected-file counts", () =
 });
 
 test("standalone Windows backup uses the same commit marker and committed-only retention", () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "backup.js"), "utf8");
+  const source = fs.readFileSync(require("../test-support/legacy-baseline").legacyPath("backup.js"), "utf8");
   assert.match(source, /writeBackupCommitMarker/);
   assert.match(source, /verifyCommittedBackup[\s\S]*verifyPair: verifyStandaloneBackupPair/);
   assert.match(source, /parseBackupKeep\(process\.env\.GRABENPLANER_BACKUP_RETENTION_DAYS, 20\)/);
@@ -134,7 +137,7 @@ test("standalone backup paths include protected candidate and loan files through
     "server-tools/windows/Restore-Grabenplaner.ps1",
     "server-tools/windows/Test-GrabenplanerServer.ps1",
   ]) {
-    const source = fs.readFileSync(path.join(__dirname, "..", ...relativePath.split("/")), "utf8");
+    const source = fs.readFileSync(require("../test-support/legacy-baseline").legacyPath(relativePath), "utf8");
     assert.match(source, /candidate_document_versions/, relativePath);
     assert.match(source, /loan_documents/, relativePath);
     assert.match(source, /loan_photos/, relativePath);
@@ -154,12 +157,12 @@ test("standalone backup paths include protected candidate and loan files through
   assert.match(canonicalSource, /loan_photos/);
   assert.match(canonicalSource, /loan_photo_attachments/);
   assert.match(canonicalSource, /crm_customer_photos/);
-  assert.match(fs.readFileSync(path.join(__dirname, "..", "backup.js"), "utf8"), /protectedStorageReferencesFromFile/);
+  assert.match(fs.readFileSync(require("../test-support/legacy-baseline").legacyPath("backup.js"), "utf8"), /protectedStorageReferencesFromFile/);
   for (const relativePath of [
     "server-tools/linux/lib/backup-snapshot.js",
     "server-tools/linux/lib/verify-backup.js",
   ]) {
-    const source = fs.readFileSync(path.join(__dirname, "..", ...relativePath.split("/")), "utf8");
+    const source = fs.readFileSync(require("../test-support/legacy-baseline").legacyPath(relativePath), "utf8");
     assert.match(source, /protectedStorageReferencesFromDatabase/, relativePath);
   }
 });

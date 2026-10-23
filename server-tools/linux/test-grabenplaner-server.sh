@@ -77,13 +77,11 @@ fi
 
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
 data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"
-database_provider="${DB_PROVIDER:-sqlite}"
+database_provider="${DB_PROVIDER:-}"
+[[ "$database_provider" == postgresql ]] || gp_die 'Dieser GP-Stand verlangt den verifizierten PostgreSQL-Paarbetrieb.'
 if [[ "$database_provider" == postgresql ]]; then
   [[ -z "$database_arg" || "$database_arg" == "$data_dir/data/postgresql-pair.json" ]] || gp_die 'Der PostgreSQL-Paarbezug ist ungueltig.'
   database="$(gp_existing_file "$data_dir/data/postgresql-pair.json" 'PostgreSQL-Paarbezug')"
-else
-  [[ "$database_provider" == sqlite ]] || gp_die 'Der Datenbankprovider wird nicht unterstuetzt.'
-  database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
 fi
 backup_dir="$(gp_existing_directory "${backup_arg:-${BACKUP_DIR:-$GP_DEFAULT_BACKUP_DIR}}" "Backupordner")"
 public_url="${public_url_arg:-${GRABENPLANER_PUBLIC_URL:-}}"

@@ -4,17 +4,19 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  sqlite-provider-node-minimum:
+  postgresql-provider-node-minimum:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.7.0
@@ -24,20 +26,16 @@ jobs:
           node-version: 22.13.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Persistence provider and Block 4 contracts on minimum Node
+      - name: PostgreSQL-only configuration, runtime boundary and legacy recovery on minimum Node
         run: >-
           node --test --test-concurrency=1
           test/v087-persistence-provider-contract.test.js
-          test/v087-sqlite-persistence-provider.test.js
-          test/v087-database-block4-application-migrations.test.js
-          test/v087-database-block4-dialect-contract.test.js
-          test/v087-database-block4-migration-contract.test.js
-          test/v087-database-block4-sqlite-migration-runner.test.js
-          test/v087-database-block4-statement-dialects.test.js
-          test/personnel-lifecycle-onboarding-execution.test.js
-          test/personnel-lifecycle-onboarding-tasks.test.js
-          test/personnel-lifecycle-onboarding-tasks-api.test.js
-          test/onboarding-json-compatibility.test.js
+          test/postgresql-only-runtime.test.js
+          test/postgresql-only-catalog-boundary.test.js
+          test/postgresql-only-recovery.test.js
+          test/postgresql-only-install-preflight.test.js
+          test/legacy-recovery-capsule.test.js
+          test/database-lock.test.js
 
   postgresql-provider-development-contract:
     runs-on: ubuntu-latest
@@ -45,6 +43,7 @@ jobs:
     env:
       TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/grabenplaner_test
       TEST_POSTGRESQL_BIN: /usr/lib/postgresql/18/bin
+      GP_PG_API_FIXTURE_BRIDGE: '1'
     services:
       postgres:
         image: postgres:18.4-alpine
@@ -63,13 +62,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           version: 11.7.0
           run_install: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: 22.13.0
+          node-version: 24.19.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Install PostgreSQL 18 client tools from PGDG
@@ -137,7 +137,22 @@ jobs:
       - if: runner.os == 'Linux'
         name: Linux server scripts syntax
         run: find server-tools/linux -type f \( -name '*.sh' -o -name '*.sh.in' \) -print0 | xargs -0 -n1 bash -n
-      - name: Full application suite with SQLite fixtures
-        run: node --test --test-concurrency=1 --test-reporter=tap --test-timeout=180000
       - name: Reboot module maintenance rollback (isolated temporary files)
         run: sudo python3 test/reboot-module-maintenance.test.py
+
+  application-gates:
+    if: always()
+    needs: [postgresql-provider-node-minimum, postgresql-provider-development-contract, test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require every application qualification job to succeed
+        env:
+          MINIMUM: ${{ needs.postgresql-provider-node-minimum.result }}
+          POSTGRESQL: ${{ needs.postgresql-provider-development-contract.result }}
+          LINUX: ${{ needs.test.result }}
+        run: |
+          for result in "$MINIMUM" "$POSTGRESQL" "$LINUX"; do
+            test "$result" = success || { echo 'A mandatory application qualification did not succeed.'; exit 1; }
+          done

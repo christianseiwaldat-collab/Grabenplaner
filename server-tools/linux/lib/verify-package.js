@@ -65,6 +65,8 @@ const expectedRecoveryArtifacts = [
   "server-tools/linux/recovery/lib/recovery-apply.js",
   "server-tools/linux/recovery/lib/recovery-metadata.js",
   "server-tools/linux/recovery/lib/recovery-verify.js",
+  "server-tools/linux/recovery/lib/recovery-shared.js",
+  "server-tools/linux/postgresql/preflight-install.js",
 ];
 
 const expectedHostControlArtifacts = [
@@ -131,12 +133,28 @@ function isAllowedRuntimePath(relative) {
 function isForbiddenRuntimePath(relative) {
   if (backupRuntimeScripts.has(relative)) return false;
   const normalized = relative.toLowerCase();
+  if (/^(lib\/persistence\/sqlite\/|lib\/persistence\/postgresql\/transfer\/|test-support\/|server-tools\/windows\/|server-tools\/package\/)/.test(normalized)) return true;
+  if (["lib/f18-loan-migration.js", "lib/usb-profile-database.js",
+    "lib/persistence/postgresql/operations/paired-development.js", "lib/persistence/postgresql/operations/paired-pitr.js",
+    "server-tools/linux/postgresql/migration-host.js", "server-tools/linux/postgresql/capture-final-source.py",
+    "server-tools/linux/postgresql/migrate-grabenplaner-postgresql.sh"].includes(normalized)) return true;
   const top = normalized.split("/", 1)[0];
   if ([".git", ".github", ".devcontainer", "backups", "data", "demo", "docs", "import-jobs", "node_modules", "output", "release", "runtime", "scripts", "test", "tmp", "usb-backups"].includes(top)) return true;
   if (/(^|\/)(\.env($|\.)|\.npmrc$|\.pnpm-store($|\/)|__pycache__($|\/))/.test(normalized)) return true;
   if (/\.(db|sqlite|sqlite3|amu|pfx|p12|pem|key|crt)$/.test(normalized)) return true;
   if (/(^|\/)(branding-kits?|customer-branding|kundenbranding)(\/|$)/.test(normalized)) return true;
   return /(lamprechter|photo-?straub|foto-?straub|united-?camera)/.test(normalized);
+}
+
+function assertPostgresqlOnlySource(relative, source) {
+  if (!/\.(?:c?js|mjs)$/.test(relative)) return;
+  const imports = source.matchAll(/\b(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)|\bfrom\s*["']([^"']+)["']/g);
+  for (const entry of imports) {
+    const request = entry[1] || entry[2];
+    if (/^(?:node:)?sqlite(?:3)?$|^better-sqlite3$|(?:^|\/)persistence\/sqlite(?:\/|$)|^(?:\.{1,2}\/)+sqlite(?:\/|$)/.test(request)) {
+      throw new Error(`SQLite-Ausfuehrung ist im PostgreSQL-Serverpaket nicht freigegeben: ${relative}`);
+    }
+  }
 }
 
 function walk(directory, prefix = "") {
@@ -436,10 +454,6 @@ function main() {
     'lib/persistence/postgresql/operations/status.js',
     'lib/persistence/postgresql/operations/lifecycle.js',
     'lib/persistence/postgresql/operations/cutover.js',
-    'lib/persistence/postgresql/transfer/activation.js',
-    'lib/persistence/postgresql/transfer/protection.js',
-    'lib/persistence/postgresql/transfer/staging.js',
-    'lib/persistence/postgresql/transfer/history.js',
     'lib/persistence/postgresql/contracts/manifest.json',
     'server-tools/linux/recovery/lib/postgresql-application-smoke.js',
     'server-tools/linux/recovery/lib/postgresql-recovery-worker.js',
@@ -449,7 +463,7 @@ function main() {
     'lib/vps-storage-contract.js', 'lib/vps-storage-control.js', 'lib/vps-storage-routes.js',
     'lib/persistence/postgresql/operations/storage-residuals.js', 'lib/persistence/postgresql/operations/import-retention.js',
     ...['control-worker.js', 'storage-worker.js', 'storage-import-run.js', 'storage-import-maintenance.sh', 'host-reboot.js', 'lifecycle-run.js', 'lifecycle-status.js', 'lifecycle-maintenance.sh',
-      'migration-host.js', 'managed-contract.js', 'migrate-grabenplaner-postgresql.sh', 'capture-final-source.py',
+      'managed-contract.js',
       'grabenplaner-postgresql.service.in', 'grabenplaner-application.conf.in',
       'grabenplaner-postgresql-maintenance-recover.service.in', 'recover-maintenance.sh',
       'grabenplaner-postgresql-control.socket.in', 'grabenplaner-postgresql-control@.service.in']
@@ -465,6 +479,7 @@ function main() {
     "pnpm-lock.yaml",
     "lib/backup-commit.js",
     "lib/database-lock.js",
+    "lib/database-lock-linux.py",
     "lib/amu-storage.js",
     "server-tools/linux/backup-grabenplaner.sh",
     "server-tools/linux/stop-grabenplaner-server.sh",
@@ -516,6 +531,7 @@ function main() {
       || sha256File(target) !== String(raw.sha256).toLowerCase()) {
       throw new Error(`Manifestpruefung fehlgeschlagen: ${relative}`);
     }
+    assertPostgresqlOnlySource(relative, /\.(?:c?js|mjs)$/.test(relative) ? fs.readFileSync(target, "utf8") : "");
     expected.set(relative, true);
   }
   for (const relative of required) {

@@ -1,5 +1,8 @@
 "use strict";
 
+// Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
+// Other PostgreSQL and application assertions below still use current code.
+
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -11,9 +14,9 @@ const { openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider
 const { createAmuStorage, syncEncryptedFilesBackup } = require("../lib/amu-storage");
 const { writeBackupCommitMarker } = require("../lib/backup-commit");
 const { sha256File } = require("../lib/file-integrity");
-const { acquireDatabaseLock, releaseDatabaseLock } = require("../lib/database-lock");
-const { acquireBackupWorkspace } = require("../lib/backup-workspace");
-const { __test, validateJob, childEnvironment, validateResult } = require("../lib/background-backup-process");
+const { acquireDatabaseLock, releaseDatabaseLock } = require("../test-support/legacy-baseline").legacyRequire("lib/database-lock.js");
+const { acquireBackupWorkspace } = require("../test-support/legacy-baseline").legacyRequire("lib/backup-workspace.js");
+const { __test, validateJob, childEnvironment, validateResult } = require("../test-support/legacy-baseline").legacyRequire("lib/background-backup-process.js");
 const project = path.resolve(__dirname, "..");
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
@@ -256,7 +259,7 @@ test("document tree inventory never runs in the parent HTTP process", async t =>
   } finally { fs.readdirSync = originalReadDir; }
   child.finish(0, f.protocol);
   assert.equal((await job).verified, true);
-  const childSource = fs.readFileSync(path.join(project, "scripts/run-background-backup.js"), "utf8");
+  const childSource = fs.readFileSync(require("../test-support/legacy-baseline").legacyPath("scripts/run-background-backup.js"), "utf8");
   assert.ok(childSource.indexOf("assertRawBackupCapacity(job)") < childSource.indexOf("createPairedBackup(database"));
 });
 
@@ -309,7 +312,7 @@ test("real background child produces a verified backup while application instanc
     assert.ok(fs.existsSync(lock.lockPath));
     assert.equal(scheduler.backgroundBackupStatus().lastErrorCode, null);
   } finally { clearInterval(interval); releaseDatabaseLock(lock); }
-  const childSource = fs.readFileSync(path.join(project, "scripts/run-background-backup.js"), "utf8");
+  const childSource = fs.readFileSync(require("../test-support/legacy-baseline").legacyPath("scripts/run-background-backup.js"), "utf8");
   assert.match(childSource, /readOnly: true/);
   assert.doesNotMatch(childSource, /acquireDatabaseLock|releaseDatabaseLock/);
   assert.match(childSource, /console\.log = \(\) => \{\}/);

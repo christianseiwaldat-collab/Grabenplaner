@@ -6,7 +6,7 @@ const { createHash } = require("node:crypto"), { createRequire } = require("node
 const catalogFile = path.resolve(__dirname, "../lib/persistence/postgresql/core/catalog.js");
 const catalogRequire = createRequire(catalogFile);
 const core = catalogRequire("./catalog");
-const { SQLITE_APPLICATION_CATALOG } = catalogRequire("../../sqlite/application-catalog");
+const { SQLITE_APPLICATION_CATALOG } = catalogRequire("../../catalogs/application-catalog");
 const baseline = catalogRequire("../contracts/block-4-catalog.json");
 const inventory = catalogRequire("../contracts/block-1-inventory.json");
 const extension = catalogRequire("../contracts/vocational-school-catalog-v1.json");
@@ -33,7 +33,7 @@ const qualificationError = /drift; explicit qualification required/;
 
 function isolatedCatalog({ sourceEntries = SQLITE_APPLICATION_CATALOG, reviewedExtension = extension } = {}) {
   const context = { module: { exports: {} }, __dirname: path.dirname(catalogFile), require(id) {
-    if (id === "../../sqlite/application-catalog") return { SQLITE_APPLICATION_CATALOG: sourceEntries };
+    if (id === "../../catalogs/application-catalog") return { SQLITE_APPLICATION_CATALOG: sourceEntries };
     if (id === "../contracts/vocational-school-catalog-v1.json") return reviewedExtension;
     return catalogRequire(id);
   } };

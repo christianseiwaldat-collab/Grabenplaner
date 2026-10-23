@@ -116,6 +116,11 @@ Optionen:
   --replace-caddy-config Vorhandene Caddy-Konfiguration root-only sichern
                          und auf diesem dedizierten Server ersetzen
   --no-start             Dienste nur installieren, noch nicht starten
+
+Voraussetzung: separat provisioniertes, geprueftes PostgreSQL-Paar mit
+/etc/grabenplaner/grabenplaner.env, postgresql-application.json,
+postgresql-operations.json und /var/lib/grabenplaner/data/postgresql-pair.json.
+Der Installer erzeugt keine SQLite-Datenbank und fuehrt keine Migration aus.
   --help                 Diese Hilfe anzeigen
 
 Das Skript laedt selbst keine Binaries herunter. Der explizite, eingefrorene
@@ -170,7 +175,7 @@ cleanup() {
     || $HOST_REBOOT_UNIT_WRITTEN -eq 1 ) ]]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
   fi
-  if [[ $exit_code -ne 0 ]]; then
+  if [[ $exit_code -ne 0 && $APP_SWAPPED -eq 1 ]]; then
     local maintenance_name target
     for maintenance_name in backup monitor stop test update uninstall; do
       target="$(readlink -- "/usr/local/sbin/grabenplaner-${maintenance_name}" 2>/dev/null || true)"
@@ -431,6 +436,8 @@ const expectedRecoveryArtifacts = [
   "server-tools/linux/recovery/lib/recovery-apply.js",
   "server-tools/linux/recovery/lib/recovery-metadata.js",
   "server-tools/linux/recovery/lib/recovery-verify.js",
+  "server-tools/linux/recovery/lib/recovery-shared.js",
+  "server-tools/linux/postgresql/preflight-install.js",
 ];
 const expectedHostControlArtifacts = [
   "server-tools/linux/host-control/lib/host-reboot-broker.js",
@@ -553,7 +560,7 @@ if (!Array.isArray(manifest.files) || !manifest.files.length) fail("Die Manifest
 const packageJsonPath = path.join(root, "package.json");
 const lockPath = path.join(root, "pnpm-lock.yaml");
 for (const required of [
-  "server.js", "package.json", "pnpm-lock.yaml", "lib/backup-commit.js", "lib/database-lock.js", "lib/amu-storage.js",
+  "server.js", "package.json", "pnpm-lock.yaml", "lib/backup-commit.js", "lib/database-lock.js", "lib/database-lock-linux.py", "lib/amu-storage.js",
   "server-tools/linux/backup-grabenplaner.sh",
   "server-tools/linux/stop-grabenplaner-server.sh",
   "server-tools/linux/test-grabenplaner-server.sh",
@@ -725,17 +732,7 @@ NODE
 }
 
 admin_is_configured() {
-  [[ -f "$DATA_ROOT/data/dienstplan.db" ]] || return 1
-  runuser -u "$SERVICE_USER" -- "$NODE_EXECUTABLE" - "$DATA_ROOT/data/dienstplan.db" <<'NODE' >/dev/null
-const { DatabaseSync } = require("node:sqlite");
-let database;
-try {
-  database = new DatabaseSync(process.argv[2], { readOnly: true });
-  const row = database.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE active = 1 AND role IN ('developer','it_admin','admin')").get();
-  process.exit(Number(row?.count || 0) > 0 ? 0 : 1);
-} catch { process.exit(1); }
-finally { try { database?.close(); } catch {} }
-NODE
+  runuser -u "$SERVICE_USER" -- "$NODE_EXECUTABLE" "$APP_ROOT/server-tools/linux/postgresql/preflight-install.js" has-admin >/dev/null
 }
 
 wait_for_health() {
@@ -788,10 +785,13 @@ fi
 [[ "$EXPECTED_SHA256" =~ ^[A-Fa-f0-9]{64}$ ]] || fail "Eine feste SHA256-Pruefsumme ist erforderlich."
 [[ "$PORT" =~ ^[0-9]+$ ]] && (( PORT >= 1 && PORT <= 65535 )) || fail "--port muss zwischen 1 und 65535 liegen."
 
-for command in awk base64 caddy chmod chown clamscan cp curl date dirname du find getent gpasswd grep groupadd groupdel head id install journalctl ln mktemp mv readlink rm rmdir runuser seq sha256sum sleep stat systemctl tr uname unzip useradd usermod wc; do
+for command in awk base64 caddy chmod chown clamscan cp curl date dirname du find getent gpasswd grep groupadd groupdel head id install journalctl ln mktemp mv python3 readlink rm rmdir runuser seq sha256sum sleep stat systemctl tr uname unzip useradd usermod wc; do
   need_command "$command"
 done
 validate_os
+[[ -x /usr/bin/python3 ]] || fail "Die feste Linux-Sperrhelfer-Laufzeit /usr/bin/python3 fehlt."
+/usr/bin/python3 -I -c 'import ctypes,fcntl,sys; sys.exit(0 if ctypes.sizeof(ctypes.c_long)==8 and hasattr(fcntl,"F_OFD_SETLK") else 1)' \
+  || fail "Der Linux-Kernel-/Python-Vertrag fuer OFD-Instanzsperren wird nicht unterstuetzt."
 if [[ -z "$NODE_EXECUTABLE" ]]; then
   need_command node
   NODE_EXECUTABLE="$(command -v node)"
@@ -801,6 +801,13 @@ NODE_EXECUTABLE="$(readlink -f -- "$NODE_EXECUTABLE")"
 validate_node_version
 CLAMSCAN_EXECUTABLE="$(readlink -f -- "$(command -v clamscan)")"
 validate_public_url
+
+# Validate the pre-provisioned pair before creating users/directories or stopping
+# services. A PostgreSQL-only package must never bootstrap a SQLite installation.
+[[ -f "$SCRIPT_DIR/postgresql/preflight-install.js" && ! -L "$SCRIPT_DIR/postgresql/preflight-install.js" ]] \
+  || fail "Die PostgreSQL-Installationspruefung fehlt."
+"$NODE_EXECUTABLE" "$SCRIPT_DIR/postgresql/preflight-install.js" documents >/dev/null \
+  || fail "Vor der Installation ist ein geprueftes PostgreSQL-Paar samt geschuetzter Konfiguration, Datenanker und Schluesseln vorzubereiten. SQLite wird nicht angelegt oder automatisch migriert."
 
 install -d -o root -g root -m 0755 "$APP_PARENT"
 STAGE_ROOT="$(mktemp -d "$APP_PARENT/.install.XXXXXX")"
@@ -881,21 +888,8 @@ if [[ -e "$MONITOR_STATUS_ROOT" || -L "$MONITOR_STATUS_ROOT" ]]; then
 fi
 install -d -o root -g "$MONITOR_STATUS_GROUP" -m 0750 "$MONITOR_STATUS_ROOT"
 
-if [[ ! -f "$ENV_FILE" ]]; then
-  AMU_KEY="$(random_base64 32)"
-  INTEGRATION_KEY="$(random_base64 32)"
-  WIFI_IDENTITY_KEY="$(random_base64 32)"
-  WIFI_WEBHOOK_SECRET="$(random_base64 48)"
-  SERVICE_CONTROL_TOKEN="$(random_base64 48)"
-  BOOTSTRAP_TOKEN="$(random_base64 32)"
-  ENV_TEMP="$(mktemp "$CONFIG_ROOT/.grabenplaner.env.XXXXXX")"
-  chmod 0600 "$ENV_TEMP"
-  render_template "$SCRIPT_DIR/grabenplaner.env.example" "$ENV_TEMP"
-  mv -- "$ENV_TEMP" "$ENV_FILE"
-  chown root:root "$ENV_FILE"
-  chmod 0600 "$ENV_FILE"
-  unset AMU_KEY INTEGRATION_KEY WIFI_IDENTITY_KEY WIFI_WEBHOOK_SECRET SERVICE_CONTROL_TOKEN BOOTSTRAP_TOKEN
-else
+[[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] \
+  || fail "Die vorbereitete PostgreSQL-Umgebungsdatei fehlt."
   [[ "$(stat -c %a "$ENV_FILE")" == "600" && "$(stat -c %U:%G "$ENV_FILE")" == "root:root" ]] \
     || fail "Die bestehende Umgebungsdatei muss root:root gehoeren und Modus 0600 haben."
   require_environment_value NODE_ENV production
@@ -906,15 +900,16 @@ else
   require_environment_value GRABENPLANER_TRUST_PROXY loopback
   require_environment_value PORT "$PORT"
   require_environment_value GRABENPLANER_DATA_DIR "$DATA_ROOT"
-  require_environment_value DB_PATH "$DATA_ROOT/data/dienstplan.db"
+  require_environment_value DB_PROVIDER postgresql
+  require_environment_value DB_PATH "$DATA_ROOT/data/postgresql-pair.json"
+  require_environment_value GRABENPLANER_POSTGRESQL_APPLICATION_CONFIG "$CONFIG_ROOT/postgresql-application.json"
   require_environment_value BACKUP_DIR "$BACKUP_ROOT"
   validate_secret_bytes GRABENPLANER_AMU_KEY 32
   validate_secret_bytes GRABENPLANER_INTEGRATION_KEY 32
   validate_secret_bytes GRABENPLANER_WIFI_IDENTITY_KEY 32
   validate_secret_bytes GRABENPLANER_WIFI_WEBHOOK_SECRET 48
   [[ "$(environment_value GRABENPLANER_SERVICE_CONTROL_TOKEN | wc -c)" -ge 32 ]] || fail "Der Dienststeuerungs-Token ist zu kurz."
-  validate_secret_bytes GRABENPLANER_BOOTSTRAP_TOKEN 32
-fi
+  if [[ -n "$(environment_value GRABENPLANER_BOOTSTRAP_TOKEN)" ]]; then validate_secret_bytes GRABENPLANER_BOOTSTRAP_TOKEN 32; fi
 
 SCANNER_PROBE="$(mktemp "$DATA_ROOT/private/.scanner-probe.XXXXXX")"
 printf '%s\n' 'Grabenplaner ClamAV readiness probe' >"$SCANNER_PROBE"
@@ -974,6 +969,11 @@ find "$STAGE_ROOT/source" -type f -perm /111 -exec chmod 0750 {} +
 find "$STAGE_ROOT/source" -type f ! -perm /111 -exec chmod 0640 {} +
 [[ -x "$STAGE_ROOT/source/server-tools/linux/monitor/run-grabenplaner-monitor.sh" ]] \
   || fail "Das freigegebene Monitorwerkzeug ist nach der Berechtigungssetzung nicht ausfuehrbar."
+
+# All four application/reader logins and both environment bindings are checked
+# with read-only transactions, after package ownership is locked and before swap.
+"$NODE_EXECUTABLE" "$STAGE_ROOT/source/server-tools/linux/postgresql/preflight-install.js" check >/dev/null \
+  || fail "Das vorbereitete PostgreSQL-Paar ist nicht vollstaendig erreichbar oder passt nicht zur Installation."
 
 systemctl disable --now grabenplaner-monitor.timer grabenplaner-monitor.service >/dev/null 2>&1 || true
 systemctl stop grabenplaner-bootstrap.service grabenplaner.service >/dev/null 2>&1 || true

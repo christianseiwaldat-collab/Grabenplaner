@@ -1,4 +1,7 @@
 "use strict";
+
+// Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
+// Other PostgreSQL and application assertions below still use current code.
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -734,7 +737,7 @@ test("v0.71 Block 4: Sicherungspunkte enthalten alle aktiven geschützten Dokume
   assert.equal(fs.existsSync(backup.path), true);
   assert.equal(fs.existsSync(backup.marker), true);
   assert.equal(latestDatabaseBackup(backupDirectory).committed, true);
-  const verifierPath = path.join(__dirname, "..", "server-tools", "linux", "lib", "verify-backup.js");
+  const verifierPath = require("../test-support/legacy-baseline").legacyPath("server-tools/linux/lib/verify-backup.js");
   const amuModulePath = path.join(__dirname, "..", "lib", "amu-storage.js");
   const malformedMarker = path.join(backupDirectory, "malformed-marker.json");
   const malformedPayload = JSON.parse(fs.readFileSync(backup.marker, "utf8"));

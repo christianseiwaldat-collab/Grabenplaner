@@ -1,5 +1,8 @@
 "use strict";
 
+// Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
+// Other PostgreSQL and application assertions below still use current code.
+
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -30,9 +33,7 @@ const {
   verifiedApplicationSmokeResult,
   START_TIMEOUT_MS,
   STOP_TIMEOUT_MS,
-} = require(path.join(
-  root, "server-tools/linux/offsite/lib/application-smoke.js",
-));
+} = require(require("../test-support/legacy-baseline").legacyPath("server-tools/linux/offsite/lib/application-smoke.js"));
 const {
   ensureSqliteApplicationSchema,
 } = require(path.join(root, "lib/persistence/sqlite/operations/application-schema.js"));

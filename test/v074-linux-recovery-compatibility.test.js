@@ -6,8 +6,8 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { DatabaseSync } = require("node:sqlite");
-const { assertCompatibility, compareSemver, readEnvironment } = require("../server-tools/linux/recovery/lib/recovery-verify.js");
-const { __internalTestOnly } = require("../server-tools/linux/recovery/lib/recovery-metadata.js");
+const { assertCompatibility, compareSemver, readEnvironment } = require("../test-support/legacy-baseline").legacyRequire("server-tools/linux/recovery/lib/recovery-verify.js");
+const { __internalTestOnly } = require("../test-support/legacy-baseline").legacyRequire("server-tools/linux/recovery/lib/recovery-metadata.js");
 const nonRootPolicy = __internalTestOnly.nonRootOwnershipPolicy;
 
 test("v0.74 compares stable and prerelease app versions without allowing a newer recovery source", () => {

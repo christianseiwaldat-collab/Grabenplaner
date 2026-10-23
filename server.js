@@ -120,7 +120,6 @@ const {
   normalizePersonalEmailAddress,
 } = require("./lib/personal-email-address");
 const { acquireDatabaseLock, lockPathForDatabase, releaseDatabaseLock } = require("./lib/database-lock");
-const { acquireBackupWorkspace, withBackupWorkspace, prepareBackupWorkspace, MAX_WAIT_MS: BACKUP_WORKSPACE_MAX_WAIT_MS } = require("./lib/backup-workspace");
 const {
   listCommittedBackupMetadata,
   listLegacyBackupMetadata,
@@ -195,12 +194,6 @@ const {
   buildHostSecurityAlerts,
   readHostSecurityStatus,
 } = require("./lib/host-security-status");
-const {
-  F18MigrationError,
-  inspectF18Backup,
-  photoBufferForMigration,
-  publicF18Inspection,
-} = require("./lib/f18-loan-migration");
 const { createSystemCenterTechnicalCache } = require("./lib/system-center-technical-cache");
 const {
   assertRuntimeConfiguration,
@@ -212,82 +205,9 @@ const {
   runtimeValidationErrors,
 } = require("./lib/server-runtime");
 const { resolvePersistenceConfiguration } = require("./lib/persistence/configuration");
-const {
-  createSqlitePersistenceProvider,
-  openSqliteApplicationPersistence,
-  openSqliteLegacyDatabase,
-} = require("./lib/persistence/sqlite/provider");
-const {
-  applicationSettingsSnapshotFromDatabase,
-  createSqliteMaintenanceOperations,
-  createSqliteSchemaOperations,
-  protectedLoanStorageSnapshotFromDatabase,
-  protectedSicknessAmuStorageSnapshotFromDatabase,
-  protectedStorageReferencesFromDatabase,
-  protectedStorageReferencesFromFile,
-  verifyPriceLabelImageFilesFromFile,
-  verifySqliteDatabaseFile,
-} = require("./lib/persistence/sqlite/operations/maintenance");
-const {
-  createSqliteSystemDiagnosticsOperations,
-} = require("./lib/persistence/sqlite/operations/system-diagnostics");
-const {
-  createSqliteAuditLogOperations,
-} = require("./lib/persistence/sqlite/operations/audit-log");
-const {
-  applyBrandingSnapshotToSqliteFile,
-  inspectSqliteImportForeignKeyIntegrity,
-  inspectSqliteImportFile,
-} = require("./lib/persistence/sqlite/operations/database-import");
-const {
-  SQLITE_APPLICATION_CATALOG,
-} = require("./lib/persistence/sqlite/application-catalog");
-const {
-  ensureSqliteApplicationSchema,
-} = require("./lib/persistence/sqlite/operations/application-schema");
-const {
-  inspectSqlitePersonnelLifecycleConversionSchema,
-  inspectSqlitePersonnelLifecycleSchema,
-} = require("./lib/persistence/sqlite/operations/personnel-lifecycle-schema");
-const {
-  eventReceiptSha256: personnelDocumentEventReceiptSha256,
-} = require("./lib/persistence/sqlite/operations/personnel-document-history-schema");
-const {
-  runSqliteStartupSchemaMigrations,
-} = require("./lib/persistence/sqlite/operations/startup-schema-migrations");
-const {
-  runSqliteHistoricalCompatibilityMigrations,
-} = require("./lib/persistence/sqlite/operations/historical-compatibility-migrations");
-const {
-  runSqliteFeatureCompatibilityMigrations,
-} = require("./lib/persistence/sqlite/operations/feature-compatibility-migrations");
-const {
-  runSqliteOrganizationSchemaMigrations,
-} = require("./lib/persistence/sqlite/operations/organization-schema-migrations");
-const {
-  createSqliteProtectedRecordOperations,
-} = require("./lib/persistence/sqlite/operations/protected-record-migrations");
-const {
-  createSqliteApplicationSeedingOperations,
-} = require("./lib/persistence/sqlite/operations/application-seeding");
-
-
-
-
-
-
-const {
-  ensureSqliteSystemCenterMetricsSchema,
-} = require("./lib/persistence/sqlite/operations/system-center-metrics-schema");
-const {
-  BranchOrderError,
-  createSqliteBranchOrderOperations,
-  ensureSqliteBranchOrdersSchema,
-} = require("./lib/persistence/sqlite/operations/branch-orders");
-const {
-  EmployeeLocationLendingError,
-  createSqliteEmployeeLocationLendingOperations,
-} = require("./lib/persistence/sqlite/operations/employee-location-lendings");
+const { BranchOrderError } = require("./lib/persistence/postgresql/application-operations/branch-orders");
+const { EmployeeLocationLendingError } = require("./lib/persistence/postgresql/application-operations/employee-location-lendings");
+const { eventReceiptSha256: personnelDocumentEventReceiptSha256 } = require("./lib/personnel-document-event-receipt");
 const {
   createApplicationRepositories,
 } = require("./lib/persistence/application-repositories");
@@ -311,7 +231,6 @@ const {
   configureSystemCertificateAuthorities,
   downloadGitHubReleaseAsset,
 } = require("./lib/update-download");
-const { populateUsbProfileDatabase } = require("./lib/usb-profile-database");
 const {
   createSelectionToken,
   enumerateSafeUsbCandidates,
@@ -620,7 +539,7 @@ const {
   moduleReceiptSha256: personnelLearningModuleReceiptSha256,
   moduleVersionReceiptSha256: personnelLearningVersionReceiptSha256,
   sha256Text: personnelLearningSha256,
-} = require("./lib/persistence/sqlite/operations/personnel-learning-schema");
+} = require("./lib/personnel-learning-receipts");
 const {
   PERSONNEL_LIFECYCLE_CASE_PERMISSIONS,
   PERSONNEL_LIFECYCLE_CASE_PERMISSION_IDS,
@@ -2251,7 +2170,7 @@ const deploymentKind = String(process.env.GRABENPLANER_DEPLOYMENT_KIND || "local
 const systemdInvocationId = String(process.env.INVOCATION_ID || "").trim().toLowerCase();
 function currentHostManagedRebootAvailable() {
   if (!serverModeActive || process.platform !== "linux" || !hostBootGeneration) return false;
-  if (postgresqlActive) return require('./lib/persistence/postgresql/lifecycle-control').available();
+  return require('./lib/persistence/postgresql/lifecycle-control').available();
   try {
     assertSafeHostRebootSocket();
     return true;
@@ -2281,14 +2200,13 @@ const dataRootDirectory = serverModeActive || configuredDataRoot ? serverDataRoo
 const dataDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "data") : portableDataDirectory;
 const persistenceConfiguration = resolvePersistenceConfiguration({
   environment: process.env,
-  defaultSqlitePath: path.join(dataDirectory, "dienstplan.db"),
 });
 const databasePath = persistenceConfiguration.databasePath;
-const postgresqlActive = persistenceConfiguration.providerId === 'postgresql';
+
 const serverManagedRestartAvailable = serverModeActive
   && process.platform === "linux"
   && /^[a-f0-9]{32}$/.test(systemdInvocationId)
-  && (!postgresqlActive || require('./lib/persistence/postgresql/lifecycle-control').available());
+  && ((require('./lib/persistence/postgresql/lifecycle-control').available()));
 const persistenceAsyncCollections = require('./lib/persistence/postgresql/application-operations/async-collections');
 const persistenceRequestContext = new (require('node:async_hooks').AsyncLocalStorage)();
 const appBackupDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "backups") : path.join(__dirname, "backups");
@@ -2527,27 +2445,23 @@ function cleanupPortableInstallRoot() {
 
 cleanupPortableInstallRoot();
 
-const databaseExistedBeforeOpen = databasePath !== ":memory:" && fs.existsSync(databasePath);
+
 let instanceLockHeld = false;
 let instanceLockHandle = null;
 acquireInstanceLock();
 let applicationPersistence;
 try {
-  applicationPersistence = postgresqlActive ? require('./lib/persistence/postgresql/application').openDeferredPostgresqlApplication({
+  applicationPersistence = (require('./lib/persistence/postgresql/application').openDeferredPostgresqlApplication({
     ...persistenceConfiguration, authorize: authorizePersistenceOperation,
     onOperation: persistenceConfiguration.rehearsal && process.env.GRABENPLANER_POSTGRESQL_TRACE === '1' ? (id) => {
       fs.appendFileSync(path.join(dataRootDirectory,'logs','persistence-startup.jsonl'),JSON.stringify({id,heap:process.memoryUsage().heapUsed})+'\n',{mode:0o600});
     } : undefined,
-  }) : openSqliteApplicationPersistence({
-    databasePath,
-    catalog: SQLITE_APPLICATION_CATALOG,
-  });
+  }));
 } catch (error) {
   releaseInstanceLock();
   throw error;
 }
 const { database: db, provider: persistenceProvider } = applicationPersistence;
-if (!postgresqlActive && databasePath !== ":memory:") prepareBackupWorkspace(databasePath);
 const saturdayCreditService = createSaturdayCreditService({ access: persistenceProvider, today: () => viennaTodayIso() });
 const applicationRepositories = createApplicationRepositories(persistenceProvider);
 const {
@@ -2581,16 +2495,12 @@ const {
   workRuleGovernance: workRuleGovernanceRepository,
   workRules: workRuleStoreRepository,
 } = applicationRepositories;
-const sqliteMaintenanceOperations = postgresqlActive ? null : createSqliteMaintenanceOperations(db);
-const sqliteSchemaOperations = postgresqlActive ? require('./lib/persistence/postgresql/application-operations/startup').schema : createSqliteSchemaOperations(db);
-const sqliteSystemDiagnosticsOperations = postgresqlActive
-  ? require('./lib/persistence/postgresql/application-operations/diagnostics').createPostgresqlSystemDiagnosticsOperations(applicationPersistence.operations)
-  : createSqliteSystemDiagnosticsOperations(db);
-const sqliteAuditLogOperations = postgresqlActive
-  ? require('./lib/persistence/postgresql/application-operations/diagnostics').createPostgresqlAuditLogOperations(applicationPersistence.operations)
-  : createSqliteAuditLogOperations(db);
-let loanProtectedStorageSnapshot = postgresqlActive ? Object.freeze({documents:[],photos:[],photoAttachments:[]}) : protectedLoanStorageSnapshotFromDatabase(db);
-let applicationSettingsSnapshot = postgresqlActive ? Object.freeze({}) : applicationSettingsSnapshotFromDatabase(db);
+
+const applicationSchemaOperations = (require('./lib/persistence/postgresql/application-operations/startup').schema);
+const systemDiagnosticsOperations = (require('./lib/persistence/postgresql/application-operations/diagnostics').createPostgresqlSystemDiagnosticsOperations(applicationPersistence.operations));
+const auditLogOperations = (require('./lib/persistence/postgresql/application-operations/diagnostics').createPostgresqlAuditLogOperations(applicationPersistence.operations));
+let loanProtectedStorageSnapshot = (Object.freeze({documents:[],photos:[],photoAttachments:[]}));
+let applicationSettingsSnapshot = (Object.freeze({}));
 let planningSettingsReadModel = Object.freeze({
   pdfSettings: Object.freeze([]),
   locationBranding: Object.freeze([]),
@@ -2602,7 +2512,7 @@ const {
   ensureColumn,
   tableExists,
   triggerExists,
-} = sqliteSchemaOperations;
+} = applicationSchemaOperations;
 let lastBackup = null;
 let backupInterval = null;
 let retentionInterval = null;
@@ -2612,7 +2522,6 @@ let notificationDispatchInterval = null;
 let rateLimitCleanupInterval = null;
 let systemCenterHealthInterval = null;
 
-const verifyDatabaseFile = verifySqliteDatabaseFile;
 
 function backupTimestamp(date = new Date()) {
   return date.toISOString().replace(/[:.]/g, "-");
@@ -2622,196 +2531,15 @@ function fileSha256(filePath) {
   return require("./lib/file-integrity").sha256File(filePath);
 }
 
-function verifyProtectedBackupPair(databaseFile, backupDirectory, expectedDatabase = {}) {
-  const requiredStorageKeys = protectedStorageReferencesFromFile(databaseFile);
-  const verified = verifyBackupReferences({ backupDirectory, requiredStorageKeys });
-  verifyPriceLabelImageFilesFromFile(databaseFile, () => ({
-    vault: integrationSecretVault,
-    sourceDirectory: backupDirectory,
-    encryptionKeys: amuEncryptionConfiguration ? { [amuEncryptionConfiguration.keyId]: amuEncryptionConfiguration.key } : {},
-    activeKeyId: amuEncryptionConfiguration?.keyId,
-  }));
-  const manifestDatabase = verified.manifest?.database || {};
-  if (expectedDatabase.fileName && manifestDatabase.fileName !== expectedDatabase.fileName) {
-    throw new Error("Datenbank und private Dateisicherung gehören nicht zum selben Sicherungspunkt.");
-  }
-  if (expectedDatabase.sha256 && String(manifestDatabase.sha256 || "").toLowerCase() !== String(expectedDatabase.sha256).toLowerCase()) {
-    throw new Error("Die Datenbank-Prüfsumme der privaten Dateisicherung stimmt nicht überein.");
-  }
-  return { requiredStorageKeys, manifest: verified.manifest };
+
+async function createDatabaseBackup() {
+  throw Object.assign(new Error("Eine gemeinsame PostgreSQL-Sicherung wird von der Serverwartung erstellt."), { code: "PG_PAIRED_BACKUP_REQUIRED" });
 }
 
-function verifyBackupPairPaths(paths, marker = null) {
-  return verifyProtectedBackupPair(paths.databasePath, paths.protectedDirectory, {
-    fileName: path.basename(paths.databasePath),
-    sha256: marker?.database?.sha256 || paths.databaseSha256,
-  });
-}
 
-function pruneDatabaseBackups(backupDirectory, keep = 20) {
-  return pruneCommittedBackups(backupDirectory, keep, { verifyPair: verifyBackupPairPaths });
-}
-
-function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", kind = "external", { beforeListen = false } = {}) {
-  if (databasePath === ":memory:" || !fs.existsSync(databasePath)) return null;
-  return withBackupWorkspace(databasePath, () => createDatabaseBackupToDirectoryWhileLocked(backupDirectory, reason, kind, { beforeListen }),
-    { waitMs: beforeListen ? BACKUP_WORKSPACE_MAX_WAIT_MS : 0 });
-}
-function createDatabaseBackupToDirectoryWhileLocked(backupDirectory, reason, kind, { beforeListen }) {
-  if (amuMutationInProgress > 0) throw new Error("Die Sicherung wartet, bis der laufende AUM-Upload abgeschlossen ist.");
-  if (!amuStorage) throw new Error("Ohne betriebsbereiten AUM-Speicher wird kein unvollständiger Sicherungspunkt erstellt.");
-  const archive = prepareLocalBackupArchive({ backupDirectory, keep: backupKeep, vault: integrationSecretVault, expectedStream: kind });
-  if (archive && !beforeListen) throw new Error("LOCAL_ARCHIVE_BACKGROUND_REQUIRED");
-  if (archive) archive.preflightBackup();
-  verifyActiveProtectedDocumentBlobsForBackup();
-  fs.mkdirSync(backupDirectory, { recursive: true });
-  const snapshotName = `dienstplan-${backupTimestamp()}-${crypto.randomBytes(6).toString("hex")}`;
-  const target = path.join(backupDirectory, `${snapshotName}.db`);
-  const amuTarget = path.join(backupDirectory, `${snapshotName}.amu`);
-  const markerTarget = path.join(backupDirectory, `${snapshotName}.complete.json`);
-  const nonce = crypto.randomUUID();
-  const temporaryDatabase = `${target}.partial-${nonce}`;
-  const temporaryAmu = `${amuTarget}.partial-${nonce}`;
-  let amuBackup = null;
-  try {
-    sqliteMaintenanceOperations.vacuumInto(temporaryDatabase);
-    const verification = verifyDatabaseFile(temporaryDatabase);
-    if (!verification.ok) throw new Error("Das erstellte Datenbank-Backup hat die Integritätsprüfung nicht bestanden.");
-    const databaseHash = fileSha256(temporaryDatabase);
-    amuBackup = syncEncryptedFilesBackup({
-      sourceDirectory: amuStorageDirectory,
-      targetDirectory: temporaryAmu,
-      manifestMetadata: { database: { fileName: path.basename(target), sha256: databaseHash } },
-    });
-    verifyProtectedBackupPair(temporaryDatabase, temporaryAmu, {
-      fileName: path.basename(target),
-      sha256: databaseHash,
-    });
-    fs.renameSync(temporaryAmu, amuTarget);
-    fs.renameSync(temporaryDatabase, target);
-    writeBackupCommitMarker({
-      backupDirectory,
-      snapshot: snapshotName,
-      databaseSha256: databaseHash,
-      protectedFiles: amuBackup?.fileCount || 0,
-    });
-    verifyCommittedBackup(backupDirectory, path.basename(markerTarget), { verifyPair: verifyBackupPairPaths });
-    if (amuBackup) amuBackup.targetDirectory = amuTarget;
-  } catch (error) {
-    safeRemoveFile(temporaryDatabase);
-    fs.rmSync(temporaryAmu, { recursive: true, force: true });
-    fs.rmSync(amuTarget, { recursive: true, force: true });
-    safeRemoveFile(target);
-    safeRemoveFile(markerTarget);
-    throw error;
-  }
-  // Pre-migration safety copies are synchronous, before listening. Preserve
-  // them as unregistered raw points; never run Restic on the live event loop.
-  const archiveResult = archive ? { archived: false, rawSafetyPointRetained: true } : null;
-  if (!archive) pruneDatabaseBackups(backupDirectory, backupKeep);
-  return { path: target, marker: markerTarget, createdAt: new Date().toISOString(), reason, kind, verified: true, committed: true, amuBackup, archive: archiveResult };
-}
-
-function createInternalDatabaseBackup(reason = "automatic") {
-  return createDatabaseBackupToDirectory(appBackupDirectory, reason, "app");
-}
-
-function createPreMigrationDatabaseBackup(reason) {
-  return createDatabaseBackupToDirectory(appBackupDirectory, reason, "app", { beforeListen: true });
-}
-
-async function createDatabaseBackupInBackground(backupDirectory, reason, kind, { deadlineMs = Date.now() + 1400000 } = {}) {
-  if (!localBackupArchiveEnabled()) return createDatabaseBackupToDirectory(backupDirectory, reason, kind);
-  if (shutdownStarted && !String(reason).startsWith("shutdown-")) {
-    const error = new Error("Während des Dienststopps werden keine weiteren Sicherungsaufträge angenommen.");
-    error.code = "BACKGROUND_BACKUP_SHUTDOWN_IN_PROGRESS";
-    throw error;
-  }
-  if (databasePath === ":memory:" || !fs.existsSync(databasePath)) return null;
-  if (!amuStorage) throw new Error("LOCAL_ARCHIVE_DOCUMENT_STORAGE_REQUIRED");
-  prepareLocalBackupArchive({ backupDirectory, keep: backupKeep, vault: integrationSecretVault, expectedStream: kind });
-  const { createBackgroundBackup } = require("./lib/background-backup-process");
-  const result = await createBackgroundBackup({ databasePath, protectedDirectory: amuStorageDirectory,
-    backupDirectory, expectedStream: kind, deadlineMs, environment: { ...process.env,
-      GRABENPLANER_INTEGRATION_KEY_ID: integrationEncryptionConfiguration.keyId,
-      GRABENPLANER_INTEGRATION_KEYS: JSON.stringify(integrationEncryptionConfiguration.keys),
-      GRABENPLANER_AMU_KEY_ID: amuEncryptionConfiguration.keyId,
-      GRABENPLANER_AMU_KEY: amuEncryptionConfiguration.key,
-    } });
-  return { ...result, reason, kind, verified: true, committed: true,
-    amuBackup: { targetDirectory: result.protectedDirectory } };
-}
-
-function createExternalDatabaseBackup(reason = "automatic", settings = tableExists("settings") ? getSettings() : {}) {
-  if (serverModeActive) return null;
-  if (settings.external_backup_enabled === "0") return null;
-  return createDatabaseBackupToDirectory(backupDirectoryFromSettings(settings), reason, "external");
-}
-
-function createDatabaseDownloadSnapshot() {
-  if (databasePath === ":memory:" || !fs.existsSync(databasePath)) {
-    throw httpError(409, "Die Datenbank steht derzeit nicht als Datei zur Verfügung.", "DATABASE_DOWNLOAD_UNAVAILABLE");
-  }
-  const workspace = acquireBackupWorkspace({ databasePath });
-  let temporaryRoot;
-  try {
-    temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-db-download-"));
-    const snapshotPath = path.join(temporaryRoot, `grabenplaner-${backupTimestamp()}-${crypto.randomBytes(6).toString("hex")}.db`);
-    try { fs.chmodSync(temporaryRoot, 0o700); } catch {}
-    sqliteMaintenanceOperations.vacuumInto(snapshotPath);
-    const verification = verifyDatabaseFile(snapshotPath);
-    if (!verification.ok) {
-      throw new Error("Die Integritätsprüfung des Datenbank-Downloads ist fehlgeschlagen.");
-    }
-    try { fs.chmodSync(snapshotPath, 0o600); } catch {}
-    const stat = fs.statSync(snapshotPath);
-    return {
-      temporaryRoot,
-      path: snapshotPath,
-      size: stat.size,
-      sha256: fileSha256(snapshotPath),
-      createdAt: new Date().toISOString(),
-      releaseWorkspace: () => workspace.release(),
-    };
-  } catch (error) {
-    try { if (temporaryRoot) fs.rmSync(temporaryRoot, { recursive: true, force: true }); }
-    finally { workspace.release(); }
-    throw error;
-  }
-}
-
-async function createDatabaseBackup(reason = "automatic", { deadlineMs = Date.now() + 1400000 } = {}) {
-  if (postgresqlActive) throw Object.assign(new Error('Eine gemeinsame PostgreSQL-Sicherung wird von der Serverwartung erstellt.'), { code: 'PG_PAIRED_BACKUP_REQUIRED' });
-  const settings = tableExists("settings") ? getSettings() : {};
-  // Both destinations and their queue time share one budget, not 1500 s each.
-  const appBackup = await createDatabaseBackupInBackground(appBackupDirectory, reason, "app", { deadlineMs });
-  const externalBackup = serverModeActive || settings.external_backup_enabled === "0" ? null
-    : await createDatabaseBackupInBackground(backupDirectoryFromSettings(settings), reason, "external", { deadlineMs });
-  lastBackup = {
-    path: externalBackup?.path || appBackup?.path || null,
-    createdAt: new Date().toISOString(),
-    reason,
-    appBackup,
-    externalBackup,
-  };
-  return lastBackup;
-}
-
-function createSchema() {
-  ensureSqliteApplicationSchema(db);
-  require('./lib/persistence/sqlite/operations/trade-annotations-schema').ensureSqliteTradeAnnotationsSchema(db);
-}
-
-const startupSchemaMigrationState = postgresqlActive ? Object.freeze({
+const startupSchemaMigrationState = (Object.freeze({
   ensureWorkRuleEvaluationReceiptIntegrity: (...args) => postgresqlStartupOperations.ensureWorkRuleEvaluationReceiptIntegrity(...args),
-}) : runSqliteStartupSchemaMigrations({
-  database: db,
-  databaseExistedBeforeOpen,
-  appVersion: packageMetadata.version,
-  ensureApplicationSchema: createSchema,
-  createPreMigrationBackup: createPreMigrationDatabaseBackup,
-  workRuleSha256,
-});
+}));
 const {
   block7SettingsMigrationId,
   block7SettingsMigrationRequired,
@@ -3012,7 +2740,6 @@ async function personnelSensitiveProfile(
     },
   };
 }
-
 
 
 function sicknessCaseProtectionContext(row) {
@@ -3299,7 +3026,6 @@ function requireGovernanceStore() {
 }
 
 
-
 async function verifyProtectedGovernanceRecords() {
   const store = requireGovernanceStore();
   let verified = 0;
@@ -3419,41 +3145,20 @@ async function verifyProtectedGovernanceRecords() {
 }
 
 
-
 const {
   migrateProtectedPersonnelRecords,
   migrateProtectedVacationHistoryRecords,
   verifyProtectedPersonnelRecordDocuments,
   verifyProtectedSensitivePersonnelRecords,
-} = postgresqlActive ? Object.fromEntries([
+} = (Object.fromEntries([
   'migrateProtectedPersonnelRecords','migrateProtectedVacationHistoryRecords',
   'verifyProtectedPersonnelRecordDocuments','verifyProtectedSensitivePersonnelRecords',
-].map(name => [name, (...args) => postgresqlStartupOperations[name](...args)])) : createSqliteProtectedRecordOperations(db, {
-  appVersion: packageMetadata.version,
-  vacationHistoryProtectionMigrationId,
-  httpError,
-  parseProtectedJson,
-  personnelRecordDocumentProtectionContext,
-  personnelSensitiveProtectionContext,
-  parseVacationHistorySnapshot,
-  protectJson,
-  vacationHistoryProtectionContext,
-  requireAmuStorage,
-  amuReportProtectionContext,
-  amuDocumentProtectionContext,
-});
+].map(name => [name, (...args) => postgresqlStartupOperations[name](...args)])));
 
-const postgresqlStartupOperations = postgresqlActive ? require('./lib/persistence/postgresql/application-operations/startup').createPostgresqlStartupOperations(applicationPersistence.operations, {
+const postgresqlStartupOperations = (require('./lib/persistence/postgresql/application-operations/startup').createPostgresqlStartupOperations(applicationPersistence.operations, {
   parseProtectedJson, personnelRecordDocumentProtectionContext, personnelSensitiveProtectionContext,
   parseVacationHistorySnapshot, amuReportProtectionContext, amuDocumentProtectionContext, workRuleSha256,
-}) : null;
-if (!postgresqlActive) {
-  migrateProtectedPersonnelRecords();
-  migrateProtectedVacationHistoryRecords();
-  verifyProtectedSensitivePersonnelRecords();
-  verifyProtectedPersonnelRecordDocuments();
-  runSqliteHistoricalCompatibilityMigrations(db);
-}
+}));
 
 const defaultSettings = {
   installation_features: JSON.stringify(defaultInstallationFeatures),
@@ -3540,65 +3245,31 @@ for (const [day, start, end] of planningDays) {
   defaultSettings[`${day}_min_to`] = end;
 }
 
-const sqliteApplicationSeedingOperations = postgresqlActive ? null : createSqliteApplicationSeedingOperations(db);
-const {
-  legacyDaySettingsSnapshot,
-} = postgresqlActive ? {} : sqliteApplicationSeedingOperations.seedApplicationDefaults({
-  defaultSettings,
-  planningDays,
-  builtinPortalRoles,
-});
-if (!postgresqlActive) applicationSettingsSnapshot = applicationSettingsSnapshotFromDatabase(db);
+
+function defaultLocationDaySettings() {
+  const stored = getSettings();
+  return Object.fromEntries(planningDays.map(([day]) => [day, {
+    open: stored[`${day}_open`] !== "0",
+    start: stored[`${day}_start_time`], end: stored[`${day}_end_time`],
+    lunchEnabled: stored[`${day}_lunch_enabled`] === "1",
+    lunchStart: stored[`${day}_lunch_start`], lunchEnd: stored[`${day}_lunch_end`],
+    minStaff: Number(stored[`${day}_min_staff`] || 0),
+    minFrom: stored[`${day}_min_from`], minTo: stored[`${day}_min_to`],
+  }]));
+}
 
 const {
   localAmuRoutingMigrationNeeded,
   startupIntegrity,
-} = postgresqlActive ? { localAmuRoutingMigrationNeeded:false, startupIntegrity:['pending'] } : runSqliteFeatureCompatibilityMigrations(db, {
-  appVersion: packageMetadata.version,
-  migrationState: startupSchemaMigrationState,
-  normalizeAppFontScalePercent,
-  defaultPortalSettings,
-  passwordMinLength: portalPasswordMinLength(),
-  passwordPolicy: { ...portalPasswordPolicyMetadata(), maxLength: portalPasswordPolicyMetadata().maxCodePoints },
-  installationFeatureIds,
-  preV063DefaultInstallationFeatures,
-  preV085DefaultInstallationFeatures,
-});
+} = ({ localAmuRoutingMigrationNeeded:false, startupIntegrity:['pending'] });
 
 const {
   ensureDefaultLocation,
-} = postgresqlActive ? {ensureDefaultLocation:()=>postgresqlStartupOperations.ensureDefaultLocation()} : runSqliteOrganizationSchemaMigrations(db, {
-  appVersion: packageMetadata.version,
-  migrationState: startupSchemaMigrationState,
-  legacyDaySettingsSnapshot,
-  auditPortal,
-  getSettings,
-  brandingFromSettings,
-  defaultSettings,
-});
+} = ({ensureDefaultLocation:()=>postgresqlStartupOperations.ensureDefaultLocation()});
 
-if (!postgresqlActive) sqliteApplicationSeedingOperations.seedDemoIfRequested({
-  enabled: process.env.GRABENPLANER_SEED_DEMO === "1",
-  demoProfile: process.env.GRABENPLANER_DEMO_PROFILE,
-  appVersion: packageMetadata.version,
-  planningDays,
-  sporthandelProfilePath: path.join(__dirname, "demo", "sporthandel", "demo-profile.json"),
-});
 
-if (!postgresqlActive) {
-  ensureSqliteSystemCenterMetricsSchema(db);
-  ensureSqliteBranchOrdersSchema(db);
-}
-const sqliteBranchOrderOperations = postgresqlActive
-  ? require('./lib/persistence/postgresql/application-operations/branch-orders').createPostgresqlBranchOrderOperations(applicationPersistence.operations)
-  : createSqliteBranchOrderOperations(db);
-const sqliteEmployeeLocationLendingOperations = postgresqlActive
-  ? require('./lib/persistence/postgresql/application-operations/employee-location-lendings').createPostgresqlEmployeeLocationLendingOperations(applicationPersistence.operations)
-  : createSqliteEmployeeLocationLendingOperations(db);
-if (!postgresqlActive) {
-  sqliteBranchOrderOperations.ensureActiveBranchAccountBasePermissions();
-  sqliteBranchOrderOperations.ensureConfiguredLocationCatalogContent();
-}
+const branchOrderOperations = (require('./lib/persistence/postgresql/application-operations/branch-orders').createPostgresqlBranchOrderOperations(applicationPersistence.operations));
+const employeeLocationLendingOperations = (require('./lib/persistence/postgresql/application-operations/employee-location-lendings').createPostgresqlEmployeeLocationLendingOperations(applicationPersistence.operations));
 let applicationInitialization = null;
 let configuredAdminSnapshot = false;
 let portalScopeProjectionSnapshot = Object.freeze({
@@ -3608,13 +3279,11 @@ let portalScopeProjectionSnapshot = Object.freeze({
 });
 
 async function protectedStorageReferencesForApplication() {
-  if (!postgresqlActive) return protectedStorageReferencesFromDatabase(db);
   return applicationPersistence.operations.transaction(() => require('./lib/persistence/postgresql/application-operations/protected-storage')
     .protectedStorageReferencesFromDatabase(applicationPersistence.operations),{readOnly:true});
 }
 
 async function protectedSicknessStorageForApplication() {
-  if (!postgresqlActive) return protectedSicknessAmuStorageSnapshotFromDatabase(db);
   return applicationPersistence.operations.transaction(() => require('./lib/persistence/postgresql/application-operations/protected-storage')
     .protectedSicknessAmuStorageSnapshotFromDatabase(applicationPersistence.operations),{readOnly:true});
 }
@@ -3806,7 +3475,7 @@ function initializeApplicationPersistence({ onProgress } = {}) {
     applicationInitialization = (async () => {
       const startupProgress = phase => { try { onProgress?.(phase); } catch { /* Diagnostic observers cannot alter startup. */ } };
       startupProgress('application-data');
-      if (postgresqlActive) {
+      {
         await applicationPersistence.ready;
         await postgresqlStartupOperations.seedDefaults({defaultSettings,builtinPortalRoles});
         await postgresqlStartupOperations.ensureDefaultLocation();
@@ -3815,8 +3484,8 @@ function initializeApplicationPersistence({ onProgress } = {}) {
         await verifyProtectedSensitivePersonnelRecords();
         await verifyProtectedPersonnelRecordDocuments();
         await ensureWorkRuleEvaluationReceiptIntegrity();
-        await sqliteBranchOrderOperations.ensureActiveBranchAccountBasePermissions();
-        await sqliteBranchOrderOperations.ensureConfiguredLocationCatalogContent();
+        await branchOrderOperations.ensureActiveBranchAccountBasePermissions();
+        await branchOrderOperations.ensureConfiguredLocationCatalogContent();
       }
       await refreshConfiguredAdminSnapshot();
       await refreshPortalScopeProjectionSnapshot();
@@ -3843,7 +3512,7 @@ function initializeApplicationPersistence({ onProgress } = {}) {
       if (localAmuRoutingMigrationNeeded) {
         await reconcileOpenAmuResponsibilities("migration");
       }
-      if (postgresqlActive) {
+      {
         startupProgress('receipt-workers');
         await postgresqlReceiptWorkers.warm();
         startupProgress('report-worker');
@@ -4818,7 +4487,7 @@ function isLoopbackRequest(request) {
 }
 
 async function auditPortal(actor, action, entityType = "", entityId = "", detail = "") {
-  return persistenceRequestContext.run({auditOnly:true}, async () => (await sqliteAuditLogOperations.record({
+  return persistenceRequestContext.run({auditOnly:true}, async () => (await auditLogOperations.record({
     actor,
     action,
     entityType,
@@ -5898,7 +5567,7 @@ async function executeMobileMutation(request, response, session, operation, payl
       expiresAt,
     });
   } catch (error) {
-    if (String(error.code || "").includes("SQLITE_CONSTRAINT")) {
+    if (isUniquePersistenceViolation(error)) {
       throw httpError(409, "Diese App-Aktion wird bereits verarbeitet.", "MOBILE_IDEMPOTENCY_IN_PROGRESS");
     }
     throw error;
@@ -17998,16 +17667,6 @@ async function verifyActiveProtectedDocumentBlobs() {
   );
 }
 
-function verifyActiveProtectedDocumentBlobsForBackup() {
-  if (postgresqlActive) throw new Error('PG_PAIRED_BACKUP_REQUIRED');
-  const snapshot = protectedSicknessAmuStorageSnapshotFromDatabase(db);
-  return verifyProtectedDocumentBlobRows(
-    snapshot.amuDocuments,
-    snapshot.personnelDocuments,
-    snapshot.candidateDocuments,
-    snapshot.personnelDocumentVersions,
-  );
-}
 
 async function amuResponsibilityForReport(report) {
   if (report?.protected_payload) {
@@ -18558,7 +18217,7 @@ async function validateLocationPayload(body, isNew = false) {
   }
   if (!isNew) await validateLocationExists(id);
   const daySettings = validateDaySettings(body.daySettings
-    || (isNew ? legacyDaySettingsSnapshot() : await daySettingsFromLocation(id)));
+    || (isNew ? defaultLocationDaySettings() : await daySettingsFromLocation(id)));
   const timeTrackingAccessMode = body.timeTrackingAccessMode === "trusted_network" || body.time_tracking_access_mode === "trusted_network"
     ? "trusted_network"
     : "anywhere";
@@ -18640,9 +18299,8 @@ async function validateDepartmentPayload(body, existingId = null) {
 }
 
 async function resolvePlanningContext(input = {}) {
-  if (!postgresqlActive) await ensureDefaultLocation();
   const locations = await organizationPersonnelRepository.listLocations(true);
-  if (postgresqlActive && !locations.length) throw new Error('PG_APPLICATION_LOCATION_REQUIRED');
+  if ((!locations.length)) throw new Error('PG_APPLICATION_LOCATION_REQUIRED');
   const activeLocations = locations.filter((location) => location.active);
   const fallbackLocation = activeLocations[0] || locations[0];
   let locationId = String(input.locationId || input.location || "").trim();
@@ -19523,26 +19181,7 @@ function backupIntervalMs(settings = getSettings()) {
 function scheduleAutomaticBackups() {
   if (backupInterval) clearInterval(backupInterval);
   backupInterval = null;
-  if (serverModeActive) return;
-  backupInterval = setInterval(async () => {
-    try {
-      const settings = getSettings();
-      const backup = settings.external_backup_enabled === "0" ? null
-        : await createDatabaseBackupInBackground(backupDirectoryFromSettings(settings), "scheduled", "external");
-      if (backup) {
-        lastBackup = {
-          path: backup.path,
-          createdAt: backup.createdAt,
-          reason: "scheduled",
-          appBackup: lastBackup?.appBackup || null,
-          externalBackup: backup,
-        };
-      }
-    } catch (error) {
-      console.error("Backup konnte nicht erstellt werden:", error);
-    }
-  }, backupIntervalMs());
-  backupInterval.unref();
+  // PostgreSQL pairs are backed up by the supervised server maintenance only.
 }
 
 const dayKeyByNumber = {
@@ -20277,7 +19916,7 @@ async function validateShift(body, contextInput = {}, actor = null) {
   });
   const homeLocationId = String(employee.home_location_id || "").trim();
   if (locationId === homeLocationId) {
-    const awayAssignment = (await sqliteEmployeeLocationLendingOperations.overlapForShift(
+    const awayAssignment = (await employeeLocationLendingOperations.overlapForShift(
       employeeNumber,
       shiftDate,
       startTime,
@@ -20291,7 +19930,7 @@ async function validateShift(body, contextInput = {}, actor = null) {
       );
     }
   } else {
-    const assignment = (await sqliteEmployeeLocationLendingOperations.coverageForShift(
+    const assignment = (await employeeLocationLendingOperations.coverageForShift(
       employeeNumber,
       locationId,
       shiftDate,
@@ -20418,10 +20057,10 @@ function staffAssignmentAbsenceConstraintError(error) {
 
 async function assertShiftEmployeeAssignmentScope(session, shift, existing = null) {
   if (sessionHasGlobalScope(session)) return;
-  const employee = (await sqliteEmployeeLocationLendingOperations.employee(shift.employeeNumber));
+  const employee = (await employeeLocationLendingOperations.employee(shift.employeeNumber));
   const homeLocationId = String(employee?.home_location_id || "");
   if (homeLocationId === shift.locationId) return;
-  const assignment = (await sqliteEmployeeLocationLendingOperations.coverageForShift(
+  const assignment = (await employeeLocationLendingOperations.coverageForShift(
     shift.employeeNumber,
     shift.locationId,
     shift.shiftDate,
@@ -20588,7 +20227,7 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
     }
   }
   if (directlyApprovedAbsenceOptionTypes.has(optionType)) {
-    const assignment = (await sqliteEmployeeLocationLendingOperations.overlapForPeriod({
+    const assignment = (await employeeLocationLendingOperations.overlapForPeriod({
       employeeNumber,
       dateFrom,
       dateTo,
@@ -21148,7 +20787,7 @@ async function planningMutationEmployees(weekStart, context, session) {
 function readPlanningMutation(build) {
   // Legacy lending validation stays outside this catalog-only read snapshot.
   // It ends (including reauthorization) before the separate write transaction.
-  return postgresqlActive ? applicationPersistence.readSnapshot(build) : build();
+  return (applicationPersistence.readSnapshot(build));
 }
 
 function createPlanningWorkRuleEvaluator() {
@@ -24107,7 +23746,7 @@ async function deleteVacationGroup(
 }
 
 function databasePragmaValue(name) {
-  return postgresqlActive ? null : sqliteSystemDiagnosticsOperations.pragmaValue(name);
+  return (null);
 }
 
 function directoryDiagnostics(directory) {
@@ -24197,7 +23836,7 @@ async function serverDiagnostics() {
   const postgresqlHealth = await postgresqlSystemHealthCache.read();
   const settings = getSettings();
   const portal = getPortalStatus();
-  const migration = (await sqliteSystemDiagnosticsOperations.latestMigration());
+  const migration = (await systemDiagnosticsOperations.latestMigration());
   const warnings = [];
   const alerts = [];
   const addAlert = (id, severity, title, message, category = "system", action = "open-server-status") => {
@@ -24232,9 +23871,9 @@ async function serverDiagnostics() {
   const backupMetadataError = () => addAlert("BACKUP_METADATA_UNAVAILABLE", "critical", "Sicherungsarchiv prüfen",
     "Die Sicherungsmetadaten oder die lokale Archivkonfiguration konnten nicht sicher geprüft werden.", "backup");
   const latestExternalBackup = externalDirectory ? latestDatabaseBackup(externalDirectory, backupMetadataError, "external") : null;
-  const postgresqlStatus = postgresqlActive && !persistenceConfiguration.rehearsal
+  const postgresqlStatus = (!persistenceConfiguration.rehearsal)
     ? require('./lib/persistence/postgresql/operations/status').readStatus(persistenceConfiguration.binding) : null;
-  const latestAppBackup = postgresqlActive ? postgresqlStatus?.backup || null : latestDatabaseBackup(appBackupDirectory, backupMetadataError);
+  const latestAppBackup = (postgresqlStatus?.backup || null);
   if (postgresqlStatus?.code) addAlert('PG_OPERATIONS_ATTENTION', 'warning', 'Datenbankwartung prüfen',
     'Der letzte Wartungs- oder Sicherungsstatus muss durch die technische Administration geprüft werden.', 'backup');
   const backgroundBackup = localBackupArchiveEnabled()
@@ -24331,7 +23970,7 @@ async function serverDiagnostics() {
     configured: hostSecurityConfiguration === "1" ? true : (hostSecurityConfiguration === "0" ? false : undefined),
   });
   const amu = amuStorage ? amuStorage.diagnostics() : { ok: false, writable: false, error: amuStorageStartupError };
-  const protectedIntegrationConnectionCount = (await sqliteSystemDiagnosticsOperations
+  const protectedIntegrationConnectionCount = (await systemDiagnosticsOperations
     .protectedIntegrationConnectionCount());
   const integrationSecretsReady = protectedIntegrationConnectionCount === 0 || Boolean(integrationSecretVault);
   const runtimeErrors = runtimeValidationErrors(runtimeConfiguration);
@@ -24400,7 +24039,7 @@ async function serverDiagnostics() {
     addAlert(alert.id, alert.severity, alert.title, alert.message, alert.category);
   }
   if (serverModeActive && serviceControlToken.length < 32) addAlert("SERVICE_CONTROL_TOKEN_MISSING", "critical", "Dienststeuerung nicht abgesichert", "Der sichere Token für die Dienststeuerung fehlt.", "security");
-  const lockedAccounts = (await sqliteSystemDiagnosticsOperations.lockedPortalAccountCount());
+  const lockedAccounts = (await systemDiagnosticsOperations.lockedPortalAccountCount());
   if (lockedAccounts) addAlert("PORTAL_ACCOUNTS_LOCKED", "warning", "Zugänge vorübergehend gesperrt", `${lockedAccounts} Zugang/Zugänge sind derzeit wegen fehlgeschlagener Anmeldungen gesperrt.`, "security");
   const productionChecks = [
     { id: "mode", label: "Servermodus", ok: serverModeActive, detail: serverModeActive ? "aktiv" : "nicht aktiv" },
@@ -24475,7 +24114,7 @@ async function serverDiagnostics() {
       retentionCount: backupKeep,
       retentionUnit: 'calendar-days',
       background: backgroundBackup,
-      lastVerified: postgresqlActive ? latestAppBackup?.verified === true : Boolean(lastBackup?.appBackup?.verified || lastBackup?.externalBackup?.verified),
+      lastVerified: (latestAppBackup?.verified === true),
       offsite,
     },
     monitor,
@@ -24485,7 +24124,7 @@ async function serverDiagnostics() {
     pilotChecks: productionChecks,
     security: {
       lockedAccounts,
-      activeSessions: (await sqliteSystemDiagnosticsOperations.activePortalSessionCount()),
+      activeSessions: (await systemDiagnosticsOperations.activePortalSessionCount()),
       loginRateLimitActive: serverModeActive,
       secureCookies: serverModeActive,
       serviceControlConfigured: serviceControlToken.length >= 32,
@@ -26594,20 +26233,18 @@ const dataImportRoutes=registerDataImportRoutes(app, {
   requireSession: requireEmployeePortalSession,
   refreshSession: async (request) => loadPortalSessionFromRequest(request, {
     touch: false,
-    ...(postgresqlActive ? { repository: (await applicationPersistence.ready).authorizationRepositories.portalAccess } : {}),
+    ...(({ repository: (await applicationPersistence.ready).authorizationRepositories.portalAccess })),
   }),
   assertCsrf: assertPortalCsrf,
 });
-const postgresqlWorkerConfiguration = postgresqlActive ? persistenceConfiguration.readers : null;
-const postgresqlReceiptWorkers = postgresqlActive ? require('./lib/persistence/postgresql/reporting/receipt-runtime').createPostgresqlReceiptWorkers({
+const postgresqlWorkerConfiguration = (persistenceConfiguration.readers);
+const postgresqlReceiptWorkers = (require('./lib/persistence/postgresql/reporting/receipt-runtime').createPostgresqlReceiptWorkers({
   workerConfiguration: postgresqlWorkerConfiguration,
   keyConfiguration: integrationEncryptionConfiguration ? {activeKeyId:integrationEncryptionConfiguration.keyId,keys:integrationEncryptionConfiguration.keys} : null,
-}) : null;
-const managedSalesHistoryRuntime = postgresqlActive
-  ? postgresqlReceiptWorkers.runtime({access:persistenceProvider,vault:integrationSecretVault,enabled:false,cashEnabled:true,cashBackendFactory:require('./lib/persistence/postgresql/reporting/receipt-prefetch').createPostgresqlCashHistoryBackend})
-  : createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: false, cashEnabled: true });
+}));
+const managedSalesHistoryRuntime = (postgresqlReceiptWorkers.runtime({access:persistenceProvider,vault:integrationSecretVault,enabled:false,cashEnabled:true,cashBackendFactory:require('./lib/persistence/postgresql/reporting/receipt-prefetch').createPostgresqlCashHistoryBackend}));
 const salesReportBatchWorker = require('./lib/sales-report-batch-worker').createSalesReportBatchWorker({ databasePath,
-    ...(postgresqlActive ? {workerFile:path.join(__dirname,'lib/persistence/postgresql/reporting/worker.js'),workerConfiguration:postgresqlWorkerConfiguration} : {}),
+    ...(({workerFile:path.join(__dirname,'lib/persistence/postgresql/reporting/worker.js'),workerConfiguration:postgresqlWorkerConfiguration})),
     keyConfiguration: integrationEncryptionConfiguration ? { activeKeyId: integrationEncryptionConfiguration.keyId, keys: integrationEncryptionConfiguration.keys } : null });
 const salesReportJobs = createSalesReportJobs({ access: persistenceProvider, vault: integrationSecretVault,
   scope: persistenceConfiguration.rehearsal ? 'postgresql-rehearsal-11' : 'grabenplaner-main',
@@ -26638,7 +26275,7 @@ require('./lib/sales-bwl-abc-routes').registerSalesBwlAbcRoutes(app, {
   assertFresh:async(request,original,executor)=>{
     const fresh=await loadPortalSessionFromRequest(request, {touch:false,
       ...(executor ? {repository:require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor)}
-        : postgresqlActive ? {repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess} : {}),
+        : ({repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess})),
     });
     const identity=session=>require('./lib/sales-bwl-abc-model').authority(session).identity;
     if (!fresh || identity(fresh)!==identity(original)) require('./lib/data-import-contract').fail('BWL_ABC_FORBIDDEN',403);
@@ -26688,7 +26325,7 @@ require('./lib/sales-bwl-actions-routes').registerSalesBwlActionsRoutes(app,{
   assertFresh:async(request,original,executor)=>{
     const fresh=await loadPortalSessionFromRequest(request,{touch:false,
       ...(executor?{repository:require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor)}
-        :postgresqlActive?{repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess}:{}),
+        :({repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess})),
     });
     const authority=session=>require('./lib/sales-bwl-actions-model').authority(session).identity;
     if(!fresh||authority(fresh)!==authority(original))require('./lib/data-import-contract').fail('BWL_ACTIONS_FORBIDDEN',403);
@@ -26710,7 +26347,7 @@ require('./lib/sales-bwl-simulation-routes').registerSalesBwlSimulationRoutes(ap
   assertFresh:async(request,original,executor)=>{
     const fresh=await loadPortalSessionFromRequest(request,{touch:false,
       ...(executor ? {repository:require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor)}
-        : postgresqlActive ? {repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess} : {}),
+        : ({repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess})),
     });
     const authority=session=>require('./lib/sales-bwl-simulation-model').authority(session).identity;
     if (!fresh || authority(fresh)!==authority(original)) require('./lib/data-import-contract').fail('BWL_SIMULATION_FORBIDDEN',403);
@@ -26722,7 +26359,7 @@ require('./lib/sales-bwl-simulation-routes').registerSalesBwlSimulationRoutes(ap
 });
 const tradeInsightJobs = require('./lib/persistence/repositories/trade-insight-jobs').createTradeInsightJobs({
   access: persistenceProvider, vault: integrationSecretVault, runtime: tradeInsightRuntime, resolvePrincipal: resolveSalesReportPrincipal,
-  ...(postgresqlActive ? { dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
+  ...(({ dispatchRead: input => postgresqlReceiptWorkers.run(input) })),
   onError: code => console.error('Gespeicherte Einkaufsergebnisse derzeit nicht verfügbar:', code),
 });
 require('./lib/trade-insight-job-routes').registerTradeInsightJobRoutes(app, {
@@ -26732,7 +26369,7 @@ require('./lib/trade-insight-job-routes').registerTradeInsightJobRoutes(app, {
 });
 require('./lib/trade-insights-routes').registerTradeInsightRoutes(app, {
   runtime: tradeInsightRuntime,
-  ...(postgresqlActive ? { dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
+  ...(({ dispatchRead: input => postgresqlReceiptWorkers.run(input) })),
   requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
   refreshSession: (request, executor) => loadPortalSessionFromRequest(request, { touch: false, ...(executor ? { repository: require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor) } : {}) }),
 });
@@ -26742,8 +26379,8 @@ require("./lib/branch-sales-routes").registerBranchSalesRoutes(app, {
   images: require('./lib/persistence/repositories/sales-article-images').createSalesArticleImagesRepository(persistenceProvider),
   receipts: require("./lib/persistence/repositories/branch-receipt-runtime").createBranchReceiptRuntime({
     access: persistenceProvider, vault: integrationSecretVault,
-    ...(postgresqlActive ? { cashBackendFactory: require("./lib/persistence/postgresql/reporting/receipt-prefetch").createPostgresqlCashHistoryBackend,
-      dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
+    ...(({ cashBackendFactory: require("./lib/persistence/postgresql/reporting/receipt-prefetch").createPostgresqlCashHistoryBackend,
+      dispatchRead: input => postgresqlReceiptWorkers.run(input) })),
   }),
   requireSession: requirePortalSession, assertCsrf: assertPortalCsrf,
   refreshSession: request => loadPortalSessionFromRequest(request, { touch: false }),
@@ -28936,7 +28573,7 @@ app.get("/api/system-info", async (request, response) => {
   const statusAllowed = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.some((permission) => ["system:diagnostics:read", "system:diagnostics:technical"].includes(permission));
   const diagnosticsAllowed = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.includes("system:diagnostics:technical");
   const diagnosticSnapshot = statusAllowed || diagnosticsAllowed ? (await serverDiagnostics()) : null;
-  const databaseVersion = postgresqlActive ? await sqliteSystemDiagnosticsOperations.databaseVersion() : await sqliteSystemDiagnosticsOperations.sqliteVersion();
+  const databaseVersion = (await systemDiagnosticsOperations.databaseVersion());
   const serverTime = new Intl.DateTimeFormat("de-AT", {
     day: "2-digit",
     month: "2-digit",
@@ -28951,14 +28588,11 @@ app.get("/api/system-info", async (request, response) => {
     serverTime,
     timezone: "Europe/Vienna",
     nodeVersion: process.version,
-    sqliteVersion: postgresqlActive ? null : databaseVersion,
     databaseVersion,
     databaseProvider: persistenceConfiguration.providerId,
     platform: `${os.type()} ${os.release()} · ${os.arch()}`,
     uptimeSeconds: Math.floor(process.uptime()),
-    database: postgresqlActive
-      ? [persistenceConfiguration.coreUrl, persistenceConfiguration.salesUrl].map(value => decodeURIComponent(new URL(value).pathname.slice(1))).join(" + ")
-      : path.basename(databasePath),
+    database: ([persistenceConfiguration.coreUrl, persistenceConfiguration.salesUrl].map(value => decodeURIComponent(new URL(value).pathname.slice(1))).join(" + ")),
     appBackupDirectory: privileged ? appBackupDirectory : "",
     backupDirectory: privileged && !serverModeActive ? backupDirectoryFromSettings(settings) : "",
     externalBackupEnabled: !serverModeActive && settingEnabled(settings, "external_backup_enabled"),
@@ -29164,47 +28798,12 @@ Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
   }, 100);
 });
 
-app.put("/api/backup/settings", async (request, response) => {
-  if (serverModeActive) {
-    throw httpError(
-      409,
-      "Die frühere zweite Pfadsicherung wird im Serverbetrieb nicht mehr von der App verwaltet.",
-      "SERVER_MANAGED_BACKUP",
-    );
-  }
-  const currentSettings = getSettings();
-  const externalBackupEnabled = request.body?.externalBackupEnabled !== false;
-  const backupDirectory = externalBackupEnabled
-    ? validateBackupDirectory(request.body?.backupDirectory || currentSettings.backup_directory || defaultBackupDirectorySetting)
-    : { stored: String(request.body?.backupDirectory || currentSettings.backup_directory || defaultBackupDirectorySetting).trim() || defaultBackupDirectorySetting };
-  const backupIntervalHours = Number(request.body?.backupIntervalHours || currentSettings.backup_interval_hours || 24);
-  if (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 24) {
-    throw httpError(400, "Das Backup-Intervall muss zwischen 1 und 24 Stunden liegen.");
-  }
-  sqliteMaintenanceOperations.updateLegacyBackupSettings({
-    externalBackupEnabled,
-    backupDirectory: backupDirectory.stored,
-    backupIntervalHours,
-  });
-  await refreshApplicationSettingsSnapshot();
-  scheduleAutomaticBackups();
-  (await auditPortal(request.portalSession?.employeeNumber || "local", "backup.settings.update", "system", "backup"));
-  response.json({
-    ok: true,
-    externalBackupEnabled,
-    backupIntervalHours,
-  });
+app.put("/api/backup/settings", async () => {
+  throw httpError(409, "PostgreSQL-Sicherungen und Wiederherstellungen werden gemeinsam über die Serverwartung verwaltet.", "SERVER_MANAGED_BACKUP");
 });
 
-app.post("/api/backup", async (_request, response) => {
-  if (serverModeActive) {
-    throw httpError(
-      409,
-      "Im Serverbetrieb übernimmt die gesicherte Offsite-Automatik die laufenden Sicherungen.",
-      "SERVER_MANAGED_BACKUP",
-    );
-  }
-  response.status(201).json(await createDatabaseBackup("manual"));
+app.post("/api/backup", async () => {
+  throw httpError(409, "PostgreSQL-Sicherungen und Wiederherstellungen werden gemeinsam über die Serverwartung verwaltet.", "SERVER_MANAGED_BACKUP");
 });
 
 app.post("/api/backup/database-download", async (request, response, next) => {
@@ -29233,10 +28832,8 @@ app.post("/api/backup/database-download", async (request, response, next) => {
 
   let snapshot;
   try {
-    snapshot = postgresqlActive
-      ? await require('./lib/persistence/postgresql/operations/application-export').createApplicationDatabaseExport({
-        ...persistenceConfiguration,directory:path.join(dataRootDirectory,'transient','database-exports')})
-      : createDatabaseDownloadSnapshot();
+    snapshot = (await require('./lib/persistence/postgresql/operations/application-export').createApplicationDatabaseExport({
+        ...persistenceConfiguration,directory:path.join(dataRootDirectory,'transient','database-exports')}));
   } catch (error) {
     (await auditBackupAdministration(
       session.employeeNumber,
@@ -29249,9 +28846,9 @@ app.post("/api/backup/database-download", async (request, response, next) => {
     throw httpError(500, "Der geprüfte Datenbankstand konnte nicht erstellt werden.", "DATABASE_DOWNLOAD_FAILED");
   }
 
-  const filename = `Grabenplaner-Datenbank-${backupTimestamp(new Date()).replace(/Z$/, "")}.${snapshot.extension || 'db'}`;
+  const filename = `Grabenplaner-Datenbank-${backupTimestamp(new Date()).replace(/Z$/, "")}.${snapshot.extension || 'tar'}`;
   response.set({
-    "Content-Type": snapshot.contentType || "application/vnd.sqlite3",
+    "Content-Type": snapshot.contentType || "application/octet-stream",
     "Content-Disposition": contentDispositionHeader(filename),
     "Cache-Control": "private, no-store, max-age=0",
     Pragma: "no-cache",
@@ -29315,7 +28912,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
       (await cleanup());
     }
   };
-  if (postgresqlActive && (response.destroyed || !await authorizePersistenceOperation({readOnly:true}))) {
+  if ((response.destroyed || !await authorizePersistenceOperation({readOnly:true}))) {
     await finishTransfer('failed', response.destroyed ? 'CLIENT_ABORTED' : 'AUTHORIZATION_CHANGED');
     if (!response.destroyed) throw httpError(403, 'Die Berechtigung für den Datenbank-Download hat sich geändert.', 'DATABASE_DOWNLOAD_FORBIDDEN');
     return;
@@ -29481,7 +29078,7 @@ function serverMonitorRestartCooldownSeconds(lastAcceptedAt, now = new Date()) {
 }
 
 async function currentServerMonitorRestartCooldownSeconds(now = new Date()) {
-  const latestAcceptedAt = (await sqliteSystemDiagnosticsOperations
+  const latestAcceptedAt = (await systemDiagnosticsOperations
     .latestAuditActionCreatedAt("system.server_monitor.restart.accepted"));
   return serverMonitorRestartCooldownSeconds(latestAcceptedAt, now);
 }
@@ -29689,7 +29286,7 @@ app.post("/api/portal/v1/server-monitor/restart", async (request, response) => {
 
   const requestId = crypto.randomUUID();
   serverManagedRestartRequested = true;
-  if (postgresqlActive) {
+  {
     try { return await queuePostgresqlLifecycle(request, response, actor, 'restart', requestId); }
     catch (error) { serverManagedRestartRequested = false; throw error; }
   }
@@ -29768,7 +29365,6 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
     );
   }
   try {
-    if (!postgresqlActive) assertSafeHostRebootSocket();
   } catch {
     throw httpError(
       503,
@@ -29787,7 +29383,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
 
   const requestId = crypto.randomUUID();
   hostManagedRebootRequested = true;
-  if (postgresqlActive) {
+  {
     try { return await queuePostgresqlLifecycle(request, response, session, 'vps-reboot', requestId); }
     catch (error) { hostManagedRebootRequested = false; throw error; }
   }
@@ -29858,7 +29454,7 @@ app.post("/api/system/exit", async (request, response) => {
     if (!["developer", "it_admin", "admin"].includes(session.role)) {
       throw httpError(403, "Nur Developer, IT-Administration oder Administration dürfen den Server beenden.", "SERVER_SHUTDOWN_ROLE_DENIED");
     }
-    if (postgresqlActive) return queuePostgresqlLifecycle(request, response, session, 'shutdown', crypto.randomUUID());
+    return queuePostgresqlLifecycle(request, response, session, 'shutdown', crypto.randomUUID());
   }
   const driveInfo = runtimeDriveInfo();
   let backup = null;
@@ -29881,74 +29477,6 @@ app.post("/api/system/exit", async (request, response) => {
   response.on("finish", () => setTimeout(() => shutdown({ reason: "api", skipBackup: true }), 350));
 });
 
-function scheduleBackupImport(importPath) {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-db-import-"));
-  const scriptPath = path.join(tempRoot, "apply-db-import.ps1");
-  const launcherPath = path.join(tempRoot, "launch-db-import.cmd");
-  const safeAppDir = __dirname.replaceAll("'", "''");
-  const safeDatabasePath = databasePath.replaceAll("'", "''");
-  const safeImportPath = importPath.replaceAll("'", "''");
-  const safeTempRoot = tempRoot.replaceAll("'", "''");
-  const safeVersionLabel = APP_VERSION_LABEL.replaceAll("'", "''");
-  const script = `
-$ErrorActionPreference = 'Stop'
-$appDir = '${safeAppDir}'
-$databasePath = '${safeDatabasePath}'
-$importPath = '${safeImportPath}'
-$workDir = '${safeTempRoot}'
-$versionLabel = '${safeVersionLabel}'
-$pidToWait = ${process.pid}
-$logPath = Join-Path $appDir 'data\\import-last.log'
-function Write-ImportLog([string]$message) {
-  $line = "[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $message
-  Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
-}
-try {
-  New-Item -ItemType Directory -Path (Split-Path -Parent $logPath) -Force | Out-Null
-  Set-Content -LiteralPath $logPath -Value ("[{0}] Datenbank-Import gestartet" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')) -Encoding UTF8
-  Write-ImportLog "App-Verzeichnis: $appDir"
-  Write-ImportLog "Warte auf Server-Prozess $pidToWait ..."
-  $deadline = (Get-Date).AddMinutes(2)
-  while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {
-    if ((Get-Date) -gt $deadline) { throw "Server-Prozess $pidToWait wurde nicht rechtzeitig beendet." }
-    Start-Sleep -Milliseconds 300
-  }
-  Start-Sleep -Milliseconds 800
-  Remove-Item -LiteralPath "$databasePath-wal" -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath "$databasePath-shm" -Force -ErrorAction SilentlyContinue
-  Copy-Item -LiteralPath $importPath -Destination $databasePath -Force
-  Remove-Item -LiteralPath $importPath -Force -ErrorAction SilentlyContinue
-  Write-ImportLog "Datenbank ersetzt."
-  $startFile = Join-Path $appDir "Grabenplaner $versionLabel starten.cmd"
-  if (-not (Test-Path $startFile)) { $startFile = Join-Path $appDir 'Dienstplan starten.cmd' }
-  Write-ImportLog "Starte neu: $startFile"
-  Start-Process -FilePath $startFile -WorkingDirectory $appDir
-  Start-Sleep -Seconds 3
-  Write-ImportLog "Datenbank-Import erfolgreich abgeschlossen."
-  Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
-} catch {
-  try {
-    Write-ImportLog ("FEHLER: " + $_.Exception.Message)
-    Write-ImportLog ("Details: " + $_.ScriptStackTrace)
-  } catch {}
-  exit 1
-}
-`;
-  fs.writeFileSync(scriptPath, script, "utf8");
-  fs.writeFileSync(
-    launcherPath,
-    `@echo off\r\nstart "" /min powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"\r\n`,
-    "utf8",
-  );
-  setTimeout(() => {
-    childProcess.spawn("cmd.exe", ["/d", "/c", launcherPath], {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-    }).unref();
-    setTimeout(shutdown, 900);
-  }, 450);
-}
 
 const brandingPreserveSettingKeys = [
   "branding_management_kit_id",
@@ -29985,7 +29513,6 @@ function currentBrandingSnapshot() {
   return brandingSnapshotRepository.read(brandingPreserveSettingKeys);
 }
 
-const applyBrandingSnapshotToDatabase = applyBrandingSnapshotToSqliteFile;
 
 function verifyImportedProtectedPersonnelPayloads(inspection) {
   const storage = requireAmuStorage();
@@ -30129,58 +29656,6 @@ function verifyImportedProtectedPersonnelPayloads(inspection) {
   return verified;
 }
 
-async function verifyImportedPersonnelLifecycleState(importPath) {
-  let importedDatabase = null;
-  let importedProvider = null;
-  try {
-    importedDatabase = openSqliteLegacyDatabase(importPath, {
-      readOnly: true,
-      initializeConnection: false,
-    });
-    const schema = inspectSqlitePersonnelLifecycleSchema(importedDatabase);
-    const conversionSchema = inspectSqlitePersonnelLifecycleConversionSchema(importedDatabase);
-    if (schema.absent) {
-      if (!conversionSchema.absent) {
-        throw new Error("personnel lifecycle conversion schema without foundation");
-      }
-      return Object.freeze({ present: false });
-    }
-    if (!schema.valid) {
-      throw new Error("invalid personnel lifecycle schema");
-    }
-    if (!conversionSchema.absent && !conversionSchema.valid) {
-      throw new Error("invalid personnel lifecycle conversion schema");
-    }
-
-    if (!inspectSqliteImportForeignKeyIntegrity(importedDatabase).valid) {
-      throw new Error("invalid personnel lifecycle foreign keys");
-    }
-
-    importedProvider = createSqlitePersistenceProvider({
-      database: importedDatabase,
-      catalog: SQLITE_APPLICATION_CATALOG,
-      closeDatabase: false,
-      initializeConnection: false,
-    });
-    const importedRepository = createPersonnelLifecycleRepository(importedProvider);
-    const integrity = await createPersonnelLifecycleService(importedRepository, {
-      protectJson,
-      parseProtectedJson,
-      conversionAvailable: conversionSchema.valid,
-    }).verifyIntegrity();
-    return Object.freeze({
-      present: true,
-      conversionSchema: conversionSchema.valid ? "m3" : "m2-compatible",
-      ...integrity,
-    });
-  } finally {
-    try {
-      await importedProvider?.close();
-    } finally {
-      try { importedDatabase?.close(); } catch {}
-    }
-  }
-}
 
 async function verifyImportedIntegrationCredentials(connections = []) {
   if (!connections.length) return 0;
@@ -30194,94 +29669,8 @@ async function verifyImportedIntegrationCredentials(connections = []) {
   return connections.length;
 }
 
-app.post("/api/backup/import", express.raw({ type: "application/octet-stream", limit: "200mb" }), async (request, response) => {
-  if (getPortalStatus().portalEnabled && !["developer", "it_admin"].includes(request.portalSession?.role)) {
-    throw httpError(403, "Datenbankimporte dürfen im geschützten Betrieb nur durch Developer oder IT-Admin ausgeführt werden.", "BACKUP_IMPORT_ROLE_DENIED");
-  }
-  const {
-    amuDocuments: currentAmuDocuments,
-    personnelDocuments: currentPersonnelDocuments,
-  } = await runtimeRecoveryRepository.protectedDocumentCounts();
-  const currentProtectedSnapshot = await protectedSicknessStorageForApplication();
-  const currentCandidateDocuments = currentProtectedSnapshot.candidateDocuments.length;
-  const currentPersonnelDocumentVersions = currentProtectedSnapshot.personnelDocumentVersions.length;
-  if (currentAmuDocuments + currentPersonnelDocuments + currentCandidateDocuments
-    + currentPersonnelDocumentVersions > 0) {
-    throw httpError(409, "Diese Datenbank enthält geschützte Personalakt-Dokumente. Bitte Datenbank und private Dateisicherung gemeinsam über die Wartungswerkzeuge wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
-  }
-  if (serverModeActive) throw httpError(409, "Datenbankimporte sind im laufenden Serverbetrieb gesperrt und müssen in einem Wartungsfenster am Server durchgeführt werden.", "SERVER_MAINTENANCE_REQUIRED");
-  if (!Buffer.isBuffer(request.body) || request.body.length < 1024) {
-    throw httpError(400, "Bitte eine gültige Backup-Datei auswählen.");
-  }
-  fs.mkdirSync(dataDirectory, { recursive: true });
-  const importPath = path.join(dataDirectory, `pending-import-${backupTimestamp()}.db`);
-  fs.writeFileSync(importPath, request.body);
-  let importedInspection;
-  let importedAmuDocuments = 0;
-  let importedPersonnelDocuments = 0;
-  let importedPersonnelDocumentVersions = 0;
-  let importedCandidateDocuments = 0;
-  let importedProtectedPayloadError = false;
-  let importedIntegrationCredentialError = false;
-  let importedDatabaseReadError = false;
-  try {
-    importedInspection = inspectSqliteImportFile(importPath);
-  } catch {
-    importedDatabaseReadError = true;
-  }
-  if (importedInspection) {
-    importedAmuDocuments = importedInspection.amuDocuments;
-    importedPersonnelDocuments = importedInspection.personnelDocuments;
-    importedPersonnelDocumentVersions = importedInspection.protected
-      ?.personnelDocumentVersions?.length || 0;
-    importedCandidateDocuments = importedInspection.candidateDocuments;
-    importedProtectedPayloadError = importedInspection.protectedInspectionError;
-    importedIntegrationCredentialError = importedInspection.integrationInspectionError;
-    if (!importedAmuDocuments && !importedPersonnelDocuments
-      && !importedPersonnelDocumentVersions && !importedCandidateDocuments) {
-      try {
-        verifyImportedProtectedPersonnelPayloads(importedInspection);
-        await verifyImportedPersonnelLifecycleState(importPath);
-      }
-      catch { importedProtectedPayloadError = true; }
-    }
-    try {
-      await verifyImportedIntegrationCredentials(importedInspection.integrationConnections);
-    } catch {
-      importedIntegrationCredentialError = true;
-    }
-  }
-  if (importedDatabaseReadError) {
-    fs.rmSync(importPath, { force: true });
-    throw httpError(400, "Die ausgewählte Datei ist keine lesbare SQLite-Backup-Datei.");
-  }
-  if (importedProtectedPayloadError) {
-    fs.rmSync(importPath, { force: true });
-    throw httpError(409, "Die geschützten Personalakt-Daten dieses Backups gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Datenbank und die zugehörige private Datensicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
-  }
-  if (importedIntegrationCredentialError) {
-    fs.rmSync(importPath, { force: true });
-    throw httpError(409, "Die geschützten Zugangsdaten direkter Verbindungen gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Serversicherung mit dem zugehörigen Integrationsschlüssel wiederherstellen oder die Verbindungen im Quellsystem entfernen.", "INTEGRATION_FULL_RESTORE_REQUIRED");
-  }
-  if (importedAmuDocuments + importedPersonnelDocuments + importedPersonnelDocumentVersions
-    + importedCandidateDocuments > 0) {
-    fs.rmSync(importPath, { force: true });
-    throw httpError(409, "Das ausgewählte Backup enthält geschützte Personalakt-Dokumente. Bitte die vollständige Datenbank- und private Dateisicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
-  }
-  const preserveBranding = String(request.query.preserveBranding ?? "1") !== "0";
-  if (preserveBranding) {
-    applyBrandingSnapshotToDatabase(importPath, await currentBrandingSnapshot());
-  }
-  const safetyBackup = await createDatabaseBackup("before-import");
-  response.status(202).json({
-    ok: true,
-    message: preserveBranding
-      ? "Backup wurde übernommen, aktuelles Branding bleibt erhalten. Grabenplaner wird sicher neu gestartet."
-      : "Backup wurde vollständig übernommen. Grabenplaner wird sicher neu gestartet.",
-    safetyBackup,
-    preserveBranding,
-  });
-  scheduleBackupImport(importPath);
+app.post("/api/backup/import", async () => {
+  throw httpError(409, "PostgreSQL-Sicherungen und Wiederherstellungen werden gemeinsam über die Serverwartung verwaltet.", "SERVER_MANAGED_BACKUP");
 });
 
 function governanceSource(source) {
@@ -30842,7 +30231,7 @@ app.post("/api/privacy-governance/retention/rules", async (request, response) =>
       JSON.stringify({ category: rule.category, version: rule.version, status: rule.status })));
     response.status(201).json({ rule, notice: RETENTION_GOVERNANCE_NOTICE });
   } catch (error) {
-    governanceRouteError(error, error?.code === "SQLITE_CONSTRAINT_UNIQUE" ? 409 : 400);
+    governanceRouteError(error, isUniquePersistenceViolation(error) ? 409 : 400);
   }
 });
 
@@ -32769,7 +32158,7 @@ function readModelResponse(build) {
   return async (request, response) => {
     const read = () => build(request);
     // The response is sent only after the snapshot's final authority check.
-    response.json(await (postgresqlActive ? applicationPersistence.readSnapshot(read) : read()));
+    response.json(await ((applicationPersistence.readSnapshot(read))));
   };
 }
 
@@ -39462,7 +38851,7 @@ require('./lib/sales-article-tools-routes').registerSalesArticleToolsRoutes(app,
   },
   loadSales:async(session,input,fresh)=>managedSalesHistoryRuntime.run(fresh,workspace=>{if(!workspace?.articleSales)require('./lib/data-import-contract').fail('IMPORT_HISTORY_NOT_ACTIVATED',503);return workspace.articleSales.search(input);}),
   loadMovements:async(session,input,fresh)=>{
-    const started=performance.now(),result=postgresqlActive?await postgresqlReceiptWorkers.run({operation:'trade-insights',kind:'article-movements',query:input,session:{employeeNumber:session.employeeNumber}}):await tradeInsightRuntime.run(fresh,'article-movements',input);
+    const started=performance.now(),result=(await postgresqlReceiptWorkers.run({operation:'trade-insights',kind:'article-movements',query:input,session:{employeeNumber:session.employeeNumber}}));
     return {...result,durationMs:Math.round(performance.now()-started)};
   },
 });
@@ -44139,7 +43528,7 @@ function staffAssignmentEmployeeInScope(session, employee) {
 }
 
 async function assertStaffAssignmentEmployeeScope(session, employeeNumber) {
-  const employee = (await sqliteEmployeeLocationLendingOperations.employee(employeeNumber));
+  const employee = (await employeeLocationLendingOperations.employee(employeeNumber));
   if (!employee || !employee.active) {
     throw httpError(404, "Das aktive Teammitglied wurde nicht gefunden.", "STAFF_ASSIGNMENT_EMPLOYEE_NOT_FOUND");
   }
@@ -44389,12 +43778,12 @@ app.get("/api/portal/v1/staff-assignments", async (request, response) => {
     throw httpError(403, "Diese Filiale ist dem Zugang nicht zugewiesen.", "STAFF_ASSIGNMENT_SCOPE_DENIED");
   }
   const scopeLocationIds = requestedLocationId ? [requestedLocationId] : assignedLocationIds;
-  const allCandidates = (await sqliteEmployeeLocationLendingOperations.activeCandidates());
+  const allCandidates = (await employeeLocationLendingOperations.activeCandidates());
   const candidateLookup = new Map(allCandidates.map((employee) => [employee.employeeNumber, employee]));
   const candidates = allCandidates
     .filter((employee) => staffAssignmentEmployeeInScope(session, employee))
     .filter((employee) => !requestedLocationId || employee.homeLocationId === requestedLocationId);
-  const assignments = (await persistenceAsyncCollections.filter((await sqliteEmployeeLocationLendingOperations.list({
+  const assignments = (await persistenceAsyncCollections.filter((await employeeLocationLendingOperations.list({
     status: status === "all" ? "" : status,
     dateFrom,
     dateTo,
@@ -44403,7 +43792,7 @@ app.get("/api/portal/v1/staff-assignments", async (request, response) => {
       session,
       assignment,
       candidateLookup.get(assignment.employeeNumber)
-        || (await sqliteEmployeeLocationLendingOperations.employee(assignment.employeeNumber)),
+        || (await employeeLocationLendingOperations.employee(assignment.employeeNumber)),
     )))
     .map((assignment) => {
       const requestBound = Boolean(staffAssignmentRequestIdFromAssignmentId(assignment.id));
@@ -44418,8 +43807,8 @@ app.get("/api/portal/v1/staff-assignments", async (request, response) => {
   response.json({
     assignments,
     candidates,
-    locations: (await sqliteEmployeeLocationLendingOperations.activeLocations()),
-    departments: (await sqliteEmployeeLocationLendingOperations.activeDepartments()),
+    locations: (await employeeLocationLendingOperations.activeLocations()),
+    departments: (await employeeLocationLendingOperations.activeDepartments()),
     delegates: await staffAssignmentDelegates(session, requestedLocationId),
     canManage: true,
   });
@@ -44431,7 +43820,7 @@ app.post("/api/portal/v1/staff-assignments", async (request, response) => {
   (await assertStaffAssignmentEmployeeScope(session, input.employeeNumber));
   let assignment;
   try {
-    assignment = (await sqliteEmployeeLocationLendingOperations.create({
+    assignment = (await employeeLocationLendingOperations.create({
       ...input,
       actor: portalActorId(session),
     }));
@@ -44451,7 +43840,7 @@ app.post("/api/portal/v1/staff-assignments", async (request, response) => {
 
 app.put("/api/portal/v1/staff-assignments/:assignmentId", async (request, response) => {
   const session = requireStaffAssignmentAccess(request, { csrf: true });
-  const existing = (await sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId));
+  const existing = (await employeeLocationLendingOperations.get(request.params.assignmentId));
   if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
   (await assertStaffAssignmentEmployeeScope(session, existing.employeeNumber));
   if (staffAssignmentRequestIdFromAssignmentId(existing.id)) {
@@ -44465,7 +43854,7 @@ app.put("/api/portal/v1/staff-assignments/:assignmentId", async (request, respon
   const revision = staffAssignmentRevision(request.body?.revision);
   let assignment;
   try {
-    assignment = (await sqliteEmployeeLocationLendingOperations.update(existing.id, {
+    assignment = (await employeeLocationLendingOperations.update(existing.id, {
       ...input,
       revision,
       actor: portalActorId(session),
@@ -44486,7 +43875,7 @@ app.put("/api/portal/v1/staff-assignments/:assignmentId", async (request, respon
 
 app.post("/api/portal/v1/staff-assignments/:assignmentId/cancel", async (request, response) => {
   const session = requireStaffAssignmentAccess(request, { csrf: true });
-  const existing = (await sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId));
+  const existing = (await employeeLocationLendingOperations.get(request.params.assignmentId));
   if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
   (await assertStaffAssignmentEmployeeScope(session, existing.employeeNumber));
   if (staffAssignmentRequestIdFromAssignmentId(existing.id)) {
@@ -44499,7 +43888,7 @@ app.post("/api/portal/v1/staff-assignments/:assignmentId/cancel", async (request
   const revision = staffAssignmentRevision(request.body?.revision);
   let assignment;
   try {
-    assignment = (await sqliteEmployeeLocationLendingOperations.cancel(existing.id, {
+    assignment = (await employeeLocationLendingOperations.cancel(existing.id, {
       revision,
       actor: portalActorId(session),
     }));
@@ -44733,7 +44122,7 @@ app.get("/api/portal/v1/branch-orders/catalog", async (request, response) => {
   const context = requireBranchOrderSubmissionSession(request);
   const { session, locationId } = context;
   try {
-    const catalog = (await sqliteBranchOrderOperations.catalogSnapshot(locationId));
+    const catalog = (await branchOrderOperations.catalogSnapshot(locationId));
     const weekStart = currentWeekStart();
     response.json({
       ...catalog,
@@ -44756,7 +44145,7 @@ app.get("/api/portal/v1/branch-orders/draft", async (request, response) => {
   try {
     response.json({
       locationId: context.locationId,
-      draft: (await sqliteBranchOrderOperations.draftSnapshot(context.locationId, scope)),
+      draft: (await branchOrderOperations.draftSnapshot(context.locationId, scope)),
     });
   } catch (error) {
     throw branchOrderHttpError(error);
@@ -44769,7 +44158,7 @@ app.put("/api/portal/v1/branch-orders/draft", async (request, response) => {
   const scope = branchOrderDraftScope(context, request.body?.employeeNumber);
   const weekStart = currentWeekStart();
   try {
-    const draft = (await sqliteBranchOrderOperations.saveDraft(context.locationId, {
+    const draft = (await branchOrderOperations.saveDraft(context.locationId, {
       ...scope,
       items: request.body?.items,
       expectedRevision: request.body?.expectedRevision,
@@ -44792,7 +44181,7 @@ app.delete("/api/portal/v1/branch-orders/draft", async (request, response) => {
   assertPortalCsrf(request);
   const scope = branchOrderDraftScope(context, request.body?.employeeNumber);
   try {
-    const deleted = (await sqliteBranchOrderOperations.deleteDraft(context.locationId, {
+    const deleted = (await branchOrderOperations.deleteDraft(context.locationId, {
       ...scope,
       expectedRevision: request.body?.expectedRevision,
     }));
@@ -44816,7 +44205,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
   let order;
   try {
     const emailDelivery = branchOrderEmailStatus();
-    const configuration = (await sqliteBranchOrderOperations.settingsSnapshot(locationId));
+    const configuration = (await branchOrderOperations.settingsSnapshot(locationId));
     if (branchOrderConfigurationRequiresPdf(configuration) && !emailDelivery.attachmentsAvailable) {
       throw httpError(
         409,
@@ -44824,7 +44213,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
         "BRANCH_ORDER_PDF_DELIVERY_UNAVAILABLE",
       );
     }
-    order = await sqliteBranchOrderOperations.createOrder(locationId, {
+    order = await branchOrderOperations.createOrder(locationId, {
       selectedEmployeeNumber: context.selectedEmployeeNumber || request.body?.employeeNumber,
       items: request.body?.items,
       weekStart,
@@ -44863,15 +44252,15 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
           },
         } : {}),
       });
-      (await sqliteBranchOrderOperations.markDelivery(delivery.id, { status: "sent" }));
+      (await branchOrderOperations.markDelivery(delivery.id, { status: "sent" }));
     } catch (error) {
-      (await sqliteBranchOrderOperations.markDelivery(delivery.id, {
+      (await branchOrderOperations.markDelivery(delivery.id, {
         status: error?.code === "EXTERNAL_NOTIFICATION_TIMEOUT" ? "pending" : "failed",
         failureCode: String(error?.code || "EXTERNAL_NOTIFICATION_DELIVERY_FAILED"),
       }));
     }
   }
-  const deliverySummary = (await sqliteBranchOrderOperations.finalizeOrder(order.id));
+  const deliverySummary = (await branchOrderOperations.finalizeOrder(order.id));
   (await auditPortal(session.actorId, "branch-order.delivery", "branch_order", order.id, JSON.stringify(deliverySummary)));
   response.status(deliverySummary.status === "sent" ? 201 : 202).json({
     order: {
@@ -44895,7 +44284,7 @@ app.get("/api/portal/v1/branch-orders/settings", async (request, response) => {
   const session = requirePortalSession(request, BRANCH_ORDER_MANAGE_PERMISSION);
   const locationId = await branchOrderManagementLocation(session, request.query || {});
   try {
-    const configuration = await sqliteBranchOrderOperations.settingsSnapshot(locationId);
+    const configuration = await branchOrderOperations.settingsSnapshot(locationId);
     response.json({
       locationId,
       configuration,
@@ -44912,9 +44301,9 @@ app.put("/api/portal/v1/branch-orders/settings", async (request, response) => {
   assertPortalCsrf(request);
   const locationId = await branchOrderManagementLocation(session, request.body || {});
   try {
-    const previousConfiguration = (await sqliteBranchOrderOperations.settingsSnapshot(locationId));
+    const previousConfiguration = (await branchOrderOperations.settingsSnapshot(locationId));
     const emailDelivery = branchOrderEmailStatus();
-    const configuration = (await sqliteBranchOrderOperations.replaceConfiguration(
+    const configuration = (await branchOrderOperations.replaceConfiguration(
       locationId,
       request.body?.configuration,
       portalActorId(session),
@@ -44940,7 +44329,7 @@ app.put("/api/portal/v1/branch-orders/settings", async (request, response) => {
 app.get("/api/portal/v1/branch-orders/history", async (request, response) => {
   const access = await branchOrderHistoryAccess(request, request.query || {});
   try {
-    const orders = (await sqliteBranchOrderOperations.history(
+    const orders = (await branchOrderOperations.history(
       access.locationId,
       Number(request.query?.limit || 50),
       { selectedEmployeeNumber: access.selectedEmployeeNumber },
@@ -44957,7 +44346,7 @@ app.get("/api/portal/v1/branch-orders/history", async (request, response) => {
 app.get("/api/portal/v1/branch-orders/:orderId/pdf", async (request, response) => {
   const access = await branchOrderHistoryAccess(request, request.query || {});
   try {
-    const pdf = await sqliteBranchOrderOperations.orderPdf(access.locationId, request.params.orderId, {
+    const pdf = await branchOrderOperations.orderPdf(access.locationId, request.params.orderId, {
       selectedEmployeeNumber: access.selectedEmployeeNumber,
     });
     const download = String(request.query?.download || "") === "1";
@@ -46346,229 +45735,11 @@ function loanMigrationRunRows() {
   return loanModuleRepository.listMigrationRuns();
 }
 
-function f18MigrationError(error) {
-  if (!(error instanceof F18MigrationError)) return error;
-  return httpError(error.status || 400, error.message, error.code);
-}
-
-function inspectUploadedF18Backup(backup) {
-  try {
-    return inspectF18Backup(backup.buffer);
-  } catch (error) {
-    throw f18MigrationError(error);
-  }
-}
-
-function f18RequiredSourceEmployeeIds(inspection) {
-  const ids = new Set();
-  for (const loan of inspection.loans) {
-    ids.add(Number(loan.borrowerSourceEmployeeId));
-    if (loan.returnWitnessSourceEmployeeId != null) {
-      ids.add(Number(loan.returnWitnessSourceEmployeeId));
-    }
-  }
-  return ids;
-}
-
-async function f18TargetEmployees() {
-  return (await loanModuleRepository.listMigrationTargetEmployees()).map((row) => ({
-    employeeNumber: row.personnel_number,
-    name: row.nickname || row.full_name || row.personnel_number,
-    fullName: row.full_name || "",
-    active: Boolean(row.active),
-  }));
-}
-
-async function f18PreviewPayload(inspection, locationId) {
-  const targetEmployees = await f18TargetEmployees();
-  const targetNumbers = new Set(targetEmployees.map((employee) => employee.employeeNumber));
-  const requiredIds = f18RequiredSourceEmployeeIds(inspection);
-  const suggestedMappings = {};
-  for (const sourceEmployee of inspection.employees) {
-    if (targetNumbers.has(sourceEmployee.employeeNumber)) {
-      suggestedMappings[String(sourceEmployee.id)] = sourceEmployee.employeeNumber;
-    }
-  }
-  const existingRun = await loanModuleRepository.getF18MigrationRunForLocation({ locationId });
-  return {
-    inspection: publicF18Inspection(inspection),
-    locationId,
-    requiredSourceEmployeeIds: [...requiredIds].sort((left, right) => left - right),
-    suggestedMappings,
-    targetEmployees,
-    existingRun: publicLoanMigrationRun(existingRun),
-  };
-}
-
-function parseF18EmployeeMappings(value) {
-  let parsed;
-  try {
-    parsed = JSON.parse(String(value || "{}"));
-  } catch {
-    throw httpError(
-      400,
-      "Die Mitarbeiterzuordnung ist ungültig.",
-      "F18_EMPLOYEE_MAPPING_INVALID",
-    );
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw httpError(
-      400,
-      "Die Mitarbeiterzuordnung ist ungültig.",
-      "F18_EMPLOYEE_MAPPING_INVALID",
-    );
-  }
-  const result = new Map();
-  for (const [sourceId, targetNumber] of Object.entries(parsed)) {
-    if (!/^\d+$/.test(sourceId)) continue;
-    const employeeNumber = String(targetNumber || "").trim();
-    if (employeeNumber) result.set(Number(sourceId), employeeNumber);
-  }
-  return result;
-}
-
-async function validateF18EmployeeMappings(inspection, mappings) {
-  const sourceEmployees = new Map(inspection.employees.map((employee) => [employee.id, employee]));
-  const targetEmployees = new Map((await f18TargetEmployees()).map((employee) => [
-    employee.employeeNumber,
-    employee,
-  ]));
-  for (const sourceId of f18RequiredSourceEmployeeIds(inspection)) {
-    const source = sourceEmployees.get(sourceId);
-    if (!source) {
-      throw httpError(
-        409,
-        `Die F18-Leihe verweist auf die unbekannte Mitarbeiter-ID ${sourceId}.`,
-        "F18_SOURCE_EMPLOYEE_MISSING",
-      );
-    }
-    const targetNumber = mappings.get(sourceId);
-    if (!targetNumber || !targetEmployees.has(targetNumber)) {
-      throw httpError(
-        400,
-        `Bitte ${source.employeeNumber || source.id} · ${source.name} einem Grabenplaner-Teammitglied zuordnen.`,
-        "F18_EMPLOYEE_MAPPING_REQUIRED",
-      );
-    }
-  }
-  return { sourceEmployees, targetEmployees };
-}
 
 function f18MigrationText(value, maximum) {
   return stripEmoji(String(value || "")).replace(/\0/g, "").trim().slice(0, maximum);
 }
 
-function f18ItemNote(item) {
-  const notes = [];
-  if (item.note) notes.push(item.note);
-  if (item.conditionOut?.original
-    && !["gut", "good"].includes(item.conditionOut.original.toLocaleLowerCase("de"))) {
-    notes.push(`F18-Zustand bei Ausgabe: ${item.conditionOut.original}`);
-  }
-  return f18MigrationText(notes.join(" · "), 1000);
-}
-
-async function prepareF18MigrationArtifacts(inspection, mappings, location, actor) {
-  const prepared = [];
-  const preparedDocuments = [];
-  const preparedPhotos = [];
-  try {
-    for (const sourceLoan of inspection.loans) {
-      const loanId = crypto.randomUUID();
-      const borrowerEmployeeNumber = mappings.get(sourceLoan.borrowerSourceEmployeeId);
-      const witnessEmployeeNumber = sourceLoan.returnWitnessSourceEmployeeId == null
-        ? ""
-        : mappings.get(sourceLoan.returnWitnessSourceEmployeeId);
-      const borrower = await loanParticipant(borrowerEmployeeNumber);
-      const witness = witnessEmployeeNumber
-        ? await loanParticipant(witnessEmployeeNumber)
-        : { employeeNumber: "", name: "Nicht dokumentiert" };
-      const items = sourceLoan.items.map((item) => ({
-        position: item.position,
-        articleNumber: item.articleNumber,
-        description: item.description,
-        serialNumber: item.serialNumber,
-        conditionOut: item.conditionOut.normalized,
-        conditionReturn: sourceLoan.returnCondition.normalized,
-        note: f18ItemNote(item),
-      }));
-      const issueDocument = await prepareLoanDocument({
-        type: "issue",
-        loanId,
-        revision: 1,
-        createdAt: sourceLoan.issuedAt,
-        issuedAt: sourceLoan.issuedAt,
-        dueDate: sourceLoan.dueDate,
-        note: f18MigrationText(sourceLoan.notes, 1000),
-        location,
-        borrower,
-        recordedBy: borrower,
-        items,
-        branding: loanPdfBranding(location.id),
-      }, actor.employeeNumber);
-      preparedDocuments.push(issueDocument);
-      let returnDocument = null;
-      if (sourceLoan.status === "returned") {
-        returnDocument = await prepareLoanDocument({
-          type: "return",
-          loanId,
-          revision: 2,
-          createdAt: sourceLoan.returnedAt,
-          issuedAt: sourceLoan.issuedAt,
-          returnedAt: sourceLoan.returnedAt,
-          dueDate: sourceLoan.dueDate,
-          note: f18MigrationText([sourceLoan.notes, sourceLoan.returnNotes].filter(Boolean).join(" · "), 1000),
-          confirmationNote: "",
-          location,
-          borrower,
-          recordedBy: borrower,
-          witness,
-          items,
-          branding: loanPdfBranding(location.id),
-        }, actor.employeeNumber);
-        preparedDocuments.push(returnDocument);
-      }
-      const photos = [];
-      const phasePositions = { issue: 0, return: 0 };
-      for (const sourcePhoto of sourceLoan.photos) {
-        const buffer = photoBufferForMigration(inspection, sourcePhoto);
-        if (!buffer) {
-          throw httpError(
-            409,
-            `Das F18-Foto ${sourcePhoto.originalName} fehlt in der geprüften Sicherung.`,
-            "F18_PHOTO_MISSING",
-          );
-        }
-        const stored = await prepareStoredLoanPhoto({
-          buffer,
-          originalName: sourcePhoto.originalName || `F18-${sourcePhoto.sourceId}.jpg`,
-        }, actor.employeeNumber);
-        preparedPhotos.push(stored);
-        phasePositions[sourcePhoto.phase] += 1;
-        photos.push({
-          phase: sourcePhoto.phase,
-          position: phasePositions[sourcePhoto.phase],
-          prepared: stored,
-        });
-      }
-      prepared.push({
-        sourceLoan,
-        loanId,
-        borrowerEmployeeNumber,
-        witnessEmployeeNumber: witnessEmployeeNumber || null,
-        items,
-        photos,
-        issueDocument,
-        returnDocument,
-      });
-    }
-    return { loans: prepared, preparedDocuments, preparedPhotos };
-  } catch (error) {
-    preparedDocuments.forEach(cleanupPreparedLoanDocument);
-    cleanupPreparedLoanPhotos(preparedPhotos);
-    throw error;
-  }
-}
 
 async function insertF18Migration(inspection, mappings, location, actor, artifacts) {
   const runId = crypto.randomUUID();
@@ -48999,7 +48170,7 @@ app.post("/api/portal/v1/branch-orders/:orderId/delivery-confirmation", async (r
   assertPortalCsrf(request);
   const locationId = await branchOrderManagementLocation(session, request.body || {});
   try {
-    const result = (await sqliteBranchOrderOperations.confirmOrderDeliveries(
+    const result = (await branchOrderOperations.confirmOrderDeliveries(
       locationId,
       request.params.orderId,
       new Date().toISOString(),
@@ -50701,7 +49872,7 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
     weekEnd,
     calendarWeek: getIsoWeek(weekStart),
     shifts,
-    displaySettings: (await sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId)),
+    displaySettings: (await branchOrderOperations.branchPortalSettingsSnapshot(locationId)),
     ...(request.query.focus === "current" ? { focusDate } : {}),
   });
 });
@@ -58323,7 +57494,7 @@ app.get("/api/portal/v1/branch-portal-settings", async (request, response) => {
   try {
     response.json({
       locationId,
-      settings: (await sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId)),
+      settings: (await branchOrderOperations.branchPortalSettingsSnapshot(locationId)),
     });
   } catch (error) {
     throw branchOrderHttpError(error);
@@ -58335,7 +57506,7 @@ app.put("/api/portal/v1/branch-portal-settings", async (request, response) => {
   assertPortalCsrf(request);
   const locationId = await branchPortalDisplaySettingsLocation(session, request.body || {});
   try {
-    const settings = (await sqliteBranchOrderOperations.saveBranchPortalSettings(
+    const settings = (await branchOrderOperations.saveBranchPortalSettings(
       locationId,
       request.body?.settings,
       portalActorId(session),
@@ -60946,9 +60117,7 @@ app.post("/api/portal/v1/xoffi-time-import/apply", async (request, response) => 
   response.status(201).json({
     ok: true,
     importId,
-    schedule: await (postgresqlActive
-      ? applicationPersistence.readSnapshot(() => getSchedule(preview.weekStart, context, session))
-      : getSchedule(preview.weekStart, context, session)),
+    schedule: await ((applicationPersistence.readSnapshot(() => getSchedule(preview.weekStart, context, session)))),
   });
 });
 
@@ -61066,16 +60235,8 @@ app.get("/api/portal/v1/time-presence", async (request, response) => {
   response.json({ presence: await timePresenceForContext(session, context, date) });
 });
 
-function usbProvisioningAvailability(request = null) {
-  return evaluateUsbProvisioningAccess({
-    platform: process.platform,
-    operationMode: configuredOperationMode,
-    deploymentKind,
-    requestPresent: Boolean(request),
-    socketAddress: request?.socket?.remoteAddress || "",
-    clientAddress: request?.ip || request?.socket?.remoteAddress || "",
-    proxyChainPresent: Array.isArray(request?.ips) && request.ips.length > 0,
-  });
+function usbProvisioningAvailability() {
+  return { available: false, reasonCode: "POSTGRESQL_SERVER_ONLY", reason: "USB-Installationen werden von dieser PostgreSQL-Serverversion nicht unterstützt." };
 }
 
 function usbProvisioningOriginAllowed(request) {
@@ -61490,23 +60651,6 @@ function usbFirstStepsSpec(body, primaryBranding, enabledFeatures) {
   };
 }
 
-function initializeUsbStageDatabase(appDirectory) {
-  const targetDatabase = path.join(appDirectory, "data", "dienstplan.db");
-  const runtimeNode = path.join(appDirectory, "runtime", "node.exe");
-  const nodeExecutable = fs.existsSync(runtimeNode) ? runtimeNode : process.execPath;
-  const initializer = path.join(appDirectory, "scripts", "initialize-portable-db.js");
-  const result = childProcess.spawnSync(nodeExecutable, [initializer, targetDatabase, appDirectory], {
-    cwd: appDirectory,
-    encoding: "utf8",
-    windowsHide: true,
-    timeout: 120000,
-    maxBuffer: 4 * 1024 * 1024,
-  });
-  if (result.error || result.status !== 0) {
-    throw httpError(500, `Die frische USB-Datenbank konnte nicht erstellt werden: ${String(result.stderr || result.error?.message || "Unbekannter Fehler").trim().slice(0, 800)}`, "USB_DATABASE_INITIALIZE_FAILED");
-  }
-  return targetDatabase;
-}
 
 function copyUsbBrandingKits(kitIds, appDirectory) {
   const targetRoot = path.join(appDirectory, "data", "branding-kits");
@@ -61614,102 +60758,8 @@ app.put("/api/usb-provisioning/branding/import", express.raw({ type: ["applicati
   }
 });
 
-app.post("/api/usb-provisioning/create", async (request, response) => {
-  const access = assertUsbProvisioningRequest(request, { mutation: true });
-  if (usbProvisioningActive) throw httpError(409, "Ein USB-Stick wird bereits vorbereitet.", "USB_PROVISIONING_BUSY");
-  usbProvisioningActive = true;
-  let stage = null;
-  try {
-    const body = request.body || {};
-    const creator = await verifyUsbCreator(request, body.creatorEmployeeNumber, body.creatorPassword);
-    const enabledFeatures = validateUsbFeatures(body);
-    const selectedLocations = await validateUsbSelectedLocations(body.selectedLocationIds);
-    const brandingSelection = validateUsbBrandings(body);
-    const primaryBranding = usbPrimaryBranding(brandingSelection);
-    const employees = await validateUsbEmployees(body.employees, selectedLocations, creator);
-    const firstStepsSpec = usbFirstStepsSpec(body, primaryBranding, enabledFeatures);
-    const installationName = validateBrandOptionalText(body.installationName, 80);
-    const selectionValidatedAt = Date.now();
-    const tokenPayload = verifyTokenEnvelope(body.selectionToken, usbProvisioningTokenSecret, { now: selectionValidatedAt });
-    const earlyEnumeration = await enumerateSafeUsbCandidates(usbCandidateOptions());
-    const currentCandidate = earlyEnumeration.candidates.find((candidate) => candidate.driveLetter === tokenPayload.identity.driveLetter);
-    if (!currentCandidate) throw httpError(409, "Der ausgewählte USB-Stick ist nicht mehr verfügbar.", "USB_SELECTION_NOT_FOUND");
-    verifySelectionToken(body.selectionToken, currentCandidate, usbProvisioningTokenSecret, { now: selectionValidatedAt });
-    assertFormatConfirmation(body.confirmation, currentCandidate.driveLetter);
-
-    stage = await stagePortableInstallation({
-      sourceAppDirectory: __dirname,
-      copyOptions: { directories: ["docs", "lib", "node_modules", "public", "runtime", "scripts"] },
-      manifestMetadata: {
-        appVersion: packageMetadata.version,
-        installationName,
-        creator: creator.personnelNumber,
-        enabledFeatures,
-        primaryBrandingKitId: brandingSelection.primaryKitId,
-      },
-      prepareApp: async ({ stageRoot, appDirectory }) => {
-        fs.writeFileSync(path.join(stageRoot, "Backup erstellen.cmd"), "@echo off\r\ncd /d \"%~dp0app\"\r\ncall \"Backup erstellen.cmd\"\r\n", "latin1");
-        const targetDatabase = initializeUsbStageDatabase(appDirectory);
-        copyUsbBrandingKits(brandingSelection.kitIds, appDirectory);
-        fs.writeFileSync(path.join(appDirectory, "portable-layout.json"), `${JSON.stringify({
-          format: "grabenplaner-portable-layout",
-          version: 1,
-          createdAt: new Date().toISOString(),
-          installationName,
-          hideProgramFolder: body.hideProgramFolder !== false,
-          protectProgramFiles: body.protectProgramFiles !== false,
-          enabledFeatures,
-        }, null, 2)}\n`, "utf8");
-        populateUsbProfileDatabase({
-          sourceDatabase: db,
-          targetDatabasePath: targetDatabase,
-          selectedLocationIds: selectedLocations,
-          employees,
-          creator,
-          primaryBranding,
-          enabledFeatures,
-          permissionCatalog: [...delegablePortalPermissions],
-        });
-      },
-      generateFirstStepsPdf: async () => renderFirstStepsPdf(firstStepsSpec),
-    });
-
-    const result = await provisionUsbStick({
-      stage,
-      selectionToken: body.selectionToken,
-      tokenSecret: usbProvisioningTokenSecret,
-      confirmation: body.confirmation,
-      candidateOptions: usbCandidateOptions(),
-      consumeToken: consumeUsbTokenOnce,
-      now: selectionValidatedAt,
-      hideApp: async (appDirectory) => {
-        if (body.protectProgramFiles !== false) protectUsbProgramFiles(appDirectory);
-        if (body.hideProgramFolder !== false) await hidePortableAppDirectory(appDirectory);
-      },
-    });
-    (await auditPortal(access.session?.employeeNumber || creator.personnelNumber, "usb.provision", "volume", result.driveLetter, JSON.stringify({
-      installationName,
-      employees: employees.length + 1,
-      locations: selectedLocations,
-      enabledFeatures,
-      primaryBrandingKitId: brandingSelection.primaryKitId,
-    })));
-    response.json({
-      ...result,
-      installationName,
-      creator: creator.personnelNumber,
-      employeeCount: employees.length + 1,
-      locationCount: selectedLocations.length,
-      brandingCount: brandingSelection.kitIds.length,
-      enabledFeatures,
-      manifestSha256: sha256(JSON.stringify(stage.manifest)),
-    });
-  } catch (error) {
-    throw normalizeUsbProvisioningError(error);
-  } finally {
-    usbProvisioningActive = false;
-    if (stage?.stageRoot) fs.rmSync(stage.stageRoot, { recursive: true, force: true });
-  }
+app.post("/api/usb-provisioning/create", async () => {
+  throw httpError(410, "Diese PostgreSQL-Serverversion erstellt keine lokalen USB-Installationen.", "POSTGRESQL_SERVER_ONLY");
 });
 
 async function voiceSettingsDeveloper(request) {
@@ -66449,7 +65499,7 @@ async function startServer() {
       }, 5 * 60 * 1000);
       scannerProbeInterval.unref();
     }
-    const maintenanceOwnsStartupBackup = postgresqlActive || maintenanceOwnsLifecycleBackup();
+    const maintenanceOwnsStartupBackup = true;
     setTimeout(async () => {
       if (shutdownStarted) return;
       if (maintenanceOwnsStartupBackup) {
@@ -66499,7 +65549,6 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
     if (!databaseClosed) {
       try {
         if (localBackupArchiveEnabled()) await require("./lib/background-backup-process").drainBackgroundBackups({ deadlineMs });
-        if (!postgresqlActive && !skipBackup && !maintenanceOwnsLifecycleBackup()) await createDatabaseBackup(`shutdown-${reason}`, { deadlineMs });
       } catch (error) {
         console.error("Backup beim Dienststopp konnte nicht erstellt werden:", error);
         if (error?.code === "BACKGROUND_BACKUP_TREE_UNVERIFIED") {
@@ -66520,7 +65569,6 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
           String(error?.code || "PERSISTENCE_CLOSE_FAILED"),
         );
       }
-      try { sqliteMaintenanceOperations.checkpointWal(); } catch {}
       try { db?.close(); } finally { databaseClosed = true; }
     }
     releaseInstanceLock();
@@ -66636,11 +65684,8 @@ module.exports = {
   usbProvisioningAvailability,
   drawSchedulePdfForTests: drawSchedulePdf,
   scheduleForPdfForTests: scheduleForPdf,
-  createDatabaseBackupToDirectory,
   latestDatabaseBackup,
-  pruneDatabaseBackups,
   verifyActiveProtectedDocumentBlobs,
-  verifyProtectedBackupPair,
   verifyProtectedGovernanceRecords,
   verifyImportedProtectedPersonnelPayloads,
   reconcileOrphanAmuBlobs,

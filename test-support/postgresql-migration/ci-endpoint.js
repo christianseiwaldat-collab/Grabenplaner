@@ -9,9 +9,11 @@ function assertSyntheticEndpoint(value, domain, localPorts, env = process.env) {
   assert.equal(url.hostname, "127.0.0.1");
   assert.equal(url.pathname, `/gp_migration_${domain}`);
   assert.ok(["app", "reader", "migrator"].some(role => url.username === `gp_${domain}_${role}`));
-  if (env.GP_CI_POSTGRESQL_FIXTURE === "github-actions-service-v1") {
-    assert.equal(env.CI, "true");
-    assert.equal(env.GITHUB_ACTIONS, "true");
+  if (["github-actions-service-v1", "owned-local-service-v1"].includes(env.GP_CI_POSTGRESQL_FIXTURE)) {
+    if (env.GP_CI_POSTGRESQL_FIXTURE === "github-actions-service-v1") {
+      assert.equal(env.CI, "true");
+      assert.equal(env.GITHUB_ACTIONS, "true");
+    } else require("./owned-local-fixture").readOwnedLocalFixtureMarker(env);
     const admin = new URL(env.TEST_POSTGRESQL_URL);
     assert.equal(admin.hostname, "127.0.0.1");
     assert.equal(admin.port, "5432");

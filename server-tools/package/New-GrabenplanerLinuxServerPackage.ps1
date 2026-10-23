@@ -26,6 +26,11 @@ function Resolve-SafeDirectory([string]$Path, [switch]$MustExist) {
 
 function Test-ExcludedRelativePath([string]$RelativePath) {
     $normalized = $RelativePath.Replace('\', '/')
+    if ($normalized -match '^(lib/persistence/sqlite/|lib/persistence/postgresql/transfer/|test-support/|server-tools/windows/|server-tools/package/)') { return $true }
+    if ($normalized -cin @('lib/f18-loan-migration.js', 'lib/usb-profile-database.js',
+        'lib/persistence/postgresql/operations/paired-development.js', 'lib/persistence/postgresql/operations/paired-pitr.js',
+        'server-tools/linux/postgresql/migration-host.js', 'server-tools/linux/postgresql/capture-final-source.py',
+        'server-tools/linux/postgresql/migrate-grabenplaner-postgresql.sh')) { return $true }
     if ($normalized -cin @('scripts/run-background-backup.js', 'scripts/manage-local-backup-archive.js')) { return $false }
     $top = ($normalized -split '/', 2)[0].ToLowerInvariant()
     if ($top -in @('.git', '.github', '.devcontainer', 'backups', 'data', 'demo', 'docs', 'import-jobs', 'node_modules', 'output', 'release', 'runtime', 'scripts', 'test', 'tmp', 'usb-backups')) { return $true }
@@ -372,6 +377,9 @@ try {
         'server-tools\linux\recovery\lib\recovery-apply.js',
         'server-tools\linux\recovery\lib\recovery-metadata.js',
         'server-tools\linux\recovery\lib\recovery-verify.js'
+        'server-tools\linux\recovery\lib\recovery-shared.js'
+        'server-tools\linux\postgresql\preflight-install.js'
+        'lib\database-lock-linux.py'
     ) + $expectedHardeningArtifacts + $expectedHostControlArtifacts
     foreach ($required in $requiredPackageFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $buildRoot $required) -PathType Leaf)) {

@@ -165,7 +165,9 @@ for command_name in cmp realpath readlink flock sha256sum unzip zipinfo systemct
 gp_load_env_file "$env_file"
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
 data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"
-database_provider="${DB_PROVIDER:-sqlite}"
+database_provider="${DB_PROVIDER:-}"
+[[ "$database_provider" == postgresql ]] \
+  || gp_die 'Dieser GP-Stand unterstuetzt ausschliesslich PostgreSQL. SQLite-Bestaende zuerst mit dem erhaltenen Altstand kontrolliert migrieren.'
 if (( postgresql_backup_budget_repair == 1 )); then
   [[ "$database_provider" == postgresql && -z "$runtime_v5_transition" && "$xoffi_snapshots_migration" -eq 0 ]] \
     || gp_die 'Der Backup-Budget-Uebergang verlangt PostgreSQL ohne weitere Migrationsbruecke.'
@@ -178,9 +180,6 @@ fi
 if [[ "$database_provider" == postgresql ]]; then
   [[ -z "$database_arg" || "$database_arg" == "$data_dir/data/postgresql-pair.json" ]] || gp_die 'Der PostgreSQL-Paarbezug ist ungueltig.'
   database="$(gp_existing_file "$data_dir/data/postgresql-pair.json" 'PostgreSQL-Paarbezug')"
-else
-  [[ "$database_provider" == sqlite ]] || gp_die 'Der Datenbankprovider wird nicht unterstuetzt.'
-  database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
 fi
 postgresql_before_identity=''
 backup_dir="$(gp_safe_absolute_path "${backup_arg:-${BACKUP_DIR:-$GP_DEFAULT_BACKUP_DIR}}" "Backupordner")"

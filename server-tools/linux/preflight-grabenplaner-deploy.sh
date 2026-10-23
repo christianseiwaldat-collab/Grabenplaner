@@ -123,15 +123,12 @@ actual_pnpm="$(cd -- "$build_cache" && runuser --user "$GP_DEFAULT_BUILD_USER" -
 clamscan --no-summary -- "$SCRIPT_PATH" >/dev/null \
   || gp_die "ClamAV konnte den sauberen Vorabtest nicht erfolgreich pruefen."
 
-database_provider="${DB_PROVIDER:-sqlite}"
+database_provider="${DB_PROVIDER:-}"
+[[ "$database_provider" == postgresql ]] || gp_die 'Dieser GP-Stand verlangt den verifizierten PostgreSQL-Paarbetrieb.'
 if [[ "$database_provider" == postgresql ]]; then
   [[ -z "$database_arg" || "$database_arg" == "$data_dir/data/postgresql-pair.json" ]] \
     || gp_die "Der PostgreSQL-Paarbezug ist ungueltig."
   database="$(gp_existing_file "$data_dir/data/postgresql-pair.json" "PostgreSQL-Paarbezug")"
-elif [[ "$database_provider" == sqlite ]]; then
-  database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
-else
-  gp_die "Der Datenbankprovider wird nicht unterstuetzt."
 fi
 gp_path_is_same_or_child "$database" "$data_dir" || gp_die "Die Datenbankbindung liegt nicht im geschuetzten Datenordner."
 gp_assert_separate_trees "$app_dir" "$data_dir" "App- und Datenordner"

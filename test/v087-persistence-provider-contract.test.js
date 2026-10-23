@@ -77,34 +77,19 @@ test("v0.87 Datenbank Block 4: nur definierte Statementverträge bestehen die sy
   );
 });
 
-test("v0.87 Datenbank Block 2: fehlender Provider bleibt vollständig DB_PATH-kompatibel", () => {
-  for (const providerValue of [undefined, null, "", "   ", "sqlite", "SQLite", " SQLITE "]) {
-    const environment = {};
-    if (providerValue !== undefined) environment.DB_PROVIDER = providerValue;
-    const configuration = resolvePersistenceConfiguration({
-      environment,
-      defaultSqlitePath: "data/dienstplan.db",
+test("PostgreSQL-only: former SQLite defaults and paths cannot create an unconfigured server", () => {
+  for (const providerValue of [undefined, null, "", "   ", "postgresql", "PostgreSQL", " POSTGRESQL "]) {
+    const environment = { DB_PROVIDER: providerValue, DB_PATH: "data/old.db" };
+    assert.throws(() => resolvePersistenceConfiguration({ environment, defaultSqlitePath: "unused.db" }), error => {
+      assert.equal(error.code, PERSISTENCE_ERROR_CODES.CONFIGURATION_INVALID);
+      assert.equal(error.messageKey, "postgresql-configuration-required");
+      return true;
     });
-    assert.deepEqual(configuration, {
-      providerId: "sqlite",
-      databasePath: "data/dienstplan.db",
-      databaseUrlConfigured: false,
-    });
-    assert.equal(Object.isFrozen(configuration), true);
   }
-
-  const configuredPath = "  relative/custom database.db  ";
-  const explicit = resolvePersistenceConfiguration({
-    environment: { DB_PROVIDER: "sqlite", DB_PATH: configuredPath },
-    defaultSqlitePath: "unused.db",
-  });
-  assert.equal(explicit.databasePath, configuredPath);
-
-  const memory = resolvePersistenceConfiguration({
-    environment: { DB_PATH: ":memory:" },
-    defaultSqlitePath: "unused.db",
-  });
-  assert.equal(memory.databasePath, ":memory:");
+  for (const providerValue of ["sqlite", "SQLite", " SQLITE "]) {
+    assert.throws(() => resolvePersistenceConfiguration({environment:{DB_PROVIDER:providerValue, DB_PATH:":memory:"}}),
+      error => error.code === PERSISTENCE_ERROR_CODES.CONFIGURATION_INVALID && error.messageKey === "provider-id-invalid");
+  }
 });
 
 test("v0.87 Datenbank Block 2: Wert- und Fehlerregeln sind verlustfrei und stabil", async () => {
@@ -196,74 +181,37 @@ test("v0.87 Datenbank Block 2: Wert- und Fehlerregeln sind verlustfrei und stabi
   await subject.provider.close();
 });
 
-test("v0.87 Datenbank Block 2: unbekannte, widersprüchliche und noch nicht verfügbare Provider scheitern geschlossen", () => {
-  for (const value of ["pg", "postgres", "sqlite3", "mysql", "postgrsql"]) {
-    assert.throws(
-      () => resolvePersistenceConfiguration({
-        environment: { DB_PROVIDER: value },
-        defaultSqlitePath: "data/dienstplan.db",
-      }),
-      (error) => error?.code === PERSISTENCE_ERROR_CODES.CONFIGURATION_INVALID,
-    );
+test("PostgreSQL-only: arbitrary URLs and rehearsal flags fail closed without leaking secrets", () => {
+  for (const value of ["pg", "postgres", "sqlite3", "mysql", "postgrsql", "sqlite"]) {
+    assert.throws(() => resolvePersistenceConfiguration({environment:{DB_PROVIDER:value}}), error => error.code === PERSISTENCE_ERROR_CODES.CONFIGURATION_INVALID);
   }
-
   for (const environment of [
-    { DB_PROVIDER: "postgresql" },
-    { DB_PROVIDER: "postgresql", DATABASE_URL: "postgresql://admin:GEHEIM@db.example/app" },
-  ]) {
-    assert.throws(
-      () => resolvePersistenceConfiguration({
-        environment,
-        defaultSqlitePath: "data/dienstplan.db",
-      }),
-      (error) => {
-        assert.equal(error?.code, PERSISTENCE_ERROR_CODES.PROVIDER_UNAVAILABLE);
-        assert.equal(JSON.stringify(error).includes("GEHEIM"), false);
-        assert.equal(String(error.message).includes("GEHEIM"), false);
-        return true;
-      },
-    );
-  }
-
-  const secret = "postgresql://admin:ANDERES-GEHEIM@db.example/app";
-  assert.throws(
-    () => resolvePersistenceConfiguration({
-      environment: { DB_PROVIDER: "sqlite", DATABASE_URL: secret },
-      defaultSqlitePath: "data/dienstplan.db",
-    }),
-    (error) => {
-      assert.equal(error?.code, PERSISTENCE_ERROR_CODES.CONFIGURATION_INVALID);
-      assert.equal(JSON.stringify(error).includes("ANDERES-GEHEIM"), false);
-      assert.equal(String(error.message).includes("ANDERES-GEHEIM"), false);
-      return true;
-    },
-  );
-
-  const blankSecret = resolvePersistenceConfiguration({
-    environment: { DATABASE_URL: "   " },
-    defaultSqlitePath: "data/dienstplan.db",
+    {}, {DATABASE_URL:"postgresql://admin:PRIVATE-SYNTHETIC@db.example/app"},
+    {DB_PATH:":memory:"}, {DB_PATH:"legacy.db"},
+    {DB_PROVIDER:"postgresql",NODE_ENV:"production",GRABENPLANER_POSTGRESQL_REHEARSAL:"application-11"},
+  ]) assert.throws(() => resolvePersistenceConfiguration({environment}), error => {
+    assert.equal(error.code,PERSISTENCE_ERROR_CODES.CONFIGURATION_INVALID);
+    assert.equal(JSON.stringify(error).includes("PRIVATE-SYNTHETIC"),false);
+    assert.equal(String(error.message).includes("PRIVATE-SYNTHETIC"),false);
+    return true;
   });
-  assert.equal(blankSecret.databaseUrlConfigured, false);
-  assert.deepEqual(redactPersistenceConfiguration(blankSecret), blankSecret);
+  assert.deepEqual(redactPersistenceConfiguration({providerId:"postgresql",databasePath:"PRIVATE-SYNTHETIC",databaseUrlConfigured:true,coreUrl:"PRIVATE-SYNTHETIC"}),
+    {providerId:"postgresql",databasePath:"",databaseUrlConfigured:true});
+  assert.deepEqual(redactPersistenceConfiguration({providerId:"sqlite",databasePath:"PRIVATE-SYNTHETIC"}),
+    {providerId:"unknown",databasePath:"",databaseUrlConfigured:false});
 });
 
-test("v0.87 Datenbank Block 2: Startvalidierung liegt vor Lock, Dateisystem und Treiberöffnung", () => {
-  const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
-  const configurationCall = server.indexOf("resolvePersistenceConfiguration({");
-  const runtimeValidation = server.indexOf("assertRuntimeConfiguration(runtimeConfiguration)");
-  const lockPath = server.indexOf("const instanceLockPath = lockPathForDatabase(databasePath)");
-  const firstDirectoryWrite = server.indexOf("fs.mkdirSync(");
-  const driverOpen = server.indexOf("openSqliteApplicationPersistence({");
-
-  assert.ok(configurationCall > 0);
-  assert.ok(configurationCall < runtimeValidation);
-  assert.ok(runtimeValidation < lockPath);
-  assert.ok(lockPath < firstDirectoryWrite);
-  assert.ok(firstDirectoryWrite < driverOpen);
-  assert.equal(server.includes("node:sqlite"), false);
-  assert.equal(server.includes("DatabaseSync"), false);
-  assert.equal(server.includes("process.env.DB_PROVIDER"), false);
-  assert.equal(server.includes("process.env.DATABASE_URL"), false);
+test("PostgreSQL-only: configuration validation precedes filesystem writes, singleton lock and pair opening", () => {
+  const server = fs.readFileSync(path.join(root,"server.js"),"utf8");
+  const configurationCall=server.indexOf("resolvePersistenceConfiguration({"),runtimeValidation=server.indexOf("assertRuntimeConfiguration(runtimeConfiguration)"),
+    lockPath=server.indexOf("const instanceLockPath = lockPathForDatabase(databasePath)"),firstDirectoryWrite=server.indexOf("fs.mkdirSync("),
+    lockAcquire=server.indexOf("acquireInstanceLock();"),driverOpen=server.indexOf("openDeferredPostgresqlApplication({");
+  assert.ok(configurationCall>0 && configurationCall<runtimeValidation);
+  assert.ok(runtimeValidation<lockPath && lockPath<firstDirectoryWrite);
+  assert.ok(firstDirectoryWrite<lockAcquire && lockAcquire<driverOpen);
+  assert.doesNotMatch(server,/node:sqlite|DatabaseSync|openSqlite|persistence\/sqlite/);
+  assert.equal(server.includes("process.env.DB_PROVIDER"),false);
+  assert.equal(server.includes("process.env.DATABASE_URL"),false);
 });
 
 test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Provider-Slices", () => {
@@ -480,7 +428,7 @@ test("v0.87 Datenbank Block 5: Architekturprüfung erlaubt nur die benannten Pro
     "lib/persistence/postgresql/sales-analytics-schema.js",
     "lib/persistence/repositories/sales-analytics.js",
     "lib/persistence/sqlite/operations/sales-analytics-schema.js",
-    "lib/persistence/sqlite/sales-analytics-catalog.js",
+    "lib/persistence/catalogs/sales-analytics-catalog.js",
     "lib/persistence/statements/sales-analytics.js",
   ]);
   assert.deepEqual(SALES_ANALYTICS_PERSISTENCE_SLICE_TEST_FILES, [
@@ -667,7 +615,8 @@ test("Provider-Dokumentation schützt den Installationsstandard; Treiberabhängi
   const operations = fs.readFileSync(path.join(root, "SERVERBETRIEB.md"), "utf8");
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 
-  assert.match(operations, /SQLite bleibt der Installationsstandard/);
+  assert.match(operations, /PostgreSQL ist die einzige unterstützte Betriebsdatenbank/);
+  assert.doesNotMatch(operations, /SQLite bleibt der Installationsstandard/);
   assert.match(operations, /Eine alleinige Änderung von `DB_PROVIDER` aktiviert keine Migration/);
   assert.match(operations, /keinen automatischen Rückfall auf SQLite/);
   assert.equal(packageJson.dependencies?.pg, "8.22.0");

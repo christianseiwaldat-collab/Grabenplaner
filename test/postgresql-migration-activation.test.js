@@ -14,7 +14,7 @@ test("Legacy SQLite recovery cannot overwrite files of an activated PostgreSQL p
   const { assertSqliteRecoveryTarget } = require('../server-tools/linux/recovery/lib/recovery-apply');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gp-recovery-provider-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  assert.doesNotThrow(() => assertSqliteRecoveryTarget(root, {}, {}));
+  assert.throws(() => assertSqliteRecoveryTarget(root, {}, {}), { code: 'RECOVERY_LEGACY_OFFLINE_REQUIRED' });
   assert.throws(() => assertSqliteRecoveryTarget(root, { providerId: 'postgresql-pair' }, {}), /PostgreSQL/);
   assert.throws(() => assertSqliteRecoveryTarget(root, {}, { providerId: 'postgresql-pair' }), /PostgreSQL/);
   fs.mkdirSync(path.join(root, 'data'));

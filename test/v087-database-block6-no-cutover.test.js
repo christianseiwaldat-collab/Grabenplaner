@@ -54,15 +54,10 @@ function unavailableCapability() {
   };
 }
 
-test("DB Block 6 No-Cutover: ausschliesslich SQLite bleibt als Produktprovider aktiv", () => {
-  assert.deepEqual([...IMPLEMENTED_PERSISTENCE_PROVIDER_IDS], ["sqlite"]);
-  assert.throws(
-    () => resolvePersistenceConfiguration({
-      environment: { DB_PROVIDER: "postgresql" },
-      defaultSqlitePath: path.join(root, "data", "dienstplan.db"),
-    }),
-    (error) => error?.code === PERSISTENCE_ERROR_CODES.PROVIDER_UNAVAILABLE,
-  );
+test("PostgreSQL-only: the sole provider still requires a separately activated pair", () => {
+  assert.deepEqual([...IMPLEMENTED_PERSISTENCE_PROVIDER_IDS],["postgresql"]);
+  for(const environment of [{DB_PROVIDER:"sqlite"},{DB_PROVIDER:"postgresql"},{}])
+    assert.throws(()=>resolvePersistenceConfiguration({environment}),error=>error.code===PERSISTENCE_ERROR_CODES.CONFIGURATION_INVALID);
 });
 
 test("DB Block 6 No-Cutover: PostgreSQL-Produktfaehigkeiten bleiben geschlossen", () => {
@@ -145,42 +140,23 @@ test("DB Block 6 No-Cutover: Operationsprofile und Reports bleiben Development-o
   assert.notEqual(monitoringReport.state, "supported");
 });
 
-test("DB Block 6 No-Cutover: server.js oeffnet keinen PostgreSQL-Produktpfad", () => {
-  const server = read("server.js");
-  assert.match(server, /require\("\.\/lib\/persistence\/sqlite\/provider"\)/);
-  assert.match(server, /openSqliteApplicationPersistence\(/);
-  assert.match(server, /postgresqlActive/);
-  assert.deepEqual(IMPLEMENTED_PERSISTENCE_PROVIDER_IDS, ["sqlite"]);
-  assert.throws(() => resolvePersistenceConfiguration({environment: {DB_PROVIDER: "postgresql"}}));
-  assert.throws(() => resolvePersistenceConfiguration({environment: {DB_PROVIDER: "postgresql", NODE_ENV: "production", GRABENPLANER_POSTGRESQL_REHEARSAL: "application-11"}}));
-  assert.doesNotMatch(server, /require\(["']pg["']\)/);
-  assert.doesNotMatch(server, /\bcreatePostgresql(?:Persistence)?Provider\s*\(/);
-  assert.doesNotMatch(server, /\bcreatePostgresqlOperationsMonitor\s*\(/);
+test("PostgreSQL-only: server opens only the protected PostgreSQL product path", () => {
+  const server=read("server.js");
+  assert.match(server,/openDeferredPostgresqlApplication\(/);
+  assert.doesNotMatch(server,/persistence\/sqlite|openSqliteApplicationPersistence|postgresqlActive/);
+  assert.deepEqual(IMPLEMENTED_PERSISTENCE_PROVIDER_IDS,["postgresql"]);
+  assert.throws(()=>resolvePersistenceConfiguration({environment:{DB_PROVIDER:"postgresql"}}));
+  assert.throws(()=>resolvePersistenceConfiguration({environment:{DB_PROVIDER:"postgresql",NODE_ENV:"production",GRABENPLANER_POSTGRESQL_REHEARSAL:"application-11"}}));
+  assert.doesNotMatch(server,/require\(["']pg["']\)/);
 });
 
-test("PostgreSQL product documentation requires the separately authorized managed migration", () => {
-  const readme = read("README.md");
-  assert.match(readme, /SQLite bleibt der Standard/);
-  assert.match(
-    readme,
-    /ausdrücklich migrierte Ubuntu-Server[\s\S]*grabenplaner_core[\s\S]*grabenplaner_sales[\s\S]*ein einzelner Umgebungsparameter aktiviert den PostgreSQL-Wechsel nicht/,
-  );
-
-  const app = read("public/app.js");
-  // A migrated server may display its provider. Only this read-only system-info
-  // template is exempt; no provider selector or browser activation is allowed.
-  const infoStart = app.indexOf("elements.systemData.innerHTML = `");
-  const infoEnd = app.indexOf("state.serverStatus = info.serverStatus", infoStart);
-  assert.ok(infoStart >= 0 && infoEnd > infoStart);
-  const systemInfoMarkup = app.slice(infoStart, infoEnd);
-  assert.match(systemInfoMarkup, /info\.databaseProvider === "postgresql" \? "PostgreSQL" : "SQLite"/);
-  assert.doesNotMatch(systemInfoMarkup, /\b(?:api|fetch)\s*\(|\bDB_PROVIDER\b|<input|<select|<button/i);
-  const productSurface = [
-    read("public/index.html"),
-    app.slice(0, infoStart) + app.slice(infoEnd),
-    read("public/styles.css"),
-  ].join("\n");
-  assert.doesNotMatch(productSurface, /\bPostgreSQL\b|\bpostgresql\b/i);
+test("PostgreSQL-only product declaration never offers a database activation selector", () => {
+  const metadata=JSON.parse(read("package.json"));
+  assert.deepEqual(metadata.grabenplaner.databaseProviders,["postgresql"]);
+  const app=read("public/app.js"),infoStart=app.indexOf("elements.systemData.innerHTML = `"),infoEnd=app.indexOf("state.serverStatus = info.serverStatus",infoStart);
+  assert.ok(infoStart>=0 && infoEnd>infoStart);
+  const systemInfoMarkup=app.slice(infoStart,infoEnd);
+  assert.doesNotMatch(systemInfoMarkup,/\b(?:api|fetch)\s*\(|\bDB_PROVIDER\b|<input|<select|<button/i);
 });
 
 test("DB Block 6 No-Cutover: neue Betriebsdateien aktivieren weder Cutover noch VPS oder Auto-Migration", () => {

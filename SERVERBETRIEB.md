@@ -4,6 +4,7 @@
 
 Der zentrale Serverbetrieb verwendet eine verwaltete Ubuntu-Instanz mit genau einem aktiven App-Prozess.
 Unterstützt sind Ubuntu 24.04 LTS und Ubuntu 26.04 LTS x86-64; Node.js und pnpm richten sich nach `package.json`.
+Python 3 mit Linux-OFD-Sperren (`fcntl.F_OFD_SETLK`) ist für die Instanzsperre erforderlich. Fehlt der geprüfte Sperrhelfer, verweigert die Anwendung den Start.
 Caddy stellt HTTPS bereit. Die Anwendung bindet ausschließlich an Loopback; Bootstrap und Datenbankports bleiben privat.
 Die Administration prüft DNS, TLS, Firewall, Dienstkonten, Sicherheitsupdates, ClamAV, Backupziel und Wiederanlauf.
 Programm, Daten, Schlüssel, Protokolle und Sicherungen besitzen getrennte Verzeichnisse und restriktive Rechte.
@@ -11,11 +12,12 @@ Die Anwendung hat keine allgemeinen sudo-/Shell-Rechte; Caddy erhält keinen Zug
 Aktive Datenbanken liegen auf einem lokalen Dateisystem, niemals auf Netzlaufwerken, Cloudmounts oder synchronisierten Ordnern.
 Geheimnisse stammen aus der geschützten Dienstumgebung und gehören weder in Git noch in Programm- oder Releasepakete.
 
-SQLite bleibt der Installationsstandard. Ausdrücklich migrierte PostgreSQL-Installationen verwenden
-`grabenplaner_core` und `grabenplaner_sales` als gebundenes Datenbankpaar.
-Die Migration benötigt freigegebenes Paket, passende Betriebsverträge, Wartungssperre, vollständige Datenprüfung und den ersten gemeinsamen Sicherungspunkt.
+PostgreSQL ist die einzige unterstützte Betriebsdatenbank. `grabenplaner_core` und `grabenplaner_sales` bilden ein gebundenes Datenbankpaar.
+Eine Installation benötigt das zuvor eingerichtete und vollständig verifizierte PostgreSQL-Paar einschließlich geschützter Anwendungs-, Paaranker- und Betriebskonfiguration.
+Der Installer darf auf einem unvorbereiteten Host keine SQLite-Datenbank erzeugen. Fehlende Konfiguration oder `DB_PROVIDER=sqlite` führen vor dem Anwendungsstart zu einem Fehler.
+Bestehende SQLite-Installationen müssen vor dem Versionswechsel mit dem erhaltenen früheren Migrationsstand kontrolliert nach PostgreSQL übertragen werden: freigegebenes Paket, passende Betriebsverträge, Wartungssperre, vollständige Datenprüfung und erster gemeinsamer Sicherungspunkt.
 Eine alleinige Änderung von `DB_PROVIDER` aktiviert keine Migration. Geschäftszugänge und administrative Recovery-Zugänge bleiben getrennt.
-Nach Veröffentlichung des PostgreSQL-Bestands gibt es keinen automatischen Rückfall auf SQLite.
+Nach Veröffentlichung des PostgreSQL-Bestands gibt es keinen automatischen Rückfall auf SQLite. Einzelheiten und der abgegrenzte Offline-Weg für Altsicherungen stehen in `POSTGRESQL-ONLY.md`.
 
 ## Installation und Pakete
 
