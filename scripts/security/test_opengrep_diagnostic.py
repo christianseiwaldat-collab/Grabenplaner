@@ -12,7 +12,10 @@ class SecondEngineDiagnosticTests(unittest.TestCase):
             stage = Path(directory)
             target = str(stage / 'unsafe.js')
             result = {'errors': [], 'paths': {'scanned': [target]}, 'results': [{'path': target}]}
-            self.assertTrue(summarize(result, {'unsafe.js'}, stage, 1)['analysisCompleteForCase'])
+            clean = summarize(result, {'unsafe.js'}, stage, 1)
+            self.assertTrue(clean['processEvidenceComplete'])
+            self.assertFalse(clean['analysisCompleteForCase'])
+            self.assertEqual(clean['qualificationConclusion'], 'not_qualified_no_convergence_telemetry')
             mutations = [
                 {**result, 'errors': None}, {**result, 'errors': [{'type': 'Timeout'}]},
                 {**result, 'paths': {'scanned': []}},
@@ -24,8 +27,9 @@ class SecondEngineDiagnosticTests(unittest.TestCase):
                 {**result, 'results': None}]
             for mutation in mutations:
                 with self.subTest(mutation=mutation):
+                    self.assertFalse(summarize(mutation, {'unsafe.js'}, stage, 1)['processEvidenceComplete'])
                     self.assertFalse(summarize(mutation, {'unsafe.js'}, stage, 1)['analysisCompleteForCase'])
-            self.assertFalse(summarize(result, {'unsafe.js'}, stage, 0)['analysisCompleteForCase'])
+            self.assertFalse(summarize(result, {'unsafe.js'}, stage, 0)['processEvidenceComplete'])
 
     def test_unqualified_download_is_never_executable(self):
         class Response:

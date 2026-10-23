@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -18,22 +19,14 @@ process.env.GRABENPLANER_HOST = "127.0.0.1";
 process.env.NODE_ENV = "test";
 
 const {
-  createDatabaseBackupToDirectory,
   db,
   releaseInstanceLockForTests,
 } = require("../server");
 const {
   createSalesAnalyticsPersistenceRepository,
 } = require("../lib/persistence/repositories/sales-analytics");
-const {
-  SQLITE_SALES_ANALYTICS_CATALOG,
-} = require("../lib/persistence/sqlite/sales-analytics-catalog");
-const {
-  ensureSqliteSalesAnalyticsSchema,
-} = require("../lib/persistence/sqlite/operations/sales-analytics-schema");
-const {
-  openSqliteApplicationPersistence,
-} = require("../lib/persistence/sqlite/provider");
+const pgSchema = require("../test-support/postgresql-api/metadata");
+const { openDeferredPostgresqlApplication } = require("../lib/persistence/postgresql/application");
 
 function digest(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex");
@@ -138,96 +131,30 @@ function insertTotalMetric(database, reportId, horizon) {
   `).run(reportId, horizon);
 }
 
-test.after(() => {
-  db.close();
+test.after(async () => {
+  await db.close();
   releaseInstanceLockForTests();
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test("Verkaufsanalysen: Sicherung und Wiederherstellung erhalten Berichte, Kennzahlen und Schutztrigger", async () => {
-  const locationId = "sales-backup-location";
-  db.prepare("INSERT INTO locations (id, name) VALUES (?, ?)")
-    .run(locationId, "Verkaufsanalyse Sicherung");
-  const reportId = insertReport(db, { index: "backup", locationId });
-  insertProductGroupMetric(db, reportId, "period", 101);
-  insertProductGroupMetric(db, reportId, "year_to_date", 101);
-  insertTotalMetric(db, reportId, "period");
-  insertTotalMetric(db, reportId, "year_to_date");
-
-  const backup = createDatabaseBackupToDirectory(
-    backupDirectory,
-    "sales-analytics-production-hardening",
-    "external",
-  );
-  assert.equal(backup.verified, true);
-  assert.equal(backup.committed, true);
-  assert.ok(fs.existsSync(backup.marker));
-
-  const backupApplication = openSqliteApplicationPersistence({
-    databasePath: backup.path,
-    catalog: [],
-  });
-  const backupDatabase = backupApplication.database;
-  try {
-    assert.equal(Object.values(backupDatabase.prepare("PRAGMA integrity_check").get())[0], "ok");
-    assert.deepEqual(backupDatabase.prepare("PRAGMA foreign_key_check").all(), []);
-    assert.equal(
-      backupDatabase.prepare("SELECT COUNT(*) AS count FROM sales_aggregate_reports WHERE id = ?")
-        .get(reportId).count,
-      1,
-    );
-    assert.equal(
-      backupDatabase.prepare("SELECT COUNT(*) AS count FROM sales_report_product_group_metrics WHERE report_id = ?")
-        .get(reportId).count,
-      2,
-    );
-  } finally {
-    await backupApplication.provider.close();
-    backupDatabase.close();
-  }
-
-  const restoredPath = path.join(root, "restored-sales.db");
-  fs.copyFileSync(backup.path, restoredPath);
-  const restoredApplication = openSqliteApplicationPersistence({
-    databasePath: restoredPath,
-    catalog: [],
-  });
-  const restoredDatabase = restoredApplication.database;
-  try {
-    restoredDatabase.exec("PRAGMA foreign_keys = ON");
-    assert.equal(Object.values(restoredDatabase.prepare("PRAGMA integrity_check").get())[0], "ok");
-    assert.deepEqual(restoredDatabase.prepare("PRAGMA foreign_key_check").all(), []);
-    assert.equal(
-      restoredDatabase.prepare("SELECT COUNT(*) AS count FROM sales_report_total_metrics WHERE report_id = ?")
-        .get(reportId).count,
-      2,
-    );
-    assert.throws(
-      () => restoredDatabase.prepare(`
-        UPDATE sales_aggregate_reports SET currency = 'USD' WHERE id = ?
-      `).run(reportId),
-      /sales-aggregate-report-immutable/,
-    );
-  } finally {
-    await restoredApplication.provider.close();
-    restoredDatabase.close();
-  }
-});
-
 test("Verkaufsanalysen: große, aber erlaubte Berichtsmengen bleiben begrenzt abrufbar", async () => {
-  const application = openSqliteApplicationPersistence({
-    databasePath: ":memory:",
-    catalog: SQLITE_SALES_ANALYTICS_CATALOG,
+  const native = openDeferredPostgresqlApplication({
+    coreUrl: process.env.GP_CORE_APP_URL, salesUrl: process.env.GP_SALES_APP_URL,
+    readers: { coreUrl: process.env.GP_CORE_READER_URL, salesUrl: process.env.GP_SALES_READER_URL },
+    authorize: async () => true,
   });
-  application.database.exec(`
-    CREATE TABLE locations (id TEXT PRIMARY KEY);
-    INSERT INTO locations (id) VALUES ('sales-volume-location');
-  `);
-  ensureSqliteSalesAnalyticsSchema(application.database);
+  const application = { database: db, provider: native.provider };
+  await native.ready;
+  prepareLocationFixture(db, "INSERT INTO locations (id,name) VALUES (?,?)")
+    .run("sales-volume-location", "Verkaufsanalyse Lastprüfung");
+  // The two-database schema deliberately keeps a signed location reference in
+  // Sales. This owned fixture seeds that boundary explicitly; no FK is disabled.
+  db.postgresqlCatalogQuery("sales", "INSERT INTO integration.core_location_references(id,source_sha256) VALUES (?,?)",
+    ["sales-volume-location", digest("sales-volume-location")]);
   const repository = createSalesAnalyticsPersistenceRepository(application.provider);
   let selectedReportId;
   try {
-    application.database.exec("BEGIN IMMEDIATE");
+    application.database.exec("BEGIN");
     try {
       for (let index = 0; index < 500; index += 1) {
         const reportId = insertReport(application.database, {
@@ -250,8 +177,7 @@ test("Verkaufsanalysen: große, aber erlaubte Berichtsmengen bleiben begrenzt ab
       throw error;
     }
 
-    const indexes = application.database.prepare("PRAGMA index_list('sales_aggregate_reports')")
-      .all().map((row) => row.name);
+    const indexes = pgSchema.indexes(db, "sales_aggregate_reports").map(row => row.name);
     assert.ok(indexes.includes("idx_sales_aggregate_reports_location_period"));
     assert.ok(indexes.includes("idx_sales_aggregate_reports_natural_key"));
 
@@ -272,6 +198,5 @@ test("Verkaufsanalysen: große, aber erlaubte Berichtsmengen bleiben begrenzt ab
     );
   } finally {
     await application.provider.close();
-    application.database.close();
   }
 });

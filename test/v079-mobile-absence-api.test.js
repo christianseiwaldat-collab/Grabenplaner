@@ -1,4 +1,6 @@
 "use strict";
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -92,7 +94,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -297,8 +299,8 @@ test("v0.79: Fehlende Receipt-Finalisierung wird ohne doppelte Fachaktion wieder
   const accessToken = session.payload.tokenSet.accessToken;
   const key = crypto.randomUUID();
   const body = { dateFrom: dateInVienna(170), dateTo: dateInVienna(170), note: "Finalisierung" };
-  db.exec(`
-    CREATE TRIGGER v079_fail_receipt_finalize
+  installFixtureTrigger(db, `
+    CREATE TRIGGER test_v079_fail_receipt_finalize
     BEFORE UPDATE OF status ON mobile_mutation_receipts
     WHEN NEW.employee_number = '${employeeNumber}'
       AND NEW.idempotency_key = '${key}'
@@ -320,7 +322,7 @@ test("v0.79: Fehlende Receipt-Finalisierung wird ohne doppelte Fachaktion wieder
     assert.ok(pendingReceipt.action_completed_at);
     assert.equal(JSON.parse(pendingReceipt.response_json).id, Number(pendingReceipt.entity_id));
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS v079_fail_receipt_finalize");
+    dropFixtureTrigger(db, "test_v079_fail_receipt_finalize", { ifExists: true });
   }
   const countBeforeReplay = db.prepare("SELECT COUNT(*) AS count FROM vacation_requests WHERE employee_number = ?")
     .get(employeeNumber).count;
@@ -346,8 +348,8 @@ test("v0.79: Rücknahme und Entscheidungsverlauf bleiben bei Fehlern atomar", as
     .run(employeeNumber, locationId, date, date);
   const requestId = Number(inserted.lastInsertRowid);
   const key = crypto.randomUUID();
-  db.exec(`
-    CREATE TRIGGER v079_fail_withdraw_decision
+  installFixtureTrigger(db, `
+    CREATE TRIGGER test_v079_fail_withdraw_decision
     BEFORE INSERT ON request_decisions
     WHEN NEW.request_kind = 'vacation' AND NEW.request_id = ${requestId}
     BEGIN
@@ -365,7 +367,7 @@ test("v0.79: Rücknahme und Entscheidungsverlauf bleiben bei Fehlern atomar", as
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM mobile_mutation_receipts WHERE employee_number = ? AND idempotency_key = ?")
       .get(employeeNumber, key).count, 0);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS v079_fail_withdraw_decision");
+    dropFixtureTrigger(db, "test_v079_fail_withdraw_decision", { ifExists: true });
   }
   const withdrawn = await api(`/api/mobile/v1/me/vacation-requests/${requestId}/withdraw`, {
     method: "POST", accessToken, idempotencyKey: key, body: {},

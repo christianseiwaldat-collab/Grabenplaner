@@ -22,8 +22,14 @@ function sourceRoot() {
   fs.mkdirSync(source, { mode: 0o700 });
   try {
     command("git", ["archive", "--format=tar", "--output", archive, BASELINE,
-      "backup.js", "server.js", "package.json", "pnpm-lock.yaml", "lib", "public", "services/planning-optimizer",
-      "test/portal-foundation.test.js",
+      ".gitattributes", "backup.js", "server.js", "package.json", "pnpm-lock.yaml", "lib", "public", "demo", "services/planning-optimizer",
+      "test/cross-location-schedule-view-api.test.js", "test/sales-analytics-production-hardening.test.js",
+      "test/v081-work-rule-safety-regressions.test.js",
+      "test/portal-foundation.test.js", "test/portal-permission-defaults.test.js",
+      "test/v082-immutable-trigger-migration.test.js", "test/v087-block5-loan-photo-migration.test.js",
+      "test/v087-block8-cost-center-migration.test.js", "test/v087-block7-settings-appearance.test.js", "test/v072-production-bootstrap.test.js",
+      "test/v063-import-payroll.test.js", "test/v071-cost-centers-personnel.test.js", "test/v071-shift-locations.test.js",
+      "test-support/portal-session-fixture.js", "test-support/session-touch-race.js",
       "scripts/run-background-backup.js", "scripts/manage-local-backup-archive.js", "server-tools"]);
     command("tar", ["-xf", archive, "-C", source]);
     fs.rmSync(archive);
@@ -43,4 +49,19 @@ function legacyPath(relative) {
   return path.join(sourceRoot(), relative);
 }
 function legacyRequire(relative) { return require(legacyPath(relative)); }
-module.exports = { BASELINE, legacyPath, legacyRequire, sourceRoot };
+function linkFrozenDependencies() {
+  const crypto = require("node:crypto");
+  const lockDigest = file => crypto.createHash("sha256")
+    .update(fs.readFileSync(file, "utf8").replaceAll("\r\n", "\n")).digest("hex");
+  // This explicitly requested test-only link requires identical complete lock
+  // contents. No historical application dependency is guessed or downloaded.
+  if (lockDigest(legacyPath("pnpm-lock.yaml")) !== lockDigest(path.join(repository, "pnpm-lock.yaml"))) {
+    throw new Error("LEGACY_TEST_FROZEN_DEPENDENCIES_REQUIRED");
+  }
+  const target = fs.realpathSync(path.join(repository, "node_modules"));
+  const entry = legacyPath("node_modules");
+  if (!fs.existsSync(entry)) fs.symlinkSync(target, entry, process.platform === "win32" ? "junction" : "dir");
+  if (fs.realpathSync(entry) !== target) throw new Error("LEGACY_TEST_DEPENDENCY_LINK_MISMATCH");
+  return target;
+}
+module.exports = { BASELINE, legacyPath, legacyRequire, sourceRoot, linkFrozenDependencies };

@@ -7,18 +7,9 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { DatabaseSync } = require("node:sqlite");
-const { once } = require("node:events");
-const { Worker } = require("node:worker_threads");
+const { databaseForCurrentTest } = require("../test-support/postgresql-api/preload");
 
-function openFixtureDatabase(databasePath) {
-  const database = new DatabaseSync(databasePath);
-  // HTTP liveness does not imply that startup/background writes have finished.
-  // Match the application's bounded SQLite writer coordination for this second
-  // connection; the existing server/test deadlines remain unchanged.
-  database.exec("PRAGMA busy_timeout = 5000");
-  return database;
-}
+function openFixtureDatabase(databasePath) { return databaseForCurrentTest(databasePath); }
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -49,52 +40,11 @@ function waitForExit(child) {
   return new Promise((resolve) => child.once("exit", resolve));
 }
 
-test("bootstrap fixture waits for an existing SQLite writer to release its lock", { timeout: 10_000 }, async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-bootstrap-lock-"));
-  const databasePath = path.join(root, "fixture.db");
-  const setup = new DatabaseSync(databasePath);
-  setup.exec("PRAGMA journal_mode = WAL; CREATE TABLE fixture (active INTEGER); INSERT INTO fixture VALUES (1)");
-  setup.close();
-  const holder = new Worker(`
-    const { parentPort, workerData } = require("node:worker_threads");
-    const { DatabaseSync } = require("node:sqlite");
-    const database = new DatabaseSync(workerData);
-    database.exec("BEGIN IMMEDIATE");
-    parentPort.postMessage("locked");
-    parentPort.once("message", () => setTimeout(() => {
-      database.exec("COMMIT");
-      database.close();
-      parentPort.postMessage("released");
-      parentPort.close();
-    }, 50));
-  `, { eval: true, workerData: databasePath });
-  let database;
-  try {
-    assert.deepEqual(await once(holder, "message"), ["locked"]);
-    const uncoordinated = new DatabaseSync(databasePath);
-    try {
-      assert.throws(() => uncoordinated.prepare("UPDATE fixture SET active = 0").run(),
-        error => error.code === "ERR_SQLITE_ERROR" && error.errcode === 5);
-    } finally { uncoordinated.close(); }
-    database = openFixtureDatabase(databasePath);
-    assert.equal(database.prepare("PRAGMA busy_timeout").get().timeout, 5000);
-    const released = once(holder, "message");
-    holder.postMessage("release");
-    assert.equal(database.prepare("UPDATE fixture SET active = 0").run().changes, 1);
-    assert.deepEqual(await released, ["released"]);
-    assert.equal(database.prepare("SELECT active FROM fixture").get().active, 0);
-  } finally {
-    database?.close();
-    await holder.terminate();
-    fs.rmSync(root, { recursive: true, force: true });
-  }
-});
-
 test("v0.72 browser bootstrap keeps the one-time key local and sends it only on mutations", () => {
   const application = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
   const portalAccessCatalog = fs.readFileSync(
-    path.join(__dirname, "..", "lib", "persistence", "sqlite", "portal-access-catalog.js"),
+    path.join(__dirname, "..", "lib", "persistence", "catalogs", "portal-access-catalog.js"),
     "utf8",
   );
 
@@ -131,8 +81,9 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
     GRABENPLANER_AMU_KEY_ID: "server-test-v1",
     GRABENPLANER_AMU_KEY: Buffer.alloc(32, 17).toString("base64"),
   };
+  Object.assign(process.env, environment);
   for (const key of ["GRABENPLANER_SEED_DEMO", "GRABENPLANER_DEMO_PROFILE", "GRABENPLANER_FORCE_PORTAL"]){
-    delete environment[key];
+    delete environment[key]; delete process.env[key];
   }
 
   const child = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {

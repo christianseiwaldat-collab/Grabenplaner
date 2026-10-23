@@ -1,4 +1,6 @@
 "use strict";
+const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -443,7 +445,7 @@ function installSessionTouchRaceMutation(auth, statements) {
   db.prepare("UPDATE portal_sessions SET expires_at = ? WHERE id = ?")
     .run(new Date(Date.now() + 60000).toISOString(), auth.id);
   db.exec(`CREATE TABLE ${triggerName}_proof (fired INTEGER NOT NULL)`);
-  db.exec(`
+  const removeTrigger = installFixtureTrigger(db, `
     CREATE TRIGGER ${triggerName}
     AFTER UPDATE OF expires_at ON portal_sessions
     WHEN NEW.id = ${sqliteText(auth.id)}
@@ -455,7 +457,8 @@ function installSessionTouchRaceMutation(auth, statements) {
   return () => {
     auth.userActivity = previousActivity;
     const fired = db.prepare(`SELECT COUNT(*) AS count FROM ${triggerName}_proof`).get().count;
-    db.exec(`DROP TRIGGER IF EXISTS ${triggerName}; DROP TABLE ${triggerName}_proof`);
+    removeTrigger();
+    db.exec(`DROP TABLE ${triggerName}_proof`);
     assert.ok(fired > 0, "The concurrent actor mutation must actually execute");
   };
 }
@@ -509,7 +512,7 @@ test.before(async () => {
     SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 2
   `).all();
   if (locations.length < 2) {
-    db.prepare(`
+    prepareLocationFixture(db, `
       INSERT INTO locations (id, name, min_staff, active)
       VALUES ('learning-foreign-location', 'Learning Fremdfiliale', 0, 1)
     `).run();
@@ -569,7 +572,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -1474,7 +1477,7 @@ test("Zugang entsperren prüft Learning-Hierarchie live, bleibt bei No-op nebenw
   const rollbackTargetPortal = session(LOCAL_AL);
   const rollbackTargetMobile = mobileSession(LOCAL_AL);
   const rollbackAuditBefore = auditRowCount();
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_learning_unlock_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'portal.user.unlock'
@@ -1489,7 +1492,7 @@ test("Zugang entsperren prüft Learning-Hierarchie live, bleibt bei No-op nebenw
     assert.equal(auditRowCount(), rollbackAuditBefore);
     assertSessionNotRevoked(rollbackTargetPortal, rollbackTargetMobile);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_learning_unlock_audit_abort");
+    dropFixtureTrigger(db, "test_learning_unlock_audit_abort", { ifExists: true });
   }
 
   for (const actorEmployeeNumber of [DEVELOPER, HR]) {
@@ -2224,7 +2227,7 @@ test("Learning-Topologiemutation rollt Ressource, Sitzungen und Audits gemeinsam
   const targetPortalSession = session(LOCAL_AL);
   const targetMobileSession = mobileSession(LOCAL_AL);
   const auditBefore = auditRowCount();
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_learning_topology_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'personnel.learning.organization-scope.update'
@@ -2244,7 +2247,7 @@ test("Learning-Topologiemutation rollt Ressource, Sitzungen und Audits gemeinsam
     assert.equal(auditRowCount(), auditBefore);
     assertSessionNotRevoked(targetPortalSession, targetMobileSession);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_personnel_learning_topology_audit_abort");
+    dropFixtureTrigger(db, "test_personnel_learning_topology_audit_abort", { ifExists: true });
   }
 });
 
@@ -2260,7 +2263,7 @@ test("Abteilungsverschiebung meldet Mitarbeiter- und Scope-Referenzen fachlich",
     }
   }
   assert.ok(destinationLocationId, "Kein freier zweistelliger Teststandort");
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, active)
     VALUES (?, ?, 0, 1)
   `).run(destinationLocationId, `Learning Move ${destinationLocationId}`);
@@ -2385,7 +2388,7 @@ test("Denial, Provenienz, Sitzungswiderruf und Audit rollen bei Auditfehler geme
   const manager = session(MANAGER);
   const targetPortalSession = session(LOCAL_AL_TWO);
   const targetMobileSession = mobileSession(LOCAL_AL_TWO);
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_learning_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'personnel.learning.cross-location-right.update'
@@ -2416,7 +2419,7 @@ test("Denial, Provenienz, Sitzungswiderruf und Audit rollen bei Auditfehler geme
     assert.equal(mobile.revoked_at, null);
     assert.equal(mobile.revoked_reason, "");
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_personnel_learning_audit_abort");
+    dropFixtureTrigger(db, "test_personnel_learning_audit_abort", { ifExists: true });
   }
 });
 

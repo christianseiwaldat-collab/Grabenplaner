@@ -33,6 +33,16 @@ test("fixture writes route to the actual PostgreSQL database and reject mixed-da
   assert.throws(() => translate("INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)", ["synthetic", "value"]), /EXPLICIT_UPSERT/);
 });
 
+test("native catalog assertions preserve physical Core boundary names and PostgreSQL booleans", () => {
+  const result = translate("SELECT TRUE FROM gp.import_master_bindings WHERE binding_key=?", ["synthetic"], { postgresqlDomain: "core" });
+  assert.equal(result.domain, "core");
+  assert.match(result.sql, /gp \. import_master_bindings/);
+  assert.doesNotMatch(result.sql, /trade\./);
+  assert.match(result.sql, /SELECT TRUE/);
+  assert.deepEqual(result.values, ["synthetic"]);
+  assert.throws(() => translate("SELECT 1", [], { postgresqlDomain: "unknown" }), /CATALOG_DOMAIN/);
+});
+
 test("fixture statement splitting preserves literals and refuses implicit endpoint authority", () => {
   assert.equal(splitStatements("SELECT 'a;b'; SELECT 'c'").length, 2);
   assert.throws(() => assertSyntheticEnvironment({}), /EXPLICIT_SYNTHETIC/);
@@ -46,4 +56,34 @@ test("fixture statement splitting preserves literals and refuses implicit endpoi
     assert.throws(() => assertSyntheticEnvironment({ ...environment, TEST_POSTGRESQL_URL: replacement }), /SYNTHETIC_ENDPOINT/);
   }
   assert.throws(() => assertSyntheticEnvironment({ ...environment, GITHUB_ACTIONS: "false" }), /EXPLICIT_SYNTHETIC/);
+});
+
+
+test("fixture startup barrier delays fixture seeds and requests until real initialization completes", async () => {
+  const { registerStartupBarrier } = require("../test-support/postgresql-api/preload");
+  const callbacks = [], effects = [], fakeTest = { before(callback) { callbacks.push(callback); } };
+  let release, initialized = 0;
+  const gate = new Promise(resolve => { release = resolve; });
+  registerStartupBarrier(fakeTest, async () => { initialized += 1; await gate; effects.push("initialized"); });
+  fakeTest.before(() => { effects.push("seed"); });
+  fakeTest.before(() => { effects.push("http"); });
+  const running = callbacks.map(callback => callback());
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(initialized, 1); assert.deepEqual(effects, []);
+  release(); await Promise.all(running);
+  assert.deepEqual(effects, ["initialized", "seed", "http"]);
+});
+
+test("fixture startup failure never releases seed or request callbacks", async () => {
+  const { registerStartupBarrier } = require("../test-support/postgresql-api/preload");
+  const callbacks = [], effects = [], fakeTest = { before(callback) { callbacks.push(callback); } };
+  const failure = new Error("synthetic actual startup rejected");
+  let initialized = 0;
+  registerStartupBarrier(fakeTest, async () => { initialized += 1; throw failure; });
+  fakeTest.before(() => { effects.push("seed"); });
+  fakeTest.before(() => { effects.push("http"); });
+  const results = await Promise.allSettled(callbacks.map(callback => callback()));
+  assert.equal(initialized, 1); assert.deepEqual(effects, []);
+  assert.equal(results.length, 3);
+  for (const result of results) { assert.equal(result.status, "rejected"); assert.equal(result.reason, failure); }
 });

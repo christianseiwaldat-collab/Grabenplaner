@@ -151,7 +151,16 @@ function assertPostgresqlOnlySource(relative, source) {
   const imports = source.matchAll(/\b(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)|\bfrom\s*["']([^"']+)["']/g);
   for (const entry of imports) {
     const request = entry[1] || entry[2];
-    if (/^(?:node:)?sqlite(?:3)?$|^better-sqlite3$|(?:^|\/)persistence\/sqlite(?:\/|$)|^(?:\.{1,2}\/)+sqlite(?:\/|$)/.test(request)) {
+    const moduleName = request.startsWith("node:") ? request.slice(5) : request;
+    const segments = request.split("/");
+    let providerPath = false;
+    for (let index = 0; index + 1 < segments.length; index += 1) {
+      if (segments[index] === "persistence" && segments[index + 1] === "sqlite") providerPath = true;
+    }
+    let relativePrefix = 0;
+    while (segments[relativePrefix] === "." || segments[relativePrefix] === "..") relativePrefix += 1;
+    const relativeSqlite = relativePrefix > 0 && segments[relativePrefix] === "sqlite";
+    if (moduleName === "sqlite" || moduleName === "sqlite3" || request === "better-sqlite3" || providerPath || relativeSqlite) {
       throw new Error(`SQLite-Ausfuehrung ist im PostgreSQL-Serverpaket nicht freigegeben: ${relative}`);
     }
   }
@@ -299,8 +308,8 @@ function readRuntimeContract() {
   const requiredArtifacts = contract.deploymentSchemaVersion === 1 ? requiredV1
     : contract.deploymentSchemaVersion === 2 ? requiredV2
       : contract.deploymentSchemaVersion === 3 ? requiredV3
-        : [4, 5].includes(contract.deploymentSchemaVersion) ? requiredV4 : null;
-  if ([3, 4, 5].includes(contract.deploymentSchemaVersion)) assertExactHostControlTree();
+        : [4, 5, 6].includes(contract.deploymentSchemaVersion) ? requiredV4 : null;
+  if ([3, 4, 5, 6].includes(contract.deploymentSchemaVersion)) assertExactHostControlTree();
   if (!requiredArtifacts || artifacts.size !== requiredArtifacts.size
     || [...requiredArtifacts].some((relative) => !artifacts.has(relative))) {
     throw new Error("Der Runtimevertrag enthaelt nicht exakt die freigegebenen Deployment-Artefakte.");
@@ -323,7 +332,7 @@ function readOffsiteModuleContract() {
   const contract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, ""));
   const expected = expectedOffsiteArtifacts.filter(relative => contract?.moduleVersion >= 12 || !relative.endsWith("/deploy-deferral.js"));
   if (contract?.format !== "grabenplaner-linux-offsite-module-contract" || contract?.schemaVersion !== 1
-    || !(runtimeOnly ? [6, 7, 8, 9, 10, 11, 12] : [12]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
+    || !(runtimeOnly ? [6, 7, 8, 9, 10, 11, 12, 13] : [13]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
     || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expected.length
     || expected.some((relative) => !contract.managedArtifacts.includes(relative))) {
     throw new Error("Der optionale Offsite-Modulvertrag wird nicht unterstuetzt.");
@@ -410,6 +419,9 @@ function main() {
   const rootStat = fs.lstatSync(root);
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error("Der Paket-Stagingordner ist ungueltig.");
   const runtimeContract = readRuntimeContract();
+  if (!runtimeOnly && runtimeContract.deploymentSchemaVersion !== 6) {
+    throw new Error("Ein aktuelles PostgreSQL-Serverpaket verlangt den expliziten Core-6-Runtimevertrag.");
+  }
   const offsiteModuleContract = readOffsiteModuleContract();
   const hardeningModuleContract = readHardeningModuleContract();
   if (runtimeOnly) {
@@ -493,6 +505,9 @@ function main() {
     "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
     "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
     "server-tools/linux/lib/runtime-v5-transition.js",
+  "server-tools/linux/migrate-grabenplaner-runtime-v6.sh",
+  "server-tools/linux/lib/runtime-v6-transition.js",
+  "server-tools/linux/lib/offsite-postgresql-only-compat.js",
     "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
     "server-tools/linux/preflight-grabenplaner-deploy.sh",
     "server-tools/linux/lib/postgresql-backup-repair-compat.js",

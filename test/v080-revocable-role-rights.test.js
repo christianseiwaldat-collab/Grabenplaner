@@ -1,4 +1,5 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -163,7 +164,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -459,8 +460,8 @@ test("v0.80: Leserecht-Entzug normalisiert das abhängige Schreibrecht", async (
 });
 
 test("v0.80: Migration und Dashboard weisen entzogene Rechte transparent aus", async () => {
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.80-revocable-role-rights'").get());
-  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'portal_permission_denials'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
+  assert.ok(pgSchema.tableExists(db, "portal_permission_denials"));
   const dashboard = await request("/api/portal/v1/rights-dashboard");
   assert.equal(dashboard.response.status, 200, JSON.stringify(dashboard.payload));
   const manager = dashboard.payload.users.find((entry) => entry.employeeNumber === MANAGER);

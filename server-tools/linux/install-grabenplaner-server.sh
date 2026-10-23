@@ -569,6 +569,9 @@ for (const required of [
   "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
   "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
   "server-tools/linux/lib/runtime-v5-transition.js",
+  "server-tools/linux/migrate-grabenplaner-runtime-v6.sh",
+  "server-tools/linux/lib/runtime-v6-transition.js",
+  "server-tools/linux/lib/offsite-postgresql-only-compat.js",
   "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
   "server-tools/linux/preflight-grabenplaner-deploy.sh",
   "server-tools/linux/lib/postgresql-backup-repair-compat.js",
@@ -612,7 +615,7 @@ const expectedRuntimeArtifacts = [
   ...expectedHostControlArtifacts,
 ];
 if (runtimeContract?.format !== "grabenplaner-linux-runtime-contract" || runtimeContract?.schemaVersion !== 1
-  || runtimeContract?.deploymentSchemaVersion !== 5 || runtimeContract?.migrationPolicy !== "explicit-maintenance"
+  || runtimeContract?.deploymentSchemaVersion !== 6 || runtimeContract?.migrationPolicy !== "explicit-maintenance"
   || !Array.isArray(runtimeContract?.managedArtifacts)
   || runtimeContract.managedArtifacts.length !== expectedRuntimeArtifacts.length
   || expectedRuntimeArtifacts.some((relative) => !runtimeContract.managedArtifacts.includes(relative))) {
@@ -622,7 +625,7 @@ const offsiteSchemaPath = path.join(root, "server-tools/linux/offsite/module-sch
 let offsiteContract;
 try { offsiteContract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Der optionale Offsite-Modulvertrag ist nicht lesbar."); }
 if (offsiteContract?.format !== "grabenplaner-linux-offsite-module-contract" || offsiteContract?.schemaVersion !== 1
-  || offsiteContract?.moduleVersion !== 12 || offsiteContract?.activationPolicy !== "explicit-root-setup"
+  || offsiteContract?.moduleVersion !== 13 || offsiteContract?.activationPolicy !== "explicit-root-setup"
   || !Array.isArray(offsiteContract?.managedArtifacts) || offsiteContract.managedArtifacts.length !== expectedOffsiteArtifacts.length
   || expectedOffsiteArtifacts.some((relative) => !offsiteContract.managedArtifacts.includes(relative))
   || offsiteContract.managedArtifacts.some((relative) => typeof relative !== "string" || !relative.startsWith("server-tools/linux/offsite/") || relative.includes("\\") || relative.split("/").some((part) => !part || part === "." || part === ".."))) {

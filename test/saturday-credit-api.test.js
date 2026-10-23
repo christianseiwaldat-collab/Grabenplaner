@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -30,7 +31,7 @@ async function request(actor, route, body, csrf = true, method = body ? 'POST' :
 const actors = {};
 test.before(async () => {
   const day = { open: true, start: '09:00', end: '18:00', lunchEnabled: true, lunchStart: '12:30', lunchEnd: '13:00', minStaff: 0, minFrom: '09:00', minTo: '18:00' };
-  for (const id of ['91', '92']) db.prepare('INSERT INTO locations(id,name,day_settings_json,active) VALUES(?,?,?,1)').run(id, id, JSON.stringify(Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(name => [name, day]))));
+  for (const id of ['91', '92']) prepareLocationFixture(db, 'INSERT INTO locations(id,name,day_settings_json,active) VALUES(?,?,?,1)').run(id, id, JSON.stringify(Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(name => [name, day]))));
   actors.admin = session('S901', 'admin');
   actors.manager = session('S902', 'manager', ['employees:write'], '91');
   actors.hr = session('S905', 'hr', ['employees:write', 'work_rules:assign'], '91');
@@ -41,7 +42,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  db.close(); subject.releaseInstanceLockForTests();
+  await db.close(); subject.releaseInstanceLockForTests();
   assert.equal(path.dirname(fs.realpathSync(root)), tmp); fs.rmSync(root, { recursive: true });
 });
 test('employee API requires live personnel rights, scope and CSRF; cutover is fixed and assignments are explicit', async () => {

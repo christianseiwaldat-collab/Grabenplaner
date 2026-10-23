@@ -1,4 +1,5 @@
 "use strict";
+const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -225,7 +226,7 @@ test.beforeEach(reset);
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -551,7 +552,7 @@ test("Learning-Deaktivierung über PUT und DELETE erzeugt Scope-Delta und widerr
 test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar zurück", async () => {
   const developer = session("101", "developer");
   const createAuditBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count);
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_employee_create_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'employee.create'
@@ -575,7 +576,7 @@ test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar
     assert.equal(db.prepare("SELECT 1 FROM personnel_sensitive_records WHERE employee_number = '896'").get(), undefined);
     assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), createAuditBefore);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_employee_create_audit_abort");
+    dropFixtureTrigger(db, "test_employee_create_audit_abort", { ifExists: true });
   }
 
   const displayTarget = await request("/api/employees", {
@@ -588,7 +589,7 @@ test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar
     "SELECT color, nickname FROM employees WHERE personnel_number = '897'",
   ).get() };
   const displayAuditBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count);
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_employee_display_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'employee.display.update'
@@ -608,7 +609,7 @@ test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar
     ).get() }, displayBefore);
     assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), displayAuditBefore);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_employee_display_audit_abort");
+    dropFixtureTrigger(db, "test_employee_display_audit_abort", { ifExists: true });
   }
 
   const deleteTarget = await request("/api/employees", {
@@ -623,7 +624,7 @@ test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar
   const targetPortalSession = session("898", "department_manager");
   const targetMobileSession = mobileSession("898");
   const deleteAuditBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count);
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_employee_delete_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'employee.deactivate'
@@ -649,7 +650,7 @@ test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar
     assert.equal(mobile.revoked_reason, "");
     assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), deleteAuditBefore);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_employee_delete_audit_abort");
+    dropFixtureTrigger(db, "test_employee_delete_audit_abort", { ifExists: true });
   }
 });
 
@@ -790,7 +791,7 @@ test("Employee-DTOS projizieren Learning-Rechte nur mit wirksamer Delegate-Autho
   }
 
   const postEmployeeNumber = "895";
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_employee_dto_learning_profile
     AFTER INSERT ON employees
     WHEN NEW.personnel_number = '${postEmployeeNumber}'
@@ -815,7 +816,7 @@ test("Employee-DTOS projizieren Learning-Rechte nur mit wirksamer Delegate-Autho
     assert.equal(created.payload.portal_access.role, "manager");
     assertNoLearningRightsInPortalAccess(created.payload.portal_access);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_employee_dto_learning_profile");
+    dropFixtureTrigger(db, "test_employee_dto_learning_profile", { ifExists: true });
   }
 });
 
@@ -1085,7 +1086,7 @@ test("Learning-Employee-Scope, Sitzungen und Audits rollen bei Auditfehler gemei
     FROM employees WHERE personnel_number = ?
   `).get(employeeNumber) };
   const auditBefore = db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count;
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_employee_update_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'employee.update'
@@ -1113,7 +1114,7 @@ test("Learning-Employee-Scope, Sitzungen und Audits rollen bei Auditfehler gemei
     assert.equal(mobile.revoked_at, null);
     assert.equal(mobile.revoked_reason, "");
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_employee_update_audit_abort");
+    dropFixtureTrigger(db, "test_employee_update_audit_abort", { ifExists: true });
   }
 });
 
@@ -1236,7 +1237,7 @@ test("v0.58: ungültiges Rechteprofil rollt die komplette Neuanlage zurück", as
 test("Personalmodul R1: konkurrierender AccessProfile-Scope endet kontrolliert und atomar", async () => {
   const developer = session("101", "developer");
   const employeeNumber = "889";
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_access_profile_scope_unique_race
     BEFORE INSERT ON portal_access_scopes
     WHEN NEW.employee_number = '${employeeNumber}'
@@ -1263,7 +1264,7 @@ test("Personalmodul R1: konkurrierender AccessProfile-Scope endet kontrolliert u
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM portal_access_scopes WHERE employee_number = ?")
       .get(employeeNumber).count, 0);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_access_profile_scope_unique_race");
+    dropFixtureTrigger(db, "test_access_profile_scope_unique_race", { ifExists: true });
   }
 });
 

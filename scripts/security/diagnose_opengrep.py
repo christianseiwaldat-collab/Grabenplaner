@@ -42,13 +42,16 @@ def summarize(result, expected, stage, exit_code):
     skipped = result.get('paths', {}).get('skipped', [])
     skipped_rules = result.get('skipped_rules', [])
     fixpoints = result.get('time', {}).get('fixpoint_timeouts')
-    # Opengrep removed the inner fixpoint timeout. Absence is measured explicitly
-    # here; it does NOT satisfy the Semgrep gate's required diagnostic field.
+    # Upstream removed the elapsed-time limit but silently caps node visits at
+    # four. This engine does not emit sufficient convergence telemetry. A clean
+    # process is therefore measured separately from completed dataflow analysis.
     fixpoint_shape = fixpoints is None or isinstance(fixpoints, list)
     consistent = isinstance(findings, list) and exit_code in (0, 1) and ((exit_code == 1) == bool(findings))
     valid = coverage and errors == [] and not skipped and not skipped_rules and fixpoint_shape and consistent
     return {'targetCoverageComplete': coverage, 'executionEvidenceValid': valid,
-            'analysisCompleteForCase': bool(valid and not fixpoints),
+            'processEvidenceComplete': bool(valid and not fixpoints),
+            'analysisCompleteForCase': False,
+            'qualificationConclusion': 'not_qualified_no_convergence_telemetry',
             'topLevelErrors': len(errors) if isinstance(errors, list) else -1,
             'skippedTargets': len(skipped), 'skippedRules': len(skipped_rules),
             'fixpointFieldPresent': fixpoints is not None,
@@ -132,17 +135,21 @@ def run(root, tools, output):
             detected = {Path(finding['path']).name for finding in raw.get('results', [])}
             records.append({'name': name, 'argv': command, 'exitCode': completed.returncode,
                             'elapsedSeconds': time.monotonic() - started, 'resultSha256': sha(result_path),
-                            'ruleFiles': rows, 'controlPassed': summary['analysisCompleteForCase'] and detected == {'unsafe.js'} if control else None,
+                            'ruleFiles': rows, 'controlPassed': summary['processEvidenceComplete'] and detected == {'unsafe.js'} if control else None,
                             **summary})
         except Exception as error:
             records.append({'name': name, 'executionEvidenceValid': False, 'analysisCompleteForCase': False,
                             'diagnosticError': str(error)})
-    complete = len(records) == len(cases) and all(row['analysisCompleteForCase'] for row in records)
+    complete = len(records) == len(cases) and all(row.get('processEvidenceComplete') for row in records)
     controls_passed = all(next((r.get('controlPassed') is True for r in records if r['name'] == name), False)
                           for name, _, _ in controls)
     write(output / 'gate-result.json', {'schemaVersion': 1, 'gate': 'sast-diagnostic', 'diagnosticOnly': True,
           'complete': False, 'passed': False, 'securityGatePassed': False, 'status': 'diagnostic_only',
           'diagnosticExecutionComplete': complete, 'controlsPassed': controls_passed,
+          'engineQualifiedForSecurityGate': False,
+          'qualificationConclusion': 'not_qualified_no_convergence_telemetry',
+          'upstreamLimitation': 'Dataflow_core.ml silently skips nodes after four visits; no proof of a converged fixpoint.',
+          'upstreamSource': 'https://github.com/opengrep/opengrep/blob/60ed3b3b0f2a0afada4777c459d7e80b3d304bd3/src/analyzing/Dataflow_core.ml#L127-L158',
           'scanner': 'opengrep', 'scannerVersion': version, 'ruleCommit': upstream['commit'],
           'elapsedSeconds': time.monotonic() - began, 'cases': records,
           'scope': 'Second engine qualification with complete unchanged source files and unchanged rules. No production security gate or disposition changes.'})

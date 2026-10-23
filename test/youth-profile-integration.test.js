@@ -1,4 +1,6 @@
 "use strict";
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -66,7 +68,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -165,7 +167,7 @@ test("editing school facts recalculates the present and future plan and preserve
 
 test("receipt failure rolls back school creates, edits, and deletion atomically", async () => {
   const original = db.prepare("SELECT * FROM week_options WHERE id=?").get(schoolId);
-  db.exec(`CREATE TRIGGER youth_receipt_failure BEFORE INSERT ON work_rule_evaluation_runs BEGIN SELECT RAISE(ABORT,'synthetic receipt failure'); END`);
+  installFixtureTrigger(db, `CREATE TRIGGER test_youth_receipt_failure BEFORE INSERT ON work_rule_evaluation_runs BEGIN SELECT RAISE(ABORT,'synthetic receipt failure'); END`);
   try {
     const created = await request("/api/week-options", { method: "POST", body: option({ dateFrom: "2032-07-07", dateTo: "2032-07-07" }) });
     assert.ok(created.status >= 500, JSON.stringify(created.payload));
@@ -176,7 +178,7 @@ test("receipt failure rolls back school creates, edits, and deletion atomically"
     const deleted = await request(`/api/week-options/${schoolId}`, { method: "DELETE" });
     assert.ok(deleted.status >= 500, JSON.stringify(deleted.payload));
     assert.deepEqual(db.prepare("SELECT * FROM week_options WHERE id=?").get(schoolId), original);
-  } finally { db.exec("DROP TRIGGER youth_receipt_failure"); }
+  } finally { dropFixtureTrigger(db, "test_youth_receipt_failure"); }
 });
 
 test("Legacy BS stays all-day/null and block courses force all-day; deletion removes current school facts", async () => {

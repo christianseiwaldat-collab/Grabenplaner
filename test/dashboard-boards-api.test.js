@@ -61,7 +61,7 @@ test.beforeEach(() => {
 });
 test.after(async () => {
   if (httpServer) await new Promise(resolve => httpServer.close(resolve));
-  db.close(); releaseInstanceLockForTests();
+  await db.close(); releaseInstanceLockForTests();
   assert.equal(path.dirname(path.resolve(temporaryRoot)), temporaryParent);
   assert.ok(path.basename(temporaryRoot).startsWith('gp-dashboard-boards-api-'));
   fs.rmSync(temporaryRoot, {recursive:true, force:true, maxRetries:8, retryDelay:100});

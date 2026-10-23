@@ -37,7 +37,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  db.close(); releaseInstanceLockForTests();
+  await db.close(); releaseInstanceLockForTests();
   assert.equal(path.dirname(root), path.resolve(os.tmpdir())); assert(path.basename(root).startsWith("gp-planning-preferences-"));
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

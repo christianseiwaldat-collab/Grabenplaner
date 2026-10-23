@@ -6,7 +6,7 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { DatabaseSync } = require("node:sqlite");
+const { databaseForCurrentTest } = require("../test-support/postgresql-api/preload");
 
 const repositoryRoot = path.join(__dirname, "..");
 
@@ -85,6 +85,7 @@ test("v0.57: Codespaces nutzt die Sporthandel-Demo und vertraut nur dem gleichur
     NODE_ENV: "test",
   };
 
+  Object.assign(process.env, common, { GRABENPLANER_SEED_DEMO: "1", GRABENPLANER_DEMO_PROFILE: "sporthandel", GRABENPLANER_FORCE_PORTAL: "1" });
   const setupPort = await freePort();
   const setup = spawnServer({
     ...common,
@@ -109,9 +110,10 @@ test("v0.57: Codespaces nutzt die Sporthandel-Demo und vertraut nur dem gleichur
     assert.doesNotMatch(setupError, /Error:|Datenbank-Integritaetspruefung fehlgeschlagen/);
   } finally {
     if (setup.exitCode === null) setup.kill();
+    await waitForExit(setup);
   }
 
-  const database = new DatabaseSync(databasePath, { readOnly: true });
+  const database = databaseForCurrentTest(databasePath, { readOnly: true });
   try {
     assert.equal(database.prepare("SELECT COUNT(*) AS count FROM locations").get().count, 6);
     assert.equal(database.prepare("SELECT COUNT(*) AS count FROM departments").get().count, 15);
@@ -190,5 +192,6 @@ test("v0.57: Codespaces nutzt die Sporthandel-Demo und vertraut nur dem gleichur
     assert.equal(await waitForExit(server), 0, serverError);
   } finally {
     if (server.exitCode === null) server.kill();
+    await waitForExit(server);
   }
 });

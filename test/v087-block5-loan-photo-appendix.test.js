@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -45,7 +47,7 @@ let otherSession;
 let organizationSession;
 
 function ensureLocation() {
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, 'Block 5 Fotobeilagen', 0, '{}', 1)
     ON CONFLICT(id) DO UPDATE SET
@@ -352,7 +354,7 @@ test.before(() => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, {
     recursive: true,
@@ -378,10 +380,7 @@ test("v0.87 Block 5 erzeugt geschützte Foto-PDF-Beilagen mit konfigurierbarer F
       (location) => location.locationId === LOCATION_ID,
     );
     assert.ok(initialLocation);
-    assert.ok(db.prepare(`
-      SELECT 1 FROM schema_migrations
-      WHERE id = 'v0.87-loan-photo-pdf-attachments'
-    `).get());
+    assert.ok(pgSchema.assertCoreSchemaLedger(db));
     assert.deepEqual(initialLocation.photoPdf, {
       outputMode: "grayscale",
       originalRetention: "retain",

@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -169,9 +170,9 @@ test.before(async () => {
   // Keep them deterministic after the configured weekly closing time as well.
   db.prepare("UPDATE settings SET value = '0' WHERE key = 'current_week_auto_lock'").run();
   const settings = JSON.stringify(daySettings());
-  db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('91', 'V59 Standort A', 2, ?, 1)")
+  prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('91', 'V59 Standort A', 2, ?, 1)")
     .run(settings);
-  db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('92', 'V59 Standort B', 2, ?, 1)")
+  prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('92', 'V59 Standort B', 2, ?, 1)")
     .run(settings);
   const departmentA = Number(db.prepare("INSERT INTO departments (location_id, name, min_staff, active, sort_order) VALUES ('91', 'Verkauf A', 0, 1, 1)").run().lastInsertRowid);
   const departmentB = Number(db.prepare("INSERT INTO departments (location_id, name, min_staff, active, sort_order) VALUES ('92', 'Verkauf B', 0, 1, 1)").run().lastInsertRowid);
@@ -239,7 +240,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  db.close();
+  await db.close();
   releaseInstanceLockForTests();
   globalThis.fetch = nativeFetch;
   fs.rmSync(testRoot, { recursive: true, force: true });

@@ -140,7 +140,7 @@ test.beforeEach(resetFixture);
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -152,24 +152,24 @@ test("v0.56: Migration legt das WLAN-Fundament datensparsam mit Vertrauensstufe 
     "wifi_event_inbox",
     "wifi_time_suggestions",
   ];
-  const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name));
+  const tables = new Set(pgSchema.tableNames(db).map((row) => row.name));
   for (const table of wifiTables) assert.ok(tables.has(table), `${table} fehlt.`);
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.56-wifi-automation-foundation'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
 
-  const employeeColumns = db.prepare("PRAGMA table_info(employees)").all();
+  const employeeColumns = pgSchema.columns(db, "employees");
   const levelColumn = employeeColumns.find((column) => column.name === "time_confirmation_level");
   assert.ok(levelColumn);
   assert.equal(levelColumn.notnull, 1);
-  assert.equal(String(levelColumn.dflt_value).replaceAll("'", ""), "C");
+  assert.equal(levelColumn.dflt_value, "'C'::text");
 
   db.prepare("INSERT INTO employees (personnel_number, full_name, nickname) VALUES ('v056-default', 'Default C', 'Default')").run();
   assert.equal(db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = 'v056-default'").get().time_confirmation_level, "C");
 
-  const allWifiColumns = wifiTables.flatMap((table) => db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name.toLowerCase()));
+  const allWifiColumns = wifiTables.flatMap((table) => pgSchema.columns(db, table).map((column) => column.name.toLowerCase()));
   for (const forbidden of ["external_event_id", "mac", "mac_address", "ssid", "bssid"]) {
     assert.equal(allWifiColumns.includes(forbidden), false, `${forbidden} darf nicht gespeichert werden.`);
   }
-  assert.ok(db.prepare("PRAGMA table_info(wifi_event_inbox)").all().some((column) => column.name === "external_event_hash"));
+  assert.ok(pgSchema.columns(db, "wifi_event_inbox").some((column) => column.name === "external_event_hash"));
 });
 
 test("v0.56: wifi:settings ist nur in den vorgesehenen Built-in-Rollen und nicht delegierbar", async () => {
@@ -393,7 +393,7 @@ test("v0.56: WLAN-Regeln bleiben nach einem frischen App-Start erhalten", async 
 });
 
 test("v0.65: Vertrauensstufen bleiben gespeichert, sind abschaltbar und rollenabhängig sichtbar", async () => {
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.65-settings-dashboard-foundation'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   const admin = createPortalSession("101", "admin");
   const saved = await requestJson("/api/portal/v1/trust-level-settings", {
     method: "PUT",

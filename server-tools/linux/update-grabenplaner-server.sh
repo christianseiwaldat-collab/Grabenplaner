@@ -76,6 +76,7 @@ allow_downgrade=0
 lock_already_held=0
 commit_marker_arg=""
 runtime_v5_transition=""
+runtime_v6_transition=""
 verification_policy="auto"
 package_verifier_sha256=""
 xoffi_snapshots_migration=0
@@ -119,6 +120,7 @@ while (($#)); do
     --lock-already-held) lock_already_held=1; shift ;;
     --commit-marker) commit_marker_arg="${2:?Wert fuer --commit-marker fehlt}"; shift 2 ;;
     --runtime-v5-transition) runtime_v5_transition="${2:?Wert fuer --runtime-v5-transition fehlt}"; shift 2 ;;
+    --runtime-v6-transition) runtime_v6_transition="${2:?Wert fuer --runtime-v6-transition fehlt}"; shift 2 ;;
     --verification) verification_policy="${2:?Wert fuer --verification fehlt}"; shift 2 ;;
     --package-verifier-sha256) package_verifier_sha256="${2:?Wert fuer --package-verifier-sha256 fehlt}"; shift 2 ;;
     --xoffi-snapshots-migration) xoffi_snapshots_migration=1; shift ;;
@@ -133,7 +135,7 @@ done
 gp_require_root
 if (( preflight_only == 1 )); then
   [[ -z "$package_arg" && -z "$sha256_arg" && -z "$sha256_file_arg" && -z "$commit_marker_arg" \
-    && -z "$runtime_v5_transition" && -z "$package_verifier_sha256" && "$xoffi_snapshots_migration" -eq 0 \
+    && -z "$runtime_v5_transition" && -z "$runtime_v6_transition" && -z "$package_verifier_sha256" && "$xoffi_snapshots_migration" -eq 0 \
     && "$postgresql_backup_budget_repair" -eq 0 && "$lock_already_held" -eq 0 && "$allow_downgrade" -eq 0 ]] \
     || gp_die "Der Deploy-Vorabcheck akzeptiert keine Paket-, Migrations- oder Freigabeoptionen."
   preflight_script="$SCRIPT_DIR/preflight-grabenplaner-deploy.sh"
@@ -149,7 +151,7 @@ if (( preflight_only == 1 )); then
   [[ -z "$build_cache_arg" ]] || preflight_args+=(--build-cache "$build_cache_arg")
   exec bash "$preflight_script" "${preflight_args[@]}"
 fi
-for command_name in cmp realpath readlink flock sha256sum unzip zipinfo systemctl curl find grep sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
+for command_name in cmp cp rmdir realpath readlink flock sha256sum unzip zipinfo systemctl curl find grep sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
 [[ "$(uname -m)" == "x86_64" ]] || gp_die "Das Serverpaket wird derzeit nur auf Linux x86_64 unterstuetzt."
 [[ -n "$package_arg" ]] || gp_die "--package ist erforderlich."
 [[ "$verification_policy" == auto || "$verification_policy" == full ]] || gp_die "--verification erlaubt auto oder full."
@@ -169,7 +171,7 @@ database_provider="${DB_PROVIDER:-}"
 [[ "$database_provider" == postgresql ]] \
   || gp_die 'Dieser GP-Stand unterstuetzt ausschliesslich PostgreSQL. SQLite-Bestaende zuerst mit dem erhaltenen Altstand kontrolliert migrieren.'
 if (( postgresql_backup_budget_repair == 1 )); then
-  [[ "$database_provider" == postgresql && -z "$runtime_v5_transition" && "$xoffi_snapshots_migration" -eq 0 ]] \
+  [[ "$database_provider" == postgresql && -z "$runtime_v5_transition" && -z "$runtime_v6_transition" && "$xoffi_snapshots_migration" -eq 0 ]] \
     || gp_die 'Der Backup-Budget-Uebergang verlangt PostgreSQL ohne weitere Migrationsbruecke.'
 fi
 if (( xoffi_snapshots_migration == 1 )); then
@@ -231,7 +233,7 @@ commit_marker=""
 if [[ -n "$commit_marker_arg" ]]; then
   commit_marker="$(gp_safe_absolute_path "$commit_marker_arg" "Updater-Commitmarker")"
   commit_marker_parent="$(dirname -- "$commit_marker")"
-  [[ "$commit_marker_parent" =~ ^/opt/grabenplaner/\.runtime-v(2|3|4|5)-migration\.[A-Za-z0-9]+$ \
+  [[ "$commit_marker_parent" =~ ^/opt/grabenplaner/\.runtime-v(2|3|4|5|6)-migration\.[A-Za-z0-9]+$ \
     && -d "$commit_marker_parent" && ! -L "$commit_marker_parent" \
     && "$(stat --format='%u:%g:%a' -- "$commit_marker_parent")" == "0:0:711" \
     && ! -e "$commit_marker" && ! -L "$commit_marker" ]] \
@@ -254,7 +256,7 @@ trusted_tree_verifier="$app_dir/server-tools/linux/lib/verify-install-tree.js"
 # predecessor. Pin the standalone verifier separately; never infer this trust
 # from the candidate's own manifest or silently fall back after a rejection.
 if [[ -n "$package_verifier_sha256" ]]; then
-  [[ -z "$runtime_v5_transition" ]] || gp_die "Paketprueferwechsel und Runtime-v5-Migration sind getrennte Vorgaenge."
+  [[ -z "$runtime_v5_transition" && -z "$runtime_v6_transition" ]] || gp_die "Paketprueferwechsel und Runtime-Migration sind getrennte Vorgaenge."
   gp_validate_sha256 "$package_verifier_sha256"
   pinned_verifier="$SCRIPT_DIR/lib/verify-package.js"
   [[ -f "$pinned_verifier" && ! -L "$pinned_verifier" && "$(stat --format='%u:%h' -- "$pinned_verifier")" == "0:1" ]] \
@@ -275,6 +277,7 @@ if [[ -n "$package_verifier_sha256" ]]; then
   gp_info "Separat freigegebener Paketpruefer SHA256 ${package_verifier_sha256,,}; vollstaendige Deploy-Pruefung."
 fi
 if [[ -n "$runtime_v5_transition" ]]; then
+  [[ -z "$runtime_v6_transition" ]] || gp_die "Runtime-Migrationsbruecken duerfen nicht kombiniert werden."
   [[ "$lock_already_held" -eq 1 && -n "$commit_marker" ]] || gp_die "Runtime v5 verlangt den gebundenen Migrationsaufruf."
   inherited_lock_target="$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)"
   [[ "$inherited_lock_target" == "$(gp_resolve_path "$GP_DEFAULT_MAINTENANCE_LOCK")" ]] \
@@ -284,6 +287,19 @@ if [[ -n "$runtime_v5_transition" ]]; then
   trusted_package_verifier="$SCRIPT_DIR/lib/verify-package.js"
   installed_runtime_verifier="$trusted_package_verifier"
   trusted_tree_verifier="$SCRIPT_DIR/lib/verify-install-tree.js"
+fi
+if [[ -n "$runtime_v6_transition" ]]; then
+  [[ "$lock_already_held" -eq 1 && -n "$commit_marker" && "$xoffi_snapshots_migration" -eq 0 ]] \
+    || gp_die "Runtime v6 verlangt den gebundenen PostgreSQL-Migrationsaufruf ohne weitere Migrationsbruecke."
+  inherited_lock_target="$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)"
+  [[ "$inherited_lock_target" == "$(gp_resolve_path "$GP_DEFAULT_MAINTENANCE_LOCK")" ]] \
+    && flock --nonblock 9 || gp_die "Die Runtime-v6-Wartungssperre fehlt."
+  "$node" "$SCRIPT_DIR/lib/runtime-v6-transition.js" invocation "$runtime_v6_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
+    || gp_die "Der Runtime-v6-Vertrauensuebergang ist ungueltig."
+  trusted_package_verifier="$SCRIPT_DIR/lib/verify-package.js"
+  installed_runtime_verifier="$trusted_package_verifier"
+  trusted_tree_verifier="$SCRIPT_DIR/lib/verify-install-tree.js"
+  verification_policy=full
 fi
 [[ -f "$trusted_package_verifier" && ! -L "$trusted_package_verifier" ]] || gp_die "Die installierte vertrauenswuerdige Paketpruefung fehlt."
 [[ -f "$trusted_tree_verifier" && ! -L "$trusted_tree_verifier" ]] || gp_die "Die installierte vertrauenswuerdige Baumpruefung fehlt."
@@ -548,14 +564,14 @@ begin_deploy_deferral() {
   deploy_deferral_helper_sha256="$("$node" - "$contract" "$module_root" <<'NODE'
 const fs=require('node:fs'),crypto=require('node:crypto');
 const [file,root]=process.argv.slice(2),receipt=JSON.parse(fs.readFileSync(file,'utf8'));
-if(receipt.moduleVersion!==12)throw new Error('DEPLOY_DEFERRAL_MODULE_MIGRATION_REQUIRED');
+if(![12,13].includes(receipt.moduleVersion))throw new Error('DEPLOY_DEFERRAL_MODULE_MIGRATION_REQUIRED');
 for(const name of ['lib/offsite-contract.js','lib/deploy-deferral.js']){
  const target=root+'/'+name,st=fs.lstatSync(target),item=receipt.files.find(v=>v.path===name);
  if(!st.isFile()||st.isSymbolicLink()||st.uid!==0||st.gid!==0||st.nlink!==1||(st.mode&0o022)!==0||!item||crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex')!==item.sha256)throw new Error('DEPLOY_DEFERRAL_MODULE_PROTECTION');
 }
 process.stdout.write(receipt.files.find(v=>v.path==='lib/deploy-deferral.js').sha256);
 NODE
-)" || gp_die "Der Nachtlaufaufschub benoetigt das zuvor geprueft installierte Offsite-Modul 12."
+)" || gp_die "Der Nachtlaufaufschub benoetigt das zuvor geprueft installierte Offsite-Modul 12 oder 13."
   "$node" "$module_root/lib/offsite-contract.js" verify-installed-bound "$module_root" "$contract" >/dev/null \
     || gp_die "Der installierte Offsite-Vertrag fuer den Nachtlaufaufschub stimmt nicht."
   flock --nonblock 9 || gp_die "Die eigene Wartungssperre fuer den Nachtlaufaufschub fehlt."
@@ -760,7 +776,9 @@ rollback_update() {
   fi
   rollback_public_ok=0
   if (( rollback_app_ok == 1 && rollback_data_ok == 1 )) && [[ -d "$app_dir" && ! -L "$app_dir" ]]; then
-    gp_configure_nightly_backups "$app_dir" "$node" || gp_warn "Der Sicherungszeitplan muss nach der Rueckkehr geprueft werden."
+    if [[ -z "$runtime_v6_transition" ]]; then
+      gp_configure_nightly_backups "$app_dir" "$node" || gp_warn "Der Sicherungszeitplan muss nach der Rueckkehr geprueft werden."
+    fi
     systemctl start "$service"
     if gp_wait_ready "$internal_ready_url" "$health_timeout" && gp_wait_ready "$public_ready_url" "$health_timeout"; then
       rollback_public_ok=1
@@ -903,6 +921,9 @@ done <"$entries_file"
 (cd -- "$build_cache" && runuser --user "$build_user" -- unzip -qq "$staged_package" -d "$extract_root")
 actual_expanded_bytes="$(du --bytes --summarize "$extract_root" | awk '{print $1}')"
 (( actual_expanded_bytes <= maximum_expanded_bytes )) || gp_die "Die tatsaechlich entpackte Paketgroesse ist zu gross."
+gp_seal_build_tree "$extract_root" "$maintenance_root/verified-source" "$service_group" \
+  || gp_die "Der Kandidat konnte vor den privilegierten Vorpruefungen nicht mit frischen Dateien versiegelt werden."
+extract_root="$maintenance_root/verified-source"
 
 "$node" "$trusted_package_verifier" "$extract_root" >"$manifest_result_file" || gp_die "Die Einzeldatei- und Manifestpruefung ist fehlgeschlagen."
 if [[ "$database_provider" == postgresql ]]; then
@@ -943,6 +964,16 @@ else if (installed.deploymentSchemaVersion !== candidate.deploymentSchemaVersion
 } else process.stdout.write("compatible");
 NODE
 )"
+if [[ -n "$runtime_v6_transition" ]]; then
+  [[ "$runtime_gate" == "migration-required:5->6" ]] || gp_die "Die explizite Runtime-v6-Bruecke erlaubt ausschliesslich Schema 5 -> 6."
+  # Keep the complete installed Core 5 tree untouched. Only this authenticated
+  # explicit bridge may authorize the two reviewed PostgreSQL runtime changes.
+  "$node" "$SCRIPT_DIR/lib/runtime-v6-transition.js" invocation "$runtime_v6_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
+    || gp_die "Die gebundene PostgreSQL-Konfiguration wurde waehrend des Preflights veraendert."
+  "$node" "$SCRIPT_DIR/lib/runtime-v6-transition.js" verify "$app_dir" "$extract_root" >/dev/null \
+    || gp_die "Der Kandidat enthaelt nicht exakt den freigegebenen Core-5-zu-6-Uebergang."
+  runtime_gate="compatible"
+fi
 case "$runtime_gate" in
   compatible) ;;
   migration-required:*)
@@ -956,7 +987,7 @@ esac
 installed_runtime_schema="$("$node" -e \
   'const fs=require("node:fs");process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).deploymentSchemaVersion))' \
   "$installed_runtime_result_file")"
-if [[ "$installed_runtime_schema" == "3" || "$installed_runtime_schema" == "4" || "$installed_runtime_schema" == "5" ]]; then
+if [[ "$installed_runtime_schema" == "3" || "$installed_runtime_schema" == "4" || "$installed_runtime_schema" == "5" || "$installed_runtime_schema" == "6" ]]; then
   host_control_group="grabenplaner-host-control"
   host_control_module="/opt/grabenplaner-host-control/module"
   host_control_socket_unit="/etc/systemd/system/grabenplaner-host-control.socket"
@@ -1122,10 +1153,17 @@ for (const dependency of Object.keys(metadata.dependencies || {})) require.resol
 for (const dependency of ["express", "sharp", "pdfkit"]) require(require.resolve(dependency, { paths: [root] }));
 NODE
 )
+gp_seal_build_tree "$extract_root" "$maintenance_root/verified-ready" "$service_group" \
+  || gp_die "Der Buildbaum konnte nach dem Abhaengigkeitsinstall nicht mit frischen Dateien versiegelt werden."
+extract_root="$maintenance_root/verified-ready"
+"$node" "$trusted_package_verifier" "$extract_root" >"$manifest_result_file" \
+  || gp_die "Der versiegelte Buildbaum weicht vom freigegebenen Paket ab."
+"$node" "$trusted_tree_verifier" "$extract_root" >/dev/null \
+  || gp_die "Der versiegelte Abhaengigkeitsbaum ist ungueltig."
+
 gp_info "Pruefe den vollstaendigen Stagingordner mit ClamAV."
 begin_deploy_phase package-scan
 scan_candidate_with_clamav
-gp_apply_app_permissions "$extract_root" "$service_group"
 
 begin_deploy_phase maintenance-lock
 (( maintenance_lock_held == 1 )) && flock --nonblock 9 \
@@ -1145,6 +1183,10 @@ elif [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 ]]; then
 fi
 deploy_mode="$("$node" -e 'const value=JSON.parse(process.argv[1]); if(!["short","full"].includes(value.mode))process.exit(1); process.stdout.write(value.mode)' "$deploy_decision")"
 gp_info "Deploy-Pruefstrategie: $deploy_mode. Der frische gekoppelte Rueckkehrpunkt bleibt verpflichtend."
+if [[ -n "$runtime_v6_transition" ]]; then
+  "$node" "$SCRIPT_DIR/lib/runtime-v6-transition.js" invocation "$runtime_v6_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
+    || gp_die "Die geschuetzte Runtime-v6-Bindung wurde vor dem Dienststopp veraendert."
+fi
 # A live lease suppresses redundant lifecycle copies only. The short path
 # makes one fully verified fresh rollback point; the full fallback retains
 # the pre-update offsite transfer and its second current rollback point.
@@ -1228,7 +1270,9 @@ begin_deploy_phase session-security-schema-migration
 fi
 begin_deploy_phase application-start
 gp_start_service "$service"
-gp_configure_nightly_backups "$app_dir" "$node" || gp_die "Der gemeinsame naechtliche Sicherungsablauf konnte nicht aktiviert werden."
+if [[ -z "$runtime_v6_transition" ]]; then
+  gp_configure_nightly_backups "$app_dir" "$node" || gp_die "Der gemeinsame naechtliche Sicherungsablauf konnte nicht aktiviert werden."
+fi
 gp_wait_ready "$internal_ready_url" "$health_timeout" || gp_die "Die neue App wurde intern nicht rechtzeitig betriebsbereit."
 gp_wait_ready "$public_ready_url" "$health_timeout" || gp_die "Der oeffentliche HTTPS-Readinesscheck ist fehlgeschlagen."
 begin_deploy_phase deployment-checks
@@ -1246,7 +1290,7 @@ update_committed=1
 # im vollen Ablauf startet danach Recovery Assurance; im kurzen Ablauf arbeitet
 # der aktivierte Nacht-Timer die Queue ab. Ein Fehler
 # an dieser Stelle darf das gesunde neue Release nicht mehr zurueckrollen.
-if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transition" ]]; then
+if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transition" && -z "$runtime_v6_transition" ]]; then
   offsite_common="/opt/grabenplaner-offsite/module/lib/offsite-common.sh"
   if ! (
     [[ -f "$offsite_common" && ! -L "$offsite_common" ]] || exit 1

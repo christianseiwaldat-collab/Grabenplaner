@@ -25,8 +25,8 @@ const {
   serverStatusSummary,
 } = require("../server");
 
-test.after(() => {
-  db.close();
+test.after(async () => {
+  await db.close();
   releaseInstanceLockForTests();
   fs.rmSync(root, { recursive: true, force: true });
 });

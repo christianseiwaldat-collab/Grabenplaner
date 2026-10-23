@@ -1,4 +1,5 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -120,7 +121,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -136,8 +137,8 @@ test("v0.87 Kostenstellentypen: Katalog, Migration und Positionssets sind vollst
   assert.ok(listed.payload.types.every((type) => Array.isArray(type.positionIds) && Array.isArray(type.positions)));
   assert.ok(listed.payload.types.find((type) => type.code === "branch")?.isBranch);
   assert.equal(listed.payload.positions.length, db.prepare("SELECT COUNT(*) AS count FROM positions").get().count);
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.87-cost-center-types'").get());
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.92.20-position-catalog-governance'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   assert.equal(db.prepare(`
     SELECT COUNT(*) AS count FROM audit_log
     WHERE action = 'position.catalog.migrate'
@@ -148,7 +149,7 @@ test("v0.87 Kostenstellentypen: Katalog, Migration und Positionssets sind vollst
       .filter((id) => !db.prepare("SELECT 1 FROM positions WHERE id = ? AND active = 1 AND builtin = 0").get(id)),
     [],
   );
-  assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+  assert.deepEqual(pgSchema.foreignKeyViolations(db), []);
 });
 
 test("v0.87 Kostenstellentypen: PL+ verwaltet eigene Typen atomar und der Code bleibt stabil", async () => {

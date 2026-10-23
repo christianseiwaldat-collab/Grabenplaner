@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -51,7 +53,7 @@ let organizationSession;
 let organizationAccountId;
 
 function ensureLocation(id, name) {
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, ?, 0, '{}', 1)
     ON CONFLICT(id) DO UPDATE SET name = excluded.name, active = 1
@@ -280,7 +282,7 @@ test.before(() => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -294,12 +296,12 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
       "portal_organization_account_scopes",
     ]) {
       assert.ok(
-        db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table),
+        pgSchema.tableExists(db, table),
         `${table} fehlt`,
       );
     }
 
-    const accountForeignKeys = db.prepare("PRAGMA foreign_key_list('portal_organization_accounts')").all();
+    const accountForeignKeys = pgSchema.foreignKeys(db, "portal_organization_accounts");
     assert.equal(accountForeignKeys.some((foreignKey) => foreignKey.table === "employees"), false);
     assert.equal(accountForeignKeys.some((foreignKey) => foreignKey.table === "portal_users"), false);
 
@@ -308,7 +310,7 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
       "portal_organization_account_permissions",
       "portal_organization_account_scopes",
     ]) {
-      const foreignKeys = db.prepare(`PRAGMA foreign_key_list('${table}')`).all();
+      const foreignKeys = pgSchema.foreignKeys(db, table);
       assert.equal(
         foreignKeys.some((foreignKey) => foreignKey.table === "portal_organization_accounts"),
         true,
@@ -423,7 +425,7 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
       db.prepare("SELECT 1 FROM portal_organization_accounts WHERE id = ?")
         .get(organizationAccountId),
     );
-    assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
+    assert.equal(pgSchema.foreignKeyViolations(db).length, 0);
   });
 
   await t.test("fil18 kann später weder Mitarbeiter noch Personal- oder Rücknahmeauswahl werden", async () => {

@@ -1,4 +1,5 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
 
 // Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
 // Other PostgreSQL and application assertions below still use current code.
@@ -256,15 +257,15 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
 test("v0.71 Block 4: Schema, Migration und alte verschlüsselte Personalakte bleiben kompatibel", async () => {
-  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'personnel_record_documents'").get());
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.71-extended-personnel-records'").get());
-  const columns = new Set(db.prepare("PRAGMA table_info(personnel_record_documents)").all().map((column) => column.name));
+  assert.ok(pgSchema.tableExists(db, "personnel_record_documents"));
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
+  const columns = new Set(pgSchema.columns(db, "personnel_record_documents").map((column) => column.name));
   for (const column of ["id", "employee_number", "storage_key", "status", "protected_payload", "created_at", "deleted_by", "deleted_at"]) {
     assert.ok(columns.has(column), `Spalte ${column} fehlt`);
   }

@@ -1,4 +1,6 @@
 "use strict";
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -56,7 +58,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  try {db.close();} catch {} releaseInstanceLockForTests();
+  try {await db.close();} catch {} releaseInstanceLockForTests();
   fs.rmSync(root,{recursive:true,force:true,maxRetries:8,retryDelay:100});
 });
 test("read prepares known facts without writing or creating a DPO account", async () => {
@@ -210,12 +212,12 @@ test("authenticated ciphertext corruption fails closed without replacing protect
 });
 test("audit failure rolls back the encrypted write and history together", async () => {
   const before = db.prepare("SELECT value FROM settings WHERE key=?").get(KEY).value;
-  db.exec("CREATE TRIGGER privacy_synthetic_audit_failure BEFORE INSERT ON audit_log WHEN NEW.action='privacy-organization.command' BEGIN SELECT RAISE(ABORT,'synthetic audit failure'); END");
+  installFixtureTrigger(db, "CREATE TRIGGER test_privacy_synthetic_audit_failure BEFORE INSERT ON audit_log WHEN NEW.action='privacy-organization.command' BEGIN SELECT RAISE(ABORT,'synthetic audit failure'); END");
   try {
     const result=await command({action:"update",id:"organization",payload:{notes:"Must roll back"}});
     assert.equal(result.status,500);
     assert.equal(db.prepare("SELECT value FROM settings WHERE key=?").get(KEY).value,before);
-  } finally {db.exec("DROP TRIGGER privacy_synthetic_audit_failure");}
+  } finally {dropFixtureTrigger(db, "test_privacy_synthetic_audit_failure");}
 });
 test("missing records return an explicit 404", async () => {
   const result=await command({action:"update",id:"synthetic-nonexistent",payload:{title:"Missing"}});

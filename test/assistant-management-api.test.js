@@ -40,7 +40,7 @@ test.before(async () => {
   db.prepare("INSERT INTO week_options(employee_number,week_start,date_from,date_to,option_type,all_day,start_time,end_time,note) VALUES(?,?,?,?,'time_off',0,'12:00','13:00','PRIVATE-ABSENCE-NOTE')").run(MANAGER, WEEK, WEEK, WEEK);
   await new Promise(resolve => { server = app.listen(0, "127.0.0.1", resolve); }); origin = `http://127.0.0.1:${server.address().port}`;
 });
-test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); db.close(); releaseInstanceLockForTests();
+test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); await db.close(); releaseInstanceLockForTests();
   assert.equal(path.dirname(root), path.resolve(os.tmpdir())); assert(path.basename(root).startsWith("gp-assistant-management-")); fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }); });
 
 test("voice.assistants requires a personal Developer session, not an admin or local bypass", async () => {

@@ -1,4 +1,5 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -36,12 +37,12 @@ let positionId;
 let defaultCostCenterId;
 
 function tableExists(name) {
-  return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
+  return Boolean(pgSchema.tableExists(db, name));
 }
 
 function columnNames(table) {
   if (!tableExists(table)) return new Set();
-  return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
+  return new Set(pgSchema.columns(db, table).map((column) => column.name));
 }
 
 function session(employeeNumber, role) {
@@ -216,7 +217,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -225,9 +226,9 @@ test("v0.71 Block 6: Schema, Migration und bestehende Zuordnungen sind vollstaen
   assert.ok(tableExists("cost_centers"), "Tabelle cost_centers fehlt");
   assert.ok(tableExists("cost_center_types"), "Tabelle cost_center_types fehlt");
   assert.ok(tableExists("cost_center_type_positions"), "Tabelle cost_center_type_positions fehlt");
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.71-cost-centers-personnel'").get(),
+  assert.ok(pgSchema.assertCoreSchemaLedger(db),
     "Kostenstellenmigration fehlt");
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.87-cost-center-types'").get(),
+  assert.ok(pgSchema.assertCoreSchemaLedger(db),
     "Kostenstellentypmigration fehlt");
   for (const column of ["id", "code", "name", "type", "active", "created_at", "updated_at"]) {
     assert.ok(columnNames("cost_centers").has(column), `cost_centers.${column} fehlt`);
@@ -256,132 +257,11 @@ test("v0.71 Block 6: Schema, Migration und bestehende Zuordnungen sind vollstaen
     db.prepare("SELECT code FROM cost_center_types WHERE builtin = 1 ORDER BY sort_order").all().map((row) => row.code),
     ["branch", "administration", "production", "other"],
   );
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id = 'v0.71-cost-centers-personnel'").get().count, 1);
-  assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+  assert.equal(pgSchema.assertCoreSchemaLedger(db).version, 1);
+  assert.deepEqual(pgSchema.foreignKeyViolations(db), []);
 });
 
-test("v0.71 Block 6: Eine echte Alt-Datenbank wird deterministisch und ohne Waisen migriert", () => {
-  const legacyRoot = fs.mkdtempSync(path.join(testRoot, "legacy-"));
-  const legacyDb = path.join(legacyRoot, "legacy.db");
-  const serverPath = path.join(__dirname, "..", "server.js");
-  const legacySchema = `
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE cost_centers (
-      id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('branch','administration','production','other')),
-      description TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1,
-      sort_order INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL DEFAULT '',
-      updated_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE locations (
-      id TEXT PRIMARY KEY, name TEXT NOT NULL, cost_center_id TEXT, min_staff INTEGER NOT NULL DEFAULT 0,
-      day_settings_json TEXT NOT NULL DEFAULT '', time_tracking_enabled INTEGER NOT NULL DEFAULT 0,
-      time_tracking_access_mode TEXT NOT NULL DEFAULT 'anywhere',
-      time_tracking_allowed_networks TEXT NOT NULL DEFAULT '', time_tracking_variance_minutes INTEGER NOT NULL DEFAULT 15,
-      active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE departments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, location_id TEXT NOT NULL, name TEXT NOT NULL,
-      min_staff INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1,
-      sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(location_id, name)
-    );
-    CREATE TABLE employees (
-      personnel_number TEXT PRIMARY KEY, full_name TEXT NOT NULL, nickname TEXT NOT NULL,
-      color TEXT NOT NULL DEFAULT '#0b84c6', contracted_hours REAL NOT NULL DEFAULT 38.5,
-      target_workdays_per_week INTEGER NOT NULL DEFAULT 5, preferred_day_off TEXT,
-      fixed_workdays TEXT NOT NULL DEFAULT '', position_id TEXT NOT NULL DEFAULT 'verkaufsmitarbeiter',
-      time_confirmation_level TEXT NOT NULL DEFAULT 'C', sickness_without_aum_enabled INTEGER NOT NULL DEFAULT 0,
-      home_location_id TEXT, preferred_department_id INTEGER, cost_center_id TEXT,
-      active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    INSERT INTO cost_centers (id, code, name, type, active) VALUES
-      ('legacy-admin', 'LEGACY-VERW', 'Alte gemeinsame Verwaltung', 'administration', 1),
-      ('legacy-shared-branch', 'LEGACY-FIL', 'Alte gemeinsame Filiale', 'branch', 1);
-    INSERT INTO locations (id, name, cost_center_id, active)
-      VALUES
-        ('L1', 'Legacy Nord', 'legacy-admin', 1),
-        ('L2', 'Legacy Sued', 'legacy-admin', 1),
-        ('L3', 'Legacy West', 'legacy-shared-branch', 1),
-        ('L4', 'Legacy Ost', 'legacy-shared-branch', 1);
-    INSERT INTO employees (personnel_number, full_name, nickname, home_location_id, cost_center_id)
-      VALUES
-        ('LEG-1', 'Legacy Eins', 'Eins', 'L1', 'legacy-admin'),
-        ('LEG-2', 'Legacy Zwei', 'Zwei', 'L2', 'legacy-admin'),
-        ('LEG-3', 'Legacy Drei', 'Drei', 'L3', 'legacy-shared-branch'),
-        ('LEG-4', 'Legacy Vier', 'Vier', 'L4', 'legacy-shared-branch'),
-        ('LEG-5', 'Legacy Fünf', 'Fünf', NULL, NULL);
-  `;
-  const employeeQuery = `
-    SELECT e.personnel_number, e.home_location_id, e.cost_center_id, c.code
-    FROM employees e LEFT JOIN cost_centers c ON c.id = e.cost_center_id
-    WHERE e.personnel_number LIKE 'LEG-%' ORDER BY e.personnel_number
-  `;
-  const locationQuery = `
-    SELECT l.id, l.cost_center_id, c.code, c.cost_center_type_id, cct.is_branch FROM locations l
-    LEFT JOIN cost_centers c ON c.id = l.cost_center_id
-    LEFT JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
-    ORDER BY l.id
-  `;
-  const script = `
-    const { DatabaseSync } = require('node:sqlite');
-    const database = new DatabaseSync(process.env.DB_PATH);
-    database.exec(${JSON.stringify(legacySchema)});
-    database.close();
-    const subject = require(${JSON.stringify(serverPath)});
-    const rows = subject.db.prepare(${JSON.stringify(employeeQuery)}).all();
-    const locations = subject.db.prepare(${JSON.stringify(locationQuery)}).all();
-    const migrationCount = subject.db.prepare(
-      "SELECT COUNT(*) AS count FROM schema_migrations WHERE id = 'v0.71-cost-centers-personnel'"
-    ).get().count;
-    const typeMigrationCount = subject.db.prepare(
-      "SELECT COUNT(*) AS count FROM schema_migrations WHERE id = 'v0.87-cost-center-types'"
-    ).get().count;
-    const builtInTypes = subject.db.prepare(
-      "SELECT code FROM cost_center_types WHERE builtin = 1 ORDER BY sort_order"
-    ).all().map((row) => row.code);
-    process.stdout.write(JSON.stringify({ rows, locations, migrationCount, typeMigrationCount, builtInTypes,
-      foreignKeys: subject.db.prepare('PRAGMA foreign_key_check').all() }));
-    subject.db.close();
-    subject.releaseInstanceLockForTests();
-  `;
-  const result = spawnSync(process.execPath, ["-e", script], {
-    cwd: path.join(__dirname, ".."),
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      DB_PATH: legacyDb,
-      BACKUP_DIR: path.join(legacyRoot, "backups"),
-      GRABENPLANER_DATA_DIR: path.join(legacyRoot, "app-data"),
-      GRABENPLANER_SEED_DEMO: "0",
-      GRABENPLANER_FORCE_PORTAL: "0",
-      GRABENPLANER_TEST_AMU_SCANNER: "clean",
-      NODE_ENV: "test",
-    },
-  });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  const migrated = JSON.parse(result.stdout);
-  assert.equal(migrated.migrationCount, 1);
-  assert.equal(migrated.typeMigrationCount, 1);
-  assert.deepEqual(migrated.builtInTypes, ["branch", "administration", "production", "other"]);
-  assert.equal(migrated.rows.length, 5);
-  assert.ok(migrated.rows.every((row) => row.cost_center_id && row.code));
-  assert.ok(migrated.locations.every((row) => row.cost_center_id && row.code
-    && row.cost_center_type_id === "branch" && Number(row.is_branch) === 1));
-  assert.equal(new Set(migrated.locations.map((row) => row.cost_center_id)).size, migrated.locations.length,
-    "Geteilte oder nicht-filiale Altzuordnungen müssen deterministisch getrennt werden");
-  const migratedLocationCenters = new Map(migrated.locations.map((row) => [row.id, row.cost_center_id]));
-  for (const employee of migrated.rows.filter((row) => row.home_location_id)) {
-    assert.equal(
-      employee.cost_center_id,
-      migratedLocationCenters.get(employee.home_location_id),
-      `${employee.personnel_number} muss der normalisierten Kostenstelle des eigenen Standorts folgen`,
-    );
-  }
-  assert.deepEqual(migrated.foreignKeys, []);
-});
+// The unchanged historical upgrade is exercised by the corresponding postgresql-only-historical-*.test.js.
 
 test("v0.71 Block 6: Rollen erhalten nur die vorgesehenen globalen Personalrechte", () => {
   const roles = new Map(db.prepare("SELECT id, permissions FROM portal_roles").all()

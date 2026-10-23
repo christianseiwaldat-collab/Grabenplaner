@@ -9,7 +9,7 @@ const sales = new Set(inventory.tables.filter(t => t.database === "sales").map(t
 for (const name of ["import_history_snapshots", "import_history_snapshot_members"]) sales.add(name);
 const core = new Set(inventory.tables.filter(t => t.database === "core").map(t => t.name));
 
-function translate(sql, values = []) {
+function translate(sql, values = [], { postgresqlDomain } = {}) {
   const tokens = S.tokens(String(sql));
   let index = 0;
   const parameters = [];
@@ -24,6 +24,14 @@ function translate(sql, values = []) {
     }
   }
   if (!named && index !== values.length) throw new Error("PG_TEST_PARAMETER_COUNT");
+  if (postgresqlDomain !== undefined) {
+    if (!["core", "sales"].includes(postgresqlDomain)) throw new Error("PG_API_FIXTURE_CATALOG_DOMAIN");
+    // Catalog queries already use the physical PostgreSQL schema and native
+    // types. Only bind values; never route a same-named Core boundary relation
+    // through the historical Sales logical-name qualifier.
+    return { sql: S.text(tokens).replace(/;\s*$/, ""), values: parameters,
+      domain: postgresqlDomain, relations: [], legacyBusinessSql: false };
+  }
   const relations = new Set();
   // Only relation positions affect routing. A column/alias named 'settings'
   // must not change the selected database.

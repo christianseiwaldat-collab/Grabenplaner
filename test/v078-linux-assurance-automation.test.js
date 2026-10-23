@@ -22,7 +22,7 @@ const installer = read("server-tools/linux/offsite/install-grabenplaner-offsite.
 const uninstaller = read("server-tools/linux/offsite/uninstall-grabenplaner-offsite.sh");
 const selfTest = read("server-tools/linux/offsite/test-grabenplaner-offsite.sh");
 const server = read("server.js");
-const applicationSmokeSource = read("server-tools/linux/offsite/lib/application-smoke.js");
+const applicationSmokeSource = fs.readFileSync(require('../test-support/legacy-baseline').legacyPath("server-tools/linux/offsite/lib/application-smoke.js"), 'utf8');
 const {
   childEnvironment,
   PROTECTED_COLUMNS,
@@ -1305,7 +1305,7 @@ test("application smoke is a private-network, hard-timeout unit without live dat
   assert.doesNotMatch(smokeUnit, /Conflicts=grabenplaner\.service/);
 });
 
-test("root seals the smoke parent and parses only a bounded descriptor-stable result", () => {
+test("historical SQLite smoke helper: root seals the smoke parent and parses only a bounded descriptor-stable result", () => {
   assert.match(restore, /chown --no-dereference root:root -- "\$OFFSITE_SMOKE_ROOT"/);
   assert.match(restore, /chmod 0500 -- "\$OFFSITE_SMOKE_ROOT"/);
   assert.match(restore, /--verify-result "\$smoke_result" "\$smoke_uid" "\$smoke_gid"/);
@@ -1321,7 +1321,7 @@ test("root seals the smoke parent and parses only a bounded descriptor-stable re
   assert.ok(assuranceGuard >= 0 && serviceStart > assuranceGuard);
 });
 
-test("smoke result verifier rejects links and same-inode races without reopening the path", (context) => {
+test("historical SQLite smoke result verifier rejects links and same-inode races without reopening the path", (context) => {
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-result-"));
   context.after(() => fs.rmSync(parent, { recursive: true, force: true }));
   const result = path.join(parent, "result.json");
@@ -1427,4 +1427,11 @@ test("new runs sign application-smoke-passed or application-smoke-failed while l
   assert.doesNotMatch(assurance, /record_event application-smoke-not-run/);
   assert.match(assurance, /record_event application-smoke-failed/);
   assert.match(assurance, /failure_code="APPLICATION_SMOKE_FAILED"/);
+});
+
+test("current smoke entrypoint refuses retired SQLite execution before examining target paths", () => {
+  const child = require('node:child_process').spawnSync(process.execPath, [path.join(root, 'server-tools/linux/offsite/lib/application-smoke.js'), '--verify-result', '/not-an-existing-gp-target'], { encoding: 'utf8' });
+  assert.equal(child.status, 1);
+  assert.match(child.stderr, /PG_PAIRED_MAINTENANCE_REQUIRED/);
+  assert.equal(child.stdout, '');
 });

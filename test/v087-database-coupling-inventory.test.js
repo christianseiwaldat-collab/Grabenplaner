@@ -697,12 +697,19 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   "server-tools/linux/lib/verify-backup.js",
   "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
   "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
+  "server-tools/linux/migrate-grabenplaner-runtime-v6.sh",
   "server-tools/linux/offsite/lib/application-smoke.js",
   "server-tools/linux/recovery/lib/recovery-apply.js",
   "server-tools/linux/recovery/lib/recovery-verify.js",
   "server-tools/linux/test-grabenplaner-server.sh"
 ]);
-  assert.deepEqual(report.resolvedTestFiles, ["test/database-lock.test.js"]);
+  assert.deepEqual(report.resolvedTestFiles, [
+    "test/database-lock.test.js",
+    "test/v082-immutable-trigger-migration.test.js",
+    "test/v087-block5-loan-photo-migration.test.js",
+    "test/v087-block7-settings-appearance.test.js",
+    "test/v087-block8-cost-center-migration.test.js",
+  ]);
   assert.deepEqual(report.missingIndirectFiles, []);
   assert.deepEqual(report.missingPhase3Files, []);
   assert.deepEqual(report.missingPhase3TestFiles, []);

@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -248,7 +250,7 @@ async function requestBinary(route, { session = employeeSession } = {}) {
 
 test.before(() => {
   locationId = String(db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1").get().id);
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, 'Block-8-Fremdfiliale', 0, '{}', 1)
     ON CONFLICT(id) DO UPDATE SET name = excluded.name, active = 1
@@ -294,7 +296,7 @@ test.after(async () => {
   fetchShopwareArticleForTest = null;
   articleCatalog.fetchShopwareArticle = originalFetchShopwareArticle;
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -385,16 +387,16 @@ test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leih
     "loan_document_deliveries",
     "loan_events",
   ]) {
-    assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table), table);
+    assert.ok(pgSchema.tableExists(db, table), table);
   }
   for (const legacyTable of ["articles", "article_identifiers"]) {
     assert.equal(
-      db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(legacyTable),
-      undefined,
+      pgSchema.tableExists(db, legacyTable),
+      false,
       legacyTable,
     );
   }
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.85-loan-module-foundation'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   const centralArticle = storeCentralSalesArticleRevision({
     articleNumber: "654321",
     description: "Testartikel",
@@ -456,19 +458,17 @@ test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leih
     "trg_loan_photos_immutable_delete",
     "trg_loan_events_immutable_delete",
   ];
-  const deleteTriggers = deleteTriggerNames.map((name) => db.prepare(`
-    SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name = ?
-  `).get(name));
+  const deleteTriggers = deleteTriggerNames.map((name) => pgSchema.triggerByName(db, name));
   assert.equal(deleteTriggers.every((trigger) => trigger?.sql), true);
   db.exec("BEGIN IMMEDIATE");
   try {
-    for (const trigger of deleteTriggers) db.exec(`DROP TRIGGER "${trigger.name}"`);
+    for (const trigger of deleteTriggers) db.exec(`DROP TRIGGER "${trigger.name}" ON gp."${trigger.table}"`);
     db.prepare("DELETE FROM loan_document_deliveries WHERE document_id = 'test-document'").run();
     db.prepare("DELETE FROM loan_documents WHERE loan_id = ?").run(loanId);
     db.prepare("DELETE FROM loan_photos WHERE loan_id = ?").run(loanId);
     db.prepare("DELETE FROM loan_events WHERE loan_id = ?").run(loanId);
     db.prepare("DELETE FROM loans WHERE id = ?").run(loanId);
-    for (const trigger of deleteTriggers) db.exec(trigger.sql);
+    for (const trigger of deleteTriggers) db.exec(trigger.definition);
     db.exec("COMMIT");
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}

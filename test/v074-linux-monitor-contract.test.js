@@ -209,8 +209,8 @@ test("security CSP: native Bash monitor rejects self, duplicate names and policy
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), cases.map(([name,,expected])=>name+'='+expected).join('\n'));
 });
-test("v0.74 rejects backup timestamps more than five minutes in the future", () => {
-  const health = read("server-tools/linux/test-grabenplaner-server.sh");
+test("immutable historical v0.74 SQLite monitor rejects backup timestamps more than five minutes in the future", () => {
+  const health = fs.readFileSync(require('../test-support/legacy-baseline').legacyPath("server-tools/linux/test-grabenplaner-server.sh"), 'utf8');
   assert.match(health, /age_seconds < -300/);
   assert.match(health, /Zeitstempel liegt unplausibel in der Zukunft/);
   assert.match(health, /age_seconds < 0 \)\) && age_seconds=0/);

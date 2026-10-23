@@ -463,7 +463,7 @@ test("Aktionslog ist in Anwendungskatalog, Repository-Factory und PostgreSQL-Pla
     "utf8",
   );
   const applicationCatalog = fs.readFileSync(
-    path.join(root, "lib", "persistence", "sqlite", "application-catalog.js"),
+    path.join(root, "lib", "persistence", "catalogs", "application-catalog.js"),
     "utf8",
   );
   const applicationSchema = fs.readFileSync(

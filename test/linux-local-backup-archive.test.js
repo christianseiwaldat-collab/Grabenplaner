@@ -106,8 +106,8 @@ test("Linux archive launcher rejects unsafe identities and redacts failed child 
   }
 });
 
-test("Linux bulk snapshots use disk, archive mode never falls back to legacy pruning", () => {
-  const script = fs.readFileSync(path.join(root, "server-tools/linux/backup-grabenplaner.sh"), "utf8");
+test("immutable historical SQLite Linux bulk snapshots use disk and never fall back to legacy pruning", () => {
+  const script = fs.readFileSync(require('../test-support/legacy-baseline').legacyPath('server-tools/linux/backup-grabenplaner.sh'), "utf8");
   assert.match(script, /mktemp --directory --tmpdir="\$backup_dir" \.backup-stage/);
   assert.ok(script.indexOf('preflight-as "$service_user"') < script.indexOf('staging_directory="$(mktemp'));
   assert.doesNotMatch(script, /mktemp --directory --tmpdir="\$runtime_directory" backup-stage/);
@@ -235,4 +235,15 @@ test("Linux archive CLI contract works with the real backend and preserves old r
     pair.protectedDirectory, path.join(root, "lib/amu-storage.js"), pair.markerPath) });
   try { assert.equal(fs.readFileSync(restored.databasePath, "utf8"), "synthetic-backup-payload-second"); }
   finally { restored.cleanup(); }
+});
+
+test("current Linux backup entrypoint requires PostgreSQL and refuses unsupported SQLite archive switches before work", () => {
+  const source = fs.readFileSync(path.join(root, "server-tools/linux/backup-grabenplaner.sh"), "utf8");
+  const gate = source.indexOf('[[ "${DB_PROVIDER:-}" == postgresql ]]');
+  const launch = source.indexOf('\ngp_postgresql_backup');
+  assert.ok(gate >= 0 && launch > gate);
+  const retiredOptions = source.indexOf('defer_archive == 0 && preserve_existing_backups == 0');
+  assert.ok(retiredOptions > gate && retiredOptions < launch);
+  assert.doesNotMatch(source, /VACUUM INTO|sqliteMaintenanceOperations|\.backup-stage|snapshot_committed=1/);
+  assert.match(source, /Offline-Wiederherstellungskapsel/);
 });

@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const testRoot=fs.mkdtempSync(path.join(os.tmpdir(),'gp-studio-portal-api-'));
@@ -9,9 +10,9 @@ function session(employeeNumber,role){const token=crypto.randomBytes(32).toStrin
 async function request(route,auth,method='GET',body,csrf=true){const response=await fetch(base+route,{method,headers:{Accept:'application/json',...(auth?{Cookie:auth.cookie,...(csrf?{'X-CSRF-Token':auth.csrf}:{})}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});return{response,body:await response.json()};}
 const ok=result=>assert.equal(result.response.status,200,result.body?.code||result.body?.error||'Unexpected Studio status');
 test.before(async()=>{server=await new Promise((resolve,reject)=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));s.once('error',reject);});base=`http://127.0.0.1:${server.address().port}`;});
-test.after(async()=>{if(server)await new Promise(r=>server.close(r));try{db.close();}catch{}releaseInstanceLockForTests();assert.ok(path.resolve(testRoot).startsWith(path.resolve(os.tmpdir())+path.sep));fs.rmSync(testRoot,{recursive:true,force:true,maxRetries:8,retryDelay:100});});
+test.after(async()=>{if(server)await new Promise(r=>server.close(r));try{await db.close();}catch{}releaseInstanceLockForTests();assert.ok(path.resolve(testRoot).startsWith(path.resolve(os.tmpdir())+path.sep));fs.rmSync(testRoot,{recursive:true,force:true,maxRetries:8,retryDelay:100});});
 test('Actual GP server Studio and Portal routes publish/start/complete immutable manual tasks independently of disabled M5, preserve history, reject legacy mutation and current recipient revocation',async()=>{
- db.prepare("INSERT INTO locations(id,name,active)VALUES('STUDIO-TEST','BEISPIEL Filiale',1)").run();const manager=session('STUDIO-MANAGER','hr'),employee=session('STUDIO-EMPLOYEE','employee'),foreign=session('STUDIO-FOREIGN','employee');
+ prepareLocationFixture(db, "INSERT INTO locations(id,name,active)VALUES('STUDIO-TEST','BEISPIEL Filiale',1)").run();const manager=session('STUDIO-MANAGER','hr'),employee=session('STUDIO-EMPLOYEE','employee'),foreign=session('STUDIO-FOREIGN','employee');
  for(const permission of ['rights:read','processes:write'])db.prepare('INSERT OR IGNORE INTO portal_permission_grants(employee_number,permission,granted_by)VALUES(?,?,?)').run('STUDIO-MANAGER',permission,'test');
  const features=JSON.parse(db.prepare("SELECT value FROM settings WHERE key='installation_features'").get()?.value||'[]').filter(x=>x!=='personnelLifecycle');db.prepare("UPDATE settings SET value=? WHERE key='installation_features'").run(JSON.stringify(features));
  const prefix='/api/portal/v1/workflow-studio';let r=await request(prefix+'/catalog',manager);ok(r);assert.equal(r.body.capabilities.canPublish,true);assert.equal(r.body.people.some(p=>p.employeeNumber==='STUDIO-EMPLOYEE'),true);const count=t=>db.prepare('SELECT COUNT(*) n FROM '+t).get().n,before={notifications:count('portal_notifications'),jobs:count('outbound_notification_jobs')};

@@ -760,6 +760,16 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  "test/linux-local-backup-archive.test.js",
+  "test-support/postgresql-api/metadata.js",
+  "test-support/postgresql-api/location-fixture.js",
+  "test-support/postgresql-api/trigger-fixture.js",
+  "test-support/historical-server-tests.js",
+  "test/postgresql-only-historical-permissions.test.js",
+  "test/postgresql-only-historical-integrations.test.js",
+  "test/postgresql-only-historical-cost-centers.test.js",
+  "test/postgresql-only-historical-shift-locations.test.js",
+  "test/portal-foundation-legacy-migration.test.js",
   "test/planning-assistant-preferences-api.test.js",
   "test-support/postgresql-api/ownership.js",
   "test/postgresql-api-native-fixture.test.js",
@@ -1389,6 +1399,7 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
       "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
       "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
       "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
+      "server-tools/linux/migrate-grabenplaner-runtime-v6.sh",
       "server-tools/linux/monitor/lib/monitor-status.js",
       "server-tools/linux/offsite/lib/application-smoke.js",
       "server-tools/linux/recovery/lib/recovery-apply.js",
@@ -1400,7 +1411,7 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
     targetLayer: "provider-specific snapshot, restore, verification, recovery and bootstrap adapters",
     risk: "critical",
     transactionContext: "offline snapshots, integrity checks and controlled file replacement",
-    transitionException: "the complete SQLite operating path remains supported until a separate PostgreSQL path passes all gates",
+    transitionException: "historical SQLite operating adapters remain archived source fixtures; current managed operation requires the qualified PostgreSQL pair and the bounded legacy recovery capsule",
     laterPhase: "3-6",
   }),
   Object.freeze({
@@ -1855,8 +1866,18 @@ const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
   "test-support/cash-history-snapshot-prototype.js",
   "test/data-import-state-counts.test.js",
   ...BASELINE_DIRECT_TEST_DRIVER_FILES.filter((file) => ![
+    "test/v053-time-corrections.test.js",
+    "test/v057-codespaces-demo.test.js",
+    "test/v072-production-bootstrap.test.js",
+    "test/v082-immutable-trigger-migration.test.js",
+    "test/v087-block5-loan-photo-migration.test.js",
+    "test/v087-block7-settings-appearance.test.js",
+    "test/v087-block8-cost-center-migration.test.js",
     "test/database-lock.test.js",
     "test/portal-foundation.test.js",
+    "test/v063-import-payroll.test.js",
+    "test/v071-cost-centers-personnel.test.js",
+    "test/v071-shift-locations.test.js",
     "test/block6-custom-work-rule-evaluator.test.js",
     "test/work-rule-store.test.js",
   ].includes(file)),
@@ -3025,6 +3046,9 @@ function architectureBoundaryViolationsForText(file, text) {
     'server-tools/linux/test-grabenplaner-server.sh',
     'server-tools/linux/preflight-grabenplaner-deploy.sh',
     'server-tools/linux/update-grabenplaner-server.sh',
+    // The exact Core5-to-Core6 entrypoint validates the root-owned installed
+    // PostgreSQL pair before its coordinated protected module transition.
+    'server-tools/linux/migrate-grabenplaner-runtime-v6.sh',
   ]);
   const persistenceInternalFiles = new Set([
     'lib/persistence/postgresql/application.js',
@@ -5135,7 +5159,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
 
   const currentRuntime = Object.freeze({
     scope: "current-server-source-boundary",
-    supportedProviderIds: Object.freeze([...(require(path.join(root, "lib/persistence/configuration.js")).IMPLEMENTED_PERSISTENCE_PROVIDER_IDS)]),
+    supportedProviderIds: Object.freeze([...phase6Progress.implementedProviderIds]),
     postgresqlOnlyConfiguration: phase5Progress.configurationPostgresqlOnly && phase6Progress.configurationPostgresqlOnly,
     qualifiedComposition: /\bopenDeferredPostgresqlApplication\s*\(/.test(serverText),
     sqliteStartupImports: [...serverText.matchAll(/require\s*\(\s*["'](?:node:sqlite|[^"']*persistence\/sqlite[^"']*)["']\s*\)/g)].length,

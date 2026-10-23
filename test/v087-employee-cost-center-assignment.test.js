@@ -1,4 +1,5 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -135,16 +136,13 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
 test("v0.87 Block 2: Migration und Datenbank sichern die führende Kostenstelle ab", () => {
-  assert.ok(db.prepare(`
-    SELECT 1 FROM schema_migrations
-    WHERE id = 'v0.87-employee-cost-center-assignment'
-  `).get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   const inconsistent = db.prepare(`
     SELECT e.personnel_number
     FROM employees e

@@ -47,7 +47,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  db.close(); releaseInstanceLockForTests();
+  await db.close(); releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 

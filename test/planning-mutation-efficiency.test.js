@@ -8,15 +8,17 @@ const { createPlanningDerivedRefresh } = require("../lib/planning-derived-refres
 const source = fs.readFileSync(require.resolve("../server"), "utf8").replace(/\r\n/g, "\n");
 const plain = value => JSON.parse(JSON.stringify(value));
 const addDays = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
-function extract(name) {
-  const start = source.search(new RegExp(`^(?:async )?function ${name}\\(`, "m"));
-  const end = source.indexOf("\n}\n", start);
+function extract(name, input = source) {
+  const start = input.search(new RegExp(`^(?:async )?function ${name}\\(`, "m"));
+  const end = input.indexOf("\n}\n", start);
   assert.ok(start >= 0 && end > start, name);
-  return source.slice(start, end + 3);
+  return input.slice(start, end + 3);
 }
-function load(names, values) {
+function load(names, values, { historical = false } = {}) {
+  const input = historical ? fs.readFileSync(require("../test-support/legacy-baseline").legacyPath("server.js"), "utf8").replace(/\r\n/g, "\n") : source;
+  if (historical) values.sqliteEmployeeLocationLendingOperations = values.employeeLocationLendingOperations;
   const context = vm.createContext(values);
-  vm.runInContext(names.map(extract).join("\n"), context);
+  vm.runInContext(names.map(name => extract(name, input)).join("\n"), context);
   return context;
 }
 
@@ -52,7 +54,7 @@ function validationFixture({ postgres = true, revokeAt = 0, foreign = false } = 
     defaultScheduleDutyCode: () => "general",
     validateLocationExists: catalog("location", { id: "18" }),
     validateDepartmentExists: catalog("department", { id: 7, location_id: "18" }),
-    sqliteEmployeeLocationLendingOperations: { overlapForShift: legacy(null), coverageForShift: legacy({ destinationDepartmentId: 7 }) },
+    employeeLocationLendingOperations: { overlapForShift: legacy(null), coverageForShift: legacy({ destinationDepartmentId: 7 }) },
     employeeCanWorkOnDate: () => true, settingsForLocation: catalog("settings", {}),
     assertDateEditable: catalog("manual-lock", undefined), getGlobalDayBlockForDate: () => null,
     manualPlanningHours: () => ({ start: "07:00", end: "21:00" }), dayConfiguration: async () => ({}),
@@ -60,13 +62,13 @@ function validationFixture({ postgres = true, revokeAt = 0, foreign = false } = 
     activeSicknessEmployeeNumbers: catalog("sickness", () => new Set(state.sick ? ["E1"] : [])),
     sessionHasGlobalScope: () => false,
     httpError: (status, message, code) => Object.assign(new Error(message), { status, code }),
-  });
+  }, { historical: !postgres });
   const input = { employeeNumber: "E1", locationId: "18", departmentId: 7,
     date: "2032-07-05", startTime: "09:00", endTime: "17:00", area: "Area", note: "Note" };
   return { c, state, input };
 }
 
-test("shift validation brackets legacy lending with two independently authorized catalog snapshots", async () => {
+test("current PostgreSQL validation brackets lending with authorized snapshots; historical SQLite behavior remains separately bound", async () => {
   for (const postgres of [true, false]) for (const foreign of [true, false]) {
     const { c, state, input } = validationFixture({ postgres, foreign });
     assert.deepEqual(plain(await c.validateShift(input, {}, { employeeNumber: "actor" })), {

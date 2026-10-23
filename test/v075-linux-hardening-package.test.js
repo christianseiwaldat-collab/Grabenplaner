@@ -164,6 +164,34 @@ test("v0.90.7 keeps every managed Linux byte contract platform-stable", () => {
   }
 });
 
+test("immutable pre-PostgreSQL-only runtime keeps its exact adopted v5, Offsite12 and Hardening1 byte fingerprints", () => {
+  const { legacyPath } = require("../test-support/legacy-baseline");
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "gp-legacy-runtime-checkout-")), fixture = path.join(parent, "source");
+  fs.mkdirSync(fixture);
+  try {
+  fs.cpSync(legacyPath("server-tools"), path.join(fixture, "server-tools"), { recursive: true });
+  fs.copyFileSync(legacyPath(".gitattributes"), path.join(fixture, ".gitattributes"));
+  const attributes = path.join(parent, "no-global-attributes"); fs.writeFileSync(attributes, "");
+  // Reproduce only the historical managed-artifact checkout in a new fixture.
+  // Its versioned eol=crlf contracts remain exact on Linux as on Windows.
+  for (const args of [["init", "--quiet"], ["add", "--all"], ["checkout-index", "--force", "--all"]]) {
+    const result = spawnSync("git", ["-C", fixture, "-c", "core.autocrlf=false", "-c", "core.attributesFile=" + attributes, ...args], {
+      encoding: "utf8", env: { ...process.env, GIT_ATTR_NOSYSTEM: "1" },
+    });
+    assert.equal(result.status, 0, result.stderr);
+  }
+  const verification = spawnSync(process.execPath, [legacyPath("server-tools/linux/lib/verify-package.js"), "--runtime-contract", fixture], { encoding: "utf8" });
+  assert.equal(verification.status, 0, verification.stderr);
+  const result = JSON.parse(verification.stdout);
+  assert.equal(result.deploymentSchemaVersion, 5);
+  assert.equal(result.fingerprint, "21f541a85b74ced5e5b6ec84ff2561badcd6635ad1fceb7438cb32350392cd8c");
+  assert.equal(result.offsiteModule.moduleVersion, 12);
+  assert.equal(result.offsiteModule.fingerprint, "3b4f00d0ac775549f460aaeb089346f61cedf112c0fc68a4d09059b0dc6d933c");
+  assert.equal(result.hardeningModule.fingerprint, "dc42a15ed03fe6f10eae2fbc38754fb9c44d14377a1a6989ee27527564140a50");
+  assert.equal(result.managedArtifacts.length, 11);
+  } finally { fs.rmSync(parent, { recursive: true, force: true }); }
+});
+
 test("hardening stays separate from the current core runtime and binds its exact fingerprint", () => {
   const verification = spawnSync(process.execPath, [
     path.join(root, "server-tools/linux/lib/verify-package.js"),
@@ -172,15 +200,14 @@ test("hardening stays separate from the current core runtime and binds its exact
   ], { encoding: "utf8" });
   assert.equal(verification.status, 0, verification.stderr);
   const result = JSON.parse(verification.stdout);
-  assert.equal(result.deploymentSchemaVersion, 5);
-  // The reviewed reboot broker accepts a read-only status group and safely
-  // prepares its state directory. GP710 adopted these exact bytes explicitly.
-  // Older hosts still require that module maintenance before an app update.
-  assert.equal(result.fingerprint, "21f541a85b74ced5e5b6ec84ff2561badcd6635ad1fceb7438cb32350392cd8c");
-  // Offsite v12 binds action-aware control locks while preserving nightly deferral.
-  // Adoption requires the explicit Offsite module update, never a receipt edit.
-  assert.equal(result.offsiteModule.moduleVersion, 12);
-  assert.equal(result.offsiteModule.fingerprint, "3b4f00d0ac775549f460aaeb089346f61cedf112c0fc68a4d09059b0dc6d933c");
+  assert.equal(result.deploymentSchemaVersion, 6);
+  // Core6 requires explicit PostgreSQL-only maintenance; the immutable Core5
+  // fixture above retains its original bytes and receipt contract.
+  assert.equal(result.fingerprint, "f9c09a999f5d6b30c0df35e714d0a5ddf0ca17880ad9190ff4bc5c068c3d95fc");
+  // Offsite13 is adopted only by the fenced Core5/12 -> Core6/13 transition.
+  // A receipt edit cannot authorize the module or provider change.
+  assert.equal(result.offsiteModule.moduleVersion, 13);
+  assert.equal(result.offsiteModule.fingerprint, "7e7b9c89ec334c00b247db7325e5c32df487ee6af9ede21b1f8587e0416660bf");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 

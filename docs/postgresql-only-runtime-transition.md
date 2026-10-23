@@ -1,0 +1,31 @@
+# PostgreSQL-only: expliziter Linux-Runtimeübergang
+
+Der PostgreSQL-only-Server verwendet Core-Runtimevertrag 6 und Offsite-Modulvertrag 13. Ein reguläres App-Update darf einen installierten Vertrag 5 nicht als unverändert behandeln. Der koordinierte Übergang erfolgt ausschließlich mit `server-tools/linux/migrate-grabenplaner-runtime-v6.sh` aus demselben separat anhand seines SHA-256 freigegebenen Serverpaket.
+
+## Enger Vertragsumfang
+
+Der Ausgangsstand ist der qualifizierte Core-5-/Offsite-12-Vertrag der historischen Basis `b2ba03cdc0b738d44766857de052e090db557807`. Core 5 besitzt den Fingerprint `21f541a85b74ced5e5b6ec84ff2561badcd6635ad1fceb7438cb32350392cd8c`, Offsite 12 den Fingerprint `3b4f00d0ac775549f460aaeb089346f61cedf112c0fc68a4d09059b0dc6d933c`. Dabei gelten die ausdrücklich versionierten Checkoutbytes der `.gitattributes`; der Monitor-Timer verwendet CRLF. Ein abweichender Ausgangsstand erfordert eine eigene Prüfung.
+
+Von den elf verwalteten Core-Dateien ändern sich ausschließlich die PostgreSQL-Bootstrapvorlage und die Beispielumgebung. Die übrigen neun Dateien einschließlich aller systemd-Units, des Host-Control-Brokers und Caddy bleiben bytegleich. Der Core-6-Fingerprint lautet `f9c09a999f5d6b30c0df35e714d0a5ddf0ca17880ad9190ff4bc5c068c3d95fc`. Die Offsite-Dateimenge bleibt gleich; ihr eigener Übergangsprüfer begrenzt die Änderungen auf den Installer, die gemeinsame Sicherheitsbasis, den Modulvertragsprüfer und den selbständigen Verweigerungseinstieg für historische SQLite-Smoke-Aufrufe. Er prüft jede übrige Datei und jede Unit unverändert.
+
+Die echte geschützte Serverumgebung, PostgreSQL-Anwendungs- und Betriebskonfiguration, der Paaranker, Repositorykennung, Installationskennung und die vorhandenen Kennwortdateien werden unverändert gebunden. Der installierte Bootstrap-Befehl ist eine gerenderte Datei außerhalb des App-Baums. Er wird deshalb gesondert gegen die alte Vorlage geprüft, gesichert und gegen die neue Vorlage ausgetauscht. Der bereits verbrauchte Bootstrap-Schlüssel wird weder neu gesetzt noch verwendet. Ein Datenbankwechsel, eine Repositoryinitialisierung und ein Host-Neustart gehören nicht zu diesem Ablauf.
+
+## Voraussetzungen und Reihenfolge
+
+Vorausgesetzt sind Linux x86_64, die qualifizierte Node.js-Version, `/usr/bin/python3`, ein grüner read-only Deploy-Vorabcheck, ein vollständig vorbereiteter produktiver PostgreSQL-Paarbetrieb, funktionierende interne und öffentliche Readiness sowie das unverändert gebundene Offsite-Modul 12. Ein SQLite-Bestand muss zuvor über die erhaltene historische Wiederherstellungs- und Migrationstoolchain kontrolliert überführt und geprüft werden. Dieser Runtimeübergang führt keine solche Datenmigration aus.
+
+| Phase | Core / externes Offsite-Modul | Bedeutung |
+| --- | --- | --- |
+| Vorprüfung | 5 / 12 | Normaler Ausgangsstand; vollständiges Paket, Einzeldateien, ClamAV, echte PostgreSQL-Rollen und Clusterbezug werden geprüft. |
+| Gesperrter Übergang | 5 / 13 | Ausschließlich kontrollierte Wartungslücke unter geerbtem FD 9 und pausierten Offsite-Timern. Die alten Modulprüfer erkennen 13 ausdrücklich nicht als unterstützten Dauerstand an. |
+| App-Update | 5 / 13 → 6 / 13 | Der normale vollständige Updater erstellt frische gekoppelte Sicherungen, verwendet die üblichen Healthchecks und Produktivprüfungen und bewahrt den vollständigen alten App-Baum für seinen Rollback. |
+| Fehler vor App-Commit | zurück zu 5 / 12 | Nach bestätigter Rückkehr der alten App werden das exakte Modul 12, sein ursprünglicher Beleg und der alte Bootstrap-Befehl wiederhergestellt. Erst bestätigte alte Betriebsprüfungen erlauben die Wiederaufnahme der vorherigen Timerzustände. |
+| Erfolgreicher App-Commit | 6 / 13 | Core-, Modul-, Bootstrap- und Providerbindung werden erneut geprüft, der Migrationsbeleg wird gespeichert und ein gesonderter Assurance-Lauf eingeplant. |
+
+Ein Fehler nach dauerhaft bestätigtem App-Commit löst keinen Teilrollback aus. Ein unklarer Rollback oder ein Signal bewahrt alle Rückkehrpunkte und Diagnosen und lässt die Offsite-Timer pausiert. PostgreSQL-Schreibvorgänge werden nicht durch ein ungesichertes Zurückspielen einer älteren Datenbank überschrieben. Die bisherigen aktivierten und laufenden Timerzustände bleiben die Vorgabe; die Migration führt keine neue Timerpolitik ein.
+
+## Nachweise vor einer Produktivfreigabe
+
+Die fokussierten Vertragstests prüfen zulässige und unzulässige Core-Deltas, Vorgängerversionen, Dateimengen, Hardlinks, symbolische Elternpfade und ungebundene Aufrufe. Historische Core-4-/Core-5-Assertions bleiben separat an die unveränderliche Basis gebunden. Das ersetzt nicht die erforderliche isolierte Linux-Qualifikation der tatsächlichen alten und neuen Einstiegspunkte.
+
+Für eine spätere Freigabe müssen insbesondere der wirkliche Start der unveränderten alten PostgreSQL-App mit externem Modul 13 während der Wartung, ihre Live-/Ready-Antworten, die negative Prüfung aller alten Modul-/Zeitplaneinstiege, der exakte Modul-12-Rollback vor Timerfreigabe und der vollständige erfolgreiche Core-6-/Offsite-13-Ablauf nachgewiesen sein. Falls die alte App vor dem Modulrollback nicht startet, ist ein gebundener Rücktausch vor ihrem Start erforderlich. Vollständige Linux-Anwendungsprüfungen, CI/SAST und der gesonderte Assurance-Abschluss bleiben zusätzliche Nachweise. Dieses Dokument bestätigt keine bereits erfolgte Produktivmigration.

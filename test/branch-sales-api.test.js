@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const assert = require("node:assert/strict"), test = require("node:test");
 const crypto = require("node:crypto"), fs = require("node:fs"), os = require("node:os"), path = require("node:path");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-branch-sales-"));
@@ -35,7 +36,7 @@ async function enable(permissions, extra = {}) {
 }
 test.before(async () => {
   await initializeApplicationPersistence();
-  for (const id of ["93", "94"]) db.prepare("INSERT INTO locations (id,name,min_staff,active) VALUES (?,?,0,1)").run(id, "Demo-Filiale " + id);
+  for (const id of ["93", "94"]) prepareLocationFixture(db, "INSERT INTO locations (id,name,min_staff,active) VALUES (?,?,0,1)").run(id, "Demo-Filiale " + id);
   db.exec("INSERT INTO employees (personnel_number,full_name,nickname,color,contracted_hours,home_location_id,active) VALUES ('sales-hr','Demo Leitung','Demo','#287a67',38.5,'93',1)");
   db.exec("INSERT INTO portal_users (employee_number,password_hash,role,active,must_change_password) VALUES ('sales-hr','test-only','hr',1,0)");
   const token = crypto.randomBytes(32).toString("hex");
@@ -51,7 +52,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  db.close(); releaseInstanceLockForTests();
+  await db.close(); releaseInstanceLockForTests();
   assert.equal(path.dirname(path.resolve(root)), path.resolve(os.tmpdir()));
   assert.ok(path.basename(root).startsWith("gp-branch-sales-")); fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

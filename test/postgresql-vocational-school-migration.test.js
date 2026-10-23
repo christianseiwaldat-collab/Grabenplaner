@@ -224,7 +224,7 @@ test("explicit CLI rejects catalog drift before opening operations configuration
   const root = "/opt/grabenplaner/app", reads = [];
   const paths = ["server-tools/linux/lib/vocational-school-migrate.js", "lib/persistence/postgresql/core/vocational-school.js",
     "lib/persistence/postgresql/core/catalog.js", "lib/persistence/postgresql/boundary/migrate.js",
-    "lib/persistence/sqlite/planning-settings-catalog.js", "lib/persistence/statements/planning-settings.js"];
+    "lib/persistence/catalogs/planning-settings-catalog.js", "lib/persistence/statements/planning-settings.js"];
   const hash = bytes => require("node:crypto").createHash("sha256").update(bytes).digest("hex");
   const manifest = Buffer.from(JSON.stringify({ files: paths.map(relative => ({ path: relative, sha256: hash(Buffer.from(relative)) })) }));
   const context = { module: { exports: {} }, __dirname: root + "/server-tools/linux/lib",

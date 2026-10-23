@@ -1,3 +1,4 @@
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
 "use strict";
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
@@ -225,7 +226,7 @@ test.before(async () => {
 test.after(async () => {
   deliveryHook = null;
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  db.close();
+  await db.close();
   releaseInstanceLockForTests();
   nodemailer.createTransport = nativeCreateTransport;
   globalThis.fetch = nativeFetch;
@@ -576,9 +577,9 @@ test("v0.88: Auditfehler rollen Praeferenz und Codebestaetigung vollstaendig zur
   setMasterTargets(employeeNumber, { privateEmail: "audit-rollback@example.at" });
   const session = createSession(employeeNumber);
   await request("/api/portal/v1/me/email-settings", { session });
-  const trigger = "trg_test_personal_notifications_audit_failure";
-  const removeTrigger = () => db.exec(`DROP TRIGGER IF EXISTS ${trigger}`);
-  const installTrigger = (action) => db.exec(`
+  const trigger = "test_trg_test_personal_notifications_audit_failure";
+  const removeTrigger = () => dropFixtureTrigger(db, trigger, { ifExists: true });
+  const installTrigger = (action) => installFixtureTrigger(db, `
     CREATE TRIGGER ${trigger}
     BEFORE INSERT ON audit_log
     WHEN NEW.action = '${action}'

@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -272,7 +273,7 @@ function o5CaseRuntimeCounts(caseId) {
 }
 
 function createFixture() {
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, active)
     VALUES (?, 'O5 API Standort', 1)
   `).run(LOCATION);
@@ -305,7 +306,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

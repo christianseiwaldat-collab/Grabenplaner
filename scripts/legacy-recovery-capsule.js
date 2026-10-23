@@ -64,6 +64,24 @@ function newRoot(value) {
     || fs.realpathSync(parent) !== parent) fail("LEGACY_CAPSULE_NEW_ROOT_REQUIRED");
   return root;
 }
+function isLinuxLoaderPath(file) {
+  if (typeof file !== "string") return false;
+  const separator = file.lastIndexOf("/"), name = file.slice(separator + 1);
+  if (separator < 0 || !name.startsWith("ld-linux")) return false;
+  const suffix = name.lastIndexOf(".so");
+  if (suffix < "ld-linux".length) return false;
+  const version = name.slice(suffix + 3);
+  if (version === "") return true;
+  if (!version.startsWith(".")) return false;
+  return version.slice(1).split(".").every(part => {
+    if (!part.length) return false;
+    for (let index = 0; index < part.length; index++) {
+      const digit = part.charCodeAt(index);
+      if (digit < 48 || digit > 57) return false;
+    }
+    return true;
+  });
+}
 function preserveNativeLibraries(binary, root) {
   const os = require("node:os");
   const contract = { platform: process.platform, arch: process.arch, kernelRelease: os.release(),
@@ -81,7 +99,7 @@ function preserveNativeLibraries(binary, root) {
   fs.mkdirSync(path.join(root, "runtime/lib"), { mode: 0o700 });
   for (const file of [...new Set(files)].sort()) {
     const actual = fs.realpathSync(file); regular(actual);
-    const loader = /\/ld-linux[^/]*\.so(?:\.\d+)*$/.test(file);
+    const loader = isLinuxLoaderPath(file);
     const destination = loader ? "runtime/loader" : "runtime/lib/" + path.basename(file);
     if (fs.existsSync(path.join(root, destination))) fail("LEGACY_CAPSULE_NATIVE_COLLISION");
     fs.copyFileSync(actual, path.join(root, destination), fs.constants.COPYFILE_EXCL);
@@ -280,4 +298,4 @@ if (require.main === module) Promise.resolve().then(async () => {
 }).then(result => process.stdout.write(JSON.stringify(result) + "\n"))
   .catch(error => { process.stderr.write(JSON.stringify({ ok: false, code: error.code || "LEGACY_CAPSULE_FAILED",
     ...(error.legacyPhase ? { phase: error.legacyPhase } : {}), ...(error.child ? { child: error.child } : {}) }) + "\n"); process.exitCode = 1; });
-module.exports = { BASELINE, createCapsule, verifyCapsule, restoreCapsule, hashFile, inventory, argumentsFor, assertSeparatedOutput };
+module.exports = { BASELINE, createCapsule, verifyCapsule, restoreCapsule, hashFile, inventory, argumentsFor, assertSeparatedOutput, isLinuxLoaderPath };

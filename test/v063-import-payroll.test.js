@@ -1,4 +1,7 @@
 "use strict";
+const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -6,7 +9,6 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { DatabaseSync } = require("node:sqlite");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v063-integrations-"));
 process.env.DB_PATH = path.join(testRoot, "dienstplan.db");
@@ -18,19 +20,6 @@ process.env.GRABENPLANER_SEED_DEMO = "1";
 process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
 process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
-
-const preMigrationDb = new DatabaseSync(process.env.DB_PATH);
-preMigrationDb.exec(`
-  CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-  CREATE TABLE schema_migrations (
-    id TEXT PRIMARY KEY,
-    app_version TEXT NOT NULL,
-    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-`);
-preMigrationDb.prepare("INSERT INTO settings (key, value) VALUES ('installation_features', ?)")
-  .run(JSON.stringify(["schedule", "vacation", "requests", "employeePortal", "timeTracking", "sicknessAmu", "wifiSuggestions"]));
-preMigrationDb.close();
 
 const subject = require("../server");
 const {
@@ -49,10 +38,10 @@ let baseUrl;
 let locationId;
 let positionId;
 
-test("v0.63: vollständig freigeschaltete Altinstallationen erhalten das neue Integrationsmodul", () => {
+test("PostgreSQL: das freigeschaltete Integrationsmodul besitzt den kanonischen Schema-Nachweis", () => {
   const configured = JSON.parse(db.prepare("SELECT value FROM settings WHERE key = 'installation_features'").get().value);
   assert.ok(configured.includes("integrations"));
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.63-import-payroll-integrations'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
 });
 
 function session(employeeNumber, role) {
@@ -309,7 +298,7 @@ test.beforeEach(resetFixture);
 
 test.after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -1031,7 +1020,7 @@ test("Personalimport rollt Mehrziel-Scope, Sitzungen, Run und Audits bei Auditfe
   );
   const auditBefore = db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count;
   const runsBefore = db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count;
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_import_apply_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'integration.personnel.import.applied'
@@ -1064,7 +1053,7 @@ test("Personalimport rollt Mehrziel-Scope, Sitzungen, Run und Audits bei Auditfe
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count, runsBefore);
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count, auditBefore);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_personnel_import_apply_audit_abort");
+    dropFixtureTrigger(db, "test_personnel_import_apply_audit_abort", { ifExists: true });
     for (const sessionId of [prepared.previewId, prepared.inspectionId]) {
       const cleanup = await request(`/api/integrations/personnel-import/sessions/${sessionId}`, {
         method: "DELETE",
@@ -1105,7 +1094,7 @@ test("Personalmodul R1: konkurrierender Unique-Insert macht die Importvorschau k
     SELECT COUNT(*) AS count FROM audit_log
     WHERE action = 'integration.personnel.import.applied'
   `).get().count;
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_import_unique_race
     BEFORE INSERT ON employees
     WHEN NEW.personnel_number = '${employeeNumber}'
@@ -1130,7 +1119,7 @@ test("Personalmodul R1: konkurrierender Unique-Insert macht die Importvorschau k
       WHERE action = 'integration.personnel.import.applied'
     `).get().count, auditCountBefore);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_personnel_import_unique_race");
+    dropFixtureTrigger(db, "test_personnel_import_unique_race", { ifExists: true });
   }
 
   const retried = await request("/api/integrations/personnel-import/apply", {
@@ -1360,7 +1349,7 @@ test("v0.63: delegierter Personalimport sieht nur zugewiesene Standorte", async 
 test("v0.63: delegierter Import darf keine Person aus einem fremden Standort in den eigenen Bereich verschieben", async () => {
   const manager = session("102", "manager");
   const otherLocationId = "97";
-  db.prepare("INSERT OR IGNORE INTO locations (id, name, active) VALUES (?, 'Fremdfiliale', 1)").run(otherLocationId);
+  prepareLocationFixture(db, "INSERT OR IGNORE INTO locations (id, name, active) VALUES (?, 'Fremdfiliale', 1)").run(otherLocationId);
   db.prepare(`
     INSERT INTO employees
       (personnel_number, full_name, nickname, color, contracted_hours, position_id, time_confirmation_level, home_location_id, active)
@@ -1542,7 +1531,7 @@ test("v0.63: Abteilungsfilter blendet Urlaub nicht aus der Konfliktprüfung aus"
 test("v0.63: Standortexport ordnet fremde Abteilungsdienste nur dem tatsächlichen Standort zu", async () => {
   const admin = session("101", "admin");
   const otherLocationId = "98";
-  db.prepare("INSERT OR IGNORE INTO locations (id, name, active) VALUES (?, 'Testfiliale', 1)").run(otherLocationId);
+  prepareLocationFixture(db, "INSERT OR IGNORE INTO locations (id, name, active) VALUES (?, 'Testfiliale', 1)").run(otherLocationId);
   db.prepare("INSERT OR IGNORE INTO departments (location_id, name, active) VALUES (?, 'Testabteilung', 1)").run(otherLocationId);
   const otherDepartmentId = db.prepare("SELECT id FROM departments WHERE location_id = ? AND active = 1 ORDER BY id LIMIT 1").get(otherLocationId)?.id;
   assert.ok(otherDepartmentId);

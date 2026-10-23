@@ -5,7 +5,7 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { DatabaseSync } = require("node:sqlite");
+const { databaseForCurrentTest } = require("../test-support/postgresql-api/preload");
 
 const repositoryRoot = path.resolve(__dirname, "..");
 
@@ -90,6 +90,7 @@ function summaryFrom(payload) {
 test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichssicher und revisionsfähig", async () => {
   const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v053-time-"));
   const databasePath = path.join(testRoot, "dienstplan.db");
+  Object.assign(process.env, { DB_PATH: databasePath, BACKUP_DIR: path.join(testRoot, "backups"), GRABENPLANER_DATA_DIR: path.join(testRoot, "app-data"), GRABENPLANER_SEED_DEMO: "1", GRABENPLANER_FORCE_PORTAL: "1" });
   const port = await getFreePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, [path.join(repositoryRoot, "server.js")], {
@@ -171,7 +172,7 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
     });
     assert.equal(createSecondLocation.response.status, 201, JSON.stringify(createSecondLocation.payload));
 
-    const fixtureDb = new DatabaseSync(databasePath);
+    const fixtureDb = databaseForCurrentTest(databasePath);
     fixtureDb.exec("PRAGMA busy_timeout = 5000");
     try {
       fixtureDb.prepare("UPDATE locations SET time_tracking_enabled = 1 WHERE id IN ('01','02')").run();
@@ -203,7 +204,7 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
     const remoteEmployee = await login("105", "Synthetic-Time-556677!");
     await changePassword(remoteEmployee, "Synthetic-Time-556677!", "Synthetic-Time-776655!");
 
-    const dataDb = new DatabaseSync(databasePath);
+    const dataDb = databaseForCurrentTest(databasePath);
     dataDb.exec("PRAGMA busy_timeout = 5000");
     let originalCorrectionDayIds;
     let departmentAId;
@@ -364,7 +365,7 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
     });
     assert.equal(emptySnapshotCreate.response.status, 201, JSON.stringify(emptySnapshotCreate.payload));
     const emptySnapshotCorrection = correctionFrom(emptySnapshotCreate.payload);
-    const changedSourceDb = new DatabaseSync(databasePath);
+    const changedSourceDb = databaseForCurrentTest(databasePath);
     changedSourceDb.exec("PRAGMA busy_timeout = 5000");
     try {
       const insertChangedSource = changedSourceDb.prepare(`
@@ -429,7 +430,7 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
     });
     assert.equal(duplicateDecision.response.status, 409, JSON.stringify(duplicateDecision.payload));
 
-    const verifiedDb = new DatabaseSync(databasePath, { readOnly: true });
+    const verifiedDb = databaseForCurrentTest(databasePath, { readOnly: true });
     try {
       const correctionRow = verifiedDb.prepare(`
         SELECT status, decided_by, decision_note FROM time_corrections WHERE id = ?

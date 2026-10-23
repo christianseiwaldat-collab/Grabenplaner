@@ -8,6 +8,18 @@ const { assertSyntheticEnvironment } = require("./guard");
 const root = path.resolve(__dirname, "../..");
 const manifest = require("./manifest.json");
 
+function registerStartupBarrier(nodeTest, initialize) {
+  let pending;
+  const ready = () => pending ||= Promise.resolve().then(initialize);
+  const registerBefore = nodeTest.before;
+  registerBefore(() => ready());
+  nodeTest.before = (callback, options) => registerBefore(async function(...args) {
+    await ready();
+    return callback.apply(this, args);
+  }, options);
+  return ready;
+}
+
 function install() {
   if (process.env.GP_PG_API_FIXTURE_BRIDGE !== "1") return;
   // The outer --test launcher is not a fixture owner. Node's test subprocess
@@ -19,7 +31,7 @@ function install() {
   if (!manifest.files.includes(relative)) return;
   assertSyntheticEnvironment();
   if (!process.env.NODE_ENV) process.env.NODE_ENV = "test";
-  let worker, port, signal, serial = 0, subject, opened = false, fixturePath, ownerMarker;
+  let worker, port, signal, serial = 0, subject, opened = false, fixturePath, ownerMarker, closing, startupHookRegistered = false;
   const applicationHandles = new Set();
 
   function rpc(operation, options = {}) {
@@ -34,6 +46,7 @@ function install() {
   }
 
   function open() {
+    if (closing) throw new Error("PG_API_FIXTURE_ALREADY_CLOSING");
     if (opened) return;
     assertSyntheticEnvironment();
     const channel = new MessageChannel(); port = channel.port1;
@@ -60,7 +73,7 @@ function install() {
         enabled: process.env.GRABENPLANER_SEED_DEMO === "1", demoProfile: process.env.GRABENPLANER_DEMO_PROFILE || "",
         appVersion: require("../../package.json").version,
         planningDays: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"].map(day => [day, day]),
-        sporthandelProfilePath: path.join(root, "demo-profiles/sporthandel.json"),
+        sporthandelProfilePath: path.join(root, "demo/sporthandel/demo-profile.json"),
       });
   }
 
@@ -71,9 +84,35 @@ function install() {
     return value;
   }
 
+  function closeFixture() {
+    if (closing) return closing;
+    if (!opened) return Promise.resolve();
+    closing = (async () => {
+      // Let application transactions, workers and pools finish while the main
+      // event loop can still run. Only then may the owned seed worker truncate.
+      await subject?.closePersistenceForTests();
+      for (const handle of applicationHandles) await handle.provider.close();
+      rpc("close"); opened = false;
+      await worker.terminate();
+    })();
+    // Existing synchronous-style teardown callers may ignore the promise; the
+    // registered async test hook still awaits and reports the same failure.
+    closing.catch(() => {});
+    return closing;
+  }
+
   function database(primary, { readOnly = false } = {}) {
     return Object.freeze({
       postgresqlTestFixture: true,
+      postgresqlCatalogQuery(domain, sql, values = []) {
+        if (!["core", "sales"].includes(domain)) throw new Error("PG_API_FIXTURE_CATALOG_DOMAIN");
+        open(); return restoreBuffers(rpc("all", { sql, values, readOnly: true, catalogDomain: domain }).rows);
+      },
+      postgresqlFixtureDdl(domain, sql) {
+        if (readOnly) throw new Error("PG_API_FIXTURE_READ_ONLY");
+        if (!["core", "sales"].includes(domain)) throw new Error("PG_API_FIXTURE_CATALOG_DOMAIN");
+        open(); return rpc("run", { sql, catalogDomain: domain, fixtureDdl: true });
+      },
       exec(sql) { if (readOnly) throw new Error("PG_API_FIXTURE_READ_ONLY"); open(); return rpc("exec", { sql }); },
       prepare(sql) {
         const statement = {
@@ -86,10 +125,8 @@ function install() {
         return statement;
       },
       close() {
-        if (!primary || !opened) return;
-        void subject?.closePersistenceForTests();
-        for (const handle of applicationHandles) void handle.provider.close();
-        rpc("close"); opened = false; void worker.terminate();
+        if (!primary) return;
+        return closeFixture();
       },
     });
   }
@@ -102,7 +139,7 @@ function install() {
   };
   module.exports.closeCurrentTestFixture = () => {
     if (subject) throw new Error("PG_API_FIXTURE_CLOSE_CURRENT_APPLICATION_FIRST");
-    raw.close();
+    return raw.close();
   };
   // Node children launched by a whitelisted integration test keep its explicit
   // synthetic ownership. Other commands and unrelated tests are unaffected.
@@ -120,7 +157,9 @@ function install() {
       return original.call(this, command, args, { ...options, env: environment });
     };
   }
-  if (file) require("node:test").before(async () => { if (subject) await subject.initializeApplicationPersistence(); });
+  if (file) {
+    require("node:test").after(async () => { await closeFixture(); });
+  }
   let providerPatched = false;
   let sqliteModule;
   Module._load = function(request, parent, isMain) {
@@ -128,7 +167,19 @@ function install() {
     if (resolved === path.join(root, "server.js")) {
       open();
       const exported = load.call(this, request, parent, isMain);
+      const originalClose = exported.closePersistenceForTests;
+      let applicationClosing;
+      exported.closePersistenceForTests = () => {
+        if (!applicationClosing) applicationClosing = Promise.resolve().then(() => originalClose());
+        return applicationClosing;
+      };
       exported.db = raw; subject = exported;
+      if (file && !startupHookRegistered) {
+        startupHookRegistered = true;
+        // Register only after the actual server exists. A preload-level hook
+        // can run while synchronous module construction is still in progress.
+        registerStartupBarrier(require("node:test"), () => exported.initializeApplicationPersistence());
+      }
       return exported;
     }
     const exported = load.call(this, request, parent, isMain);
@@ -163,7 +214,13 @@ function install() {
     }
     return exported;
   };
-  process.on("exit", () => { if (opened) { rpc("close"); opened = false; } });
+  process.on("exit", () => {
+    // A forced process exit cannot await application pools. Preserve its owned
+    // marker rather than truncating underneath an unverified live transaction.
+    if (opened && !subject && applicationHandles.size === 0 && !closing) { rpc("close"); opened = false; }
+  });
 }
 
 if (isMainThread) install();
+
+module.exports.registerStartupBarrier = registerStartupBarrier;

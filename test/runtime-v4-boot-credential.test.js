@@ -12,7 +12,7 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 test("runtime schema 4 binds the boot ID through systemd without relaxing proc hardening", () => {
   const schema = JSON.parse(read("server-tools", "linux", "runtime-schema.json"));
   const unit = read("server-tools", "linux", "grabenplaner.service.in");
-  assert.equal(schema.deploymentSchemaVersion, 5);
+  assert.equal(schema.deploymentSchemaVersion, 6);
   assert.equal(schema.migrationPolicy, "explicit-maintenance");
   assert.equal(schema.managedArtifacts.length, 11);
   assert.match(unit, /^LoadCredential=host-boot-id:\/proc\/sys\/kernel\/random\/boot_id$/m);
@@ -33,7 +33,7 @@ test("runtime schema 4 binds the boot ID through systemd without relaxing proc h
   ], { encoding: "utf8" });
   assert.equal(verification.status, 0, verification.stderr);
   const contract = JSON.parse(verification.stdout);
-  assert.equal(contract.deploymentSchemaVersion, 5);
+  assert.equal(contract.deploymentSchemaVersion, 6);
   assert.match(contract.fingerprint, /^[a-f0-9]{64}$/);
 });
 
@@ -108,11 +108,11 @@ test("package, installer, verifier, and updater understand the explicit schema-4
   for (const source of [builder, installer, verifier]) {
     assert.match(source, /migrate-grabenplaner-runtime-v4\.sh/);
   }
-  assert.match(installer, /deploymentSchemaVersion !== 5/);
-  assert.match(verifier, /\[4, 5\]\.includes\(contract\.deploymentSchemaVersion\) \? requiredV4/);
-  assert.match(verifier, /\[3, 4, 5\]\.includes\(contract\.deploymentSchemaVersion\)/);
+  assert.match(installer, /deploymentSchemaVersion !== 6/);
+  assert.match(verifier, /\[4, 5, 6\]\.includes\(contract\.deploymentSchemaVersion\) \? requiredV4/);
+  assert.match(verifier, /\[3, 4, 5, 6\]\.includes\(contract\.deploymentSchemaVersion\)/);
   assert.match(updater, /installed_runtime_schema" == "3" \|\| "\$installed_runtime_schema" == "4"/);
-  assert.match(updater, /\.runtime-v\(2\|3\|4\|5\)-migration/);
+  assert.match(updater, /\.runtime-v\(2\|3\|4\|5\|6\)-migration/);
   assert.match(updater, /schema-not-incremented/);
 });
 

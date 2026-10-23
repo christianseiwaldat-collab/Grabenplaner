@@ -350,7 +350,7 @@ try {
   if(!fs.existsSync(installed)){process.stdout.write('none');process.exit(0);}
   function read(file){const s=fs.lstatSync(file);if(!s.isFile()||s.isSymbolicLink()||s.uid!==0||s.nlink!==1||(s.mode&0o022)||s.size>131072||fs.realpathSync(file)!==file)throw Error();return JSON.parse(fs.readFileSync(file,'utf8'));}
   const core=read(path.join(process.argv[2],'server-tools/linux/offsite/module-schema.json')),module=read(installed);
-  if(core.format!=='grabenplaner-linux-offsite-module-contract'||core.schemaVersion!==1||module.format!=='grabenplaner-linux-offsite-installed-contract'||module.schemaVersion!==1||![7,8,9,10,11,12].includes(core.moduleVersion)||![7,8,9,10,11,12].includes(module.moduleVersion))throw Error();
+  if(core.format!=='grabenplaner-linux-offsite-module-contract'||core.schemaVersion!==1||module.format!=='grabenplaner-linux-offsite-installed-contract'||module.schemaVersion!==1||![7,8,9,10,11,12,13].includes(core.moduleVersion)||![7,8,9,10,11,12,13].includes(module.moduleVersion))throw Error();
   process.stdout.write(core.moduleVersion>=10&&module.moduleVersion>=10?'single':'legacy');
 }catch{process.stderr.write('Der Sicherungszeitplan konnte nicht verifiziert werden.\n');process.exitCode=1;}
 NODE
@@ -449,4 +449,30 @@ gp_apply_app_permissions() {
   find "$path" -type f ! -perm /111 -exec chmod 0640 -- {} +
   find "$path" -type f -perm /111 -exec chmod 0750 -- {} +
   find "$linux_root" -type f -name '*.sh' -exec chmod 0750 -- {} +
+}
+
+# Copy into fresh inodes behind a root-only directory before root executes
+# candidate code. Chown alone cannot revoke a build process's open writer FDs.
+gp_seal_build_tree() {
+  local source="$1" target="$2" group="$3" parent private_root unsafe
+  [[ -d "$source" && ! -L "$source" && ! -e "$target" && ! -L "$target" ]] || return 1
+  parent="$(dirname -- "$target")"
+  [[ "$(realpath --canonicalize-existing -- "$parent")" == "$parent" \
+    && "$(stat --format='%u' -- "$parent")" == 0 ]] || return 1
+  local parent_mode
+  parent_mode="$(stat --format='%a' -- "$parent")"
+  (( (8#$parent_mode & 022) == 0 )) || return 1
+  private_root="$(mktemp --directory --tmpdir="$parent" .root-seal.XXXXXXXX)" || return 1
+  chmod 0700 -- "$private_root" || return 1
+  mkdir -m 0700 -- "$private_root/tree" || return 1
+  cp -R --no-preserve=ownership --no-dereference -- "$source/." "$private_root/tree" || return 1
+  unsafe="$(find "$private_root/tree" ! -type f ! -type d -print -quit)" || return 1
+  [[ -z "$unsafe" ]] || return 1
+  unsafe="$(find "$private_root/tree" -type f ! -links 1 -print -quit)" || return 1
+  [[ -z "$unsafe" ]] || return 1
+  unsafe="$(find "$private_root/tree" ! -user root -print -quit)" || return 1
+  [[ -z "$unsafe" ]] || return 1
+  gp_apply_app_permissions "$private_root/tree" "$group" || return 1
+  mv -T -- "$private_root/tree" "$target" || return 1
+  rmdir -- "$private_root" || return 1
 }

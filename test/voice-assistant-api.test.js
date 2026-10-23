@@ -72,7 +72,7 @@ test.before(async () => {
 test.after(async () => {
   global.fetch = originalFetch;
   if (server) await new Promise(resolve => server.close(resolve));
-  db.close(); releaseInstanceLockForTests();
+  await db.close(); releaseInstanceLockForTests();
   assert.equal(path.dirname(testRoot), path.resolve(os.tmpdir())); assert(path.basename(testRoot).startsWith("gp-voice-api-"));
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

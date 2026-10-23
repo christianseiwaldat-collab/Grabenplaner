@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -51,7 +53,7 @@ test.before(async () => {
   const daySettings = Object.fromEntries(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
     .map(day => [day, { open: day === "monday", start: "09:00", end: "18:00", lunchEnabled: false,
       lunchStart: "13:00", lunchEnd: "14:00", minStaff: 0, minFrom: "09:00", minTo: "18:00" }]));
-  for (const location of [LOCATION, OTHER]) db.prepare("INSERT INTO locations(id,name,day_settings_json,active) VALUES(?,?,?,1)")
+  for (const location of [LOCATION, OTHER]) prepareLocationFixture(db, "INSERT INTO locations(id,name,day_settings_json,active) VALUES(?,?,?,1)")
     .run(location, location === LOCATION ? "Prüffiliale" : "Zielfiliale", JSON.stringify(daySettings));
   departmentId = Number(db.prepare("INSERT INTO departments(location_id,name,active) VALUES(?,'Hardware',1)").run(LOCATION).lastInsertRowid);
   otherDepartmentId = Number(db.prepare("INSERT INTO departments(location_id,name,active) VALUES(?,'Fotowelt',1)").run(OTHER).lastInsertRowid);
@@ -81,7 +83,7 @@ test.beforeEach(() => {
 });
 test.after(async () => {
   if (httpServer) await new Promise(resolve => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -111,7 +113,7 @@ test("Schnellansicht liefert Raster und Stunden vor den Hintergrundprüfungen", 
 });
 
 test("Dienst wird getrennt gespeichert, gelesen und bei alten PUT-Clients bewahrt", async () => {
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id='schedule-duty-v1'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   const created = assertStatus(await request("/api/shifts", "POST", body()), 201);
   assert.equal(created.dutyCode, "branch_supervision");
   const row = db.prepare("SELECT duty_code,department_id,area FROM shifts WHERE id=?").get(created.id);

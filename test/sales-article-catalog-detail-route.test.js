@@ -1,4 +1,5 @@
 "use strict";
+const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
 const { sessionCsrf, sessionCsrfFromCookie } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -251,7 +252,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -655,7 +656,7 @@ test("Artikelmutationen sind CSRF-, Rechte-, Revisions-, Audit- und Undo-gesiche
     table,
     db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count,
   ]));
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_article_receipt_failure
     BEFORE INSERT ON personal_action_receipts
     WHEN NEW.action_type = 'sales.article-catalog.create'
@@ -671,7 +672,7 @@ test("Artikelmutationen sind CSRF-, Rechte-, Revisions-, Audit- und Undo-gesiche
       identifiers: [],
     },
   });
-  db.exec("DROP TRIGGER test_article_receipt_failure");
+  dropFixtureTrigger(db, "test_article_receipt_failure");
   assert.equal(receiptFailed.response.status, 400, receiptFailed.text);
   assert.equal(receiptFailed.payload.code, "SALES_ARTICLE_MUTATION_INVALID");
   for (const [table, before] of Object.entries(rollbackCounts)) {

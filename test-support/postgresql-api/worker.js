@@ -9,7 +9,7 @@ const { isTechnicalRelation } = require("./ownership");
 const { verifyEnvironment } = require("../../lib/persistence/postgresql/core/environment");
 
 const port = workerData.port, signal = new Int32Array(workerData.signal);
-const clients = {}, dataTables = {};
+const clients = {}, catalogClients = {}, dataTables = {};
 const connected = new Set();
 let marker = "synthetic-api-" + crypto.randomUUID();
 let initialized = false, closed = false, ownsData = false;
@@ -64,11 +64,23 @@ async function initialize(expectedMarker) {
     await clients.sales.query("INSERT INTO gp.migration_fixture_owner(id) VALUES($1)", [marker]);
     await clients.core.query("INSERT INTO gp.settings(key,value) VALUES('migration-test-owner',$1)", [marker]);
     initialized = true; ownsData = true;
-    await clients.core.query("INSERT INTO gp.cost_center_types(id,code,name,is_branch,builtin,sort_order,created_by,updated_by) VALUES('branch','branch','Filiale',1,1,10,'migration','migration'),('administration','administration','Verwaltung',0,1,20,'migration','migration'),('production','production','Produktion',0,1,30,'migration','migration'),('other','other','Sonstiges',0,1,40,'migration','migration')");
+    await clients.core.query("INSERT INTO gp.cost_center_types(id,code,name,is_branch,builtin,sort_order,created_by,updated_by) VALUES('branch','branch','Filiale',1,1,10,'migration','migration'),('administration','administration','Verwaltung',0,1,20,'migration','migration'),('production','production','Produktion',0,1,30,'migration','migration'),('other','other','Sonstiges',0,1,90,'migration','migration')");
     await clients.core.query("INSERT INTO gp.positions(id,name,builtin,active,is_default,employment_classification,sort_order) VALUES('teamleitung','Teamleitung',0,1,0,'standard',1),('abteilungsleitung','Abteilungsleitung',0,1,0,'standard',2),('verkaufsmitarbeiter','Verkaufsmitarbeiter',0,1,1,'standard',3),('lehrling','Lehrling',0,1,0,'apprentice',4)");
     await clients.core.query("INSERT INTO gp.cost_center_type_positions(cost_center_type_id,position_id,sort_order) SELECT c.id,p.id,p.sort_order FROM gp.cost_center_types c CROSS JOIN gp.positions p");
+    // Same deterministic administrative seed as the frozen pre-PostgreSQL
+    // organization migration. Location-less synthetic actors must never fall
+    // back to a branch cost center, whose real constraint requires a location.
+    await clients.core.query("INSERT INTO gp.cost_centers(id,code,name,type,cost_center_type_id,active,sort_order,created_by,updated_by) VALUES('cc-administration','VERW','Verwaltung','administration','administration',1,10,'migration','migration')");
     await clients.core.query("INSERT INTO gp.cost_centers(id,code,name,type,cost_center_type_id,active,sort_order,created_by,updated_by) VALUES('cc-location-01','FIL01','Hauptstandort','branch','branch',1,100,'trigger','trigger')");
-    await clients.core.query("INSERT INTO gp.locations(id,name,cost_center_id,day_settings_json,active) VALUES('01','Hauptstandort','cc-location-01','{}',1)");
+    // Exact six-day state produced by b2's defaultSettings and
+    // legacyDaySettingsSnapshot before its organization migration creates 01.
+    const defaultDays = Object.fromEntries([
+      ["monday", "09:00", "18:00"], ["tuesday", "09:00", "18:00"],
+      ["wednesday", "09:00", "18:00"], ["thursday", "09:00", "18:00"],
+      ["friday", "09:00", "18:00"], ["saturday", "10:00", "17:00"],
+    ].map(([day, start, end]) => [day, { open: true, start, end, lunchEnabled: false,
+      lunchStart: "13:00", lunchEnd: "14:00", minStaff: 0, minFrom: start, minTo: end }]));
+    await clients.core.query("INSERT INTO gp.locations(id,name,cost_center_id,day_settings_json,active) VALUES('01','Hauptstandort','cc-location-01',$1,1)", [JSON.stringify(defaultDays)]);
     return { marker };
   } catch (error) {
     await close().catch(() => {}); throw error;
@@ -85,8 +97,9 @@ function normalize(value) {
   return value;
 }
 
-async function executeOne(sql, values, mode) {
-  const translated = translate(sql, values);
+async function executeOne(sql, values, mode, catalogDomain, { readOnly = false } = {}) {
+  if (catalogDomain !== undefined && !["core", "sales"].includes(catalogDomain)) throw new Error("PG_API_FIXTURE_CATALOG_DOMAIN");
+  const translated = translate(sql, values, { postgresqlDomain: catalogDomain });
   let text = translated.sql;
   if (/^PRAGMA\b/i.test(text)) {
     if (/^PRAGMA\s+(?:foreign_keys|journal_mode|busy_timeout|wal_checkpoint|optimize|integrity_check|quick_check)\b/i.test(text)) return { rows: [], changes: 0 };
@@ -96,7 +109,7 @@ async function executeOne(sql, values, mode) {
     for (const client of Object.values(clients)) await client.query(text);
     return { rows: [], changes: 0 };
   }
-  const client = clients[translated.domain];
+  const client = (readOnly ? catalogClients : clients)[catalogDomain || translated.domain];
   let returning = false;
   if (mode === "run" && /^INSERT\b/i.test(text) && !/\bRETURNING\b/i.test(text) && translated.relations.length === 1) {
     const table = translated.relations[0];
@@ -114,9 +127,25 @@ async function executeOne(sql, values, mode) {
   return { rows, changes: result.rowCount || 0, lastInsertRowid: returning ? normalize(rows[0]?.id) || 0 : 0 };
 }
 
+async function ensureCatalogClients() {
+  // Catalog/assertion reads must not BEGIN/ROLLBACK on a seed transaction.
+  // Separate connections enforce PostgreSQL READ ONLY without disturbing it.
+  for (const domain of ["core", "sales"]) if (!catalogClients[domain]) {
+    const client = new Client({ connectionString: process.env[`GP_${domain.toUpperCase()}_MIGRATOR_URL`] });
+    await client.connect();
+    try {
+      await verifyEnvironment(client, { domain, purpose: "migrator" });
+      await client.query("SET ROLE " + owner(domain));
+      await client.query("SET search_path=pg_catalog,gp,kassa,integration,trade,reporting");
+      catalogClients[domain] = client;
+    } catch (error) { await client.end(); throw error; }
+  }
+}
+
 async function close() {
   if (closed) return; closed = true;
   try {
+    for (const client of Object.values(catalogClients)) await client.end();
     if (initialized && ownsData) {
       for (const domain of ["core", "sales"]) {
         const client = clients[domain]; await client.query("ROLLBACK");
@@ -145,9 +174,17 @@ port.on("message", async message => {
     else if (message.operation === "exec") {
       for (const sql of splitStatements(message.sql)) result = await executeOne(sql, [], "run");
     } else if (message.readOnly) {
-      for (const client of Object.values(clients)) await client.query("BEGIN READ ONLY");
-      try { result = await executeOne(message.sql, message.values || [], message.operation); }
-      finally { for (const client of Object.values(clients)) await client.query("ROLLBACK"); }
+      await ensureCatalogClients();
+      for (const client of Object.values(catalogClients)) await client.query("BEGIN READ ONLY");
+      try { result = await executeOne(message.sql, message.values || [], message.operation, message.catalogDomain, { readOnly: true }); }
+      finally { for (const client of Object.values(catalogClients)) await client.query("ROLLBACK"); }
+    } else if (message.fixtureDdl) {
+      const tokens = require("../../lib/persistence/postgresql/core/sql").tokens(message.sql);
+      const fixtureSequence = /^(?:CREATE|DROP) SEQUENCE gp \. "test_attempt_[a-f0-9]{16}"$/.test(tokens.join(" "));
+      if ((!/^(?:CREATE|DROP) (?:FUNCTION|TRIGGER)\b/i.test(tokens.join(" ")) && !fixtureSequence) || tokens.includes(";")) {
+        throw new Error("PG_API_FIXTURE_DDL_KIND");
+      }
+      result = await executeOne(message.sql, [], "run", message.catalogDomain);
     } else result = await executeOne(message.sql, message.values || [], message.operation);
     port.postMessage({ id: message.id, result });
   } catch (error) {

@@ -73,6 +73,19 @@ source "$os_release_source"
 systemctl show-environment >/dev/null 2>&1 || offsite_die "Ein aktives systemd wird benoetigt."
 [[ -d "$OFFSITE_APP_ROOT" && ! -L "$OFFSITE_APP_ROOT" && -f "$OFFSITE_APP_ENV" && ! -L "$OFFSITE_APP_ENV" ]] \
   || offsite_die "Zuerst muss der Grabenplaner-Ubuntu-Server installiert werden."
+# A standalone setup must never leave the unsupported Core5/Offsite13 gap.
+# The exact 5/12 -> 6/13 migration uses its separate FD9-bound coordinator.
+"$OFFSITE_NODE" - "$OFFSITE_APP_ROOT" <<'NODE' >/dev/null || offsite_die "Offsite13 benoetigt Core6; einen bisherigen Server nur mit der koordinierten PostgreSQL-Migration uebernehmen."
+const fs = require("node:fs"), path = require("node:path"), root = process.argv[2];
+for (const [relative, field, expected] of [
+  ["server-tools/linux/runtime-schema.json", "deploymentSchemaVersion", 6],
+  ["server-tools/linux/offsite/module-schema.json", "moduleVersion", 13],
+]) {
+  const file = path.join(root, relative), stat = fs.lstatSync(file);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.uid !== 0 || (stat.mode & 0o022)
+    || JSON.parse(fs.readFileSync(file, "utf8"))[field] !== expected) process.exit(1);
+}
+NODE
 recovery_command="$OFFSITE_APP_ROOT/server-tools/linux/recovery/grabenplaner-recovery.sh"
 [[ -f "$recovery_command" && ! -L "$recovery_command" ]] || offsite_die "Der ueberwachte Recovery-Befehl fehlt im installierten Serverpaket."
 recovery_command_mode="$(stat --format='%a' -- "$recovery_command")"
@@ -276,7 +289,7 @@ if [[ -e "$OFFSITE_MODULE_ROOT" || -L "$OFFSITE_MODULE_ROOT" ]]; then
   installed_module_version="$("$OFFSITE_NODE" - "$OFFSITE_CONFIG_ROOT/installed-contract.json" <<'NODE'
 const fs = require("node:fs");
 const value = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(value.moduleVersion)) process.exit(1);
+if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].includes(value.moduleVersion)) process.exit(1);
 process.stdout.write(String(value.moduleVersion));
 NODE
 )" || offsite_die "Die installierte Offsite-Modulversion ist nicht migrationsfaehig."
@@ -920,7 +933,7 @@ core_offsite_module_version="$($OFFSITE_NODE - "$OFFSITE_APP_ROOT/server-tools/l
 const fs=require("node:fs");
 const value=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));
 if(value?.format!=="grabenplaner-linux-offsite-module-contract"||value?.schemaVersion!==1
-  ||![7,8,9,10,11,12].includes(value?.moduleVersion))process.exit(1);
+  ||![7,8,9,10,11,12,13].includes(value?.moduleVersion))process.exit(1);
 process.stdout.write(String(value.moduleVersion));
 NODE
 )" || offsite_die "Der installierte Core-Offsite-Vertrag ist ungueltig."
