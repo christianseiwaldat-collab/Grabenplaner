@@ -4435,6 +4435,8 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:var(--deploym
 #mobilePortalLocationDisplayModules label > span { display:grid; gap:2px; min-width:0; }
 #mobilePortalLocationDisplayModules label small { color:var(--muted); line-height:1.35; }
 #backupSettings .diagnostic-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.planning-assistant-setting-state { display:inline-flex; margin-top:8px; padding:3px 9px; border:1px solid var(--line); border-radius:999px; color:var(--green); background:var(--surface-soft); font-size:11px; font-weight:700; line-height:1.5; }
+.planning-assistant-setting-state[data-enabled="false"] { color:var(--muted); background:var(--surface-muted); }
 .settings-field-disclosure { align-self:start; padding:0 !important; overflow:hidden; }
 .settings-field-disclosure-summary { display:grid; grid-template-columns:auto minmax(0,1fr) 30px; align-items:center; gap:11px; width:100%; min-height:0; padding:16px 17px; border:0; border-radius:inherit; color:var(--ink); background:transparent; text-align:left; cursor:pointer; }
 .settings-field-disclosure-summary:hover { background:var(--surface-muted); }

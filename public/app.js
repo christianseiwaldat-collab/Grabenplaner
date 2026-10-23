@@ -855,7 +855,7 @@ const elements = Object.fromEntries(
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "vpsRebootModal", "vpsRebootForm", "vpsRebootCloseButton", "vpsRebootCancelButton", "vpsRebootConfirmButton", "vpsRebootCurrentPassword", "vpsRebootMessage", "maintenanceScheduleCard", "maintenanceScheduleStatus", "maintenanceScheduleForm", "maintenanceScheduleRows", "reloadMaintenanceSchedulesButton", "saveMaintenanceSchedulesButton", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "offsiteProviderSelect", "offsiteProviderPolicyHint", "googleDriveManagementStatus", "googleDriveFolderControls", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
-    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "branchSupervisionSettingsCard", "branchSupervisionMode", "branchSupervisionIntensity", "branchSupervisionThresholds", "branchSupervisionPrimaryCoveragePercent", "branchSupervisionDepartmentGapMinutes", "branchSupervisionSettingsHint", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
+    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "planningAssistantSettingsCard", "planningAssistantEnabled", "planningAssistantAutoCheck", "planningAssistantShowInformational", "planningAssistantSettingsState", "branchSupervisionSettingsCard", "branchSupervisionMode", "branchSupervisionIntensity", "branchSupervisionThresholds", "branchSupervisionPrimaryCoveragePercent", "branchSupervisionDepartmentGapMinutes", "branchSupervisionSettingsHint", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "birthdayPresentationSettingsCard", "birthdayPresentationScope", "birthdayPresentationCatalogSection", "birthdayPresentationCatalog", "birthdayPresentationDeveloperPreviewSection", "birthdayPresentationDeveloperPreviewEnabled", "birthdayPresentationDeveloperPreviewDesign", "birthdayPresentationDeveloperPreviewHint", "saveBirthdayPresentationDeveloperPreviewButton", "openBirthdayPresentationDeveloperPreviewButton", "birthdayPresentationGlobalSection", "birthdayPresentationEnabled", "birthdayPresentationTeamSection", "birthdayPresentationEmployeeSearch", "birthdayPresentationLocationFilter", "birthdayPresentationEmployeeList", "birthdayPresentationDelegatesSection", "birthdayPresentationDelegateList", "birthdayPresentationSettingsHint", "saveBirthdayPresentationSettingsButton",
@@ -3081,6 +3081,8 @@ function applyRoleVisibility() {
   elements.staffAssignmentChangeSettingsCard?.classList.toggle("hidden", !scheduleSettingsAccess);
   elements.scheduleLockSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.branchSupervisionSettingsCard?.classList.toggle("hidden", !settingsAccess);
+  elements.planningAssistantSettingsCard?.classList.toggle("hidden", !settingsAccess);
+  updatePlanningAssistantSettings();
   document.querySelector("#legacyUsbProvisioning")?.classList.toggle("hidden", !usbProvisioningAccess);
   const timeTrackingTabActive = document.querySelector('[data-settings-tab="timeTracking"]')?.classList.contains("active");
   const scheduleTabActive = document.querySelector('[data-settings-tab="schedule"]')?.classList.contains("active");
@@ -23789,6 +23791,35 @@ function updateBranchSupervisionSettings({ applyPreset = false } = {}) {
   elements.branchSupervisionSettingsHint.textContent = `${modeCopy} Die gesamte Öffnungszeit muss abgedeckt bleiben; Abteilungsleitungen zählen nur innerhalb der gewählten Überbrückungsgrenze.`;
 }
 
+function planningAssistantSettingsInput() {
+  return {
+    enabled: elements.planningAssistantEnabled.checked,
+    autoCheck: elements.planningAssistantAutoCheck.checked,
+    showInformational: elements.planningAssistantShowInformational.checked,
+  };
+}
+
+function updatePlanningAssistantSettings() {
+  if (!elements.planningAssistantEnabled) return;
+  const canManage = state.portalStatus?.portalEnabled !== true || state.portalSession?.user?.permissions?.includes("settings:write") === true;
+  const { enabled, autoCheck } = planningAssistantSettingsInput();
+  elements.planningAssistantEnabled.disabled = !canManage;
+  elements.planningAssistantAutoCheck.disabled = !canManage || !enabled;
+  elements.planningAssistantShowInformational.disabled = !canManage || !enabled;
+  if (elements.planningAssistantSettingsState) {
+    elements.planningAssistantSettingsState.textContent = !enabled ? "Deaktiviert" : autoCheck ? "Aktiv · Automatisch" : "Aktiv · Manuell";
+    elements.planningAssistantSettingsState.dataset.enabled = String(enabled);
+  }
+}
+
+function renderPlanningAssistantSettings(settings) {
+  if (!elements.planningAssistantEnabled) return;
+  elements.planningAssistantEnabled.checked = settings.planning_assistant_enabled !== "0";
+  elements.planningAssistantAutoCheck.checked = settings.planning_assistant_auto_check !== "0";
+  elements.planningAssistantShowInformational.checked = settings.planning_assistant_show_informational !== "0";
+  updatePlanningAssistantSettings();
+}
+
 function canManageScheduleDutyColors() {
   const user = state.portalSession?.user;
   return ["hr", "developer"].includes(user?.role) && user?.permissions?.includes("settings:write") === true;
@@ -24020,12 +24051,19 @@ function restoreSettingsFormDrafts() {
     const scope = { contains: node => ids.includes(node?.id) };
     restoreSettingsConfirmation(scope); settingsDraftGuard?.restore(scope);
   };
+  if (elements.planningAssistantEnabled && (state.portalStatus?.portalEnabled !== true || state.portalSession?.user?.permissions?.includes("settings:write") === true)) {
+    // Restore dependent drafts before applying the master switch's disabled state.
+    const ids = ["planningAssistantEnabled", "planningAssistantAutoCheck", "planningAssistantShowInformational"];
+    for (const id of ids) elements[id].disabled = false;
+    restore(ids);
+  }
   restore(["currentWeekAutoLock", "branchSupervisionMode"]);
   updateWeekLockSettings(); updateBranchSupervisionSettings();
   restore(["currentWeekLockMode", "currentWeekLockDay", "branchSupervisionIntensity"]);
   updateWeekLockSettings(); updateBranchSupervisionSettings();
   restoreSettingsConfirmation(); settingsDraftGuard?.restore();
   updateWeekLockSettings(); updateBranchSupervisionSettings();
+  updatePlanningAssistantSettings();
 }
 function trackSettingsSaveDraft(event) {
   const node = event.target;
@@ -24133,6 +24171,7 @@ function renderSettings() {
     Number(settings.branch_supervision_max_department_gap_minutes || 180),
   );
   updateBranchSupervisionSettings();
+  renderPlanningAssistantSettings(settings);
   if (elements.vacationHrApprovalRequired) {
     elements.vacationHrApprovalRequired.checked = Boolean(state.workflowSettings?.vacationHrApprovalRequired ?? state.portalStatus?.workflow?.vacationHrApprovalRequired);
     elements.workflowSettingsHint.textContent = "Die Einstellung kann von Personalleitung oder höher geändert werden.";
@@ -42129,6 +42168,7 @@ async function saveSettings(silent = false) {
           minimumPrimaryCoveragePercent: Number(elements.branchSupervisionPrimaryCoveragePercent.value),
           maximumDepartmentGapMinutes: Number(elements.branchSupervisionDepartmentGapMinutes.value),
         },
+        planningAssistant: planningAssistantSettingsInput(),
         ...(activeSettingsTab === "schedule" && canSaveScheduleSettings ? {
           crossLocationSchedule: {
             enabled: elements.crossLocationScheduleEnabled.checked,
@@ -42157,6 +42197,7 @@ async function saveSettings(silent = false) {
     const crossIds = ['crossLocationScheduleEnabled','crossLocationScheduleHorizonWeeks','staffAssignmentManagerCreateEnabled','staffAssignmentDepartmentManagerCreateEnabled','staffAssignmentDepartmentManagerReviewEnabled','staffAssignmentEmailSubmittedEnabled','staffAssignmentEmailDecisionEnabled','staffAssignmentChangePolicy','staffAssignmentCancellationPolicy'];
     const pdfIds = [...Object.keys(schedulePdfPayload), 'pdfTitleSetting'];
     const generalIds = [...Object.keys(payload), 'pdfTitleSetting','vacationPdfTitleSetting','breakAfterHours','breakDuration','branchSupervisionMode','branchSupervisionIntensity','branchSupervisionPrimaryCoveragePercent','branchSupervisionDepartmentGapMinutes'];
+    generalIds.push("planningAssistantEnabled", "planningAssistantAutoCheck", "planningAssistantShowInformational");
     if (payload.crossLocationSchedule) generalIds.push(...crossIds);
     const saveFont = !silent && canSaveGeneralSettings && elements.appFontScalePercent;
     const fontValue = saveFont ? elements.appFontScalePercent.valueAsNumber : null;
@@ -42173,8 +42214,16 @@ async function saveSettings(silent = false) {
     };
     if (!current()) return false;
     if (canSaveGeneralSettings) {
-      await api("/api/settings", { method: "PUT", body: JSON.stringify(payload) });
+      const savedSettings = await api("/api/settings", { method: "PUT", body: JSON.stringify(payload) });
       if (!current()) return false;
+      if (state.data) {
+        const preferenceKeys = ["planning_assistant_enabled", "planning_assistant_auto_check", "planning_assistant_show_informational"];
+        const confirmedPreferences = Object.fromEntries(preferenceKeys
+          .filter(key => savedSettings?.[key] === "0" || savedSettings?.[key] === "1")
+          .map(key => [key, savedSettings[key]]));
+        state.data.settings = { ...state.data.settings, ...confirmedPreferences };
+        planningAssistantWorkspace?.synchronize({ data: state.data, session: state.portalSession, allowed: canReadStartDashboardSchedule() });
+      }
       confirm(generalIds); confirmDesign();
     }
     if (canSaveSchedulePdfSettings && !canSaveGeneralSettings) {
@@ -42798,6 +42847,8 @@ elements.currentWeekLockMode?.addEventListener("change", updateWeekLockSettings)
 elements.currentWeekLockDay?.addEventListener("change", updateWeekLockSettings);
 elements.branchSupervisionMode?.addEventListener("change", () => updateBranchSupervisionSettings());
 elements.branchSupervisionIntensity?.addEventListener("change", () => updateBranchSupervisionSettings({ applyPreset: true }));
+elements.planningAssistantEnabled?.addEventListener("change", updatePlanningAssistantSettings);
+elements.planningAssistantAutoCheck?.addEventListener("change", updatePlanningAssistantSettings);
 [elements.branchSupervisionPrimaryCoveragePercent, elements.branchSupervisionDepartmentGapMinutes].forEach((input) => {
   input?.addEventListener("input", () => {
     if (elements.branchSupervisionIntensity.value !== "custom") {

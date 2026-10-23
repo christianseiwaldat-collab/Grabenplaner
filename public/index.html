@@ -2593,6 +2593,13 @@
                 <p class="settings-note" id="currentWeekLockHint"></p>
               </div>
             </div>
+            <div class="settings-card planning-assistant-settings-card" id="planningAssistantSettingsCard">
+              <div class="card-heading"><div class="card-icon">PA</div><div><h2>Planungsassistent</h2><p>Prüft gespeicherte Dienstpläne und unterstützt bei der Planung.</p><span class="planning-assistant-setting-state" id="planningAssistantSettingsState" aria-live="polite">Aktiv · Automatisch</span></div></div>
+              <label class="switch-row"><span><strong>Planungsassistent aktivieren</strong><small>Gilt für alle Filialen und Abteilungen. Arbeitsregeln und Filialaufsicht gelten unabhängig davon weiter.</small></span><input id="planningAssistantEnabled" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Gespeicherte Pläne automatisch prüfen</strong><small>Prüft beim Laden und nach Planänderungen. Ausgeschaltet startest du die Prüfung bei Bedarf im Dienstplan.</small></span><input id="planningAssistantAutoCheck" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Zusätzliche Hinweise anzeigen</strong><small>Zeigt Hinweise und nicht prüfbare Punkte in der Ergebnisliste. Konflikte und Warnungen bleiben immer sichtbar.</small></span><input id="planningAssistantShowInformational" type="checkbox" /></label>
+              <p class="settings-note">Besetzung, Schlüsselpersonen und Sollstunden-Toleranz legst du weiterhin im Planungsassistenten unter „Prüfeinstellungen für diesen Bereich“ fest.</p>
+            </div>
           </section>
 
           <section id="vacationSettings" class="settings-section settings-two-column">

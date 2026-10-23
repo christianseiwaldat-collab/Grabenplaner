@@ -26,6 +26,7 @@ const { personalAbsenceRequestPeriod, absenceRequestSubmissionAllowed,
 const { createOpenAiVoiceProvider } = require('./lib/voice-assistant-openai');
 const voiceAssistantSettings = require('./lib/voice-assistant-settings');
 const planningAssistantSettings = require('./lib/planning-assistant-settings');
+const planningAssistantPreferences = require('./lib/planning-assistant-preferences');
 const assistantPilotAccess = require('./lib/assistant-pilot-access');
 const { createPlanningAssistantReader } = require('./lib/planning-assistant-gp');
 const { createVoiceAssistant } = require('./lib/voice-assistant');
@@ -6690,6 +6691,7 @@ async function daySettingsFromLocation(locationId, repository = null) {
 
 async function settingsForLocation(locationId, repository = null) {
   const settings = getSettings();
+  Object.assign(settings, planningAssistantPreferences.values(settings));
   // These scoped/developer values are served only by their authorized routes,
   // never through the generic settings included in every schedule response.
   for (const key of Object.keys(settings)) {
@@ -32825,6 +32827,7 @@ const planningOptimizer = planningOptimizerModel.createPlanningOptimizer({
       if (fresh?.mustChangePassword) throw httpError(428, 'Bitte zuerst das Startpasswort ändern.', 'PORTAL_PASSWORD_CHANGE_REQUIRED');
       assertPlanningAssistantPilot(fresh);
       assertSessionContextScope(fresh, entry.snapshot.facts.context);
+      planningAssistantPreferences.assertEnabled(settingsObjectFromRows(await repositories.planningSettings.listSettings()));
       if (entry.sourceStamp !== await planningOptimizerRevision(repositories, entry.snapshot.facts.context, entry.snapshot.facts.period.from)) {
         throw httpError(409, 'Die Planungsgrundlage wurde geändert. Bitte neue Vorschläge berechnen.', 'OPTIMIZER_PLAN_CHANGED');
       }
@@ -32853,6 +32856,7 @@ async function planningOptimizerActor(request) {
   if (request.portalSession && !isLocalSystemSession(request.portalSession)) request.portalSession = await loadPortalSessionFromRequest(request, { touch: false });
   const actor = requirePortalAnyPermissionOrLocal(request, ['schedule:write'], { csrf: true });
   assertPlanningAssistantPilot(actor);
+  planningAssistantPreferences.assertEnabled(getSettings());
   if (actor && !isLocalSystemSession(actor) && (!actor.permissions.includes('schedule:read') || !actor.permissions.includes('work_rules:read'))) {
     throw httpError(403, 'Für Vorschläge werden Dienstplan- und Arbeitsregelrechte benötigt.', 'PORTAL_PERMISSION_DENIED');
   }
@@ -32911,6 +32915,7 @@ app.get("/api/schedule/assistant", (_request, response, next) => {
 }, readModelResponse(async request => {
   const actor = requirePortalAnyPermissionOrLocal(request, ["schedule:read"]);
   assertPlanningAssistantPilot(actor);
+  planningAssistantPreferences.assertEnabled(getSettings());
   if (Object.keys(request.query).some(key => !["week", "location", "locationId", "department", "departmentId"].includes(key))
     || typeof request.query.week !== "string" || !isIsoDate(request.query.week)) throw httpError(400, "Bitte eine gültige Planungswoche auswählen.", "PLANNING_ASSISTANT_INPUT_INVALID");
   const authority = value => JSON.stringify([value?.id, value?.employeeNumber, value?.accountId, value?.permissions, value?.scopes, value?.role, value?.mustChangePassword]);
@@ -32923,6 +32928,7 @@ app.get("/api/schedule/assistant", (_request, response, next) => {
     assertSessionContextScope(fresh, result.assessment.context);
   }
   const canOptimize = optimizer.available && (!actor || isLocalSystemSession(actor) || actor.permissions?.includes('schedule:write') && actor.permissions?.includes('work_rules:read'));
+  planningAssistantPreferences.assertEnabled(getSettings());
   result.assessment.optimization.available = Boolean(canOptimize);
   return { ...result, optimizer, canOptimize,
     canConfigure: !actor || isLocalSystemSession(actor) || actor.permissions?.includes("settings:write") === true };
@@ -62167,6 +62173,13 @@ app.put("/api/settings", async (request, response) => {
   }
   const body = request.body;
   const currentSettings = getSettings();
+  const planningAssistantSubmitted = body.planningAssistant !== undefined;
+  const planningAssistantValues = planningAssistantSubmitted
+    ? planningAssistantPreferences.validate(body.planningAssistant)
+    : null;
+  const planningAssistantActor = planningAssistantSubmitted
+    ? requirePortalAnyPermissionOrLocal(request, ["settings:write"], { csrf: true })
+    : null;
   const branchSupervisionSettingsSubmitted = body.branchSupervision !== undefined;
   let branchSupervisionValues = null;
   if (branchSupervisionSettingsSubmitted) {
@@ -62354,6 +62367,7 @@ app.put("/api/settings", async (request, response) => {
     remember_last_vacation_overall_plan: rememberLastVacationOverallPlan ? "1" : "0",
     ...(branchSupervisionValues || {}),
     ...(crossLocationScheduleValues || {}),
+    ...(planningAssistantValues || {}),
   };
   if (!getPortalStatus().portalEnabled) {
     values.allow_past_week_editing = body.allowPastWeekEditing === true ? "1" : "0";
@@ -62361,6 +62375,17 @@ app.put("/api/settings", async (request, response) => {
   await persistenceProvider.transaction(async (executor) => {
     const repositories = createApplicationRepositories(executor);
     const repository = repositories.planningSettings;
+    let livePlanningAssistantActor = planningAssistantActor;
+    if (planningAssistantSubmitted && !isLocalSystemSession(planningAssistantActor)) {
+      livePlanningAssistantActor = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+      if (!livePlanningAssistantActor || livePlanningAssistantActor.id !== planningAssistantActor.id) throw httpError(401, "Bitte erneut anmelden.", "PORTAL_LOGIN_REQUIRED");
+      if (livePlanningAssistantActor.mustChangePassword) throw httpError(428, "Bitte zuerst das Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+      assertLivePortalRoutePermission(livePlanningAssistantActor, "settings:write");
+      assertSessionContextScope(livePlanningAssistantActor, scheduleContext);
+    }
+    const livePlanningAssistantSettings = planningAssistantSubmitted
+      ? settingsObjectFromRows(await repository.listSettings())
+      : null;
     let liveCrossLocationScheduleSettingsSession = crossLocationScheduleSettingsSession;
     if (crossLocationScheduleSettingsSubmitted
       && !isLocalSystemSession(crossLocationScheduleSettingsSession)) {
@@ -62391,6 +62416,17 @@ app.put("/api/settings", async (request, response) => {
       : [];
     for (const [key, value] of Object.entries(values)) {
       await repository.upsertSetting({ key, value });
+    }
+    if (planningAssistantSubmitted) {
+      const before = planningAssistantPreferences.read(livePlanningAssistantSettings);
+      const after = planningAssistantPreferences.read(planningAssistantValues);
+      const changedKeys = Object.keys(planningAssistantValues).filter(key => (
+        planningAssistantPreferences.values(livePlanningAssistantSettings)[key] !== planningAssistantValues[key]
+      ));
+      if (changedKeys.length) await repositories.organizationPersonnel.insertAudit(
+        livePlanningAssistantActor?.employeeNumber || "local", "planning.assistant.preferences.update", "schedule_settings", "planning_assistant",
+        JSON.stringify({ changedKeys: changedKeys.sort(), before, after }),
+      );
     }
     if (branchSupervisionValues) {
       const changedKeys = Object.keys(branchSupervisionValues).filter((key) => (
