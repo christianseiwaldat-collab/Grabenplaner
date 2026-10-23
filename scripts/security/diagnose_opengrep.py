@@ -118,7 +118,7 @@ def run(root, tools, output):
                 raise ValueError('Diagnostic rule copy drift')
         result_path = output / (name + '.json')
         command = [str(binary), 'scan', '--config', str(rule_dir), '--json', '--output', str(result_path),
-                   '--metrics', 'off', '--disable-version-check', '--disable-nosem', '--no-git-ignore',
+                   '--disable-version-check', '--disable-nosem', '--no-git-ignore', '--time',
                    '--max-target-bytes', '0', '--timeout', '300', '--timeout-threshold', '0',
                    '--max-memory', '4096', '--jobs', '1', '--strict', '--error', str(stage)]
         started = time.monotonic()

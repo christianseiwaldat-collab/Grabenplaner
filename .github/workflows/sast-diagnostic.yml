@@ -9,6 +9,7 @@ on:
       - 'scripts/security/diagnose_sast_fixpoints.py'
       - 'scripts/security/test_sast_diagnostic.py'
       - 'scripts/security/diagnose_opengrep.py'
+      - 'scripts/security/test_opengrep_diagnostic.py'
 
 permissions:
   contents: read
@@ -48,7 +49,9 @@ jobs:
           python -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r scripts/security/requirements.txt
           python scripts/security/install_tools.py --tool rules --directory "$RUNNER_TEMP/sast-diagnostic-tools"
       - name: Test diagnostic completeness and publication boundaries
-        run: python -m unittest discover -s scripts/security -p 'test_sast_diagnostic.py' -v
+        run: |
+          python -m unittest discover -s scripts/security -p 'test_sast_diagnostic.py' -v
+          python -m unittest discover -s scripts/security -p 'test_opengrep_diagnostic.py' -v
       - name: Run bounded experiments with exact complete source files
         run: python scripts/security/diagnose_opengrep.py --root . --tools "$RUNNER_TEMP/sast-diagnostic-tools" --output "$RUNNER_TEMP/sast-diagnostic-private"
       - name: Seal private diagnostic evidence
