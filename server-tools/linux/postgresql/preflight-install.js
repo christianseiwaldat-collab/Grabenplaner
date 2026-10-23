@@ -12,6 +12,7 @@ function validatePreparedDocuments({ environment, document, anchor, operations }
   if (environment.NODE_ENV !== "production" || environment.GRABENPLANER_OPERATION_MODE !== "server"
     || environment.GRABENPLANER_DEPLOYMENT_KIND !== "production" || environment.DB_PROVIDER !== "postgresql"
     || environment.GRABENPLANER_DATA_DIR !== "/var/lib/grabenplaner" || environment.DB_PATH !== application.ANCHOR
+    || environment.BACKUP_DIR !== "/var/backups/grabenplaner-postgresql"
     || environment.GRABENPLANER_POSTGRESQL_APPLICATION_CONFIG !== application.FILE
     || environment.DATABASE_URL || environment.GRABENPLANER_POSTGRESQL_REHEARSAL || environment.GRABENPLANER_RESTORE_ROOT) fail("PG_INSTALL_ENVIRONMENT");
   if (operations?.format !== "grabenplaner-postgresql-operations-v1" || operations.mode !== "productive"
@@ -33,7 +34,7 @@ function validatePreparedDocuments({ environment, document, anchor, operations }
     || operations.domains.some(domain => domain.database !== "grabenplaner_" + domain.domain
       || domain.role !== `gp_${domain.domain}_migrator` || operations.recoveryAccounts?.[domain.role] !== domain.password
       || domain.environmentId !== document.binding.environmentId || domain.profile !== document.binding.profile)) fail("PG_INSTALL_OPERATIONS_BINDING");
-  return { resolved, environment };
+  return { resolved, environment, operations };
 }
 function readPreparedDocuments() {
   if (process.platform !== "linux" || process.getuid() !== 0) fail("PG_INSTALL_ROOT_REQUIRED");
@@ -47,11 +48,42 @@ function readPreparedDocuments() {
     if (!match || seen.has(match[1])) fail("PG_INSTALL_ENVIRONMENT_DUPLICATE");
     seen.add(match[1]);
   }
-  return validatePreparedDocuments({ environment: parseEnv(source), document: application.readProtectedJson(application.FILE),
-    anchor: application.readProtectedJson(application.ANCHOR), operations: application.readProtectedJson(OPERATIONS) });
+  const serviceGroups = fs.readFileSync("/etc/group", "utf8").split("\n").map(line => line.split(":"))
+    .filter(fields => fields[0] === "grabenplaner" && /^[1-9][0-9]*$/.test(fields[2] || ""));
+  if (serviceGroups.length !== 1) fail("PG_INSTALL_SERVICE_GROUP_REQUIRED");
+  const gid = Number(serviceGroups[0][2]);
+  const configDirectory = fs.lstatSync("/etc/grabenplaner");
+  if (!configDirectory.isDirectory() || configDirectory.isSymbolicLink() || configDirectory.uid !== 0
+    || configDirectory.gid !== gid || (configDirectory.mode & 0o777) !== 0o750
+    || fs.realpathSync("/etc/grabenplaner") !== "/etc/grabenplaner") fail("PG_INSTALL_CONFIGURATION_DIRECTORY_READABILITY");
+  for (const file of [application.FILE, application.ANCHOR]) {
+    const stat = fs.lstatSync(file);
+    if ((stat.mode & 0o777) !== 0o640 || stat.gid !== gid) fail("PG_INSTALL_APPLICATION_CONFIG_READABILITY");
+  }
+  const operationsInfo = fs.lstatSync(OPERATIONS);
+  if ((operationsInfo.mode & 0o777) !== 0o600 || operationsInfo.gid !== 0) fail("PG_INSTALL_OPERATIONS_PERMISSIONS");
+  const document = application.readProtectedJson(application.FILE, { gid }), anchor = application.readProtectedJson(application.ANCHOR, { gid }),
+    operations = application.readProtectedJson(OPERATIONS);
+  for (const directory of [operations.backupDirectory, operations.workDirectory]) {
+    require("../../../lib/persistence/postgresql/operations/paired-bundle").safeRoot(directory);
+    if (fs.statSync(directory).uid !== 0) fail("PG_INSTALL_OPERATIONS_DIRECTORY_OWNER");
+  }
+  return validatePreparedDocuments({ environment: parseEnv(source), document, anchor, operations });
 }
-async function verifyPreparedPair({ resolved, environment }, Client) {
+async function verifyPreparedPair({ resolved, environment, operations }, Client) {
   let adminConfigured = false;
+  if (operations) {
+    const monitor = new Client({ host: operations.host, port: operations.port, database: "grabenplaner_core",
+      user: operations.monitor.role, password: operations.monitor.password, connectionTimeoutMillis: 5000,
+      application_name: "gp-postgresql-only-install-monitor", options: "-c default_transaction_read_only=on -c statement_timeout=10000" });
+    try {
+      await monitor.connect(); await monitor.query("BEGIN READ ONLY");
+      const identity = (await monitor.query("SELECT current_database() AS database, current_user AS username, (SELECT system_identifier::text FROM pg_control_system()) AS cluster_id, pg_has_role(current_user,'pg_monitor','MEMBER') AS monitor_role, (SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) AS elevated")).rows;
+      if (identity.length !== 1 || identity[0].database !== "grabenplaner_core" || identity[0].username !== "gp_operations_monitor"
+        || identity[0].cluster_id !== resolved.binding.clusterId || identity[0].monitor_role !== true || identity[0].elevated !== false) fail("PG_INSTALL_CLUSTER_BINDING");
+      await monitor.query("COMMIT");
+    } finally { await monitor.end(); }
+  }
   for (const domain of ["core", "sales"]) {
     for (const purpose of ["app", "reader"]) {
       const configuration = purpose === "reader" ? resolved.readers : resolved;
@@ -71,7 +103,7 @@ async function verifyPreparedPair({ resolved, environment }, Client) {
     }
   }
   if (environment && !adminConfigured && !/^[A-Za-z0-9+/_=-]{32,256}$/.test(environment.GRABENPLANER_BOOTSTRAP_TOKEN || "")) fail("PG_INSTALL_BOOTSTRAP_TOKEN_REQUIRED");
-  return { ok: true, providerId: "postgresql", domains: 2, accountsVerified: 4, readOnly: true, adminConfigured };
+  return { ok: true, providerId: "postgresql", domains: 2, accountsVerified: 4, monitorAccountVerified: Boolean(operations), clusterVerified: Boolean(operations), readOnly: true, adminConfigured };
 }
 async function hasAdmin(Client) {
   const document = application.readProtectedJson(application.FILE), anchor = application.readProtectedJson(application.ANCHOR);

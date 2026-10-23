@@ -18,8 +18,11 @@ Dateien vorbereitet sein:
   `DB_PROVIDER=postgresql`, dem PostgreSQL-Datenanker als `DB_PATH` und der
   verwalteten PostgreSQL-Anwendungskonfiguration;
 - `/etc/grabenplaner/postgresql-application.json` und
-  `/var/lib/grabenplaner/data/postgresql-pair.json` mit identischer geprüfter Bindung;
-- `/etc/grabenplaner/postgresql-operations.json` mit passendem Aktivierungsnachweis;
+  `/var/lib/grabenplaner/data/postgresql-pair.json` mit identischer geprüfter Bindung,
+  Eigentümer `root`, bereits vorbereiteter Gruppe `grabenplaner` und Modus `0640`;
+- `/etc/grabenplaner/postgresql-operations.json` mit passendem Aktivierungsnachweis
+  (`root:root`, `0600`) und bereits vorbereiteten privaten, root-eigenen
+  Sicherungs-/Prüfverzeichnissen;
 - ein Paar mit vollständigem Schema, überprüften Anwendungs-/Lesekonten und
   richtigem Umgebungsvertrag; die gesonderten Verwaltungszugänge bleiben getrennt.
 

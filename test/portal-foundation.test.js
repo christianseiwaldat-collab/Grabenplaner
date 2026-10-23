@@ -33,7 +33,7 @@ preparedPostgresql.exec(`
   INSERT INTO portal_roles (id, name, builtin, permissions)
   VALUES ('employee', 'Alt', 1, '["legacy"]');
   INSERT INTO portal_roles (id, name, builtin, permissions)
-  VALUES ('custom-auditor', 'Eigene Pr�ferrolle', 0, '["audit:read"]');
+  VALUES ('custom-auditor', 'Eigene Prüferrolle', 0, '["audit:read"]');
 `);
 
 const {

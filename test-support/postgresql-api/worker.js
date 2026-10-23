@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const { Client } = require("pg");
 const { assertSyntheticEnvironment } = require("./guard");
 const { splitStatements, translate } = require("./sql");
+const { isTechnicalRelation } = require("./ownership");
 const { verifyEnvironment } = require("../../lib/persistence/postgresql/core/environment");
 
 const port = workerData.port, signal = new Int32Array(workerData.signal);
@@ -33,8 +34,8 @@ async function initialize(expectedMarker) {
       clients[domain] = client; await client.connect(); connected.add(domain); await verifyEnvironment(client, { domain, purpose: "migrator" });
       if (!expectedMarker) await client.query("SELECT pg_advisory_lock(9261261)");
       const tables = (await client.query("SELECT schemaname,tablename FROM pg_tables WHERE tableowner=$1 AND schemaname IN ('gp','kassa','integration','trade','reporting') ORDER BY schemaname,tablename", [owner(domain)])).rows;
-      dataTables[domain] = tables.filter(t => !["environment_contract", "migration_fixture_owner", "schema_migrations"].includes(t.tablename)
-        && !t.tablename.endsWith("_migration_history")).map(t => q(t.schemaname) + "." + q(t.tablename));
+      dataTables[domain] = tables.filter(t => !isTechnicalRelation(domain, t.schemaname, t.tablename))
+        .map(t => q(t.schemaname) + "." + q(t.tablename));
       if (!dataTables[domain].length) throw new Error("PG_API_FIXTURE_SCHEMA_REQUIRED");
       if (!expectedMarker) {
         const occupied = (await client.query(dataTables[domain].map(table => "SELECT EXISTS(SELECT 1 FROM " + table + ") occupied").join(" UNION ALL "))).rows;
@@ -42,6 +43,14 @@ async function initialize(expectedMarker) {
       }
       await client.query("SET ROLE " + owner(domain));
       await client.query("SET search_path=pg_catalog,gp,kassa,integration,trade,reporting");
+      if (domain === "sales") {
+        const ledger = (await client.query("SELECT version,plan_sha256,base_target_sha256,target_sha256 FROM gp.import_delete_performance_history")).rows;
+        if (ledger.length !== 1 || ledger[0].version !== 1
+          || ledger[0].plan_sha256 !== require("../../lib/persistence/postgresql/sales/import-delete-performance").digest
+          || !/^[a-f0-9]{64}$/.test(ledger[0].base_target_sha256) || !/^[a-f0-9]{64}$/.test(ledger[0].target_sha256)) {
+          throw new Error("PG_API_FIXTURE_TECHNICAL_LEDGER_MISMATCH");
+        }
+      }
     }
     const salesOwner = (await clients.sales.query("SELECT id FROM gp.migration_fixture_owner")).rows;
     if (expectedMarker) {
@@ -58,7 +67,8 @@ async function initialize(expectedMarker) {
     await clients.core.query("INSERT INTO gp.cost_center_types(id,code,name,is_branch,builtin,sort_order,created_by,updated_by) VALUES('branch','branch','Filiale',1,1,10,'migration','migration'),('administration','administration','Verwaltung',0,1,20,'migration','migration'),('production','production','Produktion',0,1,30,'migration','migration'),('other','other','Sonstiges',0,1,40,'migration','migration')");
     await clients.core.query("INSERT INTO gp.positions(id,name,builtin,active,is_default,employment_classification,sort_order) VALUES('teamleitung','Teamleitung',0,1,0,'standard',1),('abteilungsleitung','Abteilungsleitung',0,1,0,'standard',2),('verkaufsmitarbeiter','Verkaufsmitarbeiter',0,1,1,'standard',3),('lehrling','Lehrling',0,1,0,'apprentice',4)");
     await clients.core.query("INSERT INTO gp.cost_center_type_positions(cost_center_type_id,position_id,sort_order) SELECT c.id,p.id,p.sort_order FROM gp.cost_center_types c CROSS JOIN gp.positions p");
-    await clients.core.query("INSERT INTO gp.locations(id,name,day_settings_json,active) VALUES('01','Hauptstandort','{}',1)");
+    await clients.core.query("INSERT INTO gp.cost_centers(id,code,name,type,cost_center_type_id,active,sort_order,created_by,updated_by) VALUES('cc-location-01','FIL01','Hauptstandort','branch','branch',1,100,'trigger','trigger')");
+    await clients.core.query("INSERT INTO gp.locations(id,name,cost_center_id,day_settings_json,active) VALUES('01','Hauptstandort','cc-location-01','{}',1)");
     return { marker };
   } catch (error) {
     await close().catch(() => {}); throw error;
@@ -98,6 +108,7 @@ async function executeOne(sql, values, mode) {
   const rows = result.rows.map(row => Object.fromEntries(result.fields.map(field => {
     let value = row[field.name];
     if ([20, 21, 23, 26].includes(field.dataTypeID) && typeof value === "string" && Number.isSafeInteger(Number(value))) value = Number(value);
+    if (field.dataTypeID === 16 && translated.legacyBusinessSql && typeof value === "boolean") value = value ? 1 : 0;
     return [aliases.get(field.name) || field.name, value];
   })));
   return { rows, changes: result.rowCount || 0, lastInsertRowid: returning ? normalize(rows[0]?.id) || 0 : 0 };

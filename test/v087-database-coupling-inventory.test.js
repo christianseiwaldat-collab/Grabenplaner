@@ -44,6 +44,16 @@ const {
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
+test("PostgreSQL-only retired online entrypoints cannot regain a SQLite driver grant", () => {
+  for (const file of ["backup.js", "lib/database-lock.js", "server-tools/linux/lib/backup-snapshot.js",
+    "server-tools/linux/lib/restore-backup.js", "server-tools/linux/lib/verify-backup.js",
+    "server-tools/linux/offsite/lib/application-smoke.js", "server-tools/linux/recovery/lib/recovery-apply.js",
+    "server-tools/linux/recovery/lib/recovery-verify.js"]) {
+    assert.equal(architectureBoundaryViolationsForText(file, 'const driver = require("node:sqlite");')
+      .some(entry => entry.kind === "sqlite-driver-import-outside-boundary"), true, file);
+  }
+});
+
 test("v0.87 Datenbank Block 3: Importscanner erkennt Ausfuehrung ohne Dokumentationstext zu melden", () => {
   const specifier = "node:" + "sqlite";
   const hasSqliteViolation = (file, source) => architectureBoundaryViolationsForText(file, source)
@@ -672,16 +682,26 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   assert.deepEqual(report.unknownProduction, []);
   assert.deepEqual(report.unknownTests, []);
   assert.deepEqual(report.resolvedProductionFiles, [
-    "lib/collective-agreements.js",
-    "lib/governance-store.js",
-    "lib/system-center-metrics.js",
-    "lib/work-rules/custom-rules.js",
-    "lib/work-rules/governance.js",
-    "lib/work-rules/store.js",
-    "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
-    "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
-  ]);
-  assert.deepEqual(report.resolvedTestFiles, []);
+  "backup.js",
+  "lib/collective-agreements.js",
+  "lib/database-lock.js",
+  "lib/governance-store.js",
+  "lib/system-center-metrics.js",
+  "lib/work-rules/custom-rules.js",
+  "lib/work-rules/governance.js",
+  "lib/work-rules/store.js",
+  "server-tools/linux/grabenplaner-bootstrap-admin.sh.in",
+  "server-tools/linux/install-grabenplaner-server.sh",
+  "server-tools/linux/lib/backup-snapshot.js",
+  "server-tools/linux/lib/restore-backup.js",
+  "server-tools/linux/lib/verify-backup.js",
+  "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
+  "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
+  "server-tools/linux/offsite/lib/application-smoke.js",
+  "server-tools/linux/recovery/lib/recovery-apply.js",
+  "server-tools/linux/recovery/lib/recovery-verify.js"
+]);
+  assert.deepEqual(report.resolvedTestFiles, ["test/database-lock.test.js"]);
   assert.deepEqual(report.missingIndirectFiles, []);
   assert.deepEqual(report.missingPhase3Files, []);
   assert.deepEqual(report.missingPhase3TestFiles, []);

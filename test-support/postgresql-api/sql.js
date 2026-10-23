@@ -24,12 +24,12 @@ function translate(sql, values = []) {
     }
   }
   if (!named && index !== values.length) throw new Error("PG_TEST_PARAMETER_COUNT");
-  let rendered = S.text(tokens).replace(/;\s*$/, "");
   const relations = new Set();
   // Only relation positions affect routing. A column/alias named 'settings'
   // must not change the selected database.
   for (let i = 0; i < tokens.length - 1; i++) {
     if (["FROM", "JOIN", "INTO", "UPDATE", "TABLE"].includes(tokens[i].toUpperCase())) {
+      if (tokens[i].toUpperCase() === "UPDATE" && tokens[i - 1]?.toUpperCase() === "DO") continue;
       let j = i + 1;
       if (tokens[j]?.toUpperCase() === "IF") j += 3;
       const name = S.name(tokens[j + 1] === "." ? tokens[j + 2] : tokens[j]);
@@ -40,14 +40,19 @@ function translate(sql, values = []) {
   const touchesCore = [...relations].some(name => core.has(name) && !sales.has(name));
   if (touchesSales && touchesCore) throw new Error("PG_TEST_MIXED_DATABASE_SEED: " + [...relations].join(","));
   const domain = touchesSales ? "sales" : "core";
-  rendered = S.insertIgnore(rendered)
+  const legacyBusinessSql = [...relations].some(name => core.has(name) || sales.has(name));
+  if (legacyBusinessSql) for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].toUpperCase() === "TRUE") tokens[i] = "1";
+    else if (tokens[i].toUpperCase() === "FALSE") tokens[i] = "0";
+  }
+  let rendered = S.insertIgnore(S.text(tokens).replace(/;\s*$/, ""))
     .replace(/\bBEGIN\s+(?:IMMEDIATE|EXCLUSIVE)\b/gi, "BEGIN")
     .replace(/\bCOLLATE\s+NOCASE\b/gi, "")
     .replace(/\bAUTOINCREMENT\b/gi, "")
     .replace(/\browid\b/gi, "id");
   if (/^INSERT OR REPLACE\b/i.test(rendered)) throw new Error("PG_TEST_REPLACE_REQUIRES_EXPLICIT_UPSERT");
   if (domain === "sales") rendered = layout.qualify(rendered);
-  return { sql: rendered, values: parameters, domain, relations: [...relations] };
+  return { sql: rendered, values: parameters, domain, relations: [...relations], legacyBusinessSql };
 }
 
 function splitStatements(sql) {

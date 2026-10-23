@@ -119,7 +119,7 @@ function safeRelativePath(value) {
 function isAllowedRuntimePath(relative) {
   const topLevelFiles = new Set([
     "server.js", "backup.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
-    "README.md", "LICENSE.md", "SECURITY.md", "SERVERBETRIEB.md",
+    "README.md", "LICENSE.md", "SECURITY.md", "SERVERBETRIEB.md", "POSTGRESQL-ONLY.md",
   ]);
   return topLevelFiles.has(relative)
     || backupRuntimeScripts.has(relative)
@@ -443,11 +443,15 @@ function main() {
     throw new Error("Manifest-Version und package.json-Version stimmen nicht ueberein.");
   }
   if (metadata.packageManager !== manifest.packageManager) throw new Error("package.json und Manifest fordern unterschiedliche pnpm-Versionen.");
+  if (JSON.stringify(metadata.grabenplaner?.databaseProviders) !== '["postgresql"]') {
+    throw new Error("Das Serverpaket muss ausschliesslich PostgreSQL als Betriebsdatenbank freigeben.");
+  }
   if (!hardeningContractMatches(manifest.hardeningModule, hardeningModuleContract)) {
     throw new Error("Der Hardening-Fingerprint im Paketmanifest stimmt nicht mit dem separaten Modulvertrag ueberein.");
   }
 
   const required = [
+    'POSTGRESQL-ONLY.md',
     'lib/persistence/postgresql/productive-configuration.js',
     'lib/persistence/postgresql/application.js',
     'lib/persistence/postgresql/operations/runtime.js',

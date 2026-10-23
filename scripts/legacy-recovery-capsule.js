@@ -109,6 +109,8 @@ function assertNativeHost(manifest) {
 }
 function createCapsule({ repository, node, nodeSha256, nodeVersion, output }) {
   if (!HASH.test(nodeSha256 || "") || !/^v(?:22|24)\.\d+\.\d+$/.test(nodeVersion || "")) fail("LEGACY_CAPSULE_RUNTIME_PIN_REQUIRED");
+  const [major, minor] = nodeVersion.slice(1).split(".").map(Number);
+  if (major === 22 && minor < 13) fail("LEGACY_CAPSULE_RUNTIME_UNSUPPORTED");
   const binary = path.resolve(node); regular(binary);
   if (hashFile(binary) !== nodeSha256) fail("LEGACY_CAPSULE_RUNTIME_HASH");
   const runtime = JSON.parse(run(binary, ["-p", "JSON.stringify({version:process.version,platform:process.platform,arch:process.arch})"]));
@@ -196,6 +198,8 @@ async function restoreCapsule({ capsule, manifestSha256, stage, environment, out
   const frozenStage = path.join(root, "input"); copyTree(stage, frozenStage); freeze(frozenStage);
   const stageProof = JSON.parse(run(expectedBinary, [path.join(source, "server-tools/linux/offsite/lib/offsite-stage.js"), "verify", frozenStage], { diagnosticPhase: "verify-frozen-stage" }));
   if (stageProof.providerId === "postgresql-pair") fail("LEGACY_CAPSULE_SQLITE_ONLY");
+  run(expectedBinary, [path.join(source, "server-tools/linux/lib/verify-backup.js"), stageProof.database, stageProof.documents,
+    path.join(source, "lib/amu-storage.js"), stageProof.commitMarker], { diagnosticPhase: "verify-legacy-backup-artifacts" });
   const environmentCopy = path.join(root, "keys.env");
   fs.copyFileSync(environment, environmentCopy, fs.constants.COPYFILE_EXCL); fs.chmodSync(environmentCopy, 0o600);
   const result = await phase("verify-legacy-recovery", () => verifyRecovery({ stage: frozenStage,
@@ -212,8 +216,20 @@ async function restoreCapsule({ capsule, manifestSha256, stage, environment, out
   for (const state of ["prepared", "verified"]) fs.writeFileSync(path.join(root, state + ".json"), JSON.stringify({ ...receipt, state }) + "\n", { flag: "wx", mode: 0o600 });
   const target = path.join(root, "restored"), safety = path.join(root, "safety");
   fs.mkdirSync(target, { mode: 0o700 }); fs.mkdirSync(safety, { mode: 0o700 });
-  // A harmless marker makes the original pre-restore safety contract meaningful
-  // even when restoring into a completely new offline target.
+  // Preserve the original prior-state safety contract. Only this new private
+  // offline destination receives an explicitly empty DB and empty encrypted
+  // store before applying the archived backup. No historical guard is bypassed.
+  await phase("prepare-empty-offline-target", () => {
+    fs.mkdirSync(path.join(target, "data"), { mode: 0o700 });
+    fs.mkdirSync(path.join(target, "private"), { mode: 0o700 });
+    const empty = moduleAt("lib/persistence/sqlite/provider.js").openSqliteLegacyDatabase(path.join(target, "data/dienstplan.db"));
+    try { empty.exec("CREATE TABLE legacy_capsule_empty_target (offline_only INTEGER NOT NULL CHECK (offline_only = 1)); INSERT INTO legacy_capsule_empty_target VALUES (1)"); }
+    finally { empty.close(); }
+    const checks = moduleAt("server-tools/linux/recovery/lib/recovery-verify.js");
+    const keys = checks.encryptionConfiguration(checks.readEnvironment(environmentCopy, policy));
+    moduleAt("lib/amu-storage.js").createAmuStorage({ rootDirectory: path.join(target, "private/amu"), activeKeyId: keys.amuKeyId,
+      encryptionKeys: { [keys.amuKeyId]: keys.amuKey } });
+  });
   fs.writeFileSync(path.join(target, "runtime-config.json"), "{}\n", { flag: "wx", mode: 0o600 });
   const applied = await phase("apply-isolated-recovery", () => applyRecovery({ stage: frozenStage, "prepared-receipt": path.join(root, "prepared.json"),
     "verified-receipt": path.join(root, "verified.json"), "safety-receipt": path.join(safety, "pre-restore-safety.json"),

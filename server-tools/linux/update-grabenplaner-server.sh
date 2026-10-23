@@ -1144,11 +1144,6 @@ elif [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 ]]; then
     || gp_die "Die Deploy-Pruefstrategie konnte nicht bestimmt werden."
 fi
 deploy_mode="$("$node" -e 'const value=JSON.parse(process.argv[1]); if(!["short","full"].includes(value.mode))process.exit(1); process.stdout.write(value.mode)' "$deploy_decision")"
-if [[ "$database_provider" == sqlite && "$deploy_mode" == short ]] \
-  && ! "$node" "$SCRIPT_DIR/lib/deferred-backups.js" preflight "$data_dir" "$backup_dir" >/dev/null; then
-  deploy_mode=full
-  deploy_decision='{"mode":"full","reason":"DEFERRED_ARCHIVE_REQUIRES_COMPLETION"}'
-fi
 gp_info "Deploy-Pruefstrategie: $deploy_mode. Der frische gekoppelte Rueckkehrpunkt bleibt verpflichtend."
 # A live lease suppresses redundant lifecycle copies only. The short path
 # makes one fully verified fresh rollback point; the full fallback retains

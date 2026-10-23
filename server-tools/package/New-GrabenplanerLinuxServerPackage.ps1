@@ -57,6 +57,7 @@ function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
         'LICENSE.md',
         'SECURITY.md',
         'SERVERBETRIEB.md'
+        'POSTGRESQL-ONLY.md'
     )) { return $true }
     return $normalized.StartsWith('lib/') -or
         $normalized.StartsWith('public/') -or
@@ -315,6 +316,7 @@ try {
         'package.json',
         'pnpm-lock.yaml',
         'SERVERBETRIEB.md',
+        'POSTGRESQL-ONLY.md',
         'server-tools\server.env.example',
         'server-tools\caddy\Caddyfile.example',
         'server-tools\linux\offsite\module-schema.json',

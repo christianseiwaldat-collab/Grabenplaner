@@ -4,6 +4,15 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { translate, splitStatements } = require("../test-support/postgresql-api/sql");
 const { assertSyntheticEnvironment } = require("../test-support/postgresql-api/guard");
+const { isTechnicalRelation } = require("../test-support/postgresql-api/ownership");
+
+test("fixture ownership preserves only explicitly reviewed infrastructure relations", () => {
+  assert.equal(isTechnicalRelation("sales", "gp", "import_delete_performance_history"), true);
+  assert.equal(isTechnicalRelation("core", "gp", "import_delete_performance_history"), false);
+  assert.equal(isTechnicalRelation("sales", "trade", "import_delete_performance_history"), false);
+  assert.equal(isTechnicalRelation("sales", "gp", "unreviewed_migration_history"), false);
+  assert.equal(isTechnicalRelation("core", "gp", "employees"), false);
+});
 
 test("PostgreSQL API fixture binds values without changing quoted parameter-looking text", () => {
   const result = translate("SELECT '?' AS literal, '$secret' AS marker FROM employees WHERE personnel_number=? AND full_name=?", ["101", "Synthetic"]);

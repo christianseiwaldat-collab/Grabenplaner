@@ -4,6 +4,7 @@
 public/fonts/price-labels/** -text
 public/fonts/price-labels/*/*.txt -whitespace
 *.sh text eol=lf
+lib/database-lock-linux.py text eol=lf
 # Qualified PostgreSQL contracts and SQL bind exact source bytes on every host.
 lib/persistence/postgresql/contracts/*.json text eol=lf
 lib/persistence/postgresql/core/compatibility.sql text eol=lf

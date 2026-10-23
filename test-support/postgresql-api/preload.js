@@ -2,7 +2,7 @@
 
 // Loaded only by the explicit Linux test command. This adapter changes fixture
 // setup/assertion access, never the application's repositories or transactions.
-const fs = require("node:fs"), path = require("node:path"), Module = require("node:module");
+const path = require("node:path"), Module = require("node:module");
 const { isMainThread, Worker, MessageChannel, receiveMessageOnPort } = require("node:worker_threads");
 const { assertSyntheticEnvironment } = require("./guard");
 const root = path.resolve(__dirname, "../..");
@@ -10,10 +10,15 @@ const manifest = require("./manifest.json");
 
 function install() {
   if (process.env.GP_PG_API_FIXTURE_BRIDGE !== "1") return;
+  // The outer --test launcher is not a fixture owner. Node's test subprocess
+  // has NODE_TEST_CONTEXT; explicitly spawned application children have the
+  // separately verified paired owner marker instead.
+  if (!process.env.NODE_TEST_CONTEXT && !process.env.GP_PG_API_FIXTURE_CHILD_OWNER) return;
   const file = process.argv.find(value => value.endsWith(".test.js"));
   const relative = file ? path.relative(root, path.resolve(file)).replaceAll("\\", "/") : process.env.GP_PG_API_FIXTURE_TEST_FILE || "";
   if (!manifest.files.includes(relative)) return;
   assertSyntheticEnvironment();
+  if (!process.env.NODE_ENV) process.env.NODE_ENV = "test";
   let worker, port, signal, serial = 0, subject, opened = false, fixturePath, ownerMarker;
   const applicationHandles = new Set();
 
@@ -35,7 +40,9 @@ function install() {
     signal = new Int32Array(new SharedArrayBuffer(4));
     worker = new Worker(path.join(__dirname, "worker.js"), { workerData: { port: channel.port2, signal: signal.buffer }, transferList: [channel.port2] });
     worker.unref(); port.unref();
-    const ownership = rpc("initialize", { expectedMarker: process.env.GP_PG_API_FIXTURE_CHILD_OWNER || undefined });
+    let ownership;
+    try { ownership = rpc("initialize", { expectedMarker: process.env.GP_PG_API_FIXTURE_CHILD_OWNER || undefined }); }
+    catch (error) { void worker.terminate(); throw error; }
     ownerMarker = ownership.marker; opened = true;
     fixturePath = process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : "";
     const configuration = require("../../lib/persistence/configuration");
@@ -108,12 +115,14 @@ function install() {
       open();
       const environment = { ...process.env, ...(options.env || {}), GP_PG_API_FIXTURE_TEST_FILE: relative,
         GP_PG_API_FIXTURE_CHILD_OWNER: ownerMarker };
+      if (!args.includes("--test")) delete environment.NODE_TEST_CONTEXT;
       environment.NODE_OPTIONS = (environment.NODE_OPTIONS || "") + " " + preloadOption;
       return original.call(this, command, args, { ...options, env: environment });
     };
   }
-  require("node:test").before(async () => { if (subject) await subject.initializeApplicationPersistence(); });
+  if (file) require("node:test").before(async () => { if (subject) await subject.initializeApplicationPersistence(); });
   let providerPatched = false;
+  let sqliteModule;
   Module._load = function(request, parent, isMain) {
     const resolved = Module._resolveFilename(request, parent, isMain);
     if (resolved === path.join(root, "server.js")) {
@@ -123,6 +132,17 @@ function install() {
       return exported;
     }
     const exported = load.call(this, request, parent, isMain);
+    if (request === "node:sqlite") {
+      if (!sqliteModule) sqliteModule = { ...exported, DatabaseSync: class DatabaseSync {
+        constructor(filename, options) {
+          if (filename && filename !== ":memory:" && process.env.DB_PATH && path.resolve(filename) === path.resolve(process.env.DB_PATH)) {
+            open(); return database(false, options);
+          }
+          return new exported.DatabaseSync(filename, options);
+        }
+      } };
+      return sqliteModule;
+    }
     if (resolved === path.join(root, "lib/persistence/sqlite/provider.js") && !providerPatched) {
       providerPatched = true;
       const originalOpen = exported.openSqliteApplicationPersistence, originalLegacy = exported.openSqliteLegacyDatabase;

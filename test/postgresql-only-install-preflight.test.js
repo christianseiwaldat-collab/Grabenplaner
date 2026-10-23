@@ -18,18 +18,20 @@ function documents() {
     domains: ["core", "sales"].map(domain => ({ domain, database: "grabenplaner_" + domain, role: `gp_${domain}_migrator`, password: (domain === "core" ? "z" : "t").repeat(64), environmentId: binding.environmentId, profile: binding.profile })) };
   const environment = { NODE_ENV: "production", GRABENPLANER_OPERATION_MODE: "server", GRABENPLANER_DEPLOYMENT_KIND: "production", DB_PROVIDER: "postgresql",
     GRABENPLANER_DATA_DIR: "/var/lib/grabenplaner", DB_PATH: "/var/lib/grabenplaner/data/postgresql-pair.json",
+    BACKUP_DIR: "/var/backups/grabenplaner-postgresql",
     GRABENPLANER_POSTGRESQL_APPLICATION_CONFIG: "/etc/grabenplaner/postgresql-application.json", GRABENPLANER_BOOTSTRAP_TOKEN: "g".repeat(48) };
   return { document, anchor, operations, environment };
 }
-function clientFixture(binding, { admin = "1", wrongDomain = false, privileged = false } = {}) {
+function clientFixture(binding, { admin = "1", wrongDomain = false, privileged = false, wrongCluster = false } = {}) {
   const queries = [], connections = [], ended = [];
   class Client {
-    constructor(configuration) { this.configuration = configuration; connections.push(configuration); this.url = new URL(configuration.connectionString); }
+    constructor(configuration) { this.configuration = configuration; connections.push(configuration); this.url = configuration.connectionString ? new URL(configuration.connectionString) : new URL(`postgresql://${configuration.user}@${configuration.host}:${configuration.port}/${configuration.database}`); }
     async connect() {}
     async end() { ended.push(this.url.username); }
     async query(sql) {
       queries.push(sql);
       if (/COUNT\(\*\)/.test(sql)) return { rows: [{ count: admin }] };
+      if (/pg_control_system/.test(sql)) return { rows: [{ database: "grabenplaner_core", username: "gp_operations_monitor", cluster_id: wrongCluster ? "other" : binding.clusterId, monitor_role: true, elevated: false }] };
       if (/pg_roles/.test(sql)) return { rows: [{ database: this.url.pathname.slice(1), username: this.url.username,
         rolsuper: privileged, rolcreatedb: false, rolcreaterole: false, rolreplication: false, rolbypassrls: false,
         environment_id: binding.environmentId, profile: binding.profile, domain: wrongDomain ? "other" : this.url.pathname.slice(1).split("_")[1] }] };
@@ -50,10 +52,10 @@ test("PostgreSQL-only install accepts paired documents and rejects SQLite/rehear
 test("install preflight checks all four bounded app/reader accounts using read-only transactions", async () => {
   const prepared = validatePreparedDocuments(documents()), fixture = clientFixture(prepared.resolved.binding);
   const result = await verifyPreparedPair(prepared, fixture.Client);
-  assert.deepEqual(result, { ok: true, providerId: "postgresql", domains: 2, accountsVerified: 4, readOnly: true, adminConfigured: true });
-  assert.equal(fixture.ended.length, 4);
-  assert.equal(fixture.queries.filter(sql => sql === "BEGIN READ ONLY").length, 4);
-  assert.equal(fixture.queries.filter(sql => sql === "COMMIT").length, 4);
+  assert.deepEqual(result, { ok: true, providerId: "postgresql", domains: 2, accountsVerified: 4, monitorAccountVerified: true, clusterVerified: true, readOnly: true, adminConfigured: true });
+  assert.equal(fixture.ended.length, 5);
+  assert.equal(fixture.queries.filter(sql => sql === "BEGIN READ ONLY").length, 5);
+  assert.equal(fixture.queries.filter(sql => sql === "COMMIT").length, 5);
   assert.ok(fixture.connections.every(c => c.connectionTimeoutMillis === 5000 && /default_transaction_read_only=on/.test(c.options)));
   assert.ok(fixture.queries.every(sql => /^(?:BEGIN READ ONLY|SELECT|COMMIT)/.test(sql)));
 });
@@ -62,14 +64,17 @@ test("install preflight refuses changed environment or overprivileged accounts a
   for (const settings of [{ wrongDomain: true }, { privileged: true }]) {
     const fixture = clientFixture(prepared.resolved.binding, settings);
     await assert.rejects(verifyPreparedPair(prepared, fixture.Client), { code: "PG_INSTALL_DATABASE_BINDING" });
-    assert.equal(fixture.ended.length, 1); assert.equal(fixture.queries.includes("COMMIT"), false);
+    assert.equal(fixture.ended.length, 2); assert.equal(fixture.queries.filter(sql => sql === "COMMIT").length, 1);
   }
+  const changed = clientFixture(prepared.resolved.binding, { wrongCluster: true });
+  await assert.rejects(verifyPreparedPair(prepared, changed.Client), { code: "PG_INSTALL_CLUSTER_BINDING" });
+  assert.equal(changed.ended.length, 1); assert.equal(changed.queries.includes("COMMIT"), false);
 });
 test("an empty prepared pair needs an unconsumed bootstrap token, existing admins do not", async () => {
   const input = documents(); delete input.environment.GRABENPLANER_BOOTSTRAP_TOKEN;
   const prepared = validatePreparedDocuments(input), fixture = clientFixture(prepared.resolved.binding, { admin: "0" });
   await assert.rejects(verifyPreparedPair(prepared, fixture.Client), { code: "PG_INSTALL_BOOTSTRAP_TOKEN_REQUIRED" });
-  assert.equal(fixture.ended.length, 4);
+  assert.equal(fixture.ended.length, 5);
   assert.equal((await verifyPreparedPair(prepared, clientFixture(prepared.resolved.binding).Client)).adminConfigured, true);
 });
 test("Linux install templates have valid shell syntax and pair gates precede persistent installation and swap", { skip: process.platform !== "linux" }, () => {

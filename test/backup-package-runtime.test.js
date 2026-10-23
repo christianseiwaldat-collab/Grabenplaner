@@ -111,3 +111,29 @@ test("package verifier rejects SQLite loaders even under a newly introduced allo
   assert.doesNotThrow(()=>check("lib/database-lock.js","const file = 'compatibility.server-lock.sqlite';"));
   assert.doesNotThrow(()=>check("lib/new-module.js","require('pg'); require('./persistence/catalogs/application-catalog');"));
 });
+
+test("every admitted server module keeps its literal relative dependencies inside the PostgreSQL package", () => {
+  const policy=verifierPolicy(), source=fs.readFileSync(path.join(root,"server-tools/linux/lib/verify-package.js"),"utf8");
+  const definition=source.match(/^function assertPostgresqlOnlySource\([^]*?^\}/m)?.[0];
+  const check=vm.runInNewContext(definition+"\nassertPostgresqlOnlySource");
+  const errors=[];let checked=0;
+  function inspect(relative) {
+    for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})) {
+      const file=path.posix.join(relative,entry.name);
+      if(!policy.accepts(file))continue;
+      if(entry.isDirectory()){inspect(file);continue;}
+      if(!entry.isFile()||!file.endsWith(".js"))continue;
+      const text=fs.readFileSync(path.join(root,file),"utf8");checked++;
+      assert.doesNotThrow(()=>check(file,text),file);
+      for(const match of text.matchAll(/require\(\s*["'](\.[^"']+)["']\s*\)/g)) {
+        let target=path.posix.normalize(path.posix.join(path.posix.dirname(file),match[1]));
+        for(const suffix of [".js",".json","/index.js"])
+          if(fs.existsSync(path.join(root,target+suffix))){target+=suffix;break;}
+        if(!policy.accepts(target))errors.push(`${file} -> ${target}`);
+      }
+    }
+  }
+  inspect("lib");inspect("server-tools");
+  assert.ok(checked>600,"the admitted module tree must actually be inspected");
+  assert.deepEqual(errors,[]);
+});

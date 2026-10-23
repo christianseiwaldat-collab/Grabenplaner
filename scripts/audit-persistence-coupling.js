@@ -760,10 +760,14 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  "test-support/postgresql-api/ownership.js",
+  "test/postgresql-api-native-fixture.test.js",
+  "test/portal-foundation-https.test.js",
+  "test/portal-foundation-lan-pilot.test.js",
+  "test/portal-foundation-scope.test.js",
+  "test/portal-foundation-loopback.test.js",
   "test-support/legacy-baseline.js",
   "test/postgresql-only-retired-backup.test.js",
-  "test-support/legacy-recovery/recovery-verify.cjs",
-  "test-support/legacy-recovery/recovery-apply.cjs",
   "test-support/database-lock-legacy-v09293.cjs",
   "test-support/legacy-recovery-fixture.js",
   "test/legacy-recovery-capsule.test.js",
@@ -1817,15 +1821,26 @@ const BASELINE_DIRECT_TEST_DRIVER_FILES = Object.freeze([
 const MANAGED_LINUX_SQLITE_COMPATIBILITY_DRIVER_FILES = Object.freeze([
   "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
 ]);
+const RETIRED_SQLITE_DRIVER_FILES = new Set([
+  "server-tools/linux/test-grabenplaner-server.sh",
+  "backup.js",
+  "lib/database-lock.js",
+  "server-tools/linux/grabenplaner-bootstrap-admin.sh.in",
+  "server-tools/linux/install-grabenplaner-server.sh",
+  "server-tools/linux/lib/backup-snapshot.js",
+  "server-tools/linux/lib/restore-backup.js",
+  "server-tools/linux/lib/verify-backup.js",
+  "server-tools/linux/offsite/lib/application-smoke.js",
+  "server-tools/linux/recovery/lib/recovery-apply.js",
+  "server-tools/linux/recovery/lib/recovery-verify.js"
+]);
 const PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES = Object.freeze([
   ...BASELINE_DIRECT_PRODUCTION_DRIVER_FILES.filter((file) => file !== "server.js"),
   ...PHASE_3_SQLITE_DRIVER_FILES,
   ...MANAGED_LINUX_SQLITE_COMPATIBILITY_DRIVER_FILES,
   "scripts/cleanup-branch-order-test-data.js",
-]);
+].filter(file => !RETIRED_SQLITE_DRIVER_FILES.has(file)));
 const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
-  "test-support/legacy-recovery/recovery-verify.cjs",
-  "test-support/legacy-recovery/recovery-apply.cjs",
   "test-support/database-lock-legacy-v09293.cjs",
   "test-support/legacy-recovery-fixture.js",
   "test/legacy-recovery-capsule.test.js",
@@ -1839,6 +1854,8 @@ const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
   "test-support/cash-history-snapshot-prototype.js",
   "test/data-import-state-counts.test.js",
   ...BASELINE_DIRECT_TEST_DRIVER_FILES.filter((file) => ![
+    "test/database-lock.test.js",
+    "test/portal-foundation.test.js",
     "test/block6-custom-work-rule-evaluator.test.js",
     "test/work-rule-store.test.js",
   ].includes(file)),

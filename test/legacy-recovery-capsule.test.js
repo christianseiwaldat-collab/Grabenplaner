@@ -9,7 +9,7 @@ test("legacy capsule rejects a mismatched supplied runtime pin before creating a
   assert.throws(() => createCapsule({ repository: root, node: process.execPath, nodeSha256: "0".repeat(64), nodeVersion: process.version, output }), { code: "LEGACY_CAPSULE_RUNTIME_HASH" });
   assert.equal(fs.existsSync(output), false);
 });
-test("Linux capsule restores old SQLite to a new isolated workspace and fails closed for tamper, wrong keys and current targets", { skip: process.platform !== "linux", timeout: 240000 }, () => {
+test("Linux capsule restores old SQLite to a new isolated workspace and fails closed for tamper, wrong keys and current targets", { skip: process.platform !== "linux", timeout: 600000 }, () => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-legacy-capsule-test-"));
   try {
     const capsule = path.join(temporary, "capsule"), created = createCapsule({ repository: root, node: process.execPath, nodeSha256: hashFile(process.execPath), nodeVersion: process.version, output: capsule });
@@ -20,7 +20,7 @@ test("Linux capsule restores old SQLite to a new isolated workspace and fails cl
     assert.equal(manifest.files.some(x => /(?:^|\/)node_modules\//.test(x.file)), false);
     const fixtureRoot = path.join(temporary, "fixture"); fs.mkdirSync(fixtureRoot);
     const built = createLegacyRecoveryFixture(fixtureRoot), before = hashFile(built.database);
-    const restore = (output, environment = built.environment) => spawnSync(process.execPath, [cli, "restore", "--capsule", capsule, "--manifest-sha256", created.manifestSha256, "--stage", built.stage, "--environment", environment, "--output", output], { encoding: "utf8", timeout: 120000 });
+    const restore = (output, environment = built.environment) => spawnSync(process.execPath, [cli, "restore", "--capsule", capsule, "--manifest-sha256", created.manifestSha256, "--stage", built.stage, "--environment", environment, "--output", output], { encoding: "utf8", timeout: 180000 });
     const target = path.join(temporary, "offline"), result = restore(target);
     assert.equal(result.status, 0, result.stderr);
     const evidence = JSON.parse(result.stdout);

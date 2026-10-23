@@ -200,7 +200,7 @@ test("DB Block 6 No-Cutover: neue Betriebsdateien aktivieren weder Cutover noch 
 test("Betriebsvertrag verlangt geprüfte Migration und verhindert Einzelrücksicherung", () => {
   const operationsContract = read("SERVERBETRIEB.md");
   assert.match(operationsContract, /Eine alleinige Änderung von `DB_PROVIDER` aktiviert keine Migration/);
-  assert.match(operationsContract, /Wartungssperre, vollständige Datenprüfung und den ersten gemeinsamen Sicherungspunkt/);
+  assert.match(operationsContract, /Wartungssperre, vollständige Datenprüfung und erster gemeinsamer Sicherungspunkt/);
   assert.match(operationsContract, /keinen automatischen Rückfall auf SQLite/);
   assert.match(operationsContract, /Einzelrücksicherung und generischer SQLite-Recovery-Apply sind ausgeschlossen/);
 });

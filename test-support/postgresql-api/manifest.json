@@ -44,6 +44,7 @@
     "test/portal-foundation.test.js",
     "test/portal-loan-order-defaults.test.js",
     "test/portal-permission-defaults.test.js",
+    "test/postgresql-api-native-fixture.test.js",
     "test/privacy-organization-integration.test.js",
     "test/retail-kv-integration.test.js",
     "test/sales-analytics-production-hardening.test.js",

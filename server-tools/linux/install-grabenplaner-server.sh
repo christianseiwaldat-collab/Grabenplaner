@@ -881,7 +881,7 @@ install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 \
   "$BACKUP_ROOT" "$LOG_ROOT/app"
 install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0750 "$CACHE_ROOT" "$CACHE_ROOT/pnpm" "$CACHE_ROOT/corepack"
 install -d -o caddy -g caddy -m 0750 "$LOG_ROOT/caddy"
-install -d -o root -g root -m 0700 "$CONFIG_ROOT"
+install -d -o root -g "$SERVICE_GROUP" -m 0750 "$CONFIG_ROOT"
 if [[ -e "$MONITOR_STATUS_ROOT" || -L "$MONITOR_STATUS_ROOT" ]]; then
   [[ -d "$MONITOR_STATUS_ROOT" && ! -L "$MONITOR_STATUS_ROOT" ]] \
     || fail "Der Monitorstatuspfad ist kein sicherer lokaler Ordner."
@@ -903,7 +903,7 @@ install -d -o root -g "$MONITOR_STATUS_GROUP" -m 0750 "$MONITOR_STATUS_ROOT"
   require_environment_value DB_PROVIDER postgresql
   require_environment_value DB_PATH "$DATA_ROOT/data/postgresql-pair.json"
   require_environment_value GRABENPLANER_POSTGRESQL_APPLICATION_CONFIG "$CONFIG_ROOT/postgresql-application.json"
-  require_environment_value BACKUP_DIR "$BACKUP_ROOT"
+  require_environment_value BACKUP_DIR /var/backups/grabenplaner-postgresql
   validate_secret_bytes GRABENPLANER_AMU_KEY 32
   validate_secret_bytes GRABENPLANER_INTEGRATION_KEY 32
   validate_secret_bytes GRABENPLANER_WIFI_IDENTITY_KEY 32
