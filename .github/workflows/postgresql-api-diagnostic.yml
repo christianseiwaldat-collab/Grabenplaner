@@ -2,6 +2,8 @@ name: PostgreSQL API diagnostic
 
 on:
   workflow_dispatch:
+  push:
+    branches: [qualification/postgresql-api-diagnostic-20261024]
 
 permissions:
   contents: read
