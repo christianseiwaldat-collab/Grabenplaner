@@ -1,0 +1,92 @@
+name: SAST original-core source build qualification
+
+on:
+  workflow_dispatch:
+  # The experiment does not need a default-branch workflow registration/merge.
+  # Narrow qualification pushes can run the first reviewable candidate as-is.
+  push:
+    branches: [qualification/postgresql-only-20261023]
+    paths:
+      - '.github/workflows/sast-source-build.yml'
+      - 'scripts/security/build_semgrep_source.py'
+      - 'scripts/security/test_semgrep_source_build.py'
+      - 'scripts/security/fixtures/semgrep-1.181.0-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sast-source-build-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PYTHONUTF8: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+  SEMGREP_SEND_METRICS: 'off'
+  SEMGREP_ENABLE_VERSION_CHECK: '0'
+
+jobs:
+  source-build-diagnostic:
+    name: Source qualification only; no security gate approval
+    runs-on: ubuntu-24.04
+    # Cold upstream OCaml/compiler/dependency builds can take several hours.
+    # The scanner's original per-rule budgets and completeness checks remain.
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12.14'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24.19.0'
+      - name: Install original hash-locked wrapper in a disposable environment
+        run: |
+          python -m venv "$RUNNER_TEMP/semgrep-source-venv"
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r scripts/security/requirements.txt
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" scripts/security/install_tools.py --tool rules --directory "$RUNNER_TEMP/semgrep-source-tools"
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" scripts/security/install_tools.py --tool syft --directory "$RUNNER_TEMP/semgrep-source-tools"
+      - name: Require exact patch and fail-closed diagnostic contracts
+        run: |
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" -m unittest discover -s scripts/security -p 'test_semgrep_source_build.py' -v
+      - name: Build the official upstream target and qualify whole files and controls
+        run: |
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" scripts/security/build_semgrep_source.py --root . --tools "$RUNNER_TEMP/semgrep-source-tools" --work "$RUNNER_TEMP/semgrep-source-work" --output "$RUNNER_TEMP/semgrep-source-private"
+      - name: Seal private provenance, native core, inventories and scanner evidence
+        if: always()
+        run: |
+          mkdir "$RUNNER_TEMP/semgrep-source-public"
+          node scripts/security/seal-evidence.cjs "$RUNNER_TEMP/semgrep-source-private" "$RUNNER_TEMP/semgrep-source-public/private-evidence.gpe" .github/security-evidence-public-key.pem
+      - name: Bind diagnostic-only upload metadata
+        id: prepare-upload
+        if: always()
+        run: |
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" scripts/security/diagnose_sast_fixpoints.py --publish --output "$RUNNER_TEMP/semgrep-source-private" --public "$RUNNER_TEMP/semgrep-source-public" --key .github/security-evidence-public-key.pem
+      - name: Retain bounded metadata and encrypted private evidence
+        id: upload
+        if: always() && steps.prepare-upload.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sast-source-build-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/semgrep-source-public/diagnostic-summary.json
+            ${{ runner.temp }}/semgrep-source-public/private-evidence.gpe
+            ${{ runner.temp }}/semgrep-source-public/diagnostic-upload-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+          archive: true
+          overwrite: false
+          include-hidden-files: false
+      - name: Require artifact identity and digest
+        if: always() && steps.upload.outcome == 'success'
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: python scripts/security/prepare_upload.py --uploaded-receipt
