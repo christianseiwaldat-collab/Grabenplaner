@@ -106,10 +106,17 @@ test("package verifier rejects SQLite loaders even under a newly introduced allo
   const definition=source.match(/^function assertPostgresqlOnlySource\([^]*?^\}/m)?.[0];
   assert.ok(definition);
   const check=vm.runInNewContext(definition+"\nassertPostgresqlOnlySource");
-  for(const statement of ["require('node:sqlite')", "require('./persistence/sqlite/provider')", "require('../sqlite/provider')", "require('./sqlite/provider')", "import('better-sqlite3')"])
+  for(const statement of ["require('node:sqlite')", "require('node:sqlite3')", "require('sqlite')", "require('sqlite3')",
+    "require('./persistence/sqlite/provider')", "require('/absolute/persistence/sqlite/provider')",
+    "require('../sqlite/provider')", "require('./sqlite/provider')", "require('../.././sqlite')", "import('better-sqlite3')"])
     assert.throws(()=>check("lib/new-module.js",statement),/SQLite-Ausfuehrung/);
   assert.doesNotThrow(()=>check("lib/database-lock.js","const file = 'compatibility.server-lock.sqlite';"));
   assert.doesNotThrow(()=>check("lib/new-module.js","require('pg'); require('./persistence/catalogs/application-catalog');"));
+  for(const request of ["sqlite-policy", "persistence/sqlite-schema", "./sqlite3-helper", "./x/sqlite-policy", "node:better-sqlite3"])
+    assert.doesNotThrow(()=>check("lib/new-module.js",`require('${request}')`),request);
+  const deepPrefix="../".repeat(20000);
+  assert.throws(()=>check("lib/new-module.js",`require('${deepPrefix}sqlite/provider')`),/SQLite-Ausfuehrung/);
+  assert.doesNotThrow(()=>check("lib/new-module.js",`require('${deepPrefix}sqlite-compatible/helper')`));
 });
 
 test("every admitted server module keeps its literal relative dependencies inside the PostgreSQL package", () => {

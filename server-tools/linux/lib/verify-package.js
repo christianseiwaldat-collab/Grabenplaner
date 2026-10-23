@@ -508,6 +508,7 @@ function main() {
   "server-tools/linux/migrate-grabenplaner-runtime-v6.sh",
   "server-tools/linux/lib/runtime-v6-transition.js",
   "server-tools/linux/lib/offsite-postgresql-only-compat.js",
+  "server-tools/linux/lib/root-postgresql-dependencies.sh",
     "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
     "server-tools/linux/preflight-grabenplaner-deploy.sh",
     "server-tools/linux/lib/postgresql-backup-repair-compat.js",

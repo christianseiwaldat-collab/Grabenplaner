@@ -75,3 +75,40 @@ test("current package declares Core6 / Offsite13 and preserves the qualified Cor
   assert.equal(value.deploymentSchemaVersion, 6); assert.equal(value.fingerprint, transition.NEW_FINGERPRINT);
   assert.equal(value.offsiteModule.moduleVersion, 13); assert.equal(value.managedArtifacts.length, 11);
 });
+function dependencyFixture(t) {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-core6-dependencies-"));
+  t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  const oldRoot = path.join(temporary, "old"), candidateRoot = path.join(temporary, "new");
+  for (const directory of [oldRoot, candidateRoot]) {
+    fs.mkdirSync(directory); fs.writeFileSync(path.join(directory, "package.json"), JSON.stringify({ packageManager: "pnpm@11.7.0", dependencies: { pg: "8.20.0" } }));
+    fs.writeFileSync(path.join(directory, "pnpm-lock.yaml"), "frozen fixture bytes\n");
+  }
+  fs.mkdirSync(path.join(oldRoot, "node_modules/pg"), { recursive: true }); fs.writeFileSync(path.join(oldRoot, "node_modules/pg/index.js"), "module.exports={};\n");
+  return { oldRoot, candidateRoot };
+}
+test("Core6 binds unchanged dependency metadata and every copied dependency byte to the qualified predecessor", t => {
+  const values = dependencyFixture(t);
+  const before = transition.verifyDependencyContinuity(values.oldRoot, values.candidateRoot, { requireRoot: false });
+  assert.equal(before.exactLock, true); assert.equal(before.copiedTreeVerified, false);
+  fs.cpSync(path.join(values.oldRoot, "node_modules"), path.join(values.candidateRoot, "node_modules"), { recursive: true });
+  const after = transition.verifyDependencyContinuity(values.oldRoot, values.candidateRoot, { requireRoot: false });
+  assert.equal(after.copiedTreeVerified, true); assert.equal(after.sha256, before.sha256); assert.equal(after.fileCount, 1);
+  fs.appendFileSync(path.join(values.candidateRoot, "node_modules/pg/index.js"), "unreviewed builder code");
+  assert.throws(() => transition.verifyDependencyContinuity(values.oldRoot, values.candidateRoot, { requireRoot: false }), /Copied runtime dependencies differ/);
+});
+test("Core6 dependency reuse refuses lock changes, changed runtime dependencies and package manager drift", t => {
+  for (const key of ["lock", "dependencies", "packageManager"]) {
+    const values = dependencyFixture(t);
+    if (key === "lock") fs.appendFileSync(path.join(values.candidateRoot, "pnpm-lock.yaml"), "changed\n");
+    else {
+      const file = path.join(values.candidateRoot, "package.json"), document = JSON.parse(fs.readFileSync(file));
+      document[key] = key === "dependencies" ? { pg: "different" } : "pnpm@different"; fs.writeFileSync(file, JSON.stringify(document));
+    }
+    assert.throws(() => transition.verifyDependencyContinuity(values.oldRoot, values.candidateRoot, { requireRoot: false }));
+  }
+});
+test("Core6 dependency reuse refuses a hardlinked predecessor dependency", t => {
+  const values = dependencyFixture(t), original = path.join(values.oldRoot, "node_modules/pg/index.js");
+  fs.linkSync(original, path.join(values.oldRoot, "another-writer-path"));
+  assert.throws(() => transition.verifyDependencyContinuity(values.oldRoot, values.candidateRoot, { requireRoot: false }));
+});

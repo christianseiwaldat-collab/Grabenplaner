@@ -2,6 +2,9 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 umask 077
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+readonly PATH
+unset NODE_OPTIONS NODE_PATH NODE_EXTRA_CA_CERTS NODE_ICU_DATA NODE_V8_COVERAGE NODE_REDIRECT_WARNINGS NODE_TLS_REJECT_UNAUTHORIZED BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS OPENSSL_CONF OPENSSL_MODULES LD_PRELOAD LD_LIBRARY_PATH
 
 # Explicit PostgreSQL-only Core 5 -> 6 / Offsite 12 -> 13 maintenance.
 # Core 5 with external module 13 is only a paused, locked transition state.
@@ -14,6 +17,23 @@ SCRIPT_PATH="$(readlink -f -- "$SCRIPT_SOURCE" 2>/dev/null || true)"
   || { printf '%s\n' 'Das Runtime-v6-Migrationsskript ist ungueltig.' >&2; exit 1; }
 readonly SCRIPT_PATH
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
+# Root must not execute an entrypoint or shared verifier from an account-writable
+# source directory. Package bytes are checked independently after extraction.
+for trusted_source_file in "$SCRIPT_PATH" "$SCRIPT_DIR/lib/common.sh"; do
+  [[ -f "$trusted_source_file" && ! -L "$trusted_source_file" \
+    && "$(stat --format='%u:%h' -- "$trusted_source_file")" == '0:1' ]] \
+    || { printf '%s\n' 'Der Wartungseinstieg ist nicht root-geschuetzt.' >&2; exit 1; }
+  trusted_source_parent="$trusted_source_file"
+  while :; do
+    [[ ! -L "$trusted_source_parent" && "$(stat --format='%u' -- "$trusted_source_parent")" == 0 ]] \
+      || { printf '%s\n' 'Der Wartungspfad ist nicht root-geschuetzt.' >&2; exit 1; }
+    trusted_source_mode="$(stat --format='%a' -- "$trusted_source_parent")"
+    (( (8#$trusted_source_mode & 022) == 0 )) \
+      || { printf '%s\n' 'Der Wartungspfad ist fremdschreibbar.' >&2; exit 1; }
+    [[ "$trusted_source_parent" != / ]] || break
+    trusted_source_parent="$(dirname -- "$trusted_source_parent")"
+  done
+done
 # shellcheck source=server-tools/linux/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 readonly APP_DIR=/opt/grabenplaner/app
@@ -48,7 +68,9 @@ done
 [[ -n "$package_arg" && ( -z "$sha256_arg" || -z "$sha256_file_arg" ) ]] || gp_die 'Ein Paket und genau eine SHA256-Quelle sind erforderlich.'
 [[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 1500 )) || gp_die 'Ungueltiges Health-Timeout.'
 if [[ -n "$node_arg" ]]; then node="$(gp_existing_file "$node_arg" 'Node.js')"; else gp_require_command node; node="$(readlink -f -- "$(command -v node)")"; fi
-"$node" -e 'const [a,b]=process.versions.node.split(".").map(Number);if(a<22||(a===22&&b<13)||process.arch!=="x64")process.exit(1)' || gp_die 'Node.js >=22.13.0 x64 wird benoetigt.'
+node="$(gp_assert_root_node "$node")" || gp_die 'Die privilegierte Node-Laufzeit ist nicht root-geschuetzt.'
+root_node() { /usr/bin/env -i PATH="$PATH" LANG=C.UTF-8 HOME=/root NODE_ENV=production "$node" --no-global-search-paths "$@"; }
+root_node -e 'const [a,b]=process.versions.node.split(".").map(Number);if(a<22||(a===22&&b<13)||process.arch!=="x64")process.exit(1)' || gp_die 'Node.js >=22.13.0 x64 wird benoetigt.'
 package="$(gp_existing_file "$package_arg" 'Migrationspaket')"
 [[ "$package" == *.zip ]] || gp_die 'Ein offizielles Linux-Server-ZIP wird benoetigt.'
 if [[ -n "$sha256_file_arg" ]]; then sha256_file="$(gp_existing_file "$sha256_file_arg" 'SHA256-Datei')"; sha256_arg="$(awk 'NR==1 {print $1;exit}' "$sha256_file")";
@@ -56,6 +78,7 @@ elif [[ -z "$sha256_arg" ]]; then sha256_file="$(gp_existing_file "$package.sha2
 gp_validate_sha256 "$sha256_arg"
 sha256_arg="${sha256_arg,,}"
 gp_load_env_file "$ENV_FILE"
+unset NODE_OPTIONS NODE_PATH NODE_EXTRA_CA_CERTS NODE_ICU_DATA NODE_V8_COVERAGE NODE_REDIRECT_WARNINGS NODE_TLS_REJECT_UNAUTHORIZED BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS OPENSSL_CONF OPENSSL_MODULES LD_PRELOAD LD_LIBRARY_PATH
 [[ "${DB_PROVIDER:-}" == postgresql && "${NODE_ENV:-}" == production \
   && "${GRABENPLANER_OPERATION_MODE:-}" == server && "${GRABENPLANER_DEPLOYMENT_KIND:-}" == production \
   && "${GRABENPLANER_DATA_DIR:-}" == "$DATA_DIR" && "${DB_PATH:-}" == "$DATA_DIR/data/postgresql-pair.json" \
@@ -64,9 +87,16 @@ gp_load_env_file "$ENV_FILE"
 app_dir="$(gp_existing_directory "$APP_DIR" 'Bestehende App')"
 public_url="${GRABENPLANER_PUBLIC_URL:-}"
 port="${PORT:-3000}"
-gp_validate_https_url "$node" "$public_url" || gp_die 'Ungueltige produktive HTTPS-Adresse.'
+gp_validate_https_url root_node "$public_url" || gp_die 'Ungueltige produktive HTTPS-Adresse.'
 [[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1 && port <= 65535 )) || gp_die 'Ungueltiger interner Port.'
 preflight_args=(--node "$node")
+if [[ -n "$pnpm_arg" ]]; then
+  gp_assert_root_package_manager "$pnpm_arg" >/dev/null || gp_die 'Die Paketmanager-Distribution ist nicht root-geschuetzt.'
+elif command -v pnpm >/dev/null 2>&1; then
+  gp_assert_root_package_manager "$(command -v pnpm)" >/dev/null || gp_die 'Die Paketmanager-Distribution ist nicht root-geschuetzt.'
+elif command -v corepack >/dev/null 2>&1; then
+  gp_assert_root_package_manager "$(command -v corepack)" pnpm >/dev/null || gp_die 'Die Corepack-Distribution ist nicht root-geschuetzt.'
+else gp_die 'Weder pnpm noch Corepack/pnpm ist vorhanden.'; fi
 [[ -z "$pnpm_arg" ]] || preflight_args+=(--pnpm "$pnpm_arg")
 bash "$SCRIPT_DIR/preflight-grabenplaner-deploy.sh" "${preflight_args[@]}" >/dev/null || gp_die 'Der verpflichtende read-only Deploy-Vorabcheck ist nicht gruen.'
 env_sha256_before="$(gp_sha256 "$ENV_FILE")"
@@ -105,19 +135,19 @@ install_atomic_root_file() {
   [[ "$target" == "$BOOTSTRAP_COMMAND" || "$target" == "$OFFSITE_RECEIPT" ]] || return 1
   pending="$(mktemp "$(dirname -- "$target")/.runtime-v6-file.XXXXXXXX")" || return 1
   install -m "$permissions" -o root -g root -- "$source" "$pending" || return 1
-  "$node" - "$pending" <<'NODE' || return 1
+  root_node - "$pending" <<'NODE' || return 1
 const fs=require('node:fs');const fd=fs.openSync(process.argv[2],fs.constants.O_RDONLY|fs.constants.O_NOFOLLOW);
 try{const s=fs.fstatSync(fd);if(!s.isFile()||s.uid!==0||s.nlink!==1)throw Error('Unsafe pending file');fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
 NODE
   mv -T -- "$pending" "$target" || return 1
-  "$node" - "$(dirname -- "$target")" <<'NODE'
+  root_node - "$(dirname -- "$target")" <<'NODE'
 const fs=require('node:fs');const fd=fs.openSync(process.argv[2],fs.constants.O_RDONLY|fs.constants.O_DIRECTORY|fs.constants.O_NOFOLLOW);
 try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
 NODE
 }
 commit_is_valid() {
   [[ -f "$updater_commit_marker" && ! -L "$updater_commit_marker" ]] || return 1
-  "$node" - "$updater_commit_marker" "${candidate_version:-}" "$sha256_arg" <<'NODE'
+  root_node - "$updater_commit_marker" "${candidate_version:-}" "$sha256_arg" <<'NODE'
 const fs=require('node:fs');const [file,version,sha]=process.argv.slice(2),s=fs.lstatSync(file),v=JSON.parse(fs.readFileSync(file,'utf8'));
 if(!s.isFile()||s.isSymbolicLink()||s.uid!==0||s.nlink!==1||(s.mode&0o777)!==0o600||v.format!=='grabenplaner-update-commit'||v.schemaVersion!==1||v.status!=='committed'||v.installedVersion!==version||v.packageSha256!==sha||!Number.isFinite(Date.parse(v.committedAt)))process.exit(1);
 NODE
@@ -125,7 +155,7 @@ NODE
 restore_predecessor_module() {
   # The updater must already have restored the exact old app. Never install
   # module12 over a committed/uncertain Core6 or roll PostgreSQL writes back.
-  "$node" "$extract_root/server-tools/linux/lib/runtime-v6-transition.js" verify "$app_dir" "$extract_root" >/dev/null || return 1
+  root_node "$extract_root/server-tools/linux/lib/runtime-v6-transition.js" verify "$app_dir" "$extract_root" >/dev/null || return 1
   if (( module_phase >= 1 )); then
     if [[ -d "$rollback_root/module12" && ! -L "$rollback_root/module12" ]]; then
       if [[ -e "$OFFSITE_MODULE" || -L "$OFFSITE_MODULE" ]]; then
@@ -142,7 +172,7 @@ restore_predecessor_module() {
     bootstrap_changed=0
   fi
   cmp --silent -- "$rollback_root/installed-contract12.json" "$OFFSITE_RECEIPT" || return 1
-  "$node" "$app_dir/server-tools/linux/offsite/lib/offsite-contract.js" verify-installed-bound "$OFFSITE_MODULE" "$OFFSITE_RECEIPT" >/dev/null || return 1
+  root_node "$app_dir/server-tools/linux/offsite/lib/offsite-contract.js" verify-installed-bound "$OFFSITE_MODULE" "$OFFSITE_RECEIPT" >/dev/null || return 1
   [[ "$(gp_sha256 "$ENV_FILE")" == "$env_sha256_before" ]] || return 1
   systemctl is-active --quiet grabenplaner.service || return 1
   gp_wait_ready "$internal_ready_url" "$health_timeout" && gp_wait_ready "$public_ready_url" "$health_timeout" || return 1
@@ -232,22 +262,31 @@ runuser --user "$build_user" -- unzip -qq "$staged_package" -d "$extract_root"
 
 gp_seal_build_tree "$extract_root" "$work_root/extract" "$GP_DEFAULT_SERVICE_GROUP" || gp_die 'Der ausgepackte Buildbaum konnte nicht mit frischen root-eigenen Dateien versiegelt werden.'
 extract_root="$work_root/extract"
+gp_verify_sealed_zip "$staged_package" "$extract_root" 0 || gp_die 'Der versiegelte Quellbaum ist nicht bytegleich an das originale SHA-gepruefte ZIP gebunden.'
 
 candidate_verifier="$extract_root/server-tools/linux/lib/verify-package.js"
 transition_helper="$extract_root/server-tools/linux/lib/runtime-v6-transition.js"
 module_helper="$extract_root/server-tools/linux/lib/offsite-postgresql-only-compat.js"
 manifest_result="$work_root/manifest.json"
-"$node" "$candidate_verifier" "$extract_root" >"$manifest_result" || gp_die 'Paketmanifest und Einzeldateien sind ungueltig.'
+root_node "$candidate_verifier" "$extract_root" >"$manifest_result" || gp_die 'Paketmanifest und Einzeldateien sind ungueltig.'
 cmp --silent -- "$SCRIPT_PATH" "$extract_root/server-tools/linux/migrate-grabenplaner-runtime-v6.sh" || gp_die 'Der gestartete EntryPoint ist nicht bytegleich paketgebunden.'
 cmp --silent -- "$SCRIPT_DIR/lib/common.sh" "$extract_root/server-tools/linux/lib/common.sh" || gp_die 'Die geladene Sicherheitsbasis ist nicht bytegleich paketgebunden.'
-"$node" "$transition_helper" verify "$app_dir" "$extract_root" >"$work_root/core-delta.json" || gp_die 'Nur der exakt gepruefte Core-5-zu-6-Uebergang ist erlaubt.'
-candidate_version="$("$node" -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).appVersion)' "$manifest_result")"
-old_version="$("$node" -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).version)' "$app_dir/package.json")"
-version_comparison="$(gp_compare_semver "$node" "$old_version" "$candidate_version")"
+root_node "$transition_helper" verify "$app_dir" "$extract_root" >"$work_root/core-delta.json" || gp_die 'Nur der exakt gepruefte Core-5-zu-6-Uebergang ist erlaubt.'
+candidate_version="$(root_node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).appVersion)' "$manifest_result")"
+old_version="$(root_node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).version)' "$app_dir/package.json")"
+version_comparison="$(gp_compare_semver root_node "$old_version" "$candidate_version")"
 (( version_comparison <= 0 )) || gp_die 'Die Runtime-Migration erlaubt keine aeltere App-Version.'
 clamscan --recursive --infected --no-summary -- "$extract_root" >/dev/null || gp_die 'ClamAV hat das vollstaendige Paket abgelehnt.'
 gp_apply_app_permissions "$extract_root" "$GP_DEFAULT_SERVICE_GROUP"
-NODE_PATH="$app_dir/node_modules" "$node" "$extract_root/server-tools/linux/postgresql/preflight-install.js" check >"$work_root/postgresql-preflight.json" \
+root_node "$transition_helper" dependencies "$app_dir" "$extract_root" >"$work_root/dependency-continuity.json" \
+  || gp_die 'Die alte privilegierte Abhaengigkeitskette ist nicht vollstaendig root-geschuetzt und unveraendert gebunden.'
+cp -R --no-preserve=ownership --no-dereference -- "$app_dir/node_modules" "$extract_root/node_modules" \
+  || gp_die 'Die qualifizierte Alt-Closure konnte nicht in frische lokale Kandidatdateien uebernommen werden.'
+gp_apply_app_permissions "$extract_root" "$GP_DEFAULT_SERVICE_GROUP"
+root_node "$transition_helper" dependencies "$app_dir" "$extract_root" >"$work_root/dependency-continuity-local.json" \
+  || gp_die 'Die lokale Root-Closure weicht von der qualifizierten Alt-Closure ab.'
+gp_verify_sealed_zip "$staged_package" "$extract_root" 1 || gp_die 'Die lokal ergaenzten Abhaengigkeiten haben Originalpaketbytes veraendert.'
+root_node "$extract_root/server-tools/linux/postgresql/preflight-install.js" check >"$work_root/postgresql-preflight.json" \
   || gp_die 'Der geschuetzte PostgreSQL-Paar-, Rollen- und Clusterbezug wurde nicht read-only bestaetigt.'
 
 render_bootstrap() {
@@ -279,23 +318,23 @@ cmp --silent -- "$BOOTSTRAP_COMMAND" "$work_root/bootstrap-old" || gp_die 'Der i
 gp_acquire_maintenance_lock
 [[ "$(gp_sha256 "$ENV_FILE")" == "$env_sha256_before" ]] || gp_die 'Die Konfiguration wurde waehrend des Vorabchecks veraendert.'
 gp_url_reports_ready "$internal_ready_url" 8 && gp_url_reports_ready "$public_ready_url" 15 || gp_die 'Die alte App ist unter der Wartungssperre nicht bereit.'
-"$node" "$transition_helper" verify "$app_dir" "$extract_root" >/dev/null || gp_die 'Der alte/neue Core-Vertrag hat sich veraendert.'
-"$node" "$module_helper" verify "$OFFSITE_MODULE" "$extract_root/server-tools/linux/offsite" "$OFFSITE_RECEIPT" >"$work_root/offsite-delta.json" \
+root_node "$transition_helper" verify "$app_dir" "$extract_root" >/dev/null || gp_die 'Der alte/neue Core-Vertrag hat sich veraendert.'
+root_node "$module_helper" verify "$OFFSITE_MODULE" "$extract_root/server-tools/linux/offsite" "$OFFSITE_RECEIPT" >"$work_root/offsite-delta.json" \
   || gp_die 'Die exakte und providergebundene Offsite12-zu-13-Kontinuitaet ist nicht bestaetigt.'
 assert_provider_binding || gp_die 'Die bestehende externe Repository-/Providerbindung ist ungueltig.'
 [[ "$(stat --format='%d' "$work_root")" == "$(stat --format='%d' "$(dirname -- "$OFFSITE_MODULE")")" ]] \
   || gp_die 'Der atomare Modultausch verlangt dasselbe Dateisystem.'
 install -m 0600 -o root -g root -- "$OFFSITE_RECEIPT" "$rollback_root/installed-contract12.json"
 install -m 0750 -o root -g root -- "$BOOTSTRAP_COMMAND" "$rollback_root/bootstrap-admin"
-"$node" "$extract_root/server-tools/linux/offsite/lib/offsite-contract.js" contract "$extract_root/server-tools/linux/offsite" >"$work_root/offsite13.json"
-"$node" "$module_helper" bind "$OFFSITE_RECEIPT" "$work_root/offsite13.json" "$rollback_root/offsite13-bound.json" \
+root_node "$extract_root/server-tools/linux/offsite/lib/offsite-contract.js" contract "$extract_root/server-tools/linux/offsite" >"$work_root/offsite13.json"
+root_node "$module_helper" bind "$OFFSITE_RECEIPT" "$work_root/offsite13.json" "$rollback_root/offsite13-bound.json" \
   || gp_die 'Die unveraenderte Providerbindung konnte nicht fuer Modul13 vorbereitet werden.'
 cp --archive -- "$extract_root/server-tools/linux/offsite" "$work_root/module13"
 chown -R root:root -- "$work_root/module13"
 find "$work_root/module13" -type d -exec chmod 0755 -- {} +
 find "$work_root/module13" -type f -name '*.sh' -exec chmod 0755 -- {} +
 find "$work_root/module13" -type f ! -name '*.sh' -exec chmod 0644 -- {} +
-"$node" "$work_root/module13/lib/offsite-contract.js" verify-installed-bound "$work_root/module13" "$rollback_root/offsite13-bound.json" >/dev/null \
+root_node "$work_root/module13/lib/offsite-contract.js" verify-installed-bound "$work_root/module13" "$rollback_root/offsite13-bound.json" >/dev/null \
   || gp_die 'Das vorbereitete externe Modul13 ist nicht vollstaendig verifiziert.'
 for index in "${!offsite_timer_names[@]}"; do
   timer_state="$(systemctl show "${offsite_timer_names[index]}" --property=ActiveState --value)" || gp_die 'Ein Timerzustand konnte vor der Pause nicht ermittelt werden.'
@@ -325,10 +364,10 @@ mv -T -- "$OFFSITE_MODULE" "$rollback_root/module12"
 mv -T -- "$work_root/module13" "$OFFSITE_MODULE"
 module_phase=2
 install_atomic_root_file "$rollback_root/offsite13-bound.json" "$OFFSITE_RECEIPT" 0600
-"$node" "$OFFSITE_MODULE/lib/offsite-contract.js" verify-installed-bound "$OFFSITE_MODULE" "$OFFSITE_RECEIPT" >/dev/null || gp_die 'Das externe Modul13 wurde nicht exakt uebernommen.'
+root_node "$OFFSITE_MODULE/lib/offsite-contract.js" verify-installed-bound "$OFFSITE_MODULE" "$OFFSITE_RECEIPT" >/dev/null || gp_die 'Das externe Modul13 wurde nicht exakt uebernommen.'
 bootstrap_changed=1
 install_atomic_root_file "$work_root/bootstrap-new" "$BOOTSTRAP_COMMAND" 0750
-"$node" "$transition_helper" create "$app_dir" "$extract_root" "$sha256_arg" "$transition_file" || gp_die 'Die Paket-/Konfigurations-/Modulbindung konnte nicht erstellt werden.'
+root_node "$transition_helper" create "$app_dir" "$extract_root" "$sha256_arg" "$transition_file" || gp_die 'Die Paket-/Konfigurations-/Modulbindung konnte nicht erstellt werden.'
 update_args=(--package "$staged_package" --sha256 "$sha256_arg" --env-file "$ENV_FILE"
   --app-dir "$app_dir" --data-dir "$DATA_DIR" --database "$DATA_DIR/data/postgresql-pair.json"
   --backup-dir "$BACKUP_DIR" --public-url "$public_url" --node "$node" --backup-keep 1000
@@ -340,13 +379,13 @@ if bash "$extract_root/server-tools/linux/update-grabenplaner-server.sh" "${upda
 commit_is_valid || gp_die "Der normale App-Updater hat keinen dauerhaften Commit bestaetigt (Exit $updater_status)."
 (( updater_status == 0 )) || gp_die 'Die App ist committed, aber eine nachgelagerte Abschlusspruefung ist fehlgeschlagen.'
 [[ "$(gp_sha256 "$ENV_FILE")" == "$env_sha256_before" ]] || gp_die 'Die geschuetzte Serverumgebung wurde veraendert.'
-"$node" "$app_dir/server-tools/linux/lib/verify-package.js" --runtime-contract "$app_dir" >"$work_root/installed-core6.json"
-"$node" - "$work_root/installed-core6.json" <<'NODE'
+root_node "$app_dir/server-tools/linux/lib/verify-package.js" --runtime-contract "$app_dir" >"$work_root/installed-core6.json"
+root_node - "$work_root/installed-core6.json" <<'NODE'
 const fs=require('node:fs'),v=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
 if(v.deploymentSchemaVersion!==6||v.fingerprint!=='f9c09a999f5d6b30c0df35e714d0a5ddf0ca17880ad9190ff4bc5c068c3d95fc'||v.offsiteModule.moduleVersion!==13)process.exit(1);
 NODE
 cmp --silent -- "$BOOTSTRAP_COMMAND" "$work_root/bootstrap-new" || gp_die 'Das ausgelieferte Bootstrap-CLI ist nicht an Core6 gebunden.'
-"$node" "$OFFSITE_MODULE/lib/offsite-contract.js" verify-installed-bound "$OFFSITE_MODULE" "$OFFSITE_RECEIPT" >/dev/null
+root_node "$OFFSITE_MODULE/lib/offsite-contract.js" verify-installed-bound "$OFFSITE_MODULE" "$OFFSITE_RECEIPT" >/dev/null
 assert_provider_binding || gp_die 'Die externe Repository-/Providerbindung ist nach der Migration nicht bestaetigt.'
 gp_wait_ready "$internal_ready_url" "$health_timeout" && gp_wait_ready "$public_ready_url" "$health_timeout" || gp_die 'Core6/Offsite13 ist nach dem Update nicht bereit.'
 restore_timer_states || gp_die 'Die urspruenglichen Timerzustaende sind nach dem App-Commit nicht vollstaendig bestaetigt; kein Erfolgseintrag.'
@@ -354,7 +393,7 @@ systemctl start --no-block grabenplaner-offsite-assurance@app-updated.service ||
 history_dir="$DATA_DIR/maintenance/history"
 install -d -m 0750 -o root -g "$GP_DEFAULT_SERVICE_GROUP" -- "$history_dir"
 receipt="$history_dir/runtime-v6-$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N').json"
-"$node" - "$receipt" "$old_version" "$candidate_version" "$sha256_arg" "$env_sha256_before" "$updater_commit_marker" <<'NODE'
+root_node - "$receipt" "$old_version" "$candidate_version" "$sha256_arg" "$env_sha256_before" "$updater_commit_marker" <<'NODE'
 const fs=require('node:fs');const [file,fromVersion,toVersion,packageSha256,environmentSha256,commitFile]=process.argv.slice(2);
 const commit=JSON.parse(fs.readFileSync(commitFile,'utf8'));
 fs.writeFileSync(file,JSON.stringify({format:'grabenplaner-runtime-migration',schemaVersion:1,status:'success',completedAt:new Date().toISOString(),deploymentSchema:{from:5,to:6},offsiteModule:{from:12,to:13,providerPreserved:true},providerId:'postgresql',fromVersion,toVersion,packageSha256,environmentSha256,unitsChanged:false,bootstrapCommandUpdated:true,rebootTriggered:false,updateCommittedAt:commit.committedAt})+'\n',{flag:'wx',mode:0o640});

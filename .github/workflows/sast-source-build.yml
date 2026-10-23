@@ -2,15 +2,6 @@ name: SAST original-core source build qualification
 
 on:
   workflow_dispatch:
-  # The experiment does not need a default-branch workflow registration/merge.
-  # Narrow qualification pushes can run the first reviewable candidate as-is.
-  push:
-    branches: [qualification/postgresql-only-20261023]
-    paths:
-      - '.github/workflows/sast-source-build.yml'
-      - 'scripts/security/build_semgrep_source.py'
-      - 'scripts/security/test_semgrep_source_build.py'
-      - 'scripts/security/fixtures/semgrep-1.181.0-*'
 
 permissions:
   contents: read

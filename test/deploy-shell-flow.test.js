@@ -13,7 +13,7 @@ const workflow = source.slice(source.indexOf(entry))
   .replaceAll("/usr/local/sbin/grabenplaner-offsite-pre-update", "$TEST_MODULE_ROOT/grabenplaner-offsite-pre-update.sh")
   .replaceAll("/opt/grabenplaner-offsite/module", "$TEST_MODULE_ROOT");
 
-for (const scenario of ["ordinary", "xoffi", "runtime-v5", "postgresql-repair"]) {
+for (const scenario of ["ordinary", "xoffi", "runtime-v5", "runtime-v6", "postgresql-repair"]) {
   test(`backup source and retention selection: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
     const start = source.indexOf("create_exact_local_backup() {");
     const selection = source.slice(start, source.indexOf('  [[ -x "$backup_script" ]]', start));
@@ -24,6 +24,7 @@ for (const scenario of ["ordinary", "xoffi", "runtime-v5", "postgresql-repair"])
 app_dir=/installed
 extract_root=/verified-candidate
 runtime_v5_transition=${scenario === "runtime-v5" ? "bound-transition" : "''"}
+runtime_v6_transition=${scenario === "runtime-v6" ? "bound-transition" : "''"}
 xoffi_snapshots_migration=${scenario === "xoffi" ? 1 : 0}
 postgresql_backup_repair=${scenario === "postgresql-repair" ? 1 : 0}
 deploy_mode=full
@@ -36,7 +37,7 @@ create_exact_local_backup
     assert.equal(result.status,0,result.stderr);
     const lines=result.stdout.split(/\r?\n/),expected=scenario==="ordinary"?"/installed":"/verified-candidate";
     assert.equal(lines[0],expected);assert.equal(lines[1],expected+"/server-tools/linux/backup-grabenplaner.sh");
-    assert.equal(lines[2],scenario==="runtime-v5"?"--preserve-existing-backups":"");
+    assert.equal(lines[2],["runtime-v5", "runtime-v6"].includes(scenario)?"--preserve-existing-backups":"");
   });
 }
 
@@ -55,6 +56,7 @@ SCRIPT_DIR="$PWD"
 verification_policy=auto
 package_verifier_sha256=${scenario === "default" ? "''" : scenario === "wrong-hash" ? "a".repeat(64) : hash}
 runtime_v5_transition=${scenario === "migration-conflict" ? "conflict" : "''"}
+runtime_v6_transition=''
 gp_die() { exit 42; }
 gp_info() { :; }
 gp_validate_sha256() { [[ "$1" =~ ^[a-f0-9]{64}$ ]]; }
@@ -146,6 +148,10 @@ service=fixture.service
 caddy_service=fixture-caddy.service
 service_group=root
 node=${quote(process.execPath.replaceAll("\\", "/"))}
+# This fixture exercises operating phase ordering. Interpreter isolation is
+# executed separately by runtime-root-environment.test.js.
+root_node() { "$node" "$@"; }
+root_node_with_installed_dependencies() { NODE_PATH="$app_dir/node_modules" "$node" "$@"; }
 health_timeout=1500
 internal_ready_url=http://127.0.0.1/ready
 public_ready_url=https://fixture.invalid/ready
@@ -154,6 +160,7 @@ old_version=0.92.37-beta
 candidate_version=0.92.38-beta
 actual_package_sha256=synthetic
 runtime_v5_transition=""
+runtime_v6_transition=""
 GRABENPLANER_OFFSITE_CONFIGURED=1
 GRABENPLANER_OFFSITE_STATUS_FILE=/var/lib/grabenplaner-offsite/status.json
 deploy_mode=${full ? "full" : "short"}

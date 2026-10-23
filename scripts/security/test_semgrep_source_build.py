@@ -82,6 +82,12 @@ class SourceBuildQualificationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'virtual environment'):
                 replace_venv_core(Path('/unused'), Path('/unused'), None)
 
+    def test_unrelated_virtual_environment_is_never_modified(self):
+        with patch('build_semgrep_source.sys.prefix', '/unrelated'), patch('build_semgrep_source.sys.base_prefix', '/base'):
+            with patch.dict('os.environ', {'RUNNER_TEMP': '/runner-temp'}):
+                with self.assertRaisesRegex(ValueError, 'explicitly prepared'):
+                    replace_venv_core(Path('/unused'), Path('/unused'), None)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -85,6 +85,48 @@ function protectedDigest(file) {
 function protectedBindings() {
   return Object.fromEntries(Object.entries(PROTECTED_FILES).map(([key, file]) => [key, protectedDigest(file)]));
 }
+function canonical(value) {
+  if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
+  if (value && typeof value === "object") return "{" + Object.keys(value).sort().map(key => JSON.stringify(key) + ":" + canonical(value[key])).join(",") + "}";
+  return JSON.stringify(value);
+}
+function dependencyInventory(directory, requireRoot) {
+  const files = [];
+  function visit(file, relative = "") {
+    const info = fs.lstatSync(file);
+    assert.equal(fs.realpathSync(file), path.resolve(file));
+    assert(!info.isSymbolicLink() && (info.isFile() || info.isDirectory()));
+    if (requireRoot) assert(info.uid === 0 && (info.mode & 0o022) === 0);
+    if (info.isDirectory()) {
+      for (const name of fs.readdirSync(file).sort()) visit(path.join(file, name), relative ? relative + "/" + name : name);
+    } else {
+      assert.equal(info.nlink, 1); files.push([relative, hash(fs.readFileSync(file))]);
+    }
+  }
+  visit(directory);
+  assert(files.length > 0);
+  return { sha256: hash(files.map(([name, digest]) => name + "\0" + digest + "\n").join("")), fileCount: files.length };
+}
+function verifyDependencyContinuity(oldRoot, candidateRoot, { requireRoot = process.platform === "linux" } = {}) {
+  for (const root of [oldRoot, candidateRoot]) for (const relative of ["package.json", "pnpm-lock.yaml"]) {
+    const file = path.join(root, relative), info = fs.lstatSync(file);
+    assert(info.isFile() && !info.isSymbolicLink() && info.nlink === 1 && fs.realpathSync(file) === path.resolve(file));
+    if (requireRoot) assert(info.uid === 0 && (info.mode & 0o022) === 0);
+  }
+  const previous = JSON.parse(read(oldRoot, "package.json")), candidate = JSON.parse(read(candidateRoot, "package.json"));
+  assert.deepEqual(read(oldRoot, "pnpm-lock.yaml"), read(candidateRoot, "pnpm-lock.yaml"), "The Core6 bridge requires the exact installed frozen lock bytes");
+  for (const key of ["packageManager", "dependencies", "optionalDependencies", "peerDependencies", "pnpm"]) {
+    assert.equal(canonical(previous[key]), canonical(candidate[key]), "Runtime dependency metadata changed: " + key);
+  }
+  assert.equal(previous.dependencies?.pg, candidate.dependencies?.pg);
+  assert(typeof previous.dependencies?.pg === "string" && previous.packageManager?.startsWith("pnpm@"));
+  const original = dependencyInventory(path.join(oldRoot, "node_modules"), requireRoot);
+  const target = path.join(candidateRoot, "node_modules");
+  const copied = fs.existsSync(target) ? dependencyInventory(target, requireRoot) : null;
+  if (copied) assert.deepEqual(copied, original, "Copied runtime dependencies differ from the qualified installed tree");
+  return { exactLock: true, packageManager: previous.packageManager, lockSha256: hash(read(oldRoot, "pnpm-lock.yaml")),
+    dependencySource: "qualified-root-owned-installed-tree", ...original, copiedTreeVerified: Boolean(copied) };
+}
 function validateInvocation({ transitionFile, marker, script, packageSha256, uid = process.getuid?.() }) {
   assert.equal(uid, 0);
   const parent = path.dirname(marker);
@@ -114,7 +156,7 @@ function validateInvocation({ transitionFile, marker, script, packageSha256, uid
   return value;
 }
 module.exports = { OLD_FILES, NEW_FILES, OLD_FINGERPRINT, NEW_FINGERPRINT, PROTECTED_FILES,
-  validateTransition, validateInvocation, protectedBindings };
+  validateTransition, validateInvocation, protectedBindings, verifyDependencyContinuity };
 if (require.main === module) {
   try {
     const [command, ...args] = process.argv.slice(2);
@@ -122,6 +164,9 @@ if (require.main === module) {
     else if (command === "invocation") {
       const [transitionFile, marker, script, packageSha256] = args;
       console.log(JSON.stringify(validateInvocation({ transitionFile, marker, script, packageSha256 })));
+    } else if (command === "dependencies") {
+      assert.equal(process.getuid?.(), 0);
+      console.log(JSON.stringify(verifyDependencyContinuity(...args)));
     } else if (command === "create") {
       const [oldRoot, candidateRoot, packageSha256, output] = args;
       assert.equal(process.getuid?.(), 0); assert.match(packageSha256, /^[a-f0-9]{64}$/);

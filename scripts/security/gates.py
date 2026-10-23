@@ -176,6 +176,11 @@ class Gate:
 
     def sast(self):
         started=time.monotonic()
+        if self.config['semgrep'].get('sourceCoreRequired') is not True:
+            raise ValueError('The reviewed source-core qualification is mandatory')
+        from prepare_source_core import verify_bound_core, select_scanner
+        engine=verify_bound_core(self.root,self.output)
+        scanner=select_scanner(self.args.semgrep,engine.pop('wrapperExecutable'))
         inventory=source_files(self.root)
         entries=[e for e in inventory if PurePosixPath(e['path']).suffix in ('.js','.cjs','.mjs','.ts','.jsx','.tsx')
                  and PurePosixPath(e['path']).parts[0] not in ('test','tests','test-support') and not e['path'].startswith('public/vendor/')]
@@ -190,7 +195,7 @@ class Gate:
         profiles['perRuleTimeoutSeconds']=PROFILE_TIMEOUTS
         profiles['combinedWallClockSeconds']=2400
         write(self.output/'sast-profile-manifest.json',profiles)
-        version=self.command([self.args.semgrep,'--version'],'semgrep-version').stdout.decode().strip()
+        version=self.command([scanner,'--version'],'semgrep-version').stdout.decode().strip()
         if version!=self.config['semgrep']['version']:raise ValueError('Unpinned Semgrep version')
         findings=[];runs=[];incomplete=[]
         for name,targets in partitions.items():
@@ -198,7 +203,7 @@ class Gate:
             result_path=self.output/('sast-'+name+'.json')
             remaining=2400-(time.monotonic()-started)
             if remaining<=0:raise ValueError('Combined SAST wall-clock budget exhausted')
-            run=self.command([self.args.semgrep,'scan','--config',self.output/'sast-profiles'/name/'rules','--json','--output',result_path,'--metrics','off','--disable-version-check','--disable-nosem','--no-git-ignore','--max-target-bytes','0','--timeout',str(PROFILE_TIMEOUTS[name]),'--timeout-threshold','0','--max-memory','4096','--jobs','1','--strict','--error',stage], 'semgrep-'+name,(0,1,2,3),timeout=remaining)
+            run=self.command([scanner,'scan','--config',self.output/'sast-profiles'/name/'rules','--json','--output',result_path,'--metrics','off','--disable-version-check','--disable-nosem','--no-git-ignore','--time','--max-target-bytes','0','--timeout',str(PROFILE_TIMEOUTS[name]),'--timeout-threshold','0','--max-memory','4096','--jobs','1','--strict','--error',stage], 'semgrep-'+name,(0,1,2,3),timeout=remaining)
             result=read(result_path);target_map={e['path']:e for e in targets}
             try:
                 count=check_sast_result(result,target_map,stage)
@@ -221,7 +226,7 @@ class Gate:
         # Review decisions cannot turn an incomplete analysis into a pass.
         if not incomplete:
             disposition=apply_dispositions(read(HERE/'sast-dispositions.json'),findings,self.root)
-        details={'scannedFiles':len(entries),'serverBytes':expected['server.js']['bytes'],'rulesCommit':manifest['commit'],'profileVersion':profiles['profileVersion'],'profiles':runs,'elapsedSeconds':time.monotonic()-started,'findings':findings,**disposition}
+        details={'scannedFiles':len(entries),'serverBytes':expected['server.js']['bytes'],'rulesCommit':manifest['commit'],'profileVersion':profiles['profileVersion'],'engine':engine,'profiles':runs,'elapsedSeconds':time.monotonic()-started,'findings':findings,**disposition}
         write(self.output/'sast-assessment.json',{'complete':not incomplete,**details})
         if incomplete:raise ValueError('Incomplete SAST profiles: '+', '.join(incomplete))
         return details

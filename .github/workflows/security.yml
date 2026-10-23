@@ -89,7 +89,9 @@ jobs:
 
   security-sast:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Cold official-source OCaml builds plus qualification and all five full
+    # profiles. Scanner rule/wall limits and incomplete-analysis failures stay.
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -100,10 +102,24 @@ jobs:
           python-version: '3.12.14'
       - name: Install hash-locked Semgrep and immutable upstream rules
         run: |
-          python -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r scripts/security/requirements.txt
-          python scripts/security/install_tools.py --tool rules --directory "$RUNNER_TEMP/security-tools"
+          python -m venv "$RUNNER_TEMP/semgrep-source-venv"
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r scripts/security/requirements.txt
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" scripts/security/install_tools.py --tool rules --directory "$RUNNER_TEMP/security-tools"
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" scripts/security/install_tools.py --tool syft --directory "$RUNNER_TEMP/security-tools"
+          echo "$RUNNER_TEMP/semgrep-source-venv/bin" >> "$GITHUB_PATH"
       - name: Fail-closed security gate contract tests
         run: python -m unittest discover -s scripts/security -p 'test_*.py' -v
+      - name: Build and qualify the reviewed original upstream core in this private job
+        run: >-
+          python scripts/security/build_semgrep_source.py --root .
+          --tools "$RUNNER_TEMP/security-tools" --work "$RUNNER_TEMP/security-source-core-work"
+          --output "$RUNNER_TEMP/security-source-core-qualification"
+      - name: Bind raw qualification and actual private core before the full scan
+        if: always()
+        run: >-
+          python scripts/security/prepare_source_core.py --root .
+          --qualification "$RUNNER_TEMP/security-source-core-qualification"
+          --output "$RUNNER_TEMP/security-results"
       - name: Run sast gate
         run: python scripts/security/gates.py sast --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
       - name: Verify response rule with actual route and unsafe controls

@@ -454,7 +454,7 @@ gp_apply_app_permissions() {
 # Copy into fresh inodes behind a root-only directory before root executes
 # candidate code. Chown alone cannot revoke a build process's open writer FDs.
 gp_seal_build_tree() {
-  local source="$1" target="$2" group="$3" parent private_root unsafe
+  local source="$1" target="$2" group="$3" parent source_parent private_root unsafe
   [[ -d "$source" && ! -L "$source" && ! -e "$target" && ! -L "$target" ]] || return 1
   parent="$(dirname -- "$target")"
   [[ "$(realpath --canonicalize-existing -- "$parent")" == "$parent" \
@@ -462,10 +462,70 @@ gp_seal_build_tree() {
   local parent_mode
   parent_mode="$(stat --format='%a' -- "$parent")"
   (( (8#$parent_mode & 022) == 0 )) || return 1
+  source_parent="$(dirname -- "$source")"
+  [[ "$(realpath --canonicalize-existing -- "$source_parent")" == "$source_parent" \
+    && "$(stat --format='%u' -- "$source_parent")" == 0 ]] || return 1
+  parent_mode="$(stat --format='%a' -- "$source_parent")"
+  (( (8#$parent_mode & 022) == 0 )) || return 1
   private_root="$(mktemp --directory --tmpdir="$parent" .root-seal.XXXXXXXX)" || return 1
   chmod 0700 -- "$private_root" || return 1
   mkdir -m 0700 -- "$private_root/tree" || return 1
-  cp -R --no-preserve=ownership --no-dereference -- "$source/." "$private_root/tree" || return 1
+  # The builder may rename a directory while it is copied. Hold each source
+  # directory descriptor and open every child relative to it, without following
+  # links; a pathname-recursive copy could otherwise read outside that tree.
+  /usr/bin/python3 -I - "$source" "$private_root/tree" <<'PY' || return 1
+import os, stat, sys
+source, target = sys.argv[1:]
+directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+assert os.geteuid() == 0
+def copy_directory(source_fd, target_fd, depth=0):
+    assert depth < 128
+    for name in sorted(os.listdir(source_fd)):
+        assert name not in ('.', '..') and '/' not in name and '\0' not in name
+        before = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
+        if stat.S_ISDIR(before.st_mode):
+            child = os.open(name, directory_flags, dir_fd=source_fd)
+            try:
+                opened = os.fstat(child)
+                assert (before.st_dev, before.st_ino) == (opened.st_dev, opened.st_ino)
+                os.mkdir(name, 0o700, dir_fd=target_fd)
+                destination = os.open(name, directory_flags, dir_fd=target_fd)
+                try:
+                    copy_directory(child, destination, depth + 1)
+                finally:
+                    os.close(destination)
+            finally:
+                os.close(child)
+        else:
+            assert stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+            descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=source_fd)
+            try:
+                opened = os.fstat(descriptor)
+                assert stat.S_ISREG(opened.st_mode) and opened.st_nlink == 1
+                assert (before.st_dev, before.st_ino) == (opened.st_dev, opened.st_ino)
+                output = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                 0o700 if opened.st_mode & 0o111 else 0o600, dir_fd=target_fd)
+                try:
+                    while chunk := os.read(descriptor, 1024 * 1024):
+                        view = memoryview(chunk)
+                        while view:
+                            count = os.write(output, view)
+                            assert count > 0
+                            view = view[count:]
+                finally:
+                    os.close(output)
+            finally:
+                os.close(descriptor)
+source_fd = os.open(source, directory_flags)
+try:
+    target_fd = os.open(target, directory_flags)
+    try:
+        copy_directory(source_fd, target_fd)
+    finally:
+        os.close(target_fd)
+finally:
+    os.close(source_fd)
+PY
   unsafe="$(find "$private_root/tree" ! -type f ! -type d -print -quit)" || return 1
   [[ -z "$unsafe" ]] || return 1
   unsafe="$(find "$private_root/tree" -type f ! -links 1 -print -quit)" || return 1
@@ -475,4 +535,126 @@ gp_seal_build_tree() {
   gp_apply_app_permissions "$private_root/tree" "$group" || return 1
   mv -T -- "$private_root/tree" "$target" || return 1
   rmdir -- "$private_root" || return 1
+}
+
+# This independent verifier reads the original, root-owned SHA-pinned ZIP.
+# Neither a build-modified manifest nor candidate JavaScript is a trust anchor.
+gp_verify_sealed_zip() {
+  local package="$1" sealed="$2" dependencies="${3:-0}"
+  /usr/bin/python3 -I - "$package" "$sealed" "$dependencies" <<'PY'
+import os, stat, sys, zipfile
+from pathlib import Path
+package, root, dependencies = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+assert os.geteuid() == 0 and dependencies in ('0', '1')
+assert package.is_absolute() and root.is_absolute()
+assert package.resolve() == package and root.resolve() == root
+info = package.lstat()
+assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == 0 and info.st_mode & 0o022 == 0
+expected = set()
+with zipfile.ZipFile(package) as archive:
+    for entry in archive.infolist():
+        name = entry.filename.removeprefix('./').rstrip('/')
+        assert name and '\\' not in name and not name.startswith('/') and all(ord(c) >= 32 and ord(c) != 127 for c in name)
+        parts = name.split('/')
+        assert all(part and part not in ('.', '..') for part in parts)
+        if entry.is_dir():
+            continue
+        assert name not in expected and not (dependencies == '1' and parts[0] == 'node_modules')
+        expected.add(name)
+        target = root.joinpath(*parts)
+        info = target.lstat()
+        assert target.resolve() == target and stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == 0 and info.st_mode & 0o022 == 0
+        assert info.st_size == entry.file_size
+        descriptor = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(descriptor, 'rb') as current, archive.open(entry) as original:
+            while True:
+                before, after = original.read(1024 * 1024), current.read(1024 * 1024)
+                assert before == after
+                if not before:
+                    break
+actual = set()
+for directory, folders, files in os.walk(root, followlinks=False):
+    for name in folders + files:
+        target = Path(directory) / name
+        info = target.lstat()
+        assert target.resolve() == target and not stat.S_ISLNK(info.st_mode) and info.st_uid == 0 and info.st_mode & 0o022 == 0
+    if dependencies == '1' and Path(directory) == root and 'node_modules' in folders:
+        folders.remove('node_modules')
+    for name in files:
+        target = Path(directory) / name
+        assert stat.S_ISREG(target.lstat().st_mode)
+        actual.add(target.relative_to(root).as_posix())
+assert actual == expected
+PY
+}
+
+gp_assert_root_node() {
+  # No candidate runtime code may execute to establish this boundary. Require
+  # the native Linux executable; script wrappers could load writable siblings.
+  /usr/bin/python3 -I - "$1" <<'PY'
+import os, stat, sys
+from pathlib import Path
+file = Path(sys.argv[1]).resolve(strict=True)
+assert os.geteuid() == 0 and file.is_absolute()
+info = file.lstat()
+assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_mode & 0o111
+for item in (file, *file.parents):
+    info = item.lstat()
+    assert info.st_uid == 0 and not stat.S_ISLNK(info.st_mode) and info.st_mode & 0o022 == 0
+with file.open('rb') as stream:
+    assert stream.read(4) == b'\x7fELF'
+print(file)
+PY
+}
+
+gp_assert_root_package_manager() {
+  # Both supported distributions bundle their implementation. An entry file
+  # alone is insufficient: a writable dist/ sibling would execute as root.
+  /usr/bin/python3 -I - "$1" "${2:-}" <<'PY'
+import json, os, stat, sys
+from pathlib import Path
+file = Path(sys.argv[1]).resolve(strict=True)
+assert os.geteuid() == 0 and file.is_absolute()
+kind = 'corepack' if sys.argv[2] == 'pnpm' else 'pnpm'
+assert sys.argv[2] in ('', 'pnpm')
+package = next((p for p in file.parents if (p / 'package.json').is_file()), None)
+assert package is not None
+metadata = json.loads((package / 'package.json').read_text())
+assert metadata['name'] == kind
+assert kind != 'pnpm' or metadata['version'] == '11.7.0'
+assert not any(metadata.get(key) for key in ('dependencies', 'optionalDependencies', 'peerDependencies'))
+entry = metadata['bin'][kind]
+assert (package / entry).resolve(strict=True) == file and file.suffix in ('.js', '.mjs', '.cjs')
+count = 0
+for item in (*package.parents, package):
+    info = item.lstat()
+    assert stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and info.st_mode & 0o022 == 0
+for directory, folders, files in os.walk(package, followlinks=False):
+    for name in (*folders, *files):
+        item = Path(directory) / name
+        info = item.lstat()
+        assert info.st_uid == 0 and info.st_mode & 0o022 == 0
+        assert stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+        count += 1
+        assert count <= 100000
+print(file)
+PY
+}
+
+gp_prepare_root_pg_dependencies() {
+  local helper="${BASH_SOURCE[0]%/*}/root-postgresql-dependencies.sh"
+  # Check before executing the helper; the build account must not supply the
+  # verifier itself through a writable source tree or an extra hard link.
+  /usr/bin/python3 -I - "$helper" <<'PY' || return 1
+import os, stat, sys
+from pathlib import Path
+file = Path(sys.argv[1])
+assert os.geteuid() == 0 and file.is_absolute() and file.resolve() == file
+info = file.lstat()
+assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+for item in (file, *file.parents):
+    info = item.lstat()
+    assert info.st_uid == 0 and not stat.S_ISLNK(info.st_mode) and info.st_mode & 0o022 == 0
+PY
+  /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 /usr/bin/bash -- "$helper" "$@"
 }

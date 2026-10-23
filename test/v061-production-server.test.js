@@ -59,7 +59,7 @@ test("v0.61: produktive Serverkonfiguration ist strikt und testbare Sondermodi b
     [{ forcePortal: "1" }, /FORCE_PORTAL/i],
     [{ allowUnscannedAmu: "1" }, /Ungeprüfte AUM-Uploads/i],
     [{ testAmuScanner: "clean" }, /AUM-Testscanner/i],
-    [{ databasePath: ":memory:" }, /DB_PATH.*lokale absolute SQLite-Datei/i],
+    [{ databasePath: ":memory:" }, /DB_PATH.*lokalen absoluten PostgreSQL-Paarbezug/i],
     [{ databasePath: "\\\\server\\share\\dienstplan.db" }, /DB_PATH.*Netzwerkpfade/i],
     [{ dataRoot: "\\\\server\\share\\grabenplaner" }, /DATA_DIR.*Netzwerkpfade/i],
   ];

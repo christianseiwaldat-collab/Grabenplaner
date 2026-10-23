@@ -39,9 +39,16 @@ jobs:
           test/portal-foundation-legacy-migration.test.js
           test/runtime-v6-transition.test.js
           test/runtime-v6-timer-fencing.test.js
+          test/preflight-root-environment.test.js
+          test/runtime-root-environment.test.js
+          test/postgresql-operations-pure-preflight.test.js
           test/database-lock.test.js
       - name: Verify application and root maintenance lock transitions
         run: sudo "$(command -v node)" --test --test-name-pattern='root maintenance' test/database-lock.test.js
+      - name: Verify original package binding and the root build-account boundary
+        run: sudo "$(command -v node)" --test test/linux-build-tree-seal.test.js
+      - name: Verify migration backups preserve existing points under the actual kernel lease
+        run: sudo "$(command -v node)" --test test/postgresql-backup-preserve-shell.test.js
 
   postgresql-provider-development-contract:
     runs-on: ubuntu-latest

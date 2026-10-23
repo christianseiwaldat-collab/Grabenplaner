@@ -82,7 +82,7 @@ test("Linux install templates have valid shell syntax and pair gates precede per
   for (const file of [installer, path.join(root, "server-tools/linux/grabenplaner-bootstrap-admin.sh.in")]) {
     const result = spawnSync("bash", ["-n", file], { encoding: "utf8" }); assert.equal(result.status, 0, result.stderr);
   }
-  const source = fs.readFileSync(installer, "utf8"), structure = source.indexOf('"$SCRIPT_DIR/postgresql/preflight-install.js" documents'), create = source.indexOf('install -d -o root -g root -m 0755 "$APP_PARENT"', structure),
+  const source = fs.readFileSync(installer, "utf8"), structure = source.indexOf('"$STAGE_ROOT/source/server-tools/linux/postgresql/preflight-install.js" documents'), create = source.indexOf('getent group "$SERVICE_GROUP"', structure),
     live = source.indexOf('"$STAGE_ROOT/source/server-tools/linux/postgresql/preflight-install.js" check'), swap = source.indexOf('mv -- "$STAGE_ROOT/source" "$APP_ROOT"');
   assert.ok(structure > 0 && create > structure && live > create && swap > live);
   assert.doesNotMatch(source, /node:sqlite|new DatabaseSync/);

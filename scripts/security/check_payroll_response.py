@@ -20,6 +20,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     root = args.root.resolve()
+    from prepare_source_core import verify_bound_core
+    scanner = verify_bound_core(root, args.output.resolve())['wrapperExecutable']
     source = (root / "server.js").read_bytes()
     text = source.decode("utf-8").replace("\r\n", "\n")
     start = 'app.post("/api/integrations/payroll-export/file", async (request, response) => {'
@@ -59,8 +61,8 @@ def main():
         rules = scratch / "response.yaml"
         rules.write_bytes(rule)
         result_path = scratch / "result.json"
-        command = ["semgrep", "scan", "--config", str(rules), "--json", "--output", str(result_path),
-                   "--metrics", "off", "--disable-version-check", "--disable-nosem", "--no-git-ignore",
+        command = [scanner, "scan", "--config", str(rules), "--json", "--output", str(result_path),
+                   "--metrics", "off", "--disable-version-check", "--disable-nosem", "--no-git-ignore", "--time",
                    "--max-target-bytes", "0", "--timeout", "30", "--timeout-threshold", "0",
                    "--jobs", "1", "--strict", "--error", str(targets)]
         completed = subprocess.run(command, capture_output=True, timeout=120, check=False)

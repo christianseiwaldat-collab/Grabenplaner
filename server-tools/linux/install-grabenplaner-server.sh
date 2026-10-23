@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 IFS=$'\n\t'
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+# Apply in this shell before the first interpreter call, including child tools.
+unset NODE_OPTIONS NODE_PATH BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SERVICE_USER="grabenplaner"
@@ -283,16 +287,21 @@ validate_secret_bytes() {
   [[ "$decoded_bytes" -eq "$expected_bytes" ]] || fail "$key hat nicht die erforderliche Laenge."
 }
 
+root_node() {
+  /usr/bin/env -i PATH="$(dirname -- "$NODE_EXECUTABLE"):/usr/sbin:/usr/bin:/sbin:/bin" \
+    HOME=/root LANG=C.UTF-8 NODE_ENV=production "$NODE_EXECUTABLE" --no-global-search-paths "$@"
+}
+
 validate_node_version() {
   local version major minor patch architecture
-  version="$($NODE_EXECUTABLE --version)"
+  version="$(root_node --version)"
   version="${version#v}"
   IFS=. read -r major minor patch <<<"$version"
   [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]] || fail "Node.js meldet eine ungueltige Version."
   if (( major < 22 || (major == 22 && minor < 13) )); then
     fail "Node.js >=22.13.0 ist erforderlich; gefunden wurde $version."
   fi
-  architecture="$($NODE_EXECUTABLE -p 'process.arch')"
+  architecture="$(root_node -p 'process.arch')"
   [[ "$architecture" == "x64" ]] || fail "Die Node.js-Runtime muss fuer x64 gebaut sein; gefunden wurde $architecture."
 }
 
@@ -305,7 +314,7 @@ resolve_pnpm() {
   else
     fail "pnpm $EXPECTED_PNPM_VERSION oder Corepack ist erforderlich."
   fi
-  version="$(run_as_build_user "$STAGE_ROOT/source" env \
+  version="$(run_as_build_user "$STAGE_ROOT/source" env -i \
     HOME="$CACHE_ROOT" XDG_CACHE_HOME="$CACHE_ROOT" PNPM_HOME="$CACHE_ROOT/pnpm" COREPACK_HOME="$CACHE_ROOT/corepack" \
     PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     "${PNPM_COMMAND[@]}" --version)"
@@ -325,7 +334,7 @@ validate_os() {
 }
 
 validate_public_url() {
-  PUBLIC_HOST="$($NODE_EXECUTABLE - "$PUBLIC_URL" <<'NODE'
+  PUBLIC_HOST="$(root_node - "$PUBLIC_URL" <<'NODE'
 const value = process.argv[2];
 let url;
 try { url = new URL(value); } catch { process.exit(1); }
@@ -373,7 +382,7 @@ validate_zip_entries() {
 }
 
 validate_manifest() {
-  APP_VERSION="$($NODE_EXECUTABLE - "$STAGE_ROOT/source" <<'NODE'
+  APP_VERSION="$(root_node - "$STAGE_ROOT/source" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -572,6 +581,7 @@ for (const required of [
   "server-tools/linux/migrate-grabenplaner-runtime-v6.sh",
   "server-tools/linux/lib/runtime-v6-transition.js",
   "server-tools/linux/lib/offsite-postgresql-only-compat.js",
+  "server-tools/linux/lib/root-postgresql-dependencies.sh",
   "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
   "server-tools/linux/preflight-grabenplaner-deploy.sh",
   "server-tools/linux/lib/postgresql-backup-repair-compat.js",
@@ -722,7 +732,7 @@ NODE
 }
 
 validate_installed_dependencies() {
-  run_as_build_user "$STAGE_ROOT/source" env NODE_ENV=production HOME="$CACHE_ROOT" "$NODE_EXECUTABLE" - "$STAGE_ROOT/source" <<'NODE' >/dev/null
+  run_as_build_user "$STAGE_ROOT/source" env -i PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/bin:/usr/bin:/bin" NODE_ENV=production HOME="$CACHE_ROOT" "$NODE_EXECUTABLE" - "$STAGE_ROOT/source" <<'NODE' >/dev/null
 const path = require("node:path");
 const root = process.argv[2];
 const metadata = require(path.join(root, "package.json"));
@@ -778,6 +788,24 @@ while (($#)); do
 done
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || fail "Der Installer muss mit sudo ausgefuehrt werden."
+# The authorized installer/common entrypoints must be in a root-controlled
+# directory. An unprivileged build can modify neither the verifier nor its
+# interpreter before any package-controlled code is considered.
+/usr/bin/python3 -I - "${BASH_SOURCE[0]}" "$SCRIPT_DIR/lib/common.sh" <<'PY'
+import os, stat, sys
+from pathlib import Path
+for value in sys.argv[1:]:
+    file = Path(value).absolute()
+    assert file.resolve() == file
+    info = file.lstat()
+    assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+    for item in (file, *file.parents):
+        info = item.lstat()
+        assert info.st_uid == 0 and not stat.S_ISLNK(info.st_mode) and info.st_mode & 0o022 == 0
+PY
+# shellcheck source=server-tools/linux/lib/common.sh
+source "$SCRIPT_DIR/lib/common.sh"
+
 [[ -n "$PACKAGE_PATH" && -f "$PACKAGE_PATH" ]] || fail "Ein lokales Server-ZIP muss mit --package angegeben werden."
 [[ -n "$PUBLIC_URL" ]] || fail "--public-url fehlt."
 [[ -z "$EXPECTED_SHA256" || -z "$SHA256_FILE" ]] || fail "Nur --sha256 oder --sha256-file verwenden."
@@ -800,17 +828,11 @@ if [[ -z "$NODE_EXECUTABLE" ]]; then
   NODE_EXECUTABLE="$(command -v node)"
 fi
 NODE_EXECUTABLE="$(readlink -f -- "$NODE_EXECUTABLE")"
-[[ -x "$NODE_EXECUTABLE" ]] || fail "Das Node.js-Binary ist nicht ausfuehrbar."
+NODE_EXECUTABLE="$(gp_assert_root_node "$NODE_EXECUTABLE")" \
+  || fail "Vor dem ersten Node-Aufruf ist ein root-geschuetztes natives Linux-Binary erforderlich."
 validate_node_version
 CLAMSCAN_EXECUTABLE="$(readlink -f -- "$(command -v clamscan)")"
 validate_public_url
-
-# Validate the pre-provisioned pair before creating users/directories or stopping
-# services. A PostgreSQL-only package must never bootstrap a SQLite installation.
-[[ -f "$SCRIPT_DIR/postgresql/preflight-install.js" && ! -L "$SCRIPT_DIR/postgresql/preflight-install.js" ]] \
-  || fail "Die PostgreSQL-Installationspruefung fehlt."
-"$NODE_EXECUTABLE" "$SCRIPT_DIR/postgresql/preflight-install.js" documents >/dev/null \
-  || fail "Vor der Installation ist ein geprueftes PostgreSQL-Paar samt geschuetzter Konfiguration, Datenanker und Schluesseln vorzubereiten. SQLite wird nicht angelegt oder automatisch migriert."
 
 install -d -o root -g root -m 0755 "$APP_PARENT"
 STAGE_ROOT="$(mktemp -d "$APP_PARENT/.install.XXXXXX")"
@@ -822,14 +844,30 @@ ACTUAL_SHA256="$(sha256sum -- "$PACKAGE_PATH" | awk '{ print $1 }')"
 [[ "${ACTUAL_SHA256,,}" == "${EXPECTED_SHA256,,}" ]] || fail "Die SHA256-Pruefsumme des Serverpakets stimmt nicht."
 validate_zip_entries
 
-[[ -f "$SCRIPT_DIR/grabenplaner.service.in" && -f "$SCRIPT_DIR/grabenplaner-bootstrap.service.in" \
-  && -f "$SCRIPT_DIR/grabenplaner-monitor.service.in" && -f "$SCRIPT_DIR/grabenplaner-monitor.timer.in" \
-  && -f "$SCRIPT_DIR/Caddyfile.in" && -f "$SCRIPT_DIR/grabenplaner.env.example" \
-  && -f "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" \
-  && -f "$SCRIPT_DIR/host-control/lib/host-reboot-broker.js" \
-  && -f "$SCRIPT_DIR/host-control/systemd/grabenplaner-host-control.socket.in" \
-  && -f "$SCRIPT_DIR/host-control/systemd/grabenplaner-host-control@.service.in" \
-  && -f "$SCRIPT_DIR/host-control/systemd/grabenplaner-host-reboot.service.in" ]] \
+# Extract data as root into the private staging area, then independently bind
+# every source byte to the SHA-pinned original ZIP before executing any package
+# JS. This includes documents and every transitive preflight import.
+install -d -o root -g root -m 0700 "$STAGE_ROOT/source-extracted-untrusted"
+unzip -q "$STAGE_ROOT/package.zip" -d "$STAGE_ROOT/source-extracted-untrusted"
+gp_seal_build_tree "$STAGE_ROOT/source-extracted-untrusted" "$STAGE_ROOT/source" root \
+  || fail "Der entpackte Quellbaum konnte nicht mit frischen Root-Dateien versiegelt werden."
+gp_verify_sealed_zip "$STAGE_ROOT/package.zip" "$STAGE_ROOT/source" 0 \
+  || fail "Der entpackte Quellbaum weicht von den urspruenglichen ZIP-Bytes ab."
+[[ "$(du -sb "$STAGE_ROOT/source" | awk '{ print $1 }')" -le "$MAX_EXTRACTED_BYTES" ]] || fail "Das entpackte Serverpaket ist groesser als 4 GiB."
+[[ -f "$STAGE_ROOT/source/$MANIFEST_NAME" ]] || fail "Das Serverpaket-Manifest fehlt in der Archivwurzel."
+validate_manifest
+normalize_verified_archive_modes "$STAGE_ROOT/source"
+root_node "$STAGE_ROOT/source/server-tools/linux/postgresql/preflight-install.js" documents >/dev/null \
+  || fail "Vor der Installation ist ein geprueftes PostgreSQL-Paar samt geschuetzter Konfiguration, Datenanker und Schluesseln vorzubereiten. SQLite wird nicht angelegt oder automatisch migriert."
+
+[[ -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner.service.in" && -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner-bootstrap.service.in" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner-monitor.service.in" && -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner-monitor.timer.in" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/Caddyfile.in" && -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner.env.example" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner-bootstrap-admin.sh.in" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/host-control/lib/host-reboot-broker.js" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/host-control/systemd/grabenplaner-host-control.socket.in" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/host-control/systemd/grabenplaner-host-control@.service.in" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/host-control/systemd/grabenplaner-host-reboot.service.in" ]] \
   || fail "Die Linux-Laufzeitvorlagen sind unvollstaendig."
 if [[ -s "$CADDY_CONFIG" ]] && ! caddy_config_is_managed; then
   [[ $REPLACE_CADDY_CONFIG -eq 1 ]] || fail "Die vorhandene Caddy-Konfiguration wird nicht von Grabenplaner verwaltet. Fuer einen dedizierten Server ist --replace-caddy-config erforderlich."
@@ -928,18 +966,12 @@ chown root:"$BUILD_GROUP" "$STAGE_ROOT"
 chmod 0750 "$STAGE_ROOT"
 chown root:"$BUILD_GROUP" "$STAGE_ROOT/package.zip"
 chmod 0640 "$STAGE_ROOT/package.zip"
-install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0750 "$STAGE_ROOT/source"
 install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0700 "$STAGE_ROOT/pnpm-store"
-run_as_build_user "$STAGE_ROOT/source" unzip -q "$STAGE_ROOT/package.zip" -d "$STAGE_ROOT/source"
-[[ -z "$(find "$STAGE_ROOT/source" ! -type f ! -type d -print -quit)" ]] || fail "Links und Spezialdateien sind im Quellpaket nicht erlaubt."
-[[ "$(du -sb "$STAGE_ROOT/source" | awk '{ print $1 }')" -le "$MAX_EXTRACTED_BYTES" ]] || fail "Das entpackte Serverpaket ist groesser als 4 GiB."
-[[ -f "$STAGE_ROOT/source/$MANIFEST_NAME" ]] || fail "Das Serverpaket-Manifest fehlt in der Archivwurzel."
-validate_manifest
-normalize_verified_archive_modes "$STAGE_ROOT/source"
+chown -R root:"$BUILD_GROUP" "$STAGE_ROOT/source"
 resolve_pnpm
 
 chown -R "$BUILD_USER:$BUILD_GROUP" "$STAGE_ROOT/source"
-run_as_build_user "$STAGE_ROOT/source" env \
+run_as_build_user "$STAGE_ROOT/source" env -i \
   HOME="$CACHE_ROOT" XDG_CACHE_HOME="$CACHE_ROOT" PNPM_HOME="$CACHE_ROOT/pnpm" COREPACK_HOME="$CACHE_ROOT/corepack" \
   PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
   NODE_ENV=production "${PNPM_COMMAND[@]}" install --prod --frozen-lockfile --config.node-linker=hoisted \
@@ -965,17 +997,21 @@ function walk(directory) {
 walk(root);
 NODE
 
-chown -hR root:"$SERVICE_GROUP" "$STAGE_ROOT/source"
-chmod -R o-rwx "$STAGE_ROOT/source"
-find "$STAGE_ROOT/source" -type d -exec chmod 0750 {} +
-find "$STAGE_ROOT/source" -type f -perm /111 -exec chmod 0750 {} +
-find "$STAGE_ROOT/source" -type f ! -perm /111 -exec chmod 0640 {} +
+# A retained build-user writer FD can survive chown. Move the entire untrusted
+# tree aside and copy fresh root inodes before checking the original ZIP again.
+mv -- "$STAGE_ROOT/source" "$STAGE_ROOT/source-built-untrusted"
+gp_seal_build_tree "$STAGE_ROOT/source-built-untrusted" "$STAGE_ROOT/source" "$SERVICE_GROUP" \
+  || fail "Der fertige Buildbaum konnte nicht mit frischen Root-Dateien versiegelt werden."
+gp_verify_sealed_zip "$STAGE_ROOT/package.zip" "$STAGE_ROOT/source" 1 \
+  || fail "Der Build hat urspruengliche Paketdateien oder das Manifest veraendert."
+gp_prepare_root_pg_dependencies "$STAGE_ROOT/package.zip" "$STAGE_ROOT/source" "$NODE_EXECUTABLE" "${PNPM_COMMAND[@]}" \
+  || fail "Die privilegierte PostgreSQL-Abhaengigkeitskette konnte nicht unabhaengig aufgebaut werden."
 [[ -x "$STAGE_ROOT/source/server-tools/linux/monitor/run-grabenplaner-monitor.sh" ]] \
   || fail "Das freigegebene Monitorwerkzeug ist nach der Berechtigungssetzung nicht ausfuehrbar."
 
 # All four application/reader logins and both environment bindings are checked
 # with read-only transactions, after package ownership is locked and before swap.
-"$NODE_EXECUTABLE" "$STAGE_ROOT/source/server-tools/linux/postgresql/preflight-install.js" check >/dev/null \
+root_node "$STAGE_ROOT/source/server-tools/linux/postgresql/preflight-install.js" check >/dev/null \
   || fail "Das vorbereitete PostgreSQL-Paar ist nicht vollstaendig erreichbar oder passt nicht zur Installation."
 
 systemctl disable --now grabenplaner-monitor.timer grabenplaner-monitor.service >/dev/null 2>&1 || true
@@ -995,26 +1031,26 @@ HOST_CONTROL_MODULE_WRITTEN=1
 [[ -f "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" && ! -L "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" \
   && "$(stat -c '%U:%G:%a:%h' -- "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js")" == "root:root:644:1" ]] \
   || fail "Der root-geschuetzte Host-Control-Broker wurde nicht sicher installiert."
-"$NODE_EXECUTABLE" "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" --ensure-state-directory \
+root_node "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" --ensure-state-directory \
   || fail "Der Host-Neustartstatus konnte nicht sicher vorbereitet werden."
 
 monitor_status_gid="$(getent group "$MONITOR_STATUS_GROUP" | awk -F: '{print $3}')"
 [[ "$monitor_status_gid" =~ ^[0-9]+$ ]] || fail "Die Monitor-Statusgruppe konnte nicht sicher aufgeloest werden."
 monitor_status_helper="$APP_ROOT/server-tools/linux/monitor/lib/monitor-status.js"
 [[ -f "$monitor_status_helper" && ! -L "$monitor_status_helper" ]] || fail "Der Monitorstatus-Helfer fehlt im installierten Paket."
-"$NODE_EXECUTABLE" "$monitor_status_helper" --status-file "$MONITOR_STATUS_FILE" --status-gid "$monitor_status_gid" initialize >/dev/null
+root_node "$monitor_status_helper" --status-file "$MONITOR_STATUS_FILE" --status-gid "$monitor_status_gid" initialize >/dev/null
 
 UNIT_TEMP="$(mktemp)"
-render_template "$SCRIPT_DIR/grabenplaner.service.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/grabenplaner.service.in" "$UNIT_TEMP"
 APP_UNIT_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$APP_UNIT"
-render_template "$SCRIPT_DIR/grabenplaner-bootstrap.service.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/grabenplaner-bootstrap.service.in" "$UNIT_TEMP"
 BOOTSTRAP_UNIT_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$BOOTSTRAP_UNIT"
-render_template "$SCRIPT_DIR/grabenplaner-monitor.service.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/grabenplaner-monitor.service.in" "$UNIT_TEMP"
 MONITOR_UNIT_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$MONITOR_UNIT"
-render_template "$SCRIPT_DIR/grabenplaner-monitor.timer.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/grabenplaner-monitor.timer.in" "$UNIT_TEMP"
 MONITOR_TIMER_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$MONITOR_TIMER"
 host_control_render_root="$STAGE_ROOT/host-control-units"
@@ -1055,10 +1091,10 @@ install -o root -g root -m 0644 \
 mv -T -- "$HOST_CONTROL_PENDING_UNIT" "$HOST_REBOOT_UNIT"
 HOST_CONTROL_PENDING_UNIT=""
 HOST_REBOOT_UNIT_WRITTEN=1
-render_template "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/grabenplaner-bootstrap-admin.sh.in" "$UNIT_TEMP"
 BOOTSTRAP_COMMAND_WRITTEN=1
 install -o root -g root -m 0750 "$UNIT_TEMP" "$BOOTSTRAP_COMMAND"
-render_template "$SCRIPT_DIR/Caddyfile.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/Caddyfile.in" "$UNIT_TEMP"
 caddy validate --config "$UNIT_TEMP" --adapter caddyfile >/dev/null
 capture_caddy_service_state
 if [[ -s "$CADDY_CONFIG" ]]; then
