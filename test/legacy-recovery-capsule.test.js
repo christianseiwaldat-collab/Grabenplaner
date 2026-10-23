@@ -1,13 +1,25 @@
 "use strict";
 const assert = require("node:assert/strict"), fs = require("node:fs"), path = require("node:path"), os = require("node:os");
 const { spawnSync } = require("node:child_process"), test = require("node:test");
-const { createCapsule, verifyCapsule, hashFile, BASELINE } = require("../scripts/legacy-recovery-capsule");
+const { createCapsule, verifyCapsule, hashFile, BASELINE, assertSeparatedOutput } = require("../scripts/legacy-recovery-capsule");
 const { createLegacyRecoveryFixture, thaw } = require("../test-support/legacy-recovery-fixture");
 const root = path.resolve(__dirname, ".."), cli = path.join(root, "scripts/legacy-recovery-capsule.js");
 test("legacy capsule rejects a mismatched supplied runtime pin before creating any output", () => {
   const output = path.join(os.tmpdir(), "gp-capsule-must-not-exist-" + Date.now());
   assert.throws(() => createCapsule({ repository: root, node: process.execPath, nodeSha256: "0".repeat(64), nodeVersion: process.version, output }), { code: "LEGACY_CAPSULE_RUNTIME_HASH" });
   assert.equal(fs.existsSync(output), false);
+});
+
+test("offline output cannot be placed inside retained stage or capsule, including path-prefix siblings", () => {
+  const base = path.join(os.tmpdir(), "gp-retained-input-path-check");
+  const stage = path.join(base, "stage"), capsule = path.join(base, "capsule");
+  for (const retained of [stage, capsule]) {
+    for (const output of [retained, path.join(retained, "new-output"), path.join(retained, "nested/new-output")]) {
+      assert.throws(() => assertSeparatedOutput(output, stage, capsule), { code: "LEGACY_CAPSULE_OUTPUT_OVERLAPS_RETAINED_INPUT" });
+    }
+  }
+  assert.doesNotThrow(() => assertSeparatedOutput(path.join(base, "stage-independent"), stage, capsule));
+  assert.doesNotThrow(() => assertSeparatedOutput(path.join(base, "capsule-independent"), stage, capsule));
 });
 test("Linux capsule restores old SQLite to a new isolated workspace and fails closed for tamper, wrong keys and current targets", { skip: process.platform !== "linux", timeout: 600000 }, () => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-legacy-capsule-test-"));
@@ -29,16 +41,12 @@ test("Linux capsule restores old SQLite to a new isolated workspace and fails cl
     const { DatabaseSync } = require("node:sqlite"), db = new DatabaseSync(path.join(target, "restored/data/dienstplan.db"), { readOnly: true });
     try { assert.equal(db.prepare("SELECT value FROM recovery_marker").get().value, "restored-offline"); } finally { db.close(); }
     assert.equal(JSON.parse(fs.readFileSync(path.join(target, "verification.json"))).protectedRecords, 1);
-    // Preserve the exact historical minimal-schema assertions separately from
-    // current PostgreSQL API tests. The archived server needs the unchanged CI
-    // dependency set for this one historical test; those dependencies are not
-    // a capability of the builtins-only offline recovery capsule.
-    assert.equal(hashFile(path.join(root, "pnpm-lock.yaml")), manifest.dependencies.applicationLockSha256);
-    const baselineEnvironment = { PATH: process.env.PATH, LANG: "C.UTF-8", NODE_ENV: "test", NODE_PATH: path.join(root, "node_modules") };
-    const historical = spawnSync(path.join(capsule, manifest.runtime.executable), ["--test", "--test-reporter=tap", "--test-name-pattern=^alte Datenbank wird", path.join(capsule, "source/test/portal-foundation.test.js")], {
-      cwd: path.join(capsule, "source"), env: baselineEnvironment, encoding: "utf8", timeout: 120000 });
-    assert.equal(historical.status, 0, "historical minimal-schema test failed; stderr digest only: " + require("node:crypto").createHash("sha256").update(historical.stderr || "").digest("hex"));
-    assert.match(historical.stdout, /^# pass 1$/m);
+    for (const retained of [built.stage, capsule]) {
+      const nestedTarget = path.join(retained, "forbidden-output"), refused = restore(nestedTarget);
+      assert.equal(refused.status, 1); assert.match(refused.stderr, /LEGACY_CAPSULE_OUTPUT_OVERLAPS_RETAINED_INPUT/);
+      assert.equal(fs.existsSync(nestedTarget), false);
+    }
+    assert.equal(hashFile(built.database), before);
     const sameTarget = restore(target); assert.equal(sameTarget.status, 1); assert.match(sameTarget.stderr, /LEGACY_CAPSULE_NEW_ROOT_REQUIRED/);
     const currentTarget = path.join(temporary, "current-pg"); fs.mkdirSync(currentTarget); fs.writeFileSync(path.join(currentTarget, "postgresql-pair.json"), "protected");
     const blocked = restore(currentTarget); assert.equal(blocked.status, 1); assert.match(blocked.stderr, /LEGACY_CAPSULE_NEW_ROOT_REQUIRED/);

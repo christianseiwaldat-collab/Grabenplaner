@@ -106,7 +106,7 @@ test.after(async () => {
 });
 
 // The former minimal SQLite schema upgrade is checked against immutable
-// b2ba03c source in legacy-recovery-capsule.test.js, not a hidden current driver.
+// b2ba03c source in portal-foundation-legacy-migration.test.js, not a hidden current driver.
 test("PostgreSQL-Portal-Fundament stellt Tabellen, Sicherheitsfelder und Idempotenzindex bereit", () => {
   const tables = new Set(db.prepare("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'gp'").all().map(row => row.name));
   for (const name of ["portal_users", "portal_roles", "portal_sessions", "mobile_sessions", "mobile_refresh_token_history", "vacation_requests", "time_off_requests", "time_off_change_requests", "vacation_change_requests", "request_blackouts", "request_decisions", "approval_delegations", "time_entries", "time_corrections", "audit_log", "portal_permission_grants", "location_branding", "schema_migrations"]) assert.ok(tables.has(name), name);

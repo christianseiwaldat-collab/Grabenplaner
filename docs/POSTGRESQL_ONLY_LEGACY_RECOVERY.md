@@ -110,7 +110,8 @@ node scripts/legacy-recovery-capsule.js restore \
 ```
 
 `--output` muss vollständig neu sein; ein bestehendes Ziel wird auch dann
-abgelehnt, wenn es leer erscheint. Das Werkzeug kopiert den Quellbestand in einen
+abgelehnt, wenn es leer erscheint. Das Ziel darf auch nicht innerhalb der
+aufbewahrten Kapsel oder Quell-Stage liegen. Das Werkzeug kopiert den Quellbestand in einen
 eigenen eingefrorenen Eingabebaum, prüft Marker, SQLite-Integrität, Fremdschlüssel,
 Versionskompatibilität und verschlüsselte Inhalte mit den ursprünglichen Helfern.
 Danach stellt es ausschließlich unter `--output/restored` wieder her. Es startet
@@ -129,7 +130,7 @@ Umschaltung des aktuellen GP auf den alten Bestand.
 `test/legacy-recovery-capsule.test.js` führt unter Linux eine synthetische
 Wiederherstellung einschließlich verschlüsseltem Datensatz aus. Negativfälle
 prüfen manipulierte Quelle, falschen Manifest-/Runtime-Hash, falsche Schlüssel,
-Links und bestehende beziehungsweise PostgreSQL-Ziele. Die unveränderte
+Links, verschachtelte Quell-/Kapselziele und bestehende beziehungsweise PostgreSQL-Ziele. Die unveränderte
 Quellsicherung wird erneut gehasht. `test/postgresql-only-recovery.test.js`
 prüft die Ablehnung alter SQLite-Stages durch die aktuellen Recovery-CLIs und
 das Laden der gemeinsamen PostgreSQL-Prüfungen ohne SQLite-Treiber.

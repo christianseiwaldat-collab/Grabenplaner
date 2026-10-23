@@ -22,7 +22,8 @@ function sourceRoot() {
   fs.mkdirSync(source, { mode: 0o700 });
   try {
     command("git", ["archive", "--format=tar", "--output", archive, BASELINE,
-      "backup.js", "package.json", "lib", "public", "services/planning-optimizer",
+      "backup.js", "server.js", "package.json", "pnpm-lock.yaml", "lib", "public", "services/planning-optimizer",
+      "test/portal-foundation.test.js",
       "scripts/run-background-backup.js", "scripts/manage-local-backup-archive.js", "server-tools"]);
     command("tar", ["-xf", archive, "-C", source]);
     fs.rmSync(archive);

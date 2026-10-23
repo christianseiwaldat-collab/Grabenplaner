@@ -80,10 +80,19 @@ function enablePersonnelLifecycle() {
 }
 
 function createOrganizationFixture() {
-  db.prepare("INSERT OR REPLACE INTO locations (id, name, active) VALUES (?, ?, 1)")
-    .run(LOCATION_A, "M5 API Standort A");
-  db.prepare("INSERT OR REPLACE INTO locations (id, name, active) VALUES (?, ?, 1)")
-    .run(LOCATION_B, "M5 API Standort B");
+  for (const [id, name] of [[LOCATION_A, "M5 API Standort A"], [LOCATION_B, "M5 API Standort B"]]) {
+    const costCenterId = `fixture-location-${id}`;
+    db.prepare(`
+      INSERT INTO cost_centers (id, code, name, type, cost_center_type_id, active)
+      VALUES (?, ?, ?, 'branch', 'branch', 1)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, active = 1
+    `).run(costCenterId, `FIXTURE-${id}`, name);
+    db.prepare(`
+      INSERT INTO locations (id, name, cost_center_id, active) VALUES (?, ?, ?, 1)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name,
+        cost_center_id = excluded.cost_center_id, active = 1
+    `).run(id, name, costCenterId);
+  }
   for (const [locationId, name] of [
     [LOCATION_A, "M5 API Abteilung A"],
     [LOCATION_B, "M5 API Abteilung B"],

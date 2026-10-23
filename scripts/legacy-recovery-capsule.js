@@ -176,6 +176,14 @@ function copyTree(source, target) {
   // inventory rejects links, special files and multiply-linked files before copying.
   inventory(source); fs.cpSync(source, target, { recursive: true, force: false, errorOnExist: true });
 }
+function assertSeparatedOutput(output, ...retainedInputs) {
+  for (const input of retainedInputs) {
+    const relative = path.relative(path.resolve(input), path.resolve(output));
+    if (relative === "" || (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(".." + path.sep))) {
+      fail("LEGACY_CAPSULE_OUTPUT_OVERLAPS_RETAINED_INPUT");
+    }
+  }
+}
 async function restoreCapsule({ capsule, manifestSha256, stage, environment, output }) {
   const manifest = verifyCapsule(capsule, manifestSha256);
   const currentBinary = path.resolve(process.execPath), expectedBinary = path.join(path.resolve(capsule), manifest.runtime.executable);
@@ -185,6 +193,7 @@ async function restoreCapsule({ capsule, manifestSha256, stage, environment, out
   const root = newRoot(output);
   if (!path.isAbsolute(stage) || !path.isAbsolute(environment)) fail("LEGACY_CAPSULE_INPUT_PATH");
   if (fs.realpathSync(stage) !== stage || !fs.lstatSync(stage).isDirectory() || fs.lstatSync(stage).isSymbolicLink()) fail("LEGACY_CAPSULE_INPUT_PATH");
+  assertSeparatedOutput(root, stage, capsule);
   regular(environment); inventory(stage);
   fs.mkdirSync(root, { mode: 0o700 });
   const source = path.join(path.resolve(capsule), "source");
@@ -271,4 +280,4 @@ if (require.main === module) Promise.resolve().then(async () => {
 }).then(result => process.stdout.write(JSON.stringify(result) + "\n"))
   .catch(error => { process.stderr.write(JSON.stringify({ ok: false, code: error.code || "LEGACY_CAPSULE_FAILED",
     ...(error.legacyPhase ? { phase: error.legacyPhase } : {}), ...(error.child ? { child: error.child } : {}) }) + "\n"); process.exitCode = 1; });
-module.exports = { BASELINE, createCapsule, verifyCapsule, restoreCapsule, hashFile, inventory, argumentsFor };
+module.exports = { BASELINE, createCapsule, verifyCapsule, restoreCapsule, hashFile, inventory, argumentsFor, assertSeparatedOutput };

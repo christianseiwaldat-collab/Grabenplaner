@@ -211,9 +211,12 @@ test("v0.79: Kombinierte Abwesenheiten filtern Urlaub und ZA nach wirksamen Lese
     ["mobile-v079-time-read", ["own_time:read"]],
     ["mobile-v079-no-absence-read", []],
   ]) {
-    db.prepare(`INSERT OR REPLACE INTO portal_roles
+    db.prepare(`INSERT INTO portal_roles
       (id, name, description, builtin, permissions, sort_order, updated_at)
-      VALUES (?, ?, '', 0, ?, 199, CURRENT_TIMESTAMP)`)
+      VALUES (?, ?, '', 0, ?, 199, CURRENT_TIMESTAMP)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = '',
+        builtin = 0, permissions = excluded.permissions, sort_order = 199,
+        updated_at = CURRENT_TIMESTAMP`)
       .run(id, id, JSON.stringify(permissions));
   }
   const session = await login(employeeNumber);

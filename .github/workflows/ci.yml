@@ -35,6 +35,7 @@ jobs:
           test/postgresql-only-recovery.test.js
           test/postgresql-only-install-preflight.test.js
           test/legacy-recovery-capsule.test.js
+          test/portal-foundation-legacy-migration.test.js
           test/database-lock.test.js
       - name: Verify application and root maintenance lock transitions
         run: sudo "$(command -v node)" --test --test-name-pattern='root maintenance' test/database-lock.test.js
