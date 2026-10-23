@@ -61,16 +61,31 @@ jobs:
       - name: Seal private scanner evidence
         if: always()
         run: node scripts/security/seal-evidence.cjs "$RUNNER_TEMP/security-results" "$RUNNER_TEMP/security-public/private-evidence.gpe" .github/security-evidence-public-key.pem
-      - name: Preserve sanitized security receipts
+      - name: Verify exact upload set and bind source/run hashes
+        id: prepare-upload
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        run: python scripts/security/prepare_upload.py --gate sca --input "$RUNNER_TEMP/security-results" --public "$RUNNER_TEMP/security-public" --key .github/security-evidence-public-key.pem
+      - name: Preserve sanitized security receipts
+        id: upload
+        if: always() && steps.prepare-upload.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: security-sca-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/security-public/gate-summary.json
             ${{ runner.temp }}/security-public/private-evidence.gpe
+            ${{ runner.temp }}/security-public/upload-manifest.json
           if-no-files-found: error
           retention-days: 14
+          archive: true
+          overwrite: false
+          include-hidden-files: false
+      - name: Require artifact identity and archive digest
+        if: always() && steps.upload.outcome == 'success'
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: python scripts/security/prepare_upload.py --uploaded-receipt
 
   security-sast:
     runs-on: ubuntu-24.04
@@ -100,16 +115,31 @@ jobs:
       - name: Seal private scanner evidence
         if: always()
         run: node scripts/security/seal-evidence.cjs "$RUNNER_TEMP/security-results" "$RUNNER_TEMP/security-public/private-evidence.gpe" .github/security-evidence-public-key.pem
-      - name: Preserve sanitized security receipts
+      - name: Verify exact upload set and bind source/run hashes
+        id: prepare-upload
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        run: python scripts/security/prepare_upload.py --gate sast --input "$RUNNER_TEMP/security-results" --public "$RUNNER_TEMP/security-public" --key .github/security-evidence-public-key.pem
+      - name: Preserve sanitized security receipts
+        id: upload
+        if: always() && steps.prepare-upload.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: security-sast-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/security-public/gate-summary.json
             ${{ runner.temp }}/security-public/private-evidence.gpe
+            ${{ runner.temp }}/security-public/upload-manifest.json
           if-no-files-found: error
           retention-days: 14
+          archive: true
+          overwrite: false
+          include-hidden-files: false
+      - name: Require artifact identity and archive digest
+        if: always() && steps.upload.outcome == 'success'
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: python scripts/security/prepare_upload.py --uploaded-receipt
 
   security-secrets:
     runs-on: ubuntu-24.04
@@ -134,16 +164,31 @@ jobs:
       - name: Seal private scanner evidence
         if: always()
         run: node scripts/security/seal-evidence.cjs "$RUNNER_TEMP/security-results" "$RUNNER_TEMP/security-public/private-evidence.gpe" .github/security-evidence-public-key.pem
-      - name: Preserve sanitized security receipts
+      - name: Verify exact upload set and bind source/run hashes
+        id: prepare-upload
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        run: python scripts/security/prepare_upload.py --gate secrets --input "$RUNNER_TEMP/security-results" --public "$RUNNER_TEMP/security-public" --key .github/security-evidence-public-key.pem
+      - name: Preserve sanitized security receipts
+        id: upload
+        if: always() && steps.prepare-upload.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: security-secrets-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/security-public/gate-summary.json
             ${{ runner.temp }}/security-public/private-evidence.gpe
+            ${{ runner.temp }}/security-public/upload-manifest.json
           if-no-files-found: error
           retention-days: 14
+          archive: true
+          overwrite: false
+          include-hidden-files: false
+      - name: Require artifact identity and archive digest
+        if: always() && steps.upload.outcome == 'success'
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: python scripts/security/prepare_upload.py --uploaded-receipt
 
   security-sbom:
     runs-on: ubuntu-24.04
@@ -179,17 +224,32 @@ jobs:
       - name: Seal private scanner evidence
         if: always()
         run: node scripts/security/seal-evidence.cjs "$RUNNER_TEMP/security-results" "$RUNNER_TEMP/security-public/private-evidence.gpe" .github/security-evidence-public-key.pem
-      - name: Preserve sanitized security receipts
+      - name: Verify exact upload set and bind source/run hashes
+        id: prepare-upload
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        run: python scripts/security/prepare_upload.py --gate sbom --input "$RUNNER_TEMP/security-results" --public "$RUNNER_TEMP/security-public" --key .github/security-evidence-public-key.pem
+      - name: Preserve sanitized security receipts
+        id: upload
+        if: always() && steps.prepare-upload.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: security-sbom-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/security-public/gate-summary.json
             ${{ runner.temp }}/security-public/private-evidence.gpe
+            ${{ runner.temp }}/security-public/upload-manifest.json
             ${{ runner.temp }}/security-public/sbom.cdx.json
           if-no-files-found: error
           retention-days: 14
+          archive: true
+          overwrite: false
+          include-hidden-files: false
+      - name: Require artifact identity and archive digest
+        if: always() && steps.upload.outcome == 'success'
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: python scripts/security/prepare_upload.py --uploaded-receipt
 
   security-gates:
     if: always()

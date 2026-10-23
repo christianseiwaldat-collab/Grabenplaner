@@ -24,7 +24,13 @@ test('Private diagnostics remain confidential and authenticated, and unrelated f
     }
     assert.equal(envelope.format, FORMAT);
     const result = open(envelope);
+    assert.deepEqual(result.metadata, { commit: 'a'.repeat(40) });
     assert.equal(result.files.length, 6);
+    for (const file of result.files) {
+      const recovered = Buffer.from(file.content, 'base64');
+      assert.equal(crypto.createHash('sha256').update(recovered).digest('hex'), file.sha256);
+      assert.deepEqual(recovered, fs.readFileSync(path.join(root, file.name)));
+    }
     assert.deepEqual(result.files.map(file => file.name).sort(), ['gate-result.json', ...profiles.map(name => 'sast-' + name + '.json')].sort());
     assert.equal(JSON.parse(Buffer.from(result.files[0].content, 'base64')).sensitive, 'synthetic private finding');
     assert.throws(() => open({ ...envelope, recipientSha256: '0'.repeat(64) }));
@@ -37,4 +43,37 @@ test('Private diagnostics remain confidential and authenticated, and unrelated f
     fs.unlinkSync(path.join(root, 'gate-result.json'));
     assert.throws(() => seal(root, path.join(root, 'missing.gpe'), publicFile), /missing/);
   } finally { assert.ok(path.basename(root).startsWith('gp-evidence-')); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('Evidence sealing and publication preserve the same commit, run, attempt and exact file bytes', () => {
+  const { spawnSync } = require('node:child_process');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gp-evidence-upload-'));
+  try {
+    const source = path.join(root, 'raw'), published = path.join(root, 'public');
+    fs.mkdirSync(source); fs.mkdirSync(published);
+    const keys = crypto.generateKeyPairSync('rsa', { modulusLength: 3072 });
+    const keyFile = path.join(root, 'recipient.pem');
+    fs.writeFileSync(keyFile, keys.publicKey.export({ type: 'spki', format: 'pem' }));
+    const metadata = { commit: 'a'.repeat(40), runId: '123', attempt: '2' };
+    const rawReceipt = Buffer.from(JSON.stringify({ gate: 'sca', sensitive: 'PRIVATE-SYNTHETIC-DETAIL', exitCode: 1, complete: true, passed: false, status: 'findings' }));
+    fs.writeFileSync(path.join(source, 'gate-result.json'), rawReceipt);
+    fs.writeFileSync(path.join(published, 'gate-summary.json'), JSON.stringify({ schemaVersion: 1, gate: 'sca', complete: true, passed: false, status: 'findings', exitCode: 1, privateReceiptSha256: crypto.createHash('sha256').update(rawReceipt).digest('hex') }));
+    seal(source, path.join(published, 'private-evidence.gpe'), keyFile, metadata);
+    const run = spawnSync(process.env.PYTHON || 'python', [path.resolve(__dirname, '../scripts/security/prepare_upload.py'), '--gate', 'sca', '--input', source, '--public', published, '--key', keyFile], {
+      encoding: 'utf8', env: { ...process.env, GITHUB_SHA: metadata.commit, GITHUB_RUN_ID: metadata.runId, GITHUB_RUN_ATTEMPT: metadata.attempt }
+    });
+    assert.ifError(run.error); assert.equal(run.status, 0, run.stderr + run.stdout);
+    const manifest = JSON.parse(fs.readFileSync(path.join(published, 'upload-manifest.json')));
+    for (const key of ['commit', 'runId', 'attempt']) assert.equal(manifest[key], metadata[key]);
+    for (const file of manifest.files) assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(published, file.name))).digest('hex'), file.sha256);
+    const envelope = JSON.parse(fs.readFileSync(path.join(published, 'private-evidence.gpe')));
+    const dataKey = crypto.privateDecrypt({ key: keys.privateKey, oaepHash: 'sha256', padding: crypto.constants.RSA_PKCS1_OAEP_PADDING }, Buffer.from(envelope.wrappedKey, 'base64'));
+    const decipher = crypto.createDecipheriv('aes-256-gcm', dataKey, Buffer.from(envelope.iv, 'base64'));
+    decipher.setAAD(Buffer.from(JSON.stringify({ format: envelope.format, recipientSha256: envelope.recipientSha256 })));
+    decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
+    const recovered = JSON.parse(zlib.gunzipSync(Buffer.concat([decipher.update(Buffer.from(envelope.ciphertext, 'base64')), decipher.final()])));
+    assert.deepEqual(recovered.metadata, metadata);
+    assert.deepEqual(Buffer.from(recovered.files[0].content, 'base64'), rawReceipt);
+    assert.ok(!fs.readFileSync(path.join(published, 'upload-manifest.json'), 'utf8').includes('PRIVATE-SYNTHETIC'));
+  } finally { assert.ok(path.basename(root).startsWith('gp-evidence-upload-')); fs.rmSync(root, { recursive: true, force: true }); }
 });

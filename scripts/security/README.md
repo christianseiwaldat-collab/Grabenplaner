@@ -58,6 +58,11 @@ eingerichtet und an einem tatsächlichen Actions-Lauf nachgewiesen werden.
   sind unterschiedliche Nachweise.
 
 GitHub-Actions sind auf überprüfte vollständige Commit-SHAs festgelegt.
+`upload-artifact` ist auf v7.0.2 / `cf430e030ddbb5b0abf93d22962f4752f3646cd9`
+gebunden. Der offizielle Stand läuft mit Node 24 und benötigt einen Runner ab
+2.327.1; der Workflow verwendet GitHub-gehostetes Ubuntu 24.04. Das ZIP-Format
+bleibt mit `archive: true` ausdrücklich erhalten. Direkte Einzeldatei-Uploads,
+Überschreiben bestehender Artefakte und versteckte Dateien sind deaktiviert.
 Binärwerkzeuge stammen aus offiziellen GitHub-Releases; SHA256 und Dateigröße
 sind gegen veröffentlichte Release-Metadaten gebunden. Eine zusätzliche
 Signaturprüfung wird nicht behauptet. `requirements.txt` bindet PyPI-Wheels
@@ -145,9 +150,31 @@ der Sicherheitsverantwortung. Das Archiv enthält weder Quellbäume noch
 Umgebungsvariablen oder installierte Pakete. Änderungen am Empfängerschlüssel
 benötigen eine unabhängige Prüfung.
 
-Nur die ausdrücklich benannten bereinigten Dateien und der verschlüsselte
-Detailbeleg werden 14 Tage als Actions-Artefakte aufbewahrt. Dauerhaft benötigte
+`prepare_upload.py` prüft vor jedem Upload den vollständigen erlaubten Dateisatz,
+den Hash des privaten Scannerbelegs, die SBOM-Bindung und den Empfänger sowie
+die Struktur des verschlüsselten Umschlags. Fehlende/zusätzliche Dateien,
+symbolische Links, ungültige Laufidentitäten und inkonsistente Zusammenfassungen
+blockieren den Upload. Diese Strukturprüfung behauptet keine Entschlüsselung;
+RSA-/GCM-Authentifizierung und Wiederherstellung der exakten Dateibytes sind
+gesondert positiv und negativ getestet.
+
+Der neue `upload-manifest.json` enthält ausschließlich Gate, Commit, Laufnummer,
+Versuch, 14 Tage Aufbewahrung, Empfängerhash und Größe/SHA256 der ausgewählten
+Dateien. Der ZIP-Digest der Action ist ein anderer Hash als diese Dateihashes.
+Der Uploadschritt muss eine gültige Artefakt-ID und einen SHA256-ZIP-Digest
+zurückgeben; fehlende/ungültige Werte lassen den Job scheitern. Ein Nachweis der
+GitHub-Upload-/Downloadstrecke muss aus einem tatsächlichen Actions-Lauf samt
+heruntergeladenem ZIP kommen; lokale Vertragstests ersetzen ihn nicht.
+
+Nur die ausdrücklich benannten bereinigten Dateien, der verschlüsselte
+Detailbeleg und das Uploadmanifest werden 14 Tage als Actions-Artefakte
+aufbewahrt. Dauerhaft benötigte
 Belege sind rechtzeitig privat abzurufen, zu entschlüsseln und anhand der
-Dateihashes und des Lauf-Commits zu verifizieren. Verlust des privaten
+Dateihashes, ZIP-Digests und des Lauf-Commits zu verifizieren. Verlust des privaten
 Schlüssels bedeutet Verlust der Entschlüsselungsmöglichkeit. Fehlgeschlagene
 Scans oder eine fehlgeschlagene Versiegelung bleiben blockierend.
+
+Eine technische Kontinuitätsprüfung der bestehenden Ausnahmen verlängert keine
+Frist und ist keine unabhängige menschliche Freigabe. Der tatsächliche Vollscan
+muss die Treffer weiterhin einzeln den unveränderten, quellgebundenen
+Entscheidungen zuordnen. Fristablauf und Inhaltsdrift bleiben blockierend.

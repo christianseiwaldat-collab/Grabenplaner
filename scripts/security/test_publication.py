@@ -73,5 +73,25 @@ class PublicationTests(unittest.TestCase):
             self.assertNotIn('*.json',body)
             self.assertIn('security-public/gate-summary.json',body)
 
+    def test_each_workflow_upload_requires_preflight_and_retains_only_bound_files(self):
+        root=Path(__file__).resolve().parents[2]
+        workflow=(root/'.github/workflows/security.yml').read_text()
+        action=json.loads((root/'scripts/security/tools.json').read_text())['actions']['actions/upload-artifact']
+        self.assertEqual(action['ref'],'v7.0.2')
+        self.assertEqual(action['runtime'],'node24')
+        for gate in ('sca','sast','secrets','sbom'):
+            job=workflow.split('\n  security-'+gate+':\n',1)[1].split('\n  security-',1)[0]
+            self.assertIn('uses: actions/upload-artifact@'+action['sha'],job)
+            prepare='python scripts/security/prepare_upload.py --gate '+gate
+            self.assertLess(job.index(prepare),job.index('uses: actions/upload-artifact@'))
+            upload=job[job.index('      - name: Preserve sanitized security receipts'):job.index('      - name: Require artifact identity and archive digest')]
+            self.assertIn("if: always() && steps.prepare-upload.outcome == 'success'",upload)
+            self.assertIn('security-'+gate+'-${{ github.run_id }}-${{ github.run_attempt }}',upload)
+            for required in ('retention-days: 14','archive: true','overwrite: false','include-hidden-files: false','if-no-files-found: error','security-public/upload-manifest.json'):
+                self.assertIn(required,upload)
+            self.assertNotIn('continue-on-error:',job)
+            self.assertIn('ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}',job)
+            self.assertIn('python scripts/security/prepare_upload.py --uploaded-receipt',job)
+
 
 if __name__=='__main__':unittest.main()

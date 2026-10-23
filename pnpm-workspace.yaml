@@ -7,6 +7,8 @@ minimumReleaseAgeExclude:
   - nodemailer@10.1.6
 
 overrides:
+  # Native parser/encoder fixes and platform SBOM; qualify PDF/OCR before release.
+  'pdfjs-dist>@napi-rs/canvas': 1.0.13
   brace-expansion: 5.0.12
   proxy-addr: 2.0.8
   qs: 6.16.1
