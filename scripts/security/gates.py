@@ -105,6 +105,14 @@ def stage_sources(root, destination, entries):
 
 def check_sast_result(result, expected, stage):
     if result.get('errors'):raise ValueError('SAST parser, rule, memory or timeout errors: incomplete analysis')
+    # Semgrep 1.181 also reports interrupted taint convergence separately from
+    # top-level errors. A fully enumerated target list does not make a partial
+    # dataflow result complete. Require the pinned engine's explicit empty list.
+    timing=result.get('time')
+    if not isinstance(timing,dict) or not isinstance(timing.get('fixpoint_timeouts'),list):
+        raise ValueError('Missing or malformed SAST fixpoint completeness evidence')
+    if timing['fixpoint_timeouts']:
+        raise ValueError('SAST taint fixpoint timeout: incomplete analysis')
     scanned={Path(p).resolve().relative_to(stage.resolve()).as_posix() for p in result.get('paths',{}).get('scanned',[])}
     missing=sorted(set(expected)-scanned)
     if not expected or set(expected)!=scanned:
@@ -206,7 +214,8 @@ class Gate:
                 run_findings.append({'rule':rule,'path':relative,'line':start['line'],'start':start,'end':end,'severity':item['extra']['severity'],'fingerprint':finding_identity(rule,relative,start,end),'legacyFingerprint':legacy,'sourceSha256':target_map[relative]['sha256']})
             if complete and ((run.returncode==1)!=bool(run_findings) or run.returncode not in (0,1)):
                 raise ValueError('Inconsistent SAST exit/result')
-            runs.append({'profile':name,'targetedFiles':len(targets),'reportedScannedFiles':count,'complete':complete,'scannerExitCode':run.returncode,'findings':len(run_findings),'analysisErrors':len(result.get('errors',[]))})
+            runs.append({'profile':name,'targetedFiles':len(targets),'reportedScannedFiles':count,'complete':complete,'scannerExitCode':run.returncode,'findings':len(run_findings),'analysisErrors':len(result.get('errors',[])),
+                         'fixpointTimeouts':result['time'].get('fixpoint_timeouts') if isinstance(result.get('time'),dict) else None})
             findings.extend(run_findings)
         disposition={'reviewedFalsePositives':[],'blockingFindings':findings}
         # Review decisions cannot turn an incomplete analysis into a pass.

@@ -2172,12 +2172,6 @@ const systemdInvocationId = String(process.env.INVOCATION_ID || "").trim().toLow
 function currentHostManagedRebootAvailable() {
   if (!serverModeActive || process.platform !== "linux" || !hostBootGeneration) return false;
   return require('./lib/persistence/postgresql/lifecycle-control').available();
-  try {
-    assertSafeHostRebootSocket();
-    return true;
-  } catch {
-    return false;
-  }
 }
 const hostBootGeneration = readHostBootGeneration();
 const bootstrapToken = String(process.env.GRABENPLANER_BOOTSTRAP_TOKEN || "").trim();

@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from gates import check_sast_result
+
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -65,8 +67,7 @@ def main():
         result = json.loads(result_path.read_text(encoding="utf-8"))
         assert result["version"] == config["semgrep"]["version"]
         assert completed.returncode == 1, "Unsafe controls must produce a findings exit"
-        assert not result["errors"] and not result.get("skipped_rules") and not result["paths"].get("skipped")
-        assert {Path(name).name for name in result["paths"]["scanned"]} == set(cases)
+        check_sast_result(result, set(cases), targets)
         findings = result["results"]
         assert {Path(row["path"]).name for row in findings} == {"unsafe-a.js", "unsafe-b.js"}
         assert all(row["check_id"].endswith("direct-response-write") for row in findings)
