@@ -168,6 +168,24 @@ test("v0.78: reine Leseberechtigung bleibt redigiert und GET ist nebenwirkungsfr
   assert.match(serverSource, /createAbsencePortalNotification\(\s*absenceManagementRepository,\s*employeeNumber,\s*"system\.recovery\.alert",[\s\S]{0,1000}?reactivate:\s*true/);
 });
 
+test("CPU/RAM-Verlauf ist separat geschützt und benötigt keine vollständige Diagnose", async () => {
+  const route = "/api/portal/v1/system-center/utilization";
+  const admin = ensureTestUser("9701", "admin");
+  const result = await requestJson(`${route}?hours=24`, { session: admin });
+  assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+  assert.equal(result.response.headers.get("cache-control"), "private, no-store");
+  assert.equal(result.payload.schemaVersion, 1); assert.equal(result.payload.scope, "host");
+  assert(result.payload.points.length > 0 && result.payload.points.length <= 1200);
+  assert.equal(result.payload.current.cpu.usedPercent, null); // app.listen does not start background workers.
+  assert.equal((await requestJson(route)).response.status, 401);
+  const hr = ensureTestUser("9704", "hr");
+  assert.equal((await requestJson(route, { session: hr })).response.status, 403);
+  for (const query of ["hours=2", "hours=24&hours=1", "hours=024", "hours=Infinity", "hours[]=24"])
+    assert.equal((await requestJson(`${route}?${query}`, { session: admin })).response.status, 400, query);
+  assert.equal((await requestJson(route, { session: admin })).payload.hours, 24);
+  assert.match(serverSource, /app\.get\("\/api\/portal\/v1\/system-center\/utilization",[\s\S]{0,650}response\.json\(systemUtilization\.read\(hours\)\)/);
+});
+
 test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer begrenzt", async () => {
   const actor = (role, permissions = ["system:write", "system:diagnostics:technical"]) => ({
     employeeNumber: `role-${role}`,

@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/gp-xoffi-import.css" />
     <link rel="stylesheet" href="/assistant-management.css" />
+    <link rel="stylesheet" href="/system-utilization.css" />
     <link rel="stylesheet" href="/learning-library.css" />
     <link rel="stylesheet" href="/personnel-learning-workspace.css" />
     <link rel="stylesheet" href="/personnel-dashboard-workspace.css" />
@@ -2593,6 +2594,13 @@
                 <p class="settings-note" id="currentWeekLockHint"></p>
               </div>
             </div>
+            <div class="settings-card planning-assistant-settings-card" id="planningAssistantSettingsCard">
+              <div class="card-heading"><div class="card-icon">PA</div><div><h2>Planungsassistent</h2><p>Prüft gespeicherte Dienstpläne und unterstützt bei der Planung.</p><span class="planning-assistant-setting-state" id="planningAssistantSettingsState" aria-live="polite">Aktiv · Automatisch</span></div></div>
+              <label class="switch-row"><span><strong>Planungsassistent aktivieren</strong><small>Gilt für alle Filialen und Abteilungen. Arbeitsregeln und Filialaufsicht gelten unabhängig davon weiter.</small></span><input id="planningAssistantEnabled" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Gespeicherte Pläne automatisch prüfen</strong><small>Prüft beim Laden und nach Planänderungen. Ausgeschaltet startest du die Prüfung bei Bedarf im Dienstplan.</small></span><input id="planningAssistantAutoCheck" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Zusätzliche Hinweise anzeigen</strong><small>Zeigt Hinweise und nicht prüfbare Punkte in der Ergebnisliste. Konflikte und Warnungen bleiben immer sichtbar.</small></span><input id="planningAssistantShowInformational" type="checkbox" /></label>
+              <p class="settings-note">Besetzung, Schlüsselpersonen und Sollstunden-Toleranz legst du weiterhin im Planungsassistenten unter „Prüfeinstellungen für diesen Bereich“ fest.</p>
+            </div>
           </section>
 
           <section id="vacationSettings" class="settings-section settings-two-column">
@@ -3025,6 +3033,7 @@
               <div class="system-center-content" id="systemCenterContent" aria-live="polite" aria-busy="true">
                 <p class="settings-note">System-Center wird geladen.</p>
               </div>
+              <div id="systemCenterUtilization" hidden></div>
             </div>
           </section>
 
@@ -4674,6 +4683,7 @@
     <script src="/voice-assistant-settings.js"></script>
     <script src="/planning-optimizer.js"></script>
     <script src="/planning-assistant.js"></script>
+    <script src="/system-utilization.js"></script>
     <script src="/gp-definitions.js"></script>
     <script src="/gp-xoffi-import.js"></script>
     <dialog id="vpsStorageDialog" class="modal vps-storage-modal" data-gp-window-id="settings:vps-storage" data-gp-window-mode="workspace" data-gp-window-rich aria-label="VPS-Speicher">

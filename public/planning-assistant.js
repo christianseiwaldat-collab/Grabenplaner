@@ -1,9 +1,15 @@
 (function (root) {
   "use strict";
   const severityLabels = { error: "Konflikt", warning: "Warnung", unknown: "Nicht prüfbar", info: "Hinweis" };
+  function readPreferences(settings = {}) {
+    if (!settings || typeof settings !== "object") settings = {};
+    const enabled = key => settings[key] !== "0" && settings[key] !== false;
+    return { enabled: enabled("planning_assistant_enabled"), autoCheck: enabled("planning_assistant_auto_check"), showInformational: enabled("planning_assistant_show_informational") };
+  }
   function mount(host, { api, onApplied = async () => {} }) {
     const doc = host.ownerDocument, node = (tag, text, className) => { const item = doc.createElement(tag); if (text !== undefined) item.textContent = text; if (className) item.className = className; return item; };
     let source = null, actor = null, result = null, generation = 0, controller = null, busy = false, limit = 40, dirty = false, draftRevision = null;
+    let preferences = readPreferences();
     host.className = "planning-assistant"; host.hidden = true;
     const heading = node("header"), headingText = node("div"), status = node("p", "Dienstplanprüfung wird vorbereitet …", "planning-assistant-status");
     status.setAttribute("role", "status"); headingText.append(node("h2", "Planungsassistent"), status);
@@ -12,8 +18,8 @@
     filter.setAttribute("aria-label", "Hinweise nach Schweregrad filtern");
     for (const [id, text] of [["all", "Alle Schweregrade"], ...Object.entries(severityLabels)]) { const option = node("option", text); option.value = id; filter.append(option); }
     filterBar.append(node("span", "Anzeige"), filter);
-    const list = node("div", undefined, "planning-assistant-list"), more = node("button", "Weitere Hinweise anzeigen", "secondary-button"); more.type = "button";
-    details.append(summary, filterBar, list, more);
+    const visibilityNote = node("p", undefined, "planning-assistant-visibility-note"), list = node("div", undefined, "planning-assistant-list"), more = node("button", "Weitere Hinweise anzeigen", "secondary-button"); more.type = "button";
+    visibilityNote.hidden = true; details.append(summary, filterBar, visibilityNote, list, more);
     const settings = node("details", undefined, "planning-assistant-settings"), form = node("form"), settingsStatus = node("p"); settingsStatus.setAttribute("role", "status");
     settings.append(node("summary", "Prüfeinstellungen für diesen Bereich"), form); settings.hidden = true;
     const toleranceLabel = node("label"), tolerance = node("input"); tolerance.name = "weeklyToleranceMinutes"; tolerance.type = "number"; tolerance.min = "0"; tolerance.max = "600"; tolerance.step = "1"; tolerance.required = true;
@@ -27,13 +33,20 @@
     const optimizerHost = node("div");
     const optimizer = root.GpPlanningOptimizer?.mount(optimizerHost, { api, onApplied });
     host.replaceChildren(heading, caption, details, optimizerHost, settings);
-    function lock(value) { busy = value; refresh.disabled = value || !source; for (const item of form.querySelectorAll("input,select,button")) item.disabled = value; }
-    function clearResult() { optimizer?.reset(); result = null; list.replaceChildren(); details.hidden = true; settings.hidden = true; if (!dirty) { form.reset(); rows.replaceChildren(); people.replaceChildren(); settingsStatus.textContent = ""; } more.hidden = true; }
+    function lock(value) { busy = value; refresh.disabled = value || !source || !!source.enrichmentPending || !preferences.enabled; for (const item of form.querySelectorAll("input,select,button")) item.disabled = value; }
+    function clearResult() { optimizer?.reset(); result = null; caption.textContent = "Für den aktuell geladenen Plan liegt noch keine aktuelle Prüfung vor. Vorschläge ändern keine Dienste."; list.replaceChildren(); details.hidden = true; settings.hidden = true; visibilityNote.hidden = true; if (!dirty) { form.reset(); rows.replaceChildren(); people.replaceChildren(); settingsStatus.textContent = ""; } more.hidden = true; }
     function reset() { generation++; controller?.abort(); source = null; actor = null; dirty = false; draftRevision = null; clearResult(); lock(false); host.hidden = true; }
     function markDirty() { if (!dirty && result) draftRevision = result.configuration.revision; dirty = true; }
     function renderFindings() {
       list.replaceChildren(); if (!result) return;
-      const entries = result.assessment.findings.filter(item => filter.value === "all" || item.severity === filter.value);
+      const findings = result.assessment.findings, visible = findings.filter(item => preferences.showInformational || !["info", "unknown"].includes(item.severity));
+      for (const option of filter.options) option.disabled = !preferences.showInformational && ["info", "unknown"].includes(option.value);
+      if (filter.selectedOptions[0]?.disabled) filter.value = "all";
+      const hiddenCount = findings.length - visible.length;
+      summary.textContent = hiddenCount ? `Konflikte und Warnungen (${visible.length} von ${findings.length})` : `Konflikte und Hinweise (${findings.length})`;
+      visibilityNote.hidden = !hiddenCount;
+      visibilityNote.textContent = `${hiddenCount} Hinweise bzw. nicht prüfbare Punkte sind ausgeblendet. Die Gesamtzählung bleibt vollständig; Konflikte und Warnungen werden weiterhin angezeigt.`;
+      const entries = visible.filter(item => filter.value === "all" || item.severity === filter.value);
       for (const entry of entries.slice(0, limit)) {
         const card = node("article", undefined, "planning-assistant-finding"); card.dataset.severity = entry.severity;
         const meta = [severityLabels[entry.severity], entry.date && new Intl.DateTimeFormat("de-AT", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(entry.date + "T12:00:00Z")), entry.startTime && `${entry.startTime}–${entry.endTime}`].filter(Boolean).join(" · ");
@@ -44,6 +57,10 @@
       }
       if (!entries.length) list.append(node("p", "Für diesen Filter liegen keine Hinweise vor."));
       more.hidden = entries.length <= limit; more.textContent = `Weitere Hinweise anzeigen (${Math.max(0, entries.length - limit)})`;
+    }
+    function waitForManualCheck() {
+      status.textContent = "Automatische Prüfung deaktiviert. Diesen gespeicherten Plan bei Bedarf mit „Jetzt prüfen“ prüfen.";
+      refresh.textContent = "Jetzt prüfen";
     }
     function positionRow(value = {}) {
       const row = node("div", undefined, "planning-position-row"), select = node("select"), count = node("input"), remove = node("button", "Entfernen", "secondary-button");
@@ -62,20 +79,20 @@
       for (const item of choices) { const label = node("label"), input = node("input"); input.type = "checkbox"; input.value = item.id; input.checked = selected.includes(item.id); label.append(input, node("span", item.label)); people.append(label); }
     }
     async function load() {
-      if (!source) return;
+      if (!source || source.enrichmentPending || !preferences.enabled) return;
       const token = ++generation, expectedSource = source; controller?.abort(); controller = new AbortController();
       clearResult(); lock(true); status.textContent = "Gespeicherten Dienstplan lokal prüfen …";
       const query = new URLSearchParams({ week: source.weekStart, locationId: source.context.locationId, ...(source.context.departmentId ? { departmentId: source.context.departmentId } : {}) });
       try {
         const payload = await api("/api/schedule/assistant?" + query, { signal: controller.signal });
         if (token !== generation || source !== expectedSource) return;
-        result = payload; const counts = payload.assessment.counts;
+        result = payload; refresh.textContent = "Erneut prüfen"; const counts = payload.assessment.counts;
         status.textContent = `${counts.error} ${counts.error === 1 ? "Konflikt" : "Konflikte"} · ${counts.warning} ${counts.warning === 1 ? "Warnung" : "Warnungen"} · ${counts.unknown} nicht prüfbar · ${counts.info} ${counts.info === 1 ? "Hinweis" : "Hinweise"}`;
         const dateText = value => new Intl.DateTimeFormat("de-AT", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value + "T12:00:00Z"));
         caption.textContent = `Gespeicherter Plan ${dateText(payload.assessment.period.from)} bis ${dateText(payload.assessment.period.to)} · ${payload.assessment.context.departmentName || payload.assessment.context.locationName}. Lokal geprüft; Vorschläge ändern keine Dienste.`;
-        details.hidden = false; summary.textContent = `Konflikte und Hinweise (${payload.assessment.findings.length})`; renderFindings(); renderSettings(); optimizer?.synchronize(payload, source);
+        details.hidden = false; renderFindings(); renderSettings(); optimizer?.synchronize(payload, source);
       } catch (error) { if (token === generation && error.name !== "AbortError") {
-        if (error.code === "PLANNING_ASSISTANT_PILOT_DENIED") { clearResult(); host.hidden = true; }
+        if (["PLANNING_ASSISTANT_PILOT_DENIED", "PLANNING_ASSISTANT_DISABLED"].includes(error.code)) { clearResult(); host.hidden = true; }
         else status.textContent = "Prüfung nicht verfügbar: " + error.message;
       } }
       finally { if (token === generation) lock(false); }
@@ -97,14 +114,16 @@
     reloadSettings.addEventListener("click", () => { dirty = false; draftRevision = null; load(); });
     refresh.addEventListener("click", load); addPosition.addEventListener("click", () => { if (!busy && result && rows.children.length < 20) { markDirty(); positionRow(); } });
     filter.addEventListener("change", () => { limit = 40; renderFindings(); }); more.addEventListener("click", () => { limit += 40; renderFindings(); });
-    return { reset, synchronize({ data, session, allowed }) {
-      if (!allowed || !data?.context?.locationId) { reset(); return; }
+    return { reset, synchronize({ data, session, allowed, settings: currentSettings }) {
+      const nextPreferences = readPreferences(currentSettings || data?.settings), autoChanged = nextPreferences.autoCheck !== preferences.autoCheck, visibilityChanged = nextPreferences.showInformational !== preferences.showInformational;
+      preferences = nextPreferences;
+      if (!allowed || !data?.context?.locationId || !preferences.enabled) { reset(); return; }
       if (session !== actor) { reset(); actor = session; } host.hidden = false;
-      if (source === data) return;
+      if (source === data && !autoChanged) { if (visibilityChanged) renderFindings(); return; }
       if (source && JSON.stringify([source.weekStart, source.context]) !== JSON.stringify([data.weekStart, data.context])) { dirty = false; draftRevision = null; }
       generation++; controller?.abort(); source = data; clearResult(); lock(false);
       if (data.enrichmentPending) { status.textContent = "Arbeitsregelprüfung wird geladen …"; return; }
-      load();
+      if (preferences.autoCheck) load(); else waitForManualCheck();
     } };
   }
   root.GpPlanningAssistant = Object.freeze({ mount });

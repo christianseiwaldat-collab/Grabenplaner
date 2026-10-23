@@ -38,7 +38,7 @@ test('Developer definitions navigate, search, survive ordinary navigation and wi
       window.gpDefinitionsWorkspace=null;window.timePresenceRefreshTimer=null;window.privateWorkspaceReturnRoute=null;
       window.currentAdministrationRoute=()=>({view:state.currentView});window.api=async()=>({workspaces:[]});
       for(const name of ['receiptSearchWorkspace','tradeInsightsWorkspace','tradeOrdersWorkspace','salesArticleReportWorkspace','salesPriceLabelsWorkspace','salesBwlWorkspace'])window[name]=null;
-      for(const name of ['renderContextNavigation','activatePrivacyOrganizationView','syncSalesArticleSearchWindow','syncGpWindows','syncStartDashboardVps','loadStartDashboard','loadPlanningView','closeMobileNavigation','clearUsbProvisioningPasswords'])window[name]=()=>{};
+      for(const name of ['renderContextNavigation','activatePrivacyOrganizationView','activateTechnicalSecurityView','syncSalesArticleSearchWindow','syncGpWindows','syncStartDashboardVps','syncSystemUtilizationWorkspace','loadStartDashboard','loadPlanningView','closeMobileNavigation','clearUsbProvisioningPasswords'])window[name]=()=>{};
       window.canReadSalesBwl=()=>false;window.employeeProfileIsOpen=()=>false;window.restoreRememberedOverallContext=()=>false;window.planningContextNeedsReload=()=>false;
       // Mark the evidence as an isolated visual preview without live VPS state.
       const badge=document.createElement('p');badge.textContent='Lokale UI-Prüfung · BEISPIEL-Konto · ohne Produktivdaten';badge.style.cssText='margin:18px 0 0;color:var(--muted);font-size:9px';document.getElementById('gpDefinitionsView').append(badge);

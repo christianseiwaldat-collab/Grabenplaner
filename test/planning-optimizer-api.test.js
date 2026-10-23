@@ -122,3 +122,30 @@ test("corrupted stored business constraints never fall back to an unrestricted o
     assert.equal(response.status, 409, JSON.stringify(response.data)); assert.equal(response.data.code, 'OPTIMIZER_CONFIGURATION_INVALID');
   } finally { db.prepare("DELETE FROM settings WHERE key=?").run(key); }
 });
+
+test("disabling the assistant invalidates an outstanding real proposal without changing duties", { skip: !ready }, async () => {
+  const response = await api(endpoint, { method: "POST", body: options });
+  assert.equal(response.status, 200, JSON.stringify(response.data));
+  const next = response.data, scenario = next.scenarios.find(item => item.changes.length);
+  assert(scenario, JSON.stringify(next));
+  const before = db.prepare("SELECT * FROM shifts ORDER BY id").all();
+  const audits = db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action='planning.assistant.proposal.apply'").get().n;
+  const savePreferences = enabled => api("/api/settings", { method: "PUT", body: {
+    locationId: LOCATION, departmentId: null, breakAfterMinutes: 360, breakDurationMinutes: 30,
+    planningAssistant: { enabled, autoCheck: true, showInformational: true },
+  } });
+  try {
+    const disabled = await savePreferences(false);
+    assert.equal(disabled.status, 200, JSON.stringify(disabled.data));
+    const denied = await api(applyEndpoint, { method: "POST", body: {
+      proposalId: next.id, scenarioId: scenario.id, confirmationToken: next.confirmationToken, confirmed: true,
+    } });
+    assert.equal(denied.status, 409, JSON.stringify(denied.data));
+    assert.equal(denied.data.code, "PLANNING_ASSISTANT_DISABLED");
+    assert.deepEqual(db.prepare("SELECT * FROM shifts ORDER BY id").all(), before);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action='planning.assistant.proposal.apply'").get().n, audits);
+  } finally {
+    const restored = await savePreferences(true);
+    assert.equal(restored.status, 200, JSON.stringify(restored.data));
+  }
+});
