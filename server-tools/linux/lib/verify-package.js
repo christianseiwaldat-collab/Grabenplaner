@@ -173,6 +173,12 @@ function walk(directory, prefix = "") {
     const target = path.join(directory, entry.name);
     const stat = fs.lstatSync(target);
     if (stat.isSymbolicLink()) throw new Error(`Symbolische Links sind im Serverpaket nicht erlaubt: ${relative}`);
+    // The frozen production graph is installed and qualified separately. Only
+    // its real top-level directory is outside the source-package manifest.
+    if (!prefix && entry.name === "node_modules") {
+      if (!stat.isDirectory()) throw new Error("Der separate Abhaengigkeitsbaum ist kein Verzeichnis: node_modules");
+      continue;
+    }
     if (stat.isDirectory()) files.push(...walk(target, relative));
     else if (stat.isFile()) files.push(relative);
     else throw new Error(`Unzulaessiger Dateityp im Serverpaket: ${relative}`);
