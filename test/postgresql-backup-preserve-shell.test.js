@@ -11,13 +11,27 @@ test("native PostgreSQL preservation dispatcher requires explicit retention and 
   // No host account, GP service, product path or database is contacted. Only
   // the service-state probe and operations payload are controlled fixtures;
   // shell dispatch, ownership checks and both kernel flock descriptions run.
-  const root = fs.mkdtempSync("/opt/gp-pg-backup-preserve-");
+  // CI runners may own or write /opt. Privileged Node verification also
+  // checks ancestors, so keep the positive fixture below verified /root.
+  const parent = "/root";
+  for (const directory of ["/", parent]) {
+    const info = fs.lstatSync(directory);
+    assert(info.isDirectory() && !info.isSymbolicLink());
+    assert.equal(info.uid, 0); assert.equal(info.mode & 0o022, 0);
+    assert.equal(fs.realpathSync(directory), directory);
+  }
+  const root = fs.mkdtempSync(path.join(parent, "gp-pg-backup-preserve-"));
+  fs.chmodSync(root, 0o700);
+  const created = fs.lstatSync(root);
   t.after(() => {
-    assert.equal(path.dirname(fs.realpathSync(root)), "/opt");
+    const current = fs.lstatSync(root);
+    assert(current.isDirectory() && !current.isSymbolicLink());
+    assert.equal(current.uid, 0); assert.equal(current.mode & 0o077, 0);
+    assert.equal(current.dev, created.dev); assert.equal(current.ino, created.ino);
+    assert.equal(path.dirname(fs.realpathSync(root)), parent);
     assert.match(path.basename(root), /^gp-pg-backup-preserve-[A-Za-z0-9]+$/);
     fs.rmSync(root, { recursive: true, force: true });
   });
-  fs.chmodSync(root, 0o700);
   const runtime = path.join(root, "node");
   fs.copyFileSync(process.execPath, runtime); fs.chmodSync(runtime, 0o755);
   const common = path.join(root, "common.sh"), dispatcher = path.join(root, "postgresql-maintenance.sh");
@@ -26,14 +40,14 @@ test("native PostgreSQL preservation dispatcher requires explicit retention and 
   }
   function fixture(options = {}) {
     const directory = path.join(root, crypto.randomUUID()), app = path.join(directory, "app"), data = path.join(directory, "data"), backups = path.join(directory, "backups");
-    for (const relative of ["server-tools/linux/lib", "node_modules", "lib"]) fs.mkdirSync(path.join(app, relative), { recursive: true });
-    fs.mkdirSync(path.join(data, "data"), { recursive: true }); fs.mkdirSync(backups);
+    for (const relative of ["server-tools/linux/lib", "node_modules", "lib"]) fs.mkdirSync(path.join(app, relative), { recursive: true, mode: 0o755 });
+    fs.mkdirSync(path.join(data, "data"), { recursive: true, mode: 0o755 }); fs.mkdirSync(backups, { mode: 0o755 });
     const anchor = path.join(data, "data/postgresql-pair.json"), events = path.join(directory, "events");
     fs.writeFileSync(anchor, "{}"); fs.writeFileSync(path.join(backups, "needed-old-point"), "unchanged synthetic old recovery point");
     fs.writeFileSync(path.join(app, "lib/backup-workspace.js"), `
 const fs=require('node:fs');const file=process.argv[3]+'.backup-workspace.lock';
 fs.writeFileSync(file,'',{flag:'wx',mode:0o600});process.stdout.write(file);
-`);
+`, { mode: 0o644 });
     fs.writeFileSync(path.join(app, "server-tools/linux/lib/postgresql-operations.js"), `
 const fs=require('node:fs');const action=process.argv[2];
 require('node:assert/strict').ok(process.execArgv.includes('--no-global-search-paths'));
@@ -42,14 +56,14 @@ for(const key of ['NODE_OPTIONS','NODE_REDIRECT_WARNINGS','NODE_V8_COVERAGE','PR
 fs.appendFileSync(${JSON.stringify(events)},action+'\\n');
 if(!['check-paths','backup-preserve','backup','prune'].includes(action))process.exit(42);
 process.stdout.write(JSON.stringify({verified:true,action}));
-`);
+`, { mode: 0o644 });
     const lock = path.join(directory, "maintenance.lock"), wrongLock = path.join(directory, "wrong.lock");
     fs.writeFileSync(lock, ""); fs.writeFileSync(wrongLock, "");
     const preload = path.join(directory, "preload.cjs"), marker = path.join(directory, "forbidden-preload");
     fs.writeFileSync(preload, `require('node:fs').writeFileSync(${JSON.stringify(marker)},'executed');`);
     const script = ["set -Eeuo pipefail", "IFS=$'\\n\\t'", "source " + quote(common), "source " + quote(dispatcher),
       "app_arg=" + quote(app), "data_arg=" + quote(data), "backup_arg=" + quote(backups),
-      "node_arg=" + quote(runtime), "database_arg=''", "service=grabenplaner.service",
+      "node_arg=" + quote(options.node ?? runtime), "database_arg=''", "service=grabenplaner.service",
       "keep_arg=" + quote(options.keep ?? "1000"), "preserve_existing_backups=" + (options.preserve ?? 1),
       "finish_deferred=" + (options.finish ?? 0), "defer_archive=" + (options.defer ?? 0),
       "lock_already_held=" + (options.inherited ?? 1), "GP_DEFAULT_MAINTENANCE_LOCK=" + quote(lock),
@@ -86,6 +100,13 @@ process.stdout.write(JSON.stringify({verified:true,action}));
       assert.notEqual(result.status, 0, result.stdout);
       const events = fs.existsSync(item.events) ? fs.readFileSync(item.events, "utf8") : "";
       assert.doesNotMatch(events, /(?:^|\n)(?:backup|backup-preserve|prune)(?:\n|$)/);
+      if (options.lock) {
+        assert.equal(events, "check-paths\n", "the negative lease case must reach the real inherited-FD check");
+        assert.match(result.stderr, /Die uebernommene Wartungssperre fehlt/);
+      } else {
+        assert.equal(events, "");
+        assert.match(result.stderr, /Der erhaltende Sicherungsauftrag benoetigt/);
+      }
       assert.equal(fs.existsSync(item.marker), false);
       assert.equal(fs.readFileSync(path.join(item.backups, "needed-old-point"), "utf8"), "unchanged synthetic old recovery point");
     });
@@ -97,10 +118,26 @@ process.stdout.write(JSON.stringify({verified:true,action}));
       assert.equal(fs.readFileSync(item.events, "utf8"), "check-paths\n" + (finish ? "prune\n" : "backup\n"));
     }
   });
+  for (const unsafe of ["foreign-owned", "writable"]) {
+    await t.test("a root-owned Node file under a " + unsafe + " ancestor is refused before helper execution", () => {
+      const ancestor = fs.mkdtempSync(path.join(root, "unsafe-node-")), file = path.join(ancestor, "node");
+      fs.copyFileSync(runtime, file); fs.chmodSync(file, 0o755);
+      const info = fs.lstatSync(file);
+      assert(info.isFile() && !info.isSymbolicLink()); assert.equal(info.uid, 0); assert.equal(info.nlink, 1);
+      assert.equal(info.mode & 0o022, 0);
+      if (unsafe === "foreign-owned") fs.chownSync(ancestor, 65534, 65534);
+      else fs.chmodSync(ancestor, 0o777);
+      const item = fixture({ node: file }), result = item.execute();
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /Die privilegierte Node-Laufzeit ist nicht root-geschuetzt/);
+      assert.equal(fs.existsSync(item.events), false); assert.equal(fs.existsSync(item.marker), false);
+      assert.equal(fs.readFileSync(path.join(item.backups, "needed-old-point"), "utf8"), "unchanged synthetic old recovery point");
+    });
+  }
   await t.test("a writable or foreign-owned app dependency is refused before helper execution", () => {
     for (const unsafe of ["owner", "mode"]) {
       const item = fixture(), file = path.join(item.directory, "app/node_modules/untrusted.cjs");
-      fs.writeFileSync(file, "throw Error('must not execute');");
+      fs.writeFileSync(file, "throw Error('must not execute');", { mode: 0o644 });
       if (unsafe === "owner") fs.chownSync(file, 65534, 65534);
       else fs.chmodSync(file, 0o666);
       const result = item.execute();
