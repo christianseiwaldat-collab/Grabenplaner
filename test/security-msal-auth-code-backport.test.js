@@ -2,17 +2,76 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const { pathToFileURL } = require("node:url");
 const { createRequire } = require("node:module");
 
+function resolveConsumerPackageRoot(root) {
+  const modules = fs.realpathSync(path.join(root, "node_modules"));
+  let consumer = createRequire(path.join(root, "package.json"));
+  function resolve(name) {
+    const file = fs.realpathSync(consumer.resolve(name));
+    const relative = path.relative(modules, file);
+    assert(relative && relative !== ".." && !relative.startsWith(".." + path.sep) && !path.isAbsolute(relative),
+      "MSAL consumer dependency resolved outside the tested GP node_modules: " + name);
+    return file;
+  }
+  for (const name of ["tedious", "@azure/identity"]) consumer = createRequire(resolve(name));
+  return path.dirname(resolve("@azure/msal-node/package.json"));
+}
+
 const packageRoot = process.env.GP_MSAL_TEST_PACKAGE_ROOT
   ? path.resolve(process.env.GP_MSAL_TEST_PACKAGE_ROOT)
-  : path.dirname(require.resolve("@azure/msal-node/package.json"));
+  : resolveConsumerPackageRoot(path.resolve(__dirname, ".."));
 const packageRequire = createRequire(path.join(packageRoot, "package.json"));
 const tenant = "11111111-1111-4111-8111-111111111111";
 const host = "login.microsoftonline.com";
 const authority = `https://${host}/${tenant}`;
+
+function verifyIsolatedConsumerResolution(t) {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "gp-msal-consumer-resolution-"));
+  t.after(() => fs.rmSync(fixture, { recursive: true, force: true }));
+  function project(name) {
+    const root = path.join(fixture, name); fs.mkdirSync(path.join(root, "node_modules"), { recursive: true });
+    fs.writeFileSync(path.join(root, "package.json"), '{"private":true}\n');
+    return root;
+  }
+  function dependency(parent, name) {
+    const root = path.join(parent, "node_modules", name); fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name, main: "index.cjs" }) + "\n");
+    fs.writeFileSync(path.join(root, "index.cjs"), "throw new Error('resolution fixtures must never execute');\n");
+    return root;
+  }
+  function isolatedChain(root) {
+    return dependency(dependency(dependency(root, "tedious"), "@azure/identity"), "@azure/msal-node");
+  }
+  const isolated = project("isolated"), expected = isolatedChain(isolated);
+  const decoy = dependency(isolated, "@azure/msal-node");
+  assert.equal(createRequire(path.join(isolated, "package.json")).resolve("@azure/msal-node/package.json"), path.join(decoy, "package.json"));
+  assert.equal(resolveConsumerPackageRoot(isolated), expected, "test the MSAL actually consumed by Tedious, rather than the directly visible decoy");
+  for (const missing of ["tedious", "@azure/identity"]) {
+    const broken = project(missing === "tedious" ? "missing-tedious" : "missing-identity");
+    dependency(broken, "@azure/msal-node");
+    if (missing === "@azure/identity") dependency(broken, "tedious");
+    assert.throws(() => resolveConsumerPackageRoot(broken), error => error.code === "MODULE_NOT_FOUND" && error.message.includes(missing));
+  }
+  // A separate process initializes Node's actual NODE_PATH lookup. Prove the
+  // globally reachable decoy exists, then require our resolver to reject it.
+  const app = project("global-decoy-app"), global = project("global-decoy");
+  dependency(app, "@azure/msal-node"); isolatedChain(global);
+  const child = spawnSync(process.execPath, ["-e", `
+    const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path');
+    const { createRequire } = require('node:module');
+    ${resolveConsumerPackageRoot.toString()}
+    const app = ${JSON.stringify(app)};
+    assert.equal(createRequire(path.join(app, 'package.json')).resolve('tedious'), ${JSON.stringify(path.join(global, "node_modules/tedious/index.cjs"))});
+    assert.throws(() => resolveConsumerPackageRoot(app), /outside the tested GP node_modules: tedious/);
+  `], { cwd: app, env: { ...process.env, NODE_PATH: path.join(global, "node_modules"), NODE_OPTIONS: "" }, timeout: 10000, encoding: "utf8", windowsHide: true });
+  assert.ifError(child.error); assert.equal(child.status, 0, child.stdout + child.stderr);
+}
 
 function configuration(networkClient = {
   async sendGetRequestAsync() { throw new Error("unexpected synthetic network call"); },
@@ -43,7 +102,8 @@ for (const format of ["CommonJS", "ESM"]) {
     return format === "CommonJS" ? packageRequire("./lib/msal-node.cjs") : import(pathToFileURL(path.join(packageRoot, "dist/index.mjs")).href);
   }
 
-  test(`MSAL backport (${format}): untrusted response cannot override routing, code or expected nonce`, async () => {
+  test(`MSAL backport (${format}): untrusted response cannot override routing, code or expected nonce`, async t => {
+    if (format === "CommonJS") verifyIsolatedConsumerResolution(t);
     const { ConfidentialClientApplication } = await library();
     const base = Object.getPrototypeOf(ConfidentialClientApplication.prototype);
     const original = base.acquireTokenByCode;

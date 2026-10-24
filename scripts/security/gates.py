@@ -152,6 +152,60 @@ def registry_vulnerability_count(audit):
     return sum(counts.values())
 
 
+def registry_audit_findings(audit, expected):
+    """Bind every registry count to explicit advisory/package/version records."""
+    registry_vulnerability_count(audit)
+    advisories=audit.get('advisories')
+    if not isinstance(advisories,dict):raise ValueError('Registry advisory records are missing')
+    totals=dict.fromkeys(('info','low','moderate','high','critical'),0)
+    metadata=audit['metadata']
+    if type(metadata.get('totalDependencies')) is not int or metadata['totalDependencies']!=len(expected):
+        raise ValueError('Registry package inventory differs from the complete lockfile')
+    findings=[];seen=set()
+    for key,record in advisories.items():
+        if not isinstance(record,dict) or type(record.get('id')) is not int or record['id']<=0 or str(record['id'])!=key:
+            raise ValueError('Malformed registry advisory identity')
+        advisory=record.get('github_advisory_id');package=record.get('module_name');severity=record.get('severity')
+        if not isinstance(advisory,str) or not re.fullmatch(r'GHSA-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}-[23456789cfghjmpqrvwx]{4}',advisory) \
+                or not isinstance(package,str) or not isinstance(severity,str) or severity not in totals or record.get('url')!='https://github.com/advisories/'+advisory:
+            raise ValueError('Unbound registry advisory identity or severity')
+        totals[severity]+=1
+        versions=record.get('findings')
+        if not isinstance(versions,list) or not versions:raise ValueError('Registry affected versions are missing')
+        for item in versions:
+            if not isinstance(item,dict) or not isinstance(item.get('version'),str) or (package,item['version']) not in expected:
+                raise ValueError('Registry affected version is outside the checked lockfile')
+            paths=item.get('paths')
+            if not isinstance(paths,list) or not paths \
+                    or any(not isinstance(value,str) or not value.startswith('.>') or value.split('>')[-1]!=package for value in paths) \
+                    or len(paths)!=len(set(paths)):
+                raise ValueError('Malformed registry dependency paths')
+            if any(type(item.get(flag)) is not bool for flag in ('dev','optional','bundled')):
+                raise ValueError('Incomplete registry dependency classification')
+            identity=(advisory,package,item['version'])
+            if identity in seen:raise ValueError('Duplicate registry advisory/package/version record')
+            seen.add(identity)
+            findings.append({'advisory':advisory,'package':package,'version':item['version'],
+                             'registryAdvisoryId':record['id'],'registrySeverity':severity,'registryDependencyPaths':paths})
+    if totals!=metadata['vulnerabilities']:
+        raise ValueError('Registry advisory records do not account for every reported severity count')
+    return findings
+
+
+def verified_registry_patch_remediations(audit, expected, verification, registrations, today=None):
+    findings=registry_audit_findings(audit,expected)
+    result=verified_patch_remediations(findings,verification,registrations,today)
+    remediated=[];blocking=list(result['blockingFindings'])
+    for finding in result['remediatedFindings']:
+        # verify-patch.cjs actually resolves and verifies this exact installed
+        # consumer. A same-version instance on another path is not that proof.
+        if finding['registryDependencyPaths']==['.>tedious>@azure/identity>@azure/msal-node']:
+            remediated.append(finding)
+        else:
+            blocking.append({**finding,'status':'unverified_installed_consumer'})
+    return {'findings':findings,'remediatedFindings':remediated,'blockingFindings':blocking}
+
+
 def verified_patch_remediations(findings, verification, registrations, today=None):
     """Preserve raw advisories; account only for freshly verified repaired code."""
     today=today or dt.datetime.now(dt.timezone.utc).date()
@@ -296,12 +350,16 @@ class Gate:
         version=self.command([*pnpm_command,'--version'],'pnpm-version').stdout.decode().strip()
         if version!='11.7.0':raise ValueError('Unpinned pnpm audit version')
         pnpm=self.command([*pnpm_command,'audit','--json'],'pnpm-audit',(0,1))
+        (self.output/'sca-pnpm.json').write_bytes(pnpm.stdout)
         audit=json.loads(pnpm.stdout)
         count=registry_vulnerability_count(audit)
         if (pnpm.returncode==1)!=bool(count):raise ValueError('Inconsistent pnpm audit exit/result')
+        registry=verified_registry_patch_remediations(audit,expected,patch_verification,read(HERE/'patch-policy.json').get('securityBackports'))
         return {'scannedPackages':len(expected),'scope':'All lockfile packages including optional packages for other operating systems; OSV + npm registry metadata. Raw advisories are retained; a source-bound verified security backport may account for repaired code. No reachability waiver.',
                 'findings':findings,'remediatedFindings':disposition['remediatedFindings'],'verifiedSecurityPatches':disposition['verifiedSecurityPatches'],
-                'registryVulnerabilities':audit['metadata']['vulnerabilities'],'blockingFindings':disposition['blockingFindings']+([{'registryVulnerabilityCount':count}] if count else [])}
+                'registryVulnerabilities':audit['metadata']['vulnerabilities'],'registryFindings':registry['findings'],
+                'registryRemediatedFindings':registry['remediatedFindings'],
+                'blockingFindings':disposition['blockingFindings']+registry['blockingFindings']}
 
     def secrets(self):
         entries=source_files(self.root);stage=self.output/'secrets-source';stage_sources(self.root,stage,entries);write(self.output/'secrets-targets.json',entries)

@@ -60,7 +60,7 @@
       "packageJsonSha256": "6119d93093e1c227b63986484301a5d620bff78be9f2856cf568d2810ac978f2",
       "licenseSha256": "17474e386e0b9e1a700cc3d06b2b0882a2c376d9c6b49c7f8274409b8f8d2352",
       "regressionTest": "test/security-msal-auth-code-backport.test.js",
-      "regressionTestSha256": "d83ee7fb47746c686441ddb48595dcf60419b9c659f1f5596bc68eba541de279",
+      "regressionTestSha256": "5b5c46271466cc697a6a46c2d4682f79ab62fbf32f4ba24e4b82106324f81819",
       "regressionPassCount": 14,
       "reviewedOn": "2026-10-24",
       "expiresOn": "2026-11-23",
