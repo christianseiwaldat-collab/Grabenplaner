@@ -2,11 +2,15 @@
 // Fresh GitHub Actions service container only; never connects to a product DB.
 const crypto=require('node:crypto'),fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:child_process'),{Client}=require('pg');
 async function main(){
+ const shard=require('./application-test-shard.cjs').applicationTestShard(process.argv.slice(2));
  const diagnosticIndex=process.argv.indexOf('--diagnostic-api');
  const diagnosticGroups=Object.freeze({
   foundations:['test/portal-foundation-https.test.js','test/portal-foundation-loopback.test.js','test/portal-foundation-scope.test.js','test/v057-codespaces-demo.test.js'],
   rights:['test/personnel-learning-rights-hierarchy.test.js','test/portal-birthday-presentation-claim-api.test.js','test/portal-birthday-presentation-settings-api.test.js','test/v058-personnel-rights-encryption.test.js','test/v059-sickness-integration.test.js','test/v060-portal-mobile-foundation.test.js'],
   sales:['test/postgresql-api-native-fixture.test.js','test/postgresql-startup-category-defaults.test.js','test/postgresql-startup-policy-defaults.test.js','test/branch-sales-api.test.js','test/sales-analytics-production-hardening.test.js','test/sales-article-catalog-detail-route.test.js','test/sales-article-catalog-import-api.test.js','test/schedule-duty-persistence-api.test.js','test/v056-wifi-foundation.test.js','test/postgresql-ascii-nocase-parity.test.js'],
+  'next-rights':['test/portal-foundation.test.js','test/personnel-lifecycle-onboarding-execution-api.test.js','test/v063-import-payroll.test.js','test/v083-payroll-handoffs.test.js'],
+  reports:['test/personnel-lifecycle-scoped-rights-api.test.js','test/v062-mobile-native-auth.test.js','test/v079-mobile-absence-api.test.js','test/v071-page-appearance.test.js','test/v0862-server-backup-download.test.js'],
+  loans:['test/v085-loan-foundation.test.js','test/v087-block4-loan-overview.test.js','test/v087-block4-organization-accounts.test.js'],
  });
  const diagnosticGroup=diagnosticIndex<0?null:process.argv[diagnosticIndex+1];
  if(diagnosticIndex>=0&&(!Object.hasOwn(diagnosticGroups,diagnosticGroup)||process.argv.includes('--full')||process.argv.includes('--bootstrap-only')))throw new Error('Explicit bounded diagnostic API group required');
@@ -72,7 +76,7 @@ async function main(){
  // installs the snapshot extension required by imports earlier in discovery order.
  ['--test','--test-concurrency=1','--test-reporter=tap','test/postgresql-stock-import-delete.test.js'],
  ...(diagnosticGroup?[['--require','./test-support/postgresql-api/diagnostic-errors.js','--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000',...diagnosticGroups[diagnosticGroup]]]:process.argv.includes('--bootstrap-only')?[]:process.argv.includes('--full')
-   ? [['--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000']]
+   ? [['--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000',...(shard?['--test-shard='+shard]:[])]]
    : [['--test','--test-concurrency=1','test/postgresql-cash-takeover.test.js']])];
  for(const args of commands){const result=spawnSync(process.execPath,args,{env,stdio:'inherit'});if(result.status!==0)throw new Error('Synthetic migration qualification failed: '+args[0]);}
  const outputIndex=process.argv.indexOf('--environment-file');
