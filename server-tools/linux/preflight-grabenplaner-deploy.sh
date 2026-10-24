@@ -244,12 +244,70 @@ root_node - "$app_dir" <<'NODE' >/dev/null \
 const fs = require('node:fs'), path = require('node:path');
 try {
   const root = path.resolve(process.argv[2]);
-  function trusted(file, recursive = false) {
-    const s = fs.lstatSync(file);
-    if (s.isSymbolicLink() || s.uid !== 0 || (s.mode & 0o022)
+  const dependencyRoots = [path.join(root, 'node_modules')];
+  function trustedDependencyBinLink(file, dependencyRoot) {
+    // Only protected node_modules/.bin commands may resolve to regular files
+    // in this same dependency tree. All other symbolic links stay forbidden.
+    const inside = target => target === dependencyRoot || (!path.relative(dependencyRoot, target).startsWith('..' + path.sep)
+      && path.relative(dependencyRoot, target) !== '..' && !path.isAbsolute(path.relative(dependencyRoot, target)));
+    const metadata = s => [s.dev, s.ino, s.uid, s.gid, s.mode, s.nlink, s.size, s.mtimeMs, s.ctimeMs].join(':');
+    const regular = target => {
+      const s = fs.lstatSync(target);
+      if (s.isSymbolicLink() || s.uid !== 0 || (s.mode & 0o022)
+        || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1)) || fs.realpathSync(target) !== target) throw Error('unsafe');
+      return s;
+    };
+    let cursor = dependencyRoot;
+    regular(cursor);
+    for (const part of path.relative(dependencyRoot, path.dirname(file)).split(path.sep).filter(Boolean)) {
+      cursor = path.join(cursor, part);
+      if (!regular(cursor).isDirectory()) throw Error('unsafe');
+    }
+    let pending = [path.basename(file)];
+    const links = new Set();
+    while (pending.length) {
+      const part = pending.shift();
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        cursor = path.dirname(cursor);
+        if (!inside(cursor) || !regular(cursor).isDirectory()) throw Error('unsafe');
+        continue;
+      }
+      const target = path.join(cursor, part), s = fs.lstatSync(target);
+      if (s.isSymbolicLink()) {
+        if (!inside(target) || path.basename(path.dirname(target)) !== '.bin'
+          || path.basename(path.dirname(path.dirname(target))) !== 'node_modules'
+          || s.uid !== 0 || s.nlink !== 1 || links.has(target) || links.size >= 64) throw Error('unsafe');
+        links.add(target);
+        const destination = fs.readlinkSync(target);
+        if (!destination || metadata(fs.lstatSync(target)) !== metadata(s)) throw Error('unsafe');
+        if (path.isAbsolute(destination)) {
+          if (!destination.startsWith(dependencyRoot + path.sep)) throw Error('unsafe');
+          cursor = dependencyRoot;
+          pending = destination.slice(dependencyRoot.length + 1).split(path.sep).concat(pending);
+        } else {
+          pending = destination.split(path.sep).concat(pending);
+        }
+      } else {
+        cursor = target;
+        const checked = regular(cursor);
+        if (pending.length && !checked.isDirectory()) throw Error('unsafe');
+      }
+    }
+    if (!inside(cursor) || !regular(cursor).isFile()) throw Error('unsafe');
+  }
+  function trusted(target, recursive = false) {
+    const s = fs.lstatSync(target);
+    if (s.isSymbolicLink()) {
+      const dependencyRoot = dependencyRoots.find(base => target.startsWith(base + path.sep));
+      if (!dependencyRoot) throw Error('unsafe');
+      trustedDependencyBinLink(target, dependencyRoot);
+      return;
+    }
+    if (s.uid !== 0 || (s.mode & 0o022)
       || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1))
-      || fs.realpathSync(file) !== file) throw Error('unsafe');
-    if (recursive && s.isDirectory()) for (const name of fs.readdirSync(file)) trusted(path.join(file, name), true);
+      || fs.realpathSync(target) !== target) throw Error('unsafe');
+    if (recursive && s.isDirectory()) for (const name of fs.readdirSync(target)) trusted(path.join(target, name), true);
   }
   for (let directory = root;; directory = path.dirname(directory)) {
     trusted(directory);
@@ -277,9 +335,68 @@ if [[ "$database_provider" == postgresql ]]; then
 const fs = require('node:fs'), path = require('node:path');
 try {
   const helper = process.argv[2], root = path.resolve(path.dirname(helper), '../../..');
+  const installedRoot = path.resolve(process.argv[5]);
+  const dependencyRoots = [path.join(root, 'node_modules'), path.join(installedRoot, 'node_modules')];
+  function trustedDependencyBinLink(file, dependencyRoot) {
+    // Only protected node_modules/.bin commands may resolve to regular files
+    // in this same dependency tree. All other symbolic links stay forbidden.
+    const inside = target => target === dependencyRoot || (!path.relative(dependencyRoot, target).startsWith('..' + path.sep)
+      && path.relative(dependencyRoot, target) !== '..' && !path.isAbsolute(path.relative(dependencyRoot, target)));
+    const metadata = s => [s.dev, s.ino, s.uid, s.gid, s.mode, s.nlink, s.size, s.mtimeMs, s.ctimeMs].join(':');
+    const regular = target => {
+      const s = fs.lstatSync(target);
+      if (s.isSymbolicLink() || s.uid !== 0 || (s.mode & 0o022)
+        || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1)) || fs.realpathSync(target) !== target) throw Error('unsafe');
+      return s;
+    };
+    let cursor = dependencyRoot;
+    regular(cursor);
+    for (const part of path.relative(dependencyRoot, path.dirname(file)).split(path.sep).filter(Boolean)) {
+      cursor = path.join(cursor, part);
+      if (!regular(cursor).isDirectory()) throw Error('unsafe');
+    }
+    let pending = [path.basename(file)];
+    const links = new Set();
+    while (pending.length) {
+      const part = pending.shift();
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        cursor = path.dirname(cursor);
+        if (!inside(cursor) || !regular(cursor).isDirectory()) throw Error('unsafe');
+        continue;
+      }
+      const target = path.join(cursor, part), s = fs.lstatSync(target);
+      if (s.isSymbolicLink()) {
+        if (!inside(target) || path.basename(path.dirname(target)) !== '.bin'
+          || path.basename(path.dirname(path.dirname(target))) !== 'node_modules'
+          || s.uid !== 0 || s.nlink !== 1 || links.has(target) || links.size >= 64) throw Error('unsafe');
+        links.add(target);
+        const destination = fs.readlinkSync(target);
+        if (!destination || metadata(fs.lstatSync(target)) !== metadata(s)) throw Error('unsafe');
+        if (path.isAbsolute(destination)) {
+          if (!destination.startsWith(dependencyRoot + path.sep)) throw Error('unsafe');
+          cursor = dependencyRoot;
+          pending = destination.slice(dependencyRoot.length + 1).split(path.sep).concat(pending);
+        } else {
+          pending = destination.split(path.sep).concat(pending);
+        }
+      } else {
+        cursor = target;
+        const checked = regular(cursor);
+        if (pending.length && !checked.isDirectory()) throw Error('unsafe');
+      }
+    }
+    if (!inside(cursor) || !regular(cursor).isFile()) throw Error('unsafe');
+  }
   function trusted(target, recursive = false) {
     const s = fs.lstatSync(target);
-    if (s.isSymbolicLink() || s.uid !== 0 || (s.mode & 0o022)
+    if (s.isSymbolicLink()) {
+      const dependencyRoot = dependencyRoots.find(base => target.startsWith(base + path.sep));
+      if (!dependencyRoot) throw Error('unsafe');
+      trustedDependencyBinLink(target, dependencyRoot);
+      return;
+    }
+    if (s.uid !== 0 || (s.mode & 0o022)
       || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1))
       || fs.realpathSync(target) !== target) throw Error('unsafe');
     if (recursive && s.isDirectory()) for (const name of fs.readdirSync(target)) trusted(path.join(target, name), true);
@@ -295,8 +412,10 @@ try {
   trusted(path.join(root, 'server-tools/linux/lib'), true);
   // A present local module tree must be protected even though this read-only
   // path/configuration probe loads no PostgreSQL driver or global modules.
-  if (fs.existsSync(path.join(root, 'node_modules'))) trusted(path.join(root, 'node_modules'), true);
-  const installedRoot = path.resolve(process.argv[5]);
+  let localModulesPresent = false;
+  try { fs.lstatSync(path.join(root, 'node_modules')); localModulesPresent = true; }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (localModulesPresent) trusted(path.join(root, 'node_modules'), true);
   for (let directory = installedRoot;; directory = path.dirname(directory)) {
     trusted(directory);
     if (directory === path.dirname(directory)) break;
