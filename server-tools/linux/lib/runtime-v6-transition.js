@@ -199,7 +199,7 @@ function verifyDependencyContinuity(oldRoot, candidateRoot, { requireRoot = proc
     if (requireRoot) assert(info.uid === 0 && (info.mode & 0o022) === 0);
   }
   const previous = JSON.parse(read(oldRoot, "package.json")), candidate = JSON.parse(read(candidateRoot, "package.json"));
-  assert.deepEqual(read(oldRoot, "pnpm-lock.yaml"), read(candidateRoot, "pnpm-lock.yaml"), "The Core6 bridge requires the exact installed frozen lock bytes");
+  assert(read(oldRoot, "pnpm-lock.yaml").equals(read(candidateRoot, "pnpm-lock.yaml")), "The Core6 bridge requires the exact installed frozen lock bytes");
   for (const key of ["packageManager", "dependencies", "optionalDependencies", "peerDependencies", "pnpm"]) {
     assert.equal(canonical(previous[key]), canonical(candidate[key]), "Runtime dependency metadata changed: " + key);
   }

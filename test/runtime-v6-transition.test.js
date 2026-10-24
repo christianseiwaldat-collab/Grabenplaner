@@ -108,6 +108,34 @@ test("Core6 dependency reuse refuses lock changes, changed runtime dependencies 
     assert.throws(() => transition.verifyDependencyContinuity(values.oldRoot, values.candidateRoot, { requireRoot: false }));
   }
 });
+
+test("Core6 rejects large unequal locks with a bounded diagnostic and a constrained child heap", t => {
+  const { oldRoot, candidateRoot } = dependencyFixture(t);
+  const previous = Buffer.alloc(100_000, 0x61), candidate = Buffer.from(previous);
+  candidate[candidate.length - 1] = 0x62;
+  const files = [path.join(oldRoot, "pnpm-lock.yaml"), path.join(candidateRoot, "pnpm-lock.yaml")];
+  fs.writeFileSync(files[0], previous); fs.writeFileSync(files[1], Buffer.concat([candidate, Buffer.from("\n")]));
+  const before = files.map(sha);
+  const script = `
+    const transition = require(process.argv[1]);
+    try {
+      transition.verifyDependencyContinuity(process.argv[2], process.argv[3], { requireRoot: false });
+      process.exitCode = 2;
+    } catch (error) {
+      process.stdout.write(JSON.stringify({ name: error.name, message: error.message }));
+    }
+  `;
+  const result = spawnSync(process.execPath, ["--max-old-space-size=96", "--no-global-search-paths", "-e", script,
+    path.join(root, "server-tools/linux/lib/runtime-v6-transition.js"), oldRoot, candidateRoot],
+  { encoding: "utf8", timeout: 10_000, maxBuffer: 128 * 1024 });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
+  assert(result.stdout.length < 512, "Rejection must not render lock contents");
+  assert.deepEqual(JSON.parse(result.stdout), { name: "AssertionError",
+    message: "The Core6 bridge requires the exact installed frozen lock bytes" });
+  assert.deepEqual(files.map(sha), before);
+});
 test("Core6 dependency reuse refuses a hardlinked predecessor dependency", t => {
   const values = dependencyFixture(t), original = path.join(values.oldRoot, "node_modules/pg/index.js");
   fs.linkSync(original, path.join(values.oldRoot, "another-writer-path"));
