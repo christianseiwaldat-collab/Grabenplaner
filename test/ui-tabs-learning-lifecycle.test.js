@@ -11,6 +11,7 @@ function source(name, text = app) {
   return text.slice(match.index, text.indexOf('\n}', match.index) + 2);
 }
 function load(context, names) {
+  context.syncSystemUtilizationWorkspace = () => {};
   vm.createContext(context);
   vm.runInContext(names.map(name => source(name)).join('\n'), context);
   return context;

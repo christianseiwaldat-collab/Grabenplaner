@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "scope": "payroll-handoff-department-application-extension",
+  "baseCatalog": "block-4-catalog.json",
+  "baseSchemaPlanSha256": "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e",
+  "productActivation": false,
+  "entries": [
+    {
+      "statementId": "governance-store.insert-payroll-handoff",
+      "sourceContract": "abc5e12bee5903b24fbd9178bd9742b66e22089139bedd86878102775db6a265",
+      "sqlSha256": "e845b413fa90440bedac7a03876264bed31b38a14c992449f42e2f8541b6fbef",
+      "baseSourceContract": "abc5e12bee5903b24fbd9178bd9742b66e22089139bedd86878102775db6a265",
+      "baseSqlSha256": "71fac09adb262c8069879e63f208b70d346f363823bec5827585e2b2e1529c10",
+      "parameterBindingsSha256": "4f2a65580fcb39a4d6a509eddb3e14bf6600dda73359d5f4871b25b8485486fa",
+      "parameterOrderSha256": "0bb0bfa71b01a0396ab1f7058d434012dd3c3a672d8e923cb8de5c7cea9c2393"
+    }
+  ]
+}

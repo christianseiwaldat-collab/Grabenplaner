@@ -124,11 +124,12 @@ test("Personalmodul-Fundament: Bewerber-API bleibt zentral, sensibel und ohne un
   assert.doesNotMatch(api, /candidate-documents|documents\/:documentId/);
 });
 
-test("Personalmodul-Fundament: Import und Sicherung bleiben für alle Bewerberdaten fail-closed", () => {
-  assert.match(server, /currentCandidateDocuments[\s\S]*?AMU_FULL_RESTORE_REQUIRED/);
-  assert.match(server, /importedCandidateDocuments[\s\S]*?AMU_FULL_RESTORE_REQUIRED/);
+test("Historischer Personalimport: Altsicherungen bleiben für alle Bewerberdaten fail-closed", () => {
+  const historicalServer = fs.readFileSync(require("../test-support/legacy-baseline").legacyPath("server.js"), "utf8");
+  assert.match(historicalServer, /currentCandidateDocuments[\s\S]*?AMU_FULL_RESTORE_REQUIRED/);
+  assert.match(historicalServer, /importedCandidateDocuments[\s\S]*?AMU_FULL_RESTORE_REQUIRED/);
   const importedProtection = between(
-    server,
+    historicalServer,
     "const candidateProtectedGroups = [",
     "for (const report of protectedRows.amuReports",
   );
@@ -142,10 +143,8 @@ test("Personalmodul-Fundament: Import und Sicherung bleiben für alle Bewerberda
   ]) assert.match(importedProtection, new RegExp(contextFactory));
 });
 
-test("Personalmodul-Fundament: Dokumentregeln sind vor synchronen Startmigrationen initialisiert", () => {
-  const startupMigrationIndex = server.indexOf(
-    "runSqliteStartupSchemaMigrations(", server.indexOf("const startupSchemaMigrationState ="),
-  );
+test("Personalmodul-Fundament: Dokumentregeln sind vor der PostgreSQL-Anwendungsinitialisierung definiert", () => {
+  const startupMigrationIndex = server.indexOf("function initializeApplicationPersistence(");
   const categoriesIndex = server.indexOf("const PERSONNEL_DOCUMENT_CATEGORIES = new Set(");
   const visibilityIndex = server.indexOf(
     'const PERSONNEL_DOCUMENT_VISIBILITY = "hr_confidential";',
@@ -156,4 +155,5 @@ test("Personalmodul-Fundament: Dokumentregeln sind vor synchronen Startmigration
   assert.notEqual(visibilityIndex, -1);
   assert.ok(categoriesIndex < startupMigrationIndex);
   assert.ok(visibilityIndex < startupMigrationIndex);
+  assert.doesNotMatch(server, /runSqliteStartupSchemaMigrations\(/);
 });

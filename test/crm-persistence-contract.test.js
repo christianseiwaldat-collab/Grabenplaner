@@ -345,7 +345,7 @@ test("CRM-Repository ist als eigene Persistence-Scheibe in Anwendung und SQLite 
     "utf8",
   );
   const applicationCatalog = fs.readFileSync(
-    path.join(root, "lib", "persistence", "sqlite", "application-catalog.js"),
+    path.join(root, "lib", "persistence", "catalogs", "application-catalog.js"),
     "utf8",
   );
   const applicationSchema = fs.readFileSync(

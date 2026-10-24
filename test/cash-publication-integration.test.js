@@ -243,12 +243,14 @@ test('batched publication preserves the scalar plan and rolls back every binding
   f.session.permissions=[];await assert.rejects(runtime.operation(f.get,'preview',{request:{...request,expectedRevision:1}}),code('IMPORT_FORBIDDEN'));
 });
 
-test('the real background worker reads a separate file connection and produces the same PDF totals', async t => {
+test('historical immutable SQLite background worker preserves separate-file PDF totals for old data', async t => {
   const fs = require('node:fs'), path = require('node:path');
   const root = fs.realpathSync(path.resolve(__dirname, '../tmp')), dir = fs.mkdtempSync(path.join(root, 'report-worker-'));
   const databasePath = path.join(dir, 'source.db'), f = await fixture(t, { databasePath, count: 205 });
   await f.activate();
-  const { createSalesReportBatchWorker } = require('../lib/sales-report-batch-worker');
+  const historical = require('../test-support/legacy-baseline');
+  historical.linkFrozenDependencies();
+  const { createSalesReportBatchWorker } = historical.legacyRequire('lib/sales-report-batch-worker.js');
   const batchWorker = createSalesReportBatchWorker({ databasePath, scopeId: f.actor.scopeId, today: '2026-09-07',
     keyConfiguration: { activeKeyId: 'synthetic', keys: { synthetic: Buffer.alloc(32, 12).toString('base64') } } });
   const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');

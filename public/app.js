@@ -7662,7 +7662,7 @@ function renderServerDiagnostics(status, technical = null) {
       <div class="diagnostic-grid">
         <span><small>HTTPS-Pflicht</small><strong>${technical.httpsRequired ? "aktiv" : "nicht erforderlich"}</strong></span>
         <span><small>Passwortminimum</small><strong>${Number(technical.passwordMinLength || 6)} Zeichen</strong></span>
-        <span><small>SQLite</small><strong>${escapeHtml(technical.database?.journalMode || "–")} · ${Number(technical.database?.busyTimeoutMs || 0)} ms</strong></span>
+        <span><small>Datenbank</small><strong>PostgreSQL · gemeinsames Core-/Sales-Paar</strong></span>
         <span><small>Integrität</small><strong>${escapeHtml(technical.database?.integrity || "unbekannt")}</strong></span>
         <span><small>Migration</small><strong>${escapeHtml(technical.database?.migration?.id || "–")}</strong></span>
         <span><small>Instanzschutz</small><strong>${technical.instanceLock?.held ? "aktiv" : technical.instanceLock?.enabled ? "beim Serverstart" : "nicht nötig"}</strong></span>
@@ -8090,9 +8090,7 @@ async function loadSystemInfo() {
       <span><strong>Serverzeit</strong> ${escapeHtml(info.serverTime)} Uhr</span>
       <span><strong>App</strong> ${escapeHtml(appName)} ${escapeHtml(info.appVersionLabel)}</span>
       <span><strong>Node.js</strong> ${escapeHtml(info.nodeVersion)}</span>
-      <span><strong>${info.databaseProvider === "postgresql" ? "PostgreSQL" : "SQLite"}</strong> ${escapeHtml(info.databaseProvider === "postgresql"
-        ? (String(info.databaseVersion || "").match(/PostgreSQL\s+([\d.]+)/i)?.[1] || "Version nicht verfügbar")
-        : info.sqliteVersion)}</span>
+      <span><strong>PostgreSQL</strong> ${escapeHtml(String(info.databaseVersion || "").match(/PostgreSQL\s+([\d.]+)/i)?.[1] || "Version nicht verfügbar")}</span>
       <span><strong>System</strong> ${escapeHtml(info.platform)}</span>
       <span><strong>Datenbank</strong> ${escapeHtml(info.database)}</span>
       <span><strong>Interne Sicherung</strong> ${escapeHtml(info.appBackupDirectory || "geschützter App-Datenbereich")}</span>

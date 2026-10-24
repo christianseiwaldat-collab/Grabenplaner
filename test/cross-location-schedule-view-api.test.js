@@ -1,4 +1,7 @@
 "use strict";
+const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrfFromCookie } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -7,7 +10,6 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-cross-schedule-view-"));
 process.env.DB_PATH = path.join(testRoot, "dienstplan.db");
@@ -145,11 +147,11 @@ test.before(async () => {
   `).get().id);
   positionId = String(db.prepare("SELECT id FROM positions ORDER BY id LIMIT 1").get().id);
   const daySettings = JSON.stringify({});
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, 'Filiale 95 Privat', 1, ?, 1)
   `).run(FOREIGN_LOCATION, daySettings);
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, 'Inaktive Filiale', 1, ?, 0)
   `).run(INACTIVE_LOCATION, daySettings);
@@ -206,7 +208,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -370,7 +372,7 @@ test("Block 7 API: Auditfehler rollt die Dienstplan-Einstellungen vollständig z
   const before = db.prepare(`
     SELECT value FROM settings WHERE key = 'staff_assignment_request_change_policy'
   `).get().value;
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_cross_location_schedule_settings_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'schedule.cross-location.settings.update'
@@ -392,7 +394,7 @@ test("Block 7 API: Auditfehler rollt die Dienstplan-Einstellungen vollständig z
       SELECT value FROM settings WHERE key = 'staff_assignment_request_change_policy'
     `).get().value, before);
   } finally {
-    db.exec("DROP TRIGGER test_cross_location_schedule_settings_audit_abort");
+    dropFixtureTrigger(db, "test_cross_location_schedule_settings_audit_abort");
   }
 });
 
@@ -1024,7 +1026,7 @@ test("Block 6 API: ein Auditfehler rollt Entscheidung, Fachereignis und Filialei
   );
   const requestId = submitted.payload.request.id;
   const assignmentId = staffAssignmentRequestAssignmentId(requestId);
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_staff_assignment_decision_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'staff-assignment-request.accepted'
@@ -1060,7 +1062,7 @@ test("Block 6 API: ein Auditfehler rollt Entscheidung, Fachereignis und Filialei
       WHERE action = 'staff-assignment-request.email' AND entity_id = ?
     `).get(requestId).count, 1);
   } finally {
-    db.exec("DROP TRIGGER test_staff_assignment_decision_audit_abort");
+    dropFixtureTrigger(db, "test_staff_assignment_decision_audit_abort");
   }
 });
 
@@ -1195,7 +1197,7 @@ test("Einsatzanfragen: heutige Frist nutzt die Zielfiliale, wird frisch geprüft
   }
 });
 
-test("Block 12: fünf gleichzeitige persönliche Benutzeraktionen bleiben SQLite-stabil", async () => {
+test("Block 12: fünf gleichzeitige persönliche Benutzeraktionen bleiben PostgreSQL-stabil", async () => {
   const actors = Array.from({ length: 5 }, (_, index) => `block12-load-${index + 1}`);
   for (const [index, employeeNumber] of actors.entries()) {
     insertEmployee(employeeNumber, `Lastprofil ${index + 1}`, homeLocation, homeDepartment);
@@ -1232,62 +1234,6 @@ test("Block 12: fünf gleichzeitige persönliche Benutzeraktionen bleiben SQLite
       SELECT COUNT(*) AS count FROM staff_assignment_request_events WHERE request_id = ?
     `).get(requestId).count, 2);
   }
-  assert.deepEqual(db.prepare("PRAGMA integrity_check").all().map((row) => row.integrity_check), ["ok"]);
-  assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
-});
-
-test("Block 12: verifizierter Sicherungspunkt erhält Anfragehistorie und Geburtstagsnachweise", () => {
-  assert.equal(block12LoadRequestIds.length, 5);
-  const employeeNumber = "block12-load-1";
-  db.prepare(`
-    INSERT INTO portal_birthday_presentation_assignments (
-      employee_number, presentation_id, revision
-    ) VALUES (?, 'elegant', 1)
-  `).run(employeeNumber);
-  db.prepare(`
-    INSERT INTO portal_birthday_presentation_claims (
-      employee_number, event_year, presentation_id, policy_revision,
-      assignment_revision, receipt_sha256, revision
-    ) VALUES (?, 2026, 'elegant', 1, 1, ?, 1)
-  `).run(employeeNumber, "a".repeat(64));
-
-  const backupDirectory = path.join(testRoot, "block12-release-backup");
-  const backup = subject.createDatabaseBackupToDirectory(
-    backupDirectory,
-    "block12-release-readiness",
-    "test",
-  );
-  assert.equal(backup?.verified, true);
-  assert.equal(backup?.committed, true);
-  assert.equal(fs.existsSync(backup.path), true);
-  assert.equal(fs.existsSync(backup.marker), true);
-
-  const restoredPath = path.join(testRoot, "block12-restored.db");
-  fs.copyFileSync(backup.path, restoredPath);
-  const restored = openSqliteLegacyDatabase(restoredPath, { readOnly: true });
-  try {
-    assert.deepEqual(restored.prepare("PRAGMA quick_check").all().map((row) => row.quick_check), ["ok"]);
-    assert.deepEqual(restored.prepare("PRAGMA integrity_check").all().map((row) => row.integrity_check), ["ok"]);
-    assert.deepEqual(restored.prepare("PRAGMA foreign_key_check").all(), []);
-    const requestId = block12LoadRequestIds[0];
-    assert.equal(restored.prepare(`
-      SELECT COUNT(*) AS count FROM staff_assignment_requests WHERE id = ?
-    `).get(requestId).count, 1);
-    assert.equal(restored.prepare(`
-      SELECT COUNT(*) AS count FROM staff_assignment_request_revisions WHERE request_id = ?
-    `).get(requestId).count, 2);
-    assert.equal(restored.prepare(`
-      SELECT COUNT(*) AS count FROM staff_assignment_request_events WHERE request_id = ?
-    `).get(requestId).count, 2);
-    assert.deepEqual({ ...restored.prepare(`
-      SELECT presentation_id, revision
-      FROM portal_birthday_presentation_assignments WHERE employee_number = ?
-    `).get(employeeNumber) }, { presentation_id: "elegant", revision: 1 });
-    assert.deepEqual({ ...restored.prepare(`
-      SELECT event_year, presentation_id, revision
-      FROM portal_birthday_presentation_claims WHERE employee_number = ?
-    `).get(employeeNumber) }, { event_year: 2026, presentation_id: "elegant", revision: 1 });
-  } finally {
-    restored.close();
-  }
+  pgSchema.assertCoreSchemaLedger(db);
+  assert.deepEqual(pgSchema.foreignKeyViolations(db), []);
 });

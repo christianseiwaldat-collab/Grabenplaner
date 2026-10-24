@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 IFS=$'\n\t'
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+readonly PATH
+unset NODE_OPTIONS NODE_PATH NODE_EXTRA_CA_CERTS NODE_ICU_DATA NODE_V8_COVERAGE NODE_REDIRECT_WARNINGS NODE_TLS_REJECT_UNAUTHORIZED BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS OPENSSL_CONF OPENSSL_MODULES LD_PRELOAD LD_LIBRARY_PATH
 
 readonly SCRIPT_SOURCE="${BASH_SOURCE[0]}"
 readonly EXPECTED_COMMAND_TARGET="/opt/grabenplaner/app/server-tools/linux/update-grabenplaner-server.sh"
@@ -11,6 +14,23 @@ SCRIPT_PATH="$(readlink -f -- "$SCRIPT_SOURCE" 2>/dev/null || true)"
   || { printf '%s\n' "Der Wartungsbefehl zeigt nicht auf die erwartete Grabenplaner-Installation." >&2; exit 1; }
 readonly SCRIPT_PATH
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
+# Root must not execute an entrypoint or shared verifier from an account-writable
+# source directory. Package bytes are checked independently after extraction.
+for trusted_source_file in "$SCRIPT_PATH" "$SCRIPT_DIR/lib/common.sh"; do
+  [[ -f "$trusted_source_file" && ! -L "$trusted_source_file" \
+    && "$(stat --format='%u:%h' -- "$trusted_source_file")" == '0:1' ]] \
+    || { printf '%s\n' 'Der Wartungseinstieg ist nicht root-geschuetzt.' >&2; exit 1; }
+  trusted_source_parent="$trusted_source_file"
+  while :; do
+    [[ ! -L "$trusted_source_parent" && "$(stat --format='%u' -- "$trusted_source_parent")" == 0 ]] \
+      || { printf '%s\n' 'Der Wartungspfad ist nicht root-geschuetzt.' >&2; exit 1; }
+    trusted_source_mode="$(stat --format='%a' -- "$trusted_source_parent")"
+    (( (8#$trusted_source_mode & 022) == 0 )) \
+      || { printf '%s\n' 'Der Wartungspfad ist fremdschreibbar.' >&2; exit 1; }
+    [[ "$trusted_source_parent" != / ]] || break
+    trusted_source_parent="$(dirname -- "$trusted_source_parent")"
+  done
+done
 # shellcheck source=server-tools/linux/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
@@ -76,6 +96,7 @@ allow_downgrade=0
 lock_already_held=0
 commit_marker_arg=""
 runtime_v5_transition=""
+runtime_v6_transition=""
 verification_policy="auto"
 package_verifier_sha256=""
 xoffi_snapshots_migration=0
@@ -119,6 +140,7 @@ while (($#)); do
     --lock-already-held) lock_already_held=1; shift ;;
     --commit-marker) commit_marker_arg="${2:?Wert fuer --commit-marker fehlt}"; shift 2 ;;
     --runtime-v5-transition) runtime_v5_transition="${2:?Wert fuer --runtime-v5-transition fehlt}"; shift 2 ;;
+    --runtime-v6-transition) runtime_v6_transition="${2:?Wert fuer --runtime-v6-transition fehlt}"; shift 2 ;;
     --verification) verification_policy="${2:?Wert fuer --verification fehlt}"; shift 2 ;;
     --package-verifier-sha256) package_verifier_sha256="${2:?Wert fuer --package-verifier-sha256 fehlt}"; shift 2 ;;
     --xoffi-snapshots-migration) xoffi_snapshots_migration=1; shift ;;
@@ -133,7 +155,7 @@ done
 gp_require_root
 if (( preflight_only == 1 )); then
   [[ -z "$package_arg" && -z "$sha256_arg" && -z "$sha256_file_arg" && -z "$commit_marker_arg" \
-    && -z "$runtime_v5_transition" && -z "$package_verifier_sha256" && "$xoffi_snapshots_migration" -eq 0 \
+    && -z "$runtime_v5_transition" && -z "$runtime_v6_transition" && -z "$package_verifier_sha256" && "$xoffi_snapshots_migration" -eq 0 \
     && "$postgresql_backup_budget_repair" -eq 0 && "$lock_already_held" -eq 0 && "$allow_downgrade" -eq 0 ]] \
     || gp_die "Der Deploy-Vorabcheck akzeptiert keine Paket-, Migrations- oder Freigabeoptionen."
   preflight_script="$SCRIPT_DIR/preflight-grabenplaner-deploy.sh"
@@ -149,7 +171,7 @@ if (( preflight_only == 1 )); then
   [[ -z "$build_cache_arg" ]] || preflight_args+=(--build-cache "$build_cache_arg")
   exec bash "$preflight_script" "${preflight_args[@]}"
 fi
-for command_name in cmp realpath readlink flock sha256sum unzip zipinfo systemctl curl find grep sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
+for command_name in cmp cp rmdir realpath readlink flock sha256sum unzip zipinfo systemctl curl find grep sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
 [[ "$(uname -m)" == "x86_64" ]] || gp_die "Das Serverpaket wird derzeit nur auf Linux x86_64 unterstuetzt."
 [[ -n "$package_arg" ]] || gp_die "--package ist erforderlich."
 [[ "$verification_policy" == auto || "$verification_policy" == full ]] || gp_die "--verification erlaubt auto oder full."
@@ -163,11 +185,14 @@ for command_name in cmp realpath readlink flock sha256sum unzip zipinfo systemct
   || gp_die "--commit-marker ist ausschliesslich innerhalb einer uebernommenen Runtime-Migrationssperre erlaubt."
 
 gp_load_env_file "$env_file"
+unset NODE_OPTIONS NODE_PATH NODE_EXTRA_CA_CERTS NODE_ICU_DATA NODE_V8_COVERAGE NODE_REDIRECT_WARNINGS NODE_TLS_REJECT_UNAUTHORIZED BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS OPENSSL_CONF OPENSSL_MODULES LD_PRELOAD LD_LIBRARY_PATH
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
 data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"
-database_provider="${DB_PROVIDER:-sqlite}"
+database_provider="${DB_PROVIDER:-}"
+[[ "$database_provider" == postgresql ]] \
+  || gp_die 'Dieser GP-Stand unterstuetzt ausschliesslich PostgreSQL. SQLite-Bestaende zuerst mit dem erhaltenen Altstand kontrolliert migrieren.'
 if (( postgresql_backup_budget_repair == 1 )); then
-  [[ "$database_provider" == postgresql && -z "$runtime_v5_transition" && "$xoffi_snapshots_migration" -eq 0 ]] \
+  [[ "$database_provider" == postgresql && -z "$runtime_v5_transition" && -z "$runtime_v6_transition" && "$xoffi_snapshots_migration" -eq 0 ]] \
     || gp_die 'Der Backup-Budget-Uebergang verlangt PostgreSQL ohne weitere Migrationsbruecke.'
 fi
 if (( xoffi_snapshots_migration == 1 )); then
@@ -178,9 +203,6 @@ fi
 if [[ "$database_provider" == postgresql ]]; then
   [[ -z "$database_arg" || "$database_arg" == "$data_dir/data/postgresql-pair.json" ]] || gp_die 'Der PostgreSQL-Paarbezug ist ungueltig.'
   database="$(gp_existing_file "$data_dir/data/postgresql-pair.json" 'PostgreSQL-Paarbezug')"
-else
-  [[ "$database_provider" == sqlite ]] || gp_die 'Der Datenbankprovider wird nicht unterstuetzt.'
-  database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
 fi
 postgresql_before_identity=''
 backup_dir="$(gp_safe_absolute_path "${backup_arg:-${BACKUP_DIR:-$GP_DEFAULT_BACKUP_DIR}}" "Backupordner")"
@@ -191,6 +213,8 @@ backup_keep="${backup_keep_arg:-${GRABENPLANER_BACKUP_RETENTION_DAYS:-20}}"
 port="${PORT:-3000}"
 [[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1 && port <= 65535 )) || gp_die "PORT ist ungueltig."
 if [[ -n "$node_arg" ]]; then node="$(gp_existing_file "$node_arg" "Node.js")"; else gp_require_command node; node="$(command -v node)"; fi
+node="$(gp_assert_root_node "$node")" || gp_die "Die privilegierte Node-Laufzeit ist nicht unabhaengig root-geschuetzt."
+root_node() { /usr/bin/env -i PATH="$PATH" LANG=C.UTF-8 HOME=/root NODE_ENV=production "$node" --no-global-search-paths "$@"; }
 if [[ -n "$pnpm_arg" ]]; then
   pnpm_program="$(gp_existing_file "$pnpm_arg" "pnpm")"
   pnpm_arguments=()
@@ -203,9 +227,11 @@ elif command -v corepack >/dev/null 2>&1; then
 else
   gp_die "Weder pnpm noch Corepack/pnpm ist installiert."
 fi
-"$node" -e 'const [major, minor] = process.versions.node.split(".").map(Number); if (major < 22 || (major === 22 && minor < 13)) process.exit(1)' \
+pnpm_program="$(gp_assert_root_package_manager "$pnpm_program" "${pnpm_arguments[@]}")" \
+  || gp_die "Die Paketmanager-Distribution ist nicht vollstaendig root-geschuetzt."
+root_node -e 'const [major, minor] = process.versions.node.split(".").map(Number); if (major < 22 || (major === 22 && minor < 13)) process.exit(1)' \
   || gp_die "Node.js >=22.13.0 wird benoetigt."
-gp_validate_https_url "$node" "$public_url" || gp_die "GRABENPLANER_PUBLIC_URL muss eine reine HTTPS-Ursprungsadresse sein."
+gp_validate_https_url root_node "$public_url" || gp_die "GRABENPLANER_PUBLIC_URL muss eine reine HTTPS-Ursprungsadresse sein."
 getent passwd "$service_user" >/dev/null || gp_die "Dienstbenutzer fehlt: $service_user"
 getent group "$service_group" >/dev/null || gp_die "Dienstgruppe fehlt: $service_group"
 getent passwd "$build_user" >/dev/null || gp_die "Isolierter Build-Benutzer fehlt: $build_user"
@@ -213,6 +239,92 @@ getent group "$build_group" >/dev/null || gp_die "Isolierte Build-Gruppe fehlt: 
 [[ "$(id -gn "$build_user")" == "$build_group" ]] || gp_die "Der Build-Benutzer verwendet eine unerwartete Hauptgruppe."
 gp_assert_shared_tmp "$service_user" "$build_user"
 build_cache="$(gp_existing_directory "${build_cache_arg:-$GP_DEFAULT_BUILD_CACHE}" "Build-Cache")"
+# Early read-only PostgreSQL checks intentionally use the installed driver.
+# Establish ownership of its complete closure before root imports any of it.
+root_node - "$app_dir/node_modules" <<'NODE' >/dev/null \
+  || gp_die "Die installierten privilegierten Abhaengigkeiten sind nicht vollstaendig root-geschuetzt."
+const fs = require('node:fs'), path = require('node:path');
+const root = path.resolve(process.argv[2]);
+let checking = root;
+try {
+  const dependencyRoots = [root];
+  function trustedDependencyBinLink(file, dependencyRoot) {
+    // Only protected node_modules/.bin commands may resolve to regular files
+    // in this same dependency tree. All other symbolic links stay forbidden.
+    const inside = target => target === dependencyRoot || (!path.relative(dependencyRoot, target).startsWith('..' + path.sep)
+      && path.relative(dependencyRoot, target) !== '..' && !path.isAbsolute(path.relative(dependencyRoot, target)));
+    const metadata = s => [s.dev, s.ino, s.uid, s.gid, s.mode, s.nlink, s.size, s.mtimeMs, s.ctimeMs].join(':');
+    const regular = target => {
+      const s = fs.lstatSync(target);
+      if (s.isSymbolicLink() || s.uid !== 0 || (s.mode & 0o022)
+        || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1)) || fs.realpathSync(target) !== target) throw Error('unsafe');
+      return s;
+    };
+    let cursor = dependencyRoot;
+    regular(cursor);
+    for (const part of path.relative(dependencyRoot, path.dirname(file)).split(path.sep).filter(Boolean)) {
+      cursor = path.join(cursor, part);
+      if (!regular(cursor).isDirectory()) throw Error('unsafe');
+    }
+    let pending = [path.basename(file)];
+    const links = new Set();
+    while (pending.length) {
+      const part = pending.shift();
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        cursor = path.dirname(cursor);
+        if (!inside(cursor) || !regular(cursor).isDirectory()) throw Error('unsafe');
+        continue;
+      }
+      const target = path.join(cursor, part), s = fs.lstatSync(target);
+      if (s.isSymbolicLink()) {
+        if (!inside(target) || path.basename(path.dirname(target)) !== '.bin'
+          || path.basename(path.dirname(path.dirname(target))) !== 'node_modules'
+          || s.uid !== 0 || s.nlink !== 1 || links.has(target) || links.size >= 64) throw Error('unsafe');
+        links.add(target);
+        const destination = fs.readlinkSync(target);
+        if (!destination || metadata(fs.lstatSync(target)) !== metadata(s)) throw Error('unsafe');
+        if (path.isAbsolute(destination)) {
+          if (!destination.startsWith(dependencyRoot + path.sep)) throw Error('unsafe');
+          cursor = dependencyRoot;
+          pending = destination.slice(dependencyRoot.length + 1).split(path.sep).concat(pending);
+        } else {
+          pending = destination.split(path.sep).concat(pending);
+        }
+      } else {
+        cursor = target;
+        const checked = regular(cursor);
+        if (pending.length && !checked.isDirectory()) throw Error('unsafe');
+      }
+    }
+    if (!inside(cursor) || !regular(cursor).isFile()) throw Error('unsafe');
+  }
+  function trusted(target, recursive = false) {
+    checking = target;
+    const s = fs.lstatSync(target);
+    if (s.isSymbolicLink()) {
+      const dependencyRoot = dependencyRoots.find(base => target.startsWith(base + path.sep));
+      if (!dependencyRoot) throw Error('unsafe');
+      trustedDependencyBinLink(target, dependencyRoot);
+      return;
+    }
+    if (s.uid !== 0 || (s.mode & 0o022)
+      || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1))
+      || fs.realpathSync(target) !== target) throw Error('unsafe');
+    if (recursive && s.isDirectory()) for (const name of fs.readdirSync(target)) trusted(path.join(target, name), true);
+  }
+  for (let directory = root;; directory = path.dirname(directory)) {
+    trusted(directory);
+    if (directory === path.dirname(directory)) break;
+  }
+  trusted(root, true);
+} catch (error) {
+  const reason = typeof error.code === 'string' ? error.code : 'protected metadata or dependency-bin-link contract';
+  process.stderr.write('Unsafe installed dependency tree: ' + JSON.stringify(checking).slice(0, 600)
+    + ' (' + reason.slice(0, 80) + ')\n');
+  process.exitCode = 1;
+}
+NODE
 
 package="$(gp_existing_file "$package_arg" "Updatepaket")"
 [[ "$package" == *.zip ]] || gp_die "Das Linux-Serverupdate muss als ZIP-Paket vorliegen."
@@ -232,7 +344,7 @@ commit_marker=""
 if [[ -n "$commit_marker_arg" ]]; then
   commit_marker="$(gp_safe_absolute_path "$commit_marker_arg" "Updater-Commitmarker")"
   commit_marker_parent="$(dirname -- "$commit_marker")"
-  [[ "$commit_marker_parent" =~ ^/opt/grabenplaner/\.runtime-v(2|3|4|5)-migration\.[A-Za-z0-9]+$ \
+  [[ "$commit_marker_parent" =~ ^/opt/grabenplaner/\.runtime-v(2|3|4|5|6)-migration\.[A-Za-z0-9]+$ \
     && -d "$commit_marker_parent" && ! -L "$commit_marker_parent" \
     && "$(stat --format='%u:%g:%a' -- "$commit_marker_parent")" == "0:0:711" \
     && ! -e "$commit_marker" && ! -L "$commit_marker" ]] \
@@ -255,7 +367,7 @@ trusted_tree_verifier="$app_dir/server-tools/linux/lib/verify-install-tree.js"
 # predecessor. Pin the standalone verifier separately; never infer this trust
 # from the candidate's own manifest or silently fall back after a rejection.
 if [[ -n "$package_verifier_sha256" ]]; then
-  [[ -z "$runtime_v5_transition" ]] || gp_die "Paketprueferwechsel und Runtime-v5-Migration sind getrennte Vorgaenge."
+  [[ -z "$runtime_v5_transition" && -z "$runtime_v6_transition" ]] || gp_die "Paketprueferwechsel und Runtime-Migration sind getrennte Vorgaenge."
   gp_validate_sha256 "$package_verifier_sha256"
   pinned_verifier="$SCRIPT_DIR/lib/verify-package.js"
   [[ -f "$pinned_verifier" && ! -L "$pinned_verifier" && "$(stat --format='%u:%h' -- "$pinned_verifier")" == "0:1" ]] \
@@ -276,15 +388,29 @@ if [[ -n "$package_verifier_sha256" ]]; then
   gp_info "Separat freigegebener Paketpruefer SHA256 ${package_verifier_sha256,,}; vollstaendige Deploy-Pruefung."
 fi
 if [[ -n "$runtime_v5_transition" ]]; then
+  [[ -z "$runtime_v6_transition" ]] || gp_die "Runtime-Migrationsbruecken duerfen nicht kombiniert werden."
   [[ "$lock_already_held" -eq 1 && -n "$commit_marker" ]] || gp_die "Runtime v5 verlangt den gebundenen Migrationsaufruf."
   inherited_lock_target="$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)"
   [[ "$inherited_lock_target" == "$(gp_resolve_path "$GP_DEFAULT_MAINTENANCE_LOCK")" ]] \
     && flock --nonblock 9 || gp_die "Die Runtime-v5-Wartungssperre fehlt."
-  "$node" "$SCRIPT_DIR/lib/runtime-v5-transition.js" invocation "$runtime_v5_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
+  root_node "$SCRIPT_DIR/lib/runtime-v5-transition.js" invocation "$runtime_v5_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
     || gp_die "Der Runtime-v5-Vertrauensuebergang ist ungueltig."
   trusted_package_verifier="$SCRIPT_DIR/lib/verify-package.js"
   installed_runtime_verifier="$trusted_package_verifier"
   trusted_tree_verifier="$SCRIPT_DIR/lib/verify-install-tree.js"
+fi
+if [[ -n "$runtime_v6_transition" ]]; then
+  [[ "$lock_already_held" -eq 1 && -n "$commit_marker" && "$xoffi_snapshots_migration" -eq 0 ]] \
+    || gp_die "Runtime v6 verlangt den gebundenen PostgreSQL-Migrationsaufruf ohne weitere Migrationsbruecke."
+  inherited_lock_target="$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)"
+  [[ "$inherited_lock_target" == "$(gp_resolve_path "$GP_DEFAULT_MAINTENANCE_LOCK")" ]] \
+    && flock --nonblock 9 || gp_die "Die Runtime-v6-Wartungssperre fehlt."
+  root_node "$SCRIPT_DIR/lib/runtime-v6-transition.js" invocation "$runtime_v6_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
+    || gp_die "Der Runtime-v6-Vertrauensuebergang ist ungueltig."
+  trusted_package_verifier="$SCRIPT_DIR/lib/verify-package.js"
+  installed_runtime_verifier="$trusted_package_verifier"
+  trusted_tree_verifier="$SCRIPT_DIR/lib/verify-install-tree.js"
+  verification_policy=full
 fi
 [[ -f "$trusted_package_verifier" && ! -L "$trusted_package_verifier" ]] || gp_die "Die installierte vertrauenswuerdige Paketpruefung fehlt."
 [[ -f "$trusted_tree_verifier" && ! -L "$trusted_tree_verifier" ]] || gp_die "Die installierte vertrauenswuerdige Baumpruefung fehlt."
@@ -376,7 +502,7 @@ database_lock_helper=""
 backup_database=""
 backup_amu=""
 candidate_version=""
-old_version="$("$node" -p "require(process.argv[1]).version" "$app_dir/package.json")"
+old_version="$(root_node -p "require(process.argv[1]).version" "$app_dir/package.json")"
 rollback_data_ok=1
 rollback_public_ok=1
 rollback_app_ok=1
@@ -424,7 +550,7 @@ write_receipt() {
   local error_text="${2:-}"
   install -d -m 0750 -o root -g "$service_group" -- "$history_dir"
   local receipt="$history_dir/update-$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N').json"
-  "$node" - "$receipt" "$status" "$old_version" "$candidate_version" "$(basename -- "$package")" "$actual_package_sha256" \
+  root_node - "$receipt" "$status" "$old_version" "$candidate_version" "$(basename -- "$package")" "$actual_package_sha256" \
     "$backup_database" "$error_text" "$rollback_stop_ok" "$rollback_app_ok" "$rollback_data_ok" "$rollback_public_ok" \
     "$deploy_started_at" "$deploy_decision" "$deploy_phases_file" "$schema_migration_result" "$school_migration_result" "$session_security_migration_result" <<'NODE'
 const fs = require("node:fs");
@@ -474,7 +600,7 @@ NODE
 
 commit_marker_is_valid() {
   [[ -n "$commit_marker" && -f "$commit_marker" && ! -L "$commit_marker" ]] || return 1
-  "$node" - "$commit_marker" "$candidate_version" "$actual_package_sha256" <<'NODE' >/dev/null
+  root_node - "$commit_marker" "$candidate_version" "$actual_package_sha256" <<'NODE' >/dev/null
 const fs=require("node:fs");const [file,version,sha]=process.argv.slice(2);
 const stat=fs.lstatSync(file);const value=JSON.parse(fs.readFileSync(file,"utf8"));
 if(!stat.isFile()||stat.isSymbolicLink()||stat.uid!==0||(stat.mode&0o077)!==0||value?.format!=="grabenplaner-update-commit"||value?.schemaVersion!==1||value?.status!=="committed"||value?.installedVersion!==version||value?.packageSha256!==sha||!Number.isFinite(Date.parse(value?.committedAt||"")))process.exit(1);
@@ -483,7 +609,7 @@ NODE
 
 write_commit_marker() {
   [[ -n "$commit_marker" ]] || return 0
-  "$node" - "$commit_marker" "$candidate_version" "$actual_package_sha256" "$receipt" <<'NODE'
+  root_node - "$commit_marker" "$candidate_version" "$actual_package_sha256" "$receipt" <<'NODE'
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
 const [file,installedVersion,packageSha256,receipt]=process.argv.slice(2);
 const parent=path.dirname(file);const temporary=path.join(parent,`.updater-commit.${process.pid}.${crypto.randomBytes(6).toString("hex")}`);
@@ -546,24 +672,24 @@ begin_deploy_deferral() {
   [[ -f "$contract" && ! -L "$contract" && "$(stat --format='%u:%g:%a:%h' -- "$contract")" == "0:0:600:1" ]] \
     || gp_die "Der Offsite-Vertrag fuer den Nachtlaufaufschub ist unsicher."
   # The installed module is stable across application rename and rollback.
-  deploy_deferral_helper_sha256="$("$node" - "$contract" "$module_root" <<'NODE'
+  deploy_deferral_helper_sha256="$(root_node - "$contract" "$module_root" <<'NODE'
 const fs=require('node:fs'),crypto=require('node:crypto');
 const [file,root]=process.argv.slice(2),receipt=JSON.parse(fs.readFileSync(file,'utf8'));
-if(receipt.moduleVersion!==12)throw new Error('DEPLOY_DEFERRAL_MODULE_MIGRATION_REQUIRED');
+if(![12,13].includes(receipt.moduleVersion))throw new Error('DEPLOY_DEFERRAL_MODULE_MIGRATION_REQUIRED');
 for(const name of ['lib/offsite-contract.js','lib/deploy-deferral.js']){
  const target=root+'/'+name,st=fs.lstatSync(target),item=receipt.files.find(v=>v.path===name);
  if(!st.isFile()||st.isSymbolicLink()||st.uid!==0||st.gid!==0||st.nlink!==1||(st.mode&0o022)!==0||!item||crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex')!==item.sha256)throw new Error('DEPLOY_DEFERRAL_MODULE_PROTECTION');
 }
 process.stdout.write(receipt.files.find(v=>v.path==='lib/deploy-deferral.js').sha256);
 NODE
-)" || gp_die "Der Nachtlaufaufschub benoetigt das zuvor geprueft installierte Offsite-Modul 12."
-  "$node" "$module_root/lib/offsite-contract.js" verify-installed-bound "$module_root" "$contract" >/dev/null \
+)" || gp_die "Der Nachtlaufaufschub benoetigt das zuvor geprueft installierte Offsite-Modul 12 oder 13."
+  root_node "$module_root/lib/offsite-contract.js" verify-installed-bound "$module_root" "$contract" >/dev/null \
     || gp_die "Der installierte Offsite-Vertrag fuer den Nachtlaufaufschub stimmt nicht."
   flock --nonblock 9 || gp_die "Die eigene Wartungssperre fuer den Nachtlaufaufschub fehlt."
-  deploy_deferral_generation="$("$node" "$deploy_deferral_helper" begin "$$" "${sha256_arg,,}")" \
+  deploy_deferral_generation="$(root_node "$deploy_deferral_helper" begin "$$" "${sha256_arg,,}")" \
     || gp_die "Der begrenzte Nachtlaufaufschub konnte nicht belegt werden."
   # Direct Node child: close all inherited maintenance descriptors before exec.
-  "$node" "$deploy_deferral_helper" heartbeat "$$" "$deploy_deferral_generation" 5>&- 6>&- 7>&- 8>&- 9>&- &
+  root_node "$deploy_deferral_helper" heartbeat "$$" "$deploy_deferral_generation" 5>&- 6>&- 7>&- 8>&- 9>&- &
   deploy_deferral_pid=$!
 }
 
@@ -577,7 +703,7 @@ finish_deploy_deferral() {
   [[ "$(gp_sha256 "$deploy_deferral_helper")" == "$deploy_deferral_helper_sha256" ]] || return 1
   local outcome=aborted due
   (( update_committed == 1 )) && outcome=completed
-  due="$("$node" "$deploy_deferral_helper" finish "$$" "$deploy_deferral_generation" "$outcome")" || return 1
+  due="$(root_node "$deploy_deferral_helper" finish "$$" "$deploy_deferral_generation" "$outcome")" || return 1
   if [[ "$due" == due ]]; then
     systemctl start --no-block grabenplaner-offsite-assurance@scheduled-nightly.service >/dev/null || return 1
   fi
@@ -620,7 +746,7 @@ pause_deploy_timers() {
     active_state="$(systemctl show --property=ActiveState --value "$unit" 2>/dev/null || true)"
     # Only the exact scheduled service may now be waiting behind our FD 9.
     if [[ "$unit" == grabenplaner-offsite-assurance@scheduled-nightly.service && -n "$deploy_deferral_generation" \
-      && "$("$node" "$deploy_deferral_helper" due)" == due ]]; then continue; fi
+      && "$(root_node "$deploy_deferral_helper" due)" == due ]]; then continue; fi
     case "$active_state" in
       inactive|failed) ;;
       *) gp_die "Die Wartung $unit ist bereits aktiv oder im Zustandswechsel ($active_state). Der Deploy wird vor Paketinstallation und Virenscan beendet." ;;
@@ -741,7 +867,7 @@ rollback_update() {
   if (( rollback_app_ok == 1 && new_service_started == 1 )) && [[ "$database_provider" == postgresql ]]; then
     # Retain all PostgreSQL writes. A code rollback is safe only while the
     # previous package's exact database pair/schema remains compatible.
-    postgresql_rollback_identity="$("$node" "$app_dir/server-tools/linux/lib/postgresql-operations.js" identity /etc/grabenplaner/postgresql-operations.json 2>/dev/null)"
+    postgresql_rollback_identity="$(root_node "$app_dir/server-tools/linux/lib/postgresql-operations.js" identity /etc/grabenplaner/postgresql-operations.json 2>/dev/null)"
     if [[ -z "$postgresql_before_identity" || "$postgresql_rollback_identity" != "$postgresql_before_identity" ]]; then
       rollback_data_ok=0
       gp_log ERROR 'Der PostgreSQL-Stand passt nicht zur vorherigen App. Die Daten bleiben erhalten; der Dienst bleibt fuer die gezielte Wiederherstellung gestoppt.'
@@ -761,7 +887,9 @@ rollback_update() {
   fi
   rollback_public_ok=0
   if (( rollback_app_ok == 1 && rollback_data_ok == 1 )) && [[ -d "$app_dir" && ! -L "$app_dir" ]]; then
-    gp_configure_nightly_backups "$app_dir" "$node" || gp_warn "Der Sicherungszeitplan muss nach der Rueckkehr geprueft werden."
+    if [[ -z "$runtime_v6_transition" ]]; then
+      gp_configure_nightly_backups "$app_dir" "$node" || gp_warn "Der Sicherungszeitplan muss nach der Rueckkehr geprueft werden."
+    fi
     systemctl start "$service"
     if gp_wait_ready "$internal_ready_url" "$health_timeout" && gp_wait_ready "$public_ready_url" "$health_timeout"; then
       rollback_public_ok=1
@@ -803,7 +931,7 @@ create_exact_local_backup() {
   local backup_script="$app_dir/server-tools/linux/backup-grabenplaner.sh"
   local backup_app_dir="$app_dir"
   local -a retention_args=()
-  if [[ -n "$runtime_v5_transition" ]] || (( ${xoffi_snapshots_migration:-0} == 1 || ${postgresql_backup_repair:-0} == 1 || ${postgresql_backup_budget_repair:-0} == 1 )); then
+  if [[ -n "$runtime_v5_transition" || -n "$runtime_v6_transition" ]] || (( ${xoffi_snapshots_migration:-0} == 1 || ${postgresql_backup_repair:-0} == 1 || ${postgresql_backup_budget_repair:-0} == 1 )); then
     # This complete candidate tree has already passed manifest, dependency,
     # ClamAV and permission checks. The Xoffi release also carries the bounded
     # backup query budget needed by large existing pairs. The probe repair is
@@ -814,25 +942,27 @@ create_exact_local_backup() {
     if (( ${postgresql_backup_budget_repair:-0} == 1 )); then
       # Recheck before each fresh pre-swap backup, including the full path's
       # second point. A previous point is never accepted as a replacement.
-      "$node" "$backup_app_dir/server-tools/linux/lib/postgresql-backup-budget-compat.js" "$app_dir" "$backup_app_dir" >/dev/null \
+      root_node "$backup_app_dir/server-tools/linux/lib/postgresql-backup-budget-compat.js" "$app_dir" "$backup_app_dir" >/dev/null \
         || gp_die 'Der gepruefte Backup-Budget-Vertrag hat sich geaendert.'
     fi
-    if [[ -n "$runtime_v5_transition" ]]; then retention_args=(--preserve-existing-backups); fi
+    # The historical PostgreSQL dispatcher ignored the preserve flag. Only the
+    # complete qualified candidate has the explicit no-prune operation.
+    if [[ -n "$runtime_v5_transition" || -n "$runtime_v6_transition" ]]; then retention_args=(--preserve-existing-backups); fi
   elif [[ "$deploy_mode" == short ]]; then
     retention_args=(--defer-archive)
   fi
   [[ -x "$backup_script" ]] || gp_die "Installiertes Linux-Backupwerkzeug fehlt: $backup_script"
   if [[ "$database_provider" == postgresql ]]; then
-    postgresql_before_identity="$("$node" "$backup_app_dir/server-tools/linux/lib/postgresql-operations.js" identity /etc/grabenplaner/postgresql-operations.json)" || gp_die 'Der PostgreSQL-Paarstand konnte nicht gebunden werden.'
+    postgresql_before_identity="$(root_node "$backup_app_dir/server-tools/linux/lib/postgresql-operations.js" identity /etc/grabenplaner/postgresql-operations.json)" || gp_die 'Der PostgreSQL-Paarstand konnte nicht gebunden werden.'
   fi
   "$backup_script" --env-file "$env_file" --app-dir "$backup_app_dir" --data-dir "$data_dir" --database "$database" \
     --backup-dir "$backup_dir" --keep "$backup_keep" --service "$service" --node "$node" \
     --service-user "$service_user" --service-group "$service_group" --lock-already-held "${retention_args[@]}" >"$backup_result_file"
-  backup_database="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).path))' "$backup_result_file")"
-  backup_amu="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).amuBackup))' "$backup_result_file")"
+  backup_database="$(root_node -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).path))' "$backup_result_file")"
+  backup_amu="$(root_node -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).amuBackup))' "$backup_result_file")"
   if [[ "$database_provider" == postgresql ]]; then
     [[ -d "$backup_database" && -d "$backup_amu" ]] || gp_die 'Die gekoppelte PostgreSQL-Sicherung ist unvollstaendig.'
-    "$node" "$backup_app_dir/server-tools/linux/lib/postgresql-operations.js" verify /etc/grabenplaner/postgresql-operations.json "$backup_database" "$backup_database.complete.json" >/dev/null || gp_die 'Die PostgreSQL-Sicherung konnte nicht bestaetigt werden.'
+    root_node "$backup_app_dir/server-tools/linux/lib/postgresql-operations.js" verify /etc/grabenplaner/postgresql-operations.json "$backup_database" "$backup_database.complete.json" >/dev/null || gp_die 'Die PostgreSQL-Sicherung konnte nicht bestaetigt werden.'
   else
     [[ -f "$backup_database" && -d "$backup_amu" ]] || gp_die "Das Sicherheitsbackup vor dem Update ist unvollstaendig."
   fi
@@ -904,34 +1034,39 @@ done <"$entries_file"
 (cd -- "$build_cache" && runuser --user "$build_user" -- unzip -qq "$staged_package" -d "$extract_root")
 actual_expanded_bytes="$(du --bytes --summarize "$extract_root" | awk '{print $1}')"
 (( actual_expanded_bytes <= maximum_expanded_bytes )) || gp_die "Die tatsaechlich entpackte Paketgroesse ist zu gross."
+gp_seal_build_tree "$extract_root" "$maintenance_root/verified-source" "$service_group" \
+  || gp_die "Der Kandidat konnte vor den privilegierten Vorpruefungen nicht mit frischen Dateien versiegelt werden."
+extract_root="$maintenance_root/verified-source"
+gp_verify_sealed_zip "$staged_package" "$extract_root" 0 \
+  || gp_die "Der versiegelte Quellbaum stimmt nicht exakt mit dem originalen SHA-geprueften ZIP ueberein."
 
-"$node" "$trusted_package_verifier" "$extract_root" >"$manifest_result_file" || gp_die "Die Einzeldatei- und Manifestpruefung ist fehlgeschlagen."
+root_node "$trusted_package_verifier" "$extract_root" >"$manifest_result_file" || gp_die "Die Einzeldatei- und Manifestpruefung ist fehlgeschlagen."
 if [[ "$database_provider" == postgresql ]]; then
-  "$node" "$app_dir/server-tools/linux/postgresql/managed-contract.js" "$extract_root" >/dev/null \
+  root_node "$app_dir/server-tools/linux/postgresql/managed-contract.js" "$extract_root" >/dev/null \
     || gp_die 'Der PostgreSQL-Dienstvertrag stimmt nicht mit dem Paket ueberein; eine explizite Modulwartung ist erforderlich.'
   if (( postgresql_backup_budget_repair == 1 )); then
-    "$node" "$extract_root/server-tools/linux/lib/postgresql-backup-budget-compat.js" "$app_dir" "$extract_root" >/dev/null \
+    root_node "$extract_root/server-tools/linux/lib/postgresql-backup-budget-compat.js" "$app_dir" "$extract_root" >/dev/null \
       || gp_die 'Der Backup-Budget-Uebergang ist nicht fuer den installierten und den geprueften Kandidatenbaum freigegeben.'
   fi
   # Only the installed v0.92.58 repair needs this bridge. Later releases keep
   # using their already repaired installed engine even when candidate code changes.
   if [[ "$old_version" == 0.92.58-beta && -z "$runtime_v5_transition" && "$xoffi_snapshots_migration" == 0 ]]; then
-    "$node" "$extract_root/server-tools/linux/lib/postgresql-backup-repair-compat.js" "$app_dir" "$extract_root" >/dev/null \
+    root_node "$extract_root/server-tools/linux/lib/postgresql-backup-repair-compat.js" "$app_dir" "$extract_root" >/dev/null \
       || gp_die 'Die Reparatur des PostgreSQL-Backupwerkzeugs ist nicht rueckwaertskompatibel verifiziert.'
     postgresql_backup_repair=1
   fi
-  # Candidate dependencies are not installed yet. The read-only path check
-  # resolves its PostgreSQL module from the verified installed application.
-  NODE_PATH="$app_dir/node_modules" "$node" "$extract_root/server-tools/linux/lib/postgresql-operations.js" check-paths \
+  # These candidate checks load local path/configuration code only. The pg driver
+  # is loaded by actual database operations after the trusted closure is ready.
+  root_node "$extract_root/server-tools/linux/lib/postgresql-operations.js" check-paths \
     /etc/grabenplaner/postgresql-operations.json "$data_dir" "$backup_dir" >/dev/null \
     || gp_die 'Daten- oder Backupordner weichen von der PostgreSQL-Konfiguration ab. Der Deploy wurde vor Abhaengigkeiten, Virenscan und Dienststopp beendet.'
-  NODE_PATH="$app_dir/node_modules" "$node" "$extract_root/server-tools/linux/lib/postgresql-operations.js" recovery-files-preflight \
+  root_node "$extract_root/server-tools/linux/lib/postgresql-operations.js" recovery-files-preflight \
     /etc/grabenplaner/postgresql-operations.json >/dev/null \
     || gp_die 'Die PostgreSQL-Rueckkehrdateien verletzen den Pfad- oder Dateitypvertrag. Der Deploy wurde vor Abhaengigkeiten, Virenscan und Backup beendet.'
 fi
-"$node" "$installed_runtime_verifier" --runtime-contract "$app_dir" >"$installed_runtime_result_file" \
+root_node "$installed_runtime_verifier" --runtime-contract "$app_dir" >"$installed_runtime_result_file" \
   || gp_die "Der installierte Linux-Runtimevertrag ist ungueltig; das Update erfordert eine explizite Serverwartung."
-runtime_gate="$("$node" - "$installed_runtime_result_file" "$manifest_result_file" <<'NODE'
+runtime_gate="$(root_node - "$installed_runtime_result_file" "$manifest_result_file" <<'NODE'
 const fs = require("node:fs");
 const [installedFile, candidateFile] = process.argv.slice(2);
 const installed = JSON.parse(fs.readFileSync(installedFile, "utf8"));
@@ -944,6 +1079,16 @@ else if (installed.deploymentSchemaVersion !== candidate.deploymentSchemaVersion
 } else process.stdout.write("compatible");
 NODE
 )"
+if [[ -n "$runtime_v6_transition" ]]; then
+  [[ "$runtime_gate" == "migration-required:5->6" ]] || gp_die "Die explizite Runtime-v6-Bruecke erlaubt ausschliesslich Schema 5 -> 6."
+  # Keep the complete installed Core 5 tree untouched. Only this authenticated
+  # explicit bridge may authorize the two reviewed PostgreSQL runtime changes.
+  root_node "$SCRIPT_DIR/lib/runtime-v6-transition.js" invocation "$runtime_v6_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
+    || gp_die "Die gebundene PostgreSQL-Konfiguration wurde waehrend des Preflights veraendert."
+  root_node "$SCRIPT_DIR/lib/runtime-v6-transition.js" verify "$app_dir" "$extract_root" >/dev/null \
+    || gp_die "Der Kandidat enthaelt nicht exakt den freigegebenen Core-5-zu-6-Uebergang."
+  runtime_gate="compatible"
+fi
 case "$runtime_gate" in
   compatible) ;;
   migration-required:*)
@@ -954,10 +1099,10 @@ case "$runtime_gate" in
     ;;
   *) gp_die "Der Runtimevertrag des Updatepakets konnte nicht sicher verglichen werden." ;;
 esac
-installed_runtime_schema="$("$node" -e \
+installed_runtime_schema="$(root_node -e \
   'const fs=require("node:fs");process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).deploymentSchemaVersion))' \
   "$installed_runtime_result_file")"
-if [[ "$installed_runtime_schema" == "3" || "$installed_runtime_schema" == "4" || "$installed_runtime_schema" == "5" ]]; then
+if [[ "$installed_runtime_schema" == "3" || "$installed_runtime_schema" == "4" || "$installed_runtime_schema" == "5" || "$installed_runtime_schema" == "6" ]]; then
   host_control_group="grabenplaner-host-control"
   host_control_module="/opt/grabenplaner-host-control/module"
   host_control_socket_unit="/etc/systemd/system/grabenplaner-host-control.socket"
@@ -979,7 +1124,7 @@ if [[ "$installed_runtime_schema" == "3" || "$installed_runtime_schema" == "4" |
   [[ -z "$(find "$host_control_module" -xdev \( ! -user root -o ! -group root -o -perm /022 \) -print -quit)" \
     && -z "$(find "$host_control_module" -xdev ! -type f ! -type d -print -quit)" ]] \
     || gp_die "Das Host-Control-Modul besitzt unsichere Eigentumsrechte oder Dateitypen."
-  "$node" - "$host_control_module" "$app_dir/server-tools/linux/host-control" <<'NODE' >/dev/null \
+  root_node - "$host_control_module" "$app_dir/server-tools/linux/host-control" <<'NODE' >/dev/null \
     || gp_die "Die installierte Host-Control-Modulkopie weicht vom Runtimevertrag ab."
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -1017,7 +1162,7 @@ NODE
   host_control_render_root="$maintenance_root/host-control-runtime"
   install -d -m 0700 -o root -g root -- "$host_control_render_root"
   resolved_node="$(readlink -f -- "$node")"
-  "$node" - "$app_dir" "$host_control_render_root" "$resolved_node" <<'NODE'
+  root_node - "$app_dir" "$host_control_render_root" "$resolved_node" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 const [appRoot, outputRoot, nodeExecutable] = process.argv.slice(2);
@@ -1072,10 +1217,10 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
   offsite_gate_helper_mode="$(stat --format='%a' -- "$offsite_gate_helper")"
   (( (8#$offsite_gate_helper_mode & 022) == 0 )) \
     || gp_die "Die installierte Offsite-Kompatibilitaetspruefung hat unsichere Dateirechte."
-  offsite_module_gate="$("$node" "$offsite_gate_helper" "$manifest_result_file" "$installed_offsite_receipt")" \
+  offsite_module_gate="$(root_node "$offsite_gate_helper" "$manifest_result_file" "$installed_offsite_receipt")" \
     || gp_die "Der Vertrag des eingerichteten Offsite-Moduls konnte nicht sicher verglichen werden."
   if [[ -n "$runtime_v5_transition" && "$offsite_module_gate" == "migration-required:6->7" ]]; then
-    "$node" - "$runtime_v5_transition" "$installed_offsite_receipt" <<'NODE' \
+    root_node - "$runtime_v5_transition" "$installed_offsite_receipt" <<'NODE' \
       || gp_die "Die vorab gepruefte Offsite-Bindung wurde veraendert."
 const fs=require("node:fs"),crypto=require("node:crypto"),assert=require("node:assert/strict");
 const [transition,receipt]=process.argv.slice(2),value=JSON.parse(fs.readFileSync(transition,"utf8"));
@@ -1091,30 +1236,36 @@ NODE
     *) gp_die "Der Vertrag des eingerichteten Offsite-Moduls konnte nicht sicher verglichen werden." ;;
   esac
 fi
-candidate_version="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).appVersion))' "$manifest_result_file")"
-required_pnpm="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).packageManager).split("@").pop())' "$manifest_result_file")"
+candidate_version="$(root_node -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).appVersion))' "$manifest_result_file")"
+required_pnpm="$(root_node -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).packageManager).split("@").pop())' "$manifest_result_file")"
 if (( allow_downgrade == 0 )); then
-  version_comparison="$(gp_compare_semver "$node" "$old_version" "$candidate_version")"
+  version_comparison="$(gp_compare_semver root_node "$old_version" "$candidate_version")"
   (( version_comparison < 0 )) || gp_die "Gleiche oder aeltere App-Versionen erfordern --allow-downgrade-or-reinstall."
 fi
 actual_pnpm="$(cd -- "$build_cache" && runuser --user "$build_user" -- env -i \
   HOME="$build_cache" XDG_CACHE_HOME="$build_cache" PNPM_HOME="$build_cache/pnpm" COREPACK_HOME="$build_cache/corepack" \
   PATH="$(dirname -- "$node"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-  "$pnpm_program" "${pnpm_arguments[@]}" --version)"
+  "$node" "$pnpm_program" "${pnpm_arguments[@]}" --version)"
 [[ "$actual_pnpm" == "$required_pnpm" ]] || gp_die "Das Paket erfordert pnpm $required_pnpm; installiert ist $actual_pnpm."
 
 gp_info "Installiere eingefrorene Produktionsabhaengigkeiten im isolierten Stagingordner."
 begin_deploy_phase dependencies
+dependency_probe_user="$build_user"
+dependency_probe_cwd="$build_cache"
+if [[ -n "$runtime_v6_transition" ]]; then
+  root_node "$SCRIPT_DIR/lib/runtime-v6-transition.js" dependency-plan "$app_dir" "$extract_root" >"$maintenance_root/frozen-dependency-plan.json" \
+    || gp_die "Der Core6-Uebergang verlangt den gebundenen eingefrorenen Kandidatenplan und den unveraenderten geschuetzten Altbaum."
+fi
 chown -R "$build_user:$build_group" -- "$extract_root"
 chmod 0750 -- "$extract_root"
 (cd -- "$build_cache" && runuser --user "$build_user" -- env -i \
   HOME="$build_cache" XDG_CACHE_HOME="$build_cache" PNPM_HOME="$build_cache/pnpm" COREPACK_HOME="$build_cache/corepack" \
   PATH="$(dirname -- "$node"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" NODE_ENV=production \
-  "$pnpm_program" "${pnpm_arguments[@]}" --dir "$extract_root" install --prod --frozen-lockfile \
+  "$node" "$pnpm_program" "${pnpm_arguments[@]}" --dir "$extract_root" install --prod --frozen-lockfile \
     --config.node-linker=hoisted --store-dir "$pnpm_store" --package-import-method=copy) >&2
 [[ -d "$extract_root/node_modules" && ! -L "$extract_root/node_modules" ]] || gp_die "node_modules fehlt nach dem Produktionsinstall."
-"$node" "$trusted_tree_verifier" "$extract_root" >/dev/null || gp_die "Der installierte Abhaengigkeitsbaum enthaelt unzulaessige Links oder Dateitypen."
-(cd -- "$build_cache" && runuser --user "$build_user" -- env -i PATH="$(dirname -- "$node"):/usr/local/bin:/usr/bin:/bin" NODE_ENV=production \
+root_node "$trusted_tree_verifier" "$extract_root" >/dev/null || gp_die "Der installierte Abhaengigkeitsbaum enthaelt unzulaessige Links oder Dateitypen."
+(cd -- "$dependency_probe_cwd" && runuser --user "$dependency_probe_user" -- env -i PATH="$(dirname -- "$node"):/usr/local/bin:/usr/bin:/bin" NODE_ENV=production \
   "$node" - "$extract_root" <<'NODE' >/dev/null
 const path = require("node:path");
 const root = process.argv[2];
@@ -1123,10 +1274,21 @@ for (const dependency of Object.keys(metadata.dependencies || {})) require.resol
 for (const dependency of ["express", "sharp", "pdfkit"]) require(require.resolve(dependency, { paths: [root] }));
 NODE
 )
+gp_seal_build_tree "$extract_root" "$maintenance_root/verified-ready" "$service_group" \
+  || gp_die "Der Buildbaum konnte nach dem Abhaengigkeitsinstall nicht mit frischen Dateien versiegelt werden."
+extract_root="$maintenance_root/verified-ready"
+gp_verify_sealed_zip "$staged_package" "$extract_root" 1 \
+  || gp_die "Der Build hat urspruengliche Paketbytes veraendert oder unzulaessige Dateien ergaenzt."
+gp_prepare_root_pg_dependencies "$staged_package" "$extract_root" "$node" "$pnpm_program" "${pnpm_arguments[@]}" \
+  || gp_die "Die privilegierte PostgreSQL-Abhaengigkeitskette konnte nicht unabhaengig vom Buildkonto qualifiziert werden."
+root_node "$trusted_package_verifier" "$extract_root" >"$manifest_result_file" \
+  || gp_die "Der versiegelte Buildbaum weicht vom freigegebenen Paket ab."
+root_node "$trusted_tree_verifier" "$extract_root" >/dev/null \
+  || gp_die "Der versiegelte Abhaengigkeitsbaum ist ungueltig."
+
 gp_info "Pruefe den vollstaendigen Stagingordner mit ClamAV."
 begin_deploy_phase package-scan
 scan_candidate_with_clamav
-gp_apply_app_permissions "$extract_root" "$service_group"
 
 begin_deploy_phase maintenance-lock
 (( maintenance_lock_held == 1 )) && flock --nonblock 9 \
@@ -1140,17 +1302,16 @@ elif [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 ]]; then
   # Preserve both states: an enabled but already inactive timer is not ready.
   if [[ "${deploy_timer_was_enabled[grabenplaner-offsite-assurance.timer]:-0}" == 1 \
     && "${deploy_timer_was_active[grabenplaner-offsite-assurance.timer]:-0}" == 1 ]]; then nightly_timer_active=1; fi
-  deploy_decision="$("$node" "$SCRIPT_DIR/lib/deploy-policy.js" decide \
+  deploy_decision="$(root_node "$SCRIPT_DIR/lib/deploy-policy.js" decide \
     "$app_dir" "$extract_root" "$database" "$env_file" "$nightly_timer_active")" \
     || gp_die "Die Deploy-Pruefstrategie konnte nicht bestimmt werden."
 fi
-deploy_mode="$("$node" -e 'const value=JSON.parse(process.argv[1]); if(!["short","full"].includes(value.mode))process.exit(1); process.stdout.write(value.mode)' "$deploy_decision")"
-if [[ "$database_provider" == sqlite && "$deploy_mode" == short ]] \
-  && ! "$node" "$SCRIPT_DIR/lib/deferred-backups.js" preflight "$data_dir" "$backup_dir" >/dev/null; then
-  deploy_mode=full
-  deploy_decision='{"mode":"full","reason":"DEFERRED_ARCHIVE_REQUIRES_COMPLETION"}'
-fi
+deploy_mode="$(root_node -e 'const value=JSON.parse(process.argv[1]); if(!["short","full"].includes(value.mode))process.exit(1); process.stdout.write(value.mode)' "$deploy_decision")"
 gp_info "Deploy-Pruefstrategie: $deploy_mode. Der frische gekoppelte Rueckkehrpunkt bleibt verpflichtend."
+if [[ -n "$runtime_v6_transition" ]]; then
+  root_node "$SCRIPT_DIR/lib/runtime-v6-transition.js" invocation "$runtime_v6_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
+    || gp_die "Die geschuetzte Runtime-v6-Bindung wurde vor dem Dienststopp veraendert."
+fi
 # A live lease suppresses redundant lifecycle copies only. The short path
 # makes one fully verified fresh rollback point; the full fallback retains
 # the pre-update offsite transfer and its second current rollback point.
@@ -1205,36 +1366,38 @@ new_service_started=1
 if (( ${xoffi_snapshots_migration:-0} == 1 )); then
   begin_deploy_phase xoffi-schema-migration
   installed_manifest_sha256="$(gp_sha256 "$app_dir/grabenplaner-server-manifest.json")"
-  "$node" "$app_dir/server-tools/linux/lib/xoffi-snapshots-migrate.js" \
+  root_node "$app_dir/server-tools/linux/lib/xoffi-snapshots-migrate.js" \
     "$installed_manifest_sha256" --maintenance-lock-held >"$schema_migration_result" \
     || gp_die "Die freigegebene Xoffi-Erweiterung ist fehlgeschlagen; die neue App wird nicht gestartet."
-  "$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$schema_migration_result" \
+  root_node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$schema_migration_result" \
     || gp_die "Der Xoffi-Migrationsnachweis ist unvollstaendig."
 fi
 if [[ "$database_provider" == postgresql ]]; then
 begin_deploy_phase import-deletion-schema-migration
 installed_manifest_sha256="$(gp_sha256 "$app_dir/grabenplaner-server-manifest.json")"
-"$node" "$app_dir/server-tools/linux/lib/import-delete-migrate.js" \
+root_node "$app_dir/server-tools/linux/lib/import-delete-migrate.js" \
   "$installed_manifest_sha256" --maintenance-lock-held >"$schema_migration_result" \
   || gp_die "Die Erweiterung zum Loeschen nicht uebernommener Importe ist fehlgeschlagen; die neue App wird nicht gestartet."
-"$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.coreUnchanged!==true)process.exit(1)' "$schema_migration_result" \
+root_node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.coreUnchanged!==true)process.exit(1)' "$schema_migration_result" \
   || gp_die "Der Import-Loeschnachweis ist unvollstaendig."
 begin_deploy_phase vocational-school-schema-migration
-"$node" "$app_dir/server-tools/linux/lib/vocational-school-migrate.js" \
+root_node "$app_dir/server-tools/linux/lib/vocational-school-migrate.js" \
   "$installed_manifest_sha256" --maintenance-lock-held >"$school_migration_result" \
   || gp_die "Die Berufsschul-Erweiterung ist fehlgeschlagen; die neue App wird nicht gestartet."
-"$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$school_migration_result" \
+root_node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$school_migration_result" \
   || gp_die "Der Berufsschul-Migrationsnachweis ist unvollstaendig."
 begin_deploy_phase session-security-schema-migration
-"$node" "$app_dir/server-tools/linux/lib/session-security-migrate.js" \
+root_node "$app_dir/server-tools/linux/lib/session-security-migrate.js" \
   "$installed_manifest_sha256" --maintenance-lock-held >"$session_security_migration_result" \
   || gp_die "Die Sitzungs- und Kennwortsicherheits-Erweiterung ist fehlgeschlagen; die neue App wird nicht gestartet."
-"$node" -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$session_security_migration_result" \
+root_node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true)process.exit(1)' "$session_security_migration_result" \
   || gp_die "Der Sitzungs-Sicherheitsmigrationsnachweis ist unvollstaendig."
 fi
 begin_deploy_phase application-start
 gp_start_service "$service"
-gp_configure_nightly_backups "$app_dir" "$node" || gp_die "Der gemeinsame naechtliche Sicherungsablauf konnte nicht aktiviert werden."
+if [[ -z "$runtime_v6_transition" ]]; then
+  gp_configure_nightly_backups "$app_dir" "$node" || gp_die "Der gemeinsame naechtliche Sicherungsablauf konnte nicht aktiviert werden."
+fi
 gp_wait_ready "$internal_ready_url" "$health_timeout" || gp_die "Die neue App wurde intern nicht rechtzeitig betriebsbereit."
 gp_wait_ready "$public_ready_url" "$health_timeout" || gp_die "Der oeffentliche HTTPS-Readinesscheck ist fehlgeschlagen."
 begin_deploy_phase deployment-checks
@@ -1252,7 +1415,7 @@ update_committed=1
 # im vollen Ablauf startet danach Recovery Assurance; im kurzen Ablauf arbeitet
 # der aktivierte Nacht-Timer die Queue ab. Ein Fehler
 # an dieser Stelle darf das gesunde neue Release nicht mehr zurueckrollen.
-if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transition" ]]; then
+if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transition" && -z "$runtime_v6_transition" ]]; then
   offsite_common="/opt/grabenplaner-offsite/module/lib/offsite-common.sh"
   if ! (
     [[ -f "$offsite_common" && ! -L "$offsite_common" ]] || exit 1
@@ -1267,7 +1430,7 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transiti
   ); then
     gp_warn "Das erfolgreiche App-Update konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden."
   fi
-  if [[ -n "${deploy_deferral_generation:-}" && "$("$node" "$deploy_deferral_helper" due)" == due ]]; then
+  if [[ -n "${deploy_deferral_generation:-}" && "$(root_node "$deploy_deferral_helper" due)" == due ]]; then
     gp_info "Der bereits faellige Nachtlauf prueft die neue Version unmittelbar nach Freigabe der Wartungssperre."
   elif [[ "$deploy_mode" == short ]]; then
     gp_info "Der vollstaendige Recovery-Nachweis fuer die neue Version folgt im aktivierten Nachtlauf."
@@ -1276,7 +1439,7 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transiti
   fi
 fi
 
-"$node" - "$old_version" "$candidate_version" "$actual_package_sha256" "$backup_database" "$receipt" "$public_ready_url" <<'NODE'
+root_node - "$old_version" "$candidate_version" "$actual_package_sha256" "$backup_database" "$receipt" "$public_ready_url" <<'NODE'
 const [previousVersion, installedVersion, packageSha256, backup, receipt, publicReadiness] = process.argv.slice(2);
 process.stdout.write(`${JSON.stringify({
   ok: true,

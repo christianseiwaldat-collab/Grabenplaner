@@ -7,6 +7,8 @@ minimumReleaseAgeExclude:
   - nodemailer@10.1.6
 
 overrides:
+  # Reviewed CVE-2026-111181 security fix; keep the Express major unchanged.
+  body-parser: 2.4.0
   # Native parser/encoder fixes and platform SBOM; qualify PDF/OCR before release.
   'pdfjs-dist>@napi-rs/canvas': 1.0.13
   brace-expansion: 5.0.12
@@ -15,4 +17,5 @@ overrides:
   uuid: 11.1.1
 
 patchedDependencies:
+  '@azure/msal-node@5.4.0': lib/vendor-patches/@azure__msal-node@5.4.0.patch
   brace-expansion@5.0.12: lib/vendor-patches/brace-expansion@5.0.12.patch

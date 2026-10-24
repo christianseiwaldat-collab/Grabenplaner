@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -51,7 +53,7 @@ let organizationSession;
 let organizationAccountId;
 
 function ensureLocation(id, name) {
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, ?, 0, '{}', 1)
     ON CONFLICT(id) DO UPDATE SET name = excluded.name, active = 1
@@ -171,7 +173,25 @@ function insertCentralArticle(articleNumber, description) {
         match_method, match_confidence, linked_by, linked_at
       ) VALUES (?, 'manual.loan', ?, ?, 'source_import', 'authoritative', 'test', ?)
     `).run(productId, articleNumber, snapshotId, timestamp);
+    const revision = db.prepare(`
+      SELECT to_jsonb(article_revision) AS data FROM sales_article_revisions article_revision
+      WHERE article_revision.product_id = ? AND article_revision.revision = 1
+    `).get(productId)?.data;
+    assert.equal(revision?.article_number, articleNumber);
+    // The Core loan guard requires the real Sales revision's immutable
+    // boundary snapshot, including the exact digest used by current runtime.
+    const revisionSha = crypto.createHash("sha256").update(JSON.stringify(revision)).digest("hex");
+    db.postgresqlFixtureWrite("core", `
+      INSERT INTO gp.article_reference_snapshots(product_id,revision,source_digest,article_number)
+      VALUES (?,1,?,?)
+    `, [productId, revisionSha, articleNumber]);
     db.exec("COMMIT");
+    const published = db.postgresqlCatalogQuery("core", `
+      SELECT source_digest, article_number FROM gp.article_reference_snapshots
+      WHERE product_id = ? AND revision = 1
+    `, [productId])[0];
+    assert.equal(published?.source_digest, revisionSha);
+    assert.equal(published.article_number, articleNumber);
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
     throw error;
@@ -280,7 +300,7 @@ test.before(() => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -294,12 +314,12 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
       "portal_organization_account_scopes",
     ]) {
       assert.ok(
-        db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table),
+        pgSchema.tableExists(db, table),
         `${table} fehlt`,
       );
     }
 
-    const accountForeignKeys = db.prepare("PRAGMA foreign_key_list('portal_organization_accounts')").all();
+    const accountForeignKeys = pgSchema.foreignKeys(db, "portal_organization_accounts");
     assert.equal(accountForeignKeys.some((foreignKey) => foreignKey.table === "employees"), false);
     assert.equal(accountForeignKeys.some((foreignKey) => foreignKey.table === "portal_users"), false);
 
@@ -308,7 +328,7 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
       "portal_organization_account_permissions",
       "portal_organization_account_scopes",
     ]) {
-      const foreignKeys = db.prepare(`PRAGMA foreign_key_list('${table}')`).all();
+      const foreignKeys = pgSchema.foreignKeys(db, table);
       assert.equal(
         foreignKeys.some((foreignKey) => foreignKey.table === "portal_organization_accounts"),
         true,
@@ -423,7 +443,7 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
       db.prepare("SELECT 1 FROM portal_organization_accounts WHERE id = ?")
         .get(organizationAccountId),
     );
-    assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
+    assert.equal(pgSchema.foreignKeyViolations(db).length, 0);
   });
 
   await t.test("fil18 kann später weder Mitarbeiter noch Personal- oder Rücknahmeauswahl werden", async () => {

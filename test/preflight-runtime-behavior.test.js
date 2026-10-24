@@ -31,6 +31,10 @@ function fixture(t) {
       fs.writeFileSync(path.join(root, "run.sh"), [
         "set -Eeuo pipefail", "IFS=$'\\n\\t'",
         "node=" + quote(process.execPath.replaceAll("\\", "/")),
+        // These partial-script fixtures deliberately model Linux metadata and
+        // status paths through a preload. The real entrypoint uses env -i;
+        // its privileged environment boundary has separate native tests.
+        'root_node() { "$node" "$@"; }',
         "gp_die() { printf '%s\\n' \"$*\" >&2; exit 42; }",
         "gp_info() { :; }", script,
       ].join("\n"));
@@ -145,7 +149,7 @@ for (const scenario of ["enough", "low", "invalid"]) {
   });
 }
 
-for (const scenario of ["old-installed-helper", "unsafe-candidate", "wrong-data-root", "wrong-backup-root", "invalid-recovery-files", "failed-installed-contract"]) {
+for (const scenario of ["old-installed-helper", "unsafe-candidate", "unsafe-installed-dependency", "unsafe-candidate-dependency", "wrong-data-root", "wrong-backup-root", "invalid-recovery-files", "failed-installed-contract"]) {
   test("preflight validates candidate recovery code and installed contracts: " + scenario, { skip: !fs.existsSync(bash) }, t => {
     const f = fixture(t);
     f.write("installed/server-tools/linux/lib/verify-package.js", "require('node:fs').appendFileSync(process.env.TEST_EVENTS,'installed-contract\\n'); process.exit(" + (scenario === "failed-installed-contract" ? 1 : 0) + ");");
@@ -154,8 +158,8 @@ for (const scenario of ["old-installed-helper", "unsafe-candidate", "wrong-data-
     f.write("installed/node_modules/preflight-installed-dependency/index.js", "module.exports=true;");
     f.write("candidate/package.json", "{}");
     f.write("candidate/server-tools/linux/lib/postgresql-operations.js", "// Sibling identifies candidate source root.\n");
+    if (scenario === "unsafe-candidate-dependency") f.write("candidate/node_modules/untrusted-shadow/index.js", "throw Error('must not execute');");
     f.write("candidate/lib/persistence/postgresql/operations/runtime.js", [
-      "require('preflight-installed-dependency');",
       "exports.loadConfiguration = file => {",
       " require('node:assert/strict').equal(file,'/etc/grabenplaner/postgresql-operations.json');",
       " return {sourceFiles:" + (scenario === "wrong-data-root" ? "'/wrong-data'" : "process.env.TEST_DATA")
@@ -171,7 +175,9 @@ for (const scenario of ["old-installed-helper", "unsafe-candidate", "wrong-data-
       "const fs=require('node:fs'), stat=fs.lstatSync;",
       "fs.lstatSync = function(file) {",
       " const value=stat.call(this,file);",
-      " value.uid=" + (scenario === "unsafe-candidate" ? "String(file).endsWith('runtime.js')?1000:0" : "0") + ";",
+      " value.uid=" + (scenario === "unsafe-candidate" ? "String(file).endsWith('runtime.js')?1000:0"
+        : scenario === "unsafe-installed-dependency" ? "String(file).includes('preflight-installed-dependency')?1000:0"
+          : scenario === "unsafe-candidate-dependency" ? "String(file).includes('untrusted-shadow')?1000:0" : "0") + ";",
       " value.mode=value.isDirectory()?0o40755:0o100644;",
       " return value;",
       "};",
@@ -188,7 +194,8 @@ for (const scenario of ["old-installed-helper", "unsafe-candidate", "wrong-data-
       TEST_EVENTS: path.join(f.root, "events"), TEST_DATA: "/synthetic-data", TEST_BACKUP: "/synthetic-backups",
     });
     const events = fs.existsSync(path.join(f.root, "events")) ? fs.readFileSync(path.join(f.root, "events"), "utf8") : "";
-    assert.match(events, /^installed-contract\n/);
+    if (scenario === "unsafe-installed-dependency") assert.equal(events, "", "no installed verifier executes before the independent dependency guard");
+    else assert.match(events, /^installed-contract\n/);
     if (scenario === "old-installed-helper") {
       assert.equal(result.status, 0, result.stderr);
       assert.equal(events, "installed-contract\ninstalled-tree\ncandidate-recovery\n");

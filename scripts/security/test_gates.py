@@ -44,7 +44,7 @@ class GateContractTests(unittest.TestCase):
     def test_sast_requires_complete_server_coverage(self):
         with tempfile.TemporaryDirectory() as directory:
             stage=Path(directory);path=str(stage/'server.js')
-            self.assertEqual(check_sast_result({'errors':[],'paths':{'scanned':[path]}},{'server.js'},stage),1)
+            self.assertEqual(check_sast_result({'errors':[],'paths':{'scanned':[path]},'time':{'fixpoint_timeouts':[]}},{'server.js'},stage),1)
             for result in ({'errors':[],'paths':{'scanned':[]}}, {'errors':[{'type':'Timeout'}],'paths':{'scanned':[path]}}, {'errors':[{'type':'ParseError'}],'paths':{'scanned':[path]}}, {'paths':{'scanned':[path],'skipped':[{'path':path,'reason':'size'}]}}):
                 with self.assertRaises(ValueError):check_sast_result(result,{'server.js'},stage)
 
@@ -54,6 +54,30 @@ class GateContractTests(unittest.TestCase):
         self.assertEqual(check_sca_result(result,expected),[])
         result['results'][0]['packages'].pop()
         with self.assertRaises(ValueError):check_sca_result(result,expected)
+
+    def test_sast_taint_fixpoint_timeout_blocks_despite_complete_targets_and_no_errors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stage=Path(directory);path=str(stage/'server.js')
+            clean={'errors':[],'paths':{'scanned':[path]},'time':{'fixpoint_timeouts':[]}}
+            self.assertEqual(check_sast_result(clean,{'server.js'},stage),1)
+            # This is the shape emitted by the actual pinned scanner: warnings
+            # in profiling, even with strict mode and no top-level errors.
+            warning={'error_type':'Fixpoint timeout','severity':'warn',
+                     'message':'Fixpoint timeout while performing taint analysis',
+                     'location':{'path':path,'start':{'line':1,'col':1,'offset':0},'end':{'line':1,'col':1,'offset':0}}}
+            for severity in ('warn','error','info'):
+                result={**clean,'time':{'fixpoint_timeouts':[{**warning,'severity':severity}]}}
+                with self.assertRaisesRegex(ValueError,'taint fixpoint timeout'):
+                    check_sast_result(result,{'server.js'},stage)
+
+    def test_sast_fixpoint_evidence_missing_or_malformed_is_not_empty(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stage=Path(directory);path=str(stage/'server.js')
+            base={'errors':[],'paths':{'scanned':[path]}}
+            for result in (base,{**base,'time':None},{**base,'time':[]},{**base,'time':{}},
+                           *({**base,'time':{'fixpoint_timeouts':value}} for value in (None,False,0,'',{}))):
+                with self.assertRaisesRegex(ValueError,'fixpoint completeness evidence'):
+                    check_sast_result(result,{'server.js'},stage)
 
     def test_sast_rule_skip_or_unexpected_extra_target_blocks(self):
         with tempfile.TemporaryDirectory() as directory:

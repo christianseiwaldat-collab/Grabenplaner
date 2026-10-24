@@ -1,4 +1,7 @@
 'use strict';
+
+// Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
+// Other PostgreSQL and application assertions below still use current code.
 const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite'), { EventEmitter } = require('node:events');
@@ -6,13 +9,13 @@ const { createRequire } = require('node:module'), { spawnSync } = require('node:
 const { createAmuStorage, syncEncryptedFilesBackup } = require('../lib/amu-storage');
 const { createIntegrationSecretVault } = require('../lib/integration-secret-vault');
 const { createDataImportProtection } = require('../lib/data-import-protection');
-const recovery = require('../server-tools/linux/recovery/lib/recovery-verify');
+const recovery = require('../test-support/legacy-baseline').legacyRequire('server-tools/linux/recovery/lib/recovery-verify.js');
 const runtime = require('../lib/persistence/postgresql/operations/runtime');
 const root = path.resolve(__dirname, '..');
 const amuModule = path.join(root, 'lib/amu-storage.js'), integrationModule = path.join(root, 'lib/integration-secret-vault.js');
 const stageHelper = path.join(root, 'server-tools/linux/offsite/lib/offsite-stage.js');
-const backupVerifier = path.join(root, 'server-tools/linux/lib/verify-backup.js');
-const policy = require('../server-tools/linux/recovery/lib/recovery-metadata').__internalTestOnly.nonRootOwnershipPolicy;
+const backupVerifier = require("../test-support/legacy-baseline").legacyPath("server-tools/linux/lib/verify-backup.js");
+const policy = require('../test-support/legacy-baseline').legacyRequire('server-tools/linux/recovery/lib/recovery-metadata.js').__internalTestOnly.nonRootOwnershipPolicy;
 const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9xkAAAAASUVORK5CYII=', 'base64');
 const digest = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const json = (file, value) => fs.writeFileSync(file, JSON.stringify(value) + '\n', { mode: 0o600 });
@@ -134,7 +137,7 @@ function backupRuntime(f) {
   constructor(options) { this.database = options.database; }
   async connect() {
    const c = new EventEmitter(); c.database = this.database; c.queries = []; c.release = () => {};
-   c.query = async sql => {
+   c.query = async (sql, values = []) => {
     c.queries.push(sql); events.push(c.database + ':' + sql);
     if (sql.includes('ISOLATION LEVEL REPEATABLE READ')) c.retainedRows = f.rows.map(row => ({ ...row }));
     if (sql.includes('pg_stat_activity')) return { rows: [{ n: 0 }] };
@@ -142,7 +145,10 @@ function backupRuntime(f) {
     if (sql.includes('FROM pg_tables')) return { rows: [{ schemaname: 'gp', tablename: 'trade_annotations' }] };
     if (sql.includes('pg_database_size')) return { rows: [{ bytes: '1024' }] };
     if (sql.includes('pg_export_snapshot')) return { rows: [{ id: '123-AB' }] };
+    if (sql.includes('information_schema.columns')) return { rows: (require('../lib/persistence/postgresql/contracts/source-schema-v09237.json').tables
+     .find(table => table.name === values[1])?.columns || []).map(column => ({ column_name: column.name })) };
     if (sql.includes('to_regclass')) return { rows: [{ present: true }] };
+    if (sql.includes("FROM trade_annotations WHERE kind = 'price-label-image-storage-v1'")) return { rows: c.retainedRows.filter(row => row.kind === 'price-label-image-storage-v1').map(row => ({ storage_key: row.scopeId })) };
     if (sql.includes('FROM gp.trade_annotations')) {
      assert.ok(c.retainedRows, 'image reads must use the dump snapshot, never a new pool connection');
      assert.ok(!c.queries.includes('COMMIT') && !c.queries.includes('ROLLBACK'), 'snapshot must still be retained');

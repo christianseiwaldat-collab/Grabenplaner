@@ -1,12 +1,34 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 IFS=$'\n\t'
+export PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+readonly PATH
+
+# Privileged verification must not inherit interpreter preloads or bypasses.
+unset NODE_OPTIONS NODE_PATH BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS LD_PRELOAD LD_LIBRARY_PATH OPENSSL_CONF OPENSSL_MODULES
 
 SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}" 2>/dev/null || true)"
 [[ -n "$SCRIPT_PATH" && -f "$SCRIPT_PATH" && ! -L "$SCRIPT_PATH" ]] \
   || { printf '%s\n' "Der Deploy-Vorabcheck konnte nicht sicher aufgeloest werden." >&2; exit 1; }
 readonly SCRIPT_PATH
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
+# Check the shared shell implementation before sourcing it. These checks do
+# not invoke any candidate JavaScript or an account-writable verifier.
+for trusted_source_file in "$SCRIPT_PATH" "$SCRIPT_DIR/lib/common.sh"; do
+  [[ -f "$trusted_source_file" && ! -L "$trusted_source_file" \
+    && "$(stat --format='%u:%h' -- "$trusted_source_file")" == '0:1' ]] \
+    || { printf '%s\n' 'Der Vorabcheck ist nicht root-geschuetzt.' >&2; exit 1; }
+  trusted_source_parent="$trusted_source_file"
+  while :; do
+    [[ ! -L "$trusted_source_parent" && "$(stat --format='%u' -- "$trusted_source_parent")" == 0 ]] \
+      || { printf '%s\n' 'Der Vorabcheckpfad ist nicht root-geschuetzt.' >&2; exit 1; }
+    trusted_source_mode="$(stat --format='%a' -- "$trusted_source_parent")"
+    (( (8#$trusted_source_mode & 022) == 0 )) \
+      || { printf '%s\n' 'Der Vorabcheckpfad ist fremdschreibbar.' >&2; exit 1; }
+    [[ "$trusted_source_parent" != / ]] || break
+    trusted_source_parent="$(dirname -- "$trusted_source_parent")"
+  done
+done
 # shellcheck source=server-tools/linux/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
@@ -21,7 +43,7 @@ keine Timer und installiert nichts.
   --env-file PFAD             geschuetzte Server-Umgebung
   --app-dir PFAD              installierter App-Ordner
   --data-dir PFAD             geschuetzter Datenordner
-  --database PFAD             SQLite-Datei oder PostgreSQL-Paarbezug
+  --database PFAD             PostgreSQL-Paarbezug
   --backup-dir PFAD           Ziel fuer lokale Sicherungen
   --public-url HTTPS-URL      oeffentliche Grabenplaner-Ursprungsadresse
   --node PFAD                 Node.js-Laufzeit
@@ -74,6 +96,7 @@ done
   || gp_die "--minimum-free-bytes muss zwischen 1 GiB und 1 TiB liegen."
 
 gp_load_env_file "$env_file"
+unset NODE_OPTIONS NODE_PATH BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS LD_PRELOAD LD_LIBRARY_PATH OPENSSL_CONF OPENSSL_MODULES
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
 data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"
 backup_dir="$(gp_safe_absolute_path "${backup_arg:-${BACKUP_DIR:-$GP_DEFAULT_BACKUP_DIR}}" "Backupordner")"
@@ -98,9 +121,17 @@ elif command -v corepack >/dev/null 2>&1; then
 else
   gp_die "Weder pnpm noch Corepack/pnpm ist installiert."
 fi
-"$node" -e 'const [major,minor]=process.versions.node.split(".").map(Number);if(major<22||(major===22&&minor<13))process.exit(1)' \
+node="$(gp_assert_root_node "$node")" \
+  || gp_die "Die privilegierte Node-Laufzeit ist nicht root-geschuetzt."
+pnpm_program="$(gp_assert_root_package_manager "$pnpm_program" "${pnpm_arguments[@]}")" \
+  || gp_die "Die Paketmanager-Distribution ist nicht root-geschuetzt."
+root_node() {
+  /usr/bin/env -i PATH="$(dirname -- "$node"):/usr/sbin:/usr/bin:/sbin:/bin" \
+    HOME=/root LANG=C.UTF-8 NODE_ENV=production "$node" --no-global-search-paths "$@"
+}
+root_node -e 'const [major,minor]=process.versions.node.split(".").map(Number);if(major<22||(major===22&&minor<13))process.exit(1)' \
   || gp_die "Node.js >=22.13.0 wird benoetigt."
-gp_validate_https_url "$node" "$public_url" || gp_die "GRABENPLANER_PUBLIC_URL muss eine reine HTTPS-Ursprungsadresse sein."
+gp_validate_https_url root_node "$public_url" || gp_die "GRABENPLANER_PUBLIC_URL muss eine reine HTTPS-Ursprungsadresse sein."
 getent passwd "$GP_DEFAULT_SERVICE_USER" >/dev/null || gp_die "Dienstbenutzer fehlt: $GP_DEFAULT_SERVICE_USER"
 getent group "$GP_DEFAULT_SERVICE_GROUP" >/dev/null || gp_die "Dienstgruppe fehlt: $GP_DEFAULT_SERVICE_GROUP"
 getent passwd "$GP_DEFAULT_BUILD_USER" >/dev/null || gp_die "Isolierter Build-Benutzer fehlt: $GP_DEFAULT_BUILD_USER"
@@ -112,26 +143,23 @@ for cache_access in -r -w -x; do
   runuser --user "$GP_DEFAULT_BUILD_USER" -- test "$cache_access" "$build_cache" \
     || gp_die "Der isolierte Build-Benutzer kann den Build-Cache nicht verwenden."
 done
-required_pnpm="$("$node" -e 'const fs=require("node:fs");const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(p.packageManager||"").split("@").pop())' "$app_dir/package.json")"
+required_pnpm="$(root_node -e 'const fs=require("node:fs");const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(p.packageManager||"").split("@").pop())' "$app_dir/package.json")"
 [[ "$required_pnpm" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || gp_die "Die installierte pnpm-Vorgabe ist ungueltig."
 actual_pnpm="$(cd -- "$build_cache" && runuser --user "$GP_DEFAULT_BUILD_USER" -- env -i \
   HOME="$build_cache" XDG_CACHE_HOME="$build_cache" PNPM_HOME="$build_cache/pnpm" COREPACK_HOME="$build_cache/corepack" \
   PATH="$(dirname -- "$node"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-  "$pnpm_program" "${pnpm_arguments[@]}" --version)"
+  "$node" "$pnpm_program" "${pnpm_arguments[@]}" --version)"
 [[ "$actual_pnpm" == "$required_pnpm" ]] \
   || gp_die "Der installierte App-Stand erfordert pnpm $required_pnpm; einsatzbereit ist $actual_pnpm."
 clamscan --no-summary -- "$SCRIPT_PATH" >/dev/null \
   || gp_die "ClamAV konnte den sauberen Vorabtest nicht erfolgreich pruefen."
 
-database_provider="${DB_PROVIDER:-sqlite}"
+database_provider="${DB_PROVIDER:-}"
+[[ "$database_provider" == postgresql ]] || gp_die 'Dieser GP-Stand verlangt den verifizierten PostgreSQL-Paarbetrieb.'
 if [[ "$database_provider" == postgresql ]]; then
   [[ -z "$database_arg" || "$database_arg" == "$data_dir/data/postgresql-pair.json" ]] \
     || gp_die "Der PostgreSQL-Paarbezug ist ungueltig."
   database="$(gp_existing_file "$data_dir/data/postgresql-pair.json" "PostgreSQL-Paarbezug")"
-elif [[ "$database_provider" == sqlite ]]; then
-  database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
-else
-  gp_die "Der Datenbankprovider wird nicht unterstuetzt."
 fi
 gp_path_is_same_or_child "$database" "$data_dir" || gp_die "Die Datenbankbindung liegt nicht im geschuetzten Datenordner."
 gp_assert_separate_trees "$app_dir" "$data_dir" "App- und Datenordner"
@@ -209,12 +237,92 @@ done
 
 installed_runtime_verifier="$app_dir/server-tools/linux/lib/verify-package.js"
 installed_tree_verifier="$app_dir/server-tools/linux/lib/verify-install-tree.js"
+# The installed verifier cannot establish its own code/dependency trust.
+# Use only Node core modules before the first installed JavaScript entrypoint.
+root_node - "$app_dir" <<'NODE' >/dev/null \
+  || gp_die "Der installierte App- und Abhaengigkeitsbaum ist nicht root-geschuetzt."
+const fs = require('node:fs'), path = require('node:path');
+try {
+  const root = path.resolve(process.argv[2]);
+  const dependencyRoots = [path.join(root, 'node_modules')];
+  function trustedDependencyBinLink(file, dependencyRoot) {
+    // Only protected node_modules/.bin commands may resolve to regular files
+    // in this same dependency tree. All other symbolic links stay forbidden.
+    const inside = target => target === dependencyRoot || (!path.relative(dependencyRoot, target).startsWith('..' + path.sep)
+      && path.relative(dependencyRoot, target) !== '..' && !path.isAbsolute(path.relative(dependencyRoot, target)));
+    const metadata = s => [s.dev, s.ino, s.uid, s.gid, s.mode, s.nlink, s.size, s.mtimeMs, s.ctimeMs].join(':');
+    const regular = target => {
+      const s = fs.lstatSync(target);
+      if (s.isSymbolicLink() || s.uid !== 0 || (s.mode & 0o022)
+        || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1)) || fs.realpathSync(target) !== target) throw Error('unsafe');
+      return s;
+    };
+    let cursor = dependencyRoot;
+    regular(cursor);
+    for (const part of path.relative(dependencyRoot, path.dirname(file)).split(path.sep).filter(Boolean)) {
+      cursor = path.join(cursor, part);
+      if (!regular(cursor).isDirectory()) throw Error('unsafe');
+    }
+    let pending = [path.basename(file)];
+    const links = new Set();
+    while (pending.length) {
+      const part = pending.shift();
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        cursor = path.dirname(cursor);
+        if (!inside(cursor) || !regular(cursor).isDirectory()) throw Error('unsafe');
+        continue;
+      }
+      const target = path.join(cursor, part), s = fs.lstatSync(target);
+      if (s.isSymbolicLink()) {
+        if (!inside(target) || path.basename(path.dirname(target)) !== '.bin'
+          || path.basename(path.dirname(path.dirname(target))) !== 'node_modules'
+          || s.uid !== 0 || s.nlink !== 1 || links.has(target) || links.size >= 64) throw Error('unsafe');
+        links.add(target);
+        const destination = fs.readlinkSync(target);
+        if (!destination || metadata(fs.lstatSync(target)) !== metadata(s)) throw Error('unsafe');
+        if (path.isAbsolute(destination)) {
+          if (!destination.startsWith(dependencyRoot + path.sep)) throw Error('unsafe');
+          cursor = dependencyRoot;
+          pending = destination.slice(dependencyRoot.length + 1).split(path.sep).concat(pending);
+        } else {
+          pending = destination.split(path.sep).concat(pending);
+        }
+      } else {
+        cursor = target;
+        const checked = regular(cursor);
+        if (pending.length && !checked.isDirectory()) throw Error('unsafe');
+      }
+    }
+    if (!inside(cursor) || !regular(cursor).isFile()) throw Error('unsafe');
+  }
+  function trusted(target, recursive = false) {
+    const s = fs.lstatSync(target);
+    if (s.isSymbolicLink()) {
+      const dependencyRoot = dependencyRoots.find(base => target.startsWith(base + path.sep));
+      if (!dependencyRoot) throw Error('unsafe');
+      trustedDependencyBinLink(target, dependencyRoot);
+      return;
+    }
+    if (s.uid !== 0 || (s.mode & 0o022)
+      || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1))
+      || fs.realpathSync(target) !== target) throw Error('unsafe');
+    if (recursive && s.isDirectory()) for (const name of fs.readdirSync(target)) trusted(path.join(target, name), true);
+  }
+  for (let directory = root;; directory = path.dirname(directory)) {
+    trusted(directory);
+    if (directory === path.dirname(directory)) break;
+  }
+  trusted(root, true);
+  trusted(path.join(root, 'node_modules'), true);
+} catch { process.exitCode = 1; }
+NODE
 [[ -f "$installed_runtime_verifier" && ! -L "$installed_runtime_verifier" \
   && -f "$installed_tree_verifier" && ! -L "$installed_tree_verifier" ]] \
   || gp_die "Die installierten Runtime-Pruefer fehlen."
-"$node" "$installed_runtime_verifier" --runtime-contract "$app_dir" >/dev/null \
+root_node "$installed_runtime_verifier" --runtime-contract "$app_dir" >/dev/null \
   || gp_die "Der installierte Runtimevertrag ist nicht deployfaehig."
-"$node" "$installed_tree_verifier" "$app_dir" >/dev/null \
+root_node "$installed_tree_verifier" "$app_dir" >/dev/null \
   || gp_die "Der installierte App-Baum ist nicht deployfaehig."
 if [[ "$database_provider" == postgresql ]]; then
   # The installed version may predate recovery-files-preflight. Use the
@@ -222,14 +330,73 @@ if [[ "$database_provider" == postgresql ]]; then
   postgresql_preflight="$SCRIPT_DIR/lib/postgresql-operations.js"
   [[ -f "$postgresql_preflight" && ! -L "$postgresql_preflight" ]] \
     || gp_die "Die PostgreSQL-Vorabpruefung fehlt."
-  NODE_PATH="$app_dir/node_modules" "$node" - "$postgresql_preflight" "$data_dir" "$backup_dir" <<'NODE' >/dev/null \
+  root_node - "$postgresql_preflight" "$data_dir" "$backup_dir" "$app_dir" <<'NODE' >/dev/null \
     || gp_die "Die PostgreSQL-Pfade oder Rueckkehrdateien verletzen bereits vor dem Deploy den Pfad- oder Dateitypvertrag."
 const fs = require('node:fs'), path = require('node:path');
 try {
   const helper = process.argv[2], root = path.resolve(path.dirname(helper), '../../..');
+  const installedRoot = path.resolve(process.argv[5]);
+  const dependencyRoots = [path.join(root, 'node_modules'), path.join(installedRoot, 'node_modules')];
+  function trustedDependencyBinLink(file, dependencyRoot) {
+    // Only protected node_modules/.bin commands may resolve to regular files
+    // in this same dependency tree. All other symbolic links stay forbidden.
+    const inside = target => target === dependencyRoot || (!path.relative(dependencyRoot, target).startsWith('..' + path.sep)
+      && path.relative(dependencyRoot, target) !== '..' && !path.isAbsolute(path.relative(dependencyRoot, target)));
+    const metadata = s => [s.dev, s.ino, s.uid, s.gid, s.mode, s.nlink, s.size, s.mtimeMs, s.ctimeMs].join(':');
+    const regular = target => {
+      const s = fs.lstatSync(target);
+      if (s.isSymbolicLink() || s.uid !== 0 || (s.mode & 0o022)
+        || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1)) || fs.realpathSync(target) !== target) throw Error('unsafe');
+      return s;
+    };
+    let cursor = dependencyRoot;
+    regular(cursor);
+    for (const part of path.relative(dependencyRoot, path.dirname(file)).split(path.sep).filter(Boolean)) {
+      cursor = path.join(cursor, part);
+      if (!regular(cursor).isDirectory()) throw Error('unsafe');
+    }
+    let pending = [path.basename(file)];
+    const links = new Set();
+    while (pending.length) {
+      const part = pending.shift();
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        cursor = path.dirname(cursor);
+        if (!inside(cursor) || !regular(cursor).isDirectory()) throw Error('unsafe');
+        continue;
+      }
+      const target = path.join(cursor, part), s = fs.lstatSync(target);
+      if (s.isSymbolicLink()) {
+        if (!inside(target) || path.basename(path.dirname(target)) !== '.bin'
+          || path.basename(path.dirname(path.dirname(target))) !== 'node_modules'
+          || s.uid !== 0 || s.nlink !== 1 || links.has(target) || links.size >= 64) throw Error('unsafe');
+        links.add(target);
+        const destination = fs.readlinkSync(target);
+        if (!destination || metadata(fs.lstatSync(target)) !== metadata(s)) throw Error('unsafe');
+        if (path.isAbsolute(destination)) {
+          if (!destination.startsWith(dependencyRoot + path.sep)) throw Error('unsafe');
+          cursor = dependencyRoot;
+          pending = destination.slice(dependencyRoot.length + 1).split(path.sep).concat(pending);
+        } else {
+          pending = destination.split(path.sep).concat(pending);
+        }
+      } else {
+        cursor = target;
+        const checked = regular(cursor);
+        if (pending.length && !checked.isDirectory()) throw Error('unsafe');
+      }
+    }
+    if (!inside(cursor) || !regular(cursor).isFile()) throw Error('unsafe');
+  }
   function trusted(target, recursive = false) {
     const s = fs.lstatSync(target);
-    if (s.isSymbolicLink() || s.uid !== 0 || (s.mode & 0o022)
+    if (s.isSymbolicLink()) {
+      const dependencyRoot = dependencyRoots.find(base => target.startsWith(base + path.sep));
+      if (!dependencyRoot) throw Error('unsafe');
+      trustedDependencyBinLink(target, dependencyRoot);
+      return;
+    }
+    if (s.uid !== 0 || (s.mode & 0o022)
       || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1))
       || fs.realpathSync(target) !== target) throw Error('unsafe');
     if (recursive && s.isDirectory()) for (const name of fs.readdirSync(target)) trusted(path.join(target, name), true);
@@ -243,6 +410,17 @@ try {
   trusted(path.join(root, 'server-tools'));
   trusted(path.join(root, 'server-tools/linux'));
   trusted(path.join(root, 'server-tools/linux/lib'), true);
+  // A present local module tree must be protected even though this read-only
+  // path/configuration probe loads no PostgreSQL driver or global modules.
+  let localModulesPresent = false;
+  try { fs.lstatSync(path.join(root, 'node_modules')); localModulesPresent = true; }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (localModulesPresent) trusted(path.join(root, 'node_modules'), true);
+  for (let directory = installedRoot;; directory = path.dirname(directory)) {
+    trusted(directory);
+    if (directory === path.dirname(directory)) break;
+  }
+  trusted(path.join(installedRoot, 'node_modules'), true);
   const runtime = require(path.join(root, 'lib/persistence/postgresql/operations/runtime.js'));
   const config = runtime.loadConfiguration('/etc/grabenplaner/postgresql-operations.json');
   if (config.sourceFiles !== process.argv[3] || config.backupDirectory !== process.argv[4]) {
@@ -262,7 +440,7 @@ fi
 
 # The optional module's self-test checks structure, not successful recovery.
 # Inspect only its protected, redacted status; never read provider credentials.
-"$node" - "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" <<'NODE' \
+root_node - "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" <<'NODE' \
   || gp_die "Die Offsite-Wiederherstellbarkeit ist nicht bestaetigt. Zuerst Recovery Assurance abschliessen."
 const fs = require('node:fs');
 try {

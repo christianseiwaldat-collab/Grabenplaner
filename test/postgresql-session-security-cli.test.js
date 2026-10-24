@@ -5,8 +5,8 @@ const file = path.resolve(__dirname, '../server-tools/linux/lib/session-security
 const root = '/opt/grabenplaner/app';
 const paths = ['server-tools/linux/lib/session-security-migrate.js', 'lib/persistence/postgresql/core/session-security.js',
   'lib/persistence/postgresql/core/catalog.js', 'lib/persistence/postgresql/boundary/migrate.js',
-  'lib/persistence/sqlite/operations/session-security-schema.js', 'lib/persistence/sqlite/portal-access-catalog.js',
-  'lib/persistence/sqlite/mobile-auth-catalog.js', 'lib/persistence/sqlite/organization-personnel-catalog.js',
+  'lib/persistence/schema-definitions/session-security.js', 'lib/persistence/catalogs/portal-access-catalog.js',
+  'lib/persistence/catalogs/mobile-auth-catalog.js', 'lib/persistence/catalogs/organization-personnel-catalog.js',
   'lib/persistence/statements/portal-access.js', 'lib/persistence/statements/mobile-auth.js', 'lib/persistence/statements/organization-personnel.js'];
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
@@ -31,7 +31,7 @@ function harness(scenario = 'success') {
       if (id === 'node:fs') return {
         realpathSync: value => value === '/proc/self/fd/9' ? '/run/grabenplaner/maintenance.lock' : root,
         readFileSync: value => value.endsWith('grabenplaner-server-manifest.json') ? manifest
-          : Buffer.from(scenario === 'source-drift' && value.endsWith('session-security-schema.js') ? 'changed source' : value.slice(root.length + 1)),
+          : Buffer.from(scenario === 'source-drift' && value.endsWith('schema-definitions/session-security.js') ? 'changed source' : value.slice(root.length + 1)),
       };
       if (id === 'node:child_process') return { spawnSync: () => ({ status: scenario === 'bad-lease' ? 1 : 0 }) };
       if (id === './deploy-policy') return { applicationContract: () => { events.push('contract'); } };

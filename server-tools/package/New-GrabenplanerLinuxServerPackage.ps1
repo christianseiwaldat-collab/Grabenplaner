@@ -26,6 +26,11 @@ function Resolve-SafeDirectory([string]$Path, [switch]$MustExist) {
 
 function Test-ExcludedRelativePath([string]$RelativePath) {
     $normalized = $RelativePath.Replace('\', '/')
+    if ($normalized -match '^(lib/persistence/sqlite/|lib/persistence/postgresql/transfer/|test-support/|server-tools/windows/|server-tools/package/)') { return $true }
+    if ($normalized -cin @('lib/f18-loan-migration.js', 'lib/usb-profile-database.js',
+        'lib/persistence/postgresql/operations/paired-development.js', 'lib/persistence/postgresql/operations/paired-pitr.js',
+        'server-tools/linux/postgresql/migration-host.js', 'server-tools/linux/postgresql/capture-final-source.py',
+        'server-tools/linux/postgresql/migrate-grabenplaner-postgresql.sh')) { return $true }
     if ($normalized -cin @('scripts/run-background-backup.js', 'scripts/manage-local-backup-archive.js')) { return $false }
     $top = ($normalized -split '/', 2)[0].ToLowerInvariant()
     if ($top -in @('.git', '.github', '.devcontainer', 'backups', 'data', 'demo', 'docs', 'import-jobs', 'node_modules', 'output', 'release', 'runtime', 'scripts', 'test', 'tmp', 'usb-backups')) { return $true }
@@ -52,6 +57,7 @@ function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
         'LICENSE.md',
         'SECURITY.md',
         'SERVERBETRIEB.md'
+        'POSTGRESQL-ONLY.md'
     )) { return $true }
     return $normalized.StartsWith('lib/') -or
         $normalized.StartsWith('public/') -or
@@ -82,6 +88,19 @@ function Get-Sha256File([string]$Path) {
         $stream.Dispose()
         $algorithm.Dispose()
     }
+}
+
+function Assert-BundledPasswordPolicy([string]$Root, [string]$Node) {
+    # Each invocation loads the actual staged corpus in a fresh process. The
+    # outer package hashes alone cannot establish its internal manifest contract.
+    $check = @'
+'use strict';
+const path = require('node:path');
+const policy = require(path.join(path.resolve(process.argv[1]), 'lib', 'portal-password-policy.js'));
+if (policy.metadata().available !== true) throw new Error('Bundled password corpus is unavailable or fails its integrity contract.');
+'@
+    & $Node --no-global-search-paths -e $check $Root
+    if ($LASTEXITCODE -ne 0) { throw 'Der gebuendelte Kennwortkorpus ist nicht verfuegbar oder verletzt seinen Integritaetsvertrag.' }
 }
 
 function Assert-ManagedTextByteContracts([string]$SourceRoot, [string[]]$RelativePaths) {
@@ -310,6 +329,7 @@ try {
         'package.json',
         'pnpm-lock.yaml',
         'SERVERBETRIEB.md',
+        'POSTGRESQL-ONLY.md',
         'server-tools\server.env.example',
         'server-tools\caddy\Caddyfile.example',
         'server-tools\linux\offsite\module-schema.json',
@@ -360,6 +380,10 @@ try {
         'server-tools\linux\migrate-grabenplaner-runtime-v3.sh',
         'server-tools\linux\migrate-grabenplaner-runtime-v4.sh',
         'server-tools\linux\migrate-grabenplaner-runtime-v5.sh',
+        'server-tools\linux\migrate-grabenplaner-runtime-v6.sh',
+        'server-tools\linux\lib\runtime-v6-transition.js',
+        'server-tools\linux\lib\offsite-postgresql-only-compat.js',
+        'server-tools\linux\lib\root-postgresql-dependencies.sh',
         'server-tools\linux\finalize-grabenplaner-runtime-v3.sh',
         'server-tools\linux\preflight-grabenplaner-deploy.sh',
         'server-tools\linux\lib\postgresql-backup-repair-compat.js',
@@ -372,6 +396,9 @@ try {
         'server-tools\linux\recovery\lib\recovery-apply.js',
         'server-tools\linux\recovery\lib\recovery-metadata.js',
         'server-tools\linux\recovery\lib\recovery-verify.js'
+        'server-tools\linux\recovery\lib\recovery-shared.js'
+        'server-tools\linux\postgresql\preflight-install.js'
+        'lib\database-lock-linux.py'
     ) + $expectedHardeningArtifacts + $expectedHostControlArtifacts
     foreach ($required in $requiredPackageFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $buildRoot $required) -PathType Leaf)) {
@@ -493,6 +520,7 @@ try {
     # Bind the deterministic source inventory through the existing file/hash
     # contract. It excludes itself and the outer manifest to avoid a hash cycle.
     $inventoryNode = (Get-Command node -ErrorAction Stop).Source
+    Assert-BundledPasswordPolicy -Root $buildRoot -Node $inventoryNode
     $inventoryCli = Join-Path $buildRoot 'server-tools\linux\security-release-inventory.js'
     $sourceInventoryPath = Join-Path $buildRoot 'lib\security-release-inventory.source.json'
     & $inventoryNode $inventoryCli generate --mode source --root $buildRoot --source-commit $sourceCommit --created-at $sourceTimestamp --output $sourceInventoryPath
@@ -532,6 +560,7 @@ try {
     Write-DeterministicZip -SourceRoot $buildRoot -ArchivePath $archivePath
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $roundtripRoot)
+    Assert-BundledPasswordPolicy -Root $roundtripRoot -Node $inventoryNode
     $roundtripManifestPath = Join-Path $roundtripRoot 'grabenplaner-server-manifest.json'
     if (-not (Test-Path -LiteralPath $roundtripManifestPath -PathType Leaf)) { throw 'Manifest fehlt nach dem ZIP-Roundtrip.' }
     $roundtripManifest = Get-Content -LiteralPath $roundtripManifestPath -Raw -Encoding utf8 | ConvertFrom-Json

@@ -350,7 +350,7 @@ try {
   if(!fs.existsSync(installed)){process.stdout.write('none');process.exit(0);}
   function read(file){const s=fs.lstatSync(file);if(!s.isFile()||s.isSymbolicLink()||s.uid!==0||s.nlink!==1||(s.mode&0o022)||s.size>131072||fs.realpathSync(file)!==file)throw Error();return JSON.parse(fs.readFileSync(file,'utf8'));}
   const core=read(path.join(process.argv[2],'server-tools/linux/offsite/module-schema.json')),module=read(installed);
-  if(core.format!=='grabenplaner-linux-offsite-module-contract'||core.schemaVersion!==1||module.format!=='grabenplaner-linux-offsite-installed-contract'||module.schemaVersion!==1||![7,8,9,10,11,12].includes(core.moduleVersion)||![7,8,9,10,11,12].includes(module.moduleVersion))throw Error();
+  if(core.format!=='grabenplaner-linux-offsite-module-contract'||core.schemaVersion!==1||module.format!=='grabenplaner-linux-offsite-installed-contract'||module.schemaVersion!==1||![7,8,9,10,11,12,13].includes(core.moduleVersion)||![7,8,9,10,11,12,13].includes(module.moduleVersion))throw Error();
   process.stdout.write(core.moduleVersion>=10&&module.moduleVersion>=10?'single':'legacy');
 }catch{process.stderr.write('Der Sicherungszeitplan konnte nicht verifiziert werden.\n');process.exitCode=1;}
 NODE
@@ -449,4 +449,320 @@ gp_apply_app_permissions() {
   find "$path" -type f ! -perm /111 -exec chmod 0640 -- {} +
   find "$path" -type f -perm /111 -exec chmod 0750 -- {} +
   find "$linux_root" -type f -name '*.sh' -exec chmod 0750 -- {} +
+}
+
+# Copy into fresh inodes behind a root-only directory before root executes
+# candidate code. Chown alone cannot revoke a build process's open writer FDs.
+gp_seal_build_tree() {
+  local source="$1" target="$2" group="$3" parent source_parent private_root unsafe
+  [[ -d "$source" && ! -L "$source" && ! -e "$target" && ! -L "$target" ]] || return 1
+  parent="$(dirname -- "$target")"
+  [[ "$(realpath --canonicalize-existing -- "$parent")" == "$parent" \
+    && "$(stat --format='%u' -- "$parent")" == 0 ]] || return 1
+  local parent_mode
+  parent_mode="$(stat --format='%a' -- "$parent")"
+  (( (8#$parent_mode & 022) == 0 )) || return 1
+  source_parent="$(dirname -- "$source")"
+  [[ "$(realpath --canonicalize-existing -- "$source_parent")" == "$source_parent" \
+    && "$(stat --format='%u' -- "$source_parent")" == 0 ]] || return 1
+  parent_mode="$(stat --format='%a' -- "$source_parent")"
+  (( (8#$parent_mode & 022) == 0 )) || return 1
+  private_root="$(mktemp --directory --tmpdir="$parent" .root-seal.XXXXXXXX)" || return 1
+  chmod 0700 -- "$private_root" || return 1
+  mkdir -m 0700 -- "$private_root/tree" || return 1
+  # The builder may rename a directory while it is copied. Hold each source
+  # directory descriptor and open every child relative to it, without following
+  # links; a pathname-recursive copy could otherwise read outside that tree.
+  /usr/bin/python3 -I - "$source" "$private_root/tree" <<'PY' || return 1
+import json, os, posixpath, re, shlex, stat, sys
+source, target = sys.argv[1:]
+directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+executable_links = []
+assert os.geteuid() == 0
+
+def defer_executable_link(source_fd, name, before, parts):
+    # Hold the npm command-link inode itself, never its untrusted target.
+    assert parts[-2:] == ('node_modules', '.bin')
+    assert re.fullmatch(r'[A-Za-z0-9_@][A-Za-z0-9_.+-]{0,199}', name)
+    assert len(executable_links) < 4096 and before.st_nlink == 1
+    descriptor = os.open(name, os.O_PATH | os.O_NOFOLLOW, dir_fd=source_fd)
+    try:
+        opened = os.fstat(descriptor)
+        assert stat.S_ISLNK(opened.st_mode) and opened.st_nlink == 1
+        assert (before.st_dev, before.st_ino) == (opened.st_dev, opened.st_ino)
+        link = os.readlink('', dir_fd=descriptor)
+        assert re.fullmatch(r'[A-Za-z0-9_@./+-]{1,2048}', link) and not link.startswith('/')
+        resolved = posixpath.normpath(posixpath.join(*parts, link))
+        assert not resolved.startswith('../') and resolved != '..'
+        resolved_parts = tuple(resolved.split('/'))
+        assert 'node_modules' in resolved_parts and '.bin' not in resolved_parts
+        executable_links.append((parts, name, descriptor, link, resolved_parts))
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+def copy_directory(source_fd, target_fd, depth=0, parts=()):
+    assert depth < 128
+    for name in sorted(os.listdir(source_fd)):
+        assert name not in ('.', '..') and '/' not in name and '\0' not in name
+        before = os.stat(name, dir_fd=source_fd, follow_symlinks=False)
+        if stat.S_ISDIR(before.st_mode):
+            child = os.open(name, directory_flags, dir_fd=source_fd)
+            try:
+                opened = os.fstat(child)
+                assert (before.st_dev, before.st_ino) == (opened.st_dev, opened.st_ino)
+                os.mkdir(name, 0o700, dir_fd=target_fd)
+                destination = os.open(name, directory_flags, dir_fd=target_fd)
+                try:
+                    copy_directory(child, destination, depth + 1, parts + (name,))
+                finally:
+                    os.close(destination)
+            finally:
+                os.close(child)
+        elif stat.S_ISLNK(before.st_mode):
+            defer_executable_link(source_fd, name, before, parts)
+        else:
+            assert stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+            descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=source_fd)
+            try:
+                opened = os.fstat(descriptor)
+                assert stat.S_ISREG(opened.st_mode) and opened.st_nlink == 1
+                assert (before.st_dev, before.st_ino) == (opened.st_dev, opened.st_ino)
+                output = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                 0o700 if opened.st_mode & 0o111 else 0o600, dir_fd=target_fd)
+                try:
+                    while chunk := os.read(descriptor, 1024 * 1024):
+                        view = memoryview(chunk)
+                        while view:
+                            count = os.write(output, view)
+                            assert count > 0
+                            view = view[count:]
+                finally:
+                    os.close(output)
+            finally:
+                os.close(descriptor)
+def copied_directory(root_fd, parts):
+    descriptor = os.dup(root_fd)
+    try:
+        for part in parts:
+            assert part not in ('', '.', '..')
+            child = os.open(part, directory_flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+            assert os.fstat(descriptor).st_uid == 0
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+def copied_regular(root_fd, parts, limit):
+    parent = copied_directory(root_fd, parts[:-1])
+    try:
+        descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                             dir_fd=parent)
+        try:
+            info = os.fstat(descriptor)
+            assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == 0
+            return info, os.read(descriptor, limit + 1)
+        finally:
+            os.close(descriptor)
+    finally:
+        os.close(parent)
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        assert key not in result
+        result[key] = value
+    return result
+
+def materialize_executable_links(root_fd):
+    # Validate only fresh root-owned bytes. Nested ESM type markers are not
+    # package roots: the nearest node_modules boundary selects the bin manifest.
+    for parts, name, descriptor, link, resolved in executable_links:
+        info = os.fstat(descriptor)
+        assert stat.S_ISLNK(info.st_mode) and info.st_nlink == 1
+        assert os.readlink('', dir_fd=descriptor) == link
+        boundary = max(i for i, part in enumerate(resolved) if part == 'node_modules')
+        package_end = boundary + (3 if resolved[boundary + 1].startswith('@') else 2)
+        assert package_end < len(resolved)
+        package = resolved[:package_end]
+        package_name = '/'.join(package[boundary + 1:])
+        _, data = copied_regular(root_fd, package + ('package.json',), 1024 * 1024)
+        assert len(data) <= 1024 * 1024
+        metadata = json.loads(data, object_pairs_hook=unique_object)
+        assert isinstance(metadata, dict) and metadata.get('name') == package_name
+        commands = metadata.get('bin')
+        if isinstance(commands, str):
+            commands = {package_name.rsplit('/', 1)[-1]: commands}
+        assert isinstance(commands, dict) and isinstance(commands.get(name), str)
+        declared = commands[name]
+        assert re.fullmatch(r'[A-Za-z0-9_@./+-]{1,2048}', declared) and not declared.startswith('/')
+        declared_parts = tuple(posixpath.normpath(posixpath.join(*package, declared)).split('/'))
+        assert declared_parts == resolved and declared_parts[:package_end] == package
+        executable, prefix = copied_regular(root_fd, resolved, 256)
+        assert executable.st_mode & 0o111
+        # sha.js@2.4.12 uses the valid Linux space immediately after #!.
+        # Keep an exact interpreter allowlist: no arguments or shell parsing.
+        assert prefix.split(b'\n', 1)[0] in (
+            b'#!/usr/bin/env node', b'#!/usr/bin/node', b'#! /usr/bin/env node')
+        destination = copied_directory(root_fd, parts)
+        try:
+            output = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             0o700, dir_fd=destination)
+            try:
+                relative = posixpath.relpath('/'.join(resolved), '/'.join(parts))
+                shim = ('#!/bin/sh\ncase "$0" in\n  */*) gp_bin_dir=${0%/*} ;;\n'
+                        '  *) gp_bin_dir=. ;;\nesac\nexec "$gp_bin_dir"/' +
+                        shlex.quote(relative) + ' "$@"\n').encode('utf-8')
+                assert os.write(output, shim) == len(shim)
+            finally:
+                os.close(output)
+        finally:
+            os.close(destination)
+
+source_fd = os.open(source, directory_flags)
+try:
+    target_fd = os.open(target, directory_flags)
+    try:
+        copy_directory(source_fd, target_fd)
+        materialize_executable_links(target_fd)
+    finally:
+        os.close(target_fd)
+finally:
+    os.close(source_fd)
+    for _, _, descriptor, _, _ in executable_links:
+        os.close(descriptor)
+PY
+  unsafe="$(find "$private_root/tree" ! -type f ! -type d -print -quit)" || return 1
+  [[ -z "$unsafe" ]] || return 1
+  unsafe="$(find "$private_root/tree" -type f ! -links 1 -print -quit)" || return 1
+  [[ -z "$unsafe" ]] || return 1
+  unsafe="$(find "$private_root/tree" ! -user root -print -quit)" || return 1
+  [[ -z "$unsafe" ]] || return 1
+  gp_apply_app_permissions "$private_root/tree" "$group" || return 1
+  mv -T -- "$private_root/tree" "$target" || return 1
+  rmdir -- "$private_root" || return 1
+}
+
+# This independent verifier reads the original, root-owned SHA-pinned ZIP.
+# Neither a build-modified manifest nor candidate JavaScript is a trust anchor.
+gp_verify_sealed_zip() {
+  local package="$1" sealed="$2" dependencies="${3:-0}"
+  /usr/bin/python3 -I - "$package" "$sealed" "$dependencies" <<'PY'
+import os, stat, sys, zipfile
+from pathlib import Path
+package, root, dependencies = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+assert os.geteuid() == 0 and dependencies in ('0', '1')
+assert package.is_absolute() and root.is_absolute()
+assert package.resolve() == package and root.resolve() == root
+info = package.lstat()
+assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == 0 and info.st_mode & 0o022 == 0
+expected = set()
+with zipfile.ZipFile(package) as archive:
+    for entry in archive.infolist():
+        name = entry.filename.removeprefix('./').rstrip('/')
+        assert name and '\\' not in name and not name.startswith('/') and all(ord(c) >= 32 and ord(c) != 127 for c in name)
+        parts = name.split('/')
+        assert all(part and part not in ('.', '..') for part in parts)
+        if entry.is_dir():
+            continue
+        assert name not in expected and not (dependencies == '1' and parts[0] == 'node_modules')
+        expected.add(name)
+        target = root.joinpath(*parts)
+        info = target.lstat()
+        assert target.resolve() == target and stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == 0 and info.st_mode & 0o022 == 0
+        assert info.st_size == entry.file_size
+        descriptor = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(descriptor, 'rb') as current, archive.open(entry) as original:
+            while True:
+                before, after = original.read(1024 * 1024), current.read(1024 * 1024)
+                assert before == after
+                if not before:
+                    break
+actual = set()
+for directory, folders, files in os.walk(root, followlinks=False):
+    for name in folders + files:
+        target = Path(directory) / name
+        info = target.lstat()
+        assert target.resolve() == target and not stat.S_ISLNK(info.st_mode) and info.st_uid == 0 and info.st_mode & 0o022 == 0
+    if dependencies == '1' and Path(directory) == root and 'node_modules' in folders:
+        folders.remove('node_modules')
+    for name in files:
+        target = Path(directory) / name
+        assert stat.S_ISREG(target.lstat().st_mode)
+        actual.add(target.relative_to(root).as_posix())
+assert actual == expected
+PY
+}
+
+gp_assert_root_node() {
+  # No candidate runtime code may execute to establish this boundary. Require
+  # the native Linux executable; script wrappers could load writable siblings.
+  /usr/bin/python3 -I - "$1" <<'PY'
+import os, stat, sys
+from pathlib import Path
+file = Path(sys.argv[1]).resolve(strict=True)
+assert os.geteuid() == 0 and file.is_absolute()
+info = file.lstat()
+assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_mode & 0o111
+for item in (file, *file.parents):
+    info = item.lstat()
+    assert info.st_uid == 0 and not stat.S_ISLNK(info.st_mode) and info.st_mode & 0o022 == 0
+with file.open('rb') as stream:
+    assert stream.read(4) == b'\x7fELF'
+print(file)
+PY
+}
+
+gp_assert_root_package_manager() {
+  # Both supported distributions bundle their implementation. An entry file
+  # alone is insufficient: a writable dist/ sibling would execute as root.
+  /usr/bin/python3 -I - "$1" "${2:-}" <<'PY'
+import json, os, stat, sys
+from pathlib import Path
+file = Path(sys.argv[1]).resolve(strict=True)
+assert os.geteuid() == 0 and file.is_absolute()
+kind = 'corepack' if sys.argv[2] == 'pnpm' else 'pnpm'
+assert sys.argv[2] in ('', 'pnpm')
+package = next((p for p in file.parents if (p / 'package.json').is_file()), None)
+assert package is not None
+metadata = json.loads((package / 'package.json').read_text())
+assert metadata['name'] == kind
+assert kind != 'pnpm' or metadata['version'] == '11.7.0'
+assert not any(metadata.get(key) for key in ('dependencies', 'optionalDependencies', 'peerDependencies'))
+entry = metadata['bin'][kind]
+assert (package / entry).resolve(strict=True) == file and file.suffix in ('.js', '.mjs', '.cjs')
+count = 0
+for item in (*package.parents, package):
+    info = item.lstat()
+    assert stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and info.st_mode & 0o022 == 0
+for directory, folders, files in os.walk(package, followlinks=False):
+    for name in (*folders, *files):
+        item = Path(directory) / name
+        info = item.lstat()
+        assert info.st_uid == 0 and info.st_mode & 0o022 == 0
+        assert stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+        count += 1
+        assert count <= 100000
+print(file)
+PY
+}
+
+gp_prepare_root_pg_dependencies() {
+  local helper="${BASH_SOURCE[0]%/*}/root-postgresql-dependencies.sh"
+  # Check before executing the helper; the build account must not supply the
+  # verifier itself through a writable source tree or an extra hard link.
+  /usr/bin/python3 -I - "$helper" <<'PY' || return 1
+import os, stat, sys
+from pathlib import Path
+file = Path(sys.argv[1])
+assert os.geteuid() == 0 and file.is_absolute() and file.resolve() == file
+info = file.lstat()
+assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+for item in (file, *file.parents):
+    info = item.lstat()
+    assert info.st_uid == 0 and not stat.S_ISLNK(info.st_mode) and info.st_mode & 0o022 == 0
+PY
+  /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 /usr/bin/bash -- "$helper" "$@"
 }

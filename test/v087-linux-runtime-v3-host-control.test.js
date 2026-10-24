@@ -19,7 +19,7 @@ const hostRuntimeArtifacts = [
 
 test("current runtime schema retains the exact root-managed host-control artifacts", () => {
   const schema = JSON.parse(read("server-tools", "linux", "runtime-schema.json"));
-  assert.equal(schema.deploymentSchemaVersion, 5);
+  assert.equal(schema.deploymentSchemaVersion, 6);
   assert.equal(schema.migrationPolicy, "explicit-maintenance");
   assert.equal(schema.managedArtifacts.length, 11);
   for (const relative of hostRuntimeArtifacts) assert.ok(schema.managedArtifacts.includes(relative), relative);
@@ -31,7 +31,7 @@ test("current runtime schema retains the exact root-managed host-control artifac
   ], { encoding: "utf8" });
   assert.equal(verification.status, 0, verification.stderr);
   const contract = JSON.parse(verification.stdout);
-  assert.equal(contract.deploymentSchemaVersion, 5);
+  assert.equal(contract.deploymentSchemaVersion, 6);
   assert.deepEqual(
     contract.managedArtifacts.filter((relative) => relative.includes("/host-control/")),
     [...hostRuntimeArtifacts].sort(),
@@ -57,7 +57,7 @@ test("package builder and both verifiers require current runtime control files",
     assert.match(verifier, new RegExp(basename), `Verifier fordert ${relative} nicht an.`);
     assert.match(installer, new RegExp(basename), `Installer fordert ${relative} nicht an.`);
   }
-  assert.match(installer, /deploymentSchemaVersion !== 5/);
+  assert.match(installer, /deploymentSchemaVersion !== 6/);
   assert.match(installer, /Der Linux-Runtimevertrag v5 ist ungueltig/);
 });
 
@@ -334,6 +334,10 @@ test("nested runtime-v3 updater uses the installed root-protected offsite helper
     /(if \[\[ "\$\{GRABENPLANER_OFFSITE_CONFIGURED:-0\}" == "1" \]\]; then[\s\S]*?\r?\nfi)\r?\ncandidate_version=/,
   )?.[1];
   assert.ok(gateBlock, "Der ausführbare Offsite-Kompatibilitätsblock fehlt.");
+  const rootNode = updater.match(/^root_node\(\) \{[^\r\n]+\}/m)?.[0];
+  assert.ok(rootNode, "Der aktuelle Root-Node-Launcher fehlt.");
+  assert.match(rootNode, /\/usr\/bin\/env -i/);
+  assert.match(rootNode, /--no-global-search-paths/);
   const harnessGateBlock = gateBlock.replace(
     'installed_offsite_receipt="/etc/grabenplaner/offsite/installed-contract.json"',
     'installed_offsite_receipt="$TEST_INSTALLED_OFFSITE_RECEIPT"',
@@ -356,17 +360,26 @@ test("nested runtime-v3 updater uses the installed root-protected offsite helper
     const manifest = path.join(temporary, "manifest.json");
     const receipt = path.join(temporary, "installed-contract.json");
     const harness = path.join(temporary, "nested-updater-gate.sh");
+    const installedProof = path.join(temporary, "installed-helper.executed");
+    const candidateProof = path.join(temporary, "candidate-helper.executed");
+    const poisonProof = path.join(temporary, "inherited-preload.executed");
+    const poison = path.join(temporary, "poison.cjs");
 
     fs.mkdirSync(path.dirname(installedHelper), { recursive: true });
     fs.mkdirSync(path.dirname(candidateHelper), { recursive: true });
     fs.writeFileSync(
       installedHelper,
-      "'use strict'; process.stdout.write('compatible\\n');\n",
+      "'use strict'; const fs=require('node:fs');"
+      + "if(process.env.NODE_OPTIONS!==undefined||process.env.NODE_PATH!==undefined||process.env.NODE_ENV!=='production'||process.env.HOME!=='/root')process.exit(44);"
+      + `fs.writeFileSync(${JSON.stringify(installedProof)},'installed');`
+      + "process.stdout.write('compatible\\n');\n",
     );
     fs.writeFileSync(
       candidateHelper,
-      "'use strict'; process.stderr.write('build-user helper must not run\\n'); process.exit(43);\n",
+      `require('node:fs').writeFileSync(${JSON.stringify(candidateProof)},'candidate');`
+      + "process.stderr.write('build-user helper must not run\\n'); process.exit(43);\n",
     );
+    fs.writeFileSync(poison, `require('node:fs').writeFileSync(${JSON.stringify(poisonProof)},'inherited');throw Error('INHERITED_PRELOAD_MUST_NOT_RUN');\n`);
     fs.writeFileSync(manifest, "{}\n");
     fs.writeFileSync(receipt, "{}\n");
     fs.writeFileSync(harness, `#!/usr/bin/env bash
@@ -376,9 +389,11 @@ readonly app_dir="$2"
 readonly node="$3"
 readonly manifest_result_file="$4"
 readonly TEST_INSTALLED_OFFSITE_RECEIPT="$5"
+readonly TEST_HELPER_IDENTITY="\${6:-0:4242:1}"
 readonly service_group="grabenplaner"
 readonly GRABENPLANER_OFFSITE_CONFIGURED=1
 readonly runtime_v5_transition=""
+${rootNode}
 gp_die() { printf '%s\\n' "$1" >&2; exit 97; }
 getent() {
   [[ "\${1:-}" == "group" && "\${2:-}" == "$service_group" ]] || return 1
@@ -399,7 +414,7 @@ stat() {
       ;;
     "$app_dir/server-tools/linux/lib/offsite-update-compat.js")
       case "$format" in
-        "%u:%g:%h") printf '%s\\n' "0:4242:1" ;;
+        "%u:%g:%h") printf '%s\\n' "$TEST_HELPER_IDENTITY" ;;
         "%a") printf '%s\\n' "640" ;;
         *) return 2 ;;
       esac
@@ -418,17 +433,37 @@ ${harnessGateBlock}
 printf '%s\\n' "nested-helper-ok"
 `);
 
-    const result = spawnSync("bash", [
+    const invoke = (identity = "0:4242:1") => spawnSync("bash", [
       harness,
       installedScriptDir,
       installedAppDir,
       process.execPath,
       manifest,
       receipt,
-    ], { encoding: "utf8" });
+      identity,
+    ], { encoding: "utf8", env: { ...process.env, NODE_OPTIONS: "--require " + JSON.stringify(poison), NODE_PATH: temporary } });
+    const result = invoke();
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout.trim(), "nested-helper-ok");
     assert.doesNotMatch(result.stderr, /build-user helper must not run/);
+    assert.equal(fs.readFileSync(installedProof, "utf8"), "installed");
+    assert.equal(fs.existsSync(candidateProof), false);
+    assert.equal(fs.existsSync(poisonProof), false);
+
+    fs.unlinkSync(installedProof);
+    const foreign = invoke("1000:4242:1");
+    assert.equal(foreign.status, 97, foreign.stderr);
+    assert.match(foreign.stderr, /installierte Offsite-Kompatibilitaetspruefung ist ungueltig/);
+    assert.equal(fs.existsSync(installedProof), false);
+    assert.equal(fs.existsSync(candidateProof), false);
+    fs.unlinkSync(installedHelper);
+    fs.symlinkSync(candidateHelper, installedHelper);
+    const linked = invoke();
+    assert.equal(linked.status, 97, linked.stderr);
+    assert.match(linked.stderr, /installierte Offsite-Kompatibilitaetspruefung ist ungueltig/);
+    assert.equal(fs.existsSync(installedProof), false);
+    assert.equal(fs.existsSync(candidateProof), false);
+    assert.equal(fs.existsSync(poisonProof), false);
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }
@@ -443,7 +478,7 @@ test("schema-3/4 updater rejects a damaged installed host-control contract", () 
   assert.match(updater, /systemctl is-enabled --quiet grabenplaner-host-control\.socket/);
   assert.match(updater, /systemctl is-active --quiet grabenplaner-host-control\.socket/);
   assert.match(updater, /Ein Host-Neustart ist bereits aktiv/);
-  assert.match(updater, /\.runtime-v\(2\|3\|4\|5\)-migration/);
+  assert.match(updater, /\.runtime-v\(2\|3\|4\|5\|6\)-migration/);
 });
 
 test("runtime-v3 uninstaller removes broker, units, and narrow group but preserves data", () => {

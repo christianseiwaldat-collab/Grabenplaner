@@ -33,7 +33,7 @@ async function main(){
   const client=connect(config.domains[0].database,'gp_core_reader');
   try{
    await client.connect();const rows=(await client.query("SELECT id,app_version FROM gp.schema_migrations WHERE btrim(app_version)<>''")).rows;
-   const {compareSemver}=require('./recovery-verify');
+   const {compareSemver}=require('./recovery-shared');
    if(compareSemver(request.sourceVersion,request.targetVersion)>0)throw new Error('PG_RECOVERY_APP_DOWNGRADE');
    for(const row of rows){const version=request.sourceVersion==='0.92.32-beta'&&row.id==='developer-permission-defaults-v1'&&row.app_version==='local'?'0.92.32-beta':row.app_version;if(compareSemver(version,request.targetVersion)>0)throw new Error('PG_RECOVERY_SCHEMA_NEWER_THAN_APP');}
   }finally{await client.end();}

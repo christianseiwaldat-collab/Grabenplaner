@@ -7,9 +7,9 @@ const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
 
-test("v0.75.7 keeps offsite workers lifecycle-bound on Ubuntu 26.04", () => {
+test("historical v0.75.7 SQLite backup transition and current offsite workers remain lifecycle-bound on Ubuntu 26.04", () => {
   const backup = fs.readFileSync(
-    path.join(root, "server-tools", "linux", "backup-grabenplaner.sh"),
+    require('../test-support/legacy-baseline').legacyPath("server-tools/linux/backup-grabenplaner.sh"),
     "utf8",
   );
   const prepareUnit = fs.readFileSync(

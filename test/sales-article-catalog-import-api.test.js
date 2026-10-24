@@ -1,4 +1,5 @@
 "use strict";
+const { installSalesOutboxFailure } = require("../test-support/postgresql-api/trigger-fixture");
 const { sessionCsrfFromCookie } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -177,7 +178,7 @@ function exchange(catalog, articles, overrides = {}) {
 }
 
 function tableCounts() {
-  return Object.fromEntries([
+  const counts = Object.fromEntries([
     "sales_article_import_snapshots",
     "sales_article_import_findings",
     "sales_article_import_impacts",
@@ -192,6 +193,10 @@ function tableCounts() {
     table,
     Number(db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count),
   ]));
+  for (const table of ["core_audit_outbox", "core_audit_delivery"]) {
+    counts[table] = Number(db.postgresqlCatalogQuery("sales", `SELECT COUNT(*) AS count FROM integration.${table}`)[0].count);
+  }
+  return counts;
 }
 
 function currentArticleBusinessState(articleNumber) {
@@ -405,7 +410,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -932,16 +937,12 @@ test("Apply koppelt Snapshot, Revisionen, Quellbindungen und Audit atomar", asyn
   ]);
   assert.equal(result.response.status, 201, result.text);
   const before = tableCounts();
-  db.exec(`
-    CREATE TRIGGER test_article_import_audit_failure
-    BEFORE INSERT ON audit_log
-    WHEN NEW.action = 'sales.article-catalog.import'
-    BEGIN
-      SELECT RAISE(ABORT, 'synthetic article import audit failure');
-    END
-  `);
-  const failed = await applyPreview(result.payload);
-  db.exec("DROP TRIGGER test_article_import_audit_failure");
+  const removeAuditFailure = installSalesOutboxFailure(db, {
+    name: "test_article_import_audit_failure", action: "sales.article-catalog.import",
+  });
+  let failed;
+  try { failed = await applyPreview(result.payload); }
+  finally { removeAuditFailure(); }
   assert.notEqual(failed.response.status, 201, failed.text);
   assert.deepEqual(tableCounts(), before, "Ein Auditfehler muss den gesamten Import zurückrollen");
 
@@ -1034,19 +1035,16 @@ test("Import-Undo stellt Updates exakt wieder her, archiviert Neuanlagen additiv
   grant(IMPORTER, SALES_ARTICLE_CATALOG_PERMISSIONS.IMPORT);
 
   const beforeFailedUndo = tableCounts();
-  db.exec(`
-    CREATE TRIGGER test_article_import_undo_audit_failure
-    BEFORE INSERT ON audit_log
-    WHEN NEW.action = 'sales.article-catalog.import.undo'
-    BEGIN
-      SELECT RAISE(ABORT, 'synthetic article import undo audit failure');
-    END
-  `);
-  const failedUndo = await requestJson(
-    `/api/portal/v1/me/actions/${encodeURIComponent(applied.payload.personalActionId)}/undo`,
-    { method: "POST", body: {} },
-  );
-  db.exec("DROP TRIGGER test_article_import_undo_audit_failure");
+  const removeUndoFailure = installSalesOutboxFailure(db, {
+    name: "test_article_import_undo_audit_failure", action: "sales.article-catalog.import.undo",
+  });
+  let failedUndo;
+  try {
+    failedUndo = await requestJson(
+      `/api/portal/v1/me/actions/${encodeURIComponent(applied.payload.personalActionId)}/undo`,
+      { method: "POST", body: {} },
+    );
+  } finally { removeUndoFailure(); }
   assert.notEqual(failedUndo.response.status, 200, failedUndo.text);
   assert.deepEqual(tableCounts(), beforeFailedUndo, "Undo-Auditfehler muss jede Gegenrevision zurückrollen");
   assert.equal(currentArticleBusinessState("093840").currentRevision, 2);
@@ -1161,7 +1159,10 @@ test("Import-Undo meldet Identifier-Eigentümerkonflikte kontrolliert mit 409 un
     SELECT product_id AS productId FROM sales_articles WHERE article_number = 'UNDO-GTIN-OWNER'
   `).get().productId;
   const canonical = `0${conflictGtin}`;
-  db.exec("DROP TRIGGER trg_sales_article_identifier_owners_immutable_update");
+  const immutableOwnerGuard = require("../test-support/postgresql-api/metadata").triggerByName(
+    db, "trg_sales_article_identifier_owners_immutable_update", { domain: "sales" });
+  assert.ok(immutableOwnerGuard?.definition, "the actual immutable-owner guard must exist before the race fixture");
+  db.postgresqlFixtureDdl("sales", 'DROP TRIGGER "trg_sales_article_identifier_owners_immutable_update" ON "trade"."sales_article_identifier_owners"');
   db.prepare(`
     UPDATE sales_article_identifier_owners SET product_id = ?
     WHERE canonical_gtin14 = ?
@@ -1182,13 +1183,9 @@ test("Import-Undo meldet Identifier-Eigentümerkonflikte kontrolliert mit 409 un
       UPDATE sales_article_identifier_owners SET product_id = ?
       WHERE canonical_gtin14 = ?
     `).run(imported.productId, canonical);
-    db.exec(`
-      CREATE TRIGGER trg_sales_article_identifier_owners_immutable_update
-      BEFORE UPDATE ON sales_article_identifier_owners
-      BEGIN
-        SELECT RAISE(ABORT, 'sales-article-identifier-owner-immutable');
-      END
-    `);
+    db.postgresqlFixtureDdl("sales", immutableOwnerGuard.definition);
+    assert.equal(require("../test-support/postgresql-api/metadata").triggerByName(
+      db, immutableOwnerGuard.name, { domain: "sales" }).definition, immutableOwnerGuard.definition);
   }
 });
 

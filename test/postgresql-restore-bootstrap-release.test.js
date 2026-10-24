@@ -52,7 +52,7 @@ function fixture({adminEndFails=false,stopFails=false,imageVerificationError=nul
    return 2;
   }},
   './restore-privileges':{async materializeDefaultPrivileges(){}},'../sales/layout':{SCHEMAS:['synthetic']},
-  '../../../../server-tools/linux/recovery/lib/recovery-verify':{protectedRecordChecks:function*(){return 0;}},
+  '../../../../server-tools/linux/recovery/lib/recovery-shared':{protectedRecordChecks:function*(){return 0;}},
   '../../../../server-tools/linux/recovery/lib/postgresql-recovery-activity':{
    childCompletion:child=>child.stop&&stopFails?Promise.reject(stopError):Promise.resolve({code:0}),
    monitorActivity:({completion})=>completion,terminateAndConfirm(){},readCgroupActivity(){},processCgroup(){},

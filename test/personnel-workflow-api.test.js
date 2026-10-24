@@ -65,10 +65,19 @@ function enablePersonnelLifecycle() {
 }
 
 function createOrganizationFixture() {
-  db.prepare("INSERT OR REPLACE INTO locations (id, name, active) VALUES (?, ?, 1)")
-    .run(LOCATION_A, "M4 API Standort A");
-  db.prepare("INSERT OR REPLACE INTO locations (id, name, active) VALUES (?, ?, 1)")
-    .run(LOCATION_B, "M4 API Standort B");
+  for (const [id, name] of [[LOCATION_A, "M4 API Standort A"], [LOCATION_B, "M4 API Standort B"]]) {
+    const costCenterId = `fixture-location-${id}`;
+    db.prepare(`
+      INSERT INTO cost_centers (id, code, name, type, cost_center_type_id, active)
+      VALUES (?, ?, ?, 'branch', 'branch', 1)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, active = 1
+    `).run(costCenterId, `FIXTURE-${id}`, name);
+    db.prepare(`
+      INSERT INTO locations (id, name, cost_center_id, active) VALUES (?, ?, ?, 1)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name,
+        cost_center_id = excluded.cost_center_id, active = 1
+    `).run(id, name, costCenterId);
+  }
   for (const [locationId, name] of [
     [LOCATION_A, "M4 API Abteilung A"],
     [LOCATION_A, "M4 API Abteilung B"],
@@ -278,7 +287,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

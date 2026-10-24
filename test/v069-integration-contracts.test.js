@@ -1,4 +1,5 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -74,7 +75,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -148,7 +149,7 @@ test("v0.69: SQL-Importprofile bewahren Quellenart, Verbindung und Vertrag", () 
 });
 
 test("v0.69: Vertrags-API ist geschützt und liefert prüfbare JSON-Dokumente", async () => {
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.69-integration-contracts'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   assert.deepEqual(installationFeaturesForApiPath("/integrations/contracts"), ["integrations"]);
   const employee = session("102", "employee");
   const denied = await request("/api/integrations/contracts", { auth: employee });

@@ -51,7 +51,7 @@ test("v0.92.93: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", 
   assert.match(appJavascript, /monitorActions\.canRestart === true/);
   assert.match(appJavascript, /\/api\/portal\/v1\/server-monitor\/restart/);
   assert.match(appJavascript, /JSON\.stringify\(\{ confirmation: "SERVER_RESTART" \}\)/);
-  assert.match(read("server.js"), /sqliteBranchOrderOperations\.ensureConfiguredLocationCatalogContent\(\)/);
+  assert.match(read("server.js"), /branchOrderOperations\.ensureConfiguredLocationCatalogContent\(\)/);
   assert.match(readme, /v0\.92\.93 Beta/);
   assert.match(readme, /verwalteten Ubuntu-Einzelserver/i);
   assert.match(readme, /SQLite/);

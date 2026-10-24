@@ -1,4 +1,5 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -218,11 +219,7 @@ function normalizeSnapshotValue(value) {
 }
 
 function protectedTableNames() {
-  const existing = new Set(db.prepare(`
-    SELECT name
-    FROM sqlite_master
-    WHERE type = 'table'
-  `).all().map(({ name }) => String(name)));
+  const existing = new Set(pgSchema.tableNames(db).map(({ name }) => String(name)));
   const dynamic = [...existing].filter((tableName) => (
     tableName.startsWith("loan")
     || tableName.startsWith("personnel_lifecycle_")
@@ -345,7 +342,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

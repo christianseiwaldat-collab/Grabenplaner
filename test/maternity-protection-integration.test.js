@@ -1,4 +1,5 @@
 "use strict";
+const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -93,7 +94,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests(); fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
@@ -203,14 +204,14 @@ test("failed receipt insertion rolls the standalone status change back atomicall
   const before = db.prepare("SELECT * FROM personnel_sensitive_records WHERE employee_number=?").get(SUBJECT);
   const receiptCount = db.prepare("SELECT count(*) n FROM work_rule_evaluation_runs").get().n;
   const auditCount = db.prepare("SELECT count(*) n FROM audit_log").get().n;
-  db.exec("CREATE TRIGGER maternity_receipt_failure BEFORE INSERT ON work_rule_evaluation_runs BEGIN SELECT RAISE(ABORT,'synthetic'); END");
+  installFixtureTrigger(db, "CREATE TRIGGER maternity_receipt_failure BEFORE INSERT ON work_rule_evaluation_runs BEGIN SELECT RAISE(ABORT,'synthetic'); END");
   try {
     const result = await save(status({ periods: [period({ phase: "employment_prohibition" })] }), users.admin, failureBasis);
     assert.ok(result.status >= 500, JSON.stringify(result.payload));
     assert.deepEqual(db.prepare("SELECT * FROM personnel_sensitive_records WHERE employee_number=?").get(SUBJECT), before);
     assert.equal(db.prepare("SELECT count(*) n FROM work_rule_evaluation_runs").get().n, receiptCount);
     assert.equal(db.prepare("SELECT count(*) n FROM audit_log").get().n, auditCount);
-  } finally { db.exec("DROP TRIGGER maternity_receipt_failure"); }
+  } finally { dropFixtureTrigger(db, "maternity_receipt_failure"); }
 });
 
 test("embedded employee update uses the same private transaction and rolls the whole change back", async () => {
@@ -222,7 +223,7 @@ test("embedded employee update uses the same private transaction and rolls the w
   const employeeBefore = db.prepare("SELECT * FROM employees WHERE personnel_number=?").get(SUBJECT);
   const receiptCount = db.prepare("SELECT count(*) n FROM work_rule_evaluation_runs").get().n;
   const auditCount = db.prepare("SELECT count(*) n FROM audit_log").get().n;
-  db.exec("CREATE TRIGGER maternity_embedded_failure BEFORE INSERT ON work_rule_evaluation_runs BEGIN SELECT RAISE(ABORT,'synthetic'); END");
+  installFixtureTrigger(db, "CREATE TRIGGER maternity_embedded_failure BEFORE INSERT ON work_rule_evaluation_runs BEGIN SELECT RAISE(ABORT,'synthetic'); END");
   try {
     const body = employeeBody(SUBJECT, "Must Roll Back");
     body.personnelRecord.planningStatusBasis = read.payload.planningStatusBasis;
@@ -233,20 +234,20 @@ test("embedded employee update uses the same private transaction and rolls the w
     assert.deepEqual(db.prepare("SELECT * FROM personnel_sensitive_records WHERE employee_number=?").get(SUBJECT), before);
     assert.equal(db.prepare("SELECT count(*) n FROM work_rule_evaluation_runs").get().n, receiptCount);
     assert.equal(db.prepare("SELECT count(*) n FROM audit_log").get().n, auditCount);
-  } finally { db.exec("DROP TRIGGER maternity_embedded_failure"); }
+  } finally { dropFixtureTrigger(db, "maternity_embedded_failure"); }
 });
 
 test("embedded employee creation cannot leave a person behind when its protected receipt fails", async () => {
   const employeeNumber = "00982";
   const auditCount = db.prepare("SELECT count(*) n FROM audit_log").get().n;
-  db.exec("CREATE TRIGGER maternity_creation_failure BEFORE INSERT ON work_rule_evaluation_runs BEGIN SELECT RAISE(ABORT,'synthetic'); END");
+  installFixtureTrigger(db, "CREATE TRIGGER maternity_creation_failure BEFORE INSERT ON work_rule_evaluation_runs BEGIN SELECT RAISE(ABORT,'synthetic'); END");
   try {
     const failed = await request("/api/employees", { method: "POST", auth: users.hr, body: employeeBody(employeeNumber) });
     assert.ok(failed.status >= 500, JSON.stringify(failed.payload));
     assert.equal(db.prepare("SELECT * FROM employees WHERE personnel_number=?").get(employeeNumber), undefined);
     assert.equal(db.prepare("SELECT * FROM personnel_sensitive_records WHERE employee_number=?").get(employeeNumber), undefined);
     assert.equal(db.prepare("SELECT count(*) n FROM audit_log").get().n, auditCount);
-  } finally { db.exec("DROP TRIGGER maternity_creation_failure"); }
+  } finally { dropFixtureTrigger(db, "maternity_creation_failure"); }
   const good = await request("/api/employees", { method: "POST", auth: users.hr, body: employeeBody(employeeNumber) });
   assert.equal(good.status, 201, JSON.stringify(good.payload)); assertNeutral(good.payload);
   const read = await request(`/api/portal/v1/personnel-records/${employeeNumber}`, { auth: users.hr });

@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -125,7 +126,7 @@ test.before(async () => {
   const positionId = db.prepare("SELECT id FROM positions ORDER BY sort_order, id LIMIT 1").get().id;
   db.prepare("UPDATE positions SET name = ? WHERE id = ?").run(matrixPositionName, positionId);
   const daySettings = db.prepare("SELECT day_settings_json FROM locations ORDER BY id LIMIT 1").get()?.day_settings_json || "{}";
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, 'Teamsitzungs-Testfiliale', 2, ?, 1)
   `).run(LOCATION, daySettings);
@@ -187,7 +188,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

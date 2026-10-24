@@ -78,7 +78,7 @@ test("Linux runtime artifacts stay separate from the optional offsite contract",
   assert.deepEqual([...runtime.managedArtifacts].sort(), [...coreRuntimeArtifacts].sort());
   assert.equal(runtime.managedArtifacts.length, 11);
   assert.equal(offsite.activationPolicy, "explicit-root-setup");
-  assert.equal(offsite.moduleVersion, 12);
+  assert.equal(offsite.moduleVersion, 13);
   assert.deepEqual([...offsite.managedArtifacts].sort(), [...offsiteArtifacts].sort());
   for (const relative of offsiteArtifacts) assert.ok(fs.statSync(path.join(root, relative)).isFile(), `Fehlt: ${relative}`);
 });
@@ -90,7 +90,7 @@ test("package verifier validates the separate offsite module without changing th
   const contract = JSON.parse(result.stdout);
   assert.deepEqual(contract.managedArtifacts, [...coreRuntimeArtifacts].sort());
   assert.equal(contract.offsiteModule.activationPolicy, "explicit-root-setup");
-  assert.equal(contract.offsiteModule.moduleVersion, 12);
+  assert.equal(contract.offsiteModule.moduleVersion, 13);
   assert.deepEqual(contract.offsiteModule.managedArtifacts, [...offsiteArtifacts].sort());
   assert.match(contract.offsiteModule.fingerprint, /^[a-f0-9]{64}$/);
 });
