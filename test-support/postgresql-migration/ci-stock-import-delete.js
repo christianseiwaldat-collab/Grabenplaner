@@ -11,6 +11,7 @@ async function main(){
   'next-rights':['test/portal-foundation.test.js','test/personnel-lifecycle-onboarding-execution-api.test.js','test/v063-import-payroll.test.js','test/v083-payroll-handoffs.test.js'],
   reports:['test/personnel-lifecycle-scoped-rights-api.test.js','test/v062-mobile-native-auth.test.js','test/v079-mobile-absence-api.test.js','test/v071-page-appearance.test.js','test/v0862-server-backup-download.test.js'],
   loans:['test/v085-loan-foundation.test.js','test/v087-block4-loan-overview.test.js','test/v087-block4-organization-accounts.test.js'],
+  'closure-apis':['test/v053-time-corrections.test.js','test/v087-block5-loan-photo-appendix.test.js','test/v088-personal-email-settings.test.js','test/v091-branch-orders.test.js','test/v0921-staff-assignments.test.js','test/voice-assistant-api.test.js','test/workflow-studio-portal-api.test.js','test/youth-profile-integration.test.js'],
  });
  const diagnosticGroup=diagnosticIndex<0?null:process.argv[diagnosticIndex+1];
  if(diagnosticIndex>=0&&(!Object.hasOwn(diagnosticGroups,diagnosticGroup)||process.argv.includes('--full')||process.argv.includes('--bootstrap-only')))throw new Error('Explicit bounded diagnostic API group required');

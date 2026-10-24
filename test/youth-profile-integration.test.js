@@ -146,11 +146,16 @@ test("school evidence survives SQLite CRUD; empty travel remains unknown; mutati
 });
 
 test("editing school facts recalculates the present and future plan and preserves an immutable prior receipt", async () => {
+  const idsBeforeFuture = new Set(db.prepare("SELECT id FROM work_rule_evaluation_runs").all().map(row => row.id));
   const future = await request("/api/shifts", { method: "POST", body: {
     employeeNumber: YOUTH, locationId, departmentId: "", date: "2032-07-12", startTime: "09:00", endTime: "12:00", area: "synthetic", note: "",
   } });
   assert.equal(future.status, 201, JSON.stringify(future.payload));
-  const previous = db.prepare("SELECT id,input_sha256,result_json FROM work_rule_evaluation_runs ORDER BY rowid DESC LIMIT 1").get();
+  const futureReceipts = db.prepare("SELECT id,input_sha256,result_json FROM work_rule_evaluation_runs WHERE period_from=?")
+    .all("2032-07-12").filter(row => !idsBeforeFuture.has(row.id));
+  assert.equal(futureReceipts.length, 1, "The future shift must create its own evaluation receipt.");
+  const previous = futureReceipts[0];
+  const idsBeforeUpdate = new Set(db.prepare("SELECT id FROM work_rule_evaluation_runs").all().map(row => row.id));
   const updated = await request(`/api/week-options/${schoolId}`, { method: "PUT", body: option({
     vocationalSchool: details({ endTime: "12:00", lunchMinutes: 0, travelMinutes: 30 }), endTime: "12:00",
   }) });
@@ -159,9 +164,15 @@ test("editing school facts recalculates the present and future plan and preserve
   assert.deepEqual(db.prepare("SELECT id,input_sha256,result_json FROM work_rule_evaluation_runs WHERE id=?").get(previous.id), previous);
   const findings = (await schedule()).workRuleAssessment.findings;
   assert.ok(!findings.some(entry => entry.employeeNumber === YOUTH && entry.ruleId === "at.kjbg.school.eight-hours"));
-  const receipt = JSON.parse(db.prepare("SELECT result_json FROM work_rule_evaluation_runs WHERE period_from=? ORDER BY rowid DESC LIMIT 1").get(WEEK).result_json);
+  // Receipt IDs are UUIDs in PostgreSQL; their order is not insertion order.
+  // Bind this assertion to the receipts created by this exact school edit.
+  const editedReceipts = db.prepare("SELECT id,result_json FROM work_rule_evaluation_runs WHERE period_from=?")
+    .all(WEEK).filter(row => !idsBeforeUpdate.has(row.id));
+  assert.equal(editedReceipts.length, 1, "The school edit must create one current-week receipt.");
+  const receipt = JSON.parse(editedReceipts[0].result_json);
   const daily = receipt.employeeResults.find(entry => entry.employeeNumber === YOUTH).result.findings
     .find(entry => entry.ruleId === "at.kjbg.school.daily-combination" && entry.scope.date === "2032-07-06");
+  assert.ok(daily, "The receipt from this school edit must contain the youth's daily school-combination result.");
   assert.equal(daily.state, "pass");
 });
 

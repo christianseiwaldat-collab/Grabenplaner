@@ -162,12 +162,23 @@ test("assistant calls cannot bypass disabled GP vacation/request installation mo
   } finally { db.prepare("UPDATE settings SET value=? WHERE key='installation_features'").run(previous); }
 });
 test("API outage and a revoked real GP session during model processing cannot submit or return personal data", async () => {
+  const requestCounts = () => ({
+    vacation: db.prepare("SELECT COUNT(*) AS count FROM vacation_requests WHERE employee_number=?").get(A).count,
+    timeOff: db.prepare("SELECT COUNT(*) AS count FROM time_off_requests WHERE employee_number=?").get(A).count,
+  });
+  const before = requestCounts();
   let id = await start(); providerFailure = true;
   const failure = await message(id, "Wie arbeite ich?"); assert.equal(failure.status, 503); assert.equal(failure.data.code, "ASSISTANT_PROVIDER_UNAVAILABLE"); providerFailure = false;
   intent = { ...intent, action: "schedule", dateText: "diese Woche" };
   onInterpret = async () => db.prepare("DELETE FROM portal_sessions WHERE employee_number=?").run(A);
-  const denied = await message(id, "Wie arbeite ich diese Woche?"); assert.equal(denied.status, 401); assert(!JSON.stringify(denied.data).includes("2031-04-04"));
+  const denied = await message(id, "Wie arbeite ich diese Woche?"); assert.equal(denied.status, 401, JSON.stringify(denied.data));
+  assert.equal(denied.data.code, "PORTAL_LOGIN_REQUIRED"); assert(!JSON.stringify(denied.data).includes("2031-04-04"));
+  assert.deepEqual(requestCounts(), before);
   sessions.set(A, authentication(A)); id = await start();
-  db.prepare("INSERT INTO portal_permission_denials(employee_number,permission,denied_by) VALUES(?,'own_schedule:read',?)").run(A, B);
-  assert.equal((await message(id, "Wie arbeite ich diese Woche?")).status, 403);
+  const restored = await message(id, "Wie arbeite ich diese Woche?");
+  assert.equal(restored.status, 200, JSON.stringify(restored.data)); assert.equal(restored.data.data.shifts[0].date, "2031-04-04");
+  onInterpret = async () => db.prepare("INSERT INTO portal_permission_denials(employee_number,permission,denied_by) VALUES(?,'own_schedule:read',?)").run(A, B);
+  const revoked = await message(id, "Wie arbeite ich diese Woche?");
+  assert.equal(revoked.status, 403, JSON.stringify(revoked.data)); assert.equal(revoked.data.code, "PORTAL_PERMISSION_DENIED");
+  assert(!JSON.stringify(revoked.data).includes("2031-04-04")); assert.deepEqual(requestCounts(), before);
 });

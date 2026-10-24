@@ -703,9 +703,13 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   "server-tools/linux/recovery/lib/recovery-verify.js",
   "server-tools/linux/test-grabenplaner-server.sh"
 ]);
+  // These two exact retired operating cases now delegate to the immutable
+  // historical server child; their current wrappers no longer import drivers.
   assert.deepEqual(report.resolvedTestFiles, [
     "test/database-lock.test.js",
     "test/v082-immutable-trigger-migration.test.js",
+    "test/v0853-offsite-system-center.test.js",
+    "test/v0862-local-backup-compat.test.js",
     "test/v087-block5-loan-photo-migration.test.js",
     "test/v087-block7-settings-appearance.test.js",
     "test/v087-block8-cost-center-migration.test.js",
@@ -727,6 +731,9 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
     assert.notEqual(finding.owner, "unclassified", `${finding.file}:${finding.line}`);
     assert.notEqual(finding.targetLayer, "unclassified", `${finding.file}:${finding.line}`);
   }
+  assert.equal(PHASE_3_ALLOWED_TEST_DRIVER_FILES.includes("test/v0862-server-backup-download.test.js"), false);
+  assert.ok(architectureBoundaryViolationsForText("test/v0862-server-backup-download.test.js", 'require("node:sqlite");')
+    .some(entry => entry.kind === "sqlite-driver-import-outside-boundary"));
 });
 
 test("Datenbank-Betriebsdokumentation bleibt neutral; CI-Verträge bleiben erhalten", () => {

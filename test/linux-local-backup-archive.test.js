@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { spawnSync } = require("node:child_process");
@@ -151,9 +152,9 @@ test("Linux archive preflight validates external history before raw creation and
 });
 
 test("Linux archive adapter refuses missing Vault secrets and disabled existing history", t => {
-  const temporary = fs.mkdtempSync(path.join(root, "tmp", "linux-archive-adapter-test-"));
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "linux-archive-adapter-test-"));
   t.after(() => {
-    assert.equal(path.dirname(fs.realpathSync(temporary)), fs.realpathSync(path.join(root, "tmp")));
+    assert.equal(path.dirname(fs.realpathSync(temporary)), fs.realpathSync(os.tmpdir()));
     fs.rmSync(temporary, { recursive: true });
   });
   const archiveInput = { ...input, backupDirectory: temporary, environment: {
@@ -183,11 +184,11 @@ test("Linux archive CLI contract works with the real backend and preserves old r
   const { openLocalBackupArchiveFromEnvironment } = require("../lib/local-backup-environment");
   const { writeBackupCommitMarker } = require("../lib/backup-commit");
   const { sha256File } = require("../lib/file-integrity");
-  const directory = fs.mkdtempSync(path.join(root, "tmp", "linux-archive-core-test-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "linux-archive-core-test-"));
   const key = crypto.randomBytes(32);
   t.after(() => {
     key.fill(0);
-    assert.equal(path.dirname(fs.realpathSync(directory)), fs.realpathSync(path.join(root, "tmp")));
+    assert.equal(path.dirname(fs.realpathSync(directory)), fs.realpathSync(os.tmpdir()));
     fs.rmSync(directory, { recursive: true });
   });
   const environment = { GRABENPLANER_LOCAL_BACKUP_ARCHIVE: "1", GRABENPLANER_LOCAL_BACKUP_RESTIC: resticBinary,

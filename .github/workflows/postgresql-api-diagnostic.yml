@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [foundations, rights, sales, next-rights, reports, loans]
+        group: [foundations, rights, sales, next-rights, reports, loans, closure-apis]
     env:
       TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/grabenplaner_test
       TEST_POSTGRESQL_BIN: /usr/lib/postgresql/18/bin

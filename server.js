@@ -57408,7 +57408,10 @@ async function ownAssistantPreview(session, kind, parameters) {
 const voiceAssistant = createVoiceAssistant({
   config: voiceAssistantConfig, provider: createOpenAiVoiceProvider({ config: voiceAssistantConfig }), today: viennaTodayIso,
   authorize: async request => {
-    const session = await loadPortalSessionFromRequest(request, { touch: false });
+    const application = await applicationPersistence.ready;
+    const session = await loadPortalSessionFromRequest(request, {
+      touch: false, repository: application.authorizationRepositories.portalAccess,
+    });
     return requireEmployeePortalSession({ portalSession: session });
   },
   balances: ownAssistantBalances, preview: ownAssistantPreview,

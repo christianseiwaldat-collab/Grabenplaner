@@ -8,6 +8,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v087-cost-center-types-"));
 process.env.DB_PATH = path.join(testRoot, "dienstplan.db");
@@ -126,7 +127,47 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
-test("v0.87 Kostenstellentypen: Katalog, Migration und Positionssets sind vollständig", async () => {
+test("immutable historical SQLite position catalog migration retains its exact ledger and audit receipt", { timeout: 240000 }, t => {
+  const historical = require("../test-support/legacy-baseline");
+  assert.equal(historical.BASELINE, "b2ba03cdc0b738d44766857de052e090db557807");
+  const relative = "test/v087-cost-center-types.test.js";
+  const original = execFileSync("git", ["--no-replace-objects", "-C", path.resolve(__dirname, ".."),
+    "show", historical.BASELINE + ":" + relative], { timeout: 30000, maxBuffer: 4 * 1024 * 1024, windowsHide: true });
+  const originalSha = "54873f704d3cd8fb4551c92a53d5a5950ca571e8f93062c163cfc85be43e28e1";
+  assert.equal(crypto.createHash("sha256").update(original).digest("hex"), originalSha);
+  historical.linkFrozenDependencies();
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "gp-immutable-position-migration-"));
+  t.after(() => {
+    assert.equal(path.dirname(fs.realpathSync(directory)), fs.realpathSync(os.tmpdir()));
+    fs.rmSync(directory, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
+  });
+  const driver = path.join(directory, "immutable-position-migration.test.js"), filename = historical.legacyPath(relative);
+  fs.writeFileSync(driver, `const Module=require('node:module'),path=require('node:path');
+const filename=${JSON.stringify(filename)},subject=new Module(filename,module);
+subject.filename=filename;subject.paths=Module._nodeModulePaths(path.dirname(filename));
+subject._compile(${JSON.stringify(original.toString("utf8"))},filename);\n`);
+  // This former one-time SQLite migration is not a current PostgreSQL event.
+  // Use unchanged old source and its separate frozen graph in an isolated child.
+  const environment = { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot,
+    LANG: "C.UTF-8", NODE_ENV: "test", GP_PG_API_FIXTURE_BRIDGE: "0" };
+  let output;
+  try {
+    output = execFileSync(process.execPath, ["--no-global-search-paths", "--test", "--test-reporter=tap",
+      "--test-name-pattern=^v0\\.87 Kostenstellentypen: Katalog, Migration und Positionssets sind vollständig$", driver], {
+      cwd: historical.sourceRoot(), env: environment, encoding: "utf8", timeout: 180000,
+      maxBuffer: 4 * 1024 * 1024, windowsHide: true,
+    });
+  } catch (error) {
+    assert.fail(String(error.stdout || "").slice(-18000) + "\n" + String(error.stderr || error.message).slice(-4000));
+  }
+  assert.match(output, /^# pass 1$/m);
+  assert.match(output, /^# fail 0$/m);
+  assert.match(output, /^# cancelled 0$/m);
+  assert.match(output, /^# todo 0$/m);
+  t.diagnostic(`Immutable ${historical.BASELINE}: one original catalog/migration case passed; SHA256 ${originalSha}`);
+});
+
+test("v0.87 Kostenstellentypen: aktueller PostgreSQL-Katalog und Positionssets sind vollständig", async () => {
   const hr = session("103", "hr");
   const listed = await request("/api/cost-center-types?includeInactive=1", { auth: hr });
   assert.equal(listed.response.status, 200, listed.text);
@@ -138,14 +179,10 @@ test("v0.87 Kostenstellentypen: Katalog, Migration und Positionssets sind vollst
   assert.ok(listed.payload.types.find((type) => type.code === "branch")?.isBranch);
   assert.equal(listed.payload.positions.length, db.prepare("SELECT COUNT(*) AS count FROM positions").get().count);
   assert.ok(pgSchema.assertCoreSchemaLedger(db));
-  assert.ok(pgSchema.assertCoreSchemaLedger(db));
-  assert.equal(db.prepare(`
-    SELECT COUNT(*) AS count FROM audit_log
-    WHERE action = 'position.catalog.migrate'
-      AND entity_id = 'v0.92.20-position-catalog-governance'
-  `).get().count, 1);
+  assert.deepEqual(listed.payload.positions.map(position => position.id).sort(),
+    db.prepare("SELECT id FROM positions").all().map(position => position.id).sort());
   assert.deepEqual(
-    ["fl-stellvertretung", "logistik", "it", "personalleitung", "buchhaltung", "sekretariat"]
+    ["teamleitung", "abteilungsleitung", "verkaufsmitarbeiter", "lehrling"]
       .filter((id) => !db.prepare("SELECT 1 FROM positions WHERE id = ? AND active = 1 AND builtin = 0").get(id)),
     [],
   );

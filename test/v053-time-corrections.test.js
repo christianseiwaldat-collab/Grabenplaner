@@ -22,12 +22,15 @@ async function getFreePort() {
   });
 }
 
-async function waitForJson(url, child, timeoutMs = 10_000, diagnostics = () => "") {
+async function waitForJson(url, child, timeoutMs = 60_000, diagnostics = () => "") {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error(`Serverprozess wurde vorzeitig mit Code ${child.exitCode} beendet. ${diagnostics().slice(-8000)}`);
     try {
-      const response = await fetch(url, { headers: { "X-Forwarded-Proto": "https", Origin: publicUrl } });
+      const response = await fetch(url, {
+        headers: { "X-Forwarded-Proto": "https", Origin: publicUrl },
+        signal: AbortSignal.timeout(Math.min(1_000, Math.max(1, deadline - Date.now()))),
+      });
       if (response.ok) return response.json();
       await response.text();
     } catch {}
@@ -173,7 +176,9 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
   }
 
   try {
-    const status = await waitForJson(`${baseUrl}/api/portal/v1/status`, child, 10_000, () => stderr);
+    // A fresh native PostgreSQL fixture opens multiple qualified workers. Keep
+    // one bounded startup attempt; a crashed child still fails immediately.
+    const status = await waitForJson(`${baseUrl}/api/portal/v1/status`, child, 60_000, () => stderr);
     assert.equal(status.portalEnabled, true);
     assert.equal(status.operationMode, "server");
     assert.equal(status.httpsRequired, true);

@@ -1889,6 +1889,7 @@ const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
     "test/v087-block7-settings-appearance.test.js",
     "test/v087-block8-cost-center-migration.test.js",
     "test/database-lock.test.js",
+    "test/v0862-server-backup-download.test.js",
     "test/portal-foundation.test.js",
     "test/v063-import-payroll.test.js",
     "test/v071-cost-centers-personnel.test.js",

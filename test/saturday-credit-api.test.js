@@ -4,9 +4,10 @@ const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const tmp = path.resolve(__dirname, '../tmp');
+const tmp = fs.realpathSync(os.tmpdir());
 const root = fs.mkdtempSync(path.join(tmp, 'saturday-api-'));
 Object.assign(process.env, { DB_PATH: path.join(root, 'fixture.db'), BACKUP_DIR: path.join(root, 'backups'),
   GRABENPLANER_DATA_DIR: path.join(root, 'data'), GRABENPLANER_FORCE_PORTAL: '1', GRABENPLANER_SEED_DEMO: '1',

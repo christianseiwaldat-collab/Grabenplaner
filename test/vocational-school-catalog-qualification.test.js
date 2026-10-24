@@ -14,6 +14,10 @@ const authenticationExtension = catalogRequire("../contracts/authentication-cata
 const sessionSecurityExtension = catalogRequire("../contracts/session-security-catalog-v1.json");
 const onboardingExtension = catalogRequire("../contracts/onboarding-json-catalog-v1.json");
 const asciiExtension = catalogRequire("../contracts/ascii-nocase-catalog-v1.json");
+const derivedExtensions = [
+  ["custom-process-management.onboarding-operation-by-id", catalogRequire("../contracts/onboarding-receipt-projection-catalog-v1.json")],
+  ["governance-store.insert-payroll-handoff", catalogRequire("../contracts/payroll-handoff-department-catalog-v1.json")],
+];
 const SESSION_IDS = sessionSecurityExtension.entries.filter(entry=>!entry.added).map(entry=>entry.statementId);
 const AUTHENTICATION_IDS = Object.freeze([
   "portal-access.employee-login.failure", "portal-access.organization-login.failure",
@@ -58,7 +62,7 @@ test("frozen source schema, inventory and Block 4 catalog retain their independe
   assert.equal(catalogRequire("./schema").createSchemaPlan().digest, "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e");
 });
 
-test("reviewed school, authentication, session, onboarding and ASCII comparisons extend the baseline; all other contracts remain identical", () => {
+test("reviewed school, authentication, session, onboarding, ASCII and two derived receipt queries extend the baseline; all other contracts remain identical", () => {
   const reviewed = new Map(extension.entries.map(entry => [entry.statementId, entry]));
   const authenticationReviewed = new Map(authenticationExtension.entries.map(entry => [entry.statementId, entry]));
   const sessionReviewed = new Map(sessionSecurityExtension.entries.map(entry=>[entry.statementId,entry]));
@@ -66,8 +70,14 @@ test("reviewed school, authentication, session, onboarding and ASCII comparisons
   const sourceSqlChangedIds = [...SCHOOL_IDS, ...AUTHENTICATION_IDS, ...SESSION_IDS].sort();
   const extensionIds = [...sourceSqlChangedIds, ...onboardingReviewed.keys()].sort();
   const asciiReviewed = new Map(asciiExtension.entries.map(entry => [entry.statementId, entry]));
-  const changedSqlIds = [...new Set([...sourceSqlChangedIds, ...asciiReviewed.keys()])].sort();
-  const compiledExtensionIds = new Set([...extensionIds, ...asciiReviewed.keys()]);
+  const derivedReviewed = new Map(derivedExtensions.map(([id, value]) => {
+    assert.equal(value.version, 1); assert.equal(value.entries.length, 1); assert.equal(value.entries[0].statementId, id);
+    assert.equal(value.baseCatalog, "block-4-catalog.json"); assert.equal(value.baseSchemaPlanSha256, baseline.schemaPlanSha256);
+    assert.equal(value.productActivation, false);
+    return [id, value.entries[0]];
+  }));
+  const changedSqlIds = [...new Set([...sourceSqlChangedIds, ...asciiReviewed.keys(), ...derivedReviewed.keys()])].sort();
+  const compiledExtensionIds = new Set([...extensionIds, ...asciiReviewed.keys(), ...derivedReviewed.keys()]);
   assert.deepEqual([...reviewed.keys()].sort(), [...SCHOOL_IDS].sort());
   assert.equal(extension.entries.length, 5);
   assert.equal(extension.baseCatalog, "block-4-catalog.json");
@@ -83,17 +93,22 @@ test("reviewed school, authentication, session, onboarding and ASCII comparisons
   const changedCompiledIds = [];
   let preserved = 0;
   for (const provenance of qualified.provenance) {
-    const old = originalCompiled.get(provenance.statementId), current = asciiReviewed.get(provenance.statementId) || sessionReviewed.get(provenance.statementId) || reviewed.get(provenance.statementId) || authenticationReviewed.get(provenance.statementId) || onboardingReviewed.get(provenance.statementId);
+    const old = originalCompiled.get(provenance.statementId), current = derivedReviewed.get(provenance.statementId) || asciiReviewed.get(provenance.statementId) || sessionReviewed.get(provenance.statementId) || reviewed.get(provenance.statementId) || authenticationReviewed.get(provenance.statementId) || onboardingReviewed.get(provenance.statementId);
     assert.ok(old, provenance.statementId);
     if (current) {
       assert.equal(current.baseSourceContract, old.sourceContract);
       assert.equal(current.baseSqlSha256, old.sqlSha256);
       assert.equal(current.sourceContract, provenance.sourceContract);
       assert.equal(current.sqlSha256, provenance.sqlSha256);
-      if (asciiReviewed.has(provenance.statementId) && !extensionIds.includes(provenance.statementId)) {
+      if (derivedReviewed.has(provenance.statementId) || asciiReviewed.has(provenance.statementId) && !extensionIds.includes(provenance.statementId)) {
         assert.equal(provenance.sourceContract, old.sourceContract, "comparison qualification preserves original source");
       } else {
         assert.notEqual(provenance.sourceContract, old.sourceContract);
+      }
+      if (derivedReviewed.has(provenance.statementId)) {
+        const entry = qualified.entries.find(item => item.statement.id === provenance.statementId);
+        assert.equal(sha(JSON.stringify(entry.parameterBindings)), current.parameterBindingsSha256);
+        assert.equal(sha(JSON.stringify(entry.parameterOrder)), current.parameterOrderSha256);
       }
       if (onboardingReviewed.has(provenance.statementId)) {
         // SQLite's bounded constructor preserves the exact historical PostgreSQL SQL.

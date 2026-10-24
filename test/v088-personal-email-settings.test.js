@@ -8,6 +8,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v088-personal-notifications-"));
 process.env.DB_PATH = path.join(testRoot, "dienstplan.db");
@@ -77,8 +78,8 @@ globalThis.fetch = async (url, options) => {
 
 const { createAmuStorage } = require("../lib/amu-storage");
 const {
-  inspectSqlitePersonalNotificationContactRows,
-} = require("../lib/persistence/sqlite/operations/application-schema");
+  validatePersonalNotificationContactRows,
+} = require("../lib/personal-notification-contact-validation");
 const {
   app,
   db,
@@ -86,6 +87,54 @@ const {
   releaseInstanceLockForTests,
   verifyImportedProtectedPersonnelPayloads,
 } = require("../server");
+
+function inspectCurrentPersonalNotificationContactRows() {
+  // Current-server coverage reads PostgreSQL's own metadata. The old SQLite
+  // PRAGMA/schema inspector is not a runtime API for this PostgreSQL fixture.
+  const expected = require("../lib/persistence/postgresql/contracts/source-schema-v09237.json")
+    .tables.find(table => table.name === "personal_notification_contacts").columns;
+  const columns = pgSchema.columns(db, "personal_notification_contacts");
+  assert.deepEqual(columns.map(column => column.name), expected.map(column => column.name));
+  for (const [index, column] of columns.entries()) {
+    const original = expected[index];
+    assert.equal(column.type, original.type === "INTEGER" ? "bigint" : "text", column.name);
+    assert.equal(column.notnull, original.pk ? 1 : original.notnull, column.name);
+    if (original.dflt_value === "CURRENT_TIMESTAMP") {
+      assert.match(column.dflt_value, /to_char\(.*statement_timestamp\(\).*UTC.*YYYY-MM-DD HH24:MI:SS/s, column.name);
+    } else if (original.dflt_value === null) {
+      assert.equal(column.dflt_value, null, column.name);
+    } else {
+      assert.equal(String(column.dflt_value).replace(/::(?:text|bigint)$/, ""), original.dflt_value, column.name);
+    }
+  }
+  const foreignKeys = pgSchema.foreignKeys(db, "personal_notification_contacts");
+  assert.equal(foreignKeys.length, 1);
+  assert.deepEqual(Object.fromEntries(["table", "from", "to", "on_update", "on_delete"].map(key => [key, foreignKeys[0][key]])), {
+    table: "employees", from: "employee_number", to: "personnel_number", on_update: "CASCADE", on_delete: "CASCADE",
+  });
+  const constraints = db.postgresqlCatalogQuery("core", `
+    SELECT c.contype::text AS kind, c.convalidated AS validated,
+      pg_catalog.pg_get_constraintdef(c.oid) AS definition
+    FROM pg_catalog.pg_constraint c
+    WHERE c.conrelid = 'gp.personal_notification_contacts'::regclass
+    ORDER BY c.conname
+  `);
+  assert.ok(constraints.every(constraint => constraint.validated === true));
+  const primaryKeys = constraints.filter(constraint => constraint.kind === "p");
+  assert.equal(primaryKeys.length, 1);
+  assert.match(primaryKeys[0].definition, /^PRIMARY KEY \(employee_number\)$/);
+  const checks = constraints.filter(constraint => constraint.kind === "c").map(constraint => constraint.definition);
+  assert.equal(checks.length, 6);
+  for (const name of ["email_enabled", "sms_enabled", "whatsapp_enabled"]) {
+    assert.ok(checks.some(definition => definition.includes(name) && /\b0\b/.test(definition) && /\b1\b/.test(definition)), name);
+  }
+  assert.ok(checks.some(definition => definition.includes("verification_target") && definition.includes("''") && definition.includes("'email'") && definition.includes("'phone'")));
+  assert.ok(checks.some(definition => definition.includes("verification_channel") && definition.includes("''") && ["'email'", "'sms'", "'whatsapp'"].every(value => definition.includes(value))));
+  assert.ok(checks.some(definition => definition.includes("earliest_time") && definition.includes("^[0-2][0-9]:[0-5][0-9]$") && /\b23\b/.test(definition)));
+  return validatePersonalNotificationContactRows(db.prepare(`
+    SELECT * FROM personal_notification_contacts ORDER BY employee_number
+  `).all());
+}
 
 const profileStorage = createAmuStorage({
   rootDirectory: path.join(testRoot, "profile-cipher"),
@@ -300,10 +349,13 @@ test("v0.88: Stammdaten sind die einzige Zielquelle und Einstellungen bleiben PI
   assert.equal(JSON.stringify(stored).includes(email), false);
   assert.equal(JSON.stringify(stored).includes(phone), false);
   assert.equal(Object.keys(stored).some((key) => /address|destination|protected/i.test(key)), false);
-  const audit = db.prepare(`
-    SELECT GROUP_CONCAT(action || ':' || detail, '|') AS value
+  const auditRows = db.prepare(`
+    SELECT action, detail
     FROM audit_log WHERE actor = ? AND action LIKE 'personal-notifications.%'
-  `).get(employeeNumber).value;
+    ORDER BY id
+  `).all(employeeNumber);
+  assert.ok(auditRows.length > 0, "personal notification changes leave an audit record");
+  const audit = auditRows.map(row => `${row.action}:${row.detail}`).join("|");
   assert.equal(String(audit).includes(email), false);
   assert.equal(String(audit).includes(phone), false);
 });
@@ -642,12 +694,14 @@ test("v0.88: Import, Fingerprintzustand und alte Business-Jobs bleiben fail-clos
   const validPayload = setMasterTargets(employeeNumber, { privateEmail: "valid-import@example.at" });
   const session = createSession(employeeNumber, { role: "manager" });
   await request("/api/portal/v1/me/email-settings", { session });
-  assert.equal(inspectSqlitePersonalNotificationContactRows(db).valid, true);
+  assert.equal(inspectCurrentPersonalNotificationContactRows().valid, true);
   db.prepare(`
     UPDATE personal_notification_contacts SET email_target_fingerprint = 'not-a-fingerprint'
     WHERE employee_number = ?
   `).run(employeeNumber);
-  assert.equal(inspectSqlitePersonalNotificationContactRows(db).valid, false);
+  const invalidContacts = inspectCurrentPersonalNotificationContactRows();
+  assert.equal(invalidContacts.valid, false);
+  assert.ok(invalidContacts.issues.includes(`row:${employeeNumber}:email_fingerprint`));
   db.prepare("DELETE FROM personal_notification_contacts WHERE employee_number = ?").run(employeeNumber);
 
   assert.equal(verifyImportedProtectedPersonnelPayloads({
