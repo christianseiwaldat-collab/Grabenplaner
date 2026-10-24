@@ -52,7 +52,7 @@ jobs:
       - name: Fail-closed security gate contract tests
         run: python -m unittest discover -s scripts/security -p 'test_*.py' -v
       - name: Exact compatibility-patch negative tests
-        run: node --test test/security-ci-patch-policy.test.js test/security-evidence-seal.test.js
+        run: node --test test/security-ci-patch-policy.test.js test/security-ci-msal-patch-policy.test.js test/security-evidence-seal.test.js
       - name: Run sca gate
         run: python scripts/security/gates.py sca --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
       - name: Prepare sanitized public metadata

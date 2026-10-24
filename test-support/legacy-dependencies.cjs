@@ -30,6 +30,26 @@ function regular(file) {
   return info;
 }
 
+function binLink(root, file, relative, info) {
+  // Hoisted pnpm installs use executable links; package/source links remain forbidden.
+  assert.equal(process.platform, "linux", "Historical executable symlink exception is Linux-only");
+  assert.equal(info.nlink, 1, "Historical .bin link inode must not be hardlinked");
+  const parent = path.posix.dirname(relative);
+  assert(parent === ".bin" || parent.endsWith("/node_modules/.bin"), "Historical dependency link is not a .bin entry");
+  const linkText = fs.readlinkSync(file);
+  assert(linkText && !path.posix.isAbsolute(linkText) && !path.win32.isAbsolute(linkText)
+    && !linkText.includes("\\") && !/[\x00-\x1f\x7f]/.test(linkText)
+    && path.posix.normalize(linkText) === linkText && !linkText.endsWith("/"), "Historical .bin link must be canonical and relative");
+  const targetPath = path.posix.normalize(path.posix.join(parent, linkText));
+  assert(targetPath !== ".." && !targetPath.startsWith("../") && !path.posix.isAbsolute(targetPath)
+    && !targetPath.split("/").includes(".bin"), "Historical .bin link escapes its dependency root or aliases another executable");
+  const target = path.resolve(root, ...targetPath.split("/"));
+  const targetInfo = regular(target); // Also rejects a link chain, hardlink or symlinked parent.
+  assert(targetInfo.size <= 128 * 1024 * 1024);
+  return { type: "symlink", linkText, targetPath, targetSha256: sha(fs.readFileSync(target)),
+    targetBytes: targetInfo.size, targetMode: targetInfo.mode & 0o777, mode: info.mode & 0o777 };
+}
+
 function dependencyInventory(root) {
   const result = {};
   let count = 0;
@@ -40,11 +60,15 @@ function dependencyInventory(root) {
     for (const name of fs.readdirSync(directory).sort()) {
       assert(name && name !== "." && name !== ".." && !name.includes("\\") && !/[\x00-\x1f\x7f]/.test(name));
       const file = path.join(directory, name), relative = prefix + name;
-      if (fs.lstatSync(file).isDirectory()) walk(file, relative + "/");
+      const info = fs.lstatSync(file);
+      if (info.isDirectory()) walk(file, relative + "/");
       else {
-        const item = regular(file);
-        assert(item.size <= 128 * 1024 * 1024);
-        result[relative] = { sha256: sha(fs.readFileSync(file)), bytes: item.size, mode: item.mode & 0o777 };
+        if (info.isSymbolicLink()) result[relative] = binLink(root, file, relative, info);
+        else {
+          const item = regular(file);
+          assert(item.size <= 128 * 1024 * 1024);
+          result[relative] = { sha256: sha(fs.readFileSync(file)), bytes: item.size, mode: item.mode & 0o777 };
+        }
         assert(++count <= 100000);
       }
     }

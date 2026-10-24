@@ -162,8 +162,11 @@ Die JSON-Ausgabe nennt `root` und `manifestSha256`. Für den nachfolgenden
 Testprozess müssen diese Werte getrennt als `GP_LEGACY_DEPENDENCIES_ROOT` und
 `GP_LEGACY_DEPENDENCIES_MANIFEST_SHA256` übergeben werden. Der Runner prüft den
 externen Manifesthash, den unveränderten Baselinebezug und jede tatsächliche
-Datei im installierten Baum. Symlinks, Hardlinks, zusätzliche oder fehlende
-Dateien und geänderte Metadaten werden zurückgewiesen. Ein bereits bestehendes
+Datei im installierten Baum. Nur die regulären relativen Linux-Verknüpfungen
+unter `node_modules/.bin` sind erlaubt: Linktext, internes kanonisches Dateiziel,
+Zielhash und Dateirechte sind im Manifest gebunden. Linkketten, ausbrechende Ziele,
+sonstige Symlinks, sämtliche Hardlinks, zusätzliche oder fehlende Dateien und
+geänderte Metadaten werden zurückgewiesen. Ein bereits bestehendes
 Vorbereitungsziel wird niemals überschrieben.
 
 Bei abweichendem aktuellem Lock gibt es keinen stillen Rückfall auf den
