@@ -109666,18 +109666,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2660,
+        "line": 2662,
         "column": 42
       },
       "end": {
-        "line": 2663,
+        "line": 2665,
         "column": 16
       },
-      "fingerprint": "78734cac3e356df5f50041d113c571072dc1a0abdb75ad78d3fa9626214e08dc",
-      "sourceSha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+      "fingerprint": "6435de146ba00a07f4d5b18b831a3cdd1bad1545c10cddfee81db526b872d6f0",
+      "sourceSha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
       "sourceSha256Variants": [
-        "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-        "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+        "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+        "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109688,10 +109688,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+          "sha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
           "sha256Variants": [
-            "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-            "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+            "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+            "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
           ],
           "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2522: identifier escape Lines 1938: identifier lexer"
         }
@@ -109701,18 +109701,18 @@
       "rule": "javascript.lang.security.audit.detect-redos",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2807,
+        "line": 2809,
         "column": 10
       },
       "end": {
-        "line": 2807,
+        "line": 2809,
         "column": 150
       },
-      "fingerprint": "0795794a670f9f93a539805b6e7dbf4ab7d282c082e0f440014bfe4c9b548f26",
-      "sourceSha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+      "fingerprint": "259f725c034ca990965327366eb7fe741541bdc2851a6aad7282a4ca2c2bbe6c",
+      "sourceSha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
       "sourceSha256Variants": [
-        "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-        "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+        "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+        "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109723,10 +109723,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+          "sha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
           "sha256Variants": [
-            "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-            "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+            "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+            "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
           ],
           "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2668: reviewed exact recognizer"
         }
@@ -109736,18 +109736,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2818,
+        "line": 2820,
         "column": 21
       },
       "end": {
-        "line": 2818,
+        "line": 2820,
         "column": 77
       },
-      "fingerprint": "8bfbcfb40e013da35a7c83f32214245a3781ffce3a2b68806dd544cc739f139d",
-      "sourceSha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+      "fingerprint": "a2af0a6b98de1fa67b13f6a913c36461544b36c36fef62961ddd25909a08c50b",
+      "sourceSha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
       "sourceSha256Variants": [
-        "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-        "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+        "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+        "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109758,10 +109758,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+          "sha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
           "sha256Variants": [
-            "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-            "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+            "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+            "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
           ],
           "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2673: opener grammar precedes constructor"
         }
@@ -109771,18 +109771,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2836,
+        "line": 2838,
         "column": 21
       },
       "end": {
-        "line": 2836,
+        "line": 2838,
         "column": 74
       },
-      "fingerprint": "13047f580cf4e4e1cc08d543188145a89940eb86391767ceaefb5f10f4d0fdd8",
-      "sourceSha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+      "fingerprint": "b951833022918de9e3bdca5b2df5a205ca366731bf3f9944e58d43fae80c8354",
+      "sourceSha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
       "sourceSha256Variants": [
-        "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-        "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+        "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+        "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109793,10 +109793,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+          "sha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
           "sha256Variants": [
-            "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-            "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+            "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+            "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
           ],
           "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2692: two-value quote source and escaping"
         }
@@ -109806,18 +109806,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2956,
+        "line": 2958,
         "column": 18
       },
       "end": {
-        "line": 2956,
+        "line": 2958,
         "column": 94
       },
-      "fingerprint": "ac93aec5698ce08aad8aa4017562169911a5231139f8d1a2731fe29d5517e3c5",
-      "sourceSha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+      "fingerprint": "e702efe62ba450607e5b3c9e2634ca20afff70022d56e74aa4326792bbc53abf",
+      "sourceSha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
       "sourceSha256Variants": [
-        "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-        "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+        "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+        "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109828,10 +109828,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+          "sha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
           "sha256Variants": [
-            "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-            "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+            "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+            "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
           ],
           "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2817: constructor Lines 4794: fixed literal invocation"
         }
@@ -109841,18 +109841,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2969,
+        "line": 2971,
         "column": 42
       },
       "end": {
-        "line": 2969,
+        "line": 2971,
         "column": 83
       },
-      "fingerprint": "d6c73bf47607b8d630f08fcaeef7c457583f0bae96eb96f8669169a73b8f3cde",
-      "sourceSha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+      "fingerprint": "ce3cb05340f3b2a9d6dc58220a5cae347a55c2edb0756fe84384232f65ed5988",
+      "sourceSha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
       "sourceSha256Variants": [
-        "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-        "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+        "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+        "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109863,10 +109863,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+          "sha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
           "sha256Variants": [
-            "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-            "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+            "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+            "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
           ],
           "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 2830: internal regex clone"
         }
@@ -109876,18 +109876,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3273,
+        "line": 3275,
         "column": 14
       },
       "end": {
-        "line": 3273,
+        "line": 3275,
         "column": 52
       },
-      "fingerprint": "1d29e471f0492fc4750bd8e02ba8c886c4417109a78716e3c2f13d631f9d633f",
-      "sourceSha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+      "fingerprint": "d47adeac6e2c5854a54f3f6fecdc4dc55d0344d708e9111363c2da9252d023de",
+      "sourceSha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
       "sourceSha256Variants": [
-        "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-        "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+        "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+        "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109898,10 +109898,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+          "sha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
           "sha256Variants": [
-            "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-            "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+            "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+            "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
           ],
           "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3127: local tool wrapper"
         }
@@ -109911,18 +109911,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3526,
+        "line": 3528,
         "column": 30
       },
       "end": {
-        "line": 3526,
+        "line": 3528,
         "column": 57
       },
-      "fingerprint": "b4e7ca1658a4b13281a368c06f6300eb7e85534a9c9955767aba2e47099e9525",
-      "sourceSha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+      "fingerprint": "08f10f8aec38f1ce02d88994683d6b207df1133beacb5124120c589357bdd7d1",
+      "sourceSha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
       "sourceSha256Variants": [
-        "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-        "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+        "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+        "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109933,10 +109933,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+          "sha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
           "sha256Variants": [
-            "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-            "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+            "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+            "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
           ],
           "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3372: containment check Lines 3382: require after containment"
         }
@@ -109946,18 +109946,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3678,
+        "line": 3680,
         "column": 14
       },
       "end": {
-        "line": 3678,
+        "line": 3680,
         "column": 52
       },
-      "fingerprint": "0f649720dc077adb92a00ceb1725cc10a7828896370930b6528b3015f7f70215",
-      "sourceSha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+      "fingerprint": "706f9566253d992aa4c2cbc8c7dd6d924e599a77049377bf7f530def0141abe1",
+      "sourceSha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
       "sourceSha256Variants": [
-        "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-        "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+        "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+        "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109968,10 +109968,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+          "sha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
           "sha256Variants": [
-            "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-            "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+            "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+            "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
           ],
           "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3516: tool scope"
         }
@@ -109981,18 +109981,18 @@
       "rule": "javascript.lang.security.audit.unsafe-dynamic-method",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3752,
+        "line": 3754,
         "column": 14
       },
       "end": {
-        "line": 3754,
+        "line": 3756,
         "column": 9
       },
-      "fingerprint": "f699cc095def0ac1841671ca1bab2c96f58a888761a3577d8d48f29c7d048e8e",
-      "sourceSha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+      "fingerprint": "e819552d2f631f5e23c67ae5fb30eccbc517d38da77ad6b8ddb38005e6e64184",
+      "sourceSha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
       "sourceSha256Variants": [
-        "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-        "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+        "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+        "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -110003,10 +110003,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+          "sha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
           "sha256Variants": [
-            "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-            "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+            "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+            "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
           ],
           "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 3605: fixed internal factory dispatcher"
         }
@@ -110016,18 +110016,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 4458,
+        "line": 4460,
         "column": 22
       },
       "end": {
-        "line": 4458,
+        "line": 4460,
         "column": 60
       },
-      "fingerprint": "e63672aede52f7ce603c83ae5f46ea6c175d4ffca911d66314f182e38f858b6d",
-      "sourceSha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+      "fingerprint": "b3aa38d6eb91eeffdf01959b52580a43b228850abc594afeb3b3dd3cf362b32d",
+      "sourceSha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
       "sourceSha256Variants": [
-        "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-        "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+        "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+        "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -110038,10 +110038,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
+          "sha256": "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9",
           "sha256Variants": [
-            "37c6464aa261256089cfe0a671b1b02967741f24d4406ade650bd996e7cd72aa",
-            "543ce401eddd038138044e09d447e903f81a29a424ece165cab621dd5a281b3b"
+            "1efea9223c547a063ed89300a65907dc6376321a89a6335e9472efa35667f899",
+            "f861920645d6a06ca8e604a7a2faff643dfe2c2b3404cb8daef27ff98a3d98c9"
           ],
           "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 4296: tool scope"
         }

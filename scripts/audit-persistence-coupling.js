@@ -102,6 +102,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/authentication-catalog-qualification.test.js',
   // Two bounded SQLite projections retain the exact historical PostgreSQL SQL.
   'lib/persistence/postgresql/contracts/onboarding-json-catalog-v1.json',
+  'lib/persistence/postgresql/contracts/onboarding-receipt-projection-catalog-v1.json',
+  'lib/persistence/postgresql/contracts/payroll-handoff-department-catalog-v1.json',
   // Exact session extension artifacts; only the named maintenance CLI opens a driver.
   'lib/persistence/postgresql/contracts/session-security-catalog-v1.json',
   'lib/persistence/postgresql/core/session-security-catalog.js',

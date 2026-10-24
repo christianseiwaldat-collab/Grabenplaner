@@ -611,6 +611,66 @@ test("CRM, article and statistics registration grants no additional provider cap
   }
 });
 
+test("The two derived catalog JSON contracts admit neither adjacent executable privileges nor a third JSON artifact", () => {
+  const qualified = [
+    "lib/persistence/postgresql/contracts/onboarding-receipt-projection-catalog-v1.json",
+    "lib/persistence/postgresql/contracts/payroll-handoff-department-catalog-v1.json",
+  ];
+  // JSON is data, so JavaScript capability checks apply to the corresponding
+  // executable neighbours, which must remain outside the exact registration.
+  for (const file of qualified.map(file => file.replace(/\.json$/, ".js"))) {
+    for (const [source, kind] of [
+      ["const driver = require('pg');", "postgresql-driver-import"],
+      ["const driver = require('node:" + "sqlite');", "sqlite-driver-import-outside-boundary"],
+      ["const statement = definePersistenceStatement({});", "provider-statement-outside-boundary"],
+      ["const config = process.env.DB_PROVIDER;", "provider-runtime-config-outside-boundary"],
+    ]) assert.equal(architectureBoundaryViolationsForText(file, source).some(entry => entry.kind === kind), true, `${file}: ${kind}`);
+  }
+
+  // Give the real repository scanner one extra read-only virtual file. No
+  // checkout file, global fs method, module cache or migration lock is changed.
+  const unknown = "lib/persistence/postgresql/contracts/unqualified-third-derived-catalog-v1.json";
+  const unknownAbsolute = path.join(root, unknown);
+  const contractsDirectory = path.dirname(unknownAbsolute);
+  const unknownContents = Buffer.from(JSON.stringify({
+    ...JSON.parse(fs.readFileSync(path.join(root, qualified[0]), "utf8")),
+    scope: "unqualified-third-derived-application-extension",
+  }));
+  const auditFile = path.join(root, "scripts/audit-persistence-coupling.js");
+  const { Module } = require("node:module");
+  const subject = new Module(auditFile, module);
+  subject.filename = auditFile;
+  subject.paths = Module._nodeModulePaths(path.dirname(auditFile));
+  const realRequire = subject.require.bind(subject);
+  const samePath = (value, expected) => path.resolve(String(value)) === expected;
+  const virtualFs = Object.create(fs);
+  virtualFs.existsSync = value => samePath(value, unknownAbsolute) || fs.existsSync(value);
+  virtualFs.statSync = (value, ...args) => samePath(value, unknownAbsolute)
+    ? { isFile: () => true }
+    : fs.statSync(value, ...args);
+  virtualFs.readdirSync = (value, options) => {
+    const entries = fs.readdirSync(value, options);
+    if (!samePath(value, contractsDirectory)) return entries;
+    assert.equal(options?.withFileTypes, true);
+    return [...entries, { name: path.basename(unknown), isDirectory: () => false }];
+  };
+  virtualFs.readFileSync = (value, options) => {
+    if (!samePath(value, unknownAbsolute)) return fs.readFileSync(value, options);
+    const encoding = typeof options === "string" ? options : options?.encoding;
+    return encoding ? unknownContents.toString(encoding) : Buffer.from(unknownContents);
+  };
+  subject.require = id => id === "node:fs" ? virtualFs : realRequire(id);
+  subject._compile(fs.readFileSync(auditFile, "utf8"), auditFile);
+  const rejected = subject.exports.scanRepository(root);
+  assert.equal(rejected.ok, false);
+  assert.deepEqual(rejected.phase4Progress.postgresqlRuntimeArtifacts, [`file:${unknown}`]);
+  assert.ok(rejected.errors.some(error => error.includes(`file:${unknown}`)));
+  for (const file of qualified) {
+    assert.equal(rejected.phase4Progress.postgresqlRuntimeArtifacts.includes(`file:${file}`), false);
+  }
+  assert.equal(fs.existsSync(unknownAbsolute), false);
+});
+
 test("Provider-Dokumentation schützt den Installationsstandard; Treiberabhängigkeiten bleiben begrenzt", () => {
   const operations = fs.readFileSync(path.join(root, "SERVERBETRIEB.md"), "utf8");
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));

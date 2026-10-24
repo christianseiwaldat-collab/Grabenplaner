@@ -78,10 +78,13 @@ function setPersonnelLifecycleEnabled(enabled) {
 }
 
 function ensureOrganizationFixture() {
-  prepareLocationFixture(db, "INSERT OR IGNORE INTO locations (id, name) VALUES (?, ?)")
-    .run(LOCATION_A, "R1 API Standort A");
-  prepareLocationFixture(db, "INSERT OR IGNORE INTO locations (id, name) VALUES (?, ?)")
-    .run(LOCATION_B, "R1 API Standort B");
+  for (const [id, name] of [[LOCATION_A, "R1 API Standort A"], [LOCATION_B, "R1 API Standort B"]]) {
+    // A duplicate INSERT still runs the active cost-center BEFORE guard before
+    // ON CONFLICT. Retain the existing valid location on subsequent resets.
+    if (!db.prepare("SELECT 1 AS present FROM locations WHERE id = ?").get(id)) {
+      prepareLocationFixture(db, "INSERT INTO locations (id, name) VALUES (?, ?)").run(id, name);
+    }
+  }
   db.prepare("UPDATE locations SET active = 1 WHERE id IN (?, ?)")
     .run(LOCATION_A, LOCATION_B);
   for (const [locationId, name] of [
@@ -434,13 +437,13 @@ test("Personalmodul R1 HTTP: PL+ bindet Rechte atomar an Bereiche und PL delegie
   installFixtureTrigger(db, `
     CREATE TRIGGER test_portal_permission_scope_failure
     BEFORE INSERT ON portal_permission_scope_grants
-    WHEN NEW.employee_number = '${EMPLOYEES.fl}'
+    WHEN NEW.employee_number = '${EMPLOYEES.fl}' AND NEW.approved_by = '${EMPLOYEES.plPlus}'
     BEGIN
       INSERT INTO portal_permission_scope_grants (
         employee_number, permission, location_id, department_id, approved_by
       ) VALUES (
         NEW.employee_number, NEW.permission, NEW.location_id,
-        NEW.department_id, NEW.approved_by
+        NEW.department_id, 'test-r1-scope-race'
       );
     END;
   `);
@@ -457,6 +460,11 @@ test("Personalmodul R1 HTTP: PL+ bindet Rechte atomar an Bereiche und PL delegie
   `).get(EMPLOYEES.fl).count, 0);
   assert.equal(permissionScopeRows(EMPLOYEES.fl).length, 0);
   assert.equal(portalScopeRows(EMPLOYEES.fl).length, 0);
+
+  assert.equal(db.prepare("SELECT revoked_at FROM portal_sessions WHERE id = ?")
+    .get(flSession.id).revoked_at, null);
+  assert.equal(db.prepare("SELECT revoked_at FROM mobile_sessions WHERE id = ?")
+    .get(flMobileSessionId).revoked_at, null);
 
   const granted = await updateRights(plPlus, EMPLOYEES.fl, permissions, locationScope);
   assert.equal(granted.response.status, 200, JSON.stringify(granted.payload));
