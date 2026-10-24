@@ -41,16 +41,16 @@ function observeShutdown({ http, Pool, processObject = process, schedule = setTi
       code: errorCodes.has(error?.code) ? error.code : null }));
     return result;
   };
-  processObject.prependListener("SIGTERM", () => report("sigterm-observed"));
   processObject.on("beforeExit", code => report("before-exit", { code: count(code) }));
   processObject.on("exit", code => report("exit", { code: count(code) }));
+  return () => report("observer-installed");
 }
 function install() {
   if (!process.env.GP_PG_API_FIXTURE_CHILD_OWNER
       || process.env.GP_PG_API_FIXTURE_TEST_FILE !== "test/portal-foundation-loopback.test.js") return;
   require("./guard").assertSyntheticEnvironment();
   if (process.env.GP_PG_API_DIAGNOSTIC !== "bounded-errors-v1") throw new Error("PG_DRAIN_DIAGNOSTIC_NOT_ENABLED");
-  observeShutdown({ http: require("node:http"), Pool: require("pg").Pool });
+  observeShutdown({ http: require("node:http"), Pool: require("pg").Pool })();
 }
 install();
 module.exports = { observeShutdown };

@@ -90,12 +90,14 @@ port="${PORT:-3000}"
 gp_validate_https_url root_node "$public_url" || gp_die 'Ungueltige produktive HTTPS-Adresse.'
 [[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1 && port <= 65535 )) || gp_die 'Ungueltiger interner Port.'
 preflight_args=(--node "$node")
+pnpm_arguments=()
 if [[ -n "$pnpm_arg" ]]; then
-  gp_assert_root_package_manager "$pnpm_arg" >/dev/null || gp_die 'Die Paketmanager-Distribution ist nicht root-geschuetzt.'
+  pnpm_program="$(gp_assert_root_package_manager "$pnpm_arg")" || gp_die 'Die Paketmanager-Distribution ist nicht root-geschuetzt.'
 elif command -v pnpm >/dev/null 2>&1; then
-  gp_assert_root_package_manager "$(command -v pnpm)" >/dev/null || gp_die 'Die Paketmanager-Distribution ist nicht root-geschuetzt.'
+  pnpm_program="$(gp_assert_root_package_manager "$(command -v pnpm)")" || gp_die 'Die Paketmanager-Distribution ist nicht root-geschuetzt.'
 elif command -v corepack >/dev/null 2>&1; then
-  gp_assert_root_package_manager "$(command -v corepack)" pnpm >/dev/null || gp_die 'Die Corepack-Distribution ist nicht root-geschuetzt.'
+  pnpm_program="$(gp_assert_root_package_manager "$(command -v corepack)" pnpm)" || gp_die 'Die Corepack-Distribution ist nicht root-geschuetzt.'
+  pnpm_arguments=(pnpm)
 else gp_die 'Weder pnpm noch Corepack/pnpm ist vorhanden.'; fi
 [[ -z "$pnpm_arg" ]] || preflight_args+=(--pnpm "$pnpm_arg")
 bash "$SCRIPT_DIR/preflight-grabenplaner-deploy.sh" "${preflight_args[@]}" >/dev/null || gp_die 'Der verpflichtende read-only Deploy-Vorabcheck ist nicht gruen.'
@@ -278,14 +280,11 @@ version_comparison="$(gp_compare_semver root_node "$old_version" "$candidate_ver
 (( version_comparison <= 0 )) || gp_die 'Die Runtime-Migration erlaubt keine aeltere App-Version.'
 clamscan --recursive --infected --no-summary -- "$extract_root" >/dev/null || gp_die 'ClamAV hat das vollstaendige Paket abgelehnt.'
 gp_apply_app_permissions "$extract_root" "$GP_DEFAULT_SERVICE_GROUP"
-root_node "$transition_helper" dependencies "$app_dir" "$extract_root" >"$work_root/dependency-continuity.json" \
-  || gp_die 'Die alte privilegierte Abhaengigkeitskette ist nicht vollstaendig root-geschuetzt und unveraendert gebunden.'
-cp -R --no-preserve=ownership --no-dereference -- "$app_dir/node_modules" "$extract_root/node_modules" \
-  || gp_die 'Die qualifizierte Alt-Closure konnte nicht in frische lokale Kandidatdateien uebernommen werden.'
-gp_apply_app_permissions "$extract_root" "$GP_DEFAULT_SERVICE_GROUP"
-root_node "$transition_helper" dependencies "$app_dir" "$extract_root" >"$work_root/dependency-continuity-local.json" \
-  || gp_die 'Die lokale Root-Closure weicht von der qualifizierten Alt-Closure ab.'
-gp_verify_sealed_zip "$staged_package" "$extract_root" 1 || gp_die 'Die lokal ergaenzten Abhaengigkeiten haben Originalpaketbytes veraendert.'
+root_node "$transition_helper" dependency-plan "$app_dir" "$extract_root" >"$work_root/frozen-dependency-plan.json" \
+  || gp_die 'Der geschuetzte Altbaum oder der eng begrenzte eingefrorene Abhaengigkeitsplan wurde nicht bestaetigt.'
+gp_prepare_root_pg_dependencies "$staged_package" "$extract_root" "$node" "$pnpm_program" "${pnpm_arguments[@]}" \
+  >"$work_root/root-postgresql-dependencies.json" \
+  || gp_die 'Die privilegierte PostgreSQL-Closure konnte nicht frisch aus den Original-Paketmetadaten qualifiziert werden.'
 root_node "$extract_root/server-tools/linux/postgresql/preflight-install.js" check >"$work_root/postgresql-preflight.json" \
   || gp_die 'Der geschuetzte PostgreSQL-Paar-, Rollen- und Clusterbezug wurde nicht read-only bestaetigt.'
 

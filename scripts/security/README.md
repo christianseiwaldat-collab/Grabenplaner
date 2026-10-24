@@ -113,11 +113,16 @@ Upstream-Profils aufgelöst, unabhängig von temporären Scannerpfaden. Der
 zusätzliche `legacyFingerprint` dient ausschließlich dem Vergleich mit älteren
 Berichten ohne Spaltenbindung und wird nicht zur Freigabe verwendet.
 
-Die gesonderte `patch-policy.json` betrifft ausschließlich die bereits
-vorhandene CJS-Kompatibilitätsanpassung von `brace-expansion@5.0.12`. Sie
-ignoriert keine Schwachstelle. Patch, Workspace-/Lockfile-Eintrag und installierte
-Datei werden mit Hashes geprüft; beide realen ExcelJS-Verbraucher und begrenzte
-Missbrauchsfälle müssen funktionieren. Ablauf nach höchstens 30 Tagen.
+Die gesonderte `patch-policy.json` bindet die vorhandene CJS-Kompatibilitätsanpassung
+von `brace-expansion@5.0.12` sowie den konkreten Hersteller-Sicherheitsbackport für
+`@azure/msal-node@5.4.0`. Sie ignoriert keine Schwachstelle. Patch, vollständige
+Workspace-/Lock-Patchliste und installierte Bytes werden geprüft. Für MSAL sind
+Originaltarball-SRI, alle sieben geänderten Dateien, der vollständige installierte
+Paketbaum und 14 tatsächliche CJS-/ESM-Regressionsfälle erforderlich. Der OSV-Rohbefund
+bleibt erhalten; nur exakt nachweislich reparierter Code wird als
+`remediated_by_verified_patch` ausgewiesen. Neue Advisories, unvollständige Belege
+und Registry-Meldungen bleiben blockierend. `advisoryExceptions` bleibt leer.
+Beide Registrierungen laufen nach höchstens 30 Tagen ab.
 
 ## Lokale Ausführung und Ergebnisse
 

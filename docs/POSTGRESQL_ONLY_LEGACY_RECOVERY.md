@@ -141,3 +141,33 @@ Format-/Versionsgruppe sind ein vollständiger Sicherungspunkt, sein passender
 Schlüsselring und eine tatsächliche isolierte Nachprüfung zu registrieren. Neue
 Formate oder Quellversionen oberhalb der konservierten Basis werden nicht durch
 Lockerung der Versions- oder Integritätsprüfung zugelassen.
+
+## Getrennte historische Testabhängigkeiten
+
+Historische Server- und Upgradeverträge verwenden weiterhin den unveränderten
+Quellstand `b2ba03cdc0b738d44766857de052e090db557807`. Sicherheitsupdates im
+aktuellen Dependencybaum dürfen diesen Nachweis nicht nachträglich verändern.
+Der ausschließlich für Tests bestimmte Builder installiert deshalb die
+Originaldateien `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` und den
+damaligen Vendor-Patch mit exakt PNPM `11.7.0`, privatem Store/HOME,
+`--frozen-lockfile`, `--ignore-scripts` und `--ignore-pnpmfile`:
+
+```sh
+node --no-global-search-paths test-support/prepare-legacy-dependencies.cjs \
+  --target /privater-neuer-pfad/historische-testabhaengigkeiten \
+  --pnpm /absoluter-pfad/zum/geprueften/pnpm
+```
+
+Die JSON-Ausgabe nennt `root` und `manifestSha256`. Für den nachfolgenden
+Testprozess müssen diese Werte getrennt als `GP_LEGACY_DEPENDENCIES_ROOT` und
+`GP_LEGACY_DEPENDENCIES_MANIFEST_SHA256` übergeben werden. Der Runner prüft den
+externen Manifesthash, den unveränderten Baselinebezug und jede tatsächliche
+Datei im installierten Baum. Symlinks, Hardlinks, zusätzliche oder fehlende
+Dateien und geänderte Metadaten werden zurückgewiesen. Ein bereits bestehendes
+Vorbereitungsziel wird niemals überschrieben.
+
+Bei abweichendem aktuellem Lock gibt es keinen stillen Rückfall auf den
+aktuellen Dependencybaum. Der historische Baum einschließlich seiner bekannten
+alten Bibliotheksstände dient ausschließlich den isolierten Altverträgen und
+gehört nicht zum aktuellen Serverpaket. Diese Testversorgung ersetzt weder die
+Offline-Recovery-Kapsel noch die Prüfung einer konkreten produktiven Sicherung.

@@ -10,5 +10,64 @@
   "owner": "Grabenplaner dependency maintainers",
   "reason": "Temporary CommonJS callable-export compatibility for ExcelJS minimatch3/5 consumers. Upstream5.0.12 security limits and parsing are unchanged. This is a compatibility-patch approval, not an advisory waiver.",
   "removalCondition": "Revalidate or remove when upstream consumers support the modern named-export shape, when any pinned bytes/version change, or before expiry.",
-  "advisoryExceptions": []
+  "advisoryExceptions": [],
+  "securityBackports": [
+    {
+      "schemaVersion": 1,
+      "kind": "verified_security_backport",
+      "package": "@azure/msal-node",
+      "version": "5.4.0",
+      "advisory": "GHSA-xcx6-jx8p-x3h5",
+      "cve": "CVE-2026-109461",
+      "upstreamCommit": "f550958586475dbfeb1cd44be14a2d653728850e",
+      "upstreamFixedVersion": "7.1.0",
+      "originalTarballIntegrity": "sha512-6EZEParwHRlnSSIikw8FNAnAzwmh71uhveUXdPNFeZFviJ9SH+rwFiurhjzXqICYTrpm3E+dj693QOwfPbJXAQ==",
+      "originalTarballSha256": "8338df26147cd5fc510cb4cb2d29524ca9d705c08051ea4a6bafff79528970e1",
+      "patch": "lib/vendor-patches/@azure__msal-node@5.4.0.patch",
+      "patchSha256": "bbdf16bb0cf6a18ab384b515bd8a378cc5c736698c486881c60c1cbb1cbeda01",
+      "installedFiles": {
+        "dist/client/ConfidentialClientApplication.mjs": {
+          "beforeSha256": "02c34fb48c50034e2a5c10239d57de2fab8fafdecb325b22bb62e01048687c94",
+          "afterSha256": "3109ae028df23bb02f9b27cbea528baf5f7b5f141b6d7acbabadc4d06148e211"
+        },
+        "dist/error/NodeAuthError.mjs": {
+          "beforeSha256": "4f054df10b213405735d4708a54bac149efffafe1c5cb05dcb80719441a5bcd0",
+          "afterSha256": "ff3754ef1c68f3468392631f4384d656a70e958eaeb5be6fde3f1b76a4d4dd2b"
+        },
+        "lib/msal-node.cjs": {
+          "beforeSha256": "dd8447a2b301255967dfa02e0f9f81dbfbf0fc8cda92c5285c807818abd0bc48",
+          "afterSha256": "2cfc00a87e8596a7b8949ab26783196d339ec9529178be9159ba48c4c5145e9b"
+        },
+        "src/client/ConfidentialClientApplication.ts": {
+          "beforeSha256": "73077dbed972d7aa61729a640f3f41acdef801e3b028a767a701c379ed0f15b9",
+          "afterSha256": "ab6a1f163363a3f27bc6ccee91bffc62949fcebbf8c3607e10b61021c657d27e"
+        },
+        "src/error/NodeAuthError.ts": {
+          "beforeSha256": "820cb7dede2256eb6a118f3832ae02891a7ec7ebd702978a342c6cb57033d1d8",
+          "afterSha256": "e70f9dbf968907bfd4221a9dd25e8d6470843849ecdb167b2040908588c8f75a"
+        },
+        "types/client/ConfidentialClientApplication.d.ts": {
+          "beforeSha256": "7017f5aa7ba8a59b0bd5021694c01c8dfea3a3cd6037f7ab67afe9b63bb2e1ae",
+          "afterSha256": "f6285940de920f7318332176c4fbb2ed2509bedbcc2db8a99b1b8a5c95b7d29c"
+        },
+        "types/error/NodeAuthError.d.ts": {
+          "beforeSha256": "b719900a9f0e1a1d1b7c17442afa740fa1b08a62edfabb2843520c3b331ca504",
+          "afterSha256": "f2179cafbe5bd30861e091d57fcc88416be93b0ec2e4cf11cab760898c782103"
+        }
+      },
+      "installedTreeSha256": "8c2960a1bb61fc30b1217daa5325fa3b6e669567b5489e06d8b7bfa7dbdab44b",
+      "installedFileCount": 341,
+      "packageJsonSha256": "6119d93093e1c227b63986484301a5d620bff78be9f2856cf568d2810ac978f2",
+      "licenseSha256": "17474e386e0b9e1a700cc3d06b2b0882a2c376d9c6b49c7f8274409b8f8d2352",
+      "regressionTest": "test/security-msal-auth-code-backport.test.js",
+      "regressionTestSha256": "d83ee7fb47746c686441ddb48595dcf60419b9c659f1f5596bc68eba541de279",
+      "regressionPassCount": 14,
+      "reviewedOn": "2026-10-24",
+      "expiresOn": "2026-11-23",
+      "owner": "Grabenplaner security maintainers",
+      "reason": "Exact backport of the upstream CCA payload sanitization and unsupported instance-aware rejection to preserve the current Azure identity / Tedious dependency contract. Both actual CJS/ESM exports and ordinary token flows are regression-tested. This records repaired code, not an advisory waiver.",
+      "removalCondition": "Remove when an in-range supported dependency contains the upstream fix, or requalify all pinned bytes before expiry. Any patch, version, source or installed-file drift is a hard failure.",
+      "advisoryExceptions": []
+    }
+  ]
 }

@@ -1182,16 +1182,9 @@ begin_deploy_phase dependencies
 dependency_probe_user="$build_user"
 dependency_probe_cwd="$build_cache"
 if [[ -n "$runtime_v6_transition" ]]; then
-  root_node "$SCRIPT_DIR/lib/runtime-v6-transition.js" dependencies "$app_dir" "$extract_root" >"$maintenance_root/dependency-continuity-before.json" \
-    || gp_die "Der Core6-Uebergang verlangt exakt unveraenderte Abhaengigkeiten und einen geschuetzten qualifizierten Altbaum."
-  cp -R --no-preserve=ownership --no-dereference -- "$app_dir/node_modules" "$extract_root/node_modules" \
-    || gp_die "Die qualifizierten Runtime-Abhaengigkeiten konnten nicht in frische Root-Dateien uebernommen werden."
-  gp_apply_app_permissions "$extract_root" "$service_group"
-  root_node "$SCRIPT_DIR/lib/runtime-v6-transition.js" dependencies "$app_dir" "$extract_root" >"$maintenance_root/dependency-continuity-after.json" \
-    || gp_die "Die uebernommenen Runtime-Abhaengigkeiten sind nicht mehr exakt an den qualifizierten Altbaum gebunden."
-  dependency_probe_user="$service_user"
-  dependency_probe_cwd="$data_dir"
-else
+  root_node "$SCRIPT_DIR/lib/runtime-v6-transition.js" dependency-plan "$app_dir" "$extract_root" >"$maintenance_root/frozen-dependency-plan.json" \
+    || gp_die "Der Core6-Uebergang verlangt den gebundenen eingefrorenen Kandidatenplan und den unveraenderten geschuetzten Altbaum."
+fi
 chown -R "$build_user:$build_group" -- "$extract_root"
 chmod 0750 -- "$extract_root"
 (cd -- "$build_cache" && runuser --user "$build_user" -- env -i \
@@ -1199,7 +1192,6 @@ chmod 0750 -- "$extract_root"
   PATH="$(dirname -- "$node"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" NODE_ENV=production \
   "$node" "$pnpm_program" "${pnpm_arguments[@]}" --dir "$extract_root" install --prod --frozen-lockfile \
     --config.node-linker=hoisted --store-dir "$pnpm_store" --package-import-method=copy) >&2
-fi
 [[ -d "$extract_root/node_modules" && ! -L "$extract_root/node_modules" ]] || gp_die "node_modules fehlt nach dem Produktionsinstall."
 root_node "$trusted_tree_verifier" "$extract_root" >/dev/null || gp_die "Der installierte Abhaengigkeitsbaum enthaelt unzulaessige Links oder Dateitypen."
 (cd -- "$dependency_probe_cwd" && runuser --user "$dependency_probe_user" -- env -i PATH="$(dirname -- "$node"):/usr/local/bin:/usr/bin:/bin" NODE_ENV=production \
@@ -1216,10 +1208,8 @@ gp_seal_build_tree "$extract_root" "$maintenance_root/verified-ready" "$service_
 extract_root="$maintenance_root/verified-ready"
 gp_verify_sealed_zip "$staged_package" "$extract_root" 1 \
   || gp_die "Der Build hat urspruengliche Paketbytes veraendert oder unzulaessige Dateien ergaenzt."
-if [[ -z "$runtime_v6_transition" ]]; then
-  gp_prepare_root_pg_dependencies "$staged_package" "$extract_root" "$node" "$pnpm_program" "${pnpm_arguments[@]}" \
-    || gp_die "Die privilegierte PostgreSQL-Abhaengigkeitskette konnte nicht unabhaengig vom Buildkonto qualifiziert werden."
-fi
+gp_prepare_root_pg_dependencies "$staged_package" "$extract_root" "$node" "$pnpm_program" "${pnpm_arguments[@]}" \
+  || gp_die "Die privilegierte PostgreSQL-Abhaengigkeitskette konnte nicht unabhaengig vom Buildkonto qualifiziert werden."
 root_node "$trusted_package_verifier" "$extract_root" >"$manifest_result_file" \
   || gp_die "Der versiegelte Buildbaum weicht vom freigegebenen Paket ab."
 root_node "$trusted_tree_verifier" "$extract_root" >/dev/null \

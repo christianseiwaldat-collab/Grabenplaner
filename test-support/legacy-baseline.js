@@ -25,7 +25,7 @@ function sourceRoot() {
     // immutable password-corpus digest binds LF bytes, so archive extraction
     // must not inherit that unrelated workstation conversion preference.
     command("git", ["-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive", "--format=tar", "--output", archive, BASELINE,
-      ".gitattributes", "backup.js", "server.js", "package.json", "pnpm-lock.yaml", "lib", "public", "demo", "services/planning-optimizer",
+      ".gitattributes", "backup.js", "server.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "lib", "public", "demo", "services/planning-optimizer",
       "test/cross-location-schedule-view-api.test.js", "test/sales-analytics-production-hardening.test.js",
       "test/v081-work-rule-safety-regressions.test.js", "test/v058-personnel-rights-encryption.test.js",
       "test/portal-foundation.test.js", "test/portal-permission-defaults.test.js",
@@ -56,12 +56,21 @@ function linkFrozenDependencies() {
   const crypto = require("node:crypto");
   const lockDigest = file => crypto.createHash("sha256")
     .update(fs.readFileSync(file, "utf8").replaceAll("\r\n", "\n")).digest("hex");
-  // This explicitly requested test-only link requires identical complete lock
-  // contents. No historical application dependency is guessed or downloaded.
-  if (lockDigest(legacyPath("pnpm-lock.yaml")) !== lockDigest(path.join(repository, "pnpm-lock.yaml"))) {
-    throw new Error("LEGACY_TEST_FROZEN_DEPENDENCIES_REQUIRED");
+  const suppliedRoot = process.env.GP_LEGACY_DEPENDENCIES_ROOT;
+  const suppliedDigest = process.env.GP_LEGACY_DEPENDENCIES_MANIFEST_SHA256;
+  let target;
+  if (suppliedRoot || suppliedDigest) {
+    // The separate preparation step installs immutable old metadata. Both the
+    // external manifest pin and every actual installed file are checked here.
+    target = require("./legacy-dependencies.cjs").validateLegacyDependencies({ root: suppliedRoot, manifestSha256: suppliedDigest });
+  } else {
+    // Retain the original same-lock path only while the complete graph is
+    // unchanged. A changed current lock never silently supplies old tests.
+    if (lockDigest(legacyPath("pnpm-lock.yaml")) !== lockDigest(path.join(repository, "pnpm-lock.yaml"))) {
+      throw new Error("LEGACY_TEST_FROZEN_DEPENDENCIES_REQUIRED");
+    }
+    target = fs.realpathSync(path.join(repository, "node_modules"));
   }
-  const target = fs.realpathSync(path.join(repository, "node_modules"));
   const entry = legacyPath("node_modules");
   if (!fs.existsSync(entry)) fs.symlinkSync(target, entry, process.platform === "win32" ? "junction" : "dir");
   if (fs.realpathSync(entry) !== target) throw new Error("LEGACY_TEST_DEPENDENCY_LINK_MISMATCH");

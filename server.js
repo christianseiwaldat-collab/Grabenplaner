@@ -4874,6 +4874,11 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
       effectiveExpiresAt = await renewPortalSession({ session, kind: 'employee', now: currentDate.getTime(), expiresAt: lifetime.expiresAt,
         timeoutMinutes: lifetime.idleMinutes, write: value => repository.touchEmployeeSession(value) });
       if (!effectiveExpiresAt) return null;
+      // Renewal is a database write. Resolve authority again after that write;
+      // a concurrent revocation must not become the request's cached actor.
+      if (effectiveExpiresAt !== session.expires_at) {
+        return loadPortalSessionFromRequest(request, { touch: false, repository });
+      }
     }
     return {
       id: session.id,
@@ -4933,6 +4938,9 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
     organizationExpiresAt = await renewPortalSession({ session: organizationSession, kind: 'organization', now: currentDate.getTime(), expiresAt: lifetime.expiresAt,
       timeoutMinutes: lifetime.idleMinutes, write: value => repository.touchOrganizationSession(value) });
     if (!organizationExpiresAt) return null;
+    if (organizationExpiresAt !== organizationSession.expires_at) {
+      return loadPortalSessionFromRequest(request, { touch: false, repository });
+    }
   }
   return {
     id: organizationSession.id,
@@ -4964,6 +4972,46 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
     authenticatedAt: lifetime.authenticatedAt,
     absoluteExpiresAt: lifetime.absoluteExpiresAt,
   };
+}
+
+function deniedPortalSessionProjection(previous) {
+  return Object.freeze({
+    ...previous,
+    role: "", permissions: Object.freeze([]), rolePermissions: Object.freeze([]),
+    grantedPermissions: Object.freeze([]), deniedPermissions: Object.freeze([]),
+    explicitScopes: Object.freeze([]), permissionScopes: Object.freeze([]), scopes: Object.freeze([]),
+    personnelFieldPermissions: Object.freeze({}), amuLocalAccessMode: "deny", mustChangePassword: true,
+  });
+}
+
+async function completeCommittedPortalUserMutation(committed, request, employeeNumber, outcome) {
+  // The promise resolves only after the normal database authorization and COMMIT.
+  // A rejected/rolled-back mutation must never run these service effects.
+  await committed;
+  if (!outcome.changed) return outcome.actor;
+  let projection = outcome.actor;
+  if (String(outcome.actor.employeeNumber || "") === employeeNumber) {
+    const previous = request.portalSession;
+    const application = await applicationPersistence.ready;
+    const current = await loadPortalSessionFromRequest(request, {
+      touch: false, repository: application.authorizationRepositories.portalAccess,
+    });
+    projection = current && current.id === previous?.id
+      && current.sessionKind === previous.sessionKind
+      && current.employeeNumber === previous.employeeNumber
+      ? current : deniedPortalSessionProjection(previous);
+    // Keep a non-null deny-all principal after revocation. Remaining request
+    // operations must never enter the unauthenticated service-work shortcut.
+    request.portalSession = projection;
+    request.portalSessionLoaded = true;
+  }
+  // These two fixed housekeeping operations follow a committed user change.
+  // Their service context never covers the caller's response or later work.
+  await persistenceRequestContext.exit(async () => {
+    await refreshConfiguredAdminSnapshot();
+    await reconcileOpenAmuResponsibilities(outcome.actor.employeeNumber);
+  });
+  return projection;
 }
 
 async function resolveSalesReportPrincipal(employeeNumber) {
@@ -44745,15 +44793,15 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
     existingPersonnelLifecyclePermissionScopes,
     existingPortalBirthdayPresentationRights,
   );
-  let responseProjectionActor = actor;
-  let userChanged = false;
-  await personnelLifecycleSerializableTransaction(async (organization) => {
+  const mutationOutcome = { changed: false, actor };
+
+  const committedMutation = personnelLifecycleSerializableTransaction(async (organization) => {
     const [liveUser, liveLearningActor, liveEmployeeScope] = await Promise.all([
       organization.getPortalUserAccountProjection(employeeNumber),
       livePersonnelLearningRoleAdministrationActor(actor, organization),
       organization.getEmployeeScopeProjection(employeeNumber),
     ]);
-    responseProjectionActor = liveLearningActor;
+    mutationOutcome.actor = liveLearningActor;
     assertLivePortalRoutePermission(liveLearningActor, "users:write");
     let livePersonnelLifecycleGrants = [];
     let livePersonnelLifecyclePermissionScopes = [];
@@ -44799,14 +44847,14 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
         livePortalBirthdayPresentationRights,
       ),
     );
-    userChanged = Boolean(
+    mutationOutcome.changed = Boolean(
       !liveUser
       || String(liveUser.role || "") !== role
       || Boolean(liveUser.active) !== Boolean(active)
       || Boolean(liveUser.must_change_password) !== Boolean(mustChangePassword)
       || password,
     );
-    if (!userChanged) return;
+    if (!mutationOutcome.changed) return;
     if (liveUser) {
       (await assertPortalUserIsMutable(liveUser, liveLearningActor));
       if (!actorCanManagePortalRole(liveLearningActor, liveUser.role)) {
@@ -44916,15 +44964,9 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       }),
     );
   });
-  if (userChanged) {
-    await refreshConfiguredAdminSnapshot();
-    await reconcileOpenAmuResponsibilities(responseProjectionActor.employeeNumber);
-    if (String(responseProjectionActor.employeeNumber || "") === employeeNumber) {
-      responseProjectionActor = await livePersonnelLearningRoleAdministrationActor(
-        responseProjectionActor,
-      );
-    }
-  }
+  const responseProjectionActor = await completeCommittedPortalUserMutation(
+    committedMutation, request, employeeNumber, mutationOutcome,
+  );
   const [users, roles] = await Promise.all([
     portalUsersForActor(responseProjectionActor),
     portalRolesForUserAdministrationActor(responseProjectionActor),

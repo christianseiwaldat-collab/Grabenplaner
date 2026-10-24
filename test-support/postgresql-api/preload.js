@@ -61,6 +61,7 @@ function install() {
     const configuration = require("../../lib/persistence/configuration");
     configuration.resolvePersistenceConfiguration = () => Object.freeze({
       providerId: "postgresql", databasePath: fixturePath || path.join(process.env.GRABENPLANER_DATA_DIR, "core.postgresql"),
+      profile: require("../../lib/persistence/postgresql/core/environment").PROFILE,
       databaseUrlConfigured: true, coreUrl: process.env.GP_CORE_APP_URL, salesUrl: process.env.GP_SALES_APP_URL,
       readers: Object.freeze({ coreUrl: process.env.GP_CORE_READER_URL, salesUrl: process.env.GP_SALES_READER_URL }),
       rehearsal: true, productActivation: false,

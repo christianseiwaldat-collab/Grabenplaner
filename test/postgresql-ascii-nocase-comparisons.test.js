@@ -30,3 +30,20 @@ test("comparison normalization handles explicit parentheses, both collations and
   assert.throws(() => normalize("SELECT 1 WHERE a || b = c COLLATE NOCASE"), /BOUNDED_SCALARS/);
   assert.throws(() => normalize("SELECT 1 WHERE a COLLATE BINARY = b COLLATE NOCASE"), /CONFLICTING_COLLATIONS/);
 });
+
+test("all three active branch-order equality operations fold both operands and retain their bind counts", () => {
+  const source = require("node:fs").readFileSync(require("node:path").resolve(__dirname,
+    "../lib/persistence/postgresql/application-operations/branch-orders.js"), "utf8");
+  const { compileOperation } = require("../lib/persistence/postgresql/application-operations/access");
+  const queries = [...source.matchAll(/db\.prepare\(`([\s\S]*?)`\)/g)].map(match => match[1])
+    .filter(sql => /(?:title|email)\s*=\s*(?:\?|'[^']*')\s+COLLATE NOCASE/i.test(sql));
+  assert.equal(queries.length, 3, "review every active equality, rather than only copied test SQL");
+  assert.deepEqual(queries.map(sql => compileOperation(sql).parameters), [2, 2, 1]);
+  for (const sql of queries) {
+    const compiled = compileOperation(sql);
+    assert.equal((compiled.sql.match(/gp \. ascii_fold/g) || []).length, 2);
+    assert.match(compiled.sql, /COLLATE "C" = gp \. ascii_fold/);
+    assert.equal(compiled.write, false);
+    assert.equal(compileOperation(sql).sql, compiled.sql);
+  }
+});

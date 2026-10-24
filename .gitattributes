@@ -35,3 +35,6 @@ server-tools/linux/Caddyfile.in text eol=lf
 server-tools/linux/*.env.example text eol=lf
 # Source-build fixtures bind exact upstream LF bytes on every host.
 scripts/security/fixtures/semgrep-1.181.0-* text eol=lf
+# Exact reviewed MSAL backport and regression proof bytes.
+lib/vendor-patches/*.patch text eol=lf whitespace=-blank-at-eol
+test/security-msal-auth-code-backport.test.js text eol=lf

@@ -32,6 +32,19 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
     assert.equal(digest((await sales.query("SELECT * FROM gp.import_delete_performance_history ORDER BY version")).rows), before);
     await core.query("DROP TABLE gp.unreviewed_migration_history"); created = false;
     const database = databaseForCurrentTest();
+    const configuration = require("../lib/persistence/configuration").resolvePersistenceConfiguration();
+    const { readPostgresqlSystemHealth } = require("../lib/persistence/postgresql/application-operations/system-health");
+    assert.equal(configuration.profile, require("../lib/persistence/postgresql/core/environment").PROFILE);
+    const health = await readPostgresqlSystemHealth(configuration);
+    assert.equal(health.foreignKeys, true);
+    assert.ok(Number.isSafeInteger(health.databaseBytes) && health.databaseBytes > 0);
+    for (const [domain, client] of [["core", core], ["sales", sales]]) {
+      const measured = (await client.query("SELECT pg_database_size(current_database())::text AS bytes, (SELECT COUNT(*)::integer FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='gp' AND c.contype='f') AS foreign_keys")).rows[0];
+      assert.equal(health.databases[domain].foreignKeys, measured.foreign_keys);
+      assert.ok(Number.isSafeInteger(health.databases[domain].bytes) && health.databases[domain].bytes > 0);
+      assert.equal(health.databases[domain].invalidForeignKeys, 0);
+    }
+    await assert.rejects(readPostgresqlSystemHealth({ ...configuration, profile: "unreviewed-profile" }), /Verified database profile required/);
     const schema = require("../test-support/postgresql-api/metadata");
     assert.equal(schema.assertCoreSchemaLedger(database).version, 1);
     assert.equal(schema.tableExists(database, "employees"), true);

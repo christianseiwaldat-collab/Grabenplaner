@@ -5,19 +5,13 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const crypto = require("node:crypto");
-const { legacyRequire, legacyPath, sourceRoot } = require("../test-support/legacy-baseline");
+const { legacyRequire, sourceRoot, linkFrozenDependencies } = require("../test-support/legacy-baseline");
 const { openSqliteLegacyDatabase: DatabaseSync } = legacyRequire("lib/persistence/sqlite/provider.js");
 
 test("immutable historical SQLite organization integrity is checked once per migration state and a failed scan is retried", t => {
   // The removed PRAGMA migration lifecycle is tested with its exact original
   // implementation. Current PostgreSQL startup uses its native schema gates.
-  const dependencyRoot = fs.realpathSync(path.join(__dirname, "../node_modules"));
-  const lockHash = file => crypto.createHash("sha256").update(fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n")).digest("hex");
-  assert.equal(lockHash(legacyPath("pnpm-lock.yaml")), lockHash(path.join(__dirname, "../pnpm-lock.yaml")));
-  const link = legacyPath("node_modules");
-  if (!fs.existsSync(link)) fs.symlinkSync(dependencyRoot, link, process.platform === "win32" ? "junction" : "dir");
-  assert.equal(fs.realpathSync(link), dependencyRoot);
+  linkFrozenDependencies();
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-deploy-startup-"));
   t.after(() => { assert.equal(path.dirname(fs.realpathSync(root)), fs.realpathSync(os.tmpdir())); fs.rmSync(root, { recursive: true, force: true }); });
   const file = path.join(root, "dienstplan.db");
@@ -43,7 +37,7 @@ org.runSqliteOrganizationSchemaMigrations = (database, options) => original(new 
 try { const app = require('./server'); app.db.close(); app.releaseInstanceLockForTests(); console.log('SCAN_RESULT=' + JSON.stringify({ ok: true, scans })); }
 catch (error) { console.log('SCAN_RESULT=' + JSON.stringify({ ok: false, scans, error: error.stack })); process.exitCode = 2; }
 `;
-    const result = spawnSync(process.execPath, ["-e", source], { cwd: sourceRoot(), env: environment, encoding: "utf8", timeout: 60000 });
+    const result = spawnSync(process.execPath, ["--no-global-search-paths", "-e", source], { cwd: sourceRoot(), env: environment, encoding: "utf8", timeout: 60000 });
     const line = String(result.stdout).split(/\r?\n/).find(row => row.startsWith("SCAN_RESULT="));
     assert.ok(line, result.stderr || result.error?.message);
     return JSON.parse(line.slice(12));

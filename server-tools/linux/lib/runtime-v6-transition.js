@@ -8,6 +8,8 @@ const crypto = require("node:crypto");
 const assert = require("node:assert/strict");
 const OLD_FINGERPRINT = "21f541a85b74ced5e5b6ec84ff2561badcd6635ad1fceb7438cb32350392cd8c";
 const NEW_FINGERPRINT = "f9c09a999f5d6b30c0df35e714d0a5ddf0ca17880ad9190ff4bc5c068c3d95fc";
+const REVIEWED_MSAL_PATCH = Object.freeze({ package: "@azure/msal-node@5.4.0", path: "lib/vendor-patches/@azure__msal-node@5.4.0.patch",
+  sha256: "bbdf16bb0cf6a18ab384b515bd8a378cc5c736698c486881c60c1cbb1cbeda01" });
 // These are the qualified Core 5 checkout/package bytes, including the CRLF
 // monitor timer prescribed by the versioned .gitattributes, not git-archive LF.
 const OLD_FILES = Object.freeze({
@@ -127,6 +129,66 @@ function verifyDependencyContinuity(oldRoot, candidateRoot, { requireRoot = proc
   return { exactLock: true, packageManager: previous.packageManager, lockSha256: hash(read(oldRoot, "pnpm-lock.yaml")),
     dependencySource: "qualified-root-owned-installed-tree", ...original, copiedTreeVerified: Boolean(copied) };
 }
+function verifyFrozenDependencyPlan(oldRoot, candidateRoot, { requireRoot = process.platform === "linux" } = {}) {
+  const metadata = root => {
+    const files = {};
+    for (const relative of ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"]) {
+      const file = path.join(root, relative), info = fs.lstatSync(file);
+      assert(info.isFile() && !info.isSymbolicLink() && info.nlink === 1 && fs.realpathSync(file) === path.resolve(file));
+      if (requireRoot) assert(info.uid === 0 && (info.mode & 0o022) === 0);
+      files[relative] = read(root, relative);
+    }
+    return { package: JSON.parse(files["package.json"]), packageSha256: hash(files["package.json"]), lockSha256: hash(files["pnpm-lock.yaml"]),
+      workspace: files["pnpm-workspace.yaml"], workspaceSha256: hash(files["pnpm-workspace.yaml"]) };
+  };
+  const previous = metadata(oldRoot), candidate = metadata(candidateRoot);
+  for (const key of ["packageManager", "dependencies", "optionalDependencies", "peerDependencies", "pnpm"]) {
+    assert.equal(canonical(previous.package[key]), canonical(candidate.package[key]), "Unqualified dependency metadata changed: " + key);
+  }
+  assert.equal(candidate.package.packageManager, "pnpm@11.7.0");
+  assert.equal(candidate.package.dependencies?.pg, "8.22.0");
+  const withoutReviewedWorkspaceDeltas = bytes => {
+    const text = bytes.toString("utf8"), remaining = [];
+    assert(Buffer.from(text, "utf8").equals(bytes));
+    let section = null, bodyParser = null, msalPatch = null;
+    const seenSections = new Set();
+    const lines = text.match(/[^\n]*\n|[^\n]+$/g) || [];
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index];
+      const value = line.replace(/\r?\n$/, "");
+      if (value === "overrides:" || value === "patchedDependencies:") {
+        assert(!seenSections.has(value)); seenSections.add(value); section = value;
+      } else if (/^[^\s#]/.test(value)) section = null;
+      if (value === "  # Reviewed CVE-2026-111181 security fix; keep the Express major unchanged.") {
+        assert(section === "overrides:" && lines[index + 1]?.replace(/\r?\n$/, "") === "  body-parser: 2.4.0");
+      } else if (value === "  body-parser: 2.4.0") {
+        assert(section === "overrides:" && bodyParser === null, "Body-parser override must occur once inside overrides");
+        bodyParser = "2.4.0";
+      } else if (value === "  '@azure/msal-node@5.4.0': lib/vendor-patches/@azure__msal-node@5.4.0.patch") {
+        assert(section === "patchedDependencies:" && msalPatch === null, "The reviewed MSAL patch must occur once inside patchedDependencies");
+        msalPatch = REVIEWED_MSAL_PATCH.sha256;
+      } else remaining.push(line);
+    }
+    return { bytes: Buffer.from(remaining.join(""), "utf8"), bodyParser, msalPatch };
+  };
+  const before = withoutReviewedWorkspaceDeltas(previous.workspace), after = withoutReviewedWorkspaceDeltas(candidate.workspace);
+  assert(before.bytes.equals(after.bytes), "Unqualified pnpm workspace metadata changed");
+  assert(before.bodyParser === after.bodyParser || after.bodyParser === "2.4.0", "Only the reviewed body-parser security override is permitted");
+  assert(before.msalPatch === after.msalPatch || after.msalPatch === REVIEWED_MSAL_PATCH.sha256, "Removing the reviewed MSAL security patch is not permitted");
+  for (const [root, workspace] of [[oldRoot, before], [candidateRoot, after]]) if (workspace.msalPatch) {
+    const file = path.join(root, REVIEWED_MSAL_PATCH.path), info = fs.lstatSync(file);
+    if (requireRoot) assert(info.uid === 0 && (info.mode & 0o022) === 0);
+    assert.equal(hash(read(root, REVIEWED_MSAL_PATCH.path)), REVIEWED_MSAL_PATCH.sha256, "Unqualified MSAL patch bytes changed");
+  }
+  const original = dependencyInventory(path.join(oldRoot, "node_modules"), requireRoot);
+  return { format: "grabenplaner-runtime-v6-frozen-dependency-plan", schemaVersion: 1,
+    predecessorRoot: path.resolve(oldRoot), predecessor: { packageSha256: previous.packageSha256, lockSha256: previous.lockSha256, workspaceSha256: previous.workspaceSha256, ...original },
+    candidate: { packageSha256: candidate.packageSha256, lockSha256: candidate.lockSha256, workspaceSha256: candidate.workspaceSha256, packageManager: candidate.package.packageManager },
+    reviewedBodyParserOverride: { previous: before.bodyParser ?? null, candidate: after.bodyParser ?? null },
+    reviewedMsalPatch: { package: REVIEWED_MSAL_PATCH.package, path: REVIEWED_MSAL_PATCH.path, previous: before.msalPatch, candidate: after.msalPatch },
+    requirements: { originalZipByteBinding: true, unprivilegedFrozenProductionBuild: true,
+      freshRootPostgresqlClosureBeforePreflight: true, freshRootPostgresqlClosureAfterBuild: true } };
+}
 function validateInvocation({ transitionFile, marker, script, packageSha256, uid = process.getuid?.() }) {
   assert.equal(uid, 0);
   const parent = path.dirname(marker);
@@ -144,19 +206,21 @@ function validateInvocation({ transitionFile, marker, script, packageSha256, uid
   assert(stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1 && stat.uid === 0 && (stat.mode & 0o777) === 0o600);
   const value = JSON.parse(fs.readFileSync(transitionFile, "utf8"));
   assert.equal(value.format, "grabenplaner-runtime-v6-transition");
-  assert.equal(value.schemaVersion, 1);
+  assert.equal(value.schemaVersion, 2);
   assert.equal(value.providerId, "postgresql");
   assert.equal(value.packageSha256, packageSha256);
   assert.match(packageSha256, /^[a-f0-9]{64}$/);
   assert.equal(value.candidateRoot, path.join(parent, "extract"));
   assert.equal(value.installedFingerprint, OLD_FINGERPRINT);
   assert.equal(value.candidateFingerprint, NEW_FINGERPRINT);
+  assert.equal(value.dependencyPlan?.predecessorRoot, "/opt/grabenplaner/app");
+  assert.deepEqual(value.dependencyPlan, verifyFrozenDependencyPlan("/opt/grabenplaner/app", value.candidateRoot));
   assert.deepEqual(value.bindings, protectedBindings());
   assert.equal(JSON.parse(fs.readFileSync(PROTECTED_FILES.installedOffsiteReceiptSha256, "utf8")).moduleVersion, 13);
   return value;
 }
 module.exports = { OLD_FILES, NEW_FILES, OLD_FINGERPRINT, NEW_FINGERPRINT, PROTECTED_FILES,
-  validateTransition, validateInvocation, protectedBindings, verifyDependencyContinuity };
+  validateTransition, validateInvocation, protectedBindings, verifyDependencyContinuity, verifyFrozenDependencyPlan };
 if (require.main === module) {
   try {
     const [command, ...args] = process.argv.slice(2);
@@ -167,13 +231,16 @@ if (require.main === module) {
     } else if (command === "dependencies") {
       assert.equal(process.getuid?.(), 0);
       console.log(JSON.stringify(verifyDependencyContinuity(...args)));
+    } else if (command === "dependency-plan") {
+      assert.equal(process.getuid?.(), 0);
+      console.log(JSON.stringify(verifyFrozenDependencyPlan(...args)));
     } else if (command === "create") {
       const [oldRoot, candidateRoot, packageSha256, output] = args;
       assert.equal(process.getuid?.(), 0); assert.match(packageSha256, /^[a-f0-9]{64}$/);
       const delta = validateTransition(oldRoot, candidateRoot);
-      const value = { format: "grabenplaner-runtime-v6-transition", schemaVersion: 1, providerId: "postgresql", candidateRoot,
+      const value = { format: "grabenplaner-runtime-v6-transition", schemaVersion: 2, providerId: "postgresql", candidateRoot,
         packageSha256, installedFingerprint: delta.installedFingerprint, candidateFingerprint: delta.candidateFingerprint,
-        bindings: protectedBindings() };
+        dependencyPlan: verifyFrozenDependencyPlan(oldRoot, candidateRoot), bindings: protectedBindings() };
       fs.writeFileSync(output, JSON.stringify(value) + "\n", { flag: "wx", mode: 0o600 });
     } else throw new Error("Unsupported command");
   } catch (error) { console.error("Runtime-v6 transition rejected: " + error.message); process.exitCode = 1; }

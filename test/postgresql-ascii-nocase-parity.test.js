@@ -79,3 +79,46 @@ test("four actual PostgreSQL catalog comparisons retain historical ASCII NOCASE 
     }
   });
 });
+
+test("actual PostgreSQL branch catalog upgrade reuses mixed-case groups, units and warehouse recipient", {
+  skip: !process.env.GP_CORE_MIGRATOR_URL,
+}, async () => {
+  const { withCoreFixture } = require("../test-support/postgresql-migration/core-fixture");
+  const { openCoreOperations } = require("../lib/persistence/postgresql/application-operations/access");
+  const { createPostgresqlBranchOrderOperations } = require("../lib/persistence/postgresql/application-operations/branch-orders");
+  await withCoreFixture(async () => {
+    const access = await openCoreOperations({ profile: "core-migration-development",
+      databaseUrl: process.env.GP_CORE_APP_URL, tlsMode: "disable-local-only" });
+    try {
+      const operations = createPostgresqlBranchOrderOperations(access);
+      const initial = await operations.settingsSnapshot("18");
+      const plotter = initial.groups.find(group => group.title === "Fotowelt – Plotter");
+      const roll = initial.units.find(unit => unit.title === "Rolle");
+      const packageUnit = initial.units.find(unit => unit.title === "Packung");
+      const warehouse = initial.recipients.find(recipient => recipient.email === "lager@lamprechter.com");
+      const paper = initial.items.find(item => item.title === "Papierrolle – Photorag Ultra Smooth");
+      assert.ok(plotter && roll && packageUnit && warehouse && paper);
+      await access.prepare("UPDATE branch_order_groups SET title=? WHERE id=?").run(plotter.title.toUpperCase(), plotter.id);
+      await access.prepare("UPDATE branch_order_units SET title=? WHERE id=?").run("ROLLE", roll.id);
+      await access.prepare("UPDATE branch_order_units SET title=? WHERE id=?").run("pAcKuNg", packageUnit.id);
+      await access.prepare("UPDATE branch_order_recipients SET email=? WHERE id=?").run(warehouse.email.toUpperCase(), warehouse.id);
+      // An owned old-content fixture: force the real upgrade to find the
+      // existing group and recipient by title/email, rather than by membership.
+      await access.prepare("DELETE FROM branch_order_group_items WHERE group_id=?").run(plotter.id);
+      await access.prepare("DELETE FROM branch_order_catalog_items WHERE id=?").run(paper.id);
+      await access.prepare("UPDATE branch_order_location_settings SET catalog_content_version=0 WHERE location_id=?").run("18");
+      const repaired = await operations.settingsSnapshot("18");
+      assert.equal(repaired.groups.length, initial.groups.length, "case variation must not create a duplicate group");
+      assert.equal(repaired.units.length, initial.units.length, "case variation must not create duplicate units");
+      const rebuilt = repaired.items.find(item => item.title === paper.title);
+      assert.ok(rebuilt); assert.notEqual(rebuilt.id, paper.id);
+      assert.equal(rebuilt.unitId, roll.id);
+      assert.equal(rebuilt.recipientId, warehouse.id, "case-insensitive fallback retains the actual warehouse recipient");
+      assert.ok(repaired.groups.find(group => group.id === plotter.id).itemIds.includes(rebuilt.id));
+      assert.equal(repaired.units.find(unit => unit.id === packageUnit.id).title, "pAcKuNg");
+      assert.equal(await access.prepare("SELECT id FROM branch_order_units WHERE location_id=? AND title=? COLLATE NOCASE")
+        .get("18", "missing-synthetic-unit"), undefined);
+      assert.deepEqual(await operations.settingsSnapshot("18"), repaired, "a second upgrade preserves all identifiers and content");
+    } finally { await access.close(); }
+  });
+});

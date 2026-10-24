@@ -76,6 +76,7 @@ test("produktiver Start bleibt auf Loopback und blockiert externe Bindung", asyn
   });
   let stdout = "";
   let stderr = "";
+  let failure = null;
   child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
   child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
   try {
@@ -88,11 +89,28 @@ test("produktiver Start bleibt auf Loopback und blockiert externe Bindung", asyn
       body: "{}",
     });
     assert.equal(exitResponse.status, 200);
+    assert.equal((await exitResponse.json()).ok, true);
     const exit = await waitForExit(child, 8000, () => stderr);
     assert.equal(exit.code, 0, stderr);
     assert.match(stdout, new RegExp(`http://localhost:${port}`));
+  } catch (error) {
+    failure = error;
   } finally {
-    if (child.exitCode === null) { child.kill(); await waitForExit(child, 8000, () => stderr); }
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill();
+      try { await waitForExit(child, 8000, () => stderr); }
+      catch (error) {
+        failure ||= error;
+        // A failed graceful-stop assertion remains failed. Reap only this
+        // owned synthetic child before its parent's fixture can be truncated.
+        child.kill("SIGKILL");
+        await waitForExit(child, 8000, () => stderr);
+      }
+    }
+    if (failure) {
+      failure.message += `\nAbschließender Kindprozessnachweis:\n${stderr.slice(-16384)}`;
+      throw failure;
+    }
   }
 
   const blockedPort = await getFreePort();
