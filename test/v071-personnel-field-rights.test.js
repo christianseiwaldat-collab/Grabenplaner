@@ -1087,7 +1087,14 @@ test("v0.71 Block 5: Employee-POST und -PUT prüfen Feldrechte im seriellen Live
       .get(createNumber), undefined);
     assert.equal(db.prepare("SELECT 1 FROM personnel_sensitive_records WHERE employee_number = ?")
       .get(createNumber), undefined);
-    assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), auditBefore);
+    // The denied employee transaction is rolled back, then exactly one
+    // minimized denial audit is intentionally committed outside that rollback.
+    assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), auditBefore + 1);
+    const denial = latestDeniedAudit(MANAGER, createNumber);
+    assert.equal(denial.detail.reason, "PERSONNEL_FIELD_WRITE_DENIED");
+    assert.equal(denial.detail.route, "POST /api/employees");
+    assert.deepEqual(denial.detail.fieldKeys, ["employment.notes"]);
+    assert.equal(denial.raw.includes(createMarker), false);
   } finally {
     dropTrigger();
   }

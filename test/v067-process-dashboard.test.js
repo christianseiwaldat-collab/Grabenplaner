@@ -1,4 +1,5 @@
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");

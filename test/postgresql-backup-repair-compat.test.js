@@ -44,6 +44,13 @@ function fixture(t) {
     fs.copyFileSync(path.join(sourceRoot, "test-support/postgresql-backup-repair", name),
       path.join(candidate, "lib/persistence/postgresql/operations", relative));
   }
+  // The current entrypoint also supports backup-preserve. This historical
+  // scanner-only bridge must keep its independently pinned reviewed after-CLI.
+  const reviewedOperations = fs.readFileSync(require("../test-support/legacy-baseline").legacyPath(
+    "server-tools/linux/lib/postgresql-operations.js"));
+  assert.equal(require("node:crypto").createHash("sha256").update(reviewedOperations.toString("utf8").replace(/\r\n/g, "\n")).digest("hex"),
+    "a0699ec58917ae64fe3e5d36894ccf8eed7bc88d7fd438be4d3e16972d552006");
+  fs.writeFileSync(path.join(candidate, "server-tools/linux/lib/postgresql-operations.js"), reviewedOperations);
   const metadata = JSON.parse(fs.readFileSync(path.join(installed, "package.json"), "utf8"));
   metadata.version = "0.92.58-beta";
   fs.writeFileSync(path.join(installed, "package.json"), JSON.stringify(metadata));
@@ -63,6 +70,12 @@ test("the historical bridge rejects the current telemetry and parallel-restore r
     const relative = "lib/persistence/postgresql/operations/" + name;
     fs.copyFileSync(path.join(sourceRoot, relative), path.join(f.candidate, relative));
   }
+  assert.throws(() => verifyBackupRepairCompatibility(f.installed, f.candidate), /PG_BACKUP_REPAIR_UNREVIEWED/);
+});
+
+test("the historical scanner bridge rejects the current preservation entrypoint", t => {
+  const f = fixture(t), relative = "server-tools/linux/lib/postgresql-operations.js";
+  fs.copyFileSync(path.join(sourceRoot, relative), path.join(f.candidate, relative));
   assert.throws(() => verifyBackupRepairCompatibility(f.installed, f.candidate), /PG_BACKUP_REPAIR_UNREVIEWED/);
 });
 

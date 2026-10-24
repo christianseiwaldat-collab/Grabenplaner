@@ -1,13 +1,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { databaseForCurrentTest } = require("../test-support/postgresql-api/preload");
+const { databaseForCurrentTest, closeCurrentTestFixture } = require("../test-support/postgresql-api/preload");
 
 const repositoryRoot = path.resolve(__dirname, "..");
+const publicUrl = "https://time-corrections.example.test";
 
 async function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -20,17 +22,18 @@ async function getFreePort() {
   });
 }
 
-async function waitForJson(url, child, timeoutMs = 10_000) {
+async function waitForJson(url, child, timeoutMs = 10_000, diagnostics = () => "") {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`Serverprozess wurde vorzeitig mit Code ${child.exitCode} beendet.`);
+    if (child.exitCode !== null) throw new Error(`Serverprozess wurde vorzeitig mit Code ${child.exitCode} beendet. ${diagnostics().slice(-8000)}`);
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { headers: { "X-Forwarded-Proto": "https", Origin: publicUrl } });
       if (response.ok) return response.json();
+      await response.text();
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  throw new Error(`Server war nach ${timeoutMs} ms nicht erreichbar.`);
+  throw new Error(`Server war nach ${timeoutMs} ms nicht erreichbar. ${diagnostics().slice(-8000)}`);
 }
 
 async function waitForExit(child, timeoutMs = 8_000) {
@@ -58,7 +61,7 @@ function sessionHeaders(response) {
 }
 
 async function requestJson(baseUrl, route, { method = "GET", session = null, body, csrf = true } = {}) {
-  const headers = { Accept: "application/json" };
+  const headers = { Accept: "application/json", "X-Forwarded-Proto": "https", Origin: publicUrl };
   if (session) headers.Cookie = session.cookie;
   if (session && csrf && !["GET", "HEAD"].includes(method)) headers["X-CSRF-Token"] = session.csrf;
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -90,7 +93,21 @@ function summaryFrom(payload) {
 test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichssicher und revisionsfähig", async () => {
   const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v053-time-"));
   const databasePath = path.join(testRoot, "dienstplan.db");
-  Object.assign(process.env, { DB_PATH: databasePath, BACKUP_DIR: path.join(testRoot, "backups"), GRABENPLANER_DATA_DIR: path.join(testRoot, "app-data"), GRABENPLANER_SEED_DEMO: "1", GRABENPLANER_FORCE_PORTAL: "1" });
+  Object.assign(process.env, { DB_PATH: databasePath, BACKUP_DIR: path.join(testRoot, "backups"), GRABENPLANER_DATA_DIR: path.join(testRoot, "app-data"), GRABENPLANER_SEED_DEMO: "1", GRABENPLANER_FORCE_PORTAL: "", NODE_ENV: "test" });
+  // The current server starts from an explicitly owned PostgreSQL fixture with
+  // a configured administrator. Admin setup in a retired local mode is not a
+  // prerequisite for the time-correction business/security checks.
+  const prepared = databaseForCurrentTest(databasePath);
+  const salt = crypto.randomBytes(16);
+  const passwordHash = ["scrypt-v1", salt.toString("base64url"),
+    crypto.scryptSync("Synthetic-Time-987654!", salt, 64).toString("base64url")].join("$");
+  prepared.prepare(`
+    INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, password_changed_at)
+    VALUES ('101', ?, 'admin', 1, 0, CURRENT_TIMESTAMP)
+    ON CONFLICT(employee_number) DO UPDATE SET password_hash = excluded.password_hash,
+      role = 'admin', active = 1, must_change_password = 0
+  `).run(passwordHash);
+  prepared.close();
   const port = await getFreePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, [path.join(repositoryRoot, "server.js")], {
@@ -103,7 +120,18 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
       BACKUP_DIR: path.join(testRoot, "backups"),
       GRABENPLANER_DATA_DIR: path.join(testRoot, "app-data"),
       GRABENPLANER_HOST: "127.0.0.1",
-      GRABENPLANER_FORCE_PORTAL: "1",
+      GRABENPLANER_OPERATION_MODE: "server",
+      GRABENPLANER_DEPLOYMENT_KIND: "codespaces-test",
+      GRABENPLANER_BOOTSTRAP_MODE: "",
+      GRABENPLANER_BOOTSTRAP_TOKEN: "",
+      GRABENPLANER_FORCE_PORTAL: "",
+      GRABENPLANER_PUBLIC_URL: publicUrl,
+      GRABENPLANER_TRUST_PROXY: "loopback",
+      GRABENPLANER_SERVICE_CONTROL_TOKEN: "synthetic-time-service-control-0123456789abcdef",
+      GRABENPLANER_AMU_KEY_ID: "synthetic-time-v1",
+      GRABENPLANER_AMU_KEY: Buffer.alloc(32, 0x53).toString("base64"),
+      GRABENPLANER_INTEGRATION_KEY_ID: "synthetic-time-integration-v1",
+      GRABENPLANER_INTEGRATION_KEY: Buffer.alloc(32, 0x54).toString("base64"),
       GRABENPLANER_SEED_DEMO: "1",
       GRABENPLANER_TEST_AMU_SCANNER: "clean",
       NODE_ENV: "test",
@@ -114,6 +142,7 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
   let stderr = "";
   let admin = null;
   child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+  child.stdout.resume();
 
   async function login(employeeNumber, password) {
     const { response, payload } = await requestJson(baseUrl, "/api/portal/v1/auth/login", {
@@ -144,14 +173,18 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
   }
 
   try {
-    const status = await waitForJson(`${baseUrl}/api/portal/v1/status`, child);
+    const status = await waitForJson(`${baseUrl}/api/portal/v1/status`, child, 10_000, () => stderr);
     assert.equal(status.portalEnabled, true);
+    assert.equal(status.operationMode, "server");
+    assert.equal(status.httpsRequired, true);
+    assert.equal(status.adminSetupState, "configured");
 
     const setup = await requestJson(baseUrl, "/api/portal/v1/setup/admin", {
       method: "POST",
       body: { employeeNumber: "101", password: "Synthetic-Time-987654!" },
     });
-    assert.equal(setup.response.status, 201, JSON.stringify(setup.payload));
+    assert.equal(setup.response.status, 403, JSON.stringify(setup.payload));
+    assert.match(setup.payload.error, /lokalen Einrichtungsmodus/i);
     admin = await login("101", "Synthetic-Time-987654!");
 
     const locations = await requestJson(baseUrl, "/api/locations", { session: admin });
@@ -502,8 +535,7 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
     assert.equal(decidedCorrection.decidedBy, "104");
     assert.equal(decidedCorrection.decisionNote, "Zeiten anhand Rücksprache bestätigt");
 
-    const exit = await requestJson(baseUrl, "/api/system/exit", { method: "POST", session: admin, body: {} });
-    assert.equal(exit.response.status, 200, JSON.stringify(exit.payload));
+    assert.equal(child.kill("SIGTERM"), true);
     assert.equal((await waitForExit(child)).code, 0, stderr);
   } finally {
     if (child.exitCode === null) {
@@ -515,6 +547,7 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
         try { await waitForExit(child, 3_000); } catch {}
       }
     }
+    await closeCurrentTestFixture();
     fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 });
   }
 });

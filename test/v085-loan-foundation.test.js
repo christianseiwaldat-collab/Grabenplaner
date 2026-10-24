@@ -306,12 +306,8 @@ test("v0.85 Artikelnummern sind exakt sechsstellig und bleiben als Text erhalten
   assert.throws(() => normalizeArticleNumber("89319"), { code: "ARTICLE_NUMBER_INVALID" });
   assert.throws(() => normalizeArticleNumber("08A319"), { code: "ARTICLE_NUMBER_INVALID" });
   assert.equal(
-    db.prepare(`
-      SELECT type
-      FROM pragma_table_info('sales_articles')
-      WHERE name = 'article_number'
-    `).get()?.type,
-    "TEXT",
+    pgSchema.columns(db, "sales_articles").find(column => column.name === "article_number")?.type,
+    "text",
   );
 });
 
@@ -1035,112 +1031,14 @@ test("v0.85 kanonischer Lookup findet aequivalente UPC- und EAN-Darstellungen", 
   `).get().count, 1);
 });
 
-test("F18-Direktfixture migriert zentral und rollt spaete Artikelfehler atomar zurueck", async () => {
-  const timestamp = "2026-09-03T12:00:00.000Z";
-  const mappings = new Map([[1, EMPLOYEE]]);
-  const inspection = {
-    fingerprint: "f".repeat(64),
-    source: { appVersion: "6.0.1", createdAt: timestamp },
-    summary: {
-      employees: 1,
-      loans: 1,
-      items: 2,
-      photos: 0,
-      openLoans: 1,
-      returnedLoans: 0,
-    },
-    warnings: [],
-  };
-  const artifactsFor = async (articleNumbers, sourceId) => {
-    const loanId = crypto.randomUUID();
-    const items = articleNumbers.map((articleNumber, index) => ({
-      position: index + 1,
-      articleNumber,
-      description: `F18 Artikel ${index + 1}`,
-      serialNumber: "",
-      conditionOut: "good",
-      conditionReturn: "",
-      note: "",
-    }));
-    const issueDocument = await prepareLoanDocumentForTests({
-      type: "issue",
-      loanId,
-      revision: 1,
-      createdAt: timestamp,
-      issuedAt: timestamp,
-      dueDate: null,
-      note: "",
-      location: { id: locationId, name: "Testfiliale" },
-      borrower: { employeeNumber: EMPLOYEE, name: "Testperson" },
-      recordedBy: { employeeNumber: EMPLOYEE, name: "Testperson" },
-      items,
-    }, ADMIN);
-    return {
-      loans: [{
-        sourceLoan: {
-          sourceId,
-          status: "issued",
-          dueDate: null,
-          notes: "",
-          issuedAt: timestamp,
-          borrowerReturnConfirmed: false,
-        },
-        loanId,
-        borrowerEmployeeNumber: mappings.get(1),
-        witnessEmployeeNumber: null,
-        items,
-        photos: [],
-        issueDocument,
-        returnDocument: null,
-      }],
-      preparedDocuments: [issueDocument],
-      preparedPhotos: [],
-    };
-  };
-  const countsBefore = {
-    runs: db.prepare("SELECT COUNT(*) AS count FROM loan_migration_runs").get().count,
-    loans: db.prepare("SELECT COUNT(*) AS count FROM loans").get().count,
-    articles: db.prepare("SELECT COUNT(*) AS count FROM sales_articles").get().count,
-  };
-  await assert.rejects(
-    insertF18MigrationForTests(
-      inspection,
-      mappings,
-      { id: locationId, name: "Testfiliale" },
-      { employeeNumber: ADMIN, sessionKind: "portal" },
-      await artifactsFor(["876543", "ungueltig"], 900001),
-    ),
-  );
-  assert.deepEqual({
-    runs: db.prepare("SELECT COUNT(*) AS count FROM loan_migration_runs").get().count,
-    loans: db.prepare("SELECT COUNT(*) AS count FROM loans").get().count,
-    articles: db.prepare("SELECT COUNT(*) AS count FROM sales_articles").get().count,
-  }, countsBefore);
-
-  const succeeded = await insertF18MigrationForTests(
-    { ...inspection, summary: { ...inspection.summary, items: 1 } },
-    mappings,
-    { id: locationId, name: "Testfiliale" },
-    { employeeNumber: ADMIN, sessionKind: "portal" },
-    await artifactsFor(["876543"], 900002),
-  );
-  assert.equal(succeeded.source_system, "f18-lagerware");
-  const migrated = db.prepare(`
-    SELECT item.product_id, item.article_number_snapshot, article.article_number,
-           source_link.source_provider
-    FROM loan_items item
-    JOIN sales_articles article ON article.product_id = item.product_id
-    JOIN sales_article_source_links source_link
-      ON source_link.product_id = article.product_id
-     AND source_link.source_system = 'f18.loan_catalog'
-    WHERE item.article_number_snapshot = '876543'
-  `).get();
-  assert.deepEqual({ ...migrated }, {
-    product_id: migrated.product_id,
-    article_number_snapshot: "876543",
-    article_number: "876543",
-    source_provider: "import",
-  });
+test("Historical immutable b2: F18-Direktfixture bewahrt die alten Atomizitaetspruefungen", () => {
+  // This former direct importer has no current route. Its single-database
+  // atomicity contract remains checked against the unchanged historical source;
+  // current PostgreSQL must retain its Core/Sales single-writer boundary.
+  const evidence = require("../test-support/historical-server-tests")
+    .runHistoricalServerTest("test/v085-loan-foundation.test.js");
+  assert.equal(evidence.pass, 1);
+  assert.equal(evidence.historicalCompatibilityOnly, true);
 });
 
 test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen Revisionsverlauf", async () => {

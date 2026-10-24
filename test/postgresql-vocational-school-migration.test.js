@@ -2,6 +2,7 @@
 
 const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
+const { createRequire } = require("node:module");
 const migrationFile = path.resolve(__dirname, "../lib/persistence/postgresql/core/vocational-school.js");
 const baseHash = "a".repeat(64), targetHash = "b".repeat(64);
 
@@ -35,7 +36,7 @@ function fixture({ failureSql, environmentFailure } = {}) {
       const expected = await migration.target(client, baseHash);
       if (expected !== fingerprint()) throw new Error("Core development schema contract mismatch");
     } };
-    return require(id);
+    return createRequire(migrationFile)(id);
   } };
   vm.runInNewContext(fs.readFileSync(migrationFile, "utf8"), context, { filename: migrationFile });
   migration = context.module.exports;
@@ -211,7 +212,7 @@ test("operation connections require the school migration before allowing any app
       assert.equal(options.requireVocationalSchool, true); throw new Error("PG_VOCATIONAL_SCHOOL_MIGRATION_REQUIRED");
     } };
     if (id === "../core/sql") return require("../lib/persistence/postgresql/core/sql");
-    return require(id);
+    return createRequire(file)(id);
   } };
   vm.runInNewContext(fs.readFileSync(file, "utf8"), context, { filename: file });
   await assert.rejects(context.module.exports.openCoreOperations({}, { pool }), /PG_VOCATIONAL_SCHOOL_MIGRATION_REQUIRED/);
@@ -235,7 +236,7 @@ test("explicit CLI rejects catalog drift before opening operations configuration
       if (id === "./deploy-policy") return { applicationContract: () => {} };
       if (id === "../../../lib/persistence/postgresql/core/catalog") return { createCoreCatalog() { throw new Error("synthetic unreviewed catalog drift"); } };
       if (id === "../../../lib/persistence/postgresql/operations/runtime") return { loadConfiguration() { throw new Error("must not read private configuration"); } };
-      return require(id);
+      return createRequire(file)(id);
     } };
   vm.runInNewContext(fs.readFileSync(file, "utf8"), context, { filename: file });
   await assert.rejects(context.module.exports.main([hash(manifest), "--maintenance-lock-held"]), /synthetic unreviewed catalog drift/);

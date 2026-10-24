@@ -204,89 +204,10 @@ test("Login und Mitarbeiterfunktionen bleiben bis zum Servermodus gesperrt", asy
   assert.equal(result.status.operationMode, "local");
 });
 
-test("lokaler Einzelplatzmodus kann Filialen und Abteilungen deaktivieren und reaktivieren", async () => {
-  const initialResponse = await fetch(`${baseUrl}/api/locations`);
-  assert.equal(initialResponse.status, 200, await initialResponse.clone().text());
-  const initialLocations = await initialResponse.json();
-  const template = initialLocations.find((location) => location.active !== false) || initialLocations[0];
-  assert.ok(template, "Für den lokalen Topologietest fehlt eine Ausgangsfiliale.");
-  const usedIds = new Set(initialLocations.map((location) => String(location.id)));
-  const locationId = Array.from({ length: 10 }, (_, index) => String(99 - index).padStart(2, "0"))
-    .find((candidate) => !usedIds.has(candidate));
-  assert.ok(locationId, "Für den lokalen Topologietest fehlt eine freie Filial-ID.");
-
-  const locationBody = {
-    id: locationId,
-    name: "Lokale Topologieprüfung",
-    minStaff: 1,
-    daySettings: template.day_settings,
-    timeTrackingEnabled: false,
-    active: true,
-  };
-  const createdLocation = await fetch(`${baseUrl}/api/locations`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(locationBody),
-  });
-  assert.equal(createdLocation.status, 201, await createdLocation.clone().text());
-
-  const disabledLocation = await fetch(`${baseUrl}/api/locations/${locationId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...locationBody, active: false }),
-  });
-  assert.equal(disabledLocation.status, 200, await disabledLocation.clone().text());
-  assert.equal((await disabledLocation.json()).find((location) => location.id === locationId)?.active, false);
-
-  const restoredLocation = await fetch(`${baseUrl}/api/locations/${locationId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(locationBody),
-  });
-  assert.equal(restoredLocation.status, 200, await restoredLocation.clone().text());
-  assert.equal((await restoredLocation.json()).find((location) => location.id === locationId)?.active, true);
-
-  const departmentBody = {
-    locationId,
-    name: "Lokale Wissensprüfung",
-    minStaff: 1,
-    active: true,
-  };
-  const createdDepartment = await fetch(`${baseUrl}/api/departments`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(departmentBody),
-  });
-  assert.equal(createdDepartment.status, 201, await createdDepartment.clone().text());
-  const departmentId = (await createdDepartment.json())
-    .find((location) => location.id === locationId)?.departments
-    .find((department) => department.name === departmentBody.name)?.id;
-  assert.ok(departmentId, "Die lokale Testabteilung wurde nicht angelegt.");
-
-  const disabledDepartment = await fetch(`${baseUrl}/api/departments/${departmentId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...departmentBody, active: false }),
-  });
-  assert.equal(disabledDepartment.status, 200, await disabledDepartment.clone().text());
-  assert.equal(
-    (await disabledDepartment.json()).find((location) => location.id === locationId)?.departments
-      .find((department) => Number(department.id) === Number(departmentId))?.active,
-    false,
-  );
-
-  const restoredDepartment = await fetch(`${baseUrl}/api/departments/${departmentId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(departmentBody),
-  });
-  assert.equal(restoredDepartment.status, 200, await restoredDepartment.clone().text());
-  assert.equal(
-    (await restoredDepartment.json()).find((location) => location.id === locationId)?.departments
-      .find((department) => Number(department.id) === Number(departmentId))?.active,
-    true,
-  );
-});
+// Retired unauthenticated local topology mutations run only against the pinned
+// historical source in portal-foundation-legacy-migration.test.js. Current
+// authenticated topology, live revocation and atomic rollback are exercised in
+// personnel-learning-rights-hierarchy.test.js.
 
 test("Betriebsmodus kann nicht über eine Browser-API verändert werden", async () => {
   const response = await fetch(`${baseUrl}/api/operation-mode`, {

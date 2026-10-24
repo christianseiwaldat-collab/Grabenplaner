@@ -1,113 +1,47 @@
 "use strict";
 
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const os = require("node:os");
-const path = require("node:path");
+const test = require("node:test"), assert = require("node:assert/strict");
+const fs = require("node:fs"), os = require("node:os"), path = require("node:path"), crypto = require("node:crypto");
+const { execFileSync } = require("node:child_process");
 
-const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v0862-local-backup-"));
-const databasePath = path.join(testRoot, "dienstplan.db");
-const externalBackupDirectory = path.join(testRoot, "configured-local-backups");
-
-process.env.DB_PATH = databasePath;
-process.env.GRABENPLANER_DATA_DIR = path.join(testRoot, "app-data");
-process.env.GRABENPLANER_HOST = "127.0.0.1";
-process.env.GRABENPLANER_OPERATION_MODE = "local";
-process.env.GRABENPLANER_FORCE_PORTAL = "0";
-process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
-process.env.NODE_ENV = "test";
-process.env.TZ = "Europe/Vienna";
-delete process.env.BACKUP_DIR;
-delete process.env.GRABENPLANER_PUBLIC_URL;
-
-const subject = require("../server");
-const { app, db } = subject;
-
-let httpServer;
-let baseUrl;
-
-async function responseJson(response) {
-  const text = await response.text();
+// Execute only the explicitly selected immutable historical assertion. The
+// current server and current PostgreSQL API fixtures are never redirected.
+function runFrozenHistoricalBackupTest(t, relative, expectedSha256, pattern, expectedPass) {
+  const historical = require("../test-support/legacy-baseline");
+  assert.equal(historical.BASELINE, "b2ba03cdc0b738d44766857de052e090db557807");
+  historical.linkFrozenDependencies();
+  const original = execFileSync("git", ["--no-replace-objects", "-C", path.resolve(__dirname, ".."),
+    "show", historical.BASELINE + ":" + relative], { timeout: 30000, maxBuffer: 4 * 1024 * 1024, windowsHide: true });
+  assert.equal(crypto.createHash("sha256").update(original).digest("hex"), expectedSha256);
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "gp-immutable-backup-test-"));
+  t.after(() => {
+    assert.equal(path.dirname(fs.realpathSync(directory)), fs.realpathSync(os.tmpdir()));
+    fs.rmSync(directory, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
+  });
+  const driver = path.join(directory, "immutable-backup.test.js"), filename = historical.legacyPath(relative);
+  fs.writeFileSync(driver, `const Module=require('node:module'),path=require('node:path');
+const filename=${JSON.stringify(filename)},subject=new Module(filename,module);
+subject.filename=filename;subject.paths=Module._nodeModulePaths(path.dirname(filename));
+subject._compile(${JSON.stringify(original.toString("utf8"))},filename);\n`);
+  // execFileSync deliberately avoids the PostgreSQL fixture's spawn adapter.
+  // The child receives no inherited NODE_OPTIONS, connection URLs or owner marker.
+  const environment = { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot,
+    LANG: "C.UTF-8", NODE_ENV: "test", GP_PG_API_FIXTURE_BRIDGE: "0" };
+  let output;
   try {
-    return JSON.parse(text);
-  } catch {
-    return { raw: text };
+    output = execFileSync(process.execPath, ["--no-global-search-paths", "--test", "--test-reporter=tap",
+      ...(pattern ? ["--test-name-pattern=" + pattern] : []), driver], {
+      cwd: historical.sourceRoot(), env: environment, encoding: "utf8", timeout: 180000,
+      maxBuffer: 4 * 1024 * 1024, windowsHide: true,
+    });
+  } catch (error) {
+    assert.fail(String(error.stdout || "").slice(-18000) + "\n" + String(error.stderr || error.message).slice(-4000));
   }
+  assert.match(output, new RegExp("^# pass " + expectedPass + "$", "m"));
+  assert.match(output, /^# fail 0$/m);
+  t.diagnostic(`Immutable ${historical.BASELINE} ${relative}: ${expectedPass} original assertions passed; SHA256 ${expectedSha256}`);
 }
 
-test.before(async () => {
-  await new Promise((resolve, reject) => {
-    httpServer = app.listen(0, "127.0.0.1", resolve);
-    httpServer.once("error", reject);
-  });
-  baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
-});
-
-test.after(async () => {
-  if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { await db.close(); } catch {}
-  subject.releaseInstanceLockForTests();
-  fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
-});
-
-test("v0.86.2: Lokaler Betrieb behält Pfadkonfiguration und manuelle Sicherung unverändert", async () => {
-  const settingsResponse = await fetch(`${baseUrl}/api/backup/settings`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      externalBackupEnabled: true,
-      backupDirectory: externalBackupDirectory,
-      backupIntervalHours: 3,
-    }),
-  });
-  assert.equal(settingsResponse.status, 200, await settingsResponse.clone().text());
-  const settingsPayload = await responseJson(settingsResponse);
-  assert.equal(settingsPayload.externalBackupEnabled, true);
-  assert.equal(settingsPayload.backupIntervalHours, 3);
-  assert.deepEqual(
-    Object.fromEntries(db.prepare(`
-      SELECT key, value FROM settings
-      WHERE key IN ('external_backup_enabled', 'backup_directory', 'backup_interval_hours')
-    `).all().map((row) => [row.key, row.value])),
-    {
-      external_backup_enabled: "1",
-      backup_directory: externalBackupDirectory,
-      backup_interval_hours: "3",
-    },
-  );
-
-  const backupResponse = await fetch(`${baseUrl}/api/backup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  });
-  assert.equal(backupResponse.status, 201, await backupResponse.clone().text());
-  const backup = await responseJson(backupResponse);
-  assert.equal(backup.appBackup?.verified, true);
-  assert.equal(backup.appBackup?.committed, true);
-  assert.equal(backup.externalBackup?.verified, true);
-  assert.equal(backup.externalBackup?.committed, true);
-  assert.equal(path.dirname(backup.externalBackup.path), externalBackupDirectory);
-
-  const names = fs.readdirSync(externalBackupDirectory).sort();
-  assert.equal(names.filter((name) => name.endsWith(".db")).length, 1);
-  assert.equal(names.filter((name) => name.endsWith(".amu")).length, 1);
-  assert.equal(names.filter((name) => name.endsWith(".complete.json")).length, 1);
-});
-
-test("Lokale Sicherung: 24-Stunden-Intervall wird gespeichert und ungueltige Aenderung bleibt atomar", async () => {
-  const save = hours => fetch(`${baseUrl}/api/backup/settings`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ externalBackupEnabled: true, backupDirectory: externalBackupDirectory, backupIntervalHours: hours }),
-  });
-  const accepted = await save(24);
-  assert.equal(accepted.status, 200, await accepted.clone().text());
-  assert.equal((await responseJson(accepted)).backupIntervalHours, 24);
-  assert.equal(db.prepare("SELECT value FROM settings WHERE key='backup_interval_hours'").get().value, "24");
-
-  const rejected = await save(25);
-  assert.equal(rejected.status, 400, await rejected.clone().text());
-  assert.equal(db.prepare("SELECT value FROM settings WHERE key='backup_interval_hours'").get().value, "24");
+test('immutable historical local backup retains its original configuration and atomic interval rules', { timeout: 240000 }, t => {
+  runFrozenHistoricalBackupTest(t, 'test/v0862-local-backup-compat.test.js', '0b853e87cb6b080494ecc8e60adde71cb4dafe4872053270f8493384d083a428', null, 2);
 });

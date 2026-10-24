@@ -32,6 +32,7 @@ function sourceRoot() {
       "test/v082-immutable-trigger-migration.test.js", "test/v087-block5-loan-photo-migration.test.js",
       "test/v087-block8-cost-center-migration.test.js", "test/v087-block7-settings-appearance.test.js", "test/v072-production-bootstrap.test.js",
       "test/v063-import-payroll.test.js", "test/v071-cost-centers-personnel.test.js", "test/v071-shift-locations.test.js",
+      "test/v085-loan-foundation.test.js",
       "test-support/portal-session-fixture.js", "test-support/session-touch-race.js",
       "scripts/run-background-backup.js", "scripts/manage-local-backup-archive.js", "server-tools"]);
     command("tar", ["-xf", archive, "-C", source]);

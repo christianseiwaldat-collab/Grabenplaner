@@ -425,18 +425,18 @@
       "rule": "javascript.lang.security.audit.detect-redos",
       "path": "lib/persistence/postgresql/core/catalog.js",
       "start": {
-        "line": 59,
+        "line": 70,
         "column": 13
       },
       "end": {
-        "line": 59,
+        "line": 70,
         "column": 64
       },
-      "fingerprint": "1c260fc49a8291684879780f31de1fa0ad4a0aca66f221f9243b57428bdcb606",
-      "sourceSha256": "ea9957a05f1b974f446976ec43e4bc69df711fd01a60bbf57549dc5bf7b98cd0",
+      "fingerprint": "d96baa9a6919cca7e97164283793a1156bb3cc30fcd98cd50d838efdc22bb256",
+      "sourceSha256": "1658263696f4ebf0f763313011886bd231022ea6b3aa6e5232b93ebc07d9ee8c",
       "sourceSha256Variants": [
-        "5946aa92dc9a3333679639eec6b71cad113f87d0ac4c341270f5a4d2cfa8d78c",
-        "ea9957a05f1b974f446976ec43e4bc69df711fd01a60bbf57549dc5bf7b98cd0"
+        "1658263696f4ebf0f763313011886bd231022ea6b3aa6e5232b93ebc07d9ee8c",
+        "8520f86f9d6f770421011464b8b734683c510c8e48ca99b4d20b0237a95b1993"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -447,12 +447,36 @@
       "context": [
         {
           "path": "lib/persistence/postgresql/core/catalog.js",
-          "sha256": "ea9957a05f1b974f446976ec43e4bc69df711fd01a60bbf57549dc5bf7b98cd0",
+          "sha256": "1658263696f4ebf0f763313011886bd231022ea6b3aa6e5232b93ebc07d9ee8c",
           "sha256Variants": [
-            "5946aa92dc9a3333679639eec6b71cad113f87d0ac4c341270f5a4d2cfa8d78c",
-            "ea9957a05f1b974f446976ec43e4bc69df711fd01a60bbf57549dc5bf7b98cd0"
+            "1658263696f4ebf0f763313011886bd231022ea6b3aa6e5232b93ebc07d9ee8c",
+            "8520f86f9d6f770421011464b8b734683c510c8e48ca99b4d20b0237a95b1993"
           ],
-          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 47: rejects every unsupported path Continuity 2026-10-20: the exact JSON-path regex and its checked-in source boundary are unchanged. Two reviewed SQLite constructors are flattened to the byte-identical historical PostgreSQL SQL; explicit source and binding hashes reject other inputs."
+          "reason": "Exact reviewed source containing the reported sink and its surrounding function. Lines 47: rejects every unsupported path Continuity 2026-10-20: the exact JSON-path regex and its checked-in source boundary are unchanged. Two reviewed SQLite constructors are flattened to the byte-identical historical PostgreSQL SQL; explicit source and binding hashes reject other inputs. Catalog-only continuity review 2026-10-24: the complete fallbackBindings function and this JSON-path regex are byte-identical; exact current sink is 70:13-70:64. The added helper admits one exact checked-in onboarding source hash and one replacement of its stored result payload, preserving original receipt text; the department cast changes only the one qualified handoff statement to its pre-existing TEXT empty-sentinel contract. Both derived records require source/base SQL, compiled SQL, binding and order pins; the frozen base lock and compiler remain unchanged. This is one existing decision rebound after individual source review; no new scanner finding is accepted and final current-source SAST remains mandatory."
+        },
+        {
+          "path": "lib/persistence/postgresql/contracts/block-4-catalog.json",
+          "sha256": "3b2e1d374883a86f4f371e82dc638ec2c405b88f620c6695853346e44bf52805",
+          "sha256Variants": [
+            "3b2e1d374883a86f4f371e82dc638ec2c405b88f620c6695853346e44bf52805"
+          ],
+          "reason": "Exact unchanged 1125-entry frozen Core base lock used to verify the source/base SQL and schema-plan pins of both bounded new derived records; no frozen lock or DDL modification is approved."
+        },
+        {
+          "path": "lib/persistence/postgresql/contracts/onboarding-receipt-projection-catalog-v1.json",
+          "sha256": "57af8f3408c032cd39ff3e07c92f33c2a9211695fa8649eccab80da737be716a",
+          "sha256Variants": [
+            "57af8f3408c032cd39ff3e07c92f33c2a9211695fa8649eccab80da737be716a"
+          ],
+          "reason": "Exact single-statement derived producer contract for onboarding-operation-by-id: original payload text retained, original source/base SQL fixed, compiled SQL plus mandatory binding/order hashes individually checked. No request SQL or arbitrary JSON path is introduced."
+        },
+        {
+          "path": "lib/persistence/postgresql/contracts/payroll-handoff-department-catalog-v1.json",
+          "sha256": "e507ae2460e47f302699beefb478879788894bed9ea76403c02d02263f247aed",
+          "sha256Variants": [
+            "e507ae2460e47f302699beefb478879788894bed9ea76403c02d02263f247aed"
+          ],
+          "reason": "Exact single-statement derived producer contract for insert-payroll-handoff: departmentId retains its frozen TEXT empty sentinel; original source/base SQL, compiled SQL and mandatory binding/order hashes are individually checked. All other bindings and statements retain their prior contracts."
         }
       ]
     },

@@ -660,7 +660,7 @@ test("Personalimport prüft den expliziten Filialscope beim Apply im Live-Snapsh
   }
 });
 
-test("Learning-Organisationsscope ist im Personalimport vorgeprueft und live gegatet", async () => {
+test("Learning-Organisationsscope ist im Personalimport vorgeprueft und live gegatet", async (t) => {
   const employeeNumber = "99Learn";
   const delegatePermission = "personnel:learning:delegate";
   const assignment = db.prepare(`
@@ -721,6 +721,10 @@ test("Learning-Organisationsscope ist im Personalimport vorgeprueft und live geg
     `Personalnummer;Name;Abteilung-ID\r\n${employeeNumber};Learning Import Bestand;${desiredDepartmentId}\r\n`,
     "utf8",
   );
+  const inspectionIds = [];
+  let latestPreviewId = "";
+  let dropTrigger = null;
+  let primaryFailure = null;
   const previewFor = async (auth, fileName) => {
     const inspected = await request("/api/integrations/personnel-import/inspect", {
       method: "POST",
@@ -730,7 +734,8 @@ test("Learning-Organisationsscope ist im Personalimport vorgeprueft und live geg
       fileName,
     });
     assert.equal(inspected.response.status, 201, JSON.stringify(inspected.payload));
-    return request("/api/integrations/personnel-import/preview", {
+    inspectionIds.push(inspected.payload.inspectionId);
+    const preview = await request("/api/integrations/personnel-import/preview", {
       method: "POST",
       auth,
       body: {
@@ -751,6 +756,8 @@ test("Learning-Organisationsscope ist im Personalimport vorgeprueft und live geg
         duplicateStrategy: "update",
       },
     });
+    if (preview.response.status === 201) latestPreviewId = preview.payload.previewId;
+    return preview;
   };
 
   const hr = session("103", "hr");
@@ -785,34 +792,65 @@ test("Learning-Organisationsscope ist im Personalimport vorgeprueft und live geg
     `).run(targetSessionId, employeeNumber, crypto.createHash("sha256").update(targetSessionId).digest("hex"));
     const auditBefore = db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count;
     const runsBefore = db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count;
-    const dropTrigger = installSessionTouchRaceMutation(hr, `
+    dropTrigger = installSessionTouchRaceMutation(hr, `
       INSERT OR IGNORE INTO portal_permission_denials
         (employee_number, permission, denied_by)
       VALUES ('103', ${sqliteText(delegatePermission)}, 'learning-import-live-race');
     `);
-    try {
-      const deniedApply = await request("/api/integrations/personnel-import/apply", {
-        method: "POST",
-        auth: hr,
-        body: { previewId: livePreview.payload.previewId },
-      });
-      assert.equal(deniedApply.response.status, 403, JSON.stringify(deniedApply.payload));
-      assert.equal(deniedApply.payload.code, "PORTAL_ROLE_HIERARCHY_DENIED");
-      assert.equal(db.prepare(`
-        SELECT preferred_department_id FROM employees WHERE personnel_number = ?
-      `).get(employeeNumber).preferred_department_id, initialDepartmentId);
-      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count, runsBefore);
-      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count, auditBefore);
-      assert.equal(db.prepare("SELECT revoked_at FROM portal_sessions WHERE id = ?")
-        .get(targetSessionId).revoked_at, null);
-    } finally {
-      dropTrigger();
-    }
+    const deniedApply = await request("/api/integrations/personnel-import/apply", {
+      method: "POST",
+      auth: hr,
+      body: { previewId: livePreview.payload.previewId },
+    });
+    assert.equal(deniedApply.response.status, 403, JSON.stringify(deniedApply.payload));
+    assert.equal(deniedApply.payload.code, "PORTAL_ROLE_HIERARCHY_DENIED");
+    assert.equal(db.prepare(`
+      SELECT preferred_department_id FROM employees WHERE personnel_number = ?
+    `).get(employeeNumber).preferred_department_id, initialDepartmentId);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count, runsBefore);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count, auditBefore);
+    assert.equal(db.prepare("SELECT revoked_at FROM portal_sessions WHERE id = ?")
+      .get(targetSessionId).revoked_at, null);
+  } catch (error) {
+    primaryFailure = error;
+    throw error;
   } finally {
-    db.prepare(`
+    const cleanupFailures = [];
+    const cleanup = async (action) => {
+      try { await action(); } catch (error) { cleanupFailures.push(error); }
+    };
+    await cleanup(() => dropTrigger?.());
+    await cleanup(() => db.prepare(`
       DELETE FROM portal_permission_denials
       WHERE employee_number = '103' AND permission = ?
-    `).run(delegatePermission);
+    `).run(delegatePermission));
+    const noMutationState = () => ({
+      departmentId: db.prepare(`
+        SELECT preferred_department_id FROM employees WHERE personnel_number = ?
+      `).get(employeeNumber).preferred_department_id,
+      runs: db.prepare("SELECT COUNT(*) AS count FROM integration_runs").get().count,
+      audits: db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count,
+    });
+    let beforeCleanup;
+    await cleanup(() => { beforeCleanup = noMutationState(); });
+    // The second preview replaces the first one. Close only this test's two
+    // inspections and latest preview through the regular owner-scoped API.
+    for (const sessionId of [...inspectionIds, latestPreviewId].filter(Boolean)) {
+      await cleanup(async () => {
+        const closed = await request(`/api/integrations/personnel-import/sessions/${sessionId}`, {
+          method: "DELETE", auth: hr,
+        });
+        assert.equal(closed.response.status, 204, JSON.stringify(closed.payload));
+      });
+    }
+    if (beforeCleanup) await cleanup(() => assert.deepEqual(noMutationState(), beforeCleanup));
+    if (cleanupFailures.length) {
+      if (primaryFailure) {
+        for (const error of cleanupFailures) t.diagnostic(`Learning import cleanup: ${error.stack || error}`);
+      } else {
+        throw new AggregateError(cleanupFailures, "Learning import fixture cleanup failed");
+      }
+    }
   }
 });
 
@@ -1097,8 +1135,10 @@ test("Personalmodul R1: konkurrierender Unique-Insert macht die Importvorschau k
   installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_import_unique_race
     BEFORE INSERT ON employees
-    WHEN NEW.personnel_number = '${employeeNumber}'
+    WHEN NEW.personnel_number = '${employeeNumber}' AND NEW.full_name = 'Race Beispiel'
     BEGIN
+      -- The inserted competitor must not recursively manufacture another
+      -- competitor: PostgreSQL must reach the real unique constraint.
       INSERT INTO employees (personnel_number, full_name, nickname, active)
       VALUES ('${employeeNumber}', 'Race Konkurrent', 'Race', 1);
     END;
@@ -1305,6 +1345,7 @@ test("v0.63: Personalimport behandelt Groß-/Kleinschreibung als dieselbe Person
   const inspected = await request("/api/integrations/personnel-import/inspect", {
     method: "POST", auth: hr, body: duplicateFile, contentType: "text/csv", fileName: "case.csv",
   });
+  assert.equal(inspected.response.status, 201, JSON.stringify(inspected.payload));
   const preview = await request("/api/integrations/personnel-import/preview", {
     method: "POST", auth: hr, body: {
       inspectionId: inspected.payload.inspectionId,
@@ -1323,6 +1364,7 @@ test("v0.63: Personalimport behandelt Groß-/Kleinschreibung als dieselbe Person
   const headerOnly = await request("/api/integrations/personnel-import/inspect", {
     method: "POST", auth: hr, body: Buffer.from("Personalnummer;Name\r\n", "utf8"), contentType: "text/csv", fileName: "leer.csv",
   });
+  assert.equal(headerOnly.response.status, 201, JSON.stringify(headerOnly.payload));
   const emptyPreview = await request("/api/integrations/personnel-import/preview", {
     method: "POST", auth: hr, body: {
       inspectionId: headerOnly.payload.inspectionId,
@@ -1332,7 +1374,7 @@ test("v0.63: Personalimport behandelt Groß-/Kleinschreibung als dieselbe Person
       defaults: { homeLocationId: locationId, positionId, contractedHours: 38.5, active: true },
     },
   });
-  assert.equal(emptyPreview.response.status, 400);
+  assert.equal(emptyPreview.response.status, 400, JSON.stringify(emptyPreview.payload));
   assert.equal(emptyPreview.payload.code, "IMPORT_DATA_ROWS_REQUIRED");
 });
 

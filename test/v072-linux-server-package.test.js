@@ -205,7 +205,11 @@ test("v0.72 Linux installer restores trusted shell modes after ZIP extraction", 
   assert.match(helper, /find "\$source_root" -type f -exec chmod 0640/);
   assert.doesNotMatch(helper, /-perm \/111/);
   assert.doesNotMatch(helper, /find "\$source_root" -type f -name '\*\.sh'/);
-  assert.match(installer, /validate_manifest\r?\nnormalize_verified_archive_modes "\$STAGE_ROOT\/source"\r?\nresolve_pnpm/);
+  const validated = installer.lastIndexOf("\nvalidate_manifest\n"), normalized = installer.indexOf('\nnormalize_verified_archive_modes "$STAGE_ROOT/source"', validated);
+  const documents = installer.indexOf('root_node "$STAGE_ROOT/source/server-tools/linux/postgresql/preflight-install.js" documents', normalized);
+  const packageManager = installer.indexOf("\nresolve_pnpm\n", documents);
+  assert.ok(validated >= 0 && normalized > validated && documents > normalized && packageManager > documents,
+    "Only verified and normalized sources may run the document preflight before resolving the package manager.");
   assert.match(installer, /NODE_ENV=production "\$\{PNPM_COMMAND\[@\]\}" install[\s\S]+find "\$STAGE_ROOT\/source" -type f -perm \/111 -exec chmod 0750/);
 
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-linux-zip-modes-"));

@@ -1865,6 +1865,9 @@ test("Learning-Scope-Deltas prüfen Akteursrechte und explizite FL-Scopes live e
       auth: manager,
       route: mutations[0].route,
       body: mutations[0].body,
+      // Renewal reloads the actor without the explicit assignments observed
+      // earlier in this request; the target scope check must fail closed.
+      expectedCode: "PORTAL_SCOPE_DENIED",
     });
   } finally {
     dropTrigger();

@@ -1961,9 +1961,14 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
   }
   assert.equal(
     disabledDuringRequest.response.status,
-    403,
+    401,
     JSON.stringify(disabledDuringRequest.payload),
   );
+  // The live session reload filters inactive organization accounts before
+  // route authorization; this denial must not reach the progress mutation.
+  assert.equal(disabledDuringRequest.payload.code, "PORTAL_LOGIN_REQUIRED");
+  assert.equal(Object.hasOwn(disabledDuringRequest.payload, "assignment"), false);
+  assert.equal(progressRevisionCount(), revisionsBeforeSecurityChecks);
 
   db.prepare("UPDATE portal_organization_sessions SET expires_at = ? WHERE account_id = ?")
     .run(new Date(Date.now() + 60000).toISOString(), branchAccountId);
