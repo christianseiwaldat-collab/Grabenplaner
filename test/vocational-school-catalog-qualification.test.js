@@ -13,6 +13,7 @@ const extension = catalogRequire("../contracts/vocational-school-catalog-v1.json
 const authenticationExtension = catalogRequire("../contracts/authentication-catalog-v1.json");
 const sessionSecurityExtension = catalogRequire("../contracts/session-security-catalog-v1.json");
 const onboardingExtension = catalogRequire("../contracts/onboarding-json-catalog-v1.json");
+const asciiExtension = catalogRequire("../contracts/ascii-nocase-catalog-v1.json");
 const SESSION_IDS = sessionSecurityExtension.entries.filter(entry=>!entry.added).map(entry=>entry.statementId);
 const AUTHENTICATION_IDS = Object.freeze([
   "portal-access.employee-login.failure", "portal-access.organization-login.failure",
@@ -57,13 +58,16 @@ test("frozen source schema, inventory and Block 4 catalog retain their independe
   assert.equal(catalogRequire("./schema").createSchemaPlan().digest, "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e");
 });
 
-test("reviewed school, authentication, session and onboarding statements extend the baseline; all other contracts remain identical", () => {
+test("reviewed school, authentication, session, onboarding and ASCII comparisons extend the baseline; all other contracts remain identical", () => {
   const reviewed = new Map(extension.entries.map(entry => [entry.statementId, entry]));
   const authenticationReviewed = new Map(authenticationExtension.entries.map(entry => [entry.statementId, entry]));
   const sessionReviewed = new Map(sessionSecurityExtension.entries.map(entry=>[entry.statementId,entry]));
   const onboardingReviewed = new Map(onboardingExtension.entries.map(entry=>[entry.statementId,entry]));
-  const changedSqlIds = [...SCHOOL_IDS, ...AUTHENTICATION_IDS, ...SESSION_IDS].sort();
-  const extensionIds = [...changedSqlIds, ...onboardingReviewed.keys()].sort();
+  const sourceSqlChangedIds = [...SCHOOL_IDS, ...AUTHENTICATION_IDS, ...SESSION_IDS].sort();
+  const extensionIds = [...sourceSqlChangedIds, ...onboardingReviewed.keys()].sort();
+  const asciiReviewed = new Map(asciiExtension.entries.map(entry => [entry.statementId, entry]));
+  const changedSqlIds = [...new Set([...sourceSqlChangedIds, ...asciiReviewed.keys()])].sort();
+  const compiledExtensionIds = new Set([...extensionIds, ...asciiReviewed.keys()]);
   assert.deepEqual([...reviewed.keys()].sort(), [...SCHOOL_IDS].sort());
   assert.equal(extension.entries.length, 5);
   assert.equal(extension.baseCatalog, "block-4-catalog.json");
@@ -79,14 +83,18 @@ test("reviewed school, authentication, session and onboarding statements extend 
   const changedCompiledIds = [];
   let preserved = 0;
   for (const provenance of qualified.provenance) {
-    const old = originalCompiled.get(provenance.statementId), current = sessionReviewed.get(provenance.statementId) || reviewed.get(provenance.statementId) || authenticationReviewed.get(provenance.statementId) || onboardingReviewed.get(provenance.statementId);
+    const old = originalCompiled.get(provenance.statementId), current = asciiReviewed.get(provenance.statementId) || sessionReviewed.get(provenance.statementId) || reviewed.get(provenance.statementId) || authenticationReviewed.get(provenance.statementId) || onboardingReviewed.get(provenance.statementId);
     assert.ok(old, provenance.statementId);
     if (current) {
       assert.equal(current.baseSourceContract, old.sourceContract);
       assert.equal(current.baseSqlSha256, old.sqlSha256);
       assert.equal(current.sourceContract, provenance.sourceContract);
       assert.equal(current.sqlSha256, provenance.sqlSha256);
-      assert.notEqual(provenance.sourceContract, old.sourceContract);
+      if (asciiReviewed.has(provenance.statementId) && !extensionIds.includes(provenance.statementId)) {
+        assert.equal(provenance.sourceContract, old.sourceContract, "comparison qualification preserves original source");
+      } else {
+        assert.notEqual(provenance.sourceContract, old.sourceContract);
+      }
       if (onboardingReviewed.has(provenance.statementId)) {
         // SQLite's bounded constructor preserves the exact historical PostgreSQL SQL.
         assert.equal(provenance.sqlSha256, old.sqlSha256);
@@ -100,7 +108,7 @@ test("reviewed school, authentication, session and onboarding statements extend 
       preserved++;
     }
   }
-  assert.equal(preserved, 1125 - extensionIds.length);
+  assert.equal(preserved, 1125 - compiledExtensionIds.size);
   assert.deepEqual(changedCompiledIds.sort(), changedSqlIds);
 });
 

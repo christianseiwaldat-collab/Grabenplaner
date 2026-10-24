@@ -28,6 +28,7 @@ async function main(){
  if(diagnosticGroup){
   env.GP_PG_API_DIAGNOSTIC='bounded-errors-v1';
   env.NODE_OPTIONS=(env.NODE_OPTIONS||'')+' --require='+JSON.stringify(path.resolve(__dirname,'../postgresql-api/diagnostic-errors.js'));
+  env.NODE_OPTIONS+=' --require='+JSON.stringify(path.resolve(__dirname,'../postgresql-api/diagnostic-shutdown.js'));
  }
  try {
   if(local&&(await client.query('SELECT system_identifier::text AS id FROM pg_control_system()')).rows[0].id!==marker.clusterId)throw new Error('Local fixture cluster identity changed');

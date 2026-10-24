@@ -7,6 +7,7 @@ const lock=require('../test-support/postgresql-migration-doc-fixtures/block-4-ca
 const reviewedExtensions=[
   'vocational-school-catalog-v1.json','authentication-catalog-v1.json',
   'session-security-catalog-v1.json','onboarding-json-catalog-v1.json',
+  'ascii-nocase-catalog-v1.json',
 ].flatMap(name=>require('../lib/persistence/postgresql/contracts/'+name).entries);
 const coreTables=new Set(require('../test-support/postgresql-migration-doc-fixtures/block-1-inventory.json').tables.filter(t=>t.database==='core').map(t=>t.name));
 test('Live entire Core read catalog executes with bound synthetic inputs and compares SQLite results',{skip:!process.env.GP_PG_MIGRATION_LIVE},async()=>withCoreFixture(async f=>{

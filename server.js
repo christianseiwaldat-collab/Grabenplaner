@@ -3472,7 +3472,7 @@ function initializeApplicationPersistence({ onProgress } = {}) {
       startupProgress('application-data');
       {
         await applicationPersistence.ready;
-        await postgresqlStartupOperations.seedDefaults({defaultSettings,builtinPortalRoles});
+        await postgresqlStartupOperations.seedDefaults({defaultSettings,defaultPortalSettings,builtinPortalRoles});
         await postgresqlStartupOperations.ensureDefaultLocation();
         await migrateProtectedPersonnelRecords();
         await migrateProtectedVacationHistoryRecords();

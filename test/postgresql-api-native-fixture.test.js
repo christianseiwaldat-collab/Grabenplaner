@@ -80,6 +80,16 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
     assert.equal(database.prepare("SELECT key FROM settings WHERE key='synthetic-trigger-failure'").get(), undefined);
     assert.equal(attemptCounter.count(), 1, "native attempt proof must survive the failed transaction");
     removeFailure(); attemptCounter.close();
+    const removeUniqueRace = installFixtureTrigger(database, `CREATE TRIGGER test_native_unique_race
+      BEFORE INSERT ON settings
+      WHEN NEW.key='synthetic-unique-race' AND pg_trigger_depth()=1
+      BEGIN INSERT INTO settings(key,value) VALUES(NEW.key,NEW.value); END`);
+    try {
+      assert.throws(() => database.prepare("INSERT INTO settings(key,value) VALUES('synthetic-unique-race','value')").run(),
+        error => error.code === "23505", "one nested insert must produce the intended unique conflict, never recursive stack exhaustion");
+      assert.equal(database.prepare("SELECT key FROM settings WHERE key='synthetic-unique-race'").get(), undefined,
+        "the nested competing insert must roll back with the failed statement");
+    } finally { removeUniqueRace(); }
     database.prepare("INSERT INTO settings(key,value) VALUES('synthetic-trigger-failure','value')").run();
     assert.equal(database.prepare("DELETE FROM settings WHERE key='synthetic-trigger-failure'").run().changes, 1);
     const removeSalesFailure = installFixtureTrigger(database, `CREATE TRIGGER test_native_sales_failure
@@ -95,7 +105,9 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
       const name = "test_native_outbox_failure_" + index;
       const remove = installSalesOutboxFailure(database, { name, ...failure });
       try {
-        assert.ok(schema.triggerByName(database, name, { domain: "sales" }).definition.includes("integration.core_audit_outbox"));
+        const actualTrigger = schema.triggerByName(database, name, { domain: "sales" });
+        assert.equal(actualTrigger.schema, "integration");
+        assert.equal(actualTrigger.table, "core_audit_outbox");
         const before = database.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_outbox")[0].count;
         const insert = (action, detail) => database.postgresqlFixtureWrite("sales",
           "INSERT INTO integration.core_audit_outbox(actor,action,entity_type,entity_id,detail,created_at) VALUES(?,?,?,?,?,?)",
@@ -112,6 +124,12 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
         if (failure.receiptActionType) assert.equal(insert("database-boundary.personal-action-v1", { actionType: "synthetic.other-receipt" }).changes, 1);
       } finally { remove(); }
       assert.equal(schema.triggerByName(database, name, { domain: "sales" }), undefined);
+      // Positive controls deliberately use synthetic event payloads. Remove
+      // only these owned controls before the actual application starts its
+      // real ordered outbox delivery later in this test.
+      assert.equal(database.postgresqlFixtureWrite("sales",
+        "DELETE FROM integration.core_audit_outbox WHERE actor=? AND entity_id=?",
+        ["synthetic-native", "native-outbox"]).changes, failure.receiptActionType ? 2 : 1);
     }
     assert.throws(() => installSalesOutboxFailure(database, { name: "test_native_outbox_unknown", action: "arbitrary-action" }));
     assert.equal(schema.triggerByName(database, "test_native_outbox_unknown", { domain: "sales" }), undefined);

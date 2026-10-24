@@ -94,6 +94,11 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/vocational-school-catalog-qualification.test.js',
   // Four reviewed authentication statements; historical locks and driver gates stay fixed.
   'lib/persistence/postgresql/contracts/authentication-catalog-v1.json',
+  'lib/persistence/postgresql/contracts/ascii-nocase-catalog-v1.json',
+  'lib/persistence/postgresql/core/ascii-nocase-comparisons.js',
+  'test/postgresql-ascii-nocase-comparisons.test.js',
+  'test/ascii-nocase-catalog-qualification.test.js',
+  'test/postgresql-ascii-nocase-parity.test.js',
   'test/authentication-catalog-qualification.test.js',
   // Two bounded SQLite projections retain the exact historical PostgreSQL SQL.
   'lib/persistence/postgresql/contracts/onboarding-json-catalog-v1.json',
@@ -773,6 +778,7 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/portal-foundation-legacy-migration.test.js",
   "test/planning-assistant-preferences-api.test.js",
   "test-support/postgresql-api/ownership.js",
+  "test-support/postgresql-api/diagnostic-shutdown.js",
   "test/postgresql-api-native-fixture.test.js",
   "test/root-postgresql-dependency-trust.test.js",
   "test/postgresql-startup-category-defaults.test.js",

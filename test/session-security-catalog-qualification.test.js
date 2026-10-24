@@ -7,6 +7,7 @@ const localRequire = createRequire(file), core = localRequire("./catalog");
 const { SQLITE_APPLICATION_CATALOG: sources } = localRequire("../../catalogs/application-catalog");
 const receipt = localRequire("../contracts/session-security-catalog-v1.json");
 const baseline = localRequire("../contracts/block-4-catalog.json");
+const casefold = localRequire("../contracts/ascii-nocase-catalog-v1.json");
 const sha = value => createHash("sha256").update(value).digest("hex");
 const qualified = core.createCoreCatalog();
 const compiled = qualified.entries.map((providerEntry, i) => ({ providerEntry, provenance: qualified.provenance[i] }));
@@ -29,7 +30,13 @@ test("session SQL qualifies exactly 25 historical overrides and four additions w
     const source = sources.find(e => e.statement.id === record.statementId), current = core.compileCoreEntry(source);
     assert.equal(record.sourceSqlSha256, sha(source.sql));
     assert.equal(record.sourceContract, current.provenance.sourceContract);
-    assert.equal(record.sqlSha256, sha(current.providerEntry.sql));
+    const next = casefold.entries.find(entry => entry.statementId === record.statementId);
+    if (next) {
+      assert.equal(next.previousSourceContract, record.sourceContract);
+      assert.equal(next.previousSqlSha256, record.sqlSha256);
+      assert.equal(next.sourceContract, record.sourceContract);
+    }
+    assert.equal(next ? next.sqlSha256 : record.sqlSha256, sha(current.providerEntry.sql));
     assert.equal(record.parameterBindingsSha256, sha(JSON.stringify(current.providerEntry.parameterBindings)));
     assert.equal(record.parameterOrderSha256, sha(JSON.stringify(current.providerEntry.parameterOrder)));
     if (!record.added) { const old = baseline.entries.find(e => e.statementId === record.statementId);

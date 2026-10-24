@@ -32,8 +32,13 @@ test("real PostgreSQL startup initializes the policy once, preserves existing ch
       const read = () => database.prepare("SELECT " + columns + " FROM portal_birthday_presentation_policy ORDER BY singleton_id").all();
       assert.deepEqual(await read(), []);
       const startup = createPostgresqlStartupOperations(database, {});
-      const seed = () => startup.seedDefaults({ defaultSettings: {}, builtinPortalRoles: [] });
+      const seed = () => startup.seedDefaults({ defaultSettings: {},
+        defaultPortalSettings: { trust_levels_enabled: "1", wifi_minimum_presence_minutes: "5" }, builtinPortalRoles: [] });
       await seed();
+      const portalRows = () => database.prepare("SELECT key,value FROM portal_settings ORDER BY key").all();
+      assert.deepEqual(await portalRows(), [{ key: "trust_levels_enabled", value: "1" }, { key: "wifi_minimum_presence_minutes", value: "5" }]);
+      assert.equal((await database.prepare("UPDATE portal_settings SET value='0' WHERE key='trust_levels_enabled'").run()).changes, 1);
+      const customizedPortal = await portalRows();
       const rows = await read();
       assert.equal(rows.length, 1);
       assert.deepEqual({ singleton_id: rows[0].singleton_id, enabled: rows[0].enabled, revision: rows[0].revision }, expected);
@@ -45,6 +50,7 @@ test("real PostgreSQL startup initializes the policy once, preserves existing ch
       const customized = await read();
       await seed(); await seed();
       assert.deepEqual(await read(), customized, "startup must retain an existing enabled policy and its revision");
+      assert.deepEqual(await portalRows(), customizedPortal, "startup must preserve an explicitly changed portal setting");
       await assert.rejects(database.prepare(`UPDATE portal_birthday_presentation_policy
         SET enabled=2,revision=revision+1 WHERE singleton_id=1`).run(), error => error.code === "23514");
       await assert.rejects(database.prepare(`INSERT INTO portal_birthday_presentation_policy

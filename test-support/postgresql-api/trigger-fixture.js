@@ -75,8 +75,7 @@ function installSalesOutboxFailure(db, { name, action, receiptActionType } = {})
   assert.ok(receiptActionType === undefined ? auditActions.has(action)
     : action === undefined && receiptActionType === "sales.article-catalog.create");
   assert.equal(metadata.triggerByName(db, name, { domain: "sales" }), undefined);
-  assert.equal(db.postgresqlCatalogQuery("sales", "SELECT to_regclass('integration.core_audit_outbox') AS relation")[0].relation,
-    "integration.core_audit_outbox");
+  assert.equal(db.postgresqlCatalogQuery("sales", "SELECT to_regclass('integration.core_audit_outbox') IS NOT NULL AS present")[0].present, true);
   const functionName = "trigger_" + require("node:crypto").createHash("sha256").update(name).digest("hex").slice(0, 20);
   const condition = receiptActionType === undefined ? "NEW.action = '" + action + "'"
     : "NEW.action = 'database-boundary.personal-action-v1' AND NEW.detail::jsonb ->> 'actionType' = '" + receiptActionType + "'";

@@ -79,6 +79,8 @@ test("v0.57: Codespaces nutzt die Sporthandel-Demo und vertraut nur dem gleichur
     GRABENPLANER_HOST: "127.0.0.1",
     GRABENPLANER_AMU_KEY_ID: "codespaces-demo-test-v1",
     GRABENPLANER_AMU_KEY: Buffer.alloc(32, 11).toString("base64"),
+    GRABENPLANER_INTEGRATION_KEY_ID: "codespaces-demo-integration-test-v1",
+    GRABENPLANER_INTEGRATION_KEY: Buffer.alloc(32, 41).toString("base64"),
     GRABENPLANER_WIFI_WEBHOOK_SECRET: "codespaces-demo-wifi-secret-0123456789abcdef",
     GRABENPLANER_SERVICE_CONTROL_TOKEN: "codespaces-demo-control-token-0123456789abcdef",
     GRABENPLANER_TEST_AMU_SCANNER: "clean",
@@ -188,7 +190,11 @@ test("v0.57: Codespaces nutzt die Sporthandel-Demo und vertraut nur dem gleichur
       headers: { ...forwardedHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf },
       body: "{}",
     });
-    assert.equal(stopped.status, 200, stopped.body);
+    // Current PostgreSQL lifecycle commands require native server control.
+    // This synthetic child has no privileged control socket and must refuse.
+    assert.equal(stopped.status, 503, stopped.body);
+    assert.equal(JSON.parse(stopped.body).code, "INTERNAL_ERROR");
+    server.kill("SIGTERM");
     assert.equal(await waitForExit(server), 0, serverError);
   } finally {
     if (server.exitCode === null) server.kill();

@@ -3,6 +3,7 @@
 // Test seed/assertion SQL only. Application requests continue through the real,
 // catalog-bound PostgreSQL provider. Unknown cross-database seed joins fail.
 const S = require("../../lib/persistence/postgresql/core/sql");
+const { normalizeAsciiNoCaseComparisons } = require("../../lib/persistence/postgresql/core/ascii-nocase-comparisons");
 const layout = require("../../lib/persistence/postgresql/sales/layout");
 const inventory = require("../../lib/persistence/postgresql/contracts/block-1-inventory.json");
 const sales = new Set(inventory.tables.filter(t => t.database === "sales").map(t => t.name));
@@ -53,7 +54,7 @@ function translate(sql, values = [], { postgresqlDomain } = {}) {
     if (tokens[i].toUpperCase() === "TRUE") tokens[i] = "1";
     else if (tokens[i].toUpperCase() === "FALSE") tokens[i] = "0";
   }
-  let rendered = S.insertIgnore(S.text(tokens).replace(/;\s*$/, ""))
+  let rendered = S.insertIgnore(normalizeAsciiNoCaseComparisons(S.text(tokens).replace(/;\s*$/, "")))
     .replace(/\bBEGIN\s+(?:IMMEDIATE|EXCLUSIVE)\b/gi, "BEGIN")
     .replace(/\bCOLLATE\s+NOCASE\b/gi, "")
     .replace(/\bAUTOINCREMENT\b/gi, "")

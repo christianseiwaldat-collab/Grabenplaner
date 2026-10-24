@@ -5,6 +5,7 @@
 require("./guard").assertSyntheticEnvironment();
 if (process.env.GP_PG_API_DIAGNOSTIC !== "bounded-errors-v1") throw new Error("PG_API_DIAGNOSTIC_NOT_ENABLED");
 const { createHash } = require("node:crypto");
+const path = require("node:path");
 const { Client } = require("pg");
 const query = Client.prototype.query;
 const emitted = new Set();
@@ -33,3 +34,61 @@ Client.prototype.query = function(...args) {
   if (result && typeof result.then === "function") result.then(undefined, error => report(error, input));
   return result;
 };
+
+// The persistence facade deliberately hides unknown adapter messages. Keep
+// that production behavior and record only a hash and reviewed code locations
+// in this explicitly guarded diagnostic process, before normalization.
+const errors = require("../../lib/persistence/errors");
+const normalize = errors.normalizePersistenceError;
+const repository = path.resolve(__dirname, "../..");
+const knownMessages = new Map([
+  ["Core development schema contract mismatch", "CORE_SCHEMA_CONTRACT_MISMATCH"],
+  ["Core boundary migration required", "CORE_BOUNDARY_MIGRATION_REQUIRED"],
+  ["Isolated environment verification failed", "PG_ENVIRONMENT_MISMATCH"],
+]);
+const knownFrames = new Set([
+  "server.js", "lib/persistence/contract.js", "lib/persistence/postgresql/provider.js",
+  "lib/persistence/postgresql/boundary/migrate.js", "lib/persistence/postgresql/core/application.js",
+  "lib/persistence/postgresql/boundary/application.js", "lib/persistence/postgresql/application.js",
+  "lib/persistence/postgresql/read-scope.js", "lib/persistence/postgresql/application-operations/access.js",
+  "lib/persistence/postgresql/boundary/transaction-activity.js",
+  "lib/persistence/repositories/organization-personnel.js", "lib/persistence/repositories/portal-access.js",
+  "lib/persistence/repositories/personnel-lifecycle.js", "lib/persistence/postgresql/core/catalog.js",
+  "lib/persistence/postgresql/sales/catalog.js",
+]);
+function reportAdapter(error) {
+  try {
+    if (error && !errors.isPersistenceError(error) && emitted.size < 96) {
+      const frames = [];
+      for (const line of String(error.stack || "").split("\n")) {
+        if (!/^\s+at /.test(line)) continue;
+        const match = /\(?((?:[A-Za-z]:[\\/]|\/)[^()]+):([0-9]+):([0-9]+)\)?$/.exec(line);
+        if (!match) continue;
+        const file = path.relative(repository, path.resolve(match[1])).replaceAll("\\", "/");
+        if (!knownFrames.has(file)) continue;
+        frames.push({ file, line: Number(match[2]), column: Number(match[3]) });
+        if (frames.length === 8) break;
+      }
+      const row = { diagnosticOnly: true,
+        messageKey: knownMessages.get(error.message) || null,
+        messageSha256: createHash("sha256").update(String(error.message || "").slice(0, 16384)).digest("hex"),
+        frames };
+      const record = JSON.stringify(row);
+      if (!emitted.has(record)) { emitted.add(record); process.stderr.write("PG_ADAPTER_DIAGNOSTIC " + record + "\n"); }
+    }
+  } catch { /* An observer must never change an original failure. */ }
+}
+errors.normalizePersistenceError = function(error, options) {
+  reportAdapter(error);
+  return normalize.call(this, error, options);
+};
+const OriginalPersistenceError = errors.PersistenceError;
+const ObservedPersistenceError = new Proxy(OriginalPersistenceError, {
+  construct(target, args, newTarget) {
+    try { reportAdapter(args[1]?.cause); } catch { /* Preserve constructor behavior. */ }
+    return Reflect.construct(target, args, newTarget === ObservedPersistenceError ? target : newTarget);
+  },
+});
+// Instances retain the actual original class/prototype and sanitized cause.
+// Only this guarded process receives the distinct observing constructor proxy.
+errors.PersistenceError = ObservedPersistenceError;

@@ -89,6 +89,8 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     GRABENPLANER_DATA_DIR: path.join(childRoot, "server-data"),
     GRABENPLANER_AMU_KEY_ID: "test-v1",
     GRABENPLANER_AMU_KEY: Buffer.alloc(32, 7).toString("base64"),
+    GRABENPLANER_INTEGRATION_KEY_ID: "synthetic-https-integration-v1",
+    GRABENPLANER_INTEGRATION_KEY: Buffer.alloc(32, 11).toString("base64"),
     NODE_ENV: "test",
     GRABENPLANER_TEST_AMU_SCANNER: "clean",
     GRABENPLANER_SERVICE_CONTROL_TOKEN: serviceControlToken,

@@ -1237,7 +1237,7 @@ test("Personalmodul R1: konkurrierender AccessProfile-Scope endet kontrolliert u
   installFixtureTrigger(db, `
     CREATE TRIGGER test_access_profile_scope_unique_race
     BEFORE INSERT ON portal_access_scopes
-    WHEN NEW.employee_number = '${employeeNumber}'
+    WHEN NEW.employee_number = '${employeeNumber}' AND pg_trigger_depth() = 1
     BEGIN
       INSERT INTO portal_access_scopes (
         employee_number, location_id, department_id, assigned_by
@@ -1550,8 +1550,8 @@ test("v0.70 Block 2: Personalakt-Oberfläche trennt Kontakt, sensible Daten und 
 
 test("PostgreSQL personnel verification rejects plaintext without mutation and accepts valid protected records idempotently", async () => {
   const reportId = Number(db.prepare(`INSERT INTO amu_reports
-    (employee_number,location_id,incapacity_from,employee_note,status,protected_payload)
-    VALUES('102',?,'2027-09-01','Synthetic plaintext','reviewed','')`).run(locationId).lastInsertRowid);
+    (employee_number,location_id,incapacity_from,incapacity_to,employee_note,status,protected_payload)
+    VALUES('102',?,'2027-09-01','','Synthetic plaintext','reviewed','')`).run(locationId).lastInsertRowid);
   const plaintext = db.prepare("SELECT * FROM amu_reports WHERE id=?").get(reportId);
   await assert.rejects(() => migrateProtectedPersonnelRecords(), /PG_APPLICATION_PROTECTED_RECORD_INVALID/);
   assert.deepEqual(db.prepare("SELECT * FROM amu_reports WHERE id=?").get(reportId), plaintext);
