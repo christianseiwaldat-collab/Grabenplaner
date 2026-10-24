@@ -5,8 +5,8 @@ const { spawnSync } = require("node:child_process");
 const { BASELINE, legacyPath, sourceRoot, linkFrozenDependencies } = require("./legacy-baseline");
 const cases = Object.freeze({
   "test/portal-foundation.test.js": {
-    pattern: "^(?:HTTPS-Serverfundament erzwingt Proxy-Sicherheit|LAN-Bereichsrechte trennen Filial- und Abteilungsdaten)",
-    minimumPass: 2,
+    pattern: "^(?:HTTPS-Serverfundament erzwingt Proxy-Sicherheit|LAN-Bereichsrechte trennen Filial- und Abteilungsdaten|produktiver Start bleibt auf Loopback und blockiert externe Bindung)",
+    minimumPass: 3,
   },
   "test/v058-personnel-rights-encryption.test.js": {
     pattern: "^(?:v0\\.58: bestehende Klartext-Personalaktfelder|v0\\.58: Admin darf keine Datenbank|v0\\.87: unlesbarer DB-Import|v0\\.58: DB-Import|v0\\.70 Block 2: DB-Import|Personalmodul: DB-Import)",

@@ -4802,12 +4802,25 @@ function parseCrmPhotoMultipart(request, { maxFileBytes = MAX_CANDIDATE_PHOTO_IN
   });
 }
 
-function sessionPortalAccessScopeProjection(row = {}) {
+const portalScopeAssignmentsByRequest = new WeakMap();
+function observedPortalScopeAssignments(request, row = {}) {
+  const assigned = Number(row.access_scope_assignment_count || 0) > 0;
+  if (!request || typeof request !== "object") return assigned;
+  const principal = JSON.stringify([row.id, row.employee_number]);
+  let observed = portalScopeAssignmentsByRequest.get(request);
+  if (assigned) {
+    if (!observed) portalScopeAssignmentsByRequest.set(request, observed = new Set());
+    observed.add(principal);
+  }
+  return assigned || observed?.has(principal) === true;
+}
+
+function sessionPortalAccessScopeProjection(row = {}, { hasObservedAssignments = false } = {}) {
   const explicitScopes = portalAccessScopesForPrincipal({
     role: "employee",
     scopesValue: row.access_scopes,
   });
-  if (Number(row.access_scope_assignment_count || 0) > 0) {
+  if (Number(row.access_scope_assignment_count || 0) > 0 || hasObservedAssignments) {
     return {
       explicitScopes,
       scopes: portalAccessScopesForPrincipal({
@@ -4849,7 +4862,13 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
   });
   if (session) {
     if (isReservedEmployeePrincipal(session.employee_number) || !isSessionTimeValid(session, currentDate)) return null;
-    const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(session);
+    // A request that observed explicit assignments must not gain legacy home
+    // scopes if its renewal or later authority read observes their removal.
+    // Genuine legacy accounts retain their fallback in an independent request.
+    const scopeAssignmentsObserved = observedPortalScopeAssignments(request, session);
+    const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(session, {
+      hasObservedAssignments: scopeAssignmentsObserved,
+    });
     const permissionState = effectivePortalPermissionState(
       session.employee_number,
       session.role,
@@ -4903,6 +4922,7 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
       grantedPermissions: permissionState.grantedPermissions,
       deniedPermissions: permissionState.deniedPermissions,
       explicitScopes,
+      scopeAssignmentsObserved,
       permissionScopes: parsePortalPermissionScopes(session.permission_scopes),
       scopes,
       timeConfirmationLevel: normalizeTimeConfirmationLevel(session.time_confirmation_level),
@@ -10127,8 +10147,8 @@ async function livePersonnelLearningRoleAdministrationActor(
       locationId: scope.locationId,
       departmentId: scope.departmentId,
     }));
-  const requestHadExplicitScopes = Array.isArray(actor.explicitScopes)
-    && actor.explicitScopes.length > 0;
+  const requestHadExplicitScopes = actor.scopeAssignmentsObserved === true
+    || (Array.isArray(actor.explicitScopes) && actor.explicitScopes.length > 0);
   const fallbackScopes = portalAccessScopesForPrincipal({
     role: user.role,
     homeLocationId: user.homeLocationId,
@@ -65408,7 +65428,7 @@ app.use(async (error, request, response, _next) => {
   }
   const status = Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 500;
   const requestId = request.grabenplanerRequestId || crypto.randomUUID();
-  if (status >= 500) console.error(`[${requestId}] ${request.method} ${request.path}`, error);
+  if (status >= 500) console.error("[%s] %s %s", requestId, request.method, request.path, error);
   if (response.headersSent) {
     _next(error);
     return;

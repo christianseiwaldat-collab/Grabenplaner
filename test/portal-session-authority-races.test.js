@@ -22,12 +22,16 @@ class FixedDate extends Date {
   static now() { return instant; }
 }
 
-function loader(kind, { activity = true, coalesced = false, route = "/api/synthetic", afterWrite } = {}) {
+function loader(kind, { activity = true, coalesced = false, route = "/api/synthetic", afterWrite,
+  assignedScopes = false, removeScopesAtRenewal = false } = {}) {
   let state = "active", reads = 0, writes = 0;
   let row = { id: "synthetic-session", employee_number: "synthetic-person", role: "hr", permissions: ["users:write"],
     expires_at: new Date(instant + (coalesced ? 30 : 1) * 60000).toISOString(),
     authenticated_at: new Date(instant - 10 * 60000).toISOString(), absolute_expires_at: new Date(instant + 3600000).toISOString(),
-    last_seen_at: new Date(instant - 60000).toISOString(), personnel_field_permissions: {}, access_scopes: [],
+    last_seen_at: new Date(instant - 60000).toISOString(), personnel_field_permissions: {},
+    access_scope_assignment_count: assignedScopes ? 1 : 0,
+    access_scopes: assignedScopes ? [{ locationId: "18", departmentId: null }] : [],
+    home_location_id: "18", home_location_active: true,
     account_id: "synthetic-account", login_name: "Synthetic", account_type: "branch", display_name: "Synthetic account" };
   const read = async requested => {
     if (requested !== kind) return null;
@@ -37,6 +41,7 @@ function loader(kind, { activity = true, coalesced = false, route = "/api/synthe
   const write = async () => {
     writes++;
     row = { ...row, expires_at: new Date(instant + 30 * 60000).toISOString(), permissions: [] };
+    if (removeScopesAtRenewal) row = { ...row, access_scope_assignment_count: 0, access_scopes: [] };
     state = afterWrite || "active";
     return { rowsAffected: 1 };
   };
@@ -46,20 +51,80 @@ function loader(kind, { activity = true, coalesced = false, route = "/api/synthe
     parseCookies: () => ({ token: "synthetic-token" }), PORTAL_SESSION_COOKIE: "token", sha256: value => value,
     portalSessionTimeoutMinutes: () => 30, viennaTodayIso: () => "2026-10-24", isReservedEmployeePrincipal: () => false,
     isSessionTimeValid: value => Date.parse(value.expires_at) > instant && Date.parse(value.absolute_expires_at) > instant,
-    sessionPortalAccessScopeProjection: () => ({ explicitScopes: [], scopes: [] }),
+    portalScopeAssignmentsByRequest: new WeakMap(),
     effectivePortalPermissionState: (_number, _role, permissions) => ({ effectivePermissions: permissions, rolePermissions: permissions,
       grantedPermissions: [], deniedPermissions: [] }),
     browserSessionLifetime: () => ({ expiresAt: new Date(instant + 30 * 60000).toISOString(), idleMinutes: 30,
       authenticatedAt: row.authenticated_at, absoluteExpiresAt: row.absolute_expires_at, privileged: false }),
     sessionInstant: Date.parse, renewPortalSession: createPortalSessionRenewal(), normalizeTimeConfirmationLevel: value => value,
     normalizedManagerAmuAccessMode: () => "inherit", parsePersonnelFieldPermissionProjection: value => value,
-    parsePortalPermissionScopes: () => [], portalAccessScopesForPrincipal: () => [],
+    parsePortalPermissionScopes: () => [],
+    GLOBAL_SCOPE_PORTAL_ROLES: new Set(["developer", "admin", "hr"]),
     normalizedOrganizationAccountPermissions: (_type, permissions) => permissions, parsePortalPermissions: value => value,
     organizationAccountRoleName: () => "Synthetic organization", Object });
-  vm.runInContext(actualFunction("loadPortalSessionFromRequest"), context);
+  vm.runInContext(["observedPortalScopeAssignments", "sessionPortalAccessScopeProjection",
+    "portalAccessScopesForPrincipal", "loadPortalSessionFromRequest"].map(actualFunction).join("\n"), context);
   const request = { headers: activity ? { "x-gp-user-activity": "1" } : {}, originalUrl: route };
-  return { run: options => context.loadPortalSessionFromRequest(request, options), counts: () => ({ reads, writes }) };
+  return { run: options => context.loadPortalSessionFromRequest(request, options), counts: () => ({ reads, writes }),
+    replaceRow: update => { row = { ...row, ...update }; },
+    anotherRequest: () => context.loadPortalSessionFromRequest({ headers: {} }, { touch: false }) };
 }
+
+test("the actual employee loader retains request scope provenance across renewal and later reads", async () => {
+  const fixture = loader("employee", { assignedScopes: true, removeScopesAtRenewal: true });
+  fixture.replaceRow({ role: "manager" });
+  const renewed = await fixture.run();
+  assert.equal(renewed.scopeAssignmentsObserved, true);
+  assert.deepEqual(Array.from(renewed.scopes), []);
+  assert.deepEqual(Array.from(renewed.explicitScopes), []);
+  assert.deepEqual(fixture.counts(), { reads: 2, writes: 1 });
+  const later = await fixture.run({ touch: false });
+  assert.equal(later.scopeAssignmentsObserved, true);
+  assert.deepEqual(Array.from(later.scopes), []);
+  const legacy = await fixture.anotherRequest();
+  assert.equal(legacy.scopeAssignmentsObserved, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(legacy.scopes)), [{ locationId: "18", departmentId: null }],
+    "the existing legacy-account contract is confined to an independent request");
+});
+
+test("a scope removal on a later authority read cannot broaden an already observed request", async () => {
+  const fixture = loader("employee", { activity: false, assignedScopes: true });
+  fixture.replaceRow({ role: "manager" });
+  assert.equal((await fixture.run()).scopes.length, 1);
+  fixture.replaceRow({ access_scope_assignment_count: 0, access_scopes: [] });
+  const revoked = await fixture.run({ touch: false });
+  assert.deepEqual(Array.from(revoked.scopes), []);
+  assert.equal(revoked.scopeAssignmentsObserved, true);
+  fixture.replaceRow({ id: "different-session" });
+  const independentPrincipal = await fixture.run({ touch: false });
+  assert.equal(independentPrincipal.scopeAssignmentsObserved, false);
+  assert.equal(independentPrincipal.scopes.length, 1, "provenance is keyed by session and principal");
+});
+
+test("inactive explicit assignments never acquire a legacy fallback in the same request", async () => {
+  const fixture = loader("employee", { activity: false, assignedScopes: true });
+  fixture.replaceRow({ role: "manager", access_scopes: [] });
+  assert.deepEqual(Array.from((await fixture.run()).scopes), []);
+  fixture.replaceRow({ access_scope_assignment_count: 0 });
+  assert.deepEqual(Array.from((await fixture.run({ touch: false })).scopes), []);
+});
+
+test("the actual live personnel actor preserves scope-source provenance without suppressing genuine legacy access", async () => {
+  const current = { active: true, employeeActive: true, employeeNumber: "synthetic-person", role: "manager",
+    rolePermissions: [], grantedPermissions: [], deniedPermissions: [], scopes: [], homeLocationId: "18" };
+  const context = vm.createContext({ isLocalSystemSession: () => false, organizationPersonnelRepository: {},
+    personnelLearningPortalUser: async () => current,
+    personnelLearningScopeContext: async () => ({ locations: new Map([["18", {}]]), departments: new Map() }),
+    effectivePortalPermissionState: () => ({ effectivePermissions: [] }), personnelLearningEffectiveScopes: () => [],
+    GLOBAL_SCOPE_PORTAL_ROLES: new Set() });
+  vm.runInContext(["portalAccessScopesForPrincipal", "livePersonnelLearningRoleAdministrationActor"]
+    .map(actualFunction).join("\n"), context);
+  const observed = await context.livePersonnelLearningRoleAdministrationActor({ employeeNumber: "synthetic-person",
+    explicitScopes: [], scopeAssignmentsObserved: true });
+  assert.deepEqual(Array.from(observed.scopes), []);
+  const legacy = await context.livePersonnelLearningRoleAdministrationActor({ employeeNumber: "synthetic-person", explicitScopes: [] });
+  assert.deepEqual(JSON.parse(JSON.stringify(legacy.scopes)), [{ locationId: "18", departmentId: null }]);
+});
 
 test("actual employee and organization loaders adopt authority read after a successful renewal", async () => {
   for (const kind of ["employee", "organization"]) {

@@ -474,11 +474,34 @@ gp_seal_build_tree() {
   # directory descriptor and open every child relative to it, without following
   # links; a pathname-recursive copy could otherwise read outside that tree.
   /usr/bin/python3 -I - "$source" "$private_root/tree" <<'PY' || return 1
-import os, stat, sys
+import json, os, posixpath, re, shlex, stat, sys
 source, target = sys.argv[1:]
 directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+executable_links = []
 assert os.geteuid() == 0
-def copy_directory(source_fd, target_fd, depth=0):
+
+def defer_executable_link(source_fd, name, before, parts):
+    # Hold the npm command-link inode itself, never its untrusted target.
+    assert parts[-2:] == ('node_modules', '.bin')
+    assert re.fullmatch(r'[A-Za-z0-9_@][A-Za-z0-9_.+-]{0,199}', name)
+    assert len(executable_links) < 4096 and before.st_nlink == 1
+    descriptor = os.open(name, os.O_PATH | os.O_NOFOLLOW, dir_fd=source_fd)
+    try:
+        opened = os.fstat(descriptor)
+        assert stat.S_ISLNK(opened.st_mode) and opened.st_nlink == 1
+        assert (before.st_dev, before.st_ino) == (opened.st_dev, opened.st_ino)
+        link = os.readlink('', dir_fd=descriptor)
+        assert re.fullmatch(r'[A-Za-z0-9_@./+-]{1,2048}', link) and not link.startswith('/')
+        resolved = posixpath.normpath(posixpath.join(*parts, link))
+        assert not resolved.startswith('../') and resolved != '..'
+        resolved_parts = tuple(resolved.split('/'))
+        assert 'node_modules' in resolved_parts and '.bin' not in resolved_parts
+        executable_links.append((parts, name, descriptor, link, resolved_parts))
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+def copy_directory(source_fd, target_fd, depth=0, parts=()):
     assert depth < 128
     for name in sorted(os.listdir(source_fd)):
         assert name not in ('.', '..') and '/' not in name and '\0' not in name
@@ -491,11 +514,13 @@ def copy_directory(source_fd, target_fd, depth=0):
                 os.mkdir(name, 0o700, dir_fd=target_fd)
                 destination = os.open(name, directory_flags, dir_fd=target_fd)
                 try:
-                    copy_directory(child, destination, depth + 1)
+                    copy_directory(child, destination, depth + 1, parts + (name,))
                 finally:
                     os.close(destination)
             finally:
                 os.close(child)
+        elif stat.S_ISLNK(before.st_mode):
+            defer_executable_link(source_fd, name, before, parts)
         else:
             assert stat.S_ISREG(before.st_mode) and before.st_nlink == 1
             descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=source_fd)
@@ -516,15 +541,95 @@ def copy_directory(source_fd, target_fd, depth=0):
                     os.close(output)
             finally:
                 os.close(descriptor)
+def copied_directory(root_fd, parts):
+    descriptor = os.dup(root_fd)
+    try:
+        for part in parts:
+            assert part not in ('', '.', '..')
+            child = os.open(part, directory_flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+            assert os.fstat(descriptor).st_uid == 0
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+def copied_regular(root_fd, parts, limit):
+    parent = copied_directory(root_fd, parts[:-1])
+    try:
+        descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                             dir_fd=parent)
+        try:
+            info = os.fstat(descriptor)
+            assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == 0
+            return info, os.read(descriptor, limit + 1)
+        finally:
+            os.close(descriptor)
+    finally:
+        os.close(parent)
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        assert key not in result
+        result[key] = value
+    return result
+
+def materialize_executable_links(root_fd):
+    # Validate only fresh root-owned bytes. Nested ESM type markers are not
+    # package roots: the nearest node_modules boundary selects the bin manifest.
+    for parts, name, descriptor, link, resolved in executable_links:
+        info = os.fstat(descriptor)
+        assert stat.S_ISLNK(info.st_mode) and info.st_nlink == 1
+        assert os.readlink('', dir_fd=descriptor) == link
+        boundary = max(i for i, part in enumerate(resolved) if part == 'node_modules')
+        package_end = boundary + (3 if resolved[boundary + 1].startswith('@') else 2)
+        assert package_end < len(resolved)
+        package = resolved[:package_end]
+        package_name = '/'.join(package[boundary + 1:])
+        _, data = copied_regular(root_fd, package + ('package.json',), 1024 * 1024)
+        assert len(data) <= 1024 * 1024
+        metadata = json.loads(data, object_pairs_hook=unique_object)
+        assert isinstance(metadata, dict) and metadata.get('name') == package_name
+        commands = metadata.get('bin')
+        if isinstance(commands, str):
+            commands = {package_name.rsplit('/', 1)[-1]: commands}
+        assert isinstance(commands, dict) and isinstance(commands.get(name), str)
+        declared = commands[name]
+        assert re.fullmatch(r'[A-Za-z0-9_@./+-]{1,2048}', declared) and not declared.startswith('/')
+        declared_parts = tuple(posixpath.normpath(posixpath.join(*package, declared)).split('/'))
+        assert declared_parts == resolved and declared_parts[:package_end] == package
+        executable, prefix = copied_regular(root_fd, resolved, 256)
+        assert executable.st_mode & 0o111
+        assert prefix.split(b'\n', 1)[0] in (b'#!/usr/bin/env node', b'#!/usr/bin/node')
+        destination = copied_directory(root_fd, parts)
+        try:
+            output = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             0o700, dir_fd=destination)
+            try:
+                relative = posixpath.relpath('/'.join(resolved), '/'.join(parts))
+                shim = ('#!/bin/sh\ncase "$0" in\n  */*) gp_bin_dir=${0%/*} ;;\n'
+                        '  *) gp_bin_dir=. ;;\nesac\nexec "$gp_bin_dir"/' +
+                        shlex.quote(relative) + ' "$@"\n').encode('utf-8')
+                assert os.write(output, shim) == len(shim)
+            finally:
+                os.close(output)
+        finally:
+            os.close(destination)
+
 source_fd = os.open(source, directory_flags)
 try:
     target_fd = os.open(target, directory_flags)
     try:
         copy_directory(source_fd, target_fd)
+        materialize_executable_links(target_fd)
     finally:
         os.close(target_fd)
 finally:
     os.close(source_fd)
+    for _, _, descriptor, _, _ in executable_links:
+        os.close(descriptor)
 PY
   unsafe="$(find "$private_root/tree" ! -type f ! -type d -print -quit)" || return 1
   [[ -z "$unsafe" ]] || return 1

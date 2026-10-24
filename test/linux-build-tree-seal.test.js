@@ -19,6 +19,158 @@ function fixture(t) {
 function seal({ source, target }) {
   return spawnSync("bash", ["-e", "-s", "--", source, target], { encoding: "utf8", input: `set -Eeuo pipefail\ngp_log() { printf '%s\\n' "$*" >&2; }\n${selected}\ngp_seal_build_tree "$1" "$2" root\n` });
 }
+const rootLinux = process.platform === "linux" && process.getuid?.() === 0;
+function commandFixture(values, {
+  name = "seal-fixture", command = "seal-fixture", relative = "bin/command.cjs",
+  body = `#!/usr/bin/env node\nconsole.log('fixture command');\n`,
+  bin = { [command]: relative }, metadata = {}, modules = "node_modules", link,
+} = {}) {
+  const packageRoot = path.join(values.source, modules, name);
+  const executable = path.join(packageRoot, relative);
+  fs.mkdirSync(path.dirname(executable), { recursive: true });
+  fs.writeFileSync(executable, body, { mode: 0o755 });
+  const manifest = path.join(packageRoot, "package.json");
+  fs.writeFileSync(manifest, JSON.stringify({ name, bin, ...metadata }) + "\n");
+  const commandRoot = path.join(values.source, modules, ".bin");
+  fs.mkdirSync(commandRoot, { recursive: true });
+  const commandPath = path.join(commandRoot, command);
+  fs.symlinkSync(link ?? path.posix.relative(
+    path.posix.join(modules, ".bin"), path.posix.join(modules, name, relative)), commandPath);
+  return { packageRoot, executable, manifest, commandPath };
+}
+function assertSealingRefused(values) {
+  const result = seal(values);
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.equal(fs.existsSync(values.target), false, "invalid dependency tree must never be published");
+}
+test("declared npm command links become portable regular shims preserving CommonJS entry, imports and arguments", {
+  skip: !rootLinux,
+}, t => {
+  const values = fixture(t);
+  commandFixture(values, {
+    body: `#!/usr/bin/env node\nconst path = require('node:path'); console.log(JSON.stringify({ main: require.main === module, sibling: require('./relative.cjs'), argv: process.argv.slice(2), entry: path.basename(process.argv[1]) }));\n`,
+  });
+  fs.writeFileSync(path.join(values.source, "node_modules/seal-fixture/bin/relative.cjs"), "module.exports = 'relative sibling';\n");
+  const result = seal(values); assert.equal(result.status, 0, result.stderr);
+  const moved = path.join(values.root, "moved-candidate"); fs.renameSync(values.target, moved);
+  const shim = path.join(moved, "node_modules/.bin/seal-fixture");
+  const info = fs.lstatSync(shim);
+  assert(info.isFile()); assert(!info.isSymbolicLink()); assert.equal(info.nlink, 1); assert.equal(info.uid, 0);
+  assert.equal(info.mode & 0o022, 0); assert(info.mode & 0o111);
+  const args = ["space argument", "literal $() ; ' %s", "--switch"];
+  for (const invocation of [
+    { executable: shim, cwd: values.root },
+    { executable: "./seal-fixture", cwd: path.dirname(shim) },
+    { executable: "seal-fixture", cwd: values.root, env: { ...process.env, PATH: path.dirname(shim) + path.delimiter + process.env.PATH } },
+  ]) {
+    const run = spawnSync(invocation.executable, args, { encoding: "utf8", cwd: invocation.cwd, env: invocation.env });
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(JSON.parse(run.stdout), { main: true, sibling: "relative sibling", argv: args, entry: "command.cjs" });
+  }
+  assert.equal(fs.lstatSync(path.join(values.source, "node_modules/.bin/seal-fixture")).isSymbolicLink(), true);
+});
+test("npm command sealing selects the package boundary before a nested ESM type-only manifest", {
+  skip: !rootLinux,
+}, t => {
+  const values = fixture(t);
+  commandFixture(values, {
+    name: "esm-fixture", command: "esm-fixture", relative: "dist/esm/bin/command",
+    body: `#!/usr/bin/env node\nimport { sibling } from './relative.js'; console.log(JSON.stringify({ sibling, argv: process.argv.slice(2), url: import.meta.url.endsWith('/dist/esm/bin/command') }));\n`,
+  });
+  fs.writeFileSync(path.join(values.source, "node_modules/esm-fixture/dist/esm/package.json"), '{"type":"module"}\n');
+  fs.writeFileSync(path.join(values.source, "node_modules/esm-fixture/dist/esm/bin/relative.js"), "export const sibling = 'esm sibling';\n");
+  const result = seal(values); assert.equal(result.status, 0, result.stderr);
+  const run = spawnSync(path.join(values.target, "node_modules/.bin/esm-fixture"), ["esm argument"], { encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(JSON.parse(run.stdout), { sibling: "esm sibling", argv: ["esm argument"], url: true });
+});
+test("sealing validates dependency bytes without running their declared command", {
+  skip: !rootLinux,
+}, t => {
+  const values = fixture(t), marker = path.join(values.root, "command-executed");
+  commandFixture(values, { body: `#!/usr/bin/env node\nrequire('node:fs').writeFileSync(${JSON.stringify(marker)}, 'ran explicitly');\n` });
+  const result = seal(values); assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(marker), false);
+  const run = spawnSync(path.join(values.target, "node_modules/.bin/seal-fixture"), [], { encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr); assert.equal(fs.readFileSync(marker, "utf8"), "ran explicitly");
+});
+test("declared string bins, scoped packages and nested npm command directories remain executable", {
+  skip: !rootLinux,
+}, t => {
+  const values = fixture(t);
+  commandFixture(values, { name: "string-fixture", command: "string-fixture", bin: "./bin/command.cjs", body: "#!/usr/bin/env node\nconsole.log('string bin');\n" });
+  commandFixture(values, { name: "@scope/scoped-fixture", command: "scoped-fixture", bin: "bin/command.cjs", modules: "node_modules/parent/node_modules", body: "#!/usr/bin/env node\nconsole.log('scoped nested bin');\n" });
+  const result = seal(values); assert.equal(result.status, 0, result.stderr);
+  for (const [relative, expected] of [
+    ["node_modules/.bin/string-fixture", "string bin"],
+    ["node_modules/parent/node_modules/.bin/scoped-fixture", "scoped nested bin"],
+  ]) {
+    const run = spawnSync(path.join(values.target, relative), [], { encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr); assert.equal(run.stdout.trim(), expected);
+  }
+});
+test("the regular npm command shim forwards SIGTERM directly to the Node entry process", {
+  skip: !rootLinux, timeout: 15000,
+}, async t => {
+  const values = fixture(t);
+  commandFixture(values, { body: "#!/usr/bin/env node\nconsole.log('READY'); setInterval(() => {}, 1000);\n" });
+  const result = seal(values); assert.equal(result.status, 0, result.stderr);
+  const child = spawn(path.join(values.target, "node_modules/.bin/seal-fixture"), [], { stdio: ["ignore", "pipe", "pipe"] });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); });
+  let output = "", errors = "";
+  child.stdout.on("data", value => { output += value; }); child.stderr.on("data", value => { errors += value; });
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("command did not start: " + errors)), 8000);
+    child.once("error", reject);
+    child.once("exit", () => { if (!output.includes("READY")) { clearTimeout(timer); reject(new Error("command exited before ready: " + errors)); } });
+    child.stdout.on("data", () => { if (output.includes("READY")) { clearTimeout(timer); resolve(); } });
+  });
+  const exited = new Promise(resolve => child.once("exit", (code, signal) => resolve({ code, signal })));
+  assert.equal(child.kill("SIGTERM"), true);
+  assert.deepEqual(await exited, { code: null, signal: "SIGTERM" });
+});
+test("npm command sealing rejects undeclared, mismatched and duplicate bin declarations", {
+  skip: !rootLinux,
+}, async t => {
+  for (const kind of ["undeclared", "wrong-target", "wrong-package-name", "duplicate-bin", "duplicate-command"]) {
+    await t.test(kind, t => {
+      const values = fixture(t), files = commandFixture(values);
+      if (kind === "undeclared") fs.writeFileSync(files.manifest, '{"name":"seal-fixture","bin":{"other":"bin/command.cjs"}}\n');
+      if (kind === "wrong-target") fs.writeFileSync(files.manifest, '{"name":"seal-fixture","bin":{"seal-fixture":"different.cjs"}}\n');
+      if (kind === "wrong-package-name") fs.writeFileSync(files.manifest, '{"name":"other-package","bin":{"seal-fixture":"bin/command.cjs"}}\n');
+      if (kind === "duplicate-bin") fs.writeFileSync(files.manifest, '{"name":"seal-fixture","bin":{},"bin":{"seal-fixture":"bin/command.cjs"}}\n');
+      if (kind === "duplicate-command") fs.writeFileSync(files.manifest, '{"name":"seal-fixture","bin":{"seal-fixture":"different.cjs","seal-fixture":"bin/command.cjs"}}\n');
+      assertSealingRefused(values);
+    });
+  }
+});
+test("npm command sealing rejects escaping, chained, misplaced and linked executable inodes", {
+  skip: !rootLinux,
+}, async t => {
+  for (const kind of ["escape", "absolute", "link-chain", "non-bin-link", "hardlinked-executable", "hardlinked-link", "non-executable", "shell-shebang", "missing-shebang", "shell-alias", "shell-link", "missing-target", "directory-target", "fifo-target"]) {
+    await t.test(kind, t => {
+      const values = fixture(t), files = commandFixture(values);
+      if (kind === "escape" || kind === "absolute") {
+        const outside = path.join(values.root, "outside.cjs");
+        fs.writeFileSync(outside, "#!/usr/bin/env node\nconsole.log('must not execute');\n", { mode: 0o755 });
+        fs.unlinkSync(files.commandPath); fs.symlinkSync(kind === "absolute" ? outside : "../../../outside.cjs", files.commandPath);
+      }
+      if (kind === "link-chain") { fs.renameSync(files.executable, files.executable + ".actual"); fs.symlinkSync("command.cjs.actual", files.executable); }
+      if (kind === "non-bin-link") fs.symlinkSync("node_modules/seal-fixture/bin/command.cjs", path.join(values.source, "outside-bin"));
+      if (kind === "hardlinked-executable") fs.linkSync(files.executable, files.executable + ".second");
+      if (kind === "hardlinked-link") fs.linkSync(files.commandPath, files.commandPath + "-second");
+      if (kind === "non-executable") fs.chmodSync(files.executable, 0o644);
+      if (kind === "shell-shebang") fs.writeFileSync(files.executable, "#!/bin/sh\nprintf unexpected\\n\n");
+      if (kind === "missing-shebang") fs.writeFileSync(files.executable, "console.log('not a direct executable');\n");
+      if (kind === "shell-alias") fs.renameSync(files.commandPath, files.commandPath + ";touch-unexpected");
+      if (kind === "shell-link") { fs.unlinkSync(files.commandPath); fs.symlinkSync("../seal-fixture/bin/command.cjs;touch-unexpected", files.commandPath); }
+      if (kind === "missing-target") fs.unlinkSync(files.executable);
+      if (kind === "directory-target") { fs.unlinkSync(files.executable); fs.mkdirSync(files.executable); }
+      if (kind === "fifo-target") { fs.unlinkSync(files.executable); assert.equal(spawnSync("mkfifo", [files.executable]).status, 0); }
+      assertSealingRefused(values);
+    });
+  }
+});
 test("a held unprivileged writer FD cannot modify the fresh root-sealed candidate inode", {
   skip: process.platform !== "linux" || process.getuid?.() !== 0,
 }, async t => {

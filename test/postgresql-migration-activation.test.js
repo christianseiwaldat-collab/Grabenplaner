@@ -66,6 +66,57 @@ test("Production application configuration needs a matching two-database activat
   assert.throws(() => product.resolveDocument({ ...document, accounts: { ...document.accounts, gp_migration_admin: "forbidden" } }, anchor));
 });
 
+test("The managed PostgreSQL pair admits only explicit server mode before reading configuration or starting persistence", () => {
+  // Run the exact production module with a synthetic Linux service identity.
+  // This keeps the admission proof executable on development hosts without
+  // changing the real process identity, protected files or database state.
+  const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
+  const filename = path.resolve(__dirname, "../lib/persistence/postgresql/productive-configuration.js");
+  const { document, anchor } = fixture();
+  const reads = [];
+  const protectedFiles = new Map([[product.FILE, document], [product.ANCHOR, anchor]]);
+  const subject = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
+    module: subject, URL,
+    process: { platform: "linux", getuid: () => 61001, getgid: () => 61001 },
+    require(name) {
+      if (name === "./runtime-binding") return runtime;
+      if (name === "node:os") return { userInfo: () => ({ username: "grabenplaner" }) };
+      if (name === "node:fs") return {
+        lstatSync(file) {
+          assert.ok(protectedFiles.has(file));
+          reads.push(["lstatSync", file]);
+          return { isFile: () => true, isSymbolicLink: () => false,
+            nlink: 1, uid: 0, gid: 61001, mode: 0o100640, size: 4096 };
+        },
+        realpathSync(file) { reads.push(["realpathSync", file]); return file; },
+        readFileSync(file) { reads.push(["readFileSync", file]); return JSON.stringify(protectedFiles.get(file)); },
+      };
+      throw new Error("Unexpected managed configuration dependency");
+    },
+  }, { filename });
+  const valid = {
+    NODE_ENV: "production", GRABENPLANER_DEPLOYMENT_KIND: "production",
+    GRABENPLANER_POSTGRESQL_APPLICATION_CONFIG: product.FILE,
+    GRABENPLANER_DATA_DIR: "/var/lib/grabenplaner", DB_PATH: product.ANCHOR,
+    INVOCATION_ID: "a".repeat(32), GRABENPLANER_OPERATION_MODE: "server",
+  };
+  for (const mode of [undefined, "", " ", "local", " LOCAL ", "lan", " LAN ", "other", "server\nlocal"]) {
+    reads.length = 0;
+    assert.throws(() => subject.exports.configuration({ ...valid, GRABENPLANER_OPERATION_MODE: mode }),
+      /PG_APPLICATION_MANAGED_RUNTIME_REQUIRED/, `mode ${JSON.stringify(mode)}`);
+    assert.equal(reads.length, 0, "rejection precedes every protected file read");
+  }
+  for (const mode of ["server", " SeRvEr "]) {
+    reads.length = 0;
+    const resolved = subject.exports.configuration({ ...valid, GRABENPLANER_OPERATION_MODE: mode });
+    assert.equal(resolved.productActivation, true);
+    assert.equal(new URL(resolved.coreUrl).username, "gp_core_app");
+    assert.deepEqual(reads, [product.FILE, product.ANCHOR].flatMap(file =>
+      ["lstatSync", "realpathSync", "readFileSync"].map(operation => [operation, file])));
+  }
+});
+
 test("An environment flag alone cannot open PostgreSQL or reuse development and restore exceptions in production", () => {
   for (const environment of [
     { DB_PROVIDER: "postgresql" },

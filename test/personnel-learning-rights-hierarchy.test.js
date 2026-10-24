@@ -1331,7 +1331,9 @@ test("Live-Entzug von Learning-Delegate stoppt Rechte- und Rollenmutation atomar
     }),
   );
   assert.equal(deniedRights.response.status, 403, JSON.stringify(deniedRights.payload));
-  assert.equal(deniedRights.payload.code, "PORTAL_ROLE_HIERARCHY_DENIED");
+  // The actor is already refreshed after the armed renewal. The specific
+  // non-delegable-permission check therefore rejects before role hierarchy.
+  assert.equal(deniedRights.payload.code, "PORTAL_PERMISSION_NOT_DELEGABLE");
   assert.equal(db.prepare(`
     SELECT COUNT(*) AS count FROM portal_permission_denials
     WHERE employee_number = ? AND permission = ?
@@ -1556,6 +1558,8 @@ test("No-op-Antworten aller Zugangswege nutzen den live eingeschränkten Akteur"
       method: "PUT",
       route: `/api/portal/v1/users/${LOCAL_AL}`,
       body: { role: "department_manager", active: true, mustChangePassword: false },
+      expectedStatus: 403,
+      expectedCode: "PORTAL_ROLE_HIERARCHY_DENIED",
     },
     {
       method: "POST",
@@ -1580,8 +1584,16 @@ test("No-op-Antworten aller Zugangswege nutzen den live eingeschränkten Akteur"
         ...(route.body === undefined ? {} : { body: route.body }),
       }),
     );
-    assert.equal(result.response.status, 200, `${route.route}: ${JSON.stringify(result.payload)}`);
-    assertLearningRightsHiddenInPortalUsers(result.payload);
+    assert.equal(result.response.status, route.expectedStatus || 200,
+      `${route.route}: ${JSON.stringify(result.payload)}`);
+    if (route.expectedCode) {
+      assert.equal(result.payload.code, route.expectedCode);
+      assert.equal(Object.hasOwn(result.payload, "users"), false);
+      assert.equal(Object.hasOwn(result.payload, "roles"), false);
+      assert.equal(Object.hasOwn(result.payload, "catalog"), false);
+    } else {
+      assertLearningRightsHiddenInPortalUsers(result.payload);
+    }
     assert.deepEqual(accountSecuritySnapshot(LOCAL_AL), accountBefore);
     assert.deepEqual(portalScopeSnapshot(LOCAL_AL), scopesBefore);
     assert.equal(auditRowCount(), auditBefore);
