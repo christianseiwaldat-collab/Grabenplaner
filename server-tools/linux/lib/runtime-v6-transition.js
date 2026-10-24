@@ -92,22 +92,105 @@ function canonical(value) {
   if (value && typeof value === "object") return "{" + Object.keys(value).sort().map(key => JSON.stringify(key) + ":" + canonical(value[key])).join(",") + "}";
   return JSON.stringify(value);
 }
+function trustedDependencyBinLink(file, dependencyRoot, requireRoot) {
+  // Resolve each raw component before accepting it. A path which leaves this
+  // dependency tree and subsequently points back in must never be trusted.
+  const inside = target => target === dependencyRoot || (!path.relative(dependencyRoot, target).startsWith(".." + path.sep)
+    && path.relative(dependencyRoot, target) !== ".." && !path.isAbsolute(path.relative(dependencyRoot, target)));
+  const metadata = s => [s.dev, s.ino, s.uid, s.gid, s.mode, s.nlink, s.size, s.mtimeMs, s.ctimeMs].join(":");
+  const regular = target => {
+    const s = fs.lstatSync(target);
+    assert(!s.isSymbolicLink() && (!requireRoot || s.uid === 0) && (s.mode & 0o022) === 0
+      && (s.isDirectory() || (s.isFile() && s.nlink === 1)) && fs.realpathSync(target) === target,
+    "Unsafe dependency command target");
+    return s;
+  };
+  const first = fs.lstatSync(file);
+  let cursor = dependencyRoot, firstDestination;
+  regular(cursor);
+  for (const part of path.relative(dependencyRoot, path.dirname(file)).split(path.sep).filter(Boolean)) {
+    cursor = path.join(cursor, part);
+    assert(regular(cursor).isDirectory(), "Unsafe dependency command parent");
+  }
+  let pending = [path.basename(file)];
+  const links = new Set();
+  while (pending.length) {
+    const part = pending.shift();
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      cursor = path.dirname(cursor);
+      assert(inside(cursor) && regular(cursor).isDirectory(), "Dependency command left its tree");
+      continue;
+    }
+    const target = path.join(cursor, part), s = fs.lstatSync(target);
+    if (s.isSymbolicLink()) {
+      assert(inside(target) && path.basename(path.dirname(target)) === ".bin"
+        && path.basename(path.dirname(path.dirname(target))) === "node_modules"
+        && (!requireRoot || s.uid === 0) && s.nlink === 1 && !links.has(target) && links.size < 64,
+      "Unsafe dependency command link");
+      links.add(target);
+      const destination = fs.readlinkSync(target);
+      assert(destination && metadata(fs.lstatSync(target)) === metadata(s), "Dependency command link changed");
+      if (target === file) firstDestination = destination;
+      if (path.isAbsolute(destination)) {
+        assert(destination.startsWith(dependencyRoot + path.sep), "Dependency command left its tree");
+        cursor = dependencyRoot;
+        pending = destination.slice(dependencyRoot.length + 1).split(path.sep).concat(pending);
+      } else pending = destination.split(path.sep).concat(pending);
+    } else {
+      cursor = target;
+      const checked = regular(cursor);
+      assert(!pending.length || checked.isDirectory(), "Unsafe dependency command traversal");
+    }
+  }
+  assert(inside(cursor) && regular(cursor).isFile(), "Dependency command is not an internal regular file");
+  assert(firstDestination && metadata(fs.lstatSync(file)) === metadata(first)
+    && fs.readlinkSync(file) === firstDestination, "Dependency command changed during resolution");
+  return { rawTarget: firstDestination, resolvedTarget: cursor };
+}
 function dependencyInventory(directory, requireRoot) {
+  directory = path.resolve(directory);
   const files = [];
+  let regularFileCount = 0, symbolicLinkCount = 0;
+  const metadata = s => [s.dev, s.ino, s.uid, s.gid, s.mode, s.nlink, s.size, s.mtimeMs, s.ctimeMs].join(":");
+  function digestRegular(file) {
+    const before = fs.lstatSync(file);
+    assert(before.isFile() && !before.isSymbolicLink() && before.nlink === 1 && fs.realpathSync(file) === file);
+    if (requireRoot) assert(before.uid === 0 && (before.mode & 0o022) === 0);
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    try {
+      assert.equal(metadata(fs.fstatSync(fd)), metadata(before));
+      const digest = hash(fs.readFileSync(fd));
+      assert.equal(metadata(fs.fstatSync(fd)), metadata(before));
+      assert.equal(metadata(fs.lstatSync(file)), metadata(before));
+      return digest;
+    } finally { fs.closeSync(fd); }
+  }
   function visit(file, relative = "") {
     const info = fs.lstatSync(file);
+    if (info.isSymbolicLink()) {
+      const link = trustedDependencyBinLink(file, directory, requireRoot);
+      // A typed record prevents a regular file containing the link text from
+      // impersonating a link. Both the literal link and final bytes are bound.
+      files.push([relative, "symlink:" + hash(Buffer.from(JSON.stringify([
+        link.rawTarget, path.relative(directory, link.resolvedTarget), digestRegular(link.resolvedTarget)
+      ]), "utf8"))]);
+      symbolicLinkCount++;
+      return;
+    }
     assert.equal(fs.realpathSync(file), path.resolve(file));
     assert(!info.isSymbolicLink() && (info.isFile() || info.isDirectory()));
     if (requireRoot) assert(info.uid === 0 && (info.mode & 0o022) === 0);
     if (info.isDirectory()) {
       for (const name of fs.readdirSync(file).sort()) visit(path.join(file, name), relative ? relative + "/" + name : name);
     } else {
-      assert.equal(info.nlink, 1); files.push([relative, hash(fs.readFileSync(file))]);
+      assert.equal(info.nlink, 1); files.push([relative, digestRegular(file)]); regularFileCount++;
     }
   }
   visit(directory);
   assert(files.length > 0);
-  return { sha256: hash(files.map(([name, digest]) => name + "\0" + digest + "\n").join("")), fileCount: files.length };
+  return { sha256: hash(files.map(([name, digest]) => name + "\0" + digest + "\n").join("")),
+    fileCount: files.length, regularFileCount, symbolicLinkCount };
 }
 function verifyDependencyContinuity(oldRoot, candidateRoot, { requireRoot = process.platform === "linux" } = {}) {
   for (const root of [oldRoot, candidateRoot]) for (const relative of ["package.json", "pnpm-lock.yaml"]) {
@@ -150,7 +233,7 @@ function verifyFrozenDependencyPlan(oldRoot, candidateRoot, { requireRoot = proc
   const withoutReviewedWorkspaceDeltas = bytes => {
     const text = bytes.toString("utf8"), remaining = [];
     assert(Buffer.from(text, "utf8").equals(bytes));
-    let section = null, bodyParser = null, msalPatch = null;
+    let section = null, bodyParser = null, msalPatch = null, canvas = null;
     const seenSections = new Set();
     const lines = text.match(/[^\n]*\n|[^\n]+$/g) || [];
     for (let index = 0; index < lines.length; index++) {
@@ -164,16 +247,22 @@ function verifyFrozenDependencyPlan(oldRoot, candidateRoot, { requireRoot = proc
       } else if (value === "  body-parser: 2.4.0") {
         assert(section === "overrides:" && bodyParser === null, "Body-parser override must occur once inside overrides");
         bodyParser = "2.4.0";
+      } else if (value === "  # Native parser/encoder fixes and platform SBOM; qualify PDF/OCR before release.") {
+        assert(section === "overrides:" && lines[index + 1]?.replace(/\r?\n$/, "") === "  'pdfjs-dist>@napi-rs/canvas': 1.0.13");
+      } else if (value === "  'pdfjs-dist>@napi-rs/canvas': 1.0.13") {
+        assert(section === "overrides:" && canvas === null, "The reviewed Canvas override must occur once inside overrides");
+        canvas = "1.0.13";
       } else if (value === "  '@azure/msal-node@5.4.0': lib/vendor-patches/@azure__msal-node@5.4.0.patch") {
         assert(section === "patchedDependencies:" && msalPatch === null, "The reviewed MSAL patch must occur once inside patchedDependencies");
         msalPatch = REVIEWED_MSAL_PATCH.sha256;
       } else remaining.push(line);
     }
-    return { bytes: Buffer.from(remaining.join(""), "utf8"), bodyParser, msalPatch };
+    return { bytes: Buffer.from(remaining.join(""), "utf8"), bodyParser, msalPatch, canvas };
   };
   const before = withoutReviewedWorkspaceDeltas(previous.workspace), after = withoutReviewedWorkspaceDeltas(candidate.workspace);
   assert(before.bytes.equals(after.bytes), "Unqualified pnpm workspace metadata changed");
   assert(before.bodyParser === after.bodyParser || after.bodyParser === "2.4.0", "Only the reviewed body-parser security override is permitted");
+  assert(before.canvas === after.canvas || after.canvas === "1.0.13", "Removing the reviewed Canvas override is not permitted");
   assert(before.msalPatch === after.msalPatch || after.msalPatch === REVIEWED_MSAL_PATCH.sha256, "Removing the reviewed MSAL security patch is not permitted");
   for (const [root, workspace] of [[oldRoot, before], [candidateRoot, after]]) if (workspace.msalPatch) {
     const file = path.join(root, REVIEWED_MSAL_PATCH.path), info = fs.lstatSync(file);
@@ -185,6 +274,7 @@ function verifyFrozenDependencyPlan(oldRoot, candidateRoot, { requireRoot = proc
     predecessorRoot: path.resolve(oldRoot), predecessor: { packageSha256: previous.packageSha256, lockSha256: previous.lockSha256, workspaceSha256: previous.workspaceSha256, ...original },
     candidate: { packageSha256: candidate.packageSha256, lockSha256: candidate.lockSha256, workspaceSha256: candidate.workspaceSha256, packageManager: candidate.package.packageManager },
     reviewedBodyParserOverride: { previous: before.bodyParser ?? null, candidate: after.bodyParser ?? null },
+    reviewedCanvasOverride: { previous: before.canvas, candidate: after.canvas },
     reviewedMsalPatch: { package: REVIEWED_MSAL_PATCH.package, path: REVIEWED_MSAL_PATCH.path, previous: before.msalPatch, candidate: after.msalPatch },
     requirements: { originalZipByteBinding: true, unprivilegedFrozenProductionBuild: true,
       freshRootPostgresqlClosureBeforePreflight: true, freshRootPostgresqlClosureAfterBuild: true } };

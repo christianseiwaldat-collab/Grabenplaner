@@ -180,6 +180,8 @@ jobs:
         run: find server-tools/linux -type f \( -name '*.sh' -o -name '*.sh.in' \) -print0 | xargs -0 -n1 bash -n
       - name: Native root deployment preflight dependency links
         run: sudo /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 "$(command -v node)" --no-global-search-paths --test --test-concurrency=1 test/preflight-root-dependency-links.test.js
+      - name: Native root runtime transition dependencies
+        run: sudo /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 "$(command -v node)" --no-global-search-paths --test --test-concurrency=1 test/runtime-v6-root-dependency-topology.test.js
       - name: Reboot module maintenance rollback (isolated temporary files)
         run: sudo python3 test/reboot-module-maintenance.test.py
 

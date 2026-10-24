@@ -202,3 +202,62 @@ test("Core6 frozen dependency plan accepts the exact final repository workspace 
   assert.equal(actual.reviewedMsalPatch.candidate, sha(patch));
   assert.equal(actual.candidate.lockSha256, sha(path.join(root, "pnpm-lock.yaml")));
 });
+
+
+const actualAdddWorkspace = path.join(__dirname, "../test-support/runtime-v6/installed-addd4c3-pnpm-workspace.yaml");
+const actualAdddWorkspaceSha256 = "64509458e01c67fe9a97e59870d25dd636239db9fe06cdb7187756555f49ae35";
+const canvasWorkspaceComment = "  # Native parser/encoder fixes and platform SBOM; qualify PDF/OCR before release.\n";
+const canvasWorkspaceLine = "  'pdfjs-dist>@napi-rs/canvas': 1.0.13\n";
+function actualWorkspaceFixture(t, previousCurrent = false) {
+  const values = dependencyFixture(t), original = fs.readFileSync(actualAdddWorkspace);
+  assert.equal(original.length, 359); assert.equal(sha(actualAdddWorkspace), actualAdddWorkspaceSha256);
+  for (const directory of [values.oldRoot, values.candidateRoot]) {
+    const target = path.join(directory, msalPatchRelative); fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(path.join(root, msalPatchRelative), target);
+  }
+  fs.writeFileSync(path.join(values.oldRoot, "pnpm-workspace.yaml"), previousCurrent
+    ? fs.readFileSync(path.join(root, "pnpm-workspace.yaml")) : original);
+  fs.copyFileSync(path.join(root, "pnpm-workspace.yaml"), path.join(values.candidateRoot, "pnpm-workspace.yaml"));
+  fs.copyFileSync(path.join(root, "pnpm-lock.yaml"), path.join(values.candidateRoot, "pnpm-lock.yaml"));
+  return values;
+}
+test("Core6 actual installed addd workspace accepts exactly the qualified Canvas body-parser MSAL delta", t => {
+  const values = actualWorkspaceFixture(t);
+  const result = transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false });
+  assert.equal(result.predecessor.workspaceSha256, actualAdddWorkspaceSha256);
+  assert.equal(result.candidate.workspaceSha256, sha(path.join(root, "pnpm-workspace.yaml")));
+  assert.deepEqual(result.reviewedCanvasOverride, { previous: null, candidate: "1.0.13" });
+  assert.deepEqual(result.reviewedBodyParserOverride, { previous: null, candidate: "2.4.0" });
+  assert.equal(result.reviewedMsalPatch.candidate, sha(path.join(root, msalPatchRelative)));
+  assert.equal(fs.existsSync(path.join(values.candidateRoot, "node_modules")), false);
+  assert.equal(sha(actualAdddWorkspace), actualAdddWorkspaceSha256);
+});
+test("Core6 actual installed reviewed Canvas override is preserved in an unchanged later workspace", t => {
+  const values = actualWorkspaceFixture(t, true);
+  const result = transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false });
+  assert.deepEqual(result.reviewedCanvasOverride, { previous: "1.0.13", candidate: "1.0.13" });
+  assert.equal(result.reviewedBodyParserOverride.previous, result.reviewedBodyParserOverride.candidate);
+  assert.equal(result.reviewedMsalPatch.previous, result.reviewedMsalPatch.candidate);
+});
+for (const change of ["removal", "wrongVersion", "wrongSection", "duplicate", "commentOutsideOverrides", "changedComment", "unreviewedComment"]) {
+  test("Core6 actual installed Canvas metadata rejects " + change + " without rewriting either graph", t => {
+    const values = actualWorkspaceFixture(t, change === "removal");
+    const workspace = path.join(values.candidateRoot, "pnpm-workspace.yaml"); let text = fs.readFileSync(workspace, "utf8");
+    assert.equal(text.split(canvasWorkspaceLine).length, 2);
+    if (change === "removal") text = text.replace(canvasWorkspaceComment + canvasWorkspaceLine, "");
+    if (change === "wrongVersion") text = text.replace(canvasWorkspaceLine, canvasWorkspaceLine.replace("1.0.13", "1.0.12"));
+    if (change === "wrongSection") text = text.replace(canvasWorkspaceComment + canvasWorkspaceLine, "")
+      .replace("patchedDependencies:\n", "patchedDependencies:\n" + canvasWorkspaceLine);
+    if (change === "duplicate") text = text.replace(canvasWorkspaceLine, canvasWorkspaceLine + canvasWorkspaceLine);
+    if (change === "commentOutsideOverrides") text = canvasWorkspaceComment + text.replace(canvasWorkspaceComment, "");
+    if (change === "changedComment") text = text.replace(canvasWorkspaceComment, "  # Unreviewed Canvas qualification.\n");
+    if (change === "unreviewedComment") text += "# Unreviewed workspace change.\n";
+    fs.writeFileSync(workspace, text);
+    const previous = fs.readFileSync(path.join(values.oldRoot, "pnpm-workspace.yaml")), next = fs.readFileSync(workspace);
+    assert.throws(() => transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false }));
+    assert.deepEqual(fs.readFileSync(path.join(values.oldRoot, "pnpm-workspace.yaml")), previous);
+    assert.deepEqual(fs.readFileSync(workspace), next);
+    assert.equal(fs.existsSync(path.join(values.candidateRoot, "node_modules")), false);
+    assert.equal(sha(actualAdddWorkspace), actualAdddWorkspaceSha256);
+  });
+}
