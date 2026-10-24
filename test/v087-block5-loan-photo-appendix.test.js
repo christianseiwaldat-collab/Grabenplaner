@@ -792,13 +792,17 @@ test("v0.87 Block 5 erzeugt geschützte Foto-PDF-Beilagen mit konfigurierbarer F
     };
 
     const attachmentBlobPath = protectedBlobPath(attachmentRow.storage_key);
-    const parkedAttachmentPath = `${attachmentBlobPath}.missing`;
+    // Park outside the copied app-data tree so this case reaches the missing
+    // reference guard, rather than rejecting an unexpected backup component.
+    const parkedAttachmentDirectory = fs.mkdtempSync(path.join(testRoot, "parked-attachment-"));
+    const parkedAttachmentPath = path.join(parkedAttachmentDirectory, path.basename(attachmentBlobPath));
     fs.renameSync(attachmentBlobPath, parkedAttachmentPath);
     try {
       await assert.rejects(backup(), /PG_PAIR_PROTECTED_FILE_MISSING|nicht gefunden|fehlt/i);
       assertPriorPointUnchanged();
     } finally {
       fs.renameSync(parkedAttachmentPath, attachmentBlobPath);
+      fs.rmdirSync(parkedAttachmentDirectory);
     }
     const originalAttachment = fs.readFileSync(attachmentBlobPath), tamperedAttachment = Buffer.from(originalAttachment);
     tamperedAttachment[tamperedAttachment.length - 1] ^= 1; fs.writeFileSync(attachmentBlobPath, tamperedAttachment);
