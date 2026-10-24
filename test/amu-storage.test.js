@@ -40,6 +40,130 @@ function pngBuffer() {
   return Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x00]);
 }
 
+function readOnlyTreeState(directory) {
+  if (!fs.existsSync(directory)) return null;
+  const crypto = require("node:crypto"), result = {};
+  function visit(file) {
+    const stat = fs.lstatSync(file), relative = path.relative(directory, file);
+    result[relative] = { mode: stat.mode, ino: stat.ino, nlink: stat.nlink, size: stat.size, mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs,
+      ...(stat.isFile() ? { sha256: crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex") } : {}) };
+    if (stat.isDirectory()) for (const name of fs.readdirSync(file).sort()) visit(path.join(file, name));
+  }
+  visit(directory); return result;
+}
+
+test("read-only storage exposes only frozen reads and preserves source bytes, metadata and stale temporary files", async () => {
+  const directory = temporaryDirectory("readonly"), writer = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example" });
+  const metadata = await writer.saveBuffer({ buffer: pdfBuffer(), originalName: "proof.pdf" });
+  const context = { namespace: "synthetic", recordId: "record", field: "payload", employeeNumber: "person" };
+  const record = writer.protectRecord('{"synthetic":true}', context), text = writer.protectText("synthetic");
+  const stale = path.join(directory, "tmp", "old.upload"); fs.writeFileSync(stale, "must remain"); fs.utimesSync(stale, new Date(0), new Date(0));
+  const before = readOnlyTreeState(directory);
+  const reader = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: true });
+  assert.equal(Object.isFrozen(reader), true); assert.deepEqual(Object.keys(reader).sort(), ["readBuffer", "unprotectRecord", "unprotectText"]);
+  assert.deepEqual(reader.readBuffer(metadata), pdfBuffer()); assert.equal(reader.unprotectRecord(record, context), '{"synthetic":true}'); assert.equal(reader.unprotectText(text), "synthetic");
+  assert.deepEqual(readOnlyTreeState(directory), before);
+  assert.throws(() => createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: "true" }), { code: "AMU_STORAGE_MODE_INVALID" });
+  assert.throws(() => createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: true,
+    checkBudget() { throw Object.assign(Error("synthetic deadline"), { code: "PG_BACKUP_OPERATION_TIMEOUT" }); } }), { code: "PG_BACKUP_OPERATION_TIMEOUT" });
+  assert.deepEqual(readOnlyTreeState(directory), before);
+});
+
+test("read-only storage never creates a missing root or key check and rejects wrong keys and changed ciphertext", async () => {
+  const parent = temporaryDirectory("readonly-missing"), directory = path.join(parent, "storage");
+  createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: true });
+  assert.equal(fs.existsSync(directory), false);
+  const writer = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example" });
+  const metadata = await writer.saveBuffer({ buffer: pdfBuffer(), originalName: "proof.pdf" });
+  fs.unlinkSync(path.join(directory, "key-check.amu")); const before = readOnlyTreeState(directory);
+  const reader = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: true });
+  assert.deepEqual(reader.readBuffer(metadata), pdfBuffer()); assert.deepEqual(readOnlyTreeState(directory), before);
+  assert.throws(() => createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key(8) }, activeKeyId: "example", readOnly: true }), { code: "AMU_DOCUMENT_INTEGRITY_FAILED" });
+  const file = writer.blobPath(metadata.storageKey), encrypted = fs.readFileSync(file); encrypted[encrypted.length - 1] ^= 1; fs.writeFileSync(file, encrypted);
+  assert.throws(() => reader.readBuffer(metadata), { code: "AMU_DOCUMENT_INTEGRITY_FAILED" }); assert.equal(fs.existsSync(path.join(directory, "key-check.amu")), false);
+});
+
+test("read-only storage rejects hardlinks, traversal and unexpected encrypted sizes before returning plaintext", async () => {
+  const directory = temporaryDirectory("readonly-boundary"), writer = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example" });
+  const metadata = await writer.saveBuffer({ buffer: pdfBuffer(), originalName: "proof.pdf" });
+  const reader = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: true });
+  assert.throws(() => reader.readBuffer("../outside.amu"), { code: "AMU_STORAGE_KEY_INVALID" });
+  const file = writer.blobPath(metadata.storageKey), linked = path.join(directory, "linked.amu"); fs.linkSync(file, linked);
+  try { assert.throws(() => reader.readBuffer(metadata), { code: "AMU_DOCUMENT_INTEGRITY_FAILED" }); } finally { fs.unlinkSync(linked); }
+  fs.truncateSync(file, MAX_DOCUMENT_BYTES + 513);
+  assert.throws(() => reader.readBuffer(metadata), { code: "AMU_DOCUMENT_INTEGRITY_FAILED" });
+});
+
+test("read-only storage rejects a linked root and linked blob ancestors", async () => {
+  const parent = temporaryDirectory("readonly-links"), directory = path.join(parent, "storage");
+  const writer = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example" });
+  const metadata = await writer.saveBuffer({ buffer: pdfBuffer(), originalName: "proof.pdf" });
+  const alias = path.join(parent, "alias"); fs.symlinkSync(directory, alias, "junction");
+  assert.throws(() => createAmuStorage({ rootDirectory: alias, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: true }), { code: "AMU_STORAGE_KEY_INVALID" });
+  fs.unlinkSync(alias);
+  const reader = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: true });
+  const blobs = path.join(directory, "blobs"), parked = path.join(parent, "parked-blobs"); fs.renameSync(blobs, parked); fs.symlinkSync(parked, blobs, "junction");
+  try { assert.throws(() => reader.readBuffer(metadata), { code: "AMU_STORAGE_KEY_INVALID" }); } finally { fs.unlinkSync(blobs); fs.renameSync(parked, blobs); }
+});
+
+test("read-only storage rejects a file symlink under the actual Linux filesystem", { skip: process.platform === "win32" }, async () => {
+  const directory = temporaryDirectory("readonly-file-link"), writer = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example" });
+  const metadata = await writer.saveBuffer({ buffer: pdfBuffer(), originalName: "proof.pdf" });
+  const reader = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: true });
+  const file = writer.blobPath(metadata.storageKey), parkedFile = path.join(directory, "parked.amu"); fs.renameSync(file, parkedFile);
+  try { fs.symlinkSync(parkedFile, file, "file"); assert.throws(() => reader.readBuffer(metadata), { code: "AMU_DOCUMENT_INTEGRITY_FAILED" }); }
+  finally { if (fs.existsSync(file) || fs.lstatSync(file, { throwIfNoEntry: false })) fs.unlinkSync(file); fs.renameSync(parkedFile, file); }
+});
+
+test("read-only FD reads reject growth during the read after at most the original size plus one byte", async t => {
+  const directory = temporaryDirectory("readonly-growth"), writer = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example" });
+  const metadata = await writer.saveBuffer({ buffer: pdfBuffer(), originalName: "proof.pdf" });
+  const reader = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: true });
+  const file = writer.blobPath(metadata.storageKey), originalSize = fs.statSync(file).size, actualRead = fs.readSync;
+  let grew = false, readBytes = 0;
+  const controlled = t.mock.method(fs, "readSync", (fd, buffer, offset, length, position) => {
+    if (!grew) { grew = true; fs.appendFileSync(file, Buffer.alloc(MAX_DOCUMENT_BYTES + 1024)); }
+    assert.ok(length <= originalSize + 1); assert.ok(length <= 65536);
+    const count = actualRead(fd, buffer, offset, length, position); readBytes += count; return count;
+  });
+  try { assert.throws(() => reader.readBuffer(metadata), { code: "AMU_DOCUMENT_INTEGRITY_FAILED" }); }
+  finally { controlled.mock.restore(); }
+  assert.equal(grew, true); assert.ok(readBytes > originalSize); assert.ok(readBytes <= originalSize + 1);
+});
+
+test("read-only key checks, fallback scans and failed metadata reads erase discarded plaintext buffers", async t => {
+  const directory = temporaryDirectory("readonly-zero"), writer = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example" });
+  const plain = pdfBuffer(), metadata = await writer.saveBuffer({ buffer: plain, originalName: "proof.pdf" });
+  const actualConcat = Buffer.concat, captured = [];
+  const control = t.mock.method(Buffer, "concat", (...args) => {
+    const value = actualConcat(...args);
+    if (value.equals(plain) || value.equals(Buffer.from("Grabenplaner AMU key check v1"))) captured.push(value);
+    return value;
+  });
+  try {
+    const reader = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: true });
+    assert.throws(() => reader.readBuffer({ ...metadata, sha256: "0".repeat(64) }), { code: "AMU_DOCUMENT_INTEGRITY_FAILED" });
+    fs.unlinkSync(path.join(directory, "key-check.amu"));
+    createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example", readOnly: true });
+  } finally { control.mock.restore(); }
+  assert.equal(captured.length, 3, "Capture the actual key-check, failed document read and no-key-check fallback plaintext.");
+  assert.ok(captured.every(buffer => buffer.every(byte => byte === 0)));
+  assert.equal(fs.existsSync(path.join(directory, "key-check.amu")), false);
+});
+
+test("read-only FD open rejects a regular-file to FIFO swap without blocking the actual Linux child", { skip: process.platform === "win32", timeout: 5000 }, async () => {
+  const directory = temporaryDirectory("readonly-fifo"), writer = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example" });
+  const metadata = await writer.saveBuffer({ buffer: pdfBuffer(), originalName: "proof.pdf" });
+  const code = `const assert=require('node:assert/strict'),fs=require('node:fs'),{spawnSync}=require('node:child_process');
+    const storage=require(process.argv[1]).createAmuStorage({rootDirectory:process.argv[2],encryptionKeys:{example:Buffer.alloc(32,7)},activeKeyId:'example',readOnly:true});
+    const file=process.argv[3],actualOpen=fs.openSync;let swapped=false;
+    fs.openSync=(target,...args)=>{if(target===file&&!swapped){swapped=true;fs.unlinkSync(file);const made=spawnSync('/usr/bin/mkfifo',[file],{timeout:1000});assert.equal(made.status,0);}return actualOpen(target,...args);};
+    assert.throws(()=>storage.readBuffer(JSON.parse(process.argv[4])),{code:'AMU_DOCUMENT_INTEGRITY_FAILED'});assert.equal(swapped,true);console.log('FIFO_REJECTED');`;
+  const result = require("node:child_process").spawnSync(process.execPath, ["-e", code, path.resolve(__dirname, "../lib/amu-storage.js"), directory, writer.blobPath(metadata.storageKey), JSON.stringify(metadata)],
+    { env: { PATH: "/usr/bin:/bin" }, timeout: 3000, encoding: "utf8" });
+  assert.equal(result.error, undefined); assert.equal(result.signal, null); assert.equal(result.status, 0, result.stderr); assert.equal(result.stdout.trim(), "FIFO_REJECTED");
+});
+
 test.after(() => {
   for (const root of testRoots) fs.rmSync(root, { recursive: true, force: true });
 });

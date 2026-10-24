@@ -47,6 +47,22 @@ const {
 
 const root = path.resolve(__dirname, "..");
 
+test("Paired-backup file verifier registration grants no driver, facade, statements or runtime configuration", () => {
+  const file = "lib/persistence/postgresql/operations/protected-files.js";
+  for (const fixture of ["test-support/postgresql-api/backup-pools.js", "test/postgresql-backup-protected-files.test.js"]) {
+    assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.filter(name => name === fixture).length, 1, fixture);
+  }
+  for (const candidate of [file, "lib/persistence/postgresql/operations/other-protected-files.js"]) {
+    for (const [source, kind] of [
+      ['require("pg");', "postgresql-driver-import"],
+      ['require("node:sqlite");', "sqlite-driver-import-outside-boundary"],
+      ["createPersistenceProviderFacade(adapter);", "provider-facade-outside-boundary"],
+      ["definePersistenceStatement({});", "provider-statement-outside-boundary"],
+      ["process.env.DB_PROVIDER;", "provider-runtime-config-outside-boundary"],
+    ]) assert.ok(architectureBoundaryViolationsForText(candidate, source).some(row => row.kind === kind), `${candidate}: ${kind}`);
+  }
+});
+
 definePersistenceProviderContractTests({
   name: "v0.87 Datenbank Block 2",
   createSubject: createContractTestSubject,

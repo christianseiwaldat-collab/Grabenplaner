@@ -246,6 +246,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'lib/persistence/postgresql/operations/paired-monitor.js',
   'lib/persistence/postgresql/operations/paired-retention.js',
   'lib/persistence/postgresql/operations/runtime.js',
+  // Same retained maintenance snapshot; file/record verification only.
+  'lib/persistence/postgresql/operations/protected-files.js',
   'server-tools/linux/lib/postgresql-operations.js',
   'scripts/postgresql/qualify-operations-runtime.js',
   'scripts/postgresql/qualify-paired-backup-api.js',
@@ -802,6 +804,8 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/postgresql-api-fixture-boundary.test.js",
   "test-support/postgresql-api/preload.js",
   "test-support/postgresql-api/worker.js",
+  "test-support/postgresql-api/backup-pools.js",
+  "test/postgresql-backup-protected-files.test.js",
   "test-support/postgresql-api/sql.js",
   "test-support/postgresql-api/guard.js",
   "test-support/postgresql-migration/owned-local-fixture.js",

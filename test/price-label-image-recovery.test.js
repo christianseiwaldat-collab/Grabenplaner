@@ -137,7 +137,7 @@ function backupRuntime(f) {
   constructor(options) { this.database = options.database; }
   async connect() {
    const c = new EventEmitter(); c.database = this.database; c.queries = []; c.release = () => {};
-   c.query = async sql => {
+   c.query = async (sql, values = []) => {
     c.queries.push(sql); events.push(c.database + ':' + sql);
     if (sql.includes('ISOLATION LEVEL REPEATABLE READ')) c.retainedRows = f.rows.map(row => ({ ...row }));
     if (sql.includes('pg_stat_activity')) return { rows: [{ n: 0 }] };
@@ -145,7 +145,10 @@ function backupRuntime(f) {
     if (sql.includes('FROM pg_tables')) return { rows: [{ schemaname: 'gp', tablename: 'trade_annotations' }] };
     if (sql.includes('pg_database_size')) return { rows: [{ bytes: '1024' }] };
     if (sql.includes('pg_export_snapshot')) return { rows: [{ id: '123-AB' }] };
+    if (sql.includes('information_schema.columns')) return { rows: (require('../lib/persistence/postgresql/contracts/source-schema-v09237.json').tables
+     .find(table => table.name === values[1])?.columns || []).map(column => ({ column_name: column.name })) };
     if (sql.includes('to_regclass')) return { rows: [{ present: true }] };
+    if (sql.includes("FROM trade_annotations WHERE kind = 'price-label-image-storage-v1'")) return { rows: c.retainedRows.filter(row => row.kind === 'price-label-image-storage-v1').map(row => ({ storage_key: row.scopeId })) };
     if (sql.includes('FROM gp.trade_annotations')) {
      assert.ok(c.retainedRows, 'image reads must use the dump snapshot, never a new pool connection');
      assert.ok(!c.queries.includes('COMMIT') && !c.queries.includes('ROLLBACK'), 'snapshot must still be retained');
