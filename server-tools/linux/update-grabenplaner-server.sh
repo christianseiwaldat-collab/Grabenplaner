@@ -244,15 +244,86 @@ build_cache="$(gp_existing_directory "${build_cache_arg:-$GP_DEFAULT_BUILD_CACHE
 root_node - "$app_dir/node_modules" <<'NODE' >/dev/null \
   || gp_die "Die installierten privilegierten Abhaengigkeiten sind nicht vollstaendig root-geschuetzt."
 const fs = require('node:fs'), path = require('node:path');
-const root = process.argv[2];
-function trusted(file, recursive) {
-  const info = fs.lstatSync(file);
-  if (fs.realpathSync(file) !== file || info.isSymbolicLink() || info.uid !== 0 || (info.mode & 0o022)
-      || (!info.isDirectory() && (!info.isFile() || info.nlink !== 1))) throw Error('Unsafe installed dependency tree');
-  if (recursive && info.isDirectory()) for (const name of fs.readdirSync(file)) trusted(path.join(file, name), true);
+const root = path.resolve(process.argv[2]);
+let checking = root;
+try {
+  const dependencyRoots = [root];
+  function trustedDependencyBinLink(file, dependencyRoot) {
+    // Only protected node_modules/.bin commands may resolve to regular files
+    // in this same dependency tree. All other symbolic links stay forbidden.
+    const inside = target => target === dependencyRoot || (!path.relative(dependencyRoot, target).startsWith('..' + path.sep)
+      && path.relative(dependencyRoot, target) !== '..' && !path.isAbsolute(path.relative(dependencyRoot, target)));
+    const metadata = s => [s.dev, s.ino, s.uid, s.gid, s.mode, s.nlink, s.size, s.mtimeMs, s.ctimeMs].join(':');
+    const regular = target => {
+      const s = fs.lstatSync(target);
+      if (s.isSymbolicLink() || s.uid !== 0 || (s.mode & 0o022)
+        || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1)) || fs.realpathSync(target) !== target) throw Error('unsafe');
+      return s;
+    };
+    let cursor = dependencyRoot;
+    regular(cursor);
+    for (const part of path.relative(dependencyRoot, path.dirname(file)).split(path.sep).filter(Boolean)) {
+      cursor = path.join(cursor, part);
+      if (!regular(cursor).isDirectory()) throw Error('unsafe');
+    }
+    let pending = [path.basename(file)];
+    const links = new Set();
+    while (pending.length) {
+      const part = pending.shift();
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        cursor = path.dirname(cursor);
+        if (!inside(cursor) || !regular(cursor).isDirectory()) throw Error('unsafe');
+        continue;
+      }
+      const target = path.join(cursor, part), s = fs.lstatSync(target);
+      if (s.isSymbolicLink()) {
+        if (!inside(target) || path.basename(path.dirname(target)) !== '.bin'
+          || path.basename(path.dirname(path.dirname(target))) !== 'node_modules'
+          || s.uid !== 0 || s.nlink !== 1 || links.has(target) || links.size >= 64) throw Error('unsafe');
+        links.add(target);
+        const destination = fs.readlinkSync(target);
+        if (!destination || metadata(fs.lstatSync(target)) !== metadata(s)) throw Error('unsafe');
+        if (path.isAbsolute(destination)) {
+          if (!destination.startsWith(dependencyRoot + path.sep)) throw Error('unsafe');
+          cursor = dependencyRoot;
+          pending = destination.slice(dependencyRoot.length + 1).split(path.sep).concat(pending);
+        } else {
+          pending = destination.split(path.sep).concat(pending);
+        }
+      } else {
+        cursor = target;
+        const checked = regular(cursor);
+        if (pending.length && !checked.isDirectory()) throw Error('unsafe');
+      }
+    }
+    if (!inside(cursor) || !regular(cursor).isFile()) throw Error('unsafe');
+  }
+  function trusted(target, recursive = false) {
+    checking = target;
+    const s = fs.lstatSync(target);
+    if (s.isSymbolicLink()) {
+      const dependencyRoot = dependencyRoots.find(base => target.startsWith(base + path.sep));
+      if (!dependencyRoot) throw Error('unsafe');
+      trustedDependencyBinLink(target, dependencyRoot);
+      return;
+    }
+    if (s.uid !== 0 || (s.mode & 0o022)
+      || (!s.isDirectory() && (!s.isFile() || s.nlink !== 1))
+      || fs.realpathSync(target) !== target) throw Error('unsafe');
+    if (recursive && s.isDirectory()) for (const name of fs.readdirSync(target)) trusted(path.join(target, name), true);
+  }
+  for (let directory = root;; directory = path.dirname(directory)) {
+    trusted(directory);
+    if (directory === path.dirname(directory)) break;
+  }
+  trusted(root, true);
+} catch (error) {
+  const reason = typeof error.code === 'string' ? error.code : 'protected metadata or dependency-bin-link contract';
+  process.stderr.write('Unsafe installed dependency tree: ' + JSON.stringify(checking).slice(0, 600)
+    + ' (' + reason.slice(0, 80) + ')\n');
+  process.exitCode = 1;
 }
-for (let parent = path.dirname(root);; parent = path.dirname(parent)) { trusted(parent, false); if (parent === '/') break; }
-trusted(root, true);
 NODE
 
 package="$(gp_existing_file "$package_arg" "Updatepaket")"

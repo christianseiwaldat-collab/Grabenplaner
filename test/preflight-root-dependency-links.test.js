@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const path = require("node:path");
 const vm = require("node:vm");
 const { spawnSync } = require("node:child_process");
@@ -200,4 +201,167 @@ for (const state of ["safe", "unsafe-bin", "unsafe-installed", "dangling-module-
   const result = runActualBootstrap(f, source.slice(start, end + "\nNODE".length), installedApp);
   assert.equal(result.status, state === "safe" ? 0 : 42, result.stderr || result.error?.message);
   assert.equal(fs.existsSync(marker), state === "safe", "runtime may only load after the actual guards accept the tree");
+});
+
+
+const updaterSource = fs.readFileSync(path.join(__dirname, "../server-tools/linux/update-grabenplaner-server.sh"), "utf8").replace(/\r\n/g, "\n");
+const updaterGuardStart = updaterSource.indexOf('root_node - "$app_dir/node_modules" <<\'NODE\' >/dev/null');
+const updaterGuardEnd = updaterSource.indexOf("\nNODE", updaterGuardStart);
+const updaterGuardSection = updaterSource.slice(updaterGuardStart, updaterGuardEnd + "\nNODE".length);
+const updaterRootNode = updaterSource.match(/^root_node\(\) \{[^\n]+\}/m)?.[0];
+const updaterIdentityLines = updaterSource.split("\n").filter(line => line.includes('postgresql_before_identity="$(root_node "$backup_app_dir/'));
+const updaterGuards = [...updaterGuardSection.matchAll(/  function trustedDependencyBinLink\(file, dependencyRoot\) \{[\s\S]*?(?=\n  for \(let directory = root;)/g)].map(match => match[0]);
+
+// Only path/rawTarget are retained from the actual installed Core5 graph,
+// observed 2026-10-24T13:03:50Z (diagnostic SHA256 b28dd1f3a86f83eb48d5d59c57700dde34a6b9aaf90cd8aee7ce8e3762b35d3e).
+const installedBinLinks = [
+  [".bin/mkdirp", "../mkdirp/bin/cmd.js"],
+  [".bin/opencollective-postinstall", "../opencollective-postinstall/index.js"],
+  [".bin/sha.js", "../sha.js/bin.js"],
+  [".bin/fxparser", "../fast-xml-parser/src/cli/cli.js"],
+  [".bin/uuid", "../uuid/dist/esm/bin/uuid"],
+  [".bin/semver", "../semver/bin/semver.js"],
+  [".bin/rimraf", "../rimraf/bin.js"],
+  [".bin/is-docker", "../is-docker/cli.js"],
+  [".bin/is-inside-container", "../is-inside-container/cli.js"],
+  [".bin/crc32", "../crc-32/bin/crc32.njs"],
+  ["tesseract.js/node_modules/.bin/opencollective-postinstall", "../../../opencollective-postinstall/index.js"]
+];
+
+test("updater protects its early installed dependency boundary before any privileged application import", () => {
+  assert.ok(updaterGuardStart > 0 && updaterGuardEnd > updaterGuardStart);
+  assert.ok(updaterGuardEnd < updaterSource.indexOf('package="$(gp_existing_file "$package_arg"'));
+  assert.ok(updaterGuardEnd < updaterSource.indexOf('old_version="$(root_node -p'));
+  assert.ok(updaterRootNode?.includes("--no-global-search-paths"));
+  assert.equal(updaterIdentityLines.length, 1);
+  assert.equal(updaterGuards.length, 1);
+  const binAlgorithm = value => value.slice(0, value.indexOf("\n  function trusted("));
+  assert.equal(binAlgorithm(updaterGuards[0]), binAlgorithm(guards[0]));
+  assert.ok(updaterGuardSection.includes("const dependencyRoots = [root];"), "node_modules is already the input root");
+  assert.deepEqual([...updaterGuardSection.matchAll(/require\('([^']+)'\)/g)].map(match => match[1]), ["node:fs", "node:path"]);
+  assert.ok(updaterGuardSection.includes("JSON.stringify(checking).slice(0, 600)"), "diagnostics bind only a bounded path");
+  assert.equal(installedBinLinks.length, 11);
+});
+
+function addInstalledBinLinks(f) {
+  for (const [relative, rawTarget] of installedBinLinks) {
+    const link = path.join(f.modules, relative), target = path.resolve(path.dirname(link), rawTarget);
+    assert.ok(target.startsWith(f.modules + path.sep));
+    fs.mkdirSync(path.dirname(link), { recursive: true, mode: 0o755 });
+    fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o755 });
+    if (!fs.existsSync(target)) fs.writeFileSync(target, "throw Error('dependency command must never be imported');\n", { mode: 0o750 });
+    fs.chownSync(target, 0, 982); fs.chmodSync(target, 0o750);
+    f.symlink(rawTarget, link);
+  }
+}
+
+function fixtureInventory(directory) {
+  const result = [];
+  function visit(file, relative) {
+    const s = fs.lstatSync(file);
+    const row = [relative, s.uid, s.gid, s.mode, s.nlink, s.size];
+    if (s.isSymbolicLink()) row.push("link", fs.readlinkSync(file));
+    else if (s.isFile()) row.push("file", crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"));
+    else if (s.isDirectory()) row.push("directory");
+    else row.push("special");
+    result.push(row);
+    if (s.isDirectory()) for (const name of fs.readdirSync(file).sort()) visit(path.join(file, name), path.posix.join(relative, name));
+  }
+  visit(directory, ".");
+  return result;
+}
+
+function verifyActualUpdaterGuard(f, accepted, section = updaterGuardSection) {
+  const marker = path.join(f.root, "actual-updater-pg-import");
+  const identityHelper = path.join(f.app, "server-tools/linux/lib/postgresql-operations.js");
+  fs.mkdirSync(path.dirname(identityHelper), { recursive: true, mode: 0o755 });
+  // This protected builtins-only transport sentinel has no provider, database,
+  // credentials or real application behavior. The actual updater identity call
+  // may import it only after the unchanged shell guard section succeeds.
+  fs.writeFileSync(identityHelper, `const fs = require('node:fs');
+    require('node:assert/strict').deepEqual(process.argv.slice(2), ['identity', '/etc/grabenplaner/postgresql-operations.json']);
+    fs.writeFileSync(${JSON.stringify(marker)}, 'loaded'); process.stdout.write('fixture-pair-identity');\n`);
+  const before = fixtureInventory(f.app);
+  const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
+  const script = ["set -Eeuo pipefail", "IFS=$'\\n\\t'", `node=${quote(process.execPath)}`,
+    `app_dir=${quote(f.app)}`, `backup_app_dir=${quote(f.app)}`,
+    'gp_die() { printf "%s\\n" "$*" >&2; exit 42; }', updaterRootNode,
+    section, updaterIdentityLines[0]].join("\n");
+  const result = spawnSync("/bin/bash", ["--noprofile", "--norc", "-s"], {
+    input: script, encoding: "utf8", timeout: 15000, maxBuffer: 64 * 1024,
+    env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8" },
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, accepted ? 0 : 42, result.stderr);
+  if (accepted) {
+    assert.equal(result.stderr, "");
+    assert.equal(fs.readFileSync(marker, "utf8"), "loaded");
+  } else {
+    if (section === updaterGuardSection) assert.match(result.stderr, /Unsafe installed dependency tree:/);
+    else {
+      assert.equal(section, predecessorUpdaterGuard, "only the exact retained predecessor guard is an alternate probe");
+      assert.match(result.stderr, /Error: Unsafe installed dependency tree/);
+    }
+    assert.match(result.stderr, /installierten privilegierten Abhaengigkeiten/);
+    if (section === updaterGuardSection) assert(result.stderr.length < 1024, "rejection diagnostic must contain a bounded path, never dependency contents");
+    assert.equal(fs.existsSync(marker), false, "unsafe dependencies must fail before the actual privileged PG identity entrypoint");
+  }
+  assert.deepEqual(fixtureInventory(f.app), before, "the actual inline guard and isolated identity sentinel preserve every dependency byte, link and mode");
+}
+
+test("actual updater early guard accepts all eleven observed raw bin links including nested Tesseract", native, t => {
+  const f = fixture(t); addInstalledBinLinks(f); verifyActualUpdaterGuard(f, true);
+  for (const [relative, rawTarget] of installedBinLinks) {
+    const link = path.join(f.modules, relative), info = fs.lstatSync(link);
+    assert.equal(fs.readlinkSync(link), rawTarget); assert.equal(info.uid, 0); assert.equal(info.gid, 982);
+    assert.equal(info.mode & 0o777, 0o777); assert.equal(info.nlink, 1);
+  }
+});
+
+test("actual updater early guard also accepts a protected graph without bin links", native, t => {
+  verifyActualUpdaterGuard(fixture(t), true);
+});
+
+test("actual updater early guard accepts protected bin chains with absolute same-tree targets", native, t => {
+  const f = fixture(t); f.symlink("tool-two"); f.symlink(f.payload, path.join(f.bin, "tool-two"));
+  verifyActualUpdaterGuard(f, true);
+});
+
+// The early updater guard covers dependencies and their ancestor directories.
+// The existing full preflight cases above additionally cover application files.
+for (const [name, mutate] of Object.entries(negativeCases).filter(([name]) => name !== "application source link")) {
+  test(`actual updater early guard rejects ${name} before privileged PG import`, native, t => {
+    const f = fixture(t); mutate(f); verifyActualUpdaterGuard(f, false);
+  });
+}
+for (const [name, mutate] of Object.entries({
+  "dangling node_modules root": f => { fs.rmSync(f.modules, { recursive: true }); fs.symlinkSync("missing-modules", f.modules); },
+  "foreign node_modules owner": f => { fs.chownSync(f.modules, 61001, 982); },
+  "writable node_modules root": f => { fs.chmodSync(f.modules, 0o775); },
+  "foreign application ancestor": f => { fs.chownSync(f.app, 61001, 982); },
+  "writable application ancestor": f => { fs.chmodSync(f.app, 0o775); },
+})) test(`actual updater early guard rejects ${name} before privileged PG import`, native, t => {
+  const f = fixture(t); mutate(f); verifyActualUpdaterGuard(f, false);
+});
+
+
+// Exact early-guard shell bytes from c2223c8; this immutable predecessor probe
+// reproduces the observed rejection without changing or running an old updater.
+const predecessorUpdaterGuard = String.raw`root_node - "$app_dir/node_modules" <<'NODE' >/dev/null \
+  || gp_die "Die installierten privilegierten Abhaengigkeiten sind nicht vollstaendig root-geschuetzt."
+const fs = require('node:fs'), path = require('node:path');
+const root = process.argv[2];
+function trusted(file, recursive) {
+  const info = fs.lstatSync(file);
+  if (fs.realpathSync(file) !== file || info.isSymbolicLink() || info.uid !== 0 || (info.mode & 0o022)
+      || (!info.isDirectory() && (!info.isFile() || info.nlink !== 1))) throw Error('Unsafe installed dependency tree');
+  if (recursive && info.isDirectory()) for (const name of fs.readdirSync(file)) trusted(path.join(file, name), true);
+}
+for (let parent = path.dirname(root);; parent = path.dirname(parent)) { trusted(parent, false); if (parent === '/') break; }
+trusted(root, true);
+NODE`;
+
+test("unchanged predecessor updater guard rejects the same eleven raw links before privileged PG import", native, t => {
+  assert.equal(crypto.createHash("sha256").update(predecessorUpdaterGuard).digest("hex"), "9320faeb0e8fe9dc57841e1c975b2521d17f0af031fb64684a458c39558061f1");
+  const f = fixture(t); addInstalledBinLinks(f); verifyActualUpdaterGuard(f, false, predecessorUpdaterGuard);
 });
