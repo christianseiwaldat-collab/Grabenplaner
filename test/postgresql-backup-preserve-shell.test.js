@@ -32,8 +32,23 @@ test("native PostgreSQL preservation dispatcher requires explicit retention and 
     assert.match(path.basename(root), /^gp-pg-backup-preserve-[A-Za-z0-9]+$/);
     fs.rmSync(root, { recursive: true, force: true });
   });
-  const runtime = path.join(root, "node");
-  fs.copyFileSync(process.execPath, runtime); fs.chmodSync(runtime, 0o755);
+  // Root copies can retain the source owner through libuv. Hosted Node
+  // installations belong to the runner, so reproduce that ownership here.
+  const foreignRuntime = path.join(root, "foreign-owned-source-node"), runtime = path.join(root, "node");
+  const nativeBytes = fs.readFileSync(process.execPath), nativeSha256 = crypto.createHash("sha256").update(nativeBytes).digest("hex");
+  assert.deepEqual(nativeBytes.subarray(0, 4), Buffer.from([0x7f, 0x45, 0x4c, 0x46]));
+  fs.copyFileSync(process.execPath, foreignRuntime); fs.chownSync(foreignRuntime, 65534, 65534); fs.chmodSync(foreignRuntime, 0o755);
+  const foreignInfo = fs.lstatSync(foreignRuntime);
+  assert(foreignInfo.isFile() && !foreignInfo.isSymbolicLink());
+  assert.equal(foreignInfo.uid, 65534); assert.equal(foreignInfo.gid, 65534); assert.equal(foreignInfo.nlink, 1);
+  assert.equal(foreignInfo.mode & 0o022, 0);
+  assert.equal(crypto.createHash("sha256").update(fs.readFileSync(foreignRuntime)).digest("hex"), nativeSha256);
+  fs.copyFileSync(foreignRuntime, runtime); fs.chownSync(runtime, 0, 0); fs.chmodSync(runtime, 0o755);
+  const runtimeInfo = fs.lstatSync(runtime);
+  assert(runtimeInfo.isFile() && !runtimeInfo.isSymbolicLink());
+  assert.equal(runtimeInfo.uid, 0); assert.equal(runtimeInfo.gid, 0); assert.equal(runtimeInfo.nlink, 1);
+  assert.equal(runtimeInfo.mode & 0o022, 0);
+  assert.equal(crypto.createHash("sha256").update(fs.readFileSync(runtime)).digest("hex"), nativeSha256);
   const common = path.join(root, "common.sh"), dispatcher = path.join(root, "postgresql-maintenance.sh");
   for (const [target, relative] of [[common, "common.sh"], [dispatcher, "postgresql-maintenance.sh"]]) {
     fs.writeFileSync(target, fs.readFileSync(path.join(repository, "server-tools/linux/lib", relative), "utf8").replace(/\r\n/g, "\n"));
@@ -84,6 +99,11 @@ process.stdout.write(JSON.stringify({verified:true,action}));
     } };
   }
   await t.test("preserve reaches only backup-preserve and never changes an existing point", () => {
+    const foreign = fixture({ node: foreignRuntime }), rejected = foreign.execute();
+    assert.notEqual(rejected.status, 0);
+    assert.match(rejected.stderr, /Die privilegierte Node-Laufzeit ist nicht root-geschuetzt/);
+    assert.equal(fs.existsSync(foreign.events), false); assert.equal(fs.existsSync(foreign.marker), false);
+    assert.equal(fs.readFileSync(path.join(foreign.backups, "needed-old-point"), "utf8"), "unchanged synthetic old recovery point");
     const item = fixture(), result = item.execute();
     assert.equal(result.status, 0, result.stderr);
     assert.equal(fs.readFileSync(item.events, "utf8"), "check-paths\nbackup-preserve\n");
@@ -121,9 +141,9 @@ process.stdout.write(JSON.stringify({verified:true,action}));
   for (const unsafe of ["foreign-owned", "writable"]) {
     await t.test("a root-owned Node file under a " + unsafe + " ancestor is refused before helper execution", () => {
       const ancestor = fs.mkdtempSync(path.join(root, "unsafe-node-")), file = path.join(ancestor, "node");
-      fs.copyFileSync(runtime, file); fs.chmodSync(file, 0o755);
+      fs.copyFileSync(runtime, file); fs.chownSync(file, 0, 0); fs.chmodSync(file, 0o755);
       const info = fs.lstatSync(file);
-      assert(info.isFile() && !info.isSymbolicLink()); assert.equal(info.uid, 0); assert.equal(info.nlink, 1);
+      assert(info.isFile() && !info.isSymbolicLink()); assert.equal(info.uid, 0); assert.equal(info.gid, 0); assert.equal(info.nlink, 1);
       assert.equal(info.mode & 0o022, 0);
       if (unsafe === "foreign-owned") fs.chownSync(ancestor, 65534, 65534);
       else fs.chmodSync(ancestor, 0o777);
@@ -142,6 +162,7 @@ process.stdout.write(JSON.stringify({verified:true,action}));
       else fs.chmodSync(file, 0o666);
       const result = item.execute();
       assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /Der App- und Abhaengigkeitsbaum ist nicht root-geschuetzt/);
       assert.equal(fs.existsSync(item.events), false);
       assert.equal(fs.existsSync(item.marker), false);
     }
