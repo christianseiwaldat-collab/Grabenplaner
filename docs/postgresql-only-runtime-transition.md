@@ -40,6 +40,14 @@ Linux-pnpm erzeugt deklarierte Befehle unter `node_modules/.bin` teilweise als r
 
 Nur für diese geprüften Aliase entsteht eine neue reguläre Shell-Datei, die das ursprüngliche Node-Entrypoint mit den unveränderten Argumenten per `exec` startet. Relative Imports, CJS-/ESM-Semantik und Signale bleiben dadurch erhalten; `process.argv[1]` bezeichnet das ursprüngliche Skriptziel. Das ist die normale Alias-Semantik und keine bytegleiche Kopie eines Linkpfads. Außerhalb der Paketgrenze liegende Ziele, Linkketten, andere Links, FIFO-/Hardlinkfälle, unpassende Deklarationen und fremde Interpreter bleiben unzulässig. Beim Versiegeln wird kein Paketbefehl ausgeführt.
 
+Die Interpreterprüfung akzeptiert ausschließlich drei feste Node-Zeilen:
+`#!/usr/bin/env node`, `#!/usr/bin/node` und das tatsächlich in
+`sha.js@2.4.12` enthaltene `#! /usr/bin/env node`. Das einzelne Leerzeichen
+unmittelbar nach `#!` ist eine gültige Linux-Schreibweise. Es gibt keine freie
+Whitespace-, Interpreter- oder Argumentauswertung; Shell-Interpreter und
+zusätzliche Interpreterargumente bleiben unzulässig. Der reguläre Shim führt
+weiterhin das ursprüngliche geprüfte Entrypoint aus.
+
 ## Nachweise vor einer Produktivfreigabe
 
 Die fokussierten Vertragstests prüfen zulässige und unzulässige Core-Deltas, Vorgängerversionen, Dateimengen, Hardlinks, symbolische Elternpfade und ungebundene Aufrufe. Historische Core-4-/Core-5-Assertions bleiben separat an die unveränderliche Basis gebunden. Das ersetzt nicht die erforderliche isolierte Linux-Qualifikation der tatsächlichen alten und neuen Einstiegspunkte.

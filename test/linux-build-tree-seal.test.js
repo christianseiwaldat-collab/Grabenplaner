@@ -69,6 +69,32 @@ test("declared npm command links become portable regular shims preserving Common
   }
   assert.equal(fs.lstatSync(path.join(values.source, "node_modules/.bin/seal-fixture")).isSymbolicLink(), true);
 });
+test("the fixed spaced Node shebang remains executable after sealing and moving with CommonJS, stdin and literal arguments", {
+  skip: !rootLinux,
+}, t => {
+  const values = fixture(t);
+  const files = commandFixture(values, {
+    name: "sha.js", command: "sha.js", relative: "bin.js", bin: "./bin.js", metadata: { version: "2.4.12" },
+    body: `#! /usr/bin/env node\nconst fs = require('node:fs'); console.log(JSON.stringify({ main: require.main === module, sibling: require('./relative.cjs'), argv: process.argv.slice(2), stdin: fs.readFileSync(0, 'utf8') }));\n`,
+  });
+  assert.equal(fs.readFileSync(files.executable, "utf8").split("\n", 1)[0], "#! /usr/bin/env node");
+  fs.writeFileSync(path.join(files.packageRoot, "relative.cjs"), "module.exports = 'spaced shebang sibling';\n");
+  const result = seal(values); assert.equal(result.status, 0, result.stderr);
+  const moved = path.join(values.root, "moved-spaced-shebang-candidate"); fs.renameSync(values.target, moved);
+  const shim = path.join(moved, "node_modules/.bin/sha.js"), info = fs.lstatSync(shim);
+  assert(info.isFile()); assert(!info.isSymbolicLink()); assert.equal(info.nlink, 1); assert.equal(info.uid, 0);
+  assert.equal(info.mode & 0o022, 0); assert(info.mode & 0o111);
+  const args = ["space argument", "literal $() ; ' %s", "--switch"], input = "stdin survives the move\n$() ; literal input\n";
+  for (const invocation of [
+    { executable: shim, cwd: values.root },
+    { executable: "sha.js", cwd: moved, env: { ...process.env, PATH: path.dirname(shim) + path.delimiter + process.env.PATH } },
+  ]) {
+    const run = spawnSync(invocation.executable, args, { encoding: "utf8", input, cwd: invocation.cwd, env: invocation.env });
+    assert.equal(run.status, 0, run.stderr);
+    assert.deepEqual(JSON.parse(run.stdout), { main: true, sibling: "spaced shebang sibling", argv: args, stdin: input });
+  }
+  assert.equal(fs.lstatSync(files.commandPath).isSymbolicLink(), true);
+});
 test("npm command sealing selects the package boundary before a nested ESM type-only manifest", {
   skip: !rootLinux,
 }, t => {
@@ -147,7 +173,7 @@ test("npm command sealing rejects undeclared, mismatched and duplicate bin decla
 test("npm command sealing rejects escaping, chained, misplaced and linked executable inodes", {
   skip: !rootLinux,
 }, async t => {
-  for (const kind of ["escape", "absolute", "link-chain", "non-bin-link", "hardlinked-executable", "hardlinked-link", "non-executable", "shell-shebang", "missing-shebang", "shell-alias", "shell-link", "missing-target", "directory-target", "fifo-target"]) {
+  for (const kind of ["escape", "absolute", "link-chain", "non-bin-link", "hardlinked-executable", "hardlinked-link", "non-executable", "shell-shebang", "spaced-shell-shebang", "spaced-env-argument", "missing-shebang", "shell-alias", "shell-link", "missing-target", "directory-target", "fifo-target"]) {
     await t.test(kind, t => {
       const values = fixture(t), files = commandFixture(values);
       if (kind === "escape" || kind === "absolute") {
@@ -161,6 +187,8 @@ test("npm command sealing rejects escaping, chained, misplaced and linked execut
       if (kind === "hardlinked-link") fs.linkSync(files.commandPath, files.commandPath + "-second");
       if (kind === "non-executable") fs.chmodSync(files.executable, 0o644);
       if (kind === "shell-shebang") fs.writeFileSync(files.executable, "#!/bin/sh\nprintf unexpected\\n\n");
+      if (kind === "spaced-shell-shebang") fs.writeFileSync(files.executable, "#! /bin/sh\nprintf unexpected\\n\n");
+      if (kind === "spaced-env-argument") fs.writeFileSync(files.executable, "#! /usr/bin/env node --trace-warnings\nconsole.log('interpreter arguments must be rejected');\n");
       if (kind === "missing-shebang") fs.writeFileSync(files.executable, "console.log('not a direct executable');\n");
       if (kind === "shell-alias") fs.renameSync(files.commandPath, files.commandPath + ";touch-unexpected");
       if (kind === "shell-link") { fs.unlinkSync(files.commandPath); fs.symlinkSync("../seal-fixture/bin/command.cjs;touch-unexpected", files.commandPath); }

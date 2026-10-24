@@ -602,7 +602,10 @@ def materialize_executable_links(root_fd):
         assert declared_parts == resolved and declared_parts[:package_end] == package
         executable, prefix = copied_regular(root_fd, resolved, 256)
         assert executable.st_mode & 0o111
-        assert prefix.split(b'\n', 1)[0] in (b'#!/usr/bin/env node', b'#!/usr/bin/node')
+        # sha.js@2.4.12 uses the valid Linux space immediately after #!.
+        # Keep an exact interpreter allowlist: no arguments or shell parsing.
+        assert prefix.split(b'\n', 1)[0] in (
+            b'#!/usr/bin/env node', b'#!/usr/bin/node', b'#! /usr/bin/env node')
         destination = copied_directory(root_fd, parts)
         try:
             output = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
