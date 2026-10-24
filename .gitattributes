@@ -3,6 +3,8 @@
 # Font assets and licence/source hashes preserve exact bytes on every host.
 public/fonts/price-labels/** -text
 public/fonts/price-labels/*/*.txt -whitespace
+# The password corpus manifest binds the exact LF bytes, not checkout line endings.
+lib/password-policy/common-sha256.txt -text
 *.sh text eol=lf
 lib/database-lock-linux.py text eol=lf
 # Qualified PostgreSQL contracts and SQL bind exact source bytes on every host.

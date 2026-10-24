@@ -90,6 +90,19 @@ function Get-Sha256File([string]$Path) {
     }
 }
 
+function Assert-BundledPasswordPolicy([string]$Root, [string]$Node) {
+    # Each invocation loads the actual staged corpus in a fresh process. The
+    # outer package hashes alone cannot establish its internal manifest contract.
+    $check = @'
+'use strict';
+const path = require('node:path');
+const policy = require(path.join(path.resolve(process.argv[1]), 'lib', 'portal-password-policy.js'));
+if (policy.metadata().available !== true) throw new Error('Bundled password corpus is unavailable or fails its integrity contract.');
+'@
+    & $Node --no-global-search-paths -e $check $Root
+    if ($LASTEXITCODE -ne 0) { throw 'Der gebuendelte Kennwortkorpus ist nicht verfuegbar oder verletzt seinen Integritaetsvertrag.' }
+}
+
 function Assert-ManagedTextByteContracts([string]$SourceRoot, [string[]]$RelativePaths) {
     foreach ($relative in $RelativePaths) {
         $candidate = Join-Path $SourceRoot $relative.Replace('/', '\')
@@ -507,6 +520,7 @@ try {
     # Bind the deterministic source inventory through the existing file/hash
     # contract. It excludes itself and the outer manifest to avoid a hash cycle.
     $inventoryNode = (Get-Command node -ErrorAction Stop).Source
+    Assert-BundledPasswordPolicy -Root $buildRoot -Node $inventoryNode
     $inventoryCli = Join-Path $buildRoot 'server-tools\linux\security-release-inventory.js'
     $sourceInventoryPath = Join-Path $buildRoot 'lib\security-release-inventory.source.json'
     & $inventoryNode $inventoryCli generate --mode source --root $buildRoot --source-commit $sourceCommit --created-at $sourceTimestamp --output $sourceInventoryPath
@@ -546,6 +560,7 @@ try {
     Write-DeterministicZip -SourceRoot $buildRoot -ArchivePath $archivePath
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $roundtripRoot)
+    Assert-BundledPasswordPolicy -Root $roundtripRoot -Node $inventoryNode
     $roundtripManifestPath = Join-Path $roundtripRoot 'grabenplaner-server-manifest.json'
     if (-not (Test-Path -LiteralPath $roundtripManifestPath -PathType Leaf)) { throw 'Manifest fehlt nach dem ZIP-Roundtrip.' }
     $roundtripManifest = Get-Content -LiteralPath $roundtripManifestPath -Raw -Encoding utf8 | ConvertFrom-Json
