@@ -247,6 +247,7 @@ test("v0.87 SQLite-Provider: Application-Repositories akzeptieren nur echte Prov
         "loanModule",
         "mobileAuth",
         "organizationPersonnel",
+        "passkeys",
         "personalActionLog",
         "personalNotificationContacts",
         "personnelLearning",
@@ -268,6 +269,7 @@ test("v0.87 SQLite-Provider: Application-Repositories akzeptieren nur echte Prov
       ],
     );
     assert.equal(Object.isFrozen(fixture.repositories.uiPreferences), true);
+    assert.equal(Object.isFrozen(fixture.repositories.passkeys), true);
 
     assert.deepEqual(
       await fixture.repositories.uiPreferences.saveChanges("E1", {
@@ -294,6 +296,7 @@ test("v0.87 SQLite-Provider: Application-Repositories akzeptieren nur echte Prov
           "loanModule",
           "mobileAuth",
           "organizationPersonnel",
+          "passkeys",
           "personalActionLog",
           "personalNotificationContacts",
           "personnelLearning",

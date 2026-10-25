@@ -4,6 +4,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
+const { functionSource } = require("../test-support/learning-workspace-ui");
 
 const root = path.resolve(__dirname, "..");
 function readSource(relativePath) {
@@ -526,11 +528,32 @@ test("Detailrenderer arbeitet mit einer Positivliste ohne vertrauliche Felder", 
     "preferredLanguage",
     "documents",
     "history",
-    "conversion",
   ]) assert.doesNotMatch(rendering, new RegExp(forbidden));
+  const conversionFields = [...new Set([...rendering.matchAll(/\bcandidate\.conversion(?:\?\.|\.)([A-Za-z_$][\w$]*)/g)].map(match => match[1]))].sort();
+  assert.deepEqual(conversionFields, ["createdAt", "employeeNumber", "targetMode"], "The employment notice may read only the three explicitly released conversion fields");
+  assert.doesNotMatch(rendering, /(?:JSON\.stringify|Object\.(?:values|entries|assign))\(\s*candidate\.conversion|\.\.\.candidate\.conversion/);
   assert.match(rendering, /profile\.firstName/);
   assert.match(rendering, /profile\.email/);
   assert.match(rendering, /application\.desiredRoleTitle/);
+});
+
+test("Einstellungsvermerk zeigt nur die freigegebene Personalnummer, Zielart und Zeit ohne private Conversiondaten", () => {
+  const conversion = { employeeNumber: "434", targetMode: "existing", createdAt: "2026-10-25T10:00:00.000Z" };
+  for (const field of ["id", "source", "target", "policies", "requestSha256", "createdBy", "internalNotes", "documents", "history"]) {
+    Object.defineProperty(conversion, field, { enumerable: true, get() { throw Error("Private conversion field read: " + field); } });
+  }
+  const candidate = { id: "synthetic-candidate", state: "archived", profile: { firstName: "Synthetic", lastName: "Person" }, applications: [], conversion };
+  const host = { innerHTML: "" }, escape = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+  const context = vm.createContext({ state: { selectedPersonnelCandidate: candidate, personnelCandidateCapabilities: { canWriteCandidates: false } },
+    elements: { personnelCandidateDetail: host }, escapeHtml: escape, escapeHtmlAttribute: escape, canWritePersonnelCandidatePhoto: () => false });
+  for (const name of ["personnelCandidateProfile", "personnelCandidateName", "personnelCandidateApplications", "personnelCandidateAge",
+    "personnelCandidateCitizenships", "personnelCandidateFact", "personnelCandidatePhotoMarkup", "formatPersonnelCandidateTimestamp",
+    "renderPersonnelCandidateProfileEditor", "renderPersonnelCandidatePhotoEditor", "renderPersonnelCandidateDetail"]) vm.runInContext(functionSource(name), context);
+  context.renderPersonnelCandidateDetail();
+  assert.match(host.innerHTML, /Eingestellt · MA 434/); assert.match(host.innerHTML, /Mit vorhandenem Mitarbeiter verknüpft/);
+  assert.match(host.innerHTML, /25\.10\.26|25\.10\.2026/); assert.doesNotMatch(host.innerHTML, /Private conversion|requestSha256|data-candidate-existing-employee-form/);
+  conversion.targetMode = "create"; context.renderPersonnelCandidateDetail(); assert.match(host.innerHTML, /Kontrolliert als Mitarbeiter angelegt/);
+  delete candidate.conversion; context.renderPersonnelCandidateDetail(); assert.doesNotMatch(host.innerHTML, /Eingestellt · MA|Mit vorhandenem Mitarbeiter verknüpft/);
 });
 
 test("Rechteverlust entfernt geladene Bewerberdaten und 403-Zustände bleiben nicht stale", () => {

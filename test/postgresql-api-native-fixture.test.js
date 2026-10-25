@@ -17,12 +17,15 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
   const core = new Client({ connectionString: process.env.GP_CORE_MIGRATOR_URL });
   const sales = new Client({ connectionString: process.env.GP_SALES_MIGRATOR_URL });
   const digest = value => crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
-  let created = false, releaseRead, pendingRead;
+  let created = false, releaseRead, pendingRead, pendingChallenge = null;
   await core.connect(); await sales.connect();
   try {
     await verifyEnvironment(core, { purpose: "migrator" });
     await verifyEnvironment(sales, { domain: "sales", purpose: "migrator" });
     const before = digest((await sales.query("SELECT * FROM gp.import_delete_performance_history ORDER BY version")).rows);
+    const passkeyLedger = (await core.query("SELECT * FROM gp.passkeys_migration_history ORDER BY version")).rows;
+    assert.equal(passkeyLedger.length, 1, "the normal bootstrap must have installed the technical passkey ledger");
+    assert.equal(passkeyLedger[0].plan_sha256, require("../lib/persistence/postgresql/core/passkeys").digest);
     assert.equal((await core.query("SELECT to_regclass('gp.unreviewed_migration_history') AS relation")).rows[0].relation, null);
     await core.query("SET ROLE gp_core_owner");
     await core.query("CREATE TABLE gp.unreviewed_migration_history(value TEXT NOT NULL)"); created = true;
@@ -30,8 +33,22 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
     assert.throws(() => databaseForCurrentTest(), /PG_API_FIXTURE_REFUSES_EXISTING_BUSINESS_DATA: core/);
     assert.deepEqual((await core.query("SELECT value FROM gp.unreviewed_migration_history")).rows, [{ value: "synthetic must be preserved" }]);
     assert.equal(digest((await sales.query("SELECT * FROM gp.import_delete_performance_history ORDER BY version")).rows), before);
+    assert.deepEqual((await core.query("SELECT * FROM gp.passkeys_migration_history ORDER BY version")).rows, passkeyLedger);
     await core.query("DROP TABLE gp.unreviewed_migration_history"); created = false;
+    pendingChallenge = crypto.randomUUID();
+    const challenge = crypto.randomBytes(32).toString("base64url"), now = new Date().toISOString(), expires = new Date(Date.now() + 120000).toISOString();
+    await core.query(`INSERT INTO gp.passkey_challenges(id,purpose,challenge,binding_hash,rp_id,origin,payload,created_at,expires_at)
+      VALUES($1,'authenticate',$2,$3,'native-fixture.example.test','https://native-fixture.example.test','{}',$4,$5)`,
+    [pendingChallenge, challenge, digest("synthetic native ownership guard"), now, expires]);
+    assert.throws(() => databaseForCurrentTest(), /PG_API_FIXTURE_REFUSES_EXISTING_BUSINESS_DATA: core/,
+      "a populated passkey challenge remains business/security data, never infrastructure");
+    assert.deepEqual((await core.query("SELECT id,challenge,consumed_at FROM gp.passkey_challenges WHERE id=$1", [pendingChallenge])).rows,
+      [{ id: pendingChallenge, challenge, consumed_at: null }], "refusal must preserve the existing challenge unchanged");
+    assert.deepEqual((await core.query("SELECT * FROM gp.passkeys_migration_history ORDER BY version")).rows, passkeyLedger);
+    await core.query("DELETE FROM gp.passkey_challenges WHERE id=$1", [pendingChallenge]); pendingChallenge = null;
     const database = databaseForCurrentTest();
+    assert.deepEqual((await core.query("SELECT * FROM gp.passkeys_migration_history ORDER BY version")).rows, passkeyLedger,
+      "fixture acquisition must retain the installed technical ledger");
     const configuration = require("../lib/persistence/configuration").resolvePersistenceConfiguration();
     const { readPostgresqlSystemHealth } = require("../lib/persistence/postgresql/application-operations/system-health");
     assert.equal(configuration.profile, require("../lib/persistence/postgresql/core/environment").PROFILE);
@@ -207,9 +224,12 @@ test("native PostgreSQL API fixture preserves technical ledgers, rejects unknown
     assert.equal((await core.query("SELECT COUNT(*)::integer AS count FROM gp.settings")).rows[0].count, 0);
     assert.equal((await sales.query("SELECT COUNT(*)::integer AS count FROM gp.migration_fixture_owner")).rows[0].count, 0);
     assert.equal(digest((await sales.query("SELECT * FROM gp.import_delete_performance_history ORDER BY version")).rows), before);
+    assert.deepEqual((await core.query("SELECT * FROM gp.passkeys_migration_history ORDER BY version")).rows, passkeyLedger,
+      "fixture cleanup must retain the installed technical ledger");
   } finally {
     releaseRead?.(); await pendingRead?.catch(() => {});
     if (created) await core.query("DROP TABLE gp.unreviewed_migration_history");
+    if (pendingChallenge) await core.query("DELETE FROM gp.passkey_challenges WHERE id=$1", [pendingChallenge]);
     await closeCurrentTestFixture();
     await core.end(); await sales.end();
     fs.rmSync(temporary, { recursive: true, force: true });

@@ -14,6 +14,15 @@ test("fixture ownership preserves only explicitly reviewed infrastructure relati
   assert.equal(isTechnicalRelation("core", "gp", "employees"), false);
 });
 
+test("fixture ownership preserves only the exact Core passkey ledger while retaining every passkey data guard", () => {
+  assert.equal(isTechnicalRelation("core", "gp", "passkeys_migration_history"), true);
+  for (const [domain, schema, table] of [
+    ["sales", "gp", "passkeys_migration_history"], ["core", "public", "passkeys_migration_history"],
+    ["core", "gp", "passkeys_migration_history_shadow"], ["core", "gp", "unreviewed_migration_history"],
+    ["core", "gp", "passkey_subjects"], ["core", "gp", "passkey_credentials"], ["core", "gp", "passkey_challenges"],
+  ]) assert.equal(isTechnicalRelation(domain, schema, table), false, [domain, schema, table].join("."));
+});
+
 test("PostgreSQL API fixture binds values without changing quoted parameter-looking text", () => {
   const result = translate("SELECT '?' AS literal, '$secret' AS marker FROM employees WHERE personnel_number=? AND full_name=?", ["101", "Synthetic"]);
   assert.equal(result.domain, "core");

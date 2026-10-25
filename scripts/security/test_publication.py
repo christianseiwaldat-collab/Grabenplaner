@@ -52,16 +52,20 @@ class PublicationTests(unittest.TestCase):
 
     def test_real_exception_file_is_bounded_and_no_new_fingerprint_matches(self):
         policy=json.loads((Path(__file__).with_name('exceptions.json')).read_text())
-        items=validate_exceptions(policy,dt.date(2026,10,19))
-        self.assertEqual(len(items),34)
+        # This is the maintained real policy, not a synthetic dated fixture.
+        # New reviewed entries must be valid today without freezing its size or
+        # confusing later reviews with future-dated exceptions.
+        items=validate_exceptions(policy,dt.datetime.now(dt.timezone.utc).date())
+        self.assertTrue(items)
+        self.assertEqual(len(items),len(policy['findingExceptions']))
         self.assertEqual({e['scanner'] for e in items},{'secrets'})
-        self.assertEqual({e['expiresOn'] for e in items},{'2026-11-01','2026-11-02'})
         for e in items:
             for change in ('fingerprint','sourceSha256'):
                 finding={'fingerprint':e['fingerprint'],'sourceSha256':e['sourceSha256']}
                 finding[change]='0'*64
                 self.assertEqual(remaining_findings('secrets',[finding],items),[finding])
-        with self.assertRaises(ValueError):validate_exceptions(policy,dt.date(2026,11,2))
+        after_last_expiry=max(dt.date.fromisoformat(e['expiresOn']) for e in items)+dt.timedelta(days=1)
+        with self.assertRaises(ValueError):validate_exceptions(policy,after_last_expiry)
 
     def test_workflow_uploads_no_raw_scanner_files(self):
         workflow=(Path(__file__).resolve().parents[2]/'.github/workflows/security.yml').read_text()

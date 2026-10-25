@@ -47,7 +47,7 @@ test('partial entry week clips shifts and spanning options without changing reta
 async function fixture(t) {
   const app = express(); app.use(express.json());
   const state = { start: '2026-10-14', atCommit: null, profiles: [], shifts: [], evaluations: [], transactions: 0, next: 1 };
-  const organization = { marker: 'outside' }, boundOrganization = { marker: 'transaction' };
+  const organization = { marker: 'outside', getPersonnelSensitiveRecord: async () => null }, boundOrganization = { marker: 'transaction' };
   const workRules = {
     async insertPlanningShift(shift) { const id = state.next++; state.shifts.push({ id, ...plain(shift) }); return { rowsAffected: 1, returnedRows: [{ id }] }; },
     async updatePlanningShift(shift) { state.shifts = state.shifts.map(row => Number(row.id) === Number(shift.id) ? { ...row, ...plain(shift) } : row); return { rowsAffected: 1 }; },
@@ -98,7 +98,7 @@ async function fixture(t) {
     operatingHours: async () => ({}), bestAutomaticShiftForWindows: async () => ({ shift: { start_time: '09:00', end_time: '11:00' }, metrics: { counted_minutes: 120 } }),
     formatHours: value => String(value), shiftCoversPeriod: () => false,
   });
-  vm.runInContext(['httpError', 'employeeCanWorkOnDate', 'projectScheduleEmployment', 'assertPlanningEmployment', 'runWorkRuleMutationTransaction', 'validateShift'].map(fn).join('\n')
+  vm.runInContext(['httpError', 'employeeCanWorkOnDate', 'createScheduleSensitiveReader', 'projectScheduleEmployment', 'assertPlanningEmployment', 'runWorkRuleMutationTransaction', 'validateShift'].map(fn).join('\n')
     + '\n' + route('app.post("/api/shifts",', 'app.delete("/api/shifts/:id",')
     + '\n' + route('app.delete("/api/schedule",', 'function requestCreatesTeamMeetingGroup(')
     + '\n' + route('app.post("/api/schedule/auto",', 'app.get("/api/portal/v1/product-readiness",'), context);

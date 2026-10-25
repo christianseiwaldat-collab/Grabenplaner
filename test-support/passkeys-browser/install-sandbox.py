@@ -8,6 +8,20 @@ import stat
 import sys
 
 PIN = 'be9f5d4be90fa60b985ad3069812b144ba7331fed0c3f980c6d9399d37d60314'
+DESTINATION = '/var/lib/gp-passkeys-ci-sandbox'
+
+
+def protected_directory(directory, create=False):
+    if create and not directory.exists():
+        directory.mkdir(mode=0o755)
+    info = directory.lstat()
+    proof = {'path': str(directory), 'uid': info.st_uid, 'gid': info.st_gid,
+             'mode': info.st_mode & 0o7777, 'isDirectory': stat.S_ISDIR(info.st_mode),
+             'canonical': str(directory.resolve())}
+    if (not proof['isDirectory'] or info.st_uid != 0 or info.st_mode & 0o022
+            or directory.resolve() != directory):
+        raise ValueError('Unsafe sandbox directory: ' + json.dumps(proof, sort_keys=True))
+    return proof
 
 
 def install(source):
@@ -25,14 +39,10 @@ def install(source):
         os.close(fd)
     if hashlib.sha256(content).hexdigest() != PIN:
         raise ValueError('Unreviewed browser sandbox digest')
-    parent = Path('/opt/gp-passkeys-ci-sandbox')
+    parent = Path(DESTINATION)
     target_directory = parent / PIN
-    for directory in [Path('/opt'), parent, target_directory]:
-        if not directory.exists():
-            directory.mkdir(mode=0o755)
-        info = directory.lstat()
-        if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022 or directory.resolve() != directory:
-            raise ValueError('Sandbox directory must be protected by root-owned ancestors')
+    proofs = [protected_directory(directory) for directory in [Path('/'), Path('/var'), Path('/var/lib')]]
+    proofs.extend(protected_directory(directory, create=True) for directory in [parent, target_directory])
     target = target_directory / 'chrome_sandbox'
     if not target.exists():
         fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o700)
@@ -48,7 +58,8 @@ def install(source):
     if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_gid != 0 or info.st_nlink != 1
             or info.st_mode & 0o7777 != 0o4755 or hashlib.sha256(target.read_bytes()).hexdigest() != PIN):
         raise ValueError('Existing sandbox helper differs')
-    return {'path': str(target), 'sha256': PIN, 'sandboxDisabled': False}
+    return {'format': 'gp-passkeys-ci-sandbox-v1', 'path': str(target), 'sha256': PIN,
+            'sandboxDisabled': False, 'directoryProofs': proofs}
 
 
 if __name__ == '__main__':

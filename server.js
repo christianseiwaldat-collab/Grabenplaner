@@ -19291,10 +19291,26 @@ function employeeCanWorkOnDate(employee, isoDate) {
   return fixedDays.length === 0 || fixedDays.includes(dayKeyForDate(isoDate));
 }
 
-async function projectScheduleEmployment(employeeRows, weekStart, weekEnd = addDays(weekStart, 6), repository = organizationPersonnelRepository) {
+function createScheduleSensitiveReader(repository = organizationPersonnelRepository) {
+  // One planning read only: never retain decrypted personnel data across
+  // requests, actors, repository bindings or subsequent scheduling mutations.
+  const pending = new Map();
+  return employeeNumber => {
+    const number = String(employeeNumber);
+    if (!pending.has(number)) pending.set(number, (async () => {
+      const encryptedRecord = await repository.getPersonnelSensitiveRecord(number);
+      const sensitive = await personnelSensitiveProfile(number, repository, encryptedRecord);
+      return { encryptedRecord, sensitive };
+    })());
+    return pending.get(number);
+  };
+}
+
+async function projectScheduleEmployment(employeeRows, weekStart, weekEnd = addDays(weekStart, 6), repository = organizationPersonnelRepository, readSensitive = null) {
   const numbers = [...new Set(employeeRows.map(row => String(row.personnel_number)))];
   const starts = new Map(await Promise.all(numbers.map(async number => [number,
-    (await personnelSensitiveProfile(number, repository)).employment.startDate,
+    (readSensitive ? (await readSensitive(number)).sensitive
+      : await personnelSensitiveProfile(number, repository)).employment.startDate,
   ])));
   return require('./lib/schedule-employment').employmentProjection(employeeRows, weekStart, weekEnd, starts);
 }
@@ -21065,7 +21081,7 @@ function workRuleAssignmentBoundaryFinding(profileEvaluations, employeeNumber, r
   return { ...core, fingerprint: workRuleSha256(core) };
 }
 
-async function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift = null) {
+async function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift = null, readSensitive = null) {
   const evaluationEmployees = workRuleEvaluationEmployees(employees, candidateShift);
   const facts = await scheduleWorkRuleFacts(weekStart, context, evaluationEmployees, candidateShift);
   const weekEnd = addDays(weekStart, 6);
@@ -21142,8 +21158,11 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
   };
   const employeeResults = await Promise.all(evaluationEmployees.map(async (employee) => {
     const employeeNumber = String(employee.personnel_number);
-    const encryptedRecord = await organizationPersonnelRepository.getPersonnelSensitiveRecord(employeeNumber);
-    const sensitive = await personnelSensitiveProfile(employeeNumber, organizationPersonnelRepository, encryptedRecord);
+    const record = readSensitive ? await readSensitive(employeeNumber) : null;
+    const encryptedRecord = record ? record.encryptedRecord
+      : await organizationPersonnelRepository.getPersonnelSensitiveRecord(employeeNumber);
+    const sensitive = record ? record.sensitive
+      : await personnelSensitiveProfile(employeeNumber, organizationPersonnelRepository, encryptedRecord);
     const protection = sensitive.employment.protectionStatus;
     const protectionPlanningEnabled = protection?.planningEnabled === true;
     const retailKv = sensitive.employment.retailKv;
@@ -22756,6 +22775,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
   const weekEnd = addDays(weekStart, 6);
   const context = await resolvePlanningContext(contextInput);
   assertSessionContextScope(session, context);
+  const readSensitive = createScheduleSensitiveReader();
   const settings = applyScopedPdfSettings(await settingsForLocation(context.locationId), context, "schedule");
   const allowPastWeekEditing = await pastWeekEditingAllowedForActor(session, settings);
   settings.allow_past_week_editing = allowPastWeekEditing ? "1" : "0";
@@ -22787,7 +22807,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     timeTrackingRepository.listXoffiSnapshots({ locationId: context.locationId, departmentId: Number(context.departmentId || 0), weekStart }),
     saturdayCreditService.cutover(),
   ]);
-  const employment = await projectScheduleEmployment(employeeRows, weekStart, weekEnd);
+  const employment = await projectScheduleEmployment(employeeRows, weekStart, weekEnd, organizationPersonnelRepository, readSensitive);
   employeeRows = employment.employees;
   shiftRows = employment.clip(shiftRows);
   employeeWeekShiftRows = employment.clip(employeeWeekShiftRows);
@@ -23015,7 +23035,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
   }
   const [workRuleAssessment, branchSupervisionAssessment, manualScheduleLock] = await Promise.all([
     !fast && sessionCanReadWorkRules(session)
-      ? evaluateScheduleWorkRules(weekStart, context, employees).then((result) => result.assessment)
+      ? evaluateScheduleWorkRules(weekStart, context, employees, null, readSensitive).then((result) => result.assessment)
       : Promise.resolve(null),
     fast
       ? Promise.resolve(null)
@@ -23130,6 +23150,7 @@ async function getScheduleEnrichment(weekValue, contextInput = {}, session = nul
   const weekEnd = addDays(weekStart, 6);
   const context = await resolvePlanningContext(contextInput);
   assertSessionContextScope(session, context);
+  const readSensitive = createScheduleSensitiveReader();
   const settings = applyScopedPdfSettings(await settingsForLocation(context.locationId), context, "schedule");
   const planningQuery = {
     locationId: context.locationId,
@@ -23141,7 +23162,7 @@ async function getScheduleEnrichment(weekValue, contextInput = {}, session = nul
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
   ]);
-  const employment = await projectScheduleEmployment(storedEmployees, weekStart, weekEnd);
+  const employment = await projectScheduleEmployment(storedEmployees, weekStart, weekEnd, organizationPersonnelRepository, readSensitive);
   const employeeRows = employment.employees, shiftRows = employment.clip(storedShifts);
   const employees = employeeRows.map(serializeEmployee);
   const currentWeekShifts = await Promise.all(shiftRows.map(async (shift) => {
@@ -23150,7 +23171,7 @@ async function getScheduleEnrichment(weekValue, contextInput = {}, session = nul
   }));
   const [workRuleAssessment, branchSupervisionAssessment, saturdayStats] = await Promise.all([
     sessionCanReadWorkRules(session)
-      ? evaluateScheduleWorkRules(weekStart, context, employees).then((result) => result.assessment)
+      ? evaluateScheduleWorkRules(weekStart, context, employees, null, readSensitive).then((result) => result.assessment)
       : Promise.resolve(null),
     branchSupervisionAssessmentForSchedule(weekStart, context.locationId, null, {
       snapshot: context.departmentId ? null : {

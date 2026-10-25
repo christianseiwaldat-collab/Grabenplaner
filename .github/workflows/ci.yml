@@ -66,6 +66,7 @@ jobs:
           test/passkeys-persistence.test.js
           test/passkeys-migration.test.js
           test/passkeys-browser-tooling.test.js
+          test/passkeys-browser-sandbox-location.test.js
       - name: Verify application and root maintenance lock transitions
         run: sudo "$(command -v node)" --test --test-name-pattern='root maintenance' test/database-lock.test.js
       - name: Verify original package binding and the root build-account boundary
@@ -144,6 +145,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 test-support/passkeys-browser/test_sandbox.py
           node test-support/passkeys-browser/prepare.cjs \
             --target "$RUNNER_TEMP/gp-passkeys-browser" --pnpm "$(command -v pnpm)" \
             > "$RUNNER_TEMP/gp-passkeys-browser-receipt.json"

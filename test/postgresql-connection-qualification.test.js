@@ -47,7 +47,7 @@ for(const [code,expected] of [['42P01','PERSISTENCE_SCHEMA_INVALID'],['57014','P
 
 for(const domain of ['core','sales'])for(const failReplacement of [false,true]){
  test(domain+' verifies each replacement connection before exposing it; rejected='+failReplacement,async()=>{
-  const verified=[],clients=[];let ended=false;
+  const verified=[],clients=[];let ended=false,passkeyCatalogChecks=0;
   class Pool{
    async connect(){const client={number:clients.length+1,releases:[],queries:[],
     async query(sql){this.queries.push(sql);return {rows:sql.startsWith('SELECT stage,')?[{stage:5,plan_sha256:'plan',source_sha256:'source',target_sha256:'schema'}]:[],rowCount:0};},
@@ -68,12 +68,14 @@ for(const domain of ['core','sales'])for(const failReplacement of [false,true]){
    './cash-reference-pages':{indexedCashReferencePages:entries=>entries},
    './cash-snapshot-pages':{indexedCashSnapshotPages:entries=>entries},
    './import-delete':{target:async(_client,base)=>base},
+   './passkeys-catalog':{assertPasskeysCatalog(){passkeyCatalogChecks++;return require('../lib/persistence/postgresql/core/passkeys-catalog').assertPasskeysCatalog();}},
   };
   modules['../core/environment']=modules['./environment'];modules['../core/fingerprint']=modules['./fingerprint'];
   const file=path.resolve(__dirname,'../lib/persistence/postgresql/'+domain+'/application.js');
   const context={module:{exports:{}},performance,require:id=>modules[id]||{CATALOG:[]}};
   vm.runInNewContext(fs.readFileSync(file,'utf8'),context,{filename:file});
   const application=await context.module.exports[domain==='core'?'openCoreDevelopmentApplication':'openSalesDevelopmentApplication']({stage:5});
+  assert.equal(passkeyCatalogChecks,domain==='core'?1:0,'Core construction must execute the real Passkey catalog guard before qualifying its connections');
   assert.deepEqual(verified,[1]);
   const request=application.provider.transaction(async()=> 'verified',{readOnly:true});
   if(failReplacement){await assert.rejects(request,{code:'PERSISTENCE_SCHEMA_INVALID'});assert.deepEqual(clients[1].releases,[true]);assert.equal(clients[1].queries.length,0);}
