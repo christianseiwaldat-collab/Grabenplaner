@@ -85,6 +85,42 @@ test("runtime-v6 root dependency inventory accepts all eleven actual bin link sh
   }
   assert.equal(fs.existsSync(path.join(f.candidateRoot, "node_modules")), false);
 });
+
+test("runtime-v6 root frozen plan admits only the exact additive WebAuthn pair and root-only workspace", nativeOnly, t => {
+  const f = fixture(t), candidateMetadata = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json")));
+  const previousMetadata = structuredClone(candidateMetadata);
+  delete previousMetadata.dependencies["@simplewebauthn/browser"]; delete previousMetadata.dependencies["@simplewebauthn/server"];
+  put(path.join(f.oldRoot, "package.json"), JSON.stringify(previousMetadata));
+  put(path.join(f.candidateRoot, "package.json"), JSON.stringify(candidateMetadata));
+  const before = plan(f);
+  const pair = { "@simplewebauthn/browser": "14.0.0", "@simplewebauthn/server": "14.0.3" };
+  assert.deepEqual(before.reviewedWebAuthnDependencies, { previous: null, candidate: pair });
+  assert.deepEqual(before.reviewedRootOnlyWorkspace, { previous: false, candidate: true });
+  put(path.join(f.oldRoot, "package.json"), JSON.stringify(candidateMetadata));
+  put(path.join(f.oldRoot, "pnpm-workspace.yaml"), fs.readFileSync(path.join(f.candidateRoot, "pnpm-workspace.yaml")));
+  const retained = plan(f);
+  assert.deepEqual(retained.reviewedWebAuthnDependencies, { previous: pair, candidate: pair });
+  assert.deepEqual(retained.reviewedRootOnlyWorkspace, { previous: true, candidate: true });
+  assert.equal(retained.predecessor.sha256, before.predecessor.sha256);
+  assert.equal(fs.existsSync(path.join(f.candidateRoot, "node_modules")), false);
+  const originalPackage = fs.readFileSync(path.join(f.candidateRoot, "package.json"));
+  const originalWorkspace = fs.readFileSync(path.join(f.candidateRoot, "pnpm-workspace.yaml"));
+  for (const mutation of ["removePair", "partialPair", "changedVersion", "extraDependency", "removeWorkspace", "glob", "quotes", "duplicate"]) {
+    let metadata = structuredClone(candidateMetadata), workspace = originalWorkspace.toString("utf8");
+    if (mutation === "removePair") { delete metadata.dependencies["@simplewebauthn/browser"]; delete metadata.dependencies["@simplewebauthn/server"]; }
+    if (mutation === "partialPair") delete metadata.dependencies["@simplewebauthn/browser"];
+    if (mutation === "changedVersion") metadata.dependencies["@simplewebauthn/server"] = "^14.0.3";
+    if (mutation === "extraDependency") metadata.dependencies["@simplewebauthn/unknown"] = "14.0.3";
+    if (mutation === "removeWorkspace") workspace = workspace.replace(/^packages:\r?\n  - '\.'\r?\n\r?\n/, "");
+    if (mutation === "glob") workspace = workspace.replace("  - '.'", "  - '**'");
+    if (mutation === "quotes") workspace = workspace.replace("  - '.'", "  - \".\"");
+    if (mutation === "duplicate") workspace = "packages:\n  - '.'\n\n" + workspace;
+    put(path.join(f.candidateRoot, "package.json"), JSON.stringify(metadata)); put(path.join(f.candidateRoot, "pnpm-workspace.yaml"), workspace);
+    assert.throws(() => plan(f), mutation); assert.equal(fs.existsSync(path.join(f.candidateRoot, "node_modules")), false);
+  }
+  put(path.join(f.candidateRoot, "package.json"), originalPackage); put(path.join(f.candidateRoot, "pnpm-workspace.yaml"), originalWorkspace);
+  assert.deepEqual(plan(f), retained);
+});
 test("runtime-v6 root dependency inventory is deterministic without changing source files", nativeOnly, t => {
   const f = fixture(t), before = fs.readFileSync(target(f)); assert.deepEqual(plan(f), plan(f)); assert.deepEqual(fs.readFileSync(target(f)), before);
 });

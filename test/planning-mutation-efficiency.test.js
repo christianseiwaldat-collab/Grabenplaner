@@ -34,8 +34,11 @@ function validationFixture({ postgres = true, revokeAt = 0, foreign = false } = 
     assert.equal(state.inside, false, "legacy lending must stay outside the catalog snapshot");
     state.lending++; state.trace.push("lending"); return value;
   };
-  const c = load(["readPlanningMutation", "validateShift"], {
+  const c = load(["readPlanningMutation", ...(postgres ? ["assertPlanningEmployment"] : []), "validateShift"], {
     postgresqlActive: postgres, Set,
+    require: id => { assert.equal(id, './lib/schedule-employment'); return require('../lib/schedule-employment'); },
+    organizationPersonnelRepository: {},
+    personnelSensitiveProfile: catalog('employment', { employment: { startDate: '' } }),
     applicationPersistence: { async readSnapshot(work) {
       assert.equal(state.inside, false); const phase = ++state.snapshots;
       state.inside = true; state.trace.push("begin:" + phase);
@@ -216,6 +219,9 @@ function routeFixture({ rejectAuthority = false } = {}) {
   const context = { locationId: "18", departmentId: null };
   const evaluated = { assessment: { outcome: "pass" } };
   const values = { postgresqlActive: true,
+    require: id => { assert.equal(id, './lib/schedule-employment'); return require('../lib/schedule-employment'); },
+    organizationPersonnelRepository: {},
+    personnelSensitiveProfile: async () => ({ employment: { startDate: '' } }),
     app: Object.fromEntries(["post", "put", "delete"].map(method => [method, (path, handler) => { routes[method] = handler; }])),
     applicationPersistence: { async readSnapshot(work) {
       state.snapshots++; state.inside = true;
@@ -246,7 +252,7 @@ function routeFixture({ rejectAuthority = false } = {}) {
     sessionCanReadWorkRules: () => true, staffAssignmentShiftConstraintError: error => error,
     httpError: (_, message) => new Error(message),
   };
-  const c = load(["readPlanningMutation"], values);
+  const c = load(["readPlanningMutation", "assertPlanningEmployment"], values);
   const start = source.indexOf('app.post("/api/shifts",');
   vm.runInContext(source.slice(start, source.indexOf('app.delete("/api/schedule",', start)), c);
   return { state, routes };

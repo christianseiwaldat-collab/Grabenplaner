@@ -1,0 +1,9 @@
+# Native Passkey browser qualification
+
+This is a separate, frozen test toolchain. It is copied into a new directory under `RUNNER_TEMP`; its Playwright dependency is excluded from the GP workspace and production package graph. Use pnpm 11.7.0 and `prepare.cjs`. The committed browser lock binds the native Linux executable and official sandbox helper, not only a browser version string.
+
+The CI shard `1/3` installs the browser's Linux dependencies and the exact helper under protected root-owned `/opt` ancestors. Chromium runs with its sandbox enabled. No AppArmor/sysctl changes, `--no-sandbox`, or broad TLS bypass is required. The virtual devices, credentials, accounts, and PostgreSQL fixtures are synthetic.
+
+The migration runner's explicit `--passkeys-browser` phase in shard `1/3` first prepares the previous schema chain, then requires the native upgrade/restore matrix with its own one-command opt-in. A repeated Passkey migration must return `applied:false` and its unchanged qualified digest. The original stock qualification follows, then the finite five-file browser phase receives `GP_WINDOW_BROWSER_TEST=1` and `GP_SECURITY_AUTH_BROWSER_TEST=1`. It covers protocol FIDO, management, authentication, actual PostgreSQL application flows, and the existing multi-tab Web Locks/IndexedDB account-switch regression. All three opt-ins are absent from the ordinary complete application suite. The other shards and the ordinary test runner keep their existing behavior. Browser/restore tests must never be reported as passed when their opt-in is absent.
+
+For a local disposable Linux fixture, `--pnpm-entry` can select the exact pnpm CJS entrypoint. Keep fixture URLs and private receipts outside the checkout. Verify the fresh source manifest before and after native execution; a working-tree run is not a GitHub Actions result or a release approval.

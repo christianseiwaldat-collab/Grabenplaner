@@ -122,3 +122,22 @@ test("GP adapter reuses source credits, excludes pending wishes and redacts sick
   assert(!byRule(holidayReport.assessment, "staffing").some(item => item.date === "2031-04-09"));
   assert(byRule(holidayReport.assessment, "staffing").some(item => item.date === "2031-04-10"));
 });
+
+test('optimizer rereads retain historical storage but never reintroduce shifts before projected entry days', async () => {
+  const dates = ['2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18'];
+  const schedule = { weekStart: '2026-10-12', weekEnd: '2026-10-18', context: { locationId: '18', departmentId: null }, settings: {},
+    employees: [{ personnel_number: '434', nickname: 'Synthetic entry', home_location_id: '18', contracted_hours: 4, planningDates: dates }],
+    totals: { '434': 60 }, globalBlockDates: [], sicknessCredits: [], workRuleAssessment: { findings: [] }, branchSupervisionAssessment: { mode: 'off' } };
+  const rows = ['2026-10-12', '2026-10-14'].map((shift_date, i) => ({ id: i + 1, employee_number: '434', shift_date, location_id: '18', start_time: '09:00', end_time: '10:00' }));
+  const before = structuredClone(rows);
+  const read = createPlanningAssistantReader({ getSchedule: async () => schedule, settings: () => ({}), loadShifts: async () => rows,
+    loadOptions: async () => [], loadPositions: async () => [], loadDepartments: async () => [], settingsForLocation: async () => ({}),
+    plannedShiftBreaks: async () => ({ start: 540, end: 600, breakMinutes: 0, lunchBreakMinutes: 0 }),
+    dayConfiguration: async () => ({ open: true, minFrom: '09:00', minTo: '10:00', minStaff: 1 }), optionIsAllDay: () => true,
+    optionLabel: () => 'Other', employeeCanWorkOnDate: (employee, date) => employee.planningDates.includes(date) });
+  const result = await read('2026-10-12', {}, {}, { includeFacts: true });
+  assert.deepEqual(result.rawShifts.map(row => row.id), [2]);
+  assert.deepEqual(result.facts.shifts.map(row => row.id), ['2']);
+  assert(result.facts.unavailable.some(row => row.date === '2026-10-12' && row.employeeId === '434'));
+  assert.deepEqual(rows, before);
+});

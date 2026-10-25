@@ -298,6 +298,7 @@ const state = {
   loanOverviewColumnsLocationId: "",
   loanOverviewColumnsRequestId: 0,
   branchAccountPasswordTargets: [],
+  branchAccountPasswordAuthorityKey: "",
   branchAccountPasswordLoading: false,
   loanSettings: null,
   loanSettingsLoading: false,
@@ -817,6 +818,7 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 const elements = Object.fromEntries(
   [
     "staffAssignmentRequestDeadline",
+    "branchAccountPasskeysLink",
     "costCenterActiveCount", "costCenterInactiveCount", "costCenterTypeCount", "costCenterFilterForm", "costCenterSearch", "costCenterFilterType", "costCenterFilterStatus", "costCenterFilterReset", "costCenterResultCount",
     "optionDateRangeButton", "optionDateRangeText", "optionDateRangeDialog", "optionDateRangeForm", "optionDateRangeGrid", "optionDateRangeMonthLabel", "optionDateRangeStartText", "optionDateRangeEndText",
     "optionDateRangePreviousMonth", "optionDateRangeNextMonth", "optionDateRangeOpenEnd", "optionDateRangeApply", "optionDateRangeClose", "optionDateRangeCancel",
@@ -1466,6 +1468,8 @@ function showLoginGate(message = "") {
   clearUsbProvisioningPasswords();
   resetAdminPersonalActionsState("");
   state.portalSession = null;
+  if (elements.branchAccountPasskeysLink) elements.branchAccountPasskeysLink.hidden = true;
+  elements.branchAccountPasskeysLink?.removeAttribute("href");
   planningAssistantWorkspace?.reset();
   syncSystemUtilizationWorkspace();
   syncWorkflowStudio();
@@ -3031,6 +3035,7 @@ function applyRoleVisibility() {
   elements.branchOrdersManagementNavButton?.classList.toggle("hidden", !branchOrderManagementAccess);
   elements.loanOverviewSettingsButton?.classList.toggle("hidden", !branchLoanOverviewManagementAccess);
   elements.branchAccountPasswordButton?.classList.toggle("hidden", !branchAccountPasswordManagementAccess);
+  syncBranchAccountPasskeyLink();
   elements.xoffiImportButton?.classList.toggle("hidden", !canImportXoffiTime());
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
@@ -3463,6 +3468,30 @@ async function bootstrapApplication() {
   }
 }
 
+async function completeAdministrationLogin(result) {
+  elements.adminLoginPassword.value = "";
+  if (result.user?.role === "employee"
+    || result.user?.mustChangePassword
+    || result.user?.isEmployee === false) {
+    if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
+    window.location.replace("/portal.html");
+    return;
+  }
+  if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
+  window.GrabenplanerSessionLifecycle?.advance();
+  state.portalSession = result;
+  applyShellBranding(result.status?.branding || result.branding || {});
+  hideLoginGate();
+  applyRoleVisibility();
+  await Promise.all([
+    loadUiPreferences(),
+    loadAll({ applyInitialView: true, reusePortalStatus: true }),
+  ]);
+  void loadManagementBrandingPreference().catch(() => {});
+  loadSystemInfo();
+  globalThis.grabenplanerNavigation?.start();
+}
+
 async function loginToAdministration(event) {
   event.preventDefault();
   const credentialsInput = { employeeNumber: elements.adminLoginPersonnelNumber.value, password: elements.adminLoginPassword.value };
@@ -3473,27 +3502,7 @@ async function loginToAdministration(event) {
         body: JSON.stringify(credentialsInput),
       });
       window.GrabenplanerSessionLifecycle?.publish();
-      if (result.user?.role === "employee"
-        || result.user?.mustChangePassword
-        || result.user?.isEmployee === false) {
-        if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
-        window.location.replace("/portal.html");
-        return;
-      }
-      if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
-      elements.adminLoginPassword.value = "";
-      window.GrabenplanerSessionLifecycle?.advance();
-      state.portalSession = result;
-      applyShellBranding(result.status?.branding || result.branding || {});
-      hideLoginGate();
-      applyRoleVisibility();
-      await Promise.all([
-        loadUiPreferences(),
-        loadAll({ applyInitialView: true, reusePortalStatus: true }),
-      ]);
-      void loadManagementBrandingPreference().catch(() => {});
-      loadSystemInfo();
-      globalThis.grabenplanerNavigation?.start();
+      await completeAdministrationLogin(result);
     }, { allowAccountChange: true });
   } catch (error) {
     if (error.code === "PORTAL_SESSION_CHANGED") return;
@@ -5163,6 +5172,26 @@ async function saveLoanOverviewColumns(event) {
   }
 }
 
+function branchAccountPasswordAuthorityKey() {
+  const user = state.portalSession?.user;
+  return state.portalSession?.authenticated && user && canManageBranchAccountPasswords()
+    ? JSON.stringify([user.employeeNumber, user.role, user.permissions, user.scopes, user.explicitScopes, user.permissionScopes]) : "";
+}
+
+function syncBranchAccountPasskeyLink() {
+  const link = elements.branchAccountPasskeysLink;
+  if (!link) return;
+  const accountId = elements.branchAccountPasswordAccount?.value || "";
+  const authority = branchAccountPasswordAuthorityKey();
+  const allowed = authority && authority === state.branchAccountPasswordAuthorityKey
+    && !state.branchAccountPasswordLoading && !elements.branchAccountPasswordAccount?.disabled
+    && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(accountId)
+    && state.branchAccountPasswordTargets.some(account => account.id === accountId);
+  link.hidden = !allowed;
+  if (allowed) link.setAttribute("href", `/passkeys.html?accountId=${encodeURIComponent(accountId)}`);
+  else link.removeAttribute("href");
+}
+
 function renderBranchAccountPasswordTargets() {
   if (!elements.branchAccountPasswordAccount) return;
   const accounts = state.branchAccountPasswordTargets || [];
@@ -5181,15 +5210,21 @@ function renderBranchAccountPasswordTargets() {
   if (elements.branchAccountPasswordSaveButton) {
     elements.branchAccountPasswordSaveButton.disabled = state.branchAccountPasswordLoading || !accounts.length;
   }
+  syncBranchAccountPasskeyLink();
 }
 
 async function loadBranchAccountPasswordTargets() {
-  if (!canManageBranchAccountPasswords()) return [];
+  const authority = branchAccountPasswordAuthorityKey();
+  state.branchAccountPasswordTargets = [];
+  state.branchAccountPasswordAuthorityKey = "";
+  if (!canManageBranchAccountPasswords()) { renderBranchAccountPasswordTargets(); return []; }
   state.branchAccountPasswordLoading = true;
   renderBranchAccountPasswordTargets();
   try {
     const payload = await api("/api/portal/v1/branch-accounts/passwords");
-    state.branchAccountPasswordTargets = payload.accounts || [];
+    if (!canManageBranchAccountPasswords() || authority !== branchAccountPasswordAuthorityKey()) return [];
+    state.branchAccountPasswordTargets = Array.isArray(payload.accounts) ? payload.accounts : [];
+    state.branchAccountPasswordAuthorityKey = authority;
     return state.branchAccountPasswordTargets;
   } catch (error) {
     state.branchAccountPasswordTargets = [];
@@ -5994,6 +6029,9 @@ async function decideStaffAssignmentRequestFromReview(button, decision) {
 }
 
 function crossLocationScheduleCell(schedule, teamMember, date) {
+  if (Array.isArray(teamMember.planningDates) && !teamMember.planningDates.includes(date)) {
+    return '<span class="cross-location-empty-cell">Nicht einplanbar</span>';
+  }
   const shifts = (schedule.shifts || []).filter((shift) => (
     shift.employeeNumber === teamMember.employeeNumber && shift.date === date
   ));
@@ -6039,7 +6077,8 @@ function renderCrossLocationScheduleGrid(schedule) {
     </div>
     ${dates.map((date) => {
       const content = crossLocationScheduleCell(schedule, teamMember, date);
-      const canRequestDate = requestEnabled && date >= requestMinimum && date <= requestMaximum;
+      const canRequestDate = requestEnabled && date >= requestMinimum && date <= requestMaximum
+        && (!Array.isArray(teamMember.planningDates) || teamMember.planningDates.includes(date));
       return canRequestDate
         ? `<button type="button" class="cross-location-day-cell cross-location-request-cell" data-cross-location-request-date="${escapeHtmlAttribute(date)}" data-cross-location-request-employee="${escapeHtmlAttribute(teamMember.requestEligible ? teamMember.employeeNumber : "")}" aria-label="Einsatzanfrage für ${escapeHtmlAttribute(teamMember.displayName)} am ${escapeHtmlAttribute(formatDate(date))} öffnen">${content}<span class="cross-location-request-cue">Einsatz anfragen</span></button>`
         : `<div class="cross-location-day-cell">${content}</div>`;
@@ -6448,6 +6487,7 @@ function staffAssignmentsForDate(employeeNumber, date) {
 }
 
 function scheduleEmployeeVisibleOnDate(employee, date) {
+  if (Array.isArray(employee?.planningDates) && !employee.planningDates.includes(String(date))) return false;
   const employeeNumber = String(employee?.personnel_number || employee?.personnelNumber || "");
   const locationId = String(state.data?.context?.locationId || state.locationId || "");
   const homeLocationId = String(employee?.home_location_id || employee?.homeLocationId || "");
@@ -8020,7 +8060,8 @@ async function submitVpsReboot(event) {
     return;
   }
   const currentPassword = elements.vpsRebootCurrentPassword?.value || "";
-  if (!currentPassword) {
+  const usePasskey = window.GPPasskeyAuth?.selected?.("vps-reboot") === true;
+  if (!usePasskey && !currentPassword) {
     setVpsRebootMessage("Bitte geben Sie Ihr aktuelles Developer-Passwort ein.", "error");
     elements.vpsRebootCurrentPassword?.focus();
     return;
@@ -8039,7 +8080,8 @@ async function submitVpsReboot(event) {
     await withAdminReauthentication(async () => {
       const result = await api("/api/portal/v1/server-monitor/vps-reboot", {
         method: "POST",
-        body: JSON.stringify({ confirmation: "VPS_REBOOT", currentPassword }),
+        body: JSON.stringify({ confirmation: "VPS_REBOOT", ...(usePasskey
+          ? await window.GPPasskeyAuth.authorization(api, "vps-reboot") : { currentPassword }) }),
       });
       state.vpsRebootPreviousHostBootGeneration = String(
         result?.previousHostBootGeneration || "",
@@ -14903,6 +14945,79 @@ function renderPersonnelCandidateStatusForm(candidateId, application) {
   </form>`;
 }
 
+function renderPersonnelCandidateExistingEmployeeForm(candidateId, application) {
+  const candidate = state.selectedPersonnelCandidate;
+  if (!state.personnelCandidateCapabilities.canConvert || candidate?.state !== "active" || candidate.conversion
+    || !["new", "screening", "first_interview", "further_interview", "offer", "accepted", "preboarding", "talent_pool"].includes(application.status)) return "";
+  return `<details class="personnel-candidate-detail-section personnel-candidate-editor-section">
+    <summary><span><strong>Bereits eingestellt</strong><small>Mit vorhandenem Mitarbeiter verknüpfen</small></span><i aria-hidden="true">›</i></summary>
+    <form class="personnel-candidate-detail-form" data-candidate-existing-employee-form data-candidate-id="${escapeHtmlAttribute(candidateId)}" data-application-id="${escapeHtmlAttribute(application.id)}">
+      <p>Die Einstellung ist bereits erfolgt und der Mitarbeiter wurde angelegt. Prüfe die Personalnummer und bestätige die angezeigte Person.</p>
+      <label class="field"><span>Vorhandene Personalnummer</span><input name="employeeNumber" maxlength="24" required autocomplete="off" /></label>
+      <button class="secondary-button" type="submit" name="action" value="lookup" formnovalidate>Mitarbeiter prüfen</button>
+      <div data-candidate-existing-employee-preview></div>
+      <p role="status" data-candidate-existing-employee-message></p>
+    </form>
+  </details>`;
+}
+
+async function savePersonnelCandidateExistingEmployee(form, action) {
+  const candidate = state.selectedPersonnelCandidate;
+  const application = personnelCandidateApplications(candidate).find(entry => entry.id === form.dataset.applicationId);
+  if (!candidate || candidate.id !== form.dataset.candidateId || !application
+    || !state.personnelCandidateCapabilities.canConvert || state.personnelCandidateMutationPending) return;
+  if (action === "link" ? !form.reportValidity() : !form.elements.employeeNumber.reportValidity()) return;
+  const employeeNumber = String(form.elements.employeeNumber.value || "").trim();
+  const preview = form.querySelector("[data-candidate-existing-employee-preview]");
+  const message = form.querySelector("[data-candidate-existing-employee-message]");
+  const ticket = captureGpContext(() => state.personnelCandidateCapabilities.canConvert,
+    () => state.selectedPersonnelCandidateId);
+  state.personnelCandidateMutationPending = application.id;
+  form.querySelectorAll("button").forEach(button => { button.disabled = true; });
+  message.textContent = "Wird geprüft …";
+  try {
+    const path = `/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(candidate.id)}/applications/${encodeURIComponent(application.id)}`;
+    if (action !== "link") {
+      preview.innerHTML = "";
+      delete form.dataset.employeeSnapshotSha256;
+      const result = await api(`${path}/existing-employee/${encodeURIComponent(employeeNumber)}`, { headers: csrfHeader() });
+      if (!gpContextCurrent(ticket) || state.selectedPersonnelCandidate?.id !== candidate.id) return;
+      form.dataset.employeeSnapshotSha256 = result.employee.snapshotSha256;
+      form.dataset.employeeNumber = result.employee.personnelNumber;
+      form.dataset.operationId = crypto.randomUUID();
+      preview.innerHTML = `<p><strong>${escapeHtml(result.employee.fullName)} · MA ${escapeHtml(result.employee.personnelNumber)}</strong></p>
+        <label class="employee-onboarding-start-check"><input name="confirmed" type="checkbox" required /><span>Ich habe die Person geprüft und bestätige die bereits erfolgte Einstellung.</span></label>
+        <p>Die Bewerbung wird als „Eingestellt“ abgeschlossen. Die vorhandenen Mitarbeiterdaten bleiben erhalten.</p>
+        <button class="primary-button" type="submit" name="action" value="link">Als eingestellt vermerken</button>`;
+      message.textContent = "Bitte die Zuordnung bestätigen.";
+    } else {
+      if (employeeNumber !== form.dataset.employeeNumber || !form.dataset.employeeSnapshotSha256 || form.elements.confirmed?.checked !== true) {
+        throw new Error("Bitte den Mitarbeiter zuerst erneut prüfen und bestätigen.");
+      }
+      await api(`${path}/link-existing-employee`, { method: "POST", body: JSON.stringify({
+        operationId: form.dataset.operationId, candidateRevision: candidate.revision, applicationRevision: application.revision,
+        employeeNumber, employeeSnapshotSha256: form.dataset.employeeSnapshotSha256, confirmed: true,
+      }) });
+      if (!gpContextCurrent(ticket) || state.selectedPersonnelCandidate?.id !== candidate.id) return;
+      await loadPersonnelCandidates({ force: true });
+      await loadPersonnelCandidateDetail(candidate.id);
+      showToast("Die Einstellung wurde mit dem vorhandenen Mitarbeiter verknüpft.");
+    }
+  } catch (error) {
+    if (!gpContextCurrent(ticket)) return;
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    message.textContent = error.message || "Die Zuordnung konnte nicht gespeichert werden.";
+  } finally {
+    if (gpContextCurrent(ticket)) {
+      state.personnelCandidateMutationPending = "";
+      form.querySelectorAll("button").forEach(button => { button.disabled = false; });
+    }
+  }
+}
+
 function renderPersonnelCandidateApplication(candidateId, application) {
   const weeklyMinutes = Number(application.desiredWeeklyMinutes);
   const weeklyHours = Number.isFinite(weeklyMinutes) && weeklyMinutes > 0
@@ -14956,6 +15071,7 @@ function renderPersonnelCandidateApplication(candidateId, application) {
       </form>
     </details>` : ""}
     ${renderPersonnelCandidateStatusForm(candidateId, application)}
+    ${renderPersonnelCandidateExistingEmployeeForm(candidateId, application)}
   </article>`;
 }
 
@@ -14990,6 +15106,7 @@ function renderPersonnelCandidateDetail() {
       <span class="personnel-candidate-status-badge${candidate.state === "archived" ? " status-archived" : ""}">${candidate.state === "archived" ? "Archiviert" : "Aktiv"}</span>
     </div>
     ${state.personnelCandidateDetailError ? `<p class="personnel-candidate-inline-error">${escapeHtml(state.personnelCandidateDetailError)}</p>` : ""}
+    ${candidate.conversion ? `<div class="personnel-candidate-privacy-note"><strong>Eingestellt · MA ${escapeHtml(candidate.conversion.employeeNumber)}</strong><p>${candidate.conversion.targetMode === "existing" ? "Mit vorhandenem Mitarbeiter verknüpft" : "Kontrolliert als Mitarbeiter angelegt"} · ${escapeHtml(formatPersonnelCandidateTimestamp(candidate.conversion.createdAt))}</p></div>` : ""}
     <div class="personnel-candidate-facts personnel-candidate-contact-facts">
       ${personnelCandidateFact("E-Mail", profile.email)}
       ${personnelCandidateFact("Telefon", profile.phone)}
@@ -16104,6 +16221,12 @@ function downloadCandidateEvaluationPdf(anchor) {
 }
 
 function handlePersonnelCandidateDetailSubmit(event) {
+  const existingEmployeeForm = event.target.closest("[data-candidate-existing-employee-form]");
+  if (existingEmployeeForm) {
+    event.preventDefault();
+    savePersonnelCandidateExistingEmployee(existingEmployeeForm, event.submitter?.value || "lookup");
+    return;
+  }
   const profileForm = event.target.closest("[data-personnel-candidate-profile-form]");
   const photoForm = event.target.closest("[data-personnel-candidate-photo-form]");
   const applicationForm = event.target.closest("[data-personnel-candidate-application-form]");
@@ -21781,6 +21904,8 @@ function syncGpWindows() {
   recentArticlesWindow?.sync();
   syncSalesAnalyticsPrintWindows();
   receiptSearchWorkspace?.syncPrint();
+  salesHistoryWorkspace?.syncPrint();
+  crmPurchaseWorkspace?.syncPrint();
   salesPriceLabelsWorkspace?.syncPrint?.();
   state.salesArticleCatalog?.priceLabels?.syncPrint?.();
   syncDocumentPrint();
@@ -25146,6 +25271,7 @@ function renderOrganizationAccounts() {
       <span class="status-badge ${account.active && !account.locked ? "approved" : "inactive"}">${escapeHtml(account.active ? (account.locked ? "Gesperrt" : "Aktiv") : "Inaktiv")}</span>
       <div class="organization-account-actions">
         <button class="secondary-button" data-edit-organization-account type="button">Bearbeiten</button>
+        <a class="secondary-button" href="/passkeys.html?accountId=${encodeURIComponent(account.id)}">Passkeys verwalten</a>
         ${account.locked || account.failedLoginAttempts ? '<button class="secondary-button" data-unlock-organization-account type="button">Entsperren</button>' : ""}
       </div>
     </article>`;
@@ -30446,7 +30572,7 @@ function personnelRecordSelect(name, fieldKey, label, value, accessMode, options
 
 function personnelRecordCheckbox(name, fieldKey, label, checked, accessMode) {
   if (accessMode === "hidden") return "";
-  return `<label class="field" data-personnel-field-key="${escapeHtmlAttribute(fieldKey)}"><span>Fachliche Prüfung</span><span class="checkbox-line"><input name="${escapeHtmlAttribute(name)}" type="checkbox"${checked === true ? " checked" : ""} ${accessMode === "write" ? "" : "disabled"} /> ${escapeHtml(label)}</span></label>`;
+  return `<label class="field" data-personnel-field-key="${escapeHtmlAttribute(fieldKey)}"><span>Bestätigung des Lehrlingsstatus</span><span class="checkbox-line"><input name="${escapeHtmlAttribute(name)}" type="checkbox"${checked === true ? " checked" : ""} ${accessMode === "write" ? "" : "disabled"} /> ${escapeHtml(label)}</span></label>`;
 }
 
 function renderPersonnelProtectionEditor(value, mode, prefix) {
@@ -35833,7 +35959,10 @@ function syncSalesHistoryAccess() {
   const panel = document.getElementById("salesHistoryPanel");
   panel?.classList.toggle("hidden", !user?.salesHistory?.read);
   document.getElementById("crmPurchaseHistory")?.classList.toggle("hidden", !user?.salesHistory?.customerPurchases);
-  if (panel && user?.salesHistory?.read) salesHistoryWorkspace = window.GrabenplanerSalesHistory?.mount(panel, { api });
+  if (panel && user?.salesHistory?.read) salesHistoryWorkspace = window.GrabenplanerSalesHistory?.mount(panel, { api, rawApi,
+    accessKey: startDashboardWorkspaceActorKey,
+    canUse: () => state.portalSession?.authenticated === true && !state.portalSession?.user?.mustChangePassword && state.portalSession?.user?.salesHistory?.read === true,
+    active: () => state.currentView === "receiptSearch", windowPreferences: gpWindowManager?.preferences, scale: salesArticleSearchWindowScale });
 }
 
 function renderCrmCustomerReadView(customer) {
@@ -35939,7 +36068,10 @@ function renderCrmCustomerDetail() {
     : renderCrmCustomerReadView(state.crm.selectedCustomer);
   const purchases = document.getElementById("crmPurchaseHistory");
   if (purchases && state.portalSession?.user?.salesHistory?.customerPurchases) {
-    crmPurchaseWorkspace = window.GrabenplanerSalesHistory?.mount(purchases, { api, customerId: state.crm.selectedCustomer.id });
+    crmPurchaseWorkspace = window.GrabenplanerSalesHistory?.mount(purchases, { api, rawApi, customerId: state.crm.selectedCustomer.id,
+      accessKey: startDashboardWorkspaceActorKey,
+      canUse: () => state.portalSession?.authenticated === true && !state.portalSession?.user?.mustChangePassword && state.portalSession?.user?.salesHistory?.customerPurchases === true,
+      active: () => state.currentView === "crm", windowPreferences: gpWindowManager?.preferences, scale: salesArticleSearchWindowScale });
   }
   requestAnimationFrame(() => elements.crmCustomerDetail?.querySelector("#crmCustomerName")?.focus());
 }
@@ -39483,24 +39615,25 @@ function canUseAllEmployeesForShiftPlanning() {
     || ["developer", "it_admin", "admin", "hr"].includes(state.portalSession?.user?.role);
 }
 
-function shiftEmployeeCandidates(selectedEmployeeNumber = "", shift = null) {
+function shiftEmployeeCandidates(selectedEmployeeNumber = "", shift = null, planningCandidates = null, date = null) {
   const scopedEmployees = state.data?.employees || [];
-  const source = canUseAllEmployeesForShiftPlanning() ? state.allEmployees : scopedEmployees;
+  const source = planningCandidates || (canUseAllEmployeesForShiftPlanning() ? state.allEmployees : scopedEmployees);
   const selected = String(selectedEmployeeNumber || "");
   const candidates = source.filter((employee) => (
     employee.active !== false && employee.active !== 0 && employee.active !== "0"
   ) || String(employee.personnel_number) === selected);
   if (!candidates.some((employee) => String(employee.personnel_number) === selected)) {
-    const existing = [...scopedEmployees, ...state.allEmployees]
+    const existing = (planningCandidates || [...scopedEmployees, ...state.allEmployees])
       .find((employee) => String(employee.personnel_number) === selected);
     if (existing) candidates.push(existing);
-    else if (selected) candidates.push({
+    else if (selected && !planningCandidates) candidates.push({
       personnel_number: selected,
       nickname: shift?.nickname || shift?.full_name || selected,
       home_location_id: shift?.home_location_id || shift?.homeLocationId || "",
     });
   }
   return [...new Map(candidates.map((employee) => [employee.personnel_number, employee])).values()]
+    .filter(employee => !date || !Array.isArray(employee.planningDates) || employee.planningDates.includes(date))
     .sort((left, right) => String(left.personnel_number).localeCompare(String(right.personnel_number), "de-AT", { numeric: true, sensitivity: "base" }));
 }
 
@@ -39806,7 +39939,23 @@ async function updateEmployeeLendingDelegate(employeeNumber, enabled, control) {
   }
 }
 
-function openShiftModal(employeeNumber, date, shift = null) {
+async function openShiftModalForPlanningDate(employeeNumber, date, shift = null) {
+  if (guardScheduleEditing()) return;
+  const ticket = captureGpContext(() => !isAutomaticallyWeekLocked(),
+    () => JSON.stringify([state.locationId, state.departmentId, state.weekStart]));
+  try {
+    const candidates = canUseAllEmployeesForShiftPlanning()
+      ? await api(`/api/employees?planningWeek=${encodeURIComponent(state.weekStart)}`)
+      : state.data?.employees || [];
+    if (!gpContextCurrent(ticket)) return;
+    if (!Array.isArray(candidates)) throw new Error("Die verfügbaren Mitarbeitenden konnten nicht geladen werden.");
+    openShiftModal(employeeNumber, date, shift, candidates);
+  } catch (error) {
+    if (gpContextCurrent(ticket)) showToast(error.message || "Die verfügbaren Mitarbeitenden konnten nicht geladen werden.", true);
+  }
+}
+
+function openShiftModal(employeeNumber, date, shift = null, planningCandidates = null) {
   if (guardScheduleEditing()) return;
   if (shiftMutation && shiftMutationCurrent(shiftMutation)) return;
   finishShiftMutation(shiftMutation);
@@ -39825,8 +39974,12 @@ function openShiftModal(employeeNumber, date, shift = null) {
     return;
   }
   const selectedEmployeeNumber = shift?.employee_number || employeeNumber;
-  const candidates = shiftEmployeeCandidates(selectedEmployeeNumber, shift);
+  const candidates = shiftEmployeeCandidates(selectedEmployeeNumber, shift, planningCandidates, shift?.shift_date || date);
   const initialEmployee = candidates.find((employee) => employee.personnel_number === selectedEmployeeNumber);
+  if (!initialEmployee) {
+    showToast("Der Mitarbeiter ist an diesem Tag nicht für die Dienstplanung verfügbar.", true);
+    return;
+  }
   if (initialEmployee && !shift && !employeeCanWorkOnDate(initialEmployee, shift?.shift_date || date)) {
     showToast(`${initialEmployee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`, true);
     return;
@@ -41014,7 +41167,8 @@ async function downloadCompleteDatabase(event) {
     return;
   }
   const currentPassword = elements.databaseDownloadCurrentPassword?.value || "";
-  if (!currentPassword) {
+  const usePasskey = window.GPPasskeyAuth?.selected?.("database-download") === true;
+  if (!usePasskey && !currentPassword) {
     setDatabaseDownloadStatus("Bitte das aktuelle Passwort eingeben.", "error");
     elements.databaseDownloadCurrentPassword?.focus();
     return;
@@ -41030,7 +41184,8 @@ async function downloadCompleteDatabase(event) {
       const response = await rawApi("/api/backup/database-download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmation: "DATABASE_BACKUP_DOWNLOAD", currentPassword }),
+        body: JSON.stringify({ confirmation: "DATABASE_BACKUP_DOWNLOAD", ...(usePasskey
+          ? await window.GPPasskeyAuth.authorization(api, "database-download") : { currentPassword }) }),
       });
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       await downloadFileResponse(response, `Grabenplaner-Datenbank-${timestamp}.db`);
@@ -41157,6 +41312,7 @@ async function createManagedOffsiteFolder() {
   }
   const folderLabel = elements.offsiteNewFolderLabel?.value.trim() || "";
   const currentPassword = elements.offsiteCreateCurrentPassword?.value || "";
+  const usePasskey = window.GPPasskeyAuth?.selected?.("offsite-folder-create") === true;
   if (!validManagedOffsiteFolderLabel(folderLabel)) {
     setOffsiteFolderDialogStatus("Bitte einen gültigen Ordnernamen mit 1 bis 48 Zeichen ohne Pfadbestandteile eingeben.", "error");
     elements.offsiteNewFolderLabel?.focus();
@@ -41167,7 +41323,7 @@ async function createManagedOffsiteFolder() {
     elements.offsiteNewFolderLabel?.focus();
     return;
   }
-  if (!currentPassword) {
+  if (!usePasskey && !currentPassword) {
     setOffsiteFolderDialogStatus("Bitte das aktuelle Passwort für die Ordneranlage eingeben.", "error");
     elements.offsiteCreateCurrentPassword?.focus();
     return;
@@ -41184,7 +41340,7 @@ async function createManagedOffsiteFolder() {
         body: JSON.stringify({
           confirmation: "CREATE_MANAGED_OFFSITE_FOLDER",
           folderLabel,
-          currentPassword,
+          ...(usePasskey ? await window.GPPasskeyAuth.authorization(api, "offsite-folder-create") : { currentPassword }),
         }),
       });
       if (elements.offsiteNewFolderLabel) elements.offsiteNewFolderLabel.value = "";
@@ -41219,6 +41375,7 @@ async function activateManagedOffsiteFolder() {
   }
   const folderLabel = elements.offsiteActiveFolderSelection?.value || "";
   const currentPassword = elements.offsiteActivateCurrentPassword?.value || "";
+  const usePasskey = window.GPPasskeyAuth?.selected?.("offsite-folder-activate") === true;
   if (!validManagedOffsiteFolderLabel(folderLabel)
     || !state.offsiteFolders?.folders.includes(folderLabel)
     || folderLabel === state.offsiteFolders?.activeFolder) {
@@ -41231,7 +41388,7 @@ async function activateManagedOffsiteFolder() {
     elements.offsiteFolderActivationConfirmation?.focus();
     return;
   }
-  if (!currentPassword) {
+  if (!usePasskey && !currentPassword) {
     setOffsiteFolderDialogStatus("Bitte das aktuelle Passwort für den Zielwechsel eingeben.", "error");
     elements.offsiteActivateCurrentPassword?.focus();
     return;
@@ -41251,7 +41408,7 @@ async function activateManagedOffsiteFolder() {
         body: JSON.stringify({
           confirmation: "ACTIVATE_MANAGED_OFFSITE_FOLDER",
           folderLabel,
-          currentPassword,
+          ...(usePasskey ? await window.GPPasskeyAuth.authorization(api, "offsite-folder-activate") : { currentPassword }),
         }),
       }), folderLabel);
       const refreshed = await loadManagedOffsiteFolders({ force: true });
@@ -43222,6 +43379,7 @@ elements.loanOverviewColumnsLocation?.addEventListener("change", () => {
 elements.loanOverviewColumnsForm?.addEventListener("submit", saveLoanOverviewColumns);
 elements.branchAccountPasswordButton?.addEventListener("click", openBranchAccountPasswordDialog);
 elements.branchAccountPasswordForm?.addEventListener("submit", saveBranchAccountPassword);
+elements.branchAccountPasswordAccount?.addEventListener("change", syncBranchAccountPasskeyLink);
 elements.loanManagementLocation?.addEventListener("change", () => {
   state.loanManagementLocationId = elements.loanManagementLocation.value;
   loadLoanManagement();
@@ -45543,11 +45701,11 @@ elements.timeline.addEventListener("click", (event) => {
   if (shiftButton) {
     event.stopPropagation();
     const shift = state.data.shifts.find((item) => item.id === Number(shiftButton.dataset.shiftId));
-    openShiftModal(shift.employee_number, shift.shift_date, shift);
+    openShiftModalForPlanningDate(shift.employee_number, shift.shift_date, shift);
     return;
   }
   const lane = event.target.closest("[data-employee-number][data-date]");
-  if (lane) openShiftModal(lane.dataset.employeeNumber, lane.dataset.date);
+  if (lane) openShiftModalForPlanningDate(lane.dataset.employeeNumber, lane.dataset.date);
 });
 
 elements.optionList.addEventListener("click", async (event) => {
@@ -45611,6 +45769,11 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
   enabled: () => !document.body.classList.contains("portal-locked")
     && Boolean(state.portalStatus) && (!state.portalStatus.portalEnabled || state.portalSession?.authenticated === true),
   onError: () => showToast("Die Seitennavigation konnte nicht wiederhergestellt werden.", true),
+});
+window.GPPasskeyAuth?.bindLogin(document.getElementById("adminPasskeyLogin"), {
+  api, complete: completeAdministrationLogin,
+  canUse: () => elements.adminLoginPersonnelNumber?.disabled === false,
+  error: error => { if (error.code !== "PORTAL_SESSION_CHANGED") showLoginGate(error.message); },
 });
 window.GrabenplanerSessionLifecycle?.listen(() => {
   showLoginGate("Die Anmeldung wurde in einem anderen Fenster geändert. Die Sitzung wird neu geprüft.");

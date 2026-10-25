@@ -1229,6 +1229,31 @@ test('existing verified article bindings are captured without creating or changi
 });
 
 
+test('single-sale PDF links address the complete authenticated receipt instead of a receipt number or page selection', async t => {
+  const f = await fixture(t, { count: 3 }), data = rows({ count: 3 });
+  data.Umsatz_KASSE.push({ ...data.Umsatz_KASSE[0], Kassenid: '02', RechnungsBetrag: '12' });
+  data.Umsatz_Kasse_Details.push({ ...data.Umsatz_Kasse_Details[0], Kassenid: '02', RepID: '00000000-0000-0000-0000-000000000099' });
+  const source = await f.build(data); await f.activate(f.request(source)); const runtime = f.history();
+  const found = await runtime.run(f.get, w => w.search(f.query({ limit: 1 })));
+  assert.equal(found.items.length, 1); assert.ok(found.next); assert.ok(found.items[0].receiptId);
+  const all = await runtime.run(f.get, w => w.search(f.query()));
+  assert.equal(new Set(all.items.map(row => row.receipt)).size, 1, 'Visible receipt numbers deliberately collide');
+  assert.equal(new Set(all.items.map(row => row.receiptId)).size, 2, 'Register identity remains distinct');
+  const threeLines = all.items.find(row => all.items.filter(other => other.receiptId === row.receiptId).length === 3);
+  const document = await runtime.run(f.get, w => w.receipts.documents({ ids: [threeLines.receiptId] }));
+  assert.equal(document.items.length, 1); assert.equal(document.items[0].register, '01');
+  assert.equal(document.items[0].lines.length, 3, 'PDF uses every position, including positions outside the visible page');
+  assert.doesNotMatch(JSON.stringify(document), /KUND_NR|00031|customerName|customerEmail/);
+  const { createReceiptInfoPdf } = require('../lib/receipt-info-pdf');
+  assert.equal((await createReceiptInfoPdf(document)).subarray(0, 5).toString(), '%PDF-');
+  const original = f.session;
+  f.session = { ...original, permissions: original.permissions.filter(p => !['sales:analytics:company:read', 'sales:history:unassigned:read'].includes(p)).concat('sales:analytics:location:read'), scopes: [{ locationId: 'branch-b', departmentId: 0 }] };
+  await assert.rejects(runtime.run(f.get, w => w.receipts.documents({ ids: [threeLines.receiptId] })), code('IMPORT_FORBIDDEN'));
+  f.session = original;
+  const replacement = await f.build(rows({ price: '24' })); await f.activate(f.request(replacement, 1));
+  await assert.rejects(runtime.run(f.get, w => w.receipts.documents({ ids: [threeLines.receiptId] })), e => e.code.startsWith('IMPORT_'));
+});
+
 test('receipt search groups complete receipts, tolerates wildcards and exports only authorized fields', async t => {
   const f = await fixture(t, { count: 3 }); await f.activate(); const runtime = f.history();
   const q = { sourceId: 'compact-cash', dateFrom: '2010-01-01', dateTo: '2010-12-31', query: 'Synthe*   arti?le', kind: 'receipts' };

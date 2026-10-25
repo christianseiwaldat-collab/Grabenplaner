@@ -105,7 +105,7 @@
   function credentialOptions(url, options) {
     let pathname;
     try { pathname = new URL(url, root.location.href).pathname; } catch { return options; }
-    const changesCredentials = /^\/api\/(?:portal\/v1\/(?:auth\/(?:login|logout|password-reset\/confirm)|setup\/admin|me\/password|server-monitor\/vps-reboot)|backup\/(?:database-download|offsite-folders(?:\/active)?))$/.test(pathname)
+    const changesCredentials = /^\/api\/(?:portal\/v1\/(?:auth\/(?:login|logout|password-reset\/confirm|passkeys\/verify)|passkeys\/(?:register\/verify|credentials\/[a-f0-9-]+\/revoke)|setup\/admin|me\/password|server-monitor\/vps-reboot)|backup\/(?:database-download|offsite-folders(?:\/active)?))$/.test(pathname)
       && !["GET", "HEAD", "OPTIONS"].includes(String(options.method || "GET").toUpperCase());
     if (!credentialController) {
       if (changesCredentials) throw credentialError();

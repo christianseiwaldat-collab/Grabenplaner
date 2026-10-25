@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f1e9" />
+    <meta name="referrer" content="same-origin" />
+    <title>Passkeys verwalten · Grabenplaner</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/webicon.svg" />
+    <link rel="stylesheet" href="/passkeys.css" />
+    <script src="/session-lifecycle.js" defer></script>
+    <script src="/vendor/simplewebauthn-browser-v14/index.umd.min.js" defer></script>
+    <script src="/passkeys.js" defer></script>
+  </head>
+  <body>
+    <main class="passkeys-page" id="passkeyPage">
+      <header class="passkeys-heading">
+        <a href="/portal.html" class="passkeys-brand"><img src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" /></a>
+        <nav aria-label="Zurück zum Grabenplaner"><a href="/portal.html">Mitarbeiterportal</a><a href="/">Planung</a></nav>
+      </header>
+      <section class="passkeys-card" aria-labelledby="passkeysTitle">
+        <span class="passkeys-eyebrow">Zugang und Sicherheit</span>
+        <h1 id="passkeysTitle">Passkeys verwalten</h1>
+        <p id="passkeysTarget">Der Zugang wird geprüft …</p>
+        <p>Mit einem Passkey bestätigst du die Anmeldung am Gerät, zum Beispiel mit PIN, Fingerabdruck oder Gesicht. Der GP speichert keine biometrischen Daten.</p>
+        <p>Dein Passwort bleibt als weitere Anmeldemöglichkeit erhalten. Ein zweiter Passkey hilft, wenn ein Gerät verloren geht.</p>
+        <p id="passkeysOrganizationNote" class="passkeys-note" hidden>Dieser Passkey meldet das Filial- oder Terminalkonto an. Verwende dafür vorzugsweise ein verwaltetes Firmengerät oder einen betrieblichen Sicherheitsschlüssel. Die Freigabe erfolgt mit deinem persönlichen Zugang.</p>
+        <p id="passkeysStatus" class="passkeys-status" role="status" aria-live="polite">Passkeys werden geladen …</p>
+        <a id="passkeysLoginLink" href="/portal.html" hidden>Im Mitarbeiterportal anmelden</a>
+        <button id="passkeysRefresh" type="button">Ansicht aktualisieren</button>
+      </section>
+      <section class="passkeys-card" id="passkeysCredentialsSection" aria-labelledby="passkeysCredentialsTitle" hidden>
+        <h2 id="passkeysCredentialsTitle">Hinterlegte Passkeys</h2>
+        <ul id="passkeysCredentials" class="passkeys-list"></ul>
+        <p id="passkeysEmpty" hidden>Für diesen Zugang ist noch kein Passkey hinterlegt.</p>
+      </section>
+      <section class="passkeys-card" id="passkeysRegistrationSection" aria-labelledby="passkeysRegistrationTitle" hidden>
+        <h2 id="passkeysRegistrationTitle">Passkey hinzufügen</h2>
+        <p>Gib dem Passkey einen Namen, an dem du ihn später wiedererkennst, etwa „Mein Telefon“ oder „Sicherheitsschlüssel Büro“.</p>
+        <form id="passkeysRegisterForm">
+          <fieldset id="passkeysRegisterFields" disabled>
+            <label><span>Name des Passkeys</span><input id="passkeysLabel" name="label" maxlength="80" required autocomplete="off" /></label>
+            <label><span data-passkeys-password-label>Aktuelles Passwort</span><input id="passkeysRegisterPassword" name="current-password" type="password" required autocomplete="current-password" maxlength="512" /></label>
+            <button class="primary" id="passkeysRegister" type="submit">Passkey hinzufügen</button>
+          </fieldset>
+        </form>
+      </section>
+      <dialog id="passkeysRevokeDialog" aria-labelledby="passkeysRevokeTitle" aria-describedby="passkeysRevokeDescription passkeysRevokeConsequences passkeysRevokeDeviceLoss">
+        <form id="passkeysRevokeForm">
+          <h2 id="passkeysRevokeTitle">Passkey widerrufen</h2>
+          <p id="passkeysRevokeDescription"></p>
+          <p id="passkeysRevokeConsequences">Dieser Passkey kann danach nicht mehr zur Anmeldung verwendet werden. Das Passwort und andere gültige Passkeys bleiben erhalten. Bereits angemeldete Sitzungen bleiben bestehen.</p>
+          <p id="passkeysRevokeDeviceLoss">Bei Verlust oder Fremdnutzung eines Geräts bitte die zuständige Administration kontaktieren, um bestehende Sitzungen zu beenden oder das Kennwort zurückzusetzen.</p>
+          <label><span data-passkeys-password-label>Aktuelles Passwort</span><input id="passkeysRevokePassword" name="current-password" type="password" required autocomplete="current-password" maxlength="512" /></label>
+          <p id="passkeysRevokeStatus" class="passkeys-status" role="status" aria-live="polite"></p>
+          <div class="passkeys-actions"><button id="passkeysRevokeCancel" type="button">Abbrechen</button><button class="primary" id="passkeysRevoke" type="submit">Passkey widerrufen</button></div>
+        </form>
+      </dialog>
+      <noscript>Bitte JavaScript aktivieren, um Passkeys zu verwalten.</noscript>
+    </main>
+  </body>
+</html>

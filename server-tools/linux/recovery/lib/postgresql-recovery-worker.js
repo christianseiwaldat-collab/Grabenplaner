@@ -7,9 +7,10 @@ async function prepareRestoredSchema({config,connect}){
  if(!core)throw new Error('PG_RECOVERY_CORE_MISSING');
  // connect belongs to restorePair's private Unix-socket cluster. Source
  // checkpoints and protected data have already been verified by restorePair;
- // These upgrades change only the disposable application test copy. Session
- // security also revokes copied credentials once; the verified source pair
- // remains untouched and is never opened by the target application.
+ // These upgrades change only the disposable application test copy. Its
+ // authentication state is invalidated separately on every explicit restore,
+ // including backups whose one-time schema migrations already ran. The verified
+ // source pair remains untouched and is never opened by the target application.
  const client=connect(core.database,'gp_core_migrator');
  try{
   // The final schema fingerprint runs after the migrations commit their LOCAL settings.
@@ -17,8 +18,11 @@ async function prepareRestoredSchema({config,connect}){
   const xoffi=await require('../../../../lib/persistence/postgresql/core/xoffi-snapshots').migrate(client,{binding:config.binding});
   const vocationalSchool=await require('../../../../lib/persistence/postgresql/core/vocational-school').migrate(client,{binding:config.binding});
   const sessionSecurity=await require('../../../../lib/persistence/postgresql/core/session-security').migrate(client,{binding:config.binding});
-  await require('../../../../lib/persistence/postgresql/boundary/migrate').verifyCoreSchema(client,{requireVocationalSchool:true,requireSessionSecurity:true});
-  return {xoffi,vocationalSchool,sessionSecurity};
+  const passkeys=await require('../../../../lib/persistence/postgresql/core/passkeys').migrate(client,{binding:config.binding});
+  await require('../../../../lib/persistence/postgresql/boundary/migrate').verifyCoreSchema(client,{requireVocationalSchool:true,requireSessionSecurity:true,requirePasskeys:true});
+  const restoreAuthentication=require('../../../../lib/persistence/postgresql/operations/restore-authentication');
+  const authenticationInvalidation=await restoreAuthentication.invalidateRestoredAuthentication(client,{binding:config.binding,scope:restoreAuthentication.SCOPE});
+  return {xoffi,vocationalSchool,sessionSecurity,passkeys,authenticationInvalidation};
  }finally{await client.end();}
 }
 async function main(){

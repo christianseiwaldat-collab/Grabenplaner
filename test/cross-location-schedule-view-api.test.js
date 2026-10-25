@@ -521,6 +521,7 @@ test("Block 2 API: Antwort enthält nur Planungs-Minimaldaten und neutrale Nicht
     departmentName: "Fotowelt",
     color: "#aabbcc",
     requestEligible: true,
+    planningDates: ["2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-29", "2026-08-30"],
   }]);
   assert.deepEqual(schedule.shifts, [{
     employeeNumber: FOREIGN_EMPLOYEE,

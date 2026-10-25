@@ -1,0 +1,9 @@
+{
+  "name": "gp-passkeys-browser-tests",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@11.7.0",
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}

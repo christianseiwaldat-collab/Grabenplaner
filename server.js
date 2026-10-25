@@ -3610,7 +3610,7 @@ app.use(async (request, response, next) => {
     await refreshPortalSettingsSnapshot();
     // A new login is authorized by its submitted credentials. An older cookie
     // must not veto the transaction that replaces that very session.
-    request.portalSession = request.path === "/api/portal/v1/auth/login" || request.path.startsWith('/api/mobile/')
+    request.portalSession = ["/api/portal/v1/auth/login", "/api/portal/v1/auth/passkeys/options", "/api/portal/v1/auth/passkeys/verify"].includes(request.path) || request.path.startsWith('/api/mobile/')
       ? null : await loadPortalSessionFromRequest(request);
     request.portalSessionLoaded = true;
     // Cookies are issued only by explicit authentication transitions. A late
@@ -3626,6 +3626,10 @@ app.use(async (request, response, next) => {
 });
 app.use("/branding-kits", express.static(brandingKitsDirectory));
 app.use("/vendor/quill", express.static(path.join(__dirname, "node_modules", "quill", "dist")));
+app.use("/vendor/simplewebauthn-browser-v14", express.static(
+  path.join(__dirname, "node_modules", "@simplewebauthn", "browser", "dist", "bundle"),
+  { maxAge: "365d", immutable: true, fallthrough: false },
+));
 const tesseractPackageDirectory = fs.realpathSync(path.dirname(require.resolve("tesseract.js/package.json")));
 const tesseractCoreDirectory = fs.realpathSync(path.join(path.dirname(tesseractPackageDirectory), "tesseract.js-core"));
 const tesseractGermanDataDirectory = fs.realpathSync(path.join(__dirname, "node_modules", "@tesseract.js-data", "deu", "4.0.0_best_int"));
@@ -4201,6 +4205,8 @@ async function requireBackupAdminReauthentication(request, response, {
   const user = await portalAccessRepository.getBackupAdminUser({
     employeeNumber: session.employeeNumber,
   });
+  const passkeyProof = Object.hasOwn(request.body || {}, "passkey")
+    ? await verifyPasskeyReauthentication(request, operation) : null;
   const suppliedPassword = typeof request.body?.currentPassword === "string"
     && request.body.currentPassword.length <= 512
     ? request.body.currentPassword
@@ -4215,11 +4221,11 @@ async function requireBackupAdminReauthentication(request, response, {
     && BACKUP_ADMIN_ROLES.has(user.role)
     && user.password_hash,
   );
-  const passwordMatches = await verifyPortalPassword(
+  const passwordMatches = passkeyProof ? true : await verifyPortalPassword(
     suppliedPassword,
     allowed ? user.password_hash : DUMMY_PORTAL_PASSWORD_HASH,
   );
-  if (!allowed || !suppliedPassword || !passwordMatches) {
+  if (!allowed || (!passkeyProof && !suppliedPassword) || !passwordMatches) {
     backupAdminAuthRateLimits.record(rateKey, now);
     backupAdminGlobalRateLimits.record(ipKey, now);
     (await auditBackupAdministration(session.employeeNumber, "backup.admin.reauthentication.denied", "system", operation));
@@ -4245,6 +4251,7 @@ async function requireBackupAdminReauthentication(request, response, {
       || (current.locked_until && !(new Date(current.locked_until).getTime() <= acceptedAt.getTime()))) {
       throw httpError(403, "Der Zugang oder die Berechtigung wurde geändert. Bitte erneut anmelden.", "BACKUP_ADMIN_AUTH_CHANGED");
     }
+    if (passkeyProof) await confirmPasskeyReauthentication(request, repositories, passkeyProof, operation);
     const lifetime = browserSessionLifetime({ now: acceptedAt, role: live.role, permissions: live.permissions,
       idleMinutes: portalSessionTimeoutMinutes(), authenticatedAt: live.authenticatedAt,
       absoluteExpiresAt: live.absoluteExpiresAt });
@@ -17575,7 +17582,8 @@ async function mobileSchedulePayload(session, weekValue = "") {
       weekEnd,
     }),
   ]);
-  const shifts = storedShifts.map((shift) => ({
+  const employment = await projectScheduleEmployment([{ personnel_number: session.employeeNumber }], weekStart, weekEnd);
+  const shifts = employment.clip(storedShifts).map((shift) => ({
     id: Number(shift.id),
     date: shift.shift_date,
     startTime: shift.start_time,
@@ -17588,7 +17596,7 @@ async function mobileSchedulePayload(session, weekValue = "") {
     departmentName: shift.department_name || "",
     dutyCode: shift.duty_code || "",
   }));
-  const options = storedOptions.map((option) => ({
+  const options = employment.clip(storedOptions).map((option) => ({
     id: Number(option.id),
     dateFrom: option.date_from,
     dateTo: option.date_to,
@@ -19278,8 +19286,22 @@ function normalizeFixedWorkdays(value) {
 }
 
 function employeeCanWorkOnDate(employee, isoDate) {
+  if (Array.isArray(employee.planningDates) && !employee.planningDates.includes(isoDate)) return false;
   const fixedDays = parseFixedWorkdays(employee.fixed_workdays);
   return fixedDays.length === 0 || fixedDays.includes(dayKeyForDate(isoDate));
+}
+
+async function projectScheduleEmployment(employeeRows, weekStart, weekEnd = addDays(weekStart, 6), repository = organizationPersonnelRepository) {
+  const numbers = [...new Set(employeeRows.map(row => String(row.personnel_number)))];
+  const starts = new Map(await Promise.all(numbers.map(async number => [number,
+    (await personnelSensitiveProfile(number, repository)).employment.startDate,
+  ])));
+  return require('./lib/schedule-employment').employmentProjection(employeeRows, weekStart, weekEnd, starts);
+}
+
+async function assertPlanningEmployment(shift, repository = organizationPersonnelRepository) {
+  const profile = await personnelSensitiveProfile(String(shift.employeeNumber ?? shift.employee_number), repository);
+  require('./lib/schedule-employment').assertEmploymentDate(profile.employment.startDate, shift.shiftDate ?? shift.shift_date);
 }
 
 async function dayConfiguration(isoDate, settings, context = null) {
@@ -19954,6 +19976,7 @@ async function validateShift(body, contextInput = {}, actor = null) {
     if (!employee) {
       throw httpError(404, "Die ausgewählte Person wurde nicht gefunden.");
     }
+    await assertPlanningEmployment({ employeeNumber, shiftDate });
     const hasDutyInput = Object.hasOwn(body, "dutyCode") || Object.hasOwn(body, "duty_code");
     const rawDutyCode = body.dutyCode ?? body.duty_code;
     if (hasDutyInput && (typeof rawDutyCode !== "string"
@@ -21448,7 +21471,10 @@ function assertWorkRuleAssessmentAllowsMutation(assessment) {
 
 function runWorkRuleMutationTransaction(callback) {
   if (typeof callback !== "function") throw new TypeError("Eine Planungsmutation wird benötigt.");
-  return workRuleStoreRepository.transaction(callback);
+  return persistenceProvider.transaction(executor => {
+    const repositories = createApplicationRepositories(executor);
+    return callback(repositories.workRules, repositories.organizationPersonnel);
+  });
 }
 
 async function crossLocationSchedulePrincipal(
@@ -21640,12 +21666,15 @@ async function crossLocationScheduleSource(location, weekStart) {
     weekStart,
     weekEnd,
   };
-  const [employees, shifts, weekOptions, lendings] = await Promise.all([
+  const [employeeRows, storedShifts, storedWeekOptions, storedLendings] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listScheduleWeekOptions(planningQuery),
     planningSettingsRepository.listScheduleLendings(planningQuery),
   ]);
+  const employment = await projectScheduleEmployment(employeeRows, weekStart, weekEnd);
+  const employees = employment.employees, shifts = employment.clip(storedShifts);
+  const weekOptions = employment.clip(storedWeekOptions), lendings = employment.clip(storedLendings);
   const departments = (location.departments || []).filter((department) => department.active);
   const departmentNames = new Map(
     departments.map((department) => [Number(department.id), String(department.name || "")]),
@@ -21664,6 +21693,7 @@ async function crossLocationScheduleSource(location, weekStart) {
       departmentName: departmentId ? departmentNames.get(departmentId) || "" : "",
       color: employee.color,
       requestEligible: String(employee.home_location_id || "") === locationId,
+      planningDates: employee.planningDates,
     };
   });
   const unavailability = [
@@ -22745,7 +22775,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     filterDepartment: context.departmentId ? 1 : 0,
     weekStart,
   };
-  const [employeeRows, shiftRows, employeeWeekShiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows, xoffiSnapshots, saturdayCutover] = await Promise.all([
+  let [employeeRows, shiftRows, employeeWeekShiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows, xoffiSnapshots, saturdayCutover] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningEmployeeShifts(planningQuery),
@@ -22757,6 +22787,16 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     timeTrackingRepository.listXoffiSnapshots({ locationId: context.locationId, departmentId: Number(context.departmentId || 0), weekStart }),
     saturdayCreditService.cutover(),
   ]);
+  const employment = await projectScheduleEmployment(employeeRows, weekStart, weekEnd);
+  employeeRows = employment.employees;
+  shiftRows = employment.clip(shiftRows);
+  employeeWeekShiftRows = employment.clip(employeeWeekShiftRows);
+  storedWeekOptions = employment.clip(storedWeekOptions);
+  employeeLendings = employment.clip(employeeLendings);
+  xoffiWeekRows = xoffiWeekRows.filter(row => employment.employeeByNumber.has(String(row.employee_number)));
+  xoffiWeekDays = employment.clip(xoffiWeekDays, { dateKey: 'work_date' });
+  xoffiBalanceRows = xoffiBalanceRows.filter(row => employment.eligibleOnDate(row.employee_number, row.balance_week_start));
+  xoffiSnapshots = xoffiSnapshots.filter(row => employment.eligibleOnDate(row.employeeNumber, row.snapshot?.balanceDate));
   const employees = employeeRows.map(serializeEmployee);
   const visibleEmployeeNumbers = new Set(employees.map((employee) => employee.personnel_number));
   const homeEmployeeNumbers = new Set(employees
@@ -22823,10 +22863,11 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     credited_minutes_per_day: 0,
     soft_pending: true,
   }));
-  weekOptions.push(...pendingTimeOff);
+  weekOptions.push(...employment.clip(pendingTimeOff));
   const sicknessCredits = (await sicknessCreditsForEmployeesInRange(
     employees.map((employee) => employee.personnel_number), weekStart, weekEnd,
-  )).filter((credit) => !weekOptions.some((option) => option.employee_number === credit.employee_number
+  )).filter(credit => employment.allows(credit.employee_number, credit.date))
+    .filter((credit) => !weekOptions.some((option) => option.employee_number === credit.employee_number
     && option.option_type === "sick" && credit.date >= option.date_from && credit.date <= option.date_to));
 
   const totals = {};
@@ -22949,6 +22990,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     if (day === 0 || day === 6) continue;
     for (const employee of employees) {
       const employeeDate = `${employee.personnel_number}|${holiday.date}`;
+      if (!employment.allows(employee.personnel_number, holiday.date)) continue;
       if (scheduledEmployeeDates.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
       if (hasNonVacationCreditOnDate(weekOptions, employee.personnel_number, holiday.date)) continue;
       const credit = Math.max(0, finiteScheduleMinutes(holidayCreditMinutes(employee)));
@@ -22963,6 +23005,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     if (day === 0 || day === 6) continue;
     for (const employee of employees) {
       const employeeDate = `${employee.personnel_number}|${block.block_date}`;
+      if (!employment.allows(employee.personnel_number, block.block_date)) continue;
       if (scheduledEmployeeDates.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
       if (hasNonVacationCreditOnDate(weekOptions, employee.personnel_number, block.block_date)) continue;
       const credit = Math.max(0, finiteScheduleMinutes(holidayCreditMinutes(employee)));
@@ -23015,6 +23058,14 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
       intervals: Array.isArray(intervals) ? intervals : [],
       absence: row.absence_code || "",
     });
+  }
+  for (const [number, target] of Object.entries(xoffiWeekByEmployee)) {
+    if ((employment.employeeByNumber.get(number)?.planningDates.length || 0) < 7) {
+      target.actualMinutes = target.days.reduce((sum, day) => sum + day.actualMinutes, 0);
+      target.valuedMinutes = target.days.reduce((sum, day) => sum + day.valuedMinutes, 0);
+      target.surchargeMinutes = target.days.reduce((sum, day) => sum + day.surchargeMinutes, 0);
+      target.closingBalanceMinutes = null;
+    }
   }
   const xoffiBalanceByEmployee = {};
   for (const row of xoffiBalanceRows) {
@@ -23086,10 +23137,12 @@ async function getScheduleEnrichment(weekValue, contextInput = {}, session = nul
     weekStart,
     weekEnd,
   };
-  const [employeeRows, shiftRows] = await Promise.all([
+  const [storedEmployees, storedShifts] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
   ]);
+  const employment = await projectScheduleEmployment(storedEmployees, weekStart, weekEnd);
+  const employeeRows = employment.employees, shiftRows = employment.clip(storedShifts);
   const employees = employeeRows.map(serializeEmployee);
   const currentWeekShifts = await Promise.all(shiftRows.map(async (shift) => {
     const { rawMinutes } = await plannedShiftBreaks(shift, settings);
@@ -28872,12 +28925,7 @@ app.post("/api/backup", async () => {
 
 app.post("/api/backup/database-download", async (request, response, next) => {
   const body = request.body;
-  const bodyKeys = body && typeof body === "object" && !Array.isArray(body)
-    ? Object.keys(body).sort()
-    : [];
-  if (bodyKeys.length !== 2
-    || bodyKeys[0] !== "confirmation"
-    || bodyKeys[1] !== "currentPassword"
+  if (!passkeyAuthenticationModule.reauthenticationBodyValid(body, ["confirmation"])
     || body.confirmation !== "DATABASE_BACKUP_DOWNLOAD") {
     throw httpError(400, "Die ausdrückliche Download-Bestätigung fehlt.", "DATABASE_DOWNLOAD_CONFIRMATION_REQUIRED");
   }
@@ -29019,13 +29067,7 @@ app.get("/api/backup/offsite-folders", async (request, response) => {
 app.post("/api/backup/offsite-folders", async (request, response) => {
   requireOffsiteTargetDeveloper(request);
   const body = request.body;
-  const bodyKeys = body && typeof body === "object" && !Array.isArray(body)
-    ? Object.keys(body).sort()
-    : [];
-  if (bodyKeys.length !== 3
-    || bodyKeys[0] !== "confirmation"
-    || bodyKeys[1] !== "currentPassword"
-    || bodyKeys[2] !== "folderLabel"
+  if (!passkeyAuthenticationModule.reauthenticationBodyValid(body, ["confirmation", "folderLabel"])
     || body.confirmation !== "CREATE_MANAGED_OFFSITE_FOLDER"
     || !validManagedOffsiteFolderLabel(body.folderLabel)) {
     throw httpError(400, "Bitte einen gültigen verwalteten Ordnernamen und die ausdrückliche Bestätigung angeben.", "OFFSITE_FOLDER_REQUEST_INVALID");
@@ -29071,13 +29113,7 @@ app.post("/api/backup/offsite-folders", async (request, response) => {
 app.put("/api/backup/offsite-folders/active", async (request, response) => {
   requireOffsiteTargetDeveloper(request);
   const body = request.body;
-  const bodyKeys = body && typeof body === "object" && !Array.isArray(body)
-    ? Object.keys(body).sort()
-    : [];
-  if (bodyKeys.length !== 3
-    || bodyKeys[0] !== "confirmation"
-    || bodyKeys[1] !== "currentPassword"
-    || bodyKeys[2] !== "folderLabel"
+  if (!passkeyAuthenticationModule.reauthenticationBodyValid(body, ["confirmation", "folderLabel"])
     || body.confirmation !== "ACTIVATE_MANAGED_OFFSITE_FOLDER"
     || !validManagedOffsiteFolderLabel(body.folderLabel)) {
     throw httpError(400, "Bitte das neue Sicherungsziel und die ausdrückliche Bestätigung vollständig angeben.", "OFFSITE_TARGET_REQUEST_INVALID");
@@ -29222,12 +29258,7 @@ function assertServerRestartConfirmation(body) {
 }
 
 function assertVpsRebootConfirmation(body) {
-  if (!body || typeof body !== "object" || Array.isArray(body)
-    || Object.keys(body).length !== 2
-    || body.confirmation !== "VPS_REBOOT"
-    || typeof body.currentPassword !== "string"
-    || body.currentPassword.length < 1
-    || body.currentPassword.length > 512) {
+  if (!passkeyAuthenticationModule.reauthenticationBodyValid(body, ["confirmation"]) || body.confirmation !== "VPS_REBOOT") {
     throw httpError(
       400,
       "Der kontrollierte VPS-Neustart wurde nicht eindeutig bestätigt.",
@@ -32289,6 +32320,7 @@ const planningOptimizer = planningOptimizerModel.createPlanningOptimizer({
       }
       const addedIds = [];
       for (const change of scenario.changes) if (change.kind === 'add') {
+        await assertPlanningEmployment(change.shift, repositories.organizationPersonnel);
         const inserted = await repository.insertPlanningShift(change.shift); addedIds.push(inserted.returnedRows[0]?.id);
       }
       for (const change of scenario.changes) await repository.invalidatePlanningDayReview(change.shift.employeeNumber, change.shift.shiftDate);
@@ -33393,6 +33425,14 @@ app.get("/api/employees", readModelResponse(async request => {
         || scope.departmentIds.has(Number(employee.preferred_department_id || 0))));
     });
   }
+  if (Object.hasOwn(request.query, 'planningWeek')) {
+    const planningWeek = request.query.planningWeek;
+    if (typeof planningWeek !== 'string' || !isIsoDate(planningWeek)) {
+      throw httpError(400, 'Bitte eine gültige Planungswoche auswählen.', 'SCHEDULE_EMPLOYMENT_WEEK_INVALID');
+    }
+    const from = getMonday(planningWeek);
+    employees = (await projectScheduleEmployment(employees, from, addDays(from, 6))).employees;
+  }
   employees = await Promise.all(employees.map(async (employee) => ({
     ...employee,
     personnel_display: await personnelDisplayProfile(employee.personnel_number, session),
@@ -34454,6 +34494,7 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
       passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION,
     });
     await organization.revokeMobileSessions(employeeNumber, "admin_setup_changed");
+    await organization.revokePasskeys("employee", employeeNumber);
     await organization.revokePortalSessions(employeeNumber);
     await organization.revokePasswordResetTokens(employeeNumber);
     await organization.insertAudit(
@@ -34466,6 +34507,210 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
   await refreshConfiguredAdminSnapshot();
   response.status(201).json({ ok: true, status: getPortalStatus("", request) });
 });
+
+const passkeyProtocol = require("./lib/passkey-protocol");
+const passkeyManagementModule = require("./lib/passkey-management");
+const passkeyAuthenticationModule = require("./lib/passkey-authentication");
+const passkeyConfiguration = serverModeActive ? passkeyProtocol.configuration(normalizedPublicOrigin) : null;
+const passkeyAttemptLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 2048, maxEventsPerKey: 60 });
+function passkeyRateLimit(request) {
+  const key = loginRateKey(request), now = Date.now();
+  if (passkeyAttemptLimits.get(key, now).length >= 60) throw httpError(429, "Zu viele Passkey-Anfragen. Bitte später erneut versuchen.", "PASSKEY_RATE_LIMITED");
+  passkeyAttemptLimits.record(key, now);
+}
+function passkeyRequestGuard(request, { anonymous = false } = {}) {
+  if (!getPortalStatus().portalEnabled || !passkeyConfiguration) throw passkeyProtocol.failure("PASSKEY_UNAVAILABLE", 503);
+  const fetchSite = request.headers["sec-fetch-site"];
+  if (request.headers.origin !== passkeyConfiguration.origin || (fetchSite && fetchSite !== "same-origin")) {
+    throw httpError(403, "Bitte die Passkey-Funktion direkt im GP öffnen.", "PASSKEY_ORIGIN_REQUIRED");
+  }
+  if (!anonymous) assertPortalCsrf(request);
+  else assertLoginRateLimit(request);
+  passkeyRateLimit(request);
+}
+function assertPasskeyAccount(user, now = new Date()) {
+  if (!user?.active || !user.employee_active || !user.password_hash || isReservedEmployeePrincipal(user.employee_number)
+    || (user.locked_until && !(Date.parse(user.locked_until) <= now.getTime()))) throw passkeyProtocol.failure();
+  if (user.must_change_password || Number(user.password_policy_version) !== PORTAL_PASSWORD_POLICY_VERSION) {
+    throw httpError(428, "Bitte zuerst mit Passwort anmelden und die erforderliche Kennwortaktualisierung abschließen.", "PASSKEY_PASSWORD_POLICY_REQUIRED");
+  }
+}
+async function passkeyContextFor(request, repositories, { accountId = null, operation = "register" } = {}) {
+  const session = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+  if (!session || session.sessionKind !== "employee" || session.isEmployee === false || session.mustChangePassword) {
+    throw httpError(401, "Bitte mit dem persönlichen Zugang anmelden.", "PORTAL_AUTH_REQUIRED");
+  }
+  const actor = await repositories.portalAccess.getEmployeeLogin({ loginName: session.employeeNumber });
+  assertPasskeyAccount(actor);
+  let target = actor, kind = "employee", principalId = session.employeeNumber, targetState = null, enrollmentAllowed = true;
+  if (accountId) {
+    const account = await repositories.organizationPersonnel.getOrganizationAccount(accountId);
+    if (!account) throw httpError(404, "Das Konto wurde nicht gefunden.", "PASSKEY_TARGET_NOT_FOUND");
+    const centrallyManaged = RIGHTS_ADMIN_PORTAL_ROLES.has(session.role) && session.permissions.includes("users:write") && sessionHasGlobalScope(session);
+    if (!centrallyManaged) {
+      if (!session.permissions.includes(BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION)) throw httpError(403, "Für dieses Konto fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+      assertManagedBranchAccountPasswordScope(session, account);
+    }
+    target = await repositories.portalAccess.getOrganizationLogin({ loginName: account.login_name });
+    if (!target) throw passkeyProtocol.failure();
+    if (operation === "register") {
+      assertPasskeyAccount(target);
+      if (account.must_change_password) throw httpError(428, "Bitte zuerst das Kennwort dieses Kontos aktualisieren.", "PASSKEY_PASSWORD_POLICY_REQUIRED");
+    }
+    enrollmentAllowed = Boolean(target.active && target.employee_active && target.password_hash && !target.must_change_password
+      && !account.must_change_password && Number(target.password_policy_version) === PORTAL_PASSWORD_POLICY_VERSION
+      && (!target.locked_until || Date.parse(target.locked_until) <= Date.now()));
+    targetState = [account.active, account.must_change_password, target.locked_until, account.account_type, account.scopes_json, account.permissions_json];
+    kind = "organization"; principalId = account.id;
+  }
+  const authorityHash = passkeyProtocol.hash(JSON.stringify(["gp-passkey-authority-v1", session.id,
+    session.employeeNumber, actor.password_hash, actor.password_policy_version, session.role,
+    session.permissions, session.scopes, kind, principalId, target.password_hash, target.password_policy_version, targetState]));
+  return { session, kind, principalId, actorPasswordHash: actor.password_hash, authorityHash, enrollmentAllowed,
+    displayName: target.full_name, loginName: target.employee_number };
+}
+async function rotatePasskeySession(request, repositories, session) {
+  const live = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+  if (!live || live.id !== session.id || live.sessionKind !== "employee" || live.mustChangePassword) throw passkeyProtocol.failure();
+  const now = new Date(), lifetime = browserSessionLifetime({ now, role: live.role, permissions: live.permissions,
+    idleMinutes: portalSessionTimeoutMinutes(), authenticatedAt: live.authenticatedAt, absoluteExpiresAt: live.absoluteExpiresAt });
+  if (!lifetime) throw httpError(401, "Die Sitzung ist abgelaufen.", "PORTAL_AUTH_REQUIRED");
+  const revoked = await repositories.portalAccess.revokeEmployeeSessionById({ id: live.id });
+  if (revoked.rowsAffected !== 1) throw passkeyProtocol.failure();
+  const rawToken = crypto.randomBytes(32).toString("base64url"), id = crypto.randomUUID();
+  await repositories.portalAccess.insertEmployeeSession({ id, employeeNumber: live.employeeNumber, tokenHash: sha256(rawToken), ...lifetime });
+  return { rawToken, session: { ...live, id, ...lifetime } };
+}
+function adoptPasskeySession(request, response, replacement) {
+  request.headers.cookie = `${PORTAL_SESSION_COOKIE}=${replacement.rawToken}; ${PORTAL_CSRF_COOKIE}=${portalCsrfToken(replacement.rawToken)}`;
+  request.portalSession = replacement.session;
+  issuePortalSessionCookies(request, response, replacement.rawToken, replacement.session.absoluteExpiresAt);
+  response.setHeader("X-GP-Session-Changed", "1");
+}
+const passkeyManagement = passkeyManagementModule.createPasskeyManagement({
+  repositories: applicationRepositories, config: passkeyConfiguration,
+  enabled: () => getPortalStatus().portalEnabled,
+  transact: work => runLoginTransaction(persistenceProvider, createApplicationRepositories, work),
+  contextFor: passkeyContextFor, guard: passkeyRequestGuard, rateLimit: assertLoginRateLimit,
+  verifyPassword: async (password, hash, request, context) => {
+    const accepted = await verifyPortalPassword(password, hash);
+    if (!accepted) {
+      registerFailedLogin(request);
+      await portalAccessRepository.updateEmployeeLoginFailure(loginFailureParameters(
+        { employee_number: context.session.employeeNumber, password_hash: hash }, getPortalSettings()));
+      await auditPortal(context.session.employeeNumber, "passkey.password-confirmation.denied", "portal_user", context.session.employeeNumber);
+    }
+    return accepted;
+  },
+  acceptPassword: (repositories, context) => requireVerifiedLogin(repositories.portalAccess,
+    { employee_number: context.session.employeeNumber, password_hash: context.actorPasswordHash }, false, false, new Date()),
+  rotate: rotatePasskeySession, adopt: adoptPasskeySession,
+});
+passkeyManagementModule.registerPasskeyManagementRoutes(app, passkeyManagement);
+
+const PASSKEY_BROWSER_COOKIE = "__Host-gp_passkey_browser";
+function passkeyBrowserBinding(request, response, create) {
+  let value = parseCookies(request)[PASSKEY_BROWSER_COOKIE];
+  if (!passkeyProtocol.base64(value, 43) || Buffer.from(value, "base64url").length !== 32) {
+    if (!create) throw passkeyProtocol.failure();
+    value = crypto.randomBytes(32).toString("base64url");
+  }
+  if (create) appendCookie(response, portalCookie(PASSKEY_BROWSER_COOKIE, value, request, { httpOnly: true, maxAge: 180 }));
+  return sha256("gp-passkey-preauthentication-v1:" + value);
+}
+async function passkeyAccountFor(repositories, subject) {
+  if (subject.principalKind === "employee") {
+    const user = await repositories.portalAccess.getEmployeeLogin({ loginName: subject.principalId });
+    return user?.employee_number === subject.principalId ? user : null;
+  }
+  if (subject.principalKind !== "organization") throw passkeyProtocol.failure();
+  const account = await repositories.organizationPersonnel.getOrganizationAccount(subject.principalId);
+  if (!account) return null;
+  const user = await repositories.portalAccess.getOrganizationLogin({ loginName: account.login_name });
+  return user?.account_id === subject.principalId ? { ...user, must_change_password: account.must_change_password, role: "organization_account" } : null;
+}
+async function createPasskeyLoginSession(request, repositories, subject, user) {
+  const organization = subject.principalKind === "organization", repository = repositories.portalAccess, now = new Date();
+  await requireVerifiedLogin(repository, user, organization, false, now);
+  const predecessor = await loadPortalSessionFromRequest(request, { touch: false, repository });
+  if (predecessor && (predecessor.sessionKind !== subject.principalKind
+    || (organization ? predecessor.accountId : predecessor.employeeNumber) !== subject.principalId)) {
+    if (predecessor.sessionKind === "organization") await repository.revokeOrganizationSessionById({ id: predecessor.id });
+    else await repository.revokeEmployeeSessionById({ id: predecessor.id });
+  }
+  const principal = organization ? null : await repository.getReportPrincipal({ employeeNumber: user.employee_number, businessDate: viennaTodayIso(now) });
+  if (!organization && !principal) throw passkeyProtocol.failure();
+  const permissions = organization ? [] : effectivePortalPermissionState(principal.employee_number, principal.role,
+    principal.permissions, principal.granted_permissions, principal.denied_permissions, principal.amu_local_access_mode).effectivePermissions;
+  const lifetime = browserSessionLifetime({ now, role: organization ? "organization_account" : principal.role,
+    permissions, idleMinutes: portalSessionTimeoutMinutes() });
+  const rawToken = crypto.randomBytes(32).toString("base64url"), id = crypto.randomUUID();
+  if (organization) {
+    await repository.purgeExpiredOrganizationSessions({});
+    await repository.revokeOrganizationSessionsForAccount({ accountId: subject.principalId });
+    await repository.insertOrganizationSession({ id, accountId: subject.principalId, tokenHash: sha256(rawToken), ...lifetime });
+  } else {
+    await repository.purgeExpiredEmployeeSessions({});
+    await repository.revokeEmployeeSessionsForEmployee({ employeeNumber: subject.principalId });
+    await repository.insertEmployeeSession({ id, employeeNumber: subject.principalId, tokenHash: sha256(rawToken), ...lifetime });
+  }
+  const session = await loadPortalSessionFromRequest({ ...request,
+    headers: { ...request.headers, cookie: `${PORTAL_SESSION_COOKIE}=${rawToken}` } }, { touch: false, repository });
+  if (!session || session.id !== id) throw passkeyProtocol.failure();
+  return { rawToken, session };
+}
+const passkeyAuthentication = passkeyAuthenticationModule.createPasskeyAuthentication({
+  repositories: applicationRepositories, protocol: passkeyManagement.protocol,
+  guard: passkeyRequestGuard, browserBinding: passkeyBrowserBinding, accountFor: passkeyAccountFor, assertAccount: assertPasskeyAccount,
+  transact: work => runLoginTransaction(persistenceProvider, createApplicationRepositories, work), createSession: createPasskeyLoginSession,
+  adopt: (request, response, transition) => {
+    adoptPasskeySession(request, response, transition); clearLoginRate(request);
+    appendCookie(response, portalCookie(PASSKEY_BROWSER_COOKIE, "", request, { httpOnly: true, maxAge: 0 }));
+  },
+  responseFor: (request, transition) => ({ ok: true, authenticated: true, user: publicPortalUser(transition.session), status: portalStatusForSession(transition.session, request) }),
+  failed: async request => {
+    registerFailedLogin(request);
+    await auditPortal("passkey-anonymous", "passkey.login.failed", "authentication", "passkey");
+  },
+});
+passkeyAuthenticationModule.registerPasskeyAuthenticationRoutes(app, passkeyAuthentication);
+
+const PASSKEY_REAUTH_OPERATIONS = Object.freeze({ "database-download": "backup:write", "offsite-folder-create": "system:offsite:configure",
+  "offsite-folder-activate": "system:offsite:configure", "vps-reboot": "system:write", "password-change": null });
+function assertPasskeyReauthenticationOperation(context, operation) {
+  if (!Object.hasOwn(PASSKEY_REAUTH_OPERATIONS, operation)) throw passkeyProtocol.failure("PASSKEY_OPERATION_INVALID", 400);
+  const permission = PASSKEY_REAUTH_OPERATIONS[operation], session = context.session;
+  if (permission && (!BACKUP_ADMIN_ROLES.has(session.role) || !session.permissions.includes(permission))) throw httpError(403, "Für diese Freigabe fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  if (operation === "vps-reboot" && (session.role !== "developer" || !session.permissions.includes("system:diagnostics:technical"))) throw httpError(403, "Für diese Freigabe fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+}
+app.post("/api/portal/v1/passkeys/reauthenticate/options", async (request, response) => {
+  passkeyRequestGuard(request);
+  const body = passkeyManagementModule.strictBody(request.body, ["operation"]);
+  if (!(await passkeyManagement.status()).available) throw passkeyProtocol.failure("PASSKEY_UNAVAILABLE", 503);
+  const context = await passkeyContextFor(request, applicationRepositories, { operation: "reauthenticate" });
+  assertPasskeyReauthenticationOperation(context, body.operation);
+  const subject = await applicationRepositories.passkeys.subjectForPrincipal({ kind: "employee", id: context.principalId });
+  if (!subject) throw passkeyProtocol.failure("PASSKEY_NOT_REGISTERED", 409);
+  response.setHeader("Cache-Control", "no-store");
+  response.json(await passkeyManagement.protocol.authenticationOptions({ purpose: "reauthenticate", subject,
+    ...passkeyManagementModule.contextBinding(context), payload: { operation: body.operation } }));
+});
+async function verifyPasskeyReauthentication(request, operation) {
+  passkeyRequestGuard(request);
+  if (Object.hasOwn(request.body, "currentPassword") || !passkeyAuthenticationModule.reauthenticationBodyValid({ passkey: request.body.passkey }, [])) throw passkeyProtocol.failure("PASSKEY_INPUT_INVALID", 400);
+  const context = await passkeyContextFor(request, applicationRepositories, { operation: "reauthenticate" });
+  assertPasskeyReauthenticationOperation(context, operation);
+  const proof = await passkeyManagement.protocol.verifyAuthentication({ ...request.body.passkey, purpose: "reauthenticate", ...passkeyManagementModule.contextBinding(context) });
+  if (proof.subject.principalKind !== "employee" || proof.subject.principalId !== context.principalId || proof.challenge.payload.operation !== operation) throw passkeyProtocol.failure();
+  return { ...proof, context };
+}
+async function confirmPasskeyReauthentication(request, repositories, proof, operation) {
+  const context = await passkeyContextFor(request, repositories, { operation: "reauthenticate" });
+  assertPasskeyReauthenticationOperation(context, operation);
+  passkeyManagementModule.assertContext(context, proof.context);
+  if (proof.challenge.payload.operation !== operation) throw passkeyProtocol.failure();
+  await passkeyAuthenticationModule.finalizeCredentialUse(repositories, proof);
+}
 
 app.post("/api/portal/v1/auth/login", async (request, response) => {
   if (!getPortalStatus().portalEnabled) return sendPortalInactive(request, response);
@@ -43441,6 +43686,7 @@ app.put("/api/portal/v1/organization-accounts/:accountId", async (request, respo
       await organization.insertOrganizationAccountScope(accountId, scope.locationId, actorId);
     }
     await organization.revokeOrganizationSessions(accountId);
+    if (password || !input.active) await organization.revokePasskeys("organization", accountId);
     await organization.insertAudit(actorId, "portal.organization-account.update",
       "portal_organization_account", accountId, JSON.stringify({
       before: {
@@ -43560,6 +43806,7 @@ app.put("/api/portal/v1/branch-accounts/:accountId/password", async (request, re
   const actorId = portalActorId(session);
   await organizationPersonnelRepository.transaction(async (organization) => {
     await organization.updateOrganizationAccountPassword(accountId, passwordHash, actorId, PORTAL_PASSWORD_POLICY_VERSION);
+    await organization.revokePasskeys("organization", accountId);
     await organization.revokeOrganizationSessions(accountId);
     await organization.insertAudit(actorId, "portal.organization-account.password.reset",
       "portal_organization_account", accountId, JSON.stringify({
@@ -44966,6 +45213,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       await organization.revokePortalSessions(employeeNumber);
     }
     await organization.revokeMobileSessions(employeeNumber, "account_changed");
+    if (password || !active || mustChangePassword) await organization.revokePasskeys("employee", employeeNumber);
     if (password || !active) await organization.revokePasswordResetTokens(employeeNumber);
     await organization.insertAudit(
       liveLearningActor.employeeNumber,
@@ -46366,6 +46614,7 @@ async function completePersonalPasswordReset(request) {
       passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION,
     });
     if (!changed.rowsAffected) throw invalidPasswordResetTokenError();
+    if (await repositories.passkeys.available()) await repositories.passkeys.revokePrincipal({ kind: "employee", id: current.employee_number, now });
     await repository.revokeEmployeeSessionsForEmployee({ employeeNumber: current.employee_number });
     await repository.revokeMobileSessionsForPasswordReset({ employeeNumber: current.employee_number });
     if (browserSession?.id
@@ -49826,6 +50075,7 @@ app.get("/api/mobile/v1/me/schedule", async (request, response) => {
 app.put("/api/portal/v1/me/password", async (request, response) => {
   const session = requirePortalSession(request);
   assertPortalCsrf(request);
+  if (!passkeyAuthenticationModule.reauthenticationBodyValid(request.body, ["newPassword"])) throw httpError(400, "Bitte genau eine aktuelle Sicherheitsbestätigung und das neue Passwort übermitteln.", "PASSKEY_INPUT_INVALID");
   if (session.sessionKind === "organization" || session.isEmployee === false) {
     throw httpError(
       403,
@@ -49836,7 +50086,8 @@ app.put("/api/portal/v1/me/password", async (request, response) => {
   const current = await organizationPersonnelRepository.getPortalUserAccountProjection(
     session.employeeNumber,
   );
-  if (!await verifyPortalPassword(request.body.currentPassword, current?.password_hash)) {
+  const passkeyProof = Object.hasOwn(request.body || {}, "passkey") ? await verifyPasskeyReauthentication(request, "password-change") : null;
+  if (!passkeyProof && !await verifyPortalPassword(request.body.currentPassword, current?.password_hash)) {
     throw httpError(401, "Das bisherige Passwort ist nicht korrekt.");
   }
   const passwordHash = await hashPortalPassword(request.body.newPassword, { employeeNumber: session.employeeNumber,
@@ -49846,6 +50097,7 @@ app.put("/api/portal/v1/me/password", async (request, response) => {
     const now = new Date();
     const live = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
     if (!live || live.id !== session.id) throw httpError(401, 'Bitte erneut anmelden.', 'PORTAL_AUTH_REQUIRED');
+    if (passkeyProof) await confirmPasskeyReauthentication(request, repositories, passkeyProof, "password-change");
     const lifetime = browserSessionLifetime({ now, role: live.role, permissions: live.permissions,
       idleMinutes: portalSessionTimeoutMinutes(), authenticatedAt: live.authenticatedAt, absoluteExpiresAt: live.absoluteExpiresAt });
     if (!lifetime) throw httpError(401, 'Die Sitzung ist abgelaufen.', 'PORTAL_AUTH_REQUIRED');
@@ -49869,14 +50121,15 @@ app.put("/api/portal/v1/me/password", async (request, response) => {
   // Adopt the committed credential before any subsequent guarded persistence access.
   request.headers.cookie = `${PORTAL_SESSION_COOKIE}=${rawToken}; ${PORTAL_CSRF_COOKIE}=${portalCsrfToken(rawToken)}`;
   request.portalSession = { ...session, id: lifetime.replacementId, mustChangePassword: false, ...lifetime };
-  request.portalSession = await loadPortalSessionFromRequest(request, { touch: false });
   issuePortalSessionCookies(request, response, rawToken, lifetime.absoluteExpiresAt);
+  response.setHeader("X-GP-Session-Changed", "1");
+  request.portalSession = await loadPortalSessionFromRequest(request, { touch: false });
   response.json({ ok: true, sessionChanged: true, user: publicPortalUser(request.portalSession) });
 });
 
 async function ownPortalSchedule(session, weekStart) {
   const weekEnd = addDays(weekStart, 6);
-  const [shifts, options] = await Promise.all([
+  const [storedShifts, storedOptions] = await Promise.all([
     planningSettingsRepository.listMobileScheduleShifts({
       employeeNumber: session.employeeNumber,
       weekStart,
@@ -49888,6 +50141,8 @@ async function ownPortalSchedule(session, weekStart) {
       weekEnd,
     }),
   ]);
+  const employment = await projectScheduleEmployment([{ personnel_number: session.employeeNumber }], weekStart, weekEnd);
+  const shifts = employment.clip(storedShifts), options = employment.clip(storedOptions);
   return { weekStart, weekEnd, calendarWeek: getIsoWeek(weekStart), shifts, options, user: publicPortalUser(session) };
 }
 
@@ -49911,27 +50166,41 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
   );
   assertSessionContextScope(session, { locationId });
   const location = await validateLocationExists(locationId);
+  const readShiftRows = async (weekStart, weekEnd) => {
+    const query = { locationId, departmentId: null, weekStart, weekEnd };
+    const [employees, shifts] = await Promise.all([
+      planningSettingsRepository.listScheduleEmployees(query),
+      planningSettingsRepository.listScheduleShifts(query),
+    ]);
+    const active = new Set(employees.map(employee => String(employee.personnel_number)));
+    return shifts.filter(shift => active.has(String(shift.employee_number))).sort((left, right) => (
+      String(left.shift_date).localeCompare(String(right.shift_date))
+      || String(left.start_time).localeCompare(String(right.start_time))
+      || String(left.nickname || left.full_name).localeCompare(String(right.nickname || right.full_name))
+    ));
+  };
   let weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
   let focusDate = null;
   if (request.query.focus === "current") {
     const today = viennaTodayIso();
-    const upcoming = await planningSettingsRepository.listLocationDashboardScheduleShifts({
-      locationId, weekStart: today, weekEnd: addDays(today, 35),
-    });
+    const upcoming = await readShiftRows(today, addDays(today, 35));
+    const employment = await projectScheduleEmployment(
+      [...new Set(upcoming.map(shift => shift.employee_number))].map(personnel_number => ({ personnel_number })), today, addDays(today, 35),
+    );
     const settings = await settingsForLocation(locationId);
     focusDate = await require("./lib/mobile-schedule-focus").mobileScheduleFocus({
-      today, time: viennaNowLocal().slice(11), shifts: upcoming,
+      today, time: viennaNowLocal().slice(11), shifts: employment.clip(upcoming),
       opening: date => operatingHours(date, settings),
       isClosed: date => Boolean(publicHolidayName(date) || getGlobalDayBlockForDate(date, locationId)),
     });
     weekStart = getMonday(focusDate || today);
   }
   const weekEnd = addDays(weekStart, 6);
-  const shifts = (await planningSettingsRepository.listLocationDashboardScheduleShifts({
-    locationId,
-    weekStart,
-    weekEnd,
-  })).map((shift) => ({
+  const storedShifts = await readShiftRows(weekStart, weekEnd);
+  const employment = await projectScheduleEmployment(
+    [...new Set(storedShifts.map(shift => shift.employee_number))].map(personnel_number => ({ personnel_number })), weekStart, weekEnd,
+  );
+  const shifts = employment.clip(storedShifts).map((shift) => ({
     date: shift.shift_date,
     startTime: shift.start_time,
     endTime: shift.end_time,
@@ -55684,6 +55953,91 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
     response.json({ application, capabilities });
   } catch (error) {
     (await auditPersonnelLifecycleScopedNotFound(accessContext, request, error));
+    personnelLifecycleRouteError(error);
+  }
+});
+
+function personnelExistingEmployeeTarget(employee, session) {
+  if (!employee || ![1, true].includes(employee.active)) {
+    throw httpError(404, "Der aktive Mitarbeiter wurde nicht gefunden.", "PERSONNEL_LIFECYCLE_EMPLOYEE_NOT_FOUND");
+  }
+  assertSessionContextScope(session, {
+    locationId: employee.home_location_id,
+    departmentId: employee.preferred_department_id,
+  });
+  const target = {
+    personnelNumber: employee.personnel_number,
+    fullName: employee.full_name,
+    homeLocationId: employee.home_location_id || null,
+    preferredDepartmentId: employee.preferred_department_id || null,
+    active: true,
+  };
+  return { ...target, snapshotSha256: workRuleSha256(target) };
+}
+
+app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/existing-employee/:employeeNumber", async (request, response) => {
+  const { session, access } = await requirePersonnelLifecycleAccess(request, { action: "convert" });
+  if (!/^[A-Za-z0-9._-]{1,24}$/.test(request.params.employeeNumber)
+    || request.params.employeeNumber.toLowerCase() === "local") {
+    throw httpError(400, "Bitte eine gültige vorhandene Personalnummer angeben.", "PERSONNEL_LIFECYCLE_EXISTING_EMPLOYEE_INPUT_INVALID");
+  }
+  const candidate = await requirePersonnelLifecycleService().getCandidate(request.params.candidateId, { access });
+  if (!candidate?.applications?.some(application => application.id === request.params.applicationId)) {
+    throw httpError(404, "Die Bewerbung wurde nicht gefunden.", "PERSONNEL_LIFECYCLE_APPLICATION_NOT_FOUND");
+  }
+  const target = personnelExistingEmployeeTarget(
+    await organizationPersonnelRepository.getEmployeeForUpdate(request.params.employeeNumber), session,
+  );
+  response.set("Cache-Control", "private, no-store").json({ employee: target });
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/link-existing-employee", async (request, response) => {
+  const { session, capabilities } = await requirePersonnelLifecycleAccess(request, { action: "convert" });
+  const body = request.body;
+  const keys = ["operationId", "candidateRevision", "applicationRevision", "employeeNumber", "employeeSnapshotSha256", "confirmed"];
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || Object.keys(body).some(key => !keys.includes(key)) || keys.some(key => !own(body, key))
+    || [body.operationId, body.employeeNumber, body.employeeSnapshotSha256].some(value => typeof value !== "string")
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(body.operationId)
+    || !/^[A-Za-z0-9._-]{1,24}$/.test(body.employeeNumber) || body.employeeNumber.toLowerCase() === "local"
+    || !/^[a-f0-9]{64}$/.test(body.employeeSnapshotSha256) || body.confirmed !== true
+    || !Number.isSafeInteger(body.candidateRevision) || body.candidateRevision < 1
+    || !Number.isSafeInteger(body.applicationRevision) || body.applicationRevision < 1) {
+    throw httpError(400, "Bitte die vorhandene Mitarbeiteridentität prüfen und bestätigen.", "PERSONNEL_LIFECYCLE_EXISTING_EMPLOYEE_INPUT_INVALID");
+  }
+  const candidateId = String(request.params.candidateId);
+  const applicationId = String(request.params.applicationId);
+  const requestSha256 = workRuleSha256({ schemaVersion: 2, targetMode: "existing", candidateId, applicationId, ...body });
+  try {
+    const result = await runPersonnelLifecycleSerializableMutation(() => persistenceProvider.transaction(async executor => {
+      const repositories = createApplicationRepositories(executor);
+      const lifecycle = createPersonnelLifecycleService(repositories.personnelLifecycle, { protectJson, parseProtectedJson });
+      return lifecycle.convertCandidateInTransaction(candidateId, applicationId, {
+        id: body.operationId, candidateRevision: body.candidateRevision, applicationRevision: body.applicationRevision,
+        employeeNumber: body.employeeNumber, employee: { personnelNumber: body.employeeNumber }, requestSha256,
+      }, session.employeeNumber, async () => {
+        const target = personnelExistingEmployeeTarget(
+          await repositories.organizationPersonnel.getEmployeeForUpdate(body.employeeNumber), session,
+        );
+        if (target.snapshotSha256 !== body.employeeSnapshotSha256) {
+          throw httpError(409, "Der Mitarbeiter wurde zwischenzeitlich geändert. Bitte die Zuordnung erneut prüfen.", "PERSONNEL_LIFECYCLE_EMPLOYEE_CHANGED");
+        }
+        await repositories.organizationPersonnel.insertAudit(session.employeeNumber,
+          "personnel-lifecycle.candidate.link-existing", "candidate_conversion", body.operationId,
+          JSON.stringify({ candidateId, applicationId, employeeNumber: body.employeeNumber, documentTransfer: "none", portalAccess: "none" }));
+        return target;
+      }, { targetMode: "existing" });
+    }, { isolation: "serializable" }));
+    if (result.replayed) response.set("Idempotency-Replayed", "true");
+    response.status(result.replayed ? 200 : 201).json({
+      conversion: result.conversion,
+      candidate: { id: result.candidate.id, state: result.candidate.state, revision: result.candidate.revision },
+      replayed: result.replayed, capabilities,
+    });
+  } catch (error) {
+    if (isUniquePersistenceViolation(error)) {
+      throw httpError(409, "Diese Bewerbung oder Personalnummer ist bereits verknüpft.", "PERSONNEL_LIFECYCLE_EMPLOYEE_NUMBER_CONFLICT");
+    }
     personnelLifecycleRouteError(error);
   }
 });
@@ -61649,7 +62003,8 @@ app.post("/api/shifts", async (request, response) => {
   });
   let saved;
   try {
-    saved = await runWorkRuleMutationTransaction(async (repository) => {
+    saved = await runWorkRuleMutationTransaction(async (repository, organization) => {
+      await assertPlanningEmployment(shift, organization);
       const result = await repository.insertPlanningShift({
         employeeNumber: shift.employeeNumber,
         locationId: shift.locationId,
@@ -61719,7 +62074,8 @@ app.put("/api/shifts/:id", async (request, response) => {
   });
   let workRuleAssessment;
   try {
-    workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
+    workRuleAssessment = await runWorkRuleMutationTransaction(async (repository, organization) => {
+      await assertPlanningEmployment(shift, organization);
       const result = await repository.updatePlanningShift({
         id,
         employeeNumber: shift.employeeNumber,
@@ -61817,12 +62173,7 @@ app.delete("/api/schedule", async (request, response) => {
   );
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
   const planningChange = {
-    replaceRange: {
-      dateFrom: weekStart,
-      dateTo: weekEnd,
-      locationId: context.locationId,
-      departmentId: context.departmentId,
-    },
+    deletedShiftIds: scheduleBefore.shifts.map(shift => shift.id),
     addedShifts: [],
   };
   const evaluated = await evaluateScheduleWorkRules(
@@ -61839,13 +62190,10 @@ app.delete("/api/schedule", async (request, response) => {
     Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
   );
   assertBranchSupervisionAllowsMutation(branchSupervision);
-  const saved = await runWorkRuleMutationTransaction(async (repository) => {
-    const result = await repository.deletePlanningShiftsForRange({
-      locationId: context.locationId,
-      departmentId: context.departmentId,
-      dateFrom: weekStart,
-      dateTo: weekEnd,
-    });
+  const saved = await runWorkRuleMutationTransaction(async (repository, organization) => {
+    for (const shift of scheduleBefore.shifts) await assertPlanningEmployment(shift, organization);
+    let deleted = 0;
+    for (const shift of scheduleBefore.shifts) deleted += (await repository.deletePlanningShift(Number(shift.id))).rowsAffected;
     await repository.invalidatePlanningReviewsForRange({
       locationId: context.locationId,
       departmentId: context.departmentId,
@@ -61858,7 +62206,7 @@ app.delete("/api/schedule", async (request, response) => {
       context,
       request.portalSession?.employeeNumber || "local",
     );
-    return { deleted: result.rowsAffected, workRuleAssessment };
+    return { deleted, workRuleAssessment };
   });
   await refreshSicknessStaffingAfterPlanningChange();
   response.json({
@@ -62588,13 +62936,17 @@ app.post("/api/schedule/auto", async (request, response) => {
     locationId: context.locationId,
     departmentId: context.departmentId || null,
   };
-  const [employees, storedExistingShifts, employeeWeekShifts, options, employeeLendings] = await Promise.all([
+  const [employeeRows, rawExistingShifts, rawEmployeeWeekShifts, storedOptions, storedLendings] = await Promise.all([
     planningSettingsRepository.listAutoPlanningEmployees(planningQuery),
     planningSettingsRepository.listAutoPlanningShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningEmployeeShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningOptions(planningQuery),
     planningSettingsRepository.listScheduleLendings(planningQuery),
   ]);
+  const employment = await projectScheduleEmployment(employeeRows, weekStart, weekEnd);
+  const employees = employment.employees;
+  const storedExistingShifts = employment.clip(rawExistingShifts), employeeWeekShifts = employment.clip(rawEmployeeWeekShifts);
+  const options = employment.clip(storedOptions), employeeLendings = employment.clip(storedLendings);
   const existingShifts = replaceExisting ? [] : [...storedExistingShifts];
   const retainedEmployeeWeekShifts = replaceExisting
     ? employeeWeekShifts.filter((shift) => (
@@ -62666,6 +63018,7 @@ app.post("/api/schedule/auto", async (request, response) => {
     const claimedSicknessDates = new Set();
     for (const employee of employees) {
       for (const credit of await sicknessCreditsForRange(employee.personnel_number, weekStart, weekEnd)) {
+        if (!employment.allows(employee.personnel_number, credit.date)) continue;
         const creditMinutes = Math.max(0, finiteScheduleMinutes(credit.minutes));
         if (creditMinutes === 0 || !claimEmployeeDate(
           employee.personnel_number,
@@ -62681,6 +63034,7 @@ app.post("/api/schedule/auto", async (request, response) => {
       if ([0, 6].includes(new Date(`${holiday.date}T12:00:00Z`).getUTCDay())) continue;
       for (const employee of employees) {
         const employeeDate = `${employee.personnel_number}|${holiday.date}`;
+        if (!employment.allows(employee.personnel_number, holiday.date)) continue;
         if (occupied.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
         if (hasNonVacationCreditOnDate(options, employee.personnel_number, holiday.date)) continue;
         totals[employee.personnel_number] =
@@ -62693,6 +63047,7 @@ app.post("/api/schedule/auto", async (request, response) => {
       if ([0, 6].includes(new Date(`${block.block_date}T12:00:00Z`).getUTCDay())) continue;
       for (const employee of employees) {
         const employeeDate = `${employee.personnel_number}|${block.block_date}`;
+        if (!employment.allows(employee.personnel_number, block.block_date)) continue;
         if (occupied.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
         if (hasNonVacationCreditOnDate(options, employee.personnel_number, block.block_date)) continue;
         totals[employee.personnel_number] =
@@ -62856,12 +63211,7 @@ app.post("/api/schedule/auto", async (request, response) => {
 
     const planningChange = {
       ...(replaceExisting ? {
-        replaceRange: {
-          locationId: context.locationId,
-          departmentId: context.departmentId,
-          dateFrom: weekStart,
-          dateTo: weekEnd,
-        },
+        deletedShiftIds: storedExistingShifts.map(shift => shift.id),
       } : {}),
       addedShifts: plannedShifts,
     };
@@ -62886,14 +63236,13 @@ app.post("/api/schedule/auto", async (request, response) => {
     }
     let workRuleAssessment;
     try {
-      workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
+      workRuleAssessment = await runWorkRuleMutationTransaction(async (repository, organization) => {
+      // Re-read the protected date in the write transaction. A changed entry
+      // date after preview must roll back every proposed assignment together.
+      for (const shift of plannedShifts) await assertPlanningEmployment(shift, organization);
       if (replaceExisting) {
-        await repository.deletePlanningShiftsForRange({
-          locationId: context.locationId,
-          departmentId: context.departmentId,
-          dateFrom: weekStart,
-          dateTo: weekEnd,
-        });
+        for (const shift of storedExistingShifts) await assertPlanningEmployment(shift, organization);
+        for (const shift of storedExistingShifts) await repository.deletePlanningShift(Number(shift.id));
       }
       for (const shift of plannedShifts) {
         await repository.insertPlanningShift(shift);
@@ -63197,6 +63546,30 @@ function schedulePdfAssignmentCoversShift(assignment, shift) {
       || (assignment.start_time <= shift.start_time && assignment.end_time >= shift.end_time));
 }
 
+function schedulePlanningEmployeeOnDate(employee, date) {
+  return !Array.isArray(employee?.planningDates) || employee.planningDates.includes(date);
+}
+
+function schedulePdfPlanningRows(schedule, rows, { dateKey = "shift_date", fromKey = "date_from", toKey = "date_to" } = {}) {
+  const employees = new Map((schedule.employees || []).map(employee => [String(employee.personnel_number), employee]));
+  return (rows || []).flatMap(row => {
+    const employee = employees.get(String(row.employee_number));
+    if (!employee) return [];
+    if (row[dateKey] !== undefined) return schedulePlanningEmployeeOnDate(employee, row[dateKey]) ? [row] : [];
+    const dates = [];
+    for (let date = schedule.weekStart; date <= schedule.weekEnd; date = addDays(date, 1)) {
+      if (date >= row[fromKey] && date <= row[toKey] && schedulePlanningEmployeeOnDate(employee, date)) dates.push(date);
+    }
+    const result = [];
+    for (const date of dates) {
+      const previous = result.at(-1);
+      if (previous && addDays(previous[toKey], 1) === date) previous[toKey] = date;
+      else result.push({ ...row, [fromKey]: date, [toKey]: date });
+    }
+    return result;
+  });
+}
+
 function schedulePdfWeekOptions(schedule) {
   const weekOptions = (schedule.weekOptions || []).map((option) => ({ ...option }));
   const employeesByNumber = new Map((schedule.employees || []).map((employee) => [
@@ -63351,11 +63724,11 @@ function schedulePdfWeekOptions(schedule) {
       pdf_sickness_case: true,
     });
   }
-  return weekOptions;
+  return schedulePdfPlanningRows(schedule, weekOptions);
 }
 
 function scheduleForPdf(schedule) {
-  return { ...schedule, weekOptions: schedulePdfWeekOptions(schedule) };
+  return { ...schedule, shifts: schedulePdfPlanningRows(schedule, schedule.shifts), weekOptions: schedulePdfWeekOptions(schedule) };
 }
 
 function monthName(monthNumber, format = "long") {
@@ -64050,8 +64423,7 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
   );
   const rangeMinutes = endMinutes - startMinutes;
   const employees = schedule.employees;
-  const employeeCount = Math.max(1, employees.length);
-  const employeeWidth = dayWidth / employeeCount;
+  const employeesOnDate = date => employees.filter(employee => schedulePlanningEmployeeOnDate(employee, date));
 
   doc
     .fillColor("#142033")
@@ -64087,7 +64459,8 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
         align: "center",
       });
 
-    employees.forEach((employee, employeeIndex) => {
+    const dayEmployees = employeesOnDate(date), employeeWidth = dayWidth / Math.max(1, dayEmployees.length);
+    dayEmployees.forEach((employee, employeeIndex) => {
       const employeeX = x + employeeIndex * employeeWidth;
       doc.fillColor(employee.color).rect(employeeX, employeeHeaderY, employeeWidth, employeeHeaderHeight).fill();
       doc
@@ -64172,6 +64545,8 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
 
   for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
     const dayStartX = dayX(dayIndex);
+    const employeeCount = Math.max(1, employeesOnDate(addDays(schedule.weekStart, dayIndex)).length);
+    const employeeWidth = dayWidth / employeeCount;
     doc.strokeColor(dayFrameColor).lineWidth(dayFrameWidth).rect(dayStartX, gridTop, dayWidth, gridHeight).stroke();
     for (let employeeIndex = 1; employeeIndex < employeeCount; employeeIndex += 1) {
       const x = dayStartX + employeeIndex * employeeWidth;
@@ -64181,16 +64556,14 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
 
   for (const option of schedule.weekOptions) {
     if (isTeamWideMeetingOption(option)) continue;
-    const employeeIndex = employees.findIndex(
-      (employee) => employee.personnel_number === option.employee_number,
-    );
-    if (employeeIndex < 0) continue;
 
     for (let date = option.date_from; date <= option.date_to; date = addDays(date, 1)) {
       const dayIndex = Math.round(
         (new Date(`${date}T12:00:00Z`) - new Date(`${schedule.weekStart}T12:00:00Z`)) / 86400000,
       );
-      if (dayIndex < 0 || dayIndex >= dayCount) continue;
+      const dayEmployees = employeesOnDate(date), employeeWidth = dayWidth / Math.max(1, dayEmployees.length);
+      const employeeIndex = dayEmployees.findIndex(employee => employee.personnel_number === option.employee_number);
+      if (dayIndex < 0 || dayIndex >= dayCount || employeeIndex < 0) continue;
 
       const x = dayX(dayIndex) + employeeIndex * employeeWidth + 0.5;
       const width = Math.max(2, employeeWidth - 1);
@@ -64235,7 +64608,8 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
     const dayIndex = Math.round(
       (new Date(`${shift.shift_date}T12:00:00Z`) - new Date(`${schedule.weekStart}T12:00:00Z`)) / 86400000,
     );
-    const employeeIndex = employees.findIndex(
+    const dayEmployees = employeesOnDate(shift.shift_date), employeeWidth = dayWidth / Math.max(1, dayEmployees.length);
+    const employeeIndex = dayEmployees.findIndex(
       (employee) => employee.personnel_number === shift.employee_number,
     );
     if (dayIndex < 0 || dayIndex >= dayCount || employeeIndex < 0) continue;
@@ -64247,7 +64621,7 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
     const y = gridTop + ((shiftStart - startMinutes) / rangeMinutes) * gridHeight;
     const height = ((shiftEnd - shiftStart) / rangeMinutes) * gridHeight;
     const width = Math.max(2, employeeWidth - 2);
-    const employee = employees[employeeIndex];
+    const employee = dayEmployees[employeeIndex];
     doc.fillColor(employee.color).rect(x, y, width, height).fill();
     doc.strokeColor("#25313d").lineWidth(0.35).rect(x, y, width, height).stroke();
     if (!schedule.context.departmentId && shift.department_name && height > 14 && width > 8) {
@@ -64495,6 +64869,9 @@ function scheduleMatrixDayIndex(schedule, date) {
 }
 
 function scheduleMatrixCellData(schedule, employee, date, hiddenOptions = new Set()) {
+  if (!schedulePlanningEmployeeOnDate(employee, date)) {
+    return { options: [], shifts: [], meetings: [], lines: [{ type: "empty", text: "" }], style: null };
+  }
   const options = collapsedScheduleWeekOptions(schedule.weekOptions)
     .filter((option) => !isTeamWideMeetingOption(option))
     .filter((option) => String(option.employee_number) === String(employee.personnel_number))
@@ -64623,6 +65000,7 @@ function scheduleMatrixEntryHeight(entry, timeFontSize, detailFontSize) {
 
 function scheduleMatrixSummaryForDate(schedule, date) {
   const visibleEmployeeNumbers = new Set((schedule.employees || [])
+    .filter(employee => schedulePlanningEmployeeOnDate(employee, date))
     .map((employee) => String(employee.personnel_number)));
   const categories = {
     MA: new Set(),

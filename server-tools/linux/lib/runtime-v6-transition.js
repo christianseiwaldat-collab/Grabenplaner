@@ -10,6 +10,8 @@ const OLD_FINGERPRINT = "21f541a85b74ced5e5b6ec84ff2561badcd6635ad1fceb7438cb323
 const NEW_FINGERPRINT = "f9c09a999f5d6b30c0df35e714d0a5ddf0ca17880ad9190ff4bc5c068c3d95fc";
 const REVIEWED_MSAL_PATCH = Object.freeze({ package: "@azure/msal-node@5.4.0", path: "lib/vendor-patches/@azure__msal-node@5.4.0.patch",
   sha256: "bbdf16bb0cf6a18ab384b515bd8a378cc5c736698c486881c60c1cbb1cbeda01" });
+const REVIEWED_WEBAUTHN_DEPENDENCIES = Object.freeze({ "@simplewebauthn/browser": "14.0.0", "@simplewebauthn/server": "14.0.3" });
+const REVIEWED_ROOT_ONLY_WORKSPACE_PREFIXES = Object.freeze(["packages:\n  - '.'\n\n", "packages:\r\n  - '.'\r\n\r\n"]);
 // These are the qualified Core 5 checkout/package bytes, including the CRLF
 // monitor timer prescribed by the versioned .gitattributes, not git-archive LF.
 const OLD_FILES = Object.freeze({
@@ -225,14 +227,31 @@ function verifyFrozenDependencyPlan(oldRoot, candidateRoot, { requireRoot = proc
       workspace: files["pnpm-workspace.yaml"], workspaceSha256: hash(files["pnpm-workspace.yaml"]) };
   };
   const previous = metadata(oldRoot), candidate = metadata(candidateRoot);
-  for (const key of ["packageManager", "dependencies", "optionalDependencies", "peerDependencies", "pnpm"]) {
+  for (const key of ["packageManager", "optionalDependencies", "peerDependencies", "pnpm"]) {
     assert.equal(canonical(previous.package[key]), canonical(candidate.package[key]), "Unqualified dependency metadata changed: " + key);
   }
+  const withoutReviewedWebAuthnDependencies = dependencies => {
+    const remaining = { ...dependencies }, present = Object.keys(REVIEWED_WEBAUTHN_DEPENDENCIES).filter(name => Object.hasOwn(remaining, name));
+    assert(present.length === 0 || present.length === Object.keys(REVIEWED_WEBAUTHN_DEPENDENCIES).length,
+      "The reviewed WebAuthn dependencies must be introduced together");
+    for (const name of present) {
+      assert.equal(remaining[name], REVIEWED_WEBAUTHN_DEPENDENCIES[name], "Unqualified WebAuthn dependency changed: " + name);
+      delete remaining[name];
+    }
+    return { remaining, webAuthn: present.length ? { ...REVIEWED_WEBAUTHN_DEPENDENCIES } : null };
+  };
+  const previousDependencies = withoutReviewedWebAuthnDependencies(previous.package.dependencies);
+  const candidateDependencies = withoutReviewedWebAuthnDependencies(candidate.package.dependencies);
+  assert.equal(canonical(previousDependencies.remaining), canonical(candidateDependencies.remaining), "Unqualified dependency metadata changed: dependencies");
+  assert(!previousDependencies.webAuthn || candidateDependencies.webAuthn, "Removing the reviewed WebAuthn dependencies is not permitted");
   assert.equal(candidate.package.packageManager, "pnpm@11.7.0");
   assert.equal(candidate.package.dependencies?.pg, "8.22.0");
   const withoutReviewedWorkspaceDeltas = bytes => {
-    const text = bytes.toString("utf8"), remaining = [];
-    assert(Buffer.from(text, "utf8").equals(bytes));
+    const original = bytes.toString("utf8"), remaining = [];
+    assert(Buffer.from(original, "utf8").equals(bytes));
+    const prefix = REVIEWED_ROOT_ONLY_WORKSPACE_PREFIXES.find(value => original.startsWith(value));
+    const text = prefix ? original.slice(prefix.length) : original;
+    assert(!/^\s*(?:packages|['"]packages['"])\s*:/m.test(text), "Only the exact leading root-only workspace declaration is permitted");
     let section = null, bodyParser = null, msalPatch = null, canvas = null;
     const seenSections = new Set();
     const lines = text.match(/[^\n]*\n|[^\n]+$/g) || [];
@@ -257,10 +276,11 @@ function verifyFrozenDependencyPlan(oldRoot, candidateRoot, { requireRoot = proc
         msalPatch = REVIEWED_MSAL_PATCH.sha256;
       } else remaining.push(line);
     }
-    return { bytes: Buffer.from(remaining.join(""), "utf8"), bodyParser, msalPatch, canvas };
+    return { bytes: Buffer.from(remaining.join(""), "utf8"), bodyParser, msalPatch, canvas, rootOnlyWorkspace: Boolean(prefix) };
   };
   const before = withoutReviewedWorkspaceDeltas(previous.workspace), after = withoutReviewedWorkspaceDeltas(candidate.workspace);
   assert(before.bytes.equals(after.bytes), "Unqualified pnpm workspace metadata changed");
+  assert(!before.rootOnlyWorkspace || after.rootOnlyWorkspace, "Removing the reviewed root-only workspace declaration is not permitted");
   assert(before.bodyParser === after.bodyParser || after.bodyParser === "2.4.0", "Only the reviewed body-parser security override is permitted");
   assert(before.canvas === after.canvas || after.canvas === "1.0.13", "Removing the reviewed Canvas override is not permitted");
   assert(before.msalPatch === after.msalPatch || after.msalPatch === REVIEWED_MSAL_PATCH.sha256, "Removing the reviewed MSAL security patch is not permitted");
@@ -273,6 +293,8 @@ function verifyFrozenDependencyPlan(oldRoot, candidateRoot, { requireRoot = proc
   return { format: "grabenplaner-runtime-v6-frozen-dependency-plan", schemaVersion: 1,
     predecessorRoot: path.resolve(oldRoot), predecessor: { packageSha256: previous.packageSha256, lockSha256: previous.lockSha256, workspaceSha256: previous.workspaceSha256, ...original },
     candidate: { packageSha256: candidate.packageSha256, lockSha256: candidate.lockSha256, workspaceSha256: candidate.workspaceSha256, packageManager: candidate.package.packageManager },
+    reviewedWebAuthnDependencies: { previous: previousDependencies.webAuthn, candidate: candidateDependencies.webAuthn },
+    reviewedRootOnlyWorkspace: { previous: before.rootOnlyWorkspace, candidate: after.rootOnlyWorkspace },
     reviewedBodyParserOverride: { previous: before.bodyParser ?? null, candidate: after.bodyParser ?? null },
     reviewedCanvasOverride: { previous: before.canvas, candidate: after.canvas },
     reviewedMsalPatch: { package: REVIEWED_MSAL_PATCH.package, path: REVIEWED_MSAL_PATCH.path, previous: before.msalPatch, candidate: after.msalPatch },

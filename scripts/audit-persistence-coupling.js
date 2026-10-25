@@ -67,7 +67,9 @@ const BASELINE_PACKAGE_DEPENDENCY_NAMES = Object.freeze([
   "tedious",
   "tesseract.js",
 ]);
-const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemailer", "@zxing/browser", "htmlparser2"]);
+const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemailer", "@zxing/browser", "htmlparser2",
+  // Maintained WebAuthn verification and self-hosted browser serialization; no database driver.
+  "@simplewebauthn/server", "@simplewebauthn/browser"]);
 // A read-only SQLite snapshot is the source of the user-authorized Block 9
 // transfer. This exception does not permit application fallback to SQLite.
 const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresql/transfer/history.js']);
@@ -113,6 +115,12 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/session-security-catalog-qualification.test.js',
   'lib/persistence/postgresql/transfer/session-security.js',
   'test/session-security-transfer.test.js',
+  // Additive, separately fingerprinted Passkey DDL/catalog and the explicit
+  // verified-restore transformation. This classification grants no new driver.
+  'lib/persistence/postgresql/contracts/passkeys-catalog-v1.json',
+  'lib/persistence/postgresql/core/passkeys-catalog.js',
+  'lib/persistence/postgresql/core/passkeys.js',
+  'lib/persistence/postgresql/operations/restore-authentication.js',
   'lib/persistence/postgresql/core/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete.js',
@@ -3044,6 +3052,8 @@ function architectureBoundaryViolationsForText(file, text) {
     "lib/persistence/catalogs/data-import-delete-catalog.js",
     ...PHASE_3_STATEMENT_FILES,
     "lib/persistence/statements/sales-analytics.js",
+    // Native-only, separately pinned credential/challenge statements.
+    "lib/persistence/statements/passkeys.js",
     "lib/persistence/postgresql/boundary/catalog.js",
     "lib/persistence/postgresql/boundary/transaction-activity.js",
     "lib/persistence/postgresql/reporting/catalog.js",
@@ -3071,6 +3081,8 @@ function architectureBoundaryViolationsForText(file, text) {
     'server-tools/linux/migrate-grabenplaner-runtime-v6.sh',
   ]);
   const persistenceInternalFiles = new Set([
+    "lib/persistence/statements/passkeys.js",
+    "lib/persistence/repositories/passkeys.js",
     'lib/persistence/postgresql/application.js',
     'lib/persistence/postgresql/read-scope.js',
     // Existing managed readers accept only a branded executor so source hints

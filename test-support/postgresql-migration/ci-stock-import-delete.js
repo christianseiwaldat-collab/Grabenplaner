@@ -4,6 +4,13 @@ const crypto=require('node:crypto'),fs=require('node:fs'),path=require('node:pat
 async function main(){
  const shard=require('./application-test-shard.cjs').applicationTestShard(process.argv.slice(2));
  const diagnosticIndex=process.argv.indexOf('--diagnostic-api');
+ const passkeysBrowser=process.argv.includes('--passkeys-browser');
+ if(passkeysBrowser&&(process.argv.filter(value=>value==='--passkeys-browser').length!==1||!process.argv.includes('--full')||shard!=='1/3'||diagnosticIndex>=0||process.argv.includes('--bootstrap-only')))throw new Error('Passkeys browser qualification requires explicit full shard 1/3');
+ const browserCommand=['--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=540000',
+  'test/passkey-protocol-browser.test.js','test/passkeys-management-browser.test.js','test/passkey-auth-browser.test.js','test/passkey-application-api.test.js','test/security-reauthentication-ui.test.js'];
+ const upgradeCommand=['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=420000','test/passkeys-upgrade-restore-postgresql.test.js'];
+ const beforePasskeys=process.argv.includes('--bootstrap-before-passkeys');
+ if(beforePasskeys&&(!process.argv.includes('--bootstrap-only')||shard||diagnosticIndex>=0||process.argv.includes('--full')||process.argv.includes('--passkeys-browser')))throw new Error('Old passkeys fixture preparation requires unsharded bootstrap-only');
  const diagnosticGroups=Object.freeze({
   foundations:['test/portal-foundation-https.test.js','test/portal-foundation-loopback.test.js','test/portal-foundation-scope.test.js','test/v057-codespaces-demo.test.js'],
   rights:['test/personnel-learning-rights-hierarchy.test.js','test/portal-birthday-presentation-claim-api.test.js','test/portal-birthday-presentation-settings-api.test.js','test/v058-personnel-rights-encryption.test.js','test/v059-sickness-integration.test.js','test/v060-portal-mobile-foundation.test.js'],
@@ -30,6 +37,11 @@ async function main(){
  const client=new Client({connectionString:connection.href});await client.connect();
  const env={...process.env,GP_PG_MIGRATION_LIVE:'1',GP_MIGRATION_ADMIN_URL:connection.href,
   GP_CI_POSTGRESQL_FIXTURE:local?'owned-local-service-v1':'github-actions-service-v1'};
+ // The expensive native FIDO phase has an explicit finite test list. Never
+ // propagate its opt-in to the ordinary, unchanged application discovery run.
+ delete env.GP_WINDOW_BROWSER_TEST;
+ delete env.GP_SECURITY_AUTH_BROWSER_TEST;
+ delete env.GP_PASSKEYS_UPGRADE_FIXTURE;
  if(diagnosticGroup){
   env.GP_PG_API_DIAGNOSTIC='bounded-errors-v1';
   env.NODE_OPTIONS=(env.NODE_OPTIONS||'')+' --require='+JSON.stringify(path.resolve(__dirname,'../postgresql-api/diagnostic-errors.js'));
@@ -72,14 +84,17 @@ async function main(){
   }
  }finally{await client.end();}
  const commands=[['scripts/postgresql/mark-development-environment.js'],['scripts/postgresql/apply-core-schema.js'],['scripts/postgresql/apply-sales-schema.js','5'],['scripts/postgresql/apply-sales-schema.js','6'],['scripts/postgresql/apply-boundary-schema.js'],['scripts/postgresql/apply-sales-schema.js','8'],
- ['-e',"const {Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.GP_CORE_MIGRATOR_URL});await c.connect();try{for(const name of ['trade-annotations','personnel-learning-runs','xoffi-snapshots','vocational-school','session-security'])await require('./lib/persistence/postgresql/core/'+name).migrate(c);}finally{await c.end();}})().catch(e=>{console.error(e.code||e.message);process.exitCode=1;})"],
+ ['-e',"const {Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.GP_CORE_MIGRATOR_URL});await c.connect();try{for(const name of "+JSON.stringify(['trade-annotations','personnel-learning-runs','xoffi-snapshots','vocational-school','session-security',...(!beforePasskeys&&!passkeysBrowser?['passkeys']:[])])+ ")await require('./lib/persistence/postgresql/core/'+name).migrate(c);}finally{await c.end();}})().catch(e=>{console.error(e.code||e.message);process.exitCode=1;})"],
  // Qualify the rollback/upgrade path against the fresh schema first. This also
  // installs the snapshot extension required by imports earlier in discovery order.
- ['--test','--test-concurrency=1','--test-reporter=tap','test/postgresql-stock-import-delete.test.js'],
+ ...(beforePasskeys||passkeysBrowser?[['-e',"const {Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.GP_SALES_MIGRATOR_URL});await c.connect();try{await require('./lib/persistence/postgresql/sales/import-delete').migrate(c);}finally{await c.end();}})().catch(e=>{console.error(e.code||e.message);process.exitCode=1;})"]]:[['--test','--test-concurrency=1','--test-reporter=tap','test/postgresql-stock-import-delete.test.js']]),
+ ...(passkeysBrowser?[upgradeCommand,
+  ['-e',"const {Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.GP_CORE_MIGRATOR_URL});await c.connect();try{await require('./test-support/postgresql-migration/verify-passkeys-repeat.cjs').verifyPasskeysRepeat(c);}finally{await c.end();}})().catch(e=>{console.error(e.code||e.message);process.exitCode=1;})"],
+  ['--test','--test-concurrency=1','--test-reporter=tap','test/postgresql-stock-import-delete.test.js'],browserCommand]:[]),
  ...(diagnosticGroup?[['--require','./test-support/postgresql-api/diagnostic-errors.js','--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000',...diagnosticGroups[diagnosticGroup]]]:process.argv.includes('--bootstrap-only')?[]:process.argv.includes('--full')
    ? [['--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000',...(shard?['--test-shard='+shard]:[])]]
    : [['--test','--test-concurrency=1','test/postgresql-cash-takeover.test.js']])];
- for(const args of commands){const result=spawnSync(process.execPath,args,{env,stdio:'inherit'});if(result.status!==0)throw new Error('Synthetic migration qualification failed: '+args[0]);}
+ for(const args of commands){const childEnv=args===browserCommand?{...env,GP_WINDOW_BROWSER_TEST:'1',GP_SECURITY_AUTH_BROWSER_TEST:'1'}:args===upgradeCommand?{...env,GP_PASSKEYS_UPGRADE_FIXTURE:'before-passkeys-v1'}:env;const result=spawnSync(process.execPath,args,{env:childEnv,stdio:'inherit'});if(result.status!==0)throw new Error('Synthetic migration qualification failed: '+args[0]);}
  const outputIndex=process.argv.indexOf('--environment-file');
  if(outputIndex!==-1){
   if(!local||!process.argv.includes('--bootstrap-only'))throw new Error('Fixture environment export is local-bootstrap-only');

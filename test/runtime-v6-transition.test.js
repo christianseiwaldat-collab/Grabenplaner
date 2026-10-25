@@ -75,6 +75,22 @@ test("current package declares Core6 / Offsite13 and preserves the qualified Cor
   assert.equal(value.deploymentSchemaVersion, 6); assert.equal(value.fingerprint, transition.NEW_FINGERPRINT);
   assert.equal(value.offsiteModule.moduleVersion, 13); assert.equal(value.managedArtifacts.length, 11);
 });
+
+test("Core6 dependency-plan helper is limited to the explicit migration and its sealed candidate entrypoint", () => {
+  const updater = fs.readFileSync(path.join(root, "server-tools/linux/update-grabenplaner-server.sh"), "utf8").replaceAll("\r\n", "\n");
+  const guarded = [...updater.matchAll(/^if \[\[ -n "\$runtime_v6_transition" \]\]; then\n[\s\S]*?^fi$/gm)];
+  const calls = [...updater.matchAll(/^\s*root_node "\$SCRIPT_DIR\/lib\/runtime-v6-transition\.js" (?:invocation|verify|dependency-plan) /gm)];
+  assert(calls.length >= 4);
+  for (const call of calls) assert(guarded.some(block => block.index <= call.index && call.index < block.index + block[0].length),
+    "A regular already-Core6 update must not invoke the Core5-to-Core6 dependency-plan guard");
+  assert(updater.includes('[[ "$runtime_gate" == "migration-required:5->6" ]]'));
+  const migration = fs.readFileSync(path.join(root, "server-tools/linux/migrate-grabenplaner-runtime-v6.sh"), "utf8").replaceAll("\r\n", "\n");
+  const helper = migration.indexOf('transition_helper="$extract_root/server-tools/linux/lib/runtime-v6-transition.js"');
+  assert(helper > migration.indexOf('gp_verify_sealed_zip "$staged_package" "$extract_root" 0'));
+  assert(migration.includes('root_node "$transition_helper" dependency-plan "$app_dir" "$extract_root"'));
+  assert(migration.includes('cmp --silent -- "$SCRIPT_PATH" "$extract_root/server-tools/linux/migrate-grabenplaner-runtime-v6.sh"'));
+  assert(migration.includes('bash "$extract_root/server-tools/linux/update-grabenplaner-server.sh" "${update_args[@]}"'));
+});
 function dependencyFixture(t) {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-core6-dependencies-"));
   t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
@@ -183,6 +199,95 @@ test("Core6 frozen dependency plan rejects linked metadata and hardlinked predec
   }
 });
 
+const rootOnlyWorkspacePrefix = "packages:\n  - '.'\n\n";
+const reviewedWebAuthn = { "@simplewebauthn/browser": "14.0.0", "@simplewebauthn/server": "14.0.3" };
+function changeMetadata(directory, update) {
+  const file = path.join(directory, "package.json"), value = JSON.parse(fs.readFileSync(file));
+  update(value); fs.writeFileSync(file, JSON.stringify(value));
+}
+function introduceWebAuthn(directory) { changeMetadata(directory, value => Object.assign(value.dependencies, reviewedWebAuthn)); }
+function addRootOnlyWorkspace(directory) {
+  const file = path.join(directory, "pnpm-workspace.yaml"); fs.writeFileSync(file, rootOnlyWorkspacePrefix + fs.readFileSync(file, "utf8"));
+}
+
+test("Core6 frozen plan permits only the exact root-only workspace introduction and retains it on later transitions", t => {
+  for (const eol of ["\n", "\r\n"]) {
+    const values = dependencyFixture(t), prefix = rootOnlyWorkspacePrefix.replaceAll("\n", eol);
+    for (const directory of [values.oldRoot, values.candidateRoot]) {
+      const file = path.join(directory, "pnpm-workspace.yaml"); fs.writeFileSync(file, fs.readFileSync(file, "utf8").replaceAll("\n", eol));
+    }
+    const oldFile = path.join(values.oldRoot, "pnpm-workspace.yaml"), nextFile = path.join(values.candidateRoot, "pnpm-workspace.yaml");
+    const original = fs.readFileSync(oldFile); fs.writeFileSync(nextFile, prefix + original.toString("utf8"));
+    const introduced = transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false });
+    assert.deepEqual(introduced.reviewedRootOnlyWorkspace, { previous: false, candidate: true });
+    assert.deepEqual(fs.readFileSync(oldFile), original); assert.equal(fs.existsSync(path.join(values.candidateRoot, "node_modules")), false);
+    fs.copyFileSync(nextFile, oldFile);
+    assert.deepEqual(transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false }).reviewedRootOnlyWorkspace,
+      { previous: true, candidate: true });
+    fs.writeFileSync(nextFile, original);
+    assert.throws(() => transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false }), /Removing.*root-only/);
+  }
+});
+
+test("Core6 frozen plan rejects alternative, scoped, duplicate and displaced workspace declarations", t => {
+  const alternatives = [
+    "packages:\n  - \".\"\n\n", "packages:\n  - .\n\n", "packages:\n  - '**'\n\n", "packages:\n  - 'other'\n\n",
+    "packages:\n  - '.'\n  - 'plugins/*'\n\n", rootOnlyWorkspacePrefix + rootOnlyWorkspacePrefix,
+    "# Different prefix\n" + rootOnlyWorkspacePrefix, "'packages':\n  - '.'\n\n", "\"packages\":\n  - '.'\n\n",
+    "packages: ['.']\n\n", "packages:\n  - '.'\n", "packages:\r\n  - '.'\n\n",
+  ];
+  for (const prefix of alternatives) {
+    const values = dependencyFixture(t), file = path.join(values.candidateRoot, "pnpm-workspace.yaml");
+    fs.writeFileSync(file, prefix + fs.readFileSync(file, "utf8")); const before = fs.readFileSync(file);
+    assert.throws(() => transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false }), JSON.stringify(prefix));
+    assert.deepEqual(fs.readFileSync(file), before); assert.equal(fs.existsSync(path.join(values.candidateRoot, "node_modules")), false);
+  }
+  const values = dependencyFixture(t), file = path.join(values.candidateRoot, "pnpm-workspace.yaml");
+  fs.appendFileSync(file, rootOnlyWorkspacePrefix);
+  assert.throws(() => transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false }));
+});
+
+test("Core6 frozen plan binds the exact WebAuthn pair additively while retaining the original dependency tree", t => {
+  const values = dependencyFixture(t), original = sha(path.join(values.oldRoot, "node_modules/pg/index.js"));
+  assert.deepEqual(transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false }).reviewedWebAuthnDependencies,
+    { previous: null, candidate: null });
+  introduceWebAuthn(values.candidateRoot); addRootOnlyWorkspace(values.candidateRoot);
+  const added = transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false });
+  assert.deepEqual(added.reviewedWebAuthnDependencies, { previous: null, candidate: reviewedWebAuthn });
+  introduceWebAuthn(values.oldRoot); addRootOnlyWorkspace(values.oldRoot);
+  const retained = transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false });
+  assert.deepEqual(retained.reviewedWebAuthnDependencies, { previous: reviewedWebAuthn, candidate: reviewedWebAuthn });
+  assert.equal(sha(path.join(values.oldRoot, "node_modules/pg/index.js")), original);
+  assert.equal(fs.existsSync(path.join(values.candidateRoot, "node_modules")), false);
+  changeMetadata(values.candidateRoot, value => { for (const name of Object.keys(reviewedWebAuthn)) delete value.dependencies[name]; });
+  assert.throws(() => transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false }), /Removing.*WebAuthn/);
+});
+
+test("Core6 frozen plan rejects partial, changed, downgraded and extra WebAuthn or unrelated dependency metadata", t => {
+  const mutations = [
+    value => { delete value.dependencies["@simplewebauthn/browser"]; },
+    value => { delete value.dependencies["@simplewebauthn/server"]; },
+    value => { value.dependencies["@simplewebauthn/server"] = "14.0.4"; },
+    value => { value.dependencies["@simplewebauthn/server"] = "13.3.0"; },
+    value => { value.dependencies["@simplewebauthn/browser"] = "^14.0.0"; },
+    value => { value.dependencies["@simplewebauthn/helpers"] = "14.0.3"; },
+    value => { value.dependencies["@other/server"] = "14.0.3"; },
+    value => { value.optionalDependencies = { ...reviewedWebAuthn }; },
+    value => { value.peerDependencies = { ...reviewedWebAuthn }; },
+    value => { value.dependencies.pg = "8.21.0"; },
+    value => { delete value.dependencies.pg; },
+    value => { value.pnpm = { overrides: { "@simplewebauthn/server": "14.0.3" } }; },
+  ];
+  for (const mutate of mutations) {
+    const values = dependencyFixture(t); introduceWebAuthn(values.candidateRoot); changeMetadata(values.candidateRoot, mutate);
+    assert.throws(() => transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false }));
+    assert.equal(fs.existsSync(path.join(values.candidateRoot, "node_modules")), false);
+  }
+  const values = dependencyFixture(t); introduceWebAuthn(values.oldRoot); introduceWebAuthn(values.candidateRoot);
+  changeMetadata(values.oldRoot, value => { delete value.dependencies["@simplewebauthn/server"]; });
+  assert.throws(() => transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false }));
+});
+
 const msalPatchRelative = "lib/vendor-patches/@azure__msal-node@5.4.0.patch";
 const msalWorkspaceLine = "  '@azure/msal-node@5.4.0': " + msalPatchRelative + "\n";
 function addReviewedMsal(root) {
@@ -220,6 +325,8 @@ test("Core6 frozen dependency plan rejects other MSAL entries, altered bytes and
 });
 test("Core6 frozen dependency plan accepts the exact final repository workspace security delta against the immutable predecessor", t => {
   const values = dependencyFixture(t);
+  fs.copyFileSync(legacyPath("package.json"), path.join(values.oldRoot, "package.json"));
+  fs.copyFileSync(path.join(root, "package.json"), path.join(values.candidateRoot, "package.json"));
   fs.copyFileSync(legacyPath("pnpm-workspace.yaml"), path.join(values.oldRoot, "pnpm-workspace.yaml"));
   fs.copyFileSync(path.join(root, "pnpm-workspace.yaml"), path.join(values.candidateRoot, "pnpm-workspace.yaml"));
   fs.copyFileSync(path.join(root, "pnpm-lock.yaml"), path.join(values.candidateRoot, "pnpm-lock.yaml"));
@@ -229,6 +336,8 @@ test("Core6 frozen dependency plan accepts the exact final repository workspace 
   assert.equal(actual.reviewedBodyParserOverride.candidate, "2.4.0");
   assert.equal(actual.reviewedMsalPatch.candidate, sha(patch));
   assert.equal(actual.candidate.lockSha256, sha(path.join(root, "pnpm-lock.yaml")));
+  assert.deepEqual(actual.reviewedWebAuthnDependencies, { previous: null, candidate: reviewedWebAuthn });
+  assert.deepEqual(actual.reviewedRootOnlyWorkspace, { previous: false, candidate: true });
 });
 
 

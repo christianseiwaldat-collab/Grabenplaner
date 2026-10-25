@@ -34,6 +34,10 @@ async function main(args = process.argv.slice(2)) {
     "lib/persistence/statements/portal-access.js",
     "lib/persistence/statements/mobile-auth.js",
     "lib/persistence/statements/organization-personnel.js",
+    "lib/persistence/postgresql/core/passkeys.js",
+    "lib/persistence/postgresql/core/passkeys-catalog.js",
+    "lib/persistence/postgresql/contracts/passkeys-catalog-v1.json",
+    "lib/persistence/statements/passkeys.js",
   ]) {
     const entry = manifest.files.find(file => file.path === relative);
     if (!entry || hash(fs.readFileSync(app + "/" + relative)) !== entry.sha256) {
@@ -43,26 +47,29 @@ async function main(args = process.argv.slice(2)) {
   // The Core catalog pins the frozen baseline plus exactly reviewed statement
   // revisions. Reject any other SQL/contract drift before opening a connection.
   require("../../../lib/persistence/postgresql/core/catalog").createCoreCatalog();
+  require("../../../lib/persistence/postgresql/core/passkeys-catalog").assertPasskeysCatalog();
 
   const config = R.loadConfiguration("/etc/grabenplaner/postgresql-operations.json");
   const backup = await R.latestBackup(config, { short: true, maximumAgeHours: 1 });
   const before = await R.inspectPair(config), domain = config.domains.find(item => item.domain === "core");
   const client = new (require("pg").Client)(R.url(config, domain));
-  let result;
+  let result, passkeys;
   try {
     await client.connect();
     // Keep the canonical deparse context after the migration commits its LOCAL settings.
     await client.query("SET search_path=pg_catalog,gp;SET lock_timeout='5s';SET statement_timeout='30s'");
     result = await require("../../../lib/persistence/postgresql/core/session-security").migrate(client, { binding: config.binding });
+    passkeys = await require("../../../lib/persistence/postgresql/core/passkeys").migrate(client, { binding: config.binding });
     await require("../../../lib/persistence/postgresql/boundary/migrate").verifyCoreSchema(client,
-      { requireVocationalSchool: true, requireSessionSecurity: true });
+      { requireVocationalSchool: true, requireSessionSecurity: true, requirePasskeys: true });
   } finally { await client.end(); }
   const after = await R.inspectPair(config);
   if (before.sales.schemaSha256 !== after.sales.schemaSha256 || before.core.database !== after.core.database) {
     throw new Error("PG_SESSION_SECURITY_MIGRATION_DOMAIN_DRIFT");
   }
   return { verified: true, appVersion: manifest.appVersion, sourceCommit: manifest.sourceCommit,
-    ...result, backup, coreBefore: before.core.schemaSha256, coreAfter: after.core.schemaSha256, salesUnchanged: true };
+    ...result, passkeys, passkeysVerified: true, backup,
+    coreBefore: before.core.schemaSha256, coreAfter: after.core.schemaSha256, salesUnchanged: true };
 }
 
 if (require.main === module) main().then(result => process.stdout.write(JSON.stringify(result) + "\n"))

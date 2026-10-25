@@ -7,7 +7,9 @@ const paths = ['server-tools/linux/lib/session-security-migrate.js', 'lib/persis
   'lib/persistence/postgresql/core/catalog.js', 'lib/persistence/postgresql/boundary/migrate.js',
   'lib/persistence/schema-definitions/session-security.js', 'lib/persistence/catalogs/portal-access-catalog.js',
   'lib/persistence/catalogs/mobile-auth-catalog.js', 'lib/persistence/catalogs/organization-personnel-catalog.js',
-  'lib/persistence/statements/portal-access.js', 'lib/persistence/statements/mobile-auth.js', 'lib/persistence/statements/organization-personnel.js'];
+  'lib/persistence/statements/portal-access.js', 'lib/persistence/statements/mobile-auth.js', 'lib/persistence/statements/organization-personnel.js',
+  'lib/persistence/postgresql/core/passkeys.js', 'lib/persistence/postgresql/core/passkeys-catalog.js',
+  'lib/persistence/postgresql/contracts/passkeys-catalog-v1.json', 'lib/persistence/statements/passkeys.js'];
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 
 function harness(scenario = 'success') {
@@ -31,12 +33,16 @@ function harness(scenario = 'success') {
       if (id === 'node:fs') return {
         realpathSync: value => value === '/proc/self/fd/9' ? '/run/grabenplaner/maintenance.lock' : root,
         readFileSync: value => value.endsWith('grabenplaner-server-manifest.json') ? manifest
-          : Buffer.from(scenario === 'source-drift' && value.endsWith('schema-definitions/session-security.js') ? 'changed source' : value.slice(root.length + 1)),
+          : Buffer.from((scenario === 'source-drift' && value.endsWith('schema-definitions/session-security.js'))
+            || (scenario === 'passkeys-source-drift' && value.endsWith('contracts/passkeys-catalog-v1.json')) ? 'changed source' : value.slice(root.length + 1)),
       };
       if (id === 'node:child_process') return { spawnSync: () => ({ status: scenario === 'bad-lease' ? 1 : 0 }) };
       if (id === './deploy-policy') return { applicationContract: () => { events.push('contract'); } };
       if (id === '../../../lib/persistence/postgresql/core/catalog') return { createCoreCatalog() {
         events.push('catalog'); if (scenario === 'catalog-drift') throw new Error('synthetic catalog drift');
+      } };
+      if (id === '../../../lib/persistence/postgresql/core/passkeys-catalog') return { assertPasskeysCatalog() {
+        events.push('passkeys-catalog'); if (scenario === 'passkeys-catalog-drift') throw new Error('synthetic passkeys catalog drift');
       } };
       if (id === '../../../lib/persistence/postgresql/operations/runtime') return runtime;
       if (id === 'pg') return { Client: function (url) { assert.equal(url, 'synthetic'); return client; } };
@@ -45,8 +51,13 @@ function harness(scenario = 'success') {
         if (scenario === 'migration-failure') throw new Error('synthetic migration failure');
         return { applied: scenario !== 'already-applied', digest: 'synthetic-plan' };
       } };
+      if (id === '../../../lib/persistence/postgresql/core/passkeys') return { async migrate(c, options) {
+        assert.equal(c, client); assert.equal(options.binding, config.binding); events.push('passkeys-migrate');
+        if (scenario === 'passkeys-migration-failure') throw new Error('synthetic passkeys migration failure');
+        return { applied: scenario !== 'already-applied', digest: 'synthetic-passkeys-plan' };
+      } };
       if (id === '../../../lib/persistence/postgresql/boundary/migrate') return { async verifyCoreSchema(c, options) {
-        assert.equal(c, client); assert.equal(options.requireVocationalSchool, true); assert.equal(options.requireSessionSecurity, true); events.push('verify');
+        assert.equal(c, client); assert.equal(options.requireVocationalSchool, true); assert.equal(options.requireSessionSecurity, true); assert.equal(options.requirePasskeys, true); events.push('verify');
         if (scenario === 'verification-failure') throw new Error('synthetic verification failure');
       } };
       return require(id);
@@ -64,11 +75,12 @@ for (const scenario of ['success', 'already-applied']) {
     const h = harness(scenario), result = await h.run();
     assert.equal(result.verified, true); assert.equal(result.salesUnchanged, true);
     assert.equal(result.applied, scenario === 'success');
-    assert.deepEqual(h.events, ['contract', 'catalog', 'configuration', 'backup', 'inspect', 'connect', 'bounded', 'migrate', 'verify', 'end', 'inspect']);
+    assert.equal(result.passkeysVerified, true); assert.equal(result.passkeys.applied, scenario === 'success');
+    assert.deepEqual(h.events, ['contract', 'catalog', 'passkeys-catalog', 'configuration', 'backup', 'inspect', 'connect', 'bounded', 'migrate', 'passkeys-migrate', 'verify', 'end', 'inspect']);
   });
 }
 
-for (const scenario of ['bad-lease', 'source-drift', 'catalog-drift', 'backup-failure']) {
+for (const scenario of ['bad-lease', 'source-drift', 'catalog-drift', 'passkeys-source-drift', 'passkeys-catalog-drift', 'backup-failure']) {
   test(`installed session migration rejects preconditions before connection: ${scenario}`, async () => {
     const h = harness(scenario); await assert.rejects(h.run());
     assert.equal(h.events.includes('connect'), false);
@@ -76,10 +88,10 @@ for (const scenario of ['bad-lease', 'source-drift', 'catalog-drift', 'backup-fa
   });
 }
 
-for (const scenario of ['migration-failure', 'verification-failure', 'domain-drift']) {
+for (const scenario of ['migration-failure', 'passkeys-migration-failure', 'verification-failure', 'domain-drift']) {
   test(`installed session migration never returns a success receipt on ${scenario}`, async () => {
     const h = harness(scenario); await assert.rejects(h.run());
     assert.ok(h.events.includes('end'));
-    if (scenario === 'migration-failure') assert.equal(h.events.includes('verify'), false);
+    if (scenario === 'migration-failure' || scenario === 'passkeys-migration-failure') assert.equal(h.events.includes('verify'), false);
   });
 }

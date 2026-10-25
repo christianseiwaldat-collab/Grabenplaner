@@ -85,7 +85,7 @@ printf '%s\\n' "$trusted_package_verifier" "$installed_runtime_verifier" "$verif
 
 for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", "xoffi", "failed-xoffi", "invalid-xoffi", "import-delete", "failed-import-delete", "invalid-import-delete",
   "school-short", "school-full", "school-already-applied", "failed-school", "invalid-school", "changed-school-sales", "malformed-school", "missing-school-helper", "security-short", "security-full", "security-already-applied",
-  "failed-security", "invalid-security", "changed-security-sales", "malformed-security", "missing-security-helper"]) {
+  "failed-security", "invalid-security", "changed-security-sales", "malformed-security", "missing-security-helper", "missing-security-passkeys-proof"]) {
   test(`actual updater orchestration: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
     assert.ok(source.indexOf(entry) > 0);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-deploy-shell-"));
@@ -116,7 +116,7 @@ ${scenario === "failed-school" ? "process.exit(42);" : scenario === "malformed-s
 const fs=require('node:fs');
 fs.appendFileSync(process.env.EVENTS_FILE, 'security-migration\\n');
 require('node:assert/strict').deepEqual(process.argv.slice(2), ['${"a".repeat(64)}','--maintenance-lock-held']);
-${scenario === "failed-security" ? "process.exit(42);" : scenario === "malformed-security" ? "console.log('invalid JSON');" : `console.log(JSON.stringify({verified:${scenario !== "invalid-security"},salesUnchanged:${scenario !== "changed-security-sales"},applied:${scenario !== "security-already-applied"}}));`}
+${scenario === "failed-security" ? "process.exit(42);" : scenario === "malformed-security" ? "console.log('invalid JSON');" : `console.log(JSON.stringify({verified:${scenario !== "invalid-security"},salesUnchanged:${scenario !== "changed-security-sales"},passkeysVerified:${scenario !== "missing-security-passkeys-proof"},passkeys:{applied:true,digest:'synthetic-passkeys-plan'},applied:${scenario !== "security-already-applied"}}));`}
 `);
     if (xoffi) write("candidate/server-tools/linux/lib/xoffi-snapshots-migrate.js", `
 const fs=require('node:fs');
@@ -202,7 +202,7 @@ ${workflow}
     const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: root, encoding: "utf8", timeout: 15000 });
     const events = fs.readFileSync(path.join(root, "events"), "utf8").trim().split("\n");
     if (["failed-readiness", "failed-schedule", "failed-xoffi", "invalid-xoffi", "failed-import-delete", "invalid-import-delete",
-      "failed-school", "invalid-school", "changed-school-sales", "malformed-school", "missing-school-helper", "failed-security", "invalid-security", "changed-security-sales", "malformed-security", "missing-security-helper"].includes(scenario)) {
+      "failed-school", "invalid-school", "changed-school-sales", "malformed-school", "missing-school-helper", "failed-security", "invalid-security", "changed-security-sales", "malformed-security", "missing-security-helper", "missing-security-passkeys-proof"].includes(scenario)) {
       assert.notEqual(result.status, 0); assert.ok(events.includes("failed")); assert.ok(!events.includes("commit")); assert.ok(!events.includes("queue-assurance"));
       if (xoffi) { assert.ok(events.includes("schema-migration")); assert.ok(!events.includes("start")); }
       if (importDelete && !xoffi) { assert.ok(events.includes("import-migration")); assert.ok(!events.includes("start")); }
@@ -247,6 +247,7 @@ ${workflow}
         const securityReceipt = JSON.parse(fs.readFileSync(path.join(root,"session-security-migration.json"),"utf8"));
         assert.equal(securityReceipt.verified,true);
         assert.equal(securityReceipt.salesUnchanged,true);
+        assert.equal(securityReceipt.passkeysVerified,true);
         assert.equal(securityReceipt.applied,scenario !== "security-already-applied");
       } else {
         assert.ok(!events.includes("school-migration"), "SQLite updates must never invoke the PostgreSQL migration");
@@ -273,7 +274,7 @@ test("update history retains import, school and session security evidence after 
   fs.writeFileSync(phases,"import-deletion-schema-migration\t1\nvocational-school-schema-migration\t2\nsession-security-schema-migration\t3\n");
   const importProof = { verified:true, coreUnchanged:true, applied:false };
   const schoolProof = { verified:true, salesUnchanged:true, applied:true, sourceCommit:"9c780eb1df690c2e31245e7fd8ff324c4798efc8" };
-  const securityProof = { verified:true, salesUnchanged:true, applied:true, rollbackBoundary:{automaticRollback:false} };
+  const securityProof = { verified:true, salesUnchanged:true, passkeysVerified:true, passkeys:{applied:true,digest:'synthetic-passkeys-plan'}, applied:true, rollbackBoundary:{automaticRollback:false} };
   fs.writeFileSync(importFile,JSON.stringify(importProof));
   const invoke = (name,status) => {
     const receiptFile = path.join(root,name);
