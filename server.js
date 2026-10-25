@@ -3628,7 +3628,8 @@ app.use("/branding-kits", express.static(brandingKitsDirectory));
 app.use("/vendor/quill", express.static(path.join(__dirname, "node_modules", "quill", "dist")));
 app.use("/vendor/simplewebauthn-browser-v14", express.static(
   path.join(__dirname, "node_modules", "@simplewebauthn", "browser", "dist", "bundle"),
-  { maxAge: "365d", immutable: true, fallthrough: false },
+  { etag: false, lastModified: false, cacheControl: false, fallthrough: false,
+    setHeaders: response => response.setHeader("Cache-Control", "no-store") },
 ));
 const tesseractPackageDirectory = fs.realpathSync(path.dirname(require.resolve("tesseract.js/package.json")));
 const tesseractCoreDirectory = fs.realpathSync(path.join(path.dirname(tesseractPackageDirectory), "tesseract.js-core"));
@@ -62967,7 +62968,9 @@ app.post("/api/schedule/auto", async (request, response) => {
   };
   const [employeeRows, rawExistingShifts, rawEmployeeWeekShifts, storedOptions, storedLendings] = await Promise.all([
     planningSettingsRepository.listAutoPlanningEmployees(planningQuery),
-    planningSettingsRepository.listAutoPlanningShifts(planningQuery),
+    // Replacement and its preview both need persistent IDs; the lightweight
+    // auto-planning DTO intentionally omits them. Reuse the qualified scoped read.
+    planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningEmployeeShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningOptions(planningQuery),
     planningSettingsRepository.listScheduleLendings(planningQuery),

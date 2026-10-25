@@ -15,6 +15,43 @@ test.before(async () => {
 test.after(async () => { await browser?.close(); });
 const operations = ["database-download", "offsite-folder-create", "offsite-folder-activate", "vps-reboot", "password-change"];
 
+test("the stable WebAuthn vendor URL serves the current bundle without caches or stale validators", async t => {
+  const express = require("express"), app = express(), serverSource = source("server.js");
+  const start = serverSource.indexOf('app.use("/vendor/simplewebauthn-browser-v14", express.static(');
+  const end = serverSource.indexOf("\nconst tesseractPackageDirectory", start);
+  assert(start >= 0 && end > start, "Extract the original WebAuthn vendor mount");
+  vm.runInNewContext(serverSource.slice(start, end), { app, express, path, __dirname: root });
+  app.use((_request, response) => response.status(200).send("Unexpected static fallthrough"));
+  app.use((error, _request, response, _next) => response.status(error.status || 500).end());
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise(resolve => server.once("listening", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const url = `http://127.0.0.1:${server.address().port}/vendor/simplewebauthn-browser-v14/index.umd.min.js`;
+  const response = await fetch(url);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("etag"), null);
+  assert.equal(response.headers.get("last-modified"), null);
+  const expected = fs.readFileSync(path.join(root,
+    "node_modules", "@simplewebauthn", "browser", "dist", "bundle", "index.umd.min.js"));
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), expected);
+  // An ordinary HTTP request carries old validators without fetch adding
+  // no-cache on its own: the original mount itself must force a fresh body.
+  const cached = await new Promise((resolve, reject) => require("node:http").get(url,
+    { headers: { "If-None-Match": 'W/"previous-bundle-validator"', "If-Modified-Since": "Fri, 01 Jan 2100 00:00:00 GMT" } }, result => {
+      const chunks = []; result.on("data", chunk => { chunks.push(chunk); });
+      result.on("end", () => resolve({ status: result.statusCode, headers: result.headers, body: Buffer.concat(chunks) }));
+      result.on("error", reject);
+    }).on("error", reject));
+  assert.equal(cached.status, 200);
+  assert.equal(cached.headers["cache-control"], "no-store");
+  assert.equal(cached.headers.etag, undefined);
+  assert.equal(cached.headers["last-modified"], undefined);
+  assert.deepEqual(cached.body, expected);
+  const missing = await fetch(url.replace("index.umd.min.js", "missing-bundle.js"));
+  assert.equal(missing.status, 404, "The existing fallthrough:false contract must remain effective");
+});
+
 test("every new credential-changing endpoint requires the existing cross-tab credential lock", async () => {
   const context = vm.createContext({ URL, AbortController, AbortSignal, location: { href: `${ORIGIN}/` }, document: { cookie: "grabenplaner_csrf=synthetic" },
     navigator: { locks: { request: async (_name, _options, work) => work() } } });

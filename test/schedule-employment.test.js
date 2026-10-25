@@ -3,6 +3,11 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
 const express = require('express');
 const employment = require('../lib/schedule-employment');
+const { createPersistenceProviderFacade } = require('../lib/persistence/contract');
+const { POSTGRESQL_CAPABILITIES: capabilities } = require('../lib/persistence/postgresql/provider');
+const { createWorkRuleStoreRepository } = require('../lib/persistence/repositories/work-rule-store');
+const { WORK_RULE_STORE_STATEMENTS: W } = require('../lib/persistence/statements/work-rule-store');
+const { SQLITE_PLANNING_SETTINGS_CATALOG: planningCatalog } = require('../lib/persistence/catalogs/planning-settings-catalog');
 const { addDays, mondayOfWeek } = require('../lib/work-rules/calendar');
 const source = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -15,6 +20,12 @@ function route(start, end) {
   assert(from >= 0 && to > from, start); return source.slice(from, to);
 }
 const team = [{ personnel_number: '434', nickname: 'Synthetic entry', home_location_id: '18', fixed_workdays: '', contracted_hours: 4 }];
+function shiftDto(statementId, rows) {
+  const sql = planningCatalog.find(item => item.statement.id === statementId)?.sql;
+  assert.ok(sql, statementId);
+  const fields = [...sql.match(/SELECT json_object\(([\s\S]*?)\) AS data/)[1].matchAll(/'([a-z_]+)',/g)].map(match => match[1]);
+  return rows.map(row => Object.fromEntries(fields.map(field => [field, row[field] ?? null])));
+}
 
 test('entry is inclusive, missing dates remain compatible and only week-relative eligibility is public', () => {
   const starts = new Map([['434', '2026-10-12']]);
@@ -46,16 +57,39 @@ test('partial entry week clips shifts and spanning options without changing reta
 
 async function fixture(t) {
   const app = express(); app.use(express.json());
-  const state = { start: '2026-10-14', atCommit: null, profiles: [], shifts: [], evaluations: [], transactions: 0, next: 1 };
+  const state = { start: '2026-10-14', atCommit: null, profiles: [], shifts: [], evaluations: [], transactions: 0, next: 1,
+    planningReads: [], deletedShiftIds: [] };
   const organization = { marker: 'outside', getPersonnelSensitiveRecord: async () => null }, boundOrganization = { marker: 'transaction' };
+  // Keep the actual delete-ID contract: a permissive memory stub previously
+  // concealed that the qualified auto-planning DTO intentionally has no id.
+  const deleteProvider = createPersistenceProviderFacade({ providerId: 'postgresql', capabilities,
+    query: async () => { throw Error('Unexpected query'); },
+    execute: async (statement, parameters) => {
+      assert.equal(statement, W.deletePlanningShift);
+      state.deletedShiftIds.push(parameters.id);
+      const count = state.shifts.length;
+      state.shifts = state.shifts.filter(row => Number(row.id) !== parameters.id);
+      return { rowsAffected: count - state.shifts.length, returnedRows: [] };
+    },
+    beginTransaction: async () => { throw Error('Unexpected provider transaction'); }, close: async () => {},
+  });
+  t.after(() => deleteProvider.close());
+  const deleteRepository = createWorkRuleStoreRepository(deleteProvider);
   const workRules = {
     async insertPlanningShift(shift) { const id = state.next++; state.shifts.push({ id, ...plain(shift) }); return { rowsAffected: 1, returnedRows: [{ id }] }; },
     async updatePlanningShift(shift) { state.shifts = state.shifts.map(row => Number(row.id) === Number(shift.id) ? { ...row, ...plain(shift) } : row); return { rowsAffected: 1 }; },
-    async deletePlanningShift(id) { state.shifts = state.shifts.filter(row => Number(row.id) !== Number(id)); return { rowsAffected: 1 }; },
+    deletePlanningShift: id => deleteRepository.deletePlanningShift(id),
     async invalidatePlanningDayReview() {}, async invalidatePlanningReviewsForRange() {},
   };
   const all = () => state.shifts.map(row => ({ id: row.id, employee_number: row.employeeNumber || '434',
-    shift_date: row.shiftDate, location_id: '18', start_time: row.startTime, end_time: row.endTime, department_id: null }));
+    shift_date: row.shiftDate, location_id: row.locationId || '18', start_time: row.startTime, end_time: row.endTime,
+    department_id: row.departmentId ?? null, duty_code: row.dutyCode || '' }));
+  const planningShifts = (statementId, query) => {
+    state.planningReads.push({ statementId, query: plain(query) });
+    return shiftDto(statementId, all().filter(row => row.location_id === query.locationId
+      && row.shift_date >= query.weekStart && row.shift_date <= query.weekEnd
+      && (query.departmentId == null || row.department_id === query.departmentId)));
+  };
   const register = Object.fromEntries(['post', 'put', 'delete'].map(method => [method, (url, handler) => app[method](url, (...args) => Promise.resolve(handler(...args)))]));
   const context = vm.createContext({ app: register, require: id => id === './lib/schedule-employment' ? employment : require(id),
     console, Set, Map, Object, Array, String, Number, Promise, Math,
@@ -65,7 +99,9 @@ async function fixture(t) {
     planningSettingsRepository: {
       getPlanningEmployee: async () => team[0], getOverlappingShift: async () => null,
       getShiftById: async ({ id }) => all().find(row => Number(row.id) === id),
-      listAutoPlanningEmployees: async () => team, listAutoPlanningShifts: async () => all(),
+      listAutoPlanningEmployees: async () => team,
+      listAutoPlanningShifts: async query => planningShifts('planning-settings.auto-planning.shifts', query),
+      listScheduleShifts: async query => planningShifts('planning-settings.schedule.shifts', query),
       listAutoPlanningEmployeeShifts: async () => all(), listAutoPlanningOptions: async () => [], listScheduleLendings: async () => [],
     },
     persistenceProvider: { async transaction(work) {
@@ -84,7 +120,7 @@ async function fixture(t) {
     manualPlanningHours: () => ({ start: '07:00', end: '23:00' }),
     dayConfiguration: async () => ({ minStaff: 0, key: 'mon', start: '09:00', end: '17:00' }),
     overlappingWeekOption: async () => null, activeSicknessEmployeeNumbers: async () => new Set(),
-    resolvePlanningContext: async () => ({ locationId: '18', departmentId: null }), assertSessionContextScope() {}, assertShiftEmployeeAssignmentScope: async () => {},
+    resolvePlanningContext: async input => ({ locationId: input.locationId || '18', departmentId: input.departmentId || null }), assertSessionContextScope() {}, assertShiftEmployeeAssignmentScope: async () => {},
     planningMutationEmployees: async () => team,
     evaluateScheduleWorkRules: async (week, context, employees, change) => { state.evaluations.push(change ? plain(change) : null); return { assessment: { outcome: 'allowed' } }; },
     evaluateBranchSupervisionMutation: async () => ({ after: { issueCount: 0 } }),
@@ -137,6 +173,10 @@ test('actual classic auto planner skips pre-entry days, preserves hidden histori
   assert.equal(result.status, 200, JSON.stringify(result));
   assert.equal(result.body.created, 2);
   assert.deepEqual(f.state.evaluations[0].deletedShiftIds, [91]);
+  assert.deepEqual(f.state.deletedShiftIds, [91]);
+  assert.deepEqual(f.state.planningReads, [{ statementId: 'planning-settings.schedule.shifts', query: {
+    weekStart: '2026-10-12', weekEnd: '2026-10-18', locationId: '18', departmentId: null,
+  } }]);
   assert.equal(f.state.evaluations[0].replaceRange, undefined, 'preview must retain the same pre-entry history as the commit');
   assert(f.state.shifts.some(row => row.id === 90), 'replace retains the original pre-entry record');
   assert(f.state.shifts.filter(row => row.id !== 90).every(row => row.shiftDate >= '2026-10-14'));
@@ -144,6 +184,42 @@ test('actual classic auto planner skips pre-entry days, preserves hidden histori
   const stale = await f.request('/api/schedule/auto', { weekStart: '2026-10-12', locationId: '18', replaceExisting: true });
   assert.equal(stale.status, 409); assert.equal(stale.body.code, 'SHIFT_BEFORE_EMPLOYMENT');
   assert.deepEqual(f.state.shifts, before, 'no removal or partial assignment may survive changed entry data');
+});
+
+test('the ID-bearing qualified schedule read retains the exact auto-planning location, department and date predicates', () => {
+  const ids = ['planning-settings.auto-planning.shifts', 'planning-settings.schedule.shifts'];
+  const scopedWhere = ids.map(id => planningCatalog.find(item => item.statement.id === id).sql
+    .split('WHERE ')[1].split('ORDER BY')[0].replaceAll('s.', '').replace(/\s+/g, ''));
+  assert.equal(scopedWhere[1], scopedWhere[0]);
+  const row = { id: 91, employee_number: '434', shift_date: '2026-10-14' };
+  assert.equal(Object.hasOwn(shiftDto(ids[0], [row])[0], 'id'), false, 'The legacy lightweight projection must not invent an ID');
+  assert.equal(shiftDto(ids[1], [row])[0].id, 91);
+});
+
+test('classic auto replacement deletes only qualified visible IDs and preserves foreign, department and pre-entry history', async t => {
+  for (const departmentId of [null, 7]) await t.test(departmentId == null ? 'whole branch' : 'explicit department', async t => {
+    const f = await fixture(t);
+    const stored = (id, shiftDate, extra = {}) => ({ id, employeeNumber: '434', shiftDate,
+      startTime: '09:00', endTime: '10:00', locationId: '18', departmentId: 7, ...extra });
+    f.state.shifts.push(stored(90, '2026-10-12'), stored(91, '2026-10-14'),
+      stored(92, '2026-10-15', { departmentId: 8 }), stored(93, '2026-10-16', { departmentId: null }),
+      stored(94, '2026-10-17', { locationId: '11' }), stored(95, '2026-10-19'),
+      stored(96, '2026-10-14', { employeeNumber: '999' }));
+    const original = structuredClone(f.state.shifts);
+    const expected = departmentId == null ? [91, 92, 93] : [91];
+    const response = await f.request('/api/schedule/auto', {
+      weekStart: '2026-10-12', locationId: '18', departmentId, replaceExisting: true,
+    });
+    assert.equal(response.status, 200, JSON.stringify(response));
+    assert.deepEqual(f.state.evaluations[0].deletedShiftIds, expected);
+    assert.deepEqual(f.state.deletedShiftIds, expected, 'Preview and actual repository deletion must use the same persistent IDs');
+    for (const row of original.filter(row => !expected.includes(row.id))) {
+      assert.deepEqual(f.state.shifts.find(saved => saved.id === row.id), row, `Stored history ${row.id} remains byte-for-byte unchanged`);
+    }
+    assert.deepEqual(f.state.planningReads[0].query, {
+      weekStart: '2026-10-12', weekEnd: '2026-10-18', locationId: '18', departmentId,
+    });
+  });
 });
 
 test('clearing the visible week preserves pre-entry history and binds its evaluation to the exact deleted IDs', async t => {
