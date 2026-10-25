@@ -158,6 +158,41 @@ async function errorPayload(response) {
   }
 }
 
+function rejectedBackupState(actor) {
+  const exportRoot = path.join(testRoot, "transient", "database-exports");
+  return {
+    sessions: db.prepare(`
+      SELECT id, token_hash, authenticated_at, absolute_expires_at, revoked_at
+      FROM portal_sessions WHERE employee_number = ? ORDER BY id
+    `).all(actor.employeeNumber).map(row => ({ ...row })),
+    acceptedOrRequested: Number(db.prepare(`
+      SELECT COUNT(*) AS count FROM audit_log WHERE action IN (
+        'backup.admin.reauthentication.accepted', 'backup.database-download.requested',
+        'backup.offsite-folder.create.requested', 'backup.offsite-folder.activate.requested'
+      )
+    `).get().count),
+    exportFiles: fs.existsSync(exportRoot) ? fs.readdirSync(exportRoot, { recursive: true }).sort() : [],
+  };
+}
+
+async function assertReauthenticationRejected(method, route, actor, body, status, code) {
+  const before = rejectedBackupState(actor), cookie = actor.cookie, csrf = actor.csrf;
+  const response = await requestJson(method, route, actor, body);
+  assert.equal(response.status, status);
+  assert.equal((await errorPayload(response)).code, code);
+  assert.equal(response.headers.get("X-GP-Session-Changed"), null);
+  assert.deepEqual(response.headers.getSetCookie(), []);
+  assert.equal(actor.cookie, cookie); assert.equal(actor.csrf, csrf);
+  assert.deepEqual(rejectedBackupState(actor), before,
+    "rejected proof must not rotate credentials, accept or request an operation, or create an export");
+}
+
+function structurallyInvalidReauthenticationProofs() {
+  const passkey = { challengeId: crypto.randomUUID(), response: {} };
+  return [{}, { currentPassword: "" }, { currentPassword: "x".repeat(513) },
+    { currentPassword, passkey }, { passkey: { ...passkey, response: [] } }];
+}
+
 test.before(async () => {
   actors.admin = await createActor("98621", "admin", { grantOffsite: true });
   actors.itAdmin = await createActor("98622", "it_admin", { grantOffsite: true });
@@ -230,21 +265,15 @@ test("v0.86.2: Datenbankdownload verlangt Bestätigung, CSRF, Same-Origin und ak
   assert.equal(crossSite.status, 403);
   assert.equal((await errorPayload(crossSite)).code, "ORIGIN_NOT_ALLOWED");
 
-  const missingPassword = await postJson(
-    "/api/backup/database-download",
-    actors.admin,
-    { confirmation: "DATABASE_BACKUP_DOWNLOAD", currentPassword: "" },
-  );
-  assert.equal(missingPassword.status, 403);
-  assert.equal((await errorPayload(missingPassword)).code, "BACKUP_ADMIN_AUTH_FAILED");
-
-  const wrongPassword = await postJson(
-    "/api/backup/database-download",
-    actors.admin,
+  // Exactly one bounded password or structurally valid passkey is required.
+  // Invalid request shapes fail before password verification or any operation.
+  for (const proof of structurallyInvalidReauthenticationProofs()) {
+    await assertReauthenticationRejected("POST", "/api/backup/database-download", actors.admin,
+      { confirmation: "DATABASE_BACKUP_DOWNLOAD", ...proof }, 400, "DATABASE_DOWNLOAD_CONFIRMATION_REQUIRED");
+  }
+  await assertReauthenticationRejected("POST", "/api/backup/database-download", actors.admin,
     { confirmation: "DATABASE_BACKUP_DOWNLOAD", currentPassword: "Falsches-Passwort!" },
-  );
-  assert.equal(wrongPassword.status, 403);
-  assert.equal((await errorPayload(wrongPassword)).code, "BACKUP_ADMIN_AUTH_FAILED");
+    403, "BACKUP_ADMIN_AUTH_FAILED");
 });
 
 test("v0.86.2: Rolle und backup:write müssen gemeinsam wirksam sein", async () => {
@@ -276,18 +305,11 @@ test("v0.88.3: Offsite-Pfadänderungen verlangen Developer, Recht, Same-Origin u
   assert.equal(createWithWrongPassword.status, 403);
   assert.equal((await errorPayload(createWithWrongPassword)).code, "BACKUP_ADMIN_AUTH_FAILED");
 
-  const activateWithoutPassword = await requestJson(
-    "PUT",
-    "/api/backup/offsite-folders/active",
-    actors.developer,
-    {
-      confirmation: "ACTIVATE_MANAGED_OFFSITE_FOLDER",
-      folderLabel: "Sicherung_2026",
-      currentPassword: "",
-    },
-  );
-  assert.equal(activateWithoutPassword.status, 403);
-  assert.equal((await errorPayload(activateWithoutPassword)).code, "BACKUP_ADMIN_AUTH_FAILED");
+  for (const proof of structurallyInvalidReauthenticationProofs()) {
+    await assertReauthenticationRejected("PUT", "/api/backup/offsite-folders/active", actors.developer,
+      { confirmation: "ACTIVATE_MANAGED_OFFSITE_FOLDER", folderLabel: "Sicherung_2026", ...proof },
+      400, "OFFSITE_TARGET_REQUEST_INVALID");
+  }
 
   const wrongRole = await postJson(
     "/api/backup/offsite-folders",

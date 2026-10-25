@@ -70,7 +70,12 @@ test("native old-checkpoint upgrade, transactional rollback, repeat chain and re
     PGUSER: decodeURIComponent(urls.migrator.username), PGPASSWORD: decodeURIComponent(urls.migrator.password), PGCONNECT_TIMEOUT: "5" };
   const cloneOptions = purpose => ({ host: socket, port, database: domain, user: `gp_core_${purpose}`, password: decodeURIComponent(urls[purpose].password), connectionTimeoutMillis: 5000 });
   const makeProvider = (pool, options) => createPostgresqlPersistenceProvider({ pool, poolOwnership: "provider",
-    prepareClient: client => E.verifyEnvironment(client, { purpose: "app" }), catalog: [
+    // Match the real Core connector: historical Core statements intentionally
+    // resolve their tables through this fixed, reviewed search path.
+    prepareClient: async client => {
+      await E.verifyEnvironment(client, { purpose: "app" });
+      await client.query("SET search_path=pg_catalog,gp");
+    }, catalog: [
       ...require("../lib/persistence/postgresql/core/catalog").createCoreCatalog().entries,
       ...require("../lib/persistence/postgresql/core/session-security-catalog").CATALOG,
       ...require("../lib/persistence/postgresql/core/passkeys-catalog").assertPasskeysCatalog()], ...options });

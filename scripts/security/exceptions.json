@@ -365,7 +365,7 @@
     {
       "scanner": "secrets",
       "fingerprint": "dd8ece933083a54a592ce63443416e91a293296bc74b5d30cad456093e877c3e",
-      "sourceSha256": "ad22c1f3b70bae78b9c628c7145893e0e6b3879ba496905bf8fd33a13b23e058",
+      "sourceSha256": "1dfab747cdabc955060b21495f33776a5cfaf6c491f1130e81e7ceb72c8849e2",
       "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
       "reason": "Technically reviewed by Codex: before-passkeys-v1 is a public opt-in marker for the isolated upgrade-test fixture, not a credential or confidential value. Exact fingerprint and source bytes only; no human approval claimed.",
       "reviewedOn": "2026-10-25",

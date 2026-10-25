@@ -17583,7 +17583,11 @@ async function mobileSchedulePayload(session, weekValue = "") {
     }),
   ]);
   const employment = await projectScheduleEmployment([{ personnel_number: session.employeeNumber }], weekStart, weekEnd);
-  const shifts = employment.clip(storedShifts).map((shift) => ({
+  // These qualified queries already bind the actor and omit the employee ID.
+  // Supply it only for the internal projection, preserving their public shape.
+  const clipOwnRows = rows => employment.clip(rows.map(row => ({ ...row, employee_number: session.employeeNumber })))
+    .map(({ employee_number: _actor, ...row }) => row);
+  const shifts = clipOwnRows(storedShifts).map((shift) => ({
     id: Number(shift.id),
     date: shift.shift_date,
     startTime: shift.start_time,
@@ -17596,7 +17600,7 @@ async function mobileSchedulePayload(session, weekValue = "") {
     departmentName: shift.department_name || "",
     dutyCode: shift.duty_code || "",
   }));
-  const options = employment.clip(storedOptions).map((option) => ({
+  const options = clipOwnRows(storedOptions).map((option) => ({
     id: Number(option.id),
     dateFrom: option.date_from,
     dateTo: option.date_to,
@@ -50163,7 +50167,11 @@ async function ownPortalSchedule(session, weekStart) {
     }),
   ]);
   const employment = await projectScheduleEmployment([{ personnel_number: session.employeeNumber }], weekStart, weekEnd);
-  const shifts = employment.clip(storedShifts), options = employment.clip(storedOptions);
+  // The repository has already selected only this actor's rows; its DTOs omit
+  // employee_number. Keep the temporary projection identity off the response.
+  const clipOwnRows = rows => employment.clip(rows.map(row => ({ ...row, employee_number: session.employeeNumber })))
+    .map(({ employee_number: _actor, ...row }) => row);
+  const shifts = clipOwnRows(storedShifts), options = clipOwnRows(storedOptions);
   return { weekStart, weekEnd, calendarWeek: getIsoWeek(weekStart), shifts, options, user: publicPortalUser(session) };
 }
 
