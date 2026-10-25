@@ -62,3 +62,53 @@ test('a completed cash publication never borrows the earlier review timing',()=>
  const metric=P.metrics(data).find(metric=>metric.id==='applying');
  assert.equal(P.createTracker().describe(metric).percent,100);assert.equal(P.createTracker().describe(metric).elapsedMs,null);
 });
+
+test('mixed takeover counts exclude quarantined rows and the entire deferred stock snapshot',()=>{
+ const data=source();data.currentStep={table:'Current',phase:'applying'};
+ data.tables=[
+  {name:'Earlier',declaredRows:10,run:{status:'applied',receivedRows:10,counts:{applied:7,invalid:2,conflict:1}}},
+  {name:'Stock',declaredRows:5,deferred:'INCOMPLETE_STOCK_SNAPSHOT',run:{status:'applied',receivedRows:5,counts:{applied:5,invalid:1,conflict:1}}},
+  {name:'Current',declaredRows:8,run:{status:'applying',receivedRows:8,counts:{applied:2,unchanged:1,duplicate:1,invalid:1,conflict:2}}},
+ ];
+ const main=P.metrics(data).find(m=>m.id==='applying'),table=P.metrics(data).find(m=>m.id.startsWith('table:'));
+ assert.equal(main.value,9);assert.equal(main.total,12);
+ assert.equal(table.value,4);assert.equal(table.total,5);
+ const html=UI.renderSource(data,{});
+ assert.match(html,/9 \/ 12 Zeilen übernommen oder unverändert bestätigt/);
+ assert.match(html,/1 \/ 2 Tabellen abgeschlossen/);
+ assert.match(html,/Bestandsaufnahme zurückgestellt: 5 Zeilen/);
+ assert.match(html,/Der bisherige gültige Bestandsstand bleibt erhalten/);
+ assert.doesNotMatch(html,/23 \/ 23 Zeilen übernommen/);
+});
+
+test('completed partial takeover keeps quarantine visible without counting those rows as imported',()=>{
+ const data=source();data.status='applied';data.active=false;delete data.background;delete data.currentStep;
+ data.tables=[{name:'Mixed',declaredRows:6,run:{status:'applied',receivedRows:6,counts:{applied:3,invalid:2,conflict:1}}}];
+ const main=P.metrics(data).find(m=>m.id==='applying');
+ assert.equal(main.value,3);assert.equal(main.total,3);assert.equal(main.complete,true);
+ const html=UI.renderSource(data,{});
+ assert.match(html,/Übernommen · Prüffälle zurückgestellt/);
+ assert.match(html,/3 \/ 3 Zeilen übernommen oder unverändert bestätigt/);
+ assert.match(html,/2 ungültige Zeilen · 1 offener Prüffall/);
+ assert.doesNotMatch(html,/6 \/ 6 Zeilen übernommen/);
+});
+
+test('a fully quarantined source and an empty deferred snapshot never report imported rows',()=>{
+ const data=source();data.status='applied';data.active=false;delete data.background;delete data.currentStep;
+ data.tables=[{name:'Invalid',declaredRows:3,run:{status:'applied',receivedRows:3,counts:{invalid:2,conflict:1}}},
+  {name:'Stock',declaredRows:0,deferred:'INCOMPLETE_STOCK_SNAPSHOT',run:{status:'applied',receivedRows:0,counts:{}}}];
+ const main=P.metrics(data).find(m=>m.id==='applying');
+ assert.equal(main.value,0);assert.equal(main.total,0);
+ const html=UI.renderSource(data,{});
+ assert.match(html,/0 \/ 0 Zeilen übernommen oder unverändert bestätigt/);
+ assert.match(html,/Übernahme abgeschlossen · Prüffälle zurückgestellt/);
+ assert.match(html,/Bestandsaufnahme zurückgestellt: 0 Zeilen/);
+ assert.doesNotMatch(html,/3 \/ 3 Zeilen übernommen/);
+});
+
+test('quarantined barcode assignments stay separate from blocked article counts',()=>{
+ const data=source();data.kind='trade';data.catalog={changed:2,unchanged:3,blocked:4,quarantinedAliases:5};
+ const html=UI.renderSource(data,{});
+ assert.match(html,/4 Artikel zur Prüfung zurückgestellt/);
+ assert.match(html,/5 Barcode-Zuordnungen zur Prüfung zurückgestellt/);
+});

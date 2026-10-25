@@ -534,7 +534,7 @@ test('late source approval requires explicit authorized action and survives stal
   assert.equal(events.filter(e=>e.action==='import.source-tolerance.accepted:'+proof.fingerprint).length,1);
 });
 
-test('source count approval preflights every mismatch and refuses invalid rows before any receipt',async t=>{
+test('source count approval preflights every mismatch and preserves row quarantine after a verified count receipt',async t=>{
   const f=await fixture(t,{values:{KUNDEN:[rawMaster('KUNDEN',{KUND_NR:'verified-customer'})],ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'123'})]},counts:{KUNDEN:2,ARTIKEL_STAMM:2}});
   let source=await f.upload();source=await f.finish(source,'review');
   f.options.sourceTolerances=[runtimeCountProof('KUNDEN',2,1)];f.reload();
@@ -547,9 +547,68 @@ test('source count approval preflights every mismatch and refuses invalid rows b
   let bad=await invalid.upload();bad=await invalid.finish(bad,'review');
   invalid.options.sourceTolerances=[runtimeCountProof('KUNDEN',2,1)];invalid.reload();
   assert.ok(bad.tables.find(t=>t.name==='KUNDEN').run.counts.invalid);
-  await assert.rejects(invalid.runtime.sourceOperation(invalid.getSession,bad.id,'approve-counts',{expectedRevision:bad.revision}),code('IMPORT_DECISION_GATE'));
-  assert.equal(invalid.database.prepare("SELECT COUNT(*) n FROM data_import_events WHERE substr(action,1,33)='import.source-tolerance.accepted:'").get().n,0);
+  bad=await invalid.runtime.sourceOperation(invalid.getSession,bad.id,'approve-counts',{expectedRevision:bad.revision});
+  assert.equal(bad.tables.find(t=>t.name==='KUNDEN').run.counts.invalid,1);
+  assert.equal(bad.tables.flatMap(t=>t.run.sourceToleranceReceipts||[]).length,1);
   assert.equal(invalid.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,0);
+});
+
+test('Access partial takeover retains a bad second EAN and completes the valid article catalog across restart',async t=>{
+ const ean='0000000000042',values={ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:ean,Artikelbezeichnung:'Synthetic retained article',MWST:1,'Änderungsdatum':new Date('2026-09-03T13:00:00Z'),Verkaufspreis:12,eNvk:10})],
+  ARTIKEL_ZWEITEAN:[rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:'4006381333931',Rang:1}),rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:null,Rang:2})]};
+ const f=await fixture(t,{values});
+ f.database.exec('CREATE TABLE audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT NOT NULL,action TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id TEXT NOT NULL,detail TEXT NOT NULL,created_at TEXT NOT NULL)');
+ require('../lib/persistence/sqlite/operations/sales-article-catalog-schema').ensureSqliteSalesArticleCatalogSchema(f.database);
+ f.options.syncArticleCatalog=true;f.options.sharedPayloads=true;f.reload();
+ f.state.session.permissions.push('sales:articles:access','sales:articles:read','sales:articles:import');
+ let source=await f.upload();source=await f.finish(source,'review');assert.equal(source.status,'needs_review');
+ const runId=source.tables.find(t=>t.name==='ARTIKEL_ZWEITEAN').run.id;
+ const row=()=>f.database.prepare("SELECT state,issue,payload FROM data_import_rows WHERE run_id=? AND state='invalid'").get(runId),before=row();assert.ok(before);
+ f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');source=await f.finish(source,'apply');
+ assert.equal(source.status,'applied');assert.equal(source.catalog.complete,true);assert.equal(source.catalog.changed,1);
+ assert.equal(source.tables.find(t=>t.name==='ARTIKEL_ZWEITEAN').run.counts.invalid,1);assert.deepEqual(row(),before);
+ const catalog=require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.provider);
+ const article=await catalog.getByArticleNumber('000042');assert.equal(article.description,'Synthetic retained article');
+ assert.ok(article.identifiers.some(i=>i.canonicalGtin14==='04006381333931'));
+ const count=f.database.prepare('SELECT count(*) n FROM import_master_records').get().n;
+ f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');source=await f.finish(source,'apply');
+ assert.equal(source.status,'applied');assert.equal(f.database.prepare('SELECT count(*) n FROM import_master_records').get().n,count);assert.deepEqual(row(),before);
+});
+
+test('Bestell partial takeover keeps an invalid repair row while importing its valid neighbour',async t=>{
+ const B=require('../lib/tradefoto-bestell/profiles'),raw=extra=>({...Object.fromEntries(B.tableFor('Reparatur').columns.map(c=>[c.name,null])),...extra});
+ const f=await fixture(t,{kind:'bestell',values:{Reparatur:[raw({ReparaturNr:17,FilialId:'018',Anlegedatum:new Date('2026-01-03T09:15:00Z'),AName:'Synthetic camera',erledigt:true}),raw({ReparaturNr:null,FilialId:'018'})]}});
+ let source=await f.upload();source=await f.finish(source,'review');assert.equal(source.status,'needs_review');source=await f.finish(source,'apply');
+ assert.equal(source.status,'applied');assert.equal(f.database.prepare('SELECT count(*) n FROM import_history_records').get().n,1);
+ const table=source.tables.find(t=>t.name==='Reparatur');assert.equal(table.run.counts.applied,1);assert.equal(table.run.counts.invalid,1);
+ const rows=await f.runtime.sourceOperation(f.getSession,source.id,'rows',{runId:table.run.id});assert.deepEqual(rows.rows.map(r=>r.state),['applied','invalid']);
+});
+
+test('catalog continuation quarantines an alias whose parent article was held back',async()=>{
+ const article=rawMaster('ARTIKEL_STAMM',{EAN:'0000000000042',Artikelbezeichnung:'Synthetic accepted article',MWST:1,'Änderungsdatum':'2026-09-03T13:00:00.000',Verkaufspreis:'12',eNvk:'10'});
+ const alias=rawMaster('ARTIKEL_ZWEITEAN',{EAN:'0000000000099',ZweitEAN:'4006381333931',Rang:1});
+ const sync=require('../lib/data-import-article-sync').createDataImportArticleSync();
+ const prepared=await sync.prepareSource({id:'a'.repeat(64),fileSha256:'b'.repeat(64),createdAt:TIME,tables:[{name:'ARTIKEL_STAMM',run:{id:'article-run'}},{name:'ARTIKEL_ZWEITEAN',run:{id:'alias-run'}}]},
+  async table=>({rows:table==='ARTIKEL_STAMM'?[article]:[alias],after:1,complete:true}),async()=>{});
+ assert.equal(prepared.quarantinedAliases,1);assert.equal(prepared.normalizedArticles.length,1,JSON.stringify(prepared.rows));
+ assert.equal(prepared.normalizedArticles[0].description,'Synthetic accepted article');
+});
+
+test('an incomplete stock snapshot is deferred without replacing the previous complete publication',async t=>{
+ const name='ARTIKEL_FILIALEN',ean='0000000000042';
+ const stock={...Object.fromEntries(H.tableFor('trade',name).columns.map(c=>[c.name,null])),EAN:ean,FilialID:18,FBestand:2};
+ const values={ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:ean})],FILIALEN:[rawMaster('FILIALEN',{FilialID:'18'})],[name]:[stock]};
+ const f=await fixture(t,{values});let first=await f.upload();first=await f.finish(first,'review');first=await f.finish(first,'apply');
+ const prior=first.tables.find(t=>t.name===name).run.id;
+ const header=id=>f.database.prepare('SELECT * FROM import_history_snapshots WHERE run_id=?').get(id);
+ const baseline=header(prior);assert.equal(baseline.status,'published');
+ values[name].push({...stock,EAN:null});const bytes=sourceBuffer();bytes[4000]=43;
+ let next=await f.upload(bytes);next=await f.finish(next,'review');next=await f.finish(next,'apply');
+ assert.equal(next.status,'applied');const deferred=next.tables.find(t=>t.name===name);
+ assert.equal(deferred.deferred,'INCOMPLETE_STOCK_SNAPSHOT');assert.equal(deferred.run.status,'needs_review');assert.equal(deferred.run.counts.invalid,1);
+ assert.deepEqual(header(prior),baseline);assert.equal(header(deferred.run.id).status,'withdrawn');
+ assert.equal(f.database.prepare('SELECT count(*) n FROM import_history_snapshot_members WHERE run_id=?').get(deferred.run.id).n,0);
+ f.reload();const reopened=await f.runtime.sourceOperation(f.getSession,next.id,'read');assert.equal(reopened.tables.find(t=>t.name===name).deferred,'INCOMPLETE_STOCK_SNAPSHOT');
 });
 
 test('Productive Block 1: rights are cumulative, personal and not granted by a role name',()=>{
