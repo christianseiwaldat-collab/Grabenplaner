@@ -451,6 +451,16 @@
       "reviewedOn": "2026-10-26",
       "expiresOn": "2026-11-08",
       "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "dc11925892f29ddbd7fe05378f458e405757a62f4bf2910efe8d4f2654849c0c",
+      "sourceSha256": "47e10d598747b9098337ca65ea44f327581b40af6b8e2e56277853a4ac7d3f8d",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex against authenticated run40416449080: the sole new Git-history finding at ci-stock-import-delete.js:97 in commit27858f422df279ae5cb0484a33657fde637dc449 is the public before-passkeys-v1 fixture opt-in, not a credential. Its reported span contains the literal assignment; the exact full Git blob matches the already reviewed current-file record. This exception binds only that Git-mode rule/path/line/commit fingerprint and source hash. Existing P2 priority and 2026-11-08 expiry are retained. No broad history/path suppression or human approval.",
+      "reviewedOn": "2026-10-26",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
     }
   ]
 }
