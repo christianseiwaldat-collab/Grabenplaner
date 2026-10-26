@@ -1,11 +1,11 @@
 # Versionsstatus
 
-## v0.92.93 Beta · Quellstand
+## v0.92.94 Beta · Quellstand
 
-Verbesserte Konten-, Kennwort- und Sitzungssicherheit.
-Erweiterte Sicherheitsprüfungen und nachvollziehbare Auditübersicht.
-Aktualisierte Abhängigkeiten und abgesicherte Betriebsübergänge.
-Verbesserte native Inventarprüfung und abgesicherte Abmeldung.
+Optionale Passkeys und verbesserte Sicherheitsprüfungen.
+Schnellere Datenübernahmen bei geänderten Historien.
+Punktgenaue Bemerkungen und Feiertagsanzeige im Dienstplan-PDF.
+Verbesserte Personal- und Verkaufsfunktionen.
 
 Der installierte Serverstand wird im GP angezeigt.
 

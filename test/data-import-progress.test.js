@@ -17,17 +17,18 @@ test('review progress advances while the completed takeover counter remains unch
 });
 test('rest time needs sustained real progress and expires when measurements stop',()=>{
  let now=Date.parse('2026-10-01T00:00:00Z');const tracker=P.createTracker({now:()=>now});
- const m={key:'phase',value:0,total:1000,active:true,startedAt:new Date(now).toISOString(),updatedAt:new Date(now).toISOString()};
+ const m={key:'phase',value:0,total:1000,active:true,allowEstimate:true,startedAt:new Date(now).toISOString(),updatedAt:new Date(now).toISOString()};
  assert.equal(tracker.describe(m).remainingMs,null);
  now+=10000;m.value=10;m.updatedAt=new Date(now).toISOString();assert.equal(tracker.describe(m).remainingMs,null);
- now+=10000;m.value=20;m.updatedAt=new Date(now).toISOString();const measured=tracker.describe(m);
- assert.equal(measured.remainingMs,980000);assert.equal(measured.elapsedMs,20000);
+ now+=10000;m.value=20;m.updatedAt=new Date(now).toISOString();assert.equal(tracker.describe(m).remainingMs,null);
+ now+=10000;m.value=30;m.updatedAt=new Date(now).toISOString();const measured=tracker.describe(m);
+ assert.equal(measured.remainingMs,970000);assert.equal(measured.elapsedMs,30000);
  now+=31000;assert.equal(tracker.describe(m).remainingMs,null,'stale throughput must not keep claiming a remaining time');
 });
 test('pause, rollback, a new phase and completion never reuse an inappropriate estimate',()=>{
  let now=Date.parse(start);const tracker=P.createTracker({now:()=>now});
- const m={key:'phase',value:0,total:100,active:true,startedAt:start};
- for(let n=0;n<3;n++){m.value=n*10;m.updatedAt=new Date(now).toISOString();tracker.describe(m);now+=10000;}
+ const m={key:'phase',value:0,total:100,active:true,allowEstimate:true,startedAt:start};
+ for(let n=0;n<4;n++){m.value=n*10;m.updatedAt=new Date(now).toISOString();tracker.describe(m);now+=10000;}
  assert.ok(tracker.describe(m).remainingMs>0);
  m.active=false;assert.equal(tracker.describe(m).remainingMs,null);
  m.active=true;m.value=5;assert.equal(tracker.describe(m).remainingMs,null);
@@ -111,4 +112,70 @@ test('quarantined barcode assignments stay separate from blocked article counts'
  const html=UI.renderSource(data,{});
  assert.match(html,/4 Artikel zur Prüfung zurückgestellt/);
  assert.match(html,/5 Barcode-Zuordnungen zur Prüfung zurückgestellt/);
+});
+
+test('heterogeneous remaining tables never inherit the current table throughput as a total ETA',()=>{
+ let now=Date.parse(start);const tracker=P.createTracker({now:()=>now}),data=source();
+ data.currentStep.phase='applying';data.tables[1].run.status='applying';data.tables[1].run.counts={applied:0};
+ data.tables.push({name:'Different row type',run:{id:'later',status:'ready',receivedRows:1000000,counts:{create:1000000}}});
+ let main,step;
+ for(let n=0;n<4;n++){
+  data.tables[1].run.counts.applied=n*10;data.updatedAt=new Date(now).toISOString();
+  const metrics=P.metrics(data);main=metrics.find(m=>m.id==='applying');step=metrics.find(m=>m.id.startsWith('table:'));
+  assert.equal(main.allowEstimate,false);assert.equal(tracker.describe(main).remainingMs,null);
+  tracker.describe(step);now+=10000;
+ }
+ assert.equal(main.value,115609);assert.equal(main.total,1135163);
+ assert.equal(step.value,30);assert.equal(step.total,19584);assert.equal(step.allowEstimate,true);
+ assert.equal(tracker.describe(step).remainingMs,19554000,'Only the current table/phase has a comparable denominator');
+ const html=P.render(data,tracker),overall=html.slice(html.indexOf('aria-label="Übernahme insgesamt"')).split('</section>')[0];
+ assert.match(overall,/Restzeit: <strong>nicht belastbar schätzbar/);assert.doesNotMatch(overall,/ca\./);
+ assert.match(html,/Restzeit dieses Schritts:/);
+});
+
+test('waiting and isolated bursts do not provide a credible step estimate',()=>{
+ let now=Date.parse(start);const tracker=P.createTracker({now:()=>now});
+ const m={key:'one-run:reviewing',phase:'reviewing',value:0,total:1000,active:true,allowEstimate:true,startedAt:start};
+ const sample=value=>{m.value=value;m.updatedAt=new Date(now).toISOString();return tracker.describe(m);};
+ for(let n=0;n<4;n++){sample(n*10);now+=10000;}
+ assert.ok(sample(30).remainingMs>0);
+ now+=31000;assert.equal(sample(30).remainingMs,null);
+ now+=1000;assert.equal(sample(800).remainingMs,null,'A late batch must not reuse the pre-wait history');
+ now+=10000;assert.equal(sample(810).remainingMs,null);
+ now+=10000;assert.equal(sample(820).remainingMs,null);
+ now+=10000;assert.ok(sample(830).remainingMs>0,'A fresh comparable sequence can produce a new step estimate');
+ const burstTracker=P.createTracker({now:()=>now});
+ for(const value of [0,10,20,900]){m.value=value;m.updatedAt=new Date(now).toISOString();assert.equal(burstTracker.describe(m).remainingMs,null);now+=10000;}
+});
+
+test('unchanged confirmation jumps neither inflate the total counter early nor create a total ETA',()=>{
+ let now=Date.parse(start);const tracker=P.createTracker({now:()=>now}),data=source();
+ data.currentStep.phase='applying';const run=data.tables[1].run;run.status='applying';run.counts={applied:0,unchanged:0};
+ for(let n=0;n<3;n++){run.counts.applied=n*10;data.updatedAt=new Date(now).toISOString();tracker.describe(P.metrics(data).find(m=>m.id.startsWith('table:')));now+=10000;}
+ run.counts.unchanged=18000;data.updatedAt=new Date(now).toISOString();
+ let metrics=P.metrics(data),main=metrics.find(m=>m.id==='applying');
+ assert.equal(main.value,115599,'Unchanged review results are not an applied-table acknowledgement');
+ assert.equal(tracker.describe(main).remainingMs,null);
+ assert.equal(tracker.describe(metrics.find(m=>m.id.startsWith('table:'))).remainingMs,null,'The row-type burst is not comparable throughput');
+ run.status='applied';metrics=P.metrics(data);main=metrics.find(m=>m.id==='applying');
+ assert.equal(main.value,135163);assert.equal(main.complete,false,'The source still has its own completion boundary');
+ assert.equal(tracker.describe(main).remainingMs,null);
+});
+
+test('step estimates require opt-in and fresh measurements after run, phase, retry or tracker reconstruction',()=>{
+ let now=Date.parse(start);const tracker=P.createTracker({now:()=>now}),data=source();
+ const step=()=>P.metrics(data).find(m=>m.id.startsWith('table:'));
+ for(let n=0;n<4;n++){data.tables[1].run.counts.staged=1000-n*10;data.updatedAt=new Date(now).toISOString();tracker.describe(step());now+=10000;}
+ const current=step();assert.ok(tracker.describe(current).remainingMs>0);
+ assert.equal(tracker.describe({...current,complete:true}).remainingMs,0,'An explicit completion must not be overwritten by an earlier throughput estimate');
+ assert.equal(P.createTracker({now:()=>now}).describe(current).remainingMs,null);
+ for(const allowEstimate of [undefined,false])assert.equal(tracker.describe({...current,allowEstimate}).remainingMs,null);
+ data.tables[1].run.id='new-run';assert.equal(tracker.describe(step()).remainingMs,null);
+ data.currentStep.phase='rechecking';assert.equal(tracker.describe(step()).remainingMs,null);
+ data.currentStep.phase='unsupported';assert.equal(step().allowEstimate,false);assert.equal(tracker.describe(step()).remainingMs,null);
+ for(const status of ['paused','retrying','queued','failed']){
+  data.background.status=status;assert.equal(step().active,false);assert.equal(tracker.describe(step()).remainingMs,null);
+ }
+ data.background.status='applying';assert.equal(tracker.describe(step()).remainingMs,null);
+ tracker.clear();assert.equal(tracker.describe(current).remainingMs,null);
 });

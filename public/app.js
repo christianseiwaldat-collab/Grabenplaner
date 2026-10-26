@@ -829,7 +829,7 @@ const elements = Object.fromEntries(
     "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleLastImport", "salesArticleLastImportValue", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchOrderNumber", "salesArticleSearchStatusFilter", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportDatabasePasswordField", "salesArticleImportDatabasePassword", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
-    "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton", "schedulePdfSettingsCard", "vacationPdfSettingsCard",
+    "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton", "scheduleNoteToolbar", "scheduleNoteEditorFrame", "scheduleNoteFontSize", "scheduleNoteContextMenu", "scheduleNoteContextFontSize", "scheduleNoteSelectionHint", "scheduleNoteFormatStatus", "schedulePdfSettingsCard", "vacationPdfSettingsCard",
     "employeeLendingButton", "employeeLendingModal", "employeeLendingForm", "employeeLendingId", "employeeLendingRevision", "employeeLendingEmployee", "employeeLendingDestination", "employeeLendingDepartment", "employeeLendingDateFrom", "employeeLendingDateTo", "employeeLendingAllDay", "employeeLendingTimes", "employeeLendingStartTime", "employeeLendingEndTime", "employeeLendingNote", "employeeLendingMessage", "employeeLendingCancelEdit", "employeeLendingSave", "employeeLendingRefresh", "employeeLendingList", "employeeLendingDelegatesPanel", "employeeLendingDelegates",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField", "vacationApprovedEntryHint",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount", "vacationAccountsButton", "vacationAccountsModal", "vacationAccountsYear", "loadVacationAccountsButton", "vacationAccountsSummary", "vacationAccountsList",
@@ -40992,6 +40992,173 @@ async function resetCurrentWeek(event) {
 }
 
 const scheduleNoteMaxLength = 900;
+const scheduleNoteDefaultSize = "10";
+let scheduleNoteSelection = null;
+let scheduleNoteContextSelection = null;
+let scheduleNoteEditorEventsBound = false;
+
+function normalizeScheduleNoteSize(value) {
+  const source = String(value ?? "").trim().toLowerCase();
+  const legacy = { small: "5.7", normal: "6.4", medium: "6.4", large: "7.2" };
+  if (Object.hasOwn(legacy, source)) return legacy[source];
+  if (!/^\d{1,3}(?:[.,]\d)?(?:pt)?$/.test(source)) return null;
+  const size = Number(source.replace(/pt$/, "").replace(",", "."));
+  return Number.isFinite(size) && size >= 4 && size <= 72 ? String(size) : null;
+}
+
+function scheduleNoteSizeFromNode(node) {
+  const attribute = normalizeScheduleNoteSize(node.getAttribute?.("data-size"));
+  if (attribute) return attribute;
+  for (const name of node.classList || []) {
+    const value = name.match(/^ql-size-(\d{1,2}(?:_\d)?pt|small|large)$/)?.[1];
+    if (value) return normalizeScheduleNoteSize(value.replace("_", "."));
+  }
+  return normalizeScheduleNoteSize(node.style?.fontSize);
+}
+
+function scheduleNoteSelectedRange() {
+  if (!scheduleNoteQuill) return null;
+  const value = scheduleNoteQuill.getSelection() || scheduleNoteContextSelection || scheduleNoteSelection;
+  if (!value) return null;
+  const maximum = Math.max(0, scheduleNoteQuill.getLength() - 1);
+  const index = Math.max(0, Math.min(maximum, value.index));
+  return { index, length: Math.max(0, Math.min(maximum - index, value.length)) };
+}
+
+function scheduleNoteSelectionFormats(range) {
+  const formats = scheduleNoteQuill.getFormat(range.index, range.length);
+  if (!range.length) return { ...formats, size: normalizeScheduleNoteSize(formats.size) || scheduleNoteDefaultSize };
+  const pieces = scheduleNoteQuill.getContents(range.index, range.length).ops
+    .filter(op => typeof op.insert === "string" && op.insert.replace(/\n/g, "").length);
+  if (!pieces.length) return { ...formats, size: scheduleNoteDefaultSize };
+  return Object.fromEntries(["bold", "italic", "underline", "size"].map(format => {
+    const values = [...new Set(pieces.map(op => format === "size"
+      ? normalizeScheduleNoteSize(op.attributes?.size) || scheduleNoteDefaultSize
+      : op.attributes?.[format] === true))];
+    return [format, values.length === 1 ? values[0] : "mixed"];
+  }));
+}
+
+function updateScheduleNoteFormattingControls() {
+  const range = scheduleNoteSelectedRange();
+  if (!range) return;
+  const formats = scheduleNoteSelectionFormats(range);
+  for (const button of document.querySelectorAll("#scheduleNoteToolbar [data-note-format], #scheduleNoteContextMenu [data-note-format]")) {
+    if (button.dataset.noteFormat === "clear") continue;
+    const value = formats[button.dataset.noteFormat];
+    button.setAttribute("aria-pressed", value === "mixed" ? "mixed" : String(value === true));
+    button.classList.toggle("is-active", value === true);
+    button.classList.toggle("is-mixed", value === "mixed");
+  }
+  for (const input of [elements.scheduleNoteFontSize, elements.scheduleNoteContextFontSize].filter(Boolean)) {
+    if (document.activeElement === input) continue;
+    input.value = formats.size === "mixed" ? "" : formats.size;
+    input.placeholder = formats.size === "mixed" ? "Gemischt" : scheduleNoteDefaultSize;
+    input.removeAttribute("aria-invalid");
+  }
+  if (elements.scheduleNoteSelectionHint) elements.scheduleNoteSelectionHint.textContent = range.length
+    ? `${range.length} Zeichen markiert · Formatierung gilt nur für die Auswahl.`
+    : "Text markieren und formatieren · Rechtsklick öffnet die Auswahlformatierung.";
+}
+
+function closeScheduleNoteContextMenu({ restoreFocus = false } = {}) {
+  elements.scheduleNoteContextMenu?.classList.add("hidden");
+  if (restoreFocus && scheduleNoteQuill && scheduleNoteContextSelection) {
+    scheduleNoteQuill.focus();
+    scheduleNoteQuill.setSelection(scheduleNoteContextSelection.index, scheduleNoteContextSelection.length, "silent");
+  }
+  scheduleNoteContextSelection = null;
+}
+
+function formatScheduleNoteSelection(format, value) {
+  if (!scheduleNoteQuill || !["bold", "italic", "underline", "size", "clear"].includes(format)) return;
+  const range = scheduleNoteSelectedRange();
+  if (!range) return;
+  if (format === "size" && !(value = normalizeScheduleNoteSize(value))) return;
+  const current = scheduleNoteSelectionFormats(range);
+  scheduleNoteQuill.history.cutoff();
+  scheduleNoteQuill.focus();
+  scheduleNoteQuill.setSelection(range.index, range.length, "silent");
+  const changes = format === "clear" ? { bold: false, italic: false, underline: false, size: false }
+    : { [format]: format === "size" ? value : value ?? current[format] !== true };
+  if (range.length) scheduleNoteQuill.formatText(range.index, range.length, changes, "user");
+  else for (const [name, setting] of Object.entries(changes)) scheduleNoteQuill.format(name, setting, "user");
+  scheduleNoteQuill.history.cutoff();
+  scheduleNoteQuill.setSelection(range.index, range.length, "silent");
+  scheduleNoteSelection = { ...range };
+  if (scheduleNoteContextSelection) scheduleNoteContextSelection = { ...range };
+  if (elements.scheduleNoteFormatStatus) elements.scheduleNoteFormatStatus.textContent = "";
+  updateScheduleNoteFormattingControls();
+}
+
+function applyScheduleNoteFontSize(input) {
+  const size = normalizeScheduleNoteSize(input?.value);
+  if (!size || !input.checkValidity()) {
+    if (elements.scheduleNoteFormatStatus) elements.scheduleNoteFormatStatus.textContent = "Bitte eine Schriftgröße von 4 bis 72 pt in 0,1-pt-Schritten eingeben.";
+    input?.setAttribute("aria-invalid", "true");
+    input?.focus();
+    return;
+  }
+  input.removeAttribute("aria-invalid");
+  input.value = size;
+  formatScheduleNoteSelection("size", size);
+}
+
+function openScheduleNoteContextMenu(event) {
+  const range = scheduleNoteSelectedRange();
+  if (!range?.length || !elements.scheduleNoteContextMenu) return;
+  event.preventDefault();
+  event.stopPropagation();
+  scheduleNoteSelection = { ...range };
+  scheduleNoteContextSelection = { ...range };
+  const menu = elements.scheduleNoteContextMenu, frame = elements.scheduleNoteEditorFrame;
+  menu.classList.remove("hidden");
+  updateScheduleNoteFormattingControls();
+  const bounds = frame.getBoundingClientRect();
+  const scaleX = bounds.width / frame.offsetWidth || 1, scaleY = bounds.height / frame.offsetHeight || 1;
+  const keyboard = !event.clientX && !event.clientY;
+  const left = keyboard ? 12 : (event.clientX - bounds.left) / scaleX;
+  const top = keyboard ? 48 : (event.clientY - bounds.top) / scaleY;
+  // Coordinates are bounded numeric values from this editor's own pointer event.
+  menu.style.left = `${Math.max(4, Math.min(left, frame.clientWidth - menu.offsetWidth - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(top, frame.clientHeight - menu.offsetHeight - 4))}px`;
+}
+
+function bindScheduleNoteEditorEvents() {
+  if (scheduleNoteEditorEventsBound) return;
+  scheduleNoteEditorEventsBound = true;
+  for (const panel of [elements.scheduleNoteToolbar, elements.scheduleNoteContextMenu].filter(Boolean)) {
+    panel.addEventListener("pointerdown", event => {
+      const range = scheduleNoteQuill?.getSelection();
+      if (range) scheduleNoteSelection = { index: range.index, length: range.length };
+      if (event.target.closest("button")) event.preventDefault();
+    });
+    panel.addEventListener("click", event => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      if (button.dataset.noteFormat) formatScheduleNoteSelection(button.dataset.noteFormat);
+      if (button.dataset.noteSizeApply !== undefined) applyScheduleNoteFontSize(panel.querySelector("input[data-note-size]"));
+      if (button.dataset.noteContextClose !== undefined) closeScheduleNoteContextMenu({ restoreFocus: true });
+    });
+    panel.querySelector("input[data-note-size]")?.addEventListener("keydown", event => {
+      if (event.key === "Enter") { event.preventDefault(); applyScheduleNoteFontSize(event.target); }
+    });
+  }
+  scheduleNoteQuill.root.addEventListener("contextmenu", openScheduleNoteContextMenu);
+  scheduleNoteQuill.root.addEventListener("keydown", event => {
+    if (event.key === "ContextMenu" || event.key === "F10" && event.shiftKey) openScheduleNoteContextMenu(event);
+  });
+  elements.scheduleNoteModal.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !elements.scheduleNoteContextMenu.classList.contains("hidden")) {
+      event.preventDefault(); event.stopPropagation(); closeScheduleNoteContextMenu({ restoreFocus: true });
+    }
+  });
+  elements.scheduleNoteModal.addEventListener("close", () => { closeScheduleNoteContextMenu(); scheduleNoteSelection = null; });
+  document.addEventListener("pointerdown", event => {
+    if (!elements.scheduleNoteContextMenu.contains(event.target)) closeScheduleNoteContextMenu();
+  });
+  elements.scheduleNoteModal.querySelector("form")?.addEventListener("scroll", () => closeScheduleNoteContextMenu());
+}
 
 function stripEmoji(value) {
   return String(value || "")
@@ -41027,17 +41194,32 @@ function sanitizeScheduleNoteEditor() {
     );
     return;
   }
-  const before = editorRoot.innerHTML;
-  const after = stripEmoji(before);
-  if (before !== after) {
-    if (scheduleNoteQuill) {
-      const selection = scheduleNoteQuill.getSelection();
-      scheduleNoteSanitizing = true;
-      scheduleNoteQuill.clipboard.dangerouslyPasteHTML(after);
-      if (selection) scheduleNoteQuill.setSelection(Math.min(selection.index, scheduleNoteQuill.getLength()), 0, "silent");
-      scheduleNoteSanitizing = false;
+  const before = scheduleNoteQuill.getContents();
+  const clean = cleanScheduleNoteDelta(before);
+  const change = before.diff(clean);
+  if (!change.ops.length) return;
+  const selection = scheduleNoteSelectedRange();
+  const adjust = offset => stripEmoji(scheduleNoteQuill.getText(0, offset)).length;
+  const range = selection ? { index: adjust(selection.index), length: adjust(selection.index + selection.length) - adjust(selection.index) } : null;
+  scheduleNoteSanitizing = true;
+  try {
+    // Change text in the Delta, never reparse serialized attributes. Formatting
+    // and both ends of a selection survive the removal of unsupported glyphs.
+    scheduleNoteQuill.updateContents(change, "user");
+    if (range) {
+      scheduleNoteSelection = range;
+      scheduleNoteQuill.setSelection(range.index, range.length, "silent");
     }
+  } finally { scheduleNoteSanitizing = false; }
+}
+
+function cleanScheduleNoteDelta(delta) {
+  const Delta = window.Quill.import("delta"), clean = new Delta();
+  for (const operation of delta.ops) if (typeof operation.insert === "string") {
+    const text = stripEmoji(operation.insert);
+    if (text) clean.insert(text, operation.attributes);
   }
+  return clean;
 }
 
 function scheduleNotePlainText() {
@@ -41045,19 +41227,25 @@ function scheduleNotePlainText() {
 }
 
 function scheduleNoteHtml() {
-  const html = stripEmoji(scheduleNoteQuill?.root?.innerHTML || elements.scheduleNoteEditor?.innerHTML || "").trim();
+  const html = String(scheduleNoteQuill?.root?.innerHTML || elements.scheduleNoteEditor?.innerHTML || "").trim();
   return /^<p><br><\/p>$/i.test(html) ? "" : html;
 }
 
 function setScheduleNoteHtml(html) {
-  const cleanHtml = stripEmoji(html || "");
   if (scheduleNoteQuill) {
     scheduleNoteSanitizing = true;
-    scheduleNoteQuill.setText("");
-    if (cleanHtml) scheduleNoteQuill.clipboard.dangerouslyPasteHTML(cleanHtml);
-    scheduleNoteSanitizing = false;
+    try {
+      const contents = scheduleNoteQuill.clipboard.convert({ html: String(html || "") });
+      scheduleNoteQuill.setContents(cleanScheduleNoteDelta(contents), "silent");
+      scheduleNoteQuill.history.clear();
+      scheduleNoteSelection = { index: 0, length: 0 };
+      scheduleNoteContextSelection = null;
+      updateScheduleNoteFormattingControls();
+    } finally { scheduleNoteSanitizing = false; }
   } else if (elements.scheduleNoteEditor) {
-    elements.scheduleNoteEditor.innerHTML = cleanHtml;
+    // A missing bundled editor must not activate stored markup in a fallback.
+    const parsed = new DOMParser().parseFromString(String(html || ""), "text/html");
+    elements.scheduleNoteEditor.textContent = stripEmoji(parsed.body.textContent || "");
   }
 }
 
@@ -41071,15 +41259,29 @@ function updateScheduleNoteCounter() {
       elements.scheduleNoteEditor.innerText = text.slice(0, scheduleNoteMaxLength);
     }
   }
-  elements.scheduleNoteCounter.textContent = `${Math.min(text.length, scheduleNoteMaxLength)}/${scheduleNoteMaxLength} Zeichen · Smileys werden für schlanke PDFs automatisch entfernt.`;
+  elements.scheduleNoteCounter.textContent = `${Math.min(text.length, scheduleNoteMaxLength)}/${scheduleNoteMaxLength} Zeichen · Schriftgrößen werden im PDF in Punkten übernommen. Smileys werden entfernt.`;
+  updateScheduleNoteFormattingControls();
+}
+
+function scheduleNoteInitialHtml(note) {
+  if (String(note.note_html || "").trim()) return note.note_html;
+  let html = escapeHtml(note.note_text || "").replace(/\n/g, "<br>");
+  if (!html) return "";
+  if (note.bold) html = `<b>${html}</b>`;
+  if (note.italic) html = `<i>${html}</i>`;
+  if (note.underline) html = `<u>${html}</u>`;
+  const size = normalizeScheduleNoteSize(note.font_size);
+  return size ? `<span data-size="${size}">${html}</span>` : html;
 }
 
 function openScheduleNoteModal() {
   if (guardScheduleEditing()) return;
-  initScheduleNoteEditor();
+  if (!initScheduleNoteEditor()) { showToast("Der Texteditor ist noch nicht verfügbar. Bitte die Seite neu laden.", true); return; }
   const note = state.data.scheduleNote || {};
   elements.scheduleNoteForm.reset();
-  setScheduleNoteHtml(note.note_html || escapeHtml(note.note_text || "").replace(/\n/g, "<br>"));
+  closeScheduleNoteContextMenu();
+  if (elements.scheduleNoteFormatStatus) elements.scheduleNoteFormatStatus.textContent = "";
+  setScheduleNoteHtml(scheduleNoteInitialHtml(note));
   elements.deleteScheduleNoteButton.classList.toggle("hidden", !note.note_text);
   updateScheduleNoteCounter();
   elements.scheduleNoteModal.showModal();
@@ -41087,25 +41289,51 @@ function openScheduleNoteModal() {
 }
 
 function initScheduleNoteEditor() {
-  if (!elements.scheduleNoteEditor || scheduleNoteQuill || !window.Quill) return;
-  const Size = window.Quill.import("attributors/class/size");
-  Size.whitelist = ["small", "large"];
-  window.Quill.register(Size, true);
+  if (scheduleNoteQuill) return true;
+  if (!elements.scheduleNoteEditor || !window.Quill) return false;
+  const Parchment = window.Quill.import("parchment");
+  class ScheduleNotePointSize extends Parchment.ClassAttributor {
+    add(node, value) {
+      const size = normalizeScheduleNoteSize(value);
+      if (!size) return false;
+      this.remove(node);
+      node.classList.add(`ql-size-${size.replace(".", "_")}pt`);
+      node.setAttribute("data-size", size);
+      return true;
+    }
+    remove(node) { super.remove(node); node.removeAttribute("data-size"); }
+    value(node) { return scheduleNoteSizeFromNode(node) || ""; }
+  }
+  window.Quill.register(new ScheduleNotePointSize("size", "ql-size", { scope: Parchment.Scope.INLINE }), true);
   scheduleNoteQuill = new window.Quill(elements.scheduleNoteEditor, {
     theme: "snow",
     placeholder: "z. B. Bitte Schaufensteraktion beachten",
     formats: ["bold", "italic", "underline", "size"],
     modules: {
-      toolbar: "#scheduleNoteToolbar",
+      toolbar: false,
       clipboard: { matchVisual: false },
     },
   });
+  const Delta = window.Quill.import("delta");
+  scheduleNoteQuill.clipboard.addMatcher("SPAN", (node, delta) => {
+    const size = scheduleNoteSizeFromNode(node);
+    return size ? delta.compose(new Delta().retain(delta.length(), { size })) : delta;
+  });
   scheduleNoteQuill.on("text-change", updateScheduleNoteCounter);
+  scheduleNoteQuill.on("selection-change", range => {
+    if (range) scheduleNoteSelection = { index: range.index, length: range.length };
+    updateScheduleNoteFormattingControls();
+  });
+  bindScheduleNoteEditorEvents();
+  return true;
 }
 
 async function saveScheduleNote(event) {
   event.preventDefault();
   if (guardScheduleEditing()) return;
+  // Point-size fields are commands, not stored fields. Apply validates them;
+  // saving serializes only the already accepted editor document, even when a
+  // discarded draft value remains in the hidden context panel.
   sanitizeScheduleNoteEditor();
   try {
     await api("/api/schedule-note", {

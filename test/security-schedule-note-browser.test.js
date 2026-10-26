@@ -61,3 +61,30 @@ test('fallback note editor removes text emoji without reparsing attributes or lo
     }), true);
   } finally { await browser.close(); }
 });
+
+test('real Quill note controls retain mixed point sizes, pointer selections, undo and saved formatting under a strict local CSP', {
+  skip: process.env.GP_SECURITY_BROWSER_TEST !== '1', timeout: 90000,
+}, async t => {
+  const { chromium } = require(process.env.GP_BROWSER_TEST_MODULE || 'playwright');
+  const { startScheduleNoteBrowserFixture, runScheduleNoteBrowserCases } = require('../test-support/schedule-note-browser-harness');
+  const fixture = await startScheduleNoteBrowserFixture();
+  let browser;
+  t.after(async () => { await browser?.close(); await fixture.close(); });
+  browser = await chromium.launch({ headless: true,
+    ...(process.env.GP_BROWSER_EXECUTABLE ? { executablePath: process.env.GP_BROWSER_EXECUTABLE } : {}),
+    args: ['--no-first-run', '--disable-default-apps', '--disable-background-networking'],
+  });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, serviceWorkers: 'block' });
+  const page = await context.newPage(), external = [], errors = [];
+  await context.route('**/*', route => {
+    if (route.request().url().startsWith(fixture.url + '/')) return route.continue();
+    external.push(route.request().url()); return route.abort();
+  });
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(fixture.url + '/');
+  const result = await runScheduleNoteBrowserCases(page);
+  assert.equal(result.cases.length, 10);
+  assert.deepEqual(errors, []); assert.deepEqual(fixture.errors, []); assert.deepEqual(external, []);
+  assert.deepEqual(await page.evaluate(() => window.__noteViolations), result.expectedNegativeCspViolations);
+  t.diagnostic(`${browser.version()}: ${result.cases.length} real Quill interaction groups; loopback only; strict local CSP`);
+});

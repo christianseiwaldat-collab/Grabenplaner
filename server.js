@@ -1,6 +1,8 @@
 const express = require("express");
 const { preferredDaysOff, preferredDaysLimit, validatePreferredDays, preferredDayCost, protectedPersonnelName } = require("./lib/employee-preferences");
 const PDFDocument = require("pdfkit");
+const scheduleNoteRichText = require("./lib/schedule-note-rich-text");
+const { schedulePdfDayStatus } = require("./lib/schedule-pdf-day-status");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -23585,42 +23587,11 @@ function decodeBasicEntities(value) {
 }
 
 function textFromScheduleNoteHtml(html) {
-  return decodeBasicEntities(
-    String(html || "")
-      .replace(/<\/(div|p)>/gi, "\n")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<[^>]*>/g, ""),
-  )
-    .replace(/\u00a0/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return scheduleNoteRichText.plainText(html);
 }
 
 function sanitizeScheduleNoteHtml(input) {
-  let html = stripEmoji(String(input || ""));
-  html = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "");
-  html = html.replace(/<span[^>]*class\s*=\s*["'][^"']*\bql-cursor\b[^"']*["'][^>]*>[\s\S]*?<\/span>/gi, "");
-  html = html.replace(/<[^>]*>/g, (tag) => {
-    const lower = tag.toLowerCase();
-    if (/^<(b|strong)(\s[^>]*)?>$/.test(lower)) return "<b>";
-    if (/^<\/(b|strong)>$/.test(lower)) return "</b>";
-    if (/^<(i|em)(\s[^>]*)?>$/.test(lower)) return "<i>";
-    if (/^<\/(i|em)>$/.test(lower)) return "</i>";
-    if (/^<u(\s[^>]*)?>$/.test(lower)) return "<u>";
-    if (/^<\/u>$/.test(lower)) return "</u>";
-    if (/^<br\s*\/?>$/.test(lower)) return "<br>";
-    if (/^<(div|p)(\s[^>]*)?>$/.test(lower)) return "<div>";
-    if (/^<\/(div|p)>$/.test(lower)) return "</div>";
-    if (/^<span\b/i.test(lower)) {
-      const size = lower.match(/data-size\s*=\s*["']?(small|normal|large)["']?/i)?.[1]
-        || lower.match(/class\s*=\s*["'][^"']*\bql-size-(small|large)\b/i)?.[1]
-        || "normal";
-      return `<span data-size="${size}">`;
-    }
-    if (/^<\/span>$/.test(lower)) return "</span>";
-    return "";
-  });
-  return html.trim();
+  return scheduleNoteRichText.sanitizedHtml(input);
 }
 
 async function getScheduleNote(weekStart, context) {
@@ -23635,7 +23606,7 @@ async function getScheduleNote(weekStart, context) {
     department_key: row.department_key,
     week_start: row.week_start,
     note_text: row.note_text,
-    note_html: row.note_html || "",
+    note_html: scheduleNoteRichText.storedHtml(row),
     font_size: row.font_size,
     bold: Boolean(row.bold),
     italic: Boolean(row.italic),
@@ -23653,10 +23624,14 @@ async function validateScheduleNote(body, actor = null) {
     actor,
     context.locationId,
   );
-  const noteHtml = sanitizeScheduleNoteHtml(body.noteHtml || "");
-  const noteText = stripEmoji(
-    textFromScheduleNoteHtml(noteHtml) || String(body.noteText || body.text || ""),
-  ).trim();
+  let noteHtml;
+  try { noteHtml = sanitizeScheduleNoteHtml(body.noteHtml || ""); }
+  catch (error) {
+    if (error instanceof scheduleNoteRichText.ScheduleNoteValidationError) throw httpError(400, error.message, error.code);
+    throw error;
+  }
+  const formattedText = textFromScheduleNoteHtml(noteHtml);
+  const noteText = stripEmoji(formattedText || String(body.noteText || body.text || "")).trim();
   if (!noteText) throw httpError(400, "Bitte eine Bemerkung eingeben.");
   if (noteText.length > scheduleNoteMaxLength) {
     throw httpError(400, `Die Bemerkung ist zu lang. Maximal ${scheduleNoteMaxLength} Zeichen.`);
@@ -23665,7 +23640,7 @@ async function validateScheduleNote(body, actor = null) {
     weekStart,
     context,
     noteText,
-    noteHtml: noteHtml || noteText,
+    noteHtml: formattedText ? noteHtml : scheduleNoteRichText.escape(noteText).replace(/\n/g, "<br>"),
     fontSize: "medium",
     bold: 0,
     italic: 0,
@@ -64281,125 +64256,47 @@ function drawVacationPdf(plan, selection, response, createdAt = new Date()) {
 }
 
 function scheduleNoteFontName(note) {
-  if (note.bold && note.italic) return "Helvetica-BoldOblique";
-  if (note.bold) return "Helvetica-Bold";
-  if (note.italic) return "Helvetica-Oblique";
-  return "Helvetica";
+  return scheduleNoteRichText.font(note);
 }
 
 function scheduleNoteFontSize(note) {
-  return { small: 5.7, medium: 6.4, large: 7.2 }[note.font_size] || 6.4;
+  return scheduleNoteRichText.pointSize(note.font_size) ?? scheduleNoteRichText.DEFAULT_SIZE;
 }
 
 function scheduleNoteStyleFont(style) {
-  if (style.bold && style.italic) return "Helvetica-BoldOblique";
-  if (style.bold) return "Helvetica-Bold";
-  if (style.italic) return "Helvetica-Oblique";
-  return "Helvetica";
+  return scheduleNoteRichText.font(style);
 }
 
 function scheduleNoteStyleSize(style) {
-  return { small: 5.7, normal: 6.4, large: 7.2 }[style?.size || "normal"] || 6.4;
+  return scheduleNoteRichText.pointSize(style?.size) ?? scheduleNoteRichText.DEFAULT_SIZE;
 }
 
 function parseScheduleNoteRichSegments(note) {
-  const source = note.note_html ? sanitizeScheduleNoteHtml(note.note_html) : "";
-  if (!source) {
-    return [
-      {
-        text: stripEmoji(note.note_text || ""),
-        bold: Boolean(note.bold),
-        italic: Boolean(note.italic),
-        underline: Boolean(note.underline),
-        size: note.font_size === "large" ? "large" : note.font_size === "small" ? "small" : "normal",
-      },
-    ];
-  }
-  const segments = [];
-  const style = { bold: false, italic: false, underline: false, size: "normal" };
-  const stack = [];
-  const parts = source.split(/(<[^>]+>)/g).filter((part) => part !== "");
-  function pushText(text) {
-    const decoded = stripEmoji(decodeBasicEntities(text).replace(/\u00a0/g, " "));
-    if (!decoded) return;
-    segments.push({ text: decoded, ...style });
-  }
-  function pushBreak() {
-    if (segments.length && segments[segments.length - 1].text === "\n") return;
-    segments.push({ text: "\n", ...style });
-  }
-  for (const part of parts) {
-    if (!part.startsWith("<")) {
-      pushText(part);
-      continue;
-    }
-    const tag = part.toLowerCase();
-    if (tag === "<br>" || tag === "</div>" || tag === "</p>") {
-      pushBreak();
-      continue;
-    }
-    if (tag === "<div>" || tag === "<p>") continue;
-    if (tag === "<b>" || tag === "<strong>") { stack.push({ ...style }); style.bold = true; continue; }
-    if (tag === "<i>" || tag === "<em>") { stack.push({ ...style }); style.italic = true; continue; }
-    if (tag === "<u>") { stack.push({ ...style }); style.underline = true; continue; }
-    if (tag.startsWith("<span")) {
-      stack.push({ ...style });
-      style.size = tag.match(/data-size="(small|normal|large)"/)?.[1] || style.size;
-      continue;
-    }
-    if (["</b>", "</strong>", "</i>", "</em>", "</u>", "</span>"].includes(tag)) {
-      const previous = stack.pop();
-      if (previous) Object.assign(style, previous);
-    }
-  }
-  return segments.filter((segment, index) =>
-    segment.text !== "\n" || (index > 0 && index < segments.length - 1),
-  );
+  return scheduleNoteRichText.richSegments(note);
 }
 
 function drawScheduleNoteRichText(doc, note, x, y, width, height) {
-  const segments = parseScheduleNoteRichSegments(note);
-  const maxY = y + height;
-  let cursorX = x;
-  let cursorY = y;
-  const lineGap = 1.2;
-  function lineHeightFor(size) {
-    const lineHeight = scheduleNoteStyleSize({ size }) * 1.35 + lineGap;
-    return Number.isFinite(lineHeight) ? lineHeight : 9.8;
-  }
-  function nextLine(size = "normal") {
-    cursorX = x;
-    cursorY += lineHeightFor(size);
-    return cursorY <= maxY;
-  }
-  for (const segment of segments) {
-    const tokens = segment.text === "\n" ? ["\n"] : segment.text.split(/(\s+)/).filter((token) => token !== "");
-    for (const token of tokens) {
-      const size = scheduleNoteStyleSize(segment);
-      if (token === "\n") {
-        if (!nextLine(segment.size)) return;
-        continue;
-      }
-      doc.font(scheduleNoteStyleFont(segment)).fontSize(size);
-      const measuredWidth = doc.widthOfString(token);
-      const tokenWidth = Number.isFinite(measuredWidth) ? measuredWidth : 0;
-      if (cursorX > x && cursorX + tokenWidth > x + width) {
-        if (!nextLine(segment.size)) return;
-      }
-      if (cursorY + size > maxY) return;
-      if (![cursorX, cursorY, size].every(Number.isFinite)) return;
-      doc
-        .fillColor("#1e252b")
-        .font(scheduleNoteStyleFont(segment))
-        .fontSize(size)
-        .text(token, cursorX, cursorY, {
-          width: Math.max(1, tokenWidth + 1),
-          lineBreak: false,
-          underline: Boolean(segment.underline),
-        });
-      cursorX += tokenWidth;
-    }
-  }
+  const layout = scheduleNoteRichText.layout(doc, note, width);
+  const pages = scheduleNoteRichText.paginate(layout.lines, height, 458);
+  scheduleNoteRichText.draw(doc, pages[0], x, y);
+  return { layout, pages };
+}
+
+function drawScheduleNoteContinuationPages(doc, schedule, pages, createdAt) {
+  const left = 22, width = 797.89;
+  pages.forEach((lines, index) => {
+    doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+    doc.fillColor("#142033").font("Helvetica-Bold").fontSize(15).text(
+      `Besondere Bemerkung · Fortsetzung ${index + 1}/${pages.length}`, left, 18, { width });
+    doc.fillColor("#677581").font("Helvetica").fontSize(7.2).text(
+      `${schedule.settings.pdf_title} · KW ${schedule.calendarWeek} · Woche ab ${formatDateGerman(schedule.weekStart)}`,
+      left, 40, { width });
+    doc.roundedRect(left, 58, width, 498, 4).fillAndStroke("#f7f9f8", "#c8d1cd");
+    scheduleNoteRichText.draw(doc, lines, left + 8, 69);
+    doc.fillColor("#6b7684").font("Helvetica-Bold").fontSize(5.7).text(
+      `Dienstplan erstellt mit: ${APP_NAME} ${APP_VERSION_LABEL}`, left, 571);
+    doc.font("Helvetica").text(pdfFooterContact(schedule.settings, createdAt), 541.89, 571, { width: 278, align: "right" });
+  });
 }
 
 async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date()) {
@@ -64435,6 +64332,7 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
   const employeeHeaderY = dayHeaderY + dayHeaderHeight;
   const employeeHeaderHeight = 28;
   const gridTop = employeeHeaderY + employeeHeaderHeight + 10;
+  const scheduleNote = schedule.scheduleNote?.note_text?.trim() ? schedule.scheduleNote : null;
   const gridBottom = 438;
   const gridHeight = gridBottom - gridTop;
   const timedOptionStarts = schedule.weekOptions
@@ -64734,13 +64632,12 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
       .stroke();
   }
 
-  const remarksY = 454;
+  const remarksY = gridBottom + 16;
   const remarkColumns = [
     { key: "leave", title: "Urlaube / Zeitausgleich" },
     { key: "school", title: "Schule / Schulungen" },
     { key: "other", title: "Bemerkungen / Sonderfälle" },
   ];
-  const scheduleNote = schedule.scheduleNote?.note_text?.trim() ? schedule.scheduleNote : null;
   const remarkGap = 12;
   const remarkColumnCount = scheduleNote ? 4 : 3;
   const remarkColumnWidth = (pageWidth - left - right - remarkGap * (remarkColumnCount - 1)) / remarkColumnCount;
@@ -64784,15 +64681,21 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
     }
   });
 
+  let noteContinuation = [];
   if (scheduleNote) {
-    const x = left + 3 * (remarkColumnWidth + remarkGap);
-    const boxY = remarksY;
-    const boxHeight = 101;
+    const x = left + 3 * (remarkColumnWidth + remarkGap), boxY = remarksY, boxHeight = 101;
     doc.roundedRect(x, boxY, remarkColumnWidth, boxHeight, 6).fillAndStroke("#fff6cf", "#111111");
-    doc.fillColor("#142033").font("Helvetica-Bold").fontSize(8.1).text("Besondere Bemerkung", x + 8, boxY + 8, {
-      width: remarkColumnWidth - 16,
-    });
-    drawScheduleNoteRichText(doc, scheduleNote, x + 8, boxY + 23, remarkColumnWidth - 16, boxHeight - 31);
+    doc.fillColor("#142033").font("Helvetica-Bold").fontSize(8.1).text("Besondere Bemerkung", x + 8, boxY + 8, { width: remarkColumnWidth - 16 });
+    const rich = scheduleNoteRichText.layout(doc, scheduleNote, remarkColumnWidth - 16);
+    const fits = rich.lines.reduce((height, line) => height + line.height, 0) <= boxHeight - 31;
+    if (fits) scheduleNoteRichText.draw(doc, rich.lines, x + 8, boxY + 23);
+    else {
+      const wide = scheduleNoteRichText.layout(doc, scheduleNote, pageWidth - left - right - 16);
+      noteContinuation = scheduleNoteRichText.paginate(wide.lines, 458, 458);
+      doc.fillColor("#68736e").font("Helvetica").fontSize(8).text(
+        "Die vollständige formatierte Bemerkung steht auf den folgenden Bemerkungsseiten.",
+        x + 8, boxY + 25, { width: remarkColumnWidth - 16 });
+    }
   }
 
   doc
@@ -64809,6 +64712,7 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
       { width: 278, align: "right" },
     );
 
+  if (noteContinuation.length) drawScheduleNoteContinuationPages(doc, schedule, noteContinuation, createdAt);
   doc.end();
 }
 
@@ -64976,7 +64880,11 @@ function scheduleMatrixCellData(schedule, employee, date, hiddenOptions = new Se
       { type: "more", text: `+${entries.length - prioritized.length} weitere` },
     ];
   }
-  if (!lines.length) lines.push({ type: "empty", text: "-" });
+  if (!lines.length) {
+    const dayStatus = schedulePdfDayStatus(schedule, date, publicHolidayName);
+    if (dayStatus) lines.push({ type: "day-status", text: dayStatus.label, detail: dayStatus.name, publicHoliday: dayStatus.type === "holiday" });
+    else lines.push({ type: "empty", text: "-" });
+  }
   return {
     options,
     shifts,
@@ -65026,6 +64934,7 @@ function scheduleMatrixEntryHeight(entry, timeFontSize, detailFontSize) {
     );
     return Math.max(24, estimatedLines * (detailFontSize + 2) + 6);
   }
+  if (entry.type === "day-status") return 25;
   if (entry.type === "meeting") return Math.max(9, detailFontSize + 2);
   return 8;
 }
@@ -65138,55 +65047,29 @@ function scheduleMatrixContentRowHeight(schedule, employee, dayCount, timeFontSi
   return Math.ceil(required);
 }
 
-function scheduleMatrixNoteLayout(doc, noteText, width, mainHeight = 68) {
-  const columns = 3;
-  const gap = 12;
-  const padding = 6;
-  const fontSize = 6.2;
-  const lineHeight = 7.8;
-  const columnWidth = (width - padding * 2 - gap * (columns - 1)) / columns;
-  doc.font("Helvetica").fontSize(fontSize);
-  const lines = wrapScheduleMatrixNote(
-    noteText,
-    (value) => doc.widthOfString(String(value || "")),
-    columnWidth,
-  );
-  const mainLinesPerColumn = Math.max(4, Math.floor((mainHeight - 11 - padding * 2) / lineHeight));
-  const mainPages = paginateScheduleMatrixNote(lines, {
-    columns,
-    linesPerColumn: mainLinesPerColumn,
-  });
-  const mainColumns = mainPages[0];
-  const continuationLines = mainPages.slice(1).flat(2);
-  const continuationLinesPerColumn = 53;
-  const continuationPages = continuationLines.length
-    ? paginateScheduleMatrixNote(continuationLines, { columns, linesPerColumn: continuationLinesPerColumn })
-    : [];
-  return { columns, gap, padding, fontSize, lineHeight, columnWidth, mainColumns, continuationPages };
+function scheduleMatrixNoteLayout(doc, note, width, mainHeight = 68) {
+  const padding = 8;
+  const rich = scheduleNoteRichText.layout(doc, typeof note === "string" ? { note_text: note } : note || {}, width - padding * 2);
+  const pages = scheduleNoteRichText.paginate(rich.lines, Math.max(0, mainHeight - 11 - padding * 2), 458);
+  return { columns: 1, gap: 0, padding, columnWidth: rich.width,
+    mainColumns: [pages[0]], continuationPages: pages.slice(1).map(lines => [lines]) };
 }
 
 function drawScheduleMatrixNoteColumns(doc, columns, x, y, layout) {
-  columns.forEach((lines, columnIndex) => {
-    const columnX = x + layout.padding + columnIndex * (layout.columnWidth + layout.gap);
-    lines.forEach((line, lineIndex) => {
-      doc.fillColor("#35434b").font("Helvetica").fontSize(layout.fontSize).text(
-        line || " ",
-        columnX,
-        y + layout.padding + lineIndex * layout.lineHeight,
-        { width: layout.columnWidth, height: layout.lineHeight, lineBreak: false },
-      );
-    });
-  });
+  scheduleNoteRichText.draw(doc, columns.flat(), x + layout.padding, y + layout.padding);
 }
 
 function drawScheduleMatrixNotesBox(doc, noteText, columns, x, y, width, height, layout, hint = "") {
   doc.fillColor("#253943").font("Helvetica-Bold").fontSize(7.4).text("Bemerkungen", x, y, { width });
   const boxY = y + 11;
   doc.roundedRect(x, boxY, width, height - 11, 4).fillAndStroke("#f7f9f8", "#c8d1cd");
-  if (noteText && columns.some((column) => column.length)) {
+  const hasLines = noteText && columns.some((column) => column.length);
+  if (hasLines) {
     drawScheduleMatrixNoteColumns(doc, columns, x, boxY, layout);
-  } else if (hint) {
-    doc.fillColor("#7c888d").font("Helvetica").fontSize(5.9).text(hint, x + 9, boxY + 9, { width: width - 18 });
+  }
+  if (hint) {
+    doc.fillColor("#7c888d").font("Helvetica").fontSize(5.9).text(hint, hasLines ? x + 120 : x + 9, hasLines ? y + 1 : boxY + 9,
+      { width: hasLines ? width - 120 : width - 18, align: hasLines ? "right" : "left" });
   }
 }
 
@@ -65388,7 +65271,8 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const noteAreaHeight = 64;
   const postTableHeight = 25 + noteAreaHeight + (meetings.length ? 33 : 0);
   const tableBottom = 556 - postTableHeight;
-  const headerHeight = 42;
+  const hasDayStatus = Array.from({ length: dayCount }, (_, index) => schedulePdfDayStatus(schedule, addDays(schedule.weekStart, index), publicHolidayName)).some(Boolean);
+  const headerHeight = hasDayStatus ? 65 : 42;
   const employees = schedule.employees.length ? schedule.employees : [null];
   const tableWidth = pageWidth - left - right;
   const employeeColumnWidth = 148;
@@ -65414,7 +65298,7 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
     + firstPageRowHeights.reduce((sum, height) => sum + height, 0);
   const firstNoteY = firstDataBottom + 7 + (meetings.length ? 33 : 0) + 18;
   const mainNoteHeight = Math.max(noteAreaHeight, 556 - firstNoteY);
-  const noteLayout = scheduleMatrixNoteLayout(doc, scheduleNoteText, tableWidth, mainNoteHeight);
+  const noteLayout = scheduleMatrixNoteLayout(doc, schedule.scheduleNote, tableWidth, mainNoteHeight);
 
   pageRows.forEach((employeesOnPage, pageIndex) => {
     doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
@@ -65462,7 +65346,9 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
       const date = addDays(schedule.weekStart, dayIndex);
       const x = left + employeeColumnWidth + dayIndex * dayWidth;
       const meetingToday = meetings.some((meeting) => meeting.date_from <= date && meeting.date_to >= date);
+      const dayStatus = schedulePdfDayStatus(schedule, date, publicHolidayName);
       doc.fillColor(dayIndex >= 5 ? "#dfe6e8" : "#e8eef1").rect(x, tableTop, dayWidth, headerHeight).fill();
+      if (dayStatus) doc.fillColor(dayStatus.type === "holiday" ? "#f7e8bc" : "#e4e8ea").rect(x, tableTop, dayWidth, headerHeight).fill();
       if (meetingToday) doc.fillColor("#76529a").rect(x, tableTop, dayWidth, 3).fill();
       doc.fillColor("#162635").font("Helvetica-Bold").fontSize(dayCount === 7 ? 11.3 : 12.35).text(
         weekdayNames[dayIndex],
@@ -65482,6 +65368,11 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
         tableTop + 34,
         { width: dayWidth - 10, height: 8, align: "left", lineBreak: false, ellipsis: true },
       );
+      if (dayStatus) {
+        doc.fillColor(dayStatus.type === "holiday" ? "#795415" : "#53616a").font("Helvetica-Bold").fontSize(6.5).text(
+          `${dayStatus.label} · ${dayStatus.name}`, x + 4, tableTop + 44,
+          { width: dayWidth - 8, height: headerHeight - 45, align: "center", lineGap: .3 });
+      }
     }
 
     employeesOnPage.forEach((employee, rowIndex) => {
@@ -65608,6 +65499,12 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
               { width: dayWidth - 14, height: optionFontSize + 2, align: "left", ellipsis: true, lineBreak: false },
             );
             lineY += Math.max(9, detailFontSize + 2);
+          } else if (line.type === "day-status") {
+            doc.fillColor(line.publicHoliday ? "#795415" : "#53616a").font("Helvetica-Bold").fontSize(7).text(
+              line.text, x + 5, lineY, { width: dayWidth - 10, align: "center", lineBreak: false });
+            doc.font("Helvetica").fontSize(6).text(line.detail, x + 5, lineY + 10,
+              { width: dayWidth - 10, height: 16, align: "center", lineGap: .2 });
+            lineY += 25;
           } else {
             doc.fillColor(line.type === "empty" ? "#9aa4aa" : "#66737c").font("Helvetica").fontSize(5.8).text(
               line.text,
@@ -65677,7 +65574,9 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
       tableWidth,
       pageNoteHeight,
       noteLayout,
-      pageIndex === 0 ? "" : "Wochenbemerkung auf der ersten Matrixseite; Feld für Ergänzungen.",
+      pageIndex === 0
+        ? (noteLayout.continuationPages.length ? "Fortsetzung auf den folgenden Bemerkungsseiten." : "")
+        : "Wochenbemerkung auf der ersten Matrixseite; Feld für Ergänzungen.",
     );
 
     doc.fillColor("#6b7684").font("Helvetica-Bold").fontSize(5.7).text(
