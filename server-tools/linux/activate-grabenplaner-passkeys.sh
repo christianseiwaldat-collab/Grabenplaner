@@ -131,8 +131,10 @@ cleanup() {
     # Both exact pre/post schemas are understood by A. Never downgrade schema,
     # replace credentials or claim the activation passed after a failed step.
     if (( start_attempted == 0 )); then
-      if (( activation_verified == 1 )); then start_same_application activated && recovered=1;
-      else start_same_application && recovered=1; fi
+      # A generic maintenance helper may exit rather than return on failure.
+      # Isolate that exit so timer restoration and the failure receipt still run.
+      if (( activation_verified == 1 )); then ( start_same_application activated ) && recovered=1;
+      else ( start_same_application ) && recovered=1; fi
     fi
     status=1
   fi

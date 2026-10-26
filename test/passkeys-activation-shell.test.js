@@ -11,7 +11,7 @@ const hash = "a".repeat(64), config = "b".repeat(64), backup = "c".repeat(64), p
 
 // This exercises actual shell ordering/traps with synthetic operating adapters.
 // Actual systemd/SQL/updater availability remains a separate Linux qualification.
-for (const scenario of ["success", "stop-failure", "backup-failure", "activation-failure", "committed-failure", "source-changed", "post-state-changed", "active-maintenance", "health-failure", "timer-failure"]) {
+for (const scenario of ["success", "stop-failure", "backup-failure", "activation-failure", "committed-failure", "source-changed", "post-state-changed", "active-maintenance", "start-failure", "recovery-start-failure", "health-failure", "timer-failure"]) {
   test(`explicit schema activation service and timer orchestration: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-activation-shell-"));
     t.after(() => { assert.equal(path.dirname(fs.realpathSync(root)), fs.realpathSync(os.tmpdir())); fs.rmSync(root, { recursive: true, force: true }); });
@@ -21,7 +21,7 @@ const fs=require('node:fs'),[action,manifest,...pins]=process.argv.slice(2),e=pr
 fs.appendFileSync(e,action+'\\n');
 if(action==='activate'){
  require('node:assert/strict').deepEqual(pins,['${config}','${backup}','${pair}','--maintenance-lock-held']);
- if(['activation-failure','committed-failure','source-changed'].includes('${scenario}')){fs.writeFileSync(process.env.FAILED,'1');process.exit(42);}
+ if(['activation-failure','committed-failure','source-changed','recovery-start-failure'].includes('${scenario}')){fs.writeFileSync(process.env.FAILED,'1');process.exit(42);}
  fs.writeFileSync(process.env.FAILED,'activated');
  console.log(JSON.stringify({verified:true,passkeysVerified:true,salesUnchanged:true,sameInstalledApplication:true,
  afterPairIdentitySha256:'${pair}',coreAfter:'newcore',manifestSha256:manifest,configurationSha256:'${config}',backupManifestSha256:'${backup}'}));
@@ -57,7 +57,7 @@ install(){ mkdir -p -- "\${@: -1}"; }
 stat(){ printf '0:0:700\\n'; }
 gp_systemd_unit_exists(){ [[ "$1" != grabenplaner-host-security-rollback.timer ]]; }
 gp_stop_service(){ printf 'stop-app\\n' >> "$EVENTS"; ${scenario === "stop-failure" ? "return 1" : "return 0"}; }
-gp_start_service(){ printf 'start-app\\n' >> "$EVENTS"; }
+gp_start_service(){ printf 'start-app\\n' >> "$EVENTS"; ${["start-failure","recovery-start-failure"].includes(scenario)?"exit 41":"return 0"}; }
 gp_wait_ready(){ printf 'ready:%s\\n' "$1" >> "$EVENTS"; ${scenario === "health-failure" ? "return 1" : "return 0"}; }
 gp_url_reports_ready(){ printf 'live:%s\\n' "$1" >> "$EVENTS"; }
 systemctl(){
