@@ -65230,6 +65230,15 @@ function scheduleMatrixPageRowHeights(employees, availableHeight, minimumHeightF
   return heights;
 }
 
+function scheduleMatrixFirstPageRowsHeight(doc, note, width, availableHeight, minimumHeight, noteAreaHeight) {
+  const rich = scheduleNoteRichText.layout(doc, note || {}, width - 16);
+  const noteHeight = 11 + 16 + rich.lines.reduce((sum, line) => sum + line.height, 0);
+  // The first page's notes take precedence over optional row stretching.
+  // Preserve every row's content minimum and the note's actual point sizes;
+  // text exceeding that physical space still uses the continuation pages.
+  return Math.max(minimumHeight, availableHeight - Math.max(0, noteHeight - noteAreaHeight));
+}
+
 function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const doc = new PDFDocument({
     autoFirstPage: false,
@@ -65293,7 +65302,9 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const availableRowsHeight = tableBottom - tableTop - headerHeight;
   const pageRows = scheduleMatrixPageRows(employees, availableRowsHeight, minimumHeightFor);
   const firstPageRows = pageRows[0];
-  const firstPageRowHeights = scheduleMatrixPageRowHeights(firstPageRows, availableRowsHeight, minimumHeightFor);
+  const firstPageAvailableHeight = scheduleMatrixFirstPageRowsHeight(doc, schedule.scheduleNote, tableWidth,
+    availableRowsHeight, firstPageRows.reduce((sum, employee) => sum + minimumHeightFor(employee), 0), noteAreaHeight);
+  const firstPageRowHeights = scheduleMatrixPageRowHeights(firstPageRows, firstPageAvailableHeight, minimumHeightFor);
   const firstDataBottom = tableTop + headerHeight
     + firstPageRowHeights.reduce((sum, height) => sum + height, 0);
   const firstNoteY = firstDataBottom + 7 + (meetings.length ? 33 : 0) + 18;
@@ -65303,7 +65314,8 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   pageRows.forEach((employeesOnPage, pageIndex) => {
     doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
     const pageEmployeeCount = employeesOnPage.filter(Boolean).length;
-    const rowHeights = scheduleMatrixPageRowHeights(employeesOnPage, availableRowsHeight, minimumHeightFor);
+    const rowHeights = pageIndex === 0 ? firstPageRowHeights
+      : scheduleMatrixPageRowHeights(employeesOnPage, availableRowsHeight, minimumHeightFor);
     const rowOffsets = [0];
     rowHeights.forEach((height) => rowOffsets.push(rowOffsets.at(-1) + height));
     const dataTop = tableTop + headerHeight;
