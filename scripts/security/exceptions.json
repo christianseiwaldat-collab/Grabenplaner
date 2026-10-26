@@ -441,6 +441,16 @@
       "reviewedOn": "2026-10-26",
       "expiresOn": "2026-11-08",
       "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "ebb80f580342b1c1de8ed464c94100ab96940b9de2264f489d48145cad3f09a8",
+      "sourceSha256": "47e10d598747b9098337ca65ea44f327581b40af6b8e2e56277853a4ac7d3f8d",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex: the public before-passkeys-v1 upgrade-fixture opt-in at directory finding line 97 is not a credential. Its literal assignment and location are unchanged from b38 native evidence; the trailing closing brace becomes a comma solely to add the isolated compatibility-fixture opt-in. Compared the complete committed 27858 runner delta. Exact identity and full Git-LF source hash only; existing priority and expiry retained. No human approval or completed new native scan is claimed.",
+      "reviewedOn": "2026-10-26",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
     }
   ]
 }

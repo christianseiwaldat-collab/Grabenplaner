@@ -1,8 +1,28 @@
 "use strict";
 
 const test = require("node:test"), assert = require("node:assert/strict"), crypto = require("node:crypto");
+if (process.env.GP_PASSKEYS_UPGRADE_FIXTURE !== undefined
+  && process.env.GP_PASSKEYS_COMPATIBILITY_NATIVE !== "isolated-clone-v1") {
+  throw Error("PASSKEY_COMPATIBILITY_NATIVE_PHASE_REQUIRED");
+}
 const fixture = require("../test-support/postgresql-migration/passkeys-compatibility-transition-fixture.cjs");
 const original = require("../test-support/postgresql-migration/f0d-core-inspector.json");
+
+test("explicit upgrade qualification rejects a missing or wrong native compatibility opt-in before any SQL", () => {
+  const { spawnSync } = require("node:child_process");
+  for (const phase of ["1", "required"]) for (const optIn of [undefined, "wrong"]) {
+    const environment = { ...process.env, GP_PASSKEYS_UPGRADE_FIXTURE: phase };
+    delete environment.GP_PASSKEYS_COMPATIBILITY_NATIVE;
+    delete environment.NODE_OPTIONS; delete environment.NODE_PATH;
+    if (optIn !== undefined) environment.GP_PASSKEYS_COMPATIBILITY_NATIVE = optIn;
+    const child = spawnSync(process.execPath, ["--no-global-search-paths", __filename], {
+      env: environment, encoding: "utf8", timeout: 5000, maxBuffer: 64 * 1024,
+    });
+    assert.equal(child.error, undefined); assert.equal(child.signal, null); assert.equal(child.status, 1);
+    assert.match(child.stderr, /PASSKEY_COMPATIBILITY_NATIVE_PHASE_REQUIRED/);
+    assert.doesNotMatch(child.stdout, /fresh-pre-passkeys-schema-ready|isolated-passkeys-transition-v1/);
+  }
+});
 
 test("the original installed f0d schema inspector and every reused dependency are separately bound", () => {
   assert.equal(typeof fixture.originalInspector().verifyCoreSchema, "function");
