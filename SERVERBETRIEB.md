@@ -56,6 +56,9 @@ Dienst und Schreiber werden kontrolliert gestoppt; nach dem atomaren App-Tausch 
 Der Bereitschaftstest hat eine eigene Obergrenze von 1500 Sekunden. Bei Fehlern erfolgt eine kontrollierte Rücknahme auf den vorherigen Programmstand mit erneuter Prüfung.
 Ein Versions-/Vertragskonflikt wird nicht umgangen. Gleich-/Altversionen benötigen eine ausdrücklich dokumentierte Ausnahme.
 Produktive Daten, Schlüssel und Sicherungen sind kein austauschbarer Teil des App-Pakets.
+Die erstmalige Passkey-Schemaerweiterung erfolgt getrennt auf einer kompatiblen Vorabversion;
+der normale Updater verändert dieses Schema nicht. Reihenfolge, Sperren, Nachweise und Fehlerbehandlung
+stehen unter [Passkeys: kompatibler Schemaübergang](docs/PASSKEY-SCHEMA-TRANSITION.md).
 Ein ausdrücklich bestätigter Neustart erstellt vorher einen verifizierten Sicherungspunkt.
 Update, Neustart und Hostneustart sind getrennte administrativ freizugebende Vorgänge.
 

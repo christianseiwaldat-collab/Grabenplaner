@@ -8,7 +8,7 @@ async function main(){
  if(passkeysBrowser&&(process.argv.filter(value=>value==='--passkeys-browser').length!==1||!process.argv.includes('--full')||shard!=='1/3'||diagnosticIndex>=0||process.argv.includes('--bootstrap-only')))throw new Error('Passkeys browser qualification requires explicit full shard 1/3');
  const browserCommand=['--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=540000',
   'test/passkey-protocol-browser.test.js','test/passkeys-management-browser.test.js','test/passkey-auth-browser.test.js','test/passkey-application-api.test.js','test/security-reauthentication-ui.test.js'];
- const upgradeCommand=['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=420000','test/passkeys-upgrade-restore-postgresql.test.js'];
+ const upgradeCommand=['--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=420000','test/passkeys-upgrade-restore-postgresql.test.js','test/passkeys-compatibility-transition-postgresql.test.js'];const compatibilityOptIn='isolated-clone-v1';
  const beforePasskeys=process.argv.includes('--bootstrap-before-passkeys');
  if(beforePasskeys&&(!process.argv.includes('--bootstrap-only')||shard||diagnosticIndex>=0||process.argv.includes('--full')||process.argv.includes('--passkeys-browser')))throw new Error('Old passkeys fixture preparation requires unsharded bootstrap-only');
  const diagnosticGroups=Object.freeze({
@@ -41,7 +41,7 @@ async function main(){
  // propagate its opt-in to the ordinary, unchanged application discovery run.
  delete env.GP_WINDOW_BROWSER_TEST;
  delete env.GP_SECURITY_AUTH_BROWSER_TEST;
- delete env.GP_PASSKEYS_UPGRADE_FIXTURE;
+ delete env.GP_PASSKEYS_UPGRADE_FIXTURE;delete env.GP_PASSKEYS_COMPATIBILITY_NATIVE;
  if(diagnosticGroup){
   env.GP_PG_API_DIAGNOSTIC='bounded-errors-v1';
   env.NODE_OPTIONS=(env.NODE_OPTIONS||'')+' --require='+JSON.stringify(path.resolve(__dirname,'../postgresql-api/diagnostic-errors.js'));
@@ -94,7 +94,7 @@ async function main(){
  ...(diagnosticGroup?[['--require','./test-support/postgresql-api/diagnostic-errors.js','--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000',...diagnosticGroups[diagnosticGroup]]]:process.argv.includes('--bootstrap-only')?[]:process.argv.includes('--full')
    ? [['--require','./test-support/postgresql-api/preload.js','--test','--test-concurrency=1','--test-reporter=tap','--test-timeout=180000',...(shard?['--test-shard='+shard]:[])]]
    : [['--test','--test-concurrency=1','test/postgresql-cash-takeover.test.js']])];
- for(const args of commands){const childEnv=args===browserCommand?{...env,GP_WINDOW_BROWSER_TEST:'1',GP_SECURITY_AUTH_BROWSER_TEST:'1'}:args===upgradeCommand?{...env,GP_PASSKEYS_UPGRADE_FIXTURE:'before-passkeys-v1'}:env;const result=spawnSync(process.execPath,args,{env:childEnv,stdio:'inherit'});if(result.status!==0)throw new Error('Synthetic migration qualification failed: '+args[0]);}
+ for(const args of commands){const childEnv=args===browserCommand?{...env,GP_WINDOW_BROWSER_TEST:'1',GP_SECURITY_AUTH_BROWSER_TEST:'1'}:args===upgradeCommand?{...env,GP_PASSKEYS_UPGRADE_FIXTURE:'before-passkeys-v1',GP_PASSKEYS_COMPATIBILITY_NATIVE:compatibilityOptIn}:env;const result=spawnSync(process.execPath,args,{env:childEnv,stdio:'inherit'});if(result.status!==0)throw new Error('Synthetic migration qualification failed: '+args[0]);}
  const outputIndex=process.argv.indexOf('--environment-file');
  if(outputIndex!==-1){
   if(!local||!process.argv.includes('--bootstrap-only'))throw new Error('Fixture environment export is local-bootstrap-only');

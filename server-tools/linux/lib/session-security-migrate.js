@@ -22,8 +22,11 @@ async function main(args = process.argv.slice(2)) {
   if (hash(manifestBytes) !== expectedManifest) throw new Error("PG_SESSION_SECURITY_MIGRATION_MANIFEST");
   const manifest = JSON.parse(manifestBytes);
   require("./deploy-policy").applicationContract(app);
+  const policy = require("./passkeys-release-policy").readPolicy(JSON.parse(fs.readFileSync(app + "/package.json", "utf8")));
   for (const relative of [
     "server-tools/linux/lib/session-security-migrate.js",
+    "server-tools/linux/lib/passkeys-release-policy.js",
+    "lib/passkey-schema-policy.js",
     "lib/persistence/postgresql/core/session-security.js",
     "lib/persistence/postgresql/core/catalog.js",
     "lib/persistence/postgresql/boundary/migrate.js",
@@ -53,22 +56,30 @@ async function main(args = process.argv.slice(2)) {
   const backup = await R.latestBackup(config, { short: true, maximumAgeHours: 1 });
   const before = await R.inspectPair(config), domain = config.domains.find(item => item.domain === "core");
   const client = new (require("pg").Client)(R.url(config, domain));
-  let result, passkeys;
+  let result, passkeys, passkeysState;
   try {
     await client.connect();
     // Keep the canonical deparse context after the migration commits its LOCAL settings.
     await client.query("SET search_path=pg_catalog,gp;SET lock_timeout='5s';SET statement_timeout='30s'");
-    result = await require("../../../lib/persistence/postgresql/core/session-security").migrate(client, { binding: config.binding });
-    passkeys = await require("../../../lib/persistence/postgresql/core/passkeys").migrate(client, { binding: config.binding });
+    // A normal code update never introduces Passkey DDL. The compatible release
+    // can serve either exact schema; the final release requires prior explicit
+    // activation. Requiring the earlier session schema before its idempotent
+    // migration also prevents an unexpected schema change in this bridge.
     await require("../../../lib/persistence/postgresql/boundary/migrate").verifyCoreSchema(client,
-      { requireVocationalSchool: true, requireSessionSecurity: true, requirePasskeys: true });
+      { requireVocationalSchool: true, requireSessionSecurity: true, requirePasskeys: policy === "required" });
+    result = await require("../../../lib/persistence/postgresql/core/session-security").migrate(client, { binding: config.binding });
+    const ledger = await require("../../../lib/persistence/postgresql/core/passkeys").readLedger(client);
+    passkeysState = ledger ? "present" : "absent";
+    passkeys = { applied: false, deferred: !ledger,
+      digest: require("../../../lib/persistence/postgresql/core/passkeys").digest };
   } finally { await client.end(); }
   const after = await R.inspectPair(config);
-  if (before.sales.schemaSha256 !== after.sales.schemaSha256 || before.core.database !== after.core.database) {
+  if (JSON.stringify(before) !== JSON.stringify(after) || result.applied !== false) {
     throw new Error("PG_SESSION_SECURITY_MIGRATION_DOMAIN_DRIFT");
   }
   return { verified: true, appVersion: manifest.appVersion, sourceCommit: manifest.sourceCommit,
-    ...result, passkeys, passkeysVerified: true, backup,
+    ...result, passkeys, passkeysSchemaPolicy: policy, passkeysState,
+    passkeysVerified: passkeysState === "present", schemaUnchanged: true, backup,
     coreBefore: before.core.schemaSha256, coreAfter: after.core.schemaSha256, salesUnchanged: true };
 }
 

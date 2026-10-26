@@ -67,6 +67,10 @@ jobs:
           test/passkeys-migration.test.js
           test/passkeys-browser-tooling.test.js
           test/passkeys-browser-sandbox-location.test.js
+          test/passkeys-release-policy.test.js
+          test/passkeys-application-schema-policy.test.js
+          test/passkeys-schema-activation-cli.test.js
+          test/passkeys-activation-shell.test.js
       - name: Verify application and root maintenance lock transitions
         run: sudo "$(command -v node)" --test --test-name-pattern='root maintenance' test/database-lock.test.js
       - name: Verify original package binding and the root build-account boundary

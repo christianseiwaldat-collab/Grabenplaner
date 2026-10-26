@@ -253,6 +253,9 @@ $packageManager = [string]$packageMetadata.packageManager
 if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?$') { throw 'Die App-Version in package.json ist ungueltig.' }
 if ([string]::IsNullOrWhiteSpace($minimumNode)) { throw 'Die minimale Node.js-Version fehlt in package.json.' }
 if ($packageManager -notmatch '^pnpm@[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Die festgeschriebene pnpm-Version fehlt in package.json.' }
+if ([string]$packageMetadata.grabenplaner.passkeysSchemaPolicy -cnotin @('compatible', 'required')) {
+    throw 'Die quellgebundene Passkey-Schemarichtlinie fehlt oder ist ungueltig.'
+}
 
 $gitMarker = Join-Path $sourceRoot '.git'
 if (-not (Test-Path -LiteralPath $gitMarker)) {
@@ -340,6 +343,10 @@ try {
         'lib\persistence\postgresql\contracts\passkeys-catalog-v1.json',
         'lib\persistence\postgresql\operations\restore-authentication.js',
         'server-tools\linux\lib\session-security-migrate.js',
+        'server-tools\linux\lib\passkeys-release-policy.js',
+        'lib\passkey-schema-policy.js',
+        'server-tools\linux\lib\passkeys-schema-activate.js',
+        'server-tools\linux\activate-grabenplaner-passkeys.sh',
         'public\passkeys.html',
         'public\passkeys.js',
         'public\passkeys.css',

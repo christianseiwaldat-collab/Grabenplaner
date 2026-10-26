@@ -761,6 +761,24 @@ test("Planning protection qualifies only its synthetic integration tests and gra
   }
 });
 
+test("Passkey schema activation grants a PostgreSQL driver only to the exact installed maintenance CLI", () => {
+  const cli = "server-tools/linux/lib/passkeys-schema-activate.js";
+  const adjacent = ["server-tools/linux/lib/passkeys-release-policy.js", "server-tools/linux/lib/passkeys-other-activate.js",
+    "lib/passkey-management.js", "lib/persistence/postgresql/core/passkeys.js"];
+  assert.deepEqual(architectureBoundaryViolationsForText(cli, fs.readFileSync(path.join(root, cli), "utf8")), []);
+  for (const file of [cli, ...adjacent]) {
+    for (const code of ["const driver=require('pg');", "const driver=await import('pg');"]) {
+      assert.equal(architectureBoundaryViolationsForText(file, code).some(entry => entry.kind === "postgresql-driver-import"), file !== cli, file);
+    }
+    assert.equal(architectureBoundaryViolationsForText(file, "const driver=require('node:" + "sqlite');")
+      .some(entry => entry.kind === "sqlite-driver-import-outside-boundary"), true, file);
+  }
+  const wrapper="server-tools/linux/activate-grabenplaner-passkeys.sh";
+  assert.deepEqual(architectureBoundaryViolationsForText(wrapper,fs.readFileSync(path.join(root,wrapper),"utf8")),[]);
+  assert.equal(architectureBoundaryViolationsForText("server-tools/linux/activate-other-passkeys.sh",'[[ "${DB_PROVIDER:-}" == postgresql ]]')
+    .some(entry=>entry.kind==="provider-runtime-config-outside-boundary"),true);
+});
+
 test("Article tools classify exact persistence modules without granting drivers or unrelated statement declarations", () => {
   const namedSlices = [
     "lib/persistence/repositories/sales-article-local-notes.js",

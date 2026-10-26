@@ -49,6 +49,8 @@ test("release/export inventory includes passkey implementation and its separate 
     "lib/persistence/statements/passkeys.js", "lib/persistence/repositories/passkeys.js", "lib/persistence/postgresql/core/passkeys.js",
     "lib/persistence/postgresql/core/passkeys-catalog.js", "lib/persistence/postgresql/contracts/passkeys-catalog-v1.json",
     "lib/persistence/postgresql/operations/restore-authentication.js", "server-tools/linux/lib/session-security-migrate.js",
+    "server-tools/linux/lib/passkeys-release-policy.js", "server-tools/linux/lib/passkeys-schema-activate.js",
+    "server-tools/linux/activate-grabenplaner-passkeys.sh",
     "public/passkeys.html", "public/passkeys.js", "public/passkeys.css", "public/passkey-auth.js", "public/passkey-auth.css"];
   const verifier = fs.readFileSync(path.join(ROOT, "server-tools/linux/lib/verify-package.js"), "utf8");
   const builder = fs.readFileSync(path.join(ROOT, "server-tools/package/New-GrabenplanerLinuxServerPackage.ps1"), "utf8");

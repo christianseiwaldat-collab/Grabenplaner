@@ -2,7 +2,7 @@
 
 ## v0.92.94 Beta · Quellstand
 
-Optionale Passkeys und verbesserte Sicherheitsprüfungen.
+Passkey-Vorbereitung mit gesonderter Schemaaktivierung und verbesserte Sicherheitsprüfungen.
 Schnellere Datenübernahmen bei geänderten Historien.
 Punktgenaue Bemerkungen und Feiertagsanzeige im Dienstplan-PDF.
 Verbesserte Personal- und Verkaufsfunktionen.

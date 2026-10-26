@@ -464,6 +464,9 @@ function main() {
   if (JSON.stringify(metadata.grabenplaner?.databaseProviders) !== '["postgresql"]') {
     throw new Error("Das Serverpaket muss ausschliesslich PostgreSQL als Betriebsdatenbank freigeben.");
   }
+  if (!["compatible", "required"].includes(metadata.grabenplaner?.passkeysSchemaPolicy)) {
+    throw new Error("Die quellgebundene Passkey-Schemarichtlinie fehlt oder ist ungueltig.");
+  }
   if (!hardeningContractMatches(manifest.hardeningModule, hardeningModuleContract)) {
     throw new Error("Der Hardening-Fingerprint im Paketmanifest stimmt nicht mit dem separaten Modulvertrag ueberein.");
   }
@@ -478,11 +481,15 @@ function main() {
     'lib/persistence/postgresql/operations/cutover.js',
     'lib/persistence/postgresql/contracts/manifest.json',
     'lib/passkey-protocol.js', 'lib/passkey-management.js', 'lib/passkey-authentication.js',
+    'lib/passkey-schema-policy.js',
     'lib/persistence/statements/passkeys.js', 'lib/persistence/repositories/passkeys.js',
     'lib/persistence/postgresql/core/passkeys.js', 'lib/persistence/postgresql/core/passkeys-catalog.js',
     'lib/persistence/postgresql/contracts/passkeys-catalog-v1.json',
     'lib/persistence/postgresql/operations/restore-authentication.js',
     'server-tools/linux/lib/session-security-migrate.js',
+    'server-tools/linux/lib/passkeys-release-policy.js',
+    'server-tools/linux/lib/passkeys-schema-activate.js',
+    'server-tools/linux/activate-grabenplaner-passkeys.sh',
     'public/passkeys.html', 'public/passkeys.js', 'public/passkeys.css', 'public/passkey-auth.js', 'public/passkey-auth.css',
     'server-tools/linux/recovery/lib/postgresql-application-smoke.js',
     'server-tools/linux/recovery/lib/postgresql-recovery-worker.js',

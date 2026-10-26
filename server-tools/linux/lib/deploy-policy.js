@@ -64,7 +64,8 @@ function applicationContract(root) {
   critical.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   return { appVersion: metadata.version, fingerprint: digest({ critical,
     runtime: { engines: metadata.engines, packageManager: metadata.packageManager, dependencies: metadata.dependencies,
-      databaseProviders: metadata.grabenplaner?.databaseProviders } }) };
+      databaseProviders: metadata.grabenplaner?.databaseProviders,
+      passkeysSchemaPolicy: metadata.grabenplaner?.passkeysSchemaPolicy || "legacy" } }) };
 }
 
 function databaseIdentity(databasePath) {

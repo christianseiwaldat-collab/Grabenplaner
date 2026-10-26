@@ -85,7 +85,8 @@ printf '%s\\n' "$trusted_package_verifier" "$installed_runtime_verifier" "$verif
 
 for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", "xoffi", "failed-xoffi", "invalid-xoffi", "import-delete", "failed-import-delete", "invalid-import-delete",
   "school-short", "school-full", "school-already-applied", "failed-school", "invalid-school", "changed-school-sales", "malformed-school", "missing-school-helper", "security-short", "security-full", "security-already-applied",
-  "failed-security", "invalid-security", "changed-security-sales", "malformed-security", "missing-security-helper", "missing-security-passkeys-proof"]) {
+  "failed-security", "invalid-security", "changed-security-sales", "malformed-security", "missing-security-helper", "missing-security-passkeys-proof",
+  "security-deferred-compatible", "security-deferred-required", "security-schema-changed"]) {
   test(`actual updater orchestration: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
     assert.ok(source.indexOf(entry) > 0);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-deploy-shell-"));
@@ -100,6 +101,12 @@ for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", 
     const security = scenario.includes("security");
     const importDelete = scenario.includes("import-delete") || school || security || xoffi;
     const full = scenario === "full" || scenario === "school-full" || scenario === "security-full";
+    if (importDelete) {
+      write("candidate/package.json", JSON.stringify({ grabenplaner: { passkeysSchemaPolicy: scenario === "security-deferred-required" ? "required" : "compatible" } }));
+      write("candidate/server-tools/linux/lib/passkeys-release-policy.js", fs.readFileSync(path.join(__dirname,"../server-tools/linux/lib/passkeys-release-policy.js"),"utf8"));
+      write("candidate/lib/passkey-schema-policy.js",fs.readFileSync(path.join(__dirname,"../lib/passkey-schema-policy.js"),"utf8"));
+      write("candidate/lib/persistence/postgresql/core/passkeys.js", "module.exports={digest:'synthetic-passkeys-plan'};\n");
+    }
     if (importDelete) write("candidate/server-tools/linux/lib/import-delete-migrate.js", `
 const fs=require('node:fs');
 fs.appendFileSync(process.env.EVENTS_FILE, 'import-migration\\n');
@@ -116,7 +123,7 @@ ${scenario === "failed-school" ? "process.exit(42);" : scenario === "malformed-s
 const fs=require('node:fs');
 fs.appendFileSync(process.env.EVENTS_FILE, 'security-migration\\n');
 require('node:assert/strict').deepEqual(process.argv.slice(2), ['${"a".repeat(64)}','--maintenance-lock-held']);
-${scenario === "failed-security" ? "process.exit(42);" : scenario === "malformed-security" ? "console.log('invalid JSON');" : `console.log(JSON.stringify({verified:${scenario !== "invalid-security"},salesUnchanged:${scenario !== "changed-security-sales"},passkeysVerified:${scenario !== "missing-security-passkeys-proof"},passkeys:{applied:true,digest:'synthetic-passkeys-plan'},applied:${scenario !== "security-already-applied"}}));`}
+${scenario === "failed-security" ? "process.exit(42);" : scenario === "malformed-security" ? "console.log('invalid JSON');" : `console.log(JSON.stringify({verified:${scenario !== "invalid-security"},salesUnchanged:${scenario !== "changed-security-sales"},schemaUnchanged:${scenario !== "security-schema-changed"},passkeysSchemaPolicy:'${scenario === "security-deferred-required" ? "required" : "compatible"}',coreBefore:'${"a".repeat(64)}',coreAfter:'${"a".repeat(64)}',passkeysState:'${scenario.includes("deferred") ? "absent" : "present"}',passkeysVerified:${!scenario.includes("deferred") && scenario !== "missing-security-passkeys-proof"},passkeys:{applied:false,deferred:${scenario.includes("deferred")},digest:'synthetic-passkeys-plan'},applied:false}));`}
 `);
     if (xoffi) write("candidate/server-tools/linux/lib/xoffi-snapshots-migrate.js", `
 const fs=require('node:fs');
@@ -202,7 +209,7 @@ ${workflow}
     const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: root, encoding: "utf8", timeout: 15000 });
     const events = fs.readFileSync(path.join(root, "events"), "utf8").trim().split("\n");
     if (["failed-readiness", "failed-schedule", "failed-xoffi", "invalid-xoffi", "failed-import-delete", "invalid-import-delete",
-      "failed-school", "invalid-school", "changed-school-sales", "malformed-school", "missing-school-helper", "failed-security", "invalid-security", "changed-security-sales", "malformed-security", "missing-security-helper", "missing-security-passkeys-proof"].includes(scenario)) {
+      "failed-school", "invalid-school", "changed-school-sales", "malformed-school", "missing-school-helper", "failed-security", "invalid-security", "changed-security-sales", "malformed-security", "missing-security-helper", "missing-security-passkeys-proof", "security-deferred-required", "security-schema-changed"].includes(scenario)) {
       assert.notEqual(result.status, 0); assert.ok(events.includes("failed")); assert.ok(!events.includes("commit")); assert.ok(!events.includes("queue-assurance"));
       if (xoffi) { assert.ok(events.includes("schema-migration")); assert.ok(!events.includes("start")); }
       if (importDelete && !xoffi) { assert.ok(events.includes("import-migration")); assert.ok(!events.includes("start")); }
@@ -247,8 +254,9 @@ ${workflow}
         const securityReceipt = JSON.parse(fs.readFileSync(path.join(root,"session-security-migration.json"),"utf8"));
         assert.equal(securityReceipt.verified,true);
         assert.equal(securityReceipt.salesUnchanged,true);
-        assert.equal(securityReceipt.passkeysVerified,true);
-        assert.equal(securityReceipt.applied,scenario !== "security-already-applied");
+        assert.equal(securityReceipt.passkeysVerified,!scenario.includes("deferred"));
+        assert.equal(securityReceipt.schemaUnchanged,true);
+        assert.equal(securityReceipt.applied,false);
       } else {
         assert.ok(!events.includes("school-migration"), "SQLite updates must never invoke the PostgreSQL migration");
         assert.equal(fs.existsSync(path.join(root,"school-migration.json")),false);

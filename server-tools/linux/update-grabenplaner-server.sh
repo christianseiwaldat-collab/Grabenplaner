@@ -1390,7 +1390,7 @@ begin_deploy_phase session-security-schema-migration
 root_node "$app_dir/server-tools/linux/lib/session-security-migrate.js" \
   "$installed_manifest_sha256" --maintenance-lock-held >"$session_security_migration_result" \
   || gp_die "Die Sitzungs- und Kennwortsicherheits-Erweiterung ist fehlgeschlagen; die neue App wird nicht gestartet."
-root_node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(r.verified!==true||r.salesUnchanged!==true||r.passkeysVerified!==true)process.exit(1)' "$session_security_migration_result" \
+root_node "$app_dir/server-tools/linux/lib/passkeys-release-policy.js" "$session_security_migration_result" "$app_dir/package.json" \
   || gp_die "Der Sitzungs-Sicherheitsmigrationsnachweis ist unvollstaendig."
 fi
 begin_deploy_phase application-start
