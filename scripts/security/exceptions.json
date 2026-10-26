@@ -431,6 +431,16 @@
       "reviewedOn": "2026-10-25",
       "expiresOn": "2026-11-08",
       "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "d367af92b81bd432d068fb2963d3dc2f0e443c670baa3cb596f981e34c0578b1",
+      "sourceSha256": "25fa0dd1ebffe74a0a53daab24754f65e9416aa9ef57d947eb5239d34f3661c1",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically re-reviewed by Codex against native run 40387646755: the before-passkeys-v1 regex assertion is the unchanged public upgrade-fixture marker at the same exact location. Only CI note-editor and sandbox tests were appended to this file. This record binds the final reviewed LF bytes, not a path allowlist or a claim of a fresh scanner pass; no human approval claimed.",
+      "reviewedOn": "2026-10-26",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
     }
   ]
 }

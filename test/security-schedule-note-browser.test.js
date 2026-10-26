@@ -8,7 +8,7 @@ test('fallback note editor removes text emoji without reparsing attributes or lo
   skip: process.env.GP_SECURITY_BROWSER_TEST !== '1', timeout: 30000,
 }, async () => {
   const { chromium } = require(process.env.GP_BROWSER_TEST_MODULE || 'playwright');
-  const browser = await chromium.launch({ headless: true,
+  const browser = await chromium.launch({ headless: true, chromiumSandbox: process.platform === 'linux',
     ...(process.env.GP_BROWSER_EXECUTABLE ? { executablePath: process.env.GP_BROWSER_EXECUTABLE } : {}),
   });
   try {
@@ -70,7 +70,7 @@ test('real Quill note controls retain mixed point sizes, pointer selections, und
   const fixture = await startScheduleNoteBrowserFixture();
   let browser;
   t.after(async () => { await browser?.close(); await fixture.close(); });
-  browser = await chromium.launch({ headless: true,
+  browser = await chromium.launch({ headless: true, chromiumSandbox: process.platform === 'linux',
     ...(process.env.GP_BROWSER_EXECUTABLE ? { executablePath: process.env.GP_BROWSER_EXECUTABLE } : {}),
     args: ['--no-first-run', '--disable-default-apps', '--disable-background-networking'],
   });

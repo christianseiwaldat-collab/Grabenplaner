@@ -206,15 +206,18 @@ async function runScheduleNoteBrowserCases(page){
  assert.deepEqual(await page.evaluate(()=>({html:__note.html(),text:__note.plain(),delta:__note.editor.getContents()})),legacyBefore);
  cases.push({name:'legacy plain-text notes retain escaped text, separate style flags and their original large point size',legacy});
 
- const benignViolations=await page.evaluate(()=>window.__noteViolations.slice());
- assert.deepEqual(benignViolations,[],'Normal editing must work under the stronger class-only CSP');
+ const benignViolations=await page.evaluate(async()=>{await new Promise(resolve=>setTimeout(resolve,0));return window.__noteViolations.slice();});
+ assert.deepEqual(benignViolations,[],'Normal editing must work under the stronger class-only CSP: '+JSON.stringify(benignViolations));
  const unsafe='<p><strong>Safe &amp; text</strong><span data-size="999" class="ql-size-999pt" style="font-size:999pt" onclick="window.__noteInjected=1"> bounded</span><script>window.__noteInjected=1</script></p>';
  await page.evaluate(value=>{window.__noteInjected=0;__note.setHtml(value);},unsafe);
  const safe=await page.evaluate(()=>({html:__note.html(),injected:window.__noteInjected,unsafe:[...__note.editor.root.querySelectorAll('*')].some(node=>[...node.attributes].some(attr=>/^on/i.test(attr.name)||attr.name==='style')||node.localName==='script')}));
  assert.equal(safe.injected,0);assert.equal(safe.unsafe,false);assertPoints(await wordStyle(page,'bounded'),10);
- const expectedNegativeCspViolations=await page.evaluate(()=>window.__noteViolations.slice());
- assert.ok(expectedNegativeCspViolations.every(item=>item.directive==='style-src-attr'&&item.blocked==='inline'),
-  'Only the deliberately supplied unsafe inline style may be rejected by CSP');
+ const expectedNegativeCspViolations=await page.evaluate(async()=>{await new Promise(resolve=>setTimeout(resolve,0));return window.__noteViolations.slice();});
+ // Chromium versions may also report the supplied onclick attribute while
+ // Quill converts this negative payload. Normal editing must remain violation-free.
+ const suppliedInlineAttributes=new Set(['style-src-attr','script-src-attr']);
+ assert.ok(expectedNegativeCspViolations.every(item=>suppliedInlineAttributes.has(item.directive)&&item.blocked==='inline'),
+  'Only the deliberately supplied unsafe style/onclick attributes may be rejected by CSP: '+JSON.stringify(expectedNegativeCspViolations));
  cases.push({name:'clipboard whitelist drops executable attributes and oversized style declarations',safe,rejectedInlineStyles:expectedNegativeCspViolations});
   await page.evaluate(value=>{__note.setHtml(value);__note.refresh();},beforeSave.html);
  return {cases,note_html:beforeSave.html,note_text:beforeSave.text,delta:beforeSave.delta,styles:sizes,strictLocalCsp:true,benignViolations,expectedNegativeCspViolations};

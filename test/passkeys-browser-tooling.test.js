@@ -67,3 +67,34 @@ test("CI runs the note editor browser cases once with pinned tools and keeps the
   assert.doesNotMatch(step, /ci-stock-import-delete\.js|--full|--passkeys-browser/);
   assert.match(workflow.slice(end), /node test-support\/postgresql-migration\/ci-stock-import-delete\.js "\$\{arguments\[@\]\}"/);
 });
+
+test("both actual note editor launch paths enable Chromium sandboxing on Linux", async () => {
+  const vm = require("node:vm"), source = fs.readFileSync(path.join(root, "test/security-schedule-note-browser.test.js"), "utf8");
+  for (const platform of ["linux", "win32"]) {
+    const cases = [], launches = [], stop = new Error("SYNTHETIC_STOP_BEFORE_BROWSER_START");
+    const chromium = { launch: async options => { launches.push(options); throw stop; } };
+    vm.runInNewContext(source, {
+      process: { platform, env: { GP_SECURITY_BROWSER_TEST: "1", GP_BROWSER_EXECUTABLE: "/pinned/chromium" } },
+      require(name) {
+        if (name === "node:test") return (title, options, callback) => cases.push({ title, options, callback });
+        if (name === "playwright") return { chromium };
+        if (name === "../test-support/schedule-note-browser-harness") return {
+          startScheduleNoteBrowserFixture: async () => ({ close: async () => {} }),
+        };
+        if (["node:assert/strict", "node:fs", "node:path"].includes(name)) return require(name);
+        throw new Error("Unexpected note browser dependency: " + name);
+      },
+    }, { filename: "security-schedule-note-browser.test.js" });
+    assert.equal(cases.length, 2);
+    for (const entry of cases) {
+      assert.equal(entry.options.skip, false);
+      await assert.rejects(entry.callback({ after() {} }), error => error === stop);
+    }
+    assert.equal(launches.length, 2);
+    for (const options of launches) {
+      assert.equal(options.chromiumSandbox, platform === "linux");
+      assert.equal(options.executablePath, "/pinned/chromium");
+      assert.ok(!(options.args || []).some(value => /--(?:no-sandbox|disable-setuid-sandbox)/.test(value)));
+    }
+  }
+});
