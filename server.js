@@ -66038,6 +66038,9 @@ if (require.main === module) {
   process.on("SIGINT", () => shutdown({ reason: "SIGINT" }));
   process.on("SIGTERM", () => shutdown({ reason: "SIGTERM" }));
   void startServer().catch((error) => {
+    // A signal may stop receipt workers before startup has reached app.listen.
+    // The shutdown path owns their termination, persistence and lock release.
+    if (shutdownStarted && error?.code === "IMPORT_REPORT_WORKER_STOPPED") return;
     releaseInstanceLock();
     setImmediate(() => { throw error; });
   });

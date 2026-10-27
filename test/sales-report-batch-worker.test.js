@@ -20,8 +20,9 @@ test('CPU-heavy reporting leaves HTTP responsive and worker shutdown is bounded'
   Atomics.store(signal,0,1);
   assert.deepEqual(await calculation,{complete:true,released:true});
   const interrupted = worker.run({ milliseconds: 30000 });
-  const failed = assert.rejects(interrupted, e => e.code === 'IMPORT_REPORT_WORKER_FAILED');
+  const failed = assert.rejects(interrupted, e => e.code === 'IMPORT_REPORT_WORKER_STOPPED');
   await worker.stop(); await failed;
+  await assert.rejects(worker.run({ milliseconds: 0 }), e => e.code === 'IMPORT_REPORT_WORKER_STOPPED');
 });
 test('a timed-out worker is replaced and does not poison the next request', async t => {
   const worker = createSalesReportBatchWorker({ workerFile, timeoutMs: 500 }); t.after(() => worker.stop());
