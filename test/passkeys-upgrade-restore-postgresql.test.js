@@ -23,6 +23,8 @@ test("native old-checkpoint upgrade, transactional rollback, repeat chain and re
   const M = require("../lib/persistence/postgresql/core/passkeys"), { verifyCoreSchema } = require("../lib/persistence/postgresql/boundary/migrate");
   const { schemaFingerprint } = require("../lib/persistence/postgresql/core/fingerprint");
   const { createPostgresqlPersistenceProvider } = require("../lib/persistence/postgresql/provider");
+  const { openCoreDevelopmentApplication, coreRepositories } = require("../lib/persistence/postgresql/core/application");
+  const { installedPolicy } = require("../lib/passkey-schema-policy");
   const { createPasskeysRepository } = require("../lib/persistence/repositories/passkeys");
   const RESTORE = require("../lib/persistence/postgresql/operations/restore-authentication");
   const owner = new Client({ connectionString: urls.migrator.href, connectionTimeoutMillis: 5000, query_timeout: 35000 });
@@ -110,7 +112,23 @@ test("native old-checkpoint upgrade, transactional rollback, repeat chain and re
     await owner.query("SELECT setval(pg_get_serial_sequence('gp.departments','id'),1,true)");
     await owner.query("COMMIT"); ownsData = true;
     phase("seed-committed");
-    sourceApplication = await require("../lib/persistence/postgresql/core/application").openCoreDevelopmentApplication({ profile: E.PROFILE, databaseUrl: urls.app.href, tlsMode: "disable-local-only" });
+    const applicationOptions = { profile: E.PROFILE, databaseUrl: urls.app.href, tlsMode: "disable-local-only" };
+    if (installedPolicy() === "required") {
+      await assert.rejects(openCoreDevelopmentApplication(applicationOptions), /PG_PASSKEYS_MIGRATION_REQUIRED/);
+      assert.equal(await M.readLedger(owner), null); assert.equal(await schemaFingerprint(owner), oldFingerprint);
+      phase("required-default-rejected-before-activation");
+    }
+    // Model the explicit A-compatible repository opening, as in the native
+    // compatibility-transition test. B's installed-policy opener is unchanged
+    // and is checked separately above and after the real activation below.
+    const compatibleProvider = makeProvider(new Pool({ connectionString: urls.app.href, max: 2 }), {
+      prepareClient: async client => {
+        await E.verifyEnvironment(client, { purpose: "app" });
+        await client.query("SET search_path=pg_catalog,gp");
+        await verifyCoreSchema(client, { requireVocationalSchool: true, requireSessionSecurity: true, requirePasskeys: false });
+      },
+    });
+    sourceApplication = { repositories: coreRepositories(compatibleProvider), close: () => compatibleProvider.close() };
     phase("old-application-opened");
     assert.equal(await sourceApplication.repositories.passkeys.available(), false);
     await passwordAccepted(sourceApplication.repositories);
@@ -128,6 +146,11 @@ test("native old-checkpoint upgrade, transactional rollback, repeat chain and re
     const applied = await M.migrate(owner); assert.equal(applied.applied, true); assert.equal(applied.legacyDataChanged, false);
     phase("passkeys-migration-applied");
     await verifyCoreSchema(owner, { requireVocationalSchool: true, requireSessionSecurity: true, requirePasskeys: true });
+    sourceApplication = await openCoreDevelopmentApplication(applicationOptions);
+    assert.equal(await sourceApplication.repositories.passkeys.available(), true);
+    await passwordAccepted(sourceApplication.repositories);
+    await sourceApplication.close(); sourceApplication = null;
+    phase("installed-policy-application-opened-after-activation");
     const newFingerprint = await schemaFingerprint(owner); assert.notEqual(newFingerprint, oldFingerprint);
     for (const module of ["xoffi-snapshots", "vocational-school", "session-security", "passkeys"]) assert.equal((await require("../lib/persistence/postgresql/core/" + module).migrate(owner)).applied, false);
     phase("source-repeat-chain-verified");
