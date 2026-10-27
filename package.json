@@ -1,12 +1,12 @@
 {
   "name": "grabenplaner",
-  "version": "0.92.94-beta",
+  "version": "0.92.95-beta",
   "private": true,
   "description": "Web-App zur Erstellung und zum PDF-Export von Wochendienstplänen",
   "main": "server.js",
   "grabenplaner": {
     "databaseProviders": ["postgresql"],
-    "passkeysSchemaPolicy": "compatible",
+    "passkeysSchemaPolicy": "required",
     "legacyRecoveryBaseline": "b2ba03cdc0b738d44766857de052e090db557807"
   },
   "scripts": {
