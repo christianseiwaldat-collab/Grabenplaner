@@ -443,6 +443,87 @@ def prepare_diagnostic_upload(output, outcome):
     return observation
 
 
+def diagnostic_packaging_bound(root, upstream, private, sources, components):
+    """Measure exact source packaging; never build, execute or qualify a core.
+
+    The native binary is unavailable to this diagnostic. Its full existing
+    256 MiB upper limit is retained in the conservative outer calculation.
+    The official liblzma buffer bound plus1 MiB covers streaming/container
+    overhead; ZIP's explicit1 percent plus1 MiB allowance is separate.
+    This is a bound for the exact measured source set/current publisher, not
+    an authorization to publish a tool or a promise about changed inputs.
+    """
+    import ctypes
+    import ctypes.util
+    import publish_semgrep_core_tool as publisher
+    import semgrep_core_tool as consumer
+    import compiler_license_ledger as ledger
+    provenance = publisher.read_json(private / 'sourcebuild-source-provenance.json')
+    members, patch = publisher.source_members(upstream, private, provenance)
+    references = {}
+    for component in components:
+        reference = component['correspondingSource']
+        name = reference['filename']
+        if name in references and references[name] != reference:
+            raise ValueError('Conflicting diagnostic packaging source identity')
+        references[name] = reference
+    expected = set(references)
+    for name in sorted(expected):
+        reference = references[name]
+        data = publisher.regular(sources / ledger.relative(name), publisher.MAX_SOURCE_FILE)
+        if len(data) != reference['bytes'] or publisher.sha(data) != reference['sha256']:
+            raise ValueError('Actual diagnostic packaging source identity differs')
+        members['dependency-sources/' + name] = (data, 0o644, 'regular')
+    source = publisher.archive_bytes(members, corresponding_source=True)
+    measured = {'bytes': len(source), 'sha256': publisher.sha(source), 'memberCount': len(members)}
+    # No archive is retained/uploaded: the existing explicit diagnostic proof
+    # receives only these bounded measurements and hash identities.
+    sizes = {'bin/semgrep-core': publisher.MAX_CORE,
+        'upstream/LICENSE': len(publisher.regular(upstream / 'LICENSE')),
+        'upstream/source.patch': len(patch),
+        'upstream/provenance.json': consumer.MAX_JSON,
+        'upstream/toolchain-sbom.cdx.json': consumer.MAX_JSON,
+        'upstream/corresponding-source.tar.xz': len(source),
+        'upstream/dependency-license-notices.json': ledger.MAX_LEDGER_JSON,
+        'tool-manifest.json': consumer.MAX_JSON}
+    # Python tarfile USTAR:512byteheader+512roundedpayload perregularfile,
+    # twoendblocks and final10240byte RECORDSIZE padding. Fixedshortouter
+    # names avoid PAX/longname additions, matching publisher.archive_bytes.
+    tar_bytes = sum(512 + ((size + 511) // 512) * 512 for size in sizes.values()) + 1024
+    tar_bytes = ((tar_bytes + tarfile.RECORDSIZE - 1) // tarfile.RECORDSIZE) * tarfile.RECORDSIZE
+    library_name = ctypes.util.find_library('lzma')
+    if not library_name:
+        raise ValueError('System liblzma bound function unavailable')
+    library = ctypes.CDLL(library_name)
+    buffer_bound = library.lzma_stream_buffer_bound
+    buffer_bound.argtypes = [ctypes.c_size_t]
+    buffer_bound.restype = ctypes.c_size_t
+    xz_buffer_bound = int(buffer_bound(tar_bytes))
+    if not tar_bytes < xz_buffer_bound < tar_bytes + tar_bytes // 100 + CHUNK:
+        raise ValueError('System XZ bound is invalid or exceeds conservative overhead policy')
+    xz_upper = xz_buffer_bound + CHUNK
+    zip_upper = xz_upper + (xz_upper + 99) // 100 + CHUNK
+    result = {'format': 'gp-diagnostic-source-packaging-bound/v1',
+        'diagnosticOnly': True, 'publicationReady': False, 'nativeBinaryRead': False,
+        'compilerBuilt': False, 'compilerExecuted': False, 'qualificationPerformed': False,
+        'toolPublished': False, 'pinChanged': False,
+        'measuredCorrespondingSource': measured,
+        'outerMemberUpperBounds': sizes, 'outerTarUpperBytes': tar_bytes,
+        'xzLibrary': library_name, 'xzBoundFunction': 'lzma_stream_buffer_bound',
+        'xzLibraryBufferUpperBytes': xz_buffer_bound, 'xzStreamingMarginBytes': CHUNK,
+        'outerXzUpperBytes': xz_upper, 'actionsZipUpperBytes': zip_upper,
+        'actionsZipAllowance': 'one percent of XZ upper bound plus1MiBcontainer allowance',
+        'existingArchiveLimitBytes': consumer.MAX_ARCHIVE,
+        'existingTotalExpansionLimitBytes': consumer.MAX_TOTAL,
+        'outerXzFitsExistingArchiveLimit': xz_upper <= consumer.MAX_ARCHIVE,
+        'actionsZipFitsExistingArtifactLimit': zip_upper <= consumer.MAX_ARCHIVE,
+        'totalExpansionFitsExistingLimit': sum(sizes.values()) <= consumer.MAX_TOTAL,
+        'guaranteedForExactMeasuredSourcesWithinExistingLimits':
+            xz_upper <= consumer.MAX_ARCHIVE and zip_upper <= consumer.MAX_ARCHIVE and sum(sizes.values()) <= consumer.MAX_TOTAL,
+        'scope': 'Exact current publisher/source members and existing per-member limits; changed source inputs require a fresh measurement; no producer/pin/security approval'}
+    return result
+
+
 def run(args):
     if sys.platform != 'linux' or os.name != 'posix':
         raise ValueError('Native isolated Linux diagnostic only')
@@ -558,6 +639,8 @@ def run(args):
             raise ValueError('Existing aggregate corresponding-source publication bound exceeded')
         with (sources / 'diagnostic-ledger.json').open('xb') as stream:
             stream.write(ledger.encoded(value))
+        proof['phase'] = 'diagnostic-source-packaging-bound'
+        proof['packagingBound'] = diagnostic_packaging_bound(root, upstream, private, sources, components)
         proof.update(phase='source-license-validation-complete', collectionValidationPassed=True, componentCount=len(components),
             correspondingSourceBytes=total, ledgerSha256=sha_file(sources / 'diagnostic-ledger.json', ledger.MAX_LEDGER_JSON)['sha256'])
     except Exception as error:
