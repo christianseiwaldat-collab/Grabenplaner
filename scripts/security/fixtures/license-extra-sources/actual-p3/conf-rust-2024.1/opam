@@ -1,0 +1,36 @@
+opam-version: "2.0"
+synopsis: "Virtual package relying on cargo (rust build system)"
+description:
+  "This package can only install if cargo (edition=2021) is installed on the system."
+maintainer: "contact@trili.tech"
+authors: ["TriliTech" "Simon Cruanes"]
+license: "MIT"
+homepage: "https://github.com/ocaml/opam-repository"
+bug-reports: "https://github.com/ocaml/opam-repository/issues"
+flags: conf
+build: [
+  ["cargo" "--version"]
+  ["rustc" "--edition" "2024" "test.rs"]
+]
+depexts: [
+  ["cargo"] {os-distribution = "centos" & os-version >= "8"}
+  ["cargo"] {os-distribution = "ol" & os-version >= "8"}
+  ["cargo"] {os-family = "fedora"}
+  ["cargo"] {os-family = "suse" | os-family = "opensuse"}
+  ["cargo"] {os-family = "debian"}
+  ["cargo"] {os-family = "ubuntu"}
+  ["cargo" "rustc"] {os-distribution = "nixos"}
+  ["cargo"] {os-family = "alpine"}
+  ["rust"] {os-family = "arch"}
+  ["rust"] {os = "macos" & os-distribution = "homebrew"}
+  ["rust"] {os = "freebsd"}
+]
+extra-source "test.rs" {
+  src:
+    "https://raw.githubusercontent.com/ocaml/opam-source-archives/main/patches/conf-rust-2021/test.rs"
+  checksum:
+    "sha256=536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4"
+}
+x-ci-accept-failures: [
+  "centos-7" "oraclelinux-7" "debian-10" "debian-11" "alpine-3.14"
+]

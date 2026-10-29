@@ -99,7 +99,7 @@ def actual_source_evidence(capture):
 def _reject_duplicate_critical_fields(text):
     # Count actual top-level tokens, including same-line duplicates. Strings,
     # comments and nested dependency/extra-source fields cannot invent keys.
-    critical={'name','version','license','authors','patches','substs'}
+    critical={'name','version','license','authors','patches','substs','extra-files'}
     seen={};nesting=[];quote=None;i=0
     if len(text)>MAX_METADATA: raise ValueError('Installed OPAM definition exceeds bound')
     while i<len(text):
@@ -132,6 +132,8 @@ def _semantics(data,identity):
     from compiler_license_ledger import field,opam_blocks,source_url
     policy=_policy(identity);text=data.decode('utf8')
     positions=_reject_duplicate_critical_fields(text)
+    if 'extra-files' in positions:
+        raise ValueError('Unreviewed OPAM extra-files source payload')
     critical=lambda name:field(text[positions[name]:],name) if name in positions else []
     for key,expected in [('name',policy['name']),('version',policy['version'])]:
         values=critical(key)
@@ -298,7 +300,8 @@ def validate_declaration(component,files=None,native=None):
     if native is not None:
         actual=native.get('opamSourceEvidence')
         native_ids={parts[0]+'.'+parts[1] for line in native.get('opamPackages','').splitlines() if (parts:=line.split()) and not line.lstrip().startswith('#') and len(parts)==2}
-        if not isinstance(actual,dict) or set(actual)!=(native_ids&DECLARATION_IDS) or actual.get(identity)!=_expected_native(evidence):
+        from compiler_license_extra_sources import REVIEWED_SOURCE_IDS
+        if not isinstance(actual,dict) or set(actual)!=(native_ids&(DECLARATION_IDS|REVIEWED_SOURCE_IDS)) or actual.get(identity)!=_expected_native(evidence):
             raise ValueError('Normalized metadata/source differs from fresh qualified image')
     if files is not None:
         required={spec['path']:{k:spec[k] for k in ('bytes','sha256')} for spec in _sources(identity)}

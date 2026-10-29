@@ -1,0 +1,22 @@
+opam-version: "2.0"
+lib: [
+  "_build/install/default/lib/opentelemetry-logs/META"
+  "_build/install/default/lib/opentelemetry-logs/dune-package"
+  "_build/install/default/lib/opentelemetry-logs/opam"
+  "_build/install/default/lib/opentelemetry-logs/opentelemetry_logs.a"
+  "_build/install/default/lib/opentelemetry-logs/opentelemetry_logs.cma"
+  "_build/install/default/lib/opentelemetry-logs/opentelemetry_logs.cmi"
+  "_build/install/default/lib/opentelemetry-logs/opentelemetry_logs.cmt"
+  "_build/install/default/lib/opentelemetry-logs/opentelemetry_logs.cmti"
+  "_build/install/default/lib/opentelemetry-logs/opentelemetry_logs.cmx"
+  "_build/install/default/lib/opentelemetry-logs/opentelemetry_logs.cmxa"
+  "_build/install/default/lib/opentelemetry-logs/opentelemetry_logs.ml"
+  "_build/install/default/lib/opentelemetry-logs/opentelemetry_logs.mli"
+]
+doc: [
+  "_build/install/default/doc/opentelemetry-logs/CHANGES.md"
+  "_build/install/default/doc/opentelemetry-logs/README.md"
+  "_build/install/default/doc/opentelemetry-logs/odoc-config.sexp"
+]
+libexec:
+  "_build/install/default/lib/opentelemetry-logs/opentelemetry_logs.cmxs"

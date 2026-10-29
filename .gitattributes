@@ -49,3 +49,4 @@ scripts/security/fixtures/license-declarations/* -text -whitespace
 lib/vendor-patches/*.patch text eol=lf whitespace=-blank-at-eol
 test/security-msal-auth-code-backport.test.js text eol=lf
 test-support/runtime-v6/installed-addd4c3-pnpm-workspace.yaml text eol=lf
+scripts/security/fixtures/license-extra-sources/** -text -whitespace

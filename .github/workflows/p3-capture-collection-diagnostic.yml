@@ -1,0 +1,128 @@
+# Replay the authenticated upstream-only capture using this exact committed
+# collector/workflow head. This diagnostic never builds or approves a compiler.
+name: P3 captured-source license collection diagnostic; no compiler or publication
+
+on:
+  push:
+    branches: [ci/semgrep-core-activation-20261029]
+    paths:
+      - .github/workflows/p3-capture-collection-diagnostic.yml
+      - scripts/security/collect_p3_capture_diagnostic.py
+      - scripts/security/test_collect_p3_capture_diagnostic.py
+      - scripts/security/compiler_license_extra_sources.py
+      - scripts/security/compiler_license_declaration.py
+      - scripts/security/compiler_license_ledger.py
+      - scripts/security/source_core_identity.py
+      - scripts/security/fixtures/license-extra-sources/**
+  workflow_dispatch:
+    inputs:
+      collector_ref:
+        description: Exact reviewed collector/workflow commit (40 lowercase hex)
+        type: string
+        required: true
+      expected_image_id:
+        description: Actual P3 image identity independently checked against its retained private evidence
+        type: string
+        required: true
+      expected_binary_sha256:
+        description: Actual P3 binary SHA256 independently checked against its retained private evidence
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p3-captured-source-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  captured-source-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      COLLECTOR_REF: ${{ inputs.collector_ref || github.sha }}
+      EXPECTED_IMAGE_ID: ${{ inputs.expected_image_id || 'sha256:5c81d46d602063772cae28b8a6509f71dde253c32544bf558f4747b9ea8ed6ed' }}
+      EXPECTED_BINARY_SHA256: ${{ inputs.expected_binary_sha256 || '7a333f6e243253b7d2d2d7fa8d239c65df001e8030b3f63abc84a24d455e1763' }}
+    steps:
+      - name: Require the exact reviewed workflow/source head
+        env:
+          WORKFLOW_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$COLLECTOR_REF" =~ ^[a-f0-9]{40}$ ]]
+          test "$COLLECTOR_REF" = "$WORKFLOW_HEAD"
+          [[ "$EXPECTED_IMAGE_ID" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$EXPECTED_BINARY_SHA256" =~ ^[a-f0-9]{64}$ ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          ref: ${{ env.COLLECTOR_REF }}
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12.14'
+      - name: Require diagnostic extraction and binding counterexamples
+        run: python -I -B -m unittest discover -s scripts/security -p 'test_*.py' -v
+      - name: Collect and validate only from original authenticated P3 capture
+        id: collect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python -I -B scripts/security/collect_p3_capture_diagnostic.py \
+            --root "$GITHUB_WORKSPACE" --collector-head "$COLLECTOR_REF" \
+            --artifact-id 12876557761 \
+            --artifact-sha256 6db13d90cfbfe60a20b8da9a27562c67f3e55192fbfe2cd1f361b9f75c2a6683 \
+            --expected-image-id "$EXPECTED_IMAGE_ID" \
+            --expected-binary-sha256 "$EXPECTED_BINARY_SHA256" \
+            --output "$RUNNER_TEMP/p3-capture-diagnostic"
+      - name: Prepare bounded upstream-only diagnostic proof; no scanner gate receipt
+        if: always() && steps.collect.outcome != 'skipped'
+        env:
+          COLLECT_OUTCOME: ${{ steps.collect.outcome }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python -I -B scripts/security/collect_p3_capture_diagnostic.py \
+            --prepare-upload --collect-outcome "$COLLECT_OUTCOME" \
+            --output "$RUNNER_TEMP/p3-capture-diagnostic"
+      - name: Retain diagnostic proof and upstream source/license archives
+        id: upload
+        if: always() && steps.collect.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: p3-captured-license-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/upstream-diagnostic-manifest.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/public/diagnostic-summary.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/public/capture-collection-proof.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/producer-run.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/capture-artifact.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/producer-jobs.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/actual-capture.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/capture-derived-validator-context.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/current-collector-build-inputs.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/collection-failure.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/source-manifest-secondary-failure.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/sourcebuild-source-inventory.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/sourcebuild-license.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/sourcebuild-source-provenance.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/dependency-sources/diagnostic-ledger.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/sourcebuild-process-*.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/dependency-sources/*.tar.xz
+          if-no-files-found: error
+          retention-days: 14
+          archive: true
+          overwrite: false
+          include-hidden-files: false
+      - name: Require immutable diagnostic artifact identity
+        if: always() && steps.upload.outcome == 'success'
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: python -I -B scripts/security/prepare_upload.py --uploaded-receipt

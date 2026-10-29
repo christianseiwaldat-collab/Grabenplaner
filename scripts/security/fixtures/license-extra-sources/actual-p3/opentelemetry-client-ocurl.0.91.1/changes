@@ -1,0 +1,56 @@
+opam-version: "2.0"
+added: [
+  "doc/opentelemetry-client-ocurl" {"D"}
+  "doc/opentelemetry-client-ocurl/CHANGES.md" {"F:S5854T1793251653.4"}
+  "doc/opentelemetry-client-ocurl/README.md" {"F:S5105T1793251653.4"}
+  "doc/opentelemetry-client-ocurl/odoc-config.sexp" {"F:S15T1793251653.4"}
+  "lib/opentelemetry-client-ocurl" {"D"}
+  "lib/opentelemetry-client-ocurl/META" {"F:S617T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/common_.ml" {"F:S179T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/config.ml" {"F:S1229T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/config.mli" {"F:S1139T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/dune-package" {"F:S2788T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opam" {"F:S969T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl.a"
+    {"F:S94392T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl.cma"
+    {"F:S29900T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl.cmi"
+    {"F:S5113T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl.cmt"
+    {"F:S34736T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl.cmti"
+    {"F:S12280T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl.cmx"
+    {"F:S85601T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl.cmxa"
+    {"F:S12913T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl.cmxs"
+    {"F:S139416T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl.ml"
+    {"F:S3956T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl.mli"
+    {"F:S1365T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl__.cmi"
+    {"F:S465T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl__.cmt"
+    {"F:S2313T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl__.cmx"
+    {"F:S441T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl__.ml"
+    {"F:S326T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl__Common_.cmi"
+    {"F:S1000T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl__Common_.cmt"
+    {"F:S4307T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl__Common_.cmx"
+    {"F:S2117T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl__Config.cmi"
+    {"F:S4644T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl__Config.cmt"
+    {"F:S10527T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl__Config.cmti"
+    {"F:S10977T1793251653.4"}
+  "lib/opentelemetry-client-ocurl/opentelemetry_client_ocurl__Config.cmx"
+    {"F:S14703T1793251653.4"}
+]

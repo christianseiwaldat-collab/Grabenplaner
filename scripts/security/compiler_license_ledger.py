@@ -418,12 +418,20 @@ def validate_ledger(value, binary_sha256, native=None):
                 or any(not isinstance(item, str) or item in covered[ecosystem] for item in ids)):
             raise ValueError('Duplicate or invalid dependency coverage')
         covered[ecosystem].update(ids)
-        from compiler_license_declaration import DECLARATION_IDS
-        if ecosystem == 'opam' and any(item in DECLARATION_IDS for item in ids) and 'licenseEvidence' not in component:
+        from compiler_license_declaration import DECLARATION_IDS, FORMAT as DECLARATION_FORMAT
+        from compiler_license_extra_sources import REVIEWED_SOURCE_IDS, FORMAT as EXTRA_FORMAT
+        if ecosystem == 'opam' and any(item in DECLARATION_IDS | REVIEWED_SOURCE_IDS for item in ids) and 'licenseEvidence' not in component:
             raise ValueError('Exact reviewed package requires its declaration and per-file evidence model')
         if 'licenseEvidence' in component:
-            from compiler_license_declaration import validate_declaration
-            validate_declaration(component, native=native)
+            evidence_format = component['licenseEvidence'].get('format') if isinstance(component['licenseEvidence'], dict) else None
+            if evidence_format == DECLARATION_FORMAT:
+                from compiler_license_declaration import validate_declaration
+                validate_declaration(component, native=native)
+            elif evidence_format == EXTRA_FORMAT:
+                from compiler_license_extra_sources import validate_component
+                validate_component(component, native=native)
+            else:
+                raise ValueError('Unknown exact-package source evidence format')
         else:
             notices = component['notices']
             if not isinstance(notices, list) or not notices:
@@ -528,8 +536,13 @@ def validate_sources(value, read_source):
         if previous != reference:
             raise ValueError('Shared corresponding source has conflicting identity')
         if 'licenseEvidence' in component:
-            from compiler_license_declaration import validate_declaration
-            validate_declaration(component, declaration_source_files(read_source(name)))
+            from compiler_license_extra_sources import FORMAT as EXTRA_FORMAT
+            if component['licenseEvidence']['format'] == EXTRA_FORMAT:
+                from compiler_license_extra_sources import validate_component, source_files
+                validate_component(component, source_files(read_source(name)))
+            else:
+                from compiler_license_declaration import validate_declaration
+                validate_declaration(component, declaration_source_files(read_source(name)))
         elif any(item['sourceBytesSha256'] not in actual_notices for item in component['notices']):
             raise ValueError('Primary dependency notice is not present in retained source')
     return checked
@@ -666,7 +679,7 @@ def actual_license_closure(native):
     captured = unique(command(capture_arguments(image)))
     if opam_ids(captured['opamListing']) != opam_ids(native.get('opamPackages', '')):
         raise ValueError('Fresh actual opam closure differs from qualified compiler')
-    from compiler_license_declaration import actual_source_evidence
+    from compiler_license_extra_sources import actual_source_evidence
     sources = actual_source_evidence(captured)
     return {'nativePackageIds': sorted({item['owner'] for item in captured['nativeInputs']
             if item['owner'] != 'custom-curl.8.5.0'}), 'nativeInputsSha256': digest(encoded(captured['nativeInputs'])),
@@ -773,6 +786,11 @@ def collect_opam(capture, root, output):
         if package['id'] in DECLARATION_IDS:
             components.append(collect_component(package, root, output))
             continue
+        from compiler_license_extra_sources import REVIEWED_SOURCE_IDS, collect_component as collect_extra_component, ensure_reviewed_extensions
+        if package['id'] in REVIEWED_SOURCE_IDS:
+            components.append(collect_extra_component(package, root, output))
+            continue
+        ensure_reviewed_extensions(package['id'], definition)
         # A retained actual pin tree is the source authority for git/file pins;
         # it need not pretend to be an independently downloadable release URL.
         url, checksums = (None, []) if tree and tree.is_dir() else source_url(definition)
@@ -869,7 +887,7 @@ def produce(image_file, binary, source, qualification, output):
             'tracebackTail': traceback.format_exc()[-16384:], 'publicationReady': False}
         (qualification / 'sourcebuild-compiler-capture-failure.json').write_bytes(encoded(failure))
         raise
-    from compiler_license_declaration import actual_source_evidence
+    from compiler_license_extra_sources import actual_source_evidence
     actual_sources = actual_source_evidence(capture)
     if actual_sources:
         native = {**native, 'opamSourceEvidence': actual_sources}
