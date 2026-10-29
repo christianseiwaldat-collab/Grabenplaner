@@ -240,7 +240,7 @@ def public_sbom(value):
     # Retain software/license inventory, not arbitrary Syft image paths, file
     # contents, environment, logs, timestamps or source-location properties.
     if (not isinstance(value, dict) or value.get('bomFormat') != 'CycloneDX'
-            or value.get('specVersion') not in ('1.4', '1.5', '1.6')
+            or value.get('specVersion') not in ('1.4', '1.5', '1.6', '1.7')
             or not isinstance(value.get('components'), list) or not value['components']):
         raise ValueError('Missing upstream-only toolchain SBOM')
     components = []
