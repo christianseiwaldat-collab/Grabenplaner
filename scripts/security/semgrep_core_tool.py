@@ -171,6 +171,7 @@ def check_elf(data):
 
 
 def verify_tar(data, pin, with_contents=False):
+    from compiler_license_ledger import MAX_LEDGER_JSON
     check_bytes(data, pin['archive'], 'Inner archive')
     contents, total = {}, 0
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:xz') as archive:
@@ -182,7 +183,8 @@ def verify_tar(data, pin, with_contents=False):
                     or not 0 < item.size <= MAX_TOTAL):
                 raise ValueError('Unexpected tool tar member or metadata')
             total += item.size
-            if total > MAX_TOTAL or (item.name.endswith('.json') and item.size > MAX_JSON):
+            json_limit = MAX_LEDGER_JSON if item.name == 'upstream/dependency-license-notices.json' else MAX_JSON
+            if total > MAX_TOTAL or (item.name.endswith('.json') and item.size > json_limit):
                 raise ValueError('Tool archive exceeds its declared retention bounds')
             stream = archive.extractfile(item)
             value = stream.read(item.size + 1)

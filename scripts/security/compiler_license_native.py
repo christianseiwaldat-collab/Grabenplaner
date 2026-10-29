@@ -140,13 +140,43 @@ def _notice(path, data):
             'sourceBytesSha256': sha(data), 'encoding': encoding}
 
 
-def source_notices(filename, data):
+
+# Independently inventoried original rustc source from the exact actual APKBUILD.
+# Every unknown source retains the ordinary bounds. This identity is a source
+# distribution, never an executable or pin-authority exception.
+RUST_SOURCE = {
+    'filename': 'rustc-1.91.1-src.tar.xz', 'bytes': 270957016,
+    'sha256': '66401bb815e236cc6b2aacbbe23b61b286c1fe27a67902e7c0222cfe77b3dbab',
+    'sha512': '68b6bebff2e1b3bc5762951bec60f55cb7f23fd516ca85195f8050790f20c6cefdc3c5ffe0c40aa2d34635f48fa01f567874bcea3076ad5c260eae1afd759870',
+    'origin': 'rust', 'version': '1.91.1-r2',
+    'commit': 'f20e2685939216429125190ec33b5d6a2370e91a',
+    'members': 290629, 'expandedBytes': 3484095662,
+}
+
+
+def source_inventory_bounds(filename, data, *, origin=None, version=None, commit=None):
+    reviewed = RUST_SOURCE
+    if (filename == reviewed['filename'] and len(data) == reviewed['bytes']
+            and (origin, version, commit) == (reviewed['origin'], reviewed['version'], reviewed['commit'])
+            and sha(data) == reviewed['sha256']
+            and hashlib.sha512(data).hexdigest() == reviewed['sha512']):
+        return reviewed['members'], reviewed['expandedBytes'], True
+    return MAX_MEMBERS, 2 * 1024**3, False
+
+
+def source_notices(filename, data, *, origin=None, version=None, commit=None):
     notices = []
+    member_limit, expanded_limit, exact_inventory = source_inventory_bounds(filename, data, origin=origin, version=version, commit=commit)
+    total = count = 0
     if tarfile.is_tarfile(io.BytesIO(data)):
         with tarfile.open(fileobj=io.BytesIO(data), mode='r:*') as archive:
             for count, item in enumerate(archive, 1):
-                if count > MAX_MEMBERS:
+                if count > member_limit:
                     raise ValueError('Oversized native source archive')
+                if item.isfile():
+                    total += item.size
+                    if total > expanded_limit:
+                        raise ValueError('Native source expansion exceeds reviewed bound')
                 name = safe_name(item.name)
                 if item.issym() or item.islnk():
                     target = posixpath.normpath(posixpath.join(posixpath.dirname(name), item.linkname))
@@ -172,6 +202,8 @@ def source_notices(filename, data):
         value = _notice(filename, data)
         if value:
             notices.append(value)
+    if exact_inventory and (count != member_limit or total != expanded_limit):
+        raise ValueError('Reviewed native source inventory differs')
     # Identical license copies do not make the JSON grow with every source file.
     unique = {item['sha256']: item for item in notices}
     if sum(len(item['text'].encode('utf8')) for item in unique.values()) > MAX_NOTICE_TOTAL:
@@ -193,6 +225,115 @@ def bundle_bytes(members):
     # Most distfiles already are compressed. Recompressing them expensively
     # gives negligible savings and does not strengthen their hash binding.
     return lzma.compress(buffer.getvalue(), format=lzma.FORMAT_XZ, preset=0)
+
+
+
+# This exact installed header package carries its complete BSD-3-Clause notice
+# in queue.h and BSD-2-Clause notice in tree.h. Its tiny cdefs.h has no separate
+# notice: retain it verbatim with the original package declaration, never invent
+# a per-file attribution or derive license text from an SPDX name.
+BSD_ORIGIN = 'bsd-compat-headers'
+BSD_VERSION = '0.7.2-r6'
+BSD_COMMIT = 'f578a91aef36679e703bd8badf6725cf838244da'
+BSD_EXPRESSION = 'BSD-2-Clause AND BSD-3-Clause'
+BSD_RECIPE_SHA256 = '362d5bf294bcc22f5c24e7addad966e4cd655ef6ee6b59b96c4bcecd334c1819'
+BSD_HEADERS = {'cdefs.h': {'bytes': 612, 'sha256': '15b1dd86710a4c5fc0654dbd871965b227474eb7f54531eebafffe8c1061f10e', 'sha512': '37c8fc73c7aea7b490f7850927e2bb91d12137c9e59e22c084146d515696dbc7973b5de92f4c987ba080dd2502ba83127006442c3f019b6447a620c0cae73178'}, 'queue.h': {'bytes': 30075, 'sha256': 'c13407edd0e33be73cae72514cb234f8612e1c0e54401c9448daffd3a240158b', 'sha512': '2f0d5e6e4dc3350285cf17009265dddcbe12431c111868eea39bc8cb038ab7c1f2acacbb21735c4e9d4a1fd106a8fc0f8611ea33987d4faba37dde5ce6da0750'}, 'tree.h': {'bytes': 26161, 'sha256': 'e0ea17940260f9c1fdd2d35f74eec141d21f09844eaea91131993cb950901a16', 'sha512': 'd9ac210d81feb8ad2655bc80fb065d3fe20ae4417b32b4a1711e6738a4870140005c13373b5d1846ef3ce5ae6da45f2dacef2092881eded0a2e94f6a07752ef3'}}
+
+
+def _bsd_recipe(recipe):
+    if set(recipe) != {'APKBUILD', *BSD_HEADERS} or sha(recipe['APKBUILD']) != BSD_RECIPE_SHA256:
+        raise ValueError('Exact BSD header source recipe differs')
+    sums = recipe_checksums(recipe['APKBUILD'], BSD_VERSION)
+    if sums != {name: row['sha512'] for name, row in BSD_HEADERS.items()}:
+        raise ValueError('Exact BSD header checksums differ')
+    for name, row in BSD_HEADERS.items():
+        data = recipe[name]
+        if (len(data) != row['bytes'] or sha(data) != row['sha256']
+                or hashlib.sha512(data).hexdigest() != row['sha512']):
+            raise ValueError('Exact BSD original header bytes differ')
+    return sums
+
+
+def bsd_header_notices(origin, version, commit, selected, recipe):
+    if origin != BSD_ORIGIN:
+        return []
+    if (version != BSD_VERSION or commit != BSD_COMMIT or len(selected) != 1
+            or selected[0]['id'] != BSD_ORIGIN + '.' + BSD_VERSION
+            or selected[0]['licenseExpression'] != BSD_EXPRESSION):
+        raise ValueError('Unreviewed BSD header package identity')
+    _bsd_recipe(recipe)
+    return [_notice('aports/' + name, recipe[name]) for name in ('queue.h', 'tree.h')]
+
+
+def reviewed_header_source_notice(name, data):
+    # Consumer discovery never broadens to arbitrary .h source. Only these two
+    # reviewed original complete headers may supply a primary license hash.
+    return any(name == 'aports/' + key and len(data) == BSD_HEADERS[key]['bytes']
+        and sha(data) == BSD_HEADERS[key]['sha256'] for key in ('queue.h', 'tree.h'))
+
+
+def requires_bsd_header_review(component):
+    return component['name'] == 'apk/' + BSD_ORIGIN or BSD_ORIGIN + '.' + BSD_VERSION in component['packageIds']
+
+
+def validate_bsd_header_component(component):
+    if not requires_bsd_header_review(component):
+        return
+    if (component['name'] != 'apk/' + BSD_ORIGIN or component['version'] != BSD_VERSION or component['packageIds'] != [BSD_ORIGIN + '.' + BSD_VERSION]
+            or component['licenseExpression'] != BSD_EXPRESSION or 'licenseEvidence' in component):
+        raise ValueError('Unreviewed BSD header component identity')
+    notices = component['notices']
+    if not isinstance(notices, list) or len(notices) != 2:
+        raise ValueError('Both original BSD header notices are required')
+    for item, name in zip(notices, ('queue.h', 'tree.h')):
+        try:
+            data = item['text'].encode('utf8')
+        except (KeyError, AttributeError, UnicodeError):
+            raise ValueError('Invalid BSD header notice text') from None
+        if (len(data) != BSD_HEADERS[name]['bytes'] or sha(data) != BSD_HEADERS[name]['sha256']
+                or item != _notice('aports/' + name, data)):
+            raise ValueError('Original BSD header notice differs')
+    source = component['correspondingSource']
+    expected_name = 'apk-' + BSD_ORIGIN + '-' + BSD_VERSION + '-' + BSD_COMMIT[:12] + '.tar.xz'
+    if (not isinstance(source, dict) or source.get('filename') != expected_name
+            or source.get('url') != 'https://codeload.github.com/alpinelinux/aports/tar.gz/' + BSD_COMMIT):
+        raise ValueError('Exact BSD header source provenance differs')
+
+
+def validate_bsd_header_source(component, data):
+    if not requires_bsd_header_review(component):
+        return
+    validate_bsd_header_component(component)
+    if len(data) > 256 * 1024:
+        raise ValueError('BSD source bundle exceeds exact package bound')
+    decoder = lzma.LZMADecompressor(format=lzma.FORMAT_XZ, memlimit=64 * 1024**2)
+    expanded = decoder.decompress(data, max_length=128 * 1024 + 1)
+    if len(expanded) > 128 * 1024 or not decoder.eof or decoder.unused_data:
+        raise ValueError('BSD source expansion exceeds exact package bound')
+    members = {}
+    with tarfile.open(fileobj=io.BytesIO(expanded), mode='r:') as archive:
+        for item in archive:
+            name = safe_name(item.name)
+            if (not item.isfile() or item.linkname or name in members or len(members) >= 5
+                    or item.size > 128 * 1024):
+                raise ValueError('Invalid BSD header source bundle member')
+            members[name] = archive.extractfile(item).read(item.size + 1)
+    if set(members) != {'aports/APKBUILD', *( 'aports/' + name for name in BSD_HEADERS), 'native-source-metadata.json'}:
+        raise ValueError('Incomplete BSD header source bundle')
+    recipe = {name.removeprefix('aports/'): content for name, content in members.items() if name.startswith('aports/')}
+    sums = _bsd_recipe(recipe)
+    url = 'https://codeload.github.com/alpinelinux/aports/tar.gz/' + BSD_COMMIT
+    expected = {'format': 'gp-compiler-native-source/v1', 'aportsCommit': BSD_COMMIT, 'origin': BSD_ORIGIN,
+        'version': BSD_VERSION, 'packageIds': [BSD_ORIGIN + '.' + BSD_VERSION], 'recipeFiles': [
+            {'path': name, 'sha256': sha(content), 'bytes': len(content)} for name, content in sorted(recipe.items())],
+        'distfiles': [{'filename': name, 'url': url, 'bytes': len(recipe[name]),
+            'sha512': digest, 'sha256': sha(recipe[name])} for name, digest in sorted(sums.items())],
+        'sourceExecutionPerformed': False}
+    if members['native-source-metadata.json'] != encoded(expected):
+        raise ValueError('Original BSD header source metadata differs')
+    actual = [_notice('aports/' + name, recipe[name]) for name in ('queue.h', 'tree.h')]
+    if component['notices'] != actual:
+        raise ValueError('BSD header notice is not its actual retained original')
 
 
 def collect_native(capture, capture_root, dependency_sources):
@@ -233,7 +374,7 @@ def collect_native(capture, capture_root, dependency_sources):
         recipe = recipe_files(snapshots[commit], origin, commit)
         sums = recipe_checksums(recipe['APKBUILD'], version)
         members = {'aports/' + name: data for name, data in recipe.items()}
-        distfiles, notices = [], []
+        distfiles, notices = [], bsd_header_notices(origin, version, commit, selected, recipe)
         for name, expected in sorted(sums.items()):
             if name in recipe:
                 data, url = recipe[name], snapshot_url
@@ -250,7 +391,7 @@ def collect_native(capture, capture_root, dependency_sources):
             if hashlib.sha512(data).hexdigest() != expected:
                 raise ValueError('Native distfile differs from exact aports SHA-512')
             distfiles.append({'filename': name, 'url': url, 'bytes': len(data), 'sha512': expected, 'sha256': sha(data)})
-            notices.extend(source_notices(name, data))
+            notices.extend(source_notices(name, data, origin=origin, version=version, commit=commit))
         notices = sorted({item['sha256']: item for item in notices}.values(), key=lambda item: item['path'])
         if not notices:
             raise ValueError('Genuine native dependency license text is missing: ' + origin)

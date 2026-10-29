@@ -17,6 +17,11 @@ import collect_p3_capture_diagnostic as diagnostic
 
 
 class CapturedDiagnosticTests(unittest.TestCase):
+    def setUp(self):
+        environment = patch.dict(os.environ, dict(os.environ), clear=True)
+        environment.start()
+        self.addCleanup(environment.stop)
+
     def api_fixture(self):
         run = {'id': diagnostic.P3_RUN, 'head_sha': diagnostic.P3_HEAD, 'workflow_id': diagnostic.P3_WORKFLOW,
             'run_attempt': 1, 'path': '.github/workflows/sast-source-build.yml', 'repository': {'id': diagnostic.REPOSITORY_ID},

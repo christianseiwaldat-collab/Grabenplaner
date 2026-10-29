@@ -218,8 +218,8 @@ def source_members(source, qualification, provenance):
 
 
 def license_ledger(file, source_root, binary_sha256, native=None):
-    from compiler_license_ledger import validate_ledger, validate_sources
-    value = read_json(file)
+    from compiler_license_ledger import MAX_LEDGER_JSON, validate_ledger, validate_sources
+    value = unique_json(regular(file, MAX_LEDGER_JSON))
     validate_ledger(value, binary_sha256, native)
     checked = validate_sources(value, lambda name: regular(source_root / name, MAX_SOURCE_FILE))
     members = {}

@@ -1,7 +1,7 @@
 """Acquire only an externally pinned compiler; always qualify current sources.
 
-There is intentionally no checked-in production pin. An eligible tool must first
-pass the separate corresponding-source/license publisher and trusted producer.
+An optional checked-in pin selects an externally reviewed producer artifact.
+An eligible tool must first pass the separate source/license publisher.
 Absence/expiry or another valid input key permits a cold build; corrupt evidence
 for the selected key stays a hard failure.
 """

@@ -386,6 +386,7 @@ DIAGNOSTIC_FILES = (
     'private/source-manifest-secondary-failure.json',
     'private/sourcebuild-source-inventory.json', 'private/sourcebuild-license.json',
     'private/sourcebuild-source-provenance.json',
+    'private/collected-components-opam.json', 'private/collected-components-native.json',
     'dependency-sources/diagnostic-ledger.json',
 )
 
@@ -533,8 +534,10 @@ def run(args):
         proof['upstreamCommit'] = build.COMMIT
         proof['phase'] = 'opam-source-license-collection'
         components = ledger.collect_opam(observation, capture_root, sources)
+        write_json(private / 'collected-components-opam.json', components)
         proof['phase'] = 'native-source-license-collection'
         components += native_collector.collect_native(observation, capture_root, sources)
+        write_json(private / 'collected-components-native.json', components)
         proof['phase'] = 'curl-source-license-collection'
         components.append(ledger.collect_curl(capture_root, sources))
         proof['phase'] = 'upstream-source-license-collection'
@@ -556,7 +559,7 @@ def run(args):
         with (sources / 'diagnostic-ledger.json').open('xb') as stream:
             stream.write(ledger.encoded(value))
         proof.update(phase='source-license-validation-complete', collectionValidationPassed=True, componentCount=len(components),
-            correspondingSourceBytes=total, ledgerSha256=sha_file(sources / 'diagnostic-ledger.json', ledger.MAX_JSON)['sha256'])
+            correspondingSourceBytes=total, ledgerSha256=sha_file(sources / 'diagnostic-ledger.json', ledger.MAX_LEDGER_JSON)['sha256'])
     except Exception as error:
         clean_source_environment()
         proof['errorType'] = type(error).__name__

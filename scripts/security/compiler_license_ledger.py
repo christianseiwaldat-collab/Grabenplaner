@@ -25,6 +25,9 @@ import zipfile
 FORMAT = 'gp-semgrep-core-dependency-license-ledger/v3'
 CAPTURE = 'gp-semgrep-core-license-capture/v1'
 MAX_JSON = 4 * 1024**2
+# Complete immutable license texts (including original Rust dependency notices)
+# have their own finite bound. OPAM, API and other JSON inputs retain MAX_JSON.
+MAX_LEDGER_JSON = 8 * 1024**2
 MAX_CAPTURE_JSON = 64 * 1024**2
 # Actual linux-headers corresponding source alone exceeds 128 MiB. Retain the
 # complete source with finite per-file/aggregate bounds, never drop its owner.
@@ -450,6 +453,8 @@ def validate_ledger(value, binary_sha256, native=None):
                     raise ValueError('Invalid primary notice encoding') from None
                 if digest(item['text'].encode()) != item['sha256'] or digest(original) != item['sourceBytesSha256']:
                     raise ValueError('Primary notice bytes differ')
+        from compiler_license_native import validate_bsd_header_component
+        validate_bsd_header_component(component)
         reference = component['correspondingSource']
         # Conservative complete-source distribution for every component. No
         # SPDX-derived exception or None-source waiver is implemented here.
@@ -462,15 +467,26 @@ def validate_ledger(value, binary_sha256, native=None):
     if (covered['opam'] != set(closure['opamInstalled']) or covered['apk'] != set(closure['nativePackageIds'])
             or covered['custom'] != {'curl.8.5.0'} or covered['upstream'] != {'semgrep-corresponding-source'}):
         raise ValueError('Actual transitive compiler dependency closure is incomplete')
-    if len(encoded(value)) > MAX_JSON:
+    if len(encoded(value)) > MAX_LEDGER_JSON:
         raise ValueError('Primary license notices exceed consumer JSON bound')
     return value
 
 
-def source_notice_hashes(data, depth=0):
+def source_notice_hashes(data, depth=0, source_name=None, native_component=None):
     if depth > 1:
         raise ValueError('Dependency source nesting exceeds reviewed bound')
     hashes, count, total = set(), 0, 0
+    member_limit, expanded_limit, exact_inventory = 250000, MAX_SOURCE, False
+    if depth == 1 and isinstance(native_component, dict):
+        from compiler_license_native import RUST_SOURCE, source_inventory_bounds
+        reviewed = RUST_SOURCE
+        reference = native_component.get('correspondingSource', {})
+        if (native_component.get('name') == 'apk/' + reviewed['origin']
+                and native_component.get('version') == reviewed['version']
+                and native_component.get('packageIds') == ['rust.' + reviewed['version']]
+                and reference.get('url') == 'https://codeload.github.com/alpinelinux/aports/tar.gz/' + reviewed['commit']):
+            member_limit, expanded_limit, exact_inventory = source_inventory_bounds(source_name, data,
+                origin=reviewed['origin'], version=reviewed['version'], commit=reviewed['commit'])
     if zipfile.is_zipfile(io.BytesIO(data)):
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             if len(archive.infolist()) > 250000 or sum(item.file_size for item in archive.infolist()) > MAX_SOURCE:
@@ -489,19 +505,26 @@ def source_notice_hashes(data, depth=0):
             if raw in ('.', '') and item.isdir():
                 continue
             name = source_relative(raw.removeprefix('./')); count += 1
-            if count > 250000 or item.size > MAX_FILE:
+            if count > member_limit or item.size > MAX_FILE:
                 raise ValueError('Dependency source inventory exceeds bound')
             if not item.isfile():
                 continue
             total += item.size
-            if total > MAX_SOURCE:
+            if total > expanded_limit:
                 raise ValueError('Dependency source expansion exceeds bound')
             basename = PurePosixPath(name).name
             if notice_candidate(basename) or basename == 'OPAM-REPOSITORY-LICENSE':
                 hashes.add(digest(archive.extractfile(item).read()))
+            elif depth == 0 and name in ('aports/queue.h', 'aports/tree.h'):
+                from compiler_license_native import reviewed_header_source_notice
+                original = archive.extractfile(item).read()
+                if reviewed_header_source_notice(name, original):
+                    hashes.add(digest(original))
             elif depth == 0 and (name == 'source/original-archive' or name == 'curl-8.5.0.tar.gz'
                     or name.startswith('distfiles/') and basename.endswith(('.tar.gz', '.tar.xz', '.tar.bz2', '.tbz', '.tgz', '.zip'))):
-                hashes.update(source_notice_hashes(archive.extractfile(item).read(), depth + 1))
+                hashes.update(source_notice_hashes(archive.extractfile(item).read(), depth + 1, basename, native_component))
+    if exact_inventory and (count != member_limit or total != expanded_limit):
+        raise ValueError('Reviewed dependency source inventory differs')
     return hashes
 
 
@@ -531,8 +554,13 @@ def validate_sources(value, read_source):
             data = read_source(name)
             if len(data) != reference['bytes'] or digest(data) != reference['sha256']:
                 raise ValueError('Dependency corresponding-source bytes differ')
-            checked[name] = (reference, source_notice_hashes(data))
+            from compiler_license_native import validate_bsd_header_source
+            validate_bsd_header_source(component, data)
+            checked[name] = (reference, source_notice_hashes(data, native_component=component))
         previous, actual_notices = checked[name]
+        from compiler_license_native import requires_bsd_header_review, validate_bsd_header_source
+        if requires_bsd_header_review(component):
+            validate_bsd_header_source(component, read_source(name))
         if previous != reference:
             raise ValueError('Shared corresponding source has conflicting identity')
         if 'licenseEvidence' in component:

@@ -112,6 +112,8 @@ jobs:
             ${{ runner.temp }}/p3-capture-diagnostic/upload/private/sourcebuild-source-inventory.json
             ${{ runner.temp }}/p3-capture-diagnostic/upload/private/sourcebuild-license.json
             ${{ runner.temp }}/p3-capture-diagnostic/upload/private/sourcebuild-source-provenance.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/collected-components-opam.json
+            ${{ runner.temp }}/p3-capture-diagnostic/upload/private/collected-components-native.json
             ${{ runner.temp }}/p3-capture-diagnostic/upload/dependency-sources/diagnostic-ledger.json
             ${{ runner.temp }}/p3-capture-diagnostic/upload/private/sourcebuild-process-*.json
             ${{ runner.temp }}/p3-capture-diagnostic/upload/dependency-sources/*.tar.xz

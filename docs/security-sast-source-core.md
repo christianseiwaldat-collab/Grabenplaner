@@ -71,7 +71,7 @@ Quellbau bleiben ein fehlgeschlagener Security-Job. Es gibt keinen Rückfall auf
 den ursprünglich unvollständigen Kern oder den nicht qualifizierten alternativen
 Scanner.
 
-## Vertraulichkeit und mögliche spätere Wiederverwendung
+## Vertraulichkeit und geprüfte Wiederverwendung
 
 GP-Funde, Prüfkontexte, Prozessprotokolle und der private native Qualifikations-
 nachweis verlassen den Runner nur verschlüsselt. Der Entschlüsselungsschlüssel
@@ -79,11 +79,26 @@ bleibt offline. Öffentliche CI-Metadaten enthalten ausschließlich die bisherig
 schemaausgewählten Zusammenfassungen. Ein erfolgloser Quellbau hinterlässt einen
 ausdrücklich unvollständigen Prüfbeleg.
 
-Die getrennten Tool-Publisher-/Consumer-Werkzeuge sind nicht in diesen Ablauf
-eingeschaltet. Ohne vollständiges, an das tatsächliche Binary gebundenes
-Dritt-Lizenz-/Quelleninventar darf der Publisher kein wiederverwendbares
-Toolartefakt freigeben. Eine spätere Wiederverwendung verlangt zusätzlich die
-unabhängig geprüften äußeren/inneren Archiv- und Binary-Hashes sowie feste
-Repository-, Workflow-, Run-, Commit- und Artefaktidentitäten. Abgelaufene oder
-abweichende Artefakte müssen fehlschlagen. Diese Dokumentation bestätigt keine
-bereits erfolgte Toolveröffentlichung, Cachefreigabe oder Produktivinstallation.
+Die getrennten Tool-Publisher-/Consumer-Werkzeuge sind in den Quellbauablauf
+eingebunden. Ein unabhängig geprüfter, versionierter Pin unter
+`.github/security-semgrep-core-pin.json` aktiviert die Wiederverwendung für
+genau die gebundenen Compiler-Eingaben. Der Publisher verlangt ein vollständiges,
+an das tatsächlich qualifizierte Binary gebundenes Dritt-Lizenz-/Quelleninventar.
+Originale Quellen und Lizenztexte bleiben erhalten; deklarierte Lizenznamen und
+separat gekennzeichnete Referenztexte ersetzen keine Originalnachweise.
+
+Vor der Nutzung prüft der Consumer äußere und innere Archiv- und Binary-Hashes,
+das vollständige Quelleninventar sowie feste Repository-, Workflow-, Run-,
+Commit- und Artefaktidentitäten. Ein fehlender Pin, ein abgelaufenes oder nicht
+verfügbares Artefakt oder ein gültiger Pin für andere Compiler-Eingaben führt
+zum kalten Quellbau.
+Widersprüchliche oder beschädigte Nachweise für den ausgewählten Pin blockieren.
+Bei jeder Wiederverwendung folgen erneut die zehn Qualifizierungsfälle mit den
+aktuellen vollständigen Dateien und alle fünf regulären Vollscanprofile.
+Scan-Ergebnisse werden nicht wiederverwendet. Der jeweilige CI-Beleg weist den
+tatsächlich benutzten Weg als `reviewed_reuse` oder `cold_build` aus.
+
+Reine Upstream-Quellen-/Lizenzdiagnosen enthalten keine GP-Funde und werden als
+begrenztes, ausdrücklich aufgelistetes Set mit Hashmanifest aufbewahrt. Sie sind
+als Diagnose gekennzeichnet und erteilen keine Tool- oder Security-Freigabe.
+Diese Compiler-Prüfung bestätigt keine Produktivinstallation.
