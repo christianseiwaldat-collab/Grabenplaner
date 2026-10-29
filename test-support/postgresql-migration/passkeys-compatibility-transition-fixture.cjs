@@ -10,8 +10,10 @@ const REPO = path.resolve(__dirname, "../.."), BIN = "/usr/lib/postgresql/18/bin
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
 const INSPECTOR_SHA = "f89627774a3580fea93a22a30910d3034296251da30c1b92728029aee5054064";
 const DEPENDENCIES_SHA = "2afd6587681740d340039db0e128dadf52b2886d9359b6585980a7d7d7e9a70b";
+const FROZEN_DEPENDENCIES_SHA = "08bbee3052f95192586063b527e25d9817bd9d47162d2c8d24d3344c5f05042c";
 
-function originalInspector(document = require("./f0d-core-inspector.json")) {
+function originalInspector(document = require("./f0d-core-inspector.json"),
+  frozen = require("./f0d-core-inspector-frozen-dependencies.json")) {
   if (document.format !== "gp-f0d-core-schema-inspector-original-v1"
     || document.sourceCommit !== "f0d71104bbe4926930662a20bf0660744fbcc0e5"
     || document.installedManifestSha256 !== "61fc69f3fd40257674d01dfe277531895e7cac94503f430167c320b94bc79682"
@@ -22,21 +24,79 @@ function originalInspector(document = require("./f0d-core-inspector.json")) {
   const source = Buffer.from(document.inspector.sourceBase64, "base64"), names = new Set();
   if (hash(source) !== INSPECTOR_SHA || source.length !== document.inspector.bytes) throw Error("PASSKEY_TRANSITION_OLD_SOURCE");
   if (hash(JSON.stringify(document.sharedDependencies)) !== DEPENDENCIES_SHA) throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
+  // These five genuine f0d blobs diverged when the current CAS extension was
+  // added. Never relabel the current bytes as historical dependencies.
+  if (hash(JSON.stringify(frozen)) !== FROZEN_DEPENDENCIES_SHA
+    || frozen.format !== "gp-f0d-core-inspector-frozen-dependencies-v1"
+    || frozen.sourceCommit !== document.sourceCommit || frozen.sharedDependenciesSha256 !== DEPENDENCIES_SHA
+    || !Array.isArray(frozen.files) || frozen.files.length !== 5
+    || !Array.isArray(frozen.readOnlyData) || frozen.readOnlyData.length !== 1) throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
+  const retained = new Map(), originals = new Map();
+  for (const item of frozen.files) {
+    const pinned = document.sharedDependencies.find(entry => entry.path === item.path);
+    const bytes = Buffer.from(item.sourceBase64, "base64");
+    if (!pinned || retained.has(item.path) || item.gitLfSha256 !== pinned.gitLfSha256
+      || !/^[a-f0-9]{40}$/.test(item.gitBlob || "") || bytes.length !== item.bytes
+      || bytes.toString("base64") !== item.sourceBase64 || hash(bytes) !== pinned.gitLfSha256) {
+      throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
+    }
+    retained.set(item.path, bytes);
+  }
   for (const item of document.sharedDependencies) {
     if (typeof item.path !== "string" || !/^(?:lib|public)\/[a-zA-Z0-9_./-]+$/.test(item.path)
       || item.path.split("/").some(part => ["", ".", ".."].includes(part)) || names.has(item.path)
       || !/^[a-f0-9]{64}$/.test(item.gitLfSha256 || "")) throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
     names.add(item.path);
-    // The installed original has historical CRLF/mixed EOLs. Shared code is
-    // reused only when its complete Git-normalized content is still identical.
-    if (hash(Buffer.from(fs.readFileSync(path.join(REPO, item.path), "utf8").replace(/\r\n/g, "\n"))) !== item.gitLfSha256) {
+    // Snapshot unchanged shared sources only after their full original hash
+    // matches. An independent loader below cannot reuse a current module cache.
+    const bytes = retained.get(item.path)
+      || Buffer.from(fs.readFileSync(path.join(REPO, item.path), "utf8").replace(/\r\n/g, "\n"));
+    if (hash(bytes) !== item.gitLfSha256) {
       throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
     }
+    originals.set(item.path, bytes);
   }
-  const filename = path.join(REPO, document.inspector.path), instance = new Module(filename, module);
-  instance.filename = filename; instance.paths = Module._nodeModulePaths(path.dirname(filename));
-  instance._compile(source.toString("utf8"), filename);
-  return instance.exports;
+  // The original schema plan also reads this SQL file directly through fs.
+  // Preserve that exact historical data input, without opening an FS fallback.
+  const data = frozen.readOnlyData[0];
+  if (data.path !== "lib/persistence/postgresql/core/compatibility.sql"
+    || !/^[a-f0-9]{64}$/.test(data.gitLfSha256 || "") || !/^[a-f0-9]{40}$/.test(data.gitBlob || "")) {
+    throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
+  }
+  const dataBytes = Buffer.from(fs.readFileSync(path.join(REPO, data.path), "utf8").replace(/\r\n/g, "\n"));
+  if (dataBytes.length !== data.bytes || hash(dataBytes) !== data.gitLfSha256) throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
+  originals.set(data.path, dataBytes);
+  originals.set(document.inspector.path, source);
+  const cache = new Map(), builtins = new Set(["node:async_hooks", "node:crypto", "node:path"]);
+  const relative = filename => path.relative(REPO, path.resolve(filename)).replaceAll("\\", "/");
+  const frozenFs = Object.freeze({ readFileSync(filename, encoding) {
+    const bytes = originals.get(relative(filename));
+    if (!bytes || ![undefined, "utf8", "utf-8"].includes(encoding)) throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
+    return encoding ? bytes.toString("utf8") : Buffer.from(bytes);
+  } });
+  function load(name) {
+    if (cache.has(name)) return cache.get(name).exports;
+    const bytes = originals.get(name);
+    if (!bytes) throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
+    const filename = path.join(REPO, name), instance = new Module(filename, module);
+    instance.filename = filename; instance.paths = [];
+    cache.set(name, instance);
+    if (name.endsWith(".json")) instance.exports = JSON.parse(bytes.toString("utf8"));
+    else if (name.endsWith(".js")) {
+      instance.require = request => {
+        if (request === "node:fs") return frozenFs;
+        if (builtins.has(request)) return require(request);
+        if (typeof request !== "string" || !request.startsWith(".")) throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
+        const target = relative(path.resolve(path.dirname(filename), request));
+        const dependency = [target, target + ".js", target + ".json", target + "/index.js"].find(item => originals.has(item));
+        if (!dependency) throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
+        return load(dependency);
+      };
+      instance._compile(bytes.toString("utf8"), filename);
+    } else throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
+    return instance.exports;
+  }
+  return load(document.inspector.path);
 }
 
 async function withIsolatedCore(work) {

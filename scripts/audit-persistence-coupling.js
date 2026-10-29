@@ -108,6 +108,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'lib/persistence/postgresql/contracts/payroll-handoff-department-catalog-v1.json',
   // Exact session extension artifacts; only the named maintenance CLI opens a driver.
   'lib/persistence/postgresql/contracts/session-security-catalog-v1.json',
+  'lib/persistence/postgresql/contracts/planning-shift-precondition-catalog-v1.json',
+  'lib/persistence/postgresql/core/planning-shift-precondition-catalog.js',
   'lib/persistence/postgresql/core/session-security-catalog.js',
   'lib/persistence/postgresql/core/session-security.js',
   'server-tools/linux/lib/session-security-migrate.js',

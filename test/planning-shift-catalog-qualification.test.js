@@ -189,3 +189,12 @@ test("Core and boundary register only the reviewed PostgreSQL extension without 
     assert.doesNotMatch(source, /createSqlitePersistenceProvider|openSqliteDatabase|new\s+DatabaseSync\s*\(/);
   }
 });
+
+test("the named planning revision module receives no driver-import exception", () => {
+  const { architectureBoundaryViolationsForText: inspect } = require("../scripts/audit-persistence-coupling");
+  for (const target of ["lib/persistence/postgresql/core/planning-shift-precondition-catalog.js",
+    "lib/persistence/postgresql/core/planning-shift-precondition-unreviewed.js"]) {
+    assert.ok(inspect(target, "const driver = require('pg');").some(entry => entry.kind === "postgresql-driver-import"), target);
+    assert.ok(inspect(target, "const driver = require('node:sqlite');").some(entry => entry.kind === "sqlite-driver-import-outside-boundary"), target);
+  }
+});
