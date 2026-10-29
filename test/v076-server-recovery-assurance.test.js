@@ -11,7 +11,8 @@ test("assurance diagnostics await the isolated reader without changing the main 
   assert.match(server, /require\("\.\/lib\/recovery-assurance-status"\)/);
   assert.match(server, /require\("\.\/lib\/recovery-assurance-status-reader"\)/);
   assert.match(server, /recoveryAssuranceStatusReader\.read\(options\)/);
-  assert.match(server, /await readRecoveryAssuranceStatus\(\{ configured: offsiteConfigured \}\)/);
+  const diagnosticCall = server.match(/const recoveryAssurance = ([\s\S]{0,300}?);/)?.[1] || "";
+  assert.match(diagnosticCall, /^await readRecoveryAssuranceStatus\(\{\s*configured: offsiteConfigured,\s*\.\.\.\(recoverySchedulerObservation \? \{ schedulerObservation: recoverySchedulerObservation \} : \{\}\)\s*\}\)$/);
   assert.match(server, /await readRecoveryAssuranceStatus\(\{ configured: serverModeActive, reportId: match\[1\] \}\)/);
   assert.match(server, /await recoveryAssuranceStatusReader\.close\(\)/);
   assert.match(server, /id: "recovery-assurance"/);
