@@ -9,6 +9,7 @@ on:
       - scripts/security/check_compiler_capture.py
       - scripts/security/test_check_compiler_capture.py
       - scripts/security/compiler_license_ledger.py
+      - scripts/security/fixtures/ocaml-config.3/opam
 
 permissions:
   contents: read
@@ -52,6 +53,15 @@ jobs:
           path: |
             ${{ runner.temp }}/compiler-capture-contract/contract-result.json
             ${{ runner.temp }}/compiler-capture-contract/probe-metadata-binding.json
+            ${{ runner.temp }}/compiler-capture-contract/config3-metadata-binding.json
+            ${{ runner.temp }}/compiler-capture-contract/config3-original.opam
+            ${{ runner.temp }}/compiler-capture-contract/config3-installed.opam
+            ${{ runner.temp }}/compiler-capture-contract/build-metadata.stdout
+            ${{ runner.temp }}/compiler-capture-contract/build-metadata.stderr
+            ${{ runner.temp }}/compiler-capture-contract/build-metadata.json
+            ${{ runner.temp }}/compiler-capture-contract/config3-fake-metadata.stdout
+            ${{ runner.temp }}/compiler-capture-contract/config3-fake-metadata.stderr
+            ${{ runner.temp }}/compiler-capture-contract/config3-fake-metadata.json
             ${{ runner.temp }}/compiler-capture-contract/build-positive.stdout
             ${{ runner.temp }}/compiler-capture-contract/build-positive.stderr
             ${{ runner.temp }}/compiler-capture-contract/build-positive.json

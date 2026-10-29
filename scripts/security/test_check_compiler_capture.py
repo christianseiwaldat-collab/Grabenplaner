@@ -1,11 +1,14 @@
 import base64
+import contextlib
 import copy
+import io
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import check_compiler_capture as contract
 
@@ -47,6 +50,19 @@ class CaptureContractTests(unittest.TestCase):
             with self.subTest(code=code, message=message), self.assertRaises(ValueError):
                 contract.validate_negative({'exitCode': code}, b'', message)
 
+    def test_real_empty_musl_headers_remain_owned_and_byte_bound_instead_of_being_omitted(self):
+        value = capture_value()
+        # Observed in authenticated native run 40809493525: musl-dev ships
+        # these empty compatibility headers alongside nonempty stdio.h.
+        value['nativeInputs'].append({'path': '/usr/include/bits/hwcap.h', 'bytes': 0,
+            'sha256': contract.digest(b''), 'owner': 'musl-dev.synthetic'})
+        self.assertEqual(len(contract.validate_capture(contract.encoded(value))['nativeInputs']), 2)
+        for changed in ({'bytes': -1}, {'sha256': 'a' * 64}, {'owner': 'unknown.1'}, {'bytes': False}):
+            candidate = copy.deepcopy(value)
+            candidate['nativeInputs'][-1].update(changed)
+            with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, 'owner or byte identity'):
+                contract.validate_capture(contract.encoded(candidate))
+
     def test_generated_fixture_has_local_release_and_pin_but_no_compiler_build(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -77,6 +93,60 @@ class CaptureContractTests(unittest.TestCase):
                 self.assertEqual(contract.digest(installed), row['installedSha256'])
                 self.assertEqual(row['normalizedDuringInstall'], original != installed)
 
+    def test_official_config_fixture_keeps_exact_bytes_and_isolated_fake_variant_without_actions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = 'sha256:' + 'a' * 64
+            context, original, variant = contract.metadata_fixture(Path(directory), image)
+            self.assertEqual(contract.digest(original), contract.CONFIG_METADATA_SHA)
+            self.assertEqual((context / 'repository/packages/ocaml-config/ocaml-config.3/opam').read_bytes(), original)
+            self.assertEqual((context / 'Dockerfile').read_text(), 'FROM ' + image + '\nCOPY repository /metadata-repository\n')
+            self.assertIn(b'Synthetic fake-install metadata only', variant)
+            for forbidden in (b'build:', b'install:', b'url {', b'extra-source'):
+                self.assertNotIn(forbidden, variant)
+            self.assertFalse((context / 'repository/packages/gp-capture-probe').exists())
+        with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(ValueError, 'immutable'):
+            contract.metadata_fixture(Path(directory), 'mutable:tag')
+
+    def test_actual_fake_metadata_script_records_original_installed_bytes_and_scoped_commands(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _, original, variant = contract.metadata_fixture(Path(directory), 'sha256:' + 'a' * 64)
+        # Execute the actual embedded program with only its process/filesystem
+        # boundaries stubbed. Native OPAM behavior is proved by the workflow.
+        installed = original.replace(b'  src:\n    ', b'  src: ')
+        files = {
+            '/metadata-repository/packages/ocaml-config/ocaml-config.3/opam': original,
+            '/metadata-repository/packages/ocaml-variants/ocaml-variants.5.4.0/opam': variant,
+            '/metadata-root/config3-metadata/.opam-switch/packages/ocaml-config.3/opam': installed}
+        class FakePath(PurePosixPath):
+            def read_bytes(self): return files[str(self)]
+        environments = []
+        def command(arguments, **kwargs):
+            environments.append(dict(kwargs['env']))
+            stdout = b'2.5.2\n' if arguments == ['opam', '--version'] else (
+                b'ocaml-config.3\nocaml-variants.5.4.0\n' if arguments[1] == 'list' else b'Fake action metadata only\n')
+            return SimpleNamespace(returncode=0, stdout=stdout, stderr=b'')
+        stdout = io.StringIO()
+        with patch.dict(sys.modules, {'pathlib': SimpleNamespace(Path=FakePath)}), \
+                patch('subprocess.run', side_effect=command), contextlib.redirect_stdout(stdout), \
+                patch.dict('os.environ', {'OPAMSWITCH': 'inherited-must-not-leak'}, clear=True):
+            with self.assertRaises(SystemExit) as stopped:
+                exec(compile(contract.CONFIG_METADATA_SCRIPT, '<actual-config-metadata-script>', 'exec'), {})
+        self.assertEqual(stopped.exception.code, 0)
+        evidence = contract.validate_config_metadata(stdout.getvalue(), original, variant)
+        self.assertEqual(base64.b64decode(evidence['installed']['base64']), installed)
+        self.assertTrue(all('OPAMSWITCH' not in item for item in environments[:3]))
+        self.assertTrue(all(item['OPAMSWITCH'] == 'config3-metadata' for item in environments[3:]))
+        for changed in ('qualification', 'actual-install', 'original-sha', 'installed-sha', 'unexpected-package', 'command-error'):
+            value = copy.deepcopy(evidence)
+            if changed == 'qualification': value['sourceQualification'] = True
+            if changed == 'actual-install': value['commands'][3]['argv'].remove('--fake')
+            if changed == 'original-sha': value['original']['sha256'] = '0' * 64
+            if changed == 'installed-sha': value['installed']['sha256'] = '0' * 64
+            if changed == 'unexpected-package': value['installedPackageIds'].append('ocaml.5.4.0')
+            if changed == 'command-error': value['commands'][3]['exitCode'] = 1
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                contract.validate_config_metadata(contract.encoded(value), original, variant)
+
     def test_real_subprocess_keeps_bounded_stdout_and_stderr_and_rejects_truncation(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)
@@ -106,6 +176,8 @@ class CaptureContractTests(unittest.TestCase):
         self.assertNotIn('publish_semgrep_core_tool.py', source)
         self.assertNotIn('semgrep-core-tool-${{', source)
         self.assertIn('raw-negative/capture.tar.xz', source)
+        self.assertIn('config3-installed.opam', source)
+        self.assertIn('config3-metadata-binding.json', source)
         self.assertNotIn('**', source)
 
     def test_capture_image_command_binding_cannot_select_remote_docker(self):

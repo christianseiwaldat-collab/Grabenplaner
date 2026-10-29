@@ -31,6 +31,53 @@ UNKNOWN = '/usr/include/gp_capture_contract_unowned.h'
 MAX_OUTPUT = 4 * 1024**2
 MAX_ERROR = 64 * 1024
 SOCKET = Path('/run/docker.sock')
+CONFIG_METADATA_SHA = 'eac491c01bd4de3e78443d55bd9948e107c9ad4c80b5d0f4c63de778b601aae3'
+CONFIG_PACKAGE = 'ocaml-config.3'
+VARIANT_PACKAGE = 'ocaml-variants.5.4.0'
+
+# This isolated switch deliberately contains fake installation records. It is
+# never passed to the compiler capture or license collector. Network isolation
+# independently prevents the original declaration's extra-source URLs from
+# being fetched, even if OPAM were unexpectedly to try performing an action.
+CONFIG_METADATA_SCRIPT = r'''
+import base64, hashlib, json, os, pathlib, subprocess
+def sha(data): return hashlib.sha256(data).hexdigest()
+def data_record(data):
+    return {'bytes': len(data), 'sha256': sha(data), 'base64': base64.b64encode(data).decode()}
+record = {'format': 'gp-fake-opam-config3-metadata/v1', 'complete': False,
+    'fakeInstall': True, 'syntheticCompilerMetadata': True, 'compilerBuilt': False,
+    'compilerQualification': False, 'runtimeQualification': False,
+    'sourceQualification': False, 'declarationSemanticsApproved': False, 'commands': []}
+environment = dict(os.environ, HOME='/metadata-root', OPAMROOT='/metadata-root', OPAMYES='1')
+environment.pop('OPAMSWITCH', None)
+def command(arguments):
+    result = subprocess.run(arguments, env=environment, capture_output=True, timeout=60, check=False)
+    if len(result.stdout) > 65536 or len(result.stderr) > 65536:
+        raise ValueError('Metadata command exceeded its diagnostic bound')
+    record['commands'].append({'argv': arguments, 'exitCode': result.returncode,
+        'stdout': data_record(result.stdout), 'stderr': data_record(result.stderr)})
+    if result.returncode: raise ValueError('Fake metadata command failed')
+    return result.stdout
+try:
+    record['opamVersion'] = command(['opam', '--version']).decode().strip()
+    if record['opamVersion'] != '2.5.2': raise ValueError('Expected actual OPAM 2.5.2')
+    record['original'] = data_record(pathlib.Path('/metadata-repository/packages/ocaml-config/ocaml-config.3/opam').read_bytes())
+    record['syntheticVariant'] = data_record(pathlib.Path('/metadata-repository/packages/ocaml-variants/ocaml-variants.5.4.0/opam').read_bytes())
+    command(['opam', 'init', '--bare', '--disable-sandboxing', '--no-setup', '--yes',
+        'metadata', 'file:///metadata-repository'])
+    command(['opam', 'switch', 'create', 'config3-metadata', '--empty', '--yes'])
+    environment['OPAMSWITCH'] = 'config3-metadata'
+    command(['opam', 'install', '--fake', '--yes', 'ocaml-config.3'])
+    record['installedPackageIds'] = sorted(command(['opam', 'list', '--installed', '--short', '--columns=package', '--color=never']).decode().splitlines())
+    installed = pathlib.Path('/metadata-root/config3-metadata/.opam-switch/packages/ocaml-config.3/opam')
+    record['installedPath'] = str(installed)
+    record['installed'] = data_record(installed.read_bytes())
+    record['complete'] = True
+except Exception as error:
+    record['error'] = str(error)[:1000]
+print(json.dumps(record, sort_keys=True))
+raise SystemExit(0 if record['complete'] else 2)
+'''
 
 
 def digest(data):
@@ -173,12 +220,13 @@ def validate_capture(raw):
     if 'opam.2.5.2-r0' not in apks or 'python3.3.12.16-r0' not in apks:
         raise ValueError('Actual installed interpreter/OPAM versions differ')
     native = value['nativeInputs']
-    if not native or not any(item['path'] == '/usr/include/stdio.h' for item in native):
+    if not native or not any(item['path'] == '/usr/include/stdio.h' and item['bytes'] > 0 for item in native):
         raise ValueError('The positive fixture must observe real APK-owned native headers')
     for item in native:
         if (set(item) != {'path', 'bytes', 'sha256', 'owner'} or item['owner'] not in apks
-                or type(item['bytes']) is not int or item['bytes'] <= 0
-                or not re.fullmatch('[a-f0-9]{64}', str(item['sha256']))):
+                or type(item['bytes']) is not int or item['bytes'] < 0
+                or not re.fullmatch('[a-f0-9]{64}', str(item['sha256']))
+                or item['bytes'] == 0 and item['sha256'] != digest(b'')):
             raise ValueError('Actual native owner or byte identity is unbound')
     return value
 
@@ -203,6 +251,74 @@ def metadata_byte_proof(captured, context):
             'normalizedDuringInstall': installed != original})
     return {'format': 'gp-synthetic-opam-metadata-bytes/v1', 'syntheticOnly': True,
         'hashNormalizationApplied': False, 'records': records}
+
+
+def metadata_fixture(output, positive_image):
+    """Keep official config metadata out of the real two-package capture switch."""
+    if not re.fullmatch('sha256:[a-f0-9]{64}', positive_image):
+        raise ValueError('Metadata fixture requires the positive immutable image ID')
+    original = (Path(__file__).resolve().parent / 'fixtures/ocaml-config.3/opam').read_bytes()
+    if digest(original) != CONFIG_METADATA_SHA:
+        raise ValueError('Official config.3 fixture differs from its exact reviewed bytes')
+    context = output / 'metadata-fixture'; context.mkdir(mode=0o700)
+    repository = context / 'repository'
+    package = repository / 'packages/ocaml-config' / CONFIG_PACKAGE
+    package.mkdir(parents=True)
+    write(repository / 'repo', b'opam-version: "2.0"\n')
+    write(package / 'opam', original)
+    variant = repository / 'packages/ocaml-variants' / VARIANT_PACKAGE
+    variant.mkdir(parents=True)
+    synthetic = (b'opam-version: "2.0"\n'
+        b'synopsis: "Synthetic fake-install metadata only; no compiler programs"\n'
+        b'maintainer: "synthetic@example.invalid"\n'
+        b'authors: "Synthetic Capture Contract"\nlicense: "MIT"\n')
+    write(variant / 'opam', synthetic)
+    write(context / 'Dockerfile', ('FROM ' + positive_image + '\n'
+        'COPY repository /metadata-repository\n').encode())
+    return context, original, synthetic
+
+
+def validate_config_metadata(raw, original, variant):
+    """This is a metadata-writing proof, never a source/license qualification."""
+    value = json.loads(raw)
+    if (not isinstance(value, dict) or value.get('format') != 'gp-fake-opam-config3-metadata/v1'
+            or value.get('complete') is not True or value.get('fakeInstall') is not True
+            or value.get('syntheticCompilerMetadata') is not True or value.get('opamVersion') != '2.5.2'
+            or any(value.get(key) is not False for key in ('compilerBuilt', 'compilerQualification',
+                'runtimeQualification', 'sourceQualification', 'declarationSemanticsApproved'))
+            or value.get('installedPackageIds') != [CONFIG_PACKAGE, VARIANT_PACKAGE]
+            or value.get('installedPath') != '/metadata-root/config3-metadata/.opam-switch/packages/ocaml-config.3/opam'
+            or digest(original) != CONFIG_METADATA_SHA):
+        raise ValueError('Fake config metadata evidence has an invalid scope or package binding')
+    for name, expected in (('original', original), ('syntheticVariant', variant), ('installed', None)):
+        item = value.get(name, {})
+        if set(item) != {'bytes', 'sha256', 'base64'}:
+            raise ValueError('Fake config metadata byte record is malformed')
+        data = base64.b64decode(item['base64'], validate=True)
+        if (type(item['bytes']) is not int or not 0 < len(data) <= 65536
+                or item['bytes'] != len(data) or item['sha256'] != digest(data)
+                or expected is not None and data != expected):
+            raise ValueError('Fake config metadata byte identity differs')
+    commands = value.get('commands', [])
+    expected_argv = [
+        ['opam', '--version'],
+        ['opam', 'init', '--bare', '--disable-sandboxing', '--no-setup', '--yes', 'metadata', 'file:///metadata-repository'],
+        ['opam', 'switch', 'create', 'config3-metadata', '--empty', '--yes'],
+        ['opam', 'install', '--fake', '--yes', CONFIG_PACKAGE],
+        ['opam', 'list', '--installed', '--short', '--columns=package', '--color=never']]
+    if ([item.get('argv') for item in commands] != expected_argv
+            or any(type(item.get('exitCode')) is not int or item['exitCode'] != 0 for item in commands)):
+        raise ValueError('Fake config metadata was not generated by the exact isolated commands')
+    for item in commands:
+        for stream in ('stdout', 'stderr'):
+            record = item.get(stream, {})
+            if set(record) != {'bytes', 'sha256', 'base64'}:
+                raise ValueError('Fake metadata command evidence is malformed')
+            data = base64.b64decode(record['base64'], validate=True)
+            if (type(record['bytes']) is not int or record['bytes'] != len(data)
+                    or len(data) > 65536 or digest(data) != record['sha256']):
+                raise ValueError('Fake metadata command evidence is unbound')
+    return value
 
 
 def bind_capture_command(original, docker):
@@ -281,6 +397,7 @@ def check(output):
         suffix = uuid.uuid4().hex
         positive_tag = 'gp-capture-contract-positive:' + suffix
         negative_tag = 'gp-capture-contract-negative:' + suffix
+        metadata_tag = 'gp-capture-contract-metadata:' + suffix
         def command(arguments, label, timeout=120):
             result = run(arguments, label, output, timeout=timeout)
             receipt['commands'].append(result[0])
@@ -328,6 +445,36 @@ def check(output):
             '--entrypoint', 'python3', negative_tag, '-I', '-c', script], 'capture-negative')
         validate_negative(result, raw, error)
         receipt['captureImage'].append(capture_image_contract(ledger, docker, negative_image, output, 'negative', negative=True))
+        # The two genuine installed probe packages have now passed both capture
+        # paths. Run the deliberately FAKE config.3 write-contract in a separate
+        # derivative image/container and an empty tmpfs OPAMROOT, never there.
+        context, original_metadata, variant_metadata = metadata_fixture(output, positive_image)
+        result, _, _ = command(docker + ['build', '--network', 'none', '--tag', metadata_tag,
+            '--file', str(context / 'Dockerfile'), str(context)], 'build-metadata', 60)
+        if result['exitCode']:
+            raise ValueError('Separate fake metadata fixture build failed')
+        images.append(metadata_tag)
+        result, image_raw, _ = command(docker + ['image', 'inspect', '--format', '{{.Id}}', metadata_tag], 'inspect-metadata')
+        metadata_image = image_raw.decode().strip()
+        if result['exitCode'] or not re.fullmatch('sha256:[a-f0-9]{64}', metadata_image):
+            raise ValueError('Separate fake metadata image has no immutable ID')
+        result, raw, _ = command(docker + ['run', '--rm', '--network', 'none', '--read-only',
+            '--tmpfs', '/metadata-root:rw,nosuid,nodev,noexec,size=128m',
+            '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=128m',
+            '--entrypoint', 'python3', metadata_image, '-I', '-c', CONFIG_METADATA_SCRIPT], 'config3-fake-metadata', 300)
+        write(output / 'config3-metadata-binding.json', raw)
+        if result['exitCode']:
+            raise ValueError('Actual OPAM fake metadata write-contract failed; retained bounded stdout/stderr identify the cause')
+        metadata = validate_config_metadata(raw, original_metadata, variant_metadata)
+        installed_metadata = base64.b64decode(metadata['installed']['base64'], validate=True)
+        write(output / 'config3-original.opam', original_metadata)
+        write(output / 'config3-installed.opam', installed_metadata)
+        receipt['config3FakeMetadata'] = {'parentImageId': positive_image, 'imageId': metadata_image,
+            'originalSha256': digest(original_metadata), 'installedSha256': digest(installed_metadata),
+            'originalBytes': len(original_metadata), 'installedBytes': len(installed_metadata),
+            'normalizedDuringFakeInstall': installed_metadata != original_metadata,
+            'fakeInstall': True, 'syntheticCompilerMetadata': True, 'compilerQualification': False,
+            'runtimeQualification': False, 'sourceQualification': False, 'declarationSemanticsApproved': False}
         if source != Path(ledger.__file__).read_bytes() or script != ledger.CAPTURE_SCRIPT:
             raise ValueError('Capture source changed during this contract check')
         receipt.update(complete=True, passed=True)
