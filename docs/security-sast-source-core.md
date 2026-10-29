@@ -18,8 +18,9 @@ liefert keinen ausreichenden Nachweis tatsächlich abgeschlossener Konvergenz.
 
 Der verpflichtende Linux-SAST-Job verwendet den unveränderten, über sämtliche
 Paket-Hashes gebundenen Python-Wrapper 1.181.0 und denselben unveränderlichen
-Upstream-Regelsatz. Nur der native Kern wird im privaten Job aus dem offiziellen
-Upstream-Quellstand neu gebaut:
+Upstream-Regelsatz. Er bezieht einen exakt gebundenen, unabhängig geprüften
+Quellbau oder baut den nativen Kern im privaten Job aus dem offiziellen
+Upstream-Quellstand neu. Für den Kern gelten diese Bindungen:
 
 | Bindung | Wert |
 | --- | --- |
@@ -43,7 +44,9 @@ kein offizielles Releasebinary.
 
 ## Qualifikation und vollständiger Projektscan
 
-Vor jedem vollständigen Scan baut und qualifiziert derselbe Job den Kern neu.
+Vor jedem vollständigen Scan beschafft derselbe Job den exakt gebundenen Kern
+und qualifiziert ihn erneut. Ein unabhängig geprüfter Pin erlaubt den Bezug des
+bereits gebauten Kerns; ohne passenden verfügbaren Pin folgt ein neuer Quellbau.
 Vier synthetische Positiv-/Negativpaare prüfen dynamisches Laden, SQL-Injektion,
 mehrfache Schleifendurchläufe und asynchrone Datenflüsse. Hinzu kommen alle fünf
 unveränderten Profile auf der ganzen `server.js` und das Common-Profil auf einer
@@ -97,6 +100,20 @@ Bei jeder Wiederverwendung folgen erneut die zehn Qualifizierungsfälle mit den
 aktuellen vollständigen Dateien und alle fünf regulären Vollscanprofile.
 Scan-Ergebnisse werden nicht wiederverwendet. Der jeweilige CI-Beleg weist den
 tatsächlich benutzten Weg als `reviewed_reuse` oder `cold_build` aus.
+
+Das veröffentlichte Compilerartefakt wird 90 Tage aufbewahrt. Vor Ablauf oder bei
+geänderten Compiler-Eingaben muss ein neuer regulärer Publisherlauf erfolgreich
+abgeschlossen und sein Artefakt unabhängig geprüft werden; erst danach wird der
+versionierte Pin ersetzt. Die Lebensdauer wird nicht durch neue Scans verlängert.
+Ein abgelaufenes Artefakt erlaubt nur den dokumentierten kalten Quellbau.
+
+Das vollständige Drittquelleninventar erfasst die tatsächlich eingebauten
+OPAM-Pakete und nativen Bibliotheken. Paketmetadaten, zusätzliche Originalquellen,
+ursprüngliche Lizenztexte und ausdrücklich bezeichnete Referenztexte bleiben
+getrennt nachvollziehbar. Publisher und Consumer prüfen das komplette gebündelte
+Quellarchiv einschließlich seiner verschachtelten Lizenznachweise. Das bereinigte
+CycloneDX-Inventar behält die ursprüngliche unterstützte Formatversion; unbekannte
+Versionen und zusätzliche private Felder werden nicht ungeprüft übernommen.
 
 Reine Upstream-Quellen-/Lizenzdiagnosen enthalten keine GP-Funde und werden als
 begrenztes, ausdrücklich aufgelistetes Set mit Hashmanifest aufbewahrt. Sie sind
