@@ -40521,8 +40521,8 @@ app.put("/api/portal/v1/rights-dashboard/preferences", async (request, response)
   response.json({ theme });
 });
 
-async function explicitPortalAccessScopesForEmployee(employeeNumber) {
-  return (await organizationPersonnelRepository.listPortalAccessScopes(employeeNumber)).map((scope) => ({
+async function explicitPortalAccessScopesForEmployee(employeeNumber, repository = organizationPersonnelRepository) {
+  return (await repository.listPortalAccessScopes(employeeNumber)).map((scope) => ({
     locationId: scope.location_id,
     departmentId: Number(scope.department_id || 0) || null,
   }));
@@ -41003,7 +41003,7 @@ function planPersonnelLifecyclePermissionScopes({
   return planned;
 }
 
-async function normalizeRightsScopesForTarget(target, submittedScopes, projectedPermissions, actor = null) {
+async function normalizeRightsScopesForTarget(target, submittedScopes, projectedPermissions, actor = null, repository) {
   if (GLOBAL_SCOPE_PORTAL_ROLES.has(target.role)) {
     if (Array.isArray(submittedScopes) && submittedScopes.length) {
       throw httpError(400, "Globale Rollen benötigen keine Standort- oder Abteilungszuweisung.", "PORTAL_SCOPE_GLOBAL_ROLE");
@@ -41020,7 +41020,7 @@ async function normalizeRightsScopesForTarget(target, submittedScopes, projected
     && Array.isArray(actor.scopes) && actor.scopes.length === 0;
   const source = Array.isArray(submittedScopes)
     ? submittedScopes
-    : await explicitPortalAccessScopesForEmployee(target.employeeNumber);
+    : await explicitPortalAccessScopesForEmployee(target.employeeNumber, repository);
   let scopes = source.map((scope) => ({
     locationId: normalizeLocationId(scope?.locationId),
     departmentId: normalizeDepartmentId(scope?.departmentId, true),
@@ -41039,9 +41039,9 @@ async function normalizeRightsScopesForTarget(target, submittedScopes, projected
     if (scope.locationId !== target.homeLocationId && !developerManagedIndependentPlanner) {
       throw httpError(403, "Planungsrechte dürfen nur für die eigene Stammfiliale vergeben werden.", "PORTAL_SCOPE_HOME_LOCATION_REQUIRED");
     }
-    await validateActiveLocationExists(scope.locationId);
+    await validateActiveLocationExists(scope.locationId, repository);
     if (scope.departmentId) {
-      await validateActiveDepartmentExists(scope.departmentId, scope.locationId);
+      await validateActiveDepartmentExists(scope.departmentId, scope.locationId, repository);
     }
     unique.set(`${scope.locationId}:${scope.departmentId || 0}`, scope);
   }
@@ -41382,7 +41382,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     // Recheck the narrow independent-planner policy with the current actor and
     // employee assignment, including a rights-only edit preserving its scopes.
     await normalizeRightsScopesForTarget(
-      liveTargetAccess, scopes, projectedPermissions, liveLearningActor,
+      liveTargetAccess, scopes, projectedPermissions, liveLearningActor, organization,
     );
     if (scopesInputProvided) {
       assertPersonnelLearningPortalScopeDeltaAllowed(

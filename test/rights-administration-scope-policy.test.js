@@ -229,7 +229,7 @@ test("the rights transaction rechecks current actor and target even for rights-o
   const transaction = route.indexOf("await personnelLifecycleSerializableTransaction(async (organization) => {");
   assert.ok(transaction >= 0, "Expected the actual serializable rights transaction");
   const live = route.slice(transaction);
-  const recheck = live.match(/await normalizeRightsScopesForTarget\(\s*liveTargetAccess,\s*scopes,\s*projectedPermissions,\s*liveLearningActor,?\s*\);/);
+  const recheck = live.match(/await normalizeRightsScopesForTarget\(\s*liveTargetAccess,\s*scopes,\s*projectedPermissions,\s*liveLearningActor,\s*organization,?\s*\);/);
   assert.ok(recheck, "Recheck the actual live authority instead of the earlier actor");
   const nearestScopeConditional = live.lastIndexOf("if (scopesInputProvided)", recheck.index);
   assert.equal(nearestScopeConditional, -1, "Rights-only changes must not skip the independent-planner recheck");
@@ -238,4 +238,41 @@ test("the rights transaction rechecks current actor and target even for rights-o
     const at = live.indexOf(write);
     assert.ok(at > recheck.index, `The live policy must precede ${write}`);
   }
+});
+
+test("the actual scope normalizer keeps all reads on its bound transaction repository", async () => {
+  const names = ["explicitPortalAccessScopesForEmployee", "validateLocationExists", "validateActiveLocationExists",
+    "validateDepartmentExists", "validateActiveDepartmentExists", "normalizeRightsScopesForTarget"];
+  const implementations = names.map(name => {
+    const matches = [...serverSource.matchAll(new RegExp("^async function " + name + "\\([\\s\\S]*?^\\}", "gm"))];
+    assert.equal(matches.length, 1, name);
+    return matches[0][0];
+  });
+  const calls = [];
+  const bound = {
+    async listPortalAccessScopes(number) { calls.push(["stored", number]); return [{ location_id: "18", department_id: 1801 }]; },
+    async listLocations(all) { calls.push(["locations", all]); return [{ id: "18", active: true }]; },
+    async listDepartments(all) { calls.push(["departments", all]); return [{ id: 1801, location_id: "18", active: true }]; },
+  };
+  const global = new Proxy({}, { get() { throw Error("PERSISTENCE_TRANSACTION_STATE_INVALID(queryAll)"); } });
+  const context = vm.createContext({
+    organizationPersonnelRepository: global, GLOBAL_SCOPE_PORTAL_ROLES: new Set(["developer", "it_admin", "admin", "hr"]),
+    httpError, normalizeLocationId: value => String(value),
+    normalizeDepartmentId: value => value == null || value === "" ? null : Number(value),
+  });
+  vm.runInContext(implementations.join("\n") + "\nthis.normalize = normalizeRightsScopesForTarget;", context);
+  const target = independentPlanner({ homeLocationId: "18" });
+  const expected = [{ locationId: "18", departmentId: 1801 }];
+  assert.deepEqual(clone(await context.normalize(target, expected, schedulePermissions, developer(), bound)), expected);
+  assert.deepEqual(clone(await context.normalize(target, undefined, schedulePermissions, developer(), bound)), expected);
+  assert.deepEqual(calls, [["locations", true], ["departments", true], ["stored", target.employeeNumber],
+    ["locations", true], ["departments", true]]);
+  await assert.rejects(() => context.normalize(target, expected, schedulePermissions, developer()),
+    /PERSISTENCE_TRANSACTION_STATE_INVALID/, "The old unbound call must reproduce the PostgreSQL admission failure");
+  const archived = { ...bound, async listLocations() { return [{ id: "18", active: false }]; } };
+  await assert.rejects(() => context.normalize(target, expected, schedulePermissions, developer(), archived),
+    error => error.status === 409 && error.code === "PORTAL_SCOPE_LOCATION_INACTIVE");
+  const archivedDepartment = { ...bound, async listDepartments() { return [{ id: 1801, location_id: "18", active: false }]; } };
+  await assert.rejects(() => context.normalize(target, expected, schedulePermissions, developer(), archivedDepartment),
+    error => error.status === 409 && error.code === "PORTAL_SCOPE_DEPARTMENT_INACTIVE");
 });
