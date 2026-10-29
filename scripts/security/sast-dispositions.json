@@ -113019,6 +113019,146 @@
       ],
       "reviewer": "Codex technical source and actual finding review; no human approval claimed",
       "reason": "This actual native Linux span wraps the legacy plain-text representation, never note_html: the latter returns before these lines. html is the unchanged five-character escapeHtml output with authored newline/style wrappers. size is normalizeScheduleNoteSize(note.font_size), restricted to known legacy constants or a parsed finite 4..72 point number converted back to a numeric string. The dynamic double-quoted data-size attribute cannot acquire quotes, markup or CSS. The result enters Quill clipboard conversion and server canonicalization; free-form source style strings are not emitted by this sink."
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/app.js",
+      "start": {
+        "column": 28,
+        "line": 25174
+      },
+      "end": {
+        "column": 128,
+        "line": 25174
+      },
+      "fingerprint": "a358dff3427a2dab7724051b2402bfaa2d43064e50f8607a1f484e44d900fb05",
+      "sourceSha256": "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a",
+      "sourceSha256Variants": [
+        "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
+        "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "Exact new native finding from authenticated Linux Security run 40950042868 at public/app.js:25174:28. The sole interpolation in this nested <small> text fragment is Number(user.scopes.length). It can stringify only as a JavaScript Number, including NaN or Infinity; no HTML delimiter or attribute/event-handler string can survive. multipleScopes selects this authored fragment or an empty string. The surrounding innerHTML assignment does not make this exact numeric fragment executable. The complete renderer, synchronous producers and actual five-character escapeHtml helper are bound by the source context below. This decision is limited to this exact rule, source hash and span; it does not accept an exploitable risk, a different sink, an analysis error or a skipped target. Technical source review with an independent exact-source second review and an isolated hostile-input probe; no human approval is claimed.",
+      "reviewer": "Codex pin_final_review; independent exact-source reviewer sast_four_ui_findings; technical review, not human approval",
+      "reviewedOn": "2026-10-29",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/app.js",
+          "sha256": "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a",
+          "sha256Variants": [
+            "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
+            "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
+          ],
+          "reason": "Exact renderer, synchronous row/count producers and five-character escapeHtml text/quoted-attribute encoder are in this same source file; no URL, CSS, script or event-handler context is accepted."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.browser.security.insecure-document-method",
+      "path": "public/app.js",
+      "start": {
+        "column": 5,
+        "line": 25761
+      },
+      "end": {
+        "column": 17,
+        "line": 25764
+      },
+      "fingerprint": "0db866bc000e85a7808f6eabde57f6b2f89415aa41db1e28cd4c6da98cf149a7",
+      "sourceSha256": "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a",
+      "sourceSha256Variants": [
+        "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
+        "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "Exact new native finding from authenticated Linux Security run 40950042868 at public/app.js:25761:5. This innerHTML sink receives only rows created immediately above, synchronously. Location rows assign departmentId:null; department rows assign departmentId:Number(scope.departmentId), with a numeric truthiness filter. scope.locationId is escapeHtml-encoded inside a double-quoted value attribute, and the completed scope.label (including location/department fallback labels) is escapeHtml-encoded in span text. checked and disabled positions choose authored string literals only. There is no unsanitized string path to HTML syntax at this sink. The complete renderer, synchronous producers and actual five-character escapeHtml helper are bound by the source context below. This decision is limited to this exact rule, source hash and span; it does not accept an exploitable risk, a different sink, an analysis error or a skipped target. Technical source review with an independent exact-source second review and an isolated hostile-input probe; no human approval is claimed.",
+      "reviewer": "Codex pin_final_review; independent exact-source reviewer sast_four_ui_findings; technical review, not human approval",
+      "reviewedOn": "2026-10-29",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/app.js",
+          "sha256": "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a",
+          "sha256Variants": [
+            "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
+            "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
+          ],
+          "reason": "Exact renderer, synchronous row/count producers and five-character escapeHtml text/quoted-attribute encoder are in this same source file; no URL, CSS, script or event-handler context is accepted."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.browser.security.insecure-innerhtml",
+      "path": "public/app.js",
+      "start": {
+        "column": 5,
+        "line": 25761
+      },
+      "end": {
+        "column": 17,
+        "line": 25764
+      },
+      "fingerprint": "c1b98981cffa58a66cecfd1be1280f6b5055177dd04dc140a456ef05dd7fc61a",
+      "sourceSha256": "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a",
+      "sourceSha256Variants": [
+        "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
+        "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "Exact new native finding from authenticated Linux Security run 40950042868 at public/app.js:25761:5. Same exact innerHTML assignment and dataflow as the insecure-document-method finding. HTML structure is authored; escapeHtml protects every dynamic free-text value in its actual text or double-quoted attribute context, numeric departmentId cannot introduce quotes or tags, and state booleans select only checked/disabled literals. This duplicate rule flags the sink form, but the reviewed producers do not create an exploitable HTML injection. The complete renderer, synchronous producers and actual five-character escapeHtml helper are bound by the source context below. This decision is limited to this exact rule, source hash and span; it does not accept an exploitable risk, a different sink, an analysis error or a skipped target. Technical source review with an independent exact-source second review and an isolated hostile-input probe; no human approval is claimed.",
+      "reviewer": "Codex pin_final_review; independent exact-source reviewer sast_four_ui_findings; technical review, not human approval",
+      "reviewedOn": "2026-10-29",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/app.js",
+          "sha256": "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a",
+          "sha256Variants": [
+            "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
+            "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
+          ],
+          "reason": "Exact renderer, synchronous row/count producers and five-character escapeHtml text/quoted-attribute encoder are in this same source file; no URL, CSS, script or event-handler context is accepted."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/app.js",
+      "start": {
+        "column": 14,
+        "line": 25763
+      },
+      "end": {
+        "column": 269,
+        "line": 25763
+      },
+      "fingerprint": "f8a6da35367046fdf3bba9591b2f2991ac4855261c43d19fb3b903509efbfec6",
+      "sourceSha256": "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a",
+      "sourceSha256Variants": [
+        "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
+        "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "Exact new native finding from authenticated Linux Security run 40950042868 at public/app.js:25763:14. In this exact returned label template, escapeHtml(scope.locationId) is in a double-quoted value attribute and escapeHtml(scope.label) is span text. data-department-id is either the authored empty string (location row) or a Number value from the only other row producer. Number lexical forms cannot close the quoted attribute. checked and user.manageable are conditions whose selected outputs are fixed checked/disabled or empty literals; no user string is interpolated there. The complete renderer, synchronous producers and actual five-character escapeHtml helper are bound by the source context below. This decision is limited to this exact rule, source hash and span; it does not accept an exploitable risk, a different sink, an analysis error or a skipped target. Technical source review with an independent exact-source second review and an isolated hostile-input probe; no human approval is claimed.",
+      "reviewer": "Codex pin_final_review; independent exact-source reviewer sast_four_ui_findings; technical review, not human approval",
+      "reviewedOn": "2026-10-29",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/app.js",
+          "sha256": "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a",
+          "sha256Variants": [
+            "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
+            "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
+          ],
+          "reason": "Exact renderer, synchronous row/count producers and five-character escapeHtml text/quoted-attribute encoder are in this same source file; no URL, CSS, script or event-handler context is accepted."
+        }
+      ]
     }
   ]
 }
