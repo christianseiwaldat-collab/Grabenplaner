@@ -99,11 +99,24 @@ class CaptureContractTests(unittest.TestCase):
             context, original, variant = contract.metadata_fixture(Path(directory), image)
             self.assertEqual(contract.digest(original), contract.CONFIG_METADATA_SHA)
             self.assertEqual((context / 'repository/packages/ocaml-config/ocaml-config.3/opam').read_bytes(), original)
-            self.assertEqual((context / 'Dockerfile').read_text(), 'FROM ' + image + '\nCOPY repository /metadata-repository\n')
+            self.assertFalse((context / 'Dockerfile').exists())
+            arguments = contract.metadata_run_arguments(['docker', '--host', 'unix:///run/docker.sock'], image, context)
+            self.assertEqual(arguments[:4], ['docker', '--host', 'unix:///run/docker.sock', 'run'])
+            self.assertIn(image, arguments)
+            self.assertNotIn('build', arguments)
+            self.assertNotIn('pull', arguments)
+            self.assertIn('--read-only', arguments)
+            self.assertEqual(arguments[arguments.index('--network') + 1], 'none')
+            self.assertEqual(arguments[arguments.index('--mount') + 1],
+                'type=bind,src=' + str(context / 'repository') + ',dst=/metadata-repository,readonly')
+            self.assertIn('/metadata-root:rw,nosuid,nodev,noexec,size=128m', arguments)
+            self.assertEqual(arguments[-1], contract.CONFIG_METADATA_SCRIPT)
             self.assertIn(b'Synthetic fake-install metadata only', variant)
             for forbidden in (b'build:', b'install:', b'url {', b'extra-source'):
                 self.assertNotIn(forbidden, variant)
             self.assertFalse((context / 'repository/packages/gp-capture-probe').exists())
+            with self.assertRaisesRegex(ValueError, 'immutable'):
+                contract.metadata_run_arguments(['docker'], 'mutable:tag', context)
         with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(ValueError, 'immutable'):
             contract.metadata_fixture(Path(directory), 'mutable:tag')
 

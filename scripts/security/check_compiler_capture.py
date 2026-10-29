@@ -273,9 +273,26 @@ def metadata_fixture(output, positive_image):
         b'maintainer: "synthetic@example.invalid"\n'
         b'authors: "Synthetic Capture Contract"\nlicense: "MIT"\n')
     write(variant / 'opam', synthetic)
-    write(context / 'Dockerfile', ('FROM ' + positive_image + '\n'
-        'COPY repository /metadata-repository\n').encode())
     return context, original, synthetic
+
+
+def metadata_run_arguments(docker, positive_image, context):
+    """Run by local image ID; never feed a bare SHA to Dockerfile FROM.
+
+    BuildKit treats FROM sha256:<local-id> as a registry image named sha256.
+    A separate container plus a read-only local fixture mount avoids both that
+    resolution and any mutation of the already checked image/switch.
+    """
+    repository = (context / 'repository').absolute()
+    if (not re.fullmatch('sha256:[a-f0-9]{64}', positive_image)
+            or not repository.is_dir() or repository.resolve() != repository
+            or ',' in str(repository)):
+        raise ValueError('Fake metadata container requires an immutable image and canonical mount')
+    return docker + ['run', '--rm', '--network', 'none', '--read-only',
+        '--mount', 'type=bind,src=' + str(repository) + ',dst=/metadata-repository,readonly',
+        '--tmpfs', '/metadata-root:rw,nosuid,nodev,noexec,size=128m',
+        '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=128m',
+        '--entrypoint', 'python3', positive_image, '-I', '-c', CONFIG_METADATA_SCRIPT]
 
 
 def validate_config_metadata(raw, original, variant):
@@ -397,7 +414,6 @@ def check(output):
         suffix = uuid.uuid4().hex
         positive_tag = 'gp-capture-contract-positive:' + suffix
         negative_tag = 'gp-capture-contract-negative:' + suffix
-        metadata_tag = 'gp-capture-contract-metadata:' + suffix
         def command(arguments, label, timeout=120):
             result = run(arguments, label, output, timeout=timeout)
             receipt['commands'].append(result[0])
@@ -447,21 +463,11 @@ def check(output):
         receipt['captureImage'].append(capture_image_contract(ledger, docker, negative_image, output, 'negative', negative=True))
         # The two genuine installed probe packages have now passed both capture
         # paths. Run the deliberately FAKE config.3 write-contract in a separate
-        # derivative image/container and an empty tmpfs OPAMROOT, never there.
+        # container with a read-only local repo and an empty tmpfs OPAMROOT,
+        # never in the already checked switch. Docker run accepts a local
+        # image ID directly and does not resolve a Dockerfile registry name.
         context, original_metadata, variant_metadata = metadata_fixture(output, positive_image)
-        result, _, _ = command(docker + ['build', '--network', 'none', '--tag', metadata_tag,
-            '--file', str(context / 'Dockerfile'), str(context)], 'build-metadata', 60)
-        if result['exitCode']:
-            raise ValueError('Separate fake metadata fixture build failed')
-        images.append(metadata_tag)
-        result, image_raw, _ = command(docker + ['image', 'inspect', '--format', '{{.Id}}', metadata_tag], 'inspect-metadata')
-        metadata_image = image_raw.decode().strip()
-        if result['exitCode'] or not re.fullmatch('sha256:[a-f0-9]{64}', metadata_image):
-            raise ValueError('Separate fake metadata image has no immutable ID')
-        result, raw, _ = command(docker + ['run', '--rm', '--network', 'none', '--read-only',
-            '--tmpfs', '/metadata-root:rw,nosuid,nodev,noexec,size=128m',
-            '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=128m',
-            '--entrypoint', 'python3', metadata_image, '-I', '-c', CONFIG_METADATA_SCRIPT], 'config3-fake-metadata', 300)
+        result, raw, _ = command(metadata_run_arguments(docker, positive_image, context), 'config3-fake-metadata', 300)
         write(output / 'config3-metadata-binding.json', raw)
         if result['exitCode']:
             raise ValueError('Actual OPAM fake metadata write-contract failed; retained bounded stdout/stderr identify the cause')
@@ -469,7 +475,7 @@ def check(output):
         installed_metadata = base64.b64decode(metadata['installed']['base64'], validate=True)
         write(output / 'config3-original.opam', original_metadata)
         write(output / 'config3-installed.opam', installed_metadata)
-        receipt['config3FakeMetadata'] = {'parentImageId': positive_image, 'imageId': metadata_image,
+        receipt['config3FakeMetadata'] = {'imageId': positive_image, 'isolatedContainer': True,
             'originalSha256': digest(original_metadata), 'installedSha256': digest(installed_metadata),
             'originalBytes': len(original_metadata), 'installedBytes': len(installed_metadata),
             'normalizedDuringFakeInstall': installed_metadata != original_metadata,

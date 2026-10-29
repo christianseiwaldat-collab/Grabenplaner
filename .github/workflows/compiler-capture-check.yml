@@ -56,9 +56,6 @@ jobs:
             ${{ runner.temp }}/compiler-capture-contract/config3-metadata-binding.json
             ${{ runner.temp }}/compiler-capture-contract/config3-original.opam
             ${{ runner.temp }}/compiler-capture-contract/config3-installed.opam
-            ${{ runner.temp }}/compiler-capture-contract/build-metadata.stdout
-            ${{ runner.temp }}/compiler-capture-contract/build-metadata.stderr
-            ${{ runner.temp }}/compiler-capture-contract/build-metadata.json
             ${{ runner.temp }}/compiler-capture-contract/config3-fake-metadata.stdout
             ${{ runner.temp }}/compiler-capture-contract/config3-fake-metadata.stderr
             ${{ runner.temp }}/compiler-capture-contract/config3-fake-metadata.json
