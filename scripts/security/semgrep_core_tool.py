@@ -32,7 +32,10 @@ UPSTREAM = {'commit': '72d3525fe7e02f486428386078f192f8c4756804',
     'sourceModified': True, 'officialReleaseBinary': False}
 QUALIFICATION = {'complete': True, 'controlsPassed': True, 'caseCount': 10,
     'scope': 'four-synthetic-controls-and-six-whole-file-cases'}
-MAX_ARCHIVE = 1024 * 1024**2
+# Finite retained/downloaded size for the exact externally pinned compiler
+# artifact and its inner XZ only. Source expansion, per-file and JSON bounds
+# remain independent. Activate only after actual source packaging measurement.
+MAX_ARCHIVE = 1536 * 1024**2
 MAX_TOTAL = 2 * 1024**3
 MAX_JSON = 4 * 1024**2
 
