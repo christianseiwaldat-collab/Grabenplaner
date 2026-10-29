@@ -109596,18 +109596,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2682,
+        "line": 2684,
         "column": 42
       },
       "end": {
-        "line": 2685,
+        "line": 2687,
         "column": 16
       },
-      "fingerprint": "bea2d9c490b96a543487769d6c76d3ac612828b7d0b6e515606a3b2017a1bb3b",
-      "sourceSha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+      "fingerprint": "c106b893e9ac3e407060c5c34a826a0701ff97243ea62e8c48c4c5f1c8f35fd3",
+      "sourceSha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
       "sourceSha256Variants": [
-        "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-        "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+        "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+        "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109618,10 +109618,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+          "sha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
           "sha256Variants": [
-            "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-            "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+            "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+            "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2522: identifier escape Lines 1938: identifier lexer Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI."
         }
@@ -109631,18 +109631,18 @@
       "rule": "javascript.lang.security.audit.detect-redos",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2829,
+        "line": 2831,
         "column": 10
       },
       "end": {
-        "line": 2829,
+        "line": 2831,
         "column": 150
       },
-      "fingerprint": "df49046444e96f6427998a0dc8f32e250b8fde6add5630f6b00dbba3d0586258",
-      "sourceSha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+      "fingerprint": "30aab00c72cbba5a5a73ed295c3fba3bb387cffc43db7431efa5e25cccf5c23a",
+      "sourceSha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
       "sourceSha256Variants": [
-        "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-        "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+        "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+        "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109653,10 +109653,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+          "sha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
           "sha256Variants": [
-            "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-            "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+            "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+            "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2668: reviewed exact recognizer Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI."
         }
@@ -109666,18 +109666,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2840,
+        "line": 2842,
         "column": 21
       },
       "end": {
-        "line": 2840,
+        "line": 2842,
         "column": 77
       },
-      "fingerprint": "3cc8fef157953b2736a0b67e373a25dd33eb4f9b0e0d778546f5ef66e28d3fe9",
-      "sourceSha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+      "fingerprint": "403bc01a03f5e875c85596dcbbcd3f529d93f3933afbfdaeb502e5d96743a0c8",
+      "sourceSha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
       "sourceSha256Variants": [
-        "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-        "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+        "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+        "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109688,10 +109688,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+          "sha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
           "sha256Variants": [
-            "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-            "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+            "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+            "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2673: opener grammar precedes constructor Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI."
         }
@@ -109701,18 +109701,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2858,
+        "line": 2860,
         "column": 21
       },
       "end": {
-        "line": 2858,
+        "line": 2860,
         "column": 74
       },
-      "fingerprint": "e045030b532b3131a1c0d939763f93aa6babe7871db2113234bc830d6e89e8b0",
-      "sourceSha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+      "fingerprint": "53d6a64fbe7f926db5177e285fa771ce72035fa36567c906964f3bbdb43e3d0b",
+      "sourceSha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
       "sourceSha256Variants": [
-        "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-        "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+        "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+        "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109723,10 +109723,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+          "sha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
           "sha256Variants": [
-            "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-            "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+            "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+            "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2692: two-value quote source and escaping Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI."
         }
@@ -109736,18 +109736,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2978,
+        "line": 2980,
         "column": 18
       },
       "end": {
-        "line": 2978,
+        "line": 2980,
         "column": 94
       },
-      "fingerprint": "20976a514a5be9d8da8d45a83482e209967c1e353c7ef9316c6d76abf0a0f1cf",
-      "sourceSha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+      "fingerprint": "7828117c33140172979ddbc7684540cbe9944be186203e5b8fca253c79c1465f",
+      "sourceSha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
       "sourceSha256Variants": [
-        "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-        "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+        "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+        "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109758,10 +109758,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+          "sha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
           "sha256Variants": [
-            "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-            "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+            "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+            "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2817: constructor Lines 4794: fixed literal invocation Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI."
         }
@@ -109771,18 +109771,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-regexp",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 2991,
+        "line": 2993,
         "column": 42
       },
       "end": {
-        "line": 2991,
+        "line": 2993,
         "column": 83
       },
-      "fingerprint": "06a1ff20cbf60fc5213ac2621271f79f41b9de79eef0c258f15621db98318151",
-      "sourceSha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+      "fingerprint": "c24219b67bb67634de7a374072d408448064d803f3dd1f189f422ddfce53c189",
+      "sourceSha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
       "sourceSha256Variants": [
-        "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-        "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+        "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+        "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109793,10 +109793,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+          "sha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
           "sha256Variants": [
-            "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-            "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+            "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+            "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 2830: internal regex clone Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI."
         }
@@ -109806,18 +109806,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3300,
+        "line": 3302,
         "column": 14
       },
       "end": {
-        "line": 3300,
+        "line": 3302,
         "column": 52
       },
-      "fingerprint": "a1ed9ef9a9ae4d6bd533b97c7ab49d86c815e1bbbd5699287a2c05bf39b3f5b0",
-      "sourceSha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+      "fingerprint": "a17d901a6d221479e1b2066806fb0125fc6d474d314be2f6fbe6fd961810799f",
+      "sourceSha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
       "sourceSha256Variants": [
-        "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-        "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+        "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+        "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109828,10 +109828,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+          "sha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
           "sha256Variants": [
-            "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-            "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+            "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+            "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 3127: local tool wrapper Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI."
         }
@@ -109841,18 +109841,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3553,
+        "line": 3555,
         "column": 30
       },
       "end": {
-        "line": 3553,
+        "line": 3555,
         "column": 57
       },
-      "fingerprint": "a1a61eb996b5091dbb262280b3108d44f1b2e6614fc19b1493d3da1ac45694ef",
-      "sourceSha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+      "fingerprint": "10429bed7bb20425bc3261ceb56b68ac5f767c36bb907cd672a0ace25eeb6102",
+      "sourceSha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
       "sourceSha256Variants": [
-        "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-        "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+        "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+        "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109863,10 +109863,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+          "sha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
           "sha256Variants": [
-            "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-            "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+            "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+            "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 3372: containment check Lines 3382: require after containment Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI."
         }
@@ -109876,18 +109876,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3705,
+        "line": 3707,
         "column": 14
       },
       "end": {
-        "line": 3705,
+        "line": 3707,
         "column": 52
       },
-      "fingerprint": "65d99e8b1144d19314d189a3e2d27208df8cf6ee81422f37b2c77a73768d3223",
-      "sourceSha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+      "fingerprint": "d0535a85f3a56f666776b04b3845a3adf30a28462c235bdf4d188f09b18d04b6",
+      "sourceSha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
       "sourceSha256Variants": [
-        "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-        "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+        "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+        "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109898,10 +109898,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+          "sha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
           "sha256Variants": [
-            "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-            "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+            "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+            "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 3516: tool scope Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI."
         }
@@ -109911,18 +109911,18 @@
       "rule": "javascript.lang.security.audit.unsafe-dynamic-method",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 3779,
+        "line": 3781,
         "column": 14
       },
       "end": {
-        "line": 3781,
+        "line": 3783,
         "column": 9
       },
-      "fingerprint": "70240de3e3f9671422270db83ac28f48b58af7d08a10ce2d64e35961a775d91f",
-      "sourceSha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+      "fingerprint": "de529a399c807905ff957c87592083661925f038ad1c7257417eb86b4dc1e1e7",
+      "sourceSha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
       "sourceSha256Variants": [
-        "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-        "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+        "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+        "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109933,10 +109933,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+          "sha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
           "sha256Variants": [
-            "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-            "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+            "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+            "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 3605: fixed internal factory dispatcher Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI."
         }
@@ -109946,18 +109946,18 @@
       "rule": "javascript.lang.security.audit.detect-non-literal-require",
       "path": "scripts/audit-persistence-coupling.js",
       "start": {
-        "line": 4485,
+        "line": 4487,
         "column": 22
       },
       "end": {
-        "line": 4485,
+        "line": 4487,
         "column": 60
       },
-      "fingerprint": "f4b04f145ecafe4fd4fa1ca3a3496460be2ff5e0e774235d0d98ea94513eb4aa",
-      "sourceSha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+      "fingerprint": "45993e3a54bc4db9714590dbeb1f38b14c7448b0952f3cb8d3496474b900274c",
+      "sourceSha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
       "sourceSha256Variants": [
-        "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-        "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+        "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+        "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
@@ -109968,10 +109968,10 @@
       "context": [
         {
           "path": "scripts/audit-persistence-coupling.js",
-          "sha256": "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87",
+          "sha256": "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112",
           "sha256Variants": [
-            "43c516539bc9375ef5e5e9420aeac8c92417fe378057c6b3859f0cd150827a91",
-            "6b671e7c098c219abe9687f10795b85394a0e60b819ac8ad55687b2a53f9ba87"
+            "5916393ea463e9b9a3f67125abb1cf88b3051b7d865d9e8249be036ef4cdaf15",
+            "c5f1301aaed06542bab53dd52c710b6f0f86eb3e2bf5f5fe0bb7198ed329a112"
           ],
           "reason": "Historical baseline context: Exact reviewed source containing the reported sink and its surrounding function. Lines 4296: tool scope Current source delta review (2026-10-25): Only exact WebAuthn dependency and additive PostgreSQL artifact/statement/repository classification lists changed. All eleven sink spans, identifier grammars, regular-expression escaping, fixed module/factory callers and migration-root containment were read and retain their reviewed contracts. Prior prose line anchors are historical; current finding positions come from the exact native D result. Source-context review 2026-10-26 for the A94 candidate: exactly seven fixed literal array entries register the separately named activation helper/wrapper and their synthetic fixtures. The entire scanner AST is identical after removal of those seven enumerated literals. None of the eleven sink expressions, identifier grammar, regexp escaping, fixed module/factory caller lists or migration-root containment changes. Full sink lines and bytes are identical; projected coordinates remain subject to the next full native CI."
         }

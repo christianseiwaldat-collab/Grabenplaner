@@ -64,6 +64,48 @@ nodeTest("non-Linux mutations fail explicitly and CLI explains the boundary", co
   assert.equal(help.status, 0); assert.match(help.stdout, /prepare\/promote require Linux/); assert.match(help.stdout, /verify is portable/);
 });
 
+nodeTest("CLI rejects unknown selectors and wrong argument counts before reading a request", context => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-prepared-release-cli-"));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const missing = path.join(root, "nonexistent-request.json");
+  const cli = path.resolve(__dirname, "../server-tools/package/prepared-release-package.cjs");
+  for (const args of [["constructor", missing], ["__proto__", missing], ["toString", missing],
+    ["Prepare", missing], ["unknown", missing], ["verify"], ["verify", missing, "extra"]]) {
+    const result = spawnSync(process.execPath, [cli, ...args], { encoding: "utf8" });
+    assert.equal(result.status, 1, args.join(" "));
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /^PREPARED_RELEASE_USAGE\r?\n$/);
+  }
+  assert.deepEqual(fs.readdirSync(root), []);
+});
+
+test("actual CLI prepares, verifies and promotes only the pinned synthetic package", context => {
+  const f = fixture(context);
+  const cli = path.resolve(__dirname, "../server-tools/package/prepared-release-package.cjs");
+  function run(command, request) {
+    const file = path.join(f.root, command + "-request.json");
+    fs.writeFileSync(file, JSON.stringify(request));
+    const result = spawnSync(process.execPath, [cli, command, file], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stderr, "");
+    const value = JSON.parse(result.stdout); assert.equal(value.ok, true);
+    return value;
+  }
+  const prepared = run("prepare", f.request);
+  assert.deepEqual(fs.readFileSync(prepared.archive), fs.readFileSync(f.archive));
+  const verified = run("verify", { directory: prepared.directory, receiptSha256: prepared.receiptSha256 });
+  assert.equal(verified.archiveSha256, f.binding.archiveSha256);
+  assert.equal(verified.deploymentAuthorized, false);
+  assert.equal(verified.skipsProductionGates, false);
+  const promoted = run("promote", { directory: prepared.directory, receiptSha256: prepared.receiptSha256,
+    destination: path.join(f.root, "cli-promotion") });
+  assert.deepEqual(fs.readFileSync(promoted.archive), fs.readFileSync(f.archive));
+  assert.equal(promoted.archiveSha256, verified.archiveSha256);
+  assert.equal(promoted.receiptSha256, prepared.receiptSha256);
+  assert.equal(promoted.deploymentAuthorized, false);
+  assert.equal(P.verifyPrepared(promoted).skipsProductionGates, false);
+});
+
 test("prepares and promotes the exact tested bytes without building or executing candidate code", context => {
   const f = fixture(context), prepared = f.prepare();
   const verified = P.verifyPrepared(prepared);

@@ -405,7 +405,13 @@ if (require.main === module) {
     const [command, requestFile] = process.argv.slice(2);
     if (process.argv.length !== 4 || !["prepare", "verify", "promote"].includes(command)) fail("USAGE");
     const request = parseDocument(readStable(requestFile));
-    const result = ({ prepare: prepareRelease, verify: verifyPrepared, promote: promoteRelease })[command](request);
+    let result;
+    switch (command) {
+      case "prepare": result = prepareRelease(request); break;
+      case "verify": result = verifyPrepared(request); break;
+      case "promote": result = promoteRelease(request); break;
+      default: fail("USAGE");
+    }
     process.stdout.write(JSON.stringify({ ok: true, ...result }) + "\n");
   } catch (error) { process.stderr.write(`${error.message}\n`); process.exitCode = 1; }
 }
