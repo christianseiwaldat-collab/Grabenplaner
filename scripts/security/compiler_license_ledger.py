@@ -84,12 +84,49 @@ def relative(name):
     return name
 
 
+def source_relative(name):
+    """Opaque/read-only Unix source member, never a filesystem destination.
+
+    Real AFL fixture names contain colons. Keep those bytes; continue to reject
+    drive syntax, traversal, control characters, backslashes and noncanonical
+    names. The executable/pin/output-path validator remains stricter.
+    """
+    if not isinstance(name, str) or not name or '\\' in name or any(ord(c) < 32 or ord(c) == 127 for c in name):
+        raise ValueError('Unsafe original source member')
+    value = PurePosixPath(name)
+    if (not value.parts or value.is_absolute() or value.as_posix() != name or any(part in ('.', '..')
+            or re.match(r'^[A-Za-z]:', part) for part in value.parts)):
+        raise ValueError('Unsafe original source member')
+    return name
+
+
 def https(url):
     value = urlsplit(url)
-    if (value.scheme != 'https' or not value.hostname or value.username or value.password
+    if (value.scheme != 'https' or not value.hostname or value.username is not None or value.password is not None
             or value.fragment or value.query or any(ord(c) < 32 for c in url)):
         raise ValueError('Source provenance requires credential-free HTTPS')
     return url
+
+
+def https_transport(url):
+    # Signed CDN queries are ephemeral transport data, never source identity or
+    # retained provenance. Validate every hop before following it and never log
+    # the URL/query in an exception.
+    value = urlsplit(url)
+    if (value.scheme != 'https' or not value.hostname or value.username is not None or value.password is not None
+            or value.fragment or len(url) > 65536 or any(ord(c) < 32 or ord(c) == 127 for c in url)):
+        raise ValueError('Unsafe source HTTPS transport')
+    return url
+
+
+class SourceRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, newurl):
+        https_transport(newurl)
+        redirected = super().redirect_request(request, fp, code, message, headers, newurl)
+        if redirected is not None:
+            for name in ('Authorization', 'Cookie', 'Proxy-Authorization'):
+                redirected.remove_header(name)
+        return redirected
 
 
 def opam_ids(text):
@@ -176,8 +213,9 @@ def source_url(text):
 
 def download(url, maximum=MAX_FILE):
     request = urllib.request.Request(https(url), headers={'User-Agent': 'gp-compiler-license-closure'})
-    with urllib.request.urlopen(request, timeout=120) as response:
-        https(response.url)
+    opener = urllib.request.build_opener(SourceRedirectHandler())
+    with opener.open(request, timeout=120) as response:
+        https_transport(response.url)
         data = response.read(maximum + 1)
     if len(data) > maximum:
         raise ValueError('Compiler source download exceeds bound')
@@ -192,9 +230,29 @@ def checked_download(url, checksums, cache):
             raise ValueError('Unsupported source checksum')
         parsed.append((name, expected))
     data = None
+    cache = Path(cache).absolute()
+    if cache.is_symlink() or cache.exists() and (not cache.is_dir() or cache.resolve() != cache):
+        raise ValueError('Captured source cache root must be canonical')
     for name, expected in parsed:
         candidates = (cache / name / expected[:2] / expected, cache / name / expected)
         for file in candidates:
+            if file.is_symlink():
+                # opam 2.5.2 deliberately links checksum aliases. Only this
+                # private, captured cache may resolve a relative alias; the
+                # original source-tree/output-path validators stay unchanged.
+                target = os.readlink(file)
+                if Path(target).is_absolute() or not re.fullmatch(r'[A-Za-z0-9_.+/\-]+', target):
+                    raise ValueError('Unsafe captured checksum alias')
+                try:
+                    resolved = file.resolve(strict=True)
+                except (OSError, RuntimeError):
+                    raise ValueError('Broken captured checksum alias') from None
+                if not resolved.is_relative_to(cache) or resolved == cache:
+                    raise ValueError('Captured checksum alias escapes its source cache')
+                data = regular(resolved)
+                if file.resolve(strict=True) != resolved:
+                    raise ValueError('Captured checksum alias changed during verification')
+                break
             if file.exists():
                 data = regular(file)
                 break
@@ -238,7 +296,7 @@ def archive_notices(data):
             if len(archive.infolist()) > 100000:
                 raise ValueError('Source archive inventory exceeds bound')
             for item in archive.infolist():
-                name = relative(item.filename.rstrip('/'))
+                name = source_relative(item.filename.rstrip('/'))
                 if (not item.is_dir() and stat.S_IFMT(item.external_attr >> 16) in (0, stat.S_IFREG)
                         and len(PurePosixPath(name).parts) <= 3 and notice_candidate(name)):
                     if item.file_size > MAX_JSON // 2:
@@ -252,7 +310,7 @@ def archive_notices(data):
             raw = item.name.rstrip('/')
             if raw in ('.', '') and item.isdir():
                 continue
-            name = relative(raw.removeprefix('./'))
+            name = source_relative(raw.removeprefix('./'))
             # Full archives retain every original nested notice. The ledger
             # displays primary top-level/package notices, not arbitrary README.
             if item.isfile() and len(PurePosixPath(name).parts) <= 3 and notice_candidate(name):
@@ -268,7 +326,7 @@ def source_archive(files):
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode='w', format=tarfile.PAX_FORMAT) as archive:
         for name, data in sorted(files.items()):
-            relative(name)
+            source_relative(name)
             if len(data) > MAX_FILE:
                 raise ValueError('Source member exceeds bound')
             info = tarfile.TarInfo(name); info.size = len(data); info.mode = 0o644
@@ -284,7 +342,7 @@ def tree_files(root):
         for name in folders:
             file = Path(directory) / name
             if file.is_symlink():
-                result[relative(file.relative_to(root).as_posix() + '.symlink-target')] = os.readlink(file).encode()
+                result[source_relative(file.relative_to(root).as_posix() + '.symlink-target')] = os.readlink(file).encode()
         for name in sorted(names):
             file = Path(directory) / name
             if file.is_symlink():
@@ -297,7 +355,7 @@ def tree_files(root):
             total += len(data)
             if total > MAX_SOURCE:
                 raise ValueError('Captured source tree exceeds bound')
-            result[relative(key)] = data
+            result[source_relative(key)] = data
     return result
 
 
@@ -359,6 +417,9 @@ def validate_ledger(value, binary_sha256, native=None):
                 or any(not isinstance(item, str) or item in covered[ecosystem] for item in ids)):
             raise ValueError('Duplicate or invalid dependency coverage')
         covered[ecosystem].update(ids)
+        from compiler_license_declaration import DECLARATION_IDS
+        if ecosystem == 'opam' and any(item in DECLARATION_IDS for item in ids) and 'licenseEvidence' not in component:
+            raise ValueError('Exact reviewed package requires its declaration and per-file evidence model')
         if 'licenseEvidence' in component:
             from compiler_license_declaration import validate_declaration
             validate_declaration(component, native=native)
@@ -406,7 +467,7 @@ def source_notice_hashes(data, depth=0):
             if len(archive.infolist()) > 250000 or sum(item.file_size for item in archive.infolist()) > MAX_SOURCE:
                 raise ValueError('Dependency source inventory exceeds bound')
             for item in archive.infolist():
-                name = relative(item.filename.rstrip('/'))
+                name = source_relative(item.filename.rstrip('/'))
                 if (not item.is_dir() and stat.S_IFMT(item.external_attr >> 16) in (0, stat.S_IFREG)
                         and notice_candidate(name)):
                     if item.file_size > MAX_FILE:
@@ -418,7 +479,7 @@ def source_notice_hashes(data, depth=0):
             raw = item.name.rstrip('/')
             if raw in ('.', '') and item.isdir():
                 continue
-            name = relative(raw.removeprefix('./')); count += 1
+            name = source_relative(raw.removeprefix('./')); count += 1
             if count > 250000 or item.size > MAX_FILE:
                 raise ValueError('Dependency source inventory exceeds bound')
             if not item.isfile():
@@ -443,7 +504,7 @@ def declaration_source_files(data):
     files, total = {}, 0
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:xz') as archive:
         for item in archive:
-            name = relative(item.name)
+            name = source_relative(item.name)
             if not item.isfile() or name in files or len(files) >= 10000:
                 raise ValueError('Invalid config source member')
             total += item.size
@@ -478,7 +539,7 @@ def embedded_dependency_sources(data, value):
     sources, total, seen = {}, 0, set()
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:xz') as archive:
         for item in archive:
-            name = relative(item.name.rstrip('/'))
+            name = source_relative(item.name.rstrip('/'))
             if name in seen:
                 raise ValueError('Duplicate corresponding-source archive member')
             seen.add(name)
@@ -666,7 +727,7 @@ def verify_capture(output):
     actual = []
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:xz') as archive:
         for item in archive:
-            name = relative(item.name)
+            name = source_relative(item.name)
             if (not item.isfile() or not (name in ('capture.json', 'custom-curl.tar.gz', 'opam-switch-state', 'apk-installed-database')
                     or name.startswith(('opam-download-cache/', 'opam-sources/', 'opam-package-metadata/', 'opam-install-evidence/')))):
                 raise ValueError('Unexpected compiler capture member')
@@ -698,16 +759,9 @@ def collect_opam(capture, root, output):
         licenses = field(definition, 'license')
         files = {'metadata/opam': metadata, 'metadata/install': install, 'metadata/changes': changes}
         tree = root / 'opam-sources' / package['sourceDirectory'] if package['sourceDirectory'] else None
-        if package['id'] == 'ocaml-config.3':
-            from compiler_license_declaration import ORIGINALS, DECLARATION_URL, build_evidence, validate_declaration
-            original = {name: checked_download(url, ['sha256=' + sha], root / 'opam-download-cache')
-                for name, url, _size, sha in ORIGINALS}
-            evidence, config_files = build_evidence(package, metadata, original, tree_files(tree) if tree and tree.is_dir() else {})
-            component = {'name': 'opam/ocaml-config', 'version': '3', 'packageIds': ['ocaml-config.3'],
-                'licenseExpression': 'ISC', 'notices': [], 'licenseEvidence': evidence,
-                'correspondingSource': retain_source(output, 'opam-ocaml-config.3', config_files, DECLARATION_URL)}
-            validate_declaration(component, config_files)
-            components.append(component)
+        from compiler_license_declaration import DECLARATION_IDS, collect_component
+        if package['id'] in DECLARATION_IDS:
+            components.append(collect_component(package, root, output))
             continue
         # A retained actual pin tree is the source authority for git/file pins;
         # it need not pretend to be an independently downloadable release URL.
@@ -717,12 +771,10 @@ def collect_opam(capture, root, output):
             files.update({'source/' + name: data for name, data in current.items()})
             primary = [notice('source/' + name, data) for name, data in current.items()
                 if len(PurePosixPath(name).parts) <= 2 and notice_candidate(name)]
-            dev = field(definition, 'dev-repo')
-            url = url or (dev[0].removeprefix('git+') if len(dev) == 1 else None)
-            if url and '#' in url:
-                url = url.replace('.git#', '/tree/')
-            if not url:
-                url = 'https://opam.ocaml.org/packages/' + package['name'] + '/' + package['id'] + '/'
+            # This is a retained actual image tree, not an unversioned dev-repo
+            # checkout. Its exact pinned package declaration is the provenance
+            # authority; original release/archive bytes stay in the source set.
+            url = repo_url + OPAM_REPOSITORY + '/packages/' + package['name'] + '/' + package['id'] + '/opam'
             pin = package.get('sourcePin')
             if pin and pin.startswith('git+https://'):
                 repository, separator, commit = pin[4:].partition('#')
@@ -769,7 +821,7 @@ def collect_upstream(source, qualification, output):
     inventory = unique(regular(qualification / 'sourcebuild-source-inventory.json', MAX_JSON * 8))
     files, notices = {}, []
     for item in inventory:
-        name = relative(item['path']); file = source / name
+        name = source_relative(item['path']); file = source / name
         data = os.readlink(file).encode() if item['kind'] == 'symlink-text' else regular(file)
         if len(data) != item['bytes'] or digest(data) != item['sha256']:
             raise ValueError('Corresponding upstream source changed')

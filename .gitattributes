@@ -43,6 +43,8 @@ scripts/security/requirements.txt text eol=lf
 scripts/security/tools.json text eol=lf
 .github/security-semgrep-core-pin.json text eol=lf
 scripts/security/fixtures/ocaml-config.3/* -text
+# Immutable upstream evidence keeps original whitespace and exact byte hashes.
+scripts/security/fixtures/license-declarations/* -text -whitespace
 # Exact reviewed MSAL backport and regression proof bytes.
 lib/vendor-patches/*.patch text eol=lf whitespace=-blank-at-eol
 test/security-msal-auth-code-backport.test.js text eol=lf
