@@ -17,6 +17,7 @@ import re
 import stat
 import subprocess
 import tarfile
+import traceback
 import urllib.request
 from urllib.parse import urlsplit
 import zipfile
@@ -562,10 +563,18 @@ def embedded_dependency_sources(data, value):
 # not update packages, load GP files, contact a server or execute fetched code.
 CAPTURE_SCRIPT = r'''
 import base64, hashlib, json, os, pathlib, subprocess
-prefix = subprocess.check_output(['opam','var','prefix','--safe'], stderr=subprocess.DEVNULL).decode().strip()
+def observe(arguments):
+    result = subprocess.run(arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode:
+        evidence = {'arguments':arguments,'returncode':result.returncode,
+            'stderrBytes':len(result.stderr),'stderrSha256':hashlib.sha256(result.stderr).hexdigest(),
+            'stderrTailBase64':base64.b64encode(result.stderr[-8192:]).decode()}
+        raise RuntimeError('OPAM observation failed: '+json.dumps(evidence,sort_keys=True))
+    return result.stdout.decode()
+prefix = observe(['opam','var','prefix','--safe']).strip()
 assert prefix == '/root/.opam/5.4.0'
-listing = subprocess.check_output(['opam','list','--installed','--columns=name,version','--color=never','--safe'], stderr=subprocess.DEVNULL).decode()
-pins = subprocess.check_output(['opam','pin','list','--normalise','--safe'], stderr=subprocess.DEVNULL).decode()
+listing = observe(['opam','list','--installed','--columns=name,version','--color=never','--safe'])
+pins = observe(['opam','pin','list','--normalise','--safe'])
 packages=[]
 for line in listing.splitlines():
     if not line.strip() or line.lstrip().startswith('#'): continue
@@ -639,13 +648,22 @@ def command(arguments, timeout=300):
     return result.stdout
 
 
+def capture_arguments(image):
+    # Git-backed OPAM pin observations create process logs even with --safe.
+    # Only bounded, non-executable scratch is writable; compiler/source inputs
+    # and the installed switch retain the original read-only isolation.
+    return ['docker', 'run', '--rm', '--network', 'none', '--read-only',
+        '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=32m',
+        '--env', 'OPAMLOGS=/tmp/opam-capture-logs', '--entrypoint', 'python3',
+        image, '-I', '-c', CAPTURE_SCRIPT]
+
+
 def actual_license_closure(native):
     """Independently reread the qualified image at publication, not the ledger."""
     image = native.get('imageId', '')
     if not re.fullmatch('sha256:[a-f0-9]{64}', image):
         raise ValueError('Missing exact qualified license image')
-    captured = unique(command(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--entrypoint', 'python3',
-        image, '-I', '-c', CAPTURE_SCRIPT]))
+    captured = unique(command(capture_arguments(image)))
     if opam_ids(captured['opamListing']) != opam_ids(native.get('opamPackages', '')):
         raise ValueError('Fresh actual opam closure differs from qualified compiler')
     from compiler_license_declaration import actual_source_evidence
@@ -666,6 +684,7 @@ def capture_image(image, binary_sha, qualification, output):
     (capture_root / 'capture.json').write_bytes(encoded({'format': 'gp-semgrep-core-source-capture-observation/v1',
         'imageId': image, 'binarySha256': binary_sha, 'captureComplete': False}))
     container = None
+    primary_failure = False
     try:
         container = command(['docker', 'create', '--network', 'none', '--read-only', '--entrypoint', '/bin/true', image]).decode().strip()
         if not re.fullmatch('[a-f0-9]{64}', container):
@@ -682,7 +701,7 @@ def capture_image(image, binary_sha, qualification, output):
             command(['docker', 'cp', container + ':' + source, str(capture_root / target)], timeout=600)
         report['phase'] = 'raw-sources-exported'
         (qualification / 'sourcebuild-compiler-license-review.json').write_bytes(encoded(report))
-        value = unique(command(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--entrypoint', 'python3', image, '-I', '-c', CAPTURE_SCRIPT]))
+        value = unique(command(capture_arguments(image)))
         value.update(format='gp-semgrep-core-actual-license-inputs/v1', imageId=image, binarySha256=binary_sha,
             captureComplete=True)
         (capture_root / 'capture.json').write_bytes(encoded(value))
@@ -692,6 +711,7 @@ def capture_image(image, binary_sha, qualification, output):
         if len(encoded(report)) > MAX_CAPTURE_JSON:
             raise ValueError('Actual compiler metadata exceeds private receipt bound')
     except Exception as error:
+        primary_failure = True
         report.update(phase='capture-observation-failed', errorType=type(error).__name__)
         if isinstance(error, CaptureCommandError):
             (qualification / 'sourcebuild-compiler-capture-command-failure.json').write_bytes(encoded(error.evidence))
@@ -699,45 +719,35 @@ def capture_image(image, binary_sha, qualification, output):
     finally:
         try:
             if container is not None: command(['docker', 'rm', container])
+        except Exception as error:
+            report['cleanupFailureType'] = type(error).__name__
+            if not primary_failure:
+                primary_failure = True
+                raise
         finally:
             # The manifest says exactly which upstream bytes were recovered.
             # A partial capture is diagnostic evidence; it never authorizes tool
             # publication and its capture.json cannot be read as a full closure.
-            files = tree_files(capture_root)
-            archive = source_archive(files)
-            (output / 'capture.tar.xz').write_bytes(archive)
-            receipt = {'format': CAPTURE, 'archive': {'bytes': len(archive), 'sha256': digest(archive)},
-                'imageId': image, 'binarySha256': binary_sha, 'upstreamOnly': True, 'compilerRebuilt': False,
-                'memberInventory': [{'path': name, 'bytes': len(data), 'sha256': digest(data)} for name, data in sorted(files.items())]}
-            (output / 'capture-receipt.json').write_bytes(encoded(receipt))
-            report.update(captureSha256=digest(archive))
-            if report['phase'] == 'inventory-captured': report['phase'] = 'captured'
-            (qualification / 'sourcebuild-compiler-license-review.json').write_bytes(encoded(report))
+            try:
+                from compiler_capture_archive import write_capture
+                receipt = write_capture(capture_root, output, image, binary_sha)
+                report.update(captureSha256=receipt['archive']['sha256'])
+                if report['phase'] == 'inventory-captured': report['phase'] = 'captured'
+            except Exception as error:
+                report['rescueFailureType'] = type(error).__name__
+                (qualification / 'sourcebuild-compiler-capture-rescue-failure.json').write_bytes(encoded({
+                    'format': 'gp-compiler-capture-rescue-failure/v1', 'errorType': type(error).__name__,
+                    'tracebackTail': traceback.format_exc()[-16384:], 'publicationReady': False}))
+                if not primary_failure:
+                    raise
+            finally:
+                (qualification / 'sourcebuild-compiler-license-review.json').write_bytes(encoded(report))
     return value, capture_root, report
 
 
 def verify_capture(output):
-    receipt = unique(regular(output / 'capture-receipt.json', MAX_CAPTURE_JSON))
-    if (set(receipt) != {'format', 'archive', 'imageId', 'binarySha256', 'upstreamOnly', 'compilerRebuilt', 'memberInventory'}
-            or receipt['format'] != CAPTURE or receipt['upstreamOnly'] is not True or receipt['compilerRebuilt'] is not False):
-        raise ValueError('Invalid upstream-only capture receipt')
-    data = regular(output / 'capture.tar.xz', MAX_SOURCE)
-    if receipt['archive'] != {'bytes': len(data), 'sha256': digest(data)}:
-        raise ValueError('Capture archive bytes differ')
-    actual = []
-    with tarfile.open(fileobj=io.BytesIO(data), mode='r:xz') as archive:
-        for item in archive:
-            name = source_relative(item.name)
-            if (not item.isfile() or not (name in ('capture.json', 'custom-curl.tar.gz', 'opam-switch-state', 'apk-installed-database')
-                    or name.startswith(('opam-download-cache/', 'opam-sources/', 'opam-package-metadata/', 'opam-install-evidence/')))):
-                raise ValueError('Unexpected compiler capture member')
-            if item.size > MAX_FILE:
-                raise ValueError('Oversized compiler capture member')
-            content = archive.extractfile(item).read()
-            actual.append({'path': name, 'bytes': len(content), 'sha256': digest(content)})
-    if actual != receipt['memberInventory'] or len({item['path'] for item in actual}) != len(actual):
-        raise ValueError('Capture source inventory differs')
-    return receipt
+    from compiler_capture_archive import verify_capture as verify_raw_capture
+    return verify_raw_capture(output)
 
 
 def collect_opam(capture, root, output):

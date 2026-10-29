@@ -34,6 +34,75 @@ SOCKET = Path('/run/docker.sock')
 CONFIG_METADATA_SHA = 'eac491c01bd4de3e78443d55bd9948e107c9ad4c80b5d0f4c63de778b601aae3'
 CONFIG_PACKAGE = 'ocaml-config.3'
 VARIANT_PACKAGE = 'ocaml-variants.5.4.0'
+# Actual P2 identities/backend classes from run 40815657275. Sources below are
+# explicitly synthetic tiny local repositories, not these upstream packages.
+PIN_CLASSES = (
+    ('memtrace', 'dev', 'git'), ('obackward', 'dev', 'git'), ('ocaml-variants', '5.4.0', 'git'),
+    ('opentelemetry', '0.91.1', 'git'), ('opentelemetry-client', '0.91.1', 'git'),
+    ('opentelemetry-client-cohttp-eio', '0.91.1', 'git'), ('opentelemetry-client-ocurl', '0.91.1', 'git'),
+    ('opentelemetry-logs', '0.91.1', 'git'), ('pcre2', 'dev', 'git'), ('pyro-caml', 'dev', 'git'),
+    ('pyro-caml-instruments', 'dev', 'git'), ('pyro-caml-ppx', 'dev', 'git'),
+    ('semgrep-interfaces', 'dev', 'git'), ('tree-sitter', 'dev', 'rsync'))
+PIN_ROOT = '/root/.opam-git-probe'
+RSYNC_ROOT = '/root/.opam-rsync-probe'
+PIN_LOGS = '/tmp/opam-capture-logs'
+PIN_TMPFS = '/tmp:rw,nosuid,nodev,noexec,size=32m'
+
+PIN_SETUP_SCRIPT = r'''
+import json, os, pathlib, subprocess
+base = pathlib.Path('/pin-fixtures')
+pins = json.loads((base/'pins.json').read_bytes())
+def command(arguments, environment=None):
+    result = subprocess.run(arguments, env=environment, capture_output=True, timeout=60, check=False)
+    if result.returncode:
+        raise RuntimeError('Synthetic pin setup failed: '+repr(arguments)+'\n'+result.stderr.decode(errors='replace')[-16384:])
+    return result.stdout
+for name, version, backend in pins:
+    source = base/'sources'/name
+    if backend == 'git':
+        command(['git', 'init', '--quiet', str(source)])
+        command(['git', '-C', str(source), 'add', 'opam', 'README.synthetic'])
+        command(['git', '-C', str(source), '-c', 'user.name=Synthetic Capture Contract',
+            '-c', 'user.email=synthetic@example.invalid', 'commit', '--quiet', '-m', 'Synthetic metadata only'])
+for root, selected in [('/root/.opam-git-probe', pins),
+        ('/root/.opam-rsync-probe', [item for item in pins if item[2] == 'rsync'])]:
+    environment = dict(os.environ, OPAMROOT=root, OPAMYES='1')
+    environment.pop('OPAMSWITCH', None)
+    command(['opam', 'init', '--bare', '--disable-sandboxing', '--no-setup', '--yes',
+        'capture', 'file:///capture-repository'], environment)
+    command(['opam', 'switch', 'create', '5.4.0', '--empty', '--yes'], environment)
+    environment['OPAMSWITCH'] = '5.4.0'
+    for name, version, backend in selected:
+        source = str(base/'sources'/name)
+        arguments = ['opam', 'pin', 'add', name]
+        if backend == 'git': arguments += ['git+file://'+source, '--kind=git']
+        else: arguments += [source]
+        command(arguments+['--no-action', '--yes'], environment)
+    observed = command(['opam', 'pin', 'list', '--normalise'], environment)
+    (base/('setup-git-pins.stdout' if len(selected)>1 else 'setup-rsync-pins.stdout')).write_bytes(observed)
+print(json.dumps({'syntheticOnly': True, 'compilerBuilt': False, 'pinCount': len(pins)}))
+'''
+
+PIN_READ_SCRIPT = r'''
+import base64, hashlib, json, os, pathlib, subprocess
+def digest(data): return hashlib.sha256(data).hexdigest()
+root = pathlib.Path(os.environ['OPAMROOT'])
+def snapshot():
+    paths = [root/'config', root/'5.4.0/.opam-switch/switch-state']
+    paths += sorted((root/'5.4.0/.opam-switch/overlay').glob('*/opam'))
+    return [{'path':str(path.relative_to(root)), 'sha256':digest(path.read_bytes())} for path in paths]
+before = snapshot()
+arguments = ['opam', 'pin', 'list', '--normalise', '--safe']
+result = subprocess.run(arguments, capture_output=True, timeout=60, check=False)
+record = {'format':'gp-synthetic-opam-pin-readonly/v1', 'syntheticOnly':True,
+    'compilerQualification':False, 'command':arguments, 'exitCode':result.returncode,
+    'opamRoot':str(root), 'opamLogs':os.environ.get('OPAMLOGS'),
+    'stateBefore':before, 'stateAfter':snapshot()}
+for key, data in [('stdout',result.stdout),('stderr',result.stderr)]:
+    record[key] = {'bytes':len(data), 'sha256':digest(data),
+        'base64':base64.b64encode(data[-65536:]).decode(), 'truncated':len(data)>65536}
+print(json.dumps(record, sort_keys=True))
+'''
 
 # This isolated switch deliberately contains fake installation records. It is
 # never passed to the compiler capture or license collector. Network isolation
@@ -295,6 +364,128 @@ def metadata_run_arguments(docker, positive_image, context):
         '--entrypoint', 'python3', positive_image, '-I', '-c', CONFIG_METADATA_SCRIPT]
 
 
+def git_pin_fixture(output, positive_tag):
+    if not re.fullmatch('gp-capture-contract-positive:[a-f0-9]{32}', positive_tag):
+        raise ValueError('Git pin fixture requires the locally owned positive image tag')
+    context = output / 'git-pin-fixture'; context.mkdir(mode=0o700)
+    write(context / 'pins.json', encoded(PIN_CLASSES))
+    write(context / 'setup.py', PIN_SETUP_SCRIPT.encode())
+    for name, version, _backend in PIN_CLASSES:
+        source = context / 'sources' / name; source.mkdir(parents=True)
+        metadata = ('opam-version: "2.0"\nname: "' + name + '"\nversion: "' + version + '"\n'
+            'synopsis: "Synthetic backend probe; not upstream package source"\n'
+            'maintainer: "synthetic@example.invalid"\nauthors: "Synthetic Capture Contract"\nlicense: "MIT"\n')
+        write(source / 'opam', metadata.encode())
+        write(source / 'README.synthetic', b'Synthetic local pin metadata; no compiler or upstream source qualification.\n')
+    write(context / 'Dockerfile', ('FROM ' + positive_tag + '\n'
+        'COPY . /pin-fixtures\nRUN python3 -I /pin-fixtures/setup.py\n').encode())
+    return context
+
+
+def pin_read_arguments(docker, image, root, scratch=False):
+    if (not re.fullmatch('sha256:[a-f0-9]{64}', image) or root not in (PIN_ROOT, RSYNC_ROOT)):
+        raise ValueError('Pin read probe requires an exact image and isolated synthetic root')
+    arguments = docker + ['run', '--rm', '--network', 'none', '--read-only',
+        '--env', 'OPAMROOT=' + root, '--env', 'OPAMSWITCH=5.4.0']
+    if scratch:
+        arguments += ['--tmpfs', PIN_TMPFS, '--env', 'OPAMLOGS=' + PIN_LOGS]
+    return arguments + ['--entrypoint', 'python3', image, '-I', '-c', PIN_READ_SCRIPT]
+
+
+def validate_pin_read(raw, root, scratch=False, expect_readonly_failure=False):
+    value = json.loads(raw)
+    if (value.get('format') != 'gp-synthetic-opam-pin-readonly/v1' or value.get('syntheticOnly') is not True
+            or value.get('compilerQualification') is not False or value.get('opamRoot') != root
+            or value.get('command') != ['opam', 'pin', 'list', '--normalise', '--safe']
+            or value.get('opamLogs') != (PIN_LOGS if scratch else None)
+            or not value.get('stateBefore') or value['stateBefore'] != value.get('stateAfter')):
+        raise ValueError('Synthetic pin read evidence has an invalid scope or changed state')
+    streams = {}
+    for key in ('stdout', 'stderr'):
+        record = value.get(key, {})
+        if set(record) != {'bytes', 'sha256', 'base64', 'truncated'} or record['truncated'] is not False:
+            raise ValueError('Synthetic pin command diagnostics are incomplete')
+        data = base64.b64decode(record['base64'], validate=True)
+        if type(record['bytes']) is not int or record['bytes'] != len(data) or digest(data) != record['sha256']:
+            raise ValueError('Synthetic pin command byte identity differs')
+        streams[key] = data
+    if expect_readonly_failure:
+        if (scratch or root != PIN_ROOT or value.get('exitCode') != 99
+                or b'read-only' not in streams['stderr'].lower()):
+            raise ValueError('Git-pin readonly failure must retain the actual OPAM99/filesystem cause')
+    else:
+        expected = PIN_CLASSES if root == PIN_ROOT else [item for item in PIN_CLASSES if item[2] == 'rsync']
+        rows = [line.split() for line in streams['stdout'].decode().splitlines() if line.strip()]
+        observed = {row[0]: next((token for token in row[1:] if token in ('git', 'rsync')), None) for row in rows}
+        if (value.get('exitCode') != 0 or len(rows) != len(expected)
+                or observed != {name + '.' + version: backend for name, version, backend in expected}
+                or b'error while fetching' in streams['stdout']
+                or streams['stdout'].count(b'(at ') != sum(backend == 'git' for _name, _version, backend in expected)):
+            raise ValueError('Synthetic pin list must observe every exact identity/backend and genuine local Git revision')
+    return value
+
+
+def host_streaming_contract(output, image):
+    """Exercise the old 2-GiB failure boundary on native sparse host files."""
+    if sys.platform != 'linux' or not re.fullmatch('sha256:[a-f0-9]{64}', image):
+        raise ValueError('The large sparse streaming contract requires native Linux and an exact synthetic image')
+    import compiler_capture_archive as capture
+    if (capture.MAX_FILE != 512 * 1024**2 or capture.MAX_ARCHIVE != 2 * 1024**3
+            or capture.MAX_EXPANDED != 8 * 1024**3):
+        raise ValueError('The reviewed separate diagnostic bounds differ')
+    private = output / 'host-streaming-private'; private.mkdir(mode=0o700)
+    source = private / 'capture'; source.mkdir(mode=0o700)
+    probes = source / 'opam-sources/probe'; probes.mkdir(parents=True)
+    destination = output / 'host-streaming-capture'; destination.mkdir(mode=0o700)
+    binary_sha = digest(b'SYNTHETIC SPARSE STREAM CONTRACT; NOT A COMPILER')
+    descriptor = encoded({'format': 'gp-semgrep-core-source-capture-observation/v1',
+        'imageId': image, 'binarySha256': binary_sha, 'captureComplete': False})
+    write(source / 'capture.json', descriptor)
+    sparse = []
+    for index in range(4):
+        file = probes / ('part-' + str(index) + '.synthetic-source')
+        with file.open('xb') as stream: stream.truncate(capture.MAX_FILE)
+        sparse.append(file)
+    allocated = sum(file.stat().st_blocks * 512 for file in sparse)
+    if allocated >= 4 * capture.MAX_FILE:
+        raise ValueError('Native sparse fixture unexpectedly allocated the whole source payload')
+    write(probes / 'one-byte.synthetic-source', b'1')
+    # One bounded chunk computes the independent expected all-zero source hash;
+    # no multi-gigabyte bytes object is created, including on the native runner.
+    zeros = hashlib.sha256(); chunk = bytes(1024**2)
+    for _ in range(capture.MAX_FILE // len(chunk)): zeros.update(chunk)
+    expected = {'capture.json': {'bytes': len(descriptor), 'sha256': digest(descriptor)},
+        'opam-sources/probe/one-byte.synthetic-source': {'bytes': 1, 'sha256': digest(b'1')}}
+    for index in range(4):
+        expected['opam-sources/probe/part-' + str(index) + '.synthetic-source'] = {
+            'bytes': capture.MAX_FILE, 'sha256': zeros.hexdigest()}
+    started = time.monotonic()
+    receipt = capture.write_capture(source, destination, image, binary_sha)
+    if capture.verify_capture(destination) != receipt:
+        raise ValueError('Native streaming verification differs from the written receipt')
+    inventory = {row['path']: {key: row[key] for key in ('bytes', 'sha256')} for row in receipt['memberInventory']}
+    total = sum(row['bytes'] for row in inventory.values())
+    if (inventory != expected or total != 2 * 1024**3 + 1 + len(descriptor)
+            or set(receipt) != {'format', 'archive', 'imageId', 'binarySha256', 'upstreamOnly', 'compilerRebuilt', 'memberInventory'}
+            or receipt['format'] != 'gp-semgrep-core-license-capture/v1' or receipt['imageId'] != image
+            or receipt['binarySha256'] != binary_sha or receipt['upstreamOnly'] is not True
+            or receipt['compilerRebuilt'] is not False or receipt['archive']['bytes'] > capture.MAX_ARCHIVE):
+        raise ValueError('Sparse diagnostic stream has an invalid byte manifest or publication claim')
+    proof = {'format': 'gp-native-sparse-capture-stream-contract/v1', 'passed': True,
+        'syntheticOnly': True, 'compilerQualification': False, 'publicationReady': False,
+        'captureComplete': False, 'perFileBytes': capture.MAX_FILE, 'sparseFileCount': 4,
+        'sparseAllocatedBytes': allocated,
+        'extraSourceBytes': 1, 'descriptorBytes': len(descriptor), 'actualSourceBytes': total,
+        'exceedsFormer2GiB': total > 2 * 1024**3, 'manifestVerified': True,
+        'archive': receipt['archive'], 'diagnosticExpandedLimit': capture.MAX_EXPANDED,
+        'publicationLimitChanged': False, 'elapsedSeconds': time.monotonic() - started}
+    write(output / 'host-streaming-contract.json', encoded(proof))
+    # Remove only these four known private sparse fixtures after verification;
+    # retain the small compressed diagnostic archive and its exact receipt.
+    for file in sparse: file.unlink()
+    return proof
+
+
 def validate_config_metadata(raw, original, variant):
     """This is a metadata-writing proof, never a source/license qualification."""
     value = json.loads(raw)
@@ -414,6 +605,7 @@ def check(output):
         suffix = uuid.uuid4().hex
         positive_tag = 'gp-capture-contract-positive:' + suffix
         negative_tag = 'gp-capture-contract-negative:' + suffix
+        git_pin_tag = 'gp-capture-contract-gitpin:' + suffix
         def command(arguments, label, timeout=120):
             result = run(arguments, label, output, timeout=timeout)
             receipt['commands'].append(result[0])
@@ -481,6 +673,36 @@ def check(output):
             'normalizedDuringFakeInstall': installed_metadata != original_metadata,
             'fakeInstall': True, 'syntheticCompilerMetadata': True, 'compilerQualification': False,
             'runtimeQualification': False, 'sourceQualification': False, 'declarationSemanticsApproved': False}
+        context = git_pin_fixture(output, positive_tag)
+        result, image_raw, _ = command(docker + ['image', 'inspect', '--format', '{{.Id}}', positive_tag], 'inspect-pin-parent')
+        if result['exitCode'] or image_raw.decode().strip() != positive_image:
+            raise ValueError('Owned pin fixture parent no longer matches the checked positive image')
+        result, _, _ = command(docker + ['build', '--pull=false', '--network', 'none', '--tag', git_pin_tag,
+            '--file', str(context / 'Dockerfile'), str(context)], 'build-git-pins', 180)
+        if result['exitCode']:
+            raise ValueError('Synthetic local Git backend fixture build failed; retained stderr identifies the cause')
+        images.append(git_pin_tag)
+        result, image_raw, _ = command(docker + ['image', 'inspect', '--format', '{{.Id}}', git_pin_tag], 'inspect-git-pins')
+        pin_image = image_raw.decode().strip()
+        if result['exitCode'] or not re.fullmatch('sha256:[a-f0-9]{64}', pin_image):
+            raise ValueError('Synthetic Git pin image has no immutable ID')
+        pin_proofs = []
+        for label, root, scratch, expected_failure in (
+                ('pin-rsync-readonly', RSYNC_ROOT, False, False),
+                ('pin-git-readonly', PIN_ROOT, False, True),
+                ('pin-git-scratch', PIN_ROOT, True, False)):
+            result, raw, _ = command(pin_read_arguments(docker, pin_image, root, scratch), label)
+            if result['exitCode']:
+                raise ValueError('Pin probe container failed before reporting its exact OPAM result: ' + label)
+            pin_proofs.append(validate_pin_read(raw, root, scratch, expected_failure))
+        write(output / 'git-pin-readonly-binding.json', encoded(pin_proofs))
+        receipt['gitPinReadonly'] = {'imageId': pin_image, 'sourceProducerRun': 40815657275,
+            'syntheticOnly': True, 'compilerQualification': False,
+            'actualPinIdentityCount': len(PIN_CLASSES), 'syntheticGitBackends': 13, 'syntheticRsyncBackends': 1,
+            'rsyncReadonlyExit': pin_proofs[0]['exitCode'], 'gitReadonlyExit': pin_proofs[1]['exitCode'],
+            'gitIsolatedLogScratchExit': pin_proofs[2]['exitCode'], 'stateUnchanged': True,
+            'tmpfs': PIN_TMPFS, 'opamLogs': PIN_LOGS}
+        receipt['hostStreamingCapture'] = host_streaming_contract(output, positive_image)
         if source != Path(ledger.__file__).read_bytes() or script != ledger.CAPTURE_SCRIPT:
             raise ValueError('Capture source changed during this contract check')
         receipt.update(complete=True, passed=True)

@@ -54,10 +54,50 @@ class CaptureEvidenceTests(unittest.TestCase):
         self.assertEqual(raised.exception.evidence['returncode'], 'timeout')
         self.assertEqual(base64.b64decode(raised.exception.evidence['stderr']['tailBase64']), b'why')
 
+    def test_readonly_git_observation_has_only_bounded_nonexecutable_process_scratch(self):
+        arguments = ledger.capture_arguments('sha256:' + 'a' * 64)
+        self.assertIn('--read-only', arguments)
+        self.assertEqual(arguments[arguments.index('--network') + 1], 'none')
+        self.assertEqual(arguments[arguments.index('--tmpfs') + 1], '/tmp:rw,nosuid,nodev,noexec,size=32m')
+        self.assertEqual(arguments[arguments.index('--env') + 1], 'OPAMLOGS=/tmp/opam-capture-logs')
+        self.assertNotIn('--volume', arguments)
+        self.assertIn("'--normalise','--safe'", ledger.CAPTURE_SCRIPT)
+
+    def test_inner_opam_failure_retains_original_error_and_finite_tail(self):
+        stderr = b'original read-only git log failure\n' * 1000
+        responses = [subprocess.CompletedProcess([], 0, b'/root/.opam/5.4.0\n', b''),
+            subprocess.CompletedProcess([], 0, b'', b''), subprocess.CompletedProcess([], 99, b'', stderr)]
+        with patch.object(subprocess, 'run', side_effect=responses):
+            with self.assertRaisesRegex(RuntimeError, 'OPAM observation failed') as raised:
+                exec(ledger.CAPTURE_SCRIPT.split('packages=[]')[0], {})
+        value = json.loads(str(raised.exception).split('OPAM observation failed: ', 1)[1])
+        self.assertEqual(value['returncode'], 99)
+        self.assertEqual(value['stderrBytes'], len(stderr))
+        self.assertEqual(value['stderrSha256'], ledger.digest(stderr))
+        self.assertEqual(base64.b64decode(value['stderrTailBase64']), stderr[-8192:])
+
+    def test_secondary_rescue_failure_cannot_replace_the_original_capture_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); qualification = root / 'qualification'; qualification.mkdir()
+            output = root / 'review'; output.mkdir(mode=0o700)
+            with patch.object(ledger, 'command', side_effect=ledger.CaptureCommandError(['docker', 'create'], 99,
+                    stderr=b'original observation failure')), patch('compiler_capture_archive.write_capture',
+                    side_effect=ValueError('secondary archive failure')):
+                with self.assertRaises(ledger.CaptureCommandError) as raised:
+                    ledger.capture_image('sha256:' + 'a' * 64, 'b' * 64, qualification, output)
+            self.assertEqual(raised.exception.evidence['returncode'], 99)
+            report = json.loads((qualification / 'sourcebuild-compiler-license-review.json').read_bytes())
+            self.assertEqual(report['errorType'], 'CaptureCommandError')
+            self.assertEqual(report['rescueFailureType'], 'ValueError')
+            self.assertIsNone(report['captureSha256'])
+            rescue = json.loads((qualification / 'sourcebuild-compiler-capture-rescue-failure.json').read_bytes())
+            self.assertIn('secondary archive failure', rescue['tracebackTail'])
+            self.assertFalse(rescue['publicationReady'])
+
     def test_receipt_exists_before_first_command_and_preserves_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); qualification = root / 'qualification'; qualification.mkdir()
-            output = root / 'review'; output.mkdir()
+            output = root / 'review'; output.mkdir(mode=0o700)
             def fail(arguments, timeout=300):
                 early = json.loads((qualification / 'sourcebuild-compiler-license-review.json').read_bytes())
                 self.assertEqual(early['phase'], 'raw-source-export-started')
@@ -78,7 +118,7 @@ class CaptureEvidenceTests(unittest.TestCase):
     def test_raw_source_export_survives_a_later_observation_failure(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); qualification = root / 'qualification'; qualification.mkdir()
-            output = root / 'review'; output.mkdir(); operations = []
+            output = root / 'review'; output.mkdir(mode=0o700); operations = []
             def command(arguments, timeout=300):
                 operations.append(arguments[1])
                 if arguments[1] == 'create': return ('a' * 64).encode()

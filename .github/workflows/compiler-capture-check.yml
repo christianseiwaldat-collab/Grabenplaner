@@ -9,6 +9,8 @@ on:
       - scripts/security/check_compiler_capture.py
       - scripts/security/test_check_compiler_capture.py
       - scripts/security/compiler_license_ledger.py
+      - scripts/security/compiler_capture_archive.py
+      - scripts/security/test_compiler_capture_archive.py
       - scripts/security/fixtures/ocaml-config.3/opam
 
 permissions:
@@ -59,6 +61,22 @@ jobs:
             ${{ runner.temp }}/compiler-capture-contract/config3-fake-metadata.stdout
             ${{ runner.temp }}/compiler-capture-contract/config3-fake-metadata.stderr
             ${{ runner.temp }}/compiler-capture-contract/config3-fake-metadata.json
+            ${{ runner.temp }}/compiler-capture-contract/git-pin-readonly-binding.json
+            ${{ runner.temp }}/compiler-capture-contract/build-git-pins.stdout
+            ${{ runner.temp }}/compiler-capture-contract/build-git-pins.stderr
+            ${{ runner.temp }}/compiler-capture-contract/build-git-pins.json
+            ${{ runner.temp }}/compiler-capture-contract/pin-rsync-readonly.stdout
+            ${{ runner.temp }}/compiler-capture-contract/pin-rsync-readonly.stderr
+            ${{ runner.temp }}/compiler-capture-contract/pin-rsync-readonly.json
+            ${{ runner.temp }}/compiler-capture-contract/pin-git-readonly.stdout
+            ${{ runner.temp }}/compiler-capture-contract/pin-git-readonly.stderr
+            ${{ runner.temp }}/compiler-capture-contract/pin-git-readonly.json
+            ${{ runner.temp }}/compiler-capture-contract/pin-git-scratch.stdout
+            ${{ runner.temp }}/compiler-capture-contract/pin-git-scratch.stderr
+            ${{ runner.temp }}/compiler-capture-contract/pin-git-scratch.json
+            ${{ runner.temp }}/compiler-capture-contract/host-streaming-contract.json
+            ${{ runner.temp }}/compiler-capture-contract/host-streaming-capture/capture.tar.xz
+            ${{ runner.temp }}/compiler-capture-contract/host-streaming-capture/capture-receipt.json
             ${{ runner.temp }}/compiler-capture-contract/build-positive.stdout
             ${{ runner.temp }}/compiler-capture-contract/build-positive.stderr
             ${{ runner.temp }}/compiler-capture-contract/build-positive.json
