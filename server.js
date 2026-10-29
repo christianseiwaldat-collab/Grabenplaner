@@ -29,6 +29,7 @@ const { createOpenAiVoiceProvider } = require('./lib/voice-assistant-openai');
 const voiceAssistantSettings = require('./lib/voice-assistant-settings');
 const planningAssistantSettings = require('./lib/planning-assistant-settings');
 const planningAssistantPreferences = require('./lib/planning-assistant-preferences');
+const planningShiftPrecondition = require('./lib/planning-shift-precondition');
 const assistantPilotAccess = require('./lib/assistant-pilot-access');
 const { createPlanningAssistantReader } = require('./lib/planning-assistant-gp');
 const { createVoiceAssistant } = require('./lib/voice-assistant');
@@ -34443,6 +34444,7 @@ app.get("/api/portal/v1/session", (request, response) => {
     loginRequired: status.loginRequired,
     user: publicPortalUser(session),
     status,
+    ...(session ? { capabilities: { atomicShiftUpdate: { version: 1, expectedRevision: "sha256", atomic: true } } } : {}),
   });
 });
 
@@ -41001,7 +41003,7 @@ function planPersonnelLifecyclePermissionScopes({
   return planned;
 }
 
-async function normalizeRightsScopesForTarget(target, submittedScopes, projectedPermissions) {
+async function normalizeRightsScopesForTarget(target, submittedScopes, projectedPermissions, actor = null) {
   if (GLOBAL_SCOPE_PORTAL_ROLES.has(target.role)) {
     if (Array.isArray(submittedScopes) && submittedScopes.length) {
       throw httpError(400, "Globale Rollen benötigen keine Standort- oder Abteilungszuweisung.", "PORTAL_SCOPE_GLOBAL_ROLE");
@@ -41009,6 +41011,13 @@ async function normalizeRightsScopesForTarget(target, submittedScopes, projected
     return [];
   }
   const scheduleAccess = projectedPermissions.includes("schedule:read") || projectedPermissions.includes("schedule:write");
+  const independentPlanner = Boolean(target.employeeNumber && target.configured
+    && target.role === "location_planner" && !String(target.homeLocationId || "").trim()
+    && target.sessionKind !== "organization" && target.isEmployee !== false);
+  const developerManagedIndependentPlanner = independentPlanner && actor?.role === "developer"
+    && Boolean(actor.employeeNumber) && actor.sessionKind !== "organization"
+    && actor.sessionKind !== "local" && actor.localSystem !== true && actor.isEmployee !== false
+    && Array.isArray(actor.scopes) && actor.scopes.length === 0;
   const source = Array.isArray(submittedScopes)
     ? submittedScopes
     : await explicitPortalAccessScopesForEmployee(target.employeeNumber);
@@ -41027,7 +41036,7 @@ async function normalizeRightsScopesForTarget(target, submittedScopes, projected
   }
   const unique = new Map();
   for (const scope of scopes) {
-    if (scope.locationId !== target.homeLocationId) {
+    if (scope.locationId !== target.homeLocationId && !developerManagedIndependentPlanner) {
       throw httpError(403, "Planungsrechte dürfen nur für die eigene Stammfiliale vergeben werden.", "PORTAL_SCOPE_HOME_LOCATION_REQUIRED");
     }
     await validateActiveLocationExists(scope.locationId);
@@ -41195,7 +41204,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   }
   const scopes = await normalizeRightsScopesForTarget(target,
     scopesInputProvided ? request.body.scopes : currentPortalScopes,
-    projectedPermissions);
+    projectedPermissions, actor);
   if (scopesInputProvided) {
     assertPersonnelLearningPortalScopeDeltaAllowed(
       actor,
@@ -41370,6 +41379,11 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         "PORTAL_ROLE_HIERARCHY_DENIED",
       );
     }
+    // Recheck the narrow independent-planner policy with the current actor and
+    // employee assignment, including a rights-only edit preserving its scopes.
+    await normalizeRightsScopesForTarget(
+      liveTargetAccess, scopes, projectedPermissions, liveLearningActor,
+    );
     if (scopesInputProvided) {
       assertPersonnelLearningPortalScopeDeltaAllowed(
         liveLearningActor,
@@ -62063,9 +62077,14 @@ app.post("/api/shifts", async (request, response) => {
 
 app.put("/api/shifts/:id", async (request, response) => {
   const id = Number(request.params.id);
-  const existing = await planningSettingsRepository.getShiftById({ id });
-  if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
+  const guardedUpdate = Object.prototype.hasOwnProperty.call(request.body || {}, "expectedRevision");
+  const existing = guardedUpdate
+    ? await planningSettingsRepository.getShiftForRevisionById({ id })
+    : await planningSettingsRepository.getShiftById({ id });
+  if (!existing) throw httpError(guardedUpdate ? 409 : 404, "Der Dienst wurde nicht gefunden oder inzwischen geändert.",
+    guardedUpdate ? "SHIFT_REVISION_CONFLICT" : "SHIFT_NOT_FOUND");
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: existing.department_id });
+  if (guardedUpdate) planningShiftPrecondition.assertExpectedPlanningShiftRevision(existing, request.body.expectedRevision);
   await assertDateEditable(
     existing.shift_date,
     await settingsForLocation(existing.location_id),
@@ -62097,7 +62116,7 @@ app.put("/api/shifts/:id", async (request, response) => {
   try {
     workRuleAssessment = await runWorkRuleMutationTransaction(async (repository, organization) => {
       await assertPlanningEmployment(shift, organization);
-      const result = await repository.updatePlanningShift({
+      const mutation = {
         id,
         employeeNumber: shift.employeeNumber,
         locationId: shift.locationId,
@@ -62108,8 +62127,12 @@ app.put("/api/shifts/:id", async (request, response) => {
         endTime: shift.endTime,
         area: shift.area,
         note: shift.note,
-      });
-      if (!result.rowsAffected) throw httpError(404, "Der Dienst wurde nicht gefunden.");
+      };
+      const result = guardedUpdate
+        ? await repository.updatePlanningShiftIfCurrent(mutation, existing)
+        : await repository.updatePlanningShift(mutation);
+      if (!result.rowsAffected) throw httpError(guardedUpdate ? 409 : 404, "Der Dienst wurde nicht gefunden oder inzwischen geändert.",
+        guardedUpdate ? "SHIFT_REVISION_CONFLICT" : "SHIFT_NOT_FOUND");
       await repository.invalidatePlanningDayReview(existing.employee_number, existing.shift_date);
       await repository.invalidatePlanningDayReview(shift.employeeNumber, shift.shiftDate);
       const records = [];

@@ -4125,10 +4125,11 @@
         <fieldset class="rights-editor-scope hidden" id="rightsEditorScope">
           <legend>Verantwortungsbereich</legend>
           <p id="rightsEditorScopeHint">Standortbezogene Rechte gelten nur im ausgewählten Bereich.</p>
-          <div class="rights-editor-scope-options">
+          <div class="rights-editor-scope-options" id="rightsEditorHomeScopeOptions">
             <label><input type="radio" name="rightsEditorScopeMode" value="department" /><span><strong id="rightsEditorDepartmentScopeLabel">Nur eigene Abteilung</strong><small>Sicherer Standard für Mitarbeitende und Abteilungsleitungen.</small></span></label>
             <label><input type="radio" name="rightsEditorScopeMode" value="location" /><span><strong id="rightsEditorLocationScopeLabel">Gesamte Filiale</strong><small>Erweitert die wirksamen Standortrechte auf alle Abteilungen der Filiale.</small></span></label>
           </div>
+          <div class="rights-editor-scope-options hidden" id="rightsEditorLocationChoices" aria-label="Freigegebene Filialen"></div>
         </fieldset>
         <p class="calculation-note" id="rightsEditorHint">Persönliche Anpassungen gelten sofort und bleiben an den ausgewählten Verantwortungsbereich gebunden.</p>
         <p class="visually-hidden" id="rightsEditorAnnouncement" role="status" aria-live="polite" aria-atomic="true"></p>

@@ -135,6 +135,44 @@ async function drag(page, locator, dx, dy) {
   await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + dx, y + dy, { steps: 5 }); await page.mouse.up();
 }
 
+test('independent administration planner edits explicit branch scopes in the actual rights form',
+  { skip: !enabled, timeout: 60000 }, async t => {
+    const instance = await browser(); t.after(() => instance.close());
+    const page = await instance.newPage({ viewport: { width: 1280, height: 900 } });
+    const errors = await setup(page);
+    await page.addScriptTag({ content: sourceBetween('elements.rightsEditorScope?.addEventListener("change",', 'elements.rightsEditorModal?.addEventListener("close",') });
+    await page.evaluate(() => {
+      Object.assign(state.portalSession.user, { employeeNumber: 'SYN-developer', sessionKind: 'employee', scopes: [] });
+      state.locations.push({ id: 'example-central', name: 'BEISPIEL Mitte', active: true, departments: [] });
+      state.rightsManagement.users.push({ employeeNumber: 'SYN-administration', nickname: 'BEISPIEL Verwaltung',
+        fullName: 'BEISPIEL Verwaltung', role: 'location_planner', roleName: 'Planungsverantwortung',
+        homeLocationId: '', preferredDepartmentId: null, manageable: true, configured: true, active: true,
+        rolePermissions: ['schedule:read', 'schedule:write'], grantedPermissions: [], deniedPermissions: [],
+        scopes: [{ locationId: 'example-east', departmentId: null }, { locationId: 'example-west', departmentId: null }] });
+      rightsManagementWorkspace.render({ users: state.rightsManagement.users, locations: state.locations, managerDenialOnly: false });
+    });
+    await page.locator('#openRightsManagementButton').click();
+    await page.locator('[data-rights-user="SYN-administration"] [data-edit-user-rights]').click();
+    const choices = page.locator('#rightsEditorLocationChoices');
+    assert.equal(await choices.isVisible(), true);
+    assert.equal(await page.locator('#rightsEditorHomeScopeOptions').isVisible(), false);
+    assert.equal(await choices.locator('input[value="example-east"]').isChecked(), true);
+    assert.equal(await choices.locator('input[value="example-west"]').isChecked(), true);
+    assert.equal(await choices.locator('input[value="example-central"]').isChecked(), false);
+    await choices.locator('input[value="example-central"]').check();
+    await choices.locator('input[value="example-west"]').uncheck();
+    assert.deepEqual(await page.evaluate(() => rightsEditorSelectedScope()), [
+      { locationId: 'example-east', departmentId: null }, { locationId: 'example-central', departmentId: null },
+    ]);
+    await choices.locator('input[value="example-east"]').uncheck();
+    await choices.locator('input[value="example-central"]').uncheck();
+    assert.equal(await page.locator('#saveRightsEditorButton').isDisabled(), true);
+    await choices.locator('input[value="example-east"]').check();
+    assert.equal(await page.locator('#saveRightsEditorButton').isDisabled(), false);
+    await screenshot(page, 'independent-administration-scope-editor.png');
+    assert.deepEqual(errors, []);
+  });
+
 test('explicit minimized entry retains expanded dimensions and sticky profile context through actual scrolling',
   {skip:!enabled,timeout:60000},async t => {
     const instance=await browser();try {

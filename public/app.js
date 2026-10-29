@@ -851,7 +851,7 @@ const elements = Object.fromEntries(
     "adminAccessModeLabel", "accessSettings", "portalUserAccessCard", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "mobilePortalLocationDisplayCard", "mobilePortalLocationDisplayLocation", "mobilePortalLocationDisplayModules", "mobilePortalLocationDisplayHint", "saveMobilePortalLocationDisplayButton",
     "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountLearningDashboard", "organizationAccountLearningDashboardRow", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountArticles", "organizationAccountArticlesRow", "organizationAccountReceipts", "organizationAccountReceiptsRow", "organizationAccountTimeOff", "organizationAccountTimeOffRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
-    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "personnelViewSettingsCard", "trustLevelSettingsCard",
+    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorHomeScopeOptions", "rightsEditorLocationChoices", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "systemCenterUtilization", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
@@ -3598,9 +3598,19 @@ async function setupPortalAdmin(event) {
   } catch (error) { showToast(error.message, true); }
 }
 
+function portalUserScopesForSave(row, user, role) {
+  if (role === user?.role && Array.isArray(user.scopes) && user.scopes.length > 1) {
+    return user.scopes.map(scope => ({ locationId: scope.locationId, departmentId: scope.departmentId || null }));
+  }
+  const locationId = row.querySelector("[data-scope-location]").value;
+  const departmentId = role === "department_manager" ? row.querySelector("[data-scope-department]").value : "";
+  return [{ locationId, departmentId }];
+}
+
 async function savePortalUser(row) {
   if (window.GrabenplanerPasswordPolicy && !window.GrabenplanerPasswordPolicy.validate(row.querySelector("[data-portal-password]"), { report: true })) return;
   const employeeNumber = row.dataset.portalUser;
+  const previousUser = state.portalUsers.find(user => user.employeeNumber === employeeNumber);
   try {
     const mayManageUsers = state.portalSession?.user?.permissions?.includes("users:write") || !state.portalStatus?.portalEnabled;
     if (mayManageUsers) {
@@ -3617,11 +3627,9 @@ async function savePortalUser(row) {
     }
     const role = row.querySelector("[data-portal-role]").value;
     if (["location_planner", "manager", "department_manager"].includes(role)) {
-      const locationId = row.querySelector("[data-scope-location]").value;
-      const departmentId = role === "department_manager" ? row.querySelector("[data-scope-department]").value : "";
       const scoped = await api(`/api/portal/v1/users/${encodeURIComponent(employeeNumber)}/scopes`, {
         method: "PUT",
-        body: JSON.stringify({ scopes: [{ locationId, departmentId }] }),
+        body: JSON.stringify({ scopes: portalUserScopesForSave(row, previousUser, role) }),
       });
       state.portalUsers = scoped.users || state.portalUsers;
     }
@@ -25151,7 +25159,8 @@ async function loadPortalUsers() {
       const locations = state.locations.map((location) => `<option value="${escapeHtml(location.id)}" ${location.id === scope.locationId ? "selected" : ""}>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
       const departments = (state.locations.find((location) => location.id === scope.locationId)?.departments || []).map((department) => `<option value="${department.id}" ${Number(department.id) === Number(scope.departmentId) ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("");
       const roleEditable = mayManageUsers && portalUserManageableInUi(actorRole, user);
-      const scopeEditable = mayManageScopes && portalUserManageableInUi(actorRole, user)
+      const multipleScopes = (user.scopes || []).length > 1;
+      const scopeEditable = mayManageScopes && !multipleScopes && portalUserManageableInUi(actorRole, user)
         && ["location_planner", "manager", "department_manager"].includes(user.role);
       const protectedRole = user.roleLocked || user.role === "developer";
       const roleControl = roleEditable
@@ -25162,6 +25171,7 @@ async function loadPortalUsers() {
         <header class="portal-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${user.passwordConfigured ? "Zugang eingerichtet" : "Noch kein Passwort"}${user.lastLoginAt ? ` · zuletzt ${escapeHtml(new Date(user.lastLoginAt).toLocaleString("de-AT"))}` : ""}${user.locked ? ` · gesperrt bis ${escapeHtml(new Date(user.lockedUntil).toLocaleString("de-AT"))}` : user.failedLoginAttempts ? ` · ${Number(user.failedLoginAttempts)} Fehlversuch(e)` : ""}</small></div><label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} ${roleEditable ? "" : "disabled"} /><span><strong>Zugang aktiv</strong><small>Anmeldung erlaubt</small></span></label></header>
         <div class="portal-user-controls">
         ${roleControl}
+        ${multipleScopes ? `<small>${Number(user.scopes.length)} Bereiche zugewiesen · bleiben beim Speichern erhalten</small>` : ""}
         <select data-scope-location aria-label="Zugewiesene Filiale" class="${["location_planner", "manager", "department_manager"].includes(user.role) ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${locations}</select>
         <select data-scope-department aria-label="Zugewiesene Abteilung" class="${user.role === "department_manager" ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${departments}</select>
         <span class="password-field portal-user-password ${roleEditable ? "" : "hidden"}"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" data-gp-new-password placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
@@ -25427,6 +25437,7 @@ function syncRightsWorkspace() {
     rightsLoadGeneration++; rightsLoadController?.abort(); rightsLoadController = null;
     rightsEditorGeneration++; rightsEditorSaveContext?.controller.abort(); rightsEditorSaveContext = null;
     rightsEditorSnapshot = null; state.selectedRightsEmployeeNumber = null; state.rightsManagement = null;
+    elements.rightsEditorLocationChoices?.replaceChildren();
     resetRightsSettingsCardState();
     void permissionDefaultsUI?.load(false);
   }
@@ -25557,7 +25568,14 @@ function rightsEditorScopeContext(user) {
   const department = (location?.departments || []).find((entry) => Number(entry.id) === departmentId);
   const explicitMode = departmentScope ? "department" : locationScope ? "location" : "";
   const safeDefaultMode = ["employee", "department_manager"].includes(user?.role) ? "department" : "location";
+  const actor = state.portalSession?.user;
+  const independentPlanner = Boolean(user?.employeeNumber && user.configured && user.role === "location_planner"
+    && !String(user.homeLocationId || "").trim() && user.sessionKind !== "organization" && user.isEmployee !== false
+    && actor?.role === "developer" && actor.employeeNumber && actor.sessionKind !== "organization"
+    && actor.sessionKind !== "local" && actor.localSystem !== true && actor.isEmployee !== false
+    && Array.isArray(actor.scopes) && actor.scopes.length === 0);
   return {
+    independentPlanner,
     locationId,
     departmentId,
     location,
@@ -25577,6 +25595,11 @@ function rightsEditorSelectedScope() {
     return Array.isArray(user?.scopes) ? user.scopes : [];
   }
   const context = rightsEditorScopeContext(user);
+  if (context.independentPlanner) {
+    const selected = [...(elements.rightsEditorLocationChoices?.querySelectorAll('input[data-rights-location]:checked') || [])]
+      .map(input => ({ locationId: input.value, departmentId: Number(input.dataset.departmentId || 0) || null }));
+    return selected.length ? selected : null;
+  }
   const selectedMode = elements.rightsEditorForm.querySelector('input[name="rightsEditorScopeMode"]:checked')?.value || "";
   if (!context.locationId || !selectedMode) return null;
   if (selectedMode === "department") {
@@ -25599,6 +25622,8 @@ function refreshRightsEditorScope() {
   const hasOrganizationalPermissions = rightsEditorHasOrganizationalPermissions();
   const managerDenialOnly = state.portalSession?.user?.role === "manager";
   elements.rightsEditorScope.classList.toggle("hidden", managerDenialOnly || !hasOrganizationalPermissions);
+  elements.rightsEditorHomeScopeOptions?.classList.toggle("hidden", context.independentPlanner);
+  elements.rightsEditorLocationChoices?.classList.toggle("hidden", !context.independentPlanner);
   elements.rightsEditorDepartmentScopeLabel.textContent = `Nur eigene Abteilung · ${context.department?.name || "nicht zugeordnet"}`;
   elements.rightsEditorLocationScopeLabel.textContent = `Gesamte Filiale · ${context.location?.name || context.locationId || "nicht zugeordnet"}`;
   const departmentInput = elements.rightsEditorForm.querySelector('input[name="rightsEditorScopeMode"][value="department"]');
@@ -25613,6 +25638,8 @@ function refreshRightsEditorScope() {
   }
   elements.rightsEditorScopeHint.textContent = !hasOrganizationalPermissions
     ? "Für die aktuell wirksamen Rechte ist kein Standortbereich erforderlich."
+    : context.independentPlanner
+      ? "Filialunabhängige Planungsverantwortung: Filialen ausdrücklich auswählen. Die Mitarbeiterzuordnung zur Verwaltung bleibt unverändert."
     : !context.locationId
       ? "Bitte zuerst eine Filialkostenstelle zuweisen."
       : !context.departmentId && ["employee", "department_manager"].includes(user.role)
@@ -25718,6 +25745,24 @@ function openRightsEditor(employeeNumber) {
     }).join("")}</div></section>`).join("");
   enforceRightsEditorPermissionDependencies(null, false);
   const context = rightsEditorScopeContext(user);
+  if (elements.rightsEditorLocationChoices) {
+    const scopes = Array.isArray(user.scopes) ? user.scopes : [];
+    const locations = new Map(state.locations.map(location => [String(location.id), location]));
+    for (const scope of scopes) {
+      if (!locations.has(String(scope.locationId))) locations.set(String(scope.locationId), { id: scope.locationId, name: scope.locationId });
+    }
+    const rows = [...locations.values()].filter(location => location.active !== false || scopes.some(scope => String(scope.locationId) === String(location.id)))
+      .map(location => ({ locationId: String(location.id), departmentId: null, label: `${location.id} · ${location.name}` }));
+    for (const scope of scopes.filter(scope => Number(scope.departmentId))) {
+      const location = locations.get(String(scope.locationId));
+      const department = (location?.departments || []).find(entry => Number(entry.id) === Number(scope.departmentId));
+      rows.push({ locationId: String(scope.locationId), departmentId: Number(scope.departmentId), label: `${location?.name || scope.locationId} · ${department?.name || `Abteilung ${scope.departmentId}`}` });
+    }
+    elements.rightsEditorLocationChoices.innerHTML = rows.map(scope => {
+      const checked = scopes.some(entry => String(entry.locationId) === scope.locationId && (Number(entry.departmentId) || null) === scope.departmentId);
+      return `<label><input type="checkbox" data-rights-location value="${escapeHtml(scope.locationId)}" data-department-id="${scope.departmentId || ""}" ${checked ? "checked" : ""} ${user.manageable ? "" : "disabled"} /><span>${escapeHtml(scope.label)}</span></label>`;
+    }).join("");
+  }
   elements.rightsEditorForm.querySelectorAll('input[name="rightsEditorScopeMode"]').forEach((input) => {
     input.checked = input.value === context.mode;
   });
@@ -25958,6 +26003,7 @@ async function loadRightsManagement() {
       state.selectedRightsEmployeeNumber = null;
       if (elements.rightsEditorModal.open) elements.rightsEditorModal.close();
       elements.rightsEditorPermissions.replaceChildren();
+      elements.rightsEditorLocationChoices?.replaceChildren();
       elements.rightsEditorTitle.textContent = 'Rechte bearbeiten';
       elements.rightsEditorSummary.textContent = '';
       elements.saveRightsEditorButton.disabled = true;
@@ -26015,6 +26061,7 @@ function rightsEditorDraftSignature() {
   return JSON.stringify([
     [...elements.rightsEditorPermissions.querySelectorAll('input[data-rights-permission]')].map(input => [input.value, input.checked]),
     [...elements.rightsEditorForm.querySelectorAll('input[name="rightsEditorScopeMode"]')].map(input => [input.value, input.checked]),
+    [...(elements.rightsEditorLocationChoices?.querySelectorAll('input[data-rights-location]') || [])].map(input => [input.value, input.dataset.departmentId || "", input.checked]),
   ]);
 }
 
@@ -43531,9 +43578,13 @@ elements.rightsEditorPermissions?.addEventListener("change", (event) => {
   refreshRightsEditorScope();
 });
 elements.rightsEditorScope?.addEventListener("change", (event) => {
-  const input = event.target.closest('input[name="rightsEditorScopeMode"]');
+  const input = event.target.closest('input[name="rightsEditorScopeMode"], input[data-rights-location]');
   if (!input) return;
   refreshRightsEditorSaveState();
+  if (input.hasAttribute("data-rights-location")) {
+    rightsEditorAnnounce("Die ausdrücklich freigegebenen Filialbereiche wurden geändert.");
+    return;
+  }
   rightsEditorAnnounce(input.value === "department"
     ? "Verantwortungsbereich auf die eigene Abteilung begrenzt."
     : "Verantwortungsbereich auf die gesamte Filiale erweitert.");
