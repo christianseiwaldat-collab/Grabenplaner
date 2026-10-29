@@ -10,7 +10,7 @@ import re
 
 FORMAT = 'gp-semgrep-core-build-inputs/v1'
 PROGRAMS = ('build_semgrep_source.py', 'source_core_identity.py', 'source_core_acquisition.py',
-            'semgrep_core_tool.py', 'publish_semgrep_core_tool.py', 'compiler_license_ledger.py',
+            'semgrep_core_tool.py', 'publish_semgrep_core_tool.py', 'compiler_license_ledger.py', 'compiler_license_declaration.py',
             'compiler_license_native.py', 'prepare_source_core.py',
             'sast_profile.py', 'gates.py')
 PROGRAM_ATTRIBUTE = 'scripts/security/*.py text eol=lf'

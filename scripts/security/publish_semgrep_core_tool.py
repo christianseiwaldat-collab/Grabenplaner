@@ -27,7 +27,7 @@ from semgrep_core_tool import ARCHIVE, MAX_ARCHIVE, check_elf, unique_json, veri
 from source_core_identity import inputs as build_inputs, digest as input_digest, canonical as input_canonical
 
 FORMAT = 'gp-semgrep-core-tool/v2'
-LEDGER_FORMAT = 'gp-semgrep-core-dependency-license-ledger/v2'
+LEDGER_FORMAT = 'gp-semgrep-core-dependency-license-ledger/v3'
 FILES = (
     'bin/semgrep-core', 'upstream/LICENSE', 'upstream/source.patch',
     'upstream/provenance.json', 'upstream/toolchain-sbom.cdx.json',
@@ -328,7 +328,8 @@ def prepare(source, qualification, binary, ledger, dependency_sources, output, r
             'upstreamDockerfileSha256', 'derivedRecipeSha256', 'officialTarget', 'baseImage',
             'compilerSourceCommit', 'opamRepositoryCommit')},
         'native': {key: native[key] for key in ('imageId', 'binarySha256', 'binaryBytes',
-            'versionOutput', 'compilerOutput', 'opamPackages', 'nativePackageIds', 'nativeInputsSha256')},
+            'versionOutput', 'compilerOutput', 'opamPackages', 'nativePackageIds', 'nativeInputsSha256')
+            + (('opamSourceEvidence',) if 'opamSourceEvidence' in native else ())},
         'sourceModified': True, 'officialReleaseBinary': False,
         'bitIdenticalRebuildVerified': False,
         'originalBuildSbomSha256': sha(raw_sbom), 'publishedInventorySbomSha256': sha(sbom),

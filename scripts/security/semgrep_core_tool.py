@@ -236,7 +236,7 @@ def verify_tar(data, pin, with_contents=False):
     native_provenance = provenance['native']
     if (not isinstance(native_provenance, dict) or set(native_provenance) != {
             'imageId', 'binarySha256', 'binaryBytes', 'versionOutput', 'compilerOutput', 'opamPackages',
-            'nativePackageIds', 'nativeInputsSha256'}
+            'nativePackageIds', 'nativeInputsSha256'} | ({'opamSourceEvidence'} if 'opamSourceEvidence' in native_provenance else set())
             or native_provenance.get('binarySha256') != pin['native']['sha256']
             or native_provenance.get('binaryBytes') != pin['native']['bytes']
             or not re.fullmatch('sha256:[a-f0-9]{64}', str(native_provenance.get('imageId')))

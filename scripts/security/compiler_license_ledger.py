@@ -21,7 +21,7 @@ import urllib.request
 from urllib.parse import urlsplit
 import zipfile
 
-FORMAT = 'gp-semgrep-core-dependency-license-ledger/v2'
+FORMAT = 'gp-semgrep-core-dependency-license-ledger/v3'
 CAPTURE = 'gp-semgrep-core-license-capture/v1'
 MAX_JSON = 4 * 1024**2
 MAX_CAPTURE_JSON = 64 * 1024**2
@@ -115,12 +115,55 @@ def field(text, name):
     return [json.loads(value) for value in re.findall(r'"(?:[^"\\]|\\.)*"', found.group(1))]
 
 
+def opam_blocks(text, name):
+    # A bounded lexical scan, not a newline-sensitive brace regex. Braces and
+    # fake section headers inside escaped/triple-quoted strings or comments
+    # cannot terminate/create a URL block. Inline closing braces are valid.
+    if len(text) > MAX_JSON:
+        raise ValueError('Opam definition exceeds bound')
+    result, depth, quote, body, i = [], 0, None, None, 0
+    header = re.compile(r'[ \t]*' + re.escape(name) + r'\s*\{')
+    while i < len(text):
+        if quote:
+            if quote == 'triple' and text.startswith('"""', i):
+                quote = None; i += 3; continue
+            if quote == 'single' and text[i] == '"':
+                quote = None; i += 1; continue
+            if text[i] == '\\':
+                i += 2; continue
+            i += 1; continue
+        if text[i] == '#':
+            stop = text.find('\n', i); i = len(text) if stop < 0 else stop + 1; continue
+        if depth == 0 and (i == 0 or text[i - 1] == '\n'):
+            match = header.match(text, i)
+            if match:
+                body = match.end(); depth = 1; i = body; continue
+        if text.startswith('"""', i):
+            quote = 'triple'; i += 3; continue
+        if text[i] == '"':
+            quote = 'single'; i += 1; continue
+        if text[i] == '{':
+            depth += 1
+        elif text[i] == '}':
+            if depth <= 0:
+                raise ValueError('Unbalanced opam source braces')
+            depth -= 1
+            if body is not None and depth == 0:
+                result.append(text[body:i]); body = None
+        i += 1
+    if body is not None or quote or depth:
+        raise ValueError('Unterminated opam source block/string')
+    return result
+
+
 def source_url(text):
-    value = re.search(r'(?ms)^\s*url\s*\{(.*?)^\s*\}', text)
-    if not value:
+    values = opam_blocks(text, 'url')
+    if not values:
         return None, []
-    urls = field(value.group(1), 'src')
-    hashes = field(value.group(1), 'checksum')
+    if len(values) != 1:
+        raise ValueError('Duplicate opam source URL blocks')
+    urls = field(values[0], 'src')
+    hashes = field(values[0], 'checksum')
     if len(urls) == 1 and urls[0].startswith('git+https://'):
         repository, separator, commit = urls[0][4:].partition('#')
         if not separator or not re.fullmatch('[a-f0-9]{40}', commit):
@@ -301,7 +344,8 @@ def validate_ledger(value, binary_sha256, native=None):
     covered = {'opam': set(), 'apk': set(), 'custom': set(), 'upstream': set()}
     seen = set()
     for component in components:
-        if not isinstance(component, dict) or set(component) != {'name', 'version', 'packageIds', 'licenseExpression', 'notices', 'correspondingSource'}:
+        if not isinstance(component, dict) or set(component) not in ({'name', 'version', 'packageIds', 'licenseExpression', 'notices', 'correspondingSource'},
+                {'name', 'version', 'packageIds', 'licenseExpression', 'notices', 'correspondingSource', 'licenseEvidence'}):
             raise ValueError('Invalid dependency component fields')
         name, version, expression = component['name'], component['version'], component['licenseExpression']
         if (not isinstance(name, str) or '/' not in name or name in seen or len(name) > 240
@@ -315,23 +359,27 @@ def validate_ledger(value, binary_sha256, native=None):
                 or any(not isinstance(item, str) or item in covered[ecosystem] for item in ids)):
             raise ValueError('Duplicate or invalid dependency coverage')
         covered[ecosystem].update(ids)
-        notices = component['notices']
-        if not isinstance(notices, list) or not notices:
-            raise ValueError('Missing primary dependency notices')
-        paths = set()
-        for item in notices:
-            if not isinstance(item, dict) or set(item) != {'path', 'text', 'sha256', 'sourceBytesSha256', 'encoding'}:
-                raise ValueError('Incomplete primary notice evidence')
-            notice_path(item['path'])
-            if item['path'] in paths or not isinstance(item['text'], str) or not item['text'].strip() or '\x00' in item['text']:
-                raise ValueError('Blank or duplicate primary notice')
-            paths.add(item['path'])
-            try:
-                original = item['text'].encode({'utf8': 'utf8', 'latin1': 'latin1'}[item['encoding']])
-            except (KeyError, UnicodeError):
-                raise ValueError('Invalid primary notice encoding') from None
-            if digest(item['text'].encode()) != item['sha256'] or digest(original) != item['sourceBytesSha256']:
-                raise ValueError('Primary notice bytes differ')
+        if 'licenseEvidence' in component:
+            from compiler_license_declaration import validate_declaration
+            validate_declaration(component, native=native)
+        else:
+            notices = component['notices']
+            if not isinstance(notices, list) or not notices:
+                raise ValueError('Missing primary dependency notices')
+            paths = set()
+            for item in notices:
+                if not isinstance(item, dict) or set(item) != {'path', 'text', 'sha256', 'sourceBytesSha256', 'encoding'}:
+                    raise ValueError('Incomplete primary notice evidence')
+                notice_path(item['path'])
+                if item['path'] in paths or not isinstance(item['text'], str) or not item['text'].strip() or '\x00' in item['text']:
+                    raise ValueError('Blank or duplicate primary notice')
+                paths.add(item['path'])
+                try:
+                    original = item['text'].encode({'utf8': 'utf8', 'latin1': 'latin1'}[item['encoding']])
+                except (KeyError, UnicodeError):
+                    raise ValueError('Invalid primary notice encoding') from None
+                if digest(item['text'].encode()) != item['sha256'] or digest(original) != item['sourceBytesSha256']:
+                    raise ValueError('Primary notice bytes differ')
         reference = component['correspondingSource']
         # Conservative complete-source distribution for every component. No
         # SPDX-derived exception or None-source waiver is implemented here.
@@ -387,6 +435,24 @@ def source_notice_hashes(data, depth=0):
     return hashes
 
 
+def declaration_source_files(data):
+    # The exact config package is small; no filesystem extraction or nested
+    # archive execution is required to verify its complete retained payload.
+    if len(data) > 16 * 1024**2:
+        raise ValueError('Config source package exceeds reviewed bound')
+    files, total = {}, 0
+    with tarfile.open(fileobj=io.BytesIO(data), mode='r:xz') as archive:
+        for item in archive:
+            name = relative(item.name)
+            if not item.isfile() or name in files or len(files) >= 10000:
+                raise ValueError('Invalid config source member')
+            total += item.size
+            if total > 16 * 1024**2:
+                raise ValueError('Config source expansion exceeds reviewed bound')
+            files[name] = archive.extractfile(item).read()
+    return files
+
+
 def validate_sources(value, read_source):
     checked = {}
     for component in value['components']:
@@ -399,7 +465,10 @@ def validate_sources(value, read_source):
         previous, actual_notices = checked[name]
         if previous != reference:
             raise ValueError('Shared corresponding source has conflicting identity')
-        if any(item['sourceBytesSha256'] not in actual_notices for item in component['notices']):
+        if 'licenseEvidence' in component:
+            from compiler_license_declaration import validate_declaration
+            validate_declaration(component, declaration_source_files(read_source(name)))
+        elif any(item['sourceBytesSha256'] not in actual_notices for item in component['notices']):
             raise ValueError('Primary dependency notice is not present in retained source')
     return checked
 
@@ -444,11 +513,19 @@ for line in listing.splitlines():
     install=pathlib.Path(prefix+'/.opam-switch/install/'+name+'.install')
     changes=pathlib.Path(prefix+'/.opam-switch/install/'+name+'.changes')
     sources=pathlib.Path(prefix+'/.opam-switch/sources')
-    found=[p.name for p in sources.glob(name+'.*') if p.is_dir() and (p.name==identity or p.name==name+'.dev')]
     pin = next((line.split()[2] for line in pins.splitlines() if len(line.split()) >= 3 and line.split()[0] == identity), None)
+    # opam omits the version for pinned source directories. Prefer that exact
+    # current package name; regular releases remain bound to their installed id.
+    candidates=([name, identity, name+'.dev'] if pin else [identity])
+    source_directory=next((item for item in dict.fromkeys(candidates) if (sources/item).is_dir()), None)
     packages.append({'name':name,'version':version,'id':identity,'opam':base64.b64encode(metadata.read_bytes()).decode(),'sourcePin':pin,
         'install':base64.b64encode(install.read_bytes() if install.exists() else b'').decode(),
-        'changes':base64.b64encode(changes.read_bytes() if changes.exists() else b'').decode(),'sourceDirectory':found[0] if len(found)==1 else None})
+        'changes':base64.b64encode(changes.read_bytes() if changes.exists() else b'').decode(),'sourceDirectory':source_directory})
+    if identity == 'ocaml-config.3':
+        installed=pathlib.Path(prefix+'/share/ocaml-config/gen_ocaml_config.ml')
+        assert installed.is_file() and not installed.is_symlink()
+        data=installed.read_bytes(); assert 0 < len(data) <= 65536
+        packages[-1]['installedSource']={'imagePath':str(installed),'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest(),'content':base64.b64encode(data).decode()}
 database=pathlib.Path('/lib/apk/db/installed').read_text()
 apks=[]; owners={}
 for paragraph in database.strip().split('\n\n'):
@@ -476,11 +553,28 @@ print(json.dumps({'opamPackages':packages,'opamListing':listing,'apkPackages':ap
 '''
 
 
+class CaptureCommandError(ValueError):
+    """Details stay in encrypted qualification evidence, never console output."""
+    def __init__(self, arguments, returncode, stdout=b'', stderr=b''):
+        super().__init__('Compiler license capture command failed (' + str(returncode) + ')')
+        self.evidence = {'format': 'gp-compiler-capture-command-failure/v1',
+            'commandSha256': digest(encoded([str(item) for item in arguments])),
+            'operation': str(arguments[0]) + '/' + (str(arguments[1]) if len(arguments) > 1 else ''),
+            'returncode': returncode}
+        for key, data in (('stdout', stdout or b''), ('stderr', stderr or b'')):
+            if isinstance(data, str): data = data.encode('utf8', errors='replace')
+            self.evidence[key] = {'bytes': len(data), 'sha256': digest(data),
+                'tailBase64': base64.b64encode(data[-16384:]).decode(), 'truncated': len(data) > 16384}
+
+
 def command(arguments, timeout=300):
-    result = subprocess.run(arguments, capture_output=True, check=False, timeout=timeout,
-        env={key: value for key, value in os.environ.items() if key in ('PATH', 'HOME', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'XDG_RUNTIME_DIR')})
+    try:
+        result = subprocess.run(arguments, capture_output=True, check=False, timeout=timeout,
+            env={key: value for key, value in os.environ.items() if key in ('PATH', 'HOME', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'XDG_RUNTIME_DIR')})
+    except subprocess.TimeoutExpired as error:
+        raise CaptureCommandError(arguments, 'timeout', error.stdout, error.stderr) from None
     if result.returncode:
-        raise ValueError('Compiler license capture command failed')
+        raise CaptureCommandError(arguments, result.returncode, result.stdout, result.stderr)
     return result.stdout
 
 
@@ -493,44 +587,71 @@ def actual_license_closure(native):
         image, '-I', '-c', CAPTURE_SCRIPT]))
     if opam_ids(captured['opamListing']) != opam_ids(native.get('opamPackages', '')):
         raise ValueError('Fresh actual opam closure differs from qualified compiler')
+    from compiler_license_declaration import actual_source_evidence
+    sources = actual_source_evidence(captured)
     return {'nativePackageIds': sorted({item['owner'] for item in captured['nativeInputs']
-            if item['owner'] != 'custom-curl.8.5.0'}), 'nativeInputsSha256': digest(encoded(captured['nativeInputs']))}
+            if item['owner'] != 'custom-curl.8.5.0'}), 'nativeInputsSha256': digest(encoded(captured['nativeInputs'])),
+        **({'opamSourceEvidence': sources} if sources else {})}
 
 
 def capture_image(image, binary_sha, qualification, output):
     capture_root = output / 'capture'
     capture_root.mkdir(mode=0o700)
-    value = unique(command(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--entrypoint', 'python3', image, '-I', '-c', CAPTURE_SCRIPT]))
-    value.update(format='gp-semgrep-core-actual-license-inputs/v1', imageId=image, binarySha256=binary_sha)
-    (capture_root / 'capture.json').write_bytes(encoded(value))
     report = {'format': 'gp-semgrep-core-compiler-license-review/v1', 'imageId': image, 'binarySha256': binary_sha,
-        'captureSha256': None, 'opamInstalled': opam_ids(value['opamListing']),
-        'nativePackageIds': sorted({item['owner'] for item in value['nativeInputs'] if item['owner'] != 'custom-curl.8.5.0'}),
-        'nativeInputsSha256': digest(encoded(value['nativeInputs'])), 'phase': 'inventory-captured',
-        'publicationReady': False, 'actualInputs': value}
-    if len(encoded(report)) > MAX_CAPTURE_JSON:
-        raise ValueError('Actual compiler metadata exceeds private receipt bound')
+        'captureSha256': None, 'phase': 'raw-source-export-started', 'publicationReady': False}
+    # Persist BEFORE the first external command. A failed observation must not
+    # erase its command error or require another expensive build to read source.
     (qualification / 'sourcebuild-compiler-license-review.json').write_bytes(encoded(report))
-    container = command(['docker', 'create', '--network', 'none', '--read-only', '--entrypoint', '/bin/true', image]).decode().strip()
-    if not re.fullmatch('[a-f0-9]{64}', container):
-        raise ValueError('Invalid owned compiler capture container')
+    (capture_root / 'capture.json').write_bytes(encoded({'format': 'gp-semgrep-core-source-capture-observation/v1',
+        'imageId': image, 'binarySha256': binary_sha, 'captureComplete': False}))
+    container = None
     try:
+        container = command(['docker', 'create', '--network', 'none', '--read-only', '--entrypoint', '/bin/true', image]).decode().strip()
+        if not re.fullmatch('[a-f0-9]{64}', container):
+            container = None
+            raise ValueError('Invalid owned compiler capture container')
         for source, target in (
             ('/root/.opam/download-cache', 'opam-download-cache'),
             ('/root/.opam/5.4.0/.opam-switch/sources', 'opam-sources'),
+            ('/root/.opam/5.4.0/.opam-switch/packages', 'opam-package-metadata'),
+            ('/root/.opam/5.4.0/.opam-switch/install', 'opam-install-evidence'),
+            ('/root/.opam/5.4.0/.opam-switch/switch-state', 'opam-switch-state'),
+            ('/lib/apk/db/installed', 'apk-installed-database'),
             ('/tmp/curl-8.5.0.tar.gz', 'custom-curl.tar.gz')):
             command(['docker', 'cp', container + ':' + source, str(capture_root / target)], timeout=600)
+        report['phase'] = 'raw-sources-exported'
+        (qualification / 'sourcebuild-compiler-license-review.json').write_bytes(encoded(report))
+        value = unique(command(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--entrypoint', 'python3', image, '-I', '-c', CAPTURE_SCRIPT]))
+        value.update(format='gp-semgrep-core-actual-license-inputs/v1', imageId=image, binarySha256=binary_sha,
+            captureComplete=True)
+        (capture_root / 'capture.json').write_bytes(encoded(value))
+        report.update(opamInstalled=opam_ids(value['opamListing']),
+            nativePackageIds=sorted({item['owner'] for item in value['nativeInputs'] if item['owner'] != 'custom-curl.8.5.0'}),
+            nativeInputsSha256=digest(encoded(value['nativeInputs'])), phase='inventory-captured', actualInputs=value)
+        if len(encoded(report)) > MAX_CAPTURE_JSON:
+            raise ValueError('Actual compiler metadata exceeds private receipt bound')
+    except Exception as error:
+        report.update(phase='capture-observation-failed', errorType=type(error).__name__)
+        if isinstance(error, CaptureCommandError):
+            (qualification / 'sourcebuild-compiler-capture-command-failure.json').write_bytes(encoded(error.evidence))
+        raise
     finally:
-        command(['docker', 'rm', container])
-    files = tree_files(capture_root)
-    archive = source_archive(files)
-    (output / 'capture.tar.xz').write_bytes(archive)
-    receipt = {'format': CAPTURE, 'archive': {'bytes': len(archive), 'sha256': digest(archive)},
-        'imageId': image, 'binarySha256': binary_sha, 'upstreamOnly': True, 'compilerRebuilt': False,
-        'memberInventory': [{'path': name, 'bytes': len(data), 'sha256': digest(data)} for name, data in sorted(files.items())]}
-    (output / 'capture-receipt.json').write_bytes(encoded(receipt))
-    report.update(captureSha256=digest(archive), phase='captured')
-    (qualification / 'sourcebuild-compiler-license-review.json').write_bytes(encoded(report))
+        try:
+            if container is not None: command(['docker', 'rm', container])
+        finally:
+            # The manifest says exactly which upstream bytes were recovered.
+            # A partial capture is diagnostic evidence; it never authorizes tool
+            # publication and its capture.json cannot be read as a full closure.
+            files = tree_files(capture_root)
+            archive = source_archive(files)
+            (output / 'capture.tar.xz').write_bytes(archive)
+            receipt = {'format': CAPTURE, 'archive': {'bytes': len(archive), 'sha256': digest(archive)},
+                'imageId': image, 'binarySha256': binary_sha, 'upstreamOnly': True, 'compilerRebuilt': False,
+                'memberInventory': [{'path': name, 'bytes': len(data), 'sha256': digest(data)} for name, data in sorted(files.items())]}
+            (output / 'capture-receipt.json').write_bytes(encoded(receipt))
+            report.update(captureSha256=digest(archive))
+            if report['phase'] == 'inventory-captured': report['phase'] = 'captured'
+            (qualification / 'sourcebuild-compiler-license-review.json').write_bytes(encoded(report))
     return value, capture_root, report
 
 
@@ -546,8 +667,8 @@ def verify_capture(output):
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:xz') as archive:
         for item in archive:
             name = relative(item.name)
-            if (not item.isfile() or not (name == 'capture.json' or name == 'custom-curl.tar.gz'
-                    or name.startswith(('opam-download-cache/', 'opam-sources/')))):
+            if (not item.isfile() or not (name in ('capture.json', 'custom-curl.tar.gz', 'opam-switch-state', 'apk-installed-database')
+                    or name.startswith(('opam-download-cache/', 'opam-sources/', 'opam-package-metadata/', 'opam-install-evidence/')))):
                 raise ValueError('Unexpected compiler capture member')
             if item.size > MAX_FILE:
                 raise ValueError('Oversized compiler capture member')
@@ -567,7 +688,8 @@ def collect_opam(capture, root, output):
         if (not re.fullmatch('[A-Za-z0-9_+.-]+', package['name']) or not re.fullmatch('[A-Za-z0-9_+.-]+', package['version'])
                 or package['id'] != package['name'] + '.' + package['version']
                 or package['sourceDirectory'] is not None and ('/' in relative(package['sourceDirectory'])
-                    or not package['sourceDirectory'].startswith(package['name'] + '.'))):
+                    or not (package['sourceDirectory'] == package['name'] and package.get('sourcePin')
+                        or package['sourceDirectory'].startswith(package['name'] + '.')))):
             raise ValueError('Invalid captured opam package/source identity')
         metadata = base64.b64decode(package['opam'], validate=True)
         install = base64.b64decode(package['install'], validate=True)
@@ -576,6 +698,17 @@ def collect_opam(capture, root, output):
         licenses = field(definition, 'license')
         files = {'metadata/opam': metadata, 'metadata/install': install, 'metadata/changes': changes}
         tree = root / 'opam-sources' / package['sourceDirectory'] if package['sourceDirectory'] else None
+        if package['id'] == 'ocaml-config.3':
+            from compiler_license_declaration import ORIGINALS, DECLARATION_URL, build_evidence, validate_declaration
+            original = {name: checked_download(url, ['sha256=' + sha], root / 'opam-download-cache')
+                for name, url, _size, sha in ORIGINALS}
+            evidence, config_files = build_evidence(package, metadata, original, tree_files(tree) if tree and tree.is_dir() else {})
+            component = {'name': 'opam/ocaml-config', 'version': '3', 'packageIds': ['ocaml-config.3'],
+                'licenseExpression': 'ISC', 'notices': [], 'licenseEvidence': evidence,
+                'correspondingSource': retain_source(output, 'opam-ocaml-config.3', config_files, DECLARATION_URL)}
+            validate_declaration(component, config_files)
+            components.append(component)
+            continue
         # A retained actual pin tree is the source authority for git/file pins;
         # it need not pretend to be an independently downloadable release URL.
         url, checksums = (None, []) if tree and tree.is_dir() else source_url(definition)
@@ -663,7 +796,21 @@ def produce(image_file, binary, source, qualification, output):
     if native['imageId'] != image or native['baseImage'] != ALPINE:
         raise ValueError('License capture image differs from qualified core')
     output.mkdir(mode=0o700)
-    capture, root, report = capture_image(image, digest(core), qualification, output)
+    try:
+        capture, root, report = capture_image(image, digest(core), qualification, output)
+    except Exception as error:
+        # This file is sealed with all private qualification evidence. Never
+        # print source paths or raw command diagnostics in the public receipt.
+        import traceback
+        failure = {'format': 'gp-compiler-capture-private-failure/v1', 'imageId': image,
+            'binarySha256': digest(core), 'errorType': type(error).__name__,
+            'tracebackTail': traceback.format_exc()[-16384:], 'publicationReady': False}
+        (qualification / 'sourcebuild-compiler-capture-failure.json').write_bytes(encoded(failure))
+        raise
+    from compiler_license_declaration import actual_source_evidence
+    actual_sources = actual_source_evidence(capture)
+    if actual_sources:
+        native = {**native, 'opamSourceEvidence': actual_sources}
     verify_capture(output)
     if opam_ids(capture['opamListing']) != opam_ids(native['opamPackages']):
         raise ValueError('Actual image opam packages differ from qualified image')

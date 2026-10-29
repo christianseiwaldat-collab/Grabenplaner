@@ -1,0 +1,79 @@
+name: Synthetic native compiler capture contract
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ci/semgrep-core-activation-20261029]
+    paths:
+      - .github/workflows/compiler-capture-check.yml
+      - scripts/security/check_compiler_capture.py
+      - scripts/security/test_check_compiler_capture.py
+      - scripts/security/compiler_license_ledger.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compiler-capture-check-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PYTHONUTF8: '1'
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  synthetic-capture-contract:
+    name: Small native capture contract; no compiler qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12.14'
+      - name: Check bounded synthetic helper contracts
+        run: python -m unittest discover -s scripts/security -p test_check_compiler_capture.py -v
+      - name: Exercise current capture script and raw rescue in real isolated Docker containers
+        run: >-
+          python scripts/security/check_compiler_capture.py
+          --output "$RUNNER_TEMP/compiler-capture-contract"
+      - name: Retain only synthetic and upstream package capture diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: synthetic-compiler-capture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/compiler-capture-contract/contract-result.json
+            ${{ runner.temp }}/compiler-capture-contract/probe-metadata-binding.json
+            ${{ runner.temp }}/compiler-capture-contract/build-positive.stdout
+            ${{ runner.temp }}/compiler-capture-contract/build-positive.stderr
+            ${{ runner.temp }}/compiler-capture-contract/build-positive.json
+            ${{ runner.temp }}/compiler-capture-contract/build-negative.stdout
+            ${{ runner.temp }}/compiler-capture-contract/build-negative.stderr
+            ${{ runner.temp }}/compiler-capture-contract/build-negative.json
+            ${{ runner.temp }}/compiler-capture-contract/capture-positive.stdout
+            ${{ runner.temp }}/compiler-capture-contract/capture-positive.stderr
+            ${{ runner.temp }}/compiler-capture-contract/capture-positive.json
+            ${{ runner.temp }}/compiler-capture-contract/capture-negative.stdout
+            ${{ runner.temp }}/compiler-capture-contract/capture-negative.stderr
+            ${{ runner.temp }}/compiler-capture-contract/capture-negative.json
+            ${{ runner.temp }}/compiler-capture-contract/qualification-positive/sourcebuild-compiler-license-review.json
+            ${{ runner.temp }}/compiler-capture-contract/qualification-positive/sourcebuild-compiler-capture-command-failure.json
+            ${{ runner.temp }}/compiler-capture-contract/qualification-negative/sourcebuild-compiler-license-review.json
+            ${{ runner.temp }}/compiler-capture-contract/qualification-negative/sourcebuild-compiler-capture-command-failure.json
+            ${{ runner.temp }}/compiler-capture-contract/raw-positive/capture.tar.xz
+            ${{ runner.temp }}/compiler-capture-contract/raw-positive/capture-receipt.json
+            ${{ runner.temp }}/compiler-capture-contract/raw-negative/capture.tar.xz
+            ${{ runner.temp }}/compiler-capture-contract/raw-negative/capture-receipt.json
+          if-no-files-found: error
+          retention-days: 14
+          archive: true
+          overwrite: false
+          include-hidden-files: false
