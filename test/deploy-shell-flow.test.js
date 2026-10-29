@@ -83,7 +83,7 @@ printf '%s\\n' "$trusted_package_verifier" "$installed_runtime_verifier" "$verif
   });
 }
 
-for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", "xoffi", "failed-xoffi", "invalid-xoffi", "import-delete", "failed-import-delete", "invalid-import-delete",
+for (const scenario of ["short", "full", "expired-shortpath", "disabled-shortpath-timer", "failed-readiness", "failed-schedule", "xoffi", "failed-xoffi", "invalid-xoffi", "import-delete", "failed-import-delete", "invalid-import-delete",
   "school-short", "school-full", "school-already-applied", "failed-school", "invalid-school", "changed-school-sales", "malformed-school", "missing-school-helper", "security-short", "security-full", "security-already-applied",
   "failed-security", "invalid-security", "changed-security-sales", "malformed-security", "missing-security-helper", "missing-security-passkeys-proof",
   "security-deferred-compatible", "security-deferred-required", "security-schema-changed"]) {
@@ -95,6 +95,8 @@ for (const scenario of ["short", "full", "failed-readiness", "failed-schedule", 
       const file = path.join(root, relative); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content, { mode: 0o755 });
     };
     write("app/old.txt", "old application");
+    write("scripts/lib/deploy-policy.js", `require('node:fs').appendFileSync(process.env.EVENTS_FILE, 'policy-recheck\\n');process.stdout.write(JSON.stringify({mode:'${scenario === "expired-shortpath" ? "full" : "short"}'}));`);
+    write("candidate/server-tools/linux/lib/deploy-recovery-queue.js", `require('node:fs').appendFileSync(process.env.EVENTS_FILE,'queue-deadline\\n');`);
     write("candidate/server-tools/linux/test-grabenplaner-server.sh", '#!/usr/bin/env bash\nprintf "short-checks\\n" >> "$EVENTS_FILE"\n');
     const xoffi = scenario.includes("xoffi");
     const school = scenario.includes("school");
@@ -151,6 +153,7 @@ backup_dir="$PWD/backups"
 backup_result_file="$PWD/backup.json"
 env_file="$PWD/environment"
 SCRIPT_DIR="$PWD/scripts"
+deploy_assurance_scheduled_epoch_ms=1793271600000
 service=fixture.service
 caddy_service=fixture-caddy.service
 service_group=root
@@ -202,13 +205,25 @@ create_exact_local_backup() {
 write_receipt() { printf 'success-receipt\\n' >> "$EVENTS_FILE"; printf '%s\\n' "$PWD/receipt"; }
 write_commit_marker() { printf 'commit\\n' >> "$EVENTS_FILE"; }
 stat() { if [[ "$1" == "--format=%a" ]]; then printf '600\\n'; else printf '0:0:1\\n'; fi; }
-systemctl() { printf 'start-assurance\\n' >> "$EVENTS_FILE"; }
+systemctl() {
+  case "$1" in
+    is-enabled) ${scenario === "disabled-shortpath-timer" ? "return 1" : "return 0"};;
+    is-active) return 0;;
+    is-failed) return 1;;
+    *) printf 'start-assurance\\n' >> "$EVENTS_FILE";;
+  esac
+}
 ${workflow}
 `;
     write("run.sh", script);
     const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: root, encoding: "utf8", timeout: 15000 });
     const events = fs.readFileSync(path.join(root, "events"), "utf8").trim().split("\n");
-    if (["failed-readiness", "failed-schedule", "failed-xoffi", "invalid-xoffi", "failed-import-delete", "invalid-import-delete",
+    if (["expired-shortpath", "disabled-shortpath-timer"].includes(scenario)) {
+      assert.notEqual(result.status, 0); assert.ok(events.includes("verified-backup"));
+      assert.equal(events.includes("policy-recheck"), scenario === "expired-shortpath");
+      assert.ok(!events.includes("phase:application-swap")); assert.ok(!events.includes("commit"));
+      assert.ok(fs.existsSync(path.join(root, "app/old.txt")), "old app remains available to normal cleanup");
+    } else if (["failed-readiness", "failed-schedule", "failed-xoffi", "invalid-xoffi", "failed-import-delete", "invalid-import-delete",
       "failed-school", "invalid-school", "changed-school-sales", "malformed-school", "missing-school-helper", "failed-security", "invalid-security", "changed-security-sales", "malformed-security", "missing-security-helper", "missing-security-passkeys-proof", "security-deferred-required", "security-schema-changed"].includes(scenario)) {
       assert.notEqual(result.status, 0); assert.ok(events.includes("failed")); assert.ok(!events.includes("commit")); assert.ok(!events.includes("queue-assurance"));
       if (xoffi) { assert.ok(events.includes("schema-migration")); assert.ok(!events.includes("start")); }
@@ -231,6 +246,11 @@ ${workflow}
       assert.equal(events.filter(event => event === "start").length, full ? 2 : 1);
       assert.equal(events.includes("offsite-transfer"), full);
       assert.equal(events.includes("start-assurance"), full);
+      if (!full) {
+        assert.ok(events.indexOf("verified-backup") < events.indexOf("policy-recheck"));
+        assert.ok(events.indexOf("policy-recheck") < events.indexOf("phase:application-swap"));
+        assert.ok(events.indexOf("queue-assurance") < events.indexOf("queue-deadline"));
+      }
       assert.ok(events.indexOf("owner") < events.indexOf("stop"));
       assert.ok(events.indexOf("schedule-converged") > events.indexOf("start"));
       assert.ok(events.indexOf("schedule-converged") < events.indexOf("short-checks"));

@@ -24024,7 +24024,23 @@ async function serverDiagnostics() {
         : undefined,
   });
   const offsiteApplicable = serverModeActive || offsiteConfigured || offsiteStatus.statusAvailable;
-  const recoveryAssurance = await readRecoveryAssuranceStatus({ configured: offsiteConfigured });
+  let recoverySchedulerObservation;
+  if (offsiteConfigured && process.platform === "linux") {
+    try {
+      // The protected broker measures the real timer; browser input and a
+      // previously cached status cannot establish a new recovery deadline.
+      const schedules = await readMaintenanceSchedules({ timeoutMs: 1500 });
+      const task = schedules.tasks.find(item => item.id === "complete-backup");
+      if (schedules.available && task?.installed && typeof task.nextRunAt === "string") recoverySchedulerObservation = {
+        observedAt: schedules.checkedAt, nextRunAt: task.nextRunAt,
+        active: task.active, enabled: task.enabled, evidenceTrusted: true,
+      };
+    } catch { /* The history remains readable; the pending deadline stays unverified. */ }
+  }
+  const recoveryAssurance = await readRecoveryAssuranceStatus({ configured: offsiteConfigured,
+    ...(recoverySchedulerObservation ? { schedulerObservation: recoverySchedulerObservation } : {}) });
+  if (recoveryAssurance.pendingRecovery?.state === "overdue") addAlert("RECOVERY_AFTER_UPDATE_OVERDUE", "critical",
+    "Recovery-Nachprüfung überfällig", "Die feste Frist für die vollständige Recovery-Prüfung nach dem Update ist abgelaufen.", "backup");
   const configuredOffsiteProviderId = String(
     process.env.GRABENPLANER_OFFSITE_PROVIDER || "",
   ).trim();

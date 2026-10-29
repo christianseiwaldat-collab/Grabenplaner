@@ -11,6 +11,7 @@ import unittest
 import prepare_source_core as prepare
 import build_semgrep_source as build
 import test_publish_semgrep_core_tool as fixtures
+import source_core_identity as identity
 
 
 class PrivateCoreBindingTests(unittest.TestCase):
@@ -26,8 +27,17 @@ class PrivateCoreBindingTests(unittest.TestCase):
         shutil.copyfile(self.fixture.core, self.core)
         self.root = self.base / 'gp'
         (self.root / 'scripts/security').mkdir(parents=True)
-        for name in ('requirements.txt', 'tools.json'):
-            (self.root / 'scripts/security' / name).write_text('synthetic exact ' + name)
+        security = Path(__file__).resolve().parent
+        shutil.copyfile(security.parents[1] / '.gitattributes', self.root / '.gitattributes')
+        for name in ('requirements.txt', 'tools.json', *identity.PROGRAMS):
+            shutil.copyfile(security / name, self.root / 'scripts/security' / name)
+        current_inputs = identity.inputs(self.root)
+        self.fixture.write('sourcebuild-input-identity.json', current_inputs)
+        self.fixture.write('sourcebuild-acquisition.json', {'format': 'gp-semgrep-core-acquisition/v1',
+            'mode': 'cold_build', 'reason': 'no_reviewed_pin',
+            'buildInputsSha256': identity.digest(identity.canonical(current_inputs)),
+            'nativeSha256': self.fixture.sha, 'nativeBytes': len(self.core.read_bytes()),
+            'producer': None, 'freshCurrentQualificationRequired': True, 'fullProjectScanApproved': False})
         self.write_source('server.js', b'const actual = true;\n')
         self.write_source(build.SMALL_TARGET, b'const smaller = true;\n')
         plan = {'diagnosticOnly': True, 'securityGatePassed': False,
@@ -80,7 +90,7 @@ class PrivateCoreBindingTests(unittest.TestCase):
 
     def test_actual_core_mutation_fails_even_when_reported_version_is_unchanged(self):
         self.core.write_bytes(self.core.read_bytes() + b'changed')
-        with self.assertRaisesRegex(ValueError, 'actually qualified'):
+        with self.assertRaisesRegex(ValueError, 'actually qualified|acquisition is incomplete or unbound'):
             self.bind()
         self.assertFalse((self.base / 'results').exists())
 

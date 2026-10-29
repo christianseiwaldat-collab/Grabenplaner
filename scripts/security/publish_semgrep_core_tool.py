@@ -12,6 +12,7 @@ import json
 import lzma
 import os
 from pathlib import Path, PurePosixPath
+import re
 import stat
 import subprocess
 import tarfile
@@ -22,10 +23,11 @@ from build_semgrep_source import (
     OPAM_REPOSITORY, SUBMODULE, TAG, TAG_OBJECT, UPSTREAM, VERSION,
     pinned_recipe,
 )
-from semgrep_core_tool import ARCHIVE, check_elf, unique_json
+from semgrep_core_tool import ARCHIVE, MAX_ARCHIVE, check_elf, unique_json, verify_tar
+from source_core_identity import inputs as build_inputs, digest as input_digest, canonical as input_canonical
 
-FORMAT = 'gp-semgrep-core-tool/v1'
-LEDGER_FORMAT = 'gp-semgrep-core-dependency-license-ledger/v1'
+FORMAT = 'gp-semgrep-core-tool/v2'
+LEDGER_FORMAT = 'gp-semgrep-core-dependency-license-ledger/v2'
 FILES = (
     'bin/semgrep-core', 'upstream/LICENSE', 'upstream/source.patch',
     'upstream/provenance.json', 'upstream/toolchain-sbom.cdx.json',
@@ -39,8 +41,8 @@ CASES = {
 }
 MAX_CORE = 256 * 1024**2
 MAX_INPUT = 64 * 1024**2
-MAX_SOURCE_FILE = 128 * 1024**2
-MAX_SOURCE_TOTAL = 768 * 1024**2
+MAX_SOURCE_FILE = 512 * 1024**2
+MAX_SOURCE_TOTAL = 2 * 1024**3
 
 
 def sha(data):
@@ -215,52 +217,21 @@ def source_members(source, qualification, provenance):
     return members, patch
 
 
-def license_ledger(file, source_root, binary_sha256):
+def license_ledger(file, source_root, binary_sha256, native=None):
+    from compiler_license_ledger import validate_ledger, validate_sources
     value = read_json(file)
-    exact_keys(value, ('format', 'status', 'binarySha256', 'coverage', 'reviewReference', 'components'))
-    if (value['format'] != LEDGER_FORMAT or value['status'] != 'complete'
-            or value['binarySha256'] != binary_sha256):
-        raise ValueError('Static dependency license/source review remains incomplete')
-    exact_keys(value['coverage'], ('staticallyLinkedDependenciesReviewed', 'noticesComplete', 'correspondingSourceComplete'))
-    if any(flag is not True for flag in value['coverage'].values()):
-        raise ValueError('Static dependency license/source review remains incomplete')
-    if not isinstance(value['reviewReference'], str) or not 1 <= len(value['reviewReference']) <= 160:
-        raise ValueError('A bounded reviewed license reference is required')
-    if not isinstance(value['components'], list) or not value['components']:
-        raise ValueError('Reviewed static dependency notices are required')
-    members, identities = {}, set()
+    validate_ledger(value, binary_sha256, native)
+    checked = validate_sources(value, lambda name: regular(source_root / name, MAX_SOURCE_FILE))
+    members = {}
     for component in value['components']:
-        exact_keys(component, ('name', 'version', 'licenseExpression', 'notices', 'correspondingSource'))
-        for key in ('name', 'version', 'licenseExpression'):
-            if not isinstance(component[key], str) or not 1 <= len(component[key]) <= 240:
-                raise ValueError('Invalid license component')
-        identity = (component['name'], component['version'])
-        if identity in identities:
-            raise ValueError('Duplicate license component')
-        identities.add(identity)
-        if not isinstance(component['notices'], list) or not component['notices']:
-            raise ValueError('Missing dependency notice text')
-        for notice in component['notices']:
-            exact_keys(notice, ('text', 'sha256'))
-            if not isinstance(notice['text'], str) or sha(notice['text'].encode('utf8')) != notice['sha256']:
-                raise ValueError('Dependency notice digest differs')
         reference = component['correspondingSource']
-        if reference is None:
-            continue  # Reviewed permissive/exception source obligation, not an inferred waiver.
-        exact_keys(reference, ('filename', 'sha256', 'bytes', 'url'))
         filename = safe_relative(reference['filename'])
-        if '/' in filename:
-            raise ValueError('Dependency source must be a single explicit archive')
-        url = urlsplit(reference['url'])
-        if (url.scheme != 'https' or not url.hostname or url.username or url.password
-                or url.fragment or url.query):
-            raise ValueError('Dependency source provenance requires credential-free HTTPS')
         data = regular(source_root / filename, MAX_SOURCE_FILE)
-        if len(data) != reference['bytes'] or sha(data) != reference['sha256']:
-            raise ValueError('Dependency corresponding source digest differs')
         destination = 'dependency-sources/' + filename
         if destination in members:
-            raise ValueError('Duplicate dependency source archive')
+            if members[destination][0] != data:
+                raise ValueError('Conflicting shared dependency source archive')
+            continue
         members[destination] = (data, 0o644, 'regular')
     return encoded(value), members
 
@@ -318,10 +289,10 @@ def archive_bytes(members, corresponding_source=False):
             else:
                 info.size = len(content)
                 archive.addfile(info, io.BytesIO(content))
-    return lzma.compress(buffer.getvalue(), format=lzma.FORMAT_XZ, preset=6)
+    return lzma.compress(buffer.getvalue(), format=lzma.FORMAT_XZ, preset=0)
 
 
-def prepare(source, qualification, binary, ledger, dependency_sources, output):
+def prepare(source, qualification, binary, ledger, dependency_sources, output, root=None):
     if output.exists():
         raise ValueError('Tool output directory must be new')
     roots = [Path(path).resolve() for path in (source, qualification, dependency_sources)]
@@ -331,8 +302,17 @@ def prepare(source, qualification, binary, ledger, dependency_sources, output):
     if any(destination.is_relative_to(root) or root.is_relative_to(destination) for root in roots):
         raise ValueError('Tool output and input trees must be separate')
     core = regular(binary, MAX_CORE)
+    identity = build_inputs(root or Path(__file__).resolve().parents[2])
+    recorded_inputs = regular(qualification / 'sourcebuild-input-identity.json')
+    if recorded_inputs != input_canonical(identity):
+        raise ValueError('Qualified compiler build inputs differ from publisher inputs')
+    input_key = input_digest(recorded_inputs)
     provenance, native = validate_qualification(qualification, core)
-    notices, dependency_members = license_ledger(ledger, dependency_sources, sha(core))
+    # Actual installed opam and native archive/header inputs are independently
+    # observed again. A smaller set asserted only by the ledger cannot publish.
+    from compiler_license_ledger import actual_license_closure
+    native = {**native, **actual_license_closure(native)}
+    notices, dependency_members = license_ledger(ledger, dependency_sources, sha(core), native)
     upstream, patch = source_members(source, qualification, provenance)
     upstream.update(dependency_members)
     corresponding = archive_bytes(upstream, corresponding_source=True)
@@ -341,13 +321,14 @@ def prepare(source, qualification, binary, ledger, dependency_sources, output):
         raise ValueError('Qualified build SBOM digest differs')
     sbom = public_sbom(json.loads(raw_sbom.decode('utf8')))
     public_provenance = {
-        'format': 'gp-semgrep-core-build-provenance/v1',
+        'format': 'gp-semgrep-core-build-provenance/v2',
+        'buildInputsSha256': input_key,
         'source': {key: provenance[key] for key in ('repository', 'tag', 'tagObject', 'commit',
             'limitsBeforeSha256', 'limitsAfterSha256', 'changedSourcePaths', 'patchSha256',
             'upstreamDockerfileSha256', 'derivedRecipeSha256', 'officialTarget', 'baseImage',
             'compilerSourceCommit', 'opamRepositoryCommit')},
         'native': {key: native[key] for key in ('imageId', 'binarySha256', 'binaryBytes',
-            'versionOutput', 'compilerOutput')},
+            'versionOutput', 'compilerOutput', 'opamPackages', 'nativePackageIds', 'nativeInputsSha256')},
         'sourceModified': True, 'officialReleaseBinary': False,
         'bitIdenticalRebuildVerified': False,
         'originalBuildSbomSha256': sha(raw_sbom), 'publishedInventorySbomSha256': sha(sbom),
@@ -358,6 +339,7 @@ def prepare(source, qualification, binary, ledger, dependency_sources, output):
         corresponding, notices,
     )))
     manifest = {'format': FORMAT,
+        'buildInputs': identity, 'buildInputsSha256': input_key,
         'source': {'commit': COMMIT, 'limitsBeforeSha256': LIMITS_BEFORE,
                    'limitsAfterSha256': LIMITS_AFTER, 'sourceModified': True, 'officialReleaseBinary': False},
         'wrapperVersion': VERSION,
@@ -383,15 +365,81 @@ def prepare(source, qualification, binary, ledger, dependency_sources, output):
     return receipt
 
 
+def verify_publication(output, root=None):
+    """Check the exact nonsensitive upload set immediately before publication.
+
+    These local byte identities do not invent a trusted Actions producer pin.
+    Repository/run/artifact provenance must still be reviewed after upload.
+    """
+    output = Path(output).absolute()
+    if output.resolve() != output or not output.is_dir():
+        raise ValueError('Unsafe tool publication directory')
+    if {file.name for file in output.iterdir()} != {ARCHIVE, 'publisher-receipt.json'}:
+        raise ValueError('Unexpected public tool upload file')
+    receipt = read_json(output / 'publisher-receipt.json')
+    exact_keys(receipt, ('format', 'publicationReady', 'archive', 'manifest', 'core',
+                        'sourceCommit', 'wrapperVersion', 'securityGateApproved', 'uploadPerformed'))
+    if (receipt['format'] != 'gp-semgrep-core-tool-publisher-receipt/v1'
+            or receipt['publicationReady'] is not True or receipt['sourceCommit'] != COMMIT
+            or receipt['wrapperVersion'] != VERSION or receipt['securityGateApproved'] is not False
+            or receipt['uploadPerformed'] is not False):
+        raise ValueError('Unqualified public tool receipt')
+    exact_keys(receipt['archive'], ('filename', 'bytes', 'sha256'))
+    exact_keys(receipt['manifest'], ('bytes', 'sha256'))
+    exact_keys(receipt['core'], ('bytes', 'sha256'))
+    if receipt['archive']['filename'] != ARCHIVE:
+        raise ValueError('Unexpected public tool archive name')
+    identity = build_inputs(root or Path(__file__).resolve().parents[2])
+    archive = regular(output / ARCHIVE, MAX_ARCHIVE)
+    # The consumer's strict member, type, license, source, ELF and actual hash
+    # checks also protect this boundary. This descriptor has no run identity and
+    # is never persisted or accepted as an externally reviewed producer pin.
+    descriptor = {'archive': {key: receipt['archive'][key] for key in ('bytes', 'sha256')},
+        'manifestSha256': receipt['manifest']['sha256'], 'native': receipt['core'],
+        'wrapper': {'version': VERSION}, 'buildInputs': identity,
+        'buildInputsSha256': input_digest(input_canonical(identity))}
+    _, manifest = verify_tar(archive, descriptor)
+    if receipt['manifest']['bytes'] != len(encoded(manifest)):
+        raise ValueError('Public tool manifest length differs')
+    return receipt
+
+
+def uploaded_receipt(artifact_id, artifact_digest):
+    if (not isinstance(artifact_id, str) or not re.fullmatch('[1-9][0-9]{0,19}', artifact_id)
+            or not isinstance(artifact_digest, str) or not re.fullmatch('[a-f0-9]{64}', artifact_digest)):
+        raise ValueError('Missing immutable tool artifact upload identity')
+    return {'format': 'gp-semgrep-core-tool-upload/v1', 'artifactId': artifact_id,
+        'artifactArchiveSha256': artifact_digest, 'retentionDays': 90,
+        'securityGateApproved': False}
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     for name in ('source', 'qualification', 'binary', 'ledger', 'dependency-sources', 'output'):
-        parser.add_argument('--' + name, required=True, type=Path)
+        parser.add_argument('--' + name, type=Path)
+    parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument('--verify-upload', type=Path,
+                        help='Verify the exact public tool upload set; creates or uploads nothing')
+    parser.add_argument('--uploaded-receipt', action='store_true',
+                        help='Require the immutable ID and digest returned by the upload action')
     arguments = parser.parse_args()
     try:
-        receipt = prepare(arguments.source.resolve(), arguments.qualification.resolve(),
-                          arguments.binary.absolute(), arguments.ledger.absolute(),
-                          arguments.dependency_sources.resolve(), arguments.output.absolute())
+        preparation = (arguments.source, arguments.qualification, arguments.binary, arguments.ledger,
+                       arguments.dependency_sources, arguments.output)
+        if arguments.uploaded_receipt:
+            if arguments.verify_upload is not None or any(item is not None for item in preparation):
+                raise ValueError('Upload identity validation cannot also prepare or inspect a tool')
+            receipt = uploaded_receipt(os.environ.get('ARTIFACT_ID'), os.environ.get('ARTIFACT_DIGEST'))
+        elif arguments.verify_upload is not None:
+            if any(item is not None for item in preparation):
+                raise ValueError('Upload verification cannot also prepare a tool')
+            receipt = verify_publication(arguments.verify_upload, arguments.root.resolve())
+        else:
+            if any(item is None for item in preparation):
+                raise ValueError('All explicit tool preparation paths are required')
+            receipt = prepare(arguments.source.resolve(), arguments.qualification.resolve(),
+                              arguments.binary.absolute(), arguments.ledger.absolute(),
+                              arguments.dependency_sources.resolve(), arguments.output.absolute(), arguments.root.resolve())
     except Exception as error:
         # No private filenames, captured scanner stderr, environment or source
         # contents enter public workflow logs through an exception traceback.

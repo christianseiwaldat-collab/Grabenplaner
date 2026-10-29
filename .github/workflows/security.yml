@@ -88,9 +88,13 @@ jobs:
         run: python scripts/security/prepare_upload.py --uploaded-receipt
 
   security-sast:
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-24.04
-    # Cold official-source OCaml builds plus qualification and all five full
-    # profiles. Scanner rule/wall limits and incomplete-analysis failures stay.
+    # Reuse requires an externally reviewed exact-input compiler pin; otherwise
+    # build cold. Current qualification and all five full profiles always run.
+    # Scanner rule/wall limits and incomplete-analysis failures stay unchanged.
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -109,7 +113,9 @@ jobs:
           echo "$RUNNER_TEMP/semgrep-source-venv/bin" >> "$GITHUB_PATH"
       - name: Fail-closed security gate contract tests
         run: python -m unittest discover -s scripts/security -p 'test_*.py' -v
-      - name: Build and qualify the reviewed original upstream core in this private job
+      - name: Acquire the reviewed compiler or build cold, then qualify current whole files
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: >-
           python scripts/security/build_semgrep_source.py --root .
           --tools "$RUNNER_TEMP/security-tools" --work "$RUNNER_TEMP/security-source-core-work"

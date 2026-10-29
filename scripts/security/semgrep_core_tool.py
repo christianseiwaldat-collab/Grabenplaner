@@ -19,8 +19,9 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
 import zipfile
+from source_core_identity import validate as validate_inputs, canonical as input_canonical
 
-FORMAT = 'gp-semgrep-qualified-core-pin/v1'
+FORMAT = 'gp-semgrep-qualified-core-pin/v2'
 ARCHIVE = 'semgrep-core-tool.tar.xz'
 MEMBERS = frozenset(('bin/semgrep-core', 'upstream/LICENSE', 'upstream/source.patch',
     'upstream/provenance.json', 'upstream/toolchain-sbom.cdx.json',
@@ -31,9 +32,13 @@ UPSTREAM = {'commit': '72d3525fe7e02f486428386078f192f8c4756804',
     'sourceModified': True, 'officialReleaseBinary': False}
 QUALIFICATION = {'complete': True, 'controlsPassed': True, 'caseCount': 10,
     'scope': 'four-synthetic-controls-and-six-whole-file-cases'}
-MAX_ARCHIVE = 512 * 1024**2
-MAX_TOTAL = 1024 * 1024**2
+MAX_ARCHIVE = 1024 * 1024**2
+MAX_TOTAL = 2 * 1024**3
 MAX_JSON = 4 * 1024**2
+
+
+class ToolUnavailable(ValueError):
+    """Only an authenticated missing/expired artifact permits a cold rebuild."""
 
 
 def digest(value):
@@ -65,7 +70,8 @@ def identity(value, maximum):
 
 def validate_pin(pin):
     if not isinstance(pin, dict) or set(pin) != {'format', 'repository', 'run', 'artifact',
-            'archive', 'manifestSha256', 'native', 'wrapper', 'toolsConfigurationSha256', 'source'}:
+            'archive', 'manifestSha256', 'native', 'wrapper', 'toolsConfigurationSha256', 'source',
+            'buildInputs', 'buildInputsSha256'}:
         raise ValueError('Incomplete or unexpected tool pin')
     if pin['format'] != FORMAT or pin['source'] != UPSTREAM:
         raise ValueError('Unreviewed core source identity')
@@ -93,6 +99,11 @@ def validate_pin(pin):
         raise ValueError('Unreviewed wrapper version')
     if not re.fullmatch('[a-f0-9]{64}', str(pin['wrapper']['requirementsSha256'])):
         raise ValueError('Unpinned wrapper requirements')
+    validate_inputs(pin['buildInputs'])
+    if (pin['buildInputsSha256'] != digest(input_canonical(pin['buildInputs']))
+            or pin['buildInputs']['requirementsSha256'] != pin['wrapper']['requirementsSha256']
+            or pin['buildInputs']['toolsConfigurationSha256'] != pin['toolsConfigurationSha256']):
+        raise ValueError('Compiler build inputs differ from their external pin')
     return pin
 
 
@@ -110,14 +121,16 @@ def validate_metadata(pin, run, artifact, now=None):
         raise ValueError('Tool qualification run is not the reviewed successful run')
     pinned, binding = pin['artifact'], artifact.get('workflow_run', {})
     if (artifact.get('id') != pinned['id'] or artifact.get('name') != pinned['name']
-            or artifact.get('size_in_bytes') != pinned['bytes'] or artifact.get('expired') is not False
+            or artifact.get('size_in_bytes') != pinned['bytes'] or type(artifact.get('expired')) is not bool
             or artifact.get('digest') != 'sha256:' + pinned['sha256']
             or binding.get('id') != expected['id'] or binding.get('head_sha') != expected['headSha']
             or binding.get('repository_id') != repo['id'] or binding.get('head_repository_id') != repo['id']):
         raise ValueError('Tool artifact provenance differs from the external pin')
     expiry = datetime.fromisoformat(str(artifact.get('expires_at', '')).replace('Z', '+00:00'))
-    if expiry.tzinfo is None or expiry <= (now or datetime.now(timezone.utc)):
-        raise ValueError('Tool artifact has expired')
+    if expiry.tzinfo is None:
+        raise ValueError('Tool artifact has an invalid expiry')
+    if artifact['expired'] or expiry <= (now or datetime.now(timezone.utc)):
+        raise ToolUnavailable('Reviewed tool artifact has expired')
 
 
 def check_bytes(data, expected, label):
@@ -132,13 +145,32 @@ def check_elf(data):
         raise ValueError('Expected a Linux x86-64 ELF')
     offset = struct.unpack_from('<Q', data, 32)[0]
     size, count = struct.unpack_from('<HH', data, 54)
-    if size < 56 or not 0 < count <= 256 or offset + size * count > len(data):
+    if offset < 64 or size != 56 or not 0 < count <= 256 or offset + size * count > len(data):
         raise ValueError('Malformed ELF program headers')
-    if any(struct.unpack_from('<I', data, offset + n * size)[0] == 3 for n in range(count)):
-        raise ValueError('The reviewed tool must be static, without PT_INTERP')
+    dynamic = None
+    for index in range(count):
+        kind, _, start, _, _, length, memory_length, _ = struct.unpack_from('<IIQQQQQQ', data, offset + index * size)
+        if start > len(data) or length > len(data) - start or kind == 1 and length > memory_length:
+            raise ValueError('Malformed ELF segment bounds')
+        if kind == 3:  # PT_INTERP
+            raise ValueError('The reviewed tool must be static, without PT_INTERP')
+        if kind == 2:  # PT_DYNAMIC: static PIE may legitimately retain relocation metadata.
+            if dynamic is not None or length < 16 or length % 16:
+                raise ValueError('Malformed ELF dynamic segment')
+            dynamic = (start, length)
+    if dynamic is not None:
+        start, length = dynamic
+        for position in range(start, start + length, 16):
+            tag, _ = struct.unpack_from('<qQ', data, position)
+            if tag == 0:  # DT_NULL terminates the entries interpreted by the loader.
+                break
+            if tag == 1:  # DT_NEEDED is an external dependency even without PT_INTERP.
+                raise ValueError('The reviewed tool must be static, without DT_NEEDED')
+        else:
+            raise ValueError('Unterminated ELF dynamic segment')
 
 
-def verify_tar(data, pin):
+def verify_tar(data, pin, with_contents=False):
     check_bytes(data, pin['archive'], 'Inner archive')
     contents, total = {}, 0
     with tarfile.open(fileobj=io.BytesIO(data), mode='r:xz') as archive:
@@ -163,9 +195,11 @@ def verify_tar(data, pin):
     if digest(manifest_bytes) != pin['manifestSha256']:
         raise ValueError('Externally pinned tool manifest differs')
     manifest = unique_json(manifest_bytes)
-    if (set(manifest) != {'format', 'source', 'wrapperVersion', 'qualification', 'files'}
-            or manifest['format'] != 'gp-semgrep-core-tool/v1' or manifest['source'] != UPSTREAM
+    if (set(manifest) != {'format', 'source', 'wrapperVersion', 'qualification', 'files',
+            'buildInputs', 'buildInputsSha256'}
+            or manifest['format'] != 'gp-semgrep-core-tool/v2' or manifest['source'] != UPSTREAM
             or manifest['wrapperVersion'] != pin['wrapper']['version'] or manifest['qualification'] != QUALIFICATION
+            or manifest['buildInputs'] != pin['buildInputs'] or manifest['buildInputsSha256'] != pin['buildInputsSha256']
             or set(manifest['files']) != MEMBERS or canonical(manifest) != manifest_bytes):
         raise ValueError('Unqualified or unexpected tool manifest')
     for name, entry in manifest['files'].items():
@@ -175,19 +209,53 @@ def verify_tar(data, pin):
     check_bytes(native, pin['native'], 'Native core')
     check_elf(native)
     ledger = unique_json(contents['upstream/dependency-license-notices.json'])
-    if (not isinstance(ledger, dict)
-            or set(ledger) != {'format', 'status', 'binarySha256', 'coverage', 'reviewReference', 'components'}
-            or ledger['format'] != 'gp-semgrep-core-dependency-license-ledger/v1'
-            or ledger['status'] != 'complete' or ledger['binarySha256'] != pin['native']['sha256']
-            or ledger['coverage'] != {'staticallyLinkedDependenciesReviewed': True,
-                'noticesComplete': True, 'correspondingSourceComplete': True}
-            or not isinstance(ledger['reviewReference'], str) or not 1 <= len(ledger['reviewReference']) <= 160
-            or not isinstance(ledger['components'], list) or not ledger['components']):
-        raise ValueError('Static dependency notice/source ledger is incomplete or unbound')
-    return native, manifest
+    provenance = unique_json(contents['upstream/provenance.json'])
+    inputs = pin['buildInputs']
+    expected_source = {**{key: inputs['source'][key] for key in ('repository', 'tag', 'tagObject', 'commit')},
+        'limitsBeforeSha256': inputs['patchRecipe']['beforeSha256'],
+        'limitsAfterSha256': inputs['patchRecipe']['afterSha256'],
+        'changedSourcePaths': [inputs['patchRecipe']['path']],
+        'upstreamDockerfileSha256': inputs['patchRecipe']['upstreamDockerfileSha256'],
+        'derivedRecipeSha256': inputs['patchRecipe']['derivedRecipeSha256'],
+        'officialTarget': inputs['toolchain']['target'],
+        **{key: inputs['toolchain'][key] for key in ('baseImage', 'compilerSourceCommit', 'opamRepositoryCommit')},
+        'patchSha256': digest(contents['upstream/source.patch'])}
+    if (not isinstance(provenance, dict) or set(provenance) != {'format', 'source', 'native',
+            'sourceModified', 'officialReleaseBinary', 'bitIdenticalRebuildVerified',
+            'originalBuildSbomSha256', 'publishedInventorySbomSha256', 'correspondingSourceSha256',
+            'buildInputsSha256'}
+            or provenance.get('format') != 'gp-semgrep-core-build-provenance/v2'
+            or provenance.get('source') != expected_source
+            or provenance.get('buildInputsSha256') != pin['buildInputsSha256']
+            or provenance.get('sourceModified') is not True or provenance.get('officialReleaseBinary') is not False
+            or provenance.get('bitIdenticalRebuildVerified') is not False
+            or provenance.get('publishedInventorySbomSha256') != digest(contents['upstream/toolchain-sbom.cdx.json'])
+            or provenance.get('correspondingSourceSha256') != digest(contents['upstream/corresponding-source.tar.xz'])
+            or not re.fullmatch('[a-f0-9]{64}', str(provenance.get('originalBuildSbomSha256')))):
+        raise ValueError('Published compiler provenance differs from reviewed build inputs')
+    native_provenance = provenance['native']
+    if (not isinstance(native_provenance, dict) or set(native_provenance) != {
+            'imageId', 'binarySha256', 'binaryBytes', 'versionOutput', 'compilerOutput', 'opamPackages',
+            'nativePackageIds', 'nativeInputsSha256'}
+            or native_provenance.get('binarySha256') != pin['native']['sha256']
+            or native_provenance.get('binaryBytes') != pin['native']['bytes']
+            or not re.fullmatch('sha256:[a-f0-9]{64}', str(native_provenance.get('imageId')))
+            or any(not isinstance(native_provenance.get(key), str) or not 1 <= len(native_provenance[key]) <= 512
+                or any(ord(c) < 32 or ord(c) == 127 for c in native_provenance[key])
+                for key in ('versionOutput', 'compilerOutput'))
+            or inputs['wrapperVersion'] not in native_provenance['versionOutput']
+            or inputs['toolchain']['compilerSourceCommit'] not in native_provenance['compilerOutput']):
+        raise ValueError('Published native toolchain provenance is unbound')
+    from compiler_license_ledger import validate_ledger, embedded_dependency_sources
+    try:
+        validate_ledger(ledger, pin['native']['sha256'], native_provenance)
+        embedded_dependency_sources(contents['upstream/corresponding-source.tar.xz'], ledger)
+    except (ValueError, KeyError, TypeError, tarfile.TarError, OSError):
+        raise ValueError('Static dependency notice/source ledger is incomplete or unbound') from None
+    return (native, manifest, contents) if with_contents else (native, manifest)
 
 
-def verify_zip(data, pin):
+def verify_zip(data, pin, with_contents=False):
     validate_pin(pin)
     check_bytes(data, pin['artifact'], 'Outer Actions ZIP')
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
@@ -199,7 +267,7 @@ def verify_zip(data, pin):
         if (item.is_dir() or kind not in (0, stat.S_IFREG) or item.flag_bits & 1
                 or item.file_size != pin['archive']['bytes'] or item.file_size > MAX_ARCHIVE):
             raise ValueError('Unsafe Actions ZIP member')
-        return verify_tar(archive.read(item), pin)
+        return verify_tar(archive.read(item), pin, with_contents)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -228,6 +296,8 @@ def github_request(path, token, limit):
     try:
         response = urllib.request.build_opener(NoRedirect).open(request, timeout=60)
     except urllib.error.HTTPError as error:
+        if error.code in (404, 410):
+            raise ToolUnavailable('Reviewed GitHub tool artifact is unavailable') from None
         if error.code != 302:
             raise ValueError('GitHub tool metadata/download request failed') from None
         location = storage_url(error.headers.get('Location', ''))
@@ -241,15 +311,14 @@ def github_request(path, token, limit):
         return data
 
 
-def fetch(pin, token):
+def fetch(pin, token, with_contents=False):
     validate_pin(pin)
     prefix = 'repos/' + pin['repository']['fullName'] + '/actions/'
     run = unique_json(github_request(prefix + 'runs/' + str(pin['run']['id']), token, MAX_JSON))
     artifact = unique_json(github_request(prefix + 'artifacts/' + str(pin['artifact']['id']), token, MAX_JSON))
     validate_metadata(pin, run, artifact)
     data = github_request(prefix + 'artifacts/' + str(pin['artifact']['id']) + '/zip', token, pin['artifact']['bytes'])
-    native, manifest = verify_zip(data, pin)
-    return native, manifest
+    return verify_zip(data, pin, with_contents)
 
 
 def main():
@@ -258,8 +327,10 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     pin = validate_pin(unique_json(args.pin.read_bytes()))
+    from source_core_identity import inputs
     here = Path(__file__).resolve().parent
-    if (digest((here / 'requirements.txt').read_bytes()) != pin['wrapper']['requirementsSha256']
+    if (inputs(here.parents[1]) != pin['buildInputs']
+            or digest((here / 'requirements.txt').read_bytes()) != pin['wrapper']['requirementsSha256']
             or digest((here / 'tools.json').read_bytes()) != pin['toolsConfigurationSha256']):
         raise ValueError('Current wrapper/rule configuration differs from the reviewed tool pin')
     args.output = args.output.absolute()

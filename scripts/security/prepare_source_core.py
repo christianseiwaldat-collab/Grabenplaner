@@ -1,4 +1,4 @@
-"""Bind the freshly built/qualified private venv core to the ordinary SAST run.
+"""Bind the acquired and freshly qualified private core to ordinary SAST.
 
 This is an internal source-build path. It publishes no reusable executable and
 grants no scan approval. The complete original project profiles and disposition
@@ -17,6 +17,7 @@ import datetime as dt
 from build_semgrep_source import VERSION, SMALL_TARGET, control_sources, validate_result
 from publish_semgrep_core_tool import validate_qualification
 from semgrep_core_tool import canonical, unique_json
+from source_core_acquisition import verify as verify_acquisition
 
 
 def sha(value):
@@ -69,6 +70,7 @@ def prepare(directory, root, output, core, prefix, runner_temp, wrapper_version)
             or not core.resolve().is_relative_to(prefix.resolve()) or wrapper_version != VERSION):
         raise ValueError('Only the explicitly hash-locked private source-build venv may be used')
     native = require_regular(core, 256 * 1024**2)
+    acquisition = verify_acquisition(directory, root, native)
     source, provenance = validate_qualification(directory, native)
     gate = unique_json(require_regular(directory / 'gate-result.json'))
     verify_case_results(directory, root, gate)
@@ -96,6 +98,7 @@ def prepare(directory, root, output, core, prefix, runner_temp, wrapper_version)
         'toolsConfigurationSha256': sha(require_regular(root / 'scripts/security/tools.json')),
         'corePath': str(core), 'qualificationReceiptSha256': sha(require_regular(directory / 'gate-result.json')),
         'bitIdenticalRebuildVerified': False}
+    binding.update(buildInputsSha256=acquisition['buildInputsSha256'], acquisitionMode=acquisition['mode'])
     output.mkdir(mode=0o700)
     for name, data in files:
         with (output / ('sourcecore-' + name)).open('xb') as stream:
@@ -116,6 +119,7 @@ def verify_bound_core(root, output):
     binding = unique_json(require_regular(output / 'source-core-binding.json'))
     raw = require_regular(core, 256 * 1024**2)
     directory = runner / 'security-source-core-qualification'
+    acquisition = verify_acquisition(directory, root, raw)
     source, native = validate_qualification(directory, raw)
     gate = unique_json(require_regular(directory / 'gate-result.json'))
     verify_case_results(directory, root, gate)
@@ -128,6 +132,7 @@ def verify_bound_core(root, output):
         'toolsConfigurationSha256': sha(require_regular(root / 'scripts/security/tools.json')),
         'corePath': str(core), 'qualificationReceiptSha256': sha(require_regular(directory / 'gate-result.json')),
         'bitIdenticalRebuildVerified': False}
+    expected.update(buildInputsSha256=acquisition['buildInputsSha256'], acquisitionMode=acquisition['mode'])
     if binding != expected:
         raise ValueError('The actual SAST core or raw qualification differs from its binding')
     wrapper = prefix / 'bin/semgrep'

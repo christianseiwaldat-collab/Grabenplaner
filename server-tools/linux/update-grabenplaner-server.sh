@@ -491,6 +491,7 @@ new_service_started=0
 update_committed=0
 maintenance_lock_held=0
 deploy_timer_state_captured=0
+deploy_assurance_scheduled_epoch_ms=""
 deploy_deferral_generation=""
 deploy_deferral_pid=""
 deploy_deferral_helper="/opt/grabenplaner-offsite/module/lib/deploy-deferral.js"
@@ -710,7 +711,7 @@ finish_deploy_deferral() {
 }
 
 pause_deploy_timers() {
-  local timer unit next_elapse active_state schedule_state
+  local timer unit next_elapse active_state schedule_state scheduled_seconds
   for timer in "${deploy_blocking_timer_units[@]}"; do
     gp_systemd_unit_exists "$timer" || continue
     if systemctl is-active --quiet "$timer"; then
@@ -725,6 +726,12 @@ pause_deploy_timers() {
       if systemctl is-active --quiet "$timer"; then deploy_timer_was_active[$timer]=1; fi
       if systemctl is-enabled --quiet "$timer"; then deploy_timer_was_enabled[$timer]=1; fi
       next_elapse="$(systemctl show --property=NextElapseUSecRealtime --value "$timer" 2>/dev/null || true)"
+      if [[ "$timer" == grabenplaner-offsite-assurance.timer ]]; then
+        # Keep the original due slot across our own timer pause. Only parse
+        # systemctl output; never use candidate-provided scheduling claims.
+        scheduled_seconds="$(date --date="$next_elapse" +%s 2>/dev/null || true)"
+        if [[ "$scheduled_seconds" =~ ^[0-9]{10}$ ]]; then deploy_assurance_scheduled_epoch_ms="${scheduled_seconds}000"; fi
+      fi
       schedule_state="inaktiv"
       if [[ "${deploy_timer_was_active[$timer]}" == 1 ]]; then schedule_state="aktiv"; fi
       gp_info "Deploy-Preflight: $timer ist $schedule_state${next_elapse:+; naechster Lauf $next_elapse}."
@@ -1303,7 +1310,7 @@ elif [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 ]]; then
   if [[ "${deploy_timer_was_enabled[grabenplaner-offsite-assurance.timer]:-0}" == 1 \
     && "${deploy_timer_was_active[grabenplaner-offsite-assurance.timer]:-0}" == 1 ]]; then nightly_timer_active=1; fi
   deploy_decision="$(root_node "$SCRIPT_DIR/lib/deploy-policy.js" decide \
-    "$app_dir" "$extract_root" "$database" "$env_file" "$nightly_timer_active")" \
+    "$app_dir" "$extract_root" "$database" "$env_file" "$nightly_timer_active:${deploy_assurance_scheduled_epoch_ms:-}")" \
     || gp_die "Die Deploy-Pruefstrategie konnte nicht bestimmt werden."
 fi
 deploy_mode="$(root_node -e 'const value=JSON.parse(process.argv[1]); if(!["short","full"].includes(value.mode))process.exit(1); process.stdout.write(value.mode)' "$deploy_decision")"
@@ -1349,6 +1356,27 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$deploy_mode" == full ]
   gp_stop_service "$service" 150
   begin_deploy_phase final-rollback-backup
   create_exact_local_backup
+fi
+
+if [[ "$deploy_mode" == short ]]; then
+  # A backup may take long enough to expire the proof. Recheck the installed
+  # policy, actual sources, pair/schema and configuration immediately before
+  # the swap. A rejection follows the normal pre-swap cleanup/start path.
+  begin_deploy_phase shortpath-recheck
+  systemctl is-enabled --quiet grabenplaner-offsite-assurance.timer \
+    || gp_die "Der Nachtlauf wurde nach dem Preflight deaktiviert; der Kurzpfad ist nicht mehr verfuegbar."
+  if [[ -n "${deploy_deferral_generation:-}" ]]; then
+    systemctl is-active --quiet grabenplaner-offsite-assurance.timer \
+      || gp_die "Der reservierte Nachtlauf ist nach der Sicherung nicht mehr aktiv."
+  fi
+  if systemctl is-failed --quiet grabenplaner-offsite-assurance.timer; then
+    gp_die "Der Nachtlauf ist fehlgeschlagen; der Kurzpfad wird vor dem App-Tausch abgebrochen."
+  fi
+  short_recheck="$(root_node "$SCRIPT_DIR/lib/deploy-policy.js" decide \
+    "$app_dir" "$extract_root" "$database" "$env_file" "1:${deploy_assurance_scheduled_epoch_ms:-}")" \
+    || gp_die "Die Kurzpfad-Bindung konnte vor dem App-Tausch nicht erneut geprueft werden."
+  root_node -e 'if(JSON.parse(process.argv[1]).mode!=="short")process.exit(1)' "$short_recheck" \
+    || gp_die "Der Kurzpfad ist nach der Sicherung nicht mehr gueltig; die bisherige App bleibt erhalten."
 fi
 
 begin_deploy_phase application-swap
@@ -1427,6 +1455,9 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transiti
     offsite_acquire_assurance_lock
     offsite_assert_runtime_binaries
     offsite_record_assurance_queue update-queued app-updated "$candidate_version"
+    if [[ "$deploy_mode" == short ]]; then
+      root_node "$app_dir/server-tools/linux/lib/deploy-recovery-queue.js" record "$deploy_assurance_scheduled_epoch_ms"
+    fi
   ); then
     gp_warn "Das erfolgreiche App-Update konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden."
   fi

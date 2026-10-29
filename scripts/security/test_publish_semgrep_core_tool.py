@@ -13,6 +13,8 @@ import zipfile
 import build_semgrep_source as build
 import publish_semgrep_core_tool as publisher
 import semgrep_core_tool as consumer
+import source_core_identity as identity
+from test_compiler_license_ledger import fixture_ledger
 
 
 class PublisherTests(unittest.TestCase):
@@ -34,6 +36,8 @@ class PublisherTests(unittest.TestCase):
         struct.pack_into('<I', core, 64, 1)
         self.core.write_bytes(core)
         self.sha = publisher.sha(core)
+        self.build_inputs = identity.inputs(Path(__file__).resolve().parents[2])
+        self.write('sourcebuild-input-identity.json', self.build_inputs)
         (self.source / 'LICENSE').write_text('synthetic upstream license\n')
         self.secret = 'PRIVATE_GP_SOURCE_AND_SECRET_NEVER_PUBLISH'
         (self.private / 'server.js').write_text(self.secret)
@@ -51,7 +55,8 @@ class PublisherTests(unittest.TestCase):
             'variableSetGraphLimitsUnchanged': True, 'upstreamDockerfileSha256': build.DOCKERFILE,
             'officialTarget': 'semgrep-core-container', 'baseImage': build.ALPINE,
             'compilerSourceCommit': build.COMPILER, 'opamRepositoryCommit': build.OPAM_REPOSITORY,
-            'patchSha256': publisher.sha(b'synthetic patch'), 'derivedRecipeSha256': 'd' * 64,
+            'patchSha256': publisher.sha(b'synthetic patch'),
+            'derivedRecipeSha256': self.build_inputs['patchRecipe']['derivedRecipeSha256'],
             'privateExtraNeverCopied': self.secret,
         }
         self.write('sourcebuild-source-provenance.json', self.provenance)
@@ -61,6 +66,7 @@ class PublisherTests(unittest.TestCase):
             'versionOutput': build.VERSION, 'compilerOutput': '5.4+' + build.COMPILER,
             'sbomSha256': publisher.sha((self.private / 'sourcebuild-toolchain-sbom.json').read_bytes()),
             'privateExtraNeverCopied': self.secret,
+            'opamPackages': '# installed\nsynthetic 1\n',
         }
         self.write('sourcebuild-native-provenance.json', self.native)
         cases = [{'name': name, 'executionEvidenceValid': True, 'analysisCompleteForCase': True,
@@ -77,17 +83,14 @@ class PublisherTests(unittest.TestCase):
                      'scannerVersion': build.VERSION, 'sourceModified': True,
                      'officialReleaseBinary': False, 'nativeCoreSha256': self.sha, 'cases': cases}
         self.write('gate-result.json', self.gate)
-        notice = 'Synthetic dependency notice; no production input.'
         self.ledger = self.root / 'reviewed-license-ledger.json'
-        self.license_value = {
-            'format': publisher.LEDGER_FORMAT, 'status': 'complete', 'binarySha256': self.sha,
-            'coverage': {'staticallyLinkedDependenciesReviewed': True, 'noticesComplete': True,
-                         'correspondingSourceComplete': True},
-            'reviewReference': 'synthetic-unit-test-only',
-            'components': [{'name': 'synthetic-upstream', 'version': '1', 'licenseExpression': 'MIT',
-                            'notices': [{'text': notice, 'sha256': publisher.sha(notice.encode())}],
-                            'correspondingSource': None}],
-        }
+        self.license_value, dependency_sources, _ = fixture_ledger(self.sha)
+        self.actual_closure = {'nativePackageIds': self.license_value['closure']['nativePackageIds'],
+            'nativeInputsSha256': self.license_value['closure']['nativeInputsSha256']}
+        self.license_observation = patch('compiler_license_ledger.actual_license_closure', return_value=self.actual_closure)
+        self.license_observation.start(); self.addCleanup(self.license_observation.stop)
+        for name, data in dependency_sources.items():
+            (self.dependencies / name).write_bytes(data)
         self.ledger.write_bytes(publisher.encoded(self.license_value))
 
     def write(self, name, value):
@@ -108,7 +111,7 @@ class PublisherTests(unittest.TestCase):
             manifest_bytes = tool.extractfile('tool-manifest.json').read()
             manifest = json.loads(manifest_bytes)
             self.assertEqual(receipt['manifest']['sha256'], publisher.sha(manifest_bytes))
-            self.assertEqual(manifest['format'], 'gp-semgrep-core-tool/v1')
+            self.assertEqual(manifest['format'], 'gp-semgrep-core-tool/v2')
             self.assertEqual(manifest['qualification']['caseCount'], 10)
             for entry in tool.getmembers():
                 self.assertTrue(entry.isfile())
@@ -118,7 +121,7 @@ class PublisherTests(unittest.TestCase):
                 if entry.name != 'tool-manifest.json':
                     self.assertEqual(manifest['files'][entry.name], {'bytes': len(content), 'sha256': publisher.sha(content)})
             with tarfile.open(fileobj=io.BytesIO(tool.extractfile('upstream/corresponding-source.tar.xz').read()), mode='r:xz') as source:
-                self.assertEqual(source.getnames(), ['upstream/README'])
+                self.assertEqual(source.getnames(), ['dependency-sources/synthetic-sources.tar.xz', 'upstream/README'])
                 self.assertNotIn(self.secret.encode(), source.extractfile('upstream/README').read())
         self.assertFalse(receipt['securityGateApproved'])
         self.assertFalse(receipt['uploadPerformed'])
@@ -128,6 +131,42 @@ class PublisherTests(unittest.TestCase):
         second = self.prepare('second')
         self.assertEqual(first, second)
         self.assertEqual((self.root / 'first/semgrep-core-tool.tar.xz').read_bytes(), (self.root / 'second/semgrep-core-tool.tar.xz').read_bytes())
+
+    def test_public_upload_check_accepts_only_the_exact_verified_upstream_tool_set(self):
+        receipt = self.prepare()
+        output = self.root / 'tool-output'
+        self.assertEqual(publisher.verify_publication(output), receipt)
+        for name in ('server.js', 'scan-result.json', 'private-evidence.gpe', 'private-gp-evidence'):
+            adjacent = output / name
+            adjacent.write_text(self.secret)
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'Unexpected public tool upload file'):
+                publisher.verify_publication(output)
+            adjacent.unlink()
+        self.assertEqual(publisher.verify_publication(output), receipt)
+
+    def test_public_upload_check_rechecks_actual_archive_bytes_and_receipt_flags(self):
+        self.prepare()
+        output = self.root / 'tool-output'
+        archive = output / consumer.ARCHIVE
+        original = archive.read_bytes()
+        archive.write_bytes(original + b'tampered after preparation')
+        with self.assertRaisesRegex(ValueError, 'Inner archive identity mismatch'):
+            publisher.verify_publication(output)
+        archive.write_bytes(original)
+        receipt = json.loads((output / 'publisher-receipt.json').read_bytes())
+        receipt['securityGateApproved'] = True
+        (output / 'publisher-receipt.json').write_bytes(publisher.encoded(receipt))
+        with self.assertRaisesRegex(ValueError, 'Unqualified public tool receipt'):
+            publisher.verify_publication(output)
+
+    def test_uploaded_tool_receipt_requires_actual_immutable_action_identity(self):
+        actual = publisher.uploaded_receipt('12345', 'a' * 64)
+        self.assertEqual(actual['artifactArchiveSha256'], 'a' * 64)
+        self.assertEqual(actual['retentionDays'], 90)
+        self.assertFalse(actual['securityGateApproved'])
+        for artifact, digest in ((None, 'a' * 64), ('0', 'a' * 64), ('12345', None), ('12345', 'tag-or-cache-hit')):
+            with self.subTest(artifact=artifact, digest=digest), self.assertRaisesRegex(ValueError, 'immutable tool artifact'):
+                publisher.uploaded_receipt(artifact, digest)
 
     def test_publisher_archive_passes_independent_consumer_and_fails_after_tampering(self):
         receipt = self.prepare()
@@ -142,8 +181,10 @@ class PublisherTests(unittest.TestCase):
                'artifact': {'id': 4, 'name': 'semgrep-core-tool-2-1', 'bytes': len(outer), 'sha256': publisher.sha(outer)},
                'archive': {'name': consumer.ARCHIVE, 'bytes': len(data), 'sha256': publisher.sha(data)},
                'manifestSha256': receipt['manifest']['sha256'], 'native': receipt['core'],
-               'wrapper': {'version': build.VERSION, 'requirementsSha256': 'b' * 64},
-               'toolsConfigurationSha256': 'c' * 64, 'source': consumer.UPSTREAM}
+               'wrapper': {'version': build.VERSION, 'requirementsSha256': self.build_inputs['requirementsSha256']},
+               'toolsConfigurationSha256': self.build_inputs['toolsConfigurationSha256'], 'source': consumer.UPSTREAM,
+               'buildInputs': self.build_inputs,
+               'buildInputsSha256': identity.digest(identity.canonical(self.build_inputs))}
         actual, manifest = consumer.verify_zip(outer, pin)
         self.assertEqual(actual, self.core.read_bytes())
         self.assertEqual(manifest['qualification']['caseCount'], 10)
@@ -169,7 +210,7 @@ class PublisherTests(unittest.TestCase):
         for name, mutate in [
             ('incomplete', lambda x: x.update(status='incomplete')),
             ('unbound', lambda x: x.update(binarySha256='b' * 64)),
-            ('missing-source-review', lambda x: x['coverage'].update(correspondingSourceComplete=False)),
+            ('missing-component', lambda x: x['components'].pop(0)),
             ('forged-text', lambda x: x['components'][0]['notices'][0].update(text='forged')),
             ('extra-private-field', lambda x: x.update(private=self.secret)),
         ]:
@@ -191,7 +232,7 @@ class PublisherTests(unittest.TestCase):
             self.prepare('duplicate-qualification-key')
 
     def test_dependency_source_digest_and_explicit_single_archive_path(self):
-        data = b'synthetic dependency source archive'
+        data = (self.dependencies / 'synthetic-sources.tar.xz').read_bytes()
         (self.dependencies / 'dependency.tar.xz').write_bytes(data)
         reference = {'filename': 'dependency.tar.xz', 'sha256': publisher.sha(data),
                      'bytes': len(data), 'url': 'https://example.org/upstream/dependency.tar.xz'}

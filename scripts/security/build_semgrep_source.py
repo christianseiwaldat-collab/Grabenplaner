@@ -1,8 +1,9 @@
-"""Build one narrowly patched upstream core; qualification only, never a gate.
+"""Acquire/build one narrowly patched core; fresh qualification, never a gate.
 
 The official hash-locked Python wrapper is unchanged. Its native core is replaced
 only inside a disposable virtual environment. Every ordinary Semgrep completeness
-check remains enabled; this module grants no security-gate approval.
+check remains enabled; this module grants no security-gate approval. Reviewed
+compiler reuse never reuses application findings or whole-file qualification.
 """
 import argparse
 import base64
@@ -332,7 +333,7 @@ def diagnose(root, tools, output, wrapper, commands):
     return records
 
 
-def run(root, tools, work, output):
+def run(root, tools, work, output, force_cold=False):
     if output.exists() or work.exists():
         raise ValueError('Source-build work/output directories must be new')
     output.mkdir(parents=True); work.mkdir(parents=True)
@@ -344,7 +345,8 @@ def run(root, tools, work, output):
         if sys.platform != 'linux' or shutil.disk_usage(work).free < 20 * 1024**3:
             raise ValueError('Native Linux with at least 20 GiB free build space is required')
         source, recipe = checkout_and_patch(work, output, commands)
-        binary = build_core(work, output, tools, source, recipe, commands)
+        from source_core_acquisition import acquire
+        binary = acquire(root, tools, work, output, source, recipe, commands, force_cold)
         wrapper = replace_venv_core(binary, output, commands)
         records = diagnose(root, tools, output, wrapper, commands)
         assert_delta(commands.run(['git', 'diff', '--name-only'], 'final-patch-scope', cwd=source).decode().splitlines(),
@@ -371,6 +373,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     for argument in ('root', 'tools', 'work', 'output'):
         parser.add_argument('--' + argument, type=Path, required=True)
+    parser.add_argument('--cold-build', action='store_true', help='Rebuild the trusted producer compiler; never reuse an artifact')
     arguments = parser.parse_args()
     raise SystemExit(run(arguments.root.resolve(), arguments.tools.resolve(),
-                         arguments.work.resolve(), arguments.output.resolve()))
+                         arguments.work.resolve(), arguments.output.resolve(), arguments.cold_build))

@@ -11,6 +11,13 @@ import zipfile
 import urllib.request
 
 import semgrep_core_tool as tool
+import source_core_identity as identity
+from test_compiler_license_ledger import fixture_ledger
+
+
+def build_inputs():
+    return {**identity.fixed_inputs(), 'requirementsSha256': 'b' * 64,
+        'toolsConfigurationSha256': 'c' * 64, 'programs': {name: 'd' * 64 for name in identity.PROGRAMS}}
 
 
 def elf():
@@ -28,16 +35,40 @@ def identified(value):
 
 
 def fixture(changed=None, extra_tar=None, zip_entries=None):
+    inputs = build_inputs()
     contents = {name: b'synthetic upstream tool material\n' for name in tool.MEMBERS}
     contents['bin/semgrep-core'] = elf()
-    contents['upstream/dependency-license-notices.json'] = tool.canonical({
-        'format': 'gp-semgrep-core-dependency-license-ledger/v1', 'status': 'complete',
-        'binarySha256': tool.digest(elf()), 'coverage': {'staticallyLinkedDependenciesReviewed': True,
-            'noticesComplete': True, 'correspondingSourceComplete': True},
-        'reviewReference': 'synthetic review only', 'components': [{'name': 'synthetic-only'}]})
+    license_value, dependency_sources, _ = fixture_ledger(tool.digest(elf()))
+    from compiler_license_ledger import source_archive
+    contents['upstream/corresponding-source.tar.xz'] = source_archive({
+        'dependency-sources/' + name: data for name, data in dependency_sources.items()})
+    contents['upstream/provenance.json'] = tool.canonical({
+        'format': 'gp-semgrep-core-build-provenance/v2',
+        'source': {**{key: inputs['source'][key] for key in ('repository', 'tag', 'tagObject', 'commit')},
+            'limitsBeforeSha256': inputs['patchRecipe']['beforeSha256'],
+            'limitsAfterSha256': inputs['patchRecipe']['afterSha256'],
+            'changedSourcePaths': [inputs['patchRecipe']['path']],
+            'upstreamDockerfileSha256': inputs['patchRecipe']['upstreamDockerfileSha256'],
+            'derivedRecipeSha256': inputs['patchRecipe']['derivedRecipeSha256'],
+            'officialTarget': inputs['toolchain']['target'],
+            **{key: inputs['toolchain'][key] for key in ('baseImage', 'compilerSourceCommit', 'opamRepositoryCommit')},
+            'patchSha256': tool.digest(contents['upstream/source.patch'])},
+        'native': {'imageId': 'sha256:' + 'a' * 64, 'binarySha256': tool.digest(elf()),
+            'binaryBytes': len(elf()), 'versionOutput': '1.181.0',
+            'opamPackages': '# installed\nsynthetic 1\n',
+            'nativePackageIds': license_value['closure']['nativePackageIds'],
+            'nativeInputsSha256': license_value['closure']['nativeInputsSha256'],
+            'compilerOutput': inputs['toolchain']['compilerSourceCommit']},
+        'sourceModified': True, 'officialReleaseBinary': False, 'bitIdenticalRebuildVerified': False,
+        'originalBuildSbomSha256': 'f' * 64,
+        'publishedInventorySbomSha256': tool.digest(contents['upstream/toolchain-sbom.cdx.json']),
+        'correspondingSourceSha256': tool.digest(contents['upstream/corresponding-source.tar.xz']),
+        'buildInputsSha256': tool.digest(tool.canonical(inputs))})
+    contents['upstream/dependency-license-notices.json'] = tool.canonical(license_value)
     if changed:
         changed(contents)
-    manifest = {'format': 'gp-semgrep-core-tool/v1', 'source': tool.UPSTREAM,
+    manifest = {'format': 'gp-semgrep-core-tool/v2', 'source': tool.UPSTREAM,
+        'buildInputs': inputs, 'buildInputsSha256': tool.digest(tool.canonical(inputs)),
         'wrapperVersion': '1.181.0', 'qualification': tool.QUALIFICATION,
         'files': {name: identified(value) for name, value in contents.items()}}
     contents['tool-manifest.json'] = tool.canonical(manifest)
@@ -68,7 +99,8 @@ def fixture(changed=None, extra_tar=None, zip_entries=None):
         'manifestSha256': tool.digest(contents['tool-manifest.json']),
         'native': identified(contents['bin/semgrep-core']),
         'wrapper': {'version': '1.181.0', 'requirementsSha256': 'b' * 64},
-        'toolsConfigurationSha256': 'c' * 64, 'source': tool.UPSTREAM}
+        'toolsConfigurationSha256': 'c' * 64, 'source': tool.UPSTREAM,
+        'buildInputs': inputs, 'buildInputsSha256': tool.digest(tool.canonical(inputs))}
     return archive_bytes, pin, contents
 
 
@@ -85,6 +117,34 @@ def metadata(pin):
 
 
 class CoreToolTests(unittest.TestCase):
+    def test_only_authenticated_missing_or_expired_artifact_is_unavailable_not_integrity_failure(self):
+        from unittest.mock import Mock, patch
+        import urllib.error
+        for code in (404, 410, 401, 403, 500):
+            opener = Mock()
+            opener.open.side_effect = urllib.error.HTTPError('https://api.github.com/test', code, 'synthetic', {}, None)
+            with self.subTest(code=code), patch.object(tool.urllib.request, 'build_opener', return_value=opener):
+                expected = tool.ToolUnavailable if code in (404, 410) else ValueError
+                with self.assertRaises(expected) as error:
+                    tool.github_request('repos/synthetic/gp/actions/artifacts/1', 'synthetic', 1024)
+                if code not in (404, 410):
+                    self.assertNotIsInstance(error.exception, tool.ToolUnavailable)
+
+    def test_outer_hashes_cannot_hide_unreviewed_build_or_native_provenance(self):
+        for field, value in (('source', {'commit': 'b' * 40}),
+                ('buildInputsSha256', 'e' * 64), ('correspondingSourceSha256', 'e' * 64),
+                ('publishedInventorySbomSha256', 'e' * 64),
+                ('native', {'imageId': 'unbound', 'binarySha256': tool.digest(elf()),
+                    'binaryBytes': len(elf()), 'versionOutput': '1.181.0', 'compilerOutput': 'wrong'})):
+            def change(contents):
+                provenance = tool.unique_json(contents['upstream/provenance.json'])
+                provenance[field] = value
+                contents['upstream/provenance.json'] = tool.canonical(provenance)
+            with self.subTest(field=field):
+                data, pin, _ = fixture(change)
+                with self.assertRaisesRegex(ValueError, 'provenance'):
+                    tool.verify_zip(data, pin)
+
     def test_exact_external_and_internal_identity_chain(self):
         data, pin, contents = fixture()
         native, manifest = tool.verify_zip(data, pin)
@@ -204,6 +264,59 @@ class CoreToolTests(unittest.TestCase):
             mutate(value)
             with self.assertRaises(ValueError):
                 tool.check_elf(bytes(value))
+
+    def test_static_pie_dynamic_relocations_without_needed_are_valid(self):
+        # ET_DYN plus PT_DYNAMIC is valid for a static PIE; relocation tags
+        # alone do not authorize loading any external shared libraries.
+        value = bytearray(176 + 48)
+        value[:120] = elf()
+        struct.pack_into('<H', value, 16, 3)
+        struct.pack_into('<H', value, 56, 2)
+        struct.pack_into('<IIQQQQQQ', value, 64, 1, 5, 0, 0, 0, len(value), len(value), 0x1000)
+        struct.pack_into('<IIQQQQQQ', value, 120, 2, 6, 176, 176, 176, 48, 48, 8)
+        struct.pack_into('<qQqQqQ', value, 176, 7, 0x2000, 8, 24, 0, 0)
+        tool.check_elf(bytes(value))
+        # A DT_NEEDED entry after DT_NULL is outside the interpreted table.
+        struct.pack_into('<qQqQqQ', value, 176, 0, 0, 1, 5, 0, 0)
+        tool.check_elf(bytes(value))
+
+    def test_dynamic_needed_is_rejected_without_an_interpreter(self):
+        for entry_index in (0, 1):
+            with self.subTest(entry_index=entry_index):
+                value = bytearray(176 + 48)
+                value[:120] = elf()
+                struct.pack_into('<H', value, 16, 3)
+                struct.pack_into('<H', value, 56, 2)
+                struct.pack_into('<IIQQQQQQ', value, 120, 2, 6, 176, 176, 176, 48, 48, 8)
+                struct.pack_into('<qQqQqQ', value, 176, 7, 0x2000, 8, 24, 0, 0)
+                struct.pack_into('<qQ', value, 176 + 16 * entry_index, 1, 4)
+                with self.assertRaisesRegex(ValueError, 'without DT_NEEDED'):
+                    tool.check_elf(bytes(value))
+
+    def test_malformed_dynamic_and_program_header_structures_fail_closed(self):
+        baseline = bytearray(176 + 32)
+        baseline[:120] = elf()
+        struct.pack_into('<H', baseline, 56, 2)
+        struct.pack_into('<IIQQQQQQ', baseline, 120, 2, 6, 176, 176, 176, 32, 32, 8)
+        struct.pack_into('<qQqQ', baseline, 176, 7, 0x2000, 0, 0)
+        variants = (
+            ('header overlaps ELF header', lambda b: struct.pack_into('<Q', b, 32, 63)),
+            ('wrong program entry width', lambda b: struct.pack_into('<H', b, 54, 57)),
+            ('truncated program table', lambda b: struct.pack_into('<Q', b, 32, len(b) - 55)),
+            ('segment past EOF', lambda b: struct.pack_into('<Q', b, 128, len(b) + 1)),
+            ('truncated segment', lambda b: struct.pack_into('<Q', b, 152, 33)),
+            ('incomplete dynamic entry', lambda b: struct.pack_into('<Q', b, 152, 17)),
+            ('empty dynamic table', lambda b: struct.pack_into('<Q', b, 152, 0)),
+            ('unterminated dynamic table', lambda b: struct.pack_into('<qQ', b, 192, 8, 24)),
+            ('duplicate dynamic tables', lambda b: struct.pack_into('<IIQQQQQQ', b, 64, 2, 6, 176, 176, 176, 32, 32, 8)),
+            ('load segment larger than memory', lambda b: struct.pack_into('<IIQQQQQQ', b, 64, 1, 5, 0, 0, 0, 120, 119, 0x1000)),
+        )
+        for label, mutate in variants:
+            with self.subTest(label=label):
+                value = bytearray(baseline)
+                mutate(value)
+                with self.assertRaises(ValueError):
+                    tool.check_elf(bytes(value))
 
     def test_duplicate_json_keys_are_rejected(self):
         with self.assertRaisesRegex(ValueError, 'Duplicate JSON'):
