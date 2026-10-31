@@ -7,7 +7,7 @@
   'use strict';
   const ENDPOINT = '/api/security-audits/sast';
   const DEADLINES = { current: 'Frist gültig', due_soon: 'In 14 Tagen fällig', expired: 'Abgelaufen' };
-  const SOURCES = { matches: 'Prüfkontext stimmt überein', changed: 'Quellstand geändert', incomplete: 'Prüfkontext unvollständig' };
+  const SOURCES = { matches: 'Prüfkontext stimmt überein', evidenced: 'Über CI-Nachweis belegt', changed: 'Quellstand geändert', incomplete: 'Prüfkontext unvollständig' };
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   function filtered(reviews, deadline, source, pending) {
     return (reviews || []).filter(row => (!deadline || row.deadlineState === deadline) && (!source || row.sourceState === source) && (!pending || row.requiresReview));
@@ -18,7 +18,11 @@
       ['Priorität', row.priority], ['Frist', DEADLINES[row.deadlineState]], ['Quellbindung', SOURCES[row.sourceState]],
       ['Bewertet am', row.reviewedOn], ['Gültig bis einschließlich (UTC)', row.expiresOn], ['Prüfende Person / Stelle', row.reviewer],
       ['Begründung', row.reason], ['Fundstellenkennung', row.fingerprint], ['Bewerteter Datei-Hash', row.sourceSha256]];
-    return `<dl class="security-audits-detail">${fields.map(([label, value]) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join('')}</dl><h3>Gebundener Prüfkontext</h3><ul class="security-audits-evidence">${(row.context || []).map(item => `<li><code>${escape(item.path)}</code><strong>${escape({ matches: 'Unverändert', changed: 'Geändert – erneut prüfen', not_installed: 'In dieser Installation nicht vorhanden' }[item.state] || 'Ungeklärt')}</strong><p>${escape(item.reason)}</p><code>${escape(item.sha256)}</code></li>`).join('')}</ul>`;
+    return `<dl class="security-audits-detail">${fields.map(([label, value]) => `<div><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`).join('')}</dl><h3>Gebundener Prüfkontext</h3><ul class="security-audits-evidence">${(row.context || []).map(item => `<li><code>${escape(item.path)}</code><strong>${escape({ matches: 'Unverändert', ci_evidence: 'Nicht ausgeliefert; durch paketgebundenen CI-Nachweis belegt', changed: 'Geändert – erneut prüfen', not_installed: 'In dieser Installation nicht vorhanden; Nachweis fehlt' }[item.state] || 'Ungeklärt')}</strong><p>${escape(item.reason)}</p><code>${escape(item.evidenceSha256 || item.sha256)}</code></li>`).join('')}</ul>`;
+  }
+  function evidenceMarkup(evidence) {
+    if (evidence?.status !== 'package_bound') return '<p>Kein paketgebundener CI-Kontextnachweis vorhanden. Fehlende Prüfdateien bleiben ungeklärt.</p>';
+    return `<p>CI-SAST-Nachweis: Lauf <strong>${escape(evidence.ci?.runId)}</strong>, Versuch ${escape(evidence.ci?.attempt)}; Quellcommit <code>${escape(evidence.sourceCommit)}</code>. Nachweisdatei: <code>${escape(evidence.sha256)}</code>.</p>`;
   }
   function mount(host, options = {}) {
     if (!host || typeof options.api !== 'function') return null;
@@ -68,7 +72,7 @@
     }
     function render() {
       const summary = payload.summary;
-      el('[data-sast-content]').innerHTML = `<div class="security-audits-summary">${[['Bewertungen', summary.total], ['Abgelaufen', summary.expired], ['In 14 Tagen fällig', summary.dueSoon], ['Quellstand geändert', summary.sourceChanged], ['Prüfkontext unvollständig', summary.contextIncomplete]].map(([label, value]) => `<div class="security-audits-summary-card"><strong>${escape(value)}</strong><span>${escape(label)}</span></div>`).join('')}</div><details class="security-audits-run-details"><summary>Prüfstand und Vorgehen</summary><p>Die Einträge dokumentieren geprüfte Fehlalarme. Ihre Einstufung gilt nur innerhalb des angegebenen Umfangs.</p><ul>${payload.limits.map(text => `<li>${escape(text)}</li>`).join('')}</ul><p>Nächste Frist: <strong>${escape(summary.nextExpiry || 'Keine')}</strong>. Zuerst überfällige oder geänderte Einträge prüfen, Begründung und Regressionstests ergänzen und den vollständigen Scan erneut ausführen. Eine neue Bewertung wird mit dem geprüften Release übernommen.</p><p>Bewertungsdatei: <code>${escape(payload.policySha256)}</code></p></details><div class="security-audits-filters"><label class="field"><span>Friststatus</span><select data-sast-filter="deadline"><option value="">Alle</option>${Object.entries(DEADLINES).map(([value, label]) => `<option value="${value}"${deadline === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label class="field"><span>Quellbindung</span><select data-sast-filter="source"><option value="">Alle</option>${Object.entries(SOURCES).map(([value, label]) => `<option value="${value}"${source === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label class="switch-row"><span>Nur Nachprüfbedarf</span><input type="checkbox" data-sast-filter="pending"${pending ? ' checked' : ''}></label></div><div data-sast-table></div>`;
+      el('[data-sast-content]').innerHTML = `<div class="security-audits-summary">${[['Bewertungen', summary.total], ['Abgelaufen', summary.expired], ['In 14 Tagen fällig', summary.dueSoon], ['Quellstand geändert', summary.sourceChanged], ['Prüfkontext unvollständig', summary.contextIncomplete], ['Über CI-Nachweis belegt', summary.contextEvidenced || 0]].map(([label, value]) => `<div class="security-audits-summary-card"><strong>${escape(value)}</strong><span>${escape(label)}</span></div>`).join('')}</div><details class="security-audits-run-details"><summary>Prüfstand und Vorgehen</summary><p>Die Einträge dokumentieren geprüfte Fehlalarme. Ihre Einstufung gilt nur innerhalb des angegebenen Umfangs.</p><ul>${payload.limits.map(text => `<li>${escape(text)}</li>`).join('')}</ul><p>Nächste Frist: <strong>${escape(summary.nextExpiry || 'Keine')}</strong>. Zuerst überfällige oder geänderte Einträge prüfen, Begründung und Regressionstests ergänzen und den vollständigen Scan erneut ausführen. Eine neue Bewertung wird mit dem geprüften Release übernommen.</p><p>Bewertungsdatei: <code>${escape(payload.policySha256)}</code></p>${evidenceMarkup(payload.contextEvidence)}</details><div class="security-audits-filters"><label class="field"><span>Friststatus</span><select data-sast-filter="deadline"><option value="">Alle</option>${Object.entries(DEADLINES).map(([value, label]) => `<option value="${value}"${deadline === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label class="field"><span>Quellbindung</span><select data-sast-filter="source"><option value="">Alle</option>${Object.entries(SOURCES).map(([value, label]) => `<option value="${value}"${source === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label><label class="switch-row"><span>Nur Nachprüfbedarf</span><input type="checkbox" data-sast-filter="pending"${pending ? ' checked' : ''}></label></div><div data-sast-table></div>`;
       el('[data-sast-action="export"]').disabled = false; renderTable();
     }
     async function load() {
@@ -93,7 +97,7 @@
     }
     function exportReview() {
       if (!active || !current() || !payload) return;
-      const document = host.ownerDocument, blob = new Blob([JSON.stringify({ schemaVersion: 1, kind: 'sast-review-worklist', exportedAt: new Date().toISOString(), policySha256: payload.policySha256, reviews: rows(true), limits: payload.limits }, null, 2)], { type: 'application/json' });
+      const document = host.ownerDocument, blob = new Blob([JSON.stringify({ schemaVersion: 1, kind: 'sast-review-worklist', exportedAt: new Date().toISOString(), policySha256: payload.policySha256, contextEvidence: payload.contextEvidence, reviews: rows(true), limits: payload.limits }, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob), link = document.createElement('a'); link.href = url; link.download = 'SAST-Pruefauftrag.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 0);
     }
     function click(event) { const action = event.target.closest('[data-sast-action]')?.dataset.sastAction; if (action === 'close') closeDetail(); else if (action === 'refresh') void load(); else if (action === 'export') exportReview(); }
@@ -104,5 +108,5 @@
     return { async activate() { if (!current()) { clear(); return false; } active = true; return load(); },
       suspend() { active = false; clear(); }, destroy() { disposed = true; active = false; clear(); root.clearInterval?.(guard); host.removeEventListener('click', click); host.removeEventListener('change', change); host.ownerDocument?.removeEventListener('visibilitychange', visibility); } };
   }
-  return { ENDPOINT, DEADLINES, SOURCES, filtered, detailMarkup, mount };
+  return { ENDPOINT, DEADLINES, SOURCES, filtered, detailMarkup, evidenceMarkup, mount };
 });

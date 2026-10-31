@@ -2,6 +2,10 @@
 param(
     [string]$SourceDirectory,
 
+    # Digest pinned from authenticated retrieval of this commit's private SAST artifact.
+    [string]$SastContextEvidence,
+    [string]$SastContextEvidenceSha256,
+
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory
 )
@@ -537,6 +541,13 @@ try {
         $sastPolicySource = Join-Path $sourceRoot 'scripts\security\sast-dispositions.json'
         if (-not (Test-Path -LiteralPath $sastPolicySource -PathType Leaf)) { throw 'Die gebundenen SAST-Bewertungen fehlen.' }
         Copy-Item -LiteralPath $sastPolicySource -Destination (Join-Path $buildRoot 'lib\security-audits\sast-dispositions.json') -Force
+        if (Test-Path -LiteralPath (Join-Path $buildRoot 'lib\security-sast-context-evidence.js')) {
+            if ([string]::IsNullOrWhiteSpace($SastContextEvidence) -or $SastContextEvidenceSha256 -cnotmatch '^[a-f0-9]{64}$') {
+                throw 'Der authentifiziert bezogene, quellgebundene CI-SAST-Nachweis mit externer SHA-256-Bindung fehlt.'
+            }
+            & node (Join-Path $sourceRoot 'scripts\security\sast-context-evidence.cjs') prepare --root $sourceRoot --build-root $buildRoot --source-commit $sourceCommit --evidence $SastContextEvidence --sha256 $SastContextEvidenceSha256
+            if ($LASTEXITCODE -ne 0) { throw 'Der CI-SAST-Kontextnachweis passt nicht zum Serverpaket.' }
+        }
     }
 
     # Bind the deterministic source inventory through the existing file/hash

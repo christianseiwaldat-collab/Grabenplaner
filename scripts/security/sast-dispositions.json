@@ -110616,29 +110616,47 @@
       },
       "end": {
         "line": 21,
-        "column": 568
+        "column": 684
       },
-      "fingerprint": "5c08a8877b22705337cd5d565890e2c8ba9777f93dafbd01bfd1397ed4ff0763",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+      "fingerprint": "85902190b91d1ff36e4753a97dacfbf9ccdbe7a9157d595160bc009fd71af93e",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
       "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "detailMarkup builds only fixed dl/h3/ul markup. Every field label and value, including reviewer, file, fingerprint and rationale, passes the local five-character HTML encoder. Nested context markup is constructed only from escaped values and fixed tags. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
+      "reason": "detailMarkup composes fixed dl/h3/ul structure from the field and context row producers. All labels, values, file paths, rationales and selected local/CI digest text pass the five-character HTML encoder. The added CI-evidence state selects only an authored label; nested markup has no unescaped response text. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
         }
       ]
     },
@@ -110654,26 +110672,44 @@
         "column": 143
       },
       "fingerprint": "57205e78f9cea4552fed23c37710dbe32bd9d9ea82e7abeecabc672fd99792ec",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
       "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "The detail field row interpolates only escape(label) and escape(value). Both text nodes encode &, <, >, double quote and apostrophe before the fixed div/dt/dd template reaches innerHTML. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
+      "reason": "The detail field row inserts only escape(label) and escape(value) between fixed dt/dd tags. The local encoder escapes &, <, >, double quote and apostrophe; no field text becomes an attribute, URL or executable markup. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
         }
       ]
     },
@@ -110686,99 +110722,47 @@
       },
       "end": {
         "line": 21,
-        "column": 551
+        "column": 667
       },
-      "fingerprint": "1b39dd760415f42b34d51d7c0e14ab8c4222d9cd0f9fca3fe86746919649e2f9",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+      "fingerprint": "b1e302e2514a466683c15279df3a89c5b0c08145826dab58bb90d96c96dc02a7",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
       "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "The context list row encodes item.path, item.reason and item.sha256. Its state label is selected from fixed strings and encoded again. No context value is inserted as an attribute, URL or executable markup. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
+      "reason": "The context row encodes item.path, item.reason and the selected evidenceSha256-or-sha256 string. The new ci_evidence label is selected from an authored state map and encoded again. Neither a claimed evidence state nor an evidence digest allows raw HTML into the li/code/strong/p structure. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
-        }
-      ]
-    },
-    {
-      "rule": "javascript.browser.security.insecure-document-method",
-      "path": "public/security-sast.js",
-      "start": {
-        "line": 42,
-        "column": 7
-      },
-      "end": {
-        "line": 42,
-        "column": 600
-      },
-      "fingerprint": "f818aa42bb0a9319a6da1effe2c432ecb66f5927a5a0c46f83b7dac4b6d0cbc8",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-      "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
-      ],
-      "classification": "reviewed_false_positive",
-      "priority": "P2",
-      "reason": "The dialog sink receives a fixed dialog shell plus detailMarkup(row). That helper encodes every record value before returning composed fixed markup. The payload is accessed only in the active personal-authorized account; delayed responses and account changes clear the view. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
-      "context": [
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
         {
-          "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
-        }
-      ]
-    },
-    {
-      "rule": "javascript.browser.security.insecure-innerhtml",
-      "path": "public/security-sast.js",
-      "start": {
-        "line": 42,
-        "column": 7
-      },
-      "end": {
-        "line": 42,
-        "column": 600
-      },
-      "fingerprint": "e2e70f224f20a365e794bb4fa56c68cabaca2287f36602d8c1364a0ec8ebd15f",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-      "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
-      ],
-      "classification": "reviewed_false_positive",
-      "priority": "P2",
-      "reason": "The dialog sink receives a fixed dialog shell plus detailMarkup(row). That helper encodes every record value before returning composed fixed markup. The payload is accessed only in the active personal-authorized account; delayed responses and account changes clear the view. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
-      "context": [
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
         {
-          "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
         }
       ]
     },
@@ -110786,34 +110770,211 @@
       "rule": "javascript.lang.security.html-in-template-string",
       "path": "public/security-sast.js",
       "start": {
-        "line": 42,
+        "line": 25,
+        "column": 12
+      },
+      "end": {
+        "line": 25,
+        "column": 246
+      },
+      "fingerprint": "f76e3ac16ebad37503df4f4775a72b12436bb6bcda93fadbd2b99674483aaadf",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+      "sourceSha256Variants": [
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P2",
+      "reason": "evidenceMarkup emits fixed p/strong/code tags only when status equals the literal package_bound. CI run ID, attempt, sourceCommit and digest each pass the five-character encoder. Unrecognized status returns fixed explanatory text. Even a forged response containing markup in all metadata fields cannot create elements through this template; the hostile metadata regression checks this boundary. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
+      "context": [
+        {
+          "path": "public/security-sast.js",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+          "sha256Variants": [
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
+          ],
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.browser.security.insecure-document-method",
+      "path": "public/security-sast.js",
+      "start": {
+        "line": 46,
+        "column": 7
+      },
+      "end": {
+        "line": 46,
+        "column": 600
+      },
+      "fingerprint": "509be6dba87f14956802de646aeaab2f70522da575120951b8b0ed13ac8f3aae",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+      "sourceSha256Variants": [
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P2",
+      "reason": "The dialog sink/template receives an authored shell and detailMarkup(row). That producer encodes all record and context values, including the new evidence digest/state presentation. No response-supplied template, tag or attribute is accepted. Active account checks and delayed-response invalidation clear stale views; server authorization remains the authoritative access boundary. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
+      "context": [
+        {
+          "path": "public/security-sast.js",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+          "sha256Variants": [
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
+          ],
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.browser.security.insecure-innerhtml",
+      "path": "public/security-sast.js",
+      "start": {
+        "line": 46,
+        "column": 7
+      },
+      "end": {
+        "line": 46,
+        "column": 600
+      },
+      "fingerprint": "29e112fec4fb12b4f7022d9c00d923af2f09ab56bb7e01ac19e2cf44b1b8c5b3",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+      "sourceSha256Variants": [
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P2",
+      "reason": "The dialog sink/template receives an authored shell and detailMarkup(row). That producer encodes all record and context values, including the new evidence digest/state presentation. No response-supplied template, tag or attribute is accepted. Active account checks and delayed-response invalidation clear stale views; server authorization remains the authoritative access boundary. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
+      "context": [
+        {
+          "path": "public/security-sast.js",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+          "sha256Variants": [
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
+          ],
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/security-sast.js",
+      "start": {
+        "line": 46,
         "column": 26
       },
       "end": {
-        "line": 42,
+        "line": 46,
         "column": 598
       },
-      "fingerprint": "61a783993c5bc85537e2c38cb93f602531ac5a2afd4e7fd775e73fc40e008908",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+      "fingerprint": "a37d0317125fc1a5cb50f809c8bf93f2eccc73e66d916eee428d2e903561ce44",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
       "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "The dialog template interpolates only detailMarkup(row); all other tags, classes, buttons and attributes are literal. The helper encodes record and context values, including attacker-shaped rationales; browser regression tests verify that no img node or script execution is created. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
+      "reason": "The dialog sink/template receives an authored shell and detailMarkup(row). That producer encodes all record and context values, including the new evidence digest/state presentation. No response-supplied template, tag or attribute is accepted. Active account checks and delayed-response invalidation clear stale views; server authorization remains the authoritative access boundary. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
         }
       ]
     },
@@ -110821,34 +110982,52 @@
       "rule": "javascript.browser.security.insecure-document-method",
       "path": "public/security-sast.js",
       "start": {
-        "line": 71,
+        "line": 75,
         "column": 7
       },
       "end": {
-        "line": 71,
-        "column": 1864
+        "line": 75,
+        "column": 1967
       },
-      "fingerprint": "85373e158bd86badcbb089572abbb01dd300046922bb9825967f0e1390252604",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+      "fingerprint": "f5c35aae168cacee055ade64e3188117c2283a78f18b35feb4c514cc8b440cfc",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
       "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "The overview sink encodes counts, labels, limits, nextExpiry and policy hash. Select options come only from the local constant DEADLINES/SOURCES maps; selected/checked fragments are fixed strings. Record text later uses textContent through the table cells. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
+      "reason": "The overview sink/template encodes counts, labels, limits, nextExpiry and policySha256. It inserts evidenceMarkup only through that fixed producer, which encodes every CI metadata field. Nested summary/list templates preserve encoding; options use only local constant maps with fixed selected/checked fragments. Table values use textContent. Response text cannot bypass encoding via the added proof presentation. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
         }
       ]
     },
@@ -110856,34 +111035,52 @@
       "rule": "javascript.browser.security.insecure-innerhtml",
       "path": "public/security-sast.js",
       "start": {
-        "line": 71,
+        "line": 75,
         "column": 7
       },
       "end": {
-        "line": 71,
-        "column": 1864
+        "line": 75,
+        "column": 1967
       },
-      "fingerprint": "236f36f18aa98eb27247d309bf98341b4c9888e82c56425e9f7ed9ab53cd2ae0",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+      "fingerprint": "86765d407d72ca0d02fa6560bc776ec9d48e60328164091f6675a1415f7a4e15",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
       "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "The overview sink encodes counts, labels, limits, nextExpiry and policy hash. Select options come only from the local constant DEADLINES/SOURCES maps; selected/checked fragments are fixed strings. Record text later uses textContent through the table cells. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
+      "reason": "The overview sink/template encodes counts, labels, limits, nextExpiry and policySha256. It inserts evidenceMarkup only through that fixed producer, which encodes every CI metadata field. Nested summary/list templates preserve encoding; options use only local constant maps with fixed selected/checked fragments. Table values use textContent. Response text cannot bypass encoding via the added proof presentation. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
         }
       ]
     },
@@ -110891,34 +111088,52 @@
       "rule": "javascript.lang.security.html-in-template-string",
       "path": "public/security-sast.js",
       "start": {
-        "line": 71,
+        "line": 75,
         "column": 45
       },
       "end": {
-        "line": 71,
-        "column": 1862
+        "line": 75,
+        "column": 1965
       },
-      "fingerprint": "92cb0e804700ad0a07f1ec35c7189b2417469aba4ccb21778a2e8993aa849352",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+      "fingerprint": "2d987821efb4423a4ce4b38ae1aeac58b1e0e96cc262a6d6d311949548b0694a",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
       "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "The overview template uses escape for all payload-derived text. Its nested fixed summary/list templates retain those encoders. Option value/label sources are local closed constants, and selection attributes are fixed literal fragments, not input strings. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
+      "reason": "The overview sink/template encodes counts, labels, limits, nextExpiry and policySha256. It inserts evidenceMarkup only through that fixed producer, which encodes every CI metadata field. Nested summary/list templates preserve encoding; options use only local constant maps with fixed selected/checked fragments. Table values use textContent. Response text cannot bypass encoding via the added proof presentation. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
         }
       ]
     },
@@ -110926,34 +111141,52 @@
       "rule": "javascript.lang.security.html-in-template-string",
       "path": "public/security-sast.js",
       "start": {
-        "line": 71,
-        "column": 326
+        "line": 75,
+        "column": 387
       },
       "end": {
-        "line": 71,
-        "column": 437
+        "line": 75,
+        "column": 498
       },
-      "fingerprint": "7392cf21aaafe44ff85eb15f3ec9e1fd6f06d480c21c37b9f15c01946ea96501",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+      "fingerprint": "32274fd791cd5a5c8d5729d4f6cdabb69d01c9127cf0c72e474b748d2a7b180a",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
       "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "The summary-card template inserts escape(value) and escape(label) into fixed strong/span nodes. Counts are also server-validated, but this decision relies on HTML encoding, not on trusting the response. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
+      "reason": "The summary card inserts escape(value) and escape(label) into fixed strong/span nodes. This includes the new contextEvidenced count with a fixed zero fallback. Safety relies on encoding even malformed response values, not merely assuming numeric counters. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
         }
       ]
     },
@@ -110961,34 +111194,52 @@
       "rule": "javascript.lang.security.html-in-template-string",
       "path": "public/security-sast.js",
       "start": {
-        "line": 71,
-        "column": 691
+        "line": 75,
+        "column": 752
       },
       "end": {
-        "line": 71,
-        "column": 716
+        "line": 75,
+        "column": 777
       },
-      "fingerprint": "7662abb1bfa15009913231d91dd68bfe95e18a861f335641203a1d9f84ab2b2e",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+      "fingerprint": "872c8300ee1769e6507cee37558a97bf2a3de5c6af979aed53022c02a3f841e3",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
       "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "Each limit message is inserted solely as escape(text) between fixed li tags. Server or file supplied angle brackets and event-handler text therefore remain literal text. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
+      "reason": "Each limits entry is inserted only through escape(text) between authored li tags. File- or server-supplied angle brackets, quotes and event-handler-shaped text remain literal text in this exact nested template. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
         }
       ]
     },
@@ -110996,34 +111247,52 @@
       "rule": "javascript.lang.security.html-in-template-string",
       "path": "public/security-sast.js",
       "start": {
-        "line": 71,
-        "column": 1303
+        "line": 75,
+        "column": 1406
       },
       "end": {
-        "line": 71,
-        "column": 1386
+        "line": 75,
+        "column": 1489
       },
-      "fingerprint": "4b51e5e28337316fbcbcce4df01b31803c8eff0f5efce2b334fbc90bff9bf608",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+      "fingerprint": "d32d6c1f76d49b7b46e03d4cef6ed0adc8b4ad91c7d51c638bd516d81e64b589",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
       "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "The deadline option values and labels come exclusively from the local constant DEADLINES object. The dynamic comparison can choose only a fixed selected fragment or an empty string; it never inserts the filter input. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
+      "reason": "The option value/label pairs come exclusively from the local authored DEADLINES map. The filter comparison selects only a fixed selected attribute or an empty string and never emits the filter value. The new evidenced option is a literal key/label. No response data supplies option markup. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
         }
       ]
     },
@@ -111031,34 +111300,52 @@
       "rule": "javascript.lang.security.html-in-template-string",
       "path": "public/security-sast.js",
       "start": {
-        "line": 71,
-        "column": 1575
+        "line": 75,
+        "column": 1678
       },
       "end": {
-        "line": 71,
-        "column": 1656
+        "line": 75,
+        "column": 1759
       },
-      "fingerprint": "3271afcc4fe832ad17f014d4b1bf068a2ed9f5325429da5ec89ff91e5db03029",
-      "sourceSha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+      "fingerprint": "05df62afa4beba0fd772f80b04e28d557bccf090727f0371bd9682bb8031ba6d",
+      "sourceSha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
       "sourceSha256Variants": [
-        "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-        "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+        "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+        "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "The source option values and labels come exclusively from the local constant SOURCES object. The dynamic comparison can choose only a fixed selected fragment or an empty string; it never inserts the filter input. Reachability: authenticated private SAST review data may contain arbitrary text. This exact-source review is limited to the quoted sink and its fixed constructors; it is not a rule-wide suppression.",
-      "reviewer": "Codex source and browser regression review 2026-10-19; automated review, no human approval",
-      "reviewedOn": "2026-10-19",
-      "expiresOn": "2026-11-18",
+      "reason": "The option value/label pairs come exclusively from the local authored SOURCES map. The filter comparison selects only a fixed selected attribute or an empty string and never emits the filter value. The new evidenced option is a literal key/label. No response data supplies option markup. Individual automated review 2026-10-31 against fresh targeted Linux scanner coordinates and regression tests. Authenticated private review data is still treated as potentially hostile text. No human approval or rule-wide suppression is claimed.",
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/security-sast.js",
-          "sha256": "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
+          "sha256": "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
           "sha256Variants": [
-            "3975a672feabaa99bd5e104d4a391a07b063b92ff45af58fd940ebb0872ed2ee",
-            "8316a86f51b068beda8b3971d61eb3baab5dc5ed4433e2a0a14f55c3a4ec1b65"
+            "4d216284be0437e7f045681a1cc832b3d47277338164a9059887a71d16390167",
+            "52592c3201a27d4dfd5429ef5b09ad378dc3e3cc99f128f9e534340ec242f241"
           ],
-          "reason": "Exact UI implementation: local escape helper, detail/overview constructors, fixed option maps, personal-account guard and clearing of stale asynchronous responses."
+          "reason": "The complete HTML producers, five-character encoder, fixed options and active account guards."
+        },
+        {
+          "path": "test/security-sast-context-evidence.test.js",
+          "sha256": "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+          "sha256Variants": [
+            "0d79356ad654b0c18df8368268ddeda29f0fa06a2409fb0554ecad1048a73652",
+            "51453fd66ba5e9d1f956ceae88110112a405a4e5e9037347529a5883638793bc"
+          ],
+          "reason": "Hostile evidence metadata, package integrity, absent/runtime context and exact binding regression tests."
+        },
+        {
+          "path": "test/security-sast-reviews.test.js",
+          "sha256": "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+          "sha256Variants": [
+            "01d03985b687cf03df84aa386a72264ad804afbb0eb56b58f155760140aa81e5",
+            "3ee1b31a7cad0fb309c74473e76469e56df7ce2f92962e51075d2572a8f0c664"
+          ],
+          "reason": "Hostile detail text, validity boundaries, source changes and private policy loading regression tests."
         }
       ]
     },
@@ -112461,8 +112748,8 @@
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-26",
-      "expiresOn": "2026-11-08",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/app.js",
@@ -112490,14 +112777,14 @@
         "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
         "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
       ],
-      "reviewer": "Codex technical source and actual finding review; no human approval claimed",
-      "reason": "Actual native Linux evidence 40387646755 confirms this unchanged complete sink span at public/app.js:14952:10. Retained individual historical rationale (older line anchors remain historical): This new authored HTML form interpolates only candidateId and application.id, both through escapeHtmlAttribute which encodes &, <, >, double quote and apostrophe. No candidate name, imported free text or server error is inserted raw. The surrounding status/capability conditions select authored markup rather than interpolating permission strings. Reachability boundary: The form is shown only for a convertible active candidate and allowed application state. These client controls are usability checks; the original candidate API remains responsible for authorization. Technical source/finding review dated 2026-10-25 with independent technical second review; no human approval is claimed. Delta reviewed 2026-10-26: The complete note-editor delta was individually reviewed: Quill Delta/clipboard processing replaces the old HTML rewrite; format commands and 4..72 point sizes are bounded. Existing encoders, safe URLs, CSS validators, authorization/session helpers and other producers are unchanged. No human approval is claimed."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The existing-employee form interpolates only candidateId and application.id through escapeHtmlAttribute, which encodes all five HTML delimiter characters. Capability/state checks select authored markup; no name or free text is inserted raw. Server-side existing-employee lookup and linking separately enforce personnel authorization, current branch scope, strict identifiers and snapshot/revision validation. The client form is not an authorization boundary. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-26",
-      "expiresOn": "2026-11-08",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/app.js",
@@ -112525,14 +112812,14 @@
         "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
         "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
       ],
-      "reviewer": "Codex technical source and actual finding review; no human approval claimed",
-      "reason": "Actual native Linux evidence 40387646755 confirms this unchanged complete sink span at public/app.js:14988:7. Retained individual historical rationale (older line anchors remain historical): The actual innerHTML assignment uses a fixed paragraph, confirmation checkbox and button. Its only variable text values, employee.fullName and employee.personnelNumber, are passed through the five-character escapeHtml encoder. There is no raw HTML response, URL or attribute value in this template. The same explanation covers the document-method, innerHTML and template-string reports on this one assignment. Reachability boundary: The preview GET uses fixed local route segments with encodeURIComponent and CSRF. A captured context/capability ticket is checked before adoption. Linking still requires the confirmed same employee number, server snapshot hash and candidate/application revisions in the original POST. Technical source/finding review dated 2026-10-25 with independent technical second review; no human approval is claimed. Delta reviewed 2026-10-26: The complete note-editor delta was individually reviewed: Quill Delta/clipboard processing replaces the old HTML rewrite; format commands and 4..72 point sizes are bounded. Existing encoders, safe URLs, CSS validators, authorization/session helpers and other producers are unchanged. No human approval is claimed."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The existing-employee preview sink/template inserts only escapeHtml(result.employee.fullName) and escapeHtml(result.employee.personnelNumber) into text nodes. escapeHtml encodes &, <, >, both quote characters. Remaining checkbox, explanatory text and button are authored constants. Context ticket and candidate checks reject stale responses; server authorization and transactional linking remain separate. Markup-like employee names cannot create elements through this exact span. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-26",
-      "expiresOn": "2026-11-08",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/app.js",
@@ -112560,14 +112847,14 @@
         "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
         "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
       ],
-      "reviewer": "Codex technical source and actual finding review; no human approval claimed",
-      "reason": "Actual native Linux evidence 40387646755 confirms this unchanged complete sink span at public/app.js:14988:7. Retained individual historical rationale (older line anchors remain historical): The actual innerHTML assignment uses a fixed paragraph, confirmation checkbox and button. Its only variable text values, employee.fullName and employee.personnelNumber, are passed through the five-character escapeHtml encoder. There is no raw HTML response, URL or attribute value in this template. The same explanation covers the document-method, innerHTML and template-string reports on this one assignment. Reachability boundary: The preview GET uses fixed local route segments with encodeURIComponent and CSRF. A captured context/capability ticket is checked before adoption. Linking still requires the confirmed same employee number, server snapshot hash and candidate/application revisions in the original POST. Technical source/finding review dated 2026-10-25 with independent technical second review; no human approval is claimed. Delta reviewed 2026-10-26: The complete note-editor delta was individually reviewed: Quill Delta/clipboard processing replaces the old HTML rewrite; format commands and 4..72 point sizes are bounded. Existing encoders, safe URLs, CSS validators, authorization/session helpers and other producers are unchanged. No human approval is claimed."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The existing-employee preview sink/template inserts only escapeHtml(result.employee.fullName) and escapeHtml(result.employee.personnelNumber) into text nodes. escapeHtml encodes &, <, >, both quote characters. Remaining checkbox, explanatory text and button are authored constants. Context ticket and candidate checks reject stale responses; server authorization and transactional linking remain separate. Markup-like employee names cannot create elements through this exact span. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-26",
-      "expiresOn": "2026-11-08",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/app.js",
@@ -112595,14 +112882,14 @@
         "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
         "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
       ],
-      "reviewer": "Codex technical source and actual finding review; no human approval claimed",
-      "reason": "Actual native Linux evidence 40387646755 confirms this unchanged complete sink span at public/app.js:14988:27. Retained individual historical rationale (older line anchors remain historical): The actual innerHTML assignment uses a fixed paragraph, confirmation checkbox and button. Its only variable text values, employee.fullName and employee.personnelNumber, are passed through the five-character escapeHtml encoder. There is no raw HTML response, URL or attribute value in this template. The same explanation covers the document-method, innerHTML and template-string reports on this one assignment. Reachability boundary: The preview GET uses fixed local route segments with encodeURIComponent and CSRF. A captured context/capability ticket is checked before adoption. Linking still requires the confirmed same employee number, server snapshot hash and candidate/application revisions in the original POST. Technical source/finding review dated 2026-10-25 with independent technical second review; no human approval is claimed. Delta reviewed 2026-10-26: The complete note-editor delta was individually reviewed: Quill Delta/clipboard processing replaces the old HTML rewrite; format commands and 4..72 point sizes are bounded. Existing encoders, safe URLs, CSS validators, authorization/session helpers and other producers are unchanged. No human approval is claimed."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The existing-employee preview sink/template inserts only escapeHtml(result.employee.fullName) and escapeHtml(result.employee.personnelNumber) into text nodes. escapeHtml encodes &, <, >, both quote characters. Remaining checkbox, explanatory text and button are authored constants. Context ticket and candidate checks reject stale responses; server authorization and transactional linking remain separate. Markup-like employee names cannot create elements through this exact span. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-26",
-      "expiresOn": "2026-11-08",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/app.js",
@@ -112630,14 +112917,14 @@
         "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
         "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
       ],
-      "reviewer": "Codex technical source and actual finding review; no human approval claimed",
-      "reason": "Actual native Linux evidence 40387646755 confirms this unchanged complete sink span at public/app.js:15109:30. Retained individual historical rationale (older line anchors remain historical): The changed conversion notice reads only conversion.employeeNumber, conversion.createdAt and conversion.targetMode. Employee number and formatted timestamp are escapeHtml-encoded; targetMode selects between two authored literal descriptions. It does not serialize the conversion object or read its private source/target/policies/request/document fields. The surrounding pre-existing profile facts use the existing encoded helper, and the newly included application graph is reviewed separately. This is a renewed review of changed parent and nested expressions, not an unchanged-AST assertion. Reachability boundary: Only the server-approved candidate projection is rendered. Existing photo markup producer is unchanged; this delta creates no new photo/URL producer or broader HR permission. Technical source/finding review dated 2026-10-25 with independent technical second review; no human approval is claimed. Delta reviewed 2026-10-26: The complete note-editor delta was individually reviewed: Quill Delta/clipboard processing replaces the old HTML rewrite; format commands and 4..72 point sizes are bounded. Existing encoders, safe URLs, CSS validators, authorization/session helpers and other producers are unchanged. No human approval is claimed."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The conversion summary encodes candidate.conversion.employeeNumber and the formatted createdAt timestamp through escapeHtml. targetMode selects exactly one of two authored labels; its raw value is never emitted. The parent renderer and its five-character encoder are unchanged. This exact nested template accepts no raw HTML, URL or style from conversion data. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-25",
-      "expiresOn": "2026-11-08",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/passkeys.js",
@@ -112665,14 +112952,14 @@
         "589c16d51d86106f81bed1d7379658000c5913844e1190c0c1d3556d8eaa1c02",
         "f26ffd8cdc87733e64e521437e33a8d6ffb2027a45d5e538e0069ddcd7864e23"
       ],
-      "reviewer": "Codex technical source/finding review with independent technical second review; no human approval",
-      "reason": "The reported append is the native DOM Element.append method, not jQuery append. list is a DOM element obtained with host.querySelector; item/copy/name/dates/button are created with ownerDocument.createElement. Credential labels and timestamp text are assigned with textContent; the descriptive aria-label is set through the DOM setAttribute API. The appended arguments are Element objects, never HTML strings, so this exact jQuery-method audit match does not expose an HTML parser sink. Reachability boundary: Credential metadata is loaded for the authenticated personal or validated UUID organization target; lifecycle/context checks clear stale views. The native DOM construction remains safe even if a returned credential label contains markup characters. Technical source/finding review dated 2026-10-25 with independent technical second review; no human approval is claimed."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "list is a native DOM element from querySelector, and item is created with ownerDocument.createElement. The reported list.append(item) appends an Element, not a jQuery HTML string. Credential label and dates are assigned via textContent; the aria-label uses setAttribute. Hostile labels therefore remain text. The current account/context checks and credential API authorization remain separate from this DOM safety finding. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-25",
-      "expiresOn": "2026-11-08",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/gp-receipt-print.js",
@@ -112718,14 +113005,14 @@
         "1cdf6d82b4d9922c2663365cc600a0d98b088e1d59046c6c2f10753676bf3ec6",
         "21625b50931f90b68b71af38d147c35df6fc6fe096b5999e1fdf64eb4bc7682c"
       ],
-      "reviewer": "Codex technical source/finding review with independent technical second review; no human approval",
-      "reason": "The changed table/row templates and the three new Beleg-PDF/empty-result nested templates use an authored button and numeric colspan choices. receiptId and receipt text pass through the five-character escape encoder in data-history-pdf and the double-quoted aria-label. All surrounding row strings remain escaped, and the existing ArticleHistory.referenceMarkup producer uses its own five-character encoder for every source text/attribute. No untrusted URL or HTML payload is added by this PDF action. Reachability boundary: The opener requires a currently authorized actor, visible active view, available context, sales query kind and receipt membership in current result items. GpReceiptPrint is bound to the actor/context key and uses the fixed export flow; server receipt authorization is a separate authoritative check. This client-side review does not claim an IDOR defense from button visibility alone. Technical source/finding review dated 2026-10-25 with independent technical second review; no human approval is claimed."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The receipt-PDF button and its surrounding td use only authored tags/attributes. receiptId and receipt text pass the local five-character encoder before insertion into quoted data-history-pdf and aria-label attributes. The outer branch emits either that safe button, a fixed dash or an empty string. Existing surrounding row/reference text remains escaped. Receipt access is checked separately by current actor/context/membership and the server; UI visibility alone is not treated as authorization. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-25",
-      "expiresOn": "2026-11-08",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/gp-receipt-print.js",
@@ -112771,14 +113058,14 @@
         "1cdf6d82b4d9922c2663365cc600a0d98b088e1d59046c6c2f10753676bf3ec6",
         "21625b50931f90b68b71af38d147c35df6fc6fe096b5999e1fdf64eb4bc7682c"
       ],
-      "reviewer": "Codex technical source/finding review with independent technical second review; no human approval",
-      "reason": "The changed table/row templates and the three new Beleg-PDF/empty-result nested templates use an authored button and numeric colspan choices. receiptId and receipt text pass through the five-character escape encoder in data-history-pdf and the double-quoted aria-label. All surrounding row strings remain escaped, and the existing ArticleHistory.referenceMarkup producer uses its own five-character encoder for every source text/attribute. No untrusted URL or HTML payload is added by this PDF action. Reachability boundary: The opener requires a currently authorized actor, visible active view, available context, sales query kind and receipt membership in current result items. GpReceiptPrint is bound to the actor/context key and uses the fixed export flow; server receipt authorization is a separate authoritative check. This client-side review does not claim an IDOR defense from button visibility alone. Technical source/finding review dated 2026-10-25 with independent technical second review; no human approval is claimed."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The receipt-PDF button and its surrounding td use only authored tags/attributes. receiptId and receipt text pass the local five-character encoder before insertion into quoted data-history-pdf and aria-label attributes. The outer branch emits either that safe button, a fixed dash or an empty string. Existing surrounding row/reference text remains escaped. Receipt access is checked separately by current actor/context/membership and the server; UI visibility alone is not treated as authorization. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-25",
-      "expiresOn": "2026-11-08",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/gp-receipt-print.js",
@@ -112824,14 +113111,14 @@
         "1cdf6d82b4d9922c2663365cc600a0d98b088e1d59046c6c2f10753676bf3ec6",
         "21625b50931f90b68b71af38d147c35df6fc6fe096b5999e1fdf64eb4bc7682c"
       ],
-      "reviewer": "Codex technical source/finding review with independent technical second review; no human approval",
-      "reason": "The changed table/row templates and the three new Beleg-PDF/empty-result nested templates use an authored button and numeric colspan choices. receiptId and receipt text pass through the five-character escape encoder in data-history-pdf and the double-quoted aria-label. All surrounding row strings remain escaped, and the existing ArticleHistory.referenceMarkup producer uses its own five-character encoder for every source text/attribute. No untrusted URL or HTML payload is added by this PDF action. Reachability boundary: The opener requires a currently authorized actor, visible active view, available context, sales query kind and receipt membership in current result items. GpReceiptPrint is bound to the actor/context key and uses the fixed export flow; server receipt authorization is a separate authoritative check. This client-side review does not claim an IDOR defense from button visibility alone. Technical source/finding review dated 2026-10-25 with independent technical second review; no human approval is claimed."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The empty-result template contains only fixed text and a colspan selected from the numeric literals 7 and 6 by the sales boolean. No result row or caller string is interpolated into this particular fallback span. It is authored HTML, not untrusted HTML construction. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-27",
-      "expiresOn": "2026-11-09",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "lib/schedule-note-rich-text.js",
@@ -112877,14 +113164,14 @@
         "0fd61d432a451762f03c7f0a67aa6e34cf918d2dc6e7810873aecd65e1a4ee0c",
         "702dc84c41480a1b17ef3c3e8472761c2a1d2e8149c0088b99b68df689b53a3b"
       ],
-      "reviewer": "Codex differential security source review 2026-10-27; proposed individual continuity review Codex 2026-10-29; no human approval or new scan claim",
-      "reason": "Individual source-continuity proposal 2026-10-29 at lib/schedule-note-rich-text.js:49:44. The complete sink-line span is byte-identical to baseline 3680a0fc8a53. The existing per-finding authored-markup, escaped-text, URL and allowlist rationale remains bounded to its original sink. Only serverDiagnostics gains fixed read-only status fields; no reviewed template producer, sanitizer, route result or HTML context changes. The original individual producer rationale is retained below. Original expiry 2026-11-09 is unchanged. Fresh native scanner identity remains required; this local proposal is not scan evidence or human approval. Retained individual historical rationale (old line anchors are historical): The actual native Linux span in sanitizedHtml renders only a parser-produced allowlist. size comes from nodeSize/pointSize, which accepts finite 4..72 point numbers or fixed legacy constants; it cannot contain an attribute delimiter. body is recursively composed from text escaped for &, <, > and double quote plus authored div/b/i/u/br/span markup. Input tags and attributes are never serialized, blocked executable subtrees are discarded, and an apostrophe stays text rather than a quoted attribute. The recursion therefore does not interpolate untrusted HTML unchanged. Input length is limited to 128*1024 JavaScript UTF-16 code units and render depth to 100. This is an individually reviewed safe formatter, not a finding ignored because it is a new module. Source-context review 2026-10-26 for the A94 candidate: the complete b38-to-current server delta is one pure numeric note-height budget helper and two first-page row-height calculations. The existing note encoder, sanitizer, PDF continuation, authorization, selected data and complete startup module-loader AST remain unchanged; all other 3020 top-level statements are AST-identical. Full sink lines and bytes are identical. Coordinates are an exact source projection from successful native run40400347930; the next full native CI must confirm the candidate identities. Differential review 2026-10-27: explicit worker cancellation during an active shutdown does not alter this finding or its validated input/output boundary; new or moved findings still block."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "sanitizedHtml serializes a parser-derived allowlist, never original attributes or source HTML. size is produced by pointSize/nodeSize and restricted to finite 4..72 numbers or fixed legacy values; it cannot contain an attribute delimiter. body recursively contains only escaped text and authored div/b/i/u/br/span tags. Script/style/svg/math/iframe/object/template/noscript subtrees are discarded. Input is bounded to 128KiB code units and recursion depth 100. Existing positive formatting and hostile-tag/attribute tests pass in this review. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-26",
-      "expiresOn": "2026-11-09",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/app.js",
@@ -112912,14 +113199,14 @@
         "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
         "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
       ],
-      "reviewer": "Codex technical source and actual finding review; no human approval claimed",
-      "reason": "This actual native Linux b wrapper is in the legacy plain-text branch of scheduleNoteInitialHtml. A nonempty note_html returns before reaching the interpolation. Here html originates solely in escapeHtml(note.note_text), whose five-character encoder is unchanged, with only authored br tokens replacing newlines. Any preceding style wrapper adds only a fixed b/i tag. The note.bold value selects a constant tag and is not emitted. The result is passed through the bundled Quill clipboard conversion before editing and through the server canonicalizer before storage. No user-supplied attribute or raw legacy HTML can reach this particular interpolation."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The legacy scheduleNoteInitialHtml b wrapper is reached only when note_html is empty. Its html value originates in the five-character escapeHtml(note.note_text) encoder, with authored br and fixed b/i/u wrappers only. Style booleans choose literal tags and are not interpolated. The result subsequently passes Quill clipboard conversion and server canonicalization. This assessment is confined to the legacy plain-text span, not the separate note_html branch. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-26",
-      "expiresOn": "2026-11-09",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/app.js",
@@ -112947,14 +113234,14 @@
         "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
         "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
       ],
-      "reviewer": "Codex technical source and actual finding review; no human approval claimed",
-      "reason": "This actual native Linux i wrapper is in the legacy plain-text branch of scheduleNoteInitialHtml. A nonempty note_html returns before reaching the interpolation. Here html originates solely in escapeHtml(note.note_text), whose five-character encoder is unchanged, with only authored br tokens replacing newlines. Any preceding style wrapper adds only a fixed b/i tag. The note.italic value selects a constant tag and is not emitted. The result is passed through the bundled Quill clipboard conversion before editing and through the server canonicalizer before storage. No user-supplied attribute or raw legacy HTML can reach this particular interpolation."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The legacy scheduleNoteInitialHtml i wrapper is reached only when note_html is empty. Its html value originates in the five-character escapeHtml(note.note_text) encoder, with authored br and fixed b/i/u wrappers only. Style booleans choose literal tags and are not interpolated. The result subsequently passes Quill clipboard conversion and server canonicalization. This assessment is confined to the legacy plain-text span, not the separate note_html branch. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-26",
-      "expiresOn": "2026-11-09",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/app.js",
@@ -112982,14 +113269,14 @@
         "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
         "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
       ],
-      "reviewer": "Codex technical source and actual finding review; no human approval claimed",
-      "reason": "This actual native Linux u wrapper is in the legacy plain-text branch of scheduleNoteInitialHtml. A nonempty note_html returns before reaching the interpolation. Here html originates solely in escapeHtml(note.note_text), whose five-character encoder is unchanged, with only authored br tokens replacing newlines. Any preceding style wrapper adds only a fixed b/i tag. The note.underline value selects a constant tag and is not emitted. The result is passed through the bundled Quill clipboard conversion before editing and through the server canonicalizer before storage. No user-supplied attribute or raw legacy HTML can reach this particular interpolation."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The legacy scheduleNoteInitialHtml u wrapper is reached only when note_html is empty. Its html value originates in the five-character escapeHtml(note.note_text) encoder, with authored br and fixed b/i/u wrappers only. Style booleans choose literal tags and are not interpolated. The result subsequently passes Quill clipboard conversion and server canonicalization. This assessment is confined to the legacy plain-text span, not the separate note_html branch. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reviewedOn": "2026-10-26",
-      "expiresOn": "2026-11-09",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
       "context": [
         {
           "path": "public/app.js",
@@ -113017,8 +113304,8 @@
         "8ce56271555bb6cc85b85158badd379db4addc8c140eee53d6cc82c740c813d7",
         "c62cf45c3c18f53282df32aa6f149d59790928da4ba37be85394ddd478fa817a"
       ],
-      "reviewer": "Codex technical source and actual finding review; no human approval claimed",
-      "reason": "This actual native Linux span wraps the legacy plain-text representation, never note_html: the latter returns before these lines. html is the unchanged five-character escapeHtml output with authored newline/style wrappers. size is normalizeScheduleNoteSize(note.font_size), restricted to known legacy constants or a parsed finite 4..72 point number converted back to a numeric string. The dynamic double-quoted data-size attribute cannot acquire quotes, markup or CSS. The result enters Quill clipboard conversion and server canonicalization; free-form source style strings are not emitted by this sink."
+      "reviewer": "Codex individual technical source and regression review 2026-10-31; no human approval",
+      "reason": "The legacy scheduleNoteInitialHtml span wrapper is reached only when note_html is empty. Its html value originates in the five-character escapeHtml(note.note_text) encoder, with authored br and fixed b/i/u wrappers only. Style booleans choose literal tags and are not interpolated. The quoted data-size is normalizeScheduleNoteSize output, restricted to fixed legacy values or a finite 4..72 numeric string; arbitrary CSS or delimiters cannot enter the attribute. The result subsequently passes Quill clipboard conversion and server canonicalization. This assessment is confined to the legacy plain-text span, not the separate note_html branch. Individual automated source review 2026-10-31; no human approval claimed. The forthcoming full Linux scan must independently confirm exact finding identity."
     },
     {
       "rule": "javascript.lang.security.html-in-template-string",

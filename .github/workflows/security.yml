@@ -113,6 +113,8 @@ jobs:
           echo "$RUNNER_TEMP/semgrep-source-venv/bin" >> "$GITHUB_PATH"
       - name: Fail-closed security gate contract tests
         run: python -m unittest discover -s scripts/security -p 'test_*.py' -v
+      - name: Check private SAST context evidence contracts
+        run: node --test test/security-sast-context-evidence.test.js test/security-sast-reviews.test.js
       - name: Acquire the reviewed compiler or build cold, then qualify current whole files
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -131,6 +133,11 @@ jobs:
       - name: Verify response rule with actual route and unsafe controls
         if: success() || failure()
         run: python scripts/security/check_payroll_response.py --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
+      - name: Bind private review contexts to the successful current SAST gate
+        run: >-
+          node scripts/security/sast-context-evidence.cjs capture --root .
+          --gate "$RUNNER_TEMP/security-results/gate-result.json"
+          --output "$RUNNER_TEMP/security-results/sast-context-evidence.json"
       - name: Prepare sanitized public metadata
         if: always()
         run: python scripts/security/publish_artifacts.py --gate sast --input "$RUNNER_TEMP/security-results" --output "$RUNNER_TEMP/security-public"
