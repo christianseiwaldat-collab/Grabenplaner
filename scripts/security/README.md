@@ -160,7 +160,9 @@ Linux-Job mit der minimal unterstützten Node-Version 22.13.0.
 `@isaacs/nonrecursive-glob-match@1.0.3` liefern jeweils `LICENSE.md` mit
 `BlueOak-1.0.0`; diese Lizenzdateien bleiben im installierten Paket erhalten.
 `glob@7.2.3` behält seine unveränderte ISC-Lizenzdatei. Der vollständige SBOM-Lauf
-erfasst die tatsächlich eingefrorenen Versionen und ihre Lizenzmetadaten.
+erfasst die tatsächlich eingefrorenen Versionen; der Lizenznachweis erfolgt
+separat über die Metadaten und Lizenzdateien der integritätsgeprüften
+Herstellerarchive, da der Lockfile-Katalog keine Lizenzfelder liefert.
 
 ## Lokale Ausführung und Ergebnisse
 
