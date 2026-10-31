@@ -54,6 +54,7 @@ jobs:
           test/security-msal-auth-reachability.test.js
           test/security-ci-patch-policy.test.js
           test/security-ci-msal-patch-policy.test.js
+          test/security-minimatch-compatibility.test.js
           test/preflight-root-environment.test.js
           test/runtime-root-environment.test.js
           test/postgresql-operations-pure-preflight.test.js

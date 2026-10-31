@@ -94,6 +94,28 @@ function packageInventory(root) {
   walk(root); return { sha256: digest(Buffer.from(JSON.stringify(files))), files };
 }
 
+function checkGlobCompatibilityPolicy(policy, context, now = new Date()) {
+  assert.equal(policy.schemaVersion, 1); assert.equal(policy.kind, "verified_compatibility_patch");
+  assert.equal(policy.package, "glob"); assert.equal(policy.version, "7.2.3");
+  assert.equal(policy.minimatchVersion, "11.0.3");
+  checkDates(policy, now);
+  for (const [actual, expected] of [["patchHash","patchSha256"],["packageJsonHash","packageJsonSha256"],
+    ["licenseHash","licenseSha256"],["treeHash","installedTreeSha256"],["fileCount","installedFileCount"],
+    ["regressionHash","regressionTestSha256"]]) assert.equal(context[actual], policy[expected], actual);
+  assert.equal(policy.regressionTest, "test/security-minimatch-compatibility.test.js");
+  const required = ["glob.js","sync.js"];
+  assert.deepEqual(Object.keys(policy.installedFiles).sort(), required);
+  assert.deepEqual(Object.keys(context.installedHashes).sort(), required);
+  for (const file of required) {
+    assert.match(policy.installedFiles[file].beforeSha256, /^[a-f0-9]{64}$/);
+    assert.equal(context.installedHashes[file], policy.installedFiles[file].afterSha256, "Installed glob compatibility drift: " + file);
+  }
+  assert.equal(context.minimatchVersion, policy.minimatchVersion);
+  const packages = context.lock.replaceAll("\r\n","\n").split("packages:\n")[1]?.split("\nsnapshots:")[0];
+  assert(packages?.includes("  glob@7.2.3:\n    resolution: {integrity: " + policy.originalTarballIntegrity + "}\n"), "Original glob tarball integrity drift");
+  checkDeclarations(context.registeredPolicies, context.workspace, context.lock);
+}
+
 function consumer(root, ...packages) {
   let parent = createRequire(path.join(root, "package.json"));
   for (const name of packages) parent = createRequire(parent.resolve(name)); return parent;
@@ -106,15 +128,28 @@ function childEnvironment(extra = {}) {
 function verify(root = repository) {
   const policy = JSON.parse(fs.readFileSync(path.join(__dirname, "patch-policy.json"), "utf8"));
   assert(Array.isArray(policy.securityBackports) && policy.securityBackports.length === 1, "Exactly the registered MSAL security backport is required");
-  const policies = [policy, ...policy.securityBackports], workspace = fs.readFileSync(path.join(root, "pnpm-workspace.yaml"), "utf8"), lock = fs.readFileSync(path.join(root, "pnpm-lock.yaml"), "utf8");
+  assert(Array.isArray(policy.compatibilityPatches) && policy.compatibilityPatches.length === 1, "Exactly the registered glob compatibility patch is required");
+  const policies = [policy, ...policy.securityBackports, ...policy.compatibilityPatches], workspace = fs.readFileSync(path.join(root, "pnpm-workspace.yaml"), "utf8"), lock = fs.readFileSync(path.join(root, "pnpm-lock.yaml"), "utf8");
+  const compatibility = policy.compatibilityPatches[0];
+  for (const chain of [["exceljs","archiver","archiver-utils"], ["exceljs","archiver","zip-stream","archiver-utils"], ["exceljs","unzipper","fstream","rimraf"]]) {
+    const parent = consumer(root, ...chain), packageFile = parent.resolve("glob/package.json"), packageRoot = path.dirname(packageFile);
+    const metadata = JSON.parse(fs.readFileSync(packageFile,"utf8")); assert.equal(metadata.name, "glob"); assert.equal(metadata.version, "7.2.3");
+    const inventory = packageInventory(packageRoot), req = createRequire(parent.resolve("glob"));
+    checkGlobCompatibilityPolicy(compatibility, { patchHash: hash(path.join(root,compatibility.patch)), packageJsonHash: hash(packageFile),
+      licenseHash: hash(path.join(packageRoot,"LICENSE")), treeHash: inventory.sha256, fileCount: inventory.files.length,
+      installedHashes: Object.fromEntries(["glob.js","sync.js"].map(file => [file,hash(path.join(packageRoot,file))])),
+      regressionHash: hash(path.join(repository,compatibility.regressionTest)), minimatchVersion: req("minimatch/package.json").version,
+      workspace,lock,registeredPolicies:policies });
+  }
   for (const chain of [["exceljs", "archiver", "archiver-utils", "glob", "minimatch"], ["exceljs", "archiver", "readdir-glob", "minimatch"]]) {
     const req = consumer(root, ...chain), entry = req.resolve("brace-expansion");
+    assert.equal(req("minimatch/package.json").version, compatibility.minimatchVersion);
     checkPolicy(policy, { patchHash: hash(path.join(root, policy.patch)), installedHash: hash(entry), workspace, lock, registeredPolicies: policies });
     const expand = req("brace-expansion"); assert.equal(typeof expand, "function"); assert.equal(expand.expand, expand);
     for (const key of ["EXPANSION_MAX", "EXPANSION_MAX_LENGTH", "EXPANSION_MAX_DEPTH", "EXPANSION_MAX_REWRITES"]) assert.ok(Number.isFinite(expand[key]) && expand[key] > 0, key);
     assert.deepEqual(expand("file-{a,b}-{1..2}"), ["file-a-1", "file-a-2", "file-b-1", "file-b-2"]); assert.equal(expand("{a,b,c}", { max: 2 }).length, 2);
   }
-  for (const scenario of ["brace-nesting", "brace-comma", "brace-rewrite"]) {
+  for (const scenario of ["brace-nesting", "brace-comma", "brace-rewrite", "minimatch-optimization"]) {
     const result = spawnSync(process.execPath, ["--no-global-search-paths", "--max-old-space-size=192", path.join(repository, "test-support/security-audit/ops-dependency-remediation.probe.cjs"), scenario],
       { env: childEnvironment(), timeout: 15000, encoding: "utf8", windowsHide: true });
     assert.ifError(result.error); assert.equal(result.status, 0, result.stderr); assert.equal(result.stdout, "completed");
@@ -140,9 +175,11 @@ function verify(root = repository) {
       regressionPassed: true, regressionPassCount: 14, expiresOn: backport.expiresOn });
   }
   return { passed: true, package: policy.package, version: policy.version, patchSha256: policy.patchSha256, expiresOn: policy.expiresOn,
-    consumers: 2, boundedSecurityRegressions: 3, advisoryWaivers: 0, securityBackports: remediations };
+    consumers: 2, boundedSecurityRegressions: 4, advisoryWaivers: 0, securityBackports: remediations,
+    compatibilityPatches: [{ package:compatibility.package, version:compatibility.version, minimatchVersion:compatibility.minimatchVersion,
+      patchSha256:compatibility.patchSha256, installedTreeSha256:compatibility.installedTreeSha256, expiresOn:compatibility.expiresOn, consumers:3 }] };
 }
-module.exports = { checkPolicy, checkBackportPolicy, checkDeclarations, packageInventory, verify };
+module.exports = { checkPolicy, checkBackportPolicy, checkGlobCompatibilityPolicy, checkDeclarations, packageInventory, verify };
 if (require.main === module) {
   try { console.log(JSON.stringify(verify())); } catch (error) { console.error("Patch verification rejected: " + error.message); process.exitCode = 1; }
 }

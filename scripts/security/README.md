@@ -142,7 +142,25 @@ Paketbaum und 14 tatsächliche CJS-/ESM-Regressionsfälle erforderlich. Der OSV-
 bleibt erhalten; nur exakt nachweislich reparierter Code wird als
 `remediated_by_verified_patch` ausgewiesen. Neue Advisories, unvollständige Belege
 und Registry-Meldungen bleiben blockierend. `advisoryExceptions` bleibt leer.
-Beide Registrierungen laufen nach höchstens 30 Tagen ab.
+Alle Registrierungen laufen nach höchstens 30 Tagen ab.
+
+Für GHSA-g3hv-75wg-m249 verwendet der gesamte aktuelle ExcelJS-Abhängigkeitsgraph
+`minimatch@11.0.3`. Der alte `glob@7.2.3`-Aufrufer benötigt dazu einen auf sechs
+Zeilen begrenzten Adapter: `Matcher.pattern` und `Matcher.test()` ersetzen die
+frühere RegExp-interne Darstellung in beiden Dateisuchern. Die Prüfung bindet
+Originaltarball-SRI, Patch, beide Dateien, vollständigen Paketbaum, Lizenz und
+Regressionstest an exakte Prüfsummen; eine abweichende Matcher-Version wird
+abgewiesen. Die Sicherheitskorrektur und ihre Grenzen stammen unverändert aus
+minimatch; der Adapter unterdrückt keinen Befund. Positive und negative Tests
+decken alle vier ExcelJS-Pfade, Dateiauswahl, ZIP, beide Excel-Schreibweisen,
+Importgrenzen sowie die begrenzte Optimierungsregression ab. Sie laufen auch im
+Linux-Job mit der minimal unterstützten Node-Version 22.13.0.
+
+`minimatch@11.0.3` und dessen neue Abhängigkeit
+`@isaacs/nonrecursive-glob-match@1.0.3` liefern jeweils `LICENSE.md` mit
+`BlueOak-1.0.0`; diese Lizenzdateien bleiben im installierten Paket erhalten.
+`glob@7.2.3` behält seine unveränderte ISC-Lizenzdatei. Der vollständige SBOM-Lauf
+erfasst die tatsächlich eingefrorenen Versionen und ihre Lizenzmetadaten.
 
 ## Lokale Ausführung und Ergebnisse
 

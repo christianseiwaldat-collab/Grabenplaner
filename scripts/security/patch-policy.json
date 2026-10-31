@@ -69,5 +69,39 @@
       "removalCondition": "Remove when an in-range supported dependency contains the upstream fix, or requalify all pinned bytes before expiry. Any patch, version, source or installed-file drift is a hard failure.",
       "advisoryExceptions": []
     }
+  ],
+  "compatibilityPatches": [
+    {
+      "schemaVersion": 1,
+      "kind": "verified_compatibility_patch",
+      "package": "glob",
+      "version": "7.2.3",
+      "minimatchVersion": "11.0.3",
+      "patch": "lib/vendor-patches/glob@7.2.3.patch",
+      "patchSha256": "a3adbd52146b551c396de60757d254b6a90c1f4dec601cb652096ca65ca0a617",
+      "originalTarballIntegrity": "sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==",
+      "installedFiles": {
+        "glob.js": {
+          "beforeSha256": "b8f35657ca927593d0f9e1aae3a8cfe9c33c697bf3c5733c2f6727f25ae25be1",
+          "afterSha256": "5ea8fdb86e83c0c178625a724a47c3ae19bf9d177de21f83d779de1764a1b7a7"
+        },
+        "sync.js": {
+          "beforeSha256": "0f61227f4b55297f1ad16798c53e6a6dd55d633856f153133716413b7c5f61ad",
+          "afterSha256": "add06c3ea77da200e484dade81b88eebf53f138a70e6fe6f6f8a088229fda036"
+        }
+      },
+      "installedTreeSha256": "70872917a109467058fb83b20c9ee97238aa321fb8a1305544b6a25b025960b4",
+      "installedFileCount": 6,
+      "packageJsonSha256": "b00b6d35eda6d4aa6893baf19e53b7d005019ed840e4fa116c926a532ec577cf",
+      "licenseSha256": "6236fa0b88a4a0cce3dda0367979491b2052b3c8d6b1c10b3668de083e86a7f0",
+      "regressionTest": "test/security-minimatch-compatibility.test.js",
+      "regressionTestSha256": "c356db1a1554d7ce5a7819cca2805f362bc0f660a39b7b40ee500a4e30966dda",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
+      "owner": "Grabenplaner dependency maintainers",
+      "reason": "Exact six-line adapter in the synchronous and callback directory walkers: use the modern Matcher pattern and boolean test methods. Filesystem traversal and filtering remain unchanged; minimatch 11.0.3 remains unmodified with its upstream amplification bounds. No advisory suppression.",
+      "removalCondition": "Remove when ExcelJS archive and cleanup consumers use a compatible upstream glob, or requalify before expiry. Any registered byte, dependency version or patch drift rejects verification.",
+      "advisoryExceptions": []
+    }
   ]
 }

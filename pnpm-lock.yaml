@@ -8,6 +8,7 @@ overrides:
   body-parser: 2.4.0
   pdfjs-dist>@napi-rs/canvas: 1.0.13
   brace-expansion: 5.0.12
+  minimatch: 11.0.3
   proxy-addr: 2.0.8
   qs: 6.16.1
   uuid: 11.1.1
@@ -15,6 +16,7 @@ overrides:
 patchedDependencies:
   '@azure/msal-node@5.4.0': bbdf16bb0cf6a18ab384b515bd8a378cc5c736698c486881c60c1cbb1cbeda01
   brace-expansion@5.0.12: 69ec08fa5a76dd9b3e6394e64db12101aa4ac38ca484ad5eccd7974d2aa51c46
+  glob@7.2.3: a3adbd52146b551c396de60757d254b6a90c1f4dec601cb652096ca65ca0a617
 
 importers:
 
@@ -308,6 +310,9 @@ packages:
     engines: {node: '>=20.9.0'}
     cpu: [x64]
     os: [win32]
+
+  '@isaacs/nonrecursive-glob-match@1.0.3':
+    resolution: {integrity: sha512-SI7kyKHq4XXDRozw+r9GlRZkia1ZkFrpLW98r2IC2Bpr8YkFGE3fvjzmxCG0x78A++69HmDNrDvSMYBZmHGpKA==}
 
   '@js-joda/core@6.1.0':
     resolution: {integrity: sha512-H8NTMRDJqad/leyv/D/A3kSOsf5/58Ydj4DJGDyaCWk9OU/zuZOLhndVffJgQjsgrn5GC0znHMHie7TfvPPG4w==}
@@ -1081,12 +1086,9 @@ packages:
     resolution: {integrity: sha512-Lbgzdk0h4juoQ9fCKXW4by0UJqj+nOOrI9MJ1sSj4nI8aI2eo1qmvQEie4VD1glsS250n15LsWsYtCugiStS5A==}
     engines: {node: '>=18'}
 
-  minimatch@3.1.5:
-    resolution: {integrity: sha512-VgjWUsnnT6n+NUk6eZq77zeFdpW2LWDzP6zFGrCbHXiYNul5Dzqk2HHQ5uFH2DNW5Xbp8+jVzaeNt94ssEEl4w==}
-
-  minimatch@5.1.9:
-    resolution: {integrity: sha512-7o1wEA2RyMP7Iu7GNba9vc0RWWGACJOCZBJX2GJWip0ikV+wcOsgVuY9uE8CPiyQhkGFSlhuSkZPavN7u1c2Fw==}
-    engines: {node: '>=10'}
+  minimatch@11.0.3:
+    resolution: {integrity: sha512-iny/40PEGkNJQ5/Pv6z3nm6FbRAby32GeZRjCUJk2WnNDbgPSTcdI+DDvLqsgBdD4cD5sMtMheqPPnehCCa8Nw==}
+    engines: {node: 18 || 20 || >=22}
 
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
@@ -1784,6 +1786,8 @@ snapshots:
   '@img/sharp-win32-x64@0.35.5':
     optional: true
 
+  '@isaacs/nonrecursive-glob-match@1.0.3': {}
+
   '@js-joda/core@6.1.0': {}
 
   '@levischuck/tiny-cbor@0.2.11': {}
@@ -2023,7 +2027,7 @@ snapshots:
 
   archiver-utils@2.1.0:
     dependencies:
-      glob: 7.2.3
+      glob: 7.2.3(patch_hash=a3adbd52146b551c396de60757d254b6a90c1f4dec601cb652096ca65ca0a617)
       graceful-fs: 4.2.11
       lazystream: 1.0.1
       lodash.defaults: 4.2.0
@@ -2036,7 +2040,7 @@ snapshots:
 
   archiver-utils@3.0.4:
     dependencies:
-      glob: 7.2.3
+      glob: 7.2.3(patch_hash=a3adbd52146b551c396de60757d254b6a90c1f4dec601cb652096ca65ca0a617)
       graceful-fs: 4.2.11
       lazystream: 1.0.1
       lodash.defaults: 4.2.0
@@ -2449,12 +2453,12 @@ snapshots:
       dunder-proto: 1.0.1
       es-object-atoms: 1.1.2
 
-  glob@7.2.3:
+  glob@7.2.3(patch_hash=a3adbd52146b551c396de60757d254b6a90c1f4dec601cb652096ca65ca0a617):
     dependencies:
       fs.realpath: 1.0.0
       inflight: 1.0.6
       inherits: 2.0.4
-      minimatch: 3.1.5
+      minimatch: 11.0.3
       once: 1.4.0
       path-is-absolute: 1.0.1
 
@@ -2672,12 +2676,9 @@ snapshots:
     dependencies:
       mime-db: 1.54.0
 
-  minimatch@3.1.5:
+  minimatch@11.0.3:
     dependencies:
-      brace-expansion: 5.0.12(patch_hash=69ec08fa5a76dd9b3e6394e64db12101aa4ac38ca484ad5eccd7974d2aa51c46)
-
-  minimatch@5.1.9:
-    dependencies:
+      '@isaacs/nonrecursive-glob-match': 1.0.3
       brace-expansion: 5.0.12(patch_hash=69ec08fa5a76dd9b3e6394e64db12101aa4ac38ca484ad5eccd7974d2aa51c46)
 
   minimist@1.2.8: {}
@@ -2866,7 +2867,7 @@ snapshots:
 
   readdir-glob@1.1.3:
     dependencies:
-      minimatch: 5.1.9
+      minimatch: 11.0.3
 
   reflect-metadata@0.2.2: {}
 
@@ -2876,7 +2877,7 @@ snapshots:
 
   rimraf@2.7.1:
     dependencies:
-      glob: 7.2.3
+      glob: 7.2.3(patch_hash=a3adbd52146b551c396de60757d254b6a90c1f4dec601cb652096ca65ca0a617)
 
   ripemd160@2.0.3:
     dependencies:

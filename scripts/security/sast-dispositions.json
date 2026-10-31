@@ -113140,12 +113140,12 @@
         },
         {
           "path": "pnpm-lock.yaml",
-          "sha256": "9632c2f9d86f1ec72de3a3c2f740461a560ae614beb5a15d1c4c3440584c1f57",
+          "sha256": "376cec280822562427c15b8627fa7b0514af2fe8f38fb2ff2620c92a39d1711b",
           "sha256Variants": [
-            "32e996ad414335ec30d61e070456a52fecd8c8c4d3621936679749222065c088",
-            "9632c2f9d86f1ec72de3a3c2f740461a560ae614beb5a15d1c4c3440584c1f57"
+            "376cec280822562427c15b8627fa7b0514af2fe8f38fb2ff2620c92a39d1711b",
+            "6a982831f1e61f76a15b64471c4bc7d4e58683207c55f8aac91751fefd720360"
           ],
-          "reason": "Exact installed htmlparser2 parser dependency graph supporting the reviewed parseDocument call."
+          "reason": "Exact installed htmlparser2 parser dependency graph supporting the reviewed parseDocument call. Dependency delta reviewed 2026-10-31: only minimatch, its nonrecursive matcher, the glob compatibility patch and associated snapshot references changed. htmlparser2 and its full parser dependency graph, sanitizer source and reviewed sink remain unchanged. Existing expiry retained; no new finding pre-approved."
         }
       ],
       "rule": "javascript.lang.security.html-in-template-string",
