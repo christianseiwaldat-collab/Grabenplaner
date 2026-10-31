@@ -1483,10 +1483,10 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
 const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
   Object.freeze({
     id: "security-sast-review-metadata",
-    files: Object.freeze(["scripts/security/sast-dispositions.json"]),
+    files: Object.freeze(["scripts/security/sast-dispositions.json", "lib/security-sast-context-evidence.js"]),
     scope: "security-review-metadata",
     owner: "security-review-evidence",
-    targetLayer: "non-executable JSON review records containing quoted source and SQL terminology",
+    targetLayer: "private JSON review records and read-only package/hash evidence verification; legacy paths are exclusion metadata",
     risk: "low",
     transitionException: "metadata classification only; no database driver, statement, connection or runtime activation grant",
     laterPhase: "not-applicable",
@@ -1770,7 +1770,7 @@ const TEST_SPECIAL_GROUPS = Object.freeze({
     "test/deploy-startup.test.js",
     "test/deploy-workflow.test.js",
     // Offline package/evidence fixtures; no database driver or product access.
-    "test/prepared-release-package.test.js",
+    "test/prepared-release-package.test.js", "test/security-sast-context-evidence.test.js",
     "test/v074-linux-monitor-status.test.js",
   ]),
   "portal-ui-preferences-integration": new Set([

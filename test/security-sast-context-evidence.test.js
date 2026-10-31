@@ -155,6 +155,20 @@ test('Known exclusions never classify runtime backup scripts as omitted test con
   for (const name of ['test/a.js', 'scripts/a.js', 'lib/persistence/sqlite/a.js', 'lib/persistence/postgresql/transfer/a.js']) assert.equal(E.excludedContext(name), true);
   for (const name of ['scripts/run-background-backup.js', 'scripts/manage-local-backup-archive.js', 'lib/runtime.js', '../test/a.js']) assert.equal(E.excludedContext(name), false);
 });
+
+test('Evidence metadata registration grants no database driver, provider or configuration access', () => {
+  const { architectureBoundaryViolationsForText: check } = require('../scripts/audit-persistence-coupling');
+  const file = 'lib/security-sast-context-evidence.js';
+  assert.deepEqual(check(file, fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8')), []);
+  for (const source of [
+    "const driver = require('pg');",
+    "const driver = require('node:" + "sqlite');",
+    'const provider = createPersistenceProviderFacade(adapter);',
+    'const statement = definePersistenceStatement({});',
+    'const selected = process.env.DB_PROVIDER;',
+    'const secret = process.env.DATABASE_URL;',
+  ]) assert.ok(check(file, source).length > 0, source);
+});
 test('UI and export states distinguish CI proof from local bytes and escape hostile metadata', () => {
   const hostile = '<img src=x onerror=alert(1)>';
   const markup = UI.evidenceMarkup({ status: 'package_bound', ci: { runId: hostile, attempt: hostile }, sourceCommit: hostile, sha256: hostile });
