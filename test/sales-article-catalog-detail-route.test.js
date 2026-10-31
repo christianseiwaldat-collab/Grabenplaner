@@ -597,6 +597,19 @@ test("Detailroute validiert exakt und antwortet für unbekannte Artikel mit 404"
   assert.equal(extra.response.status, 400, JSON.stringify(extra.payload));
   assert.equal(extra.payload?.code, "SALES_ARTICLE_DETAIL_INVALID");
 
+  for (const suffix of ['main','notes','all']) {
+    const result=await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}&section=${suffix}`);
+    assert.equal(result.response.status,200,result.text);
+    assert.match(result.response.headers.get('cache-control'),/private.*no-store/);
+    assert.equal(result.payload.article.articleNumber,ARTICLE_NUMBER);
+    for(const account of [WINDOW_ACCESS_ONLY,WINDOW_READ_WITHOUT_ACCESS])
+      assert.equal((await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}&section=${suffix}`,account)).response.status,403);
+  }
+  for (const suffix of ['invalid','main&section=notes','notes&section[extra]=all']) {
+    const result=await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}&section=${suffix}`);
+    assert.equal(result.response.status,400,result.text);assert.equal(result.payload.code,'SALES_ARTICLE_DETAIL_INVALID');
+  }
+
   const missing = await requestJson("/api/sales/articles/detail?articleNumber=NICHT-VORHANDEN");
   assert.equal(missing.response.status, 404, JSON.stringify(missing.payload));
   assert.equal(missing.payload?.code, "SALES_ARTICLE_NOT_FOUND");

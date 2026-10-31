@@ -7,7 +7,7 @@ const { normalizeAsciiNoCaseComparisons } = require("../../lib/persistence/postg
 const layout = require("../../lib/persistence/postgresql/sales/layout");
 const inventory = require("../../lib/persistence/postgresql/contracts/block-1-inventory.json");
 const sales = new Set(inventory.tables.filter(t => t.database === "sales").map(t => t.name));
-for (const name of ["import_history_snapshots", "import_history_snapshot_members"]) sales.add(name);
+for (const name of ["import_history_snapshots", "import_history_snapshot_members", "import_history_snapshot_attestations"]) sales.add(name);
 const core = new Set(inventory.tables.filter(t => t.database === "core").map(t => t.name));
 
 function translate(sql, values = [], { postgresqlDomain } = {}) {

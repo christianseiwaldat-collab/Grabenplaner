@@ -13,6 +13,7 @@ const technical = Object.freeze({
     "gp.environment_contract", "gp.sales_migration_history", "gp.migration_fixture_owner",
     "gp.import_delete_migration_history", "gp.import_delete_performance_history",
     "gp.import_history_snapshots_migration_history",
+    "gp.import_history_attestations_migration_history",
   ]),
 });
 

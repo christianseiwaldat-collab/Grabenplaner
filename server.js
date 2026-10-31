@@ -39250,7 +39250,7 @@ app.get("/api/sales/articles/detail", async (request, response) => {
   );
   setSalesArticleCatalogPrivateHeaders(response);
   try {
-    const allowedQueryKeys = new Set(["articleNumber"]);
+    const allowedQueryKeys = new Set(["articleNumber", "section"]);
     if (Object.keys(request.query || {}).some((key) => !allowedQueryKeys.has(key))) {
       throw new SalesArticleCatalogError(
         "Die Detailparameter enthalten unbekannte Felder.",
@@ -39258,6 +39258,10 @@ app.get("/api/sales/articles/detail", async (request, response) => {
       );
     }
     const articleNumber = normalizeSalesArticleNumber(request.query?.articleNumber);
+    const section = request.query?.section === undefined ? 'all' : request.query.section;
+    if (!['all','main','notes'].includes(section)) {
+      throw new SalesArticleCatalogError('Der Detailbereich ist ungültig.', 'SALES_ARTICLE_DETAIL_INVALID');
+    }
     const article = await salesArticleCatalogRepository.getByArticleNumber(articleNumber);
     if (!article) {
       throw httpError(404, "Der Artikel wurde nicht gefunden.", "SALES_ARTICLE_NOT_FOUND");
@@ -39265,7 +39269,7 @@ app.get("/api/sales/articles/detail", async (request, response) => {
     const revisions = await salesArticleCatalogRepository.listRevisions(article.productId);
     const projection = salesArticleCatalogProjectionForSession(session);
     const result = await projectSalesArticleDetail(article, revisions, projection);
-    Object.assign(result.article, await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({ access: persistenceProvider, vault: integrationSecretVault, article, projection, session }));
+    Object.assign(result.article, await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({ access: persistenceProvider, vault: integrationSecretVault, article, projection, session, section }));
     await assertFreshSalesArticleRead(request, session, projection);
     response.json(result);
   } catch (error) {

@@ -33278,6 +33278,7 @@ function applySalesArticleDetailTabs() {
     const panel = document.getElementById(id); if (panel) { panel.hidden = !selected; panel.setAttribute('role','tabpanel'); panel.setAttribute('aria-labelledby',a.id); if (panel.tagName === 'DETAILS' && selected) panel.open = true; }
   });
   state.salesArticleCatalog.tools?.activate(active);
+  if (active === 'salesArticleNotesSection') void state.salesArticleCatalog.deferredNotes?.activate();
   if (active === 'salesArticleOrdersSection') void state.salesArticleCatalog.orders?.activate(); else state.salesArticleCatalog.orders?.suspend();
   if (active === 'salesArticlePriceLabelsSection') void state.salesArticleCatalog.priceLabels?.activate();
   else state.salesArticleCatalog.priceLabels?.suspend();
@@ -34775,6 +34776,7 @@ function renderSalesArticleCatalogDetail() {
   const catalog = state.salesArticleCatalog;
   catalog.stockPanel?.destroy(); catalog.stockPanel=null;
   catalog.orders?.destroy(); catalog.orders=null;
+  catalog.deferredNotes?.destroy(); catalog.deferredNotes=null;
   catalog.tools?.destroy(); catalog.tools=null;
   catalog.priceLabels?.destroy(); catalog.priceLabels=null;
   document.getElementById("salesArticlePdfButton")?.classList.add("hidden");
@@ -34877,6 +34879,22 @@ function renderSalesArticleCatalogDetail() {
     });
   }
   layout.mountDescriptions(elements.salesArticleDetailBody);
+  if (article.notes?.deferred) {
+    const notesSection = document.getElementById('salesArticleNotesSection');
+    const accessKey = currentSalesArticleCatalogDetailAccessKey();
+    notesSection.textContent = 'Bemerkungen werden beim Öffnen geladen.';
+    catalog.deferredNotes = window.SalesArticleDeferredNotes.create({api, articleNumber:article.articleNumber,
+      current:() => canReadSalesArticles() && currentSalesArticleCatalogDetailAccessKey()===accessKey
+        && catalog.detail?.article===article && state.currentView==='articleCatalog',
+      onData:notes => {article.notes=notes;notesSection.innerHTML=layout.notes(notes,formats);},
+      onError:error => {
+        if ([401,403].includes(error.status)) {applySalesArticleCatalogReadState(false);return;}
+        notesSection.textContent='Bemerkungen konnten nicht geladen werden. ';
+        const retry=document.createElement('button');retry.type='button';retry.textContent='Erneut laden';
+        retry.addEventListener('click',()=>{void catalog.deferredNotes?.activate();});notesSection.append(retry);
+      },
+    });
+  }
   window.SalesArticlePriceControls.mount(elements.salesArticleDetailBody, article.priceMatrix, formats, {
     preferenceKey: 'gp.article-price-columns.v1.' + currentSalesArticleCatalogActorKey(),
   });
@@ -34921,7 +34939,7 @@ async function loadSalesArticleCatalogDetail(articleNumber, { moveFocus = false,
   renderSalesArticleCatalogRows();
   renderSalesArticleCatalogDetail();
   try {
-    const parameters = new URLSearchParams({ articleNumber: normalizedArticleNumber });
+    const parameters = new URLSearchParams({ articleNumber: normalizedArticleNumber, section: 'main' });
     const payload = await api(`/api/sales/articles/detail?${parameters}`);
     if (actorKey!==currentSalesArticleCatalogDetailAccessKey() || !canReadSalesArticles() || requestId !== catalog.detailRequestId
       || normalizedArticleNumber !== catalog.selectedArticleNumber) return;
