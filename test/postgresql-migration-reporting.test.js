@@ -59,6 +59,8 @@ test('Live Block 8 real PostgreSQL worker produces a PDF, preserves cash margin 
     const q=workspace.reports.normalize(reportQuery),metadata=await workspace.reports.metadata();let step;
     do{step=await workspace.reports.step(q,metadata,step?.analysis.cursor);}while(!step.analysis.complete);model=step.report;
   });
+  // Each fresh shard prepares its own report directory independently.
+  fs.mkdirSync('tmp',{recursive:true,mode:0o700});
   fs.writeFileSync('tmp/postgresql-block8-model.json',JSON.stringify(model,null,2)+'\n');
   assert.equal(model.rows.length,1);assert.equal(model.rows[0].metrics.grossRevenue.current,'159.08');
   assert.equal(model.rows[0].metrics.grossMargin.current,'36.28');

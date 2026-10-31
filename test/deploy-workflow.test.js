@@ -8,6 +8,7 @@ const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const { openSqliteLegacyDatabase: DatabaseSync } = require("../lib/persistence/sqlite/provider");
 const policy = require("../server-tools/linux/lib/deploy-policy");
+const { legacyRequire } = require("../test-support/legacy-baseline");
 const deferred = require("../server-tools/linux/lib/deferred-backups");
 const { inspectBackupMetadata } = require("../server-tools/linux/lib/backup-metadata");
 const { sha256File } = require("../lib/file-integrity");
@@ -25,13 +26,13 @@ function temporary(t) {
 }
 function evidence() {
   const verifiedAt = "2026-09-11T02:00:00.000Z", runId = crypto.randomUUID(), fingerprint = hash("contract");
-  const proof = { format: policy.FORMAT, schemaVersion: 1, contractSha256: fingerprint,
-    databasePath: "/synthetic/dienstplan.db", schemaSha256: hash("schema"), configurationSha256: hash("configuration"),
+  const proof = { format: policy.FORMAT, schemaVersion: 2, providerId: "postgresql-pair", contractSha256: fingerprint,
+    databaseIdentitySha256: hash("synthetic paired databases"), schemaSha256: hash("schema"), configurationSha256: hash("configuration"),
     verifiedAt, runId, sequence: 7, eventHash: hash("event"), receiptSha256: hash("receipt") };
   const event = { sequence: 7, eventHash: proof.eventHash, payload: { eventType: "full-assurance-passed", runId,
     occurredAt: verifiedAt, evidence: { receiptSha256: proof.receiptSha256 } } };
   return { installed: { fingerprint }, candidate: { fingerprint }, proof,
-    history: { ok: true, events: [event] }, identity: { databasePath: proof.databasePath, schemaSha256: proof.schemaSha256 },
+    history: { ok: true, events: [event] }, identity: { providerId: "postgresql-pair", databaseIdentitySha256: proof.databaseIdentitySha256, schemaSha256: proof.schemaSha256 },
     configurationSha256: proof.configurationSha256, now: Date.parse(verifiedAt) + 3600000, timerActive: true };
 }
 
@@ -50,7 +51,7 @@ test("missing, stale, changed or failed recovery evidence falls back to the full
   const cases = {
     "schema migration": value => { value.identity.schemaSha256 = hash("new schema"); },
     "recovery code": value => { value.candidate.fingerprint = hash("new code"); },
-    "other database": value => { value.identity.databasePath = "/other/database.db"; },
+    "other database pair": value => { value.identity.databaseIdentitySha256 = hash("other database pair"); },
     "configuration": value => { value.configurationSha256 = hash("other configuration"); },
     "missing proof": value => { value.proof = null; },
     "future proof": value => { value.now = Date.parse(value.proof.verifiedAt) - 1; },
@@ -88,15 +89,24 @@ test("actual package contracts distinguish interface updates from schema, depend
   fs.writeFileSync(path.join(candidate, "server.js"), "tampered server");
   assert.throws(() => policy.applicationContract(candidate), /DEPLOY_CONTRACT_CHANGED/);
 });
-test("source binding survives ordinary data writes but changes when a migration changes the schema", t => {
+test("legacy baseline: source binding survives ordinary data writes but changes when a migration changes the schema", t => {
+  const historicalPolicy = legacyRequire("server-tools/linux/lib/deploy-policy.js");
   const file = path.join(temporary(t), "live.db"), db = new DatabaseSync(file);
   db.exec("CREATE TABLE schema_migrations(id TEXT PRIMARY KEY); CREATE TABLE sales(amount INTEGER); INSERT INTO schema_migrations VALUES('base')");
-  const before = policy.databaseIdentity(file);
+  const before = historicalPolicy.databaseIdentity(file);
   db.exec("INSERT INTO sales VALUES(100)");
-  assert.deepEqual(policy.databaseIdentity(file), before);
+  assert.deepEqual(historicalPolicy.databaseIdentity(file), before);
   db.exec("ALTER TABLE sales ADD COLUMN note TEXT");
-  assert.notEqual(policy.databaseIdentity(file).schemaSha256, before.schemaSha256);
+  assert.notEqual(historicalPolicy.databaseIdentity(file).schemaSha256, before.schemaSha256);
   db.close();
+});
+
+test("current deploy policy rejects historical SQLite identities without changing backup bytes", t => {
+  const file = path.join(temporary(t), "retained.db"), bytes = Buffer.from("SQLite format 3\0retained backup");
+  fs.writeFileSync(file, bytes);
+  assert.throws(() => policy.databaseIdentity(file), /DEPLOY_SQLITE_RETIRED/);
+  assert.deepEqual(fs.readFileSync(file), bytes);
+  assert.equal(policy.sameDatabaseIdentity({ schemaVersion: 1, providerId: "sqlite" }, { providerId: "sqlite" }), false);
 });
 
 function pair(directory, day = 11) {

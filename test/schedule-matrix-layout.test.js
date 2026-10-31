@@ -98,3 +98,28 @@ test("Absatzgrenzen bleiben auch beim Wechsel der Spalte erhalten", () => {
   });
   assert.deepEqual(pages[0], [["A1", "A2", ""], ["B1", "B2"]]);
 });
+
+function firstPageNoteBudget(note) {
+  const fs = require("node:fs"), vm = require("node:vm"), PDFDocument = require("pdfkit");
+  const source = fs.readFileSync(require.resolve("../server"), "utf8");
+  const name = "scheduleMatrixFirstPageRowsHeight", start = source.indexOf(`function ${name}(`);
+  const context = vm.createContext({ scheduleNoteRichText: require("../lib/schedule-note-rich-text") });
+  assert.ok(start >= 0);
+  vm.runInContext(source.slice(start, source.indexOf("\n}", start) + 2), context);
+  const doc = new PDFDocument({ autoFirstPage: false });
+  try { return context[name](doc, note, 797.89, 367, 288, 64); }
+  finally { doc.end(); }
+}
+
+test("normale Matrixbemerkungen erhalten Platz vor optionaler Zeilenstreckung und behalten ihre Punktgröße", () => {
+  const { syntheticSchedule } = require("../test-support/render-schedule-matrix-preview");
+  const ordinary = syntheticSchedule().scheduleNote;
+  assert.equal(firstPageNoteBudget({ note_text: "Kurze Bemerkung" }), 367);
+  const available = firstPageNoteBudget(ordinary);
+  assert.ok(Math.abs(available - 288.2) < .001, "The complete 603-character note fits without reducing any 48pt row minimum");
+  assert.ok(available >= 288 && available < 348, "Only optional row expansion is reclaimed");
+});
+
+test("große Matrixbemerkungen erhalten keine verkleinerten Mitarbeiterzeilen oder Schriftgrößen", () => {
+  assert.equal(firstPageNoteBudget({ note_text: "GROSS", note_html: '<b data-size="72">GROSS</b><br>'.repeat(8) }), 288);
+});

@@ -1,4 +1,5 @@
 "use strict";
+const { installSalesOutboxFailure } = require("../test-support/postgresql-api/trigger-fixture");
 const { sessionCsrf, sessionCsrfFromCookie } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -251,7 +252,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -596,6 +597,19 @@ test("Detailroute validiert exakt und antwortet für unbekannte Artikel mit 404"
   assert.equal(extra.response.status, 400, JSON.stringify(extra.payload));
   assert.equal(extra.payload?.code, "SALES_ARTICLE_DETAIL_INVALID");
 
+  for (const suffix of ['main','notes','all']) {
+    const result=await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}&section=${suffix}`);
+    assert.equal(result.response.status,200,result.text);
+    assert.match(result.response.headers.get('cache-control'),/private.*no-store/);
+    assert.equal(result.payload.article.articleNumber,ARTICLE_NUMBER);
+    for(const account of [WINDOW_ACCESS_ONLY,WINDOW_READ_WITHOUT_ACCESS])
+      assert.equal((await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}&section=${suffix}`,account)).response.status,403);
+  }
+  for (const suffix of ['invalid','main&section=notes','notes&section[extra]=all']) {
+    const result=await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}&section=${suffix}`);
+    assert.equal(result.response.status,400,result.text);assert.equal(result.payload.code,'SALES_ARTICLE_DETAIL_INVALID');
+  }
+
   const missing = await requestJson("/api/sales/articles/detail?articleNumber=NICHT-VORHANDEN");
   assert.equal(missing.response.status, 404, JSON.stringify(missing.payload));
   assert.equal(missing.payload?.code, "SALES_ARTICLE_NOT_FOUND");
@@ -655,25 +669,26 @@ test("Artikelmutationen sind CSRF-, Rechte-, Revisions-, Audit- und Undo-gesiche
     table,
     db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count,
   ]));
-  db.exec(`
-    CREATE TRIGGER test_article_receipt_failure
-    BEFORE INSERT ON personal_action_receipts
-    WHEN NEW.action_type = 'sales.article-catalog.create'
-    BEGIN
-      SELECT RAISE(ABORT, 'synthetic article receipt failure');
-    END
-  `);
-  const receiptFailed = await requestMutationJson("/api/sales/articles", {
-    method: "POST",
-    body: {
-      articleNumber: "A/ROLLBACK",
-      description: "Muss vollständig zurückgerollt werden",
-      identifiers: [],
-    },
+  const outboxBefore = db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_outbox")[0].count;
+  const deliveryBefore = db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_delivery")[0].count;
+  const removeReceiptFailure = installSalesOutboxFailure(db, {
+    name: "test_article_receipt_failure", receiptActionType: "sales.article-catalog.create",
   });
-  db.exec("DROP TRIGGER test_article_receipt_failure");
+  let receiptFailed;
+  try {
+    receiptFailed = await requestMutationJson("/api/sales/articles", {
+      method: "POST",
+      body: {
+        articleNumber: "A/ROLLBACK",
+        description: "Muss vollständig zurückgerollt werden",
+        identifiers: [],
+      },
+    });
+  } finally { removeReceiptFailure(); }
   assert.equal(receiptFailed.response.status, 400, receiptFailed.text);
   assert.equal(receiptFailed.payload.code, "SALES_ARTICLE_MUTATION_INVALID");
+  assert.equal(db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_outbox")[0].count, outboxBefore);
+  assert.equal(db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_delivery")[0].count, deliveryBefore);
   for (const [table, before] of Object.entries(rollbackCounts)) {
     assert.equal(
       db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count,

@@ -5,6 +5,7 @@ const I = require('../lib/sales-price-label-image-store'), T = require('../lib/s
 const { createAmuStorage, syncEncryptedFilesBackup, restoreEncryptedFilesBackup } = require('../lib/amu-storage');
 const { fixture: persistenceFixture } = require('../test-support/trade-insights-sqlite');
 const { registerSalesPriceLabelsRoutes } = require('../lib/sales-price-labels-routes');
+const { sourceRoot: legacySourceRoot } = require('../test-support/legacy-baseline');
 const rights = Object.values(require('../lib/sales-article-catalog-access').SALES_ARTICLE_CATALOG_PERMISSIONS);
 const box = assetId => ({ assetId, xMm: 2, yMm: 2, widthMm: 20, heightMm: 15 });
 const input = (assetId, extra = {}) => ({ title: 'Synthetic label', options: { imageBoxes: [box(assetId)] }, filenameOptions: {}, visibility: 'private', recipients: [], ...extra });
@@ -122,7 +123,7 @@ test('offline image verification rejects missing, duplicate, swapped and forged 
  await assert.rejects(f.images.verifyStoredImages(), { code: 'PRICE_LABEL_IMAGE_INTEGRITY' });
 });
 
-test('standalone backup verifies the exact snapshot image AAD before publishing complete and preserves prior good pairs', async t => {
+test('historical b2 standalone backup verifies the current image snapshot AAD and preserves prior good pairs', async t => {
  const f = await fixture(t); await f.images.create(await f.context(), await png());
  const databasePath = path.join(f.directory, 'snapshot.db'), backupDirectory = path.join(f.directory, 'snapshots');
  f.p.app.database.exec("VACUUM INTO '" + databasePath.replaceAll("'", "''") + "'");
@@ -131,7 +132,7 @@ test('standalone backup verifies the exact snapshot image AAD before publishing 
   GRABENPLANER_INTEGRATION_KEY_ID: 'synthetic', GRABENPLANER_INTEGRATION_KEY: Buffer.alloc(32, 42).toString('base64'), GRABENPLANER_INTEGRATION_KEYS: '' };
  const run = () => require('node:child_process').spawnSync(process.execPath, ['-e',
   "const db=require('./lib/persistence/sqlite/provider').openSqliteLegacyDatabase(process.env.DB_PATH);try{require('./backup').createPairedBackup(db,process.argv[1],Date.now().toString(),'synthetic')}catch(e){process.stderr.write(String(e.code||'failure'));process.exitCode=1}finally{db.close()}", backupDirectory],
-  { cwd: path.join(__dirname, '..'), env: environment, encoding: 'utf8', windowsHide: true });
+  { cwd: legacySourceRoot(), env: environment, encoding: 'utf8', windowsHide: true });
  assert.equal(run().status, 0);
  const good = fs.readdirSync(backupDirectory).filter(name => name.endsWith('.complete.json')); assert.equal(good.length, 1);
  const database = require('../lib/persistence/sqlite/provider').openSqliteLegacyDatabase(databasePath);
@@ -143,7 +144,7 @@ test('standalone backup verifies the exact snapshot image AAD before publishing 
  assert.deepEqual(fs.readdirSync(backupDirectory).filter(name => name.endsWith('.complete.json')), good, 'corruption never publishes a complete marker');
 });
 
-test('standalone desktop image backup reads existing private local keys without ENV secrets and never regenerates missing keys', async t => {
+test('historical b2 desktop image backup reads existing private keys and never regenerates missing keys', async t => {
  const f = await fixture(t, { storageKeyId: 'local-v1' }); await f.images.create(await f.context(), await png());
  const { createIntegrationSecretVault } = require('../lib/integration-secret-vault');
  const localVault = createIntegrationSecretVault({ activeKeyId: 'local-v1', keys: { 'local-v1': Buffer.alloc(32, 42) } });
@@ -158,7 +159,7 @@ test('standalone desktop image backup reads existing private local keys without 
  for (const key of Object.keys(environment)) if (/^GRABENPLANER_(?:AMU|INTEGRATION)_KEY/.test(key)) delete environment[key];
  const run = () => require('node:child_process').spawnSync(process.execPath, ['-e',
   "const db=require('./lib/persistence/sqlite/provider').openSqliteLegacyDatabase(process.env.DB_PATH);try{require('./backup').createPairedBackup(db,process.argv[1],Date.now().toString(),'synthetic')}catch(e){process.stderr.write(String(e.code||'failure'));process.exitCode=1}finally{db.close()}", backupDirectory],
-  { cwd: path.join(__dirname, '..'), env: environment, encoding: 'utf8', windowsHide: true });
+  { cwd: legacySourceRoot(), env: environment, encoding: 'utf8', windowsHide: true });
  const keyFile = path.join(f.directory, 'integration-local.key'), before = fs.readFileSync(keyFile);
  assert.equal(run().status, 0); assert.deepEqual(fs.readFileSync(keyFile), before);
  const good = fs.readdirSync(backupDirectory).filter(name => name.endsWith('.complete.json')); assert.equal(good.length, 1);

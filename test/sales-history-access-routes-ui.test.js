@@ -116,6 +116,16 @@ test('Block 5: UI escapes imported text, labels page sorting and separates raw p
   assert.doesNotMatch(html, /<script>|<img/); assert.match(html, /&lt;script&gt;/); assert.match(html, /Sortierung der angezeigten Seite/);
   assert.match(html, /Quellpreis \(ungeprüft\)/); assert.match(html, /Prüfung offen/); assert.doesNotMatch(html, /Positionsverkäufer/);
 });
+test('single-sale rows offer a complete receipt PDF only for an authenticated receipt identity', () => {
+  const row = { id: 'line-1', date: '2026-10-24', receipt: '90282', receiptId: 'opaque-parent-1', description: 'Synthetic article',
+    location: {}, articleReference: {}, issues: [], provenance: {} };
+  const markup = UI.renderTable([row], 'sales');
+  assert.match(markup, /<th scope="col">Beleg-PDF<\/th>/); assert.match(markup, /data-history-pdf="opaque-parent-1"/);
+  assert.match(markup, /aria-label="Vollständigen Beleg 90282 als PDF öffnen"/);
+  assert.doesNotMatch(UI.renderTable([{ ...row, receiptId: null }], 'sales'), /data-history-pdf=/);
+  assert.doesNotMatch(UI.renderTable([row], 'daily'), /data-history-pdf=|Beleg-PDF/);
+  assert.doesNotMatch(UI.renderTable([{ ...row, receiptId: '\" onclick=\"alert(1)', receipt: '<script>x<\/script>' }], 'sales'), /<script>|" onclick="/);
+});
 test('Block 5: UI reuses calendar/theme, limits direct date entry to CRM and clears outstanding reads when accounts change', () => {
   const ui = fs.readFileSync(path.join(__dirname, '../public/sales-history.js'), 'utf8'), app = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
   assert.match(ui, /GrabenplanerDateRangeCalendar\?\.createDateRangeCalendar/); assert.doesNotMatch(ui, /localStorage|sessionStorage|innerHTML\s*=\s*error/);

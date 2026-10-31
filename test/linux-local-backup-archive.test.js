@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { spawnSync } = require("node:child_process");
@@ -106,8 +107,8 @@ test("Linux archive launcher rejects unsafe identities and redacts failed child 
   }
 });
 
-test("Linux bulk snapshots use disk, archive mode never falls back to legacy pruning", () => {
-  const script = fs.readFileSync(path.join(root, "server-tools/linux/backup-grabenplaner.sh"), "utf8");
+test("immutable historical SQLite Linux bulk snapshots use disk and never fall back to legacy pruning", () => {
+  const script = fs.readFileSync(require('../test-support/legacy-baseline').legacyPath('server-tools/linux/backup-grabenplaner.sh'), "utf8");
   assert.match(script, /mktemp --directory --tmpdir="\$backup_dir" \.backup-stage/);
   assert.ok(script.indexOf('preflight-as "$service_user"') < script.indexOf('staging_directory="$(mktemp'));
   assert.doesNotMatch(script, /mktemp --directory --tmpdir="\$runtime_directory" backup-stage/);
@@ -151,9 +152,9 @@ test("Linux archive preflight validates external history before raw creation and
 });
 
 test("Linux archive adapter refuses missing Vault secrets and disabled existing history", t => {
-  const temporary = fs.mkdtempSync(path.join(root, "tmp", "linux-archive-adapter-test-"));
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "linux-archive-adapter-test-"));
   t.after(() => {
-    assert.equal(path.dirname(fs.realpathSync(temporary)), fs.realpathSync(path.join(root, "tmp")));
+    assert.equal(path.dirname(fs.realpathSync(temporary)), fs.realpathSync(os.tmpdir()));
     fs.rmSync(temporary, { recursive: true });
   });
   const archiveInput = { ...input, backupDirectory: temporary, environment: {
@@ -183,11 +184,11 @@ test("Linux archive CLI contract works with the real backend and preserves old r
   const { openLocalBackupArchiveFromEnvironment } = require("../lib/local-backup-environment");
   const { writeBackupCommitMarker } = require("../lib/backup-commit");
   const { sha256File } = require("../lib/file-integrity");
-  const directory = fs.mkdtempSync(path.join(root, "tmp", "linux-archive-core-test-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "linux-archive-core-test-"));
   const key = crypto.randomBytes(32);
   t.after(() => {
     key.fill(0);
-    assert.equal(path.dirname(fs.realpathSync(directory)), fs.realpathSync(path.join(root, "tmp")));
+    assert.equal(path.dirname(fs.realpathSync(directory)), fs.realpathSync(os.tmpdir()));
     fs.rmSync(directory, { recursive: true });
   });
   const environment = { GRABENPLANER_LOCAL_BACKUP_ARCHIVE: "1", GRABENPLANER_LOCAL_BACKUP_RESTIC: resticBinary,
@@ -235,4 +236,15 @@ test("Linux archive CLI contract works with the real backend and preserves old r
     pair.protectedDirectory, path.join(root, "lib/amu-storage.js"), pair.markerPath) });
   try { assert.equal(fs.readFileSync(restored.databasePath, "utf8"), "synthetic-backup-payload-second"); }
   finally { restored.cleanup(); }
+});
+
+test("current Linux backup entrypoint requires PostgreSQL and refuses unsupported SQLite archive switches before work", () => {
+  const source = fs.readFileSync(path.join(root, "server-tools/linux/backup-grabenplaner.sh"), "utf8");
+  const gate = source.indexOf('[[ "${DB_PROVIDER:-}" == postgresql ]]');
+  const launch = source.indexOf('\ngp_postgresql_backup');
+  assert.ok(gate >= 0 && launch > gate);
+  const retiredOptions = source.indexOf('(( defer_archive == 0 ))');
+  assert.ok(retiredOptions > gate && retiredOptions < launch);
+  assert.doesNotMatch(source, /VACUUM INTO|sqliteMaintenanceOperations|\.backup-stage|snapshot_committed=1/);
+  assert.match(source, /Offline-Wiederherstellungskapsel/);
 });

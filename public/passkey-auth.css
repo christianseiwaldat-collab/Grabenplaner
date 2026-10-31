@@ -1,0 +1,8 @@
+/* Keep passkey availability and password alternatives hidden even when the
+   surrounding product button/field styles declare their own display mode. */
+[data-gp-passkey-login][hidden],
+[data-gp-passkey-choice][hidden],
+[data-gp-passkey-password-field][hidden],
+#branchAccountPasskeysLink[hidden] {
+  display: none !important;
+}

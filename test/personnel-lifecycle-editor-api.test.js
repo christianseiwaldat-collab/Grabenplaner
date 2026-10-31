@@ -1,4 +1,5 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -244,9 +245,7 @@ function assertClosedGates(value) {
 }
 
 function protectedCounts() {
-  const existing = new Set(db.prepare(`
-    SELECT name FROM sqlite_master WHERE type = 'table'
-  `).all().map(({ name }) => name));
+  const existing = new Set(pgSchema.tableNames(db).map(({ name }) => name));
   const tables = [
     "custom_processes",
     "custom_process_steps",
@@ -278,7 +277,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

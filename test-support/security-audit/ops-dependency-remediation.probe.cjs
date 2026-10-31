@@ -14,13 +14,27 @@ function requireFrom(...packages) {
   for (const name of packages) parent = createRequire(parent.resolve(name));
   return parent;
 }
-const minimatch3 = requireFrom('exceljs', 'archiver', 'archiver-utils', 'glob');
-const minimatch5 = requireFrom('exceljs', 'archiver', 'readdir-glob');
-const braceParent = createRequire(minimatch3.resolve('minimatch'));
+const globParent = requireFrom('exceljs', 'archiver', 'archiver-utils', 'glob');
+const readdirParent = requireFrom('exceljs', 'archiver', 'readdir-glob');
+const braceParent = createRequire(globParent.resolve('minimatch'));
 const expressParent = requireFrom('express');
 const transitives = name => (name === 'brace-expansion' ? braceParent : expressParent)(name);
 const worker = process.argv[2];
-if (worker === 'brace-nesting' || worker === 'brace-comma' || worker === 'brace-rewrite') {
+if (worker === 'minimatch-optimization') {
+  for (const parent of [globParent, readdirParent]) {
+    const {Minimatch} = parent('minimatch');
+    const pattern = 'a/' + '**/../b/c/'.repeat(24) + 'z';
+    const matcher = new Minimatch(pattern, {optimizationLevel:2, braceExpandMax:32});
+    assert.ok(matcher.set.length > 0 && matcher.set.length <= 32);
+    assert.equal(matcher.match('unrelated.txt'), false);
+    assert.throws(() => new Minimatch('x'.repeat(65537)), /too long/i);
+    const large = new Minimatch('{1..1100}/**/file.txt', {optimizationLevel:2});
+    assert.equal(large.set.length, 1100);
+    assert.equal(large.match('1100/sub/file.txt'), true);
+    assert.equal(large.match('1101/sub/file.txt'), false);
+  }
+  process.stdout.write('completed');
+} else if (worker === 'brace-nesting' || worker === 'brace-comma' || worker === 'brace-rewrite') {
   const expand = transitives('brace-expansion');
   const input = worker === 'brace-nesting' ? '{'.repeat(4000) + 'a,b' + '}'.repeat(4000)
     : worker === 'brace-comma' ? '{' + '{a},'.repeat(8000) + 'b}'
@@ -47,11 +61,11 @@ if (worker === 'brace-nesting' || worker === 'brace-comma' || worker === 'brace-
     assert.deepEqual(expand('file-{a,b}-{1..2}.txt'), ['file-a-1.txt','file-a-2.txt','file-b-1.txt','file-b-2.txt']);
     assert.equal(expand('{a,b,c}', {max:2}).length, 2);
   });
-  test('both installed minimatch 3 and 5 consume the patched brace API correctly', () => {
-    for(const [parent, major] of [[minimatch3, '3'], [minimatch5, '5']]){
-      assert.equal(parent('minimatch/package.json').version.split('.')[0], major);
+  test('both ExcelJS matcher consumers use the fixed modern API', () => {
+    for(const parent of [globParent, readdirParent]){
+      assert.equal(parent('minimatch/package.json').version, '11.0.3');
       const mm=parent('minimatch');
-      assert.equal(mm('report-2.xlsx','report-{1,2}.xlsx'),true); assert.equal(mm('report-3.xlsx','report-{1,2}.xlsx'),false);
+      assert.equal(mm.minimatch('report-2.xlsx','report-{1,2}.xlsx'),true); assert.equal(mm.minimatch('report-3.xlsx','report-{1,2}.xlsx'),false);
       assert.deepEqual(mm.braceExpand('{a,b}/file-{1..2}'),['a/file-1','a/file-2','b/file-1','b/file-2']);}
   });
   test('ExcelJS XLSX write/read roundtrip works with transitive patch', async () => {
@@ -60,7 +74,7 @@ if (worker === 'brace-nesting' || worker === 'brace-comma' || worker === 'brace-
     const bytes=await book.xlsx.writeBuffer(), read=new ExcelJS.Workbook(); await read.xlsx.load(bytes);
     assert.equal(read.getWorksheet('Prüfung').getCell('B1').value,42);
   });
-  for(const name of ['brace-nesting','brace-comma','brace-rewrite']) test(`bounded upstream advisory regression: ${name}`,()=>boundedWorker(name));
+  for(const name of ['brace-nesting','brace-comma','brace-rewrite','minimatch-optimization']) test(`bounded upstream advisory regression: ${name}`,()=>boundedWorker(name));
   test('qs rejects bracket/comma expansion above explicit array limit', () => {
     assert.throws(()=>transitives('qs').parse('a[]=1,2,3,4',{comma:true,arrayLimit:3,throwOnLimitExceeded:true}),RangeError);
   });

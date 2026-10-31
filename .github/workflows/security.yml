@@ -52,7 +52,7 @@ jobs:
       - name: Fail-closed security gate contract tests
         run: python -m unittest discover -s scripts/security -p 'test_*.py' -v
       - name: Exact compatibility-patch negative tests
-        run: node --test test/security-ci-patch-policy.test.js test/security-evidence-seal.test.js
+        run: node --test test/security-ci-patch-policy.test.js test/security-ci-msal-patch-policy.test.js test/security-evidence-seal.test.js
       - name: Run sca gate
         run: python scripts/security/gates.py sca --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
       - name: Prepare sanitized public metadata
@@ -88,8 +88,14 @@ jobs:
         run: python scripts/security/prepare_upload.py --uploaded-receipt
 
   security-sast:
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Reuse requires an externally reviewed exact-input compiler pin; otherwise
+    # build cold. Current qualification and all five full profiles always run.
+    # Scanner rule/wall limits and incomplete-analysis failures stay unchanged.
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -100,15 +106,38 @@ jobs:
           python-version: '3.12.14'
       - name: Install hash-locked Semgrep and immutable upstream rules
         run: |
-          python -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r scripts/security/requirements.txt
-          python scripts/security/install_tools.py --tool rules --directory "$RUNNER_TEMP/security-tools"
+          python -m venv "$RUNNER_TEMP/semgrep-source-venv"
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r scripts/security/requirements.txt
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" scripts/security/install_tools.py --tool rules --directory "$RUNNER_TEMP/security-tools"
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" scripts/security/install_tools.py --tool syft --directory "$RUNNER_TEMP/security-tools"
+          echo "$RUNNER_TEMP/semgrep-source-venv/bin" >> "$GITHUB_PATH"
       - name: Fail-closed security gate contract tests
         run: python -m unittest discover -s scripts/security -p 'test_*.py' -v
+      - name: Check private SAST context evidence contracts
+        run: node --test test/security-sast-context-evidence.test.js test/security-sast-reviews.test.js
+      - name: Acquire the reviewed compiler or build cold, then qualify current whole files
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python scripts/security/build_semgrep_source.py --root .
+          --tools "$RUNNER_TEMP/security-tools" --work "$RUNNER_TEMP/security-source-core-work"
+          --output "$RUNNER_TEMP/security-source-core-qualification"
+      - name: Bind raw qualification and actual private core before the full scan
+        if: always()
+        run: >-
+          python scripts/security/prepare_source_core.py --root .
+          --qualification "$RUNNER_TEMP/security-source-core-qualification"
+          --output "$RUNNER_TEMP/security-results"
       - name: Run sast gate
         run: python scripts/security/gates.py sast --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
       - name: Verify response rule with actual route and unsafe controls
         if: success() || failure()
         run: python scripts/security/check_payroll_response.py --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
+      - name: Bind private review contexts to the successful current SAST gate
+        run: >-
+          node scripts/security/sast-context-evidence.cjs capture --root .
+          --gate "$RUNNER_TEMP/security-results/gate-result.json"
+          --output "$RUNNER_TEMP/security-results/sast-context-evidence.json"
       - name: Prepare sanitized public metadata
         if: always()
         run: python scripts/security/publish_artifacts.py --gate sast --input "$RUNNER_TEMP/security-results" --output "$RUNNER_TEMP/security-public"

@@ -247,6 +247,7 @@ test("v0.87 SQLite-Provider: Application-Repositories akzeptieren nur echte Prov
         "loanModule",
         "mobileAuth",
         "organizationPersonnel",
+        "passkeys",
         "personalActionLog",
         "personalNotificationContacts",
         "personnelLearning",
@@ -268,6 +269,7 @@ test("v0.87 SQLite-Provider: Application-Repositories akzeptieren nur echte Prov
       ],
     );
     assert.equal(Object.isFrozen(fixture.repositories.uiPreferences), true);
+    assert.equal(Object.isFrozen(fixture.repositories.passkeys), true);
 
     assert.deepEqual(
       await fixture.repositories.uiPreferences.saveChanges("E1", {
@@ -294,6 +296,7 @@ test("v0.87 SQLite-Provider: Application-Repositories akzeptieren nur echte Prov
           "loanModule",
           "mobileAuth",
           "organizationPersonnel",
+          "passkeys",
           "personalActionLog",
           "personalNotificationContacts",
           "personnelLearning",
@@ -826,7 +829,9 @@ test("v0.87 SQLite-Provider: Katalogparameter und read-only Legacy-Öffnung sche
   assert.throws(() => readOnly.prepare("INSERT INTO values_table VALUES ('no')").run());
 });
 
-test("v0.87 SQLite-Provider: Server-Testabschluss schließt Provider vor Datei und Lock", (context) => {
+test("historischer v0.87 SQLite-Provider: Server-Testabschluss schließt Provider vor Datei und Lock", (context) => {
+  const { legacyPath, linkFrozenDependencies } = require("../test-support/legacy-baseline");
+  linkFrozenDependencies();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-sqlite-lifecycle-"));
   context.after(() => fs.rmSync(directory, {
     recursive: true,
@@ -838,7 +843,7 @@ test("v0.87 SQLite-Provider: Server-Testabschluss schließt Provider vor Datei u
   const script = `
     (async () => {
       const fs = require("node:fs");
-      const { closePersistenceForTests } = require("./server");
+      const { closePersistenceForTests } = require(${JSON.stringify(legacyPath("server.js"))});
       await closePersistenceForTests();
       fs.rmSync(process.env.GRABENPLANER_DATA_DIR, {
         recursive: true,
@@ -856,6 +861,8 @@ test("v0.87 SQLite-Provider: Server-Testabschluss schließt Provider vor Datei u
     encoding: "utf8",
     env: {
       ...process.env,
+      DB_PROVIDER: "sqlite",
+      NODE_OPTIONS: "",
       BACKUP_DIR: path.join(directory, "backups"),
       DB_PATH: databasePath,
       GRABENPLANER_DATA_DIR: directory,

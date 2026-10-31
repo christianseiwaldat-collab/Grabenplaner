@@ -298,6 +298,7 @@ const state = {
   loanOverviewColumnsLocationId: "",
   loanOverviewColumnsRequestId: 0,
   branchAccountPasswordTargets: [],
+  branchAccountPasswordAuthorityKey: "",
   branchAccountPasswordLoading: false,
   loanSettings: null,
   loanSettingsLoading: false,
@@ -817,6 +818,7 @@ const schedulePdfSettingsWritePermission = "schedule:pdf:settings:write";
 const elements = Object.fromEntries(
   [
     "staffAssignmentRequestDeadline",
+    "branchAccountPasskeysLink",
     "costCenterActiveCount", "costCenterInactiveCount", "costCenterTypeCount", "costCenterFilterForm", "costCenterSearch", "costCenterFilterType", "costCenterFilterStatus", "costCenterFilterReset", "costCenterResultCount",
     "optionDateRangeButton", "optionDateRangeText", "optionDateRangeDialog", "optionDateRangeForm", "optionDateRangeGrid", "optionDateRangeMonthLabel", "optionDateRangeStartText", "optionDateRangeEndText",
     "optionDateRangePreviousMonth", "optionDateRangeNextMonth", "optionDateRangeOpenEnd", "optionDateRangeApply", "optionDateRangeClose", "optionDateRangeCancel",
@@ -827,7 +829,7 @@ const elements = Object.fromEntries(
     "crmView", "crmNavButton", "crmDashboardCard", "salesAnalyticsDashboardCard", "salesArticleCatalogDashboardCard", "salesArticleLastImport", "salesArticleLastImportValue", "salesArticleSearchForm", "salesArticleSearchQuery", "salesArticleSearchReset", "salesArticleSearchSubmit", "salesArticleAdvancedSearch", "salesArticleSearchOrderNumber", "salesArticleSearchStatusFilter", "salesArticleSearchStatus", "salesArticleResults", "salesArticleResultCount", "salesArticleResultRange", "salesArticleResultsToggle", "salesArticleResultsBody", "salesArticleTableScroll", "salesArticleTable", "salesArticleTableHead", "salesArticleTableBody", "salesArticleLoadStatus", "salesArticleDetail", "salesArticleDetailTitle", "salesArticleDetailSubtitle", "salesArticleDetailMeta", "salesArticleDetailNavigation", "salesArticleDetailActions", "salesArticleDetailBody", "salesArticleDetailStatus", "salesArticleActionsLogButton", "salesArticleCreateButton", "salesArticleEditButton", "salesArticleCopyButton", "salesArticleArchiveButton", "salesArticleImportButton", "salesArticleImportDialog", "salesArticleImportForm", "salesArticleImportFile", "salesArticleImportFileName", "salesArticleImportDatabasePasswordField", "salesArticleImportDatabasePassword", "salesArticleImportPreviewButton", "salesArticleImportMessage", "salesArticleImportPreview", "salesArticleImportPreviewMeta", "salesArticleImportSummary", "salesArticleImportValidCount", "salesArticleImportUnchangedCount", "salesArticleImportConflictCount", "salesArticleImportRejectedCount", "salesArticleImportBreakdown", "salesArticleImportIssuesCount", "salesArticleImportIssues", "salesArticleImportConfirmed", "salesArticleImportReset", "salesArticleImportCancel", "salesArticleImportApplyButton", "salesArticleEditorDialog", "salesArticleEditorForm", "salesArticleEditorTitle", "salesArticleEditorDescription", "salesArticleEditorExpectedRevision", "salesArticleEditorArticleNumber", "salesArticleEditorDescriptionField", "salesArticleIdentifierAdd", "salesArticleIdentifierRows", "salesArticleSalesPricesEditor", "salesArticleSalesPriceFields", "salesArticleCostPricesEditor", "salesArticleCostPriceFields", "salesArticleEditorMessage", "salesArticleEditorSubmit", "salesArticleArchiveDialog", "salesArticleArchiveForm", "salesArticleArchiveTitle", "salesArticleArchiveDescription", "salesArticleArchiveTarget", "salesArticleArchiveConfirmation", "salesArticleArchiveMessage", "salesArticleArchiveSubmit", "crmColumnsButton", "crmCreateButton", "crmDirectoryWorkspace", "crmSearchForm", "crmSearchQuery", "crmSearchCustomerType", "crmSearchReset", "crmSearchSubmit", "crmSearchStatus", "crmResults", "crmResultCount", "crmResultRange", "crmTable", "crmTableHead", "crmTableBody", "crmPreviousPage", "crmNextPage", "crmPageStatus", "crmCustomerWorkspace", "crmCustomerBackButton", "crmCustomerShell", "crmCustomerDetail", "crmColumnsDialog", "crmColumnsForm", "crmColumnOptions", "crmColumnsMessage", "crmColumnsReset", "crmColumnsSave",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "functionSearch", "functionSearchInput", "functionSearchClear", "functionSearchPopover", "functionSearchStatus", "functionSearchResults", "schedulePdfExport", "pdfButton", "schedulePdfDesignMenu", "timeline", "weekLockNotice", "manualScheduleLockControl", "manualScheduleLockToggle", "manualScheduleLockStatus", "manualScheduleLockDetail", "manualScheduleLockAction", "crossLocationScheduleButton", "crossLocationSchedulePanel", "crossLocationScheduleTitle", "crossLocationScheduleMode", "crossLocationScheduleLocation", "crossLocationScheduleWeeks", "crossLocationScheduleStatus", "crossLocationScheduleGrid", "staffAssignmentRequestDialog", "staffAssignmentRequestForm", "staffAssignmentRequestTitle", "staffAssignmentRequestClose", "staffAssignmentRequestCancel", "staffAssignmentRequestSubmit", "staffAssignmentRequestSourceLocationId", "staffAssignmentRequestSourceLocationName", "staffAssignmentRequestDestinationLocationId", "staffAssignmentRequestDestinationLocationName", "staffAssignmentRequestDepartment", "staffAssignmentRequestPreferredEmployee", "staffAssignmentRequestDateFrom", "staffAssignmentRequestDateTo", "staffAssignmentRequestDateRangeButton", "staffAssignmentRequestDateRangeText", "staffAssignmentRequestTimes", "staffAssignmentRequestStartTime", "staffAssignmentRequestEndTime", "staffAssignmentRequestReason", "staffAssignmentRequestMessage", "staffAssignmentRequestReviewButton", "staffAssignmentRequestReviewDialog", "staffAssignmentRequestReviewTitle", "staffAssignmentRequestReviewClose", "staffAssignmentRequestReviewCancel", "staffAssignmentRequestReviewRefresh", "staffAssignmentRequestReviewStatus", "staffAssignmentRequestReviewList", "staffAssignmentRequestDateRangeDialog", "staffAssignmentRequestDateRangeForm", "staffAssignmentRequestDateRangeStartText", "staffAssignmentRequestDateRangeEndText", "staffAssignmentRequestDateRangePreviousMonth", "staffAssignmentRequestDateRangeMonthLabel", "staffAssignmentRequestDateRangeNextMonth", "staffAssignmentRequestDateRangeGrid", "staffAssignmentRequestDateRangeOpenEnd", "staffAssignmentRequestDateRangeClose", "staffAssignmentRequestDateRangeCancel", "staffAssignmentRequestDateRangeApply",
     "remarks", "hoursOverview", "xoffiImportButton", "xoffiImportDialog", "xoffiImportForm", "xoffiImportClose", "xoffiImportCancel", "xoffiImportFile", "xoffiInspectButton", "xoffiImportStatus", "xoffiImportPreview", "xoffiImportConfirmation", "xoffiScreenshotWeekConfirmation", "xoffiScreenshotWeekConfirmationText", "xoffiScreenshotWeekConfirmationLabel", "xoffiScreenshotWeekConfirmed", "xoffiUseAsActual", "xoffiImportConfirmed", "xoffiApplyButton", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "branchSupervisionAssessmentPanel", "branchSupervisionAssessmentSummary", "branchSupervisionModeBadge", "branchSupervisionAssessmentCounts", "branchSupervisionAssessmentBody", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "scheduleSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
-    "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton", "schedulePdfSettingsCard", "vacationPdfSettingsCard",
+    "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton", "scheduleNoteToolbar", "scheduleNoteEditorFrame", "scheduleNoteFontSize", "scheduleNoteContextMenu", "scheduleNoteContextFontSize", "scheduleNoteSelectionHint", "scheduleNoteFormatStatus", "schedulePdfSettingsCard", "vacationPdfSettingsCard",
     "employeeLendingButton", "employeeLendingModal", "employeeLendingForm", "employeeLendingId", "employeeLendingRevision", "employeeLendingEmployee", "employeeLendingDestination", "employeeLendingDepartment", "employeeLendingDateFrom", "employeeLendingDateTo", "employeeLendingAllDay", "employeeLendingTimes", "employeeLendingStartTime", "employeeLendingEndTime", "employeeLendingNote", "employeeLendingMessage", "employeeLendingCancelEdit", "employeeLendingSave", "employeeLendingRefresh", "employeeLendingList", "employeeLendingDelegatesPanel", "employeeLendingDelegates",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField", "vacationApprovedEntryHint",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount", "vacationAccountsButton", "vacationAccountsModal", "vacationAccountsYear", "loadVacationAccountsButton", "vacationAccountsSummary", "vacationAccountsList",
@@ -849,7 +851,7 @@ const elements = Object.fromEntries(
     "adminAccessModeLabel", "accessSettings", "portalUserAccessCard", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "mobilePortalLocationDisplayCard", "mobilePortalLocationDisplayLocation", "mobilePortalLocationDisplayModules", "mobilePortalLocationDisplayHint", "saveMobilePortalLocationDisplayButton",
     "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountLearningDashboard", "organizationAccountLearningDashboardRow", "organizationAccountBranchOrders", "organizationAccountBranchOrdersRow", "organizationAccountArticles", "organizationAccountArticlesRow", "organizationAccountReceipts", "organizationAccountReceiptsRow", "organizationAccountTimeOff", "organizationAccountTimeOffRow", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
-    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "personnelViewSettingsCard", "trustLevelSettingsCard",
+    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorHomeScopeOptions", "rightsEditorLocationChoices", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "systemCenterUtilization", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
@@ -1466,6 +1468,8 @@ function showLoginGate(message = "") {
   clearUsbProvisioningPasswords();
   resetAdminPersonalActionsState("");
   state.portalSession = null;
+  if (elements.branchAccountPasskeysLink) elements.branchAccountPasskeysLink.hidden = true;
+  elements.branchAccountPasskeysLink?.removeAttribute("href");
   planningAssistantWorkspace?.reset();
   syncSystemUtilizationWorkspace();
   syncWorkflowStudio();
@@ -3031,6 +3035,7 @@ function applyRoleVisibility() {
   elements.branchOrdersManagementNavButton?.classList.toggle("hidden", !branchOrderManagementAccess);
   elements.loanOverviewSettingsButton?.classList.toggle("hidden", !branchLoanOverviewManagementAccess);
   elements.branchAccountPasswordButton?.classList.toggle("hidden", !branchAccountPasswordManagementAccess);
+  syncBranchAccountPasskeyLink();
   elements.xoffiImportButton?.classList.toggle("hidden", !canImportXoffiTime());
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
@@ -3463,6 +3468,30 @@ async function bootstrapApplication() {
   }
 }
 
+async function completeAdministrationLogin(result) {
+  elements.adminLoginPassword.value = "";
+  if (result.user?.role === "employee"
+    || result.user?.mustChangePassword
+    || result.user?.isEmployee === false) {
+    if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
+    window.location.replace("/portal.html");
+    return;
+  }
+  if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
+  window.GrabenplanerSessionLifecycle?.advance();
+  state.portalSession = result;
+  applyShellBranding(result.status?.branding || result.branding || {});
+  hideLoginGate();
+  applyRoleVisibility();
+  await Promise.all([
+    loadUiPreferences(),
+    loadAll({ applyInitialView: true, reusePortalStatus: true }),
+  ]);
+  void loadManagementBrandingPreference().catch(() => {});
+  loadSystemInfo();
+  globalThis.grabenplanerNavigation?.start();
+}
+
 async function loginToAdministration(event) {
   event.preventDefault();
   const credentialsInput = { employeeNumber: elements.adminLoginPersonnelNumber.value, password: elements.adminLoginPassword.value };
@@ -3473,27 +3502,7 @@ async function loginToAdministration(event) {
         body: JSON.stringify(credentialsInput),
       });
       window.GrabenplanerSessionLifecycle?.publish();
-      if (result.user?.role === "employee"
-        || result.user?.mustChangePassword
-        || result.user?.isEmployee === false) {
-        if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
-        window.location.replace("/portal.html");
-        return;
-      }
-      if (await redirectAdministrationToCandidateEvaluation(result.user)) return;
-      elements.adminLoginPassword.value = "";
-      window.GrabenplanerSessionLifecycle?.advance();
-      state.portalSession = result;
-      applyShellBranding(result.status?.branding || result.branding || {});
-      hideLoginGate();
-      applyRoleVisibility();
-      await Promise.all([
-        loadUiPreferences(),
-        loadAll({ applyInitialView: true, reusePortalStatus: true }),
-      ]);
-      void loadManagementBrandingPreference().catch(() => {});
-      loadSystemInfo();
-      globalThis.grabenplanerNavigation?.start();
+      await completeAdministrationLogin(result);
     }, { allowAccountChange: true });
   } catch (error) {
     if (error.code === "PORTAL_SESSION_CHANGED") return;
@@ -3589,9 +3598,19 @@ async function setupPortalAdmin(event) {
   } catch (error) { showToast(error.message, true); }
 }
 
+function portalUserScopesForSave(row, user, role) {
+  if (role === user?.role && Array.isArray(user.scopes) && user.scopes.length > 1) {
+    return user.scopes.map(scope => ({ locationId: scope.locationId, departmentId: scope.departmentId || null }));
+  }
+  const locationId = row.querySelector("[data-scope-location]").value;
+  const departmentId = role === "department_manager" ? row.querySelector("[data-scope-department]").value : "";
+  return [{ locationId, departmentId }];
+}
+
 async function savePortalUser(row) {
   if (window.GrabenplanerPasswordPolicy && !window.GrabenplanerPasswordPolicy.validate(row.querySelector("[data-portal-password]"), { report: true })) return;
   const employeeNumber = row.dataset.portalUser;
+  const previousUser = state.portalUsers.find(user => user.employeeNumber === employeeNumber);
   try {
     const mayManageUsers = state.portalSession?.user?.permissions?.includes("users:write") || !state.portalStatus?.portalEnabled;
     if (mayManageUsers) {
@@ -3608,11 +3627,9 @@ async function savePortalUser(row) {
     }
     const role = row.querySelector("[data-portal-role]").value;
     if (["location_planner", "manager", "department_manager"].includes(role)) {
-      const locationId = row.querySelector("[data-scope-location]").value;
-      const departmentId = role === "department_manager" ? row.querySelector("[data-scope-department]").value : "";
       const scoped = await api(`/api/portal/v1/users/${encodeURIComponent(employeeNumber)}/scopes`, {
         method: "PUT",
-        body: JSON.stringify({ scopes: [{ locationId, departmentId }] }),
+        body: JSON.stringify({ scopes: portalUserScopesForSave(row, previousUser, role) }),
       });
       state.portalUsers = scoped.users || state.portalUsers;
     }
@@ -5163,6 +5180,26 @@ async function saveLoanOverviewColumns(event) {
   }
 }
 
+function branchAccountPasswordAuthorityKey() {
+  const user = state.portalSession?.user;
+  return state.portalSession?.authenticated && user && canManageBranchAccountPasswords()
+    ? JSON.stringify([user.employeeNumber, user.role, user.permissions, user.scopes, user.explicitScopes, user.permissionScopes]) : "";
+}
+
+function syncBranchAccountPasskeyLink() {
+  const link = elements.branchAccountPasskeysLink;
+  if (!link) return;
+  const accountId = elements.branchAccountPasswordAccount?.value || "";
+  const authority = branchAccountPasswordAuthorityKey();
+  const allowed = authority && authority === state.branchAccountPasswordAuthorityKey
+    && !state.branchAccountPasswordLoading && !elements.branchAccountPasswordAccount?.disabled
+    && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(accountId)
+    && state.branchAccountPasswordTargets.some(account => account.id === accountId);
+  link.hidden = !allowed;
+  if (allowed) link.setAttribute("href", `/passkeys.html?accountId=${encodeURIComponent(accountId)}`);
+  else link.removeAttribute("href");
+}
+
 function renderBranchAccountPasswordTargets() {
   if (!elements.branchAccountPasswordAccount) return;
   const accounts = state.branchAccountPasswordTargets || [];
@@ -5181,15 +5218,21 @@ function renderBranchAccountPasswordTargets() {
   if (elements.branchAccountPasswordSaveButton) {
     elements.branchAccountPasswordSaveButton.disabled = state.branchAccountPasswordLoading || !accounts.length;
   }
+  syncBranchAccountPasskeyLink();
 }
 
 async function loadBranchAccountPasswordTargets() {
-  if (!canManageBranchAccountPasswords()) return [];
+  const authority = branchAccountPasswordAuthorityKey();
+  state.branchAccountPasswordTargets = [];
+  state.branchAccountPasswordAuthorityKey = "";
+  if (!canManageBranchAccountPasswords()) { renderBranchAccountPasswordTargets(); return []; }
   state.branchAccountPasswordLoading = true;
   renderBranchAccountPasswordTargets();
   try {
     const payload = await api("/api/portal/v1/branch-accounts/passwords");
-    state.branchAccountPasswordTargets = payload.accounts || [];
+    if (!canManageBranchAccountPasswords() || authority !== branchAccountPasswordAuthorityKey()) return [];
+    state.branchAccountPasswordTargets = Array.isArray(payload.accounts) ? payload.accounts : [];
+    state.branchAccountPasswordAuthorityKey = authority;
     return state.branchAccountPasswordTargets;
   } catch (error) {
     state.branchAccountPasswordTargets = [];
@@ -5994,6 +6037,9 @@ async function decideStaffAssignmentRequestFromReview(button, decision) {
 }
 
 function crossLocationScheduleCell(schedule, teamMember, date) {
+  if (Array.isArray(teamMember.planningDates) && !teamMember.planningDates.includes(date)) {
+    return '<span class="cross-location-empty-cell">Nicht einplanbar</span>';
+  }
   const shifts = (schedule.shifts || []).filter((shift) => (
     shift.employeeNumber === teamMember.employeeNumber && shift.date === date
   ));
@@ -6039,7 +6085,8 @@ function renderCrossLocationScheduleGrid(schedule) {
     </div>
     ${dates.map((date) => {
       const content = crossLocationScheduleCell(schedule, teamMember, date);
-      const canRequestDate = requestEnabled && date >= requestMinimum && date <= requestMaximum;
+      const canRequestDate = requestEnabled && date >= requestMinimum && date <= requestMaximum
+        && (!Array.isArray(teamMember.planningDates) || teamMember.planningDates.includes(date));
       return canRequestDate
         ? `<button type="button" class="cross-location-day-cell cross-location-request-cell" data-cross-location-request-date="${escapeHtmlAttribute(date)}" data-cross-location-request-employee="${escapeHtmlAttribute(teamMember.requestEligible ? teamMember.employeeNumber : "")}" aria-label="Einsatzanfrage für ${escapeHtmlAttribute(teamMember.displayName)} am ${escapeHtmlAttribute(formatDate(date))} öffnen">${content}<span class="cross-location-request-cue">Einsatz anfragen</span></button>`
         : `<div class="cross-location-day-cell">${content}</div>`;
@@ -6448,6 +6495,7 @@ function staffAssignmentsForDate(employeeNumber, date) {
 }
 
 function scheduleEmployeeVisibleOnDate(employee, date) {
+  if (Array.isArray(employee?.planningDates) && !employee.planningDates.includes(String(date))) return false;
   const employeeNumber = String(employee?.personnel_number || employee?.personnelNumber || "");
   const locationId = String(state.data?.context?.locationId || state.locationId || "");
   const homeLocationId = String(employee?.home_location_id || employee?.homeLocationId || "");
@@ -7662,7 +7710,7 @@ function renderServerDiagnostics(status, technical = null) {
       <div class="diagnostic-grid">
         <span><small>HTTPS-Pflicht</small><strong>${technical.httpsRequired ? "aktiv" : "nicht erforderlich"}</strong></span>
         <span><small>Passwortminimum</small><strong>${Number(technical.passwordMinLength || 6)} Zeichen</strong></span>
-        <span><small>SQLite</small><strong>${escapeHtml(technical.database?.journalMode || "–")} · ${Number(technical.database?.busyTimeoutMs || 0)} ms</strong></span>
+        <span><small>Datenbank</small><strong>PostgreSQL · gemeinsames Core-/Sales-Paar</strong></span>
         <span><small>Integrität</small><strong>${escapeHtml(technical.database?.integrity || "unbekannt")}</strong></span>
         <span><small>Migration</small><strong>${escapeHtml(technical.database?.migration?.id || "–")}</strong></span>
         <span><small>Instanzschutz</small><strong>${technical.instanceLock?.held ? "aktiv" : technical.instanceLock?.enabled ? "beim Serverstart" : "nicht nötig"}</strong></span>
@@ -8020,7 +8068,8 @@ async function submitVpsReboot(event) {
     return;
   }
   const currentPassword = elements.vpsRebootCurrentPassword?.value || "";
-  if (!currentPassword) {
+  const usePasskey = window.GPPasskeyAuth?.selected?.("vps-reboot") === true;
+  if (!usePasskey && !currentPassword) {
     setVpsRebootMessage("Bitte geben Sie Ihr aktuelles Developer-Passwort ein.", "error");
     elements.vpsRebootCurrentPassword?.focus();
     return;
@@ -8039,7 +8088,8 @@ async function submitVpsReboot(event) {
     await withAdminReauthentication(async () => {
       const result = await api("/api/portal/v1/server-monitor/vps-reboot", {
         method: "POST",
-        body: JSON.stringify({ confirmation: "VPS_REBOOT", currentPassword }),
+        body: JSON.stringify({ confirmation: "VPS_REBOOT", ...(usePasskey
+          ? await window.GPPasskeyAuth.authorization(api, "vps-reboot") : { currentPassword }) }),
       });
       state.vpsRebootPreviousHostBootGeneration = String(
         result?.previousHostBootGeneration || "",
@@ -8090,9 +8140,7 @@ async function loadSystemInfo() {
       <span><strong>Serverzeit</strong> ${escapeHtml(info.serverTime)} Uhr</span>
       <span><strong>App</strong> ${escapeHtml(appName)} ${escapeHtml(info.appVersionLabel)}</span>
       <span><strong>Node.js</strong> ${escapeHtml(info.nodeVersion)}</span>
-      <span><strong>${info.databaseProvider === "postgresql" ? "PostgreSQL" : "SQLite"}</strong> ${escapeHtml(info.databaseProvider === "postgresql"
-        ? (String(info.databaseVersion || "").match(/PostgreSQL\s+([\d.]+)/i)?.[1] || "Version nicht verfügbar")
-        : info.sqliteVersion)}</span>
+      <span><strong>PostgreSQL</strong> ${escapeHtml(String(info.databaseVersion || "").match(/PostgreSQL\s+([\d.]+)/i)?.[1] || "Version nicht verfügbar")}</span>
       <span><strong>System</strong> ${escapeHtml(info.platform)}</span>
       <span><strong>Datenbank</strong> ${escapeHtml(info.database)}</span>
       <span><strong>Interne Sicherung</strong> ${escapeHtml(info.appBackupDirectory || "geschützter App-Datenbereich")}</span>
@@ -14905,6 +14953,79 @@ function renderPersonnelCandidateStatusForm(candidateId, application) {
   </form>`;
 }
 
+function renderPersonnelCandidateExistingEmployeeForm(candidateId, application) {
+  const candidate = state.selectedPersonnelCandidate;
+  if (!state.personnelCandidateCapabilities.canConvert || candidate?.state !== "active" || candidate.conversion
+    || !["new", "screening", "first_interview", "further_interview", "offer", "accepted", "preboarding", "talent_pool"].includes(application.status)) return "";
+  return `<details class="personnel-candidate-detail-section personnel-candidate-editor-section">
+    <summary><span><strong>Bereits eingestellt</strong><small>Mit vorhandenem Mitarbeiter verknüpfen</small></span><i aria-hidden="true">›</i></summary>
+    <form class="personnel-candidate-detail-form" data-candidate-existing-employee-form data-candidate-id="${escapeHtmlAttribute(candidateId)}" data-application-id="${escapeHtmlAttribute(application.id)}">
+      <p>Die Einstellung ist bereits erfolgt und der Mitarbeiter wurde angelegt. Prüfe die Personalnummer und bestätige die angezeigte Person.</p>
+      <label class="field"><span>Vorhandene Personalnummer</span><input name="employeeNumber" maxlength="24" required autocomplete="off" /></label>
+      <button class="secondary-button" type="submit" name="action" value="lookup" formnovalidate>Mitarbeiter prüfen</button>
+      <div data-candidate-existing-employee-preview></div>
+      <p role="status" data-candidate-existing-employee-message></p>
+    </form>
+  </details>`;
+}
+
+async function savePersonnelCandidateExistingEmployee(form, action) {
+  const candidate = state.selectedPersonnelCandidate;
+  const application = personnelCandidateApplications(candidate).find(entry => entry.id === form.dataset.applicationId);
+  if (!candidate || candidate.id !== form.dataset.candidateId || !application
+    || !state.personnelCandidateCapabilities.canConvert || state.personnelCandidateMutationPending) return;
+  if (action === "link" ? !form.reportValidity() : !form.elements.employeeNumber.reportValidity()) return;
+  const employeeNumber = String(form.elements.employeeNumber.value || "").trim();
+  const preview = form.querySelector("[data-candidate-existing-employee-preview]");
+  const message = form.querySelector("[data-candidate-existing-employee-message]");
+  const ticket = captureGpContext(() => state.personnelCandidateCapabilities.canConvert,
+    () => state.selectedPersonnelCandidateId);
+  state.personnelCandidateMutationPending = application.id;
+  form.querySelectorAll("button").forEach(button => { button.disabled = true; });
+  message.textContent = "Wird geprüft …";
+  try {
+    const path = `/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(candidate.id)}/applications/${encodeURIComponent(application.id)}`;
+    if (action !== "link") {
+      preview.innerHTML = "";
+      delete form.dataset.employeeSnapshotSha256;
+      const result = await api(`${path}/existing-employee/${encodeURIComponent(employeeNumber)}`, { headers: csrfHeader() });
+      if (!gpContextCurrent(ticket) || state.selectedPersonnelCandidate?.id !== candidate.id) return;
+      form.dataset.employeeSnapshotSha256 = result.employee.snapshotSha256;
+      form.dataset.employeeNumber = result.employee.personnelNumber;
+      form.dataset.operationId = crypto.randomUUID();
+      preview.innerHTML = `<p><strong>${escapeHtml(result.employee.fullName)} · MA ${escapeHtml(result.employee.personnelNumber)}</strong></p>
+        <label class="employee-onboarding-start-check"><input name="confirmed" type="checkbox" required /><span>Ich habe die Person geprüft und bestätige die bereits erfolgte Einstellung.</span></label>
+        <p>Die Bewerbung wird als „Eingestellt“ abgeschlossen. Die vorhandenen Mitarbeiterdaten bleiben erhalten.</p>
+        <button class="primary-button" type="submit" name="action" value="link">Als eingestellt vermerken</button>`;
+      message.textContent = "Bitte die Zuordnung bestätigen.";
+    } else {
+      if (employeeNumber !== form.dataset.employeeNumber || !form.dataset.employeeSnapshotSha256 || form.elements.confirmed?.checked !== true) {
+        throw new Error("Bitte den Mitarbeiter zuerst erneut prüfen und bestätigen.");
+      }
+      await api(`${path}/link-existing-employee`, { method: "POST", body: JSON.stringify({
+        operationId: form.dataset.operationId, candidateRevision: candidate.revision, applicationRevision: application.revision,
+        employeeNumber, employeeSnapshotSha256: form.dataset.employeeSnapshotSha256, confirmed: true,
+      }) });
+      if (!gpContextCurrent(ticket) || state.selectedPersonnelCandidate?.id !== candidate.id) return;
+      await loadPersonnelCandidates({ force: true });
+      await loadPersonnelCandidateDetail(candidate.id);
+      showToast("Die Einstellung wurde mit dem vorhandenen Mitarbeiter verknüpft.");
+    }
+  } catch (error) {
+    if (!gpContextCurrent(ticket)) return;
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    message.textContent = error.message || "Die Zuordnung konnte nicht gespeichert werden.";
+  } finally {
+    if (gpContextCurrent(ticket)) {
+      state.personnelCandidateMutationPending = "";
+      form.querySelectorAll("button").forEach(button => { button.disabled = false; });
+    }
+  }
+}
+
 function renderPersonnelCandidateApplication(candidateId, application) {
   const weeklyMinutes = Number(application.desiredWeeklyMinutes);
   const weeklyHours = Number.isFinite(weeklyMinutes) && weeklyMinutes > 0
@@ -14958,6 +15079,7 @@ function renderPersonnelCandidateApplication(candidateId, application) {
       </form>
     </details>` : ""}
     ${renderPersonnelCandidateStatusForm(candidateId, application)}
+    ${renderPersonnelCandidateExistingEmployeeForm(candidateId, application)}
   </article>`;
 }
 
@@ -14992,6 +15114,7 @@ function renderPersonnelCandidateDetail() {
       <span class="personnel-candidate-status-badge${candidate.state === "archived" ? " status-archived" : ""}">${candidate.state === "archived" ? "Archiviert" : "Aktiv"}</span>
     </div>
     ${state.personnelCandidateDetailError ? `<p class="personnel-candidate-inline-error">${escapeHtml(state.personnelCandidateDetailError)}</p>` : ""}
+    ${candidate.conversion ? `<div class="personnel-candidate-privacy-note"><strong>Eingestellt · MA ${escapeHtml(candidate.conversion.employeeNumber)}</strong><p>${candidate.conversion.targetMode === "existing" ? "Mit vorhandenem Mitarbeiter verknüpft" : "Kontrolliert als Mitarbeiter angelegt"} · ${escapeHtml(formatPersonnelCandidateTimestamp(candidate.conversion.createdAt))}</p></div>` : ""}
     <div class="personnel-candidate-facts personnel-candidate-contact-facts">
       ${personnelCandidateFact("E-Mail", profile.email)}
       ${personnelCandidateFact("Telefon", profile.phone)}
@@ -16106,6 +16229,12 @@ function downloadCandidateEvaluationPdf(anchor) {
 }
 
 function handlePersonnelCandidateDetailSubmit(event) {
+  const existingEmployeeForm = event.target.closest("[data-candidate-existing-employee-form]");
+  if (existingEmployeeForm) {
+    event.preventDefault();
+    savePersonnelCandidateExistingEmployee(existingEmployeeForm, event.submitter?.value || "lookup");
+    return;
+  }
   const profileForm = event.target.closest("[data-personnel-candidate-profile-form]");
   const photoForm = event.target.closest("[data-personnel-candidate-photo-form]");
   const applicationForm = event.target.closest("[data-personnel-candidate-application-form]");
@@ -21783,6 +21912,8 @@ function syncGpWindows() {
   recentArticlesWindow?.sync();
   syncSalesAnalyticsPrintWindows();
   receiptSearchWorkspace?.syncPrint();
+  salesHistoryWorkspace?.syncPrint();
+  crmPurchaseWorkspace?.syncPrint();
   salesPriceLabelsWorkspace?.syncPrint?.();
   state.salesArticleCatalog?.priceLabels?.syncPrint?.();
   syncDocumentPrint();
@@ -25028,7 +25159,8 @@ async function loadPortalUsers() {
       const locations = state.locations.map((location) => `<option value="${escapeHtml(location.id)}" ${location.id === scope.locationId ? "selected" : ""}>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
       const departments = (state.locations.find((location) => location.id === scope.locationId)?.departments || []).map((department) => `<option value="${department.id}" ${Number(department.id) === Number(scope.departmentId) ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("");
       const roleEditable = mayManageUsers && portalUserManageableInUi(actorRole, user);
-      const scopeEditable = mayManageScopes && portalUserManageableInUi(actorRole, user)
+      const multipleScopes = (user.scopes || []).length > 1;
+      const scopeEditable = mayManageScopes && !multipleScopes && portalUserManageableInUi(actorRole, user)
         && ["location_planner", "manager", "department_manager"].includes(user.role);
       const protectedRole = user.roleLocked || user.role === "developer";
       const roleControl = roleEditable
@@ -25039,6 +25171,7 @@ async function loadPortalUsers() {
         <header class="portal-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${user.passwordConfigured ? "Zugang eingerichtet" : "Noch kein Passwort"}${user.lastLoginAt ? ` · zuletzt ${escapeHtml(new Date(user.lastLoginAt).toLocaleString("de-AT"))}` : ""}${user.locked ? ` · gesperrt bis ${escapeHtml(new Date(user.lockedUntil).toLocaleString("de-AT"))}` : user.failedLoginAttempts ? ` · ${Number(user.failedLoginAttempts)} Fehlversuch(e)` : ""}</small></div><label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} ${roleEditable ? "" : "disabled"} /><span><strong>Zugang aktiv</strong><small>Anmeldung erlaubt</small></span></label></header>
         <div class="portal-user-controls">
         ${roleControl}
+        ${multipleScopes ? `<small>${Number(user.scopes.length)} Bereiche zugewiesen · bleiben beim Speichern erhalten</small>` : ""}
         <select data-scope-location aria-label="Zugewiesene Filiale" class="${["location_planner", "manager", "department_manager"].includes(user.role) ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${locations}</select>
         <select data-scope-department aria-label="Zugewiesene Abteilung" class="${user.role === "department_manager" ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${departments}</select>
         <span class="password-field portal-user-password ${roleEditable ? "" : "hidden"}"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" data-gp-new-password placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
@@ -25148,6 +25281,7 @@ function renderOrganizationAccounts() {
       <span class="status-badge ${account.active && !account.locked ? "approved" : "inactive"}">${escapeHtml(account.active ? (account.locked ? "Gesperrt" : "Aktiv") : "Inaktiv")}</span>
       <div class="organization-account-actions">
         <button class="secondary-button" data-edit-organization-account type="button">Bearbeiten</button>
+        <a class="secondary-button" href="/passkeys.html?accountId=${encodeURIComponent(account.id)}">Passkeys verwalten</a>
         ${account.locked || account.failedLoginAttempts ? '<button class="secondary-button" data-unlock-organization-account type="button">Entsperren</button>' : ""}
       </div>
     </article>`;
@@ -25303,6 +25437,7 @@ function syncRightsWorkspace() {
     rightsLoadGeneration++; rightsLoadController?.abort(); rightsLoadController = null;
     rightsEditorGeneration++; rightsEditorSaveContext?.controller.abort(); rightsEditorSaveContext = null;
     rightsEditorSnapshot = null; state.selectedRightsEmployeeNumber = null; state.rightsManagement = null;
+    elements.rightsEditorLocationChoices?.replaceChildren();
     resetRightsSettingsCardState();
     void permissionDefaultsUI?.load(false);
   }
@@ -25433,7 +25568,14 @@ function rightsEditorScopeContext(user) {
   const department = (location?.departments || []).find((entry) => Number(entry.id) === departmentId);
   const explicitMode = departmentScope ? "department" : locationScope ? "location" : "";
   const safeDefaultMode = ["employee", "department_manager"].includes(user?.role) ? "department" : "location";
+  const actor = state.portalSession?.user;
+  const independentPlanner = Boolean(user?.employeeNumber && user.configured && user.role === "location_planner"
+    && !String(user.homeLocationId || "").trim() && user.sessionKind !== "organization" && user.isEmployee !== false
+    && actor?.role === "developer" && actor.employeeNumber && actor.sessionKind !== "organization"
+    && actor.sessionKind !== "local" && actor.localSystem !== true && actor.isEmployee !== false
+    && Array.isArray(actor.scopes) && actor.scopes.length === 0);
   return {
+    independentPlanner,
     locationId,
     departmentId,
     location,
@@ -25453,6 +25595,11 @@ function rightsEditorSelectedScope() {
     return Array.isArray(user?.scopes) ? user.scopes : [];
   }
   const context = rightsEditorScopeContext(user);
+  if (context.independentPlanner) {
+    const selected = [...(elements.rightsEditorLocationChoices?.querySelectorAll('input[data-rights-location]:checked') || [])]
+      .map(input => ({ locationId: input.value, departmentId: Number(input.dataset.departmentId || 0) || null }));
+    return selected.length ? selected : null;
+  }
   const selectedMode = elements.rightsEditorForm.querySelector('input[name="rightsEditorScopeMode"]:checked')?.value || "";
   if (!context.locationId || !selectedMode) return null;
   if (selectedMode === "department") {
@@ -25475,6 +25622,8 @@ function refreshRightsEditorScope() {
   const hasOrganizationalPermissions = rightsEditorHasOrganizationalPermissions();
   const managerDenialOnly = state.portalSession?.user?.role === "manager";
   elements.rightsEditorScope.classList.toggle("hidden", managerDenialOnly || !hasOrganizationalPermissions);
+  elements.rightsEditorHomeScopeOptions?.classList.toggle("hidden", context.independentPlanner);
+  elements.rightsEditorLocationChoices?.classList.toggle("hidden", !context.independentPlanner);
   elements.rightsEditorDepartmentScopeLabel.textContent = `Nur eigene Abteilung · ${context.department?.name || "nicht zugeordnet"}`;
   elements.rightsEditorLocationScopeLabel.textContent = `Gesamte Filiale · ${context.location?.name || context.locationId || "nicht zugeordnet"}`;
   const departmentInput = elements.rightsEditorForm.querySelector('input[name="rightsEditorScopeMode"][value="department"]');
@@ -25489,6 +25638,8 @@ function refreshRightsEditorScope() {
   }
   elements.rightsEditorScopeHint.textContent = !hasOrganizationalPermissions
     ? "Für die aktuell wirksamen Rechte ist kein Standortbereich erforderlich."
+    : context.independentPlanner
+      ? "Filialunabhängige Planungsverantwortung: Filialen ausdrücklich auswählen. Die Mitarbeiterzuordnung zur Verwaltung bleibt unverändert."
     : !context.locationId
       ? "Bitte zuerst eine Filialkostenstelle zuweisen."
       : !context.departmentId && ["employee", "department_manager"].includes(user.role)
@@ -25594,6 +25745,24 @@ function openRightsEditor(employeeNumber) {
     }).join("")}</div></section>`).join("");
   enforceRightsEditorPermissionDependencies(null, false);
   const context = rightsEditorScopeContext(user);
+  if (elements.rightsEditorLocationChoices) {
+    const scopes = Array.isArray(user.scopes) ? user.scopes : [];
+    const locations = new Map(state.locations.map(location => [String(location.id), location]));
+    for (const scope of scopes) {
+      if (!locations.has(String(scope.locationId))) locations.set(String(scope.locationId), { id: scope.locationId, name: scope.locationId });
+    }
+    const rows = [...locations.values()].filter(location => location.active !== false || scopes.some(scope => String(scope.locationId) === String(location.id)))
+      .map(location => ({ locationId: String(location.id), departmentId: null, label: `${location.id} · ${location.name}` }));
+    for (const scope of scopes.filter(scope => Number(scope.departmentId))) {
+      const location = locations.get(String(scope.locationId));
+      const department = (location?.departments || []).find(entry => Number(entry.id) === Number(scope.departmentId));
+      rows.push({ locationId: String(scope.locationId), departmentId: Number(scope.departmentId), label: `${location?.name || scope.locationId} · ${department?.name || `Abteilung ${scope.departmentId}`}` });
+    }
+    elements.rightsEditorLocationChoices.innerHTML = rows.map(scope => {
+      const checked = scopes.some(entry => String(entry.locationId) === scope.locationId && (Number(entry.departmentId) || null) === scope.departmentId);
+      return `<label><input type="checkbox" data-rights-location value="${escapeHtml(scope.locationId)}" data-department-id="${scope.departmentId || ""}" ${checked ? "checked" : ""} ${user.manageable ? "" : "disabled"} /><span>${escapeHtml(scope.label)}</span></label>`;
+    }).join("");
+  }
   elements.rightsEditorForm.querySelectorAll('input[name="rightsEditorScopeMode"]').forEach((input) => {
     input.checked = input.value === context.mode;
   });
@@ -25834,6 +26003,7 @@ async function loadRightsManagement() {
       state.selectedRightsEmployeeNumber = null;
       if (elements.rightsEditorModal.open) elements.rightsEditorModal.close();
       elements.rightsEditorPermissions.replaceChildren();
+      elements.rightsEditorLocationChoices?.replaceChildren();
       elements.rightsEditorTitle.textContent = 'Rechte bearbeiten';
       elements.rightsEditorSummary.textContent = '';
       elements.saveRightsEditorButton.disabled = true;
@@ -25891,6 +26061,7 @@ function rightsEditorDraftSignature() {
   return JSON.stringify([
     [...elements.rightsEditorPermissions.querySelectorAll('input[data-rights-permission]')].map(input => [input.value, input.checked]),
     [...elements.rightsEditorForm.querySelectorAll('input[name="rightsEditorScopeMode"]')].map(input => [input.value, input.checked]),
+    [...(elements.rightsEditorLocationChoices?.querySelectorAll('input[data-rights-location]') || [])].map(input => [input.value, input.dataset.departmentId || "", input.checked]),
   ]);
 }
 
@@ -30448,7 +30619,7 @@ function personnelRecordSelect(name, fieldKey, label, value, accessMode, options
 
 function personnelRecordCheckbox(name, fieldKey, label, checked, accessMode) {
   if (accessMode === "hidden") return "";
-  return `<label class="field" data-personnel-field-key="${escapeHtmlAttribute(fieldKey)}"><span>Fachliche Prüfung</span><span class="checkbox-line"><input name="${escapeHtmlAttribute(name)}" type="checkbox"${checked === true ? " checked" : ""} ${accessMode === "write" ? "" : "disabled"} /> ${escapeHtml(label)}</span></label>`;
+  return `<label class="field" data-personnel-field-key="${escapeHtmlAttribute(fieldKey)}"><span>Bestätigung des Lehrlingsstatus</span><span class="checkbox-line"><input name="${escapeHtmlAttribute(name)}" type="checkbox"${checked === true ? " checked" : ""} ${accessMode === "write" ? "" : "disabled"} /> ${escapeHtml(label)}</span></label>`;
 }
 
 function renderPersonnelProtectionEditor(value, mode, prefix) {
@@ -33107,6 +33278,7 @@ function applySalesArticleDetailTabs() {
     const panel = document.getElementById(id); if (panel) { panel.hidden = !selected; panel.setAttribute('role','tabpanel'); panel.setAttribute('aria-labelledby',a.id); if (panel.tagName === 'DETAILS' && selected) panel.open = true; }
   });
   state.salesArticleCatalog.tools?.activate(active);
+  if (active === 'salesArticleNotesSection') void state.salesArticleCatalog.deferredNotes?.activate();
   if (active === 'salesArticleOrdersSection') void state.salesArticleCatalog.orders?.activate(); else state.salesArticleCatalog.orders?.suspend();
   if (active === 'salesArticlePriceLabelsSection') void state.salesArticleCatalog.priceLabels?.activate();
   else state.salesArticleCatalog.priceLabels?.suspend();
@@ -34604,6 +34776,7 @@ function renderSalesArticleCatalogDetail() {
   const catalog = state.salesArticleCatalog;
   catalog.stockPanel?.destroy(); catalog.stockPanel=null;
   catalog.orders?.destroy(); catalog.orders=null;
+  catalog.deferredNotes?.destroy(); catalog.deferredNotes=null;
   catalog.tools?.destroy(); catalog.tools=null;
   catalog.priceLabels?.destroy(); catalog.priceLabels=null;
   document.getElementById("salesArticlePdfButton")?.classList.add("hidden");
@@ -34706,6 +34879,22 @@ function renderSalesArticleCatalogDetail() {
     });
   }
   layout.mountDescriptions(elements.salesArticleDetailBody);
+  if (article.notes?.deferred) {
+    const notesSection = document.getElementById('salesArticleNotesSection');
+    const accessKey = currentSalesArticleCatalogDetailAccessKey();
+    notesSection.textContent = 'Bemerkungen werden beim Öffnen geladen.';
+    catalog.deferredNotes = window.SalesArticleDeferredNotes.create({api, articleNumber:article.articleNumber,
+      current:() => canReadSalesArticles() && currentSalesArticleCatalogDetailAccessKey()===accessKey
+        && catalog.detail?.article===article && state.currentView==='articleCatalog',
+      onData:notes => {article.notes=notes;notesSection.innerHTML=layout.notes(notes,formats);},
+      onError:error => {
+        if ([401,403].includes(error.status)) {applySalesArticleCatalogReadState(false);return;}
+        notesSection.textContent='Bemerkungen konnten nicht geladen werden. ';
+        const retry=document.createElement('button');retry.type='button';retry.textContent='Erneut laden';
+        retry.addEventListener('click',()=>{void catalog.deferredNotes?.activate();});notesSection.append(retry);
+      },
+    });
+  }
   window.SalesArticlePriceControls.mount(elements.salesArticleDetailBody, article.priceMatrix, formats, {
     preferenceKey: 'gp.article-price-columns.v1.' + currentSalesArticleCatalogActorKey(),
   });
@@ -34750,7 +34939,7 @@ async function loadSalesArticleCatalogDetail(articleNumber, { moveFocus = false,
   renderSalesArticleCatalogRows();
   renderSalesArticleCatalogDetail();
   try {
-    const parameters = new URLSearchParams({ articleNumber: normalizedArticleNumber });
+    const parameters = new URLSearchParams({ articleNumber: normalizedArticleNumber, section: 'main' });
     const payload = await api(`/api/sales/articles/detail?${parameters}`);
     if (actorKey!==currentSalesArticleCatalogDetailAccessKey() || !canReadSalesArticles() || requestId !== catalog.detailRequestId
       || normalizedArticleNumber !== catalog.selectedArticleNumber) return;
@@ -35835,7 +36024,10 @@ function syncSalesHistoryAccess() {
   const panel = document.getElementById("salesHistoryPanel");
   panel?.classList.toggle("hidden", !user?.salesHistory?.read);
   document.getElementById("crmPurchaseHistory")?.classList.toggle("hidden", !user?.salesHistory?.customerPurchases);
-  if (panel && user?.salesHistory?.read) salesHistoryWorkspace = window.GrabenplanerSalesHistory?.mount(panel, { api });
+  if (panel && user?.salesHistory?.read) salesHistoryWorkspace = window.GrabenplanerSalesHistory?.mount(panel, { api, rawApi,
+    accessKey: startDashboardWorkspaceActorKey,
+    canUse: () => state.portalSession?.authenticated === true && !state.portalSession?.user?.mustChangePassword && state.portalSession?.user?.salesHistory?.read === true,
+    active: () => state.currentView === "receiptSearch", windowPreferences: gpWindowManager?.preferences, scale: salesArticleSearchWindowScale });
 }
 
 function renderCrmCustomerReadView(customer) {
@@ -35941,7 +36133,10 @@ function renderCrmCustomerDetail() {
     : renderCrmCustomerReadView(state.crm.selectedCustomer);
   const purchases = document.getElementById("crmPurchaseHistory");
   if (purchases && state.portalSession?.user?.salesHistory?.customerPurchases) {
-    crmPurchaseWorkspace = window.GrabenplanerSalesHistory?.mount(purchases, { api, customerId: state.crm.selectedCustomer.id });
+    crmPurchaseWorkspace = window.GrabenplanerSalesHistory?.mount(purchases, { api, rawApi, customerId: state.crm.selectedCustomer.id,
+      accessKey: startDashboardWorkspaceActorKey,
+      canUse: () => state.portalSession?.authenticated === true && !state.portalSession?.user?.mustChangePassword && state.portalSession?.user?.salesHistory?.customerPurchases === true,
+      active: () => state.currentView === "crm", windowPreferences: gpWindowManager?.preferences, scale: salesArticleSearchWindowScale });
   }
   requestAnimationFrame(() => elements.crmCustomerDetail?.querySelector("#crmCustomerName")?.focus());
 }
@@ -39485,24 +39680,25 @@ function canUseAllEmployeesForShiftPlanning() {
     || ["developer", "it_admin", "admin", "hr"].includes(state.portalSession?.user?.role);
 }
 
-function shiftEmployeeCandidates(selectedEmployeeNumber = "", shift = null) {
+function shiftEmployeeCandidates(selectedEmployeeNumber = "", shift = null, planningCandidates = null, date = null) {
   const scopedEmployees = state.data?.employees || [];
-  const source = canUseAllEmployeesForShiftPlanning() ? state.allEmployees : scopedEmployees;
+  const source = planningCandidates || (canUseAllEmployeesForShiftPlanning() ? state.allEmployees : scopedEmployees);
   const selected = String(selectedEmployeeNumber || "");
   const candidates = source.filter((employee) => (
     employee.active !== false && employee.active !== 0 && employee.active !== "0"
   ) || String(employee.personnel_number) === selected);
   if (!candidates.some((employee) => String(employee.personnel_number) === selected)) {
-    const existing = [...scopedEmployees, ...state.allEmployees]
+    const existing = (planningCandidates || [...scopedEmployees, ...state.allEmployees])
       .find((employee) => String(employee.personnel_number) === selected);
     if (existing) candidates.push(existing);
-    else if (selected) candidates.push({
+    else if (selected && !planningCandidates) candidates.push({
       personnel_number: selected,
       nickname: shift?.nickname || shift?.full_name || selected,
       home_location_id: shift?.home_location_id || shift?.homeLocationId || "",
     });
   }
   return [...new Map(candidates.map((employee) => [employee.personnel_number, employee])).values()]
+    .filter(employee => !date || !Array.isArray(employee.planningDates) || employee.planningDates.includes(date))
     .sort((left, right) => String(left.personnel_number).localeCompare(String(right.personnel_number), "de-AT", { numeric: true, sensitivity: "base" }));
 }
 
@@ -39808,7 +40004,23 @@ async function updateEmployeeLendingDelegate(employeeNumber, enabled, control) {
   }
 }
 
-function openShiftModal(employeeNumber, date, shift = null) {
+async function openShiftModalForPlanningDate(employeeNumber, date, shift = null) {
+  if (guardScheduleEditing()) return;
+  const ticket = captureGpContext(() => !isAutomaticallyWeekLocked(),
+    () => JSON.stringify([state.locationId, state.departmentId, state.weekStart]));
+  try {
+    const candidates = canUseAllEmployeesForShiftPlanning()
+      ? await api(`/api/employees?planningWeek=${encodeURIComponent(state.weekStart)}`)
+      : state.data?.employees || [];
+    if (!gpContextCurrent(ticket)) return;
+    if (!Array.isArray(candidates)) throw new Error("Die verfügbaren Mitarbeitenden konnten nicht geladen werden.");
+    openShiftModal(employeeNumber, date, shift, candidates);
+  } catch (error) {
+    if (gpContextCurrent(ticket)) showToast(error.message || "Die verfügbaren Mitarbeitenden konnten nicht geladen werden.", true);
+  }
+}
+
+function openShiftModal(employeeNumber, date, shift = null, planningCandidates = null) {
   if (guardScheduleEditing()) return;
   if (shiftMutation && shiftMutationCurrent(shiftMutation)) return;
   finishShiftMutation(shiftMutation);
@@ -39827,8 +40039,12 @@ function openShiftModal(employeeNumber, date, shift = null) {
     return;
   }
   const selectedEmployeeNumber = shift?.employee_number || employeeNumber;
-  const candidates = shiftEmployeeCandidates(selectedEmployeeNumber, shift);
+  const candidates = shiftEmployeeCandidates(selectedEmployeeNumber, shift, planningCandidates, shift?.shift_date || date);
   const initialEmployee = candidates.find((employee) => employee.personnel_number === selectedEmployeeNumber);
+  if (!initialEmployee) {
+    showToast("Der Mitarbeiter ist an diesem Tag nicht für die Dienstplanung verfügbar.", true);
+    return;
+  }
   if (initialEmployee && !shift && !employeeCanWorkOnDate(initialEmployee, shift?.shift_date || date)) {
     showToast(`${initialEmployee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`, true);
     return;
@@ -40841,6 +41057,173 @@ async function resetCurrentWeek(event) {
 }
 
 const scheduleNoteMaxLength = 900;
+const scheduleNoteDefaultSize = "10";
+let scheduleNoteSelection = null;
+let scheduleNoteContextSelection = null;
+let scheduleNoteEditorEventsBound = false;
+
+function normalizeScheduleNoteSize(value) {
+  const source = String(value ?? "").trim().toLowerCase();
+  const legacy = { small: "5.7", normal: "6.4", medium: "6.4", large: "7.2" };
+  if (Object.hasOwn(legacy, source)) return legacy[source];
+  if (!/^\d{1,3}(?:[.,]\d)?(?:pt)?$/.test(source)) return null;
+  const size = Number(source.replace(/pt$/, "").replace(",", "."));
+  return Number.isFinite(size) && size >= 4 && size <= 72 ? String(size) : null;
+}
+
+function scheduleNoteSizeFromNode(node) {
+  const attribute = normalizeScheduleNoteSize(node.getAttribute?.("data-size"));
+  if (attribute) return attribute;
+  for (const name of node.classList || []) {
+    const value = name.match(/^ql-size-(\d{1,2}(?:_\d)?pt|small|large)$/)?.[1];
+    if (value) return normalizeScheduleNoteSize(value.replace("_", "."));
+  }
+  return normalizeScheduleNoteSize(node.style?.fontSize);
+}
+
+function scheduleNoteSelectedRange() {
+  if (!scheduleNoteQuill) return null;
+  const value = scheduleNoteQuill.getSelection() || scheduleNoteContextSelection || scheduleNoteSelection;
+  if (!value) return null;
+  const maximum = Math.max(0, scheduleNoteQuill.getLength() - 1);
+  const index = Math.max(0, Math.min(maximum, value.index));
+  return { index, length: Math.max(0, Math.min(maximum - index, value.length)) };
+}
+
+function scheduleNoteSelectionFormats(range) {
+  const formats = scheduleNoteQuill.getFormat(range.index, range.length);
+  if (!range.length) return { ...formats, size: normalizeScheduleNoteSize(formats.size) || scheduleNoteDefaultSize };
+  const pieces = scheduleNoteQuill.getContents(range.index, range.length).ops
+    .filter(op => typeof op.insert === "string" && op.insert.replace(/\n/g, "").length);
+  if (!pieces.length) return { ...formats, size: scheduleNoteDefaultSize };
+  return Object.fromEntries(["bold", "italic", "underline", "size"].map(format => {
+    const values = [...new Set(pieces.map(op => format === "size"
+      ? normalizeScheduleNoteSize(op.attributes?.size) || scheduleNoteDefaultSize
+      : op.attributes?.[format] === true))];
+    return [format, values.length === 1 ? values[0] : "mixed"];
+  }));
+}
+
+function updateScheduleNoteFormattingControls() {
+  const range = scheduleNoteSelectedRange();
+  if (!range) return;
+  const formats = scheduleNoteSelectionFormats(range);
+  for (const button of document.querySelectorAll("#scheduleNoteToolbar [data-note-format], #scheduleNoteContextMenu [data-note-format]")) {
+    if (button.dataset.noteFormat === "clear") continue;
+    const value = formats[button.dataset.noteFormat];
+    button.setAttribute("aria-pressed", value === "mixed" ? "mixed" : String(value === true));
+    button.classList.toggle("is-active", value === true);
+    button.classList.toggle("is-mixed", value === "mixed");
+  }
+  for (const input of [elements.scheduleNoteFontSize, elements.scheduleNoteContextFontSize].filter(Boolean)) {
+    if (document.activeElement === input) continue;
+    input.value = formats.size === "mixed" ? "" : formats.size;
+    input.placeholder = formats.size === "mixed" ? "Gemischt" : scheduleNoteDefaultSize;
+    input.removeAttribute("aria-invalid");
+  }
+  if (elements.scheduleNoteSelectionHint) elements.scheduleNoteSelectionHint.textContent = range.length
+    ? `${range.length} Zeichen markiert · Formatierung gilt nur für die Auswahl.`
+    : "Text markieren und formatieren · Rechtsklick öffnet die Auswahlformatierung.";
+}
+
+function closeScheduleNoteContextMenu({ restoreFocus = false } = {}) {
+  elements.scheduleNoteContextMenu?.classList.add("hidden");
+  if (restoreFocus && scheduleNoteQuill && scheduleNoteContextSelection) {
+    scheduleNoteQuill.focus();
+    scheduleNoteQuill.setSelection(scheduleNoteContextSelection.index, scheduleNoteContextSelection.length, "silent");
+  }
+  scheduleNoteContextSelection = null;
+}
+
+function formatScheduleNoteSelection(format, value) {
+  if (!scheduleNoteQuill || !["bold", "italic", "underline", "size", "clear"].includes(format)) return;
+  const range = scheduleNoteSelectedRange();
+  if (!range) return;
+  if (format === "size" && !(value = normalizeScheduleNoteSize(value))) return;
+  const current = scheduleNoteSelectionFormats(range);
+  scheduleNoteQuill.history.cutoff();
+  scheduleNoteQuill.focus();
+  scheduleNoteQuill.setSelection(range.index, range.length, "silent");
+  const changes = format === "clear" ? { bold: false, italic: false, underline: false, size: false }
+    : { [format]: format === "size" ? value : value ?? current[format] !== true };
+  if (range.length) scheduleNoteQuill.formatText(range.index, range.length, changes, "user");
+  else for (const [name, setting] of Object.entries(changes)) scheduleNoteQuill.format(name, setting, "user");
+  scheduleNoteQuill.history.cutoff();
+  scheduleNoteQuill.setSelection(range.index, range.length, "silent");
+  scheduleNoteSelection = { ...range };
+  if (scheduleNoteContextSelection) scheduleNoteContextSelection = { ...range };
+  if (elements.scheduleNoteFormatStatus) elements.scheduleNoteFormatStatus.textContent = "";
+  updateScheduleNoteFormattingControls();
+}
+
+function applyScheduleNoteFontSize(input) {
+  const size = normalizeScheduleNoteSize(input?.value);
+  if (!size || !input.checkValidity()) {
+    if (elements.scheduleNoteFormatStatus) elements.scheduleNoteFormatStatus.textContent = "Bitte eine Schriftgröße von 4 bis 72 pt in 0,1-pt-Schritten eingeben.";
+    input?.setAttribute("aria-invalid", "true");
+    input?.focus();
+    return;
+  }
+  input.removeAttribute("aria-invalid");
+  input.value = size;
+  formatScheduleNoteSelection("size", size);
+}
+
+function openScheduleNoteContextMenu(event) {
+  const range = scheduleNoteSelectedRange();
+  if (!range?.length || !elements.scheduleNoteContextMenu) return;
+  event.preventDefault();
+  event.stopPropagation();
+  scheduleNoteSelection = { ...range };
+  scheduleNoteContextSelection = { ...range };
+  const menu = elements.scheduleNoteContextMenu, frame = elements.scheduleNoteEditorFrame;
+  menu.classList.remove("hidden");
+  updateScheduleNoteFormattingControls();
+  const bounds = frame.getBoundingClientRect();
+  const scaleX = bounds.width / frame.offsetWidth || 1, scaleY = bounds.height / frame.offsetHeight || 1;
+  const keyboard = !event.clientX && !event.clientY;
+  const left = keyboard ? 12 : (event.clientX - bounds.left) / scaleX;
+  const top = keyboard ? 48 : (event.clientY - bounds.top) / scaleY;
+  // Coordinates are bounded numeric values from this editor's own pointer event.
+  menu.style.left = `${Math.max(4, Math.min(left, frame.clientWidth - menu.offsetWidth - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(top, frame.clientHeight - menu.offsetHeight - 4))}px`;
+}
+
+function bindScheduleNoteEditorEvents() {
+  if (scheduleNoteEditorEventsBound) return;
+  scheduleNoteEditorEventsBound = true;
+  for (const panel of [elements.scheduleNoteToolbar, elements.scheduleNoteContextMenu].filter(Boolean)) {
+    panel.addEventListener("pointerdown", event => {
+      const range = scheduleNoteQuill?.getSelection();
+      if (range) scheduleNoteSelection = { index: range.index, length: range.length };
+      if (event.target.closest("button")) event.preventDefault();
+    });
+    panel.addEventListener("click", event => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      if (button.dataset.noteFormat) formatScheduleNoteSelection(button.dataset.noteFormat);
+      if (button.dataset.noteSizeApply !== undefined) applyScheduleNoteFontSize(panel.querySelector("input[data-note-size]"));
+      if (button.dataset.noteContextClose !== undefined) closeScheduleNoteContextMenu({ restoreFocus: true });
+    });
+    panel.querySelector("input[data-note-size]")?.addEventListener("keydown", event => {
+      if (event.key === "Enter") { event.preventDefault(); applyScheduleNoteFontSize(event.target); }
+    });
+  }
+  scheduleNoteQuill.root.addEventListener("contextmenu", openScheduleNoteContextMenu);
+  scheduleNoteQuill.root.addEventListener("keydown", event => {
+    if (event.key === "ContextMenu" || event.key === "F10" && event.shiftKey) openScheduleNoteContextMenu(event);
+  });
+  elements.scheduleNoteModal.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !elements.scheduleNoteContextMenu.classList.contains("hidden")) {
+      event.preventDefault(); event.stopPropagation(); closeScheduleNoteContextMenu({ restoreFocus: true });
+    }
+  });
+  elements.scheduleNoteModal.addEventListener("close", () => { closeScheduleNoteContextMenu(); scheduleNoteSelection = null; });
+  document.addEventListener("pointerdown", event => {
+    if (!elements.scheduleNoteContextMenu.contains(event.target)) closeScheduleNoteContextMenu();
+  });
+  elements.scheduleNoteModal.querySelector("form")?.addEventListener("scroll", () => closeScheduleNoteContextMenu());
+}
 
 function stripEmoji(value) {
   return String(value || "")
@@ -40876,17 +41259,32 @@ function sanitizeScheduleNoteEditor() {
     );
     return;
   }
-  const before = editorRoot.innerHTML;
-  const after = stripEmoji(before);
-  if (before !== after) {
-    if (scheduleNoteQuill) {
-      const selection = scheduleNoteQuill.getSelection();
-      scheduleNoteSanitizing = true;
-      scheduleNoteQuill.clipboard.dangerouslyPasteHTML(after);
-      if (selection) scheduleNoteQuill.setSelection(Math.min(selection.index, scheduleNoteQuill.getLength()), 0, "silent");
-      scheduleNoteSanitizing = false;
+  const before = scheduleNoteQuill.getContents();
+  const clean = cleanScheduleNoteDelta(before);
+  const change = before.diff(clean);
+  if (!change.ops.length) return;
+  const selection = scheduleNoteSelectedRange();
+  const adjust = offset => stripEmoji(scheduleNoteQuill.getText(0, offset)).length;
+  const range = selection ? { index: adjust(selection.index), length: adjust(selection.index + selection.length) - adjust(selection.index) } : null;
+  scheduleNoteSanitizing = true;
+  try {
+    // Change text in the Delta, never reparse serialized attributes. Formatting
+    // and both ends of a selection survive the removal of unsupported glyphs.
+    scheduleNoteQuill.updateContents(change, "user");
+    if (range) {
+      scheduleNoteSelection = range;
+      scheduleNoteQuill.setSelection(range.index, range.length, "silent");
     }
+  } finally { scheduleNoteSanitizing = false; }
+}
+
+function cleanScheduleNoteDelta(delta) {
+  const Delta = window.Quill.import("delta"), clean = new Delta();
+  for (const operation of delta.ops) if (typeof operation.insert === "string") {
+    const text = stripEmoji(operation.insert);
+    if (text) clean.insert(text, operation.attributes);
   }
+  return clean;
 }
 
 function scheduleNotePlainText() {
@@ -40894,19 +41292,25 @@ function scheduleNotePlainText() {
 }
 
 function scheduleNoteHtml() {
-  const html = stripEmoji(scheduleNoteQuill?.root?.innerHTML || elements.scheduleNoteEditor?.innerHTML || "").trim();
+  const html = String(scheduleNoteQuill?.root?.innerHTML || elements.scheduleNoteEditor?.innerHTML || "").trim();
   return /^<p><br><\/p>$/i.test(html) ? "" : html;
 }
 
 function setScheduleNoteHtml(html) {
-  const cleanHtml = stripEmoji(html || "");
   if (scheduleNoteQuill) {
     scheduleNoteSanitizing = true;
-    scheduleNoteQuill.setText("");
-    if (cleanHtml) scheduleNoteQuill.clipboard.dangerouslyPasteHTML(cleanHtml);
-    scheduleNoteSanitizing = false;
+    try {
+      const contents = scheduleNoteQuill.clipboard.convert({ html: String(html || "") });
+      scheduleNoteQuill.setContents(cleanScheduleNoteDelta(contents), "silent");
+      scheduleNoteQuill.history.clear();
+      scheduleNoteSelection = { index: 0, length: 0 };
+      scheduleNoteContextSelection = null;
+      updateScheduleNoteFormattingControls();
+    } finally { scheduleNoteSanitizing = false; }
   } else if (elements.scheduleNoteEditor) {
-    elements.scheduleNoteEditor.innerHTML = cleanHtml;
+    // A missing bundled editor must not activate stored markup in a fallback.
+    const parsed = new DOMParser().parseFromString(String(html || ""), "text/html");
+    elements.scheduleNoteEditor.textContent = stripEmoji(parsed.body.textContent || "");
   }
 }
 
@@ -40920,15 +41324,29 @@ function updateScheduleNoteCounter() {
       elements.scheduleNoteEditor.innerText = text.slice(0, scheduleNoteMaxLength);
     }
   }
-  elements.scheduleNoteCounter.textContent = `${Math.min(text.length, scheduleNoteMaxLength)}/${scheduleNoteMaxLength} Zeichen · Smileys werden für schlanke PDFs automatisch entfernt.`;
+  elements.scheduleNoteCounter.textContent = `${Math.min(text.length, scheduleNoteMaxLength)}/${scheduleNoteMaxLength} Zeichen · Schriftgrößen werden im PDF in Punkten übernommen. Smileys werden entfernt.`;
+  updateScheduleNoteFormattingControls();
+}
+
+function scheduleNoteInitialHtml(note) {
+  if (String(note.note_html || "").trim()) return note.note_html;
+  let html = escapeHtml(note.note_text || "").replace(/\n/g, "<br>");
+  if (!html) return "";
+  if (note.bold) html = `<b>${html}</b>`;
+  if (note.italic) html = `<i>${html}</i>`;
+  if (note.underline) html = `<u>${html}</u>`;
+  const size = normalizeScheduleNoteSize(note.font_size);
+  return size ? `<span data-size="${size}">${html}</span>` : html;
 }
 
 function openScheduleNoteModal() {
   if (guardScheduleEditing()) return;
-  initScheduleNoteEditor();
+  if (!initScheduleNoteEditor()) { showToast("Der Texteditor ist noch nicht verfügbar. Bitte die Seite neu laden.", true); return; }
   const note = state.data.scheduleNote || {};
   elements.scheduleNoteForm.reset();
-  setScheduleNoteHtml(note.note_html || escapeHtml(note.note_text || "").replace(/\n/g, "<br>"));
+  closeScheduleNoteContextMenu();
+  if (elements.scheduleNoteFormatStatus) elements.scheduleNoteFormatStatus.textContent = "";
+  setScheduleNoteHtml(scheduleNoteInitialHtml(note));
   elements.deleteScheduleNoteButton.classList.toggle("hidden", !note.note_text);
   updateScheduleNoteCounter();
   elements.scheduleNoteModal.showModal();
@@ -40936,25 +41354,51 @@ function openScheduleNoteModal() {
 }
 
 function initScheduleNoteEditor() {
-  if (!elements.scheduleNoteEditor || scheduleNoteQuill || !window.Quill) return;
-  const Size = window.Quill.import("attributors/class/size");
-  Size.whitelist = ["small", "large"];
-  window.Quill.register(Size, true);
+  if (scheduleNoteQuill) return true;
+  if (!elements.scheduleNoteEditor || !window.Quill) return false;
+  const Parchment = window.Quill.import("parchment");
+  class ScheduleNotePointSize extends Parchment.ClassAttributor {
+    add(node, value) {
+      const size = normalizeScheduleNoteSize(value);
+      if (!size) return false;
+      this.remove(node);
+      node.classList.add(`ql-size-${size.replace(".", "_")}pt`);
+      node.setAttribute("data-size", size);
+      return true;
+    }
+    remove(node) { super.remove(node); node.removeAttribute("data-size"); }
+    value(node) { return scheduleNoteSizeFromNode(node) || ""; }
+  }
+  window.Quill.register(new ScheduleNotePointSize("size", "ql-size", { scope: Parchment.Scope.INLINE }), true);
   scheduleNoteQuill = new window.Quill(elements.scheduleNoteEditor, {
     theme: "snow",
     placeholder: "z. B. Bitte Schaufensteraktion beachten",
     formats: ["bold", "italic", "underline", "size"],
     modules: {
-      toolbar: "#scheduleNoteToolbar",
+      toolbar: false,
       clipboard: { matchVisual: false },
     },
   });
+  const Delta = window.Quill.import("delta");
+  scheduleNoteQuill.clipboard.addMatcher("SPAN", (node, delta) => {
+    const size = scheduleNoteSizeFromNode(node);
+    return size ? delta.compose(new Delta().retain(delta.length(), { size })) : delta;
+  });
   scheduleNoteQuill.on("text-change", updateScheduleNoteCounter);
+  scheduleNoteQuill.on("selection-change", range => {
+    if (range) scheduleNoteSelection = { index: range.index, length: range.length };
+    updateScheduleNoteFormattingControls();
+  });
+  bindScheduleNoteEditorEvents();
+  return true;
 }
 
 async function saveScheduleNote(event) {
   event.preventDefault();
   if (guardScheduleEditing()) return;
+  // Point-size fields are commands, not stored fields. Apply validates them;
+  // saving serializes only the already accepted editor document, even when a
+  // discarded draft value remains in the hidden context panel.
   sanitizeScheduleNoteEditor();
   try {
     await api("/api/schedule-note", {
@@ -41016,7 +41460,8 @@ async function downloadCompleteDatabase(event) {
     return;
   }
   const currentPassword = elements.databaseDownloadCurrentPassword?.value || "";
-  if (!currentPassword) {
+  const usePasskey = window.GPPasskeyAuth?.selected?.("database-download") === true;
+  if (!usePasskey && !currentPassword) {
     setDatabaseDownloadStatus("Bitte das aktuelle Passwort eingeben.", "error");
     elements.databaseDownloadCurrentPassword?.focus();
     return;
@@ -41032,7 +41477,8 @@ async function downloadCompleteDatabase(event) {
       const response = await rawApi("/api/backup/database-download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmation: "DATABASE_BACKUP_DOWNLOAD", currentPassword }),
+        body: JSON.stringify({ confirmation: "DATABASE_BACKUP_DOWNLOAD", ...(usePasskey
+          ? await window.GPPasskeyAuth.authorization(api, "database-download") : { currentPassword }) }),
       });
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       await downloadFileResponse(response, `Grabenplaner-Datenbank-${timestamp}.db`);
@@ -41159,6 +41605,7 @@ async function createManagedOffsiteFolder() {
   }
   const folderLabel = elements.offsiteNewFolderLabel?.value.trim() || "";
   const currentPassword = elements.offsiteCreateCurrentPassword?.value || "";
+  const usePasskey = window.GPPasskeyAuth?.selected?.("offsite-folder-create") === true;
   if (!validManagedOffsiteFolderLabel(folderLabel)) {
     setOffsiteFolderDialogStatus("Bitte einen gültigen Ordnernamen mit 1 bis 48 Zeichen ohne Pfadbestandteile eingeben.", "error");
     elements.offsiteNewFolderLabel?.focus();
@@ -41169,7 +41616,7 @@ async function createManagedOffsiteFolder() {
     elements.offsiteNewFolderLabel?.focus();
     return;
   }
-  if (!currentPassword) {
+  if (!usePasskey && !currentPassword) {
     setOffsiteFolderDialogStatus("Bitte das aktuelle Passwort für die Ordneranlage eingeben.", "error");
     elements.offsiteCreateCurrentPassword?.focus();
     return;
@@ -41186,7 +41633,7 @@ async function createManagedOffsiteFolder() {
         body: JSON.stringify({
           confirmation: "CREATE_MANAGED_OFFSITE_FOLDER",
           folderLabel,
-          currentPassword,
+          ...(usePasskey ? await window.GPPasskeyAuth.authorization(api, "offsite-folder-create") : { currentPassword }),
         }),
       });
       if (elements.offsiteNewFolderLabel) elements.offsiteNewFolderLabel.value = "";
@@ -41221,6 +41668,7 @@ async function activateManagedOffsiteFolder() {
   }
   const folderLabel = elements.offsiteActiveFolderSelection?.value || "";
   const currentPassword = elements.offsiteActivateCurrentPassword?.value || "";
+  const usePasskey = window.GPPasskeyAuth?.selected?.("offsite-folder-activate") === true;
   if (!validManagedOffsiteFolderLabel(folderLabel)
     || !state.offsiteFolders?.folders.includes(folderLabel)
     || folderLabel === state.offsiteFolders?.activeFolder) {
@@ -41233,7 +41681,7 @@ async function activateManagedOffsiteFolder() {
     elements.offsiteFolderActivationConfirmation?.focus();
     return;
   }
-  if (!currentPassword) {
+  if (!usePasskey && !currentPassword) {
     setOffsiteFolderDialogStatus("Bitte das aktuelle Passwort für den Zielwechsel eingeben.", "error");
     elements.offsiteActivateCurrentPassword?.focus();
     return;
@@ -41253,7 +41701,7 @@ async function activateManagedOffsiteFolder() {
         body: JSON.stringify({
           confirmation: "ACTIVATE_MANAGED_OFFSITE_FOLDER",
           folderLabel,
-          currentPassword,
+          ...(usePasskey ? await window.GPPasskeyAuth.authorization(api, "offsite-folder-activate") : { currentPassword }),
         }),
       }), folderLabel);
       const refreshed = await loadManagedOffsiteFolders({ force: true });
@@ -43148,9 +43596,13 @@ elements.rightsEditorPermissions?.addEventListener("change", (event) => {
   refreshRightsEditorScope();
 });
 elements.rightsEditorScope?.addEventListener("change", (event) => {
-  const input = event.target.closest('input[name="rightsEditorScopeMode"]');
+  const input = event.target.closest('input[name="rightsEditorScopeMode"], input[data-rights-location]');
   if (!input) return;
   refreshRightsEditorSaveState();
+  if (input.hasAttribute("data-rights-location")) {
+    rightsEditorAnnounce("Die ausdrücklich freigegebenen Filialbereiche wurden geändert.");
+    return;
+  }
   rightsEditorAnnounce(input.value === "department"
     ? "Verantwortungsbereich auf die eigene Abteilung begrenzt."
     : "Verantwortungsbereich auf die gesamte Filiale erweitert.");
@@ -43224,6 +43676,7 @@ elements.loanOverviewColumnsLocation?.addEventListener("change", () => {
 elements.loanOverviewColumnsForm?.addEventListener("submit", saveLoanOverviewColumns);
 elements.branchAccountPasswordButton?.addEventListener("click", openBranchAccountPasswordDialog);
 elements.branchAccountPasswordForm?.addEventListener("submit", saveBranchAccountPassword);
+elements.branchAccountPasswordAccount?.addEventListener("change", syncBranchAccountPasskeyLink);
 elements.loanManagementLocation?.addEventListener("change", () => {
   state.loanManagementLocationId = elements.loanManagementLocation.value;
   loadLoanManagement();
@@ -45545,11 +45998,11 @@ elements.timeline.addEventListener("click", (event) => {
   if (shiftButton) {
     event.stopPropagation();
     const shift = state.data.shifts.find((item) => item.id === Number(shiftButton.dataset.shiftId));
-    openShiftModal(shift.employee_number, shift.shift_date, shift);
+    openShiftModalForPlanningDate(shift.employee_number, shift.shift_date, shift);
     return;
   }
   const lane = event.target.closest("[data-employee-number][data-date]");
-  if (lane) openShiftModal(lane.dataset.employeeNumber, lane.dataset.date);
+  if (lane) openShiftModalForPlanningDate(lane.dataset.employeeNumber, lane.dataset.date);
 });
 
 elements.optionList.addEventListener("click", async (event) => {
@@ -45613,6 +46066,11 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
   enabled: () => !document.body.classList.contains("portal-locked")
     && Boolean(state.portalStatus) && (!state.portalStatus.portalEnabled || state.portalSession?.authenticated === true),
   onError: () => showToast("Die Seitennavigation konnte nicht wiederhergestellt werden.", true),
+});
+window.GPPasskeyAuth?.bindLogin(document.getElementById("adminPasskeyLogin"), {
+  api, complete: completeAdministrationLogin,
+  canUse: () => elements.adminLoginPersonnelNumber?.disabled === false,
+  error: error => { if (error.code !== "PORTAL_SESSION_CHANGED") showLoginGate(error.message); },
 });
 window.GrabenplanerSessionLifecycle?.listen(() => {
   showLoginGate("Die Anmeldung wurde in einem anderen Fenster geändert. Die Sitzung wird neu geprüft.");

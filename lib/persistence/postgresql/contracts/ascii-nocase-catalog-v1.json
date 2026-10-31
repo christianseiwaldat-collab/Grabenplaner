@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "scope": "ascii-nocase-application-extension",
+  "baseCatalog": "block-4-catalog.json",
+  "baseSchemaPlanSha256": "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e",
+  "productActivation": false,
+  "entries": [
+    {
+      "statementId": "organization-personnel.cost-center.find-id-by-code",
+      "sourceContract": "d88b55955477a4e9b474249df444f1c39f3b494609b3c720542d86e197425eb1",
+      "sqlSha256": "3c974506baedcdeb2b5c58cdafb9689622017b8fc334ede77d44e1e00b79e27b",
+      "baseSourceContract": "d88b55955477a4e9b474249df444f1c39f3b494609b3c720542d86e197425eb1",
+      "baseSqlSha256": "7abf44d85f9905cc597f23164c3b77e06f04dc21f1d55623af8c126e81bbb81a",
+      "parameterBindingsSha256": "f5d2c92e5205fd3db919c68ee8af1dabe3331aa97c5950592b788c14b9d3e65f",
+      "parameterOrderSha256": "cc6c0235e5e4420bbb21a11c2c2c0432c2bed6d0388a9ce622edb5681bbc1ccc",
+      "previousSourceContract": "d88b55955477a4e9b474249df444f1c39f3b494609b3c720542d86e197425eb1",
+      "previousSqlSha256": "7abf44d85f9905cc597f23164c3b77e06f04dc21f1d55623af8c126e81bbb81a"
+    },
+    {
+      "statementId": "organization-personnel.organization-account.login-collision",
+      "sourceContract": "45b01daa3fd4033a52b2607da4dcdb622c2695130334c85d88604524f702fd6b",
+      "sqlSha256": "f7a9dbd1b5d406aee347e7434e958f87f23f597e452ba3b041969035f89c25c9",
+      "baseSourceContract": "45b01daa3fd4033a52b2607da4dcdb622c2695130334c85d88604524f702fd6b",
+      "baseSqlSha256": "c354701057e4464e89b6f40e23389472fd44b2223d6f256b746aa49ae1f4719f",
+      "parameterBindingsSha256": "4b173d6f8dffb952e00218d4a75ac84c402b3a856be435996c9b0c20cba99e43",
+      "parameterOrderSha256": "1f6ccc78df0c053c7405c9de26ddd3538413a7d3cb7a22b540ef08f5deab0cf4",
+      "previousSourceContract": "45b01daa3fd4033a52b2607da4dcdb622c2695130334c85d88604524f702fd6b",
+      "previousSqlSha256": "c354701057e4464e89b6f40e23389472fd44b2223d6f256b746aa49ae1f4719f"
+    },
+    {
+      "statementId": "portal-access.organization-login.get",
+      "sourceContract": "5c6c0d4dbd9eb2196a97a2a19987a6d92a90bc0c2e60730d6ce38943f57f4930",
+      "sqlSha256": "a593439f28d7d643efaf1fdcd8b28978015412aca446f1988783931c52003ca9",
+      "baseSourceContract": "7e3b0032032b212020e02a0b6a12e50ac1d567e737ccb3a3be2bfa01f6acf2b3",
+      "baseSqlSha256": "baec7abb784204b53f35c7a8127aa55a0309f1df577a7e2d154e586eba6004ca",
+      "parameterBindingsSha256": "718f9c600f44b52f80358e54998853a69ad8d43457c790f5ac1ce7d6c4fb12b6",
+      "parameterOrderSha256": "8dcdf4ea2f1af90a9a1dac9830e3d632084587532c7dac6e3927e849d34a48dd",
+      "previousSourceContract": "5c6c0d4dbd9eb2196a97a2a19987a6d92a90bc0c2e60730d6ce38943f57f4930",
+      "previousSqlSha256": "c953a165bc8d20f1dfea106ea7b578facf9a26979b35a0eb6b13bab6302e8597"
+    },
+    {
+      "statementId": "integration-runtime.list-employee-import-rows-case-insensitive",
+      "sourceContract": "9676aa4e9c470b8ebc7443ee878bffa7eeac5844fe8a8193dd68bec7d01d1455",
+      "sqlSha256": "39e7707327fba7581ad140621f1a40b4fbad1ae888c6ec0ae94985af3e74f875",
+      "baseSourceContract": "9676aa4e9c470b8ebc7443ee878bffa7eeac5844fe8a8193dd68bec7d01d1455",
+      "baseSqlSha256": "6c87863fb8dcd4a51cca0b8a8a7a9afce7a50457a1cfe927a35f6249e9e3d002",
+      "parameterBindingsSha256": "bf34767f72b270ce19f0110efbcec3214c589c98a6ca7e4e630405a9d94e6842",
+      "parameterOrderSha256": "8dcdf4ea2f1af90a9a1dac9830e3d632084587532c7dac6e3927e849d34a48dd",
+      "previousSourceContract": "9676aa4e9c470b8ebc7443ee878bffa7eeac5844fe8a8193dd68bec7d01d1455",
+      "previousSqlSha256": "6c87863fb8dcd4a51cca0b8a8a7a9afce7a50457a1cfe927a35f6249e9e3d002"
+    }
+  ]
+}

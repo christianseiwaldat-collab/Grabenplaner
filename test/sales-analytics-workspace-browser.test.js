@@ -28,13 +28,17 @@ test('compact sales workspace preserves report choices, validation and graphic m
         sellers:[{ id:'101', label:'101 · Anna' }, { id:'102', label:'102 · Ben' }, { id:'103', label:'103 · Chris' }],
         merchandiseGroups:[{ id:'101', label:'101 · Digitale Kameras' }, { id:'202', label:'202 · Objektive' }, { id:'301', label:'301 · Ferngläser' }],
         productGroups:[{ id:'30101', label:'30101 · Ferngläser' }, { id:'10101', label:'10101 · Systemkameras' }],
-        manufacturers:[{ id:'Example A', label:'Example A' }, { id:'Example B', label:'Example B' }],
+        manufacturers:[{ id:'Example A', label:'Example A' }, { id:'Example B', label:'Example B' },
+          ...Array.from({ length:2099 }, (_, i) => ({ id:`Synthetic ${i}`, label:`Synthetic brand ${i}` }))],
         metrics:[{ id:'netRevenue', label:'Umsatz netto' }, { id:'quantity', label:'Stückzahl' }, { id:'receiptCount', label:'Belege' }, { id:'grossMargin', label:'Rohertrag' }, { id:'grossMarginPercent', label:'Rohertrag in %' }, { id:'averageReceipt', label:'Durchschnittsbon' }],
         dimensions:[{ id:'productGroup', label:'Sortimentsgruppe' }, { id:'manufacturer', label:'Hersteller' }, { id:'location', label:'Filiale' }, { id:'seller', label:'MA' }] };
       window.salesRequests = [];
       window.reportApi = async (url, options = {}) => {
         if (options.method === 'POST') { salesRequests.push({ url, body:JSON.parse(options.body) }); return {}; }
-        if (url === '/api/sales-report-jobs/context') return context;
+        if (url === '/api/sales-report-jobs/context') {
+          if (window.failReportContext) throw Object.assign(Error('Der Bericht konnte nicht verarbeitet werden.'), { code:'IMPORT_REPORT_METADATA_LIMIT' });
+          return context;
+        }
         if (url === '/api/sales-report-jobs' || url === '/api/sales-report-templates') return [];
         throw Error('Unexpected mock URL: ' + url);
       };
@@ -65,6 +69,11 @@ test('compact sales workspace preserves report choices, validation and graphic m
     await scope.locator('> summary').click();
     const manufacturers = page.locator('.sales-report-filter-disclosure').filter({ has:page.locator('#salesReportJobManufacturers') });
     await manufacturers.locator('> summary').click();
+    const brandSearch = page.getByRole('searchbox', { name:'Hersteller / Marke durchsuchen', exact:true });
+    await brandSearch.fill('Synthetic brand 2098');
+    assert.equal(await page.locator('#salesReportJobManufacturers input[type="checkbox"]').count(), 1);
+    assert.match(await page.locator('#salesReportJobManufacturers').textContent(), /Synthetic brand 2098/);
+    await brandSearch.fill('');
     await page.locator('#salesReportJobManufacturers input[type="checkbox"]').first().check();
     await page.getByRole('button', { name:'Hersteller / Marke · Hinzufügen', exact:true }).click();
     await page.waitForFunction(() => document.querySelector('.sales-report-scope-disclosure > summary small').textContent.includes('Hersteller / Marke: 1'));
@@ -123,6 +132,15 @@ test('compact sales workspace preserves report choices, validation and graphic m
     await page.evaluate(() => reportUi.reset());
     await page.waitForFunction(() => [...document.querySelectorAll('.sales-report-filter-disclosure-count')].every(element => element.textContent === 'Alle'));
     assert.equal(await page.locator('#salesReportDataQuality').textContent(),'');
+    await page.evaluate(async () => { window.failReportContext = true; await reportUi.refresh(); });
+    assert.match(await page.locator('#salesAnalyticsRequestHint').textContent(), /zu viele Stammdatenbezeichnungen/);
+    assert.equal(await page.locator('#salesReportJobSubmit').isEnabled(), false);
+    await page.evaluate(async () => { window.failReportContext = false; await reportUi.refresh(); });
+    assert.equal(await page.locator('#salesReportJobLocations input[type="checkbox"]').count(), 3);
+    assert.equal(await page.locator('#salesReportJobSubmit').isEnabled(), true);
+    await page.evaluate(() => reportUi.setMode('graphic'));
+    assert.equal(await page.locator('#salesReportJobLocations input[type="checkbox"]').count(), 3);
+    assert.ok(await page.locator('#salesGraphicMetric option').count() > 0);
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });

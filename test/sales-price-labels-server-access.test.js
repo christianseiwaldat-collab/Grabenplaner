@@ -1,11 +1,12 @@
-'use strict';
+"use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-price-label-http-'));
 Object.assign(process.env,{DB_PATH:path.join(root,'test.db'),BACKUP_DIR:path.join(root,'backups'),GRABENPLANER_DATA_DIR:path.join(root,'data'),GRABENPLANER_HOST:'127.0.0.1',GRABENPLANER_FORCE_PORTAL:'1',GRABENPLANER_SEED_DEMO:'1',GRABENPLANER_INTEGRATION_KEY_ID:'price-label-http',GRABENPLANER_INTEGRATION_KEY:crypto.randomBytes(32).toString('base64'),NODE_ENV:'test'});
 const subject=require('../server'),{app,db}=subject;let server,url;const clients={};
 test.before(async()=>{
-  db.prepare("INSERT OR IGNORE INTO locations(id,name,active) VALUES('93','Testfiliale',1)").run();
+  prepareLocationFixture(db, "INSERT OR IGNORE INTO locations(id,name,active) VALUES('93','Testfiliale',1)").run();
   db.prepare("INSERT INTO employees(personnel_number,full_name,nickname,color,contracted_hours,home_location_id,active) VALUES('price-vk','Verkaufsmitarbeiter','VK','#215345',38.5,'93',1)").run();
   db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password) VALUES('price-vk','synthetic-no-password','employee',1,0)").run();
   for(const permission of ['sales:articles:access','sales:articles:read','sales:articles:prices:read'])db.prepare('INSERT INTO portal_permission_grants(employee_number,permission) VALUES(?,?)').run('price-vk',permission);
@@ -21,7 +22,7 @@ test.before(async()=>{
   }
   await new Promise(resolve=>{server=app.listen(0,'127.0.0.1',resolve);});url='http://127.0.0.1:'+server.address().port;
 });
-test.after(async()=>{if(server)await new Promise(resolve=>server.close(resolve));try{db.close();}catch{}subject.releaseInstanceLockForTests();fs.rmSync(root,{recursive:true,force:true,maxRetries:8,retryDelay:100});});
+test.after(async()=>{if(server)await new Promise(resolve=>server.close(resolve));try{await db.close();}catch{}subject.releaseInstanceLockForTests();fs.rmSync(root,{recursive:true,force:true,maxRetries:8,retryDelay:100});});
 const request=(actor,route,body,csrf=true)=>fetch(url+route,{method:body?'POST':'GET',headers:{...clients[actor],...(!csrf?{'X-CSRF-Token':''}:{}),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
 test('real API admits normal salesperson and branch account without scheduling rights, preserving personal catalog boundaries',async()=>{
   for(const actor of ['employee','branch']){

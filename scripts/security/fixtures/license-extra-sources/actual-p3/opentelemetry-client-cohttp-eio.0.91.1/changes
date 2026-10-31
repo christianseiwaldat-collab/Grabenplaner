@@ -1,0 +1,51 @@
+opam-version: "2.0"
+added: [
+  "doc/opentelemetry-client-cohttp-eio" {"D"}
+  "doc/opentelemetry-client-cohttp-eio/CHANGES.md" {"F:S5854T1793251652.81"}
+  "doc/opentelemetry-client-cohttp-eio/README.md" {"F:S5105T1793251652.81"}
+  "doc/opentelemetry-client-cohttp-eio/odoc-config.sexp"
+    {"F:S15T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio" {"D"}
+  "lib/opentelemetry-client-cohttp-eio/META" {"F:S792T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/config.ml" {"F:S191T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/config.mli" {"F:S350T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/dune-package"
+    {"F:S2893T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opam" {"F:S1118T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio.a"
+    {"F:S70464T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio.cma"
+    {"F:S37670T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio.cmi"
+    {"F:S6304T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio.cmt"
+    {"F:S55156T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio.cmti"
+    {"F:S15327T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio.cmx"
+    {"F:S68856T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio.cmxa"
+    {"F:S15592T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio.cmxs"
+    {"F:S118064T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio.ml"
+    {"F:S6968T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio.mli"
+    {"F:S1616T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio__.cmi"
+    {"F:S408T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio__.cmt"
+    {"F:S2058T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio__.cmx"
+    {"F:S439T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio__.ml"
+    {"F:S234T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio__Config.cmi"
+    {"F:S4446T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio__Config.cmt"
+    {"F:S5549T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio__Config.cmti"
+    {"F:S9784T1793251652.81"}
+  "lib/opentelemetry-client-cohttp-eio/opentelemetry_client_cohttp_eio__Config.cmx"
+    {"F:S11225T1793251652.81"}
+]

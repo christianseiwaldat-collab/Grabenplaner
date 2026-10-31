@@ -199,7 +199,7 @@ test("Artikelauswahl lädt Details; Navigation aktualisiert bereits ausgewählte
     "async function loadSalesArticleCatalogDetail",
     "function salesArticleCatalogCell",
   );
-  assert.match(loader, /new URLSearchParams\(\{ articleNumber: normalizedArticleNumber \}\)/);
+  assert.match(loader, /new URLSearchParams\(\{ articleNumber: normalizedArticleNumber, section: 'main' \}\)/);
   assert.match(loader, /api\(`\/api\/sales\/articles\/detail\?\$\{parameters\}`\)/);
   assert.match(loader, /catalog\.detailRequestId \+= 1/);
   assert.match(loader, /requestId !== catalog\.detailRequestId/);

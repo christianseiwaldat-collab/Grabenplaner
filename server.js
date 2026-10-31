@@ -1,6 +1,8 @@
 const express = require("express");
 const { preferredDaysOff, preferredDaysLimit, validatePreferredDays, preferredDayCost, protectedPersonnelName } = require("./lib/employee-preferences");
 const PDFDocument = require("pdfkit");
+const scheduleNoteRichText = require("./lib/schedule-note-rich-text");
+const { schedulePdfDayStatus } = require("./lib/schedule-pdf-day-status");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -27,6 +29,7 @@ const { createOpenAiVoiceProvider } = require('./lib/voice-assistant-openai');
 const voiceAssistantSettings = require('./lib/voice-assistant-settings');
 const planningAssistantSettings = require('./lib/planning-assistant-settings');
 const planningAssistantPreferences = require('./lib/planning-assistant-preferences');
+const planningShiftPrecondition = require('./lib/planning-shift-precondition');
 const assistantPilotAccess = require('./lib/assistant-pilot-access');
 const { createPlanningAssistantReader } = require('./lib/planning-assistant-gp');
 const { createVoiceAssistant } = require('./lib/voice-assistant');
@@ -121,7 +124,6 @@ const {
   normalizePersonalEmailAddress,
 } = require("./lib/personal-email-address");
 const { acquireDatabaseLock, lockPathForDatabase, releaseDatabaseLock } = require("./lib/database-lock");
-const { acquireBackupWorkspace, withBackupWorkspace, prepareBackupWorkspace, MAX_WAIT_MS: BACKUP_WORKSPACE_MAX_WAIT_MS } = require("./lib/backup-workspace");
 const {
   listCommittedBackupMetadata,
   listLegacyBackupMetadata,
@@ -196,12 +198,6 @@ const {
   buildHostSecurityAlerts,
   readHostSecurityStatus,
 } = require("./lib/host-security-status");
-const {
-  F18MigrationError,
-  inspectF18Backup,
-  photoBufferForMigration,
-  publicF18Inspection,
-} = require("./lib/f18-loan-migration");
 const { createSystemCenterTechnicalCache } = require("./lib/system-center-technical-cache");
 const {
   assertRuntimeConfiguration,
@@ -213,82 +209,9 @@ const {
   runtimeValidationErrors,
 } = require("./lib/server-runtime");
 const { resolvePersistenceConfiguration } = require("./lib/persistence/configuration");
-const {
-  createSqlitePersistenceProvider,
-  openSqliteApplicationPersistence,
-  openSqliteLegacyDatabase,
-} = require("./lib/persistence/sqlite/provider");
-const {
-  applicationSettingsSnapshotFromDatabase,
-  createSqliteMaintenanceOperations,
-  createSqliteSchemaOperations,
-  protectedLoanStorageSnapshotFromDatabase,
-  protectedSicknessAmuStorageSnapshotFromDatabase,
-  protectedStorageReferencesFromDatabase,
-  protectedStorageReferencesFromFile,
-  verifyPriceLabelImageFilesFromFile,
-  verifySqliteDatabaseFile,
-} = require("./lib/persistence/sqlite/operations/maintenance");
-const {
-  createSqliteSystemDiagnosticsOperations,
-} = require("./lib/persistence/sqlite/operations/system-diagnostics");
-const {
-  createSqliteAuditLogOperations,
-} = require("./lib/persistence/sqlite/operations/audit-log");
-const {
-  applyBrandingSnapshotToSqliteFile,
-  inspectSqliteImportForeignKeyIntegrity,
-  inspectSqliteImportFile,
-} = require("./lib/persistence/sqlite/operations/database-import");
-const {
-  SQLITE_APPLICATION_CATALOG,
-} = require("./lib/persistence/sqlite/application-catalog");
-const {
-  ensureSqliteApplicationSchema,
-} = require("./lib/persistence/sqlite/operations/application-schema");
-const {
-  inspectSqlitePersonnelLifecycleConversionSchema,
-  inspectSqlitePersonnelLifecycleSchema,
-} = require("./lib/persistence/sqlite/operations/personnel-lifecycle-schema");
-const {
-  eventReceiptSha256: personnelDocumentEventReceiptSha256,
-} = require("./lib/persistence/sqlite/operations/personnel-document-history-schema");
-const {
-  runSqliteStartupSchemaMigrations,
-} = require("./lib/persistence/sqlite/operations/startup-schema-migrations");
-const {
-  runSqliteHistoricalCompatibilityMigrations,
-} = require("./lib/persistence/sqlite/operations/historical-compatibility-migrations");
-const {
-  runSqliteFeatureCompatibilityMigrations,
-} = require("./lib/persistence/sqlite/operations/feature-compatibility-migrations");
-const {
-  runSqliteOrganizationSchemaMigrations,
-} = require("./lib/persistence/sqlite/operations/organization-schema-migrations");
-const {
-  createSqliteProtectedRecordOperations,
-} = require("./lib/persistence/sqlite/operations/protected-record-migrations");
-const {
-  createSqliteApplicationSeedingOperations,
-} = require("./lib/persistence/sqlite/operations/application-seeding");
-
-
-
-
-
-
-const {
-  ensureSqliteSystemCenterMetricsSchema,
-} = require("./lib/persistence/sqlite/operations/system-center-metrics-schema");
-const {
-  BranchOrderError,
-  createSqliteBranchOrderOperations,
-  ensureSqliteBranchOrdersSchema,
-} = require("./lib/persistence/sqlite/operations/branch-orders");
-const {
-  EmployeeLocationLendingError,
-  createSqliteEmployeeLocationLendingOperations,
-} = require("./lib/persistence/sqlite/operations/employee-location-lendings");
+const { BranchOrderError } = require("./lib/persistence/postgresql/application-operations/branch-orders");
+const { EmployeeLocationLendingError } = require("./lib/persistence/postgresql/application-operations/employee-location-lendings");
+const { eventReceiptSha256: personnelDocumentEventReceiptSha256 } = require("./lib/personnel-document-event-receipt");
 const {
   createApplicationRepositories,
 } = require("./lib/persistence/application-repositories");
@@ -312,7 +235,6 @@ const {
   configureSystemCertificateAuthorities,
   downloadGitHubReleaseAsset,
 } = require("./lib/update-download");
-const { populateUsbProfileDatabase } = require("./lib/usb-profile-database");
 const {
   createSelectionToken,
   enumerateSafeUsbCandidates,
@@ -621,7 +543,7 @@ const {
   moduleReceiptSha256: personnelLearningModuleReceiptSha256,
   moduleVersionReceiptSha256: personnelLearningVersionReceiptSha256,
   sha256Text: personnelLearningSha256,
-} = require("./lib/persistence/sqlite/operations/personnel-learning-schema");
+} = require("./lib/personnel-learning-receipts");
 const {
   PERSONNEL_LIFECYCLE_CASE_PERMISSIONS,
   PERSONNEL_LIFECYCLE_CASE_PERMISSION_IDS,
@@ -2252,13 +2174,7 @@ const deploymentKind = String(process.env.GRABENPLANER_DEPLOYMENT_KIND || "local
 const systemdInvocationId = String(process.env.INVOCATION_ID || "").trim().toLowerCase();
 function currentHostManagedRebootAvailable() {
   if (!serverModeActive || process.platform !== "linux" || !hostBootGeneration) return false;
-  if (postgresqlActive) return require('./lib/persistence/postgresql/lifecycle-control').available();
-  try {
-    assertSafeHostRebootSocket();
-    return true;
-  } catch {
-    return false;
-  }
+  return require('./lib/persistence/postgresql/lifecycle-control').available();
 }
 const hostBootGeneration = readHostBootGeneration();
 const bootstrapToken = String(process.env.GRABENPLANER_BOOTSTRAP_TOKEN || "").trim();
@@ -2282,14 +2198,13 @@ const dataRootDirectory = serverModeActive || configuredDataRoot ? serverDataRoo
 const dataDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "data") : portableDataDirectory;
 const persistenceConfiguration = resolvePersistenceConfiguration({
   environment: process.env,
-  defaultSqlitePath: path.join(dataDirectory, "dienstplan.db"),
 });
 const databasePath = persistenceConfiguration.databasePath;
-const postgresqlActive = persistenceConfiguration.providerId === 'postgresql';
+
 const serverManagedRestartAvailable = serverModeActive
   && process.platform === "linux"
   && /^[a-f0-9]{32}$/.test(systemdInvocationId)
-  && (!postgresqlActive || require('./lib/persistence/postgresql/lifecycle-control').available());
+  && ((require('./lib/persistence/postgresql/lifecycle-control').available()));
 const persistenceAsyncCollections = require('./lib/persistence/postgresql/application-operations/async-collections');
 const persistenceRequestContext = new (require('node:async_hooks').AsyncLocalStorage)();
 const appBackupDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "backups") : path.join(__dirname, "backups");
@@ -2528,27 +2443,23 @@ function cleanupPortableInstallRoot() {
 
 cleanupPortableInstallRoot();
 
-const databaseExistedBeforeOpen = databasePath !== ":memory:" && fs.existsSync(databasePath);
+
 let instanceLockHeld = false;
 let instanceLockHandle = null;
 acquireInstanceLock();
 let applicationPersistence;
 try {
-  applicationPersistence = postgresqlActive ? require('./lib/persistence/postgresql/application').openDeferredPostgresqlApplication({
+  applicationPersistence = (require('./lib/persistence/postgresql/application').openDeferredPostgresqlApplication({
     ...persistenceConfiguration, authorize: authorizePersistenceOperation,
     onOperation: persistenceConfiguration.rehearsal && process.env.GRABENPLANER_POSTGRESQL_TRACE === '1' ? (id) => {
       fs.appendFileSync(path.join(dataRootDirectory,'logs','persistence-startup.jsonl'),JSON.stringify({id,heap:process.memoryUsage().heapUsed})+'\n',{mode:0o600});
     } : undefined,
-  }) : openSqliteApplicationPersistence({
-    databasePath,
-    catalog: SQLITE_APPLICATION_CATALOG,
-  });
+  }));
 } catch (error) {
   releaseInstanceLock();
   throw error;
 }
 const { database: db, provider: persistenceProvider } = applicationPersistence;
-if (!postgresqlActive && databasePath !== ":memory:") prepareBackupWorkspace(databasePath);
 const saturdayCreditService = createSaturdayCreditService({ access: persistenceProvider, today: () => viennaTodayIso() });
 const applicationRepositories = createApplicationRepositories(persistenceProvider);
 const {
@@ -2582,16 +2493,12 @@ const {
   workRuleGovernance: workRuleGovernanceRepository,
   workRules: workRuleStoreRepository,
 } = applicationRepositories;
-const sqliteMaintenanceOperations = postgresqlActive ? null : createSqliteMaintenanceOperations(db);
-const sqliteSchemaOperations = postgresqlActive ? require('./lib/persistence/postgresql/application-operations/startup').schema : createSqliteSchemaOperations(db);
-const sqliteSystemDiagnosticsOperations = postgresqlActive
-  ? require('./lib/persistence/postgresql/application-operations/diagnostics').createPostgresqlSystemDiagnosticsOperations(applicationPersistence.operations)
-  : createSqliteSystemDiagnosticsOperations(db);
-const sqliteAuditLogOperations = postgresqlActive
-  ? require('./lib/persistence/postgresql/application-operations/diagnostics').createPostgresqlAuditLogOperations(applicationPersistence.operations)
-  : createSqliteAuditLogOperations(db);
-let loanProtectedStorageSnapshot = postgresqlActive ? Object.freeze({documents:[],photos:[],photoAttachments:[]}) : protectedLoanStorageSnapshotFromDatabase(db);
-let applicationSettingsSnapshot = postgresqlActive ? Object.freeze({}) : applicationSettingsSnapshotFromDatabase(db);
+
+const applicationSchemaOperations = (require('./lib/persistence/postgresql/application-operations/startup').schema);
+const systemDiagnosticsOperations = (require('./lib/persistence/postgresql/application-operations/diagnostics').createPostgresqlSystemDiagnosticsOperations(applicationPersistence.operations));
+const auditLogOperations = (require('./lib/persistence/postgresql/application-operations/diagnostics').createPostgresqlAuditLogOperations(applicationPersistence.operations));
+let loanProtectedStorageSnapshot = (Object.freeze({documents:[],photos:[],photoAttachments:[]}));
+let applicationSettingsSnapshot = (Object.freeze({}));
 let planningSettingsReadModel = Object.freeze({
   pdfSettings: Object.freeze([]),
   locationBranding: Object.freeze([]),
@@ -2603,7 +2510,7 @@ const {
   ensureColumn,
   tableExists,
   triggerExists,
-} = sqliteSchemaOperations;
+} = applicationSchemaOperations;
 let lastBackup = null;
 let backupInterval = null;
 let retentionInterval = null;
@@ -2613,7 +2520,6 @@ let notificationDispatchInterval = null;
 let rateLimitCleanupInterval = null;
 let systemCenterHealthInterval = null;
 
-const verifyDatabaseFile = verifySqliteDatabaseFile;
 
 function backupTimestamp(date = new Date()) {
   return date.toISOString().replace(/[:.]/g, "-");
@@ -2623,196 +2529,15 @@ function fileSha256(filePath) {
   return require("./lib/file-integrity").sha256File(filePath);
 }
 
-function verifyProtectedBackupPair(databaseFile, backupDirectory, expectedDatabase = {}) {
-  const requiredStorageKeys = protectedStorageReferencesFromFile(databaseFile);
-  const verified = verifyBackupReferences({ backupDirectory, requiredStorageKeys });
-  verifyPriceLabelImageFilesFromFile(databaseFile, () => ({
-    vault: integrationSecretVault,
-    sourceDirectory: backupDirectory,
-    encryptionKeys: amuEncryptionConfiguration ? { [amuEncryptionConfiguration.keyId]: amuEncryptionConfiguration.key } : {},
-    activeKeyId: amuEncryptionConfiguration?.keyId,
-  }));
-  const manifestDatabase = verified.manifest?.database || {};
-  if (expectedDatabase.fileName && manifestDatabase.fileName !== expectedDatabase.fileName) {
-    throw new Error("Datenbank und private Dateisicherung gehören nicht zum selben Sicherungspunkt.");
-  }
-  if (expectedDatabase.sha256 && String(manifestDatabase.sha256 || "").toLowerCase() !== String(expectedDatabase.sha256).toLowerCase()) {
-    throw new Error("Die Datenbank-Prüfsumme der privaten Dateisicherung stimmt nicht überein.");
-  }
-  return { requiredStorageKeys, manifest: verified.manifest };
+
+async function createDatabaseBackup() {
+  throw Object.assign(new Error("Eine gemeinsame PostgreSQL-Sicherung wird von der Serverwartung erstellt."), { code: "PG_PAIRED_BACKUP_REQUIRED" });
 }
 
-function verifyBackupPairPaths(paths, marker = null) {
-  return verifyProtectedBackupPair(paths.databasePath, paths.protectedDirectory, {
-    fileName: path.basename(paths.databasePath),
-    sha256: marker?.database?.sha256 || paths.databaseSha256,
-  });
-}
 
-function pruneDatabaseBackups(backupDirectory, keep = 20) {
-  return pruneCommittedBackups(backupDirectory, keep, { verifyPair: verifyBackupPairPaths });
-}
-
-function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", kind = "external", { beforeListen = false } = {}) {
-  if (databasePath === ":memory:" || !fs.existsSync(databasePath)) return null;
-  return withBackupWorkspace(databasePath, () => createDatabaseBackupToDirectoryWhileLocked(backupDirectory, reason, kind, { beforeListen }),
-    { waitMs: beforeListen ? BACKUP_WORKSPACE_MAX_WAIT_MS : 0 });
-}
-function createDatabaseBackupToDirectoryWhileLocked(backupDirectory, reason, kind, { beforeListen }) {
-  if (amuMutationInProgress > 0) throw new Error("Die Sicherung wartet, bis der laufende AUM-Upload abgeschlossen ist.");
-  if (!amuStorage) throw new Error("Ohne betriebsbereiten AUM-Speicher wird kein unvollständiger Sicherungspunkt erstellt.");
-  const archive = prepareLocalBackupArchive({ backupDirectory, keep: backupKeep, vault: integrationSecretVault, expectedStream: kind });
-  if (archive && !beforeListen) throw new Error("LOCAL_ARCHIVE_BACKGROUND_REQUIRED");
-  if (archive) archive.preflightBackup();
-  verifyActiveProtectedDocumentBlobsForBackup();
-  fs.mkdirSync(backupDirectory, { recursive: true });
-  const snapshotName = `dienstplan-${backupTimestamp()}-${crypto.randomBytes(6).toString("hex")}`;
-  const target = path.join(backupDirectory, `${snapshotName}.db`);
-  const amuTarget = path.join(backupDirectory, `${snapshotName}.amu`);
-  const markerTarget = path.join(backupDirectory, `${snapshotName}.complete.json`);
-  const nonce = crypto.randomUUID();
-  const temporaryDatabase = `${target}.partial-${nonce}`;
-  const temporaryAmu = `${amuTarget}.partial-${nonce}`;
-  let amuBackup = null;
-  try {
-    sqliteMaintenanceOperations.vacuumInto(temporaryDatabase);
-    const verification = verifyDatabaseFile(temporaryDatabase);
-    if (!verification.ok) throw new Error("Das erstellte Datenbank-Backup hat die Integritätsprüfung nicht bestanden.");
-    const databaseHash = fileSha256(temporaryDatabase);
-    amuBackup = syncEncryptedFilesBackup({
-      sourceDirectory: amuStorageDirectory,
-      targetDirectory: temporaryAmu,
-      manifestMetadata: { database: { fileName: path.basename(target), sha256: databaseHash } },
-    });
-    verifyProtectedBackupPair(temporaryDatabase, temporaryAmu, {
-      fileName: path.basename(target),
-      sha256: databaseHash,
-    });
-    fs.renameSync(temporaryAmu, amuTarget);
-    fs.renameSync(temporaryDatabase, target);
-    writeBackupCommitMarker({
-      backupDirectory,
-      snapshot: snapshotName,
-      databaseSha256: databaseHash,
-      protectedFiles: amuBackup?.fileCount || 0,
-    });
-    verifyCommittedBackup(backupDirectory, path.basename(markerTarget), { verifyPair: verifyBackupPairPaths });
-    if (amuBackup) amuBackup.targetDirectory = amuTarget;
-  } catch (error) {
-    safeRemoveFile(temporaryDatabase);
-    fs.rmSync(temporaryAmu, { recursive: true, force: true });
-    fs.rmSync(amuTarget, { recursive: true, force: true });
-    safeRemoveFile(target);
-    safeRemoveFile(markerTarget);
-    throw error;
-  }
-  // Pre-migration safety copies are synchronous, before listening. Preserve
-  // them as unregistered raw points; never run Restic on the live event loop.
-  const archiveResult = archive ? { archived: false, rawSafetyPointRetained: true } : null;
-  if (!archive) pruneDatabaseBackups(backupDirectory, backupKeep);
-  return { path: target, marker: markerTarget, createdAt: new Date().toISOString(), reason, kind, verified: true, committed: true, amuBackup, archive: archiveResult };
-}
-
-function createInternalDatabaseBackup(reason = "automatic") {
-  return createDatabaseBackupToDirectory(appBackupDirectory, reason, "app");
-}
-
-function createPreMigrationDatabaseBackup(reason) {
-  return createDatabaseBackupToDirectory(appBackupDirectory, reason, "app", { beforeListen: true });
-}
-
-async function createDatabaseBackupInBackground(backupDirectory, reason, kind, { deadlineMs = Date.now() + 1400000 } = {}) {
-  if (!localBackupArchiveEnabled()) return createDatabaseBackupToDirectory(backupDirectory, reason, kind);
-  if (shutdownStarted && !String(reason).startsWith("shutdown-")) {
-    const error = new Error("Während des Dienststopps werden keine weiteren Sicherungsaufträge angenommen.");
-    error.code = "BACKGROUND_BACKUP_SHUTDOWN_IN_PROGRESS";
-    throw error;
-  }
-  if (databasePath === ":memory:" || !fs.existsSync(databasePath)) return null;
-  if (!amuStorage) throw new Error("LOCAL_ARCHIVE_DOCUMENT_STORAGE_REQUIRED");
-  prepareLocalBackupArchive({ backupDirectory, keep: backupKeep, vault: integrationSecretVault, expectedStream: kind });
-  const { createBackgroundBackup } = require("./lib/background-backup-process");
-  const result = await createBackgroundBackup({ databasePath, protectedDirectory: amuStorageDirectory,
-    backupDirectory, expectedStream: kind, deadlineMs, environment: { ...process.env,
-      GRABENPLANER_INTEGRATION_KEY_ID: integrationEncryptionConfiguration.keyId,
-      GRABENPLANER_INTEGRATION_KEYS: JSON.stringify(integrationEncryptionConfiguration.keys),
-      GRABENPLANER_AMU_KEY_ID: amuEncryptionConfiguration.keyId,
-      GRABENPLANER_AMU_KEY: amuEncryptionConfiguration.key,
-    } });
-  return { ...result, reason, kind, verified: true, committed: true,
-    amuBackup: { targetDirectory: result.protectedDirectory } };
-}
-
-function createExternalDatabaseBackup(reason = "automatic", settings = tableExists("settings") ? getSettings() : {}) {
-  if (serverModeActive) return null;
-  if (settings.external_backup_enabled === "0") return null;
-  return createDatabaseBackupToDirectory(backupDirectoryFromSettings(settings), reason, "external");
-}
-
-function createDatabaseDownloadSnapshot() {
-  if (databasePath === ":memory:" || !fs.existsSync(databasePath)) {
-    throw httpError(409, "Die Datenbank steht derzeit nicht als Datei zur Verfügung.", "DATABASE_DOWNLOAD_UNAVAILABLE");
-  }
-  const workspace = acquireBackupWorkspace({ databasePath });
-  let temporaryRoot;
-  try {
-    temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-db-download-"));
-    const snapshotPath = path.join(temporaryRoot, `grabenplaner-${backupTimestamp()}-${crypto.randomBytes(6).toString("hex")}.db`);
-    try { fs.chmodSync(temporaryRoot, 0o700); } catch {}
-    sqliteMaintenanceOperations.vacuumInto(snapshotPath);
-    const verification = verifyDatabaseFile(snapshotPath);
-    if (!verification.ok) {
-      throw new Error("Die Integritätsprüfung des Datenbank-Downloads ist fehlgeschlagen.");
-    }
-    try { fs.chmodSync(snapshotPath, 0o600); } catch {}
-    const stat = fs.statSync(snapshotPath);
-    return {
-      temporaryRoot,
-      path: snapshotPath,
-      size: stat.size,
-      sha256: fileSha256(snapshotPath),
-      createdAt: new Date().toISOString(),
-      releaseWorkspace: () => workspace.release(),
-    };
-  } catch (error) {
-    try { if (temporaryRoot) fs.rmSync(temporaryRoot, { recursive: true, force: true }); }
-    finally { workspace.release(); }
-    throw error;
-  }
-}
-
-async function createDatabaseBackup(reason = "automatic", { deadlineMs = Date.now() + 1400000 } = {}) {
-  if (postgresqlActive) throw Object.assign(new Error('Eine gemeinsame PostgreSQL-Sicherung wird von der Serverwartung erstellt.'), { code: 'PG_PAIRED_BACKUP_REQUIRED' });
-  const settings = tableExists("settings") ? getSettings() : {};
-  // Both destinations and their queue time share one budget, not 1500 s each.
-  const appBackup = await createDatabaseBackupInBackground(appBackupDirectory, reason, "app", { deadlineMs });
-  const externalBackup = serverModeActive || settings.external_backup_enabled === "0" ? null
-    : await createDatabaseBackupInBackground(backupDirectoryFromSettings(settings), reason, "external", { deadlineMs });
-  lastBackup = {
-    path: externalBackup?.path || appBackup?.path || null,
-    createdAt: new Date().toISOString(),
-    reason,
-    appBackup,
-    externalBackup,
-  };
-  return lastBackup;
-}
-
-function createSchema() {
-  ensureSqliteApplicationSchema(db);
-  require('./lib/persistence/sqlite/operations/trade-annotations-schema').ensureSqliteTradeAnnotationsSchema(db);
-}
-
-const startupSchemaMigrationState = postgresqlActive ? Object.freeze({
+const startupSchemaMigrationState = (Object.freeze({
   ensureWorkRuleEvaluationReceiptIntegrity: (...args) => postgresqlStartupOperations.ensureWorkRuleEvaluationReceiptIntegrity(...args),
-}) : runSqliteStartupSchemaMigrations({
-  database: db,
-  databaseExistedBeforeOpen,
-  appVersion: packageMetadata.version,
-  ensureApplicationSchema: createSchema,
-  createPreMigrationBackup: createPreMigrationDatabaseBackup,
-  workRuleSha256,
-});
+}));
 const {
   block7SettingsMigrationId,
   block7SettingsMigrationRequired,
@@ -3013,7 +2738,6 @@ async function personnelSensitiveProfile(
     },
   };
 }
-
 
 
 function sicknessCaseProtectionContext(row) {
@@ -3300,7 +3024,6 @@ function requireGovernanceStore() {
 }
 
 
-
 async function verifyProtectedGovernanceRecords() {
   const store = requireGovernanceStore();
   let verified = 0;
@@ -3420,41 +3143,20 @@ async function verifyProtectedGovernanceRecords() {
 }
 
 
-
 const {
   migrateProtectedPersonnelRecords,
   migrateProtectedVacationHistoryRecords,
   verifyProtectedPersonnelRecordDocuments,
   verifyProtectedSensitivePersonnelRecords,
-} = postgresqlActive ? Object.fromEntries([
+} = (Object.fromEntries([
   'migrateProtectedPersonnelRecords','migrateProtectedVacationHistoryRecords',
   'verifyProtectedPersonnelRecordDocuments','verifyProtectedSensitivePersonnelRecords',
-].map(name => [name, (...args) => postgresqlStartupOperations[name](...args)])) : createSqliteProtectedRecordOperations(db, {
-  appVersion: packageMetadata.version,
-  vacationHistoryProtectionMigrationId,
-  httpError,
-  parseProtectedJson,
-  personnelRecordDocumentProtectionContext,
-  personnelSensitiveProtectionContext,
-  parseVacationHistorySnapshot,
-  protectJson,
-  vacationHistoryProtectionContext,
-  requireAmuStorage,
-  amuReportProtectionContext,
-  amuDocumentProtectionContext,
-});
+].map(name => [name, (...args) => postgresqlStartupOperations[name](...args)])));
 
-const postgresqlStartupOperations = postgresqlActive ? require('./lib/persistence/postgresql/application-operations/startup').createPostgresqlStartupOperations(applicationPersistence.operations, {
+const postgresqlStartupOperations = (require('./lib/persistence/postgresql/application-operations/startup').createPostgresqlStartupOperations(applicationPersistence.operations, {
   parseProtectedJson, personnelRecordDocumentProtectionContext, personnelSensitiveProtectionContext,
   parseVacationHistorySnapshot, amuReportProtectionContext, amuDocumentProtectionContext, workRuleSha256,
-}) : null;
-if (!postgresqlActive) {
-  migrateProtectedPersonnelRecords();
-  migrateProtectedVacationHistoryRecords();
-  verifyProtectedSensitivePersonnelRecords();
-  verifyProtectedPersonnelRecordDocuments();
-  runSqliteHistoricalCompatibilityMigrations(db);
-}
+}));
 
 const defaultSettings = {
   installation_features: JSON.stringify(defaultInstallationFeatures),
@@ -3541,65 +3243,31 @@ for (const [day, start, end] of planningDays) {
   defaultSettings[`${day}_min_to`] = end;
 }
 
-const sqliteApplicationSeedingOperations = postgresqlActive ? null : createSqliteApplicationSeedingOperations(db);
-const {
-  legacyDaySettingsSnapshot,
-} = postgresqlActive ? {} : sqliteApplicationSeedingOperations.seedApplicationDefaults({
-  defaultSettings,
-  planningDays,
-  builtinPortalRoles,
-});
-if (!postgresqlActive) applicationSettingsSnapshot = applicationSettingsSnapshotFromDatabase(db);
+
+function defaultLocationDaySettings() {
+  const stored = getSettings();
+  return Object.fromEntries(planningDays.map(([day]) => [day, {
+    open: stored[`${day}_open`] !== "0",
+    start: stored[`${day}_start_time`], end: stored[`${day}_end_time`],
+    lunchEnabled: stored[`${day}_lunch_enabled`] === "1",
+    lunchStart: stored[`${day}_lunch_start`], lunchEnd: stored[`${day}_lunch_end`],
+    minStaff: Number(stored[`${day}_min_staff`] || 0),
+    minFrom: stored[`${day}_min_from`], minTo: stored[`${day}_min_to`],
+  }]));
+}
 
 const {
   localAmuRoutingMigrationNeeded,
   startupIntegrity,
-} = postgresqlActive ? { localAmuRoutingMigrationNeeded:false, startupIntegrity:['pending'] } : runSqliteFeatureCompatibilityMigrations(db, {
-  appVersion: packageMetadata.version,
-  migrationState: startupSchemaMigrationState,
-  normalizeAppFontScalePercent,
-  defaultPortalSettings,
-  passwordMinLength: portalPasswordMinLength(),
-  passwordPolicy: { ...portalPasswordPolicyMetadata(), maxLength: portalPasswordPolicyMetadata().maxCodePoints },
-  installationFeatureIds,
-  preV063DefaultInstallationFeatures,
-  preV085DefaultInstallationFeatures,
-});
+} = ({ localAmuRoutingMigrationNeeded:false, startupIntegrity:['pending'] });
 
 const {
   ensureDefaultLocation,
-} = postgresqlActive ? {ensureDefaultLocation:()=>postgresqlStartupOperations.ensureDefaultLocation()} : runSqliteOrganizationSchemaMigrations(db, {
-  appVersion: packageMetadata.version,
-  migrationState: startupSchemaMigrationState,
-  legacyDaySettingsSnapshot,
-  auditPortal,
-  getSettings,
-  brandingFromSettings,
-  defaultSettings,
-});
+} = ({ensureDefaultLocation:()=>postgresqlStartupOperations.ensureDefaultLocation()});
 
-if (!postgresqlActive) sqliteApplicationSeedingOperations.seedDemoIfRequested({
-  enabled: process.env.GRABENPLANER_SEED_DEMO === "1",
-  demoProfile: process.env.GRABENPLANER_DEMO_PROFILE,
-  appVersion: packageMetadata.version,
-  planningDays,
-  sporthandelProfilePath: path.join(__dirname, "demo", "sporthandel", "demo-profile.json"),
-});
 
-if (!postgresqlActive) {
-  ensureSqliteSystemCenterMetricsSchema(db);
-  ensureSqliteBranchOrdersSchema(db);
-}
-const sqliteBranchOrderOperations = postgresqlActive
-  ? require('./lib/persistence/postgresql/application-operations/branch-orders').createPostgresqlBranchOrderOperations(applicationPersistence.operations)
-  : createSqliteBranchOrderOperations(db);
-const sqliteEmployeeLocationLendingOperations = postgresqlActive
-  ? require('./lib/persistence/postgresql/application-operations/employee-location-lendings').createPostgresqlEmployeeLocationLendingOperations(applicationPersistence.operations)
-  : createSqliteEmployeeLocationLendingOperations(db);
-if (!postgresqlActive) {
-  sqliteBranchOrderOperations.ensureActiveBranchAccountBasePermissions();
-  sqliteBranchOrderOperations.ensureConfiguredLocationCatalogContent();
-}
+const branchOrderOperations = (require('./lib/persistence/postgresql/application-operations/branch-orders').createPostgresqlBranchOrderOperations(applicationPersistence.operations));
+const employeeLocationLendingOperations = (require('./lib/persistence/postgresql/application-operations/employee-location-lendings').createPostgresqlEmployeeLocationLendingOperations(applicationPersistence.operations));
 let applicationInitialization = null;
 let configuredAdminSnapshot = false;
 let portalScopeProjectionSnapshot = Object.freeze({
@@ -3609,13 +3277,11 @@ let portalScopeProjectionSnapshot = Object.freeze({
 });
 
 async function protectedStorageReferencesForApplication() {
-  if (!postgresqlActive) return protectedStorageReferencesFromDatabase(db);
   return applicationPersistence.operations.transaction(() => require('./lib/persistence/postgresql/application-operations/protected-storage')
     .protectedStorageReferencesFromDatabase(applicationPersistence.operations),{readOnly:true});
 }
 
 async function protectedSicknessStorageForApplication() {
-  if (!postgresqlActive) return protectedSicknessAmuStorageSnapshotFromDatabase(db);
   return applicationPersistence.operations.transaction(() => require('./lib/persistence/postgresql/application-operations/protected-storage')
     .protectedSicknessAmuStorageSnapshotFromDatabase(applicationPersistence.operations),{readOnly:true});
 }
@@ -3807,17 +3473,17 @@ function initializeApplicationPersistence({ onProgress } = {}) {
     applicationInitialization = (async () => {
       const startupProgress = phase => { try { onProgress?.(phase); } catch { /* Diagnostic observers cannot alter startup. */ } };
       startupProgress('application-data');
-      if (postgresqlActive) {
+      {
         await applicationPersistence.ready;
-        await postgresqlStartupOperations.seedDefaults({defaultSettings,builtinPortalRoles});
+        await postgresqlStartupOperations.seedDefaults({defaultSettings,defaultPortalSettings,builtinPortalRoles});
         await postgresqlStartupOperations.ensureDefaultLocation();
         await migrateProtectedPersonnelRecords();
         await migrateProtectedVacationHistoryRecords();
         await verifyProtectedSensitivePersonnelRecords();
         await verifyProtectedPersonnelRecordDocuments();
         await ensureWorkRuleEvaluationReceiptIntegrity();
-        await sqliteBranchOrderOperations.ensureActiveBranchAccountBasePermissions();
-        await sqliteBranchOrderOperations.ensureConfiguredLocationCatalogContent();
+        await branchOrderOperations.ensureActiveBranchAccountBasePermissions();
+        await branchOrderOperations.ensureConfiguredLocationCatalogContent();
       }
       await refreshConfiguredAdminSnapshot();
       await refreshPortalScopeProjectionSnapshot();
@@ -3844,7 +3510,7 @@ function initializeApplicationPersistence({ onProgress } = {}) {
       if (localAmuRoutingMigrationNeeded) {
         await reconcileOpenAmuResponsibilities("migration");
       }
-      if (postgresqlActive) {
+      {
         startupProgress('receipt-workers');
         await postgresqlReceiptWorkers.warm();
         startupProgress('report-worker');
@@ -3947,7 +3613,7 @@ app.use(async (request, response, next) => {
     await refreshPortalSettingsSnapshot();
     // A new login is authorized by its submitted credentials. An older cookie
     // must not veto the transaction that replaces that very session.
-    request.portalSession = request.path === "/api/portal/v1/auth/login" || request.path.startsWith('/api/mobile/')
+    request.portalSession = ["/api/portal/v1/auth/login", "/api/portal/v1/auth/passkeys/options", "/api/portal/v1/auth/passkeys/verify"].includes(request.path) || request.path.startsWith('/api/mobile/')
       ? null : await loadPortalSessionFromRequest(request);
     request.portalSessionLoaded = true;
     // Cookies are issued only by explicit authentication transitions. A late
@@ -3963,6 +3629,11 @@ app.use(async (request, response, next) => {
 });
 app.use("/branding-kits", express.static(brandingKitsDirectory));
 app.use("/vendor/quill", express.static(path.join(__dirname, "node_modules", "quill", "dist")));
+app.use("/vendor/simplewebauthn-browser-v14", express.static(
+  path.join(__dirname, "node_modules", "@simplewebauthn", "browser", "dist", "bundle"),
+  { etag: false, lastModified: false, cacheControl: false, fallthrough: false,
+    setHeaders: response => response.setHeader("Cache-Control", "no-store") },
+));
 const tesseractPackageDirectory = fs.realpathSync(path.dirname(require.resolve("tesseract.js/package.json")));
 const tesseractCoreDirectory = fs.realpathSync(path.join(path.dirname(tesseractPackageDirectory), "tesseract.js-core"));
 const tesseractGermanDataDirectory = fs.realpathSync(path.join(__dirname, "node_modules", "@tesseract.js-data", "deu", "4.0.0_best_int"));
@@ -4538,6 +4209,8 @@ async function requireBackupAdminReauthentication(request, response, {
   const user = await portalAccessRepository.getBackupAdminUser({
     employeeNumber: session.employeeNumber,
   });
+  const passkeyProof = Object.hasOwn(request.body || {}, "passkey")
+    ? await verifyPasskeyReauthentication(request, operation) : null;
   const suppliedPassword = typeof request.body?.currentPassword === "string"
     && request.body.currentPassword.length <= 512
     ? request.body.currentPassword
@@ -4552,11 +4225,11 @@ async function requireBackupAdminReauthentication(request, response, {
     && BACKUP_ADMIN_ROLES.has(user.role)
     && user.password_hash,
   );
-  const passwordMatches = await verifyPortalPassword(
+  const passwordMatches = passkeyProof ? true : await verifyPortalPassword(
     suppliedPassword,
     allowed ? user.password_hash : DUMMY_PORTAL_PASSWORD_HASH,
   );
-  if (!allowed || !suppliedPassword || !passwordMatches) {
+  if (!allowed || (!passkeyProof && !suppliedPassword) || !passwordMatches) {
     backupAdminAuthRateLimits.record(rateKey, now);
     backupAdminGlobalRateLimits.record(ipKey, now);
     (await auditBackupAdministration(session.employeeNumber, "backup.admin.reauthentication.denied", "system", operation));
@@ -4582,6 +4255,7 @@ async function requireBackupAdminReauthentication(request, response, {
       || (current.locked_until && !(new Date(current.locked_until).getTime() <= acceptedAt.getTime()))) {
       throw httpError(403, "Der Zugang oder die Berechtigung wurde geändert. Bitte erneut anmelden.", "BACKUP_ADMIN_AUTH_CHANGED");
     }
+    if (passkeyProof) await confirmPasskeyReauthentication(request, repositories, passkeyProof, operation);
     const lifetime = browserSessionLifetime({ now: acceptedAt, role: live.role, permissions: live.permissions,
       idleMinutes: portalSessionTimeoutMinutes(), authenticatedAt: live.authenticatedAt,
       absoluteExpiresAt: live.absoluteExpiresAt });
@@ -4819,7 +4493,7 @@ function isLoopbackRequest(request) {
 }
 
 async function auditPortal(actor, action, entityType = "", entityId = "", detail = "") {
-  return persistenceRequestContext.run({auditOnly:true}, async () => (await sqliteAuditLogOperations.record({
+  return persistenceRequestContext.run({auditOnly:true}, async () => (await auditLogOperations.record({
     actor,
     action,
     entityType,
@@ -5139,12 +4813,25 @@ function parseCrmPhotoMultipart(request, { maxFileBytes = MAX_CANDIDATE_PHOTO_IN
   });
 }
 
-function sessionPortalAccessScopeProjection(row = {}) {
+const portalScopeAssignmentsByRequest = new WeakMap();
+function observedPortalScopeAssignments(request, row = {}) {
+  const assigned = Number(row.access_scope_assignment_count || 0) > 0;
+  if (!request || typeof request !== "object") return assigned;
+  const principal = JSON.stringify([row.id, row.employee_number]);
+  let observed = portalScopeAssignmentsByRequest.get(request);
+  if (assigned) {
+    if (!observed) portalScopeAssignmentsByRequest.set(request, observed = new Set());
+    observed.add(principal);
+  }
+  return assigned || observed?.has(principal) === true;
+}
+
+function sessionPortalAccessScopeProjection(row = {}, { hasObservedAssignments = false } = {}) {
   const explicitScopes = portalAccessScopesForPrincipal({
     role: "employee",
     scopesValue: row.access_scopes,
   });
-  if (Number(row.access_scope_assignment_count || 0) > 0) {
+  if (Number(row.access_scope_assignment_count || 0) > 0 || hasObservedAssignments) {
     return {
       explicitScopes,
       scopes: portalAccessScopesForPrincipal({
@@ -5186,7 +4873,13 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
   });
   if (session) {
     if (isReservedEmployeePrincipal(session.employee_number) || !isSessionTimeValid(session, currentDate)) return null;
-    const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(session);
+    // A request that observed explicit assignments must not gain legacy home
+    // scopes if its renewal or later authority read observes their removal.
+    // Genuine legacy accounts retain their fallback in an independent request.
+    const scopeAssignmentsObserved = observedPortalScopeAssignments(request, session);
+    const { explicitScopes, scopes } = sessionPortalAccessScopeProjection(session, {
+      hasObservedAssignments: scopeAssignmentsObserved,
+    });
     const permissionState = effectivePortalPermissionState(
       session.employee_number,
       session.role,
@@ -5211,6 +4904,11 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
       effectiveExpiresAt = await renewPortalSession({ session, kind: 'employee', now: currentDate.getTime(), expiresAt: lifetime.expiresAt,
         timeoutMinutes: lifetime.idleMinutes, write: value => repository.touchEmployeeSession(value) });
       if (!effectiveExpiresAt) return null;
+      // Renewal is a database write. Resolve authority again after that write;
+      // a concurrent revocation must not become the request's cached actor.
+      if (effectiveExpiresAt !== session.expires_at) {
+        return loadPortalSessionFromRequest(request, { touch: false, repository });
+      }
     }
     return {
       id: session.id,
@@ -5235,6 +4933,7 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
       grantedPermissions: permissionState.grantedPermissions,
       deniedPermissions: permissionState.deniedPermissions,
       explicitScopes,
+      scopeAssignmentsObserved,
       permissionScopes: parsePortalPermissionScopes(session.permission_scopes),
       scopes,
       timeConfirmationLevel: normalizeTimeConfirmationLevel(session.time_confirmation_level),
@@ -5270,6 +4969,9 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
     organizationExpiresAt = await renewPortalSession({ session: organizationSession, kind: 'organization', now: currentDate.getTime(), expiresAt: lifetime.expiresAt,
       timeoutMinutes: lifetime.idleMinutes, write: value => repository.touchOrganizationSession(value) });
     if (!organizationExpiresAt) return null;
+    if (organizationExpiresAt !== organizationSession.expires_at) {
+      return loadPortalSessionFromRequest(request, { touch: false, repository });
+    }
   }
   return {
     id: organizationSession.id,
@@ -5301,6 +5003,46 @@ async function loadPortalSessionFromRequest(request, { touch = true, repository 
     authenticatedAt: lifetime.authenticatedAt,
     absoluteExpiresAt: lifetime.absoluteExpiresAt,
   };
+}
+
+function deniedPortalSessionProjection(previous) {
+  return Object.freeze({
+    ...previous,
+    role: "", permissions: Object.freeze([]), rolePermissions: Object.freeze([]),
+    grantedPermissions: Object.freeze([]), deniedPermissions: Object.freeze([]),
+    explicitScopes: Object.freeze([]), permissionScopes: Object.freeze([]), scopes: Object.freeze([]),
+    personnelFieldPermissions: Object.freeze({}), amuLocalAccessMode: "deny", mustChangePassword: true,
+  });
+}
+
+async function completeCommittedPortalUserMutation(committed, request, employeeNumber, outcome) {
+  // The promise resolves only after the normal database authorization and COMMIT.
+  // A rejected/rolled-back mutation must never run these service effects.
+  await committed;
+  if (!outcome.changed) return outcome.actor;
+  let projection = outcome.actor;
+  if (String(outcome.actor.employeeNumber || "") === employeeNumber) {
+    const previous = request.portalSession;
+    const application = await applicationPersistence.ready;
+    const current = await loadPortalSessionFromRequest(request, {
+      touch: false, repository: application.authorizationRepositories.portalAccess,
+    });
+    projection = current && current.id === previous?.id
+      && current.sessionKind === previous.sessionKind
+      && current.employeeNumber === previous.employeeNumber
+      ? current : deniedPortalSessionProjection(previous);
+    // Keep a non-null deny-all principal after revocation. Remaining request
+    // operations must never enter the unauthenticated service-work shortcut.
+    request.portalSession = projection;
+    request.portalSessionLoaded = true;
+  }
+  // These two fixed housekeeping operations follow a committed user change.
+  // Their service context never covers the caller's response or later work.
+  await persistenceRequestContext.exit(async () => {
+    await refreshConfiguredAdminSnapshot();
+    await reconcileOpenAmuResponsibilities(outcome.actor.employeeNumber);
+  });
+  return projection;
 }
 
 async function resolveSalesReportPrincipal(employeeNumber) {
@@ -5899,7 +5641,7 @@ async function executeMobileMutation(request, response, session, operation, payl
       expiresAt,
     });
   } catch (error) {
-    if (String(error.code || "").includes("SQLITE_CONSTRAINT")) {
+    if (isUniquePersistenceViolation(error)) {
       throw httpError(409, "Diese App-Aktion wird bereits verarbeitet.", "MOBILE_IDEMPOTENCY_IN_PROGRESS");
     }
     throw error;
@@ -10416,8 +10158,8 @@ async function livePersonnelLearningRoleAdministrationActor(
       locationId: scope.locationId,
       departmentId: scope.departmentId,
     }));
-  const requestHadExplicitScopes = Array.isArray(actor.explicitScopes)
-    && actor.explicitScopes.length > 0;
+  const requestHadExplicitScopes = actor.scopeAssignmentsObserved === true
+    || (Array.isArray(actor.explicitScopes) && actor.explicitScopes.length > 0);
   const fallbackScopes = portalAccessScopesForPrincipal({
     role: user.role,
     homeLocationId: user.homeLocationId,
@@ -17844,7 +17586,12 @@ async function mobileSchedulePayload(session, weekValue = "") {
       weekEnd,
     }),
   ]);
-  const shifts = storedShifts.map((shift) => ({
+  const employment = await projectScheduleEmployment([{ personnel_number: session.employeeNumber }], weekStart, weekEnd);
+  // These qualified queries already bind the actor and omit the employee ID.
+  // Supply it only for the internal projection, preserving their public shape.
+  const clipOwnRows = rows => employment.clip(rows.map(row => ({ ...row, employee_number: session.employeeNumber })))
+    .map(({ employee_number: _actor, ...row }) => row);
+  const shifts = clipOwnRows(storedShifts).map((shift) => ({
     id: Number(shift.id),
     date: shift.shift_date,
     startTime: shift.start_time,
@@ -17857,7 +17604,7 @@ async function mobileSchedulePayload(session, weekValue = "") {
     departmentName: shift.department_name || "",
     dutyCode: shift.duty_code || "",
   }));
-  const options = storedOptions.map((option) => ({
+  const options = clipOwnRows(storedOptions).map((option) => ({
     id: Number(option.id),
     dateFrom: option.date_from,
     dateTo: option.date_to,
@@ -18000,16 +17747,6 @@ async function verifyActiveProtectedDocumentBlobs() {
   );
 }
 
-function verifyActiveProtectedDocumentBlobsForBackup() {
-  if (postgresqlActive) throw new Error('PG_PAIRED_BACKUP_REQUIRED');
-  const snapshot = protectedSicknessAmuStorageSnapshotFromDatabase(db);
-  return verifyProtectedDocumentBlobRows(
-    snapshot.amuDocuments,
-    snapshot.personnelDocuments,
-    snapshot.candidateDocuments,
-    snapshot.personnelDocumentVersions,
-  );
-}
 
 async function amuResponsibilityForReport(report) {
   if (report?.protected_payload) {
@@ -18560,7 +18297,7 @@ async function validateLocationPayload(body, isNew = false) {
   }
   if (!isNew) await validateLocationExists(id);
   const daySettings = validateDaySettings(body.daySettings
-    || (isNew ? legacyDaySettingsSnapshot() : await daySettingsFromLocation(id)));
+    || (isNew ? defaultLocationDaySettings() : await daySettingsFromLocation(id)));
   const timeTrackingAccessMode = body.timeTrackingAccessMode === "trusted_network" || body.time_tracking_access_mode === "trusted_network"
     ? "trusted_network"
     : "anywhere";
@@ -18642,9 +18379,8 @@ async function validateDepartmentPayload(body, existingId = null) {
 }
 
 async function resolvePlanningContext(input = {}) {
-  if (!postgresqlActive) await ensureDefaultLocation();
   const locations = await organizationPersonnelRepository.listLocations(true);
-  if (postgresqlActive && !locations.length) throw new Error('PG_APPLICATION_LOCATION_REQUIRED');
+  if ((!locations.length)) throw new Error('PG_APPLICATION_LOCATION_REQUIRED');
   const activeLocations = locations.filter((location) => location.active);
   const fallbackLocation = activeLocations[0] || locations[0];
   let locationId = String(input.locationId || input.location || "").trim();
@@ -19525,26 +19261,7 @@ function backupIntervalMs(settings = getSettings()) {
 function scheduleAutomaticBackups() {
   if (backupInterval) clearInterval(backupInterval);
   backupInterval = null;
-  if (serverModeActive) return;
-  backupInterval = setInterval(async () => {
-    try {
-      const settings = getSettings();
-      const backup = settings.external_backup_enabled === "0" ? null
-        : await createDatabaseBackupInBackground(backupDirectoryFromSettings(settings), "scheduled", "external");
-      if (backup) {
-        lastBackup = {
-          path: backup.path,
-          createdAt: backup.createdAt,
-          reason: "scheduled",
-          appBackup: lastBackup?.appBackup || null,
-          externalBackup: backup,
-        };
-      }
-    } catch (error) {
-      console.error("Backup konnte nicht erstellt werden:", error);
-    }
-  }, backupIntervalMs());
-  backupInterval.unref();
+  // PostgreSQL pairs are backed up by the supervised server maintenance only.
 }
 
 const dayKeyByNumber = {
@@ -19577,8 +19294,38 @@ function normalizeFixedWorkdays(value) {
 }
 
 function employeeCanWorkOnDate(employee, isoDate) {
+  if (Array.isArray(employee.planningDates) && !employee.planningDates.includes(isoDate)) return false;
   const fixedDays = parseFixedWorkdays(employee.fixed_workdays);
   return fixedDays.length === 0 || fixedDays.includes(dayKeyForDate(isoDate));
+}
+
+function createScheduleSensitiveReader(repository = organizationPersonnelRepository) {
+  // One planning read only: never retain decrypted personnel data across
+  // requests, actors, repository bindings or subsequent scheduling mutations.
+  const pending = new Map();
+  return employeeNumber => {
+    const number = String(employeeNumber);
+    if (!pending.has(number)) pending.set(number, (async () => {
+      const encryptedRecord = await repository.getPersonnelSensitiveRecord(number);
+      const sensitive = await personnelSensitiveProfile(number, repository, encryptedRecord);
+      return { encryptedRecord, sensitive };
+    })());
+    return pending.get(number);
+  };
+}
+
+async function projectScheduleEmployment(employeeRows, weekStart, weekEnd = addDays(weekStart, 6), repository = organizationPersonnelRepository, readSensitive = null) {
+  const numbers = [...new Set(employeeRows.map(row => String(row.personnel_number)))];
+  const starts = new Map(await Promise.all(numbers.map(async number => [number,
+    (readSensitive ? (await readSensitive(number)).sensitive
+      : await personnelSensitiveProfile(number, repository)).employment.startDate,
+  ])));
+  return require('./lib/schedule-employment').employmentProjection(employeeRows, weekStart, weekEnd, starts);
+}
+
+async function assertPlanningEmployment(shift, repository = organizationPersonnelRepository) {
+  const profile = await personnelSensitiveProfile(String(shift.employeeNumber ?? shift.employee_number), repository);
+  require('./lib/schedule-employment').assertEmploymentDate(profile.employment.startDate, shift.shiftDate ?? shift.shift_date);
 }
 
 async function dayConfiguration(isoDate, settings, context = null) {
@@ -20253,6 +20000,7 @@ async function validateShift(body, contextInput = {}, actor = null) {
     if (!employee) {
       throw httpError(404, "Die ausgewählte Person wurde nicht gefunden.");
     }
+    await assertPlanningEmployment({ employeeNumber, shiftDate });
     const hasDutyInput = Object.hasOwn(body, "dutyCode") || Object.hasOwn(body, "duty_code");
     const rawDutyCode = body.dutyCode ?? body.duty_code;
     if (hasDutyInput && (typeof rawDutyCode !== "string"
@@ -20279,7 +20027,7 @@ async function validateShift(body, contextInput = {}, actor = null) {
   });
   const homeLocationId = String(employee.home_location_id || "").trim();
   if (locationId === homeLocationId) {
-    const awayAssignment = (await sqliteEmployeeLocationLendingOperations.overlapForShift(
+    const awayAssignment = (await employeeLocationLendingOperations.overlapForShift(
       employeeNumber,
       shiftDate,
       startTime,
@@ -20293,7 +20041,7 @@ async function validateShift(body, contextInput = {}, actor = null) {
       );
     }
   } else {
-    const assignment = (await sqliteEmployeeLocationLendingOperations.coverageForShift(
+    const assignment = (await employeeLocationLendingOperations.coverageForShift(
       employeeNumber,
       locationId,
       shiftDate,
@@ -20420,10 +20168,10 @@ function staffAssignmentAbsenceConstraintError(error) {
 
 async function assertShiftEmployeeAssignmentScope(session, shift, existing = null) {
   if (sessionHasGlobalScope(session)) return;
-  const employee = (await sqliteEmployeeLocationLendingOperations.employee(shift.employeeNumber));
+  const employee = (await employeeLocationLendingOperations.employee(shift.employeeNumber));
   const homeLocationId = String(employee?.home_location_id || "");
   if (homeLocationId === shift.locationId) return;
-  const assignment = (await sqliteEmployeeLocationLendingOperations.coverageForShift(
+  const assignment = (await employeeLocationLendingOperations.coverageForShift(
     shift.employeeNumber,
     shift.locationId,
     shift.shiftDate,
@@ -20590,7 +20338,7 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
     }
   }
   if (directlyApprovedAbsenceOptionTypes.has(optionType)) {
-    const assignment = (await sqliteEmployeeLocationLendingOperations.overlapForPeriod({
+    const assignment = (await employeeLocationLendingOperations.overlapForPeriod({
       employeeNumber,
       dateFrom,
       dateTo,
@@ -21150,7 +20898,7 @@ async function planningMutationEmployees(weekStart, context, session) {
 function readPlanningMutation(build) {
   // Legacy lending validation stays outside this catalog-only read snapshot.
   // It ends (including reauthorization) before the separate write transaction.
-  return postgresqlActive ? applicationPersistence.readSnapshot(build) : build();
+  return (applicationPersistence.readSnapshot(build));
 }
 
 function createPlanningWorkRuleEvaluator() {
@@ -21341,7 +21089,7 @@ function workRuleAssignmentBoundaryFinding(profileEvaluations, employeeNumber, r
   return { ...core, fingerprint: workRuleSha256(core) };
 }
 
-async function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift = null) {
+async function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift = null, readSensitive = null) {
   const evaluationEmployees = workRuleEvaluationEmployees(employees, candidateShift);
   const facts = await scheduleWorkRuleFacts(weekStart, context, evaluationEmployees, candidateShift);
   const weekEnd = addDays(weekStart, 6);
@@ -21418,8 +21166,11 @@ async function evaluateScheduleWorkRules(weekStart, context, employees, candidat
   };
   const employeeResults = await Promise.all(evaluationEmployees.map(async (employee) => {
     const employeeNumber = String(employee.personnel_number);
-    const encryptedRecord = await organizationPersonnelRepository.getPersonnelSensitiveRecord(employeeNumber);
-    const sensitive = await personnelSensitiveProfile(employeeNumber, organizationPersonnelRepository, encryptedRecord);
+    const record = readSensitive ? await readSensitive(employeeNumber) : null;
+    const encryptedRecord = record ? record.encryptedRecord
+      : await organizationPersonnelRepository.getPersonnelSensitiveRecord(employeeNumber);
+    const sensitive = record ? record.sensitive
+      : await personnelSensitiveProfile(employeeNumber, organizationPersonnelRepository, encryptedRecord);
     const protection = sensitive.employment.protectionStatus;
     const protectionPlanningEnabled = protection?.planningEnabled === true;
     const retailKv = sensitive.employment.retailKv;
@@ -21747,7 +21498,10 @@ function assertWorkRuleAssessmentAllowsMutation(assessment) {
 
 function runWorkRuleMutationTransaction(callback) {
   if (typeof callback !== "function") throw new TypeError("Eine Planungsmutation wird benötigt.");
-  return workRuleStoreRepository.transaction(callback);
+  return persistenceProvider.transaction(executor => {
+    const repositories = createApplicationRepositories(executor);
+    return callback(repositories.workRules, repositories.organizationPersonnel);
+  });
 }
 
 async function crossLocationSchedulePrincipal(
@@ -21939,12 +21693,15 @@ async function crossLocationScheduleSource(location, weekStart) {
     weekStart,
     weekEnd,
   };
-  const [employees, shifts, weekOptions, lendings] = await Promise.all([
+  const [employeeRows, storedShifts, storedWeekOptions, storedLendings] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listScheduleWeekOptions(planningQuery),
     planningSettingsRepository.listScheduleLendings(planningQuery),
   ]);
+  const employment = await projectScheduleEmployment(employeeRows, weekStart, weekEnd);
+  const employees = employment.employees, shifts = employment.clip(storedShifts);
+  const weekOptions = employment.clip(storedWeekOptions), lendings = employment.clip(storedLendings);
   const departments = (location.departments || []).filter((department) => department.active);
   const departmentNames = new Map(
     departments.map((department) => [Number(department.id), String(department.name || "")]),
@@ -21963,6 +21720,7 @@ async function crossLocationScheduleSource(location, weekStart) {
       departmentName: departmentId ? departmentNames.get(departmentId) || "" : "",
       color: employee.color,
       requestEligible: String(employee.home_location_id || "") === locationId,
+      planningDates: employee.planningDates,
     };
   });
   const unavailability = [
@@ -23025,6 +22783,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
   const weekEnd = addDays(weekStart, 6);
   const context = await resolvePlanningContext(contextInput);
   assertSessionContextScope(session, context);
+  const readSensitive = createScheduleSensitiveReader();
   const settings = applyScopedPdfSettings(await settingsForLocation(context.locationId), context, "schedule");
   const allowPastWeekEditing = await pastWeekEditingAllowedForActor(session, settings);
   settings.allow_past_week_editing = allowPastWeekEditing ? "1" : "0";
@@ -23044,7 +22803,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     filterDepartment: context.departmentId ? 1 : 0,
     weekStart,
   };
-  const [employeeRows, shiftRows, employeeWeekShiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows, xoffiSnapshots, saturdayCutover] = await Promise.all([
+  let [employeeRows, shiftRows, employeeWeekShiftRows, storedWeekOptions, employeeLendings, xoffiWeekRows, xoffiWeekDays, xoffiBalanceRows, xoffiSnapshots, saturdayCutover] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningEmployeeShifts(planningQuery),
@@ -23056,6 +22815,16 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     timeTrackingRepository.listXoffiSnapshots({ locationId: context.locationId, departmentId: Number(context.departmentId || 0), weekStart }),
     saturdayCreditService.cutover(),
   ]);
+  const employment = await projectScheduleEmployment(employeeRows, weekStart, weekEnd, organizationPersonnelRepository, readSensitive);
+  employeeRows = employment.employees;
+  shiftRows = employment.clip(shiftRows);
+  employeeWeekShiftRows = employment.clip(employeeWeekShiftRows);
+  storedWeekOptions = employment.clip(storedWeekOptions);
+  employeeLendings = employment.clip(employeeLendings);
+  xoffiWeekRows = xoffiWeekRows.filter(row => employment.employeeByNumber.has(String(row.employee_number)));
+  xoffiWeekDays = employment.clip(xoffiWeekDays, { dateKey: 'work_date' });
+  xoffiBalanceRows = xoffiBalanceRows.filter(row => employment.eligibleOnDate(row.employee_number, row.balance_week_start));
+  xoffiSnapshots = xoffiSnapshots.filter(row => employment.eligibleOnDate(row.employeeNumber, row.snapshot?.balanceDate));
   const employees = employeeRows.map(serializeEmployee);
   const visibleEmployeeNumbers = new Set(employees.map((employee) => employee.personnel_number));
   const homeEmployeeNumbers = new Set(employees
@@ -23122,10 +22891,11 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     credited_minutes_per_day: 0,
     soft_pending: true,
   }));
-  weekOptions.push(...pendingTimeOff);
+  weekOptions.push(...employment.clip(pendingTimeOff));
   const sicknessCredits = (await sicknessCreditsForEmployeesInRange(
     employees.map((employee) => employee.personnel_number), weekStart, weekEnd,
-  )).filter((credit) => !weekOptions.some((option) => option.employee_number === credit.employee_number
+  )).filter(credit => employment.allows(credit.employee_number, credit.date))
+    .filter((credit) => !weekOptions.some((option) => option.employee_number === credit.employee_number
     && option.option_type === "sick" && credit.date >= option.date_from && credit.date <= option.date_to));
 
   const totals = {};
@@ -23248,6 +23018,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     if (day === 0 || day === 6) continue;
     for (const employee of employees) {
       const employeeDate = `${employee.personnel_number}|${holiday.date}`;
+      if (!employment.allows(employee.personnel_number, holiday.date)) continue;
       if (scheduledEmployeeDates.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
       if (hasNonVacationCreditOnDate(weekOptions, employee.personnel_number, holiday.date)) continue;
       const credit = Math.max(0, finiteScheduleMinutes(holidayCreditMinutes(employee)));
@@ -23262,6 +23033,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     if (day === 0 || day === 6) continue;
     for (const employee of employees) {
       const employeeDate = `${employee.personnel_number}|${block.block_date}`;
+      if (!employment.allows(employee.personnel_number, block.block_date)) continue;
       if (scheduledEmployeeDates.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
       if (hasNonVacationCreditOnDate(weekOptions, employee.personnel_number, block.block_date)) continue;
       const credit = Math.max(0, finiteScheduleMinutes(holidayCreditMinutes(employee)));
@@ -23271,7 +23043,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
   }
   const [workRuleAssessment, branchSupervisionAssessment, manualScheduleLock] = await Promise.all([
     !fast && sessionCanReadWorkRules(session)
-      ? evaluateScheduleWorkRules(weekStart, context, employees).then((result) => result.assessment)
+      ? evaluateScheduleWorkRules(weekStart, context, employees, null, readSensitive).then((result) => result.assessment)
       : Promise.resolve(null),
     fast
       ? Promise.resolve(null)
@@ -23314,6 +23086,14 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
       intervals: Array.isArray(intervals) ? intervals : [],
       absence: row.absence_code || "",
     });
+  }
+  for (const [number, target] of Object.entries(xoffiWeekByEmployee)) {
+    if ((employment.employeeByNumber.get(number)?.planningDates.length || 0) < 7) {
+      target.actualMinutes = target.days.reduce((sum, day) => sum + day.actualMinutes, 0);
+      target.valuedMinutes = target.days.reduce((sum, day) => sum + day.valuedMinutes, 0);
+      target.surchargeMinutes = target.days.reduce((sum, day) => sum + day.surchargeMinutes, 0);
+      target.closingBalanceMinutes = null;
+    }
   }
   const xoffiBalanceByEmployee = {};
   for (const row of xoffiBalanceRows) {
@@ -23378,6 +23158,7 @@ async function getScheduleEnrichment(weekValue, contextInput = {}, session = nul
   const weekEnd = addDays(weekStart, 6);
   const context = await resolvePlanningContext(contextInput);
   assertSessionContextScope(session, context);
+  const readSensitive = createScheduleSensitiveReader();
   const settings = applyScopedPdfSettings(await settingsForLocation(context.locationId), context, "schedule");
   const planningQuery = {
     locationId: context.locationId,
@@ -23385,10 +23166,12 @@ async function getScheduleEnrichment(weekValue, contextInput = {}, session = nul
     weekStart,
     weekEnd,
   };
-  const [employeeRows, shiftRows] = await Promise.all([
+  const [storedEmployees, storedShifts] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
   ]);
+  const employment = await projectScheduleEmployment(storedEmployees, weekStart, weekEnd, organizationPersonnelRepository, readSensitive);
+  const employeeRows = employment.employees, shiftRows = employment.clip(storedShifts);
   const employees = employeeRows.map(serializeEmployee);
   const currentWeekShifts = await Promise.all(shiftRows.map(async (shift) => {
     const { rawMinutes } = await plannedShiftBreaks(shift, settings);
@@ -23396,7 +23179,7 @@ async function getScheduleEnrichment(weekValue, contextInput = {}, session = nul
   }));
   const [workRuleAssessment, branchSupervisionAssessment, saturdayStats] = await Promise.all([
     sessionCanReadWorkRules(session)
-      ? evaluateScheduleWorkRules(weekStart, context, employees).then((result) => result.assessment)
+      ? evaluateScheduleWorkRules(weekStart, context, employees, null, readSensitive).then((result) => result.assessment)
       : Promise.resolve(null),
     branchSupervisionAssessmentForSchedule(weekStart, context.locationId, null, {
       snapshot: context.departmentId ? null : {
@@ -23805,42 +23588,11 @@ function decodeBasicEntities(value) {
 }
 
 function textFromScheduleNoteHtml(html) {
-  return decodeBasicEntities(
-    String(html || "")
-      .replace(/<\/(div|p)>/gi, "\n")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<[^>]*>/g, ""),
-  )
-    .replace(/\u00a0/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return scheduleNoteRichText.plainText(html);
 }
 
 function sanitizeScheduleNoteHtml(input) {
-  let html = stripEmoji(String(input || ""));
-  html = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "");
-  html = html.replace(/<span[^>]*class\s*=\s*["'][^"']*\bql-cursor\b[^"']*["'][^>]*>[\s\S]*?<\/span>/gi, "");
-  html = html.replace(/<[^>]*>/g, (tag) => {
-    const lower = tag.toLowerCase();
-    if (/^<(b|strong)(\s[^>]*)?>$/.test(lower)) return "<b>";
-    if (/^<\/(b|strong)>$/.test(lower)) return "</b>";
-    if (/^<(i|em)(\s[^>]*)?>$/.test(lower)) return "<i>";
-    if (/^<\/(i|em)>$/.test(lower)) return "</i>";
-    if (/^<u(\s[^>]*)?>$/.test(lower)) return "<u>";
-    if (/^<\/u>$/.test(lower)) return "</u>";
-    if (/^<br\s*\/?>$/.test(lower)) return "<br>";
-    if (/^<(div|p)(\s[^>]*)?>$/.test(lower)) return "<div>";
-    if (/^<\/(div|p)>$/.test(lower)) return "</div>";
-    if (/^<span\b/i.test(lower)) {
-      const size = lower.match(/data-size\s*=\s*["']?(small|normal|large)["']?/i)?.[1]
-        || lower.match(/class\s*=\s*["'][^"']*\bql-size-(small|large)\b/i)?.[1]
-        || "normal";
-      return `<span data-size="${size}">`;
-    }
-    if (/^<\/span>$/.test(lower)) return "</span>";
-    return "";
-  });
-  return html.trim();
+  return scheduleNoteRichText.sanitizedHtml(input);
 }
 
 async function getScheduleNote(weekStart, context) {
@@ -23855,7 +23607,7 @@ async function getScheduleNote(weekStart, context) {
     department_key: row.department_key,
     week_start: row.week_start,
     note_text: row.note_text,
-    note_html: row.note_html || "",
+    note_html: scheduleNoteRichText.storedHtml(row),
     font_size: row.font_size,
     bold: Boolean(row.bold),
     italic: Boolean(row.italic),
@@ -23873,10 +23625,14 @@ async function validateScheduleNote(body, actor = null) {
     actor,
     context.locationId,
   );
-  const noteHtml = sanitizeScheduleNoteHtml(body.noteHtml || "");
-  const noteText = stripEmoji(
-    textFromScheduleNoteHtml(noteHtml) || String(body.noteText || body.text || ""),
-  ).trim();
+  let noteHtml;
+  try { noteHtml = sanitizeScheduleNoteHtml(body.noteHtml || ""); }
+  catch (error) {
+    if (error instanceof scheduleNoteRichText.ScheduleNoteValidationError) throw httpError(400, error.message, error.code);
+    throw error;
+  }
+  const formattedText = textFromScheduleNoteHtml(noteHtml);
+  const noteText = stripEmoji(formattedText || String(body.noteText || body.text || "")).trim();
   if (!noteText) throw httpError(400, "Bitte eine Bemerkung eingeben.");
   if (noteText.length > scheduleNoteMaxLength) {
     throw httpError(400, `Die Bemerkung ist zu lang. Maximal ${scheduleNoteMaxLength} Zeichen.`);
@@ -23885,7 +23641,7 @@ async function validateScheduleNote(body, actor = null) {
     weekStart,
     context,
     noteText,
-    noteHtml: noteHtml || noteText,
+    noteHtml: formattedText ? noteHtml : scheduleNoteRichText.escape(noteText).replace(/\n/g, "<br>"),
     fontSize: "medium",
     bold: 0,
     italic: 0,
@@ -24109,7 +23865,7 @@ async function deleteVacationGroup(
 }
 
 function databasePragmaValue(name) {
-  return postgresqlActive ? null : sqliteSystemDiagnosticsOperations.pragmaValue(name);
+  return (null);
 }
 
 function directoryDiagnostics(directory) {
@@ -24199,7 +23955,7 @@ async function serverDiagnostics() {
   const postgresqlHealth = await postgresqlSystemHealthCache.read();
   const settings = getSettings();
   const portal = getPortalStatus();
-  const migration = (await sqliteSystemDiagnosticsOperations.latestMigration());
+  const migration = (await systemDiagnosticsOperations.latestMigration());
   const warnings = [];
   const alerts = [];
   const addAlert = (id, severity, title, message, category = "system", action = "open-server-status") => {
@@ -24234,9 +23990,9 @@ async function serverDiagnostics() {
   const backupMetadataError = () => addAlert("BACKUP_METADATA_UNAVAILABLE", "critical", "Sicherungsarchiv prüfen",
     "Die Sicherungsmetadaten oder die lokale Archivkonfiguration konnten nicht sicher geprüft werden.", "backup");
   const latestExternalBackup = externalDirectory ? latestDatabaseBackup(externalDirectory, backupMetadataError, "external") : null;
-  const postgresqlStatus = postgresqlActive && !persistenceConfiguration.rehearsal
+  const postgresqlStatus = (!persistenceConfiguration.rehearsal)
     ? require('./lib/persistence/postgresql/operations/status').readStatus(persistenceConfiguration.binding) : null;
-  const latestAppBackup = postgresqlActive ? postgresqlStatus?.backup || null : latestDatabaseBackup(appBackupDirectory, backupMetadataError);
+  const latestAppBackup = (postgresqlStatus?.backup || null);
   if (postgresqlStatus?.code) addAlert('PG_OPERATIONS_ATTENTION', 'warning', 'Datenbankwartung prüfen',
     'Der letzte Wartungs- oder Sicherungsstatus muss durch die technische Administration geprüft werden.', 'backup');
   const backgroundBackup = localBackupArchiveEnabled()
@@ -24269,7 +24025,23 @@ async function serverDiagnostics() {
         : undefined,
   });
   const offsiteApplicable = serverModeActive || offsiteConfigured || offsiteStatus.statusAvailable;
-  const recoveryAssurance = await readRecoveryAssuranceStatus({ configured: offsiteConfigured });
+  let recoverySchedulerObservation;
+  if (offsiteConfigured && process.platform === "linux") {
+    try {
+      // The protected broker measures the real timer; browser input and a
+      // previously cached status cannot establish a new recovery deadline.
+      const schedules = await readMaintenanceSchedules({ timeoutMs: 1500 });
+      const task = schedules.tasks.find(item => item.id === "complete-backup");
+      if (schedules.available && task?.installed && typeof task.nextRunAt === "string") recoverySchedulerObservation = {
+        observedAt: schedules.checkedAt, nextRunAt: task.nextRunAt,
+        active: task.active, enabled: task.enabled, evidenceTrusted: true,
+      };
+    } catch { /* The history remains readable; the pending deadline stays unverified. */ }
+  }
+  const recoveryAssurance = await readRecoveryAssuranceStatus({ configured: offsiteConfigured,
+    ...(recoverySchedulerObservation ? { schedulerObservation: recoverySchedulerObservation } : {}) });
+  if (recoveryAssurance.pendingRecovery?.state === "overdue") addAlert("RECOVERY_AFTER_UPDATE_OVERDUE", "critical",
+    "Recovery-Nachprüfung überfällig", "Die feste Frist für die vollständige Recovery-Prüfung nach dem Update ist abgelaufen.", "backup");
   const configuredOffsiteProviderId = String(
     process.env.GRABENPLANER_OFFSITE_PROVIDER || "",
   ).trim();
@@ -24333,7 +24105,7 @@ async function serverDiagnostics() {
     configured: hostSecurityConfiguration === "1" ? true : (hostSecurityConfiguration === "0" ? false : undefined),
   });
   const amu = amuStorage ? amuStorage.diagnostics() : { ok: false, writable: false, error: amuStorageStartupError };
-  const protectedIntegrationConnectionCount = (await sqliteSystemDiagnosticsOperations
+  const protectedIntegrationConnectionCount = (await systemDiagnosticsOperations
     .protectedIntegrationConnectionCount());
   const integrationSecretsReady = protectedIntegrationConnectionCount === 0 || Boolean(integrationSecretVault);
   const runtimeErrors = runtimeValidationErrors(runtimeConfiguration);
@@ -24402,7 +24174,7 @@ async function serverDiagnostics() {
     addAlert(alert.id, alert.severity, alert.title, alert.message, alert.category);
   }
   if (serverModeActive && serviceControlToken.length < 32) addAlert("SERVICE_CONTROL_TOKEN_MISSING", "critical", "Dienststeuerung nicht abgesichert", "Der sichere Token für die Dienststeuerung fehlt.", "security");
-  const lockedAccounts = (await sqliteSystemDiagnosticsOperations.lockedPortalAccountCount());
+  const lockedAccounts = (await systemDiagnosticsOperations.lockedPortalAccountCount());
   if (lockedAccounts) addAlert("PORTAL_ACCOUNTS_LOCKED", "warning", "Zugänge vorübergehend gesperrt", `${lockedAccounts} Zugang/Zugänge sind derzeit wegen fehlgeschlagener Anmeldungen gesperrt.`, "security");
   const productionChecks = [
     { id: "mode", label: "Servermodus", ok: serverModeActive, detail: serverModeActive ? "aktiv" : "nicht aktiv" },
@@ -24477,7 +24249,7 @@ async function serverDiagnostics() {
       retentionCount: backupKeep,
       retentionUnit: 'calendar-days',
       background: backgroundBackup,
-      lastVerified: postgresqlActive ? latestAppBackup?.verified === true : Boolean(lastBackup?.appBackup?.verified || lastBackup?.externalBackup?.verified),
+      lastVerified: (latestAppBackup?.verified === true),
       offsite,
     },
     monitor,
@@ -24487,7 +24259,7 @@ async function serverDiagnostics() {
     pilotChecks: productionChecks,
     security: {
       lockedAccounts,
-      activeSessions: (await sqliteSystemDiagnosticsOperations.activePortalSessionCount()),
+      activeSessions: (await systemDiagnosticsOperations.activePortalSessionCount()),
       loginRateLimitActive: serverModeActive,
       secureCookies: serverModeActive,
       serviceControlConfigured: serviceControlToken.length >= 32,
@@ -26596,20 +26368,18 @@ const dataImportRoutes=registerDataImportRoutes(app, {
   requireSession: requireEmployeePortalSession,
   refreshSession: async (request) => loadPortalSessionFromRequest(request, {
     touch: false,
-    ...(postgresqlActive ? { repository: (await applicationPersistence.ready).authorizationRepositories.portalAccess } : {}),
+    ...(({ repository: (await applicationPersistence.ready).authorizationRepositories.portalAccess })),
   }),
   assertCsrf: assertPortalCsrf,
 });
-const postgresqlWorkerConfiguration = postgresqlActive ? persistenceConfiguration.readers : null;
-const postgresqlReceiptWorkers = postgresqlActive ? require('./lib/persistence/postgresql/reporting/receipt-runtime').createPostgresqlReceiptWorkers({
+const postgresqlWorkerConfiguration = (persistenceConfiguration.readers);
+const postgresqlReceiptWorkers = (require('./lib/persistence/postgresql/reporting/receipt-runtime').createPostgresqlReceiptWorkers({
   workerConfiguration: postgresqlWorkerConfiguration,
   keyConfiguration: integrationEncryptionConfiguration ? {activeKeyId:integrationEncryptionConfiguration.keyId,keys:integrationEncryptionConfiguration.keys} : null,
-}) : null;
-const managedSalesHistoryRuntime = postgresqlActive
-  ? postgresqlReceiptWorkers.runtime({access:persistenceProvider,vault:integrationSecretVault,enabled:false,cashEnabled:true,cashBackendFactory:require('./lib/persistence/postgresql/reporting/receipt-prefetch').createPostgresqlCashHistoryBackend})
-  : createManagedSalesHistoryRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: false, cashEnabled: true });
+}));
+const managedSalesHistoryRuntime = (postgresqlReceiptWorkers.runtime({access:persistenceProvider,vault:integrationSecretVault,enabled:false,cashEnabled:true,cashBackendFactory:require('./lib/persistence/postgresql/reporting/receipt-prefetch').createPostgresqlCashHistoryBackend}));
 const salesReportBatchWorker = require('./lib/sales-report-batch-worker').createSalesReportBatchWorker({ databasePath,
-    ...(postgresqlActive ? {workerFile:path.join(__dirname,'lib/persistence/postgresql/reporting/worker.js'),workerConfiguration:postgresqlWorkerConfiguration} : {}),
+    ...(({workerFile:path.join(__dirname,'lib/persistence/postgresql/reporting/worker.js'),workerConfiguration:postgresqlWorkerConfiguration})),
     keyConfiguration: integrationEncryptionConfiguration ? { activeKeyId: integrationEncryptionConfiguration.keyId, keys: integrationEncryptionConfiguration.keys } : null });
 const salesReportJobs = createSalesReportJobs({ access: persistenceProvider, vault: integrationSecretVault,
   scope: persistenceConfiguration.rehearsal ? 'postgresql-rehearsal-11' : 'grabenplaner-main',
@@ -26640,7 +26410,7 @@ require('./lib/sales-bwl-abc-routes').registerSalesBwlAbcRoutes(app, {
   assertFresh:async(request,original,executor)=>{
     const fresh=await loadPortalSessionFromRequest(request, {touch:false,
       ...(executor ? {repository:require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor)}
-        : postgresqlActive ? {repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess} : {}),
+        : ({repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess})),
     });
     const identity=session=>require('./lib/sales-bwl-abc-model').authority(session).identity;
     if (!fresh || identity(fresh)!==identity(original)) require('./lib/data-import-contract').fail('BWL_ABC_FORBIDDEN',403);
@@ -26690,7 +26460,7 @@ require('./lib/sales-bwl-actions-routes').registerSalesBwlActionsRoutes(app,{
   assertFresh:async(request,original,executor)=>{
     const fresh=await loadPortalSessionFromRequest(request,{touch:false,
       ...(executor?{repository:require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor)}
-        :postgresqlActive?{repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess}:{}),
+        :({repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess})),
     });
     const authority=session=>require('./lib/sales-bwl-actions-model').authority(session).identity;
     if(!fresh||authority(fresh)!==authority(original))require('./lib/data-import-contract').fail('BWL_ACTIONS_FORBIDDEN',403);
@@ -26712,7 +26482,7 @@ require('./lib/sales-bwl-simulation-routes').registerSalesBwlSimulationRoutes(ap
   assertFresh:async(request,original,executor)=>{
     const fresh=await loadPortalSessionFromRequest(request,{touch:false,
       ...(executor ? {repository:require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor)}
-        : postgresqlActive ? {repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess} : {}),
+        : ({repository:(await applicationPersistence.ready).authorizationRepositories.portalAccess})),
     });
     const authority=session=>require('./lib/sales-bwl-simulation-model').authority(session).identity;
     if (!fresh || authority(fresh)!==authority(original)) require('./lib/data-import-contract').fail('BWL_SIMULATION_FORBIDDEN',403);
@@ -26724,7 +26494,7 @@ require('./lib/sales-bwl-simulation-routes').registerSalesBwlSimulationRoutes(ap
 });
 const tradeInsightJobs = require('./lib/persistence/repositories/trade-insight-jobs').createTradeInsightJobs({
   access: persistenceProvider, vault: integrationSecretVault, runtime: tradeInsightRuntime, resolvePrincipal: resolveSalesReportPrincipal,
-  ...(postgresqlActive ? { dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
+  ...(({ dispatchRead: input => postgresqlReceiptWorkers.run(input) })),
   onError: code => console.error('Gespeicherte Einkaufsergebnisse derzeit nicht verfügbar:', code),
 });
 require('./lib/trade-insight-job-routes').registerTradeInsightJobRoutes(app, {
@@ -26734,7 +26504,7 @@ require('./lib/trade-insight-job-routes').registerTradeInsightJobRoutes(app, {
 });
 require('./lib/trade-insights-routes').registerTradeInsightRoutes(app, {
   runtime: tradeInsightRuntime,
-  ...(postgresqlActive ? { dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
+  ...(({ dispatchRead: input => postgresqlReceiptWorkers.run(input) })),
   requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
   refreshSession: (request, executor) => loadPortalSessionFromRequest(request, { touch: false, ...(executor ? { repository: require('./lib/persistence/repositories/portal-access').createPortalAccessRepository(executor) } : {}) }),
 });
@@ -26744,8 +26514,8 @@ require("./lib/branch-sales-routes").registerBranchSalesRoutes(app, {
   images: require('./lib/persistence/repositories/sales-article-images').createSalesArticleImagesRepository(persistenceProvider),
   receipts: require("./lib/persistence/repositories/branch-receipt-runtime").createBranchReceiptRuntime({
     access: persistenceProvider, vault: integrationSecretVault,
-    ...(postgresqlActive ? { cashBackendFactory: require("./lib/persistence/postgresql/reporting/receipt-prefetch").createPostgresqlCashHistoryBackend,
-      dispatchRead: input => postgresqlReceiptWorkers.run(input) } : {}),
+    ...(({ cashBackendFactory: require("./lib/persistence/postgresql/reporting/receipt-prefetch").createPostgresqlCashHistoryBackend,
+      dispatchRead: input => postgresqlReceiptWorkers.run(input) })),
   }),
   requireSession: requirePortalSession, assertCsrf: assertPortalCsrf,
   refreshSession: request => loadPortalSessionFromRequest(request, { touch: false }),
@@ -28938,7 +28708,7 @@ app.get("/api/system-info", async (request, response) => {
   const statusAllowed = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.some((permission) => ["system:diagnostics:read", "system:diagnostics:technical"].includes(permission));
   const diagnosticsAllowed = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.includes("system:diagnostics:technical");
   const diagnosticSnapshot = statusAllowed || diagnosticsAllowed ? (await serverDiagnostics()) : null;
-  const databaseVersion = postgresqlActive ? await sqliteSystemDiagnosticsOperations.databaseVersion() : await sqliteSystemDiagnosticsOperations.sqliteVersion();
+  const databaseVersion = (await systemDiagnosticsOperations.databaseVersion());
   const serverTime = new Intl.DateTimeFormat("de-AT", {
     day: "2-digit",
     month: "2-digit",
@@ -28953,14 +28723,11 @@ app.get("/api/system-info", async (request, response) => {
     serverTime,
     timezone: "Europe/Vienna",
     nodeVersion: process.version,
-    sqliteVersion: postgresqlActive ? null : databaseVersion,
     databaseVersion,
     databaseProvider: persistenceConfiguration.providerId,
     platform: `${os.type()} ${os.release()} · ${os.arch()}`,
     uptimeSeconds: Math.floor(process.uptime()),
-    database: postgresqlActive
-      ? [persistenceConfiguration.coreUrl, persistenceConfiguration.salesUrl].map(value => decodeURIComponent(new URL(value).pathname.slice(1))).join(" + ")
-      : path.basename(databasePath),
+    database: ([persistenceConfiguration.coreUrl, persistenceConfiguration.salesUrl].map(value => decodeURIComponent(new URL(value).pathname.slice(1))).join(" + ")),
     appBackupDirectory: privileged ? appBackupDirectory : "",
     backupDirectory: privileged && !serverModeActive ? backupDirectoryFromSettings(settings) : "",
     externalBackupEnabled: !serverModeActive && settingEnabled(settings, "external_backup_enabled"),
@@ -29166,57 +28933,17 @@ Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
   }, 100);
 });
 
-app.put("/api/backup/settings", async (request, response) => {
-  if (serverModeActive) {
-    throw httpError(
-      409,
-      "Die frühere zweite Pfadsicherung wird im Serverbetrieb nicht mehr von der App verwaltet.",
-      "SERVER_MANAGED_BACKUP",
-    );
-  }
-  const currentSettings = getSettings();
-  const externalBackupEnabled = request.body?.externalBackupEnabled !== false;
-  const backupDirectory = externalBackupEnabled
-    ? validateBackupDirectory(request.body?.backupDirectory || currentSettings.backup_directory || defaultBackupDirectorySetting)
-    : { stored: String(request.body?.backupDirectory || currentSettings.backup_directory || defaultBackupDirectorySetting).trim() || defaultBackupDirectorySetting };
-  const backupIntervalHours = Number(request.body?.backupIntervalHours || currentSettings.backup_interval_hours || 24);
-  if (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 24) {
-    throw httpError(400, "Das Backup-Intervall muss zwischen 1 und 24 Stunden liegen.");
-  }
-  sqliteMaintenanceOperations.updateLegacyBackupSettings({
-    externalBackupEnabled,
-    backupDirectory: backupDirectory.stored,
-    backupIntervalHours,
-  });
-  await refreshApplicationSettingsSnapshot();
-  scheduleAutomaticBackups();
-  (await auditPortal(request.portalSession?.employeeNumber || "local", "backup.settings.update", "system", "backup"));
-  response.json({
-    ok: true,
-    externalBackupEnabled,
-    backupIntervalHours,
-  });
+app.put("/api/backup/settings", async () => {
+  throw httpError(409, "PostgreSQL-Sicherungen und Wiederherstellungen werden gemeinsam über die Serverwartung verwaltet.", "SERVER_MANAGED_BACKUP");
 });
 
-app.post("/api/backup", async (_request, response) => {
-  if (serverModeActive) {
-    throw httpError(
-      409,
-      "Im Serverbetrieb übernimmt die gesicherte Offsite-Automatik die laufenden Sicherungen.",
-      "SERVER_MANAGED_BACKUP",
-    );
-  }
-  response.status(201).json(await createDatabaseBackup("manual"));
+app.post("/api/backup", async () => {
+  throw httpError(409, "PostgreSQL-Sicherungen und Wiederherstellungen werden gemeinsam über die Serverwartung verwaltet.", "SERVER_MANAGED_BACKUP");
 });
 
 app.post("/api/backup/database-download", async (request, response, next) => {
   const body = request.body;
-  const bodyKeys = body && typeof body === "object" && !Array.isArray(body)
-    ? Object.keys(body).sort()
-    : [];
-  if (bodyKeys.length !== 2
-    || bodyKeys[0] !== "confirmation"
-    || bodyKeys[1] !== "currentPassword"
+  if (!passkeyAuthenticationModule.reauthenticationBodyValid(body, ["confirmation"])
     || body.confirmation !== "DATABASE_BACKUP_DOWNLOAD") {
     throw httpError(400, "Die ausdrückliche Download-Bestätigung fehlt.", "DATABASE_DOWNLOAD_CONFIRMATION_REQUIRED");
   }
@@ -29235,10 +28962,8 @@ app.post("/api/backup/database-download", async (request, response, next) => {
 
   let snapshot;
   try {
-    snapshot = postgresqlActive
-      ? await require('./lib/persistence/postgresql/operations/application-export').createApplicationDatabaseExport({
-        ...persistenceConfiguration,directory:path.join(dataRootDirectory,'transient','database-exports')})
-      : createDatabaseDownloadSnapshot();
+    snapshot = (await require('./lib/persistence/postgresql/operations/application-export').createApplicationDatabaseExport({
+        ...persistenceConfiguration,directory:path.join(dataRootDirectory,'transient','database-exports')}));
   } catch (error) {
     (await auditBackupAdministration(
       session.employeeNumber,
@@ -29251,9 +28976,9 @@ app.post("/api/backup/database-download", async (request, response, next) => {
     throw httpError(500, "Der geprüfte Datenbankstand konnte nicht erstellt werden.", "DATABASE_DOWNLOAD_FAILED");
   }
 
-  const filename = `Grabenplaner-Datenbank-${backupTimestamp(new Date()).replace(/Z$/, "")}.${snapshot.extension || 'db'}`;
+  const filename = `Grabenplaner-Datenbank-${backupTimestamp(new Date()).replace(/Z$/, "")}.${snapshot.extension || 'tar'}`;
   response.set({
-    "Content-Type": snapshot.contentType || "application/vnd.sqlite3",
+    "Content-Type": snapshot.contentType || "application/octet-stream",
     "Content-Disposition": contentDispositionHeader(filename),
     "Cache-Control": "private, no-store, max-age=0",
     Pragma: "no-cache",
@@ -29317,7 +29042,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
       (await cleanup());
     }
   };
-  if (postgresqlActive && (response.destroyed || !await authorizePersistenceOperation({readOnly:true}))) {
+  if ((response.destroyed || !await authorizePersistenceOperation({readOnly:true}))) {
     await finishTransfer('failed', response.destroyed ? 'CLIENT_ABORTED' : 'AUTHORIZATION_CHANGED');
     if (!response.destroyed) throw httpError(403, 'Die Berechtigung für den Datenbank-Download hat sich geändert.', 'DATABASE_DOWNLOAD_FORBIDDEN');
     return;
@@ -29360,13 +29085,7 @@ app.get("/api/backup/offsite-folders", async (request, response) => {
 app.post("/api/backup/offsite-folders", async (request, response) => {
   requireOffsiteTargetDeveloper(request);
   const body = request.body;
-  const bodyKeys = body && typeof body === "object" && !Array.isArray(body)
-    ? Object.keys(body).sort()
-    : [];
-  if (bodyKeys.length !== 3
-    || bodyKeys[0] !== "confirmation"
-    || bodyKeys[1] !== "currentPassword"
-    || bodyKeys[2] !== "folderLabel"
+  if (!passkeyAuthenticationModule.reauthenticationBodyValid(body, ["confirmation", "folderLabel"])
     || body.confirmation !== "CREATE_MANAGED_OFFSITE_FOLDER"
     || !validManagedOffsiteFolderLabel(body.folderLabel)) {
     throw httpError(400, "Bitte einen gültigen verwalteten Ordnernamen und die ausdrückliche Bestätigung angeben.", "OFFSITE_FOLDER_REQUEST_INVALID");
@@ -29412,13 +29131,7 @@ app.post("/api/backup/offsite-folders", async (request, response) => {
 app.put("/api/backup/offsite-folders/active", async (request, response) => {
   requireOffsiteTargetDeveloper(request);
   const body = request.body;
-  const bodyKeys = body && typeof body === "object" && !Array.isArray(body)
-    ? Object.keys(body).sort()
-    : [];
-  if (bodyKeys.length !== 3
-    || bodyKeys[0] !== "confirmation"
-    || bodyKeys[1] !== "currentPassword"
-    || bodyKeys[2] !== "folderLabel"
+  if (!passkeyAuthenticationModule.reauthenticationBodyValid(body, ["confirmation", "folderLabel"])
     || body.confirmation !== "ACTIVATE_MANAGED_OFFSITE_FOLDER"
     || !validManagedOffsiteFolderLabel(body.folderLabel)) {
     throw httpError(400, "Bitte das neue Sicherungsziel und die ausdrückliche Bestätigung vollständig angeben.", "OFFSITE_TARGET_REQUEST_INVALID");
@@ -29483,7 +29196,7 @@ function serverMonitorRestartCooldownSeconds(lastAcceptedAt, now = new Date()) {
 }
 
 async function currentServerMonitorRestartCooldownSeconds(now = new Date()) {
-  const latestAcceptedAt = (await sqliteSystemDiagnosticsOperations
+  const latestAcceptedAt = (await systemDiagnosticsOperations
     .latestAuditActionCreatedAt("system.server_monitor.restart.accepted"));
   return serverMonitorRestartCooldownSeconds(latestAcceptedAt, now);
 }
@@ -29563,12 +29276,7 @@ function assertServerRestartConfirmation(body) {
 }
 
 function assertVpsRebootConfirmation(body) {
-  if (!body || typeof body !== "object" || Array.isArray(body)
-    || Object.keys(body).length !== 2
-    || body.confirmation !== "VPS_REBOOT"
-    || typeof body.currentPassword !== "string"
-    || body.currentPassword.length < 1
-    || body.currentPassword.length > 512) {
+  if (!passkeyAuthenticationModule.reauthenticationBodyValid(body, ["confirmation"]) || body.confirmation !== "VPS_REBOOT") {
     throw httpError(
       400,
       "Der kontrollierte VPS-Neustart wurde nicht eindeutig bestätigt.",
@@ -29691,7 +29399,7 @@ app.post("/api/portal/v1/server-monitor/restart", async (request, response) => {
 
   const requestId = crypto.randomUUID();
   serverManagedRestartRequested = true;
-  if (postgresqlActive) {
+  {
     try { return await queuePostgresqlLifecycle(request, response, actor, 'restart', requestId); }
     catch (error) { serverManagedRestartRequested = false; throw error; }
   }
@@ -29770,7 +29478,6 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
     );
   }
   try {
-    if (!postgresqlActive) assertSafeHostRebootSocket();
   } catch {
     throw httpError(
       503,
@@ -29789,7 +29496,7 @@ app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) =
 
   const requestId = crypto.randomUUID();
   hostManagedRebootRequested = true;
-  if (postgresqlActive) {
+  {
     try { return await queuePostgresqlLifecycle(request, response, session, 'vps-reboot', requestId); }
     catch (error) { hostManagedRebootRequested = false; throw error; }
   }
@@ -29860,7 +29567,7 @@ app.post("/api/system/exit", async (request, response) => {
     if (!["developer", "it_admin", "admin"].includes(session.role)) {
       throw httpError(403, "Nur Developer, IT-Administration oder Administration dürfen den Server beenden.", "SERVER_SHUTDOWN_ROLE_DENIED");
     }
-    if (postgresqlActive) return queuePostgresqlLifecycle(request, response, session, 'shutdown', crypto.randomUUID());
+    return queuePostgresqlLifecycle(request, response, session, 'shutdown', crypto.randomUUID());
   }
   const driveInfo = runtimeDriveInfo();
   let backup = null;
@@ -29883,74 +29590,6 @@ app.post("/api/system/exit", async (request, response) => {
   response.on("finish", () => setTimeout(() => shutdown({ reason: "api", skipBackup: true }), 350));
 });
 
-function scheduleBackupImport(importPath) {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-db-import-"));
-  const scriptPath = path.join(tempRoot, "apply-db-import.ps1");
-  const launcherPath = path.join(tempRoot, "launch-db-import.cmd");
-  const safeAppDir = __dirname.replaceAll("'", "''");
-  const safeDatabasePath = databasePath.replaceAll("'", "''");
-  const safeImportPath = importPath.replaceAll("'", "''");
-  const safeTempRoot = tempRoot.replaceAll("'", "''");
-  const safeVersionLabel = APP_VERSION_LABEL.replaceAll("'", "''");
-  const script = `
-$ErrorActionPreference = 'Stop'
-$appDir = '${safeAppDir}'
-$databasePath = '${safeDatabasePath}'
-$importPath = '${safeImportPath}'
-$workDir = '${safeTempRoot}'
-$versionLabel = '${safeVersionLabel}'
-$pidToWait = ${process.pid}
-$logPath = Join-Path $appDir 'data\\import-last.log'
-function Write-ImportLog([string]$message) {
-  $line = "[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $message
-  Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
-}
-try {
-  New-Item -ItemType Directory -Path (Split-Path -Parent $logPath) -Force | Out-Null
-  Set-Content -LiteralPath $logPath -Value ("[{0}] Datenbank-Import gestartet" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')) -Encoding UTF8
-  Write-ImportLog "App-Verzeichnis: $appDir"
-  Write-ImportLog "Warte auf Server-Prozess $pidToWait ..."
-  $deadline = (Get-Date).AddMinutes(2)
-  while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {
-    if ((Get-Date) -gt $deadline) { throw "Server-Prozess $pidToWait wurde nicht rechtzeitig beendet." }
-    Start-Sleep -Milliseconds 300
-  }
-  Start-Sleep -Milliseconds 800
-  Remove-Item -LiteralPath "$databasePath-wal" -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath "$databasePath-shm" -Force -ErrorAction SilentlyContinue
-  Copy-Item -LiteralPath $importPath -Destination $databasePath -Force
-  Remove-Item -LiteralPath $importPath -Force -ErrorAction SilentlyContinue
-  Write-ImportLog "Datenbank ersetzt."
-  $startFile = Join-Path $appDir "Grabenplaner $versionLabel starten.cmd"
-  if (-not (Test-Path $startFile)) { $startFile = Join-Path $appDir 'Dienstplan starten.cmd' }
-  Write-ImportLog "Starte neu: $startFile"
-  Start-Process -FilePath $startFile -WorkingDirectory $appDir
-  Start-Sleep -Seconds 3
-  Write-ImportLog "Datenbank-Import erfolgreich abgeschlossen."
-  Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
-} catch {
-  try {
-    Write-ImportLog ("FEHLER: " + $_.Exception.Message)
-    Write-ImportLog ("Details: " + $_.ScriptStackTrace)
-  } catch {}
-  exit 1
-}
-`;
-  fs.writeFileSync(scriptPath, script, "utf8");
-  fs.writeFileSync(
-    launcherPath,
-    `@echo off\r\nstart "" /min powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"\r\n`,
-    "utf8",
-  );
-  setTimeout(() => {
-    childProcess.spawn("cmd.exe", ["/d", "/c", launcherPath], {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-    }).unref();
-    setTimeout(shutdown, 900);
-  }, 450);
-}
 
 const brandingPreserveSettingKeys = [
   "branding_management_kit_id",
@@ -29987,7 +29626,6 @@ function currentBrandingSnapshot() {
   return brandingSnapshotRepository.read(brandingPreserveSettingKeys);
 }
 
-const applyBrandingSnapshotToDatabase = applyBrandingSnapshotToSqliteFile;
 
 function verifyImportedProtectedPersonnelPayloads(inspection) {
   const storage = requireAmuStorage();
@@ -30131,58 +29769,6 @@ function verifyImportedProtectedPersonnelPayloads(inspection) {
   return verified;
 }
 
-async function verifyImportedPersonnelLifecycleState(importPath) {
-  let importedDatabase = null;
-  let importedProvider = null;
-  try {
-    importedDatabase = openSqliteLegacyDatabase(importPath, {
-      readOnly: true,
-      initializeConnection: false,
-    });
-    const schema = inspectSqlitePersonnelLifecycleSchema(importedDatabase);
-    const conversionSchema = inspectSqlitePersonnelLifecycleConversionSchema(importedDatabase);
-    if (schema.absent) {
-      if (!conversionSchema.absent) {
-        throw new Error("personnel lifecycle conversion schema without foundation");
-      }
-      return Object.freeze({ present: false });
-    }
-    if (!schema.valid) {
-      throw new Error("invalid personnel lifecycle schema");
-    }
-    if (!conversionSchema.absent && !conversionSchema.valid) {
-      throw new Error("invalid personnel lifecycle conversion schema");
-    }
-
-    if (!inspectSqliteImportForeignKeyIntegrity(importedDatabase).valid) {
-      throw new Error("invalid personnel lifecycle foreign keys");
-    }
-
-    importedProvider = createSqlitePersistenceProvider({
-      database: importedDatabase,
-      catalog: SQLITE_APPLICATION_CATALOG,
-      closeDatabase: false,
-      initializeConnection: false,
-    });
-    const importedRepository = createPersonnelLifecycleRepository(importedProvider);
-    const integrity = await createPersonnelLifecycleService(importedRepository, {
-      protectJson,
-      parseProtectedJson,
-      conversionAvailable: conversionSchema.valid,
-    }).verifyIntegrity();
-    return Object.freeze({
-      present: true,
-      conversionSchema: conversionSchema.valid ? "m3" : "m2-compatible",
-      ...integrity,
-    });
-  } finally {
-    try {
-      await importedProvider?.close();
-    } finally {
-      try { importedDatabase?.close(); } catch {}
-    }
-  }
-}
 
 async function verifyImportedIntegrationCredentials(connections = []) {
   if (!connections.length) return 0;
@@ -30196,94 +29782,8 @@ async function verifyImportedIntegrationCredentials(connections = []) {
   return connections.length;
 }
 
-app.post("/api/backup/import", express.raw({ type: "application/octet-stream", limit: "200mb" }), async (request, response) => {
-  if (getPortalStatus().portalEnabled && !["developer", "it_admin"].includes(request.portalSession?.role)) {
-    throw httpError(403, "Datenbankimporte dürfen im geschützten Betrieb nur durch Developer oder IT-Admin ausgeführt werden.", "BACKUP_IMPORT_ROLE_DENIED");
-  }
-  const {
-    amuDocuments: currentAmuDocuments,
-    personnelDocuments: currentPersonnelDocuments,
-  } = await runtimeRecoveryRepository.protectedDocumentCounts();
-  const currentProtectedSnapshot = await protectedSicknessStorageForApplication();
-  const currentCandidateDocuments = currentProtectedSnapshot.candidateDocuments.length;
-  const currentPersonnelDocumentVersions = currentProtectedSnapshot.personnelDocumentVersions.length;
-  if (currentAmuDocuments + currentPersonnelDocuments + currentCandidateDocuments
-    + currentPersonnelDocumentVersions > 0) {
-    throw httpError(409, "Diese Datenbank enthält geschützte Personalakt-Dokumente. Bitte Datenbank und private Dateisicherung gemeinsam über die Wartungswerkzeuge wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
-  }
-  if (serverModeActive) throw httpError(409, "Datenbankimporte sind im laufenden Serverbetrieb gesperrt und müssen in einem Wartungsfenster am Server durchgeführt werden.", "SERVER_MAINTENANCE_REQUIRED");
-  if (!Buffer.isBuffer(request.body) || request.body.length < 1024) {
-    throw httpError(400, "Bitte eine gültige Backup-Datei auswählen.");
-  }
-  fs.mkdirSync(dataDirectory, { recursive: true });
-  const importPath = path.join(dataDirectory, `pending-import-${backupTimestamp()}.db`);
-  fs.writeFileSync(importPath, request.body);
-  let importedInspection;
-  let importedAmuDocuments = 0;
-  let importedPersonnelDocuments = 0;
-  let importedPersonnelDocumentVersions = 0;
-  let importedCandidateDocuments = 0;
-  let importedProtectedPayloadError = false;
-  let importedIntegrationCredentialError = false;
-  let importedDatabaseReadError = false;
-  try {
-    importedInspection = inspectSqliteImportFile(importPath);
-  } catch {
-    importedDatabaseReadError = true;
-  }
-  if (importedInspection) {
-    importedAmuDocuments = importedInspection.amuDocuments;
-    importedPersonnelDocuments = importedInspection.personnelDocuments;
-    importedPersonnelDocumentVersions = importedInspection.protected
-      ?.personnelDocumentVersions?.length || 0;
-    importedCandidateDocuments = importedInspection.candidateDocuments;
-    importedProtectedPayloadError = importedInspection.protectedInspectionError;
-    importedIntegrationCredentialError = importedInspection.integrationInspectionError;
-    if (!importedAmuDocuments && !importedPersonnelDocuments
-      && !importedPersonnelDocumentVersions && !importedCandidateDocuments) {
-      try {
-        verifyImportedProtectedPersonnelPayloads(importedInspection);
-        await verifyImportedPersonnelLifecycleState(importPath);
-      }
-      catch { importedProtectedPayloadError = true; }
-    }
-    try {
-      await verifyImportedIntegrationCredentials(importedInspection.integrationConnections);
-    } catch {
-      importedIntegrationCredentialError = true;
-    }
-  }
-  if (importedDatabaseReadError) {
-    fs.rmSync(importPath, { force: true });
-    throw httpError(400, "Die ausgewählte Datei ist keine lesbare SQLite-Backup-Datei.");
-  }
-  if (importedProtectedPayloadError) {
-    fs.rmSync(importPath, { force: true });
-    throw httpError(409, "Die geschützten Personalakt-Daten dieses Backups gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Datenbank und die zugehörige private Datensicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
-  }
-  if (importedIntegrationCredentialError) {
-    fs.rmSync(importPath, { force: true });
-    throw httpError(409, "Die geschützten Zugangsdaten direkter Verbindungen gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Serversicherung mit dem zugehörigen Integrationsschlüssel wiederherstellen oder die Verbindungen im Quellsystem entfernen.", "INTEGRATION_FULL_RESTORE_REQUIRED");
-  }
-  if (importedAmuDocuments + importedPersonnelDocuments + importedPersonnelDocumentVersions
-    + importedCandidateDocuments > 0) {
-    fs.rmSync(importPath, { force: true });
-    throw httpError(409, "Das ausgewählte Backup enthält geschützte Personalakt-Dokumente. Bitte die vollständige Datenbank- und private Dateisicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
-  }
-  const preserveBranding = String(request.query.preserveBranding ?? "1") !== "0";
-  if (preserveBranding) {
-    applyBrandingSnapshotToDatabase(importPath, await currentBrandingSnapshot());
-  }
-  const safetyBackup = await createDatabaseBackup("before-import");
-  response.status(202).json({
-    ok: true,
-    message: preserveBranding
-      ? "Backup wurde übernommen, aktuelles Branding bleibt erhalten. Grabenplaner wird sicher neu gestartet."
-      : "Backup wurde vollständig übernommen. Grabenplaner wird sicher neu gestartet.",
-    safetyBackup,
-    preserveBranding,
-  });
-  scheduleBackupImport(importPath);
+app.post("/api/backup/import", async () => {
+  throw httpError(409, "PostgreSQL-Sicherungen und Wiederherstellungen werden gemeinsam über die Serverwartung verwaltet.", "SERVER_MANAGED_BACKUP");
 });
 
 function governanceSource(source) {
@@ -30844,7 +30344,7 @@ app.post("/api/privacy-governance/retention/rules", async (request, response) =>
       JSON.stringify({ category: rule.category, version: rule.version, status: rule.status })));
     response.status(201).json({ rule, notice: RETENTION_GOVERNANCE_NOTICE });
   } catch (error) {
-    governanceRouteError(error, error?.code === "SQLITE_CONSTRAINT_UNIQUE" ? 409 : 400);
+    governanceRouteError(error, isUniquePersistenceViolation(error) ? 409 : 400);
   }
 });
 
@@ -32771,7 +32271,7 @@ function readModelResponse(build) {
   return async (request, response) => {
     const read = () => build(request);
     // The response is sent only after the snapshot's final authority check.
-    response.json(await (postgresqlActive ? applicationPersistence.readSnapshot(read) : read()));
+    response.json(await ((applicationPersistence.readSnapshot(read))));
   };
 }
 
@@ -32838,6 +32338,7 @@ const planningOptimizer = planningOptimizerModel.createPlanningOptimizer({
       }
       const addedIds = [];
       for (const change of scenario.changes) if (change.kind === 'add') {
+        await assertPlanningEmployment(change.shift, repositories.organizationPersonnel);
         const inserted = await repository.insertPlanningShift(change.shift); addedIds.push(inserted.returnedRows[0]?.id);
       }
       for (const change of scenario.changes) await repository.invalidatePlanningDayReview(change.shift.employeeNumber, change.shift.shiftDate);
@@ -33942,6 +33443,14 @@ app.get("/api/employees", readModelResponse(async request => {
         || scope.departmentIds.has(Number(employee.preferred_department_id || 0))));
     });
   }
+  if (Object.hasOwn(request.query, 'planningWeek')) {
+    const planningWeek = request.query.planningWeek;
+    if (typeof planningWeek !== 'string' || !isIsoDate(planningWeek)) {
+      throw httpError(400, 'Bitte eine gültige Planungswoche auswählen.', 'SCHEDULE_EMPLOYMENT_WEEK_INVALID');
+    }
+    const from = getMonday(planningWeek);
+    employees = (await projectScheduleEmployment(employees, from, addDays(from, 6))).employees;
+  }
   employees = await Promise.all(employees.map(async (employee) => ({
     ...employee,
     personnel_display: await personnelDisplayProfile(employee.personnel_number, session),
@@ -34935,6 +34444,7 @@ app.get("/api/portal/v1/session", (request, response) => {
     loginRequired: status.loginRequired,
     user: publicPortalUser(session),
     status,
+    ...(session ? { capabilities: { atomicShiftUpdate: { version: 1, expectedRevision: "sha256", atomic: true } } } : {}),
   });
 });
 
@@ -35003,6 +34513,7 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
       passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION,
     });
     await organization.revokeMobileSessions(employeeNumber, "admin_setup_changed");
+    await organization.revokePasskeys("employee", employeeNumber);
     await organization.revokePortalSessions(employeeNumber);
     await organization.revokePasswordResetTokens(employeeNumber);
     await organization.insertAudit(
@@ -35015,6 +34526,210 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
   await refreshConfiguredAdminSnapshot();
   response.status(201).json({ ok: true, status: getPortalStatus("", request) });
 });
+
+const passkeyProtocol = require("./lib/passkey-protocol");
+const passkeyManagementModule = require("./lib/passkey-management");
+const passkeyAuthenticationModule = require("./lib/passkey-authentication");
+const passkeyConfiguration = serverModeActive ? passkeyProtocol.configuration(normalizedPublicOrigin) : null;
+const passkeyAttemptLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 2048, maxEventsPerKey: 60 });
+function passkeyRateLimit(request) {
+  const key = loginRateKey(request), now = Date.now();
+  if (passkeyAttemptLimits.get(key, now).length >= 60) throw httpError(429, "Zu viele Passkey-Anfragen. Bitte später erneut versuchen.", "PASSKEY_RATE_LIMITED");
+  passkeyAttemptLimits.record(key, now);
+}
+function passkeyRequestGuard(request, { anonymous = false } = {}) {
+  if (!getPortalStatus().portalEnabled || !passkeyConfiguration) throw passkeyProtocol.failure("PASSKEY_UNAVAILABLE", 503);
+  const fetchSite = request.headers["sec-fetch-site"];
+  if (request.headers.origin !== passkeyConfiguration.origin || (fetchSite && fetchSite !== "same-origin")) {
+    throw httpError(403, "Bitte die Passkey-Funktion direkt im GP öffnen.", "PASSKEY_ORIGIN_REQUIRED");
+  }
+  if (!anonymous) assertPortalCsrf(request);
+  else assertLoginRateLimit(request);
+  passkeyRateLimit(request);
+}
+function assertPasskeyAccount(user, now = new Date()) {
+  if (!user?.active || !user.employee_active || !user.password_hash || isReservedEmployeePrincipal(user.employee_number)
+    || (user.locked_until && !(Date.parse(user.locked_until) <= now.getTime()))) throw passkeyProtocol.failure();
+  if (user.must_change_password || Number(user.password_policy_version) !== PORTAL_PASSWORD_POLICY_VERSION) {
+    throw httpError(428, "Bitte zuerst mit Passwort anmelden und die erforderliche Kennwortaktualisierung abschließen.", "PASSKEY_PASSWORD_POLICY_REQUIRED");
+  }
+}
+async function passkeyContextFor(request, repositories, { accountId = null, operation = "register" } = {}) {
+  const session = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+  if (!session || session.sessionKind !== "employee" || session.isEmployee === false || session.mustChangePassword) {
+    throw httpError(401, "Bitte mit dem persönlichen Zugang anmelden.", "PORTAL_AUTH_REQUIRED");
+  }
+  const actor = await repositories.portalAccess.getEmployeeLogin({ loginName: session.employeeNumber });
+  assertPasskeyAccount(actor);
+  let target = actor, kind = "employee", principalId = session.employeeNumber, targetState = null, enrollmentAllowed = true;
+  if (accountId) {
+    const account = await repositories.organizationPersonnel.getOrganizationAccount(accountId);
+    if (!account) throw httpError(404, "Das Konto wurde nicht gefunden.", "PASSKEY_TARGET_NOT_FOUND");
+    const centrallyManaged = RIGHTS_ADMIN_PORTAL_ROLES.has(session.role) && session.permissions.includes("users:write") && sessionHasGlobalScope(session);
+    if (!centrallyManaged) {
+      if (!session.permissions.includes(BRANCH_ACCOUNT_PASSWORD_MANAGE_PERMISSION)) throw httpError(403, "Für dieses Konto fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+      assertManagedBranchAccountPasswordScope(session, account);
+    }
+    target = await repositories.portalAccess.getOrganizationLogin({ loginName: account.login_name });
+    if (!target) throw passkeyProtocol.failure();
+    if (operation === "register") {
+      assertPasskeyAccount(target);
+      if (account.must_change_password) throw httpError(428, "Bitte zuerst das Kennwort dieses Kontos aktualisieren.", "PASSKEY_PASSWORD_POLICY_REQUIRED");
+    }
+    enrollmentAllowed = Boolean(target.active && target.employee_active && target.password_hash && !target.must_change_password
+      && !account.must_change_password && Number(target.password_policy_version) === PORTAL_PASSWORD_POLICY_VERSION
+      && (!target.locked_until || Date.parse(target.locked_until) <= Date.now()));
+    targetState = [account.active, account.must_change_password, target.locked_until, account.account_type, account.scopes_json, account.permissions_json];
+    kind = "organization"; principalId = account.id;
+  }
+  const authorityHash = passkeyProtocol.hash(JSON.stringify(["gp-passkey-authority-v1", session.id,
+    session.employeeNumber, actor.password_hash, actor.password_policy_version, session.role,
+    session.permissions, session.scopes, kind, principalId, target.password_hash, target.password_policy_version, targetState]));
+  return { session, kind, principalId, actorPasswordHash: actor.password_hash, authorityHash, enrollmentAllowed,
+    displayName: target.full_name, loginName: target.employee_number };
+}
+async function rotatePasskeySession(request, repositories, session) {
+  const live = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+  if (!live || live.id !== session.id || live.sessionKind !== "employee" || live.mustChangePassword) throw passkeyProtocol.failure();
+  const now = new Date(), lifetime = browserSessionLifetime({ now, role: live.role, permissions: live.permissions,
+    idleMinutes: portalSessionTimeoutMinutes(), authenticatedAt: live.authenticatedAt, absoluteExpiresAt: live.absoluteExpiresAt });
+  if (!lifetime) throw httpError(401, "Die Sitzung ist abgelaufen.", "PORTAL_AUTH_REQUIRED");
+  const revoked = await repositories.portalAccess.revokeEmployeeSessionById({ id: live.id });
+  if (revoked.rowsAffected !== 1) throw passkeyProtocol.failure();
+  const rawToken = crypto.randomBytes(32).toString("base64url"), id = crypto.randomUUID();
+  await repositories.portalAccess.insertEmployeeSession({ id, employeeNumber: live.employeeNumber, tokenHash: sha256(rawToken), ...lifetime });
+  return { rawToken, session: { ...live, id, ...lifetime } };
+}
+function adoptPasskeySession(request, response, replacement) {
+  request.headers.cookie = `${PORTAL_SESSION_COOKIE}=${replacement.rawToken}; ${PORTAL_CSRF_COOKIE}=${portalCsrfToken(replacement.rawToken)}`;
+  request.portalSession = replacement.session;
+  issuePortalSessionCookies(request, response, replacement.rawToken, replacement.session.absoluteExpiresAt);
+  response.setHeader("X-GP-Session-Changed", "1");
+}
+const passkeyManagement = passkeyManagementModule.createPasskeyManagement({
+  repositories: applicationRepositories, config: passkeyConfiguration,
+  enabled: () => getPortalStatus().portalEnabled,
+  transact: work => runLoginTransaction(persistenceProvider, createApplicationRepositories, work),
+  contextFor: passkeyContextFor, guard: passkeyRequestGuard, rateLimit: assertLoginRateLimit,
+  verifyPassword: async (password, hash, request, context) => {
+    const accepted = await verifyPortalPassword(password, hash);
+    if (!accepted) {
+      registerFailedLogin(request);
+      await portalAccessRepository.updateEmployeeLoginFailure(loginFailureParameters(
+        { employee_number: context.session.employeeNumber, password_hash: hash }, getPortalSettings()));
+      await auditPortal(context.session.employeeNumber, "passkey.password-confirmation.denied", "portal_user", context.session.employeeNumber);
+    }
+    return accepted;
+  },
+  acceptPassword: (repositories, context) => requireVerifiedLogin(repositories.portalAccess,
+    { employee_number: context.session.employeeNumber, password_hash: context.actorPasswordHash }, false, false, new Date()),
+  rotate: rotatePasskeySession, adopt: adoptPasskeySession,
+});
+passkeyManagementModule.registerPasskeyManagementRoutes(app, passkeyManagement);
+
+const PASSKEY_BROWSER_COOKIE = "__Host-gp_passkey_browser";
+function passkeyBrowserBinding(request, response, create) {
+  let value = parseCookies(request)[PASSKEY_BROWSER_COOKIE];
+  if (!passkeyProtocol.base64(value, 43) || Buffer.from(value, "base64url").length !== 32) {
+    if (!create) throw passkeyProtocol.failure();
+    value = crypto.randomBytes(32).toString("base64url");
+  }
+  if (create) appendCookie(response, portalCookie(PASSKEY_BROWSER_COOKIE, value, request, { httpOnly: true, maxAge: 180 }));
+  return sha256("gp-passkey-preauthentication-v1:" + value);
+}
+async function passkeyAccountFor(repositories, subject) {
+  if (subject.principalKind === "employee") {
+    const user = await repositories.portalAccess.getEmployeeLogin({ loginName: subject.principalId });
+    return user?.employee_number === subject.principalId ? user : null;
+  }
+  if (subject.principalKind !== "organization") throw passkeyProtocol.failure();
+  const account = await repositories.organizationPersonnel.getOrganizationAccount(subject.principalId);
+  if (!account) return null;
+  const user = await repositories.portalAccess.getOrganizationLogin({ loginName: account.login_name });
+  return user?.account_id === subject.principalId ? { ...user, must_change_password: account.must_change_password, role: "organization_account" } : null;
+}
+async function createPasskeyLoginSession(request, repositories, subject, user) {
+  const organization = subject.principalKind === "organization", repository = repositories.portalAccess, now = new Date();
+  await requireVerifiedLogin(repository, user, organization, false, now);
+  const predecessor = await loadPortalSessionFromRequest(request, { touch: false, repository });
+  if (predecessor && (predecessor.sessionKind !== subject.principalKind
+    || (organization ? predecessor.accountId : predecessor.employeeNumber) !== subject.principalId)) {
+    if (predecessor.sessionKind === "organization") await repository.revokeOrganizationSessionById({ id: predecessor.id });
+    else await repository.revokeEmployeeSessionById({ id: predecessor.id });
+  }
+  const principal = organization ? null : await repository.getReportPrincipal({ employeeNumber: user.employee_number, businessDate: viennaTodayIso(now) });
+  if (!organization && !principal) throw passkeyProtocol.failure();
+  const permissions = organization ? [] : effectivePortalPermissionState(principal.employee_number, principal.role,
+    principal.permissions, principal.granted_permissions, principal.denied_permissions, principal.amu_local_access_mode).effectivePermissions;
+  const lifetime = browserSessionLifetime({ now, role: organization ? "organization_account" : principal.role,
+    permissions, idleMinutes: portalSessionTimeoutMinutes() });
+  const rawToken = crypto.randomBytes(32).toString("base64url"), id = crypto.randomUUID();
+  if (organization) {
+    await repository.purgeExpiredOrganizationSessions({});
+    await repository.revokeOrganizationSessionsForAccount({ accountId: subject.principalId });
+    await repository.insertOrganizationSession({ id, accountId: subject.principalId, tokenHash: sha256(rawToken), ...lifetime });
+  } else {
+    await repository.purgeExpiredEmployeeSessions({});
+    await repository.revokeEmployeeSessionsForEmployee({ employeeNumber: subject.principalId });
+    await repository.insertEmployeeSession({ id, employeeNumber: subject.principalId, tokenHash: sha256(rawToken), ...lifetime });
+  }
+  const session = await loadPortalSessionFromRequest({ ...request,
+    headers: { ...request.headers, cookie: `${PORTAL_SESSION_COOKIE}=${rawToken}` } }, { touch: false, repository });
+  if (!session || session.id !== id) throw passkeyProtocol.failure();
+  return { rawToken, session };
+}
+const passkeyAuthentication = passkeyAuthenticationModule.createPasskeyAuthentication({
+  repositories: applicationRepositories, protocol: passkeyManagement.protocol,
+  guard: passkeyRequestGuard, browserBinding: passkeyBrowserBinding, accountFor: passkeyAccountFor, assertAccount: assertPasskeyAccount,
+  transact: work => runLoginTransaction(persistenceProvider, createApplicationRepositories, work), createSession: createPasskeyLoginSession,
+  adopt: (request, response, transition) => {
+    adoptPasskeySession(request, response, transition); clearLoginRate(request);
+    appendCookie(response, portalCookie(PASSKEY_BROWSER_COOKIE, "", request, { httpOnly: true, maxAge: 0 }));
+  },
+  responseFor: (request, transition) => ({ ok: true, authenticated: true, user: publicPortalUser(transition.session), status: portalStatusForSession(transition.session, request) }),
+  failed: async request => {
+    registerFailedLogin(request);
+    await auditPortal("passkey-anonymous", "passkey.login.failed", "authentication", "passkey");
+  },
+});
+passkeyAuthenticationModule.registerPasskeyAuthenticationRoutes(app, passkeyAuthentication);
+
+const PASSKEY_REAUTH_OPERATIONS = Object.freeze({ "database-download": "backup:write", "offsite-folder-create": "system:offsite:configure",
+  "offsite-folder-activate": "system:offsite:configure", "vps-reboot": "system:write", "password-change": null });
+function assertPasskeyReauthenticationOperation(context, operation) {
+  if (!Object.hasOwn(PASSKEY_REAUTH_OPERATIONS, operation)) throw passkeyProtocol.failure("PASSKEY_OPERATION_INVALID", 400);
+  const permission = PASSKEY_REAUTH_OPERATIONS[operation], session = context.session;
+  if (permission && (!BACKUP_ADMIN_ROLES.has(session.role) || !session.permissions.includes(permission))) throw httpError(403, "Für diese Freigabe fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  if (operation === "vps-reboot" && (session.role !== "developer" || !session.permissions.includes("system:diagnostics:technical"))) throw httpError(403, "Für diese Freigabe fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+}
+app.post("/api/portal/v1/passkeys/reauthenticate/options", async (request, response) => {
+  passkeyRequestGuard(request);
+  const body = passkeyManagementModule.strictBody(request.body, ["operation"]);
+  if (!(await passkeyManagement.status()).available) throw passkeyProtocol.failure("PASSKEY_UNAVAILABLE", 503);
+  const context = await passkeyContextFor(request, applicationRepositories, { operation: "reauthenticate" });
+  assertPasskeyReauthenticationOperation(context, body.operation);
+  const subject = await applicationRepositories.passkeys.subjectForPrincipal({ kind: "employee", id: context.principalId });
+  if (!subject) throw passkeyProtocol.failure("PASSKEY_NOT_REGISTERED", 409);
+  response.setHeader("Cache-Control", "no-store");
+  response.json(await passkeyManagement.protocol.authenticationOptions({ purpose: "reauthenticate", subject,
+    ...passkeyManagementModule.contextBinding(context), payload: { operation: body.operation } }));
+});
+async function verifyPasskeyReauthentication(request, operation) {
+  passkeyRequestGuard(request);
+  if (Object.hasOwn(request.body, "currentPassword") || !passkeyAuthenticationModule.reauthenticationBodyValid({ passkey: request.body.passkey }, [])) throw passkeyProtocol.failure("PASSKEY_INPUT_INVALID", 400);
+  const context = await passkeyContextFor(request, applicationRepositories, { operation: "reauthenticate" });
+  assertPasskeyReauthenticationOperation(context, operation);
+  const proof = await passkeyManagement.protocol.verifyAuthentication({ ...request.body.passkey, purpose: "reauthenticate", ...passkeyManagementModule.contextBinding(context) });
+  if (proof.subject.principalKind !== "employee" || proof.subject.principalId !== context.principalId || proof.challenge.payload.operation !== operation) throw passkeyProtocol.failure();
+  return { ...proof, context };
+}
+async function confirmPasskeyReauthentication(request, repositories, proof, operation) {
+  const context = await passkeyContextFor(request, repositories, { operation: "reauthenticate" });
+  assertPasskeyReauthenticationOperation(context, operation);
+  passkeyManagementModule.assertContext(context, proof.context);
+  if (proof.challenge.payload.operation !== operation) throw passkeyProtocol.failure();
+  await passkeyAuthenticationModule.finalizeCredentialUse(repositories, proof);
+}
 
 app.post("/api/portal/v1/auth/login", async (request, response) => {
   if (!getPortalStatus().portalEnabled) return sendPortalInactive(request, response);
@@ -39468,7 +39183,7 @@ require('./lib/sales-article-tools-routes').registerSalesArticleToolsRoutes(app,
   },
   loadSales:async(session,input,fresh)=>managedSalesHistoryRuntime.run(fresh,workspace=>{if(!workspace?.articleSales)require('./lib/data-import-contract').fail('IMPORT_HISTORY_NOT_ACTIVATED',503);return workspace.articleSales.search(input);}),
   loadMovements:async(session,input,fresh)=>{
-    const started=performance.now(),result=postgresqlActive?await postgresqlReceiptWorkers.run({operation:'trade-insights',kind:'article-movements',query:input,session:{employeeNumber:session.employeeNumber}}):await tradeInsightRuntime.run(fresh,'article-movements',input);
+    const started=performance.now(),result=(await postgresqlReceiptWorkers.run({operation:'trade-insights',kind:'article-movements',query:input,session:{employeeNumber:session.employeeNumber}}));
     return {...result,durationMs:Math.round(performance.now()-started)};
   },
 });
@@ -39535,7 +39250,7 @@ app.get("/api/sales/articles/detail", async (request, response) => {
   );
   setSalesArticleCatalogPrivateHeaders(response);
   try {
-    const allowedQueryKeys = new Set(["articleNumber"]);
+    const allowedQueryKeys = new Set(["articleNumber", "section"]);
     if (Object.keys(request.query || {}).some((key) => !allowedQueryKeys.has(key))) {
       throw new SalesArticleCatalogError(
         "Die Detailparameter enthalten unbekannte Felder.",
@@ -39543,6 +39258,10 @@ app.get("/api/sales/articles/detail", async (request, response) => {
       );
     }
     const articleNumber = normalizeSalesArticleNumber(request.query?.articleNumber);
+    const section = request.query?.section === undefined ? 'all' : request.query.section;
+    if (!['all','main','notes'].includes(section)) {
+      throw new SalesArticleCatalogError('Der Detailbereich ist ungültig.', 'SALES_ARTICLE_DETAIL_INVALID');
+    }
     const article = await salesArticleCatalogRepository.getByArticleNumber(articleNumber);
     if (!article) {
       throw httpError(404, "Der Artikel wurde nicht gefunden.", "SALES_ARTICLE_NOT_FOUND");
@@ -39550,7 +39269,7 @@ app.get("/api/sales/articles/detail", async (request, response) => {
     const revisions = await salesArticleCatalogRepository.listRevisions(article.productId);
     const projection = salesArticleCatalogProjectionForSession(session);
     const result = await projectSalesArticleDetail(article, revisions, projection);
-    Object.assign(result.article, await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({ access: persistenceProvider, vault: integrationSecretVault, article, projection, session }));
+    Object.assign(result.article, await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({ access: persistenceProvider, vault: integrationSecretVault, article, projection, session, section }));
     await assertFreshSalesArticleRead(request, session, projection);
     response.json(result);
   } catch (error) {
@@ -40806,8 +40525,8 @@ app.put("/api/portal/v1/rights-dashboard/preferences", async (request, response)
   response.json({ theme });
 });
 
-async function explicitPortalAccessScopesForEmployee(employeeNumber) {
-  return (await organizationPersonnelRepository.listPortalAccessScopes(employeeNumber)).map((scope) => ({
+async function explicitPortalAccessScopesForEmployee(employeeNumber, repository = organizationPersonnelRepository) {
+  return (await repository.listPortalAccessScopes(employeeNumber)).map((scope) => ({
     locationId: scope.location_id,
     departmentId: Number(scope.department_id || 0) || null,
   }));
@@ -41288,7 +41007,7 @@ function planPersonnelLifecyclePermissionScopes({
   return planned;
 }
 
-async function normalizeRightsScopesForTarget(target, submittedScopes, projectedPermissions) {
+async function normalizeRightsScopesForTarget(target, submittedScopes, projectedPermissions, actor = null, repository) {
   if (GLOBAL_SCOPE_PORTAL_ROLES.has(target.role)) {
     if (Array.isArray(submittedScopes) && submittedScopes.length) {
       throw httpError(400, "Globale Rollen benötigen keine Standort- oder Abteilungszuweisung.", "PORTAL_SCOPE_GLOBAL_ROLE");
@@ -41296,9 +41015,16 @@ async function normalizeRightsScopesForTarget(target, submittedScopes, projected
     return [];
   }
   const scheduleAccess = projectedPermissions.includes("schedule:read") || projectedPermissions.includes("schedule:write");
+  const independentPlanner = Boolean(target.employeeNumber && target.configured
+    && target.role === "location_planner" && !String(target.homeLocationId || "").trim()
+    && target.sessionKind !== "organization" && target.isEmployee !== false);
+  const developerManagedIndependentPlanner = independentPlanner && actor?.role === "developer"
+    && Boolean(actor.employeeNumber) && actor.sessionKind !== "organization"
+    && actor.sessionKind !== "local" && actor.localSystem !== true && actor.isEmployee !== false
+    && Array.isArray(actor.scopes) && actor.scopes.length === 0;
   const source = Array.isArray(submittedScopes)
     ? submittedScopes
-    : await explicitPortalAccessScopesForEmployee(target.employeeNumber);
+    : await explicitPortalAccessScopesForEmployee(target.employeeNumber, repository);
   let scopes = source.map((scope) => ({
     locationId: normalizeLocationId(scope?.locationId),
     departmentId: normalizeDepartmentId(scope?.departmentId, true),
@@ -41314,12 +41040,12 @@ async function normalizeRightsScopesForTarget(target, submittedScopes, projected
   }
   const unique = new Map();
   for (const scope of scopes) {
-    if (scope.locationId !== target.homeLocationId) {
+    if (scope.locationId !== target.homeLocationId && !developerManagedIndependentPlanner) {
       throw httpError(403, "Planungsrechte dürfen nur für die eigene Stammfiliale vergeben werden.", "PORTAL_SCOPE_HOME_LOCATION_REQUIRED");
     }
-    await validateActiveLocationExists(scope.locationId);
+    await validateActiveLocationExists(scope.locationId, repository);
     if (scope.departmentId) {
-      await validateActiveDepartmentExists(scope.departmentId, scope.locationId);
+      await validateActiveDepartmentExists(scope.departmentId, scope.locationId, repository);
     }
     unique.set(`${scope.locationId}:${scope.departmentId || 0}`, scope);
   }
@@ -41482,7 +41208,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   }
   const scopes = await normalizeRightsScopesForTarget(target,
     scopesInputProvided ? request.body.scopes : currentPortalScopes,
-    projectedPermissions);
+    projectedPermissions, actor);
   if (scopesInputProvided) {
     assertPersonnelLearningPortalScopeDeltaAllowed(
       actor,
@@ -41657,6 +41383,11 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         "PORTAL_ROLE_HIERARCHY_DENIED",
       );
     }
+    // Recheck the narrow independent-planner policy with the current actor and
+    // employee assignment, including a rights-only edit preserving its scopes.
+    await normalizeRightsScopesForTarget(
+      liveTargetAccess, scopes, projectedPermissions, liveLearningActor, organization,
+    );
     if (scopesInputProvided) {
       assertPersonnelLearningPortalScopeDeltaAllowed(
         liveLearningActor,
@@ -43990,6 +43721,7 @@ app.put("/api/portal/v1/organization-accounts/:accountId", async (request, respo
       await organization.insertOrganizationAccountScope(accountId, scope.locationId, actorId);
     }
     await organization.revokeOrganizationSessions(accountId);
+    if (password || !input.active) await organization.revokePasskeys("organization", accountId);
     await organization.insertAudit(actorId, "portal.organization-account.update",
       "portal_organization_account", accountId, JSON.stringify({
       before: {
@@ -44109,6 +43841,7 @@ app.put("/api/portal/v1/branch-accounts/:accountId/password", async (request, re
   const actorId = portalActorId(session);
   await organizationPersonnelRepository.transaction(async (organization) => {
     await organization.updateOrganizationAccountPassword(accountId, passwordHash, actorId, PORTAL_PASSWORD_POLICY_VERSION);
+    await organization.revokePasskeys("organization", accountId);
     await organization.revokeOrganizationSessions(accountId);
     await organization.insertAudit(actorId, "portal.organization-account.password.reset",
       "portal_organization_account", accountId, JSON.stringify({
@@ -44157,7 +43890,7 @@ function staffAssignmentEmployeeInScope(session, employee) {
 }
 
 async function assertStaffAssignmentEmployeeScope(session, employeeNumber) {
-  const employee = (await sqliteEmployeeLocationLendingOperations.employee(employeeNumber));
+  const employee = (await employeeLocationLendingOperations.employee(employeeNumber));
   if (!employee || !employee.active) {
     throw httpError(404, "Das aktive Teammitglied wurde nicht gefunden.", "STAFF_ASSIGNMENT_EMPLOYEE_NOT_FOUND");
   }
@@ -44407,12 +44140,12 @@ app.get("/api/portal/v1/staff-assignments", async (request, response) => {
     throw httpError(403, "Diese Filiale ist dem Zugang nicht zugewiesen.", "STAFF_ASSIGNMENT_SCOPE_DENIED");
   }
   const scopeLocationIds = requestedLocationId ? [requestedLocationId] : assignedLocationIds;
-  const allCandidates = (await sqliteEmployeeLocationLendingOperations.activeCandidates());
+  const allCandidates = (await employeeLocationLendingOperations.activeCandidates());
   const candidateLookup = new Map(allCandidates.map((employee) => [employee.employeeNumber, employee]));
   const candidates = allCandidates
     .filter((employee) => staffAssignmentEmployeeInScope(session, employee))
     .filter((employee) => !requestedLocationId || employee.homeLocationId === requestedLocationId);
-  const assignments = (await persistenceAsyncCollections.filter((await sqliteEmployeeLocationLendingOperations.list({
+  const assignments = (await persistenceAsyncCollections.filter((await employeeLocationLendingOperations.list({
     status: status === "all" ? "" : status,
     dateFrom,
     dateTo,
@@ -44421,7 +44154,7 @@ app.get("/api/portal/v1/staff-assignments", async (request, response) => {
       session,
       assignment,
       candidateLookup.get(assignment.employeeNumber)
-        || (await sqliteEmployeeLocationLendingOperations.employee(assignment.employeeNumber)),
+        || (await employeeLocationLendingOperations.employee(assignment.employeeNumber)),
     )))
     .map((assignment) => {
       const requestBound = Boolean(staffAssignmentRequestIdFromAssignmentId(assignment.id));
@@ -44436,8 +44169,8 @@ app.get("/api/portal/v1/staff-assignments", async (request, response) => {
   response.json({
     assignments,
     candidates,
-    locations: (await sqliteEmployeeLocationLendingOperations.activeLocations()),
-    departments: (await sqliteEmployeeLocationLendingOperations.activeDepartments()),
+    locations: (await employeeLocationLendingOperations.activeLocations()),
+    departments: (await employeeLocationLendingOperations.activeDepartments()),
     delegates: await staffAssignmentDelegates(session, requestedLocationId),
     canManage: true,
   });
@@ -44449,7 +44182,7 @@ app.post("/api/portal/v1/staff-assignments", async (request, response) => {
   (await assertStaffAssignmentEmployeeScope(session, input.employeeNumber));
   let assignment;
   try {
-    assignment = (await sqliteEmployeeLocationLendingOperations.create({
+    assignment = (await employeeLocationLendingOperations.create({
       ...input,
       actor: portalActorId(session),
     }));
@@ -44469,7 +44202,7 @@ app.post("/api/portal/v1/staff-assignments", async (request, response) => {
 
 app.put("/api/portal/v1/staff-assignments/:assignmentId", async (request, response) => {
   const session = requireStaffAssignmentAccess(request, { csrf: true });
-  const existing = (await sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId));
+  const existing = (await employeeLocationLendingOperations.get(request.params.assignmentId));
   if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
   (await assertStaffAssignmentEmployeeScope(session, existing.employeeNumber));
   if (staffAssignmentRequestIdFromAssignmentId(existing.id)) {
@@ -44483,7 +44216,7 @@ app.put("/api/portal/v1/staff-assignments/:assignmentId", async (request, respon
   const revision = staffAssignmentRevision(request.body?.revision);
   let assignment;
   try {
-    assignment = (await sqliteEmployeeLocationLendingOperations.update(existing.id, {
+    assignment = (await employeeLocationLendingOperations.update(existing.id, {
       ...input,
       revision,
       actor: portalActorId(session),
@@ -44504,7 +44237,7 @@ app.put("/api/portal/v1/staff-assignments/:assignmentId", async (request, respon
 
 app.post("/api/portal/v1/staff-assignments/:assignmentId/cancel", async (request, response) => {
   const session = requireStaffAssignmentAccess(request, { csrf: true });
-  const existing = (await sqliteEmployeeLocationLendingOperations.get(request.params.assignmentId));
+  const existing = (await employeeLocationLendingOperations.get(request.params.assignmentId));
   if (!existing) throw httpError(404, "Der temporäre Filialeinsatz wurde nicht gefunden.", "STAFF_ASSIGNMENT_NOT_FOUND");
   (await assertStaffAssignmentEmployeeScope(session, existing.employeeNumber));
   if (staffAssignmentRequestIdFromAssignmentId(existing.id)) {
@@ -44517,7 +44250,7 @@ app.post("/api/portal/v1/staff-assignments/:assignmentId/cancel", async (request
   const revision = staffAssignmentRevision(request.body?.revision);
   let assignment;
   try {
-    assignment = (await sqliteEmployeeLocationLendingOperations.cancel(existing.id, {
+    assignment = (await employeeLocationLendingOperations.cancel(existing.id, {
       revision,
       actor: portalActorId(session),
     }));
@@ -44751,7 +44484,7 @@ app.get("/api/portal/v1/branch-orders/catalog", async (request, response) => {
   const context = requireBranchOrderSubmissionSession(request);
   const { session, locationId } = context;
   try {
-    const catalog = (await sqliteBranchOrderOperations.catalogSnapshot(locationId));
+    const catalog = (await branchOrderOperations.catalogSnapshot(locationId));
     const weekStart = currentWeekStart();
     response.json({
       ...catalog,
@@ -44774,7 +44507,7 @@ app.get("/api/portal/v1/branch-orders/draft", async (request, response) => {
   try {
     response.json({
       locationId: context.locationId,
-      draft: (await sqliteBranchOrderOperations.draftSnapshot(context.locationId, scope)),
+      draft: (await branchOrderOperations.draftSnapshot(context.locationId, scope)),
     });
   } catch (error) {
     throw branchOrderHttpError(error);
@@ -44787,7 +44520,7 @@ app.put("/api/portal/v1/branch-orders/draft", async (request, response) => {
   const scope = branchOrderDraftScope(context, request.body?.employeeNumber);
   const weekStart = currentWeekStart();
   try {
-    const draft = (await sqliteBranchOrderOperations.saveDraft(context.locationId, {
+    const draft = (await branchOrderOperations.saveDraft(context.locationId, {
       ...scope,
       items: request.body?.items,
       expectedRevision: request.body?.expectedRevision,
@@ -44810,7 +44543,7 @@ app.delete("/api/portal/v1/branch-orders/draft", async (request, response) => {
   assertPortalCsrf(request);
   const scope = branchOrderDraftScope(context, request.body?.employeeNumber);
   try {
-    const deleted = (await sqliteBranchOrderOperations.deleteDraft(context.locationId, {
+    const deleted = (await branchOrderOperations.deleteDraft(context.locationId, {
       ...scope,
       expectedRevision: request.body?.expectedRevision,
     }));
@@ -44834,7 +44567,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
   let order;
   try {
     const emailDelivery = branchOrderEmailStatus();
-    const configuration = (await sqliteBranchOrderOperations.settingsSnapshot(locationId));
+    const configuration = (await branchOrderOperations.settingsSnapshot(locationId));
     if (branchOrderConfigurationRequiresPdf(configuration) && !emailDelivery.attachmentsAvailable) {
       throw httpError(
         409,
@@ -44842,7 +44575,7 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
         "BRANCH_ORDER_PDF_DELIVERY_UNAVAILABLE",
       );
     }
-    order = await sqliteBranchOrderOperations.createOrder(locationId, {
+    order = await branchOrderOperations.createOrder(locationId, {
       selectedEmployeeNumber: context.selectedEmployeeNumber || request.body?.employeeNumber,
       items: request.body?.items,
       weekStart,
@@ -44881,15 +44614,15 @@ app.post("/api/portal/v1/branch-orders", async (request, response) => {
           },
         } : {}),
       });
-      (await sqliteBranchOrderOperations.markDelivery(delivery.id, { status: "sent" }));
+      (await branchOrderOperations.markDelivery(delivery.id, { status: "sent" }));
     } catch (error) {
-      (await sqliteBranchOrderOperations.markDelivery(delivery.id, {
+      (await branchOrderOperations.markDelivery(delivery.id, {
         status: error?.code === "EXTERNAL_NOTIFICATION_TIMEOUT" ? "pending" : "failed",
         failureCode: String(error?.code || "EXTERNAL_NOTIFICATION_DELIVERY_FAILED"),
       }));
     }
   }
-  const deliverySummary = (await sqliteBranchOrderOperations.finalizeOrder(order.id));
+  const deliverySummary = (await branchOrderOperations.finalizeOrder(order.id));
   (await auditPortal(session.actorId, "branch-order.delivery", "branch_order", order.id, JSON.stringify(deliverySummary)));
   response.status(deliverySummary.status === "sent" ? 201 : 202).json({
     order: {
@@ -44913,7 +44646,7 @@ app.get("/api/portal/v1/branch-orders/settings", async (request, response) => {
   const session = requirePortalSession(request, BRANCH_ORDER_MANAGE_PERMISSION);
   const locationId = await branchOrderManagementLocation(session, request.query || {});
   try {
-    const configuration = await sqliteBranchOrderOperations.settingsSnapshot(locationId);
+    const configuration = await branchOrderOperations.settingsSnapshot(locationId);
     response.json({
       locationId,
       configuration,
@@ -44930,9 +44663,9 @@ app.put("/api/portal/v1/branch-orders/settings", async (request, response) => {
   assertPortalCsrf(request);
   const locationId = await branchOrderManagementLocation(session, request.body || {});
   try {
-    const previousConfiguration = (await sqliteBranchOrderOperations.settingsSnapshot(locationId));
+    const previousConfiguration = (await branchOrderOperations.settingsSnapshot(locationId));
     const emailDelivery = branchOrderEmailStatus();
-    const configuration = (await sqliteBranchOrderOperations.replaceConfiguration(
+    const configuration = (await branchOrderOperations.replaceConfiguration(
       locationId,
       request.body?.configuration,
       portalActorId(session),
@@ -44958,7 +44691,7 @@ app.put("/api/portal/v1/branch-orders/settings", async (request, response) => {
 app.get("/api/portal/v1/branch-orders/history", async (request, response) => {
   const access = await branchOrderHistoryAccess(request, request.query || {});
   try {
-    const orders = (await sqliteBranchOrderOperations.history(
+    const orders = (await branchOrderOperations.history(
       access.locationId,
       Number(request.query?.limit || 50),
       { selectedEmployeeNumber: access.selectedEmployeeNumber },
@@ -44975,7 +44708,7 @@ app.get("/api/portal/v1/branch-orders/history", async (request, response) => {
 app.get("/api/portal/v1/branch-orders/:orderId/pdf", async (request, response) => {
   const access = await branchOrderHistoryAccess(request, request.query || {});
   try {
-    const pdf = await sqliteBranchOrderOperations.orderPdf(access.locationId, request.params.orderId, {
+    const pdf = await branchOrderOperations.orderPdf(access.locationId, request.params.orderId, {
       selectedEmployeeNumber: access.selectedEmployeeNumber,
     });
     const download = String(request.query?.download || "") === "1";
@@ -45362,15 +45095,15 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
     existingPersonnelLifecyclePermissionScopes,
     existingPortalBirthdayPresentationRights,
   );
-  let responseProjectionActor = actor;
-  let userChanged = false;
-  await personnelLifecycleSerializableTransaction(async (organization) => {
+  const mutationOutcome = { changed: false, actor };
+
+  const committedMutation = personnelLifecycleSerializableTransaction(async (organization) => {
     const [liveUser, liveLearningActor, liveEmployeeScope] = await Promise.all([
       organization.getPortalUserAccountProjection(employeeNumber),
       livePersonnelLearningRoleAdministrationActor(actor, organization),
       organization.getEmployeeScopeProjection(employeeNumber),
     ]);
-    responseProjectionActor = liveLearningActor;
+    mutationOutcome.actor = liveLearningActor;
     assertLivePortalRoutePermission(liveLearningActor, "users:write");
     let livePersonnelLifecycleGrants = [];
     let livePersonnelLifecyclePermissionScopes = [];
@@ -45416,14 +45149,14 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
         livePortalBirthdayPresentationRights,
       ),
     );
-    userChanged = Boolean(
+    mutationOutcome.changed = Boolean(
       !liveUser
       || String(liveUser.role || "") !== role
       || Boolean(liveUser.active) !== Boolean(active)
       || Boolean(liveUser.must_change_password) !== Boolean(mustChangePassword)
       || password,
     );
-    if (!userChanged) return;
+    if (!mutationOutcome.changed) return;
     if (liveUser) {
       (await assertPortalUserIsMutable(liveUser, liveLearningActor));
       if (!actorCanManagePortalRole(liveLearningActor, liveUser.role)) {
@@ -45515,6 +45248,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       await organization.revokePortalSessions(employeeNumber);
     }
     await organization.revokeMobileSessions(employeeNumber, "account_changed");
+    if (password || !active || mustChangePassword) await organization.revokePasskeys("employee", employeeNumber);
     if (password || !active) await organization.revokePasswordResetTokens(employeeNumber);
     await organization.insertAudit(
       liveLearningActor.employeeNumber,
@@ -45533,15 +45267,9 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       }),
     );
   });
-  if (userChanged) {
-    await refreshConfiguredAdminSnapshot();
-    await reconcileOpenAmuResponsibilities(responseProjectionActor.employeeNumber);
-    if (String(responseProjectionActor.employeeNumber || "") === employeeNumber) {
-      responseProjectionActor = await livePersonnelLearningRoleAdministrationActor(
-        responseProjectionActor,
-      );
-    }
-  }
+  const responseProjectionActor = await completeCommittedPortalUserMutation(
+    committedMutation, request, employeeNumber, mutationOutcome,
+  );
   const [users, roles] = await Promise.all([
     portalUsersForActor(responseProjectionActor),
     portalRolesForUserAdministrationActor(responseProjectionActor),
@@ -46364,229 +46092,11 @@ function loanMigrationRunRows() {
   return loanModuleRepository.listMigrationRuns();
 }
 
-function f18MigrationError(error) {
-  if (!(error instanceof F18MigrationError)) return error;
-  return httpError(error.status || 400, error.message, error.code);
-}
-
-function inspectUploadedF18Backup(backup) {
-  try {
-    return inspectF18Backup(backup.buffer);
-  } catch (error) {
-    throw f18MigrationError(error);
-  }
-}
-
-function f18RequiredSourceEmployeeIds(inspection) {
-  const ids = new Set();
-  for (const loan of inspection.loans) {
-    ids.add(Number(loan.borrowerSourceEmployeeId));
-    if (loan.returnWitnessSourceEmployeeId != null) {
-      ids.add(Number(loan.returnWitnessSourceEmployeeId));
-    }
-  }
-  return ids;
-}
-
-async function f18TargetEmployees() {
-  return (await loanModuleRepository.listMigrationTargetEmployees()).map((row) => ({
-    employeeNumber: row.personnel_number,
-    name: row.nickname || row.full_name || row.personnel_number,
-    fullName: row.full_name || "",
-    active: Boolean(row.active),
-  }));
-}
-
-async function f18PreviewPayload(inspection, locationId) {
-  const targetEmployees = await f18TargetEmployees();
-  const targetNumbers = new Set(targetEmployees.map((employee) => employee.employeeNumber));
-  const requiredIds = f18RequiredSourceEmployeeIds(inspection);
-  const suggestedMappings = {};
-  for (const sourceEmployee of inspection.employees) {
-    if (targetNumbers.has(sourceEmployee.employeeNumber)) {
-      suggestedMappings[String(sourceEmployee.id)] = sourceEmployee.employeeNumber;
-    }
-  }
-  const existingRun = await loanModuleRepository.getF18MigrationRunForLocation({ locationId });
-  return {
-    inspection: publicF18Inspection(inspection),
-    locationId,
-    requiredSourceEmployeeIds: [...requiredIds].sort((left, right) => left - right),
-    suggestedMappings,
-    targetEmployees,
-    existingRun: publicLoanMigrationRun(existingRun),
-  };
-}
-
-function parseF18EmployeeMappings(value) {
-  let parsed;
-  try {
-    parsed = JSON.parse(String(value || "{}"));
-  } catch {
-    throw httpError(
-      400,
-      "Die Mitarbeiterzuordnung ist ungültig.",
-      "F18_EMPLOYEE_MAPPING_INVALID",
-    );
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw httpError(
-      400,
-      "Die Mitarbeiterzuordnung ist ungültig.",
-      "F18_EMPLOYEE_MAPPING_INVALID",
-    );
-  }
-  const result = new Map();
-  for (const [sourceId, targetNumber] of Object.entries(parsed)) {
-    if (!/^\d+$/.test(sourceId)) continue;
-    const employeeNumber = String(targetNumber || "").trim();
-    if (employeeNumber) result.set(Number(sourceId), employeeNumber);
-  }
-  return result;
-}
-
-async function validateF18EmployeeMappings(inspection, mappings) {
-  const sourceEmployees = new Map(inspection.employees.map((employee) => [employee.id, employee]));
-  const targetEmployees = new Map((await f18TargetEmployees()).map((employee) => [
-    employee.employeeNumber,
-    employee,
-  ]));
-  for (const sourceId of f18RequiredSourceEmployeeIds(inspection)) {
-    const source = sourceEmployees.get(sourceId);
-    if (!source) {
-      throw httpError(
-        409,
-        `Die F18-Leihe verweist auf die unbekannte Mitarbeiter-ID ${sourceId}.`,
-        "F18_SOURCE_EMPLOYEE_MISSING",
-      );
-    }
-    const targetNumber = mappings.get(sourceId);
-    if (!targetNumber || !targetEmployees.has(targetNumber)) {
-      throw httpError(
-        400,
-        `Bitte ${source.employeeNumber || source.id} · ${source.name} einem Grabenplaner-Teammitglied zuordnen.`,
-        "F18_EMPLOYEE_MAPPING_REQUIRED",
-      );
-    }
-  }
-  return { sourceEmployees, targetEmployees };
-}
 
 function f18MigrationText(value, maximum) {
   return stripEmoji(String(value || "")).replace(/\0/g, "").trim().slice(0, maximum);
 }
 
-function f18ItemNote(item) {
-  const notes = [];
-  if (item.note) notes.push(item.note);
-  if (item.conditionOut?.original
-    && !["gut", "good"].includes(item.conditionOut.original.toLocaleLowerCase("de"))) {
-    notes.push(`F18-Zustand bei Ausgabe: ${item.conditionOut.original}`);
-  }
-  return f18MigrationText(notes.join(" · "), 1000);
-}
-
-async function prepareF18MigrationArtifacts(inspection, mappings, location, actor) {
-  const prepared = [];
-  const preparedDocuments = [];
-  const preparedPhotos = [];
-  try {
-    for (const sourceLoan of inspection.loans) {
-      const loanId = crypto.randomUUID();
-      const borrowerEmployeeNumber = mappings.get(sourceLoan.borrowerSourceEmployeeId);
-      const witnessEmployeeNumber = sourceLoan.returnWitnessSourceEmployeeId == null
-        ? ""
-        : mappings.get(sourceLoan.returnWitnessSourceEmployeeId);
-      const borrower = await loanParticipant(borrowerEmployeeNumber);
-      const witness = witnessEmployeeNumber
-        ? await loanParticipant(witnessEmployeeNumber)
-        : { employeeNumber: "", name: "Nicht dokumentiert" };
-      const items = sourceLoan.items.map((item) => ({
-        position: item.position,
-        articleNumber: item.articleNumber,
-        description: item.description,
-        serialNumber: item.serialNumber,
-        conditionOut: item.conditionOut.normalized,
-        conditionReturn: sourceLoan.returnCondition.normalized,
-        note: f18ItemNote(item),
-      }));
-      const issueDocument = await prepareLoanDocument({
-        type: "issue",
-        loanId,
-        revision: 1,
-        createdAt: sourceLoan.issuedAt,
-        issuedAt: sourceLoan.issuedAt,
-        dueDate: sourceLoan.dueDate,
-        note: f18MigrationText(sourceLoan.notes, 1000),
-        location,
-        borrower,
-        recordedBy: borrower,
-        items,
-        branding: loanPdfBranding(location.id),
-      }, actor.employeeNumber);
-      preparedDocuments.push(issueDocument);
-      let returnDocument = null;
-      if (sourceLoan.status === "returned") {
-        returnDocument = await prepareLoanDocument({
-          type: "return",
-          loanId,
-          revision: 2,
-          createdAt: sourceLoan.returnedAt,
-          issuedAt: sourceLoan.issuedAt,
-          returnedAt: sourceLoan.returnedAt,
-          dueDate: sourceLoan.dueDate,
-          note: f18MigrationText([sourceLoan.notes, sourceLoan.returnNotes].filter(Boolean).join(" · "), 1000),
-          confirmationNote: "",
-          location,
-          borrower,
-          recordedBy: borrower,
-          witness,
-          items,
-          branding: loanPdfBranding(location.id),
-        }, actor.employeeNumber);
-        preparedDocuments.push(returnDocument);
-      }
-      const photos = [];
-      const phasePositions = { issue: 0, return: 0 };
-      for (const sourcePhoto of sourceLoan.photos) {
-        const buffer = photoBufferForMigration(inspection, sourcePhoto);
-        if (!buffer) {
-          throw httpError(
-            409,
-            `Das F18-Foto ${sourcePhoto.originalName} fehlt in der geprüften Sicherung.`,
-            "F18_PHOTO_MISSING",
-          );
-        }
-        const stored = await prepareStoredLoanPhoto({
-          buffer,
-          originalName: sourcePhoto.originalName || `F18-${sourcePhoto.sourceId}.jpg`,
-        }, actor.employeeNumber);
-        preparedPhotos.push(stored);
-        phasePositions[sourcePhoto.phase] += 1;
-        photos.push({
-          phase: sourcePhoto.phase,
-          position: phasePositions[sourcePhoto.phase],
-          prepared: stored,
-        });
-      }
-      prepared.push({
-        sourceLoan,
-        loanId,
-        borrowerEmployeeNumber,
-        witnessEmployeeNumber: witnessEmployeeNumber || null,
-        items,
-        photos,
-        issueDocument,
-        returnDocument,
-      });
-    }
-    return { loans: prepared, preparedDocuments, preparedPhotos };
-  } catch (error) {
-    preparedDocuments.forEach(cleanupPreparedLoanDocument);
-    cleanupPreparedLoanPhotos(preparedPhotos);
-    throw error;
-  }
-}
 
 async function insertF18Migration(inspection, mappings, location, actor, artifacts) {
   const runId = crypto.randomUUID();
@@ -47139,6 +46649,7 @@ async function completePersonalPasswordReset(request) {
       passwordPolicyVersion: PORTAL_PASSWORD_POLICY_VERSION,
     });
     if (!changed.rowsAffected) throw invalidPasswordResetTokenError();
+    if (await repositories.passkeys.available()) await repositories.passkeys.revokePrincipal({ kind: "employee", id: current.employee_number, now });
     await repository.revokeEmployeeSessionsForEmployee({ employeeNumber: current.employee_number });
     await repository.revokeMobileSessionsForPasswordReset({ employeeNumber: current.employee_number });
     if (browserSession?.id
@@ -49017,7 +48528,7 @@ app.post("/api/portal/v1/branch-orders/:orderId/delivery-confirmation", async (r
   assertPortalCsrf(request);
   const locationId = await branchOrderManagementLocation(session, request.body || {});
   try {
-    const result = (await sqliteBranchOrderOperations.confirmOrderDeliveries(
+    const result = (await branchOrderOperations.confirmOrderDeliveries(
       locationId,
       request.params.orderId,
       new Date().toISOString(),
@@ -50599,6 +50110,7 @@ app.get("/api/mobile/v1/me/schedule", async (request, response) => {
 app.put("/api/portal/v1/me/password", async (request, response) => {
   const session = requirePortalSession(request);
   assertPortalCsrf(request);
+  if (!passkeyAuthenticationModule.reauthenticationBodyValid(request.body, ["newPassword"])) throw httpError(400, "Bitte genau eine aktuelle Sicherheitsbestätigung und das neue Passwort übermitteln.", "PASSKEY_INPUT_INVALID");
   if (session.sessionKind === "organization" || session.isEmployee === false) {
     throw httpError(
       403,
@@ -50609,7 +50121,8 @@ app.put("/api/portal/v1/me/password", async (request, response) => {
   const current = await organizationPersonnelRepository.getPortalUserAccountProjection(
     session.employeeNumber,
   );
-  if (!await verifyPortalPassword(request.body.currentPassword, current?.password_hash)) {
+  const passkeyProof = Object.hasOwn(request.body || {}, "passkey") ? await verifyPasskeyReauthentication(request, "password-change") : null;
+  if (!passkeyProof && !await verifyPortalPassword(request.body.currentPassword, current?.password_hash)) {
     throw httpError(401, "Das bisherige Passwort ist nicht korrekt.");
   }
   const passwordHash = await hashPortalPassword(request.body.newPassword, { employeeNumber: session.employeeNumber,
@@ -50619,6 +50132,7 @@ app.put("/api/portal/v1/me/password", async (request, response) => {
     const now = new Date();
     const live = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
     if (!live || live.id !== session.id) throw httpError(401, 'Bitte erneut anmelden.', 'PORTAL_AUTH_REQUIRED');
+    if (passkeyProof) await confirmPasskeyReauthentication(request, repositories, passkeyProof, "password-change");
     const lifetime = browserSessionLifetime({ now, role: live.role, permissions: live.permissions,
       idleMinutes: portalSessionTimeoutMinutes(), authenticatedAt: live.authenticatedAt, absoluteExpiresAt: live.absoluteExpiresAt });
     if (!lifetime) throw httpError(401, 'Die Sitzung ist abgelaufen.', 'PORTAL_AUTH_REQUIRED');
@@ -50642,14 +50156,15 @@ app.put("/api/portal/v1/me/password", async (request, response) => {
   // Adopt the committed credential before any subsequent guarded persistence access.
   request.headers.cookie = `${PORTAL_SESSION_COOKIE}=${rawToken}; ${PORTAL_CSRF_COOKIE}=${portalCsrfToken(rawToken)}`;
   request.portalSession = { ...session, id: lifetime.replacementId, mustChangePassword: false, ...lifetime };
-  request.portalSession = await loadPortalSessionFromRequest(request, { touch: false });
   issuePortalSessionCookies(request, response, rawToken, lifetime.absoluteExpiresAt);
+  response.setHeader("X-GP-Session-Changed", "1");
+  request.portalSession = await loadPortalSessionFromRequest(request, { touch: false });
   response.json({ ok: true, sessionChanged: true, user: publicPortalUser(request.portalSession) });
 });
 
 async function ownPortalSchedule(session, weekStart) {
   const weekEnd = addDays(weekStart, 6);
-  const [shifts, options] = await Promise.all([
+  const [storedShifts, storedOptions] = await Promise.all([
     planningSettingsRepository.listMobileScheduleShifts({
       employeeNumber: session.employeeNumber,
       weekStart,
@@ -50661,6 +50176,12 @@ async function ownPortalSchedule(session, weekStart) {
       weekEnd,
     }),
   ]);
+  const employment = await projectScheduleEmployment([{ personnel_number: session.employeeNumber }], weekStart, weekEnd);
+  // The repository has already selected only this actor's rows; its DTOs omit
+  // employee_number. Keep the temporary projection identity off the response.
+  const clipOwnRows = rows => employment.clip(rows.map(row => ({ ...row, employee_number: session.employeeNumber })))
+    .map(({ employee_number: _actor, ...row }) => row);
+  const shifts = clipOwnRows(storedShifts), options = clipOwnRows(storedOptions);
   return { weekStart, weekEnd, calendarWeek: getIsoWeek(weekStart), shifts, options, user: publicPortalUser(session) };
 }
 
@@ -50684,27 +50205,41 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
   );
   assertSessionContextScope(session, { locationId });
   const location = await validateLocationExists(locationId);
+  const readShiftRows = async (weekStart, weekEnd) => {
+    const query = { locationId, departmentId: null, weekStart, weekEnd };
+    const [employees, shifts] = await Promise.all([
+      planningSettingsRepository.listScheduleEmployees(query),
+      planningSettingsRepository.listScheduleShifts(query),
+    ]);
+    const active = new Set(employees.map(employee => String(employee.personnel_number)));
+    return shifts.filter(shift => active.has(String(shift.employee_number))).sort((left, right) => (
+      String(left.shift_date).localeCompare(String(right.shift_date))
+      || String(left.start_time).localeCompare(String(right.start_time))
+      || String(left.nickname || left.full_name).localeCompare(String(right.nickname || right.full_name))
+    ));
+  };
   let weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
   let focusDate = null;
   if (request.query.focus === "current") {
     const today = viennaTodayIso();
-    const upcoming = await planningSettingsRepository.listLocationDashboardScheduleShifts({
-      locationId, weekStart: today, weekEnd: addDays(today, 35),
-    });
+    const upcoming = await readShiftRows(today, addDays(today, 35));
+    const employment = await projectScheduleEmployment(
+      [...new Set(upcoming.map(shift => shift.employee_number))].map(personnel_number => ({ personnel_number })), today, addDays(today, 35),
+    );
     const settings = await settingsForLocation(locationId);
     focusDate = await require("./lib/mobile-schedule-focus").mobileScheduleFocus({
-      today, time: viennaNowLocal().slice(11), shifts: upcoming,
+      today, time: viennaNowLocal().slice(11), shifts: employment.clip(upcoming),
       opening: date => operatingHours(date, settings),
       isClosed: date => Boolean(publicHolidayName(date) || getGlobalDayBlockForDate(date, locationId)),
     });
     weekStart = getMonday(focusDate || today);
   }
   const weekEnd = addDays(weekStart, 6);
-  const shifts = (await planningSettingsRepository.listLocationDashboardScheduleShifts({
-    locationId,
-    weekStart,
-    weekEnd,
-  })).map((shift) => ({
+  const storedShifts = await readShiftRows(weekStart, weekEnd);
+  const employment = await projectScheduleEmployment(
+    [...new Set(storedShifts.map(shift => shift.employee_number))].map(personnel_number => ({ personnel_number })), weekStart, weekEnd,
+  );
+  const shifts = employment.clip(storedShifts).map((shift) => ({
     date: shift.shift_date,
     startTime: shift.start_time,
     endTime: shift.end_time,
@@ -50719,7 +50254,7 @@ app.get("/api/portal/v1/location-dashboard/schedule", async (request, response) 
     weekEnd,
     calendarWeek: getIsoWeek(weekStart),
     shifts,
-    displaySettings: (await sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId)),
+    displaySettings: (await branchOrderOperations.branchPortalSettingsSnapshot(locationId)),
     ...(request.query.focus === "current" ? { focusDate } : {}),
   });
 });
@@ -56461,6 +55996,91 @@ app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/application
   }
 });
 
+function personnelExistingEmployeeTarget(employee, session) {
+  if (!employee || ![1, true].includes(employee.active)) {
+    throw httpError(404, "Der aktive Mitarbeiter wurde nicht gefunden.", "PERSONNEL_LIFECYCLE_EMPLOYEE_NOT_FOUND");
+  }
+  assertSessionContextScope(session, {
+    locationId: employee.home_location_id,
+    departmentId: employee.preferred_department_id,
+  });
+  const target = {
+    personnelNumber: employee.personnel_number,
+    fullName: employee.full_name,
+    homeLocationId: employee.home_location_id || null,
+    preferredDepartmentId: employee.preferred_department_id || null,
+    active: true,
+  };
+  return { ...target, snapshotSha256: workRuleSha256(target) };
+}
+
+app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/existing-employee/:employeeNumber", async (request, response) => {
+  const { session, access } = await requirePersonnelLifecycleAccess(request, { action: "convert" });
+  if (!/^[A-Za-z0-9._-]{1,24}$/.test(request.params.employeeNumber)
+    || request.params.employeeNumber.toLowerCase() === "local") {
+    throw httpError(400, "Bitte eine gültige vorhandene Personalnummer angeben.", "PERSONNEL_LIFECYCLE_EXISTING_EMPLOYEE_INPUT_INVALID");
+  }
+  const candidate = await requirePersonnelLifecycleService().getCandidate(request.params.candidateId, { access });
+  if (!candidate?.applications?.some(application => application.id === request.params.applicationId)) {
+    throw httpError(404, "Die Bewerbung wurde nicht gefunden.", "PERSONNEL_LIFECYCLE_APPLICATION_NOT_FOUND");
+  }
+  const target = personnelExistingEmployeeTarget(
+    await organizationPersonnelRepository.getEmployeeForUpdate(request.params.employeeNumber), session,
+  );
+  response.set("Cache-Control", "private, no-store").json({ employee: target });
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/link-existing-employee", async (request, response) => {
+  const { session, capabilities } = await requirePersonnelLifecycleAccess(request, { action: "convert" });
+  const body = request.body;
+  const keys = ["operationId", "candidateRevision", "applicationRevision", "employeeNumber", "employeeSnapshotSha256", "confirmed"];
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || Object.keys(body).some(key => !keys.includes(key)) || keys.some(key => !own(body, key))
+    || [body.operationId, body.employeeNumber, body.employeeSnapshotSha256].some(value => typeof value !== "string")
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(body.operationId)
+    || !/^[A-Za-z0-9._-]{1,24}$/.test(body.employeeNumber) || body.employeeNumber.toLowerCase() === "local"
+    || !/^[a-f0-9]{64}$/.test(body.employeeSnapshotSha256) || body.confirmed !== true
+    || !Number.isSafeInteger(body.candidateRevision) || body.candidateRevision < 1
+    || !Number.isSafeInteger(body.applicationRevision) || body.applicationRevision < 1) {
+    throw httpError(400, "Bitte die vorhandene Mitarbeiteridentität prüfen und bestätigen.", "PERSONNEL_LIFECYCLE_EXISTING_EMPLOYEE_INPUT_INVALID");
+  }
+  const candidateId = String(request.params.candidateId);
+  const applicationId = String(request.params.applicationId);
+  const requestSha256 = workRuleSha256({ schemaVersion: 2, targetMode: "existing", candidateId, applicationId, ...body });
+  try {
+    const result = await runPersonnelLifecycleSerializableMutation(() => persistenceProvider.transaction(async executor => {
+      const repositories = createApplicationRepositories(executor);
+      const lifecycle = createPersonnelLifecycleService(repositories.personnelLifecycle, { protectJson, parseProtectedJson });
+      return lifecycle.convertCandidateInTransaction(candidateId, applicationId, {
+        id: body.operationId, candidateRevision: body.candidateRevision, applicationRevision: body.applicationRevision,
+        employeeNumber: body.employeeNumber, employee: { personnelNumber: body.employeeNumber }, requestSha256,
+      }, session.employeeNumber, async () => {
+        const target = personnelExistingEmployeeTarget(
+          await repositories.organizationPersonnel.getEmployeeForUpdate(body.employeeNumber), session,
+        );
+        if (target.snapshotSha256 !== body.employeeSnapshotSha256) {
+          throw httpError(409, "Der Mitarbeiter wurde zwischenzeitlich geändert. Bitte die Zuordnung erneut prüfen.", "PERSONNEL_LIFECYCLE_EMPLOYEE_CHANGED");
+        }
+        await repositories.organizationPersonnel.insertAudit(session.employeeNumber,
+          "personnel-lifecycle.candidate.link-existing", "candidate_conversion", body.operationId,
+          JSON.stringify({ candidateId, applicationId, employeeNumber: body.employeeNumber, documentTransfer: "none", portalAccess: "none" }));
+        return target;
+      }, { targetMode: "existing" });
+    }, { isolation: "serializable" }));
+    if (result.replayed) response.set("Idempotency-Replayed", "true");
+    response.status(result.replayed ? 200 : 201).json({
+      conversion: result.conversion,
+      candidate: { id: result.candidate.id, state: result.candidate.state, revision: result.candidate.revision },
+      replayed: result.replayed, capabilities,
+    });
+  } catch (error) {
+    if (isUniquePersistenceViolation(error)) {
+      throw httpError(409, "Diese Bewerbung oder Personalnummer ist bereits verknüpft.", "PERSONNEL_LIFECYCLE_EMPLOYEE_NUMBER_CONFLICT");
+    }
+    personnelLifecycleRouteError(error);
+  }
+});
+
 app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/convert", async (request, response) => {
   const accessContext = (await requirePersonnelLifecycleAccess(request, { action: "convert" }));
   const { session, capabilities } = accessContext;
@@ -58181,7 +57801,10 @@ async function ownAssistantPreview(session, kind, parameters) {
 const voiceAssistant = createVoiceAssistant({
   config: voiceAssistantConfig, provider: createOpenAiVoiceProvider({ config: voiceAssistantConfig }), today: viennaTodayIso,
   authorize: async request => {
-    const session = await loadPortalSessionFromRequest(request, { touch: false });
+    const application = await applicationPersistence.ready;
+    const session = await loadPortalSessionFromRequest(request, {
+      touch: false, repository: application.authorizationRepositories.portalAccess,
+    });
     return requireEmployeePortalSession({ portalSession: session });
   },
   balances: ownAssistantBalances, preview: ownAssistantPreview,
@@ -58341,7 +57964,7 @@ app.get("/api/portal/v1/branch-portal-settings", async (request, response) => {
   try {
     response.json({
       locationId,
-      settings: (await sqliteBranchOrderOperations.branchPortalSettingsSnapshot(locationId)),
+      settings: (await branchOrderOperations.branchPortalSettingsSnapshot(locationId)),
     });
   } catch (error) {
     throw branchOrderHttpError(error);
@@ -58353,7 +57976,7 @@ app.put("/api/portal/v1/branch-portal-settings", async (request, response) => {
   assertPortalCsrf(request);
   const locationId = await branchPortalDisplaySettingsLocation(session, request.body || {});
   try {
-    const settings = (await sqliteBranchOrderOperations.saveBranchPortalSettings(
+    const settings = (await branchOrderOperations.saveBranchPortalSettings(
       locationId,
       request.body?.settings,
       portalActorId(session),
@@ -60964,9 +60587,7 @@ app.post("/api/portal/v1/xoffi-time-import/apply", async (request, response) => 
   response.status(201).json({
     ok: true,
     importId,
-    schedule: await (postgresqlActive
-      ? applicationPersistence.readSnapshot(() => getSchedule(preview.weekStart, context, session))
-      : getSchedule(preview.weekStart, context, session)),
+    schedule: await ((applicationPersistence.readSnapshot(() => getSchedule(preview.weekStart, context, session)))),
   });
 });
 
@@ -61084,16 +60705,8 @@ app.get("/api/portal/v1/time-presence", async (request, response) => {
   response.json({ presence: await timePresenceForContext(session, context, date) });
 });
 
-function usbProvisioningAvailability(request = null) {
-  return evaluateUsbProvisioningAccess({
-    platform: process.platform,
-    operationMode: configuredOperationMode,
-    deploymentKind,
-    requestPresent: Boolean(request),
-    socketAddress: request?.socket?.remoteAddress || "",
-    clientAddress: request?.ip || request?.socket?.remoteAddress || "",
-    proxyChainPresent: Array.isArray(request?.ips) && request.ips.length > 0,
-  });
+function usbProvisioningAvailability() {
+  return { available: false, reasonCode: "POSTGRESQL_SERVER_ONLY", reason: "USB-Installationen werden von dieser PostgreSQL-Serverversion nicht unterstützt." };
 }
 
 function usbProvisioningOriginAllowed(request) {
@@ -61508,23 +61121,6 @@ function usbFirstStepsSpec(body, primaryBranding, enabledFeatures) {
   };
 }
 
-function initializeUsbStageDatabase(appDirectory) {
-  const targetDatabase = path.join(appDirectory, "data", "dienstplan.db");
-  const runtimeNode = path.join(appDirectory, "runtime", "node.exe");
-  const nodeExecutable = fs.existsSync(runtimeNode) ? runtimeNode : process.execPath;
-  const initializer = path.join(appDirectory, "scripts", "initialize-portable-db.js");
-  const result = childProcess.spawnSync(nodeExecutable, [initializer, targetDatabase, appDirectory], {
-    cwd: appDirectory,
-    encoding: "utf8",
-    windowsHide: true,
-    timeout: 120000,
-    maxBuffer: 4 * 1024 * 1024,
-  });
-  if (result.error || result.status !== 0) {
-    throw httpError(500, `Die frische USB-Datenbank konnte nicht erstellt werden: ${String(result.stderr || result.error?.message || "Unbekannter Fehler").trim().slice(0, 800)}`, "USB_DATABASE_INITIALIZE_FAILED");
-  }
-  return targetDatabase;
-}
 
 function copyUsbBrandingKits(kitIds, appDirectory) {
   const targetRoot = path.join(appDirectory, "data", "branding-kits");
@@ -61632,102 +61228,8 @@ app.put("/api/usb-provisioning/branding/import", express.raw({ type: ["applicati
   }
 });
 
-app.post("/api/usb-provisioning/create", async (request, response) => {
-  const access = assertUsbProvisioningRequest(request, { mutation: true });
-  if (usbProvisioningActive) throw httpError(409, "Ein USB-Stick wird bereits vorbereitet.", "USB_PROVISIONING_BUSY");
-  usbProvisioningActive = true;
-  let stage = null;
-  try {
-    const body = request.body || {};
-    const creator = await verifyUsbCreator(request, body.creatorEmployeeNumber, body.creatorPassword);
-    const enabledFeatures = validateUsbFeatures(body);
-    const selectedLocations = await validateUsbSelectedLocations(body.selectedLocationIds);
-    const brandingSelection = validateUsbBrandings(body);
-    const primaryBranding = usbPrimaryBranding(brandingSelection);
-    const employees = await validateUsbEmployees(body.employees, selectedLocations, creator);
-    const firstStepsSpec = usbFirstStepsSpec(body, primaryBranding, enabledFeatures);
-    const installationName = validateBrandOptionalText(body.installationName, 80);
-    const selectionValidatedAt = Date.now();
-    const tokenPayload = verifyTokenEnvelope(body.selectionToken, usbProvisioningTokenSecret, { now: selectionValidatedAt });
-    const earlyEnumeration = await enumerateSafeUsbCandidates(usbCandidateOptions());
-    const currentCandidate = earlyEnumeration.candidates.find((candidate) => candidate.driveLetter === tokenPayload.identity.driveLetter);
-    if (!currentCandidate) throw httpError(409, "Der ausgewählte USB-Stick ist nicht mehr verfügbar.", "USB_SELECTION_NOT_FOUND");
-    verifySelectionToken(body.selectionToken, currentCandidate, usbProvisioningTokenSecret, { now: selectionValidatedAt });
-    assertFormatConfirmation(body.confirmation, currentCandidate.driveLetter);
-
-    stage = await stagePortableInstallation({
-      sourceAppDirectory: __dirname,
-      copyOptions: { directories: ["docs", "lib", "node_modules", "public", "runtime", "scripts"] },
-      manifestMetadata: {
-        appVersion: packageMetadata.version,
-        installationName,
-        creator: creator.personnelNumber,
-        enabledFeatures,
-        primaryBrandingKitId: brandingSelection.primaryKitId,
-      },
-      prepareApp: async ({ stageRoot, appDirectory }) => {
-        fs.writeFileSync(path.join(stageRoot, "Backup erstellen.cmd"), "@echo off\r\ncd /d \"%~dp0app\"\r\ncall \"Backup erstellen.cmd\"\r\n", "latin1");
-        const targetDatabase = initializeUsbStageDatabase(appDirectory);
-        copyUsbBrandingKits(brandingSelection.kitIds, appDirectory);
-        fs.writeFileSync(path.join(appDirectory, "portable-layout.json"), `${JSON.stringify({
-          format: "grabenplaner-portable-layout",
-          version: 1,
-          createdAt: new Date().toISOString(),
-          installationName,
-          hideProgramFolder: body.hideProgramFolder !== false,
-          protectProgramFiles: body.protectProgramFiles !== false,
-          enabledFeatures,
-        }, null, 2)}\n`, "utf8");
-        populateUsbProfileDatabase({
-          sourceDatabase: db,
-          targetDatabasePath: targetDatabase,
-          selectedLocationIds: selectedLocations,
-          employees,
-          creator,
-          primaryBranding,
-          enabledFeatures,
-          permissionCatalog: [...delegablePortalPermissions],
-        });
-      },
-      generateFirstStepsPdf: async () => renderFirstStepsPdf(firstStepsSpec),
-    });
-
-    const result = await provisionUsbStick({
-      stage,
-      selectionToken: body.selectionToken,
-      tokenSecret: usbProvisioningTokenSecret,
-      confirmation: body.confirmation,
-      candidateOptions: usbCandidateOptions(),
-      consumeToken: consumeUsbTokenOnce,
-      now: selectionValidatedAt,
-      hideApp: async (appDirectory) => {
-        if (body.protectProgramFiles !== false) protectUsbProgramFiles(appDirectory);
-        if (body.hideProgramFolder !== false) await hidePortableAppDirectory(appDirectory);
-      },
-    });
-    (await auditPortal(access.session?.employeeNumber || creator.personnelNumber, "usb.provision", "volume", result.driveLetter, JSON.stringify({
-      installationName,
-      employees: employees.length + 1,
-      locations: selectedLocations,
-      enabledFeatures,
-      primaryBrandingKitId: brandingSelection.primaryKitId,
-    })));
-    response.json({
-      ...result,
-      installationName,
-      creator: creator.personnelNumber,
-      employeeCount: employees.length + 1,
-      locationCount: selectedLocations.length,
-      brandingCount: brandingSelection.kitIds.length,
-      enabledFeatures,
-      manifestSha256: sha256(JSON.stringify(stage.manifest)),
-    });
-  } catch (error) {
-    throw normalizeUsbProvisioningError(error);
-  } finally {
-    usbProvisioningActive = false;
-    if (stage?.stageRoot) fs.rmSync(stage.stageRoot, { recursive: true, force: true });
-  }
+app.post("/api/usb-provisioning/create", async () => {
+  throw httpError(410, "Diese PostgreSQL-Serverversion erstellt keine lokalen USB-Installationen.", "POSTGRESQL_SERVER_ONLY");
 });
 
 async function voiceSettingsDeveloper(request) {
@@ -62540,7 +62042,8 @@ app.post("/api/shifts", async (request, response) => {
   });
   let saved;
   try {
-    saved = await runWorkRuleMutationTransaction(async (repository) => {
+    saved = await runWorkRuleMutationTransaction(async (repository, organization) => {
+      await assertPlanningEmployment(shift, organization);
       const result = await repository.insertPlanningShift({
         employeeNumber: shift.employeeNumber,
         locationId: shift.locationId,
@@ -62578,9 +62081,14 @@ app.post("/api/shifts", async (request, response) => {
 
 app.put("/api/shifts/:id", async (request, response) => {
   const id = Number(request.params.id);
-  const existing = await planningSettingsRepository.getShiftById({ id });
-  if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
+  const guardedUpdate = Object.prototype.hasOwnProperty.call(request.body || {}, "expectedRevision");
+  const existing = guardedUpdate
+    ? await planningSettingsRepository.getShiftForRevisionById({ id })
+    : await planningSettingsRepository.getShiftById({ id });
+  if (!existing) throw httpError(guardedUpdate ? 409 : 404, "Der Dienst wurde nicht gefunden oder inzwischen geändert.",
+    guardedUpdate ? "SHIFT_REVISION_CONFLICT" : "SHIFT_NOT_FOUND");
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: existing.department_id });
+  if (guardedUpdate) planningShiftPrecondition.assertExpectedPlanningShiftRevision(existing, request.body.expectedRevision);
   await assertDateEditable(
     existing.shift_date,
     await settingsForLocation(existing.location_id),
@@ -62610,8 +62118,9 @@ app.put("/api/shifts/:id", async (request, response) => {
   });
   let workRuleAssessment;
   try {
-    workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
-      const result = await repository.updatePlanningShift({
+    workRuleAssessment = await runWorkRuleMutationTransaction(async (repository, organization) => {
+      await assertPlanningEmployment(shift, organization);
+      const mutation = {
         id,
         employeeNumber: shift.employeeNumber,
         locationId: shift.locationId,
@@ -62622,8 +62131,12 @@ app.put("/api/shifts/:id", async (request, response) => {
         endTime: shift.endTime,
         area: shift.area,
         note: shift.note,
-      });
-      if (!result.rowsAffected) throw httpError(404, "Der Dienst wurde nicht gefunden.");
+      };
+      const result = guardedUpdate
+        ? await repository.updatePlanningShiftIfCurrent(mutation, existing)
+        : await repository.updatePlanningShift(mutation);
+      if (!result.rowsAffected) throw httpError(guardedUpdate ? 409 : 404, "Der Dienst wurde nicht gefunden oder inzwischen geändert.",
+        guardedUpdate ? "SHIFT_REVISION_CONFLICT" : "SHIFT_NOT_FOUND");
       await repository.invalidatePlanningDayReview(existing.employee_number, existing.shift_date);
       await repository.invalidatePlanningDayReview(shift.employeeNumber, shift.shiftDate);
       const records = [];
@@ -62708,12 +62221,7 @@ app.delete("/api/schedule", async (request, response) => {
   );
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
   const planningChange = {
-    replaceRange: {
-      dateFrom: weekStart,
-      dateTo: weekEnd,
-      locationId: context.locationId,
-      departmentId: context.departmentId,
-    },
+    deletedShiftIds: scheduleBefore.shifts.map(shift => shift.id),
     addedShifts: [],
   };
   const evaluated = await evaluateScheduleWorkRules(
@@ -62730,13 +62238,10 @@ app.delete("/api/schedule", async (request, response) => {
     Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
   );
   assertBranchSupervisionAllowsMutation(branchSupervision);
-  const saved = await runWorkRuleMutationTransaction(async (repository) => {
-    const result = await repository.deletePlanningShiftsForRange({
-      locationId: context.locationId,
-      departmentId: context.departmentId,
-      dateFrom: weekStart,
-      dateTo: weekEnd,
-    });
+  const saved = await runWorkRuleMutationTransaction(async (repository, organization) => {
+    for (const shift of scheduleBefore.shifts) await assertPlanningEmployment(shift, organization);
+    let deleted = 0;
+    for (const shift of scheduleBefore.shifts) deleted += (await repository.deletePlanningShift(Number(shift.id))).rowsAffected;
     await repository.invalidatePlanningReviewsForRange({
       locationId: context.locationId,
       departmentId: context.departmentId,
@@ -62749,7 +62254,7 @@ app.delete("/api/schedule", async (request, response) => {
       context,
       request.portalSession?.employeeNumber || "local",
     );
-    return { deleted: result.rowsAffected, workRuleAssessment };
+    return { deleted, workRuleAssessment };
   });
   await refreshSicknessStaffingAfterPlanningChange();
   response.json({
@@ -63479,13 +62984,19 @@ app.post("/api/schedule/auto", async (request, response) => {
     locationId: context.locationId,
     departmentId: context.departmentId || null,
   };
-  const [employees, storedExistingShifts, employeeWeekShifts, options, employeeLendings] = await Promise.all([
+  const [employeeRows, rawExistingShifts, rawEmployeeWeekShifts, storedOptions, storedLendings] = await Promise.all([
     planningSettingsRepository.listAutoPlanningEmployees(planningQuery),
-    planningSettingsRepository.listAutoPlanningShifts(planningQuery),
+    // Replacement and its preview both need persistent IDs; the lightweight
+    // auto-planning DTO intentionally omits them. Reuse the qualified scoped read.
+    planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningEmployeeShifts(planningQuery),
     planningSettingsRepository.listAutoPlanningOptions(planningQuery),
     planningSettingsRepository.listScheduleLendings(planningQuery),
   ]);
+  const employment = await projectScheduleEmployment(employeeRows, weekStart, weekEnd);
+  const employees = employment.employees;
+  const storedExistingShifts = employment.clip(rawExistingShifts), employeeWeekShifts = employment.clip(rawEmployeeWeekShifts);
+  const options = employment.clip(storedOptions), employeeLendings = employment.clip(storedLendings);
   const existingShifts = replaceExisting ? [] : [...storedExistingShifts];
   const retainedEmployeeWeekShifts = replaceExisting
     ? employeeWeekShifts.filter((shift) => (
@@ -63557,6 +63068,7 @@ app.post("/api/schedule/auto", async (request, response) => {
     const claimedSicknessDates = new Set();
     for (const employee of employees) {
       for (const credit of await sicknessCreditsForRange(employee.personnel_number, weekStart, weekEnd)) {
+        if (!employment.allows(employee.personnel_number, credit.date)) continue;
         const creditMinutes = Math.max(0, finiteScheduleMinutes(credit.minutes));
         if (creditMinutes === 0 || !claimEmployeeDate(
           employee.personnel_number,
@@ -63572,6 +63084,7 @@ app.post("/api/schedule/auto", async (request, response) => {
       if ([0, 6].includes(new Date(`${holiday.date}T12:00:00Z`).getUTCDay())) continue;
       for (const employee of employees) {
         const employeeDate = `${employee.personnel_number}|${holiday.date}`;
+        if (!employment.allows(employee.personnel_number, holiday.date)) continue;
         if (occupied.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
         if (hasNonVacationCreditOnDate(options, employee.personnel_number, holiday.date)) continue;
         totals[employee.personnel_number] =
@@ -63584,6 +63097,7 @@ app.post("/api/schedule/auto", async (request, response) => {
       if ([0, 6].includes(new Date(`${block.block_date}T12:00:00Z`).getUTCDay())) continue;
       for (const employee of employees) {
         const employeeDate = `${employee.personnel_number}|${block.block_date}`;
+        if (!employment.allows(employee.personnel_number, block.block_date)) continue;
         if (occupied.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
         if (hasNonVacationCreditOnDate(options, employee.personnel_number, block.block_date)) continue;
         totals[employee.personnel_number] =
@@ -63747,12 +63261,7 @@ app.post("/api/schedule/auto", async (request, response) => {
 
     const planningChange = {
       ...(replaceExisting ? {
-        replaceRange: {
-          locationId: context.locationId,
-          departmentId: context.departmentId,
-          dateFrom: weekStart,
-          dateTo: weekEnd,
-        },
+        deletedShiftIds: storedExistingShifts.map(shift => shift.id),
       } : {}),
       addedShifts: plannedShifts,
     };
@@ -63777,14 +63286,13 @@ app.post("/api/schedule/auto", async (request, response) => {
     }
     let workRuleAssessment;
     try {
-      workRuleAssessment = await runWorkRuleMutationTransaction(async (repository) => {
+      workRuleAssessment = await runWorkRuleMutationTransaction(async (repository, organization) => {
+      // Re-read the protected date in the write transaction. A changed entry
+      // date after preview must roll back every proposed assignment together.
+      for (const shift of plannedShifts) await assertPlanningEmployment(shift, organization);
       if (replaceExisting) {
-        await repository.deletePlanningShiftsForRange({
-          locationId: context.locationId,
-          departmentId: context.departmentId,
-          dateFrom: weekStart,
-          dateTo: weekEnd,
-        });
+        for (const shift of storedExistingShifts) await assertPlanningEmployment(shift, organization);
+        for (const shift of storedExistingShifts) await repository.deletePlanningShift(Number(shift.id));
       }
       for (const shift of plannedShifts) {
         await repository.insertPlanningShift(shift);
@@ -64088,6 +63596,30 @@ function schedulePdfAssignmentCoversShift(assignment, shift) {
       || (assignment.start_time <= shift.start_time && assignment.end_time >= shift.end_time));
 }
 
+function schedulePlanningEmployeeOnDate(employee, date) {
+  return !Array.isArray(employee?.planningDates) || employee.planningDates.includes(date);
+}
+
+function schedulePdfPlanningRows(schedule, rows, { dateKey = "shift_date", fromKey = "date_from", toKey = "date_to" } = {}) {
+  const employees = new Map((schedule.employees || []).map(employee => [String(employee.personnel_number), employee]));
+  return (rows || []).flatMap(row => {
+    const employee = employees.get(String(row.employee_number));
+    if (!employee) return [];
+    if (row[dateKey] !== undefined) return schedulePlanningEmployeeOnDate(employee, row[dateKey]) ? [row] : [];
+    const dates = [];
+    for (let date = schedule.weekStart; date <= schedule.weekEnd; date = addDays(date, 1)) {
+      if (date >= row[fromKey] && date <= row[toKey] && schedulePlanningEmployeeOnDate(employee, date)) dates.push(date);
+    }
+    const result = [];
+    for (const date of dates) {
+      const previous = result.at(-1);
+      if (previous && addDays(previous[toKey], 1) === date) previous[toKey] = date;
+      else result.push({ ...row, [fromKey]: date, [toKey]: date });
+    }
+    return result;
+  });
+}
+
 function schedulePdfWeekOptions(schedule) {
   const weekOptions = (schedule.weekOptions || []).map((option) => ({ ...option }));
   const employeesByNumber = new Map((schedule.employees || []).map((employee) => [
@@ -64242,11 +63774,11 @@ function schedulePdfWeekOptions(schedule) {
       pdf_sickness_case: true,
     });
   }
-  return weekOptions;
+  return schedulePdfPlanningRows(schedule, weekOptions);
 }
 
 function scheduleForPdf(schedule) {
-  return { ...schedule, weekOptions: schedulePdfWeekOptions(schedule) };
+  return { ...schedule, shifts: schedulePdfPlanningRows(schedule, schedule.shifts), weekOptions: schedulePdfWeekOptions(schedule) };
 }
 
 function monthName(monthNumber, format = "long") {
@@ -64767,125 +64299,47 @@ function drawVacationPdf(plan, selection, response, createdAt = new Date()) {
 }
 
 function scheduleNoteFontName(note) {
-  if (note.bold && note.italic) return "Helvetica-BoldOblique";
-  if (note.bold) return "Helvetica-Bold";
-  if (note.italic) return "Helvetica-Oblique";
-  return "Helvetica";
+  return scheduleNoteRichText.font(note);
 }
 
 function scheduleNoteFontSize(note) {
-  return { small: 5.7, medium: 6.4, large: 7.2 }[note.font_size] || 6.4;
+  return scheduleNoteRichText.pointSize(note.font_size) ?? scheduleNoteRichText.DEFAULT_SIZE;
 }
 
 function scheduleNoteStyleFont(style) {
-  if (style.bold && style.italic) return "Helvetica-BoldOblique";
-  if (style.bold) return "Helvetica-Bold";
-  if (style.italic) return "Helvetica-Oblique";
-  return "Helvetica";
+  return scheduleNoteRichText.font(style);
 }
 
 function scheduleNoteStyleSize(style) {
-  return { small: 5.7, normal: 6.4, large: 7.2 }[style?.size || "normal"] || 6.4;
+  return scheduleNoteRichText.pointSize(style?.size) ?? scheduleNoteRichText.DEFAULT_SIZE;
 }
 
 function parseScheduleNoteRichSegments(note) {
-  const source = note.note_html ? sanitizeScheduleNoteHtml(note.note_html) : "";
-  if (!source) {
-    return [
-      {
-        text: stripEmoji(note.note_text || ""),
-        bold: Boolean(note.bold),
-        italic: Boolean(note.italic),
-        underline: Boolean(note.underline),
-        size: note.font_size === "large" ? "large" : note.font_size === "small" ? "small" : "normal",
-      },
-    ];
-  }
-  const segments = [];
-  const style = { bold: false, italic: false, underline: false, size: "normal" };
-  const stack = [];
-  const parts = source.split(/(<[^>]+>)/g).filter((part) => part !== "");
-  function pushText(text) {
-    const decoded = stripEmoji(decodeBasicEntities(text).replace(/\u00a0/g, " "));
-    if (!decoded) return;
-    segments.push({ text: decoded, ...style });
-  }
-  function pushBreak() {
-    if (segments.length && segments[segments.length - 1].text === "\n") return;
-    segments.push({ text: "\n", ...style });
-  }
-  for (const part of parts) {
-    if (!part.startsWith("<")) {
-      pushText(part);
-      continue;
-    }
-    const tag = part.toLowerCase();
-    if (tag === "<br>" || tag === "</div>" || tag === "</p>") {
-      pushBreak();
-      continue;
-    }
-    if (tag === "<div>" || tag === "<p>") continue;
-    if (tag === "<b>" || tag === "<strong>") { stack.push({ ...style }); style.bold = true; continue; }
-    if (tag === "<i>" || tag === "<em>") { stack.push({ ...style }); style.italic = true; continue; }
-    if (tag === "<u>") { stack.push({ ...style }); style.underline = true; continue; }
-    if (tag.startsWith("<span")) {
-      stack.push({ ...style });
-      style.size = tag.match(/data-size="(small|normal|large)"/)?.[1] || style.size;
-      continue;
-    }
-    if (["</b>", "</strong>", "</i>", "</em>", "</u>", "</span>"].includes(tag)) {
-      const previous = stack.pop();
-      if (previous) Object.assign(style, previous);
-    }
-  }
-  return segments.filter((segment, index) =>
-    segment.text !== "\n" || (index > 0 && index < segments.length - 1),
-  );
+  return scheduleNoteRichText.richSegments(note);
 }
 
 function drawScheduleNoteRichText(doc, note, x, y, width, height) {
-  const segments = parseScheduleNoteRichSegments(note);
-  const maxY = y + height;
-  let cursorX = x;
-  let cursorY = y;
-  const lineGap = 1.2;
-  function lineHeightFor(size) {
-    const lineHeight = scheduleNoteStyleSize({ size }) * 1.35 + lineGap;
-    return Number.isFinite(lineHeight) ? lineHeight : 9.8;
-  }
-  function nextLine(size = "normal") {
-    cursorX = x;
-    cursorY += lineHeightFor(size);
-    return cursorY <= maxY;
-  }
-  for (const segment of segments) {
-    const tokens = segment.text === "\n" ? ["\n"] : segment.text.split(/(\s+)/).filter((token) => token !== "");
-    for (const token of tokens) {
-      const size = scheduleNoteStyleSize(segment);
-      if (token === "\n") {
-        if (!nextLine(segment.size)) return;
-        continue;
-      }
-      doc.font(scheduleNoteStyleFont(segment)).fontSize(size);
-      const measuredWidth = doc.widthOfString(token);
-      const tokenWidth = Number.isFinite(measuredWidth) ? measuredWidth : 0;
-      if (cursorX > x && cursorX + tokenWidth > x + width) {
-        if (!nextLine(segment.size)) return;
-      }
-      if (cursorY + size > maxY) return;
-      if (![cursorX, cursorY, size].every(Number.isFinite)) return;
-      doc
-        .fillColor("#1e252b")
-        .font(scheduleNoteStyleFont(segment))
-        .fontSize(size)
-        .text(token, cursorX, cursorY, {
-          width: Math.max(1, tokenWidth + 1),
-          lineBreak: false,
-          underline: Boolean(segment.underline),
-        });
-      cursorX += tokenWidth;
-    }
-  }
+  const layout = scheduleNoteRichText.layout(doc, note, width);
+  const pages = scheduleNoteRichText.paginate(layout.lines, height, 458);
+  scheduleNoteRichText.draw(doc, pages[0], x, y);
+  return { layout, pages };
+}
+
+function drawScheduleNoteContinuationPages(doc, schedule, pages, createdAt) {
+  const left = 22, width = 797.89;
+  pages.forEach((lines, index) => {
+    doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
+    doc.fillColor("#142033").font("Helvetica-Bold").fontSize(15).text(
+      `Besondere Bemerkung · Fortsetzung ${index + 1}/${pages.length}`, left, 18, { width });
+    doc.fillColor("#677581").font("Helvetica").fontSize(7.2).text(
+      `${schedule.settings.pdf_title} · KW ${schedule.calendarWeek} · Woche ab ${formatDateGerman(schedule.weekStart)}`,
+      left, 40, { width });
+    doc.roundedRect(left, 58, width, 498, 4).fillAndStroke("#f7f9f8", "#c8d1cd");
+    scheduleNoteRichText.draw(doc, lines, left + 8, 69);
+    doc.fillColor("#6b7684").font("Helvetica-Bold").fontSize(5.7).text(
+      `Dienstplan erstellt mit: ${APP_NAME} ${APP_VERSION_LABEL}`, left, 571);
+    doc.font("Helvetica").text(pdfFooterContact(schedule.settings, createdAt), 541.89, 571, { width: 278, align: "right" });
+  });
 }
 
 async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date()) {
@@ -64921,6 +64375,7 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
   const employeeHeaderY = dayHeaderY + dayHeaderHeight;
   const employeeHeaderHeight = 28;
   const gridTop = employeeHeaderY + employeeHeaderHeight + 10;
+  const scheduleNote = schedule.scheduleNote?.note_text?.trim() ? schedule.scheduleNote : null;
   const gridBottom = 438;
   const gridHeight = gridBottom - gridTop;
   const timedOptionStarts = schedule.weekOptions
@@ -64941,8 +64396,7 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
   );
   const rangeMinutes = endMinutes - startMinutes;
   const employees = schedule.employees;
-  const employeeCount = Math.max(1, employees.length);
-  const employeeWidth = dayWidth / employeeCount;
+  const employeesOnDate = date => employees.filter(employee => schedulePlanningEmployeeOnDate(employee, date));
 
   doc
     .fillColor("#142033")
@@ -64978,7 +64432,8 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
         align: "center",
       });
 
-    employees.forEach((employee, employeeIndex) => {
+    const dayEmployees = employeesOnDate(date), employeeWidth = dayWidth / Math.max(1, dayEmployees.length);
+    dayEmployees.forEach((employee, employeeIndex) => {
       const employeeX = x + employeeIndex * employeeWidth;
       doc.fillColor(employee.color).rect(employeeX, employeeHeaderY, employeeWidth, employeeHeaderHeight).fill();
       doc
@@ -65063,6 +64518,8 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
 
   for (let dayIndex = 0; dayIndex < dayCount; dayIndex += 1) {
     const dayStartX = dayX(dayIndex);
+    const employeeCount = Math.max(1, employeesOnDate(addDays(schedule.weekStart, dayIndex)).length);
+    const employeeWidth = dayWidth / employeeCount;
     doc.strokeColor(dayFrameColor).lineWidth(dayFrameWidth).rect(dayStartX, gridTop, dayWidth, gridHeight).stroke();
     for (let employeeIndex = 1; employeeIndex < employeeCount; employeeIndex += 1) {
       const x = dayStartX + employeeIndex * employeeWidth;
@@ -65072,16 +64529,14 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
 
   for (const option of schedule.weekOptions) {
     if (isTeamWideMeetingOption(option)) continue;
-    const employeeIndex = employees.findIndex(
-      (employee) => employee.personnel_number === option.employee_number,
-    );
-    if (employeeIndex < 0) continue;
 
     for (let date = option.date_from; date <= option.date_to; date = addDays(date, 1)) {
       const dayIndex = Math.round(
         (new Date(`${date}T12:00:00Z`) - new Date(`${schedule.weekStart}T12:00:00Z`)) / 86400000,
       );
-      if (dayIndex < 0 || dayIndex >= dayCount) continue;
+      const dayEmployees = employeesOnDate(date), employeeWidth = dayWidth / Math.max(1, dayEmployees.length);
+      const employeeIndex = dayEmployees.findIndex(employee => employee.personnel_number === option.employee_number);
+      if (dayIndex < 0 || dayIndex >= dayCount || employeeIndex < 0) continue;
 
       const x = dayX(dayIndex) + employeeIndex * employeeWidth + 0.5;
       const width = Math.max(2, employeeWidth - 1);
@@ -65126,7 +64581,8 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
     const dayIndex = Math.round(
       (new Date(`${shift.shift_date}T12:00:00Z`) - new Date(`${schedule.weekStart}T12:00:00Z`)) / 86400000,
     );
-    const employeeIndex = employees.findIndex(
+    const dayEmployees = employeesOnDate(shift.shift_date), employeeWidth = dayWidth / Math.max(1, dayEmployees.length);
+    const employeeIndex = dayEmployees.findIndex(
       (employee) => employee.personnel_number === shift.employee_number,
     );
     if (dayIndex < 0 || dayIndex >= dayCount || employeeIndex < 0) continue;
@@ -65138,7 +64594,7 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
     const y = gridTop + ((shiftStart - startMinutes) / rangeMinutes) * gridHeight;
     const height = ((shiftEnd - shiftStart) / rangeMinutes) * gridHeight;
     const width = Math.max(2, employeeWidth - 2);
-    const employee = employees[employeeIndex];
+    const employee = dayEmployees[employeeIndex];
     doc.fillColor(employee.color).rect(x, y, width, height).fill();
     doc.strokeColor("#25313d").lineWidth(0.35).rect(x, y, width, height).stroke();
     if (!schedule.context.departmentId && shift.department_name && height > 14 && width > 8) {
@@ -65219,13 +64675,12 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
       .stroke();
   }
 
-  const remarksY = 454;
+  const remarksY = gridBottom + 16;
   const remarkColumns = [
     { key: "leave", title: "Urlaube / Zeitausgleich" },
     { key: "school", title: "Schule / Schulungen" },
     { key: "other", title: "Bemerkungen / Sonderfälle" },
   ];
-  const scheduleNote = schedule.scheduleNote?.note_text?.trim() ? schedule.scheduleNote : null;
   const remarkGap = 12;
   const remarkColumnCount = scheduleNote ? 4 : 3;
   const remarkColumnWidth = (pageWidth - left - right - remarkGap * (remarkColumnCount - 1)) / remarkColumnCount;
@@ -65269,15 +64724,21 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
     }
   });
 
+  let noteContinuation = [];
   if (scheduleNote) {
-    const x = left + 3 * (remarkColumnWidth + remarkGap);
-    const boxY = remarksY;
-    const boxHeight = 101;
+    const x = left + 3 * (remarkColumnWidth + remarkGap), boxY = remarksY, boxHeight = 101;
     doc.roundedRect(x, boxY, remarkColumnWidth, boxHeight, 6).fillAndStroke("#fff6cf", "#111111");
-    doc.fillColor("#142033").font("Helvetica-Bold").fontSize(8.1).text("Besondere Bemerkung", x + 8, boxY + 8, {
-      width: remarkColumnWidth - 16,
-    });
-    drawScheduleNoteRichText(doc, scheduleNote, x + 8, boxY + 23, remarkColumnWidth - 16, boxHeight - 31);
+    doc.fillColor("#142033").font("Helvetica-Bold").fontSize(8.1).text("Besondere Bemerkung", x + 8, boxY + 8, { width: remarkColumnWidth - 16 });
+    const rich = scheduleNoteRichText.layout(doc, scheduleNote, remarkColumnWidth - 16);
+    const fits = rich.lines.reduce((height, line) => height + line.height, 0) <= boxHeight - 31;
+    if (fits) scheduleNoteRichText.draw(doc, rich.lines, x + 8, boxY + 23);
+    else {
+      const wide = scheduleNoteRichText.layout(doc, scheduleNote, pageWidth - left - right - 16);
+      noteContinuation = scheduleNoteRichText.paginate(wide.lines, 458, 458);
+      doc.fillColor("#68736e").font("Helvetica").fontSize(8).text(
+        "Die vollständige formatierte Bemerkung steht auf den folgenden Bemerkungsseiten.",
+        x + 8, boxY + 25, { width: remarkColumnWidth - 16 });
+    }
   }
 
   doc
@@ -65294,6 +64755,7 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
       { width: 278, align: "right" },
     );
 
+  if (noteContinuation.length) drawScheduleNoteContinuationPages(doc, schedule, noteContinuation, createdAt);
   doc.end();
 }
 
@@ -65386,6 +64848,9 @@ function scheduleMatrixDayIndex(schedule, date) {
 }
 
 function scheduleMatrixCellData(schedule, employee, date, hiddenOptions = new Set()) {
+  if (!schedulePlanningEmployeeOnDate(employee, date)) {
+    return { options: [], shifts: [], meetings: [], lines: [{ type: "empty", text: "" }], style: null };
+  }
   const options = collapsedScheduleWeekOptions(schedule.weekOptions)
     .filter((option) => !isTeamWideMeetingOption(option))
     .filter((option) => String(option.employee_number) === String(employee.personnel_number))
@@ -65458,7 +64923,11 @@ function scheduleMatrixCellData(schedule, employee, date, hiddenOptions = new Se
       { type: "more", text: `+${entries.length - prioritized.length} weitere` },
     ];
   }
-  if (!lines.length) lines.push({ type: "empty", text: "-" });
+  if (!lines.length) {
+    const dayStatus = schedulePdfDayStatus(schedule, date, publicHolidayName);
+    if (dayStatus) lines.push({ type: "day-status", text: dayStatus.label, detail: dayStatus.name, publicHoliday: dayStatus.type === "holiday" });
+    else lines.push({ type: "empty", text: "-" });
+  }
   return {
     options,
     shifts,
@@ -65508,12 +64977,14 @@ function scheduleMatrixEntryHeight(entry, timeFontSize, detailFontSize) {
     );
     return Math.max(24, estimatedLines * (detailFontSize + 2) + 6);
   }
+  if (entry.type === "day-status") return 25;
   if (entry.type === "meeting") return Math.max(9, detailFontSize + 2);
   return 8;
 }
 
 function scheduleMatrixSummaryForDate(schedule, date) {
   const visibleEmployeeNumbers = new Set((schedule.employees || [])
+    .filter(employee => schedulePlanningEmployeeOnDate(employee, date))
     .map((employee) => String(employee.personnel_number)));
   const categories = {
     MA: new Set(),
@@ -65619,55 +65090,29 @@ function scheduleMatrixContentRowHeight(schedule, employee, dayCount, timeFontSi
   return Math.ceil(required);
 }
 
-function scheduleMatrixNoteLayout(doc, noteText, width, mainHeight = 68) {
-  const columns = 3;
-  const gap = 12;
-  const padding = 6;
-  const fontSize = 6.2;
-  const lineHeight = 7.8;
-  const columnWidth = (width - padding * 2 - gap * (columns - 1)) / columns;
-  doc.font("Helvetica").fontSize(fontSize);
-  const lines = wrapScheduleMatrixNote(
-    noteText,
-    (value) => doc.widthOfString(String(value || "")),
-    columnWidth,
-  );
-  const mainLinesPerColumn = Math.max(4, Math.floor((mainHeight - 11 - padding * 2) / lineHeight));
-  const mainPages = paginateScheduleMatrixNote(lines, {
-    columns,
-    linesPerColumn: mainLinesPerColumn,
-  });
-  const mainColumns = mainPages[0];
-  const continuationLines = mainPages.slice(1).flat(2);
-  const continuationLinesPerColumn = 53;
-  const continuationPages = continuationLines.length
-    ? paginateScheduleMatrixNote(continuationLines, { columns, linesPerColumn: continuationLinesPerColumn })
-    : [];
-  return { columns, gap, padding, fontSize, lineHeight, columnWidth, mainColumns, continuationPages };
+function scheduleMatrixNoteLayout(doc, note, width, mainHeight = 68) {
+  const padding = 8;
+  const rich = scheduleNoteRichText.layout(doc, typeof note === "string" ? { note_text: note } : note || {}, width - padding * 2);
+  const pages = scheduleNoteRichText.paginate(rich.lines, Math.max(0, mainHeight - 11 - padding * 2), 458);
+  return { columns: 1, gap: 0, padding, columnWidth: rich.width,
+    mainColumns: [pages[0]], continuationPages: pages.slice(1).map(lines => [lines]) };
 }
 
 function drawScheduleMatrixNoteColumns(doc, columns, x, y, layout) {
-  columns.forEach((lines, columnIndex) => {
-    const columnX = x + layout.padding + columnIndex * (layout.columnWidth + layout.gap);
-    lines.forEach((line, lineIndex) => {
-      doc.fillColor("#35434b").font("Helvetica").fontSize(layout.fontSize).text(
-        line || " ",
-        columnX,
-        y + layout.padding + lineIndex * layout.lineHeight,
-        { width: layout.columnWidth, height: layout.lineHeight, lineBreak: false },
-      );
-    });
-  });
+  scheduleNoteRichText.draw(doc, columns.flat(), x + layout.padding, y + layout.padding);
 }
 
 function drawScheduleMatrixNotesBox(doc, noteText, columns, x, y, width, height, layout, hint = "") {
   doc.fillColor("#253943").font("Helvetica-Bold").fontSize(7.4).text("Bemerkungen", x, y, { width });
   const boxY = y + 11;
   doc.roundedRect(x, boxY, width, height - 11, 4).fillAndStroke("#f7f9f8", "#c8d1cd");
-  if (noteText && columns.some((column) => column.length)) {
+  const hasLines = noteText && columns.some((column) => column.length);
+  if (hasLines) {
     drawScheduleMatrixNoteColumns(doc, columns, x, boxY, layout);
-  } else if (hint) {
-    doc.fillColor("#7c888d").font("Helvetica").fontSize(5.9).text(hint, x + 9, boxY + 9, { width: width - 18 });
+  }
+  if (hint) {
+    doc.fillColor("#7c888d").font("Helvetica").fontSize(5.9).text(hint, hasLines ? x + 120 : x + 9, hasLines ? y + 1 : boxY + 9,
+      { width: hasLines ? width - 120 : width - 18, align: hasLines ? "right" : "left" });
   }
 }
 
@@ -65828,6 +65273,15 @@ function scheduleMatrixPageRowHeights(employees, availableHeight, minimumHeightF
   return heights;
 }
 
+function scheduleMatrixFirstPageRowsHeight(doc, note, width, availableHeight, minimumHeight, noteAreaHeight) {
+  const rich = scheduleNoteRichText.layout(doc, note || {}, width - 16);
+  const noteHeight = 11 + 16 + rich.lines.reduce((sum, line) => sum + line.height, 0);
+  // The first page's notes take precedence over optional row stretching.
+  // Preserve every row's content minimum and the note's actual point sizes;
+  // text exceeding that physical space still uses the continuation pages.
+  return Math.max(minimumHeight, availableHeight - Math.max(0, noteHeight - noteAreaHeight));
+}
+
 function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const doc = new PDFDocument({
     autoFirstPage: false,
@@ -65869,7 +65323,8 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const noteAreaHeight = 64;
   const postTableHeight = 25 + noteAreaHeight + (meetings.length ? 33 : 0);
   const tableBottom = 556 - postTableHeight;
-  const headerHeight = 42;
+  const hasDayStatus = Array.from({ length: dayCount }, (_, index) => schedulePdfDayStatus(schedule, addDays(schedule.weekStart, index), publicHolidayName)).some(Boolean);
+  const headerHeight = hasDayStatus ? 65 : 42;
   const employees = schedule.employees.length ? schedule.employees : [null];
   const tableWidth = pageWidth - left - right;
   const employeeColumnWidth = 148;
@@ -65890,17 +65345,20 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
   const availableRowsHeight = tableBottom - tableTop - headerHeight;
   const pageRows = scheduleMatrixPageRows(employees, availableRowsHeight, minimumHeightFor);
   const firstPageRows = pageRows[0];
-  const firstPageRowHeights = scheduleMatrixPageRowHeights(firstPageRows, availableRowsHeight, minimumHeightFor);
+  const firstPageAvailableHeight = scheduleMatrixFirstPageRowsHeight(doc, schedule.scheduleNote, tableWidth,
+    availableRowsHeight, firstPageRows.reduce((sum, employee) => sum + minimumHeightFor(employee), 0), noteAreaHeight);
+  const firstPageRowHeights = scheduleMatrixPageRowHeights(firstPageRows, firstPageAvailableHeight, minimumHeightFor);
   const firstDataBottom = tableTop + headerHeight
     + firstPageRowHeights.reduce((sum, height) => sum + height, 0);
   const firstNoteY = firstDataBottom + 7 + (meetings.length ? 33 : 0) + 18;
   const mainNoteHeight = Math.max(noteAreaHeight, 556 - firstNoteY);
-  const noteLayout = scheduleMatrixNoteLayout(doc, scheduleNoteText, tableWidth, mainNoteHeight);
+  const noteLayout = scheduleMatrixNoteLayout(doc, schedule.scheduleNote, tableWidth, mainNoteHeight);
 
   pageRows.forEach((employeesOnPage, pageIndex) => {
     doc.addPage({ size: "A4", layout: "landscape", margin: 0 });
     const pageEmployeeCount = employeesOnPage.filter(Boolean).length;
-    const rowHeights = scheduleMatrixPageRowHeights(employeesOnPage, availableRowsHeight, minimumHeightFor);
+    const rowHeights = pageIndex === 0 ? firstPageRowHeights
+      : scheduleMatrixPageRowHeights(employeesOnPage, availableRowsHeight, minimumHeightFor);
     const rowOffsets = [0];
     rowHeights.forEach((height) => rowOffsets.push(rowOffsets.at(-1) + height));
     const dataTop = tableTop + headerHeight;
@@ -65943,7 +65401,9 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
       const date = addDays(schedule.weekStart, dayIndex);
       const x = left + employeeColumnWidth + dayIndex * dayWidth;
       const meetingToday = meetings.some((meeting) => meeting.date_from <= date && meeting.date_to >= date);
+      const dayStatus = schedulePdfDayStatus(schedule, date, publicHolidayName);
       doc.fillColor(dayIndex >= 5 ? "#dfe6e8" : "#e8eef1").rect(x, tableTop, dayWidth, headerHeight).fill();
+      if (dayStatus) doc.fillColor(dayStatus.type === "holiday" ? "#f7e8bc" : "#e4e8ea").rect(x, tableTop, dayWidth, headerHeight).fill();
       if (meetingToday) doc.fillColor("#76529a").rect(x, tableTop, dayWidth, 3).fill();
       doc.fillColor("#162635").font("Helvetica-Bold").fontSize(dayCount === 7 ? 11.3 : 12.35).text(
         weekdayNames[dayIndex],
@@ -65963,6 +65423,11 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
         tableTop + 34,
         { width: dayWidth - 10, height: 8, align: "left", lineBreak: false, ellipsis: true },
       );
+      if (dayStatus) {
+        doc.fillColor(dayStatus.type === "holiday" ? "#795415" : "#53616a").font("Helvetica-Bold").fontSize(6.5).text(
+          `${dayStatus.label} · ${dayStatus.name}`, x + 4, tableTop + 44,
+          { width: dayWidth - 8, height: headerHeight - 45, align: "center", lineGap: .3 });
+      }
     }
 
     employeesOnPage.forEach((employee, rowIndex) => {
@@ -66089,6 +65554,12 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
               { width: dayWidth - 14, height: optionFontSize + 2, align: "left", ellipsis: true, lineBreak: false },
             );
             lineY += Math.max(9, detailFontSize + 2);
+          } else if (line.type === "day-status") {
+            doc.fillColor(line.publicHoliday ? "#795415" : "#53616a").font("Helvetica-Bold").fontSize(7).text(
+              line.text, x + 5, lineY, { width: dayWidth - 10, align: "center", lineBreak: false });
+            doc.font("Helvetica").fontSize(6).text(line.detail, x + 5, lineY + 10,
+              { width: dayWidth - 10, height: 16, align: "center", lineGap: .2 });
+            lineY += 25;
           } else {
             doc.fillColor(line.type === "empty" ? "#9aa4aa" : "#66737c").font("Helvetica").fontSize(5.8).text(
               line.text,
@@ -66158,7 +65629,9 @@ function drawScheduleMatrixPdf(schedule, response, createdAt = new Date()) {
       tableWidth,
       pageNoteHeight,
       noteLayout,
-      pageIndex === 0 ? "" : "Wochenbemerkung auf der ersten Matrixseite; Feld für Ergänzungen.",
+      pageIndex === 0
+        ? (noteLayout.continuationPages.length ? "Fortsetzung auf den folgenden Bemerkungsseiten." : "")
+        : "Wochenbemerkung auf der ersten Matrixseite; Feld für Ergänzungen.",
     );
 
     doc.fillColor("#6b7684").font("Helvetica-Bold").fontSize(5.7).text(
@@ -66322,7 +65795,7 @@ app.use(async (error, request, response, _next) => {
   }
   const status = Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 500;
   const requestId = request.grabenplanerRequestId || crypto.randomUUID();
-  if (status >= 500) console.error(`[${requestId}] ${request.method} ${request.path}`, error);
+  if (status >= 500) console.error("[%s] %s %s", requestId, request.method, request.path, error);
   if (response.headersSent) {
     _next(error);
     return;
@@ -66498,7 +65971,7 @@ async function startServer() {
       }, 5 * 60 * 1000);
       scannerProbeInterval.unref();
     }
-    const maintenanceOwnsStartupBackup = postgresqlActive || maintenanceOwnsLifecycleBackup();
+    const maintenanceOwnsStartupBackup = true;
     setTimeout(async () => {
       if (shutdownStarted) return;
       if (maintenanceOwnsStartupBackup) {
@@ -66548,7 +66021,6 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
     if (!databaseClosed) {
       try {
         if (localBackupArchiveEnabled()) await require("./lib/background-backup-process").drainBackgroundBackups({ deadlineMs });
-        if (!postgresqlActive && !skipBackup && !maintenanceOwnsLifecycleBackup()) await createDatabaseBackup(`shutdown-${reason}`, { deadlineMs });
       } catch (error) {
         console.error("Backup beim Dienststopp konnte nicht erstellt werden:", error);
         if (error?.code === "BACKGROUND_BACKUP_TREE_UNVERIFIED") {
@@ -66569,7 +66041,6 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
           String(error?.code || "PERSISTENCE_CLOSE_FAILED"),
         );
       }
-      try { sqliteMaintenanceOperations.checkpointWal(); } catch {}
       try { db?.close(); } finally { databaseClosed = true; }
     }
     releaseInstanceLock();
@@ -66610,6 +66081,9 @@ if (require.main === module) {
   process.on("SIGINT", () => shutdown({ reason: "SIGINT" }));
   process.on("SIGTERM", () => shutdown({ reason: "SIGTERM" }));
   void startServer().catch((error) => {
+    // A signal may stop receipt workers before startup has reached app.listen.
+    // The shutdown path owns their termination, persistence and lock release.
+    if (shutdownStarted && error?.code === "IMPORT_REPORT_WORKER_STOPPED") return;
     releaseInstanceLock();
     setImmediate(() => { throw error; });
   });
@@ -66686,11 +66160,8 @@ module.exports = {
   usbProvisioningAvailability,
   drawSchedulePdfForTests: drawSchedulePdf,
   scheduleForPdfForTests: scheduleForPdf,
-  createDatabaseBackupToDirectory,
   latestDatabaseBackup,
-  pruneDatabaseBackups,
   verifyActiveProtectedDocumentBlobs,
-  verifyProtectedBackupPair,
   verifyProtectedGovernanceRecords,
   verifyImportedProtectedPersonnelPayloads,
   reconcileOrphanAmuBlobs,

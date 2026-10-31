@@ -14,6 +14,50 @@ const fixture=work=>withCoreFixture(core=>withSalesFixture(7,async sales=>{
   const app=await openTwoDatabaseDevelopmentApplication({coreUrl:process.env.GP_CORE_APP_URL,salesUrl:process.env.GP_SALES_APP_URL,stage:sales.stage,authorize:async()=>state.allowed});
   try{await work({...sales,core,state,app,access:app.provider});}finally{await app.close();}
 }));
+test('Workflow Studio owner routing admits only the three qualified Core reads and preserves commit authorization',async()=>{
+  const fs=require('node:fs'),path=require('node:path'),{Module}=require('node:module');
+  const {createPersistenceProviderFacade,definePersistenceStatement,PersistenceError,PERSISTENCE_ERROR_CODES}=require('../lib/persistence/contract');
+  const qualified=Object.values(require('../lib/persistence/statements/workflow-studio').S);
+  assert.deepEqual(qualified.map(s=>s.id).sort(),['workflow-studio.completion.lookup','workflow-studio.instance.steps','workflow-studio.instances.page']);
+  const state={allowed:true,coreReads:[],salesReads:[],commits:0,rollbacks:0,authorizations:[]};
+  const capabilities=require('../lib/persistence/postgresql/provider').POSTGRESQL_CAPABILITIES;
+  const core=createPersistenceProviderFacade({providerId:'postgresql',capabilities,
+    query:async()=>{throw Error('Reads must use the real boundary transaction');},
+    execute:async()=>{throw Error('Studio registration must not add direct writes');},
+    async beginTransaction(){return{query:async(statement)=>{
+      if(!qualified.includes(statement))throw new PersistenceError(PERSISTENCE_ERROR_CODES.STATEMENT_INVALID,{operation:'query'});
+      state.coreReads.push(statement.id);return[];
+    },execute:async()=>{throw Error('Read registration must not grant writes');},
+    commit:async()=>{state.commits++;},rollback:async()=>{state.rollbacks++;}};},close:async()=>{}});
+  const sales=createPersistenceProviderFacade({providerId:'postgresql',capabilities,
+    query:async(statement)=>{state.salesReads.push(statement.id);throw Error('Studio reads must not reach Sales');},
+    execute:async()=>{throw Error('Studio reads must not write Sales');},
+    beginTransaction:async()=>{throw Error('Studio reads must not open Sales');},close:async()=>{}});
+  const filename=path.resolve(__dirname,'../lib/persistence/postgresql/boundary/application.js');
+  const subject=new Module(filename,module);subject.filename=filename;subject.paths=Module._nodeModulePaths(path.dirname(filename));
+  const realRequire=subject.require.bind(subject);
+  subject.require=id=>id==='pg'?{Pool:class{on(){}async end(){}}}
+    :id==='../core/environment'?{PROFILE:'synthetic-only',configuration:()=>({}),verifyEnvironment:async()=>{}}
+    :id==='../core/application'?{openCoreDevelopmentApplication:async()=>({provider:core,close:()=>core.close()})}
+    :id==='../sales/application'?{openSalesDevelopmentApplication:async()=>({provider:sales,close:()=>sales.close()})}
+    :realRequire(id);
+  subject._compile(fs.readFileSync(filename,'utf8'),filename);
+  const application=await subject.exports.openTwoDatabaseDevelopmentApplication({coreUrl:'synthetic-core',salesUrl:'synthetic-sales',stage:8,
+    authorize:async input=>{state.authorizations.push(input);return state.allowed;}});
+  const parameters={'workflow-studio.completion.lookup':{key:'synthetic-operation'},'workflow-studio.instance.steps':{runId:'synthetic-run'},'workflow-studio.instances.page':{after:'',limit:5}};
+  try{
+    for(const statement of qualified)assert.deepEqual(await application.provider.queryAll(statement,parameters[statement.id]),[]);
+    assert.deepEqual(state.coreReads,[...qualified.map(s=>s.id)]);assert.deepEqual(state.salesReads,[]);assert.equal(state.commits,3);
+    assert.ok(state.authorizations.every(a=>a.readOnly&&a.statementIds.length===1&&qualified.some(s=>s.id===a.statementIds[0])));
+    const unknown=definePersistenceStatement({id:'workflow-studio.unqualified-read',operation:'queryAll',parameters:{},columns:{data:'json'}});
+    const beforeReads=state.coreReads.length,beforeCommits=state.commits;
+    await assert.rejects(application.provider.queryAll(unknown,{}));assert.equal(state.coreReads.length,beforeReads);assert.equal(state.commits,beforeCommits);
+    await assert.rejects(application.provider.execute(qualified[0],parameters[qualified[0].id]),e=>e.code==='PERSISTENCE_STATEMENT_INVALID');
+    state.allowed=false;await assert.rejects(application.provider.queryAll(qualified[0],parameters[qualified[0].id]));
+    assert.equal(state.commits,beforeCommits);assert.equal(state.rollbacks,1);assert.equal(state.authorizations.at(-1).readOnly,true);
+  }finally{await application.close();}
+});
+
 test('Live Block 7 CRM synchronization, mappings and source undo have a single atomic owner',live,()=>fixture(async f=>{
   const m=masterFixture(f.access,f.protection);
   const run=await m.ingest('KUNDEN',[raw('KUNDEN',{KUND_NR:'000419',VORNAME:'Synthetisch',NACHNAME:'Migration'})]);

@@ -4,6 +4,7 @@
 
 Der zentrale Serverbetrieb verwendet eine verwaltete Ubuntu-Instanz mit genau einem aktiven App-Prozess.
 Unterstützt sind Ubuntu 24.04 LTS und Ubuntu 26.04 LTS x86-64; Node.js und pnpm richten sich nach `package.json`.
+Python 3 mit Linux-OFD-Sperren (`fcntl.F_OFD_SETLK`) ist für die Instanzsperre erforderlich. Fehlt der geprüfte Sperrhelfer, verweigert die Anwendung den Start.
 Caddy stellt HTTPS bereit. Die Anwendung bindet ausschließlich an Loopback; Bootstrap und Datenbankports bleiben privat.
 Die Administration prüft DNS, TLS, Firewall, Dienstkonten, Sicherheitsupdates, ClamAV, Backupziel und Wiederanlauf.
 Programm, Daten, Schlüssel, Protokolle und Sicherungen besitzen getrennte Verzeichnisse und restriktive Rechte.
@@ -11,11 +12,12 @@ Die Anwendung hat keine allgemeinen sudo-/Shell-Rechte; Caddy erhält keinen Zug
 Aktive Datenbanken liegen auf einem lokalen Dateisystem, niemals auf Netzlaufwerken, Cloudmounts oder synchronisierten Ordnern.
 Geheimnisse stammen aus der geschützten Dienstumgebung und gehören weder in Git noch in Programm- oder Releasepakete.
 
-SQLite bleibt der Installationsstandard. Ausdrücklich migrierte PostgreSQL-Installationen verwenden
-`grabenplaner_core` und `grabenplaner_sales` als gebundenes Datenbankpaar.
-Die Migration benötigt freigegebenes Paket, passende Betriebsverträge, Wartungssperre, vollständige Datenprüfung und den ersten gemeinsamen Sicherungspunkt.
+PostgreSQL ist die einzige unterstützte Betriebsdatenbank. `grabenplaner_core` und `grabenplaner_sales` bilden ein gebundenes Datenbankpaar.
+Eine Installation benötigt das zuvor eingerichtete und vollständig verifizierte PostgreSQL-Paar einschließlich geschützter Anwendungs-, Paaranker- und Betriebskonfiguration.
+Der Installer darf auf einem unvorbereiteten Host keine SQLite-Datenbank erzeugen. Fehlende Konfiguration oder `DB_PROVIDER=sqlite` führen vor dem Anwendungsstart zu einem Fehler.
+Bestehende SQLite-Installationen müssen vor dem Versionswechsel mit dem erhaltenen früheren Migrationsstand kontrolliert nach PostgreSQL übertragen werden: freigegebenes Paket, passende Betriebsverträge, Wartungssperre, vollständige Datenprüfung und erster gemeinsamer Sicherungspunkt.
 Eine alleinige Änderung von `DB_PROVIDER` aktiviert keine Migration. Geschäftszugänge und administrative Recovery-Zugänge bleiben getrennt.
-Nach Veröffentlichung des PostgreSQL-Bestands gibt es keinen automatischen Rückfall auf SQLite.
+Nach Veröffentlichung des PostgreSQL-Bestands gibt es keinen automatischen Rückfall auf SQLite. Einzelheiten und der abgegrenzte Offline-Weg für Altsicherungen stehen in `POSTGRESQL-ONLY.md`.
 
 ## Installation und Pakete
 
@@ -54,11 +56,33 @@ Dienst und Schreiber werden kontrolliert gestoppt; nach dem atomaren App-Tausch 
 Der Bereitschaftstest hat eine eigene Obergrenze von 1500 Sekunden. Bei Fehlern erfolgt eine kontrollierte Rücknahme auf den vorherigen Programmstand mit erneuter Prüfung.
 Ein Versions-/Vertragskonflikt wird nicht umgangen. Gleich-/Altversionen benötigen eine ausdrücklich dokumentierte Ausnahme.
 Produktive Daten, Schlüssel und Sicherungen sind kein austauschbarer Teil des App-Pakets.
+Die erstmalige Passkey-Schemaerweiterung erfolgt getrennt auf einer kompatiblen Vorabversion;
+der normale Updater verändert dieses Schema nicht. Reihenfolge, Sperren, Nachweise und Fehlerbehandlung
+stehen unter [Passkeys: kompatibler Schemaübergang](docs/PASSKEY-SCHEMA-TRANSITION.md).
 Ein ausdrücklich bestätigter Neustart erstellt vorher einen verifizierten Sicherungspunkt.
 Update, Neustart und Hostneustart sind getrennte administrativ freizugebende Vorgänge.
 
 Kompatible kurze Updates binden die vollständige Folgeprüfung an den Nachtablauf; der vollständige Ablauf prüft sie direkt.
 Eine Deploypause bleibt wirksam. Bewusst deaktivierte Timer bleiben deaktiviert; unveränderte Timer werden nicht neu gestartet.
+
+### Lokal vorbereitete Beschleunigung
+
+Die folgenden vier Blöcke ändern keine Produktivfreigabe und begründen keine feste Laufzeit. Ihre Einführung bleibt ein gesonderter geprüfter Betriebsübergang.
+
+1. **Sicherer Kurzpfad:** Policy v3 erlaubt ausschließlich Änderungen an bereits vorhandenen Dateien unter `public/` und reine Versionsänderungen bei unveränderten übrigen Paketmetadaten. Neue, entfernte, unbekannte oder geänderte Backend-, Authentifizierungs-, Schema-, Recovery- und Betriebsdateien verlangen den vollständigen Pfad. Die erste Einführung der neuen Policy benötigt ebenfalls eine vollständige Assurance und einen neuen v3-Nachweis; ein alter Nachweis erhält keine neue Bedeutung. Unveränderte PostgreSQL-Paar-, Schema-, Konfigurations- und App-Bindung, vollständige signierte Historie und frischer aktiver Zeitplan bleiben Voraussetzung. Der Kurzpfad wird nach dem frischen Sicherungspunkt erneut geprüft. Eine Ablehnung führt vor dem App-Tausch zur regulär geprüften Rückkehr der unveränderten App.
+
+2. **Unveränderliches vorbereitetes Paket:** `node server-tools/package/prepared-release-package.cjs prepare REQUEST.json` sammelt das vorhandene Paket und seine gebundenen Prüfnachweise; `promote REQUEST.json` übernimmt genau diesen geprüften Dateisatz ohne erneuten Paketbau. Beide Schreibvorgänge verlangen Linux und veröffentlichen atomar ohne Überschreiben. `verify REQUEST.json` prüft den Satz auch auf anderen Plattformen gegen den extern festgehaltenen Beleg-Hash. Diese Belege bestätigen Identität und Integrität; sie autorisieren weder Deploy noch einen Kurzpfad. Frische Paket-, Virenscan-, Konfigurations-, Sperr- und Betriebsprüfungen des Updaters bleiben bestehen.
+
+3. **Begrenzte ausstehende Recovery:** Eine root-geschützte Queue bindet das bestehende signierte Update-Ereignis an den ersten erfassten Nachttermin. Die unveränderliche Frist ist das frühere Ende aus ursprünglicher vollständiger Assurance plus 36 Stunden und diesem Nachttermin plus drei Stunden. Ein inzwischen erreichter Termin behält nur seine ursprüngliche Restfrist. Folgeupdates, erneute Versuche und der nächste Timertermin verlängern nichts. `pendingRecovery` unterscheidet ausstehende, laufende, überfällige, fehlgeschlagene und abgeschlossene Prüfungen anhand verifizierter Historie und frischer Zeitplanbeobachtung. Fehlende oder ungültige Nachweise werden nicht grün; verspäteter Abschluss bleibt gekennzeichnet. App-Erreichbarkeit ist ein eigener Status. Das signierte Ereignisschema bleibt unverändert; nicht vorhandene Quell-/Paketbindungen werden nicht behauptet.
+
+4. **CI/SAST-Wiederverwendung:** Der warme Compilerpfad verlangt einen extern geprüften Werkzeug-Pin im Format `gp-semgrep-qualified-core-pin/v2`, vollständige Lizenznachweise und die Bindung an einen vertrauenswürdigen Erzeugerlauf samt Build-Eingaben, Binärdatei und Artefakt. Ohne diesen Nachweis bleibt der reguläre Compilerbau maßgeblich; ein lokaler Test aktiviert keinen produktiven Werkzeug-Pin. Auch beim warmen Pfad werden die zehn Qualifikationsfälle und alle fünf SAST-Profile am aktuellen Quellstand frisch geprüft. Ein Cachetreffer ersetzt keinen dieser Nachweise.
+
+   Die optionale Werkzeugveröffentlichung im Workflow `sast-source-build.yml` benötigt `publish_tool=true`. Sie erfasst die tatsächlich installierten OPAM-Pakete und nativen Eingaben des qualifizierten Buildimages, bewahrt deren vollständige Quellen und originale Lizenztexte und prüft den veröffentlichten Dateisatz erneut. Das Werkzeugartefakt bleibt 90 Tage verfügbar. Der externe Pin muss separat gegen den erfolgreichen Lauf, das Repository, die Build-Eingaben und sämtliche Artefaktbytes geprüft werden. Ablauf oder fehlendes Artefakt führen zum regulären Neubau; abweichende vorhandene Metadaten oder Inhalte brechen die Prüfung ab. Die Aktivierung gilt erst mit einem erfolgreichen vollständigen Verbraucherlauf und dessen Nachweis `reviewed_reuse` als bestätigt.
+
+Der manuelle Erzeugerlauf `sast-source-build.yml` veröffentlicht mit `publish_tool=true` nach kaltem Bau und erfolgreicher Qualifikation ausschließlich das Werkzeug samt vollständigen Quellen und originalen Lizenztexten. Die Abhängigkeitsmenge wird aus dem tatsächlich gebauten Image erneut gelesen; fehlende Komponenten, erfundene oder leere Lizenztexte und fehlende Quellen verhindern die Veröffentlichung. Der unveränderte Quell-/Lizenz-Capture bleibt für eine Fehleranalyse getrennt erhalten. Private GP-Prüfergebnisse werden weiterhin ausschließlich verschlüsselt aufbewahrt. Werkzeugartefakte haben eine Aufbewahrung von 90 Tagen; fehlende oder abgelaufene Artefakte führen zum vollständigen Neubau, manipulierte Nachweise zum Fehler. Der erfolgreiche warme Lauf muss ausdrücklich `reviewed_reuse` ausweisen; ein grüner Neubau allein belegt keine aktivierte Beschleunigung.
+
+In beiden Deploypfaden bleibt vor dem Austausch ein frischer, vollständig geprüfter PostgreSQL-Rollbackpunkt Pflicht.
+Der vollständige Pfad behält auch den zweiten Sicherungspunkt nach der zwischenzeitlichen App-Rückkehr: In dieser Phase sind neue Schreibzugriffe möglich.
 
 ### VPS-Deploy: Zeitplanung und geordneter Abschluss
 

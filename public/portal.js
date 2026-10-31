@@ -442,6 +442,7 @@ async function api(url, options = {}) {
       ? window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname })
       : new Error("Die Verbindung zum Grabenplaner ist vorübergehend unterbrochen. Bitte erneut versuchen.");
   }
+  window.GrabenplanerSessionLifecycle?.observeCredentialResponse?.(response);
   if (!response.ok) {
     const detail = window.GrabenplanerApiErrors?.fromResponse ? await window.GrabenplanerApiErrors.fromResponse(response, {
       hostname: location.hostname,
@@ -2468,6 +2469,7 @@ function setPasswordResetConfirmControlsEnabled(enabled) {
 }
 
 function setPasswordChangeControlsEnabled(enabled) {
+  window.GPPasskeyAuth?.setChoiceEnabled?.("password-change", enabled && portalUser()?.mustChangePassword !== true);
   if (el.passwordChangeUsername) {
     el.passwordChangeUsername.value = enabled ? portalCredentialUsername() : "";
     el.passwordChangeUsername.disabled = !enabled;
@@ -2718,6 +2720,19 @@ function showPortal(session) {
   if (session.user.mustChangePassword) setTimeout(openPasswordChangeDialog, 100);
 }
 
+async function completePortalLogin(result) {
+  el.loginPassword.value = "";
+  showPortal(result);
+  if (!result.user.mustChangePassword) {
+    if (await redirectToPendingCandidateEvaluation(result.user)) return;
+    await loadMobileLayout();
+    chooseInitialPortalTab();
+    await loadPortalData();
+    await refreshBirthdayPresentationTheme();
+    await claimBirthdayPresentation();
+  }
+}
+
 async function login(event) {
   event.preventDefault();
   const credentialsInput = { loginName: el.loginPersonnelNumber.value, password: el.loginPassword.value };
@@ -2727,17 +2742,8 @@ async function login(event) {
         method: "POST",
         body: JSON.stringify(credentialsInput),
       });
-      el.loginPassword.value = "";
-      showPortal(result);
       window.GrabenplanerSessionLifecycle?.publish();
-      if (!result.user.mustChangePassword) {
-        if (await redirectToPendingCandidateEvaluation(result.user)) return;
-        await loadMobileLayout();
-        chooseInitialPortalTab();
-        await loadPortalData();
-        await refreshBirthdayPresentationTheme();
-        await claimBirthdayPresentation();
-      }
+      await completePortalLogin(result);
     }, { allowAccountChange: true });
   } catch (error) {
     if (error.code === "PORTAL_SESSION_CHANGED") return;
@@ -7119,24 +7125,57 @@ async function changePassword(event) {
     return;
   }
   const ticket = { session }, current = () => passwordChangeRequest === ticket && portalState.session === session;
+  const usePasskey = window.GPPasskeyAuth?.selected?.("password-change") === true;
+  const currentPassword = el.currentPassword.value, newPassword = el.newPassword.value;
   passwordChangeRequest = ticket;
   try {
-    await window.GrabenplanerSessionLifecycle.credentials(async () => {
-      await api("/api/portal/v1/me/password", {
-        method: "PUT",
-        body: JSON.stringify({ currentPassword: el.currentPassword.value, newPassword: el.newPassword.value }),
-      });
-      if (!current()) return;
-      const replacement = await api("/api/portal/v1/session");
-      if (!current()) return;
-      if (!replacement?.authenticated) {
-        showLogin("Das Passwort wurde geändert. Bitte erneut anmelden.");
-        window.GrabenplanerSessionLifecycle?.publish();
-        return;
+    const lifecycle = window.GrabenplanerSessionLifecycle;
+    await lifecycle.credentials(async () => {
+      const generation = lifecycle.generation;
+      const csrfCookie = () => String(document.cookie || "").split(";").map(value => value.trim())
+        .find(value => value.startsWith("grabenplaner_csrf=")) || "";
+      const originalCookie = csrfCookie(), unchanged = () => current() && lifecycle.generation === generation;
+      let adoptionAttempted = false, published = false;
+      const publish = () => { if (!published) { published = true; lifecycle.publish(); } };
+      async function adoptProjection() {
+        if (!unchanged()) return null;
+        adoptionAttempted = true;
+        try {
+          const replacement = await api("/api/portal/v1/session");
+          if (!unchanged()) return null;
+          if (!replacement?.authenticated || !replacement.user?.employeeNumber
+            || replacement.user.employeeNumber !== session.user?.employeeNumber
+            || replacement.user.isEmployee !== true
+            || !["employee", "local"].includes(replacement.user.sessionKind)) {
+            showLogin("Das Passwort wurde geändert. Bitte erneut anmelden.");
+            return null;
+          }
+          closePasswordChangeDialog({ force: true });
+          showPortal(replacement);
+          return replacement;
+        } catch (error) {
+          if (unchanged()) showLogin("Die Passwortänderung wurde verarbeitet. Bitte die Sitzung nach Wiederherstellung der Verbindung erneut prüfen.");
+          throw error;
+        } finally { publish(); }
       }
-      closePasswordChangeDialog({ force: true });
-      showPortal(replacement);
-      window.GrabenplanerSessionLifecycle?.publish();
+      let replacement;
+      try {
+        await api("/api/portal/v1/me/password", {
+          method: "PUT",
+          body: JSON.stringify({ newPassword, ...(usePasskey
+            ? await window.GPPasskeyAuth.authorization(api, "password-change") : { currentPassword }) }),
+        });
+        replacement = await adoptProjection();
+      } catch (error) {
+        if (!adoptionAttempted && unchanged() && (lifecycle.credentialChanged || csrfCookie() !== originalCookie)) {
+          // A new cookie may already be committed even when its response body
+          // is lost. Settle that projection under this same cross-tab lock;
+          // never repeat the password mutation or replace its original error.
+          try { await adoptProjection(); } catch { /* Preserve the operation error. */ }
+        }
+        throw error;
+      }
+      if (!replacement) return;
       if (replacement.user?.mustChangePassword) return;
       if (await redirectToPendingCandidateEvaluation(replacement.user)) return;
       if (portalState.session !== replacement) return;
@@ -8745,6 +8784,11 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
 initializeDateRangeCalendar();
 portalVoiceAssistant=window.GpVoiceAssistant?.mount({ api, getSession: () => portalState.session,
   onSubmitted: () => Promise.allSettled([loadVacationRequests(), loadTimeOffRequests(), loadAbsenceHistory(), loadNotifications()]) });
+window.GPPasskeyAuth?.bindLogin(document.getElementById("portalPasskeyLogin"), {
+  api, complete: completePortalLogin,
+  canUse: () => el.loginPersonnelNumber?.disabled === false,
+  error: error => { if (error.code !== "PORTAL_SESSION_CHANGED") message(el.loginError, error.message, true); },
+});
 window.GrabenplanerSessionLifecycle?.listen(() => {
   showLogin("Die Anmeldung wurde in einem anderen Fenster geändert. Die Sitzung wird neu geprüft.");
   void initialize();

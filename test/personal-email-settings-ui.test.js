@@ -31,10 +31,14 @@ test("persönliche Benachrichtigungseinstellungen sind für echte Mitarbeiterkon
   const emailCard = settingsView.indexOf('id="emailSettingsCard"');
   const passwordCard = settingsView.indexOf("portal-settings-password");
   assert.ok(emailCard >= 0 && emailCard < passwordCard);
-  assert.equal(
-    settingsView.lastIndexOf("<details"),
-    settingsView.lastIndexOf('<details class="portal-card portal-settings-section portal-settings-password"'),
-  );
+  const securityCards = [...settingsView.matchAll(/<details\b[^>]*>[\s\S]*?<\/details>/g)].slice(-2);
+  assert.equal(securityCards.length, 2);
+  assert.match(securityCards[0][0], /^<details class="portal-card portal-settings-section portal-settings-password" id="passwordSettingsCard">[\s\S]*Passwort ändern/);
+  assert.match(securityCards[1][0], /^<details class="portal-card portal-settings-section">[\s\S]*<strong>Passkeys<\/strong>/);
+  assert.match(securityCards[1][0], /href="\/passkeys\.html">Passkeys verwalten<\/a>/);
+  assert.ok(securityCards[0].index < passwordCard && passwordCard < securityCards[1].index);
+  assert.equal(settingsView.lastIndexOf("<details"), securityCards[1].index);
+  for (const card of securityCards) assert.doesNotMatch(card[0].match(/^<details\b[^>]*>/)[0], /\sopen(?:\s|=|>)/);
 
   assert.match(portalScript, /if \(personalEmailSettingsAvailable\(\)\) loadEmailSettings\(\);/);
   assert.doesNotMatch(portalScript, /if \(hasPortalPermission\([^)]*\)\)\s*loadEmailSettings\(\)/);

@@ -16,8 +16,8 @@ const targetArtifacts = [
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-target-control@.service.in",
 ];
 
-test("offsite module v12 preserves the isolated v10 target-control artifacts", () => {
-  assert.equal(schema.moduleVersion, 12);
+test("offsite module v13 preserves the isolated v10 target-control artifacts", () => {
+  assert.equal(schema.moduleVersion, 13);
   for (const relative of targetArtifacts) {
     assert.ok(schema.managedArtifacts.includes(relative), `${relative} fehlt im Modulvertrag`);
   }
@@ -28,8 +28,8 @@ test("offsite module v12 preserves the isolated v10 target-control artifacts", (
     assert.match(contract, new RegExp(relative.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.match(compatibility, new RegExp(relative.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.match(contract, /CURRENT_MODULE_VERSION = 12/);
-  assert.match(compatibility, /SUPPORTED_MODULE_VERSIONS = new Set\(\[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12\]\)/);
+  assert.match(contract, /CURRENT_MODULE_VERSION = 13/);
+  assert.match(compatibility, /SUPPORTED_MODULE_VERSIONS = new Set\(\[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13\]\)/);
 });
 
 test("target-control socket exposes only the existing isolated application group", () => {
@@ -89,7 +89,7 @@ test("installer and uninstaller manage the target-control socket transactionally
   const installer = read("server-tools/linux/offsite/install-grabenplaner-offsite.sh");
   const uninstaller = read("server-tools/linux/offsite/uninstall-grabenplaner-offsite.sh");
 
-  assert.match(installer, /\[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12\]\.includes\(value\.moduleVersion\)/);
+  assert.match(installer, /\[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13\]\.includes\(value\.moduleVersion\)/);
   assert.match(installer, /target_control_socket_was_enabled/);
   assert.match(installer, /target_control_socket_was_active/);
   assert.match(installer, /if \[\[ "\$validated_provider" == "google_drive" \]\]; then[\s\S]*?systemctl enable --now grabenplaner-offsite-target-control\.socket/);

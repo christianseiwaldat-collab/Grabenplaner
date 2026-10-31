@@ -73,12 +73,13 @@
 
   function apprenticeshipHint(status = "unknown", confirmed = false, details = {}) {
     if (status === "unknown" || !Object.hasOwn(APPRENTICESHIP_STATUSES, status)) return "Lehrlingsstatus ungeklärt; die Position allein bestätigt kein Lehrverhältnis.";
-    if (details.confirmationRestricted === true) return `${APPRENTICESHIP_STATUSES[status]} · Die fachliche Bestätigung ist in dieser Ansicht nicht freigegeben.`;
-    if (confirmed && details.basisRestricted === true) return `${APPRENTICESHIP_STATUSES[status]} · fachlich bestätigt. Die Grundlage ist in dieser Ansicht nicht vollständig freigegeben.`;
+    const scopeHint = status === "not_apprentice" ? " Ein Lehrabschluss ist keine Voraussetzung für die Tätigkeit im Verkauf; Quereinsteiger sind willkommen." : "";
+    if (details.confirmationRestricted === true) return `${APPRENTICESHIP_STATUSES[status]} · Die Bestätigung des Lehrlingsstatus ist in dieser Ansicht nicht freigegeben.${scopeHint}`;
+    if (confirmed && details.basisRestricted === true) return `${APPRENTICESHIP_STATUSES[status]} · Lehrlingsstatus bestätigt. Die Grundlage ist in dieser Ansicht nicht vollständig freigegeben.${scopeHint}`;
     if (confirmed && (!details.validFrom || !String(details.sourceReference || "").trim() || (status === "completed" && !details.validTo))) {
-      return `${APPRENTICESHIP_STATUSES[status]} · Bestätigung unvollständig: ${status === "not_apprentice" ? "gültig ab" : "belegten Lehrbeginn"} und Grundlage${status === "completed" ? " sowie letzten Lehrtag (einschließlich)" : ""} angeben.`;
+      return `${APPRENTICESHIP_STATUSES[status]} · Bestätigung des Lehrlingsstatus unvollständig: ${status === "not_apprentice" ? "gültig ab" : "belegten Lehrbeginn"} und Grundlage${status === "completed" ? " sowie letzten Lehrtag (einschließlich)" : ""} angeben.${scopeHint}`;
     }
-    return `${APPRENTICESHIP_STATUSES[status]} · ${confirmed === true ? "fachlich bestätigt" : "fachlich ungeklärt"}.${status === "completed" ? " Der letzte Lehrtag zählt einschließlich zur Lehre; für die Bestätigung wird das Abschlussdatum benötigt." : ""}`;
+    return `${APPRENTICESHIP_STATUSES[status]} · ${confirmed === true ? "Lehrlingsstatus bestätigt" : "Bestätigung des Lehrlingsstatus noch offen"}.${status === "completed" ? " Der letzte Lehrtag zählt einschließlich zur Lehre; für die Bestätigung wird das Abschlussdatum benötigt." : ""}${scopeHint}`;
   }
 
   const api = Object.freeze({ KINDS, SPECIAL_CASES, APPRENTICESHIP_STATUSES, nullableMinutes, readDetails, createDetails, detailError, detailHint, apprenticeshipHint });

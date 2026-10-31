@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "scope": "planning-shift-precondition-application-extension",
+  "baseCatalog": "block-4-catalog.json",
+  "productActivation": false,
+  "baseSchemaPlanSha256": "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e",
+  "entries": [
+    {
+      "statementId": "planning-settings.shift-revision.get",
+      "added": true,
+      "sourceSqlSha256": "ee1d8043e4ec5cb0aa36f29cfff1eea1d9d33a873914fd2bb8f44de7fccde4a7",
+      "sourceContract": "a229bb5a9704e26f4d445a4cea486d9f55474b3e01af95ece2f0e00ea6780812",
+      "sqlSha256": "a653ca4b69b8b1504cb2408c8827a262c5c73c8c1124ed4b74979b9613508fdf",
+      "parameterBindingsSha256": "aded7495666322fbde0f8dce5a00d54977983346aa6e102d765bbee9aab2a46e",
+      "parameterOrderSha256": "8dcdf4ea2f1af90a9a1dac9830e3d632084587532c7dac6e3927e849d34a48dd"
+    },
+    {
+      "statementId": "work-rule-planning.update-shift-if-current",
+      "added": true,
+      "sourceSqlSha256": "5d49cb56178a09c97fd45580ae2ba8b95fab6adde41aeb2062b42e8d6132da9d",
+      "sourceContract": "0ed3cd0fef67fc264af91726343dd8f4893af373f3f470759b3cd712e5c73d84",
+      "sqlSha256": "db4dd5cec66b10b4dd4f6089708fd83d0c60f313485b17c7fb51ab29189d05c1",
+      "parameterBindingsSha256": "dcc3b8b3f78a035fa35991012ddaf9fb95218d70457d20e138a1ef1add0ff769",
+      "parameterOrderSha256": "13a26522dacb7c66b3ec79307abdaee74a8ed1e878698fc90bd209f3c54039cc"
+    }
+  ]
+}

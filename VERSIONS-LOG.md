@@ -1,13 +1,16 @@
 # Versionsstatus
 
-## v0.92.93 Beta · Quellstand
+## v0.92.95 Beta · Quellstand
 
-Verbesserte Konten-, Kennwort- und Sitzungssicherheit.
-Erweiterte Sicherheitsprüfungen und nachvollziehbare Auditübersicht.
-Aktualisierte Abhängigkeiten und abgesicherte Betriebsübergänge.
-Verbesserte native Inventarprüfung und abgesicherte Abmeldung.
+Optionale Passkeys mit gesonderter Schemaaktivierung und verbesserte Sicherheitsprüfungen.
+Schnellere Datenübernahmen bei geänderten Historien.
+Punktgenaue Bemerkungen und Feiertagsanzeige im Dienstplan-PDF.
+Verbesserte Personal- und Verkaufsfunktionen.
 
 Der installierte Serverstand wird im GP angezeigt.
+
+Der gestufte Übergang verwendet v0.92.94 als Kompatibilitätsstand.
+v0.92.95 setzt das anschließend aktivierte Passkey-Schema voraus.
 
 ## v0.92.72 Beta · GitHub-Serverrelease
 

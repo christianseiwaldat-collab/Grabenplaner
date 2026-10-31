@@ -469,6 +469,51 @@ test('report dictionaries read reviewed labels without applying master rows and 
   await assert.rejects(read());
 });
 
+test('large reviewed dictionaries keep report branches and metrics available and authenticate every bounded page', async t => {
+  const f = await fixture(t), count = 2101;
+  const values = Array.from({ length: count }, (_, i) => raw('ARTIKEL_Sortimente', {
+    Sortiment: i + 1, Bezeichnung: `Synthetic group ${i + 1}`, Warengruppe: 13,
+  }));
+  const run = await f.ready('ARTIKEL_Sortimente', values, { sourceInstance: 'tradefoto-trade' });
+  assert.equal(run.status, 'ready');
+  const { createSalesReportWorkspace } = require('../lib/persistence/repositories/sales-report-workspace');
+  let session = { employeeNumber: 'synthetic-owner', accountId: 'synthetic-account', isEmployee: true,
+    permissions: ['sales:analytics:access', 'sales:analytics:company:read', 'sales:history:read'] };
+  const backend = { source: { id: 'compact-cash', scopeId: f.context.who.scopeId, label: 'Synthetic cash',
+    locations: [{ id: 'synthetic-branch', label: 'Synthetic branch' }] }, epoch: async () => null };
+  const reports = createSalesReportWorkspace({ access: f.provider, protection: f.protection, backend,
+    scopeId: f.context.who.scopeId, getSession: () => session, today: () => '2026-10-25' });
+  const context = await reports.metadata();
+  assert.equal(context.productGroups.length, count);
+  assert.ok(context.productGroups.some(group => group.id === String(count)));
+  assert.ok(context.locations.some(location => location.id === 'synthetic-branch'));
+  assert.ok(context.metrics.some(metric => metric.id === 'netRevenue'));
+  assert.equal(reports.normalize({ sourceId: 'compact-cash', locationIds: ['synthetic-branch'] }).locationIds[0], 'synthetic-branch');
+  assert.equal(f.records('ARTIKEL_Sortimente').length, 0, 'reading options never applies a reviewed import');
+  const { createSalesMasterReader } = require('../lib/persistence/repositories/sales-master-data');
+  const reader = createSalesMasterReader({ protection: f.protection, scopeId: f.context.who.scopeId });
+  await assert.rejects(f.provider.transaction(tx => reader.dictionary(tx, 'ARTIKEL_Sortimente', ['Sortiment'], 2000)), errorCode('IMPORT_REPORT_METADATA_LIMIT'));
+  session = { ...session, permissions: [] };
+  await assert.rejects(reports.metadata(), errorCode('IMPORT_FORBIDDEN'));
+  session = { ...session, permissions: ['sales:analytics:access', 'sales:analytics:company:read', 'sales:history:read'] };
+  f.database.prepare('UPDATE data_import_rows SET content_hash=? WHERE run_id=? AND row_number=?').run('0'.repeat(64), run.id, count);
+  await assert.rejects(reports.metadata(), errorCode('IMPORT_MASTER_INTEGRITY'));
+});
+
+test('applied report dictionaries exceed the ordinary list bound without weakening missing-segment checks', async t => {
+  const f = await fixture(t), count = 2001;
+  await f.ingest('Marken', Array.from({ length: count }, (_, i) => raw('Marken', { Marke: `Synthetic brand ${String(i).padStart(5, '0')}` })));
+  const { createSalesMasterReader, REPORT_DICTIONARY_LIMIT } = require('../lib/persistence/repositories/sales-master-data');
+  const reader = createSalesMasterReader({ protection: f.protection, scopeId: f.context.who.scopeId, sourceInstance: 'test-ledger' });
+  assert.equal(REPORT_DICTIONARY_LIMIT, 10000);
+  const read = () => f.provider.transaction(tx => reader.dictionary(tx, 'Marken', ['Marke']), { readOnly: true });
+  assert.equal((await read()).length, count);
+  await assert.rejects(f.provider.transaction(tx => reader.list(tx, 'Marken', ['Marke'])), errorCode('IMPORT_REPORT_METADATA_LIMIT'));
+  const record = f.records('Marken').at(-1);
+  f.database.prepare('DELETE FROM import_master_segments WHERE record_id=?').run(record.id);
+  await assert.rejects(read(), errorCode('IMPORT_MASTER_INTEGRITY'));
+});
+
 test("Block 3: resolving a mapped target rechecks scope permissions and current activation", async t => {
   const f = await fixture(t); f.database.exec("INSERT INTO employees VALUES('gp-person',1,'Synthetic','38.5','employee')");
   const { records: [record] } = await f.ingest("MITARBEITER", [raw("MITARBEITER", { "Verkäufer_ID": 123 })]);

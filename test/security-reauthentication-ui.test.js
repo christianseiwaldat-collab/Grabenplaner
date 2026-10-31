@@ -140,7 +140,7 @@ test("real Chrome cookie jar: Web Locks and IndexedDB serialize reauth error/dow
   const origin = `http://127.0.0.1:${server.address().port}`;
   let browser;
   try {
-    browser = await chromium.launch({ headless: true, ...(process.env.GP_BROWSER_EXECUTABLE ? { executablePath: process.env.GP_BROWSER_EXECUTABLE } : {}) });
+    browser = await chromium.launch({ headless: true, chromiumSandbox: process.platform === "linux", ...(process.env.GP_BROWSER_EXECUTABLE ? { executablePath: process.env.GP_BROWSER_EXECUTABLE } : {}) });
     for (const mode of ["web-locks", "indexeddb"]) for (const download of [false, true]) {
       const context = await browser.newContext();
       try {

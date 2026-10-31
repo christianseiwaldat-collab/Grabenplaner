@@ -1,4 +1,7 @@
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
 "use strict";
+
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -328,7 +331,7 @@ test("batch assignments are atomic; repeated courses keep independent completion
 });
 
 test.before(async () => {
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, active)
     VALUES (?, 'Learning Filiale A', 0, 1), (?, 'Learning Filiale B', 0, 1)
   `).run(LOCATION_A, LOCATION_B);
@@ -358,7 +361,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -591,7 +594,7 @@ test("Learning-Katalog koppelt fachliches Ereignis und Betriebsaudit atomar", as
     versions: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_module_versions").get().count,
     events: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_module_events").get().count,
   };
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_learning_audit_failure
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'personnel.learning.module.create'
@@ -607,7 +610,7 @@ test("Learning-Katalog koppelt fachliches Ereignis und Betriebsaudit atomar", as
     });
     assert.equal(failed.response.status, 500, JSON.stringify(failed.payload));
   } finally {
-    db.exec("DROP TRIGGER test_personnel_learning_audit_failure");
+    dropFixtureTrigger(db, "test_personnel_learning_audit_failure");
   }
   assert.deepEqual({
     modules: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_modules").get().count,
@@ -780,7 +783,7 @@ test("Fähigkeitskatalog prüft Stufen und Geltungsbereich fail-closed und audit
     versions: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_module_versions").get().count,
     events: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_module_events").get().count,
   };
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_learning_skill_audit_failure
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'personnel.learning.skill.create'
@@ -796,7 +799,7 @@ test("Fähigkeitskatalog prüft Stufen und Geltungsbereich fail-closed und audit
     });
     assert.equal(failed.response.status, 500, JSON.stringify(failed.payload));
   } finally {
-    db.exec("DROP TRIGGER test_personnel_learning_skill_audit_failure");
+    dropFixtureTrigger(db, "test_personnel_learning_skill_audit_failure");
   }
   assert.deepEqual({
     modules: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_modules").get().count,
@@ -1007,7 +1010,7 @@ test("Block 4 begrenzt entzogenes filialübergreifendes Recht und koppelt Fachau
     competencies: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_employee_competencies").get().count,
     revisions: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_employee_competency_revisions").get().count,
   };
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_learning_competency_audit_failure
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'personnel.learning.competency.assign'
@@ -1026,7 +1029,7 @@ test("Block 4 begrenzt entzogenes filialübergreifendes Recht und koppelt Fachau
     );
     assert.equal(failed.response.status, 500, JSON.stringify(failed.payload));
   } finally {
-    db.exec("DROP TRIGGER test_personnel_learning_competency_audit_failure");
+    dropFixtureTrigger(db, "test_personnel_learning_competency_audit_failure");
   }
   assert.deepEqual({
     competencies: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_employee_competencies").get().count,
@@ -1612,7 +1615,7 @@ test("Block 6 führt Schrittfortschritt, Abschlussbewertung und begründete Korr
     FROM personnel_learning_assignment_progress_revisions
     WHERE assignment_id = ?
   `).get(assignment.id).count;
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_learning_progress_audit_failure
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'personnel.learning.progress.correct'
@@ -1640,7 +1643,7 @@ test("Block 6 führt Schrittfortschritt, Abschlussbewertung und begründete Korr
     );
     assert.equal(failedCorrection.response.status, 500, JSON.stringify(failedCorrection.payload));
   } finally {
-    db.exec("DROP TRIGGER test_personnel_learning_progress_audit_failure");
+    dropFixtureTrigger(db, "test_personnel_learning_progress_audit_failure");
   }
   assert.equal(db.prepare(`
     SELECT COUNT(*) AS count
@@ -1683,7 +1686,7 @@ test("Block 5 koppelt Zuweisung und minimiertes Audit atomar", async () => {
     assignments: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_assignments").get().count,
     revisions: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_assignment_revisions").get().count,
   };
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_learning_assignment_audit_failure
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'personnel.learning.assignment.assign'
@@ -1703,7 +1706,7 @@ test("Block 5 koppelt Zuweisung und minimiertes Audit atomar", async () => {
     });
     assert.equal(failed.response.status, 500, JSON.stringify(failed.payload));
   } finally {
-    db.exec("DROP TRIGGER test_personnel_learning_assignment_audit_failure");
+    dropFixtureTrigger(db, "test_personnel_learning_assignment_audit_failure");
   }
   assert.deepEqual({
     assignments: db.prepare("SELECT COUNT(*) AS count FROM personnel_learning_assignments").get().count,
@@ -1935,7 +1938,7 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
   const branchAccountId = String(createdBranch.payload.account.id);
   db.prepare("UPDATE portal_organization_sessions SET expires_at = ? WHERE account_id = ?")
     .run(new Date(Date.now() + 60000).toISOString(), branchAccountId);
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_block8_learning_branch_live_account
     AFTER UPDATE OF expires_at ON portal_organization_sessions
     WHEN NEW.account_id = '${branchAccountId}'
@@ -1950,7 +1953,7 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
       { method: "PUT", auth: branch, body: securityMutationBody, userActivity: true },
     );
   } finally {
-    db.exec("DROP TRIGGER test_block8_learning_branch_live_account");
+    dropFixtureTrigger(db, "test_block8_learning_branch_live_account");
     assert.equal(db.prepare("SELECT active FROM portal_organization_accounts WHERE id = ?")
       .get(branchAccountId).active, 0, "The concurrent account revocation must execute");
     db.prepare("UPDATE portal_organization_accounts SET active = 1 WHERE id = ?")
@@ -1958,13 +1961,18 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
   }
   assert.equal(
     disabledDuringRequest.response.status,
-    403,
+    401,
     JSON.stringify(disabledDuringRequest.payload),
   );
+  // The live session reload filters inactive organization accounts before
+  // route authorization; this denial must not reach the progress mutation.
+  assert.equal(disabledDuringRequest.payload.code, "PORTAL_LOGIN_REQUIRED");
+  assert.equal(Object.hasOwn(disabledDuringRequest.payload, "assignment"), false);
+  assert.equal(progressRevisionCount(), revisionsBeforeSecurityChecks);
 
   db.prepare("UPDATE portal_organization_sessions SET expires_at = ? WHERE account_id = ?")
     .run(new Date(Date.now() + 60000).toISOString(), branchAccountId);
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_block8_learning_branch_live_scope
     AFTER UPDATE OF expires_at ON portal_organization_sessions
     WHEN NEW.account_id = '${branchAccountId}'
@@ -1979,7 +1987,7 @@ test("Block 7 projiziert transparente Dashboards und den Fähigkeitsbaum standor
       { method: "PUT", auth: branch, body: securityMutationBody, userActivity: true },
     );
   } finally {
-    db.exec("DROP TRIGGER test_block8_learning_branch_live_scope");
+    dropFixtureTrigger(db, "test_block8_learning_branch_live_scope");
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM portal_organization_account_scopes WHERE account_id = ?")
       .get(branchAccountId).count, 0, "The concurrent scope revocation must execute");
     db.prepare(`
@@ -2182,11 +2190,11 @@ test("Block 6: mandatory completion follows current correction and requirement a
  const progress=await request(progressPath,{auth:lead});
  const correction=await request(progressPath,{method:"PUT",auth:lead,body:{...body,expectedProgressRevisionReceipt:progress.payload.assignment.progress.currentRevisionReceipt,result:"not_passed",correctionReason:"Die Praxisbewertung war falsch."}});assert.equal(correction.response.status,200);assert.equal(await status(),"notPassed");
  const blockedAuth=session(DEVELOPER),count=db.prepare("SELECT COUNT(*) AS n FROM personnel_learning_requirement_revisions").get().n;
- db.exec("CREATE TRIGGER qa_requirement_audit_failure BEFORE INSERT ON audit_log WHEN NEW.action='personnel.learning.requirement.saved' BEGIN SELECT RAISE(ABORT,'requirement audit rejected'); END");
+ installFixtureTrigger(db, "CREATE TRIGGER test_qa_requirement_audit_failure BEFORE INSERT ON audit_log WHEN NEW.action='personnel.learning.requirement.saved' BEGIN SELECT RAISE(ABORT,'requirement audit rejected'); END");
  try{
   const failed=await request(base+"/requirements",{method:"POST",auth:blockedAuth,body:{...input,title:"Synthetic rollback requirement"}});assert.equal(failed.response.status,500,JSON.stringify(failed.payload));
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM personnel_learning_requirement_revisions").get().n,count);
- }finally{db.exec("DROP TRIGGER qa_requirement_audit_failure");}
+ }finally{dropFixtureTrigger(db, "test_qa_requirement_audit_failure");}
  const archived=await request(base+"/requirements/"+rule.id,{method:"PUT",auth:lead,body:{...input,active:false,expectedReceipt:rule.receiptSha256}});assert.equal(archived.response.status,200);
  const view=await request(base+"/team?search="+BLOCK6_LEARNER,{auth:lead});assert.equal(view.payload.rules.some(r=>r.id===rule.id),false);
 });

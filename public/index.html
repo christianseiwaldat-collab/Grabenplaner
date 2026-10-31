@@ -9,6 +9,8 @@
     <link rel="apple-touch-icon" href="/assets/webicon.svg" data-brand-icon />
     <link rel="stylesheet" href="/vendor/quill/quill.snow.css" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/schedule-note-editor.css" />
+    <link rel="stylesheet" href="/passkey-auth.css" />
     <link rel="stylesheet" href="/gp-xoffi-import.css" />
     <link rel="stylesheet" href="/assistant-management.css" />
     <link rel="stylesheet" href="/system-utilization.css" />
@@ -69,6 +71,7 @@
         <label class="field"><span>Passwort</span><span class="password-field"><input id="adminLoginPassword" name="password" type="password" autocomplete="current-password" required disabled /><button class="password-toggle" type="button" data-password-toggle="adminLoginPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
         <p class="login-error hidden" id="adminLoginError"></p>
         <button class="primary-button" type="submit">Anmelden</button>
+        <button class="secondary-button" id="adminPasskeyLogin" data-gp-passkey-login type="button" hidden>Mit Passkey anmelden</button>
         <a href="/portal.html">Zum Mitarbeiterportal</a>
       </form>
     </section>
@@ -80,7 +83,7 @@
         <div class="brand">
           <button class="brand-home-button" id="startDashboardBrandButton" data-gp-print-fallback type="button" aria-label="Startdashboard öffnen">
             <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-            <span class="brand-app"><span id="sidebarVersion">v0.92.93 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
+            <span class="brand-app"><span id="sidebarVersion">v0.92.95 Beta</span><span class="sidebar-developer-text">Developer-Kontakt · christian.seiwald.at@gmail.com</span></span>
           </button>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
@@ -98,6 +101,7 @@
           <div class="sidebar-session-links" aria-label="Konto und Einstellungen">
             <button id="portalLogoutButton" type="button">(Logout)</button>
             <a class="sidebar-session-link hidden" id="employeePortalLink" href="/portal.html">Mitarbeiterportal</a>
+            <a class="sidebar-session-link" href="/passkeys.html">Meine Passkeys</a>
             <button class="nav-item sidebar-session-link" data-view="settings" id="settingsNavButton" type="button">Einstellungen</button>
           </div>
         </div>
@@ -2980,6 +2984,7 @@
                 </div>
                 <form class="secure-download-form" id="databaseDownloadForm" aria-describedby="databaseDownloadScopeNote databaseDownloadStatus">
                   <label class="field"><span>Aktuelles Passwort</span><input id="databaseDownloadCurrentPassword" type="password" autocomplete="current-password" required /></label>
+                  <label class="checkbox-line" data-gp-passkey-choice hidden><input type="checkbox" data-gp-passkey-operation="database-download" data-gp-passkey-password="databaseDownloadCurrentPassword" /> Mit Passkey bestätigen</label>
                   <button type="submit" class="secondary-button" id="databaseDownloadButton">Datenbank herunterladen</button>
                 </form>
                 <p class="secure-download-status" id="databaseDownloadStatus" role="status" aria-live="polite"></p>
@@ -3183,7 +3188,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.93 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.92.95 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -3453,7 +3458,7 @@
                   <label class="field"><span>Vertragsart</span><input name="employeeRecordContractType" maxlength="100" placeholder="z. B. unbefristet" /></label>
                   <label class="field"><span>Beschäftigungsstatus</span><input name="employeeRecordEmploymentStatus" maxlength="80" placeholder="z. B. aktiv" /></label>
                   <label class="field"><span>Lehrlingsstatus</span><select name="employeeRecordApprenticeshipStatus"><option value="unknown">Ungeklärt</option><option value="active">Aktive Lehre</option><option value="completed">Lehre abgeschlossen</option><option value="not_apprentice">Kein Lehrverhältnis</option></select></label>
-                  <label class="field"><span>Fachliche Prüfung</span><span class="checkbox-line"><input name="employeeRecordApprenticeshipConfirmed" type="checkbox" /> Lehrlingsstatus bestätigt</span></label>
+                  <label class="field"><span>Bestätigung des Lehrlingsstatus</span><span class="checkbox-line"><input name="employeeRecordApprenticeshipConfirmed" type="checkbox" /> Lehrlingsstatus bestätigt</span></label>
                   <label class="field"><span>Lehrlingsstatus gültig ab</span><input name="employeeRecordApprenticeshipValidFrom" type="date" /></label>
                   <label class="field"><span>Lehrlingsstatus gültig bis</span><input name="employeeRecordApprenticeshipValidTo" type="date" /></label>
                   <label class="field personnel-record-span-two"><span>Grundlage des Lehrlingsstatus</span><input name="employeeRecordApprenticeshipSourceReference" maxlength="240" placeholder="z. B. geprüfter Lehrvertrag" /></label>
@@ -3785,28 +3790,42 @@
     </dialog>
 
     <dialog class="modal" id="scheduleNoteModal" data-gp-window-mode="workspace">
-      <form method="dialog" id="scheduleNoteForm">
+      <form method="dialog" id="scheduleNoteForm" novalidate>
         <div class="modal-header"><div><span class="eyebrow">Dienstplan-PDF</span><h2>Besondere Bemerkung</h2><p>Dieser Hinweis erscheint nur auf der PDF dieser Kalenderwoche.</p></div><button type="button" class="close-button" data-close="scheduleNoteModal">×</button></div>
         <div class="form-grid">
           <div class="field full-width"><span>Text</span>
-            <div id="scheduleNoteToolbar" class="note-editor-toolbar" aria-label="Formatierung">
-              <span class="ql-formats">
-                <button class="ql-bold" type="button" aria-label="Fett"></button>
-                <button class="ql-italic" type="button" aria-label="Kursiv"></button>
-                <button class="ql-underline" type="button" aria-label="Unterstrichen"></button>
-              </span>
-              <span class="ql-formats">
-                <select class="ql-size" aria-label="Schriftgröße">
-                  <option value="small">klein</option>
-                  <option selected>normal</option>
-                  <option value="large">groß</option>
-                </select>
-              </span>
-              <span class="ql-formats">
-                <button class="ql-clean" type="button" aria-label="Formatierung entfernen"></button>
-              </span>
+            <div class="note-editor-frame" id="scheduleNoteEditorFrame">
+              <div id="scheduleNoteToolbar" class="note-editor-toolbar" role="group" aria-label="Text formatieren">
+                <div class="note-editor-format-group">
+                  <button data-note-format="bold" type="button" aria-label="Fett (Strg+B)" aria-pressed="false" title="Fett (Strg+B)"><strong>B</strong></button>
+                  <button data-note-format="italic" type="button" aria-label="Kursiv (Strg+I)" aria-pressed="false" title="Kursiv (Strg+I)"><em>I</em></button>
+                  <button data-note-format="underline" type="button" aria-label="Unterstrichen (Strg+U)" aria-pressed="false" title="Unterstrichen (Strg+U)"><u>U</u></button>
+                </div>
+                <div class="note-editor-size-group">
+                  <label for="scheduleNoteFontSize">Schriftgröße</label>
+                  <input id="scheduleNoteFontSize" data-note-size type="number" min="4" max="72" step="0.1" value="10" inputmode="decimal" aria-label="Schriftgröße in Punkt" />
+                  <span>pt</span><button data-note-size-apply type="button">Übernehmen</button>
+                </div>
+                <button data-note-format="clear" type="button" class="note-editor-clear" title="Auswahl auf 10 pt ohne Hervorhebung zurücksetzen">Formatierung entfernen</button>
+              </div>
+              <div id="scheduleNoteEditor" class="note-editor" aria-label="Besondere Bemerkung"></div>
+              <div id="scheduleNoteContextMenu" class="note-editor-context hidden" role="dialog" aria-label="Markierten Text formatieren">
+                <div class="note-editor-context-heading"><strong>Auswahl formatieren</strong><button data-note-context-close type="button" aria-label="Formatierung schließen">×</button></div>
+                <div class="note-editor-format-group">
+                  <button data-note-format="bold" type="button" aria-label="Auswahl fett" aria-pressed="false"><strong>B</strong></button>
+                  <button data-note-format="italic" type="button" aria-label="Auswahl kursiv" aria-pressed="false"><em>I</em></button>
+                  <button data-note-format="underline" type="button" aria-label="Auswahl unterstrichen" aria-pressed="false"><u>U</u></button>
+                </div>
+                <div class="note-editor-size-group">
+                  <label for="scheduleNoteContextFontSize">Größe</label>
+                  <input id="scheduleNoteContextFontSize" data-note-size type="number" min="4" max="72" step="0.1" value="10" inputmode="decimal" aria-label="Auswahlgröße in Punkt" />
+                  <span>pt</span><button data-note-size-apply type="button">Übernehmen</button>
+                </div>
+                <button data-note-format="clear" type="button" class="note-editor-clear">Formatierung entfernen</button>
+              </div>
             </div>
-            <div id="scheduleNoteEditor" class="note-editor"></div>
+            <small id="scheduleNoteSelectionHint" class="note-editor-selection-hint">Text markieren und formatieren · Rechtsklick öffnet die Auswahlformatierung.</small>
+            <small id="scheduleNoteFormatStatus" class="note-editor-format-status" role="status" aria-live="polite"></small>
           </div>
           <div class="calculation-note full-width" id="scheduleNoteCounter"></div>
         </div>
@@ -4106,10 +4125,11 @@
         <fieldset class="rights-editor-scope hidden" id="rightsEditorScope">
           <legend>Verantwortungsbereich</legend>
           <p id="rightsEditorScopeHint">Standortbezogene Rechte gelten nur im ausgewählten Bereich.</p>
-          <div class="rights-editor-scope-options">
+          <div class="rights-editor-scope-options" id="rightsEditorHomeScopeOptions">
             <label><input type="radio" name="rightsEditorScopeMode" value="department" /><span><strong id="rightsEditorDepartmentScopeLabel">Nur eigene Abteilung</strong><small>Sicherer Standard für Mitarbeitende und Abteilungsleitungen.</small></span></label>
             <label><input type="radio" name="rightsEditorScopeMode" value="location" /><span><strong id="rightsEditorLocationScopeLabel">Gesamte Filiale</strong><small>Erweitert die wirksamen Standortrechte auf alle Abteilungen der Filiale.</small></span></label>
           </div>
+          <div class="rights-editor-scope-options hidden" id="rightsEditorLocationChoices" aria-label="Freigegebene Filialen"></div>
         </fieldset>
         <p class="calculation-note" id="rightsEditorHint">Persönliche Anpassungen gelten sofort und bleiben an den ausgewählten Verantwortungsbereich gebunden.</p>
         <p class="visually-hidden" id="rightsEditorAnnouncement" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -4419,6 +4439,7 @@
           <div class="offsite-folder-action-fields">
             <label class="field"><span>Ordnername</span><input id="offsiteNewFolderLabel" maxlength="48" pattern="[A-Za-z0-9](?:[A-Za-z0-9_-]{0,46}[A-Za-z0-9])?" autocomplete="off" placeholder="z. B. Sicherung_2026" /></label>
             <label class="field"><span>Aktuelles Passwort</span><input id="offsiteCreateCurrentPassword" type="password" autocomplete="current-password" /></label>
+            <label class="checkbox-line" data-gp-passkey-choice hidden><input type="checkbox" data-gp-passkey-operation="offsite-folder-create" data-gp-passkey-password="offsiteCreateCurrentPassword" /> Mit Passkey bestätigen</label>
           </div>
           <div class="offsite-folder-action-buttons"><button type="button" class="secondary-button" id="createManagedOffsiteFolderButton">Ordner sicher anlegen</button></div>
         </fieldset>
@@ -4432,6 +4453,7 @@
           </section>
           <label class="checkbox-line offsite-folder-confirmation"><input id="offsiteFolderActivationConfirmation" type="checkbox" /><span>Ich habe die Folgen geprüft und möchte den ausgewählten verwalteten Ordner aktivieren.</span></label>
           <label class="field"><span>Aktuelles Passwort</span><input id="offsiteActivateCurrentPassword" type="password" autocomplete="current-password" /></label>
+          <label class="checkbox-line" data-gp-passkey-choice hidden><input type="checkbox" data-gp-passkey-operation="offsite-folder-activate" data-gp-passkey-password="offsiteActivateCurrentPassword" /> Mit Passkey bestätigen</label>
           <div class="offsite-folder-action-buttons"><button type="button" class="danger-button" id="activateManagedOffsiteFolderButton" aria-describedby="offsiteFolderActivationWarning">Ausgewählten Ordner aktivieren</button></div>
         </fieldset>
 
@@ -4481,6 +4503,7 @@
           <span>Filialkonto</span>
           <select id="branchAccountPasswordAccount" required></select>
         </label>
+        <a class="secondary-button" id="branchAccountPasskeysLink" hidden>Passkeys verwalten</a>
         <label class="field">
           <span>Neues Passwort</span>
           <span class="password-field"><input data-gp-new-password id="branchAccountPasswordNew" type="password" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="branchAccountPasswordNew" aria-label="Passwort anzeigen">Anzeigen</button></span>
@@ -4542,6 +4565,7 @@
           <span>Aktuelles Developer-Passwort</span>
           <input type="password" id="vpsRebootCurrentPassword" autocomplete="current-password" maxlength="512" required />
         </label>
+        <label class="checkbox-line" data-gp-passkey-choice hidden><input type="checkbox" data-gp-passkey-operation="vps-reboot" data-gp-passkey-password="vpsRebootCurrentPassword" /> Mit Passkey bestätigen</label>
         <p class="server-restart-message hidden" id="vpsRebootMessage" role="status" aria-live="polite"></p>
         <div class="modal-actions server-restart-actions">
           <span></span><span></span>
@@ -4606,6 +4630,8 @@
     <script src="/credential-boundaries.js"></script>
     <script src="/password-policy.js"></script>
     <script src="/session-lifecycle.js"></script>
+    <script src="/vendor/simplewebauthn-browser-v14/index.umd.min.js"></script>
+    <script src="/passkey-auth.js"></script>
     <script src="/schedule-duty.js"></script>
     <script src="/vocational-school.js"></script>
   <script src="/planning-protection.js"></script>
@@ -4631,6 +4657,7 @@
     <script src="/sales-article-price-labels.js"></script>
     <script src="/sales-article-detail-preferences.js"></script>
     <script src="/sales-article-layout.js"></script>
+    <script src="/sales-article-deferred-notes.js"></script>
     <script src="/sales-article-stock-panel.js"></script>
     <script src="/sales-article-column-widths.js"></script>
     <script src="/sales-article-search-window.js"></script>

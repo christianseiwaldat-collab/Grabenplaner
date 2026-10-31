@@ -19,7 +19,7 @@ function listFixture() {
   const rows = Array.from({ length: 120 }, (_, i) => ({ id: i + 1, status: 'submitted', employee_number: 'worker', location_id: i % 2 ? '18' : '05' }));
   let rightsReads = 0, routingReads = 0, inFlight = 0, peak = 0, granted = true, fail = false, body, handler;
   const context = {
-    postgresqlActive: false,
+    applicationPersistence: { readSnapshot: build => build() },
     app: { get(_route, fn) { handler = fn; } }, persistenceAsyncCollections,
     requirePortalReadOrLocal: () => ({ employeeNumber: 'reviewer' }),
     actorCanListAmuReports: () => true, actorCanReadAmuFiles: () => true,

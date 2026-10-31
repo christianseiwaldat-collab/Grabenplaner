@@ -4,6 +4,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
+const { functionSource } = require("../test-support/learning-workspace-ui");
 
 const root = path.resolve(__dirname, "..");
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
@@ -63,9 +65,9 @@ test("v0.86.2: Ordneraktionen verwenden exakte geschützte und redigierte API-Ve
   const targetClient = read("lib/offsite-target-client.js");
   assert.match(client, /api\("\/api\/backup\/offsite-folders"\)/);
   assert.match(client, /api\("\/api\/backup\/offsite-folders", \{\s*method: "POST"/);
-  assert.match(client, /confirmation: "CREATE_MANAGED_OFFSITE_FOLDER",\s*folderLabel,\s*currentPassword,/);
+  assert.match(functionSource("createManagedOffsiteFolder"), /confirmation: "CREATE_MANAGED_OFFSITE_FOLDER"/);
   assert.match(client, /api\("\/api\/backup\/offsite-folders\/active", \{\s*method: "PUT"/);
-  assert.match(client, /confirmation: "ACTIVATE_MANAGED_OFFSITE_FOLDER",\s*folderLabel,\s*currentPassword,/);
+  assert.match(functionSource("activateManagedOffsiteFolder"), /confirmation: "ACTIVATE_MANAGED_OFFSITE_FOLDER"/);
   assert.match(client, /Recovery-Set für Offline-Transfer\/-Prüfung vorbereitet; altes Repository bleibt Rückfallpunkt\./);
   assert.match(client, /recoverySetState !== "pending-offline-transfer-and-verification"/);
   assert.match(client, /result\.fallbackPreserved !== true/);
@@ -78,6 +80,46 @@ test("v0.86.2: Ordneraktionen verwenden exakte geschützte und redigierte API-Ve
   assert.doesNotMatch(targetClient, /RECOVERY_SET_REFRESH_REQUIRED/);
   assert.match(client, /function clearOffsiteFolderPasswords\(\)[\s\S]*offsiteCreateCurrentPassword\.value = ""[\s\S]*offsiteActivateCurrentPassword\.value = ""/);
   assert.ok((client.match(/finally \{\s*clearOffsiteFolderPasswords\(\);/g) || []).length >= 2);
+});
+
+test("Offsite-Originalhandler senden genau einen Passwort- oder operationsgebundenen Passkeybeweis und bewahren alle Sperren", async () => {
+  for (const action of ["create", "activate"]) for (const mode of ["password", "passkey", "cancelled", "missing-password", "denied", "missing-permission", "not-ready", "invalid-label", "unconfirmed"]) {
+    if (action === "create" && mode === "unconfirmed") continue;
+    const calls = [], effects = [], proof = { challengeId: "synthetic-challenge", response: { type: "public-key" } };
+    const usePasskey = ["passkey", "cancelled"].includes(mode), operation = "offsite-folder-" + action;
+    const state = { portalStatus: { operationMode: "server" }, serverStatus: { backups: { offsite: { provider: { selectedProviderId: "google_drive" } } } },
+      portalSession: { user: { role: mode === "denied" ? "admin" : "developer", permissions: mode === "missing-permission" ? [] : ["system:offsite:configure"] } },
+      offsiteFoldersLoadState: mode === "not-ready" ? "loading" : "ready", offsiteFolders: { folders: ["Active", "Archive"], activeFolder: "Active" } };
+    const password = usePasskey || mode === "missing-password" ? "" : "synthetic-current-password";
+    const field = value => ({ value, focus() { effects.push("focus"); } });
+    const elements = { offsiteNewFolderLabel: field(mode === "invalid-label" ? "../outside" : "NewFolder"),
+      offsiteActiveFolderSelection: field(mode === "invalid-label" ? "../outside" : "Archive"), offsiteCreateCurrentPassword: field(password),
+      offsiteActivateCurrentPassword: field(password), offsiteFolderActivationConfirmation: { checked: mode !== "unconfirmed", focus() { effects.push("focus"); } },
+      offsiteFolderManagementModal: { removeAttribute() {} } };
+    const context = vm.createContext({ state, elements, window: { GPPasskeyAuth: {
+      selected(value) { assert.equal(value, operation); return usePasskey; },
+      async authorization(api, value) { assert.equal(api, context.api); assert.equal(value, operation); assert.equal(effects.at(-1), "lock");
+        if (mode === "cancelled") throw Object.assign(Error("Synthetic cancellation"), { name: "AbortError" }); return { passkey: proof }; },
+    } }, withAdminReauthentication: async work => { effects.push("lock"); try { return await work(); } finally { effects.push("unlock"); } },
+      api: async (url, request) => { calls.push({ url, method: request.method, body: JSON.parse(request.body) });
+        return action === "create" ? { createdFolder: "NewFolder" } : { activeFolder: "Archive", migrationMode: "copied",
+          recoverySetState: "pending-offline-transfer-and-verification", fallbackPreserved: true, requestId: "11111111-2222-4333-8444-555555555555" }; },
+      loadManagedOffsiteFolders: async () => true, setOffsiteFolderDialogStatus(_text, status) { effects.push(status); }, renderManagedOffsiteFoldersDialog() {},
+      applyRoleVisibility() {}, showToast() {}, resetAdminCredentialVisibility() {}, offsiteFolderMutationErrorMessage: error => error.message });
+    for (const name of ["canManageOffsiteFolders", "validManagedOffsiteFolderLabel", "clearOffsiteFolderPasswords", "normalizedManagedOffsiteActivation",
+      action === "create" ? "createManagedOffsiteFolder" : "activateManagedOffsiteFolder"]) vm.runInContext(functionSource(name), context);
+    await context[action === "create" ? "createManagedOffsiteFolder" : "activateManagedOffsiteFolder"]();
+    if (["password", "passkey"].includes(mode)) {
+      assert.deepEqual(calls, [{ url: "/api/backup/offsite-folders" + (action === "activate" ? "/active" : ""), method: action === "create" ? "POST" : "PUT",
+        body: { confirmation: action === "create" ? "CREATE_MANAGED_OFFSITE_FOLDER" : "ACTIVATE_MANAGED_OFFSITE_FOLDER",
+          folderLabel: action === "create" ? "NewFolder" : "Archive", ...(mode === "password" ? { currentPassword: password } : { passkey: proof }) } }]);
+      assert(effects.includes("success")); assert.equal(effects.filter(value => value === "lock").length, 1);
+    } else { assert.deepEqual(calls, []); assert(!effects.includes("success")); if (mode !== "cancelled") assert(!effects.includes("lock")); }
+    if (["password", "passkey", "cancelled"].includes(mode)) {
+      assert.equal(elements.offsiteCreateCurrentPassword.value, ""); assert.equal(elements.offsiteActivateCurrentPassword.value, "");
+      if (action === "activate") assert.equal(elements.offsiteFolderActivationConfirmation.checked, false);
+    }
+  }
 });
 
 test("v0.86.2: Legacy target without a managed folder remains a successful empty API and UI state", () => {

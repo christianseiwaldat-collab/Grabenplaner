@@ -227,12 +227,22 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
 test("v0.83: API erzwingt Finalisierung, protokolliert Übergabe und verschlüsselt Belege", async () => {
+  const handoffsBeforeInvalidScope = db.prepare("SELECT COUNT(*) AS count FROM payroll_handoffs").get().count;
+  for (const departmentId of ["not-a-department", {}, -1]) {
+    const invalidScope = await request("/api/integrations/payroll-handoffs", {
+      method: "POST",
+      body: { month: MONTH, locationId, departmentId, fingerprint: "untrusted-scope" },
+    });
+    assert.equal(invalidScope.response.status, 400, JSON.stringify(invalidScope.payload));
+    assert.equal(Object.hasOwn(invalidScope.payload, "handoff"), false);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM payroll_handoffs").get().count, handoffsBeforeInvalidScope);
+  }
   const blocked = await request("/api/integrations/payroll-handoffs/preflight", {
     method: "POST",
     body: { month: MONTH, locationId, departmentId: null },
@@ -286,6 +296,8 @@ test("v0.83: API erzwingt Finalisierung, protokolliert Übergabe und verschlüss
   assert.equal(created.response.status, 201, JSON.stringify(created.payload));
   assert.equal(created.payload.handoff.state, "prepared");
   const handoffId = created.payload.handoff.id;
+  assert.equal(db.prepare("SELECT department_id FROM payroll_handoffs WHERE id = ?").get(handoffId).department_id, "",
+    "The historical all-departments sentinel remains exact text in PostgreSQL");
   db.prepare(`
     INSERT OR IGNORE INTO portal_permission_grants
       (employee_number, permission, granted_by, updated_at)

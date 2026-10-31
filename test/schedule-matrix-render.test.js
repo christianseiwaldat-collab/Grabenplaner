@@ -82,6 +82,29 @@ test("echte Wochenmatrix enthält sechs Personen, Dienstbuttons und normale Beme
   const heading = items.find(item => item.str === "Bemerkungen");
   const firstNote = items.find(item => item.str.startsWith("Montag: Warenübernahme"));
   assert.ok(heading.transform[5] > firstNote.transform[5], "Remarks heading is above the text field");
+  assert.ok(Math.abs(firstNote.height - 10) < .01, "Ordinary notes retain their actual 10pt size");
+  for (const paragraph of schedule.scheduleNote.note_text.split("\n\n"))
+    assert.ok(text.replace(/\s+/g, " ").includes(paragraph), "Every ordinary paragraph remains complete on the first page");
+});
+
+test("72pt Matrixbemerkungen bleiben vollständig auf Fortsetzungsseiten ohne Skalierung", async () => {
+  const schedule = syntheticSchedule(), lines = Array.from({ length: 22 }, (_, index) => `Zeile ${index + 1} vollständig`);
+  schedule.scheduleNote = { note_text: ["GROSS ÄÖÜ", ...lines].join("\n"),
+    note_html: '<b data-size="72">GROSS ÄÖÜ</b><br>' + lines.map(line => `<span data-size="24">${line}</span>`).join("<br>") };
+  const pages = await render(schedule), text = pages.map(page => page.text).join(" ").replace(/\s+/g, " ");
+  assert.ok(pages.length > 1);
+  assert.ok(pages[0].items.some(item => item.str.includes("GROSS") && Math.abs(item.height - 72) < .01));
+  for (const line of lines) assert.equal(text.split(line).length - 1, 1, line);
+  assert.ok(pages.every(page => Math.round(page.width) === 842 && Math.round(page.height) === 595));
+});
+
+test("Feiertagskopf und normale Matrixbemerkungen behalten Mindestzeilen und vollständigen Text", async () => {
+  const schedule = syntheticSchedule();
+  schedule.globalDayBlocks = [{ block_date: schedule.weekStart, is_public_holiday: 1, holiday_name: "Prüf-Feiertag" }];
+  const pages = await render(schedule), text = pages.map(page => page.text).join(" ").replace(/\s+/g, " ");
+  assert.ok(pages[0].text.includes("Prüf-Feiertag"));
+  for (const employee of schedule.employees) assert.ok(pages[0].text.includes(employee.nickname));
+  for (const paragraph of schedule.scheduleNote.note_text.split("\n\n")) assert.ok(text.includes(paragraph));
 });
 
 test("sechs Personen mit großen Uhrzeiten und Teamsitzung passen ohne verkleinerte PDF-Seite", async () => {

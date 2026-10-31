@@ -9,10 +9,12 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 
-test("v0.72 Linux backup publishes only committed DB/document pairs", () => {
-  const backup = read("server-tools/linux/backup-grabenplaner.sh");
-  const health = read("server-tools/linux/test-grabenplaner-server.sh");
-  const pruner = read("server-tools/linux/lib/prune-backups.js");
+test("immutable historical v0.72 SQLite backup publishes only committed DB/document pairs", () => {
+  const { legacyPath } = require('../test-support/legacy-baseline');
+  const historicalRead = relative => fs.readFileSync(legacyPath(relative), 'utf8');
+  const backup = historicalRead("server-tools/linux/backup-grabenplaner.sh");
+  const health = historicalRead("server-tools/linux/test-grabenplaner-server.sh");
+  const pruner = historicalRead("server-tools/linux/lib/prune-backups.js");
   assert.match(backup, /gp_prepare_runtime_directory/);
   assert.match(backup, /mktemp --tmpdir="\$runtime_directory" backup-result/);
   assert.doesNotMatch(backup, /result_file="\$backup_dir\//);
@@ -28,7 +30,7 @@ test("v0.72 Linux backup publishes only committed DB/document pairs", () => {
   assert.match(pruner, /if \(failures\.length\) throw new Error/);
 
   const invalidPrunerCall = spawnSync(process.execPath, [
-    path.join(root, "server-tools/linux/lib/prune-backups.js"),
+    legacyPath("server-tools/linux/lib/prune-backups.js"),
   ], { encoding: "utf8" });
   assert.notEqual(invalidPrunerCall.status, 0);
   assert.match(invalidPrunerCall.stderr, /Parameter fuer die Backup-Aufbewahrung/);
@@ -60,7 +62,7 @@ test("Linux runtime contract is versioned and cryptographically fingerprinted", 
   ], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   const contract = JSON.parse(result.stdout);
-  assert.equal(contract.deploymentSchemaVersion, 5);
+  assert.equal(contract.deploymentSchemaVersion, 6);
   assert.match(contract.fingerprint, /^[0-9a-f]{64}$/);
   assert.equal(contract.managedArtifacts.length, 11);
 
@@ -70,5 +72,5 @@ test("Linux runtime contract is versioned and cryptographically fingerprinted", 
 
   const installer = read("server-tools/linux/install-grabenplaner-server.sh");
   assert.match(installer, /server-tools\/linux\/runtime-schema\.json/);
-  assert.match(installer, /runtimeContract\?\.deploymentSchemaVersion !== 5/);
+  assert.match(installer, /runtimeContract\?\.deploymentSchemaVersion !== 6/);
 });

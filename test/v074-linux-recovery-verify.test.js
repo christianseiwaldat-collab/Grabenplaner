@@ -1,5 +1,8 @@
 "use strict";
 
+// Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
+// Other PostgreSQL and application assertions below still use current code.
+
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
 const crypto = require("node:crypto");
@@ -12,8 +15,8 @@ const { DatabaseSync } = require("node:sqlite");
 const root = path.resolve(__dirname, "..");
 const amuModule = path.join(root, "lib/amu-storage.js");
 const stageHelper = path.join(root, "server-tools/linux/offsite/lib/offsite-stage.js");
-const snapshotHelper = path.join(root, "server-tools/linux/lib/backup-snapshot.js");
-const backupVerifier = path.join(root, "server-tools/linux/lib/verify-backup.js");
+const snapshotHelper = require("../test-support/legacy-baseline").legacyPath("server-tools/linux/lib/backup-snapshot.js");
+const backupVerifier = require("../test-support/legacy-baseline").legacyPath("server-tools/linux/lib/verify-backup.js");
 const integrationModule = path.join(root, "lib/integration-secret-vault.js");
 const databaseLockModule = path.join(root, "lib/database-lock.js");
 const { createAmuStorage, syncEncryptedFilesBackup } = require(amuModule);
@@ -28,13 +31,13 @@ const {
   candidateEventProtectionContext,
   candidateProtectionContext,
 } = require("../lib/personnel-lifecycle");
-const { verifyBackup } = require("../server-tools/linux/lib/verify-backup.js");
+const { verifyBackup } = require("../test-support/legacy-baseline").legacyRequire("server-tools/linux/lib/verify-backup.js");
 const {
   verifyProtectedRecords,
   verifyRecovery,
-} = require("../server-tools/linux/recovery/lib/recovery-verify.js");
-const { applyRecovery } = require("../server-tools/linux/recovery/lib/recovery-apply.js");
-const { __internalTestOnly } = require("../server-tools/linux/recovery/lib/recovery-metadata.js");
+} = require("../test-support/legacy-baseline").legacyRequire("server-tools/linux/recovery/lib/recovery-verify.js");
+const { applyRecovery } = require("../test-support/legacy-baseline").legacyRequire("server-tools/linux/recovery/lib/recovery-apply.js");
+const { __internalTestOnly } = require("../test-support/legacy-baseline").legacyRequire("server-tools/linux/recovery/lib/recovery-metadata.js");
 const nonRootPolicy = __internalTestOnly.nonRootOwnershipPolicy;
 
 function sha256(file) { return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"); }

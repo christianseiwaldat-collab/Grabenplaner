@@ -15,8 +15,8 @@ const runtimeEntries = ["backup.js", "lib/backup-maintenance.js", "scripts/run-b
 const excluded = ["scripts/verify-tradefoto-full-import.mjs", "scripts/unapproved.js", "scripts/run-background-backup.js/extra",
   "scripts/run-background-backup.js.env", ".env", "data/private.db", "tmp/report.json", "import-jobs/private.source",
   "services/other-service.py", "services/planning-optimizer/.env", "services/planning-optimizer/__pycache__/service.pyc", ".venv-planning/Scripts/python.exe"];
-function verifierPolicy() {
-  const source = fs.readFileSync(path.join(root, "server-tools/linux/lib/verify-package.js"), "utf8");
+function verifierPolicy(sourceRoot = root) {
+  const source = fs.readFileSync(path.join(sourceRoot, "server-tools/linux/lib/verify-package.js"), "utf8");
   const definitions = [source.match(/^const backupRuntimeScripts = new Set\([\s\S]*?^\]\);/m)?.[0] || ""];
   for (const name of ["isAllowedRuntimePath", "isForbiddenRuntimePath"]) {
     const definition = source.match(new RegExp(`^function ${name}\\([^]*?^\\}`, "m"))?.[0];
@@ -48,7 +48,8 @@ test("both Windows package builders carry the exact backup entrypoints without a
   }
 });
 
-test("background worker creates a verified backup using only files admitted to the server package", { timeout: 30000 }, t => {
+test("historical b2 package worker still creates a verified legacy backup", { timeout: 30000 }, t => {
+  const sourceRoot = require("../test-support/legacy-baseline").sourceRoot();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "gp-backup-package-fixture-"));
   t.after(() => {
     assert.equal(path.dirname(fs.realpathSync(directory)), fs.realpathSync(os.tmpdir()));
@@ -56,10 +57,10 @@ test("background worker creates a verified backup using only files admitted to t
   });
   const packageRoot = path.join(directory, "package"), liveRoot = path.join(directory, "synthetic-live"), backupDirectory = path.join(directory, "backups");
   for (const name of [packageRoot, liveRoot, backupDirectory]) fs.mkdirSync(name);
-  const policy = verifierPolicy();
+  const policy = verifierPolicy(sourceRoot);
   const files = [...runtimeEntries, "package.json"];
   function collect(relative) {
-    for (const entry of fs.readdirSync(path.join(root, relative), { withFileTypes: true })) {
+    for (const entry of fs.readdirSync(path.join(sourceRoot, relative), { withFileTypes: true })) {
       const file = `${relative}/${entry.name}`;
       if (entry.isDirectory()) collect(file);
       else if (entry.isFile() && policy.accepts(file)) files.push(file);
@@ -69,7 +70,7 @@ test("background worker creates a verified backup using only files admitted to t
   for (const file of new Set(files)) {
     if (!policy.accepts(file)) continue;
     const target = path.join(packageRoot, file);
-    fs.mkdirSync(path.dirname(target), { recursive: true }); fs.copyFileSync(path.join(root, file), target, fs.constants.COPYFILE_EXCL);
+    fs.mkdirSync(path.dirname(target), { recursive: true }); fs.copyFileSync(path.join(sourceRoot, file), target, fs.constants.COPYFILE_EXCL);
   }
   const databasePath = path.join(liveRoot, "live.db"), protectedDirectory = path.join(liveRoot, "amu");
   const database = openSqliteLegacyDatabase(databasePath);
@@ -87,4 +88,59 @@ test("background worker creates a verified backup using only files admitted to t
   const outcome = JSON.parse(result.stdout);
   assert.equal(outcome.backup.verified, true); assert.equal(outcome.backup.committed, true);
   assert.ok(fs.statSync(outcome.backup.path).size > 0);
+});
+
+test("current server package excludes application SQLite and offline migration implementations", () => {
+  const policy = verifierPolicy();
+  for (const relative of ["lib/persistence/sqlite/provider.js", "lib/persistence/sqlite/operations/maintenance.js",
+    "lib/persistence/postgresql/transfer/history.js", "lib/f18-loan-migration.js", "lib/usb-profile-database.js",
+    "test-support/legacy-baseline.js", "server-tools/linux/postgresql/migration-host.js"])
+    assert.equal(policy.accepts(relative), false, relative);
+  for (const relative of ["lib/persistence/postgresql/application.js", "lib/persistence/catalogs/application-catalog.js",
+    "lib/database-lock-linux.py", "lib/retired-database-operation.js"])
+    assert.equal(policy.accepts(relative), true, relative);
+});
+
+test("package verifier rejects SQLite loaders even under a newly introduced allowed filename", () => {
+  const source=fs.readFileSync(path.join(root,"server-tools/linux/lib/verify-package.js"),"utf8");
+  const definition=source.match(/^function assertPostgresqlOnlySource\([^]*?^\}/m)?.[0];
+  assert.ok(definition);
+  const check=vm.runInNewContext(definition+"\nassertPostgresqlOnlySource");
+  for(const statement of ["require('node:sqlite')", "require('node:sqlite3')", "require('sqlite')", "require('sqlite3')",
+    "require('./persistence/sqlite/provider')", "require('/absolute/persistence/sqlite/provider')",
+    "require('../sqlite/provider')", "require('./sqlite/provider')", "require('../.././sqlite')", "import('better-sqlite3')"])
+    assert.throws(()=>check("lib/new-module.js",statement),/SQLite-Ausfuehrung/);
+  assert.doesNotThrow(()=>check("lib/database-lock.js","const file = 'compatibility.server-lock.sqlite';"));
+  assert.doesNotThrow(()=>check("lib/new-module.js","require('pg'); require('./persistence/catalogs/application-catalog');"));
+  for(const request of ["sqlite-policy", "persistence/sqlite-schema", "./sqlite3-helper", "./x/sqlite-policy", "node:better-sqlite3"])
+    assert.doesNotThrow(()=>check("lib/new-module.js",`require('${request}')`),request);
+  const deepPrefix="../".repeat(20000);
+  assert.throws(()=>check("lib/new-module.js",`require('${deepPrefix}sqlite/provider')`),/SQLite-Ausfuehrung/);
+  assert.doesNotThrow(()=>check("lib/new-module.js",`require('${deepPrefix}sqlite-compatible/helper')`));
+});
+
+test("every admitted server module keeps its literal relative dependencies inside the PostgreSQL package", () => {
+  const policy=verifierPolicy(), source=fs.readFileSync(path.join(root,"server-tools/linux/lib/verify-package.js"),"utf8");
+  const definition=source.match(/^function assertPostgresqlOnlySource\([^]*?^\}/m)?.[0];
+  const check=vm.runInNewContext(definition+"\nassertPostgresqlOnlySource");
+  const errors=[];let checked=0;
+  function inspect(relative) {
+    for(const entry of fs.readdirSync(path.join(root,relative),{withFileTypes:true})) {
+      const file=path.posix.join(relative,entry.name);
+      if(!policy.accepts(file))continue;
+      if(entry.isDirectory()){inspect(file);continue;}
+      if(!entry.isFile()||!file.endsWith(".js"))continue;
+      const text=fs.readFileSync(path.join(root,file),"utf8");checked++;
+      assert.doesNotThrow(()=>check(file,text),file);
+      for(const match of text.matchAll(/require\(\s*["'](\.[^"']+)["']\s*\)/g)) {
+        let target=path.posix.normalize(path.posix.join(path.posix.dirname(file),match[1]));
+        for(const suffix of [".js",".json","/index.js"])
+          if(fs.existsSync(path.join(root,target+suffix))){target+=suffix;break;}
+        if(!policy.accepts(target))errors.push(`${file} -> ${target}`);
+      }
+    }
+  }
+  inspect("lib");inspect("server-tools");
+  assert.ok(checked>600,"the admitted module tree must actually be inspected");
+  assert.deepEqual(errors,[]);
 });

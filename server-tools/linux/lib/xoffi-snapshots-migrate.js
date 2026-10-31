@@ -15,7 +15,7 @@ async function main(args=process.argv.slice(2)){
  const manifest=JSON.parse(manifestBytes);
  require('./deploy-policy').applicationContract(app);
  for(const relative of ['server-tools/linux/lib/xoffi-snapshots-migrate.js','lib/persistence/postgresql/core/xoffi-snapshots.js',
-   'lib/persistence/sqlite/operations/xoffi-snapshots-schema.js','lib/persistence/sqlite/xoffi-snapshots-catalog.js','lib/persistence/statements/xoffi-snapshots.js']){
+   'lib/persistence/schema-definitions/xoffi-snapshots.js','lib/persistence/catalogs/xoffi-snapshots-catalog.js','lib/persistence/statements/xoffi-snapshots.js']){
   const entry=manifest.files.find(f=>f.path===relative);
   if(!entry||hash(fs.readFileSync(app+'/'+relative))!==entry.sha256)throw new Error('PG_XOFFI_MIGRATION_SOURCE');
  }

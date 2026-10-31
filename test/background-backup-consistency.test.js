@@ -1,5 +1,8 @@
 "use strict";
 
+// Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
+// Other PostgreSQL and application assertions below still use current code.
+
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -90,7 +93,7 @@ test("background copy keeps a verified snapshot when the live reference changes 
     manifestMetadata: { database: { fileName: path.basename(paths.databasePath), sha256: databaseSha256 } },
   });
 
-  const { verifyStandaloneBackupPair } = require("../backup");
+  const { verifyStandaloneBackupPair } = require("../test-support/legacy-baseline").legacyRequire("backup.js");
   const committed = publishVerifiedPair(paths, databaseSha256, verifyStandaloneBackupPair);
   const snapshotDatabase = openSqliteLegacyDatabase(paths.databasePath, { readOnly: true });
   try {
@@ -120,7 +123,7 @@ test("background copy cannot publish a commit when a snapshot-referenced blob di
       database: { fileName: path.basename(paths.databasePath), sha256: databaseSha256 },
     },
   });
-  const { verifyStandaloneBackupPair } = require("../backup");
+  const { verifyStandaloneBackupPair } = require("../test-support/legacy-baseline").legacyRequire("backup.js");
   assert.throws(() => publishVerifiedPair(paths, databaseSha256, verifyStandaloneBackupPair), {
     code: "AMU_BACKUP_REFERENCE_MISSING",
   });
@@ -139,7 +142,7 @@ test("background copy remains restorable when its old blob is removed from live 
   assert.equal(f.storage.deleteBlob(oldDocument.storageKey), true);
   assert.equal(fs.existsSync(f.storage.blobPath(oldDocument.storageKey)), false);
 
-  const { verifyStandaloneBackupPair } = require("../backup");
+  const { verifyStandaloneBackupPair } = require("../test-support/legacy-baseline").legacyRequire("backup.js");
   const committed = publishVerifiedPair(paths, databaseSha256, verifyStandaloneBackupPair);
   assert.equal(committed.committed, true);
   assert.equal(fs.existsSync(path.join(paths.protectedDirectory, "blobs", ...oldDocument.storageKey.split("/"))), true);

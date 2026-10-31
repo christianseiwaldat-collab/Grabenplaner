@@ -1,0 +1,16 @@
+{
+  "format": "gp-native-passkey-browser/v1",
+  "playwright": "1.64.1",
+  "chromium": "156.0.8078.4",
+  "revision": "1248",
+  "platform": "linux-x64",
+  "executable": "chromium-1248/chrome-linux64/chrome",
+  "bytes": 301186376,
+  "sha256": "377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025",
+  "sandbox": {
+    "member": "chrome_sandbox",
+    "bytes": 15216,
+    "sha256": "be9f5d4be90fa60b985ad3069812b144ba7331fed0c3f980c6d9399d37d60314"
+  },
+  "source": "Official Playwright 1.64.1 browser download, measured on native Linux x86_64; exact bytes required."
+}

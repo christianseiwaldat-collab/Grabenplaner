@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -67,7 +69,7 @@ function daySettings() {
 }
 
 function ensureLocation(id, name) {
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, ?, 0, ?, 1)
     ON CONFLICT(id) DO UPDATE SET name = excluded.name,
@@ -240,7 +242,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -266,20 +268,13 @@ test("temporäre Filialeinsätze sind eng berechtigt, konfliktgeprüft und revis
   });
 
   await t.test("Datenbank-Trigger schließen den Prüf-/Schreib-Zwischenraum", async () => {
-    const triggerNames = new Set(db.prepare(`
-      SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'shifts'
-    `).all().map((row) => row.name));
+    const triggerNames = new Set(pgSchema.triggers(db, "shifts").map((row) => row.name));
     assert.ok(triggerNames.has("trg_shifts_staff_assignment_insert"));
     assert.ok(triggerNames.has("trg_shifts_staff_assignment_update"));
-    const assignmentTriggerNames = new Set(db.prepare(`
-      SELECT name FROM sqlite_master
-      WHERE type = 'trigger' AND tbl_name = 'employee_location_lendings'
-    `).all().map((row) => row.name));
+    const assignmentTriggerNames = new Set(pgSchema.triggers(db, "employee_location_lendings").map((row) => row.name));
     assert.ok(assignmentTriggerNames.has("trg_staff_assignments_shift_coverage_insert"));
     assert.ok(assignmentTriggerNames.has("trg_staff_assignments_shift_coverage_update"));
-    const weekOptionTriggerNames = new Set(db.prepare(`
-      SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'week_options'
-    `).all().map((row) => row.name));
+    const weekOptionTriggerNames = new Set(pgSchema.triggers(db, "week_options").map((row) => row.name));
     assert.ok(weekOptionTriggerNames.has("trg_week_options_staff_assignment_insert"));
     assert.ok(weekOptionTriggerNames.has("trg_week_options_staff_assignment_update"));
 

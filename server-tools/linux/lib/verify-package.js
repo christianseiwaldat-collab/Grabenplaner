@@ -65,6 +65,8 @@ const expectedRecoveryArtifacts = [
   "server-tools/linux/recovery/lib/recovery-apply.js",
   "server-tools/linux/recovery/lib/recovery-metadata.js",
   "server-tools/linux/recovery/lib/recovery-verify.js",
+  "server-tools/linux/recovery/lib/recovery-shared.js",
+  "server-tools/linux/postgresql/preflight-install.js",
 ];
 
 const expectedHostControlArtifacts = [
@@ -117,7 +119,7 @@ function safeRelativePath(value) {
 function isAllowedRuntimePath(relative) {
   const topLevelFiles = new Set([
     "server.js", "backup.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
-    "README.md", "LICENSE.md", "SECURITY.md", "SERVERBETRIEB.md",
+    "README.md", "LICENSE.md", "SECURITY.md", "SERVERBETRIEB.md", "POSTGRESQL-ONLY.md",
   ]);
   return topLevelFiles.has(relative)
     || backupRuntimeScripts.has(relative)
@@ -131,12 +133,37 @@ function isAllowedRuntimePath(relative) {
 function isForbiddenRuntimePath(relative) {
   if (backupRuntimeScripts.has(relative)) return false;
   const normalized = relative.toLowerCase();
+  if (/^(lib\/persistence\/sqlite\/|lib\/persistence\/postgresql\/transfer\/|test-support\/|server-tools\/windows\/|server-tools\/package\/)/.test(normalized)) return true;
+  if (["lib/f18-loan-migration.js", "lib/usb-profile-database.js",
+    "lib/persistence/postgresql/operations/paired-development.js", "lib/persistence/postgresql/operations/paired-pitr.js",
+    "server-tools/linux/postgresql/migration-host.js", "server-tools/linux/postgresql/capture-final-source.py",
+    "server-tools/linux/postgresql/migrate-grabenplaner-postgresql.sh"].includes(normalized)) return true;
   const top = normalized.split("/", 1)[0];
   if ([".git", ".github", ".devcontainer", "backups", "data", "demo", "docs", "import-jobs", "node_modules", "output", "release", "runtime", "scripts", "test", "tmp", "usb-backups"].includes(top)) return true;
   if (/(^|\/)(\.env($|\.)|\.npmrc$|\.pnpm-store($|\/)|__pycache__($|\/))/.test(normalized)) return true;
   if (/\.(db|sqlite|sqlite3|amu|pfx|p12|pem|key|crt)$/.test(normalized)) return true;
   if (/(^|\/)(branding-kits?|customer-branding|kundenbranding)(\/|$)/.test(normalized)) return true;
   return /(lamprechter|photo-?straub|foto-?straub|united-?camera)/.test(normalized);
+}
+
+function assertPostgresqlOnlySource(relative, source) {
+  if (!/\.(?:c?js|mjs)$/.test(relative)) return;
+  const imports = source.matchAll(/\b(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)|\bfrom\s*["']([^"']+)["']/g);
+  for (const entry of imports) {
+    const request = entry[1] || entry[2];
+    const moduleName = request.startsWith("node:") ? request.slice(5) : request;
+    const segments = request.split("/");
+    let providerPath = false;
+    for (let index = 0; index + 1 < segments.length; index += 1) {
+      if (segments[index] === "persistence" && segments[index + 1] === "sqlite") providerPath = true;
+    }
+    let relativePrefix = 0;
+    while (segments[relativePrefix] === "." || segments[relativePrefix] === "..") relativePrefix += 1;
+    const relativeSqlite = relativePrefix > 0 && segments[relativePrefix] === "sqlite";
+    if (moduleName === "sqlite" || moduleName === "sqlite3" || request === "better-sqlite3" || providerPath || relativeSqlite) {
+      throw new Error(`SQLite-Ausfuehrung ist im PostgreSQL-Serverpaket nicht freigegeben: ${relative}`);
+    }
+  }
 }
 
 function walk(directory, prefix = "") {
@@ -146,6 +173,12 @@ function walk(directory, prefix = "") {
     const target = path.join(directory, entry.name);
     const stat = fs.lstatSync(target);
     if (stat.isSymbolicLink()) throw new Error(`Symbolische Links sind im Serverpaket nicht erlaubt: ${relative}`);
+    // The frozen production graph is installed and qualified separately. Only
+    // its real top-level directory is outside the source-package manifest.
+    if (!prefix && entry.name === "node_modules") {
+      if (!stat.isDirectory()) throw new Error("Der separate Abhaengigkeitsbaum ist kein Verzeichnis: node_modules");
+      continue;
+    }
     if (stat.isDirectory()) files.push(...walk(target, relative));
     else if (stat.isFile()) files.push(relative);
     else throw new Error(`Unzulaessiger Dateityp im Serverpaket: ${relative}`);
@@ -281,8 +314,8 @@ function readRuntimeContract() {
   const requiredArtifacts = contract.deploymentSchemaVersion === 1 ? requiredV1
     : contract.deploymentSchemaVersion === 2 ? requiredV2
       : contract.deploymentSchemaVersion === 3 ? requiredV3
-        : [4, 5].includes(contract.deploymentSchemaVersion) ? requiredV4 : null;
-  if ([3, 4, 5].includes(contract.deploymentSchemaVersion)) assertExactHostControlTree();
+        : [4, 5, 6].includes(contract.deploymentSchemaVersion) ? requiredV4 : null;
+  if ([3, 4, 5, 6].includes(contract.deploymentSchemaVersion)) assertExactHostControlTree();
   if (!requiredArtifacts || artifacts.size !== requiredArtifacts.size
     || [...requiredArtifacts].some((relative) => !artifacts.has(relative))) {
     throw new Error("Der Runtimevertrag enthaelt nicht exakt die freigegebenen Deployment-Artefakte.");
@@ -305,7 +338,7 @@ function readOffsiteModuleContract() {
   const contract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, ""));
   const expected = expectedOffsiteArtifacts.filter(relative => contract?.moduleVersion >= 12 || !relative.endsWith("/deploy-deferral.js"));
   if (contract?.format !== "grabenplaner-linux-offsite-module-contract" || contract?.schemaVersion !== 1
-    || !(runtimeOnly ? [6, 7, 8, 9, 10, 11, 12] : [12]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
+    || !(runtimeOnly ? [6, 7, 8, 9, 10, 11, 12, 13] : [13]).includes(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
     || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expected.length
     || expected.some((relative) => !contract.managedArtifacts.includes(relative))) {
     throw new Error("Der optionale Offsite-Modulvertrag wird nicht unterstuetzt.");
@@ -392,6 +425,9 @@ function main() {
   const rootStat = fs.lstatSync(root);
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error("Der Paket-Stagingordner ist ungueltig.");
   const runtimeContract = readRuntimeContract();
+  if (!runtimeOnly && runtimeContract.deploymentSchemaVersion !== 6) {
+    throw new Error("Ein aktuelles PostgreSQL-Serverpaket verlangt den expliziten Core-6-Runtimevertrag.");
+  }
   const offsiteModuleContract = readOffsiteModuleContract();
   const hardeningModuleContract = readHardeningModuleContract();
   if (runtimeOnly) {
@@ -425,22 +461,36 @@ function main() {
     throw new Error("Manifest-Version und package.json-Version stimmen nicht ueberein.");
   }
   if (metadata.packageManager !== manifest.packageManager) throw new Error("package.json und Manifest fordern unterschiedliche pnpm-Versionen.");
+  if (JSON.stringify(metadata.grabenplaner?.databaseProviders) !== '["postgresql"]') {
+    throw new Error("Das Serverpaket muss ausschliesslich PostgreSQL als Betriebsdatenbank freigeben.");
+  }
+  if (!["compatible", "required"].includes(metadata.grabenplaner?.passkeysSchemaPolicy)) {
+    throw new Error("Die quellgebundene Passkey-Schemarichtlinie fehlt oder ist ungueltig.");
+  }
   if (!hardeningContractMatches(manifest.hardeningModule, hardeningModuleContract)) {
     throw new Error("Der Hardening-Fingerprint im Paketmanifest stimmt nicht mit dem separaten Modulvertrag ueberein.");
   }
 
   const required = [
+    'POSTGRESQL-ONLY.md',
     'lib/persistence/postgresql/productive-configuration.js',
     'lib/persistence/postgresql/application.js',
     'lib/persistence/postgresql/operations/runtime.js',
     'lib/persistence/postgresql/operations/status.js',
     'lib/persistence/postgresql/operations/lifecycle.js',
     'lib/persistence/postgresql/operations/cutover.js',
-    'lib/persistence/postgresql/transfer/activation.js',
-    'lib/persistence/postgresql/transfer/protection.js',
-    'lib/persistence/postgresql/transfer/staging.js',
-    'lib/persistence/postgresql/transfer/history.js',
     'lib/persistence/postgresql/contracts/manifest.json',
+    'lib/passkey-protocol.js', 'lib/passkey-management.js', 'lib/passkey-authentication.js',
+    'lib/passkey-schema-policy.js',
+    'lib/persistence/statements/passkeys.js', 'lib/persistence/repositories/passkeys.js',
+    'lib/persistence/postgresql/core/passkeys.js', 'lib/persistence/postgresql/core/passkeys-catalog.js',
+    'lib/persistence/postgresql/contracts/passkeys-catalog-v1.json',
+    'lib/persistence/postgresql/operations/restore-authentication.js',
+    'server-tools/linux/lib/session-security-migrate.js',
+    'server-tools/linux/lib/passkeys-release-policy.js',
+    'server-tools/linux/lib/passkeys-schema-activate.js',
+    'server-tools/linux/activate-grabenplaner-passkeys.sh',
+    'public/passkeys.html', 'public/passkeys.js', 'public/passkeys.css', 'public/passkey-auth.js', 'public/passkey-auth.css',
     'server-tools/linux/recovery/lib/postgresql-application-smoke.js',
     'server-tools/linux/recovery/lib/postgresql-recovery-worker.js',
     'server-tools/linux/recovery/lib/postgresql-recovery-activity.js',
@@ -449,7 +499,7 @@ function main() {
     'lib/vps-storage-contract.js', 'lib/vps-storage-control.js', 'lib/vps-storage-routes.js',
     'lib/persistence/postgresql/operations/storage-residuals.js', 'lib/persistence/postgresql/operations/import-retention.js',
     ...['control-worker.js', 'storage-worker.js', 'storage-import-run.js', 'storage-import-maintenance.sh', 'host-reboot.js', 'lifecycle-run.js', 'lifecycle-status.js', 'lifecycle-maintenance.sh',
-      'migration-host.js', 'managed-contract.js', 'migrate-grabenplaner-postgresql.sh', 'capture-final-source.py',
+      'managed-contract.js',
       'grabenplaner-postgresql.service.in', 'grabenplaner-application.conf.in',
       'grabenplaner-postgresql-maintenance-recover.service.in', 'recover-maintenance.sh',
       'grabenplaner-postgresql-control.socket.in', 'grabenplaner-postgresql-control@.service.in']
@@ -465,6 +515,7 @@ function main() {
     "pnpm-lock.yaml",
     "lib/backup-commit.js",
     "lib/database-lock.js",
+    "lib/database-lock-linux.py",
     "lib/amu-storage.js",
     "server-tools/linux/backup-grabenplaner.sh",
     "server-tools/linux/stop-grabenplaner-server.sh",
@@ -474,6 +525,10 @@ function main() {
     "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
     "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
     "server-tools/linux/lib/runtime-v5-transition.js",
+  "server-tools/linux/migrate-grabenplaner-runtime-v6.sh",
+  "server-tools/linux/lib/runtime-v6-transition.js",
+  "server-tools/linux/lib/offsite-postgresql-only-compat.js",
+  "server-tools/linux/lib/root-postgresql-dependencies.sh",
     "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
     "server-tools/linux/preflight-grabenplaner-deploy.sh",
     "server-tools/linux/lib/postgresql-backup-repair-compat.js",
@@ -516,6 +571,7 @@ function main() {
       || sha256File(target) !== String(raw.sha256).toLowerCase()) {
       throw new Error(`Manifestpruefung fehlgeschlagen: ${relative}`);
     }
+    assertPostgresqlOnlySource(relative, /\.(?:c?js|mjs)$/.test(relative) ? fs.readFileSync(target, "utf8") : "");
     expected.set(relative, true);
   }
   for (const relative of required) {

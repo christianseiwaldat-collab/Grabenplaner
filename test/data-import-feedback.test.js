@@ -48,7 +48,7 @@ test('invoice row explanations distinguish an expected parent from a parent stil
   assert.match(UI.rowStatusText(source,'heads',row),/HISTORY_PARENT_REQUIRED/);
 });
 
-test('invoice confirmation describes parent-first apply and row feedback is escaped',async t=>{
+test('invoice confirmation explains valid-row apply and deferred issues; row feedback is escaped',async t=>{
   const source=invoiceSource();let applied=false;
   const ui=await mount(t,source,(url)=>{
     if(url.endsWith('/apply-background')){applied=true;return {...source,active:true,status:'applying'};}
@@ -56,7 +56,8 @@ test('invoice confirmation describes parent-first apply and row feedback is esca
   });
   await ui.click({iRows:'lines'});assert.match(ui.fields.log.innerHTML,/Rechnung_A derselben Datei/);assert.doesNotMatch(ui.fields.log.innerHTML,/<script>/);
   await ui.click({iAction:'apply'});assert.equal(applied,true);
-  assert.match(ui.confirmations[0],/Zuerst werden die Rechnungsköpfe übernommen/);assert.match(ui.confirmations[0],/Verbleibende Konflikte halten/);
+  assert.match(ui.confirmations[0],/Gültige Rechnungsdaten.*übernehmen/);
+  assert.match(ui.confirmations[0],/Positionen ohne passenden Rechnungskopf.*andere Prüffälle bleiben zurückgestellt/);
 });
 
 test('accepted cash background job is shown as running without claiming a completed takeover',async t=>{

@@ -11,6 +11,8 @@ test('restored application copy upgrades school and session security in order th
   const migration=require('../lib/persistence/postgresql/core/xoffi-snapshots');
   const school=require('../lib/persistence/postgresql/core/vocational-school');
   const security=require('../lib/persistence/postgresql/core/session-security');
+  const passkeys=require('../lib/persistence/postgresql/core/passkeys');
+  const restoredAuthentication=require('../lib/persistence/postgresql/operations/restore-authentication');
   const boundary=require('../lib/persistence/postgresql/boundary/migrate');
   const {prepareRestoredSchema}=require('../server-tools/linux/recovery/lib/postgresql-recovery-worker');
   const events=[],binding={environmentId:'synthetic'};
@@ -18,11 +20,13 @@ test('restored application copy upgrades school and session security in order th
   t.mock.method(migration,'migrate',async(c,options)=>{assert.equal(c,client);assert.equal(options.binding,binding);events.push('migrated');return {applied:true,digest:'synthetic'};});
   t.mock.method(school,'migrate',async(c,options)=>{assert.equal(c,client);assert.equal(options.binding,binding);events.push('school');return {applied:false};});
   t.mock.method(security,'migrate',async(c,options)=>{assert.equal(c,client);assert.equal(options.binding,binding);events.push('security');return {applied:true};});
-  t.mock.method(boundary,'verifyCoreSchema',async(c,options)=>{assert.equal(c,client);assert.deepEqual(options,{requireVocationalSchool:true,requireSessionSecurity:true});events.push('verified');});
+  t.mock.method(passkeys,'migrate',async(c,options)=>{assert.equal(c,client);assert.equal(options.binding,binding);events.push('passkeys');return {applied:false};});
+  t.mock.method(restoredAuthentication,'invalidateRestoredAuthentication',async(c,options)=>{assert.equal(c,client);assert.equal(options.binding,binding);assert.equal(options.scope,restoredAuthentication.SCOPE);events.push('invalidate-restored-authentication');return {passwordsChanged:false};});
+  t.mock.method(boundary,'verifyCoreSchema',async(c,options)=>{assert.equal(c,client);assert.deepEqual(options,{requireVocationalSchool:true,requireSessionSecurity:true,requirePasskeys:true});events.push('verified');});
   const config={binding,domains:[{domain:'sales',database:'test_sales'},{domain:'core',database:'test_core'}]};
   const connect=(database,role)=>{assert.equal(database,'test_core');assert.equal(role,'gp_core_migrator');return client;};
-  assert.deepEqual(await prepareRestoredSchema({config,connect}),{xoffi:{applied:true,digest:'synthetic'},vocationalSchool:{applied:false},sessionSecurity:{applied:true}});
-  assert.deepEqual(events,['connected','bounded','migrated','school','security','verified','closed']);
+  assert.deepEqual(await prepareRestoredSchema({config,connect}),{xoffi:{applied:true,digest:'synthetic'},vocationalSchool:{applied:false},sessionSecurity:{applied:true},passkeys:{applied:false},authenticationInvalidation:{passwordsChanged:false}});
+  assert.deepEqual(events,['connected','bounded','migrated','school','security','passkeys','verified','invalidate-restored-authentication','closed']);
   school.migrate.mock.mockImplementation(async()=>{throw new Error('rejected school');});
   events.length=0;
   await assert.rejects(prepareRestoredSchema({config,connect}),/rejected school/);
@@ -50,4 +54,6 @@ test('native restored-schema verification survives migration commits with a rest
   assert.equal(typeof first.sessionSecurity.applied,'boolean');
   const repeated=await prepareRestoredSchema({config,connect});
   assert.equal(repeated.sessionSecurity.applied,false);
+  assert.equal(repeated.passkeys.applied,false);
+  assert.equal(repeated.authenticationInvalidation.passwordsChanged,false);
 });

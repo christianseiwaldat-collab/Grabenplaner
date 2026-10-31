@@ -339,7 +339,7 @@ test('Productive Block 2: mapping UI escapes imported values and requires explic
   const source=fs.readFileSync(path.join(__dirname,'../public/import-mappings.js'),'utf8');assert.doesNotMatch(source,/localStorage|sessionStorage/);
   assert.match(source,/planHash: plan.planHash/);assert.match(source,/ticket === generation/);assert.match(source,/visibilitychange/);
   const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');assert.match(server,/createDataImportMappingRuntime\(\{[^}]*allowMapping: false/);
-  assert.match(server,/createManagedSalesHistoryRuntime\(\{[^}]*enabled: false/);
+  assert.match(server,/createManagedSalesHistoryRuntime\(\{[^}]*cashEnabled: true, retainCompletedAnalyses: false/);
 });
 
 test('Productive Block 2: late mapping context is discarded after account view destruction',async()=>{

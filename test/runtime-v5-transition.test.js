@@ -7,7 +7,8 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { spawnSync } = require("node:child_process");
 const { validateTransition, validateInvocation, boundOffsiteReceipt } = require("../server-tools/linux/lib/runtime-v5-transition");
-const root = path.resolve(__dirname, "..");
+// Immutable historical transition; current PostgreSQL contracts are tested separately.
+const root = require("../test-support/legacy-baseline").sourceRoot();
 const read = file => fs.readFileSync(path.join(root, file), "utf8");
 function fixture(t) {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-runtime-v5-"));
@@ -86,7 +87,7 @@ test("runtime-v5 uses a complete verified candidate for fresh backups and binds 
   assert.match(updater, /trap 'exit 143' TERM/);
   assert.doesNotMatch(migration, /\bsystemctl\s+(reboot|poweroff)|\bshutdown\s+-r/);
 });
-test("runtime-v5 and offsite-v12 are the current package contracts", () => {
+test("the immutable predecessor retains runtime-v5 and offsite-v12 contracts", () => {
   const result = spawnSync(process.execPath, [path.join(root, "server-tools/linux/lib/verify-package.js"), "--runtime-contract", root], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).deploymentSchemaVersion, 5);
