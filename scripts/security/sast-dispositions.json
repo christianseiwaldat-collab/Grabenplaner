@@ -112436,14 +112436,14 @@
       },
       "end": {
         "line": 39272,
-        "column": 217
+        "column": 216
       },
       "sourceSha256": "8f53dbdddfc3fe1187625e74341fb8f394335ab39b54e1a5abdb38413f883f7f",
       "sourceSha256Variants": [
         "68ea3e3794f88cb356a0ececa3357d91a14f2dde7b39297d9803bb6f3777716c",
         "8f53dbdddfc3fe1187625e74341fb8f394335ab39b54e1a5abdb38413f883f7f"
       ],
-      "fingerprint": "424e74cff24ea5083e337ca4ce63f9e3102665f95bb33197ddafd555af235ca3"
+      "fingerprint": "1e71f85fe3d5585fee40307058b994704a748108114bcc103abf46abf73dc4c0"
     },
     {
       "rule": "javascript.express.security.audit.xss.direct-response-write",
