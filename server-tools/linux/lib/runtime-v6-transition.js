@@ -10,6 +10,8 @@ const OLD_FINGERPRINT = "21f541a85b74ced5e5b6ec84ff2561badcd6635ad1fceb7438cb323
 const NEW_FINGERPRINT = "f9c09a999f5d6b30c0df35e714d0a5ddf0ca17880ad9190ff4bc5c068c3d95fc";
 const REVIEWED_MSAL_PATCH = Object.freeze({ package: "@azure/msal-node@5.4.0", path: "lib/vendor-patches/@azure__msal-node@5.4.0.patch",
   sha256: "bbdf16bb0cf6a18ab384b515bd8a378cc5c736698c486881c60c1cbb1cbeda01" });
+const REVIEWED_GLOB_PATCH = Object.freeze({ package: "glob@7.2.3", path: "lib/vendor-patches/glob@7.2.3.patch",
+  sha256: "a3adbd52146b551c396de60757d254b6a90c1f4dec601cb652096ca65ca0a617" });
 const REVIEWED_WEBAUTHN_DEPENDENCIES = Object.freeze({ "@simplewebauthn/browser": "14.0.0", "@simplewebauthn/server": "14.0.3" });
 const REVIEWED_ROOT_ONLY_WORKSPACE_PREFIXES = Object.freeze(["packages:\n  - '.'\n\n", "packages:\r\n  - '.'\r\n\r\n"]);
 // These are the qualified Core 5 checkout/package bytes, including the CRLF
@@ -252,7 +254,7 @@ function verifyFrozenDependencyPlan(oldRoot, candidateRoot, { requireRoot = proc
     const prefix = REVIEWED_ROOT_ONLY_WORKSPACE_PREFIXES.find(value => original.startsWith(value));
     const text = prefix ? original.slice(prefix.length) : original;
     assert(!/^\s*(?:packages|['"]packages['"])\s*:/m.test(text), "Only the exact leading root-only workspace declaration is permitted");
-    let section = null, bodyParser = null, msalPatch = null, canvas = null;
+    let section = null, bodyParser = null, msalPatch = null, canvas = null, minimatch = null, globPatch = null;
     const seenSections = new Set();
     const lines = text.match(/[^\n]*\n|[^\n]+$/g) || [];
     for (let index = 0; index < lines.length; index++) {
@@ -274,9 +276,18 @@ function verifyFrozenDependencyPlan(oldRoot, candidateRoot, { requireRoot = proc
       } else if (value === "  '@azure/msal-node@5.4.0': lib/vendor-patches/@azure__msal-node@5.4.0.patch") {
         assert(section === "patchedDependencies:" && msalPatch === null, "The reviewed MSAL patch must occur once inside patchedDependencies");
         msalPatch = REVIEWED_MSAL_PATCH.sha256;
+      } else if (value === "  # GHSA-g3hv-75wg-m249: qualify the ExcelJS glob/ZIP consumers against the fixed API.") {
+        assert(section === "overrides:" && lines[index + 1]?.replace(/\r?\n$/, "") === "  minimatch: 11.0.3");
+      } else if (value === "  minimatch: 11.0.3") {
+        assert(section === "overrides:" && minimatch === null, "The reviewed minimatch override must occur once inside overrides");
+        minimatch = "11.0.3";
+      } else if (value === "  glob@7.2.3: lib/vendor-patches/glob@7.2.3.patch") {
+        assert(section === "patchedDependencies:" && globPatch === null, "The reviewed glob patch must occur once inside patchedDependencies");
+        globPatch = REVIEWED_GLOB_PATCH.sha256;
       } else remaining.push(line);
     }
-    return { bytes: Buffer.from(remaining.join(""), "utf8"), bodyParser, msalPatch, canvas, rootOnlyWorkspace: Boolean(prefix) };
+    assert(Boolean(minimatch) === Boolean(globPatch), "The fixed minimatch and glob compatibility patch must be introduced together");
+    return { bytes: Buffer.from(remaining.join(""), "utf8"), bodyParser, msalPatch, canvas, minimatch, globPatch, rootOnlyWorkspace: Boolean(prefix) };
   };
   const before = withoutReviewedWorkspaceDeltas(previous.workspace), after = withoutReviewedWorkspaceDeltas(candidate.workspace);
   assert(before.bytes.equals(after.bytes), "Unqualified pnpm workspace metadata changed");
@@ -284,6 +295,13 @@ function verifyFrozenDependencyPlan(oldRoot, candidateRoot, { requireRoot = proc
   assert(before.bodyParser === after.bodyParser || after.bodyParser === "2.4.0", "Only the reviewed body-parser security override is permitted");
   assert(before.canvas === after.canvas || after.canvas === "1.0.13", "Removing the reviewed Canvas override is not permitted");
   assert(before.msalPatch === after.msalPatch || after.msalPatch === REVIEWED_MSAL_PATCH.sha256, "Removing the reviewed MSAL security patch is not permitted");
+  assert(!before.minimatch || after.minimatch === "11.0.3", "Removing the reviewed minimatch security override is not permitted");
+  for (const [root, workspace] of [[oldRoot, before], [candidateRoot, after]]) if (workspace.globPatch) {
+    const file = path.join(root, REVIEWED_GLOB_PATCH.path), info = fs.lstatSync(file);
+    assert(info.isFile() && !info.isSymbolicLink() && info.nlink === 1 && fs.realpathSync(file) === path.resolve(file));
+    if (requireRoot) assert(info.uid === 0 && (info.mode & 0o022) === 0);
+    assert.equal(hash(read(root, REVIEWED_GLOB_PATCH.path)), REVIEWED_GLOB_PATCH.sha256, "Unqualified glob patch bytes changed");
+  }
   for (const [root, workspace] of [[oldRoot, before], [candidateRoot, after]]) if (workspace.msalPatch) {
     const file = path.join(root, REVIEWED_MSAL_PATCH.path), info = fs.lstatSync(file);
     if (requireRoot) assert(info.uid === 0 && (info.mode & 0o022) === 0);
@@ -297,6 +315,7 @@ function verifyFrozenDependencyPlan(oldRoot, candidateRoot, { requireRoot = proc
     reviewedRootOnlyWorkspace: { previous: before.rootOnlyWorkspace, candidate: after.rootOnlyWorkspace },
     reviewedBodyParserOverride: { previous: before.bodyParser ?? null, candidate: after.bodyParser ?? null },
     reviewedCanvasOverride: { previous: before.canvas, candidate: after.canvas },
+    reviewedMinimatchOverride: { previous: before.minimatch, candidate: after.minimatch },
     reviewedMsalPatch: { package: REVIEWED_MSAL_PATCH.package, path: REVIEWED_MSAL_PATCH.path, previous: before.msalPatch, candidate: after.msalPatch },
     requirements: { originalZipByteBinding: true, unprivilegedFrozenProductionBuild: true,
       freshRootPostgresqlClosureBeforePreflight: true, freshRootPostgresqlClosureAfterBuild: true } };

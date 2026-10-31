@@ -99,6 +99,8 @@ function dependencyFixture(t) {
     fs.mkdirSync(directory); fs.writeFileSync(path.join(directory, "package.json"), JSON.stringify({ packageManager: "pnpm@11.7.0", dependencies: { pg: "8.22.0" } }));
     fs.writeFileSync(path.join(directory, "pnpm-lock.yaml"), "frozen fixture bytes\n");
     fs.writeFileSync(path.join(directory, "pnpm-workspace.yaml"), "allowBuilds:\n  sharp: true\noverrides:\n  qs: 6.16.1\npatchedDependencies:\n");
+    const relative = "lib/vendor-patches/glob@7.2.3.patch";
+    fs.mkdirSync(path.dirname(path.join(directory,relative)),{recursive:true}); fs.copyFileSync(path.join(root,relative),path.join(directory,relative));
   }
   fs.mkdirSync(path.join(oldRoot, "node_modules/pg"), { recursive: true }); fs.writeFileSync(path.join(oldRoot, "node_modules/pg/index.js"), "module.exports={};\n");
   return { oldRoot, candidateRoot };
@@ -173,6 +175,44 @@ test("Core6 frozen dependency plan binds both graphs and retains the predecessor
   assert.equal(fs.existsSync(path.join(values.candidateRoot, "node_modules")), false);
   assert.deepEqual(fs.readFileSync(path.join(values.oldRoot, "node_modules/pg/index.js")), previous);
 });
+
+function addReviewedMinimatch(root) {
+  const workspace = path.join(root,"pnpm-workspace.yaml");
+  fs.writeFileSync(workspace,fs.readFileSync(workspace,"utf8").replace("overrides:\n","overrides:\n  minimatch: 11.0.3\n")
+    .replace("patchedDependencies:\n","patchedDependencies:\n  glob@7.2.3: lib/vendor-patches/glob@7.2.3.patch\n"));
+  const relative = "lib/vendor-patches/glob@7.2.3.patch", file = path.join(root,relative);
+  fs.mkdirSync(path.dirname(file),{recursive:true}); fs.copyFileSync(path.join(__dirname,"..",relative),file);
+  return {workspace,patch:file};
+}
+test("Core6 permits the exact repaired matcher pair and retains it on later transitions", t => {
+  const values = dependencyFixture(t); addReviewedMinimatch(values.candidateRoot);
+  assert.deepEqual(transition.verifyFrozenDependencyPlan(values.oldRoot,values.candidateRoot,{requireRoot:false}).reviewedMinimatchOverride,{previous:null,candidate:"11.0.3"});
+  addReviewedMinimatch(values.oldRoot);
+  assert.deepEqual(transition.verifyFrozenDependencyPlan(values.oldRoot,values.candidateRoot,{requireRoot:false}).reviewedMinimatchOverride,{previous:"11.0.3",candidate:"11.0.3"});
+});
+for (const mutation of ["version","patchVersion","path","duplicateOverride","duplicatePatch","wrongSection","overrideOnly","patchOnly","patchBytes","missingPatch","linkedPatch","hardlinkedPatch","removal"]) {
+  test("Core6 rejects an unqualified matcher transition: " + mutation,{skip:mutation === "linkedPatch" && process.platform === "win32" ? "File symlink creation requires Windows privileges; exercised on Linux" : false},t => {
+    const values=dependencyFixture(t), files=addReviewedMinimatch(values.candidateRoot);
+    let text=fs.readFileSync(files.workspace,"utf8");
+    if(mutation==="version") text=text.replace("minimatch: 11.0.3","minimatch: 11.0.4");
+    if(mutation==="patchVersion") text=text.replace("glob@7.2.3:","glob@7.2.4:");
+    if(mutation==="path") text=text.replace("lib/vendor-patches/glob@7.2.3.patch","lib/vendor-patches/unreviewed.patch");
+    if(mutation==="duplicateOverride") text=text.replace("overrides:\n","overrides:\n  minimatch: 11.0.3\n");
+    if(mutation==="duplicatePatch") text+="  glob@7.2.3: lib/vendor-patches/glob@7.2.3.patch\n";
+    if(mutation==="wrongSection") text=text.replace("overrides:\n  minimatch: 11.0.3\n","  minimatch: 11.0.3\noverrides:\n");
+    if(mutation==="overrideOnly") text=text.replace("  glob@7.2.3: lib/vendor-patches/glob@7.2.3.patch\n","");
+    if(mutation==="patchOnly") text=text.replace("  minimatch: 11.0.3\n","");
+    if(mutation==="patchBytes") fs.appendFileSync(files.patch,"unreviewed");
+    if(mutation==="missingPatch") fs.unlinkSync(files.patch);
+    if(mutation==="linkedPatch" || mutation==="hardlinkedPatch") {
+      const original=files.patch+".original"; fs.renameSync(files.patch,original);
+      if(mutation==="linkedPatch") fs.symlinkSync(original,files.patch); else fs.linkSync(original,files.patch);
+    }
+    if(mutation==="removal") { addReviewedMinimatch(values.oldRoot); text=text.replace("  minimatch: 11.0.3\n","").replace("  glob@7.2.3: lib/vendor-patches/glob@7.2.3.patch\n",""); }
+    fs.writeFileSync(files.workspace,text);
+    assert.throws(()=>transition.verifyFrozenDependencyPlan(values.oldRoot,values.candidateRoot,{requireRoot:false}));
+  });
+}
 
 test("Core6 frozen dependency plan rejects unreviewed package and workspace changes", t => {
   for (const key of ["packageManager", "dependencies", "pnpm", "buildHook", "otherOverride", "parserVersion", "duplicateParser", "parserOutsideOverrides"]) {

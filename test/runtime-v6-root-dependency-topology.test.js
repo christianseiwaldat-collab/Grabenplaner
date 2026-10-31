@@ -42,6 +42,8 @@ function fixture(t) {
     put(path.join(target, "package.json"), JSON.stringify({ packageManager: "pnpm@11.7.0", dependencies: { pg: "8.22.0" } }));
     put(path.join(target, "pnpm-lock.yaml"), "synthetic frozen lock: no installation or package execution\n");
     put(path.join(target, MSAL), fs.readFileSync(path.join(ROOT, MSAL)));
+    const globPatch = "lib/vendor-patches/glob@7.2.3.patch";
+    put(path.join(target, globPatch), fs.readFileSync(path.join(ROOT, globPatch)));
   }
   put(path.join(oldRoot, "pnpm-workspace.yaml"), fs.readFileSync(FIXTURE));
   put(path.join(candidateRoot, "pnpm-workspace.yaml"), fs.readFileSync(path.join(ROOT, "pnpm-workspace.yaml")));
