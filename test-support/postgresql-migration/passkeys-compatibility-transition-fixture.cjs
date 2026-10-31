@@ -10,7 +10,7 @@ const REPO = path.resolve(__dirname, "../.."), BIN = "/usr/lib/postgresql/18/bin
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
 const INSPECTOR_SHA = "f89627774a3580fea93a22a30910d3034296251da30c1b92728029aee5054064";
 const DEPENDENCIES_SHA = "2afd6587681740d340039db0e128dadf52b2886d9359b6585980a7d7d7e9a70b";
-const FROZEN_DEPENDENCIES_SHA = "08bbee3052f95192586063b527e25d9817bd9d47162d2c8d24d3344c5f05042c";
+const FROZEN_DEPENDENCIES_SHA = "6835c0392efec1478a4b9601c1c9b3b25cc0d48bbf23df4b890c864b55cceab4";
 
 function originalInspector(document = require("./f0d-core-inspector.json"),
   frozen = require("./f0d-core-inspector-frozen-dependencies.json")) {
@@ -24,12 +24,12 @@ function originalInspector(document = require("./f0d-core-inspector.json"),
   const source = Buffer.from(document.inspector.sourceBase64, "base64"), names = new Set();
   if (hash(source) !== INSPECTOR_SHA || source.length !== document.inspector.bytes) throw Error("PASSKEY_TRANSITION_OLD_SOURCE");
   if (hash(JSON.stringify(document.sharedDependencies)) !== DEPENDENCIES_SHA) throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
-  // These five genuine f0d blobs diverged when the current CAS extension was
-  // added. Never relabel the current bytes as historical dependencies.
+  // These seven genuine f0d blobs diverged with the CAS extension and
+  // guarded stock publication proofs. Never relabel the current bytes as historical dependencies.
   if (hash(JSON.stringify(frozen)) !== FROZEN_DEPENDENCIES_SHA
     || frozen.format !== "gp-f0d-core-inspector-frozen-dependencies-v1"
     || frozen.sourceCommit !== document.sourceCommit || frozen.sharedDependenciesSha256 !== DEPENDENCIES_SHA
-    || !Array.isArray(frozen.files) || frozen.files.length !== 5
+    || !Array.isArray(frozen.files) || frozen.files.length !== 7
     || !Array.isArray(frozen.readOnlyData) || frozen.readOnlyData.length !== 1) throw Error("PASSKEY_TRANSITION_OLD_DEPENDENCY");
   const retained = new Map(), originals = new Map();
   for (const item of frozen.files) {

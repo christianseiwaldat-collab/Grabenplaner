@@ -29,18 +29,18 @@ function isolated(readFileSync = fs.readFileSync) {
   return { fixture: entry.exports, loaded };
 }
 
-test("all five frozen historical blobs retain their original identities and differ from today's CAS additions", () => {
+test("all seven frozen historical blobs retain their original identities despite CAS and stock publication additions", () => {
   assert.equal(frozen.sourceCommit, original.sourceCommit);
-  assert.equal(frozen.files.length, 5);
+  assert.equal(frozen.files.length, 7);
   assert.equal(sha(JSON.stringify(original.sharedDependencies)), frozen.sharedDependenciesSha256);
-  assert.equal(frozen.files.reduce((count, file) => count + file.bytes, 0), 78327);
+  assert.equal(frozen.files.reduce((count, file) => count + file.bytes, 0), 82554);
   for (const file of frozen.files) {
     const bytes = Buffer.from(file.sourceBase64, "base64");
     assert.equal(bytes.length, file.bytes);
     assert.equal(sha(bytes), original.sharedDependencies.find(item => item.path === file.path).gitLfSha256);
     assert.equal(createHash("sha1").update(Buffer.concat([Buffer.from("blob " + bytes.length + "\0"), bytes])).digest("hex"), file.gitBlob);
     assert.notEqual(sha(Buffer.from(fs.readFileSync(path.join(root, file.path), "utf8").replace(/\r\n/g, "\n"))), file.gitLfSha256);
-    assert.doesNotMatch(bytes.toString("utf8"), /planning-settings\.shift-revision\.get|updatePlanningShiftIfCurrent|getShiftForRevisionById/);
+    assert.doesNotMatch(bytes.toString("utf8"), /planning-settings\.shift-revision\.get|updatePlanningShiftIfCurrent|getShiftForRevisionById|publicationCheck/);
   }
 });
 
@@ -50,7 +50,7 @@ test("the original closure executes frozen bytes instead of the already loaded c
   const inspector = fixture.originalInspector();
   assert.equal(typeof inspector.verifyCoreSchema, "function");
   // Exercise the original recorded compiler dependency through this same
-  // isolated resolver; it imports all five original catalogs/statements.
+  // isolated resolver; it imports all seven original catalogs/statements.
   loaded.get(original.inspector.path).instance.require("../core/catalog");
   for (const file of frozen.files) {
     assert.equal(loaded.get(file.path)?.sha256, file.gitLfSha256, file.path);
@@ -104,6 +104,7 @@ for (const [label, mutate] of [
   ["duplicate file", value => { value.files[1] = clone(value.files[0]); }],
   ["changed bytes", value => { value.files[0].sourceBase64 = Buffer.from("module.exports={}").toString("base64"); }],
   ["current CAS replacement", value => { value.files[0].sourceBase64 = fs.readFileSync(path.join(root, value.files[0].path)).toString("base64"); }],
+  ["current stock publication replacement", value => { value.files[5].sourceBase64 = fs.readFileSync(path.join(root, value.files[5].path)).toString("base64"); }],
   ["changed source hash", value => { value.files[0].gitLfSha256 = "0".repeat(64); }],
   ["changed Git blob", value => { value.files[0].gitBlob = "0".repeat(40); }],
   ["changed source commit", value => { value.sourceCommit = "0".repeat(40); }],
