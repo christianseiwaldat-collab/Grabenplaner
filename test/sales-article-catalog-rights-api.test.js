@@ -203,7 +203,7 @@ test("Detail-API projiziert nur freigegebene Felder und trennt Preise serverseit
   assert.match(route, /SALES_ARTICLE_CATALOG_PERMISSIONS\.READ/);
   assert.match(route, /setSalesArticleCatalogPrivateHeaders/);
   assert.match(route, /new Set\(\["articleNumber", "section"\]\)/);
-  assert.match(route, /if \(!\['all','main','notes'\]\.includes\(section\)\)/);
+  assert.match(route, /if \(!\['all','main','notes','orders'\]\.includes\(section\)\)/);
   assert.match(route, /normalizeSalesArticleNumber/);
   assert.match(route, /salesArticleCatalogRepository\.getByArticleNumber/);
   assert.match(route, /salesArticleCatalogRepository\.listRevisions/);
