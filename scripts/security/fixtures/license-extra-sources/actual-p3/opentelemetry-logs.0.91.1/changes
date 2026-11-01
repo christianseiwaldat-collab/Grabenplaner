@@ -1,0 +1,21 @@
+opam-version: "2.0"
+added: [
+  "doc/opentelemetry-logs" {"D"}
+  "doc/opentelemetry-logs/CHANGES.md" {"F:S5854T1793251651.71"}
+  "doc/opentelemetry-logs/README.md" {"F:S5105T1793251651.71"}
+  "doc/opentelemetry-logs/odoc-config.sexp" {"F:S15T1793251651.71"}
+  "lib/opentelemetry-logs" {"D"}
+  "lib/opentelemetry-logs/META" {"F:S474T1793251651.71"}
+  "lib/opentelemetry-logs/dune-package" {"F:S1282T1793251651.71"}
+  "lib/opentelemetry-logs/opam" {"F:S974T1793251651.71"}
+  "lib/opentelemetry-logs/opentelemetry_logs.a" {"F:S21808T1793251651.71"}
+  "lib/opentelemetry-logs/opentelemetry_logs.cma" {"F:S13927T1793251651.71"}
+  "lib/opentelemetry-logs/opentelemetry_logs.cmi" {"F:S4337T1793251651.71"}
+  "lib/opentelemetry-logs/opentelemetry_logs.cmt" {"F:S22117T1793251651.71"}
+  "lib/opentelemetry-logs/opentelemetry_logs.cmti" {"F:S10812T1793251651.71"}
+  "lib/opentelemetry-logs/opentelemetry_logs.cmx" {"F:S22959T1793251651.71"}
+  "lib/opentelemetry-logs/opentelemetry_logs.cmxa" {"F:S4616T1793251651.71"}
+  "lib/opentelemetry-logs/opentelemetry_logs.cmxs" {"F:S41216T1793251651.71"}
+  "lib/opentelemetry-logs/opentelemetry_logs.ml" {"F:S4481T1793251651.71"}
+  "lib/opentelemetry-logs/opentelemetry_logs.mli" {"F:S2897T1793251651.71"}
+]

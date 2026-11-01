@@ -1,4 +1,7 @@
 "use strict";
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -215,7 +218,7 @@ test.before(async () => {
     SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1
   `).get().id);
   positionId = String(db.prepare("SELECT id FROM positions ORDER BY id LIMIT 1").get().id);
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, 'Geburtstags-API Fremdfiliale', 1, '{}', 1)
   `).run(FOREIGN_LOCATION);
@@ -300,7 +303,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -864,8 +867,8 @@ test("Block 8 API: jede Mutation wird PII-arm auditiert und ein Auditfehler roll
   assertPrivacyProjection(auditRows);
 
   const stable = employeeProjection(await settings(manager), TARGETS.secondDepartment);
-  db.exec(`
-    CREATE TEMP TRIGGER birthday_api_test_fail_audit
+  installFixtureTrigger(db, `
+    CREATE TRIGGER test_birthday_api_test_fail_audit
     BEFORE INSERT ON audit_log
     WHEN NEW.actor = '${ACTORS.manager.replaceAll("'", "''")}'
     BEGIN
@@ -886,7 +889,7 @@ test("Block 8 API: jede Mutation wird PII-arm auditiert und ein Auditfehler roll
     assert.equal(failed.response.status >= 400, true, JSON.stringify(failed.payload));
   } finally {
     console.error = originalConsoleError;
-    db.exec("DROP TRIGGER IF EXISTS birthday_api_test_fail_audit");
+    dropFixtureTrigger(db, "test_birthday_api_test_fail_audit", { ifExists: true });
   }
   const afterFailure = employeeProjection(await settings(manager), TARGETS.secondDepartment);
   assert.equal(afterFailure.presentationId, stable.presentationId);

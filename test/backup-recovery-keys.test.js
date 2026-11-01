@@ -1,4 +1,7 @@
 "use strict";
+
+// Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
+// Other PostgreSQL and application assertions below still use current code.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -8,7 +11,7 @@ const crypto = require("node:crypto");
 const { openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider");
 const { createAmuStorage, syncEncryptedFilesBackup } = require("../lib/amu-storage");
 const { createIntegrationSecretVault } = require("../lib/integration-secret-vault");
-const { verifyBackupRecoveryKeys } = require("../lib/backup-recovery-keys");
+const { verifyBackupRecoveryKeys } = require("../test-support/legacy-baseline").legacyRequire("lib/backup-recovery-keys.js");
 
 test("archived recovery authenticates existing document and import keys, rejecting missing, wrong and damaged key evidence", async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-backup-key-proof-"));

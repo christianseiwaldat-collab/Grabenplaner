@@ -9,7 +9,7 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const updater = fs.readFileSync(path.join(root, "server-tools/linux/update-grabenplaner-server.sh"), "utf8").replace(/\r\n/g, "\n");
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
-const start = updater.indexOf("  # Candidate dependencies are not installed yet.");
+const start = updater.indexOf("  # These candidate checks load local path/configuration code only.");
 const end = updater.indexOf("\nfi", start);
 assert.ok(start > 0 && end > start);
 const gate = updater.slice(start, end);
@@ -43,14 +43,15 @@ for (const scenario of ["correct", "previous-wrong-backup-directory", "wrong-dat
       // recovery-file traversal use synthetic data; no production DB is opened.
       write("candidate/server-tools/linux/lib/postgresql-operations.js",
         fs.readFileSync(path.join(root, "server-tools/linux/lib/postgresql-operations.js")));
-      write("installed/node_modules/path-binding-fixture/index.js", "module.exports={sourceFiles:'/var/lib/grabenplaner',backupDirectory:'/var/backups/grabenplaner-postgresql'};");
+      const eventsFile = path.join(temporary, "events");
+      write("installed/node_modules/pg/index.js", "throw new Error('UNEXPECTED_INSTALLED_DRIVER_LOAD');");
       write("candidate/lib/persistence/postgresql/operations/runtime.js", `
 exports.loadConfiguration = file => {
   require('node:assert/strict').equal(file, '/etc/grabenplaner/postgresql-operations.json');
-  return require('path-binding-fixture');
+  return {sourceFiles:'/var/lib/grabenplaner',backupDirectory:'/var/backups/grabenplaner-postgresql'};
 };
 exports.recoveryFilesPreflight = () => {
-  require('node:fs').appendFileSync(process.env.TEST_EVENTS, 'recovery-files\\n');
+  require('node:fs').appendFileSync(${JSON.stringify(eventsFile)}, 'recovery-files\\n');
   return {verified:true};
 };
 `);
@@ -60,16 +61,16 @@ exports.recoveryFilesPreflight = () => {
       write("run.sh", [
         "set -Eeuo pipefail", "IFS=$'\\n\\t'",
         "node=" + quote(process.execPath), 'app_dir="$PWD/installed"', 'extract_root="$PWD/candidate"',
+        updater.match(/^root_node\(\) \{[^\n]+\}/m)[0],
         "data_dir=" + quote(scenario === "wrong-data-directory" ? "/wrong-data" : "/var/lib/grabenplaner"),
         "backup_dir=" + quote(scenario === "previous-wrong-backup-directory" ? "/var/backups/grabenplaner" : "/var/backups/grabenplaner-postgresql"),
         "gp_die() { printf '%s\\n' \"$*\" >&2; exit 42; }",
         gate,
-        "printf 'continue\\n' >> \"$TEST_EVENTS\"",
+        "printf 'continue\\n' >> " + quote(eventsFile),
       ].join("\n"));
-      const eventsFile = path.join(temporary, "events");
       const result = spawnSync("/bin/bash", ["--noprofile", "--norc", "run.sh"], {
         cwd: temporary, encoding: "utf8", timeout: 15000,
-        env: { ...process.env, NODE_PATH: "", TEST_EVENTS: eventsFile },
+        env: { ...process.env, NODE_PATH: path.join(temporary, "installed/node_modules") },
       });
       const events = fs.existsSync(eventsFile) ? fs.readFileSync(eventsFile, "utf8") : "";
       if (scenario === "correct") {

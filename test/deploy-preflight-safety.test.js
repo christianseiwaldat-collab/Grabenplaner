@@ -179,7 +179,7 @@ test("PostgreSQL recovery paths fail before dependencies, ClamAV and backup", ()
   assert.ok(backupIndex > preflightIndex);
 });
 
-test("candidate recovery preflight resolves installed dependencies before candidate installation", { skip: !fs.existsSync(bash) }, (t) => {
+test("candidate recovery preflight uses only local path code before dependency installation", { skip: !fs.existsSync(bash) }, (t) => {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-preflight-node-path-"));
   t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
   const write = (relative, source) => {
@@ -187,30 +187,39 @@ test("candidate recovery preflight resolves installed dependencies before candid
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, source);
   };
-  write("installed/node_modules/pg/index.js", 'module.exports={source:"verified-installed"};');
-  write("candidate/lib/runtime.js", 'module.exports=require("pg");');
+  const resultFile = path.join(temporary, "result.txt");
+  write("installed/node_modules/pg/index.js", 'throw new Error("UNEXPECTED_INSTALLED_DRIVER_LOAD");');
+  write("candidate/lib/runtime.js", 'module.exports={source:"local-path-code"};');
   write("candidate/server-tools/linux/lib/postgresql-operations.js", `
 const fs=require("node:fs");
 const assert=require("node:assert/strict");
-assert.equal(require("../../../lib/runtime").source,"verified-installed");
+assert.equal(require("../../../lib/runtime").source,"local-path-code");
+assert.equal(process.env.NODE_PATH,undefined);
+assert.ok(process.execArgv.includes('--no-global-search-paths'));
 assert.equal(process.argv[2],"recovery-files-preflight");
 assert.equal(process.argv[3],"/etc/grabenplaner/postgresql-operations.json");
-fs.writeFileSync(process.env.PREFLIGHT_RESULT,"verified");
+fs.writeFileSync(${JSON.stringify(resultFile)},"verified");
 `);
   const invocation = updater.split(/\r?\n/).find(line => line.includes('"$extract_root/server-tools/linux/lib/postgresql-operations.js" recovery-files-preflight'));
   assert.ok(invocation);
   const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+  let rootNode = updater.match(/^root_node\(\) \{[^\r\n]+\}/m)[0];
+  // Git Bash has a second native-process argument conversion in env.exe.
+  // Preserve the literal Linux config argument through that test-only layer;
+  // Linux executes the exact unmodified production root_node function.
+  if (process.platform === "win32") rootNode = rootNode.replace(" NODE_ENV=production ",
+    " NODE_ENV=production MSYS2_ARG_CONV_EXCL=/etc/grabenplaner/postgresql-operations.json ");
   write("run.sh", `set -Eeuo pipefail
 app_dir="$PWD/installed"
 extract_root="$PWD/candidate"
 node=${quote(process.execPath.replaceAll("\\", "/"))}
+${rootNode}
 ${invocation}
   /etc/grabenplaner/postgresql-operations.json >/dev/null
 `);
-  const resultFile = path.join(temporary, "result.txt");
   const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], {
     cwd: temporary, encoding: "utf8", windowsHide: true, timeout: 10000,
-    env: { ...process.env, NODE_PATH: "", PREFLIGHT_RESULT: resultFile, MSYS2_ARG_CONV_EXCL: "/etc/grabenplaner/postgresql-operations.json" },
+    env: { ...process.env, NODE_PATH: path.join(temporary, "installed/node_modules"), MSYS2_ARG_CONV_EXCL: "/etc/grabenplaner/postgresql-operations.json" },
   });
   assert.equal(result.status, 0, result.stderr || result.error?.message);
   assert.equal(fs.readFileSync(resultFile, "utf8"), "verified");
@@ -230,7 +239,7 @@ postgresql_backup_repair=0
 node=node
 app_dir=/installed
 extract_root=/candidate
-node() { :; }
+root_node() { :; }
 gp_die() { exit 1; }
 ${updater.slice(start, end)}
 printf '%s\\n' "$postgresql_backup_repair"

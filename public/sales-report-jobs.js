@@ -32,6 +32,7 @@ window.createSalesReportJobUi = function ({ api, rawApi, visible, accessKey, can
   }
   const selectors = new Map();
   const errors = { IMPORT_HISTORY_DATE_RANGE: 'Bitte gültige Zeiträume mit höchstens 366 Tagen und ohne zukünftige Tage wählen.',
+    IMPORT_REPORT_METADATA_LIMIT: 'Die Auswahl enthält zu viele Stammdatenbezeichnungen. Bitte die technische Betreuung verständigen; die importierten Verkaufsdaten bleiben erhalten.',
     IMPORT_REPORT_SELECTION: 'Bitte Kennzahlen, Filialen und Aufschlüsselung prüfen. Höchstens je 10 WGR, Sortimentsgruppen und Hersteller auswählen.', IMPORT_REPORT_GROUP_LIMIT: 'Zu viele Gruppen. Bitte nach WGR, Sortiment, Hersteller, Filiale oder MA eingrenzen. Grafiken unterstützen höchstens 50 Gruppen.',
     IMPORT_REPORT_TEMPLATE_LIMIT: 'Höchstens 50 persönliche Vorlagen. Bitte eine bestehende Vorlage bearbeiten oder entfernen.',
     IMPORT_REVISION_CONFLICT: 'Diese Vorlage wurde inzwischen geändert. Bitte erneut laden, bevor du sie überschreibst.',

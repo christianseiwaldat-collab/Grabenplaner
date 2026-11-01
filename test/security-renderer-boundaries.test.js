@@ -83,13 +83,13 @@ test('real readiness renderer emits only HTTP(S) standard links', () => {
 
 test('real portal renderers constrain employee and workspace launch colors', () => {
   const portal = fs.readFileSync(path.join(__dirname, '../public/portal.js'), 'utf8');
-  const target = () => ({ innerHTML: '', classList: { toggle() {} } });
+  const target = () => ({ innerHTML: '', classList: { toggle() {} }, insertAdjacentHTML(position, html) { assert.equal(position, 'beforeend'); this.innerHTML += html; } });
   for (const color of ['#ffffff;position:fixed', '#ffffff" onclick="unsafe', null, '#Ab12ef']) {
     const expected = color === '#Ab12ef' ? color : '#7b8983';
     const el = { leadershipPresenceSummary: target(), leadershipPresenceList: target(), mobileHomeTiles: target() };
     const ctx = { el, portalState: { activeTab: 'home' },
       leadershipPresence: () => ({ employees: [{ color, entries: [], nickname: 'Synthetic' }] }),
-      timeStateLabels: {}, durationText: () => '0 h', isMobileUi: () => true,
+      timeStateLabels: {}, durationText: () => '0 h', isMobileUi: () => true, isOrganizationAccount: () => false,
       mobileHomeTilesForCurrentAccount: () => [], privatePortalWorkspaces: { launches: [
         { id: 'synthetic', launch: { color, label: 'Synthetic' } },
       ] },

@@ -1,4 +1,6 @@
 "use strict";
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test"), assert = require("node:assert/strict"), crypto = require("node:crypto");
 const fs = require("node:fs"), path = require("node:path"), os = require("node:os");
@@ -30,7 +32,7 @@ test.before(async () => {
   db.prepare("INSERT INTO shifts(employee_number,location_id,shift_date,start_time,end_time,duty_code) VALUES(?,?,?,'09:00','13:00','general')").run(STAFF, LOCATION, WEEK);
   await new Promise(resolve => { server = app.listen(0, "127.0.0.1", resolve); }); origin = `http://127.0.0.1:${server.address().port}`;
 });
-test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); db.close(); releaseInstanceLockForTests(); assert.equal(path.dirname(root), path.resolve(os.tmpdir())); assert(path.basename(root).startsWith("gp-optimizer-")); fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }); });
+test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); await db.close(); releaseInstanceLockForTests(); assert.equal(path.dirname(root), path.resolve(os.tmpdir())); assert(path.basename(root).startsWith("gp-optimizer-")); fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }); });
 test("optimizer requires current planning rights, own scope and CSRF before computation", async () => {
   assert.equal((await api(endpoint, { method: "POST", body: options, actor: "anonymous" })).status, 401);
   assert.equal((await api(endpoint, { method: "POST", body: options, actor: STAFF })).status, 403);
@@ -85,12 +87,12 @@ test("a database failure rolls back every proposed change and audit, then the sa
   const next = response.data, scenario = next.scenarios.find(s => s.changes.length); assert(scenario, JSON.stringify(next));
   const before = db.prepare("SELECT * FROM shifts ORDER BY id").all(), audits = db.prepare("SELECT COUNT(*) AS n FROM audit_log").get().n;
   const body = { proposalId: next.id, scenarioId: scenario.id, confirmationToken: next.confirmationToken, confirmed: true };
-  db.exec("CREATE TRIGGER optimizer_synthetic_failure BEFORE INSERT ON shifts BEGIN SELECT RAISE(ABORT, 'SYNTHETIC rollback test'); END");
+  installFixtureTrigger(db, "CREATE TRIGGER test_optimizer_synthetic_failure BEFORE INSERT ON shifts BEGIN SELECT RAISE(ABORT, 'SYNTHETIC rollback test'); END");
   try {
     const failed = await api(applyEndpoint, { method: 'POST', body }); assert(failed.status >= 400);
     assert.deepEqual(db.prepare("SELECT * FROM shifts ORDER BY id").all(), before);
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM audit_log").get().n, audits);
-  } finally { db.exec("DROP TRIGGER optimizer_synthetic_failure"); }
+  } finally { dropFixtureTrigger(db, "test_optimizer_synthetic_failure"); }
   const retried = await api(applyEndpoint, { method: 'POST', body }); assert.equal(retried.status, 200, JSON.stringify(retried.data)); assert.equal(retried.data.applied, true);
 });
 

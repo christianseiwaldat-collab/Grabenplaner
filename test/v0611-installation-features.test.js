@@ -30,8 +30,8 @@ const {
   CROSS_LOCATION_SCHEDULE_OPERATIONAL_PERMISSION_IDS,
 } = require("../lib/cross-location-schedule-access");
 
-test.after(() => {
-  try { db.close(); } catch {}
+test.after(async () => {
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

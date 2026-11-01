@@ -35,7 +35,7 @@ Signatur-/Schlüsselbindung. Eine neue URL allein ist keine Freigabe.
 | --- | --- |
 | npm einschließlich Browser-Vendor- und nativer Pakete | Öffentliche npm-Registry `https://registry.npmjs.org/`; App-/pnpm-Vorgaben in `package.json`, konkrete Versionen und Integritätswerte in `pnpm-lock.yaml`, Overrides und lokale Patchpfade in `pnpm-workspace.yaml`. Der Serverinstaller verwendet die konfigurierte Registry; eine abweichende Hostkonfiguration muss vor Installation geprüft und dokumentiert werden. |
 | Sicherheitswerkzeuge und CI-Actions | Offizielle GitHub-Projekte `google/osv-scanner`, `gitleaks/gitleaks`, `anchore/syft`; Download-URL, Version, Größe und SHA256 in `scripts/security/tools.json`. Actions sind an volle Commit-SHAs gebunden. Semgrep-Regeln stammen vom dort gebundenen Commit von `semgrep/semgrep-rules`. Dies behauptet keine zusätzliche Artefaktsignatur. |
-| Python-Werkzeuge und optionaler Optimierungsdienst | Semgrep und seine Transitiven aus PyPI mit der hashgebundenen `scripts/security/requirements.txt`; CI verlangt Binärpakete und `--require-hashes`. Für den optionalen Optimierungsdienst bindet `services/planning-optimizer/requirements.txt` die Anforderung, ersetzt aber kein separat geprüftes Installationsinventar. |
+| Python-Werkzeuge und optionaler Optimierungsdienst | Der unveränderte Semgrep-Wrapper und seine Transitiven stammen aus PyPI mit der hashgebundenen `scripts/security/requirements.txt`; CI verlangt Binärpakete und `--require-hashes`. Der native SAST-Kern wird wegen nachgewiesener interner Analyseabbrüche aus dem exakten offiziellen Upstreamcommit mit einem einzigen gebundenen Zeitbudget-Patch gebaut und vor dem vollständigen Scan im selben privaten Job qualifiziert; Herkunft, Umfang und Grenzen stehen in `docs/security-sast-source-core.md`. Ein fehlgeschlagener Bau oder unvollständiger Scan hat keinen Engine-Fallback. Für den optionalen Optimierungsdienst bindet `services/planning-optimizer/requirements.txt` die Anforderung, ersetzt aber kein separat geprüftes Installationsinventar. |
 | Betriebssystem und vorinstallierte Betriebswerkzeuge | Signaturgeprüfte offizielle Ubuntu-Paketquellen für die unterstützte LTS-Version; zusätzliche Herstellerquellen nur nach dokumentierter Prüfung ihrer Herkunft und Schlüssel. Node.js darf alternativ aus dem offiziellen Node.js-Releasekanal mit geprüftem Release-/Hashnachweis stammen. Der App-Installer setzt vorhandene Werkzeuge voraus und richtet diese Quellen nicht ein. Tatsächlich verwendete Quellen, Schlüssel und Supportlaufzeiten sind daher am Zielhost separat nachzuweisen. |
 | Mitgelieferte Schriften | Die in `public/fonts/price-labels/assets.json` und `SOURCE.md` dokumentierten Upstreamquellen, Lizenzen und Datei-Hashes; fehlende unveränderliche Upstreamversionen bleiben kenntlich. |
 
@@ -122,8 +122,10 @@ nicht allgemein abgeschaltet.
    Patches. Native Änderungen benötigen einen tatsächlichen Test auf der
    unterstützten Linuxarchitektur; Windowsbelege ersetzen diesen nicht.
 2. CI liefert getrennte Scanner-, Secret-, SAST-, Dependency- und Inventarbelege
-   sowie die betroffenen Funktions-, SQLite-/PostgreSQL-, Migrations- und
-   Wiederherstellungstests. Relevante Fehler und Skips bleiben sichtbar.
+   sowie die betroffenen Funktions-, PostgreSQL-, Migrations- und
+   Wiederherstellungstests. Historische SQLite-Sicherungen werden ausschließlich
+   über die getrennt erhaltene Offline-Toolchain geprüft. Relevante Fehler und
+   Skips bleiben sichtbar.
 3. Die Releaseverantwortung prüft Status und Aktualität tatsächlich aktivierter
    GitHub-Kontrollen getrennt vom Repositorycode. Checks müssen für den exakten
    Kandidaten bestanden sein; lokale grüne Ergebnisse ersetzen kein Merge-Gate.

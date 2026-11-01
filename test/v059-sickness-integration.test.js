@@ -1,5 +1,7 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
+const { previousRegularWorkdays } = require("../test-support/planning-workday-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -169,9 +171,9 @@ test.before(async () => {
   // Keep them deterministic after the configured weekly closing time as well.
   db.prepare("UPDATE settings SET value = '0' WHERE key = 'current_week_auto_lock'").run();
   const settings = JSON.stringify(daySettings());
-  db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('91', 'V59 Standort A', 2, ?, 1)")
+  prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('91', 'V59 Standort A', 2, ?, 1)")
     .run(settings);
-  db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('92', 'V59 Standort B', 2, ?, 1)")
+  prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('92', 'V59 Standort B', 2, ?, 1)")
     .run(settings);
   const departmentA = Number(db.prepare("INSERT INTO departments (location_id, name, min_staff, active, sort_order) VALUES ('91', 'Verkauf A', 0, 1, 1)").run().lastInsertRowid);
   const departmentB = Number(db.prepare("INSERT INTO departments (location_id, name, min_staff, active, sort_order) VALUES ('92', 'Verkauf B', 0, 1, 1)").run().lastInsertRowid);
@@ -239,7 +241,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  db.close();
+  await db.close();
   releaseInstanceLockForTests();
   globalThis.fetch = nativeFetch;
   fs.rmSync(testRoot, { recursive: true, force: true });
@@ -962,7 +964,7 @@ test("v0.59: eine neue Krankmeldung nach einem begrenzten früheren Zeitraum ist
 test("v0.59: eine nachträgliche Krankmeldung macht eine bestehende Zeitprüfung veraltet", async () => {
   const employee = session("608", "employee");
   const { managerAuth, departmentA } = auth;
-  const date = offsetDate(mostRecentPlanningDate(), -1);
+  const [date] = previousRegularWorkdays(mostRecentPlanningDate(), 1);
   const day = daySettings()[["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
     [new Date(`${date}T12:00:00Z`).getUTCDay()]];
   db.prepare(`
@@ -1082,6 +1084,7 @@ test("AUM Block 3: direkter Anhang prüft die tatsächliche Datei gegen den gesc
 
 test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstunden bleiben nachvollziehbar", async () => {
   const { hrAuth, managerAuth, departmentA } = auth;
+  const previousToday = process.env.GRABENPLANER_TEST_TODAY;
   const allowanceEmployee = session("612", "employee");
   const durationEmployee = session("613", "employee");
   db.prepare(`
@@ -1110,6 +1113,10 @@ test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstun
   });
 
   try {
+    // Three separate credited workdays must be in the same allowance year
+    // and inside the unchanged five-calendar-day reporting window. The real
+    // date cannot guarantee that around holidays or New Year.
+    process.env.GRABENPLANER_TEST_TODAY = "2026-10-23";
     const invalid = await updateSettings({ enabled: true, maxCasesPerYear: 2, maxCalendarDaysPerCase: 4 });
     assert.equal(invalid.response.status, 400, JSON.stringify(invalid.payload));
 
@@ -1117,12 +1124,7 @@ test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstun
     assert.equal(configured.response.status, 200, JSON.stringify(configured.payload));
 
     const today = mostRecentPlanningDate();
-    const dates = [];
-    for (let offset = -1; dates.length < 3 && offset >= -7; offset -= 1) {
-      const candidate = offsetDate(today, offset);
-      const weekday = new Date(`${candidate}T12:00:00Z`).getUTCDay();
-      if (weekday >= 1 && weekday <= 5) dates.push(candidate);
-    }
+    const dates = previousRegularWorkdays(today, 3);
     assert.equal(dates.length, 3);
     const createdCases = [];
     for (const date of dates) {
@@ -1201,6 +1203,8 @@ test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstun
     assert.equal(durationView.payload.aumAllowance.usedCases, 0);
     assert.equal(durationView.payload.aumAllowance.remainingCases, 2);
   } finally {
+    if (previousToday === undefined) delete process.env.GRABENPLANER_TEST_TODAY;
+    else process.env.GRABENPLANER_TEST_TODAY = previousToday;
     await updateSettings(currentPolicy.aumAllowance || { enabled: false, maxCasesPerYear: 3, maxCalendarDaysPerCase: 1 });
   }
 });

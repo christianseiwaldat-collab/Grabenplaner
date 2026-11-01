@@ -10,13 +10,16 @@ const { createAmuStorage, syncEncryptedFilesBackup } = require("../lib/amu-stora
 const { verifyCommittedBackup, writeBackupCommitMarker } = require("../lib/backup-commit");
 const { sha256File } = require("../lib/file-integrity");
 const { prepareLocalBackupArchive, archivePublishedBackup } = require("../lib/backup-archive-workflow");
-const { withBackupWorkspace, MAX_WAIT_MS: BACKUP_WORKSPACE_MAX_WAIT_MS } = require("../lib/backup-workspace");
+const { withBackupWorkspace, MAX_WAIT_MS: BACKUP_WORKSPACE_MAX_WAIT_MS } = require("../test-support/legacy-baseline").legacyRequire("lib/backup-workspace.js");
 
 const serverSource = fs.readFileSync(path.join(__dirname, "../server.js"), "utf8");
-function serverFunction(name, next, dependencies) {
-  const index = serverSource.indexOf(`function ${name}(`);
-  const start = serverSource.slice(index - 6, index) === "async " ? index - 6 : index;
-  const source = serverSource.slice(start, serverSource.indexOf(next, index));
+function serverFunction(name, next, dependencies, historical = false) {
+  const sourceText = historical ? fs.readFileSync(require('../test-support/legacy-baseline').legacyPath('server.js'), 'utf8') : serverSource;
+  const index = sourceText.indexOf(`function ${name}(`);
+  const start = sourceText.slice(index - 6, index) === "async " ? index - 6 : index;
+  const end = sourceText.indexOf(next, index);
+  assert.ok(index >= 0 && end > index, `Missing exact server-function boundary: ${name}`);
+  const source = sourceText.slice(start, end);
   return vm.runInNewContext(`${source}; ${name}`, dependencies);
 }
 
@@ -39,7 +42,7 @@ test("archive workflow preserves twenty daily points and requires a published ve
   assert.equal(result.retained, 20);
 });
 
-test("app forbids synchronous archive work and preserves a pre-listen raw safety pair without pruning", t => {
+test("immutable historical SQLite app forbids synchronous archive work and preserves a pre-listen raw safety pair without pruning", t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-app-archive-workflow-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const databasePath = path.join(root, "source.db"), amuStorageDirectory = path.join(root, "protected");
@@ -56,7 +59,7 @@ test("app forbids synchronous archive work and preserves a pre-listen raw safety
     verifyProtectedBackupPair() {}, verifyBackupPairPaths() {}, verifyArchivedBackupPair() {},
     writeBackupCommitMarker, verifyCommittedBackup, safeRemoveFile: file => fs.rmSync(file, { force: true }),
     archivePublishedBackup() { throw new Error("injected archive failure"); }, pruneDatabaseBackups() { pruned = true; } };
-  const create = serverFunction("createDatabaseBackupToDirectory", "function createInternalDatabaseBackup", dependencies);
+  const create = serverFunction("createDatabaseBackupToDirectory", "function createInternalDatabaseBackup", dependencies, true);
   assert.throws(() => create(backupDirectory), /BACKGROUND_REQUIRED/);
   assert.equal(fs.existsSync(backupDirectory), false);
   const result = create(backupDirectory, "pre-migration", "app", { beforeListen: true });
@@ -70,7 +73,7 @@ test("app forbids synchronous archive work and preserves a pre-listen raw safety
   const blockedDirectory = path.join(root, "blocked");
   const blocked = serverFunction("createDatabaseBackupToDirectory", "function createInternalDatabaseBackup", {
     ...dependencies, prepareLocalBackupArchive() { throw new Error("invalid archive configuration"); },
-  });
+  }, true);
   assert.throws(() => blocked(blockedDirectory), /invalid archive configuration/);
   assert.equal(fs.existsSync(blockedDirectory), false);
 });
@@ -106,7 +109,7 @@ test("backup health reads cached authenticated archive points without inventing 
   assert.equal(raw.archived, false);
 });
 
-test("app and external backup share one deadline and publish success only after both awaited points", async () => {
+test("immutable historical SQLite app and external backup share one deadline and publish success only after both awaited points", async () => {
   const calls = [], releases = [];
   const dependencies = { postgresqlActive: false, tableExists: () => true, getSettings: () => ({}), serverModeActive: false,
     appBackupDirectory: "app", backupDirectoryFromSettings: () => "external", lastBackup: null,
@@ -114,7 +117,7 @@ test("app and external backup share one deadline and publish success only after 
       calls.push({ directory, reason, kind, deadlineMs: options.deadlineMs });
       return new Promise(resolve => releases.push(() => resolve({ path: directory })));
     } };
-  const create = serverFunction("createDatabaseBackup", "function createSchema", dependencies);
+  const create = serverFunction("createDatabaseBackup", "function createSchema", dependencies, true);
   const resultPromise = create("fixture", { deadlineMs: 1234567890 });
   assert.equal(calls.length, 1);
   assert.equal(dependencies.lastBackup, null);
@@ -130,7 +133,7 @@ test("app and external backup share one deadline and publish success only after 
   assert.equal(dependencies.lastBackup, result);
 });
 
-test("server forwards existing recovery keys and the shared deadline only to the protected child environment", async () => {
+test("immutable historical SQLite server forwards existing recovery keys and the shared deadline only to the protected child environment", async () => {
   let received;
   const dependencies = { localBackupArchiveEnabled: () => true, shutdownStarted: false,
     databasePath: "database", fs: { existsSync: () => true }, amuStorage: {}, amuStorageDirectory: "documents",
@@ -140,7 +143,7 @@ test("server forwards existing recovery keys and the shared deadline only to the
     require: name => { assert.equal(name, "./lib/background-backup-process"); return { createBackgroundBackup: async input => {
       received = input; return { protectedDirectory: "paired-documents" };
     } }; } };
-  const create = serverFunction("createDatabaseBackupInBackground", "function createExternalDatabaseBackup", dependencies);
+  const create = serverFunction("createDatabaseBackupInBackground", "function createExternalDatabaseBackup", dependencies, true);
   const result = await create("backups", "fixture", "app", { deadlineMs: 1234567890 });
   assert.equal(received.deadlineMs, 1234567890);
   assert.equal(received.environment.GRABENPLANER_AMU_KEY, "existing-amu-key");
@@ -151,7 +154,7 @@ test("server forwards existing recovery keys and the shared deadline only to the
   await create("backups", "shutdown-signal", "app");
 });
 
-test("shutdown shares one deadline with drain and does not release the instance when child termination is unverified", async () => {
+test("immutable historical SQLite shutdown shares one deadline with drain and does not release the instance when child termination is unverified", async () => {
   for (const code of [null, "BACKGROUND_BACKUP_TREE_UNVERIFIED", "BACKGROUND_BACKUP_ARCHIVE_RECOVERY_REQUIRED"]) {
     const events = [], deadlines = [];
     let finishAssurance;
@@ -176,7 +179,7 @@ test("shutdown shares one deadline with drain and does not release the instance 
       }, persistenceProvider: { close: async () => events.push("provider-close") },
       sqliteMaintenanceOperations: { checkpointWal: () => events.push("checkpoint") }, db: { close: () => events.push("db-close") },
       releaseInstanceLock: () => events.push("release"), completeProcessShutdown: value => events.push(`exit-${value}`) };
-    const stop = serverFunction("shutdown", "if (require.main === module)", dependencies);
+    const stop = serverFunction("shutdown", "if (require.main === module)", dependencies, true);
     stop();
     await new Promise(setImmediate);
     assert.deepEqual(events, ["assurance-close"], "shutdown must await the assurance worker before backup, persistence close or instance release");
@@ -196,7 +199,7 @@ test("shutdown shares one deadline with drain and does not release the instance 
 
 test("PostgreSQL never publishes a successful SQLite lifecycle backup", async () => {
   const dependencies = { postgresqlActive: true, lastBackup: null };
-  const create = serverFunction("createDatabaseBackup", "function createSchema", dependencies);
+  const create = serverFunction("createDatabaseBackup", "const startupSchemaMigrationState", dependencies);
   await assert.rejects(create("shutdown-signal"), { code: "PG_PAIRED_BACKUP_REQUIRED" });
   assert.equal(dependencies.lastBackup, null);
 });

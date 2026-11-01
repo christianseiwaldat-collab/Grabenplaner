@@ -1,0 +1,641 @@
+opam-version: "2.0"
+added: [
+  "doc/opentelemetry" {"D"}
+  "doc/opentelemetry/CHANGES.md" {"F:S5854T1793251647.12"}
+  "doc/opentelemetry/README.md" {"F:S5105T1793251647.12"}
+  "doc/opentelemetry/odoc-config.sexp" {"F:S15T1793251647.12"}
+  "lib/opentelemetry" {"D"}
+  "lib/opentelemetry/META" {"F:S3915T1793251646.9"}
+  "lib/opentelemetry/ambient-context" {"D"}
+  "lib/opentelemetry/ambient-context/opentelemetry_ambient_context.a"
+    {"F:S3652T1793251646.9"}
+  "lib/opentelemetry/ambient-context/opentelemetry_ambient_context.cma"
+    {"F:S2503T1793251646.9"}
+  "lib/opentelemetry/ambient-context/opentelemetry_ambient_context.cmi"
+    {"F:S1289T1793251646.9"}
+  "lib/opentelemetry/ambient-context/opentelemetry_ambient_context.cmt"
+    {"F:S4164T1793251646.91"}
+  "lib/opentelemetry/ambient-context/opentelemetry_ambient_context.cmx"
+    {"F:S1395T1793251646.91"}
+  "lib/opentelemetry/ambient-context/opentelemetry_ambient_context.cmxa"
+    {"F:S738T1793251646.91"}
+  "lib/opentelemetry/ambient-context/opentelemetry_ambient_context.cmxs"
+    {"F:S19008T1793251647.11"}
+  "lib/opentelemetry/ambient-context/opentelemetry_ambient_context.ml"
+    {"F:S78T1793251646.91"}
+  "lib/opentelemetry/ambient_span.ml" {"F:S388T1793251646.91"}
+  "lib/opentelemetry/ambient_span.mli" {"F:S274T1793251646.91"}
+  "lib/opentelemetry/atomic" {"D"}
+  "lib/opentelemetry/atomic/atomic.ml" {"F:S21T1793251646.91"}
+  "lib/opentelemetry/atomic/atomic.mli" {"F:S2348T1793251646.91"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic.a" {"F:S5376T1793251646.91"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic.cma"
+    {"F:S3297T1793251646.91"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic.cmi"
+    {"F:S243T1793251646.91"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic.cmt"
+    {"F:S1653T1793251646.91"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic.cmx"
+    {"F:S294T1793251646.91"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic.cmxa"
+    {"F:S481T1793251646.91"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic.cmxs"
+    {"F:S19032T1793251647.11"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic.ml" {"F:S116T1793251646.91"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic__Atomic.cmi"
+    {"F:S796T1793251646.91"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic__Atomic.cmt"
+    {"F:S2545T1793251646.91"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic__Atomic.cmti"
+    {"F:S5115T1793251646.91"}
+  "lib/opentelemetry/atomic/opentelemetry_atomic__Atomic.cmx"
+    {"F:S918T1793251646.91"}
+  "lib/opentelemetry/batch.ml" {"F:S3558T1793251646.91"}
+  "lib/opentelemetry/batch.mli" {"F:S2224T1793251646.91"}
+  "lib/opentelemetry/conventions.ml" {"F:S2957T1793251646.91"}
+  "lib/opentelemetry/core" {"D"}
+  "lib/opentelemetry/core/any_signal.ml" {"F:S270T1793251646.91"}
+  "lib/opentelemetry/core/any_signal_l.ml" {"F:S804T1793251646.91"}
+  "lib/opentelemetry/core/clock.ml" {"F:S1044T1793251646.91"}
+  "lib/opentelemetry/core/common_.ml" {"F:S105T1793251646.91"}
+  "lib/opentelemetry/core/context.ml" {"F:S464T1793251646.91"}
+  "lib/opentelemetry/core/event.ml" {"F:S247T1793251646.91"}
+  "lib/opentelemetry/core/event.mli" {"F:S248T1793251646.91"}
+  "lib/opentelemetry/core/exporter.ml" {"F:S1317T1793251646.91"}
+  "lib/opentelemetry/core/instrument.ml" {"F:S5196T1793251646.91"}
+  "lib/opentelemetry/core/instrument.mli" {"F:S2596T1793251646.91"}
+  "lib/opentelemetry/core/key_value.ml" {"F:S236T1793251646.91"}
+  "lib/opentelemetry/core/log_record.ml" {"F:S2575T1793251646.91"}
+  "lib/opentelemetry/core/metrics.ml" {"F:S4146T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core.a" {"F:S310142T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core.cma" {"F:S135417T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core.cmi" {"F:S1569T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core.cmt" {"F:S6604T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core.cmx" {"F:S969T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core.cmxa" {"F:S32629T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core.cmxs"
+    {"F:S330584T1793251647.11"}
+  "lib/opentelemetry/core/opentelemetry_core.ml" {"F:S2122T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core__Any_signal.cmi"
+    {"F:S2735T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core__Any_signal.cmt"
+    {"F:S7809T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core__Any_signal.cmx"
+    {"F:S4001T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core__Any_signal_l.cmi"
+    {"F:S2973T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core__Any_signal_l.cmt"
+    {"F:S13453T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core__Any_signal_l.cmx"
+    {"F:S9835T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core__Clock.cmi"
+    {"F:S1399T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core__Clock.cmt"
+    {"F:S9652T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core__Clock.cmx"
+    {"F:S5179T1793251646.91"}
+  "lib/opentelemetry/core/opentelemetry_core__Common_.cmi"
+    {"F:S749T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Common_.cmt"
+    {"F:S3087T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Common_.cmx"
+    {"F:S805T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Context.cmi"
+    {"F:S771T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Context.cmt"
+    {"F:S4867T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Context.cmx"
+    {"F:S1108T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Event.cmi"
+    {"F:S1620T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Event.cmt"
+    {"F:S4905T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Event.cmti"
+    {"F:S4790T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Event.cmx"
+    {"F:S5391T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Exporter.cmi"
+    {"F:S3129T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Exporter.cmt"
+    {"F:S10293T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Exporter.cmx"
+    {"F:S6632T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Instrument.cmi"
+    {"F:S3292T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Instrument.cmt"
+    {"F:S36831T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Instrument.cmti"
+    {"F:S12699T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Instrument.cmx"
+    {"F:S37647T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Key_value.cmi"
+    {"F:S1398T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Key_value.cmt"
+    {"F:S5942T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Key_value.cmx"
+    {"F:S3239T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Log_record.cmi"
+    {"F:S3305T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Log_record.cmt"
+    {"F:S18217T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Log_record.cmx"
+    {"F:S9865T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Metrics.cmi"
+    {"F:S3016T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Metrics.cmt"
+    {"F:S25450T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Metrics.cmx"
+    {"F:S19285T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Rand_bytes.cmi"
+    {"F:S681T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Rand_bytes.cmt"
+    {"F:S14973T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Rand_bytes.cmti"
+    {"F:S3613T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Rand_bytes.cmx"
+    {"F:S12699T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Span.cmi"
+    {"F:S3782T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Span.cmt"
+    {"F:S29486T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Span.cmti"
+    {"F:S15468T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Span.cmx"
+    {"F:S41798T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_ctx.cmi"
+    {"F:S1365T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_ctx.cmt"
+    {"F:S18824T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_ctx.cmti"
+    {"F:S5828T1793251646.92"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_ctx.cmx"
+    {"F:S22029T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_id.cmi"
+    {"F:S1077T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_id.cmt"
+    {"F:S9361T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_id.cmti"
+    {"F:S4407T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_id.cmx"
+    {"F:S8629T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_kind.cmi"
+    {"F:S1374T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_kind.cmt"
+    {"F:S4323T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_kind.cmx"
+    {"F:S1226T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_link.cmi"
+    {"F:S1874T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_link.cmt"
+    {"F:S6978T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_link.cmti"
+    {"F:S5840T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_link.cmx"
+    {"F:S6077T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_status.cmi"
+    {"F:S1541T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_status.cmt"
+    {"F:S4139T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_status.cmti"
+    {"F:S4964T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Span_status.cmx"
+    {"F:S3128T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Timestamp_ns.cmi"
+    {"F:S876T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Timestamp_ns.cmt"
+    {"F:S3060T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Timestamp_ns.cmx"
+    {"F:S1036T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Trace_context.cmi"
+    {"F:S1177T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Trace_context.cmt"
+    {"F:S6979T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Trace_context.cmx"
+    {"F:S3720T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Trace_id.cmi"
+    {"F:S3538T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Trace_id.cmt"
+    {"F:S15568T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Trace_id.cmti"
+    {"F:S10267T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Trace_id.cmx"
+    {"F:S47961T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Value.cmi"
+    {"F:S1386T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Value.cmt"
+    {"F:S7235T1793251646.93"}
+  "lib/opentelemetry/core/opentelemetry_core__Value.cmx"
+    {"F:S3957T1793251646.93"}
+  "lib/opentelemetry/core/rand_bytes.ml" {"F:S2032T1793251646.93"}
+  "lib/opentelemetry/core/rand_bytes.mli" {"F:S735T1793251646.93"}
+  "lib/opentelemetry/core/span.ml" {"F:S4465T1793251646.93"}
+  "lib/opentelemetry/core/span.mli" {"F:S3502T1793251646.93"}
+  "lib/opentelemetry/core/span_ctx.ml" {"F:S2762T1793251646.93"}
+  "lib/opentelemetry/core/span_ctx.mli" {"F:S990T1793251646.93"}
+  "lib/opentelemetry/core/span_id.ml" {"F:S1099T1793251647.02"}
+  "lib/opentelemetry/core/span_id.mli" {"F:S335T1793251647.02"}
+  "lib/opentelemetry/core/span_kind.ml" {"F:S229T1793251647.02"}
+  "lib/opentelemetry/core/span_link.ml" {"F:S675T1793251647.02"}
+  "lib/opentelemetry/core/span_link.mli" {"F:S665T1793251647.02"}
+  "lib/opentelemetry/core/span_status.ml" {"F:S341T1793251647.02"}
+  "lib/opentelemetry/core/span_status.mli" {"F:S316T1793251647.02"}
+  "lib/opentelemetry/core/timestamp_ns.ml" {"F:S40T1793251647.02"}
+  "lib/opentelemetry/core/trace_context.ml" {"F:S1031T1793251647.02"}
+  "lib/opentelemetry/core/trace_id.ml" {"F:S1312T1793251647.02"}
+  "lib/opentelemetry/core/trace_id.mli" {"F:S594T1793251647.02"}
+  "lib/opentelemetry/core/value.ml" {"F:S689T1793251647.02"}
+  "lib/opentelemetry/domain" {"D"}
+  "lib/opentelemetry/domain/opentelemetry_domain.a" {"F:S4932T1793251647.02"}
+  "lib/opentelemetry/domain/opentelemetry_domain.cma"
+    {"F:S1748T1793251647.02"}
+  "lib/opentelemetry/domain/opentelemetry_domain.cmi"
+    {"F:S360T1793251647.02"}
+  "lib/opentelemetry/domain/opentelemetry_domain.cmt"
+    {"F:S2068T1793251647.02"}
+  "lib/opentelemetry/domain/opentelemetry_domain.cmti"
+    {"F:S1996T1793251647.02"}
+  "lib/opentelemetry/domain/opentelemetry_domain.cmx"
+    {"F:S1058T1793251647.02"}
+  "lib/opentelemetry/domain/opentelemetry_domain.cmxa"
+    {"F:S291T1793251647.02"}
+  "lib/opentelemetry/domain/opentelemetry_domain.cmxs"
+    {"F:S18744T1793251647.11"}
+  "lib/opentelemetry/domain/opentelemetry_domain.ml" {"F:S92T1793251647.02"}
+  "lib/opentelemetry/domain/opentelemetry_domain.mli" {"F:S92T1793251647.02"}
+  "lib/opentelemetry/dune-package" {"F:S32004T1793251647.02"}
+  "lib/opentelemetry/dynamic_enricher.ml" {"F:S805T1793251647.02"}
+  "lib/opentelemetry/emitter" {"D"}
+  "lib/opentelemetry/emitter/emitter.ml" {"F:S3181T1793251647.02"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter.a"
+    {"F:S35152T1793251647.02"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter.cma"
+    {"F:S14423T1793251647.02"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter.cmi"
+    {"F:S324T1793251647.02"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter.cmt"
+    {"F:S1945T1793251647.03"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter.cmx"
+    {"F:S335T1793251647.03"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter.cmxa"
+    {"F:S2828T1793251647.03"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter.cmxs"
+    {"F:S48368T1793251647.11"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter.ml"
+    {"F:S218T1793251647.03"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter__Emitter.cmi"
+    {"F:S2352T1793251647.03"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter__Emitter.cmt"
+    {"F:S18630T1793251647.03"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter__Emitter.cmx"
+    {"F:S18407T1793251647.03"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter__To_list.cmi"
+    {"F:S1474T1793251647.03"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter__To_list.cmt"
+    {"F:S7774T1793251647.03"}
+  "lib/opentelemetry/emitter/opentelemetry_emitter__To_list.cmx"
+    {"F:S5746T1793251647.03"}
+  "lib/opentelemetry/emitter/to_list.ml" {"F:S540T1793251647.03"}
+  "lib/opentelemetry/emitter_batch.ml" {"F:S2729T1793251647.03"}
+  "lib/opentelemetry/emitter_batch.mli" {"F:S772T1793251647.03"}
+  "lib/opentelemetry/gc_metrics.ml" {"F:S1736T1793251647.03"}
+  "lib/opentelemetry/gc_metrics.mli" {"F:S476T1793251647.03"}
+  "lib/opentelemetry/globals.ml" {"F:S4385T1793251647.03"}
+  "lib/opentelemetry/interval_limiter.ml" {"F:S623T1793251647.03"}
+  "lib/opentelemetry/interval_limiter.mli" {"F:S522T1793251647.03"}
+  "lib/opentelemetry/log_provider.ml" {"F:S2868T1793251647.03"}
+  "lib/opentelemetry/logger.ml" {"F:S742T1793251647.03"}
+  "lib/opentelemetry/meter.ml" {"F:S1502T1793251647.03"}
+  "lib/opentelemetry/meter.mli" {"F:S1857T1793251647.03"}
+  "lib/opentelemetry/meter_provider.ml" {"F:S2971T1793251647.03"}
+  "lib/opentelemetry/opam" {"F:S1204T1793251647.03"}
+  "lib/opentelemetry/opentelemetry.a" {"F:S301000T1793251647.03"}
+  "lib/opentelemetry/opentelemetry.cma" {"F:S158830T1793251647.03"}
+  "lib/opentelemetry/opentelemetry.cmi" {"F:S10856T1793251647.03"}
+  "lib/opentelemetry/opentelemetry.cmt" {"F:S38008T1793251647.03"}
+  "lib/opentelemetry/opentelemetry.cmx" {"F:S11582T1793251647.03"}
+  "lib/opentelemetry/opentelemetry.cmxa" {"F:S50179T1793251647.03"}
+  "lib/opentelemetry/opentelemetry.cmxs" {"F:S326600T1793251647.11"}
+  "lib/opentelemetry/opentelemetry.ml" {"F:S3948T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__.cmi" {"F:S1455T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__.cmt" {"F:S6189T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__.cmx" {"F:S840T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__.ml" {"F:S1836T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Ambient_span.cmi"
+    {"F:S2170T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Ambient_span.cmt"
+    {"F:S5010T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Ambient_span.cmti"
+    {"F:S5679T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Ambient_span.cmx"
+    {"F:S5109T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Batch.cmi" {"F:S1344T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Batch.cmt" {"F:S20570T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Batch.cmti" {"F:S6618T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Batch.cmx" {"F:S17138T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Conventions.cmi"
+    {"F:S2152T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Conventions.cmt"
+    {"F:S11339T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Conventions.cmx"
+    {"F:S3666T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Dynamic_enricher.cmi"
+    {"F:S1613T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Dynamic_enricher.cmt"
+    {"F:S9748T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Dynamic_enricher.cmx"
+    {"F:S6821T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Emitter_batch.cmi"
+    {"F:S1770T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Emitter_batch.cmt"
+    {"F:S18446T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Emitter_batch.cmti"
+    {"F:S5835T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Emitter_batch.cmx"
+    {"F:S18067T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Gc_metrics.cmi" {"F:S3129T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Gc_metrics.cmt"
+    {"F:S14781T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Gc_metrics.cmti"
+    {"F:S7486T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Gc_metrics.cmx"
+    {"F:S16023T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Globals.cmi" {"F:S3529T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Globals.cmt" {"F:S28315T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Globals.cmx" {"F:S19131T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Interval_limiter.cmi"
+    {"F:S961T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Interval_limiter.cmt"
+    {"F:S5889T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Interval_limiter.cmti"
+    {"F:S3949T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Interval_limiter.cmx"
+    {"F:S4576T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Log_provider.cmi"
+    {"F:S3951T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Log_provider.cmt"
+    {"F:S22532T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Log_provider.cmx"
+    {"F:S21086T1793251647.03"}
+  "lib/opentelemetry/opentelemetry__Logger.cmi" {"F:S3148T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Logger.cmt" {"F:S11237T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Logger.cmx" {"F:S7002T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Meter.cmi" {"F:S3621T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Meter.cmt" {"F:S14323T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Meter.cmti" {"F:S10860T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Meter.cmx" {"F:S11930T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Meter_provider.cmi"
+    {"F:S4171T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Meter_provider.cmt"
+    {"F:S23278T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Meter_provider.cmx"
+    {"F:S23042T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Provider_config.cmi"
+    {"F:S1034T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Provider_config.cmt"
+    {"F:S3953T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Provider_config.cmti"
+    {"F:S4293T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Provider_config.cmx"
+    {"F:S2278T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Scope_attributes.cmi"
+    {"F:S1566T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Scope_attributes.cmt"
+    {"F:S7761T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Scope_attributes.cmx"
+    {"F:S4130T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Sdk.cmi" {"F:S4539T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Sdk.cmt" {"F:S28704T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Sdk.cmx" {"F:S30477T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Self_debug.cmi" {"F:S1148T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Self_debug.cmt" {"F:S7453T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Self_debug.cmti"
+    {"F:S5427T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Self_debug.cmx" {"F:S6058T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Trace_provider.cmi"
+    {"F:S4222T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Trace_provider.cmt"
+    {"F:S29827T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Trace_provider.cmx"
+    {"F:S29472T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Tracer.cmi" {"F:S3139T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Tracer.cmt" {"F:S10751T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Tracer.cmx" {"F:S6214T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Version.cmi" {"F:S668T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Version.cmt" {"F:S2005T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Version.cmti" {"F:S2739T1793251647.04"}
+  "lib/opentelemetry/opentelemetry__Version.cmx" {"F:S771T1793251647.04"}
+  "lib/opentelemetry/proto" {"D"}
+  "lib/opentelemetry/proto/common.ml" {"F:S24643T1793251647.04"}
+  "lib/opentelemetry/proto/common.mli" {"F:S9628T1793251647.04"}
+  "lib/opentelemetry/proto/logs.ml" {"F:S37450T1793251647.04"}
+  "lib/opentelemetry/proto/logs.mli" {"F:S11611T1793251647.04"}
+  "lib/opentelemetry/proto/logs_service.ml" {"F:S10666T1793251647.04"}
+  "lib/opentelemetry/proto/logs_service.mli" {"F:S6252T1793251647.04"}
+  "lib/opentelemetry/proto/metrics.ml" {"F:S123341T1793251647.04"}
+  "lib/opentelemetry/proto/metrics.mli" {"F:S44526T1793251647.04"}
+  "lib/opentelemetry/proto/metrics_service.ml" {"F:S11098T1793251647.04"}
+  "lib/opentelemetry/proto/metrics_service.mli" {"F:S6615T1793251647.04"}
+  "lib/opentelemetry/proto/opentelemetry_proto.a"
+    {"F:S1571062T1793251647.04"}
+  "lib/opentelemetry/proto/opentelemetry_proto.cma"
+    {"F:S555014T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto.cmi" {"F:S801T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto.cmt" {"F:S3669T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto.cmx" {"F:S561T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto.cmxa"
+    {"F:S11193T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto.cmxs"
+    {"F:S1581896T1793251647.12"}
+  "lib/opentelemetry/proto/opentelemetry_proto.ml" {"F:S900T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Common.cmi"
+    {"F:S4264T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Common.cmt"
+    {"F:S110798T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Common.cmti"
+    {"F:S24361T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Common.cmx"
+    {"F:S155535T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Logs.cmi"
+    {"F:S5367T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Logs.cmt"
+    {"F:S139066T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Logs.cmti"
+    {"F:S29328T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Logs.cmx"
+    {"F:S196381T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Logs_service.cmi"
+    {"F:S2563T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Logs_service.cmt"
+    {"F:S41213T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Logs_service.cmti"
+    {"F:S13270T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Logs_service.cmx"
+    {"F:S57370T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Metrics.cmi"
+    {"F:S14877T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Metrics.cmt"
+    {"F:S492581T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Metrics.cmti"
+    {"F:S92165T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Metrics.cmx"
+    {"F:S787065T1793251647.05"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Metrics_service.cmi"
+    {"F:S2575T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Metrics_service.cmt"
+    {"F:S41269T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Metrics_service.cmti"
+    {"F:S13280T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Metrics_service.cmx"
+    {"F:S58209T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Resource.cmi"
+    {"F:S1705T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Resource.cmt"
+    {"F:S26168T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Resource.cmti"
+    {"F:S8016T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Resource.cmx"
+    {"F:S36522T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Status.cmi"
+    {"F:S1610T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Status.cmt"
+    {"F:S25409T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Status.cmti"
+    {"F:S7644T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Status.cmx"
+    {"F:S33744T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Trace.cmi"
+    {"F:S7955T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Trace.cmt"
+    {"F:S231992T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Trace.cmti"
+    {"F:S47388T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Trace.cmx"
+    {"F:S345311T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Trace_service.cmi"
+    {"F:S2568T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Trace_service.cmt"
+    {"F:S41158T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Trace_service.cmti"
+    {"F:S13242T1793251647.06"}
+  "lib/opentelemetry/proto/opentelemetry_proto__Trace_service.cmx"
+    {"F:S57446T1793251647.06"}
+  "lib/opentelemetry/proto/resource.ml" {"F:S5384T1793251647.06"}
+  "lib/opentelemetry/proto/resource.mli" {"F:S2092T1793251647.06"}
+  "lib/opentelemetry/proto/status.ml" {"F:S4593T1793251647.06"}
+  "lib/opentelemetry/proto/status.mli" {"F:S1799T1793251647.06"}
+  "lib/opentelemetry/proto/trace.ml" {"F:S55257T1793251647.06"}
+  "lib/opentelemetry/proto/trace.mli" {"F:S18629T1793251647.06"}
+  "lib/opentelemetry/proto/trace_service.ml" {"F:S10668T1793251647.06"}
+  "lib/opentelemetry/proto/trace_service.mli" {"F:S6337T1793251647.06"}
+  "lib/opentelemetry/provider_config.ml" {"F:S230T1793251647.06"}
+  "lib/opentelemetry/provider_config.mli" {"F:S534T1793251647.06"}
+  "lib/opentelemetry/scope_attributes.ml" {"F:S1147T1793251647.06"}
+  "lib/opentelemetry/sdk.ml" {"F:S4482T1793251647.06"}
+  "lib/opentelemetry/self_debug.ml" {"F:S770T1793251647.06"}
+  "lib/opentelemetry/self_debug.mli" {"F:S1363T1793251647.06"}
+  "lib/opentelemetry/trace" {"D"}
+  "lib/opentelemetry/trace/common_.ml" {"F:S162T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace.a" {"F:S56884T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace.cma"
+    {"F:S30158T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace.cmi" {"F:S4187T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace.cmt"
+    {"F:S48993T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace.cmti"
+    {"F:S14857T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace.cmx"
+    {"F:S30172T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace.cmxa"
+    {"F:S6798T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace.cmxs"
+    {"F:S83024T1793251647.12"}
+  "lib/opentelemetry/trace/opentelemetry_trace.ml" {"F:S8704T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace.mli" {"F:S3659T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace__.cmi"
+    {"F:S362T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace__.cmt"
+    {"F:S1992T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace__.cmx"
+    {"F:S349T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace__.ml" {"F:S201T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace__Common_.cmi"
+    {"F:S873T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace__Common_.cmt"
+    {"F:S3622T1793251647.06"}
+  "lib/opentelemetry/trace/opentelemetry_trace__Common_.cmx"
+    {"F:S1284T1793251647.06"}
+  "lib/opentelemetry/trace_provider.ml" {"F:S4667T1793251647.06"}
+  "lib/opentelemetry/tracer.ml" {"F:S778T1793251647.06"}
+  "lib/opentelemetry/util" {"D"}
+  "lib/opentelemetry/util/alist.ml" {"F:S603T1793251647.06"}
+  "lib/opentelemetry/util/alist.mli" {"F:S187T1793251647.06"}
+  "lib/opentelemetry/util/aswitch.ml" {"F:S1679T1793251647.06"}
+  "lib/opentelemetry/util/aswitch.mli" {"F:S1411T1793251647.07"}
+  "lib/opentelemetry/util/cb_set.ml" {"F:S305T1793251647.07"}
+  "lib/opentelemetry/util/cb_set.mli" {"F:S236T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util.a" {"F:S73510T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util.cma" {"F:S32282T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util.cmi" {"F:S660T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util.cmt" {"F:S3170T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util.cmx" {"F:S483T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util.cmxa" {"F:S4937T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util.cmxs" {"F:S79784T1793251647.12"}
+  "lib/opentelemetry/util/opentelemetry_util.ml" {"F:S700T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Alist.cmi"
+    {"F:S654T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Alist.cmt"
+    {"F:S5976T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Alist.cmti"
+    {"F:S3178T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Alist.cmx"
+    {"F:S4442T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Aswitch.cmi"
+    {"F:S1299T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Aswitch.cmt"
+    {"F:S18545T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Aswitch.cmti"
+    {"F:S5976T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Aswitch.cmx"
+    {"F:S13232T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Cb_set.cmi"
+    {"F:S569T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Cb_set.cmt"
+    {"F:S4535T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Cb_set.cmti"
+    {"F:S2894T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Cb_set.cmx"
+    {"F:S3790T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Timestamp_ns.cmi"
+    {"F:S782T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Timestamp_ns.cmt"
+    {"F:S7931T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Timestamp_ns.cmx"
+    {"F:S5386T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Util_atomic.cmi"
+    {"F:S614T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Util_atomic.cmt"
+    {"F:S5611T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Util_atomic.cmx"
+    {"F:S3588T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Util_bytes_.cmi"
+    {"F:S985T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Util_bytes_.cmt"
+    {"F:S14909T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Util_bytes_.cmx"
+    {"F:S11737T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Util_mutex.cmi"
+    {"F:S480T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Util_mutex.cmt"
+    {"F:S3347T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Util_mutex.cmti"
+    {"F:S2218T1793251647.07"}
+  "lib/opentelemetry/util/opentelemetry_util__Util_mutex.cmx"
+    {"F:S1888T1793251647.07"}
+  "lib/opentelemetry/util/timestamp_ns.ml" {"F:S662T1793251647.07"}
+  "lib/opentelemetry/util/util_atomic.ml" {"F:S521T1793251647.07"}
+  "lib/opentelemetry/util/util_bytes_.ml" {"F:S1488T1793251647.07"}
+  "lib/opentelemetry/util/util_mutex.ml" {"F:S432T1793251647.07"}
+  "lib/opentelemetry/util/util_mutex.mli" {"F:S44T1793251647.11"}
+  "lib/opentelemetry/version.ml" {"F:S24T1793251647.11"}
+  "lib/opentelemetry/version.mli" {"F:S104T1793251647.11"}
+]

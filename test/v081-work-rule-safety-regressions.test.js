@@ -1,4 +1,6 @@
 "use strict";
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -297,7 +299,7 @@ test.before(async () => {
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
   try {
-    db.close();
+    await db.close();
   } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
@@ -417,21 +419,16 @@ test("Regression: Profilwechsel innerhalb einer Woche werden pro Diensttag statt
 
 test("Regression: Dienstmutation und Evaluationsbeleg werden atomar zurückgerollt", async () => {
   const note = `atomic-${crypto.randomUUID()}`;
-  let receiptInsertAttempts = 0;
-  db.function("regression_receipt_attempt", () => {
-    receiptInsertAttempts += 1;
-    return 1;
-  });
+  const receiptAttempts = require("../test-support/postgresql-api/trigger-fixture").createFixtureAttemptCounter(db);
   const shiftCountBefore = db.prepare("SELECT COUNT(*) AS count FROM shifts WHERE note = ?").get(note).count;
   const receiptCountBefore = db.prepare("SELECT COUNT(*) AS count FROM work_rule_evaluation_runs").get().count;
-  db.exec(`
-    CREATE TRIGGER regression_reject_evaluation_insert
+  installFixtureTrigger(db, `
+    CREATE TRIGGER test_regression_reject_evaluation_insert
     BEFORE INSERT ON work_rule_evaluation_runs
     BEGIN
-      SELECT regression_receipt_attempt();
       SELECT RAISE(ABORT, 'regression: evaluation receipt rejected');
     END;
-  `);
+  `, { attemptCounter: receiptAttempts });
   try {
     const created = await request("/api/shifts", {
       method: "POST",
@@ -447,7 +444,7 @@ test("Regression: Dienstmutation und Evaluationsbeleg werden atomar zurückgerol
       },
     });
     assert.ok(created.response.status >= 400, "Ein fehlgeschlagener Beleg darf nicht als erfolgreiche Mutation erscheinen.");
-    assert.equal(receiptInsertAttempts, 1, "Die Mutation muss den Prüfbeleg tatsächlich im selben Transaktionspfad versuchen.");
+    assert.equal(receiptAttempts.count(), 1, "Die Mutation muss den Prüfbeleg tatsächlich im selben Transaktionspfad versuchen.");
     assert.equal(
       db.prepare("SELECT COUNT(*) AS count FROM shifts WHERE note = ?").get(note).count,
       shiftCountBefore,
@@ -459,7 +456,8 @@ test("Regression: Dienstmutation und Evaluationsbeleg werden atomar zurückgerol
       "Der erzwungene Belegfehler darf keinen Teilbeleg hinterlassen.",
     );
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS regression_reject_evaluation_insert");
+    dropFixtureTrigger(db, "test_regression_reject_evaluation_insert", { ifExists: true });
+    receiptAttempts.close();
     db.prepare("DELETE FROM shifts WHERE note = ?").run(note);
   }
 });
@@ -534,8 +532,8 @@ test("Regression: ZA-Freigabe rollt Dienständerung ohne Regelbeleg vollständig
     VALUES (?, ?, ?, ?, ?, 1, '00:00', '23:59', 'Atomarer ZA-Test',
       'pending', 'local', 'local')
   `).run(ATOMIC_EMPLOYEE, mainLocationId, date, date, date).lastInsertRowid);
-  db.exec(`
-    CREATE TRIGGER regression_reject_time_off_evaluation
+  installFixtureTrigger(db, `
+    CREATE TRIGGER test_regression_reject_time_off_evaluation
     BEFORE INSERT ON work_rule_evaluation_runs
     BEGIN
       SELECT RAISE(ABORT, 'regression: time-off evaluation receipt rejected');
@@ -557,7 +555,7 @@ test("Regression: ZA-Freigabe rollt Dienständerung ohne Regelbeleg vollständig
     assert.equal(storedRequest.option_id, null);
     assert.equal(storedRequest.original_shifts_json, "[]");
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS regression_reject_time_off_evaluation");
+    dropFixtureTrigger(db, "test_regression_reject_time_off_evaluation", { ifExists: true });
   }
 });
 
@@ -663,26 +661,5 @@ test("Regression: Evaluation-Runs sind DB-seitig gegen DELETE geschützt", () =>
   assert.throws(
     () => db.prepare("DELETE FROM work_rule_evaluation_runs WHERE id = ?").run(id),
     /immutable|unveränderlich/i,
-  );
-});
-
-test("Regression: Legacy-Prüfbelege werden vor Aktivierung der Trigger vollständig nachsigniert", async () => {
-  const id = `legacy-receipt-${crypto.randomUUID()}`;
-  db.exec(`
-    DROP TRIGGER IF EXISTS trg_work_rule_evaluations_immutable_update;
-    DROP TRIGGER IF EXISTS trg_work_rule_evaluations_immutable_delete;
-  `);
-  insertEvaluationRun(id, "");
-  ensureWorkRuleEvaluationReceiptIntegrity();
-  const migrated = db.prepare(`
-    SELECT receipt_sha256 FROM work_rule_evaluation_runs WHERE id = ?
-  `).get(id);
-  assert.match(migrated.receipt_sha256, /^[a-f0-9]{64}$/);
-  const verified = await getWorkRuleEvaluation(workRuleStoreRepository, id);
-  assert.equal(verified.receiptHashValid, true);
-  assert.equal(verified.resultHashValid, true);
-  assert.throws(
-    () => db.prepare("UPDATE work_rule_evaluation_runs SET outcome = 'attention' WHERE id = ?").run(id),
-    /immutable|unverÃ¤nderlich/i,
   );
 });

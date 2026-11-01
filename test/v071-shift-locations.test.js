@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -120,8 +122,10 @@ function createSession(employeeNumber, role, locationId = null) {
   `).run(employeeNumber, role);
   if (locationId) {
     db.prepare(`
-      INSERT OR REPLACE INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+      INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
       VALUES (?, ?, 0, ?)
+      ON CONFLICT(employee_number,location_id,department_id) DO UPDATE
+        SET assigned_by=excluded.assigned_by,created_at=CURRENT_TIMESTAMP
     `).run(employeeNumber, locationId, ADMIN_EMPLOYEE);
   }
   db.prepare(`INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
@@ -165,9 +169,9 @@ test.before(async () => {
   assert.ok(positionId);
 
   const days = JSON.stringify(planningDays(1));
-  db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES (?, ?, 1, ?, 1)")
+  prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES (?, ?, 1, ?, 1)")
     .run(TARGET_LOCATION, "Ziel-Filiale", days);
-  db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES (?, ?, 0, ?, 1)")
+  prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES (?, ?, 0, ?, 1)")
     .run(EMPTY_LOCATION, "Leere Filiale", JSON.stringify(planningDays(0)));
   targetDepartment = Number(db.prepare(`
     INSERT INTO departments (location_id, name, min_staff, active, sort_order)
@@ -196,25 +200,24 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
 test("Einsatzfiliale ist migriert, indiziert und serverseitig abgesichert", () => {
-  const columns = db.prepare("PRAGMA table_info(shifts)").all();
+  const columns = pgSchema.columns(db, "shifts");
   assert.ok(columns.some((column) => column.name === "location_id"));
 
-  const foreignKeys = db.prepare("PRAGMA foreign_key_list(shifts)").all();
+  const foreignKeys = pgSchema.foreignKeys(db, "shifts");
   assert.ok(foreignKeys.some((foreignKey) => foreignKey.from === "location_id"
     && foreignKey.table === "locations" && foreignKey.to === "id"));
 
-  const indexes = db.prepare("PRAGMA index_list(shifts)").all();
+  const indexes = pgSchema.indexes(db, "shifts");
   assert.ok(indexes.some((index) => index.name === "idx_shifts_location_date"));
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.71-shift-locations'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
 
-  const triggers = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'shifts'")
-    .all().map((row) => row.name));
+  const triggers = new Set(pgSchema.triggers(db, "shifts").map((row) => row.name));
   assert.ok(triggers.has("trg_shifts_location_default"));
   assert.ok(triggers.has("trg_shifts_location_update"));
   assert.ok(triggers.has("trg_shifts_department_location_insert"));
@@ -257,86 +260,7 @@ test("fehlende Einsatzfiliale wird aus Abteilung oder Stammfiliale abgeleitet", 
   `).run(HOMELESS_EMPLOYEE), /SHIFT_LOCATION_REQUIRED/);
 });
 
-test("eine bestehende Datenbank wird deterministisch auf Einsatzfilialen migriert", () => {
-  const legacyDatabase = path.join(testRoot, "legacy-shifts.db");
-  db.exec(`VACUUM INTO '${legacyDatabase.replaceAll("'", "''")}'`);
-
-  const downgrade = spawnSync(process.execPath, ["-e", `
-    const { DatabaseSync } = require("node:sqlite");
-    const database = new DatabaseSync(process.env.LEGACY_DB);
-    database.exec(\`
-      PRAGMA foreign_keys = OFF;
-      DROP TRIGGER IF EXISTS trg_shifts_location_supplied;
-      DROP TRIGGER IF EXISTS trg_shifts_location_default;
-      DROP TRIGGER IF EXISTS trg_shifts_location_update;
-      DROP TRIGGER IF EXISTS trg_shifts_department_location_insert;
-      DROP TRIGGER IF EXISTS trg_shifts_department_location_update;
-      DROP TRIGGER IF EXISTS trg_staff_assignments_shift_coverage_insert;
-      DROP TRIGGER IF EXISTS trg_staff_assignments_shift_coverage_update;
-      CREATE TABLE shifts_v070 (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        employee_number TEXT NOT NULL,
-        department_id INTEGER,
-        shift_date TEXT NOT NULL,
-        start_time TEXT NOT NULL,
-        end_time TEXT NOT NULL,
-        area TEXT NOT NULL DEFAULT '',
-        note TEXT NOT NULL DEFAULT '',
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
-          ON UPDATE CASCADE ON DELETE CASCADE,
-        FOREIGN KEY (department_id) REFERENCES departments(id)
-          ON UPDATE CASCADE ON DELETE SET NULL
-      );
-      INSERT INTO shifts_v070
-        (id, employee_number, department_id, shift_date, start_time, end_time, area, note, created_at)
-      SELECT id, employee_number, department_id, shift_date, start_time, end_time, area, note, created_at FROM shifts;
-      DROP TABLE shifts;
-      ALTER TABLE shifts_v070 RENAME TO shifts;
-      DELETE FROM schema_migrations WHERE id = 'v0.71-shift-locations';
-    \`);
-    database.close();
-  `], {
-    cwd: path.resolve(__dirname, ".."),
-    env: { ...process.env, LEGACY_DB: legacyDatabase },
-    encoding: "utf8",
-  });
-  assert.equal(downgrade.status, 0, downgrade.stderr || downgrade.stdout);
-
-  const migrate = spawnSync(process.execPath, ["-e", `
-    const subject = require("./server");
-    const departmentShift = subject.db.prepare(
-      "SELECT location_id FROM shifts WHERE employee_number = ? AND shift_date = '2031-02-03'"
-    ).get(process.env.FOREIGN_EMPLOYEE);
-    const homeShift = subject.db.prepare(
-      "SELECT location_id FROM shifts WHERE employee_number = ? AND shift_date = '2031-02-04'"
-    ).get(process.env.FOREIGN_EMPLOYEE);
-    const foreignKey = subject.db.prepare("PRAGMA foreign_key_list(shifts)").all()
-      .some((row) => row.from === "location_id" && row.table === "locations" && row.to === "id");
-    if (departmentShift?.location_id !== process.env.TARGET_LOCATION) throw new Error("department migration failed");
-    if (homeShift?.location_id !== process.env.HOME_LOCATION) throw new Error("home migration failed");
-    if (!foreignKey) throw new Error("location foreign key missing");
-    if (!subject.db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.71-shift-locations'").get()) {
-      throw new Error("migration marker missing");
-    }
-    subject.db.close();
-    subject.releaseInstanceLockForTests();
-  `], {
-    cwd: path.resolve(__dirname, ".."),
-    env: {
-      ...process.env,
-      DB_PATH: legacyDatabase,
-      BACKUP_DIR: path.join(testRoot, "legacy-backups"),
-      GRABENPLANER_DATA_DIR: path.join(testRoot, "legacy-data"),
-      GRABENPLANER_SEED_DEMO: "0",
-      FOREIGN_EMPLOYEE,
-      TARGET_LOCATION,
-      HOME_LOCATION: homeLocation,
-    },
-    encoding: "utf8",
-  });
-  assert.equal(migrate.status, 0, migrate.stderr || migrate.stdout);
-});
+// The unchanged historical upgrade is exercised by the corresponding postgresql-only-historical-*.test.js.
 
 test("Dienst-CRUD zeigt zugewiesene Mitarbeitende im Zielplan", async () => {
   const assignment = await request("/api/portal/v1/staff-assignments", {

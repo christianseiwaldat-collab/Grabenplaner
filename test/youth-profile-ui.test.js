@@ -176,7 +176,34 @@ test("Personalakt: Position und Freitext erzeugen keinen bestätigten Lehrlingss
   assert.equal(result.sensitive.employment.apprenticeshipValidFrom, "");
   assert.equal(result.sensitive.employment.apprenticeshipSourceReference, "");
   assert.match(school.apprenticeshipHint("active", true), /unvollständig/);
-  assert.match(school.apprenticeshipHint("active", true, { validFrom: "2030-09-01", sourceReference: "synthetischer Lehrvertrag" }), /fachlich bestätigt/);
+  assert.match(school.apprenticeshipHint("active", true, { validFrom: "2030-09-01", sourceReference: "synthetischer Lehrvertrag" }), /Lehrlingsstatus bestätigt/);
+});
+
+test("Personalakt: fehlende Lehrlingsstatusbestätigung bewertet keine Verkaufseignung und schließt Quereinsteiger nicht aus", () => {
+  const basis = { validFrom: "2030-09-01", sourceReference: "synthetisch bestätigter Status" };
+  for (const confirmed of [false, true]) {
+    const hint = school.apprenticeshipHint("not_apprentice", confirmed, basis);
+    assert.match(hint, /^Kein Lehrverhältnis/);
+    assert.match(hint, /Ein Lehrabschluss ist keine Voraussetzung für die Tätigkeit im Verkauf/);
+    assert.match(hint, /Quereinsteiger sind willkommen/);
+    assert.doesNotMatch(hint, /fachlich|ungeeignet|Eignung.*ungeklärt/);
+    assert.match(hint, confirmed ? /Lehrlingsstatus bestätigt/ : /Bestätigung des Lehrlingsstatus noch offen/);
+  }
+  assert.match(school.apprenticeshipHint("not_apprentice", true), /Bestätigung des Lehrlingsstatus unvollständig/);
+  assert.match(school.apprenticeshipHint("active", true), /Bestätigung des Lehrlingsstatus unvollständig/);
+  assert.match(school.apprenticeshipHint("completed", true, basis), /letzten Lehrtag/);
+  assert.doesNotMatch(school.apprenticeshipHint("unknown", false), /fachlich/);
+});
+
+test("Personalakt: beide Bestätigungsfelder benennen ausschließlich den Lehrlingsstatus und behalten Feldrechte", () => {
+  const context = vm.createContext({ escapeHtml: String, escapeHtmlAttribute: String });
+  vm.runInContext(functionSource("personnelRecordCheckbox"), context);
+  const render = mode => context.personnelRecordCheckbox("apprenticeshipConfirmed", "employment.apprenticeshipConfirmed", "Lehrlingsstatus bestätigt", false, mode);
+  assert.match(render("write"), /<span>Bestätigung des Lehrlingsstatus<\/span>/);
+  assert.doesNotMatch(render("write"), /Fachliche Prüfung|disabled/);
+  assert.match(render("read"), /disabled/);
+  assert.equal(render("hidden"), "");
+  assert.match(html, /<span>Bestätigung des Lehrlingsstatus<\/span><span class="checkbox-line"><input name="employeeRecordApprenticeshipConfirmed"/);
 });
 
 test("Personalakt: Speichern verwendet Boolesche Bestätigung und respektiert einzelne Feldrechte", async () => {
@@ -226,7 +253,7 @@ test("Personalakt: verborgene Basis und Bestätigung werden nicht als fehlende D
   const fields = { apprenticeshipStatus: control("active"), apprenticeshipConfirmed: { ...control(), checked: true, disabled: true } };
   const hint = control(), form = { elements: { namedItem: (name) => fields[name] } };
   context.updateApprenticeshipHint(form, "", hint);
-  assert.match(hint.textContent, /fachlich bestätigt/);
+  assert.match(hint.textContent, /Lehrlingsstatus bestätigt/);
   assert.match(hint.textContent, /nicht vollständig freigegeben/);
   assert.doesNotMatch(hint.textContent, /unvollständig|ungeklärt|angeben/);
   delete fields.apprenticeshipConfirmed;

@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v062-mobile-"));
 const dataRoot = path.join(testRoot, "server-data");
@@ -19,6 +20,8 @@ process.env.GRABENPLANER_TRUST_PROXY = "loopback";
 process.env.GRABENPLANER_DEPLOYMENT_KIND = "codespaces-test";
 process.env.GRABENPLANER_AMU_KEY_ID = "test-v1";
 process.env.GRABENPLANER_AMU_KEY = Buffer.alloc(32, 7).toString("base64");
+process.env.GRABENPLANER_INTEGRATION_KEY_ID = "mobile-auth-test";
+process.env.GRABENPLANER_INTEGRATION_KEY = Buffer.alloc(32, 72).toString("base64");
 process.env.GRABENPLANER_WIFI_WEBHOOK_SECRET = "test-wifi-webhook-secret-0123456789abcdef";
 process.env.GRABENPLANER_SERVICE_CONTROL_TOKEN = "test-service-control-token-0123456789abcdef";
 process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
@@ -129,26 +132,41 @@ test.before(async () => {
       colors: { primary: "#123456", secondary: "#287a67", accent: "#ffcc00", text: "#111111", background: "#ffffff" },
     },
   }), "utf8");
-  db.prepare(`
-    INSERT INTO location_branding
-      (location_id, kit_id, company_name, logo_url, icon_url, logo_alt, admin_email, updated_by)
-    VALUES (?, 'mobil-test', 'Mobil Test GmbH', '/branding-kits/mobil-test/logo.svg',
-            'https://tracking.invalid/icon.svg', 'Mobil Test', 'admin@example.test', 'test')
-    ON CONFLICT(location_id) DO UPDATE SET kit_id = excluded.kit_id, company_name = excluded.company_name,
-      logo_url = excluded.logo_url, icon_url = excluded.icon_url, logo_alt = excluded.logo_alt,
-      admin_email = excluded.admin_email, updated_by = excluded.updated_by
-  `).run(locationId);
-
   await new Promise((resolve, reject) => {
     httpServer = app.listen(0, "127.0.0.1", resolve);
     httpServer.once("error", reject);
   });
   baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
+
+  // Seed through the real administration API so its committed snapshot is also
+  // visible to the mobile branding read model initialized before this fixture.
+  const brandingSessionId = crypto.randomUUID();
+  const brandingToken = crypto.randomBytes(32).toString("base64url");
+  const brandingCsrf = sessionCsrf(brandingToken);
+  db.prepare("UPDATE portal_users SET role = 'admin' WHERE employee_number = ?").run(employeeNumber);
+  db.prepare(`
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
+  `).run(brandingSessionId, employeeNumber, crypto.createHash("sha256").update(brandingToken).digest("hex"));
+  try {
+    const assigned = await request("/api/branding/assignments", {
+      method: "PUT",
+      cookie: `grabenplaner_session=${brandingToken}; grabenplaner_csrf=${brandingCsrf}`,
+      csrf: brandingCsrf,
+      headers: { Origin: "https://plan.example.test" },
+      body: { locationId, kitId: "mobil-test" },
+    });
+    assert.equal(assigned.response.status, 200, JSON.stringify(assigned.payload));
+    assert.equal(assigned.payload.branding.companyName, "Mobil Test GmbH");
+  } finally {
+    db.prepare("DELETE FROM portal_sessions WHERE id = ?").run(brandingSessionId);
+    db.prepare("UPDATE portal_users SET role = 'employee' WHERE employee_number = ?").run(employeeNumber);
+  }
 });
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

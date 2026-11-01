@@ -6,7 +6,7 @@ const crypto = require("node:crypto");
 const { openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider");
 const { functionSource } = require("../test-support/learning-workspace-ui");
 const context = vm.createContext({});
-vm.runInContext(functionSource("jsonObject", "../lib/persistence/sqlite/custom-process-management-catalog.js"), context);
+vm.runInContext(functionSource("jsonObject", "../lib/persistence/catalogs/custom-process-management-catalog.js"), context);
 
 for (const count of [63, 64, 126, 127, 190]) {
   test(`bounded onboarding JSON preserves ${count} fields, explicit nulls and nested values`, () => {

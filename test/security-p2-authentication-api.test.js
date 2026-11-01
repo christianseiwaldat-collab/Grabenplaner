@@ -13,9 +13,9 @@ const GOOD_PASSWORD = 'Synthetic-Login-Concurrency-2026!';
 const BAD_PASSWORD = 'Synthetic-Wrong-Concurrent-2026!';
 
 if (!childProvider) {
-  for (const [provider,mode] of [['sqlite','server'],['postgresql','server'],['sqlite','local'],['sqlite','lan'],['sqlite','production']]) {
+  for (const [provider,mode] of [['postgresql','server'],['postgresql','production']]) {
     test(`P2 authentication HTTP: ${provider}/${mode} real password verification, account locks and sessions`, {
-      skip: provider === 'postgresql' && !process.env.GP_CORE_MIGRATOR_URL,
+      skip: (!process.env.GP_CORE_MIGRATOR_URL),
       timeout: 180000,
     }, async t => {
       const environment = { ...process.env, GP_SECURITY_P2_HTTP_CHILD: provider, GP_SECURITY_P2_OPERATION_MODE: mode };
@@ -36,7 +36,7 @@ if (!childProvider) {
     });
   }
 } else {
-  assert.ok(['sqlite', 'postgresql'].includes(childProvider));
+  assert.ok(['postgresql'].includes(childProvider));
   const gates = new Map();
   const realScrypt = crypto.scrypt;
   // Keep native scrypt and timingSafeEqual intact. Only callback delivery is
@@ -70,7 +70,7 @@ if (!childProvider) {
     let subject, server, browserProxy;
     const productionConfiguration = process.env.GP_SECURITY_P2_OPERATION_MODE === 'production';
     Object.assign(process.env, {
-      NODE_ENV: productionConfiguration ? 'production' : 'test', TZ: 'Europe/Vienna', DB_PROVIDER: 'sqlite', DATABASE_URL: '',
+      NODE_ENV: productionConfiguration ? 'production' : 'test', TZ: 'Europe/Vienna', DB_PROVIDER: 'postgresql', DATABASE_URL: '',
       DB_PATH: path.join(temporaryRoot, 'fixture.db'), BACKUP_DIR: path.join(temporaryRoot, 'backups'),
       GRABENPLANER_DATA_DIR: path.join(temporaryRoot, 'data'), GRABENPLANER_HOST: '127.0.0.1',
       GRABENPLANER_FORCE_PORTAL: productionConfiguration ? '' : '1', GRABENPLANER_SEED_DEMO: productionConfiguration ? '' : '1',
@@ -83,7 +83,7 @@ if (!childProvider) {
       GRABENPLANER_TEST_AMU_SCANNER: productionConfiguration ? '' : 'clean',
     });
     async function exercise(fixture) {
-      if(childProvider==='sqlite'&&process.env.GP_SECURITY_P2_OPERATION_MODE==='server'&&process.env.GP_SECURITY_AUTH_BROWSER_TEST==='1') {
+      if((process.env.GP_SECURITY_P2_OPERATION_MODE==='server')&&process.env.GP_SECURITY_AUTH_BROWSER_TEST==='1') {
         // A throwaway certificate and a loopback TLS reverse proxy provide the
         // configured HTTPS origin; no Origin/CSRF guard is disabled or rewritten.
         const key=path.join(temporaryRoot,'browser-key.pem'),cert=path.join(temporaryRoot,'browser-cert.pem');
@@ -95,7 +95,7 @@ if (!childProvider) {
         await new Promise(resolve=>browserProxy.listen(0,'127.0.0.1',resolve));
         process.env.GRABENPLANER_PUBLIC_URL='https://127.0.0.1:'+browserProxy.address().port;
       }
-      if (fixture) {
+      {
         configuration.resolvePersistenceConfiguration = () => Object.freeze({
           providerId: 'postgresql', databasePath: path.join(temporaryRoot, 'core.postgresql'), databaseUrlConfigured: true,
           coreUrl: process.env.GP_CORE_APP_URL, salesUrl: process.env.GP_SALES_APP_URL,
@@ -105,12 +105,11 @@ if (!childProvider) {
       }
       subject = require('../server');
       await subject.initializeApplicationPersistence();
-      const query = fixture ? async (sql, values = []) => {
+      const query = (async (sql, values = []) => {
         let parameter = 0;
         return (await fixture.core.migrator.query(sql.replace(/\?/g, () => '$' + (++parameter)), values)).rows;
-      } : async (sql, values = []) => /^\s*SELECT\b/i.test(sql)
-        ? subject.db.prepare(sql).all(...values) : (subject.db.prepare(sql).run(...values), []);
-      if (fixture) await fixture.core.migrator.query('SET ROLE gp_core_owner; SET search_path=pg_catalog,gp');
+      });
+      await fixture.core.migrator.query('SET ROLE gp_core_owner; SET search_path=pg_catalog,gp');
       await query("UPDATE settings SET value='5' WHERE key='max_failed_login_attempts'");
       server = await new Promise(resolve => { const listener = subject.app.listen(0, '127.0.0.1', () => resolve(listener)); });
       const base = 'http://127.0.0.1:' + server.address().port;
@@ -415,8 +414,8 @@ if (!childProvider) {
         assert.equal(Number((await query('SELECT COUNT(*) count FROM mobile_sessions WHERE employee_number=? AND revoked_at IS NULL',[id]))[0].count),0);completed++;
       });
       await t.test('real audit and deferred-commit failures roll back browser and mobile password changes without emitting credentials',async()=>{
-        const ddl=sql=>fixture?fixture.core.migrator.query(sql):subject.db.exec(sql);
-        const schema=fixture?'gp.':'';
+        const ddl=sql=>(fixture.core.migrator.query(sql));
+        const schema=('gp.');
         for(const channel of ['browser','mobile'])for(const stage of ['audit','commit']) {
           const id='syn-p2-fault-'+channel+'-'+stage,action=channel==='browser'?'portal.password.change':'mobile.password.change';
           await seedPersonal(id,GOOD_PASSWORD,'employee',1);
@@ -437,13 +436,12 @@ if (!childProvider) {
             if(stage==='commit') {
               await ddl(`CREATE TABLE ${schema}gp_p2_fault_parent(id INTEGER PRIMARY KEY)`);
               await ddl(`CREATE TABLE ${schema}gp_p2_fault_child(id INTEGER REFERENCES ${schema}gp_p2_fault_parent(id) DEFERRABLE INITIALLY DEFERRED)`);
-              if(fixture)await ddl('GRANT INSERT ON gp.gp_p2_fault_child TO gp_core_app');
-              else assert.equal(Number(subject.db.prepare('PRAGMA foreign_keys').get().foreign_keys),1);
+              await ddl('GRANT INSERT ON gp.gp_p2_fault_child TO gp_core_app');
             }
-            if(fixture) {
+            {
               await ddl(`CREATE FUNCTION gp.gp_p2_fault_audit() RETURNS trigger LANGUAGE plpgsql AS $body$ BEGIN IF NEW.actor='${id}' AND NEW.action='${action}' THEN ${stage==='audit'?"RAISE EXCEPTION 'synthetic P2 audit failure';":'INSERT INTO gp.gp_p2_fault_child(id) VALUES(991);'} END IF; RETURN NEW; END $body$`);
               await ddl('CREATE TRIGGER gp_p2_fault_audit BEFORE INSERT ON gp.audit_log FOR EACH ROW EXECUTE FUNCTION gp.gp_p2_fault_audit()');
-            } else await ddl(`CREATE TRIGGER gp_p2_fault_audit BEFORE INSERT ON audit_log WHEN NEW.actor='${id}' AND NEW.action='${action}' BEGIN ${stage==='audit'?"SELECT RAISE(ABORT,'synthetic P2 audit failure');":'INSERT INTO gp_p2_fault_child(id) VALUES(991);'} END`);
+            }
             const rejected=channel==='browser'?await change(credentials(entered),GOOD_PASSWORD,GOOD_PASSWORD+'-not-committed')
               :await mobileChange(entered.body.tokenSet.accessToken,GOOD_PASSWORD,GOOD_PASSWORD+'-not-committed');
             assert.ok(rejected.status>=400,JSON.stringify(rejected.body));assert.equal(rejected.cookies.length,0);
@@ -451,8 +449,8 @@ if (!childProvider) {
             assert.deepEqual(await snapshot(),before,channel+'/'+stage);
             if(stage==='commit')assert.equal(Number((await query(`SELECT COUNT(*) count FROM ${schema}gp_p2_fault_child`))[0].count),0);
           } finally {
-            await ddl(`DROP TRIGGER IF EXISTS gp_p2_fault_audit${fixture?' ON gp.audit_log':''}`);
-            if(fixture)await ddl('DROP FUNCTION IF EXISTS gp.gp_p2_fault_audit()');
+            await ddl(`DROP TRIGGER IF EXISTS gp_p2_fault_audit${(' ON gp.audit_log')}`);
+            await ddl('DROP FUNCTION IF EXISTS gp.gp_p2_fault_audit()');
             if(stage==='commit') {await ddl(`DROP TABLE IF EXISTS ${schema}gp_p2_fault_child`);await ddl(`DROP TABLE IF EXISTS ${schema}gp_p2_fault_parent`);}
           }
           const succeeded=channel==='browser'?await change(credentials(entered),GOOD_PASSWORD,GOOD_PASSWORD+'-after-rollback')
@@ -504,7 +502,7 @@ if (!childProvider) {
         completed++;
       });
       await t.test('live Chrome uses the real legacy personal/admin flow and keeps a newer login after a delayed password response',{
-        skip:childProvider!=='sqlite'||process.env.GP_SECURITY_AUTH_BROWSER_TEST!=='1',timeout:90000,
+        skip:childProvider!=='postgresql'||process.env.GP_SECURITY_AUTH_BROWSER_TEST!=='1',timeout:90000,
       },async()=>{
         const http=require('node:http'),{chromium}=require(process.env.GP_BROWSER_TEST_MODULE||'playwright');
         let heldResponse=null, loginRequests=0, passwordRequests=0;
@@ -636,7 +634,7 @@ if (!childProvider) {
       console.log('HTTP_P2_VERIFIED '+JSON.stringify({provider:childProvider,groups:completed,syntheticOnly:true}));
     }
     try {
-      if (childProvider === 'postgresql') {
+      {
         for (const domain of ['CORE', 'SALES']) for (const purpose of ['APP', 'READER', 'MIGRATOR']) {
           const connection = new URL(process.env[`GP_${domain}_${purpose}_URL`]);
           assert.equal(connection.hostname, '127.0.0.1');
@@ -644,9 +642,16 @@ if (!childProvider) {
         }
         await require('../test-support/postgresql-migration/report-fixture').withReportFixture(async fixture => {
           try { await exercise(fixture); }
-          finally { if (server) await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }); server = null; await subject?.closePersistenceForTests(); subject?.releaseInstanceLockForTests(); subject = null; }
+          finally {
+            if (server) await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
+            server = null;
+            // All production-mode assertions have completed; close only this
+            // owned fixture through the existing explicit test shutdown API.
+            if (productionConfiguration) process.env.NODE_ENV = 'test';
+            await subject?.closePersistenceForTests(); subject?.releaseInstanceLockForTests(); subject = null;
+          }
         }, { warmWorkers: false });
-      } else await exercise();
+      }
     } finally {
       crypto.scrypt = realScrypt;
       if(browserProxy?.listening)await new Promise(resolve=>{browserProxy.close(resolve);browserProxy.closeAllConnections();});

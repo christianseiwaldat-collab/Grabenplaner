@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -75,7 +76,7 @@ const post = (suffix, body, options = {}) => request(`branch-time-off/${suffix}`
 test.before(async () => {
   const hours = JSON.stringify(Object.fromEntries(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map(day => [day,
     { open: true, start: "08:00", end: "20:00", lunchEnabled: false, minStaff: 0, minFrom: "08:00", minTo: "20:00" }])));
-  for (const id of ["93", "94"]) db.prepare(`INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES (?, ?, 0, ?, 1)`)
+  for (const id of ["93", "94"]) prepareLocationFixture(db, `INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES (?, ?, 0, ?, 1)`)
     .run(id, `Testfiliale ${id}`, hours);
   employee("za-a", "Anna Beispiel", "93");
   employee("za-b", "Ben Beispiel", "93");
@@ -106,7 +107,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   assert.equal(path.dirname(path.resolve(testRoot)), path.resolve(os.tmpdir()));
   assert.ok(path.basename(testRoot).startsWith("grabenplaner-branch-time-off-"));

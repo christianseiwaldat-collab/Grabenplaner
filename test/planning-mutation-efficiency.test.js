@@ -8,17 +8,42 @@ const { createPlanningDerivedRefresh } = require("../lib/planning-derived-refres
 const source = fs.readFileSync(require.resolve("../server"), "utf8").replace(/\r\n/g, "\n");
 const plain = value => JSON.parse(JSON.stringify(value));
 const addDays = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
-function extract(name) {
-  const start = source.search(new RegExp(`^(?:async )?function ${name}\\(`, "m"));
-  const end = source.indexOf("\n}\n", start);
+function extract(name, input = source) {
+  const start = input.search(new RegExp(`^(?:async )?function ${name}\\(`, "m"));
+  const end = input.indexOf("\n}\n", start);
   assert.ok(start >= 0 && end > start, name);
-  return source.slice(start, end + 3);
+  return input.slice(start, end + 3);
 }
-function load(names, values) {
+function load(names, values, { historical = false } = {}) {
+  const input = historical ? fs.readFileSync(require("../test-support/legacy-baseline").legacyPath("server.js"), "utf8").replace(/\r\n/g, "\n") : source;
+  if (historical) values.sqliteEmployeeLocationLendingOperations = values.employeeLocationLendingOperations;
   const context = vm.createContext(values);
-  vm.runInContext(names.map(extract).join("\n"), context);
+  vm.runInContext(names.map(name => extract(name, input)).join("\n"), context);
   return context;
 }
+
+test("atomic shift capability is advertised only by an authenticated enabled portal session", () => {
+  const start = source.indexOf('app.get("/api/portal/v1/session",');
+  const end = source.indexOf("\n});", start);
+  assert.ok(start >= 0 && end > start);
+  for (const [portalEnabled, authenticated] of [[true, true], [true, false], [false, true]]) {
+    let handler, response;
+    const session = authenticated ? { employeeNumber: "synthetic" } : null;
+    vm.runInNewContext(source.slice(start, end + 4), {
+      app: { get(path, callback) { assert.equal(path, "/api/portal/v1/session"); handler = callback; } },
+      getPortalStatus: () => ({ portalEnabled, loginRequired: true }),
+      portalSessionFromRequest: () => session,
+      portalStatusForSession: () => ({ portalEnabled: true, loginRequired: false }),
+      publicPortalUser: value => value ? { employeeNumber: value.employeeNumber } : null,
+      PORTAL_API_VERSION: "1",
+    });
+    handler({}, { json(value) { response = plain(value); } });
+    assert.equal(response.authenticated, portalEnabled && authenticated);
+    if (portalEnabled && authenticated) {
+      assert.deepEqual(response.capabilities, { atomicShiftUpdate: { version: 1, expectedRevision: "sha256", atomic: true } });
+    } else assert.equal(Object.hasOwn(response, "capabilities"), false);
+  }
+});
 
 function validationFixture({ postgres = true, revokeAt = 0, foreign = false } = {}) {
   const state = { inside: false, snapshots: 0, reauthorizations: 0, lending: 0, sick: false, trace: [] };
@@ -32,8 +57,11 @@ function validationFixture({ postgres = true, revokeAt = 0, foreign = false } = 
     assert.equal(state.inside, false, "legacy lending must stay outside the catalog snapshot");
     state.lending++; state.trace.push("lending"); return value;
   };
-  const c = load(["readPlanningMutation", "validateShift"], {
+  const c = load(["readPlanningMutation", ...(postgres ? ["assertPlanningEmployment"] : []), "validateShift"], {
     postgresqlActive: postgres, Set,
+    require: id => { assert.equal(id, './lib/schedule-employment'); return require('../lib/schedule-employment'); },
+    organizationPersonnelRepository: {},
+    personnelSensitiveProfile: catalog('employment', { employment: { startDate: '' } }),
     applicationPersistence: { async readSnapshot(work) {
       assert.equal(state.inside, false); const phase = ++state.snapshots;
       state.inside = true; state.trace.push("begin:" + phase);
@@ -52,7 +80,7 @@ function validationFixture({ postgres = true, revokeAt = 0, foreign = false } = 
     defaultScheduleDutyCode: () => "general",
     validateLocationExists: catalog("location", { id: "18" }),
     validateDepartmentExists: catalog("department", { id: 7, location_id: "18" }),
-    sqliteEmployeeLocationLendingOperations: { overlapForShift: legacy(null), coverageForShift: legacy({ destinationDepartmentId: 7 }) },
+    employeeLocationLendingOperations: { overlapForShift: legacy(null), coverageForShift: legacy({ destinationDepartmentId: 7 }) },
     employeeCanWorkOnDate: () => true, settingsForLocation: catalog("settings", {}),
     assertDateEditable: catalog("manual-lock", undefined), getGlobalDayBlockForDate: () => null,
     manualPlanningHours: () => ({ start: "07:00", end: "21:00" }), dayConfiguration: async () => ({}),
@@ -60,13 +88,13 @@ function validationFixture({ postgres = true, revokeAt = 0, foreign = false } = 
     activeSicknessEmployeeNumbers: catalog("sickness", () => new Set(state.sick ? ["E1"] : [])),
     sessionHasGlobalScope: () => false,
     httpError: (status, message, code) => Object.assign(new Error(message), { status, code }),
-  });
+  }, { historical: !postgres });
   const input = { employeeNumber: "E1", locationId: "18", departmentId: 7,
     date: "2032-07-05", startTime: "09:00", endTime: "17:00", area: "Area", note: "Note" };
   return { c, state, input };
 }
 
-test("shift validation brackets legacy lending with two independently authorized catalog snapshots", async () => {
+test("current PostgreSQL validation brackets lending with authorized snapshots; historical SQLite behavior remains separately bound", async () => {
   for (const postgres of [true, false]) for (const foreign of [true, false]) {
     const { c, state, input } = validationFixture({ postgres, foreign });
     assert.deepEqual(plain(await c.validateShift(input, {}, { employeeNumber: "actor" })), {
@@ -207,13 +235,20 @@ test("changed old/new targets remain complete and only identical effective evalu
   assert.equal(calls.length, 3);
 });
 
-function routeFixture({ rejectAuthority = false } = {}) {
-  const state = { inside: false, writes: 0, reads: 0, refreshes: 0, snapshots: 0 }, routes = {};
-  const shift = { employeeNumber: "E1", locationId: "18", departmentId: null, shiftDate: "2032-07-05" };
-  const existing = { id: 1, employee_number: "E1", location_id: "18", department_id: null, shift_date: shift.shiftDate };
+function routeFixture({ rejectAuthority = false, lateShiftChange = false, denyScope = false } = {}) {
+  const state = { inside: false, writes: 0, reads: 0, refreshes: 0, snapshots: 0, conditionalCalls: 0, legacyCalls: 0, records: 0, invalidations: 0 }, routes = {};
+  const shift = { employeeNumber: "E1", locationId: "18", departmentId: null, shiftDate: "2032-07-05",
+    dutyCode: "", startTime: "09:00", endTime: "17:00", area: "Verkauf", note: "updated" };
+  const existing = { id: 1, employee_number: "E1", location_id: "18", department_id: null, shift_date: shift.shiftDate,
+    duty_code: "", start_time: "09:00", end_time: "17:00", area: "Verkauf", note: "  raw note  " };
+  state.currentShift = { ...existing };
   const context = { locationId: "18", departmentId: null };
   const evaluated = { assessment: { outcome: "pass" } };
   const values = { postgresqlActive: true,
+    planningShiftPrecondition: require('../lib/planning-shift-precondition'),
+    require: id => { assert.equal(id, './lib/schedule-employment'); return require('../lib/schedule-employment'); },
+    organizationPersonnelRepository: {},
+    personnelSensitiveProfile: async () => ({ employment: { startDate: '' } }),
     app: Object.fromEntries(["post", "put", "delete"].map(method => [method, (path, handler) => { routes[method] = handler; }])),
     applicationPersistence: { async readSnapshot(work) {
       state.snapshots++; state.inside = true;
@@ -223,9 +258,9 @@ function routeFixture({ rejectAuthority = false } = {}) {
     validateShift: async () => { assert.equal(state.inside, false); return shift; },
     assertShiftEmployeeAssignmentScope: async () => { assert.equal(state.inside, false); },
     planningMutationEmployees: async () => { assert.equal(state.inside, true); state.reads++; return [{ personnel_number: "E1" }]; },
-    planningSettingsRepository: { getShiftById: async () => existing },
+    planningSettingsRepository: { getShiftById: async () => existing, getShiftForRevisionById: async () => existing },
     resolvePlanningContext: async () => context, getMonday: date => date,
-    assertSessionContextScope: () => {}, assertDateEditable: async () => {}, settingsForLocation: async () => ({}),
+    assertSessionContextScope: () => { if (denyScope) throw Object.assign(new Error("scope denied"), { status: 403, code: "PORTAL_SCOPE_DENIED" }); }, assertDateEditable: async () => {}, settingsForLocation: async () => ({}),
     evaluateScheduleWorkRules: async () => { assert.equal(state.inside, true); return evaluated; },
     createPlanningWorkRuleEvaluator: () => values.evaluateScheduleWorkRules,
     evaluateWorkRuleChanges: async () => { assert.equal(state.inside, true); return [{ ...shift, weekStart: shift.shiftDate, context, evaluated }]; },
@@ -235,20 +270,61 @@ function routeFixture({ rejectAuthority = false } = {}) {
     assertWorkRuleAssessmentAllowsMutation: () => {}, assertBranchSupervisionAllowsMutation: () => {},
     async runWorkRuleMutationTransaction(work) {
       assert.equal(state.inside, false, "write must be outside the finalized read snapshot"); state.writes++;
+      if (lateShiftChange) state.currentShift.note = "concurrent note";
       const result = { rowsAffected: 1, returnedRows: [{ id: 1 }] };
-      return work({ insertPlanningShift: async () => result, updatePlanningShift: async () => result,
-        deletePlanningShift: async () => result, invalidatePlanningDayReview: async () => {} });
+      return work({ insertPlanningShift: async () => result,
+        updatePlanningShift: async () => { state.legacyCalls++; return result; },
+        updatePlanningShiftIfCurrent: async (_next, old) => {
+          state.conditionalCalls++;
+          return { rowsAffected: values.planningShiftPrecondition.planningShiftRevision(state.currentShift)
+            === values.planningShiftPrecondition.planningShiftRevision(old) ? 1 : 0 };
+        },
+        deletePlanningShift: async () => result, invalidatePlanningDayReview: async () => { state.invalidations++; } });
     },
-    recordEvaluatedWorkRuleEvaluation: async () => evaluated.assessment,
+    recordEvaluatedWorkRuleEvaluation: async () => { state.records++; return evaluated.assessment; },
     refreshPlanningDerivedStateAfterCommit: async () => { assert.equal(state.inside, false); assert.equal(state.writes, 1); state.refreshes++; },
     sessionCanReadWorkRules: () => true, staffAssignmentShiftConstraintError: error => error,
-    httpError: (_, message) => new Error(message),
+    httpError: (status, message, code) => Object.assign(new Error(message), { status, code }),
   };
-  const c = load(["readPlanningMutation"], values);
+  const c = load(["readPlanningMutation", "assertPlanningEmployment"], values);
   const start = source.indexOf('app.post("/api/shifts",');
   vm.runInContext(source.slice(start, source.indexOf('app.delete("/api/schedule",', start)), c);
-  return { state, routes };
+  return { state, routes, existing };
 }
+
+test("guarded shift update uses the expected preview snapshot and the conditional writer", async () => {
+  const { state, routes, existing } = routeFixture();
+  const expectedRevision = require('../lib/planning-shift-precondition').planningShiftRevision(existing);
+  await routes.put({ body: { expectedRevision }, params: { id: "1" }, portalSession: { employeeNumber: "actor" } }, { json() {} });
+  assert.equal(state.conditionalCalls, 1); assert.equal(state.legacyCalls, 0);
+  assert.equal(state.records, 1); assert.equal(state.refreshes, 1);
+});
+
+test("guarded shift update rejects stale or malformed revisions before previews and writes", async () => {
+  for (const [expectedRevision, code, status] of [["a".repeat(64), "SHIFT_REVISION_CONFLICT", 409], ["bad", "SHIFT_REVISION_INVALID", 400]]) {
+    const { state, routes } = routeFixture();
+    await assert.rejects(routes.put({ body: { expectedRevision }, params: { id: "1" }, portalSession: {} }, { json() {} }),
+      error => error.code === code && error.status === status);
+    assert.equal(state.snapshots, 0); assert.equal(state.writes, 0); assert.equal(state.records, 0);
+  }
+});
+
+test("guarded shift update refuses a late change without recording a stale preview or refreshing", async () => {
+  const { state, routes, existing } = routeFixture({ lateShiftChange: true });
+  const expectedRevision = require('../lib/planning-shift-precondition').planningShiftRevision(existing);
+  await assert.rejects(routes.put({ body: { expectedRevision }, params: { id: "1" }, portalSession: {} }, { json() {} }),
+    error => error.code === "SHIFT_REVISION_CONFLICT" && error.status === 409);
+  assert.equal(state.conditionalCalls, 1); assert.equal(state.legacyCalls, 0);
+  assert.equal(state.records, 0); assert.equal(state.invalidations, 0); assert.equal(state.refreshes, 0);
+  assert.equal(state.currentShift.note, "concurrent note");
+});
+
+test("guarded shift update checks existing scope before exposing revision errors", async () => {
+  const { state, routes } = routeFixture({ denyScope: true });
+  await assert.rejects(routes.put({ body: { expectedRevision: "bad" }, params: { id: "1" }, portalSession: {} }, { json() {} }),
+    error => error.code === "PORTAL_SCOPE_DENIED" && error.status === 403);
+  assert.equal(state.writes, 0); assert.equal(state.records, 0);
+});
 
 for (const method of ["post", "put", "delete"]) test(`${method} keeps read authority completion before commit and refresh; revocation cannot write`, async () => {
   const response = { status() { return this; }, json() {}, end() {} };

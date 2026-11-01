@@ -28,7 +28,7 @@ test.before(async () => {
   server = app.listen(0, "127.0.0.1"); await new Promise(resolve => server.once("listening", resolve));
   base = `http://127.0.0.1:${server.address().port}`;
 });
-test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); db.close(); releaseInstanceLockForTests();
+test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); await db.close(); releaseInstanceLockForTests();
   assert.equal(path.dirname(directory), path.resolve(os.tmpdir())); fs.rmSync(directory, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }); });
 
 test("four ranked wishes persist, project the legacy first day, and survive older-client unrelated changes", async () => {

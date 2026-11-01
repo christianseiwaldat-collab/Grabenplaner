@@ -1,11 +1,11 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
-const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), crypto = require('node:crypto');
 const { createDataImportProtection } = require('../lib/data-import-protection');
 const C = require('../lib/data-import-contract'), H = require('../lib/tradefoto-history-profiles');
 const { openCashSnapshotPrototype, tableMap } = require('../test-support/cash-history-snapshot-prototype');
 function fixture() {
-  const parent = fs.realpathSync(path.resolve(__dirname, '../tmp')), directory = fs.mkdtempSync(path.join(parent, 'cash-snapshot-test-'));
+  const parent = fs.realpathSync(os.tmpdir()), directory = fs.mkdtempSync(path.join(parent, 'cash-snapshot-test-'));
   const file = path.join(directory, 'synthetic.db');
   const protection = createDataImportProtection({ encryptionKey: crypto.randomBytes(32), indexKey: crypto.randomBytes(32), keyId: 'test-cash-snapshot', compression: true });
   const manifest = { purpose: 'isolated-storage-experiment', fileSha256: 'a'.repeat(64), asOfDay: '2026-09-04' };

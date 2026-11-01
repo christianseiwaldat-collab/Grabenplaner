@@ -79,3 +79,30 @@ test("Wochenraster verwendet je Tag eine eigene Mitarbeiterliste und Spaltenzahl
   assert.match(renderer, /dayEmployees\.map\(\(employee\) =>/);
   assert.match(renderer, /--employee-count:\$\{Math\.max\(1, dayEmployees\.length\)\}/);
 });
+
+test("Firmeneintritt: Wochen davor zeigen den Mitarbeiter nicht, der erste Tag zählt einschließlich", () => {
+  const employee = { personnel_number: "TEST-NEW", home_location_id: "18", planningDates: [] };
+  const state = { locationId: "18", data: { employees: [employee], staffAssignments: [], shifts: [] } };
+  for (const day of ["2026-10-05", "2026-10-10", "2026-10-11"]) {
+    assert.deepEqual(visibleEmployeeNumbers(state, day), []);
+  }
+  employee.planningDates = ["2026-10-12", "2026-10-13"];
+  assert.deepEqual(visibleEmployeeNumbers(state, "2026-10-12"), ["TEST-NEW"]);
+  assert.deepEqual(visibleEmployeeNumbers(state, "2026-10-13"), ["TEST-NEW"]);
+});
+
+test("Firmeneintritt innerhalb einer Woche wird tageweise ausgewertet; Filialeinsätze und Alt-Dienste umgehen ihn nicht", () => {
+  const state = { locationId: "18", data: {
+    employees: [{ personnel_number: "TEST-NEW", home_location_id: "05", planningDates: ["2026-10-15", "2026-10-16"] }],
+    staffAssignments: [{ employee_number: "TEST-NEW", destination_location_id: "18", date_from: "2026-10-12", date_to: "2026-10-16" }],
+    shifts: [{ employee_number: "TEST-NEW", shift_date: "2026-10-14", location_id: "18" }],
+  } };
+  for (const day of ["2026-10-12", "2026-10-13", "2026-10-14"]) assert.deepEqual(visibleEmployeeNumbers(state, day), []);
+  for (const day of ["2026-10-15", "2026-10-16"]) assert.deepEqual(visibleEmployeeNumbers(state, day), ["TEST-NEW"]);
+  assert.equal(state.data.shifts.length, 1, "Die Anzeige darf alte Plandaten nicht verändern");
+});
+
+test("Fehlende neue Tagesprojektion erhält die bisherige Sichtbarkeit vorhandener Datensätze", () => {
+  const state = { locationId: "18", data: { employees: [{ personnel_number: "TEST-OLD", home_location_id: "18" }] } };
+  assert.deepEqual(visibleEmployeeNumbers(state, "2026-10-05"), ["TEST-OLD"]);
+});

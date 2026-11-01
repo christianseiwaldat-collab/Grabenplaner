@@ -21,15 +21,48 @@ test('exact pending count evidence enables separate approval but never apply',()
   assert.doesNotMatch(UI.renderSource(value,projection),/data-i-action="approve-counts"/);
 });
 
-test('invalid rows and additional source gates continue blocking count approval',()=>{
-  for(const issue of ['invalid','gate']){
+test('quarantined rows allow evidenced count approval while the source gate still blocks apply',()=>{
+  const value=source();value.tables[0].run.counts={create:2,invalid:1,conflict:1};
+  const html=UI.renderSource(value,projection);
+  assert.match(html,/data-i-action="approve-counts" >Geprüfte/);
+  assert.match(html,/data-i-action="apply" disabled/);
+  assert.match(html,/1 ungültige Zeile/);assert.match(html,/1 offener Prüffall/);
+});
+
+test('additional source gates block count approval and apply with or without row errors',()=>{
+  for(const invalid of [0,1]){
     const value=source();
-    if(issue==='invalid')value.tables[0].run.counts.invalid=1;
-    else value.tables[0].run.gates.push('SOURCE_SCHEMA_CHANGED');
+    value.tables[0].run.counts.invalid=invalid;
+    value.tables[0].run.gates.push('SOURCE_SCHEMA_CHANGED');
     const html=UI.renderSource(value,projection);
     assert.match(html,/data-i-action="approve-counts" disabled/);
     assert.match(html,/data-i-action="apply" disabled/);
   }
+});
+
+test('one invalid non-cash row does not disable applying the remaining valid rows',()=>{
+  const value=source(),run=value.tables[0].run;
+  run.gates=[];run.availableSourceTolerances=[];run.counts={create:3,invalid:1};
+  const html=UI.renderSource(value,projection);
+  assert.match(html,/data-i-action="apply" >Übernehmen/);
+  assert.doesNotMatch(html,/Übernahme gesperrt/);
+  assert.match(html,/1 ungültige Zeile/);
+});
+
+test('cash invalid rows remain blocked and parent-dependent conflicts allow ordered recheck',()=>{
+  const value=source(),run=value.tables[0].run;
+  Object.assign(value,{kind:'cash',storage:'cash-compact-v1',status:'ready',cashPublication:{available:true,active:false,revision:0}});
+  run.counts={create:3,invalid:1};
+  assert.match(UI.renderSource(value,projection),/data-i-action="approve-counts" disabled/);
+  run.gates=[];
+  assert.match(UI.renderSource(value,projection),/data-i-action="apply" disabled/);
+  run.counts={create:3,conflict:1};
+  assert.match(UI.renderSource(value,projection),/data-i-action="apply" >Übernehmen/);
+  run.gates=['SOURCE_ROW_COUNT_MISMATCH'];
+  assert.match(UI.renderSource(value,projection),/data-i-action="approve-counts" >Geprüfte/);
+  assert.match(UI.renderSource(value,projection),/data-i-action="apply" disabled/);
+  run.gates=['SOURCE_SCHEMA_CHANGED'];
+  assert.match(UI.renderSource(value,projection),/data-i-action="apply" disabled/);
 });
 
 test('durable approval displays actor and revision; dependencies remain eligible for ordered recheck',()=>{

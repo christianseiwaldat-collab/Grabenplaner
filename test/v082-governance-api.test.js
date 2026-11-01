@@ -1,4 +1,5 @@
 "use strict";
+const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -111,7 +112,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -338,7 +339,7 @@ test("v0.82: Selbstservice und Governance-Verwaltung bleiben serverseitig strikt
 test("v0.82: Datenschutz-State und Ereignis werden bei einem Schreibfehler gemeinsam zurückgerollt", async () => {
   const beforeRequests = db.prepare("SELECT COUNT(*) AS count FROM privacy_requests").get().count;
   const beforeEvents = db.prepare("SELECT COUNT(*) AS count FROM privacy_request_events").get().count;
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_v082_privacy_event_insert_failure
     BEFORE INSERT ON privacy_request_events
     BEGIN
@@ -353,7 +354,7 @@ test("v0.82: Datenschutz-State und Ereignis werden bei einem Schreibfehler gemei
       body: { type: "rectification" },
     });
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_v082_privacy_event_insert_failure");
+    dropFixtureTrigger(db, "test_v082_privacy_event_insert_failure", { ifExists: true });
   }
   assert.ok(failed.response.status >= 400, JSON.stringify(failed.payload));
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM privacy_requests").get().count, beforeRequests);
@@ -563,7 +564,7 @@ test("v0.82: Hilfsereignisse werden gegen ihre geschützten Revisionen geprüft"
     ORDER BY created_at, id LIMIT 1
   `).get(EMPLOYEE, YEAR);
   assert.ok(vacationEvent);
-  db.exec("DROP TRIGGER trg_vacation_account_events_immutable_update");
+  const restore_trg_vacation_account_events_immutable_update = require("../test-support/postgresql-api/trigger-fixture").suspendFixtureGuards(db, ["trg_vacation_account_events_immutable_update"]);
   try {
     db.prepare("UPDATE vacation_account_events SET detail_json = '{}' WHERE id = ?")
       .run(vacationEvent.id);
@@ -574,13 +575,7 @@ test("v0.82: Hilfsereignisse werden gegen ihre geschützten Revisionen geprüft"
   } finally {
     db.prepare("UPDATE vacation_account_events SET detail_json = ? WHERE id = ?")
       .run(vacationEvent.detail_json, vacationEvent.id);
-    db.exec(`
-      CREATE TRIGGER trg_vacation_account_events_immutable_update
-      BEFORE UPDATE ON vacation_account_events
-      BEGIN
-        SELECT RAISE(ABORT, 'vacation account events are immutable');
-      END
-    `);
+    restore_trg_vacation_account_events_immutable_update();
   }
 
   const timeEvent = db.prepare(`
@@ -588,7 +583,7 @@ test("v0.82: Hilfsereignisse werden gegen ihre geschützten Revisionen geprüft"
     ORDER BY created_at, id LIMIT 1
   `).get();
   assert.ok(timeEvent);
-  db.exec("DROP TRIGGER trg_time_record_statement_events_immutable_update");
+  const restore_trg_time_record_statement_events_immutable_update = require("../test-support/postgresql-api/trigger-fixture").suspendFixtureGuards(db, ["trg_time_record_statement_events_immutable_update"]);
   try {
     db.prepare("UPDATE time_record_statement_events SET detail_json = '{}' WHERE id = ?")
       .run(timeEvent.id);
@@ -599,13 +594,7 @@ test("v0.82: Hilfsereignisse werden gegen ihre geschützten Revisionen geprüft"
   } finally {
     db.prepare("UPDATE time_record_statement_events SET detail_json = ? WHERE id = ?")
       .run(timeEvent.detail_json, timeEvent.id);
-    db.exec(`
-      CREATE TRIGGER trg_time_record_statement_events_immutable_update
-      BEFORE UPDATE ON time_record_statement_events
-      BEGIN
-        SELECT RAISE(ABORT, 'time record statement events are immutable');
-      END
-    `);
+    restore_trg_time_record_statement_events_immutable_update();
   }
   assert.ok(await verifyProtectedGovernanceRecords() > 0);
 });
@@ -631,17 +620,11 @@ test("v0.82: Eine Lücke im unveränderlichen Datenschutzverlauf wird beim Lesen
   });
   assert.equal(created.response.status, 201, JSON.stringify(created.payload));
   const requestId = created.payload.request.id;
-  db.exec("DROP TRIGGER trg_privacy_request_events_immutable_delete");
+  const restore_trg_privacy_request_events_immutable_delete = require("../test-support/postgresql-api/trigger-fixture").suspendFixtureGuards(db, ["trg_privacy_request_events_immutable_delete"]);
   try {
     db.prepare("DELETE FROM privacy_request_events WHERE request_id = ?").run(requestId);
   } finally {
-    db.exec(`
-      CREATE TRIGGER trg_privacy_request_events_immutable_delete
-      BEFORE DELETE ON privacy_request_events
-      BEGIN
-        SELECT RAISE(ABORT, 'privacy request events are immutable');
-      END
-    `);
+    restore_trg_privacy_request_events_immutable_delete();
   }
   const corrupted = await request(`/api/privacy-governance/requests/${encodeURIComponent(requestId)}`);
   assert.equal(corrupted.response.status, 503, JSON.stringify(corrupted.payload));

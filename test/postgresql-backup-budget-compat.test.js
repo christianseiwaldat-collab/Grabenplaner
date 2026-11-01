@@ -17,8 +17,9 @@ function fixture(t){
    // This one-time predecessor bridge tests its original reviewed source tree,
    // never later application imports. Unchanged modules remain pinned by the
    // same contract; changed common/after modules use frozen historical text.
+   // Unchanged originals come from immutable b2, never a later OFD/runtime edit.
    const frozen=path.join(historical,file.replaceAll('/','__')+'.txt');
-   const from=old&&pins.before!==pins.after?path.join(source,'test-support/postgresql-backup-budget-before',file.replaceAll('/','__')+'.txt'):fs.existsSync(frozen)?frozen:path.join(source,file);
+   const from=old&&pins.before!==pins.after?path.join(source,'test-support/postgresql-backup-budget-before',file.replaceAll('/','__')+'.txt'):fs.existsSync(frozen)?frozen:require('../test-support/legacy-baseline').legacyPath(file);
    assert.equal(hash(fs.readFileSync(from)),old?pins.before:pins.after,'historical bridge source must match its original pin: '+file);
    const to=path.join(target,file);fs.mkdirSync(path.dirname(to),{recursive:true});fs.copyFileSync(from,to);
   }

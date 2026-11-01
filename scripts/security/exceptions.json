@@ -341,6 +341,126 @@
       "reviewedOn": "2026-10-19",
       "expiresOn": "2026-11-02",
       "priority": "P3"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "9a2736d4afef782e30d5362bd40384d0e0dd1e8a7417943d7adefdd370dfc7da",
+      "sourceSha256": "7c8f0e98b64aa7a01230d3c7001d9c0beae2098fdfff1ba1c23b587fede45b63",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex: the public cookie-name prefix grabenplaner_csrf= is concatenated with a value computed at runtime. This literal contains no token value; exact fingerprint and source bytes only. No human approval claimed.",
+      "reviewedOn": "2026-10-25",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "d367af92b81bd432d068fb2963d3dc2f0e443c670baa3cb596f981e34c0578b1",
+      "sourceSha256": "ccfce6c8a5b424f9200c91e94aac8cd5ab7ce1ad10ac0980c7b8d609a430e6a6",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex: before-passkeys-v1 is a public opt-in marker for the isolated upgrade-test fixture, not a credential or confidential value. Exact fingerprint and source bytes only; no human approval claimed.",
+      "reviewedOn": "2026-10-25",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "dd8ece933083a54a592ce63443416e91a293296bc74b5d30cad456093e877c3e",
+      "sourceSha256": "b5bb8760d18a1c9d7a722ceffe9a018297376c8d85d63e9d9863e752588205c1",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically re-reviewed by Codex against authenticated native run40556027364: the public before-passkeys-v1 opt-in at test/passkeys-upgrade-restore-postgresql.test.js:4 has byte-identical source text and reported scanner span compared with commit167ca3716c399b5ea80744b60c349673d227b687. The complete file delta only models the pre-activation A-compatible fixture and asserts genuine B-required rejection and post-activation default opening. This is not a credential. Only this existing directory-mode fingerprint and full Git-LF source hash are rebound; priority, expiry and review authority remain unchanged. No path-wide exemption or human approval.",
+      "reviewedOn": "2026-10-25",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "ebb80f580342b1c1de8ed464c94100ab96940b9de2264f489d48145cad3f09a8",
+      "sourceSha256": "a96843ffdbd241f823df00e52065886072895264780e527c558e61dc20af834c",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex: before-passkeys-v1 is a public opt-in marker for the isolated upgrade-test fixture, not a credential or confidential value. Exact fingerprint and source bytes only; no human approval claimed.",
+      "reviewedOn": "2026-10-25",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "39c1843aab2d738e976cc753aa024a52c038de13151a5b8a96e74f80f222ee02",
+      "sourceSha256": "08081b7a589c46abbdfa46dea0d1f0055e8916a0129ffb423e5cbd41cd4d630c",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex: before-passkeys-v1 is a public opt-in marker for the isolated upgrade-test fixture, not a credential or confidential value. Exact fingerprint and source bytes only; no human approval claimed.",
+      "reviewedOn": "2026-10-25",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "407a40a4edef005ef35c087e05fa8445fb4a8350664be01226f639c1e2c78c4d",
+      "sourceSha256": "ccfce6c8a5b424f9200c91e94aac8cd5ab7ce1ad10ac0980c7b8d609a430e6a6",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex: before-passkeys-v1 is a public opt-in marker for the isolated upgrade-test fixture, not a credential or confidential value. Exact fingerprint and source bytes only; no human approval claimed.",
+      "reviewedOn": "2026-10-25",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "9eaaed128eae7b0cd29f5e9b847f89f3dd0ac90c61ac748bd682dda882928e33",
+      "sourceSha256": "7c8f0e98b64aa7a01230d3c7001d9c0beae2098fdfff1ba1c23b587fede45b63",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex: the public cookie-name prefix grabenplaner_csrf= is concatenated with a value computed at runtime. This literal contains no token value; exact fingerprint and source bytes only. No human approval claimed.",
+      "reviewedOn": "2026-10-25",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "3c908cdcef382bb10540473f15d48b9f5dbf4095922ed0df6ca2c4b8c06e3ec9",
+      "sourceSha256": "ad22c1f3b70bae78b9c628c7145893e0e6b3879ba496905bf8fd33a13b23e058",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex: before-passkeys-v1 is a public opt-in marker for the isolated upgrade-test fixture, not a credential or confidential value. Exact fingerprint and source bytes only; no human approval claimed.",
+      "reviewedOn": "2026-10-25",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "ebb80f580342b1c1de8ed464c94100ab96940b9de2264f489d48145cad3f09a8",
+      "sourceSha256": "08081b7a589c46abbdfa46dea0d1f0055e8916a0129ffb423e5cbd41cd4d630c",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex: the same public before-passkeys-v1 opt-in at the exact CI-runner location, with LF bytes independently verified against its committed Git blob and final Linux source manifest. This byte-variant record does not claim a Linux scanner run or human approval.",
+      "reviewedOn": "2026-10-25",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "d367af92b81bd432d068fb2963d3dc2f0e443c670baa3cb596f981e34c0578b1",
+      "sourceSha256": "25fa0dd1ebffe74a0a53daab24754f65e9416aa9ef57d947eb5239d34f3661c1",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically re-reviewed by Codex against native run 40387646755: the before-passkeys-v1 regex assertion is the unchanged public upgrade-fixture marker at the same exact location. Only CI note-editor and sandbox tests were appended to this file. This record binds the final reviewed LF bytes, not a path allowlist or a claim of a fresh scanner pass; no human approval claimed.",
+      "reviewedOn": "2026-10-26",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "ebb80f580342b1c1de8ed464c94100ab96940b9de2264f489d48145cad3f09a8",
+      "sourceSha256": "47e10d598747b9098337ca65ea44f327581b40af6b8e2e56277853a4ac7d3f8d",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex: the public before-passkeys-v1 upgrade-fixture opt-in at directory finding line 97 is not a credential. Its literal assignment and location are unchanged from b38 native evidence; the trailing closing brace becomes a comma solely to add the isolated compatibility-fixture opt-in. Compared the complete committed 27858 runner delta. Exact identity and full Git-LF source hash only; existing priority and expiry retained. No human approval or completed new native scan is claimed.",
+      "reviewedOn": "2026-10-26",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "dc11925892f29ddbd7fe05378f458e405757a62f4bf2910efe8d4f2654849c0c",
+      "sourceSha256": "47e10d598747b9098337ca65ea44f327581b40af6b8e2e56277853a4ac7d3f8d",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically reviewed by Codex against authenticated run40416449080: the sole new Git-history finding at ci-stock-import-delete.js:97 in commit27858f422df279ae5cb0484a33657fde637dc449 is the public before-passkeys-v1 fixture opt-in, not a credential. Its reported span contains the literal assignment; the exact full Git blob matches the already reviewed current-file record. This exception binds only that Git-mode rule/path/line/commit fingerprint and source hash. Existing P2 priority and 2026-11-08 expiry are retained. No broad history/path suppression or human approval.",
+      "reviewedOn": "2026-10-26",
+      "expiresOn": "2026-11-08",
+      "priority": "P2"
     }
   ]
 }

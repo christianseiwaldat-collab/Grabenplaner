@@ -1,4 +1,5 @@
 "use strict";
+const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -7,7 +8,6 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { DatabaseSync } = require("node:sqlite");
 const { createAmuStorage } = require("../lib/amu-storage");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v058-personnel-"));
@@ -20,6 +20,10 @@ process.env.GRABENPLANER_SEED_DEMO = "1";
 process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
 process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
+const protectedKeyId = "v058-personnel-pg-fixture";
+const protectedKey = Buffer.alloc(32, 0x58).toString("base64");
+process.env.GRABENPLANER_AMU_KEY_ID = protectedKeyId;
+process.env.GRABENPLANER_AMU_KEY = protectedKey;
 
 const {
   app,
@@ -225,7 +229,7 @@ test.beforeEach(reset);
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -551,7 +555,7 @@ test("Learning-Deaktivierung über PUT und DELETE erzeugt Scope-Delta und widerr
 test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar zurück", async () => {
   const developer = session("101", "developer");
   const createAuditBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count);
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_employee_create_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'employee.create'
@@ -575,7 +579,7 @@ test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar
     assert.equal(db.prepare("SELECT 1 FROM personnel_sensitive_records WHERE employee_number = '896'").get(), undefined);
     assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), createAuditBefore);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_employee_create_audit_abort");
+    dropFixtureTrigger(db, "test_employee_create_audit_abort", { ifExists: true });
   }
 
   const displayTarget = await request("/api/employees", {
@@ -588,7 +592,7 @@ test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar
     "SELECT color, nickname FROM employees WHERE personnel_number = '897'",
   ).get() };
   const displayAuditBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count);
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_employee_display_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'employee.display.update'
@@ -608,7 +612,7 @@ test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar
     ).get() }, displayBefore);
     assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), displayAuditBefore);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_employee_display_audit_abort");
+    dropFixtureTrigger(db, "test_employee_display_audit_abort", { ifExists: true });
   }
 
   const deleteTarget = await request("/api/employees", {
@@ -623,7 +627,7 @@ test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar
   const targetPortalSession = session("898", "department_manager");
   const targetMobileSession = mobileSession("898");
   const deleteAuditBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count);
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_employee_delete_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'employee.deactivate'
@@ -649,7 +653,7 @@ test("Create-, Display- und Delete-Auditfehler rollen alle Fachmutationen atomar
     assert.equal(mobile.revoked_reason, "");
     assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), deleteAuditBefore);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_employee_delete_audit_abort");
+    dropFixtureTrigger(db, "test_employee_delete_audit_abort", { ifExists: true });
   }
 });
 
@@ -683,16 +687,9 @@ test("Employee-DTOS projizieren Learning-Rechte nur mit wirksamer Delegate-Autho
     INSERT INTO portal_permission_denials (employee_number, permission, denied_by)
     VALUES (?, 'personnel:learning:cross_location:assign', '101')
   `).run(target);
-  db.exec("PRAGMA ignore_check_constraints = ON");
+  const removeLegacyScope = require("../test-support/postgresql-api/constraint-fixture")
+    .installLegacyLearningScopeFixture(db, target, locationId);
   try {
-    db.prepare(`
-      INSERT INTO portal_permission_scope_grants (
-        employee_number, permission, location_id, department_id, approved_by
-      ) VALUES (?, 'personnel:learning:assignments:write', ?, 0, '101')
-    `).run(target, locationId);
-  } finally {
-    db.exec("PRAGMA ignore_check_constraints = OFF");
-  }
   db.prepare(`
     INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
     VALUES (?, 'employees:write', '101')
@@ -790,7 +787,7 @@ test("Employee-DTOS projizieren Learning-Rechte nur mit wirksamer Delegate-Autho
   }
 
   const postEmployeeNumber = "895";
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_employee_dto_learning_profile
     AFTER INSERT ON employees
     WHEN NEW.personnel_number = '${postEmployeeNumber}'
@@ -815,8 +812,9 @@ test("Employee-DTOS projizieren Learning-Rechte nur mit wirksamer Delegate-Autho
     assert.equal(created.payload.portal_access.role, "manager");
     assertNoLearningRightsInPortalAccess(created.payload.portal_access);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_employee_dto_learning_profile");
+    dropFixtureTrigger(db, "test_employee_dto_learning_profile", { ifExists: true });
   }
+  } finally { removeLegacyScope(); }
 });
 
 test("Identisches Employee-Full-Form-Save mit AccessProfile bleibt nebenwirkungsfrei", async () => {
@@ -1085,7 +1083,7 @@ test("Learning-Employee-Scope, Sitzungen und Audits rollen bei Auditfehler gemei
     FROM employees WHERE personnel_number = ?
   `).get(employeeNumber) };
   const auditBefore = db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count;
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_employee_update_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'employee.update'
@@ -1113,7 +1111,7 @@ test("Learning-Employee-Scope, Sitzungen und Audits rollen bei Auditfehler gemei
     assert.equal(mobile.revoked_at, null);
     assert.equal(mobile.revoked_reason, "");
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_employee_update_audit_abort");
+    dropFixtureTrigger(db, "test_employee_update_audit_abort", { ifExists: true });
   }
 });
 
@@ -1236,10 +1234,10 @@ test("v0.58: ungültiges Rechteprofil rollt die komplette Neuanlage zurück", as
 test("Personalmodul R1: konkurrierender AccessProfile-Scope endet kontrolliert und atomar", async () => {
   const developer = session("101", "developer");
   const employeeNumber = "889";
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_access_profile_scope_unique_race
     BEFORE INSERT ON portal_access_scopes
-    WHEN NEW.employee_number = '${employeeNumber}'
+    WHEN NEW.employee_number = '${employeeNumber}' AND pg_trigger_depth() = 1
     BEGIN
       INSERT INTO portal_access_scopes (
         employee_number, location_id, department_id, assigned_by
@@ -1263,7 +1261,7 @@ test("Personalmodul R1: konkurrierender AccessProfile-Scope endet kontrolliert u
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM portal_access_scopes WHERE employee_number = ?")
       .get(employeeNumber).count, 0);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_access_profile_scope_unique_race");
+    dropFixtureTrigger(db, "test_access_profile_scope_unique_race", { ifExists: true });
   }
 });
 
@@ -1403,124 +1401,6 @@ test("Personalmodul R1: Rechteprofile binden keine Leitungsrolle an inaktive Ber
   }
 });
 
-test("v0.58: bestehende Klartext-Personalaktfelder werden einmalig verschlüsselt und geleert", () => {
-  const reportId = Number(db.prepare(`
-    INSERT INTO amu_reports
-      (employee_number, location_id, department_id, incapacity_from, incapacity_to, employee_note, review_note,
-       reviewed_by, reviewed_at, retention_until, status, protected_payload)
-    VALUES ('102', ?, NULL, '2027-09-01', '2027-09-03', 'Klartextnotiz', 'Geprüft', '101',
-      '2027-09-04T10:00:00.000Z', '2029-09-03', 'reviewed', '')
-  `).run(locationId).lastInsertRowid);
-  const documentId = crypto.randomUUID();
-  const storageKey = `${documentId.slice(0, 2)}/${documentId}.amu`;
-  db.prepare(`
-    INSERT INTO amu_documents
-      (id, report_id, storage_key, original_filename, detected_mime, byte_size, sha256, scan_status,
-       encryption_key_id, encryption_iv, encryption_tag, status, uploaded_by, protected_payload)
-    VALUES (?, ?, ?, 'Befund.pdf', 'application/pdf', 1234, ?, 'clean', 'local-v1', '', '', 'active', '102', '')
-  `).run(documentId, reportId, storageKey, "a".repeat(64));
-
-  const migrated = migrateProtectedPersonnelRecords();
-  assert.deepEqual(migrated, { reports: 1, documents: 1 });
-  const report = db.prepare("SELECT * FROM amu_reports WHERE id = ?").get(reportId);
-  const document = db.prepare("SELECT * FROM amu_documents WHERE id = ?").get(documentId);
-  assert.equal(report.incapacity_from, "");
-  assert.equal(report.employee_note, "");
-  assert.equal(report.review_note, "");
-  assert.match(report.protected_payload, /^enc:v2:/);
-  assert.equal(document.original_filename, "");
-  assert.equal(document.byte_size, 0);
-  assert.match(document.protected_payload, /^enc:v2:/);
-  const reportPayload = parseProtectedJson(report.protected_payload, {
-    namespace: "personnel-record", recordId: String(reportId), field: "payload", employeeNumber: "102",
-  });
-  assert.equal(reportPayload.incapacityFrom, "2027-09-01");
-  assert.equal(reportPayload.employeeNote, "Klartextnotiz");
-  assert.equal(reportPayload.reviewNote, "Geprüft");
-  assert.deepEqual(migrateProtectedPersonnelRecords(), { reports: 0, documents: 0 });
-});
-
-test("v0.58: Admin darf keine Datenbank über die geschützte API importieren", async () => {
-  const admin = session("101", "admin");
-  const denied = await requestRaw("/api/backup/import", { auth: admin, body: Buffer.alloc(2048) });
-  assert.equal(denied.response.status, 403, JSON.stringify(denied.payload));
-  assert.equal(denied.payload.code, "BACKUP_IMPORT_ROLE_DENIED");
-});
-
-test("v0.87: unlesbarer DB-Import wird unter Windows erst geschlossen und dann entfernt", async () => {
-  const itAdmin = session("106", "it_admin");
-  const importDirectory = path.join(process.env.GRABENPLANER_DATA_DIR, "data");
-  const pendingImports = () => fs.existsSync(importDirectory)
-    ? fs.readdirSync(importDirectory).filter((name) => name.startsWith("pending-import-")).sort()
-    : [];
-  const before = pendingImports();
-  const denied = await requestRaw("/api/backup/import", {
-    auth: itAdmin,
-    body: Buffer.alloc(2048),
-  });
-  assert.equal(denied.response.status, 400, JSON.stringify(denied.payload));
-  assert.match(denied.payload.error, /keine lesbare SQLite-Backup-Datei/i);
-  assert.deepEqual(pendingImports(), before);
-});
-
-test("v0.58: DB-Import lehnt auch bereinigte Personalakten mit fremdem Schlüssel ab", async () => {
-  const foreignRoot = fs.mkdtempSync(path.join(testRoot, "foreign-personnel-key-"));
-  const foreignStorage = createAmuStorage({
-    rootDirectory: path.join(foreignRoot, "amu"),
-    encryptionKeys: { foreign: Buffer.alloc(32, 0x5a) },
-    activeKeyId: "foreign",
-    scanner: async () => ({ available: true, clean: true, engine: "test" }),
-  });
-  const importedPath = path.join(foreignRoot, "foreign.db");
-  const imported = new DatabaseSync(importedPath);
-  imported.exec(`
-    CREATE TABLE amu_reports (
-      id INTEGER PRIMARY KEY,
-      employee_number TEXT NOT NULL,
-      status TEXT NOT NULL,
-      protected_payload TEXT NOT NULL DEFAULT ''
-    );
-  `);
-  const context = { namespace: "personnel-record", recordId: "1", field: "payload", employeeNumber: "102" };
-  imported.prepare("INSERT INTO amu_reports (id, employee_number, status, protected_payload) VALUES (1, '102', 'purged', ?)")
-    .run(foreignStorage.protectRecord(JSON.stringify({ retentionUntil: "" }), context));
-  imported.close();
-
-  const itAdmin = session("106", "it_admin");
-  const denied = await requestRaw("/api/backup/import", { auth: itAdmin, body: fs.readFileSync(importedPath) });
-  assert.equal(denied.response.status, 409, JSON.stringify(denied.payload));
-  assert.equal(denied.payload.code, "AMU_FULL_RESTORE_REQUIRED");
-});
-
-test("v0.58: DB-Import prüft auch alte enc:v1-Personalaktfelder mit dem lokalen Schlüssel", async () => {
-  const foreignRoot = fs.mkdtempSync(path.join(testRoot, "foreign-legacy-key-"));
-  const foreignStorage = createAmuStorage({
-    rootDirectory: path.join(foreignRoot, "amu"),
-    encryptionKeys: { foreign: Buffer.alloc(32, 0x6b) },
-    activeKeyId: "foreign",
-    scanner: async () => ({ available: true, clean: true, engine: "test" }),
-  });
-  const importedPath = path.join(foreignRoot, "foreign-v057.db");
-  const imported = new DatabaseSync(importedPath);
-  imported.exec(`
-    CREATE TABLE amu_reports (
-      id INTEGER PRIMARY KEY,
-      employee_number TEXT NOT NULL,
-      status TEXT NOT NULL,
-      employee_note TEXT NOT NULL DEFAULT '',
-      review_note TEXT NOT NULL DEFAULT ''
-    );
-  `);
-  imported.prepare("INSERT INTO amu_reports (id, employee_number, status, employee_note) VALUES (1, '102', 'purged', ?)")
-    .run(foreignStorage.protectText("Alte verschlüsselte Notiz"));
-  imported.close();
-
-  const itAdmin = session("106", "it_admin");
-  const denied = await requestRaw("/api/backup/import", { auth: itAdmin, body: fs.readFileSync(importedPath) });
-  assert.equal(denied.response.status, 409, JSON.stringify(denied.payload));
-  assert.equal(denied.payload.code, "AMU_FULL_RESTORE_REQUIRED");
-});
-
 test("v0.70 Block 2: sensible Personalaktfelder werden verschlüsselt gespeichert und feldgenau ausgegeben", async () => {
   const hr = session("103", "hr");
   const saved = await request("/api/portal/v1/personnel-records/102", {
@@ -1653,33 +1533,6 @@ test("v0.70 Block 2: IT-Admin hat sensible Personaldaten nicht automatisch und d
   assert.equal(invalid.payload.code, "PERSONNEL_SOCIAL_SECURITY_INVALID");
 });
 
-test("v0.70 Block 2: DB-Import lehnt sensible Personalakten mit fremdem Schlüssel ab", async () => {
-  const foreignRoot = fs.mkdtempSync(path.join(testRoot, "foreign-sensitive-profile-"));
-  const foreignStorage = createAmuStorage({
-    rootDirectory: path.join(foreignRoot, "amu"),
-    encryptionKeys: { foreign: Buffer.alloc(32, 0x7c) },
-    activeKeyId: "foreign",
-    scanner: async () => ({ available: true, clean: true, engine: "test" }),
-  });
-  const importedPath = path.join(foreignRoot, "foreign-sensitive.db");
-  const imported = new DatabaseSync(importedPath);
-  imported.exec(`
-    CREATE TABLE personnel_sensitive_records (
-      employee_number TEXT PRIMARY KEY,
-      protected_payload TEXT NOT NULL
-    );
-  `);
-  const context = { namespace: "personnel-sensitive-record", recordId: "102", field: "payload", employeeNumber: "102" };
-  imported.prepare("INSERT INTO personnel_sensitive_records (employee_number, protected_payload) VALUES ('102', ?)")
-    .run(foreignStorage.protectRecord(JSON.stringify({ socialSecurityNumber: "1238010190" }), context));
-  imported.close();
-
-  const itAdmin = session("106", "it_admin");
-  const denied = await requestRaw("/api/backup/import", { auth: itAdmin, body: fs.readFileSync(importedPath) });
-  assert.equal(denied.response.status, 409, JSON.stringify(denied.payload));
-  assert.equal(denied.payload.code, "AMU_FULL_RESTORE_REQUIRED");
-});
-
 test("v0.70 Block 2: Personalakt-Oberfläche trennt Kontakt, sensible Daten und AUM-Verlauf kompakt", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
@@ -1693,69 +1546,50 @@ test("v0.70 Block 2: Personalakt-Oberfläche trennt Kontakt, sensible Daten und 
   assert.match(styles, /\.sensitive-personnel-section/);
 });
 
-test("Personalmodul: DB-Import verwirft entschluesselbare, aber semantisch beschaedigte Bewerberdaten vor Aktivierung", async () => {
-  const configuredFeatures = JSON.parse(
-    String(db.prepare("SELECT value FROM settings WHERE key = 'installation_features'").get()?.value || "[]"),
-  );
-  db.prepare("UPDATE settings SET value = ? WHERE key = 'installation_features'")
-    .run(JSON.stringify([...new Set([...configuredFeatures, "personnelLifecycle"])]));
 
-  const admin = session("101", "admin");
-  const created = await request("/api/portal/v1/personnel-lifecycle/candidates", {
-    method: "POST",
-    auth: admin,
-    body: {
-      dataProcessingAuthorizationConfirmed: true,
-      profile: {
-        firstName: "Import",
-        lastName: "Integritaet",
-        email: "import-integrity@example.invalid",
-      },
-    },
-  });
-  assert.equal(created.response.status, 201, JSON.stringify(created.payload));
-  const candidate = created.payload.candidate;
-  const currentRow = db.prepare(
-    "SELECT id, protected_payload, revision FROM candidates WHERE id = ?",
-  ).get(candidate.id);
-  assert.equal(currentRow.revision, 1);
 
-  const importedPath = path.join(testRoot, "candidate-semantic-corruption.db");
-  fs.rmSync(importedPath, { force: true });
-  db.exec(`VACUUM INTO '${importedPath.replace(/'/g, "''")}'`);
-  const imported = new DatabaseSync(importedPath);
-  try {
-    imported.prepare("UPDATE candidates SET revision = revision + 1 WHERE id = ?")
-      .run(candidate.id);
-    const corruptedRow = imported.prepare(
-      "SELECT id, protected_payload, revision FROM candidates WHERE id = ?",
-    ).get(candidate.id);
-    assert.equal(corruptedRow.revision, 2);
-    assert.equal(corruptedRow.protected_payload, currentRow.protected_payload);
-    assert.equal(parseProtectedJson(corruptedRow.protected_payload, {
-      namespace: "candidate-profile",
-      recordId: candidate.id,
-      field: "payload",
-      employeeNumber: `candidate:${candidate.id}`,
-    }).firstName, "Import");
-  } finally {
-    imported.close();
+test("PostgreSQL personnel verification rejects plaintext without mutation and accepts valid protected records idempotently", async () => {
+  const reportId = Number(db.prepare(`INSERT INTO amu_reports
+    (employee_number,location_id,incapacity_from,incapacity_to,employee_note,status,protected_payload)
+    VALUES('102',?,'2027-09-01','','Synthetic plaintext','reviewed','')`).run(locationId).lastInsertRowid);
+  const plaintext = db.prepare("SELECT * FROM amu_reports WHERE id=?").get(reportId);
+  await assert.rejects(() => migrateProtectedPersonnelRecords(), /PG_APPLICATION_PROTECTED_RECORD_INVALID/);
+  assert.deepEqual(db.prepare("SELECT * FROM amu_reports WHERE id=?").get(reportId), plaintext);
+  const storage = createAmuStorage({ rootDirectory: path.join(testRoot, "synthetic-verified-records"),
+    encryptionKeys: { [protectedKeyId]: protectedKey }, activeKeyId: protectedKeyId,
+    scanner: async () => ({ available: true, clean: true, engine: "test" }) });
+  const reportContext = { namespace:"personnel-record",recordId:String(reportId),field:"payload",employeeNumber:"102" };
+  const reportPayload = { incapacityFrom:"2027-09-01",employeeNote:"Synthetic protected note",reviewNote:"Synthetic protected review" };
+  const reportProtected = storage.protectRecord(JSON.stringify(reportPayload), reportContext);
+  db.prepare("UPDATE amu_reports SET incapacity_from='',employee_note='',protected_payload=? WHERE id=?").run(reportProtected, reportId);
+  const documentId = crypto.randomUUID(), documentPayload = { originalFilename:"Synthetic.pdf",byteSize:1234 };
+  const documentContext = { namespace:"personnel-record-document",recordId:documentId,field:"payload",employeeNumber:"102" };
+  const documentProtected = storage.protectRecord(JSON.stringify(documentPayload), documentContext);
+  db.prepare(`INSERT INTO amu_documents
+    (id,report_id,storage_key,original_filename,detected_mime,byte_size,sha256,scan_status,
+     encryption_key_id,encryption_iv,encryption_tag,status,uploaded_by,protected_payload)
+    VALUES(?,?,?,'','application/pdf',0,?,'clean',?,'','','active','102',?)`)
+    .run(documentId, reportId, `${documentId.slice(0, 2)}/${documentId}.amu`, "a".repeat(64), protectedKeyId, documentProtected);
+  const beforeReport=db.prepare("SELECT * FROM amu_reports WHERE id=?").get(reportId);
+  const beforeDocument=db.prepare("SELECT * FROM amu_documents WHERE id=?").get(documentId);
+  for(let i=0;i<2;i++) assert.deepEqual(await migrateProtectedPersonnelRecords(),{reports:0,documents:0});
+  assert.deepEqual(db.prepare("SELECT * FROM amu_reports WHERE id=?").get(reportId),beforeReport);
+  assert.deepEqual(db.prepare("SELECT * FROM amu_documents WHERE id=?").get(documentId),beforeDocument);
+  assert.deepEqual(parseProtectedJson(reportProtected,reportContext),reportPayload);
+  assert.deepEqual(parseProtectedJson(documentProtected,documentContext),documentPayload);
+});
+
+test("PostgreSQL server refuses online database imports for every technical role without staging or personnel data mutation", async () => {
+  const directory=path.join(process.env.GRABENPLANER_DATA_DIR,"data");
+  const pending=()=>fs.existsSync(directory)?fs.readdirSync(directory).filter(name=>name.startsWith("pending-import-")).sort():[];
+  const beforeFiles=pending(),beforeEmployees=db.prepare("SELECT personnel_number,full_name FROM employees ORDER BY personnel_number").all();
+  const beforeReports=db.prepare("SELECT * FROM amu_reports ORDER BY id").all();
+  for(const role of ["admin","it_admin","developer"]){
+    const result=await requestRaw("/api/backup/import",{auth:session(role==="it_admin"?"106":"101",role),
+      body:Buffer.concat([Buffer.from("SQLite format 3\0"),Buffer.alloc(2032)])});
+    assert.equal(result.response.status,409,JSON.stringify(result.payload));assert.equal(result.payload.code,"SERVER_MANAGED_BACKUP");
+    assert.deepEqual(pending(),beforeFiles);
+    assert.deepEqual(db.prepare("SELECT personnel_number,full_name FROM employees ORDER BY personnel_number").all(),beforeEmployees);
+    assert.deepEqual(db.prepare("SELECT * FROM amu_reports ORDER BY id").all(),beforeReports);
   }
-
-  const importDirectory = path.join(process.env.GRABENPLANER_DATA_DIR, "data");
-  const pendingImports = () => fs.existsSync(importDirectory)
-    ? fs.readdirSync(importDirectory).filter((name) => name.startsWith("pending-import-")).sort()
-    : [];
-  const before = pendingImports();
-  const denied = await requestRaw("/api/backup/import", {
-    auth: session("106", "it_admin"),
-    body: fs.readFileSync(importedPath),
-  });
-  assert.equal(denied.response.status, 409, JSON.stringify(denied.payload));
-  assert.equal(denied.payload.code, "AMU_FULL_RESTORE_REQUIRED");
-  assert.deepEqual(pendingImports(), before);
-  assert.deepEqual(
-    db.prepare("SELECT id, protected_payload, revision FROM candidates WHERE id = ?").get(candidate.id),
-    currentRow,
-  );
 });

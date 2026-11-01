@@ -129,9 +129,9 @@ test('affinity keeps queue bounds and releases slots after failures and shutdown
   assert.equal((await f.pool.run({...base,query})).items[0].receipt,'1');
   await turn();
   const holding=Array.from({length:3},()=>f.pool.run({operation:'trade-insights',testHold:true}));await turn();
-  const stopped=assert.rejects(f.pool.run({...base,query}),error=>error.code==='IMPORT_REPORT_WORKER_FAILED');
+  const stopped=assert.rejects(f.pool.run({...base,query}),error=>error.code==='IMPORT_REPORT_WORKER_STOPPED');
   await f.pool.close();await stopped;await Promise.all(holding);
-  await assert.rejects(f.pool.run({...base,query}),error=>error.code==='IMPORT_REPORT_WORKER_FAILED');
+  await assert.rejects(f.pool.run({...base,query}),error=>error.code==='IMPORT_REPORT_WORKER_STOPPED');
 });
 
 test('PostgreSQL receipt wrapper forwards a branded outer executor for protected source reads',async t=>{

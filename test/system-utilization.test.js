@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { HOURS, createHostCpuSampler, createSystemUtilizationRecorder, readCpuCounters } = require("../lib/system-utilization");
+const { HOURS, HOST_CPU_STAT_PATH, createHostCpuSampler, createSystemUtilizationRecorder, readCpuCounters, readLinuxCpuStat } = require("../lib/system-utilization");
 
 const counters = (user, idle, processors = 2) => ({ values: [user, 0, 0, idle, 0, 0, 0, 0], idle, logicalProcessors: processors });
 const memory = () => ({ totalBytes: 1000, availableBytes: 600, usedPercent: 40, availabilitySource: "mem_available" });
@@ -36,6 +36,74 @@ test("Linux parser excludes guest double-counting and includes I/O wait in idle"
   assert.equal(value.idle, 450); assert.equal(value.logicalProcessors, 2);
   const local = readCpuCounters("win32", undefined, () => [{ times: { user: 100, nice: 0, sys: 50, idle: 300, irq: 5 } }]);
   assert.equal(local.idle, 300); assert.deepEqual(local.values, [100, 0, 50, 300, 5]);
+});
+
+test("Linux CPU prefers the native proc file and never reads the optional bind unnecessarily", () => {
+  const calls = [], content = "cpu 100 0 20 400 0 0 0 0\ncpu0 1 2\n";
+  assert.equal(readLinuxCpuStat((file, encoding) => { calls.push([file, encoding]); return content; }), content);
+  assert.deepEqual(calls, [["/proc/stat", "utf8"]]);
+});
+
+test("hidden or denied global proc counters use only the fixed read-only host alias", () => {
+  for (const code of ["ENOENT", "EACCES", "EPERM"]) {
+    const calls = [], content = "cpu 100 0 20 400 0 0 0 0\ncpu0 1 2\n";
+    const value = readLinuxCpuStat((file, encoding) => {
+      calls.push([file, encoding]);
+      if (file === "/proc/stat") throw Object.assign(new Error("ProcSubset=pid"), { code });
+      assert.equal(file, HOST_CPU_STAT_PATH); return content;
+    });
+    assert.equal(value, content);
+    assert.deepEqual(calls, [["/proc/stat", "utf8"], ["/run/grabenplaner-host-cpu-stat", "utf8"]]);
+  }
+});
+
+test("CPU alias does not hide unexpected primary I/O errors or malformed counters", () => {
+  const calls = [], error = Object.assign(new Error("I/O failure"), { code: "EIO" });
+  assert.throws(() => readLinuxCpuStat(file => { calls.push(file); throw error; }), value => value === error);
+  assert.deepEqual(calls, ["/proc/stat"]);
+  const malformedCalls = [];
+  const sample = createHostCpuSampler({ readCounters: () => readCpuCounters("linux", () => readLinuxCpuStat(file => {
+    malformedCalls.push(file); return "not CPU counters";
+  })) });
+  assert.equal(sample(1000).status, "unavailable");
+  assert.deepEqual(malformedCalls, ["/proc/stat"]);
+});
+
+test("hardened Linux recorder measures fresh host alias deltas and retains unavailable gaps", () => {
+  let at = 1000, content = "cpu 100 0 0 300 0 0 0 0\ncpu0 1 2\ncpu1 1 2\n", present = true;
+  const readFile = file => {
+    if (file === "/proc/stat" || !present) throw Object.assign(new Error("not present"), { code: "ENOENT" });
+    assert.equal(file, HOST_CPU_STAT_PATH); return content;
+  };
+  const sampler = createHostCpuSampler({ readCounters: () => readCpuCounters("linux", () => readLinuxCpuStat(readFile)) });
+  const recorder = createSystemUtilizationRecorder({ now: () => at, cpuSample: sampler, memorySample: memory });
+  recorder.collect(); assert.equal(recorder.snapshot().cpu.status, "warming-up");
+  at += 10_000; content = "cpu 200 0 0 600 0 0 0 0\ncpu0 1 2\ncpu1 1 2\n";
+  recorder.collect(); assert.equal(recorder.snapshot().cpu.usedPercent, 25);
+  assert.equal(recorder.snapshot().cpu.logicalProcessors, 2);
+  assert.equal(recorder.snapshot().cpu.measurement, "host_cpu_times");
+  at += 10_000; recorder.collect();
+  assert.equal(recorder.snapshot().cpu.usedPercent, null, "a copied/stale counter file cannot invent zero utilization");
+  at += 10_000; present = false; recorder.collect(); assert.equal(recorder.snapshot().cpu.status, "unavailable");
+  at += 10_000; present = true; content = "cpu 300 0 0 900 0 0 0 0\ncpu0 1 2\ncpu1 1 2\n";
+  recorder.collect(); assert.equal(recorder.snapshot().cpu.status, "warming-up");
+  at += 10_000; content = "cpu 400 0 0 1200 0 0 0 0\ncpu0 1 2\ncpu1 1 2\n";
+  recorder.collect(); assert.equal(recorder.snapshot().cpu.usedPercent, 25);
+  at += 10_000;
+  const points = recorder.read(1).points.filter(point => point.sampleCount);
+  assert.equal(points.filter(point => point.cpu.count).length, 2);
+  assert(points.some(point => point.hasGap && point.cpu.count === 0));
+  assert.equal(recorder.snapshot().memory.usedPercent, 40);
+});
+
+test("CPU bind template exposes only live read-only aggregate counters and preserves the Core6 proc sandbox", () => {
+  const root = path.join(__dirname, "..");
+  const template = fs.readFileSync(path.join(root, "server-tools/linux/grabenplaner-host-cpu-stat.conf.in"), "utf8");
+  const directives = template.split(/\r?\n/u).filter(line => line && !line.startsWith("#"));
+  assert.deepEqual(directives, ["[Service]", `BindReadOnlyPaths=/proc/stat:${HOST_CPU_STAT_PATH}:norbind`]);
+  const unit = fs.readFileSync(path.join(root, "server-tools/linux/grabenplaner.service.in"), "utf8");
+  assert.match(unit, /^ProtectProc=invisible$/mu); assert.match(unit, /^ProcSubset=pid$/mu);
+  assert.doesNotMatch(template, /^\s*(?:BindPaths|ProcSubset|ProtectProc|CapabilityBoundingSet|AmbientCapabilities|ExecStart|User|Group)=/mu);
 });
 
 test("CPU resets, hotplug, bad counters and large/negative intervals stay unknown", () => {

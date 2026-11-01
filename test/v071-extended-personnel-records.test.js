@@ -1,4 +1,8 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
+
+// Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
+// Other PostgreSQL and application assertions below still use current code.
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -8,7 +12,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const vm = require("node:vm");
-const { spawnSync } = require("node:child_process");
+const { spawnSync, execFileSync } = require("node:child_process");
 const { createAmuStorage } = require("../lib/amu-storage");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v071-personnel-"));
@@ -25,10 +29,7 @@ process.env.TZ = "Europe/Vienna";
 const {
   app,
   db,
-  createDatabaseBackupToDirectory,
   finalizeDeletedPersonnelRecordDocuments,
-  latestDatabaseBackup,
-  pruneDatabaseBackups,
   releaseInstanceLockForTests,
 } = require("../server");
 
@@ -253,15 +254,15 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
 test("v0.71 Block 4: Schema, Migration und alte verschlüsselte Personalakte bleiben kompatibel", async () => {
-  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'personnel_record_documents'").get());
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.71-extended-personnel-records'").get());
-  const columns = new Set(db.prepare("PRAGMA table_info(personnel_record_documents)").all().map((column) => column.name));
+  assert.ok(pgSchema.tableExists(db, "personnel_record_documents"));
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
+  const columns = new Set(pgSchema.columns(db, "personnel_record_documents").map((column) => column.name));
   for (const column of ["id", "employee_number", "storage_key", "status", "protected_payload", "created_at", "deleted_by", "deleted_at"]) {
     assert.ok(columns.has(column), `Spalte ${column} fehlt`);
   }
@@ -718,93 +719,48 @@ test("M6: versionierte Personalakt-Dokumente bleiben außerhalb des Legacy-Lösc
     .get(stored.id).status, "active");
 });
 
-test("v0.71 Block 4: Sicherungspunkte enthalten alle aktiven geschützten Dokumente", async (t) => {
-  insertEmployee("8720");
-  const hr = session("103", "hr");
-  const uploaded = await uploadDocument("8720", hr, { title: "Backup-Dokument" });
-  assert.equal(uploaded.response.status, 201, uploaded.text);
-  const stored = db.prepare("SELECT * FROM personnel_record_documents WHERE id = ?").get(uploaded.payload.document.id);
-  const blobPath = path.join(testRoot, "app-data", "private", "amu", "blobs", ...stored.storage_key.split("/"));
+// Execute only the explicitly selected immutable historical assertion. The
+// current server and current PostgreSQL API fixtures are never redirected.
+function runFrozenHistoricalBackupTest(t, relative, expectedSha256, pattern, expectedPass) {
+  const historical = require("../test-support/legacy-baseline");
+  assert.equal(historical.BASELINE, "b2ba03cdc0b738d44766857de052e090db557807");
+  historical.linkFrozenDependencies();
+  const original = execFileSync("git", ["--no-replace-objects", "-C", path.resolve(__dirname, ".."),
+    "show", historical.BASELINE + ":" + relative], { timeout: 30000, maxBuffer: 4 * 1024 * 1024, windowsHide: true });
+  assert.equal(crypto.createHash("sha256").update(original).digest("hex"), expectedSha256);
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "gp-immutable-backup-test-"));
+  t.after(() => {
+    assert.equal(path.dirname(fs.realpathSync(directory)), fs.realpathSync(os.tmpdir()));
+    fs.rmSync(directory, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
+  });
+  const driver = path.join(directory, "immutable-backup.test.js"), filename = historical.legacyPath(relative);
+  fs.writeFileSync(driver, `const Module=require('node:module'),path=require('node:path');
+const filename=${JSON.stringify(filename)},subject=new Module(filename,module);
+subject.filename=filename;subject.paths=Module._nodeModulePaths(path.dirname(filename));
+subject._compile(${JSON.stringify(original.toString("utf8"))},filename);\n`);
+  // execFileSync deliberately avoids the PostgreSQL fixture's spawn adapter.
+  // The child receives no inherited NODE_OPTIONS, connection URLs or owner marker.
+  const environment = { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot,
+    LANG: "C.UTF-8", NODE_ENV: "test", GP_PG_API_FIXTURE_BRIDGE: "0" };
+  let output;
+  try {
+    output = execFileSync(process.execPath, ["--no-global-search-paths", "--test", "--test-reporter=tap",
+      ...(pattern ? ["--test-name-pattern=" + pattern] : []), driver], {
+      cwd: historical.sourceRoot(), env: environment, encoding: "utf8", timeout: 180000,
+      maxBuffer: 4 * 1024 * 1024, windowsHide: true,
+    });
+  } catch (error) {
+    assert.fail(String(error.stdout || "").slice(-18000) + "\n" + String(error.stderr || error.message).slice(-4000));
+  }
+  assert.match(output, new RegExp("^# pass " + expectedPass + "$", "m"));
+  assert.match(output, /^# fail 0$/m);
+  t.diagnostic(`Immutable ${historical.BASELINE} ${relative}: ${expectedPass} original assertions passed; SHA256 ${expectedSha256}`);
+}
 
-  const backupDirectory = path.join(testRoot, "verified-backup");
-  t.mock.timers.enable({ apis: ["Date"], now: Date.now() - 24 * 60 * 60 * 1000 });
-  const backup = createDatabaseBackupToDirectory(backupDirectory, "test", "test");
-  assert.equal(backup.verified, true);
-  assert.equal(backup.committed, true);
-  assert.equal(fs.existsSync(backup.path), true);
-  assert.equal(fs.existsSync(backup.marker), true);
-  assert.equal(latestDatabaseBackup(backupDirectory).committed, true);
-  const verifierPath = path.join(__dirname, "..", "server-tools", "linux", "lib", "verify-backup.js");
-  const amuModulePath = path.join(__dirname, "..", "lib", "amu-storage.js");
-  const malformedMarker = path.join(backupDirectory, "malformed-marker.json");
-  const malformedPayload = JSON.parse(fs.readFileSync(backup.marker, "utf8"));
-  malformedPayload.protectedDocuments.files = -1;
-  fs.writeFileSync(malformedMarker, `${JSON.stringify(malformedPayload)}\n`);
-  const malformedVerification = spawnSync(process.execPath, [
-    verifierPath,
-    backup.path,
-    path.join(backupDirectory, `${path.basename(backup.path, ".db")}.amu`),
-    amuModulePath,
-    malformedMarker,
-  ], { encoding: "utf8" });
-  assert.notEqual(malformedVerification.status, 0);
-  fs.writeFileSync(malformedMarker, `${JSON.stringify(malformedPayload)}${" ".repeat(65 * 1024)}`);
-  const oversizedVerification = spawnSync(process.execPath, [
-    verifierPath,
-    backup.path,
-    path.join(backupDirectory, `${path.basename(backup.path, ".db")}.amu`),
-    amuModulePath,
-    malformedMarker,
-  ], { encoding: "utf8" });
-  assert.notEqual(oversizedVerification.status, 0);
-  fs.rmSync(malformedMarker, { force: true });
-  const manifest = JSON.parse(fs.readFileSync(path.join(
-    backupDirectory,
-    `${path.basename(backup.path, ".db")}.amu`,
-    "manifest.json",
-  ), "utf8"));
-  assert.ok(manifest.files.some((entry) => entry.storageKey === stored.storage_key));
-
-  // Keep two different calendar days before corrupting the newer daily point.
-  t.mock.timers.tick(24 * 60 * 60 * 1000);
-  const invalidNew = createDatabaseBackupToDirectory(backupDirectory, "test-invalid-new", "test");
-  fs.appendFileSync(invalidNew.path, "tampered");
-  const pruneResult = spawnSync(process.execPath, [
-    path.join(__dirname, "..", "server-tools", "linux", "lib", "prune-backups.js"),
-    backupDirectory,
-    "1",
-    verifierPath,
-    amuModulePath,
-  ], { encoding: "utf8" });
-  assert.equal(pruneResult.status, 0, pruneResult.stderr);
-  assert.equal(JSON.parse(pruneResult.stdout).valid, 1);
-  assert.equal(fs.existsSync(backup.marker), true);
-  assert.equal(fs.existsSync(invalidNew.marker), true);
-  assert.equal(latestDatabaseBackup(backupDirectory).marker, backup.marker);
-
-  const legacyDirectory = path.join(testRoot, "legacy-backup");
-  fs.mkdirSync(legacyDirectory);
-  const legacyDatabase = path.join(legacyDirectory, path.basename(backup.path));
-  const legacyDocuments = path.join(legacyDirectory, `${path.basename(backup.path, ".db")}.amu`);
-  fs.copyFileSync(backup.path, legacyDatabase);
-  fs.cpSync(path.join(backupDirectory, `${path.basename(backup.path, ".db")}.amu`), legacyDocuments, { recursive: true });
-  const legacy = latestDatabaseBackup(legacyDirectory);
-  assert.equal(legacy.legacy, true);
-  assert.equal(legacy.committed, false);
-  pruneDatabaseBackups(legacyDirectory, 1);
-  assert.equal(fs.existsSync(legacyDatabase), true);
-  assert.equal(fs.existsSync(legacyDocuments), true);
-
-  const encrypted = fs.readFileSync(blobPath);
-  fs.rmSync(blobPath);
-  const brokenBackupDirectory = path.join(testRoot, "broken-backup");
-  assert.throws(
-    () => createDatabaseBackupToDirectory(brokenBackupDirectory, "test-missing-blob", "test"),
-    /nicht gefunden|Integrität|Dokument/i,
-  );
-  assert.equal(fs.existsSync(brokenBackupDirectory), false);
-  fs.mkdirSync(path.dirname(blobPath), { recursive: true });
-  fs.writeFileSync(blobPath, encrypted);
+test("immutable historical SQLite snapshots include every protected personnel document", { timeout: 240000 }, t => {
+  runFrozenHistoricalBackupTest(t, "test/v071-extended-personnel-records.test.js",
+    "0d41e8791c9ad00e1903923d12d1822dbda36e53de833d6c3de14f1eb9321641",
+    "^v0\\.71 Block 4: Sicherungspunkte", 1);
 });
 
 test("v0.71 Block 4: geschützte Formulare vermeiden Autofill und senden nur Feldänderungen", () => {

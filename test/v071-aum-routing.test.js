@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -113,9 +114,9 @@ function reportFrom(payload, reportId) {
 
 test.before(async () => {
   const settings = JSON.stringify(daySettings());
-  db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('171', 'Routing Nord', 2, ?, 1)")
+  prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('171', 'Routing Nord', 2, ?, 1)")
     .run(settings);
-  db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('172', 'Routing Sued', 2, ?, 1)")
+  prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('172', 'Routing Sued', 2, ?, 1)")
     .run(settings);
   const northDepartment = Number(db.prepare(`
     INSERT INTO departments (location_id, name, min_staff, active, sort_order)
@@ -169,7 +170,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  db.close();
+  await db.close();
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true });
 });

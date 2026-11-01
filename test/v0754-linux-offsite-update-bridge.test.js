@@ -231,7 +231,7 @@ test("v0.75.4 updater uses the installed root-protected helper and accepts both 
   assert.match(updater, /stat --format='%u:%g:%h' -- "\$offsite_gate_helper"\)" == "0:\$service_group_gid:1"/);
   assert.match(updater, /offsite_gate_helper_mode="\$\(stat --format='%a' -- "\$offsite_gate_helper"\)"/);
   assert.match(updater, /8#\$offsite_gate_helper_mode & 022/);
-  assert.match(updater, /"\$node" "\$offsite_gate_helper" "\$manifest_result_file" "\$installed_offsite_receipt"/);
+  assert.match(updater, /root_node "\$offsite_gate_helper" "\$manifest_result_file" "\$installed_offsite_receipt"/);
   assert.match(updater, /compatible\|compatible-installer-only\)\s*;;/);
 });
 

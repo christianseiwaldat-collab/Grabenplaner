@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
+const { functionSource } = require("../test-support/learning-workspace-ui");
 
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
@@ -25,8 +26,38 @@ test("VPS-Reboot ist als eigener Developer-Dialog vom Dienstneustart getrennt", 
   assert.match(html, /id="vpsRebootCurrentPassword"[^>]*autocomplete="current-password"/);
   assert.match(html, /Sicherung erstellen und VPS neu starten/);
   assert.match(app, /data-server-monitor-action="vps-reboot"/);
-  assert.match(app, /confirmation:\s*"VPS_REBOOT",\s*currentPassword/);
-  assert.match(app, /\/api\/portal\/v1\/server-monitor\/vps-reboot/);
+  const submit = functionSource("submitVpsReboot", "app.js");
+  assert.match(submit, /confirmation:\s*"VPS_REBOOT"/);
+  assert.match(submit, /\/api\/portal\/v1\/server-monitor\/vps-reboot/);
+});
+
+test("VPS-Reboot sendet genau einen Passwort- oder Passkeybeweis unter der bestehenden Reauthentifizierung", async () => {
+  for (const mode of ["password", "passkey", "cancelled", "missing-password"]) {
+    const calls = [], effects = [], proof = { challengeId: "synthetic-challenge", response: { type: "public-key" } };
+    const state = { serverStatus: { monitorActions: { canVpsReboot: true } } };
+    const elements = { vpsRebootCurrentPassword: { value: mode === "password" ? "synthetic-current-password" : "", focus() {} },
+      vpsRebootModal: { close() { effects.push("close"); } } };
+    const context = vm.createContext({ state, elements, window: { GPPasskeyAuth: {
+      selected: operation => { assert.equal(operation, "vps-reboot"); return ["passkey", "cancelled"].includes(mode); },
+      authorization: async (_api, operation) => {
+        assert.equal(operation, "vps-reboot"); assert.equal(effects.at(-1), "lock");
+        if (mode === "cancelled") throw Object.assign(Error("Synthetic cancellation"), { name: "AbortError" });
+        return { passkey: proof };
+      },
+    } }, api: async (url, request) => { calls.push({ url, method: request.method, body: JSON.parse(request.body) }); return { previousHostBootGeneration: "synthetic-old-boot" }; },
+      withAdminReauthentication: async work => { effects.push("lock"); try { return await work(); } finally { effects.push("unlock"); } },
+      setVpsRebootMessage() {}, applyVpsRebootDialogState() {}, renderServerDiagnostics() {}, showToast() {}, resetAdminCredentialVisibility() {},
+      applyServerDiagnosticsLoadingState() {}, waitForServerReadinessAfterVpsReboot: () => effects.push("wait-read-only") });
+    vm.runInContext(functionSource("submitVpsReboot", "app.js"), context);
+    await context.submitVpsReboot({ preventDefault() {} });
+    if (["password", "passkey"].includes(mode)) {
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0], { url: "/api/portal/v1/server-monitor/vps-reboot", method: "POST",
+        body: { confirmation: "VPS_REBOOT", ...(mode === "password" ? { currentPassword: "synthetic-current-password" } : { passkey: proof }) } });
+      assert.equal(state.vpsRebootAccepted, true); assert(effects.includes("wait-read-only"));
+    } else { assert.equal(calls.length, 0); assert.equal(state.vpsRebootAccepted, undefined); assert(!effects.includes("wait-read-only")); }
+    assert.equal(elements.vpsRebootCurrentPassword.value, "");
+  }
 });
 
 test("offener Sicherheitsneustart wird eindeutig vom Dienstneustart abgegrenzt", () => {

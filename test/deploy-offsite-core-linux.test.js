@@ -36,6 +36,16 @@ test("current offsite module preserves predecessors and requires the complete pa
     write(moduleName, JSON.stringify({ moduleVersion }));
     assert.equal(run().stdout, 'current');
   }
+  // Both mixed versions are fenced maintenance gaps, never accepted steady states.
+  write(moduleName, JSON.stringify({ moduleVersion: 13 }));
+  assert.notEqual(run().status, 0);
+  write("server-tools/linux/runtime-schema.json", JSON.stringify({ deploymentSchemaVersion: 6 }));
+  assert.equal(run().stdout, "current");
+  for (const moduleVersion of [7, 11, 12, 14]) {
+    write(moduleName, JSON.stringify({ moduleVersion }));
+    assert.notEqual(run().status, 0);
+  }
+  write(moduleName, JSON.stringify({ moduleVersion: 13 }));
   fs.chmodSync(path.join(root, "server-tools/linux/lib/deploy-policy.js"), 0o666);
   assert.notEqual(run().status, 0);
   write(moduleName, JSON.stringify({ moduleVersion: 6 }));

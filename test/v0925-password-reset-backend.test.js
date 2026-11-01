@@ -217,7 +217,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  db.close();
+  await db.close();
   releaseInstanceLockForTests();
   nodemailer.createTransport = nativeCreateTransport;
   fs.rmSync(testRoot, { recursive: true, force: true });

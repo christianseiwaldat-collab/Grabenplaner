@@ -6,11 +6,12 @@ async function main(){
  const [action,file,...args]=process.argv.slice(2),config=R.loadConfiguration(file);
  if(action==='check-paths'&&args.length===2){if(config.sourceFiles!==args[0]||config.backupDirectory!==args[1])throw new Error('PG_OPERATIONS_PATH_BINDING');return {verified:true};}
  if(action==='identity'&&!args.length)return require('./deploy-policy').postgresqlPairIdentity(await R.inspectPair(config));
- if(action==='backup'&&!args.length){
+ if(['backup','backup-preserve'].includes(action)&&!args.length){
   const policy=configuredPairedRetention(config);
   const result=await R.createBackup(config);
   // The caller holds maintenance and workspace leases. Only rotate after the
   // new pair is sealed; a failed backup leaves the existing recovery points.
+  if(action==='backup-preserve')return {...result,retention:{policy:'preserve-existing',removed:[]}};
   return policy?{...result,retention:await prunePairedSnapshots(config.backupDirectory,policy)}:result;
  }
  if(action==='monitor'&&!args.length)return R.monitor(config);

@@ -1,4 +1,5 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -32,7 +33,7 @@ let otherDepartmentId;
 let positionId;
 
 function hasColumn(table, column) {
-  return db.prepare(`PRAGMA table_info(${table})`).all().some((entry) => entry.name === column);
+  return pgSchema.columns(db, table).some((entry) => entry.name === column);
 }
 
 function createSession(employeeNumber, role) {
@@ -132,7 +133,7 @@ test.beforeEach(resetFixture);
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

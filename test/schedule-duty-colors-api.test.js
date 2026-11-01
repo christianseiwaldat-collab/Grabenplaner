@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -26,7 +27,7 @@ async function request(role, method, payload, suffix = "/schedule-duty-colors", 
   return { status: result.status, body: await result.json() };
 }
 test.before(async () => {
-  db.prepare("INSERT INTO locations(id,name,active) VALUES('95','Palette Nord',1),('96','Palette Süd',1)").run();
+  prepareLocationFixture(db, "INSERT INTO locations(id,name,active) VALUES('95','Palette Nord',1),('96','Palette Süd',1)").run();
   let number = 99810;
   for (const role of ["hr", "developer", "manager", "admin", "it_admin"]) {
     const employeeNumber = String(number++);
@@ -46,7 +47,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (httpServer) await new Promise(resolve => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   // Only the exact test-owned temporary fixture is removed.
   assert.ok(path.resolve(fixtureRoot).startsWith(path.resolve(os.tmpdir()) + path.sep));

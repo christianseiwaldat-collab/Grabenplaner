@@ -83,13 +83,14 @@ for (const [file, method, stateKey] of [["portal.js", "api", "session"], ["app.j
 }
 
 function changeFixture() {
-  const old = { authenticated: true, user: { employeeNumber: "SYNTHETIC", mustChangePassword: true } };
-  const replacement = { authenticated: true, user: { employeeNumber: "SYNTHETIC", mustChangePassword: false, permissions: ["own_schedule:read"] } };
+  const old = { authenticated: true, user: { employeeNumber: "SYNTHETIC", isEmployee: true, sessionKind: "employee", mustChangePassword: true } };
+  const replacement = { authenticated: true, user: { employeeNumber: "SYNTHETIC", isEmployee: true, sessionKind: "employee", mustChangePassword: false, permissions: ["own_schedule:read"] } };
   const state = { session: old }, changed = deferred(), calls = [], effects = [];
-  const context = vm.createContext({ portalState: state, el: { currentPassword: { value: "old-six" }, newPassword: { value: "New synthetic phrase" }, repeatPassword: { value: "New synthetic phrase" } },
-    window: { GrabenplanerSessionLifecycle: { publish: () => effects.push("publish"), credentials: operation => operation() } },
+  const lifecycle = { generation: 0, credentialChanged: false, advance() { this.generation++; }, publish: () => effects.push("publish"), credentials(operation) { this.advance(); return operation(); } };
+  const context = vm.createContext({ portalState: state, document: { cookie: "grabenplaner_csrf=synthetic-current" }, el: { currentPassword: { value: "old-six" }, newPassword: { value: "New synthetic phrase" }, repeatPassword: { value: "New synthetic phrase" } },
+    window: { GrabenplanerSessionLifecycle: lifecycle },
     api: async (url, options) => { calls.push({ url, options }); return url.endsWith("/password") ? changed.promise : replacement; },
-    showPortal: session => { state.session = session; effects.push("replace"); }, showLogin: () => effects.push("login"),
+    showPortal: session => { state.session = session; lifecycle.advance(); effects.push("replace"); }, showLogin: () => effects.push("login"),
     message: () => effects.push("message"), closePasswordChangeDialog: () => effects.push("close"),
     redirectToPendingCandidateEvaluation: async () => false, loadMobileLayout: async () => {}, chooseInitialPortalTab() {},
     loadPortalData: async () => effects.push("load"), refreshBirthdayPresentationTheme: async () => {}, claimBirthdayPresentation: async () => {},
@@ -266,7 +267,7 @@ test("real browser: password-change continuation adopts fresh user/CSRF and disc
     const context = await browser.newContext(), page = await context.newPage();
     let delayed, mutationCsrf = "", passwordCsrf = "";
     const delayedSeen = deferred();
-    const fresh = { authenticated: true, user: { employeeNumber: "SYNTHETIC", mustChangePassword: false, permissions: ["own_schedule:read"] } };
+    const fresh = { authenticated: true, user: { employeeNumber: "SYNTHETIC", isEmployee: true, sessionKind: "employee", mustChangePassword: false, permissions: ["own_schedule:read"] } };
     await context.addCookies([{ name: "grabenplaner_csrf", value: "synthetic-old-csrf", url: "http://gp-auth.test/" }]);
     await page.route("**/*", async route => {
       const url = new URL(route.request().url());
@@ -283,7 +284,7 @@ test("real browser: password-change continuation adopts fresh user/CSRF and disc
     await page.goto("http://gp-auth.test/");
     for (const helper of ["password-policy.js", "session-lifecycle.js"]) await page.addScriptTag({ path: path.join(root, "public", helper) });
     await page.addScriptTag({ content: `
-      const portalState = { session: { authenticated: true, user: { employeeNumber: 'SYNTHETIC', mustChangePassword: true, permissions: [] } } };
+      const portalState = { session: { authenticated: true, user: { employeeNumber: 'SYNTHETIC', isEmployee: true, sessionKind: 'employee', mustChangePassword: true, permissions: [] } } };
       const el = Object.fromEntries(['passwordForm','currentPassword','newPassword','repeatPassword'].map(id=>[id,document.getElementById(id)]));
       let passwordChangeRequest = null;
       function message() { throw new Error('unexpected password error'); }

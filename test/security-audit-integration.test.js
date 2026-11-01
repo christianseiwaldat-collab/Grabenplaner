@@ -1,3 +1,4 @@
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
 const crypto = require('node:crypto'), fs = require('node:fs'), os = require('node:os'), path = require('node:path');
@@ -41,7 +42,7 @@ test.before(async () => {
   }
   server = app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve)); url = `http://127.0.0.1:${server.address().port}`;
 });
-test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); try { db.close(); } catch {} releaseInstanceLockForTests();
+test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); try { await db.close(); } catch {} releaseInstanceLockForTests();
   assert.equal(path.dirname(root), os.tmpdir()); assert.ok(path.basename(root).startsWith('gp-security-audit-test-')); fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }); });
 test('anonymous and non-authorized roles cannot read even over loopback', async () => {
   assert.equal((await request(undefined, { auth: null })).status, 401);
@@ -102,11 +103,11 @@ test('live permission revocation and deactivation deny access to saved data', as
 });
 test('audit write failure rolls back register mutation', async () => {
   const before = db.prepare('SELECT value FROM settings WHERE key=?').get(KEY).value;
-  db.exec("CREATE TRIGGER synthetic_audit_deny BEFORE INSERT ON audit_log WHEN NEW.action='security-audits.command' BEGIN SELECT RAISE(ABORT, 'synthetic audit denial'); END");
+  installFixtureTrigger(db, "CREATE TRIGGER test_synthetic_audit_deny BEFORE INSERT ON audit_log WHEN NEW.action='security-audits.command' BEGIN SELECT RAISE(ABORT, 'synthetic audit denial'); END");
   try {
     const command = importCommand(2); command.run.id = 'synthetic-rollback'; const result = await post(command);
     assert.equal(result.status, 500); assert.equal(db.prepare('SELECT value FROM settings WHERE key=?').get(KEY).value, before);
-  } finally { db.exec('DROP TRIGGER synthetic_audit_deny'); }
+  } finally { dropFixtureTrigger(db, "test_synthetic_audit_deny"); }
 });
 test('damaged protected register fails closed without leaking its contents', async () => {
   const before = db.prepare('SELECT value FROM settings WHERE key=?').get(KEY).value;

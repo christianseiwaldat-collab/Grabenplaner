@@ -15,7 +15,7 @@ const client = require(path.join(root, "lib", "host-reboot-control-client.js"));
 const requestId = "af24b6d2-a935-4af0-a738-69a99d106897";
 const backupMarkerFileName = "dienstplan-2026-07-30T12-00-00-000Z-a1b2c3.complete.json";
 
-test("actual server availability guard checks the default protected socket without sending a reboot", () => {
+test("historical server availability guard preserves the protected socket contract without sending a reboot", () => {
   const safeDirectory = {
     uid: 0, gid: 0, nlink: 2, mode: 0o40755,
     isDirectory: () => true, isSymbolicLink: () => false,
@@ -46,7 +46,7 @@ test("actual server availability guard checks the default protected socket witho
   };
   vm.runInNewContext(fs.readFileSync(path.join(root, "lib/host-reboot-control-client.js"), "utf8"), sandbox);
   const protectedClient = sandbox.module.exports;
-  const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
+  const server = fs.readFileSync(require("../test-support/legacy-baseline").legacyPath("server.js"), "utf8");
   const start = server.indexOf("function currentHostManagedRebootAvailable()");
   const end = server.indexOf("const hostBootGeneration =", start);
   const context = {
@@ -88,6 +88,24 @@ test("actual server availability guard checks the default protected socket witho
   context.serverModeActive = true;
   context.process.platform = "win32";
   assert.equal(available(), false);
+});
+
+test("current server availability delegates exclusively to the PostgreSQL lifecycle broker", () => {
+  const source = fs.readFileSync(path.join(root, "server.js"), "utf8");
+  const start = source.indexOf("function currentHostManagedRebootAvailable()");
+  const end = source.indexOf("const hostBootGeneration =", start);
+  let allowed = true, reads = 0;
+  const context = { process: { platform: "linux" }, serverModeActive: true, hostBootGeneration: "verified",
+    require(id) {
+      assert.equal(id, "./lib/persistence/postgresql/lifecycle-control");
+      return { available() { reads++; return allowed; } };
+    } };
+  const available = vm.runInNewContext(source.slice(start, end) + ";currentHostManagedRebootAvailable", context);
+  assert.equal(available(), true); allowed = false; assert.equal(available(), false); assert.equal(reads, 2);
+  for (const [key, value] of [["hostBootGeneration", ""], ["serverModeActive", false]]) {
+    const previous = context[key]; context[key] = value; assert.equal(available(), false); context[key] = previous;
+  }
+  context.process.platform = "win32"; assert.equal(available(), false); assert.equal(reads, 2);
 });
 
 function protocolResponse(code, options = {}) {

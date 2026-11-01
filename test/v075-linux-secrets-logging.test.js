@@ -94,9 +94,18 @@ test("v0.75 environment files require an unlinked root-only regular file", () =>
 
 test("v0.75 internal-error logs use a query-free request path", () => {
   const server = read("server.js");
-  assert.match(server, /status >= 500\) console\.error\(`\[\$\{requestId\}\] \$\{request\.method\} \$\{request\.path\}`/);
   const errorHandler = server.slice(server.indexOf("app.use(async (error, request, response, _next) => {"),
     server.indexOf("async function closePersistenceForTests()"));
   assert.ok(errorHandler.length > 0);
   assert.doesNotMatch(errorHandler, /request\.(?:originalUrl|url)\b/);
+  const logLine = errorHandler.split(/\r?\n/).find(line => line.includes("if (status >= 500) console.error("));
+  assert.ok(logLine, "The actual internal-error log statement must be present.");
+  const calls = [], request = { method: "GET", path: "/api/synthetic", url: "/api/synthetic?token=SYNTHETIC-QUERY-SECRET",
+    originalUrl: "/api/synthetic?token=SYNTHETIC-QUERY-SECRET" }, error = new Error("synthetic internal failure");
+  for (const status of [500, 400]) require("node:vm").runInNewContext(logLine, {
+    status, requestId: "synthetic-request", request, error, console: { error: (...args) => calls.push(args) },
+  });
+  assert.equal(calls.length, 1, "Only the internal error is logged.");
+  assert.deepEqual(calls[0], ["[%s] %s %s", "synthetic-request", "GET", "/api/synthetic", error]);
+  assert.equal(require("node:util").format(...calls[0]).includes("SYNTHETIC-QUERY-SECRET"), false);
 });

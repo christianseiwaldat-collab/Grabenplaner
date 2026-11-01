@@ -1,4 +1,5 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -229,17 +230,17 @@ test.before(async () => {
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
   globalThis.fetch = nativeFetch;
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
 test("v0.71: persistentes Prozessmodell und Migration sind vorhanden", () => {
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.71-custom-processes-notifications'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   for (const table of ["custom_processes", "custom_process_steps", "custom_process_runs"]) {
-    assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table), table);
+    assert.ok(pgSchema.tableExists(db, table), table);
   }
-  const columns = db.prepare("PRAGMA table_info(custom_processes)").all().map((column) => column.name);
+  const columns = pgSchema.columns(db, "custom_processes").map((column) => column.name);
   assert.ok(columns.includes("category"));
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
@@ -313,7 +314,7 @@ test("v0.71: Scope, Bedingungsfelder und unbekannte Ausdrücke werden strikt val
     method: "POST", auth: auth.hr, body: invalidConditionPayload,
   });
   assert.equal(invalidCondition.response.status, 400, JSON.stringify(invalidCondition.payload));
-  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'employees'").get());
+  assert.ok(pgSchema.tableExists(db, "employees"));
 
   const unknownStepFieldPayload = processPayload();
   unknownStepFieldPayload.steps[0] = { ...unknownStepFieldPayload.steps[0], destination: "+436601234567" };

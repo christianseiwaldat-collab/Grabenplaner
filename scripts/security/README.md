@@ -42,7 +42,8 @@ eingerichtet und an einem tatsächlichen Actions-Lauf nachgewiesen werden.
   bzw. Backend-Ziele erhalten; kein Monolith wird ausgespart. Die Vereinigung
   aller fünf Profile entspricht exakt dem bisherigen Regelsatz. Für den Scanner
   gelten gemeinsam weiterhin 40 Minuten (ein Worker, 4096 MB-Limit); der
-  Actions-Job bleibt auf 45 Minuten begrenzt. Jeder Timeout/Parserfehler und
+  Actions-Job besitzt wegen des gesonderten kalten Quellbaus ein Gesamtlimit
+  von 300 Minuten; das gemeinsame Scanlimit bleibt bei 40 Minuten. Jeder Timeout/Parserfehler und
   jeder Datei-/Regelskip blockiert; alle Profilberichte bleiben getrennt
   nachvollziehbar. Upstream-Regeldateien werden bytegleich kopiert, Auswahl,
   ausgeschlossene Dateien und Targethashes in sast-profile-manifest.json
@@ -69,6 +70,25 @@ Signaturprüfung wird nicht behauptet. `requirements.txt` bindet PyPI-Wheels
 einschließlich transitiver Abhängigkeiten mit Hashes; die Regeldateien werden
 zusätzlich einzeln verifiziert. Änderungen erfordern erneute Prüfung gemäß
 `server-tools/linux/security-release-policy.md`.
+
+## Qualifizierter Semgrep-Kern
+
+Der private SAST-Job baut den ursprünglichen Semgrep-1.181.0-Kern aus dem
+fest gebundenen Upstream-Commit `72d3525fe7e02f486428386078f192f8c4756804`.
+Die einzige Quelländerung erhöht in `Limits_semgrep.ml` das interne
+Fixpoint-Zeitbudget von 0,2 auf 30 Sekunden. Der unveränderte Python-Wrapper,
+Regelsatz, die fünf Zielprofile und ihre Datei-/Regel-/Speicher-/Gesamtgrenzen
+bleiben erhalten. Dies ist ein gesondert qualifizierter Quellbau und keine
+Behauptung, das veröffentlichte unveränderte Binärpaket zu verwenden.
+
+`build_semgrep_source.py` prüft die Originalquellen, den begrenzten Patch,
+Werkzeug-/Buildbezug und tatsächliche Diagnose-/Negativkontrollen. Erst
+`prepare_source_core.py` bindet deren Rohbelege und den tatsächlich verwendeten
+privaten Kern an den anschließenden vollständigen Scan. Ein erfolgreicher
+Werkzeugbau allein ist keine Gate-Freigabe. Jedes Profil muss zusätzlich die
+vollständigen Ziele sowie eine ausdrücklich leere Fixpoint-Abbruchliste
+nachweisen; allein ein leeres übergeordnetes `errors`-Feld reicht nicht aus.
+Ausgelassene Dateien, Regeln, Analysefehler und Zeitabbrüche bleiben blockierend.
 
 ## Ausnahmen
 
@@ -113,11 +133,36 @@ Upstream-Profils aufgelöst, unabhängig von temporären Scannerpfaden. Der
 zusätzliche `legacyFingerprint` dient ausschließlich dem Vergleich mit älteren
 Berichten ohne Spaltenbindung und wird nicht zur Freigabe verwendet.
 
-Die gesonderte `patch-policy.json` betrifft ausschließlich die bereits
-vorhandene CJS-Kompatibilitätsanpassung von `brace-expansion@5.0.12`. Sie
-ignoriert keine Schwachstelle. Patch, Workspace-/Lockfile-Eintrag und installierte
-Datei werden mit Hashes geprüft; beide realen ExcelJS-Verbraucher und begrenzte
-Missbrauchsfälle müssen funktionieren. Ablauf nach höchstens 30 Tagen.
+Die gesonderte `patch-policy.json` bindet die vorhandene CJS-Kompatibilitätsanpassung
+von `brace-expansion@5.0.12` sowie den konkreten Hersteller-Sicherheitsbackport für
+`@azure/msal-node@5.4.0`. Sie ignoriert keine Schwachstelle. Patch, vollständige
+Workspace-/Lock-Patchliste und installierte Bytes werden geprüft. Für MSAL sind
+Originaltarball-SRI, alle sieben geänderten Dateien, der vollständige installierte
+Paketbaum und 14 tatsächliche CJS-/ESM-Regressionsfälle erforderlich. Der OSV-Rohbefund
+bleibt erhalten; nur exakt nachweislich reparierter Code wird als
+`remediated_by_verified_patch` ausgewiesen. Neue Advisories, unvollständige Belege
+und Registry-Meldungen bleiben blockierend. `advisoryExceptions` bleibt leer.
+Alle Registrierungen laufen nach höchstens 30 Tagen ab.
+
+Für GHSA-g3hv-75wg-m249 verwendet der gesamte aktuelle ExcelJS-Abhängigkeitsgraph
+`minimatch@11.0.3`. Der alte `glob@7.2.3`-Aufrufer benötigt dazu einen auf sechs
+Zeilen begrenzten Adapter: `Matcher.pattern` und `Matcher.test()` ersetzen die
+frühere RegExp-interne Darstellung in beiden Dateisuchern. Die Prüfung bindet
+Originaltarball-SRI, Patch, beide Dateien, vollständigen Paketbaum, Lizenz und
+Regressionstest an exakte Prüfsummen; eine abweichende Matcher-Version wird
+abgewiesen. Die Sicherheitskorrektur und ihre Grenzen stammen unverändert aus
+minimatch; der Adapter unterdrückt keinen Befund. Positive und negative Tests
+decken alle vier ExcelJS-Pfade, Dateiauswahl, ZIP, beide Excel-Schreibweisen,
+Importgrenzen sowie die begrenzte Optimierungsregression ab. Sie laufen auch im
+Linux-Job mit der minimal unterstützten Node-Version 22.13.0.
+
+`minimatch@11.0.3` und dessen neue Abhängigkeit
+`@isaacs/nonrecursive-glob-match@1.0.3` liefern jeweils `LICENSE.md` mit
+`BlueOak-1.0.0`; diese Lizenzdateien bleiben im installierten Paket erhalten.
+`glob@7.2.3` behält seine unveränderte ISC-Lizenzdatei. Der vollständige SBOM-Lauf
+erfasst die tatsächlich eingefrorenen Versionen; der Lizenznachweis erfolgt
+separat über die Metadaten und Lizenzdateien der integritätsgeprüften
+Herstellerarchive, da der Lockfile-Katalog keine Lizenzfelder liefert.
 
 ## Lokale Ausführung und Ergebnisse
 

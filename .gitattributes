@@ -3,7 +3,10 @@
 # Font assets and licence/source hashes preserve exact bytes on every host.
 public/fonts/price-labels/** -text
 public/fonts/price-labels/*/*.txt -whitespace
+# The password corpus manifest binds the exact LF bytes, not checkout line endings.
+lib/password-policy/common-sha256.txt -text
 *.sh text eol=lf
+lib/database-lock-linux.py text eol=lf
 # Qualified PostgreSQL contracts and SQL bind exact source bytes on every host.
 lib/persistence/postgresql/contracts/*.json text eol=lf
 lib/persistence/postgresql/core/compatibility.sql text eol=lf
@@ -32,3 +35,19 @@ server-tools/linux/hardening/systemd/*.timer.in text eol=lf
 server-tools/linux/hardening/templates/* text eol=lf
 server-tools/linux/Caddyfile.in text eol=lf
 server-tools/linux/*.env.example text eol=lf
+# Source-build fixtures bind exact upstream LF bytes on every host.
+scripts/security/fixtures/semgrep-1.181.0-* text eol=lf
+# Compiler input identities bind raw Python bytes consistently on every host.
+scripts/security/*.py text eol=lf
+scripts/security/requirements.txt text eol=lf
+scripts/security/tools.json text eol=lf
+.github/security-semgrep-core-pin.json text eol=lf
+scripts/security/fixtures/ocaml-config.3/* -text
+# Immutable upstream evidence keeps original whitespace and exact byte hashes.
+scripts/security/fixtures/license-declarations/* -text -whitespace
+# Exact reviewed MSAL backport and regression proof bytes.
+lib/vendor-patches/*.patch text eol=lf whitespace=-blank-at-eol
+test/security-msal-auth-code-backport.test.js text eol=lf
+test-support/runtime-v6/installed-addd4c3-pnpm-workspace.yaml text eol=lf
+scripts/security/fixtures/license-extra-sources/** -text -whitespace
+scripts/security/fixtures/bsd-compat-headers/** -text -whitespace

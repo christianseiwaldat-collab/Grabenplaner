@@ -538,7 +538,8 @@ const read = name => {
 };
 const runtime = read("server-tools/linux/runtime-schema.json");
 const moduleVersion = read("server-tools/linux/offsite/module-schema.json").moduleVersion;
-if (runtime.deploymentSchemaVersion !== 5 || ![7, 8, 9, 10, 11, 12].includes(moduleVersion)) process.exit(1);
+if (!((runtime.deploymentSchemaVersion === 5 && [7, 8, 9, 10, 11, 12].includes(moduleVersion))
+  || (runtime.deploymentSchemaVersion === 6 && moduleVersion === 13))) process.exit(1);
 if (moduleVersion >= 8) {
   for (const name of ["lib/backup-maintenance.js", "server-tools/linux/lib/deploy-policy.js",
     "server-tools/linux/lib/deferred-backups.js", "server-tools/linux/lib/backup-metadata.js"]) {

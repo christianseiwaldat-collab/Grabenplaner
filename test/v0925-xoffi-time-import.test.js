@@ -1,4 +1,8 @@
 "use strict";
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -305,7 +309,7 @@ function currentMonday() {
 
 test.before(async () => {
   const template = db.prepare("SELECT day_settings_json FROM locations ORDER BY id LIMIT 1").get();
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations
       (id, name, min_staff, day_settings_json, time_tracking_enabled, time_tracking_access_mode,
        time_tracking_allowed_networks, time_tracking_variance_minutes, active)
@@ -329,7 +333,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -445,8 +449,8 @@ test("xoffi: eine unsichere oder widersprüchliche Screenshot-Woche braucht serv
 
 test("xoffi: Import und Wochenbestätigungs-Audit rollen bei einem Auditfehler gemeinsam zurück", async () => {
   const sourceSha256 = "b".repeat(64);
-  db.exec(`
-    CREATE TEMP TRIGGER xoffi_audit_rollback_test
+  installFixtureTrigger(db, `
+    CREATE TRIGGER test_xoffi_audit_rollback_test
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'xoffi-time.import.apply'
     BEGIN
@@ -482,7 +486,7 @@ test("xoffi: Import und Wochenbestätigungs-Audit rollen bei einem Auditfehler g
       { code: "PERSISTENCE_CHECK_VIOLATION" },
     );
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS xoffi_audit_rollback_test");
+    dropFixtureTrigger(db, "test_xoffi_audit_rollback_test", { ifExists: true });
   }
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM xoffi_time_imports WHERE source_sha256 = ?").get(sourceSha256).count, 0);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE action = 'xoffi-time.import.apply' AND detail LIKE ?").get(`%${sourceSha256}%`).count, 0);
@@ -575,7 +579,7 @@ test("MHTML API: automatic week and employee, persistent snapshots, unchanged va
 
 test("v0.92.5: xoffi-Rohdaten bleiben revisionssicher und funktionieren auch bei deaktivierter Live-Zeiterfassung", async () => {
   for (const table of ["xoffi_time_imports", "xoffi_time_employee_rows", "xoffi_time_days"]) {
-    assert.equal(db.prepare("SELECT type FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)?.type, "table");
+    assert.equal(pgSchema.tableExists(db, table), true);
   }
   const importId = crypto.randomUUID();
   db.prepare(`

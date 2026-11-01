@@ -147,6 +147,99 @@ async function convertInProviderTransaction(context, candidate, input, insertEmp
   });
 }
 
+async function candidateInTalentPool(context, suffix) {
+  const candidate = await context.service.createCandidate({
+    dataProcessingAuthorizationConfirmed: true,
+    profile: { firstName: "Synthetisch", lastName: suffix, email: "hire@example.invalid" },
+    application: { desiredRoleTitle: "Verkauf" },
+  }, "hr-100");
+  await context.service.transitionApplication(candidate.id, candidate.applications[0].id,
+    { status: "talent_pool", reason: "Synthetische Rückkehr zur Einstellungsdokumentation", revision: candidate.applications[0].revision }, "hr-100");
+  return context.service.getCandidate(candidate.id);
+}
+
+async function prepareExistingEmployee(context) {
+  const organization = createOrganizationPersonnelRepository(context.provider);
+  await organization.insertEmployee({ personnelNumber: "EX-434", fullName: "Synthetisch Vorhanden",
+    nickname: "Vorhanden", color: "#0b84c6", contractedHours: 30, targetWorkdaysPerWeek: 5,
+    preferredDayOff: null, fixedWorkdays: "", positionId: "verkaufsmitarbeiter",
+    timeConfirmationLevel: "C", sicknessWithoutAumEnabled: false, homeLocationId: null,
+    preferredDepartmentId: null, costCenterId: null, active: true });
+  return { personnelNumber: "EX-434", fullName: "Synthetisch Vorhanden", active: true };
+}
+
+async function linkExistingInTransaction(context, candidate, input, target, calls = { count: 0 }) {
+  return context.provider.transaction(async executor => {
+    const service = context.serviceFor(createPersonnelLifecycleRepository(executor));
+    return service.convertCandidateInTransaction(candidate.id, candidate.applications[0].id, input,
+      "hr-100", async () => { calls.count++; return target; }, { targetMode: "existing" });
+  }, { isolation: "serializable" });
+}
+
+test("Bestehender Mitarbeiter: Talentpool wird mit Originalstatus und unveränderter Personalakte abgeschlossen", async () => {
+  const context = await fixture();
+  try {
+    const target = await prepareExistingEmployee(context);
+    const candidate = await candidateInTalentPool(context, "Vorhanden");
+    const before = context.database.prepare("SELECT * FROM employees ORDER BY personnel_number").all();
+    const input = conversionInput(candidate, target.personnelNumber, crypto.randomUUID());
+    const calls = { count: 0 };
+    const result = await linkExistingInTransaction(context, candidate, input, target, calls);
+    assert.equal(result.candidate.state, "archived");
+    assert.equal(result.candidate.applications[0].status, "converted");
+    assert.equal(result.conversion.targetMode, "existing");
+    assert.deepEqual(context.database.prepare("SELECT * FROM employees ORDER BY personnel_number").all(), before);
+    const original = result.candidate.history.find(event => event.detail.conversionId === result.conversion.id
+      && event.eventType === "application_status_changed");
+    assert.equal(original.detail.from, "talent_pool");
+    const stored = context.database.prepare("SELECT * FROM candidate_conversions").get();
+    const snapshot = JSON.parse(context.storage.unprotectRecord(stored.protected_payload, candidateConversionProtectionContext(stored)));
+    assert.equal(snapshot.schemaVersion, 2);
+    assert.equal(snapshot.targetMode, "existing");
+    assert.deepEqual(snapshot.target.employee, target);
+    assert.equal(snapshot.source.application.status, "talent_pool");
+    await context.service.verifyIntegrity();
+    const replay = await linkExistingInTransaction(context, candidate, input, target, calls);
+    assert.equal(replay.replayed, true);
+    assert.equal(calls.count, 1, "Wiederholung darf den Mitarbeiter weder lesen noch schreiben");
+    await assert.rejects(convertInProviderTransaction(context, candidate, input, async () => target),
+      { code: "PERSONNEL_LIFECYCLE_CONVERSION_IDEMPOTENCY_CONFLICT" });
+  } finally { await context.close(); }
+});
+
+test("Bestehender Mitarbeiter: eine zweite Bewerbung kann dieselbe Personalnummer nicht beanspruchen", async () => {
+  const context = await fixture();
+  try {
+    const target = await prepareExistingEmployee(context);
+    const first = await candidateInTalentPool(context, "Eins");
+    await linkExistingInTransaction(context, first, conversionInput(first, target.personnelNumber, crypto.randomUUID()), target);
+    const second = await candidateInTalentPool(context, "Zwei");
+    const before = await context.service.getCandidate(second.id);
+    await assert.rejects(linkExistingInTransaction(context, second,
+      conversionInput(second, target.personnelNumber, crypto.randomUUID()), target));
+    assert.deepEqual(await context.service.getCandidate(second.id), before,
+      "Status, Archivierung und Ereignisse werden zusammen zurückgerollt");
+    assert.equal(context.database.prepare("SELECT COUNT(*) AS count FROM candidate_conversions").get().count, 1);
+  } finally { await context.close(); }
+});
+
+test("Bestehender Mitarbeiter: veraltete Revision und fehlender Zielbeleg erzeugen keinerlei Teilabschluss", async () => {
+  const context = await fixture();
+  try {
+    const target = await prepareExistingEmployee(context);
+    const candidate = await candidateInTalentPool(context, "Rollback");
+    const input = conversionInput(candidate, target.personnelNumber, crypto.randomUUID());
+    await assert.rejects(linkExistingInTransaction(context, candidate, { ...input, candidateRevision: candidate.revision + 1 }, target),
+      { code: "PERSONNEL_LIFECYCLE_REVISION_CONFLICT" });
+    await assert.rejects(linkExistingInTransaction(context, candidate, input, { personnelNumber: "WRONG" }),
+      { code: "PERSONNEL_LIFECYCLE_CONVERSION_EMPLOYEE_INTEGRITY_FAILED" });
+    context.database.exec("CREATE TRIGGER reject_link_receipt BEFORE INSERT ON candidate_conversions BEGIN SELECT RAISE(ABORT, 'synthetic receipt failure'); END");
+    await assert.rejects(linkExistingInTransaction(context, candidate, input, target));
+    assert.deepEqual(await context.service.getCandidate(candidate.id), candidate);
+    assert.equal(context.database.prepare("SELECT COUNT(*) AS count FROM candidate_conversions").get().count, 0);
+  } finally { await context.close(); }
+});
+
 test("M3-Domäne: Umwandlung ist atomar, minimal projiziert und dauerhaft idempotent", async () => {
   const context = await fixture();
   try {

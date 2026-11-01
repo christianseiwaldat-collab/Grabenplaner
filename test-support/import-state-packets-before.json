@@ -1,0 +1,10 @@
+{
+  "sourceCommit": "a7585ad6a9186f7a2d74f0b6841cb956593c8f0d",
+  "sourceFile": "lib/persistence/postgresql/sales/import-batches.js",
+  "purpose": "Frozen synthetic performance comparison; never a productive execution path",
+  "statements": {
+    "import-batches.rows.mark-unchanged": "UPDATE integration.data_import_rows SET state='unchanged',issue=''\n WHERE run_id=$1::text AND state='staged'\n AND row_number IN (SELECT value::bigint FROM jsonb_array_elements_text($2::jsonb))",
+    "import-batches.rows.apply-creates": "UPDATE integration.data_import_rows SET state='applied',issue=''\n WHERE run_id=$1::text AND state='create'\n AND row_number IN (SELECT value::bigint FROM jsonb_array_elements_text($2::jsonb))",
+    "import-batches.rows.apply-updates": "UPDATE integration.data_import_rows SET state='applied',issue=''\n WHERE run_id=$1::text AND state IN ('update','refresh')\n AND row_number IN (SELECT value::bigint FROM jsonb_array_elements_text($2::jsonb))"
+  }
+}

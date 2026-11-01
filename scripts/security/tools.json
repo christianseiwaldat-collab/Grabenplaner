@@ -74,6 +74,8 @@
   },
   "semgrep": {
     "version": "1.181.0",
+    "sourceCoreRequired": true,
+    "sourceCoreScope": "Unchanged hash-locked wrapper and upstream rules; official immutable upstream core source with only the taint fixed-point timeout changed from 0.2 to 30.0 seconds. Rebuild and qualify ten cases in the same private Linux job before each full scan; no original-core or alternate-engine fallback.",
     "requirements": "scripts/security/requirements.txt",
     "releaseUrl": "https://github.com/semgrep/semgrep/releases/tag/v1.181.0"
   },

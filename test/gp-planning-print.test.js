@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const Planning=require('../public/gp-planning-print'),Existing=require('../public/gp-existing-pdf-window');
+const {functionSource}=require('../test-support/learning-workspace-ui');
 function fixture(kind='schedule'){
  let context={page:kind==='schedule'?'planning':'vacations',query:kind==='schedule'?{week:'2026-10-05',location:'18',department:'3'}:{year:'2026',view:'quarter',quarter:'4',month:'10',location:'18'},settings:{pdf_title:'My schedule',pdf_filename_prefix:'Schedule',vacation_pdf_title:'My vacation',vacation_pdf_filename_prefix:'Vacation'},designs:[{id:'matrix',label:'Compact'},{id:'timeline',label:'Timeline'}],modelRevision:1},allowed=true,owner='one',passed,input;
  const response={ok:true,headers:new Headers({'Content-Disposition':'attachment; filename="Original-Plan.pdf"'}),blob:async()=>new Blob(['%PDF-1.7 unchanged'],{type:'application/pdf'})};
@@ -66,16 +67,16 @@ test('ordinary page changes suspend visibility but preserve authority and option
 });
 
 test('application navigation deactivates unavailable pages without resetting retained planning choices',()=>{
- const source=fs.readFileSync(require.resolve('../public/app'),'utf8');function take(name){const begin=source.indexOf('function '+name+'('),end=source.indexOf('\n}',begin)+2;return source.slice(begin,end);}
+ const take=functionSource;
  const calls=[],print={activate:()=>calls.push('activate'),deactivate:()=>calls.push('deactivate'),sync:()=>calls.push('sync'),reset:()=>{throw Error('Navigation reset loses draft');}};
  const state={currentView:'planning'},sandbox={state,planningPrintWindows:{schedule:print},canUsePlanningPrint:()=>true};vm.createContext(sandbox);vm.runInContext(take('planningPrintPageAllowed')+'\n'+take('syncPlanningPrintWindows'),sandbox);
  sandbox.syncPlanningPrintWindows();state.currentView='sales';sandbox.syncPlanningPrintWindows();state.currentView='planning';sandbox.syncPlanningPrintWindows();assert.deepEqual(calls,['activate','sync','deactivate','sync','activate','sync']);
 });
 
 test('real shell sync reaches Planning before dependency early-return and logout clears it after session withdrawal',()=>{
- const source=fs.readFileSync(require.resolve('../public/app'),'utf8'),take=name=>{const begin=source.indexOf('function '+name+'('),end=source.indexOf('\n}',begin)+2;return source.slice(begin,end);};
+ const take=functionSource;
  const calls=[],state={currentView:'planning',portalStatus:{portalEnabled:true},portalSession:{authenticated:true,user:{}}},print={activate:()=>calls.push('activate'),deactivate:()=>calls.push('deactivate'),sync:()=>calls.push('sync')};
- const sandbox={state,window:{},planningAssistantWorkspace:null,usbGuidePrint:null,syncUsbGuidePrint(){},syncXoffiImport(){},syncWorkflowStudio(){},syncPersonnelDashboardWorkspace(){},syncPersonnelDashboardInformation(){},personnelDashboardInformation:{clear(){assert.equal(state.portalSession,null);}},syncSettingsSaveScopes(){},planningPrintWindows:{schedule:print},canReadStartDashboardSchedule:()=>true,canReadStartDashboardVacations:()=>true};vm.createContext(sandbox);vm.runInContext(['canUsePlanningPrint','planningPrintPageAllowed','syncPlanningPrintWindows','syncGpWindows'].map(take).join('\n'),sandbox);
+ const sandbox={state,elements:{},window:{},planningAssistantWorkspace:null,usbGuidePrint:null,syncUsbGuidePrint(){},syncXoffiImport(){},syncSystemUtilizationWorkspace(){},syncWorkflowStudio(){},syncPersonnelDashboardWorkspace(){},syncPersonnelDashboardInformation(){},personnelDashboardInformation:{clear(){assert.equal(state.portalSession,null);}},syncSettingsSaveScopes(){},planningPrintWindows:{schedule:print},canReadStartDashboardSchedule:()=>true,canReadStartDashboardVacations:()=>true};vm.createContext(sandbox);vm.runInContext(['canUsePlanningPrint','planningPrintPageAllowed','syncPlanningPrintWindows','syncGpWindows'].map(name=>take(name)).join('\n'),sandbox);
  sandbox.syncGpWindows();state.currentView='sales';sandbox.syncGpWindows();assert.deepEqual(calls,['activate','sync','deactivate','sync']);
  const logout=take('showLoginGate');assert.ok(logout.indexOf('syncPlanningPrintWindows();')>logout.indexOf('state.portalSession = null;'));
  vm.runInContext(logout.slice(logout.indexOf('  state.portalSession = null;'),logout.indexOf('  gpDocumentPrint?.reset();')),sandbox);assert.equal(state.portalSession,null);assert.deepEqual(calls.slice(-2),['deactivate','sync']);

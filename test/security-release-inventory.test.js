@@ -55,6 +55,19 @@ test('source inventory is deterministic and explicitly excludes cyclic documents
   assert.ok(!first.source.files.some(item => item.path === inventory.SOURCE_INVENTORY));
   assert.equal(inventory.verify(root, first).verified, true);
 });
+test('self-hosted Passkey browser code is inventoried without loading package exports and a missing bundle fails closed', t => {
+  const root = fixture(t);
+  write(root, 'package.json', { name: 'synthetic-gp', version: '0.0.1-test', dependencies: { alpha: '1.0.0', '@simplewebauthn/browser': '14.0.0' } });
+  write(root, 'server.js', 'app.use("/vendor/simplewebauthn-browser-v14", staticFiles);\n');
+  write(root, 'node_modules/@simplewebauthn/browser/package.json', { name: '@simplewebauthn/browser', version: '14.0.0', exports: { '.': './script/index.js' } });
+  write(root, 'node_modules/@simplewebauthn/browser/script/index.js', 'throw Error("Inventory must never load browser code");');
+  write(root, 'node_modules/@simplewebauthn/browser/dist/bundle/index.umd.min.js', '/* synthetic browser bundle */');
+  const report = inventory.generate(root, fixed), route = report.vendored.browserRoutes.find(item => item.package === '@simplewebauthn/browser');
+  assert.equal(route.route, '/vendor/simplewebauthn-browser-v14'); assert.equal(route.version, '14.0.0');
+  assert.equal(route.status, 'installed_and_hashed'); assert.equal(inventory.verify(root, report).verified, true);
+  fs.unlinkSync(path.join(root, 'node_modules/@simplewebauthn/browser/dist/bundle/index.umd.min.js'));
+  assert.throws(() => inventory.generate(root, fixed), /INVENTORY_VENDOR_MISSING/);
+});
 
 test('installed inventory includes transitive and inactive packages, bytes, metadata and unknowns', t => {
   const root = fixture(t);

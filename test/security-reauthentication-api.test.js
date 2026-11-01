@@ -14,7 +14,7 @@ const ORIGIN = 'https://reauth.example.test';
 const ACCEPTED = 'backup.admin.reauthentication.accepted';
 
 if (!provider) {
-  for (const database of ['sqlite', 'postgresql']) test(`reauthentication HTTP: ${database}`, {
+  for (const database of ['postgresql']) test(`reauthentication HTTP: ${database}`, {
     skip: database === 'postgresql' && !process.env.GP_CORE_MIGRATOR_URL,
     timeout: 240000,
   }, async t => {
@@ -33,7 +33,7 @@ if (!provider) {
     t.diagnostic(output.trim());
   });
 } else {
-  assert.ok(['sqlite', 'postgresql'].includes(provider));
+  assert.ok(['postgresql'].includes(provider));
   const gates = new Map(), originalScrypt = crypto.scrypt;
   // Run native scrypt unchanged; hold only delivery of its completed callback.
   // This forces races after the actual server has read the credential snapshot.
@@ -105,7 +105,7 @@ if (!provider) {
       return { temporaryRoot: directory, path: filename, size: bytes.length, sha256: crypto.createHash('sha256').update(bytes).digest('hex'), extension: 'bin', contentType: 'application/octet-stream', releaseWorkspace() {} };
     } });
     Object.assign(process.env, {
-      NODE_ENV: 'test', TZ: 'Europe/Vienna', DB_PROVIDER: 'sqlite', DATABASE_URL: '',
+      NODE_ENV: 'test', TZ: 'Europe/Vienna', DB_PROVIDER: 'postgresql', DATABASE_URL: '',
       DB_PATH: path.join(temporaryRoot, 'fixture.db'), BACKUP_DIR: path.join(temporaryRoot, 'backups'),
       GRABENPLANER_DATA_DIR: path.join(temporaryRoot, 'data'), GRABENPLANER_HOST: '127.0.0.1',
       GRABENPLANER_FORCE_PORTAL: '1', GRABENPLANER_SEED_DEMO: '1', GRABENPLANER_OPERATION_MODE: 'server',
@@ -117,18 +117,18 @@ if (!provider) {
     });
     async function exercise(activeFixture) {
       fixture = activeFixture;
-      if (fixture) configuration.resolvePersistenceConfiguration = () => Object.freeze({
+      configuration.resolvePersistenceConfiguration = () => Object.freeze({
         providerId: 'postgresql', databasePath: path.join(temporaryRoot, 'core.postgresql'), databaseUrlConfigured: true,
         coreUrl: process.env.GP_CORE_APP_URL, salesUrl: process.env.GP_SALES_APP_URL,
         readers: { coreUrl: process.env.GP_CORE_READER_URL, salesUrl: process.env.GP_SALES_READER_URL }, rehearsal: true, productActivation: false,
       });
       subject = require('../server');
       await subject.initializeApplicationPersistence();
-      if (fixture) await fixture.core.migrator.query('SET ROLE gp_core_owner; SET search_path=pg_catalog,gp');
-      const query = fixture ? async (sql, values = []) => {
+      await fixture.core.migrator.query('SET ROLE gp_core_owner; SET search_path=pg_catalog,gp');
+      const query = (async (sql, values = []) => {
         let index = 0; return (await fixture.core.migrator.query(sql.replace(/\?/g, () => '$' + (++index)), values)).rows;
-      } : async (sql, values = []) => /^\s*SELECT\b/i.test(sql) ? subject.db.prepare(sql).all(...values) : (subject.db.prepare(sql).run(...values), []);
-      const ddl = sql => fixture ? fixture.core.migrator.query(sql) : subject.db.exec(sql);
+      });
+      const ddl = sql => (fixture.core.migrator.query(sql));
       const salt = Buffer.alloc(16, 81);
       const passwordHash = password => 'scrypt-v1$' + salt.toString('base64url') + '$' + crypto.scryptSync(password, salt, 64).toString('base64url');
       const location = (await query('SELECT id FROM locations ORDER BY id LIMIT 1'))[0].id;
@@ -142,7 +142,7 @@ if (!provider) {
         const bytes = Buffer.from(await response.arrayBuffer());
         const json = response.headers.get('content-type')?.includes('application/json');
         let result;
-        try { result = json ? JSON.parse(bytes.toString()) : { bytes: bytes.length, sqliteMagic: bytes.subarray(0, 16).toString() === 'SQLite format 3\0' }; }
+        try { result = json ? JSON.parse(bytes.toString()) : { bytes: bytes.length }; }
         finally { bytes.fill(0); }
         return { status: response.status, body: result, cookies: response.headers.getSetCookie(), changed: response.headers.get('x-gp-session-changed') };
       }
@@ -188,7 +188,7 @@ if (!provider) {
         assert.equal(await auditCount(id), 1);
         assert.equal((await create(replacement, PASSWORD, { csrf: auth.csrf })).status, 403);
         assert.equal((await info(replacement)).body.authenticated, true);
-        if (caller === 'download' && !fixture) assert.equal(result.body.sqliteMagic, true);
+        if (caller === 'download') assert.ok(result.body.bytes > 0);
         groups++;
       });
       await t.test('repeated reauthentication of an aged administrator clamps both idle deadline and cookie lifetime to the original absolute end', async () => {
@@ -284,24 +284,24 @@ if (!provider) {
         } finally { gate.release(); await Promise.allSettled([pending]); } groups++;
       });
       for (const stage of ['audit', 'commit']) await t.test(`${stage} failure rolls back revocation, replacement and accepted audit without cookies`, async () => {
-        const id = 'syn-reauth-fault-' + stage, auth = await seed(id), before = await rows(id), count = effects.create, schema = fixture ? 'gp.' : '';
+        const id = 'syn-reauth-fault-' + stage, auth = await seed(id), before = await rows(id), count = effects.create, schema = ('gp.');
         try {
           if (stage === 'commit') {
             await ddl(`CREATE TABLE ${schema}gp_reauth_fault_parent(id INTEGER PRIMARY KEY)`);
             await ddl(`CREATE TABLE ${schema}gp_reauth_fault_child(id INTEGER REFERENCES ${schema}gp_reauth_fault_parent(id) DEFERRABLE INITIALLY DEFERRED)`);
-            if (fixture) await ddl('GRANT INSERT ON gp.gp_reauth_fault_child TO gp_core_app');
+            await ddl('GRANT INSERT ON gp.gp_reauth_fault_child TO gp_core_app');
           }
-          if (fixture) {
+          {
             await ddl(`CREATE FUNCTION gp.gp_reauth_fault() RETURNS trigger LANGUAGE plpgsql AS $body$ BEGIN IF NEW.actor='${id}' AND NEW.action='${ACCEPTED}' THEN ${stage === 'audit' ? "RAISE EXCEPTION 'synthetic reauthentication audit failure';" : 'INSERT INTO gp.gp_reauth_fault_child(id) VALUES(991);'} END IF; RETURN NEW; END $body$`);
             await ddl('CREATE TRIGGER gp_reauth_fault BEFORE INSERT ON gp.audit_log FOR EACH ROW EXECUTE FUNCTION gp.gp_reauth_fault()');
-          } else await ddl(`CREATE TRIGGER gp_reauth_fault BEFORE INSERT ON audit_log WHEN NEW.actor='${id}' AND NEW.action='${ACCEPTED}' BEGIN ${stage === 'audit' ? "SELECT RAISE(ABORT,'synthetic reauthentication audit failure');" : 'INSERT INTO gp_reauth_fault_child(id) VALUES(991);'} END`);
+          }
           const result = await create(auth);
           assert.ok(result.status >= 400, JSON.stringify(result.body)); assert.equal(result.cookies.length, 0); assert.equal(result.changed, null);
           assert.deepEqual(await rows(id), before); assert.equal(await auditCount(id), 0); assert.equal(effects.create, count);
           assert.equal((await info(auth)).body.authenticated, true);
         } finally {
-          await ddl(`DROP TRIGGER IF EXISTS gp_reauth_fault${fixture ? ' ON gp.audit_log' : ''}`);
-          if (fixture) await ddl('DROP FUNCTION IF EXISTS gp.gp_reauth_fault()');
+          await ddl(`DROP TRIGGER IF EXISTS gp_reauth_fault${(' ON gp.audit_log')}`);
+          await ddl('DROP FUNCTION IF EXISTS gp.gp_reauth_fault()');
           if (stage === 'commit') { await ddl(`DROP TABLE IF EXISTS ${schema}gp_reauth_fault_child`); await ddl(`DROP TABLE IF EXISTS ${schema}gp_reauth_fault_parent`); }
         }
         await assertRotated(id, before[0], auth, await create(auth)); groups++;
@@ -322,7 +322,7 @@ if (!provider) {
       console.log('REAUTH_HTTP_VERIFIED ' + JSON.stringify({ provider, groups, syntheticOnly: true, operatingEffectsStubbed: true }));
     }
     try {
-      if (provider === 'postgresql') {
+      {
         for (const domain of ['CORE', 'SALES']) for (const purpose of ['APP', 'READER', 'MIGRATOR']) {
           const connection = new URL(process.env[`GP_${domain}_${purpose}_URL`]);
           assert.equal(connection.hostname, '127.0.0.1'); assert.equal(connection.pathname, '/gp_migration_' + domain.toLowerCase());
@@ -334,7 +334,7 @@ if (!provider) {
             await subject?.closePersistenceForTests(); subject?.releaseInstanceLockForTests(); subject = null;
           }
         }, { warmWorkers: false });
-      } else await exercise();
+      }
     } finally {
       crypto.scrypt = originalScrypt;
       for (const gate of gates.values()) for (const callback of gate.callbacks.splice(0)) callback(); gates.clear();

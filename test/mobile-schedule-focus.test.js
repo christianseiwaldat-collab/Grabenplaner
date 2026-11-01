@@ -1,6 +1,7 @@
 "use strict";
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {mobileScheduleFocus}=require('../lib/mobile-schedule-focus');
+const {employmentProjection}=require('../lib/schedule-employment');
 const {functionSource}=require('../test-support/learning-workspace-ui');
 const shift=(date,endTime='18:00')=>({date,startTime:'09:00',endTime});
 const focus=(overrides={})=>mobileScheduleFocus({today:'2026-10-13',time:'17:59',shifts:[shift('2026-10-13'),shift('2026-10-14')],opening:async()=>({start:'09:00',end:'18:00'}),isClosed:()=>false,...overrides});
@@ -21,7 +22,8 @@ test('focus route keeps organization and location permission checks before every
  requirePortalSession:()=>({sessionKind:'organization',homeLocationId:'BEISPIEL'}),assertSessionContextScope:(s,c)=>{if(c.locationId!=='BEISPIEL')throw Error('FORBIDDEN');},normalizeLocationId:String,httpError:(s,m)=>Error(m),
  validateLocationExists:async id=>({id,name:'BEISPIEL'}),getMonday:d=>d,currentWeekStart:()=> '2026-10-12',isIsoDate:()=>true,addDays:(d,n)=>n===35?'2026-11-17':'2026-10-18',getIsoWeek:()=>42,
  viennaTodayIso:()=> '2026-10-13',viennaNowLocal:()=> '2026-10-13T18:01',settingsForLocation:async()=>({}),operatingHours:async()=>({end:'18:00'}),publicHolidayName:()=>'',getGlobalDayBlockForDate:()=>null,
- planningSettingsRepository:{listLocationDashboardScheduleShifts:async query=>{calls.push(query);return [shift('2026-10-13'),shift('2026-10-14')].map(s=>({shift_date:s.date,start_time:s.startTime,end_time:s.endTime}));}},sqliteBranchOrderOperations:{branchPortalSettingsSnapshot:async()=>({})},require:()=>({mobileScheduleFocus})};
+ projectScheduleEmployment:async(rows,from,to)=>employmentProjection(rows,from,to,new Map()),
+ planningSettingsRepository:{listScheduleEmployees:async()=>[{personnel_number:'synthetic'}],listScheduleShifts:async query=>{calls.push(query);return [shift('2026-10-13'),shift('2026-10-14')].map(s=>({employee_number:'synthetic',shift_date:s.date,start_time:s.startTime,end_time:s.endTime}));}},branchOrderOperations:{branchPortalSettingsSnapshot:async()=>({})},require:()=>({mobileScheduleFocus})};
  vm.runInNewContext(source.slice(a,b),context);let result;const response={json:v=>result=v};
  await context.route({query:{week:'2026-10-12'}},response);assert.equal(calls.length,1);assert.equal(Object.hasOwn(result,'focusDate'),false);
  await context.route({query:{focus:'current'}},response);assert.equal(calls.length,3);assert.equal(result.focusDate,'2026-10-14');assert.equal(calls[1].locationId,'BEISPIEL');assert.equal(calls[1].weekEnd,'2026-11-17');

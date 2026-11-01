@@ -4,7 +4,7 @@ const fs = require('node:fs'), path = require('node:path'), vm = require('node:v
 const { createHash } = require('node:crypto'), { createRequire } = require('node:module');
 const catalogFile = path.resolve(__dirname, '../lib/persistence/postgresql/core/catalog.js');
 const catalogRequire = createRequire(catalogFile), core = catalogRequire('./catalog');
-const { SQLITE_APPLICATION_CATALOG } = catalogRequire('../../sqlite/application-catalog');
+const { SQLITE_APPLICATION_CATALOG } = catalogRequire('../../catalogs/application-catalog');
 const baseline = catalogRequire('../contracts/block-4-catalog.json');
 const extension = catalogRequire('../contracts/authentication-catalog-v1.json');
 const AUTH_IDS = Object.freeze([
@@ -18,7 +18,7 @@ const copyCompiled = () => compiled.map(entry => ({ providerEntry: { ...entry.pr
 const qualificationError = /drift; explicit qualification required/;
 function isolatedCatalog({ sourceEntries = SQLITE_APPLICATION_CATALOG, reviewedExtension = extension } = {}) {
   const context = { module: { exports: {} }, __dirname: path.dirname(catalogFile), require(id) {
-    if (id === '../../sqlite/application-catalog') return { SQLITE_APPLICATION_CATALOG: sourceEntries };
+    if (id === '../../catalogs/application-catalog') return { SQLITE_APPLICATION_CATALOG: sourceEntries };
     if (id === '../contracts/authentication-catalog-v1.json') return reviewedExtension;
     return catalogRequire(id);
   } };

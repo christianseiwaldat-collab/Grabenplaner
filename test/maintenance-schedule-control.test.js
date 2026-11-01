@@ -586,10 +586,10 @@ test("calendar forms outside the matrix are never silently coerced to defaults",
   assert.equal(schedules.scheduleSnapshot(options).tasks[1].unsupportedReason, "calendar-not-supported");
 });
 
-test("module v12 delegates action locks to the broker and retains fixed writable paths", () => {
+test("module v13 preserves delegated action locks to the broker and retains fixed writable paths", () => {
   const schema = JSON.parse(fs.readFileSync(path.join(root, "server-tools/linux/offsite/module-schema.json"), "utf8"));
   const service = fs.readFileSync(path.join(root, "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control@.service.in"), "utf8");
-  assert.equal(schema.moduleVersion, 12);
+  assert.equal(schema.moduleVersion, 13);
   assert.ok(schema.managedArtifacts.includes("server-tools/linux/offsite/lib/maintenance-schedule-broker.js"));
   assert.match(service, /^ExecStart=\/usr\/bin\/node \/opt\/grabenplaner-offsite\/module\/lib\/assurance-control-broker\.js$/m);
   assert.doesNotMatch(service, /ExecStart=.*flock/);

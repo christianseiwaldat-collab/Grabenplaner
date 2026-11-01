@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from gates import check_sast_result
+
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -18,6 +20,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     root = args.root.resolve()
+    from prepare_source_core import verify_bound_core
+    scanner = verify_bound_core(root, args.output.resolve())['wrapperExecutable']
     source = (root / "server.js").read_bytes()
     text = source.decode("utf-8").replace("\r\n", "\n")
     start = 'app.post("/api/integrations/payroll-export/file", async (request, response) => {'
@@ -57,16 +61,15 @@ def main():
         rules = scratch / "response.yaml"
         rules.write_bytes(rule)
         result_path = scratch / "result.json"
-        command = ["semgrep", "scan", "--config", str(rules), "--json", "--output", str(result_path),
-                   "--metrics", "off", "--disable-version-check", "--disable-nosem", "--no-git-ignore",
+        command = [scanner, "scan", "--config", str(rules), "--json", "--output", str(result_path),
+                   "--metrics", "off", "--disable-version-check", "--disable-nosem", "--no-git-ignore", "--time",
                    "--max-target-bytes", "0", "--timeout", "30", "--timeout-threshold", "0",
                    "--jobs", "1", "--strict", "--error", str(targets)]
         completed = subprocess.run(command, capture_output=True, timeout=120, check=False)
         result = json.loads(result_path.read_text(encoding="utf-8"))
         assert result["version"] == config["semgrep"]["version"]
         assert completed.returncode == 1, "Unsafe controls must produce a findings exit"
-        assert not result["errors"] and not result.get("skipped_rules") and not result["paths"].get("skipped")
-        assert {Path(name).name for name in result["paths"]["scanned"]} == set(cases)
+        check_sast_result(result, set(cases), targets)
         findings = result["results"]
         assert {Path(row["path"]).name for row in findings} == {"unsafe-a.js", "unsafe-b.js"}
         assert all(row["check_id"].endswith("direct-response-write") for row in findings)

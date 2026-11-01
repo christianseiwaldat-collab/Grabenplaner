@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const assert = require("node:assert/strict"), test = require("node:test");
 const crypto = require("node:crypto"), fs = require("node:fs"), os = require("node:os"), path = require("node:path");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "gp-branch-sales-"));
@@ -11,6 +12,10 @@ const { browserSessionLifetime } = require("../lib/portal-session-security");
 const { createIntegrationSecretVault } = require("../lib/integration-secret-vault");
 const { BRANCH_ARTICLES_PERMISSION: A, BRANCH_RECEIPTS_PERMISSION: R } = require("../lib/branch-sales-access");
 const vault = createIntegrationSecretVault({ activeKeyId: "branch-sales-test", keys: { "branch-sales-test": key } });
+const workerConfiguration = { coreUrl: process.env.GP_CORE_READER_URL, salesUrl: process.env.GP_SALES_READER_URL };
+const openBranchReader = () => require("../lib/persistence/postgresql/boundary/application").openTwoDatabaseDevelopmentApplication({
+  ...workerConfiguration, purpose: "reader", stage: 8, authorize: ({ readOnly }) => readOnly,
+});
 let server, url, hr, branch, accountId, ids;
 const account = permissions => ({ loginName: "suche-demo", displayName: "Suche Demo", accountType: "branch", active: true,
   password: "Lokale-Suche-Test!", permissions, scopes: [{ locationId: "93" }] });
@@ -35,7 +40,7 @@ async function enable(permissions, extra = {}) {
 }
 test.before(async () => {
   await initializeApplicationPersistence();
-  for (const id of ["93", "94"]) db.prepare("INSERT INTO locations (id,name,min_staff,active) VALUES (?,?,0,1)").run(id, "Demo-Filiale " + id);
+  for (const id of ["93", "94"]) prepareLocationFixture(db, "INSERT INTO locations (id,name,min_staff,active) VALUES (?,?,0,1)").run(id, "Demo-Filiale " + id);
   db.exec("INSERT INTO employees (personnel_number,full_name,nickname,color,contracted_hours,home_location_id,active) VALUES ('sales-hr','Demo Leitung','Demo','#287a67',38.5,'93',1)");
   db.exec("INSERT INTO portal_users (employee_number,password_hash,role,active,must_change_password) VALUES ('sales-hr','test-only','hr',1,0)");
   const token = crypto.randomBytes(32).toString("hex");
@@ -51,7 +56,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  db.close(); releaseInstanceLockForTests();
+  await db.close(); releaseInstanceLockForTests();
   assert.equal(path.dirname(path.resolve(root)), path.resolve(os.tmpdir()));
   assert.ok(path.basename(root).startsWith("gp-branch-sales-")); fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -230,9 +235,7 @@ test("Artikelsuche und Belegsuche im echten Filialportal", async t => {
     await enable([R]); assert.equal((await request("/api/portal/v1/branch-articles")).status, 403);
   });
   await t.test("Rechte, Konto und Filiale werden nach asynchronem Beleglesen erneut geprüft", async () => {
-    const { openSqliteApplicationPersistence } = require("../lib/persistence/sqlite/provider");
-    const { SQLITE_APPLICATION_CATALOG } = require("../lib/persistence/sqlite/application-catalog");
-    const reader = openSqliteApplicationPersistence({ databasePath: process.env.DB_PATH, catalog: SQLITE_APPLICATION_CATALOG });
+    const reader = await openBranchReader();
     try {
       const runtime = require("../lib/persistence/repositories/branch-receipt-runtime").createBranchReceiptRuntime({ access: reader.provider, vault });
       const initial = { id: "synthetic-session", sessionKind: "organization", isEmployee: false, accountType: "branch", accountId,
@@ -245,15 +248,13 @@ test("Artikelsuche und Belegsuche im echten Filialportal", async t => {
         }), e => e.status === 403);
       }
       const context = await runtime.run(async () => initial, workspace => workspace.context()); assert.equal(context.location.id, "93");
-    } finally { await reader.provider.close(); reader.database.close(); }
+    } finally { await reader.provider.close(); }
   });
   await t.test("Hintergrundleser behält Filialgrenzen, Seitenwechsel und Datenstand; Rechteentzug stoppt die Ausgabe", async () => {
-    const { openSqliteApplicationPersistence } = require("../lib/persistence/sqlite/provider");
-    const { SQLITE_APPLICATION_CATALOG } = require("../lib/persistence/sqlite/application-catalog");
-    const reader = openSqliteApplicationPersistence({ databasePath: process.env.DB_PATH, catalog: SQLITE_APPLICATION_CATALOG });
+    const reader = await openBranchReader();
     const workers = Array.from({ length: 2 }, () => require("../lib/sales-report-batch-worker").createSalesReportBatchWorker({
       databasePath: process.env.DB_PATH, keyConfiguration: { activeKeyId: "branch-sales-test", keys: { "branch-sales-test": key } },
-      workerFile: path.resolve(__dirname, "../test-support/branch-sales-worker.cjs"), today: "2026-09-13" }));
+      workerConfiguration, today: "2026-09-13" }));
     let current = { id: "worker-session", sessionKind: "organization", isEmployee: false, accountType: "branch", accountId,
       permissions: [R], scopes: [{ locationId: "93" }] }, sent, revoke = false, sequence = 0;
     const read = input => workers[sequence++ % workers.length].run(input);
@@ -272,7 +273,7 @@ test("Artikelsuche und Belegsuche im echten Filialportal", async t => {
       await assert.rejects(run(w => w.receipts.documents({ ids: [ids.unassignedId] })), e => e.code === "IMPORT_FORBIDDEN");
       revoke = true;
       await assert.rejects(run(w => w.receipts.documents({ ids: [ids.ownId] })), e => e.status === 403);
-    } finally { await Promise.all(workers.map(worker => worker.stop())); await reader.provider.close(); reader.database.close(); }
+    } finally { await Promise.all(workers.map(worker => worker.stop())); await reader.provider.close(); }
   });
   await t.test("Mehrfachzuordnung und inaktive Filialen erlauben keine neue Suche", async () => {
     await enable([A, R], { scopes: [{ locationId: "93" }, { locationId: "94" }] });

@@ -66,6 +66,7 @@ function createLogoutRuntime(apiImplementation, timerImplementation = setTimeout
     branchPriceLabelsWorkspace: workspace,
     privatePortalWorkspaces: { synchronize() {} },
     portalVoiceAssistant: { reset() {}, synchronize() {} },
+    emmaWhatsappContact: null,
     syncPortalWindows: () => { calls.windowSync += 1; },
     portalState: { session: { user: { employeeNumber: "252" } }, processTasksOwnerFingerprint: "252" },
     el: {

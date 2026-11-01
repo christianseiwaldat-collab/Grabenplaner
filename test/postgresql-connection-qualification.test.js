@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {createPostgresqlPersistenceProvider}=require('../lib/persistence/postgresql/provider');
+const {readPolicy}=require('../lib/passkey-schema-policy');
 const turn=()=>new Promise(resolve=>setImmediate(resolve));
 function deferred(){let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}
 function fixture(connect){
@@ -45,9 +46,9 @@ for(const [code,expected] of [['42P01','PERSISTENCE_SCHEMA_INVALID'],['57014','P
  });
 }
 
-for(const domain of ['core','sales'])for(const failReplacement of [false,true]){
- test(domain+' verifies each replacement connection before exposing it; rejected='+failReplacement,async()=>{
-  const verified=[],clients=[];let ended=false;
+for(const domain of ['core','sales'])for(const policy of domain==='core'?['compatible','required']:['compatible'])for(const failReplacement of [false,true]){
+ test(domain+' verifies each replacement connection before exposing it; policy='+policy+'; rejected='+failReplacement,async()=>{
+  const verified=[],schemaVerified=[],clients=[];let ended=false,passkeyCatalogChecks=0,policyReads=0;
   class Pool{
    async connect(){const client={number:clients.length+1,releases:[],queries:[],
     async query(sql){this.queries.push(sql);return {rows:sql.startsWith('SELECT stage,')?[{stage:5,plan_sha256:'plan',source_sha256:'source',target_sha256:'schema'}]:[],rowCount:0};},
@@ -58,26 +59,34 @@ for(const domain of ['core','sales'])for(const failReplacement of [false,true]){
    pg:{Pool},
    '../provider':{createPostgresqlPersistenceProvider},
    '../../application-repositories':{createApplicationRepositories:()=>({})},
+   '../../../passkey-schema-policy':{installedPolicy(){policyReads++;return readPolicy({grabenplaner:{passkeysSchemaPolicy:policy}});}},
    './environment':{configuration:()=>({max:1}),async verifyEnvironment(client){verified.push(client.number);if(failReplacement&&client.number===2)throw Object.assign(new Error('PRIVATE'),{code:'42P01'});}},
    './catalog':{createCoreCatalog:()=>({entries:[]}),createSalesCatalog:()=>({entries:[]})},
    './schema':{createSalesSchemaPlan:()=>({digest:'plan',sourceSchemaSha256:'source'})},
    './fingerprint':{schemaFingerprint:async()=> 'schema'},
-   '../boundary/migrate':{verifyCoreSchema:async()=>({boundary:true})},
+   '../boundary/migrate':{verifyCoreSchema:async(client,options)=>{schemaVerified.push({number:client.number,options:{...options}});return {boundary:true};}},
    './layout':{SCHEMAS:['gp'],SEARCH_PATH:'pg_catalog,gp'},
    './import-work-queues':{indexedImportWorkQueues:entries=>entries},
    './cash-reference-pages':{indexedCashReferencePages:entries=>entries},
    './cash-snapshot-pages':{indexedCashSnapshotPages:entries=>entries},
    './import-delete':{target:async(_client,base)=>base},
+   './passkeys-catalog':{assertPasskeysCatalog(){passkeyCatalogChecks++;return require('../lib/persistence/postgresql/core/passkeys-catalog').assertPasskeysCatalog();}},
   };
   modules['../core/environment']=modules['./environment'];modules['../core/fingerprint']=modules['./fingerprint'];
   const file=path.resolve(__dirname,'../lib/persistence/postgresql/'+domain+'/application.js');
   const context={module:{exports:{}},performance,require:id=>modules[id]||{CATALOG:[]}};
   vm.runInNewContext(fs.readFileSync(file,'utf8'),context,{filename:file});
   const application=await context.module.exports[domain==='core'?'openCoreDevelopmentApplication':'openSalesDevelopmentApplication']({stage:5});
+  assert.equal(passkeyCatalogChecks,domain==='core'?1:0,'Core construction must execute the real Passkey catalog guard before qualifying its connections');
   assert.deepEqual(verified,[1]);
+  const expectedOptions={requireVocationalSchool:true,requireSessionSecurity:true,requirePasskeys:policy==='required'};
+  assert.deepEqual(schemaVerified,domain==='core'?[{number:1,options:expectedOptions}]:[]);
   const request=application.provider.transaction(async()=> 'verified',{readOnly:true});
   if(failReplacement){await assert.rejects(request,{code:'PERSISTENCE_SCHEMA_INVALID'});assert.deepEqual(clients[1].releases,[true]);assert.equal(clients[1].queries.length,0);}
   else{assert.equal(await request,'verified');assert.ok(clients[1].queries.some(sql=>sql.startsWith('BEGIN ')));}
-  assert.deepEqual(verified,[1,2]);await application.close();assert.equal(ended,true);
+  assert.deepEqual(verified,[1,2]);
+  assert.deepEqual(schemaVerified,domain==='core'?(failReplacement?[{number:1,options:expectedOptions}]:[{number:1,options:expectedOptions},{number:2,options:expectedOptions}]):[]);
+  assert.equal(policyReads,domain==='core'?(failReplacement?1:2):0,'Each admitted Core connection must verify the installed schema policy; Sales never reads it');
+  await application.close();assert.equal(ended,true);
  });
 }

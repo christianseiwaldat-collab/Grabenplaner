@@ -1,4 +1,5 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -49,7 +50,7 @@ async function policy(value, number = FL) {
 }
 test.before(async () => {
   locationId = db.prepare("SELECT id FROM locations WHERE active=1 ORDER BY id LIMIT 1").get().id;
-  db.prepare("INSERT INTO locations (id,name,min_staff,day_settings_json,active) VALUES ('98','BEISPIEL Fremdfiliale',1,'{}',1)").run();
+  prepareLocationFixture(db, "INSERT INTO locations (id,name,min_staff,day_settings_json,active) VALUES ('98','BEISPIEL Fremdfiliale',1,'{}',1)").run();
   for (const [number, role] of [[MA, "employee"], [WITNESS, "employee"], [FL, "manager"], [AL, "department_manager"], [ADMIN, "admin"], [FOREIGN, "employee"]]) {
     db.prepare("INSERT INTO employees (personnel_number,full_name,nickname,home_location_id,active) VALUES (?,?,?,?,1)")
       .run(number, `BEISPIEL ${number}`, number, number === FOREIGN ? "98" : locationId);
@@ -63,7 +64,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (server) await new Promise((resolve) => server.close(resolve));
-  db.close(); subject.releaseInstanceLockForTests();
+  await db.close(); subject.releaseInstanceLockForTests();
   const resolved = path.resolve(root);
   assert.equal(path.dirname(resolved), path.resolve(os.tmpdir()));
   assert.ok(path.basename(resolved).startsWith("gp-portal-loan-order-defaults-"));

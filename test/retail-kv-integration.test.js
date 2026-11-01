@@ -66,7 +66,7 @@ test.before(async () => {
   for (const date of ["2026-10-10", "2026-10-17"]) db.prepare("INSERT INTO shifts(employee_number,location_id,shift_date,start_time,end_time,area,note) VALUES (?, ?, ?, '12:00','14:00','synthetic','')").run(SUBJECT, locationId, date);
   server = app.listen(0, "127.0.0.1"); await new Promise(resolve => server.once("listening", resolve)); url = `http://127.0.0.1:${server.address().port}`;
 });
-test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); try { db.close(); } catch {} releaseInstanceLockForTests(); fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }); });
+test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); try { await db.close(); } catch {} releaseInstanceLockForTests(); fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }); });
 test("new source-bound KV profile is seeded without an automatic applicability assignment", () => {
   const id = `${RETAIL_KV_PROFILE.id}@${RETAIL_KV_PROFILE.version}`;
   assert.equal(db.prepare("SELECT count(*) n FROM work_rule_profile_versions WHERE id=?").get(id).n, 1);

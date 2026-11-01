@@ -13,9 +13,9 @@ const GOOD_PASSWORD = 'Synthetic-Login-Concurrency-2026!';
 const BAD_PASSWORD = 'Synthetic-Wrong-Concurrent-2026!';
 
 if (!childProvider) {
-  for (const provider of ['sqlite', 'postgresql']) {
+  for (const provider of ['postgresql']) {
     test(`Login concurrency HTTP: ${provider} real password verification, account locks and sessions`, {
-      skip: provider === 'postgresql' && !process.env.GP_CORE_MIGRATOR_URL,
+      skip: (!process.env.GP_CORE_MIGRATOR_URL),
       timeout: 180000,
     }, async t => {
       const environment = { ...process.env, GP_LOGIN_CONCURRENCY_HTTP_CHILD: provider };
@@ -36,7 +36,7 @@ if (!childProvider) {
     });
   }
 } else {
-  assert.ok(['sqlite', 'postgresql'].includes(childProvider));
+  assert.ok(['postgresql'].includes(childProvider));
   const gates = new Map();
   const realScrypt = crypto.scrypt;
   // Keep native scrypt and timingSafeEqual intact. Only callback delivery is
@@ -69,7 +69,7 @@ if (!childProvider) {
     const originalConfiguration = configuration.resolvePersistenceConfiguration;
     let subject, server;
     Object.assign(process.env, {
-      NODE_ENV: 'test', TZ: 'Europe/Vienna', DB_PROVIDER: 'sqlite', DATABASE_URL: '',
+      NODE_ENV: 'test', TZ: 'Europe/Vienna', DB_PROVIDER: 'postgresql', DATABASE_URL: '',
       DB_PATH: path.join(temporaryRoot, 'fixture.db'), BACKUP_DIR: path.join(temporaryRoot, 'backups'),
       GRABENPLANER_DATA_DIR: path.join(temporaryRoot, 'data'), GRABENPLANER_HOST: '127.0.0.1',
       GRABENPLANER_FORCE_PORTAL: '1', GRABENPLANER_SEED_DEMO: '1',
@@ -82,7 +82,7 @@ if (!childProvider) {
       GRABENPLANER_TEST_AMU_SCANNER: 'clean',
     });
     async function exercise(fixture) {
-      if (fixture) {
+      {
         configuration.resolvePersistenceConfiguration = () => Object.freeze({
           providerId: 'postgresql', databasePath: path.join(temporaryRoot, 'core.postgresql'), databaseUrlConfigured: true,
           coreUrl: process.env.GP_CORE_APP_URL, salesUrl: process.env.GP_SALES_APP_URL,
@@ -92,12 +92,11 @@ if (!childProvider) {
       }
       subject = require('../server');
       await subject.initializeApplicationPersistence();
-      const query = fixture ? async (sql, values = []) => {
+      const query = (async (sql, values = []) => {
         let parameter = 0;
         return (await fixture.core.migrator.query(sql.replace(/\?/g, () => '$' + (++parameter)), values)).rows;
-      } : async (sql, values = []) => /^\s*SELECT\b/i.test(sql)
-        ? subject.db.prepare(sql).all(...values) : (subject.db.prepare(sql).run(...values), []);
-      if (fixture) await fixture.core.migrator.query('SET ROLE gp_core_owner; SET search_path=pg_catalog,gp');
+      });
+      await fixture.core.migrator.query('SET ROLE gp_core_owner; SET search_path=pg_catalog,gp');
       await query("UPDATE settings SET value='5' WHERE key='max_failed_login_attempts'");
       server = await new Promise(resolve => { const listener = subject.app.listen(0, '127.0.0.1', () => resolve(listener)); });
       const base = 'http://127.0.0.1:' + server.address().port;
@@ -206,7 +205,7 @@ if (!childProvider) {
       console.log('HTTP_CONCURRENCY_VERIFIED ' + JSON.stringify({ provider: childProvider, channels: ['personal-browser', 'organization-browser', 'mobile', 'shared-browser-mobile'], simultaneousFailures: 8, lockThreshold: 5, staleSuccessDenied: true, passwordChangeRegression: true }));
     }
     try {
-      if (childProvider === 'postgresql') {
+      {
         for (const domain of ['CORE', 'SALES']) for (const purpose of ['APP', 'READER', 'MIGRATOR']) {
           const connection = new URL(process.env[`GP_${domain}_${purpose}_URL`]);
           assert.equal(connection.hostname, '127.0.0.1');
@@ -216,7 +215,7 @@ if (!childProvider) {
           try { await exercise(fixture); }
           finally { if (server) await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }); server = null; await subject?.closePersistenceForTests(); subject?.releaseInstanceLockForTests(); subject = null; }
         }, { warmWorkers: false });
-      } else await exercise();
+      }
     } finally {
       crypto.scrypt = realScrypt;
       if (server) await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });

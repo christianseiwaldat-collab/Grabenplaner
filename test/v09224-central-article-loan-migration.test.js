@@ -697,7 +697,7 @@ test("Leih-Laufzeit und F18-Import verwenden ausschliesslich den zentralen Artik
   const repositoryRoot = path.join(__dirname, "..");
   const loanCatalogSource = fs.readFileSync(path.join(
     repositoryRoot,
-    "lib/persistence/sqlite/loan-module-catalog.js",
+    "lib/persistence/catalogs/loan-module-catalog.js",
   ), "utf8");
   const applicationSchemaSource = fs.readFileSync(path.join(
     repositoryRoot,

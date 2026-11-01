@@ -93,89 +93,109 @@ function seedSalesAnalyticsPdfFixture(locationId, {
 } = {}) {
   const reportId = crypto.createHash("sha256").update(`v071-sales-pdf-${crypto.randomUUID()}`).digest("hex");
   const sourceHash = crypto.createHash("sha256").update(`${reportId}-source`).digest("hex");
-  db.prepare(`
-    INSERT INTO sales_aggregate_reports (
-      id, source_system, source_file_sha256, parser_version, extraction, review_method,
-      report_kind, external_branch_id, location_id, currency, period_start, period_end,
-      comparison_start, comparison_end, year_to_date_start, year_to_date_comparison_start,
-      generated_on, page_count, product_group_count, issue_count, reconciliation_status,
-      imported_by, imported_at
-    ) VALUES (
-      ?, 'tradefoto_report', ?, 2, 'pdf_text_coordinates', 'source_text_confirmed',
-      'product_group_net', ?, ?, 'EUR', '2026-07-01', '2026-07-31',
-      '2025-07-01', '2025-07-31', '2026-01-01', '2025-01-01', '2026-08-03',
-      1, ?, 0, 'match', 'v071-admin', '2026-08-21T10:00:00.000Z'
-    )
-  `).run(
-    reportId,
-    sourceHash,
-    `v071-${reportId.slice(0, 12)}`,
-    locationId,
-    35 + extraYearToDateGroups,
-  );
-  const insertGroup = db.prepare(`
-    INSERT INTO sales_report_product_group_metrics (
-      report_id, horizon, external_product_group_id, product_group_label,
-      current_quantity, comparison_quantity, current_net_revenue, comparison_net_revenue,
-      current_gross_margin, comparison_gross_margin, current_customer_count,
-      comparison_customer_count, current_revenue_per_customer,
-      comparison_revenue_per_customer, source_page, source_ordinate
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-  `);
-  const groups = [
-    ["101", "Kameras", 12, 10, 1200, nonPositiveComparisons ? 0 : 1000, 320, 270, 11, 9, 109.09, 111.11],
-    ["202", "Objektive", 8, 11, 880, nonPositiveComparisons ? -100 : 1210, 250, 350, 7, 10, 125.71, 121],
-    ["303", "Zubehör", 30, 24, 750, 600, 210, 165, 25, 20, 30, 30],
-    ...Array.from({ length: 32 }, (_, index) => [
-      String(400 + index),
-      `Testgruppe ${String(index + 1).padStart(2, "0")}`,
-      10 + index,
-      9 + index,
-      400 + index * 10,
-      390 + index * 9,
-      100 + index * 3,
-      95 + index * 2,
-      8 + index,
-      7 + index,
-      40 + index,
-      39 + index,
-    ]),
-  ];
-  for (const horizon of ["period", "year_to_date"]) {
-    groups.forEach((group, index) => insertGroup.run(
-      reportId,
-      horizon,
-      group[0],
-      group[1],
-      ...group.slice(2).map((value) => Number(value).toFixed(4)),
-      String(100 + index),
-    ));
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const location = db.prepare("SELECT id, active FROM locations WHERE id = ?").get(locationId);
+    assert.ok(location && Number(location.active) === 1, "The report fixture requires an active Core location");
+    const locationSha = crypto.createHash("sha256")
+      .update(JSON.stringify({ id: location.id, active: Boolean(location.active) })).digest("hex");
+    // The real two-database boundary publishes this reference before writing a
+    // Sales report. This explicit fixture follows the same FK contract atomically.
+    db.postgresqlFixtureWrite("sales", `
+      INSERT INTO integration.core_location_references(id,source_sha256)
+      VALUES (?,?) ON CONFLICT(id) DO NOTHING
+    `, [location.id, locationSha]);
     db.prepare(`
-      INSERT INTO sales_report_total_metrics (
-        report_id, horizon, current_quantity, comparison_quantity,
-        current_net_revenue, comparison_net_revenue, current_gross_margin,
-        comparison_gross_margin, current_customer_count, comparison_customer_count,
-        current_revenue_per_customer, comparison_revenue_per_customer, source_page
-      ) VALUES (?, ?, '50.0000', '45.0000', '2830.0000', ?,
-        '780.0000', '785.0000', '43.0000', '39.0000', '65.8100', '72.0500', 1)
+      INSERT INTO sales_aggregate_reports (
+        id, source_system, source_file_sha256, parser_version, extraction, review_method,
+        report_kind, external_branch_id, location_id, currency, period_start, period_end,
+        comparison_start, comparison_end, year_to_date_start, year_to_date_comparison_start,
+        generated_on, page_count, product_group_count, issue_count, reconciliation_status,
+        imported_by, imported_at
+      ) VALUES (
+        ?, 'tradefoto_report', ?, 2, 'pdf_text_coordinates', 'source_text_confirmed',
+        'product_group_net', ?, ?, 'EUR', '2026-07-01', '2026-07-31',
+        '2025-07-01', '2025-07-31', '2026-01-01', '2025-01-01', '2026-08-03',
+        1, ?, 0, 'match', 'v071-admin', '2026-08-21T10:00:00.000Z'
+      )
     `).run(
       reportId,
-      horizon,
-      String(nonPositiveComparisons && horizon === "year_to_date" ? -1 : 2810),
+      sourceHash,
+      `v071-${reportId.slice(0, 12)}`,
+      locationId,
+      35 + extraYearToDateGroups,
     );
+    const insertGroup = db.prepare(`
+      INSERT INTO sales_report_product_group_metrics (
+        report_id, horizon, external_product_group_id, product_group_label,
+        current_quantity, comparison_quantity, current_net_revenue, comparison_net_revenue,
+        current_gross_margin, comparison_gross_margin, current_customer_count,
+        comparison_customer_count, current_revenue_per_customer,
+        comparison_revenue_per_customer, source_page, source_ordinate
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `);
+    const groups = [
+      ["101", "Kameras", 12, 10, 1200, nonPositiveComparisons ? 0 : 1000, 320, 270, 11, 9, 109.09, 111.11],
+      ["202", "Objektive", 8, 11, 880, nonPositiveComparisons ? -100 : 1210, 250, 350, 7, 10, 125.71, 121],
+      ["303", "Zubehör", 30, 24, 750, 600, 210, 165, 25, 20, 30, 30],
+      ...Array.from({ length: 32 }, (_, index) => [
+        String(400 + index),
+        `Testgruppe ${String(index + 1).padStart(2, "0")}`,
+        10 + index,
+        9 + index,
+        400 + index * 10,
+        390 + index * 9,
+        100 + index * 3,
+        95 + index * 2,
+        8 + index,
+        7 + index,
+        40 + index,
+        39 + index,
+      ]),
+    ];
+    for (const horizon of ["period", "year_to_date"]) {
+      groups.forEach((group, index) => insertGroup.run(
+        reportId,
+        horizon,
+        group[0],
+        group[1],
+        ...group.slice(2).map((value) => Number(value).toFixed(4)),
+        String(100 + index),
+      ));
+      db.prepare(`
+        INSERT INTO sales_report_total_metrics (
+          report_id, horizon, current_quantity, comparison_quantity,
+          current_net_revenue, comparison_net_revenue, current_gross_margin,
+          comparison_gross_margin, current_customer_count, comparison_customer_count,
+          current_revenue_per_customer, comparison_revenue_per_customer, source_page
+        ) VALUES (?, ?, '50.0000', '45.0000', '2830.0000', ?,
+          '780.0000', '785.0000', '43.0000', '39.0000', '65.8100', '72.0500', 1)
+      `).run(
+        reportId,
+        horizon,
+        String(nonPositiveComparisons && horizon === "year_to_date" ? -1 : 2810),
+      );
+    }
+    for (let index = 0; index < extraYearToDateGroups; index += 1) {
+      const serial = String(index + 1).padStart(3, "0");
+      insertGroup.run(
+        reportId,
+        "year_to_date",
+        `CAP-${serial}`,
+        `Seitengrenze ${serial}`,
+        ...Array.from({ length: 10 }, () => "1.0000"),
+        String(2000 + index),
+      );
+    }
+    db.exec("COMMIT");
+    assert.equal(db.postgresqlCatalogQuery("sales", `
+      SELECT source_sha256 FROM integration.core_location_references WHERE id = ?
+    `, [location.id])[0]?.source_sha256, locationSha);
+    return reportId;
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
   }
-  for (let index = 0; index < extraYearToDateGroups; index += 1) {
-    const serial = String(index + 1).padStart(3, "0");
-    insertGroup.run(
-      reportId,
-      "year_to_date",
-      `CAP-${serial}`,
-      `Seitengrenze ${serial}`,
-      ...Array.from({ length: 10 }, () => "1.0000"),
-      String(2000 + index),
-    );
-  }
-  return reportId;
 }
 
 test.before(async () => {
@@ -190,7 +210,7 @@ test.beforeEach(resetFixture);
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

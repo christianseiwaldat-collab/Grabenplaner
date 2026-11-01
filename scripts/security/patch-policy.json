@@ -10,5 +10,98 @@
   "owner": "Grabenplaner dependency maintainers",
   "reason": "Temporary CommonJS callable-export compatibility for ExcelJS minimatch3/5 consumers. Upstream5.0.12 security limits and parsing are unchanged. This is a compatibility-patch approval, not an advisory waiver.",
   "removalCondition": "Revalidate or remove when upstream consumers support the modern named-export shape, when any pinned bytes/version change, or before expiry.",
-  "advisoryExceptions": []
+  "advisoryExceptions": [],
+  "securityBackports": [
+    {
+      "schemaVersion": 1,
+      "kind": "verified_security_backport",
+      "package": "@azure/msal-node",
+      "version": "5.4.0",
+      "advisory": "GHSA-xcx6-jx8p-x3h5",
+      "cve": "CVE-2026-109461",
+      "upstreamCommit": "f550958586475dbfeb1cd44be14a2d653728850e",
+      "upstreamFixedVersion": "7.1.0",
+      "originalTarballIntegrity": "sha512-6EZEParwHRlnSSIikw8FNAnAzwmh71uhveUXdPNFeZFviJ9SH+rwFiurhjzXqICYTrpm3E+dj693QOwfPbJXAQ==",
+      "originalTarballSha256": "8338df26147cd5fc510cb4cb2d29524ca9d705c08051ea4a6bafff79528970e1",
+      "patch": "lib/vendor-patches/@azure__msal-node@5.4.0.patch",
+      "patchSha256": "bbdf16bb0cf6a18ab384b515bd8a378cc5c736698c486881c60c1cbb1cbeda01",
+      "installedFiles": {
+        "dist/client/ConfidentialClientApplication.mjs": {
+          "beforeSha256": "02c34fb48c50034e2a5c10239d57de2fab8fafdecb325b22bb62e01048687c94",
+          "afterSha256": "3109ae028df23bb02f9b27cbea528baf5f7b5f141b6d7acbabadc4d06148e211"
+        },
+        "dist/error/NodeAuthError.mjs": {
+          "beforeSha256": "4f054df10b213405735d4708a54bac149efffafe1c5cb05dcb80719441a5bcd0",
+          "afterSha256": "ff3754ef1c68f3468392631f4384d656a70e958eaeb5be6fde3f1b76a4d4dd2b"
+        },
+        "lib/msal-node.cjs": {
+          "beforeSha256": "dd8447a2b301255967dfa02e0f9f81dbfbf0fc8cda92c5285c807818abd0bc48",
+          "afterSha256": "2cfc00a87e8596a7b8949ab26783196d339ec9529178be9159ba48c4c5145e9b"
+        },
+        "src/client/ConfidentialClientApplication.ts": {
+          "beforeSha256": "73077dbed972d7aa61729a640f3f41acdef801e3b028a767a701c379ed0f15b9",
+          "afterSha256": "ab6a1f163363a3f27bc6ccee91bffc62949fcebbf8c3607e10b61021c657d27e"
+        },
+        "src/error/NodeAuthError.ts": {
+          "beforeSha256": "820cb7dede2256eb6a118f3832ae02891a7ec7ebd702978a342c6cb57033d1d8",
+          "afterSha256": "e70f9dbf968907bfd4221a9dd25e8d6470843849ecdb167b2040908588c8f75a"
+        },
+        "types/client/ConfidentialClientApplication.d.ts": {
+          "beforeSha256": "7017f5aa7ba8a59b0bd5021694c01c8dfea3a3cd6037f7ab67afe9b63bb2e1ae",
+          "afterSha256": "f6285940de920f7318332176c4fbb2ed2509bedbcc2db8a99b1b8a5c95b7d29c"
+        },
+        "types/error/NodeAuthError.d.ts": {
+          "beforeSha256": "b719900a9f0e1a1d1b7c17442afa740fa1b08a62edfabb2843520c3b331ca504",
+          "afterSha256": "f2179cafbe5bd30861e091d57fcc88416be93b0ec2e4cf11cab760898c782103"
+        }
+      },
+      "installedTreeSha256": "8c2960a1bb61fc30b1217daa5325fa3b6e669567b5489e06d8b7bfa7dbdab44b",
+      "installedFileCount": 341,
+      "packageJsonSha256": "6119d93093e1c227b63986484301a5d620bff78be9f2856cf568d2810ac978f2",
+      "licenseSha256": "17474e386e0b9e1a700cc3d06b2b0882a2c376d9c6b49c7f8274409b8f8d2352",
+      "regressionTest": "test/security-msal-auth-code-backport.test.js",
+      "regressionTestSha256": "5b5c46271466cc697a6a46c2d4682f79ab62fbf32f4ba24e4b82106324f81819",
+      "regressionPassCount": 14,
+      "reviewedOn": "2026-10-24",
+      "expiresOn": "2026-11-23",
+      "owner": "Grabenplaner security maintainers",
+      "reason": "Exact backport of the upstream CCA payload sanitization and unsupported instance-aware rejection to preserve the current Azure identity / Tedious dependency contract. Both actual CJS/ESM exports and ordinary token flows are regression-tested. This records repaired code, not an advisory waiver.",
+      "removalCondition": "Remove when an in-range supported dependency contains the upstream fix, or requalify all pinned bytes before expiry. Any patch, version, source or installed-file drift is a hard failure.",
+      "advisoryExceptions": []
+    }
+  ],
+  "compatibilityPatches": [
+    {
+      "schemaVersion": 1,
+      "kind": "verified_compatibility_patch",
+      "package": "glob",
+      "version": "7.2.3",
+      "minimatchVersion": "11.0.3",
+      "patch": "lib/vendor-patches/glob@7.2.3.patch",
+      "patchSha256": "a3adbd52146b551c396de60757d254b6a90c1f4dec601cb652096ca65ca0a617",
+      "originalTarballIntegrity": "sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==",
+      "installedFiles": {
+        "glob.js": {
+          "beforeSha256": "b8f35657ca927593d0f9e1aae3a8cfe9c33c697bf3c5733c2f6727f25ae25be1",
+          "afterSha256": "5ea8fdb86e83c0c178625a724a47c3ae19bf9d177de21f83d779de1764a1b7a7"
+        },
+        "sync.js": {
+          "beforeSha256": "0f61227f4b55297f1ad16798c53e6a6dd55d633856f153133716413b7c5f61ad",
+          "afterSha256": "add06c3ea77da200e484dade81b88eebf53f138a70e6fe6f6f8a088229fda036"
+        }
+      },
+      "installedTreeSha256": "70872917a109467058fb83b20c9ee97238aa321fb8a1305544b6a25b025960b4",
+      "installedFileCount": 6,
+      "packageJsonSha256": "b00b6d35eda6d4aa6893baf19e53b7d005019ed840e4fa116c926a532ec577cf",
+      "licenseSha256": "6236fa0b88a4a0cce3dda0367979491b2052b3c8d6b1c10b3668de083e86a7f0",
+      "regressionTest": "test/security-minimatch-compatibility.test.js",
+      "regressionTestSha256": "c356db1a1554d7ce5a7819cca2805f362bc0f660a39b7b40ee500a4e30966dda",
+      "reviewedOn": "2026-10-31",
+      "expiresOn": "2026-11-30",
+      "owner": "Grabenplaner dependency maintainers",
+      "reason": "Exact six-line adapter in the synchronous and callback directory walkers: use the modern Matcher pattern and boolean test methods. Filesystem traversal and filtering remain unchanged; minimatch 11.0.3 remains unmodified with its upstream amplification bounds. No advisory suppression.",
+      "removalCondition": "Remove when ExcelJS archive and cleanup consumers use a compatible upstream glob, or requalify before expiry. Any registered byte, dependency version or patch drift rejects verification.",
+      "advisoryExceptions": []
+    }
+  ]
 }

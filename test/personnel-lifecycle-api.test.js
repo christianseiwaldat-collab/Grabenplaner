@@ -1,4 +1,6 @@
 "use strict";
+const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -167,12 +169,10 @@ function resetFixture() {
     const convertedEmployeeNumbers = db.prepare(
       "SELECT employee_number FROM candidate_conversions",
     ).all().map((row) => String(row.employee_number));
-    for (const definition of [
+    const restoreResetGuards = require("../test-support/postgresql-api/trigger-fixture").suspendFixtureGuards(db, [
       ...PERSONNEL_LIFECYCLE_CONVERSION_TRIGGER_DEFINITIONS,
       ...PERSONNEL_LIFECYCLE_TRIGGER_DEFINITIONS,
-    ]) {
-      db.exec(`DROP TRIGGER IF EXISTS "${definition.name}"`);
-    }
+    ].map(definition => definition.name));
     db.prepare("DELETE FROM candidate_conversions").run();
     db.prepare("DELETE FROM candidate_events").run();
     db.prepare("DELETE FROM candidate_document_versions").run();
@@ -191,12 +191,7 @@ function resetFixture() {
         .run(employeeNumber);
       db.prepare("DELETE FROM employees WHERE personnel_number = ?").run(employeeNumber);
     }
-    for (const definition of [
-      ...PERSONNEL_LIFECYCLE_TRIGGER_DEFINITIONS,
-      ...PERSONNEL_LIFECYCLE_CONVERSION_TRIGGER_DEFINITIONS,
-    ]) {
-      db.exec(definition.sql);
-    }
+    restoreResetGuards();
     setPersonnelLifecycleEnabled(false);
     db.exec("COMMIT");
   } catch (error) {
@@ -235,7 +230,7 @@ test.beforeEach(resetFixture);
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -429,7 +424,7 @@ test("Personalmodul M3: kontrollierte Einstellung ist atomar, idempotent und dat
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidate_events WHERE candidate_id = ?")
     .get(candidate.id).count, 8);
 
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_candidate_conversion_rollback
     BEFORE INSERT ON candidate_conversions
     BEGIN
@@ -440,7 +435,7 @@ test("Personalmodul M3: kontrollierte Einstellung ist atomar, idempotent und dat
     `/api/portal/v1/personnel-lifecycle/candidates/${candidate.id}/applications/${preboarding.id}/convert`,
     { method: "POST", auth: admin, body: conversionBody },
   );
-  db.exec("DROP TRIGGER test_candidate_conversion_rollback");
+  dropFixtureTrigger(db, "test_candidate_conversion_rollback");
   assert.equal(forcedRollback.response.status, 400, JSON.stringify(forcedRollback.payload));
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM candidate_conversions").get().count, 0);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM employees WHERE personnel_number = ?")
@@ -691,7 +686,7 @@ test("Personalmodul-API: Bewerberanlage verlangt eine ausdrücklich bestätigte 
 test("Personalmodul-API: Bewerberanlage rollt nach einem nachgelagerten Ereignisfehler vollständig zurück", async () => {
   setPersonnelLifecycleEnabled(true);
   const admin = createSession("101", "admin");
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_candidate_creation_rollback
     BEFORE INSERT ON candidate_events
     WHEN NEW.event_type = 'candidate_created'
@@ -722,7 +717,7 @@ test("Personalmodul-API: Bewerberanlage rollt nach einem nachgelagerten Ereignis
       WHERE action = 'personnel-lifecycle.candidate.create'
     `).get().count, 0);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_candidate_creation_rollback");
+    dropFixtureTrigger(db, "test_candidate_creation_rollback", { ifExists: true });
   }
 });
 
@@ -1239,7 +1234,7 @@ test("Personalmodul Recruiting: strukturierte Profildaten, Teamfeedback und Bewe
   assert.equal(application.trialAppointments[0].id, trialAppointmentId);
   assert.deepEqual(application.competencyRatings.map(({ rating }) => rating), [4, 5]);
 
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, active)
     VALUES ('candidate-alternate', 'Alternative Testfiliale', 1)
   `).run();
@@ -1308,7 +1303,7 @@ test("Personalmodul Recruiting: strukturierte Profildaten, Teamfeedback und Bewe
     application.revision,
   );
 
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_trial_appointment_event_failure
     BEFORE INSERT ON candidate_events
     WHEN NEW.event_type = 'application_updated'
@@ -1345,7 +1340,7 @@ test("Personalmodul Recruiting: strukturierte Profildaten, Teamfeedback und Bewe
       2,
     );
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_trial_appointment_event_failure");
+    dropFixtureTrigger(db, "test_trial_appointment_event_failure", { ifExists: true });
   }
 
   const cancelledWithReplacement = await request(trialRoute, {

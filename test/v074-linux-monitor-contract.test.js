@@ -55,7 +55,7 @@ exit "$failures"
 
 test("current runtime contract retains the monitor units after later explicit migrations", () => {
   const schema = JSON.parse(read("server-tools", "linux", "runtime-schema.json"));
-  assert.equal(schema.deploymentSchemaVersion, 5);
+  assert.equal(schema.deploymentSchemaVersion, 6);
   assert.equal(schema.migrationPolicy, "explicit-maintenance");
   assert.deepEqual(schema.managedArtifacts.filter((item) => item.includes("grabenplaner-monitor")), [
     "server-tools/linux/grabenplaner-monitor.service.in",
@@ -67,7 +67,7 @@ test("current runtime contract retains the monitor units after later explicit mi
   ], { encoding: "utf8" });
   assert.equal(verification.status, 0, verification.stderr);
   const contract = JSON.parse(verification.stdout);
-  assert.equal(contract.deploymentSchemaVersion, 5);
+  assert.equal(contract.deploymentSchemaVersion, 6);
   assert.equal(contract.managedArtifacts.length, 11);
 
   const updater = read("server-tools", "linux", "update-grabenplaner-server.sh");
@@ -209,8 +209,8 @@ test("security CSP: native Bash monitor rejects self, duplicate names and policy
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), cases.map(([name,,expected])=>name+'='+expected).join('\n'));
 });
-test("v0.74 rejects backup timestamps more than five minutes in the future", () => {
-  const health = read("server-tools/linux/test-grabenplaner-server.sh");
+test("immutable historical v0.74 SQLite monitor rejects backup timestamps more than five minutes in the future", () => {
+  const health = fs.readFileSync(require('../test-support/legacy-baseline').legacyPath("server-tools/linux/test-grabenplaner-server.sh"), 'utf8');
   assert.match(health, /age_seconds < -300/);
   assert.match(health, /Zeitstempel liegt unplausibel in der Zukunft/);
   assert.match(health, /age_seconds < 0 \)\) && age_seconds=0/);

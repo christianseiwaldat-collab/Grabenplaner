@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
@@ -20,10 +22,13 @@ process.env.GRABENPLANER_FORCE_PORTAL = "1";
 process.env.GRABENPLANER_SEED_DEMO = "1";
 process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
 process.env.NODE_ENV = "test";
+Object.assign(process.env, {
+  GRABENPLANER_AMU_KEY_ID: "synthetic-photo-backup", GRABENPLANER_AMU_KEY: Buffer.alloc(32, 42).toString("base64"),
+  GRABENPLANER_INTEGRATION_KEY_ID: "synthetic-photo-backup", GRABENPLANER_INTEGRATION_KEY: Buffer.alloc(32, 43).toString("base64"),
+});
 
 const {
   app,
-  createDatabaseBackupToDirectory,
   db,
   reconcileOrphanAmuBlobs,
   releaseInstanceLockForTests,
@@ -45,7 +50,7 @@ let otherSession;
 let organizationSession;
 
 function ensureLocation() {
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, 'Block 5 Fotobeilagen', 0, '{}', 1)
     ON CONFLICT(id) DO UPDATE SET
@@ -176,7 +181,23 @@ function insertCentralArticle(articleNumber, description) {
         match_method, match_confidence, linked_by, linked_at
       ) VALUES (?, 'manual.loan', ?, ?, 'source_import', 'authoritative', 'test', ?)
     `).run(productId, articleNumber, snapshotId, timestamp);
+    const revision = db.prepare(`
+      SELECT to_jsonb(article_revision) AS data FROM sales_article_revisions article_revision
+      WHERE article_revision.product_id = ? AND article_revision.revision = 1
+    `).get(productId)?.data;
+    assert.equal(revision?.article_number, articleNumber);
+    const revisionSha = crypto.createHash("sha256").update(JSON.stringify(revision)).digest("hex");
+    db.postgresqlFixtureWrite("core", `
+      INSERT INTO gp.article_reference_snapshots(product_id,revision,source_digest,article_number)
+      VALUES (?,1,?,?)
+    `, [productId, revisionSha, articleNumber]);
     db.exec("COMMIT");
+    const published = db.postgresqlCatalogQuery("core", `
+      SELECT source_digest, article_number FROM gp.article_reference_snapshots
+      WHERE product_id = ? AND revision = 1
+    `, [productId])[0];
+    assert.equal(published?.source_digest, revisionSha);
+    assert.equal(published.article_number, articleNumber);
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
     throw error;
@@ -352,7 +373,7 @@ test.before(() => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, {
     recursive: true,
@@ -378,10 +399,7 @@ test("v0.87 Block 5 erzeugt geschützte Foto-PDF-Beilagen mit konfigurierbarer F
       (location) => location.locationId === LOCATION_ID,
     );
     assert.ok(initialLocation);
-    assert.ok(db.prepare(`
-      SELECT 1 FROM schema_migrations
-      WHERE id = 'v0.87-loan-photo-pdf-attachments'
-    `).get());
+    assert.ok(pgSchema.assertCoreSchemaLedger(db));
     assert.deepEqual(initialLocation.photoPdf, {
       outputMode: "grayscale",
       originalRetention: "retain",
@@ -731,40 +749,66 @@ test("v0.87 Block 5 erzeugt geschützte Foto-PDF-Beilagen mit konfigurierbarer F
     assert.equal((await reconcileOrphanAmuBlobs()).removed, 0);
 
     const backupDirectory = path.join(testRoot, "block5-backup");
-    const backup = createDatabaseBackupToDirectory(
-      backupDirectory,
-      "block5-test",
-      "test",
-    );
-    assert.equal(backup.verified, true);
-    assert.equal(backup.committed, true);
-    const manifest = JSON.parse(fs.readFileSync(path.join(
-      backupDirectory,
-      `${path.basename(backup.path, ".db")}.amu`,
-      "manifest.json",
-    ), "utf8"));
-    const manifestKeys = new Set(manifest.files.map((entry) => entry.storageKey));
+    fs.mkdirSync(backupDirectory, { mode: 0o700 });
+    const { createPairedSnapshot } = require("../lib/persistence/postgresql/operations/paired-backup");
+    const { copyRecoveryFiles } = require("../lib/persistence/postgresql/operations/runtime");
+    const { verifyPairBundle } = require("../lib/persistence/postgresql/operations/paired-bundle");
+    const { verifyProtectedRecoveryFiles } = require("../lib/persistence/postgresql/operations/protected-files");
+    const backup = () => require("../test-support/postgresql-api/backup-pools").withBackupPools(async domains => {
+      let snapshot, proof;
+      const result = await createPairedSnapshot({ backupDirectory, domains,
+        withQuiescedWrites: work => work({ active: true, pendingMutations: 0 }),
+        async readCheckpoint({ domain, client }) {
+          if (domain === "core") snapshot = client;
+          return { currentPostgresqlApiFixture: true };
+        },
+        // Real PostgreSQL snapshots and the actual coordinator/sealer; native
+        // pg_dump bytes are separately qualified by the operations Linux test.
+        async runDump({ targetFile }) { fs.writeFileSync(targetFile, "explicit synthetic dump collaborator", { flag: "wx", mode: 0o600 }); },
+        async captureRecoveryFiles({ directory }) {
+          copyRecoveryFiles(process.env.GRABENPLANER_DATA_DIR, directory);
+          fs.writeFileSync(path.join(directory, "configuration.env"), "SYNTHETIC_CURRENT_FIXTURE=1\n", { flag: "wx", mode: 0o600 });
+          await snapshot.query("SET LOCAL search_path=pg_catalog,gp");
+          proof = await verifyProtectedRecoveryFiles(snapshot, { sourceDirectory: path.join(directory, "private", "amu"), environment: process.env });
+          fs.writeFileSync(path.join(directory, "roles.sql"), "explicit synthetic roles collaborator", { flag: "wx", mode: 0o600 });
+        },
+      });
+      return { ...result, proof, verification: await verifyPairBundle(result.bundle, result.commitMarker) };
+    });
+    const complete = await backup();
+    assert.equal(complete.verification.verified, true); assert.equal(fs.existsSync(complete.commitMarker), true);
+    assert.equal(complete.proof.loanPhotos, 2); assert.equal(complete.proof.loanPhotoAttachments, 3);
+    const manifestKeys = new Set(complete.verification.manifest.files.filter(entry => entry.file.startsWith("private/amu/blobs/")).map(entry => entry.file.slice("private/amu/blobs/".length)));
     const attachmentStorageKeys = db.prepare(`
       SELECT storage_key FROM loan_photo_attachments WHERE loan_id = ?
     `).all(LOAN_ID).map((row) => row.storage_key);
     assert.equal(attachmentStorageKeys.every((key) => manifestKeys.has(key)), true);
     assert.equal(manifestKeys.has(photoRow.storage_key), false);
+    const previousBytes = new Map([complete.commitMarker, ...complete.verification.manifest.files.map(entry => path.join(complete.bundle, entry.file)), path.join(complete.bundle, "manifest.json")]
+      .map(file => [file, crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex")]));
+    const assertPriorPointUnchanged = () => {
+      assert.equal(fs.readdirSync(backupDirectory).filter(name => name.endsWith(".complete.json")).length, 1);
+      for (const [file, digest] of previousBytes) assert.equal(crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"), digest);
+    };
 
     const attachmentBlobPath = protectedBlobPath(attachmentRow.storage_key);
-    const parkedAttachmentPath = `${attachmentBlobPath}.missing`;
+    // Park outside the copied app-data tree so this case reaches the missing
+    // reference guard, rather than rejecting an unexpected backup component.
+    const parkedAttachmentDirectory = fs.mkdtempSync(path.join(testRoot, "parked-attachment-"));
+    const parkedAttachmentPath = path.join(parkedAttachmentDirectory, path.basename(attachmentBlobPath));
     fs.renameSync(attachmentBlobPath, parkedAttachmentPath);
     try {
-      assert.throws(
-        () => createDatabaseBackupToDirectory(
-          path.join(testRoot, "block5-backup-missing"),
-          "block5-test-missing",
-          "test",
-        ),
-        /nicht gefunden|fehlt/i,
-      );
+      await assert.rejects(backup(), /PG_PAIR_PROTECTED_FILE_MISSING|nicht gefunden|fehlt/i);
+      assertPriorPointUnchanged();
     } finally {
       fs.renameSync(parkedAttachmentPath, attachmentBlobPath);
+      fs.rmdirSync(parkedAttachmentDirectory);
     }
+    const originalAttachment = fs.readFileSync(attachmentBlobPath), tamperedAttachment = Buffer.from(originalAttachment);
+    tamperedAttachment[tamperedAttachment.length - 1] ^= 1; fs.writeFileSync(attachmentBlobPath, tamperedAttachment);
+    try {
+      await assert.rejects(backup(), { code: "AMU_DOCUMENT_INTEGRITY_FAILED" }); assertPriorPointUnchanged();
+    } finally { fs.writeFileSync(attachmentBlobPath, originalAttachment); }
   });
 
   await t.test("Offene Block-4-Übersicht gibt weder interne IDs noch Datei-URLs preis", async () => {

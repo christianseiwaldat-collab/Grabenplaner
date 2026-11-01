@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
@@ -63,17 +65,10 @@ function resetTestPersonnelDocuments(employeeNumbers) {
   `).all(...employeeNumbers, ...employeeNumbers);
   for (const row of protectedBlobRows) fs.rmSync(blobPath(row.storage_key), { force: true });
 
-  const triggerDefinitions = new Map(
-    PERSONNEL_DOCUMENT_HISTORY_TRIGGER_DEFINITIONS.map((definition) => [
-      definition.name,
-      definition.sql,
-    ]),
-  );
   db.exec("BEGIN IMMEDIATE");
   try {
-    for (const name of PERSONNEL_DOCUMENT_TEST_RESET_TRIGGER_NAMES) {
-      db.exec(`DROP TRIGGER IF EXISTS "${name}"`);
-    }
+    const restoreResetGuards = require("../test-support/postgresql-api/trigger-fixture").suspendFixtureGuards(
+      db, PERSONNEL_DOCUMENT_TEST_RESET_TRIGGER_NAMES);
     db.prepare(`
       DELETE FROM personnel_record_document_events
       WHERE document_id IN (
@@ -92,9 +87,7 @@ function resetTestPersonnelDocuments(employeeNumbers) {
       DELETE FROM personnel_record_documents
       WHERE employee_number IN (${placeholders})
     `).run(...employeeNumbers);
-    for (const name of PERSONNEL_DOCUMENT_TEST_RESET_TRIGGER_NAMES) {
-      db.exec(triggerDefinitions.get(name));
-    }
+    restoreResetGuards();
     db.exec("COMMIT");
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
@@ -299,8 +292,8 @@ function latestDeniedAudit(actor, employeeNumber) {
 
 test.before(async () => {
   positionId = db.prepare("SELECT id FROM positions ORDER BY sort_order, id LIMIT 1").get().id;
-  db.prepare("INSERT OR IGNORE INTO locations (id, name, active) VALUES ('91', 'Testfiliale A', 1)").run();
-  db.prepare("INSERT OR IGNORE INTO locations (id, name, active) VALUES ('92', 'Testfiliale B', 1)").run();
+  prepareLocationFixture(db, "INSERT OR IGNORE INTO locations (id, name, active) VALUES ('91', 'Testfiliale A', 1)").run();
+  prepareLocationFixture(db, "INSERT OR IGNORE INTO locations (id, name, active) VALUES ('92', 'Testfiliale B', 1)").run();
   const insertDepartment = db.prepare(`
     INSERT OR IGNORE INTO departments (location_id, name, active, sort_order)
     VALUES (?, ?, 1, ?)
@@ -369,14 +362,14 @@ test.beforeEach(() => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
 test("v0.71 Block 5: Migration und sichere Leitungsstandards sind vollständig", async () => {
-  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'personnel_field_permissions'").get());
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.71-personnel-field-rights'").get());
+  assert.ok(pgSchema.tableExists(db, "personnel_field_permissions"));
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM personnel_field_permissions").get().count, 0);
 
   const hr = session("103", "hr");
@@ -1094,7 +1087,14 @@ test("v0.71 Block 5: Employee-POST und -PUT prüfen Feldrechte im seriellen Live
       .get(createNumber), undefined);
     assert.equal(db.prepare("SELECT 1 FROM personnel_sensitive_records WHERE employee_number = ?")
       .get(createNumber), undefined);
-    assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), auditBefore);
+    // The denied employee transaction is rolled back, then exactly one
+    // minimized denial audit is intentionally committed outside that rollback.
+    assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM audit_log").get().count), auditBefore + 1);
+    const denial = latestDeniedAudit(MANAGER, createNumber);
+    assert.equal(denial.detail.reason, "PERSONNEL_FIELD_WRITE_DENIED");
+    assert.equal(denial.detail.route, "POST /api/employees");
+    assert.deepEqual(denial.detail.fieldKeys, ["employment.notes"]);
+    assert.equal(denial.raw.includes(createMarker), false);
   } finally {
     dropTrigger();
   }

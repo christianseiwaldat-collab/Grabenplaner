@@ -64,6 +64,7 @@ function principalContext(permissions = [], { portalEnabled = true, role = "mana
   for (const name of new Set([...sources.matchAll(/\b(can[A-Z]\w+)\(/g)].map(match => match[1]))) {
     context[name] = () => false;
   }
+  context.syncSystemUtilizationWorkspace = () => {};
   vm.createContext(context);
   vm.runInContext(sources, context);
   return context;
@@ -241,6 +242,7 @@ test("Global theme reaches every actual main view while the persisted UI/API pre
     querySelectorAll: selector => selector.includes(".view") ? [...nodes.values()]
       : selector === "button[data-global-theme-choice]" ? choices : [],
   };
+  context.syncSystemUtilizationWorkspace = () => {};
   vm.createContext(context);
   vm.runInContext(constantSource("UI_APPEARANCE_VIEWS", appSource) + "\n"
     + ["pageViewElement", "applyActivePageAppearance", "applyPageTheme", "applyGlobalTheme"].map(name => functionSource(name)).join("\n"), context);

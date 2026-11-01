@@ -1,4 +1,5 @@
 const { sessionCsrf } = require("../test-support/portal-session-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -140,7 +141,7 @@ test.beforeEach(resetFixture);
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -152,24 +153,24 @@ test("v0.56: Migration legt das WLAN-Fundament datensparsam mit Vertrauensstufe 
     "wifi_event_inbox",
     "wifi_time_suggestions",
   ];
-  const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name));
+  const tables = new Set(pgSchema.tableNames(db).map((row) => row.name));
   for (const table of wifiTables) assert.ok(tables.has(table), `${table} fehlt.`);
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.56-wifi-automation-foundation'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
 
-  const employeeColumns = db.prepare("PRAGMA table_info(employees)").all();
+  const employeeColumns = pgSchema.columns(db, "employees");
   const levelColumn = employeeColumns.find((column) => column.name === "time_confirmation_level");
   assert.ok(levelColumn);
   assert.equal(levelColumn.notnull, 1);
-  assert.equal(String(levelColumn.dflt_value).replaceAll("'", ""), "C");
+  assert.equal(levelColumn.dflt_value, "'C'::text");
 
   db.prepare("INSERT INTO employees (personnel_number, full_name, nickname) VALUES ('v056-default', 'Default C', 'Default')").run();
   assert.equal(db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = 'v056-default'").get().time_confirmation_level, "C");
 
-  const allWifiColumns = wifiTables.flatMap((table) => db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name.toLowerCase()));
+  const allWifiColumns = wifiTables.flatMap((table) => pgSchema.columns(db, table).map((column) => column.name.toLowerCase()));
   for (const forbidden of ["external_event_id", "mac", "mac_address", "ssid", "bssid"]) {
     assert.equal(allWifiColumns.includes(forbidden), false, `${forbidden} darf nicht gespeichert werden.`);
   }
-  assert.ok(db.prepare("PRAGMA table_info(wifi_event_inbox)").all().some((column) => column.name === "external_event_hash"));
+  assert.ok(pgSchema.columns(db, "wifi_event_inbox").some((column) => column.name === "external_event_hash"));
 });
 
 test("v0.56: wifi:settings ist nur in den vorgesehenen Built-in-Rollen und nicht delegierbar", async () => {
@@ -348,52 +349,8 @@ test("v0.56: employees:write allein gibt keinen Lese- oder Schreibzugriff auf Ve
   assert.equal(db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = '106'").get().time_confirmation_level, "C");
 });
 
-test("v0.56: WLAN-Regeln bleiben nach einem frischen App-Start erhalten", async () => {
-  const admin = createPortalSession("101", "admin");
-  const saved = await requestJson("/api/portal/v1/wifi-automation/settings", {
-    method: "PUT",
-    session: admin,
-    body: { minimumPresenceMinutes: 17, absenceGraceMinutes: 73 },
-  });
-  assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
-
-  const restartDatabasePath = path.join(testRoot, "restart-dienstplan.db");
-  const escapedRestartDatabasePath = restartDatabasePath.replaceAll("\\", "/").replaceAll("'", "''");
-  db.exec(`VACUUM INTO '${escapedRestartDatabasePath}'`);
-
-  const script = `
-    process.env.DB_PATH = ${JSON.stringify(restartDatabasePath)};
-    process.env.BACKUP_DIR = ${JSON.stringify(path.join(testRoot, "restart-backups"))};
-    process.env.GRABENPLANER_DATA_DIR = ${JSON.stringify(path.join(testRoot, "restart-data"))};
-    process.env.GRABENPLANER_FORCE_PORTAL = "1";
-    process.env.GRABENPLANER_SEED_DEMO = "1";
-    process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
-    process.env.NODE_ENV = "test";
-    void (async () => {
-      const { db, closePersistenceForTests } = require("./server");
-      const rows = db.prepare("SELECT key, value FROM portal_settings WHERE key IN ('wifi_minimum_presence_minutes','wifi_absence_grace_minutes') ORDER BY key").all();
-      process.stdout.write(JSON.stringify(rows));
-      await closePersistenceForTests();
-    })().catch((error) => {
-      console.error(error);
-      process.exitCode = 1;
-    });
-  `;
-  const restarted = spawnSync(process.execPath, ["-e", script], {
-    cwd: repositoryRoot,
-    encoding: "utf8",
-    env: { ...process.env },
-    timeout: 15000,
-  });
-  assert.equal(restarted.status, 0, restarted.stderr || restarted.stdout);
-  assert.deepEqual(JSON.parse(restarted.stdout), [
-    { key: "wifi_absence_grace_minutes", value: "73" },
-    { key: "wifi_minimum_presence_minutes", value: "17" },
-  ]);
-});
-
 test("v0.65: Vertrauensstufen bleiben gespeichert, sind abschaltbar und rollenabhängig sichtbar", async () => {
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.65-settings-dashboard-foundation'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   const admin = createPortalSession("101", "admin");
   const saved = await requestJson("/api/portal/v1/trust-level-settings", {
     method: "PUT",
@@ -496,7 +453,7 @@ test("v0.56: Event-Inbox ist gehasht und idempotent, eine Session darf zwei Arbe
   insertEvent.run("event-1", providerId, externalEventHash, subjectHash, locationHash, "2026-07-14T21:55:00.000Z", payloadFingerprint);
   assert.throws(
     () => insertEvent.run("event-2", providerId, externalEventHash, subjectHash, locationHash, "2026-07-14T21:55:01.000Z", payloadFingerprint),
-    /UNIQUE constraint failed: wifi_event_inbox\.provider_id, wifi_event_inbox\.external_event_hash/,
+    error => error.code === "23505" && /wifi_event_inbox_provider_id_external_event_hash_key/.test(error.message),
   );
   const storedEvent = db.prepare("SELECT * FROM wifi_event_inbox WHERE id = 'event-1'").get();
   assert.match(storedEvent.external_event_hash, /^[a-f0-9]{64}$/);
@@ -526,6 +483,52 @@ test("v0.56: Event-Inbox ist gehasht und idempotent, eine Session darf zwei Arbe
   );
   assert.throws(
     () => insertSuggestion.run("suggestion-day-2-duplicate", "2026-07-15", "2026-07-15T00:01:00.000Z", "2026-07-15T00:29:00.000Z"),
-    /UNIQUE constraint failed: wifi_time_suggestions\.presence_session_id, wifi_time_suggestions\.work_date/,
+    error => error.code === "23505" && /wifi_time_suggestions_presence_session_id_work_date_key/.test(error.message),
   );
+});
+
+test("v0.56: WLAN-Regeln bleiben nach einem frischen App-Start erhalten", async () => {
+  const admin = createPortalSession("101", "admin");
+  const saved = await requestJson("/api/portal/v1/wifi-automation/settings", {
+    method: "PUT",
+    session: admin,
+    body: { minimumPresenceMinutes: 17, absenceGraceMinutes: 73 },
+  });
+  assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+  // A fresh process starts only after the real preceding application drains
+  // and releases its kernel lease. The seed owner preserves the same PG pair.
+  await new Promise(resolve => httpServer.close(resolve));
+  httpServer = null;
+  await subject.closePersistenceForTests();
+
+  const script = `
+    process.env.DB_PATH = ${JSON.stringify(databasePath)};
+    process.env.BACKUP_DIR = ${JSON.stringify(path.join(testRoot, "restart-backups"))};
+    process.env.GRABENPLANER_DATA_DIR = ${JSON.stringify(path.join(testRoot, "restart-data"))};
+    process.env.GRABENPLANER_FORCE_PORTAL = "1";
+    process.env.GRABENPLANER_SEED_DEMO = "1";
+    process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
+    process.env.NODE_ENV = "test";
+    void (async () => {
+      const { db, initializeApplicationPersistence, closePersistenceForTests } = require("./server");
+      await initializeApplicationPersistence();
+      const rows = db.prepare("SELECT key, value FROM portal_settings WHERE key IN ('wifi_minimum_presence_minutes','wifi_absence_grace_minutes') ORDER BY key").all();
+      process.stdout.write(JSON.stringify(rows));
+      await closePersistenceForTests();
+    })().catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+  `;
+  const restarted = spawnSync(process.execPath, ["-e", script], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    env: { ...process.env },
+    timeout: 15000,
+  });
+  assert.equal(restarted.status, 0, restarted.stderr || restarted.stdout);
+  assert.deepEqual(JSON.parse(restarted.stdout), [
+    { key: "wifi_absence_grace_minutes", value: "73" },
+    { key: "wifi_minimum_presence_minutes", value: "17" },
+  ]);
 });

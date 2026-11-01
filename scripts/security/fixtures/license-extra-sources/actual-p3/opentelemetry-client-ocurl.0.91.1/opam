@@ -1,0 +1,40 @@
+opam-version: "2.0"
+synopsis: "Collector client for opentelemetry, using http + ezcurl"
+maintainer: "ocaml-tracing"
+authors: ["ocaml-tracing" "ELLIOTTCABLE <opam@ell.io>" "the imandra team"]
+license: "MIT"
+homepage: "https://github.com/ocaml-tracing/ocaml-opentelemetry"
+bug-reports: "https://github.com/ocaml-tracing/ocaml-opentelemetry/issues"
+depends: [
+  "dune" {>= "3.11"}
+  "ocaml" {>= "4.11"}
+  "mtime" {>= "1.4"}
+  "opentelemetry" {= version}
+  "opentelemetry-client" {= version}
+  "odoc" {with-doc}
+  "ezcurl" {>= "0.2.3"}
+  "curl"
+  "alcotest" {with-test}
+  "cohttp-lwt-unix" {with-test}
+  "containers" {with-test}
+  "logs" {with-test}
+]
+build: [
+  ["dune" "subst"] {dev}
+  [
+    "dune"
+    "build"
+    "-p"
+    name
+    "-j"
+    jobs
+    "@install"
+    "@runtest" {with-test}
+    "@doc" {with-doc}
+  ]
+]
+dev-repo: "git+https://github.com/ocaml-tracing/ocaml-opentelemetry.git"
+url {
+  src:
+    "git+https://github.com/semgrep/ocaml-opentelemetry.git#c3a03bcc0afafea188b8aefa631788090f0b8fd4"
+}

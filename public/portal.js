@@ -313,6 +313,10 @@ function isMobileUi() {
   return document.documentElement.dataset.uiMode === "mobile";
 }
 
+const emmaWhatsappContact = window.GpEmmaContact?.shortcut(document.getElementById("emmaWhatsappContact"), {
+  api, session: () => portalState.session,
+});
+
 function dateText(value, options = { day: "2-digit", month: "2-digit", year: "numeric" }) {
   return new Intl.DateTimeFormat("de-AT", options).format(new Date(`${value}T12:00:00`));
 }
@@ -442,6 +446,7 @@ async function api(url, options = {}) {
       ? window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname })
       : new Error("Die Verbindung zum Grabenplaner ist vorübergehend unterbrochen. Bitte erneut versuchen.");
   }
+  window.GrabenplanerSessionLifecycle?.observeCredentialResponse?.(response);
   if (!response.ok) {
     const detail = window.GrabenplanerApiErrors?.fromResponse ? await window.GrabenplanerApiErrors.fromResponse(response, {
       hostname: location.hostname,
@@ -1272,6 +1277,9 @@ function renderMobileMoreShortcuts(modules = effectiveMobileModules()) {
   ].forEach(([button, module]) => {
     button?.classList.toggle("hidden", !mobileModuleAllowed(module) || direct.has(module));
   });
+  ["branchOrders", "branchVacation", "learningDashboard"].forEach((tab) => {
+    document.querySelector(`[data-more-tab="${tab}"]`)?.classList.toggle("hidden", !portalTabAllowed(tab));
+  });
 }
 
 function isBranchMobileAccount(user = portalUser()) {
@@ -1301,6 +1309,7 @@ function applyMobileLeadershipLayout() {
   portalState.mobileLeadership = compactMobile;
   document.body.classList.toggle("branch-mobile-account", branchMobile);
   document.body.classList.toggle("portal-mobile-session", mobilePortal);
+  document.querySelector(".portal-navigation")?.classList.toggle("personal-mobile-footer", compactMobile);
   document.body.classList.toggle(
     "branch-mobile-action-active",
     branchMobile && portalState.activeTab === "branchOrders",
@@ -1308,7 +1317,7 @@ function applyMobileLeadershipLayout() {
   navigation.classList.toggle("branch-mobile-navigation", branchMobile);
   navigation.classList.toggle("mobile-personal", compactMobile);
   navigation.classList.toggle("mobile-leadership", compactMobile && isLeadershipUser());
-  navigation.classList.toggle("mobile-settings-hidden", mobilePortal && portalState.activeTab === "settings");
+  navigation.classList.toggle("mobile-settings-hidden", branchMobile && portalState.activeTab === "settings");
   el.portalSettingsShortcut?.classList.toggle("hidden", !mobilePortal);
   if (branchMobile) {
     document.querySelectorAll("[data-tab]").forEach((button) => {
@@ -1357,28 +1366,15 @@ function applyMobileLeadershipLayout() {
     button.classList.add("hidden");
     button.classList.add("mobile-navigation-hidden");
   });
-  const modules = effectiveMobileModules();
   const homeButton = el.mobileHomeTab;
   homeButton?.classList.remove("hidden");
   homeButton?.classList.remove("mobile-navigation-hidden");
   if (homeButton) homeButton.style.order = "-1";
-  modules.forEach((module, index) => {
-    const button = document.querySelector(`[data-tab="${mobileModuleById.get(module)?.tab}"]`);
-    button?.classList.remove("hidden");
-    button?.classList.remove("mobile-navigation-hidden");
-    if (button) button.style.order = String(index);
-  });
-  renderMobileMoreShortcuts(modules);
-  const activeButton = document.querySelector(`[data-tab="${portalState.activeTab}"]`);
-  const activeModule = mobileModuleByTab.get(portalState.activeTab);
-  const secondaryViaMore = modules.includes("more") && mobileMoreSecondaryTabs.has(portalState.activeTab)
-    && (!activeModule || !modules.includes(activeModule));
-  const hiddenDirectViaMore = modules.includes("more") && activeModule && !modules.includes(activeModule);
-  if (activeButton?.classList.contains("hidden") && modules.length && !secondaryViaMore && !hiddenDirectViaMore) {
-    setTab(mobileModuleById.get(modules[0])?.tab || "leadershipMore");
-    return;
-  }
+  // All permitted areas remain reachable through home and More. A hidden
+  // footer tab must not redirect a valid view opened from either place.
+  renderMobileMoreShortcuts([]);
   syncPortalTabButtons(portalState.activeTab);
+  if (homeButton) homeButton.tabIndex = 0;
   renderMobileHome();
 }
 
@@ -1607,6 +1603,9 @@ function mobileNavigationItemsForSettings() {
 }
 
 function renderMobileNavigationSettings() {
+  // The personal footer now has a fixed Start / Emma layout. Preserve stored
+  // legacy preferences, but do not offer controls that no longer affect it.
+  el.mobileNavigationSettingsCard?.classList.add("hidden");
   if (!el.mobileNavigationSettingsList) return;
   const draft = currentMobileNavigationDraft();
   const items = mobileNavigationItemsForSettings();
@@ -2468,6 +2467,7 @@ function setPasswordResetConfirmControlsEnabled(enabled) {
 }
 
 function setPasswordChangeControlsEnabled(enabled) {
+  window.GPPasskeyAuth?.setChoiceEnabled?.("password-change", enabled && portalUser()?.mustChangePassword !== true);
   if (el.passwordChangeUsername) {
     el.passwordChangeUsername.value = enabled ? portalCredentialUsername() : "";
     el.passwordChangeUsername.disabled = !enabled;
@@ -2527,6 +2527,7 @@ function showLogin(error = "") {
   neutralizeBirthdayPresentationTheme();
   resetPersonalActionsState("");
   portalState.session = null;
+  emmaWhatsappContact?.reset();
   void privatePortalWorkspaces?.synchronize();
   syncPortalWindows();
   resetBranchSalesWorkspaces();
@@ -2654,6 +2655,7 @@ function showPortal(session) {
     neutralizeBirthdayPresentationTheme();
   }
   portalState.session = session;
+  void emmaWhatsappContact?.load();
   void portalVoiceAssistant?.synchronize();
   void privatePortalWorkspaces?.synchronize();
   syncPortalLogoutControls();
@@ -2718,6 +2720,19 @@ function showPortal(session) {
   if (session.user.mustChangePassword) setTimeout(openPasswordChangeDialog, 100);
 }
 
+async function completePortalLogin(result) {
+  el.loginPassword.value = "";
+  showPortal(result);
+  if (!result.user.mustChangePassword) {
+    if (await redirectToPendingCandidateEvaluation(result.user)) return;
+    await loadMobileLayout();
+    chooseInitialPortalTab();
+    await loadPortalData();
+    await refreshBirthdayPresentationTheme();
+    await claimBirthdayPresentation();
+  }
+}
+
 async function login(event) {
   event.preventDefault();
   const credentialsInput = { loginName: el.loginPersonnelNumber.value, password: el.loginPassword.value };
@@ -2727,17 +2742,8 @@ async function login(event) {
         method: "POST",
         body: JSON.stringify(credentialsInput),
       });
-      el.loginPassword.value = "";
-      showPortal(result);
       window.GrabenplanerSessionLifecycle?.publish();
-      if (!result.user.mustChangePassword) {
-        if (await redirectToPendingCandidateEvaluation(result.user)) return;
-        await loadMobileLayout();
-        chooseInitialPortalTab();
-        await loadPortalData();
-        await refreshBirthdayPresentationTheme();
-        await claimBirthdayPresentation();
-      }
+      await completePortalLogin(result);
     }, { allowAccountChange: true });
   } catch (error) {
     if (error.code === "PORTAL_SESSION_CHANGED") return;
@@ -3539,7 +3545,7 @@ function renderMobileHome() {
   if (!visible) return;
   const tiles = mobileHomeTilesForCurrentAccount();
   const launches = privatePortalWorkspaces?.launches || [];
-  if (!tiles.length && !launches.length) {
+  if (!tiles.length && !launches.length && isOrganizationAccount()) {
     el.mobileHomeTiles.innerHTML = '<p class="empty-state">Für dieses Konto ist derzeit kein Portalbereich freigeschaltet.</p>';
     return;
   }
@@ -3550,6 +3556,11 @@ function renderMobileHome() {
       <b aria-hidden="true">›</b>
     </button>
   `).join("") + launches.map(item => `<button type="button" class="gp-private-launch" data-private-workspace="${esc(item.id)}" style="--private-launch-color:${safeCssColor(item.launch.color)};--mobile-home-tile-color:${safeCssColor(item.launch.color)}"><span class="mobile-home-tile-accent" aria-hidden="true"></span><span><strong>${esc(item.launch.label)}</strong></span><b aria-hidden="true">›</b></button>`).join("");
+  if (!isOrganizationAccount()) el.mobileHomeTiles.insertAdjacentHTML("beforeend", `
+    <button type="button" class="mobile-home-more" data-mobile-home-tab="leadershipMore" style="--mobile-home-tile-color:rgb(0,100,221)">
+      <span class="mobile-home-tile-accent" aria-hidden="true"></span>
+      <span><strong>Mehr</strong><small>Weitere Bereiche</small></span><b aria-hidden="true">›</b>
+    </button>`);
 }
 
 function renderBranchMobileActionBar() {
@@ -7119,24 +7130,57 @@ async function changePassword(event) {
     return;
   }
   const ticket = { session }, current = () => passwordChangeRequest === ticket && portalState.session === session;
+  const usePasskey = window.GPPasskeyAuth?.selected?.("password-change") === true;
+  const currentPassword = el.currentPassword.value, newPassword = el.newPassword.value;
   passwordChangeRequest = ticket;
   try {
-    await window.GrabenplanerSessionLifecycle.credentials(async () => {
-      await api("/api/portal/v1/me/password", {
-        method: "PUT",
-        body: JSON.stringify({ currentPassword: el.currentPassword.value, newPassword: el.newPassword.value }),
-      });
-      if (!current()) return;
-      const replacement = await api("/api/portal/v1/session");
-      if (!current()) return;
-      if (!replacement?.authenticated) {
-        showLogin("Das Passwort wurde geändert. Bitte erneut anmelden.");
-        window.GrabenplanerSessionLifecycle?.publish();
-        return;
+    const lifecycle = window.GrabenplanerSessionLifecycle;
+    await lifecycle.credentials(async () => {
+      const generation = lifecycle.generation;
+      const csrfCookie = () => String(document.cookie || "").split(";").map(value => value.trim())
+        .find(value => value.startsWith("grabenplaner_csrf=")) || "";
+      const originalCookie = csrfCookie(), unchanged = () => current() && lifecycle.generation === generation;
+      let adoptionAttempted = false, published = false;
+      const publish = () => { if (!published) { published = true; lifecycle.publish(); } };
+      async function adoptProjection() {
+        if (!unchanged()) return null;
+        adoptionAttempted = true;
+        try {
+          const replacement = await api("/api/portal/v1/session");
+          if (!unchanged()) return null;
+          if (!replacement?.authenticated || !replacement.user?.employeeNumber
+            || replacement.user.employeeNumber !== session.user?.employeeNumber
+            || replacement.user.isEmployee !== true
+            || !["employee", "local"].includes(replacement.user.sessionKind)) {
+            showLogin("Das Passwort wurde geändert. Bitte erneut anmelden.");
+            return null;
+          }
+          closePasswordChangeDialog({ force: true });
+          showPortal(replacement);
+          return replacement;
+        } catch (error) {
+          if (unchanged()) showLogin("Die Passwortänderung wurde verarbeitet. Bitte die Sitzung nach Wiederherstellung der Verbindung erneut prüfen.");
+          throw error;
+        } finally { publish(); }
       }
-      closePasswordChangeDialog({ force: true });
-      showPortal(replacement);
-      window.GrabenplanerSessionLifecycle?.publish();
+      let replacement;
+      try {
+        await api("/api/portal/v1/me/password", {
+          method: "PUT",
+          body: JSON.stringify({ newPassword, ...(usePasskey
+            ? await window.GPPasskeyAuth.authorization(api, "password-change") : { currentPassword }) }),
+        });
+        replacement = await adoptProjection();
+      } catch (error) {
+        if (!adoptionAttempted && unchanged() && (lifecycle.credentialChanged || csrfCookie() !== originalCookie)) {
+          // A new cookie may already be committed even when its response body
+          // is lost. Settle that projection under this same cross-tab lock;
+          // never repeat the password mutation or replace its original error.
+          try { await adoptProjection(); } catch { /* Preserve the operation error. */ }
+        }
+        throw error;
+      }
+      if (!replacement) return;
       if (replacement.user?.mustChangePassword) return;
       if (await redirectToPendingCandidateEvaluation(replacement.user)) return;
       if (portalState.session !== replacement) return;
@@ -8745,6 +8789,11 @@ globalThis.grabenplanerNavigation = window.GrabenplanerNavigationHistory?.create
 initializeDateRangeCalendar();
 portalVoiceAssistant=window.GpVoiceAssistant?.mount({ api, getSession: () => portalState.session,
   onSubmitted: () => Promise.allSettled([loadVacationRequests(), loadTimeOffRequests(), loadAbsenceHistory(), loadNotifications()]) });
+window.GPPasskeyAuth?.bindLogin(document.getElementById("portalPasskeyLogin"), {
+  api, complete: completePortalLogin,
+  canUse: () => el.loginPersonnelNumber?.disabled === false,
+  error: error => { if (error.code !== "PORTAL_SESSION_CHANGED") message(el.loginError, error.message, true); },
+});
 window.GrabenplanerSessionLifecycle?.listen(() => {
   showLogin("Die Anmeldung wurde in einem anderen Fenster geändert. Die Sitzung wird neu geprüft.");
   void initialize();

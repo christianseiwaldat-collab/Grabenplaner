@@ -50,6 +50,26 @@ test('article receipt action submits only the selected receipt and invalidates c
   vm.createContext(sandbox);vm.runInContext(context+'\n'+action,sandbox);sandbox.receipt({receiptId:'chosen',receipt:'123'},{id:'button'});assert.deepEqual(Array.from(f.input.payload.ids),['chosen']);assert.equal(f.passed.id,'article-receipt-pdf');
   filters.locationId='19';assert.equal(f.passed.canUse(),false);assert.throws(()=>f.passed.request({payload:f.input.payload}),/Belegauswahl/);
 });
+test('single-sale receipt action reuses the complete PDF endpoint and binds the current result, actor and filters',async()=>{
+  const source=fs.readFileSync(require.resolve('../public/sales-history'),'utf8');
+  const action=extract(source,'    function exportReceipt(receiptId, target)','    function updatePeriod(');
+  const context=source.match(/    const receiptContext = [^\n]+/)[0],f=fixture(),requests=[];
+  f.api(async(...args)=>{requests.push(args);return f.response;});
+  const sandbox={receiptPdf:null,context:{available:true,sources:[{id:'compact-cash'}]},customerId:null,generation:1,
+    lastQuery:{sourceId:'compact-cash',locationId:'18'},lastResult:{query:{kind:'sales'},items:[{receiptId:'full-receipt-opaque-id',receipt:'123'}]},
+    printActive:()=>true,authorized:f.config.canUse,root:{ownerDocument:f.doc},rawApi:f.config.rawApi,accessKey:f.config.key,
+    windowPreferences:null,scale:null,el:()=>({textContent:''})};
+  vm.createContext(sandbox);vm.runInContext(context+'\n'+action,sandbox);
+  sandbox.exportReceipt('123',{});sandbox.exportReceipt('other-receipt',{});assert.equal(f.calls.length,0,'DOM changes cannot substitute an arbitrary number/ID');
+  sandbox.exportReceipt('full-receipt-opaque-id',{id:'row-action'});assert.equal(f.calls.length,1);
+  assert.deepEqual(Array.from(f.input.payload.ids),['full-receipt-opaque-id']);assert.equal(f.passed.id,'sales-history-receipt-pdf');
+  await f.passed.createPdf({payload:f.input.payload,values:{},actor:'one',signal:new AbortController().signal});
+  assert.equal(requests[0][0],'/api/receipt-search/export.pdf');assert.deepEqual(JSON.parse(requests[0][1].body),{ids:['full-receipt-opaque-id']});
+  sandbox.lastQuery.locationId='19';assert.equal(f.passed.canUse(),false);assert.throws(()=>f.passed.request({payload:f.input.payload}),/Belegauswahl/);
+  sandbox.printActive=()=>false;sandbox.exportReceipt('full-receipt-opaque-id',{});assert.equal(f.calls.length,1,'Hidden or inactive view does not export');
+  const app=fs.readFileSync(require.resolve('../public/app'),'utf8');
+  assert.match(app,/salesHistoryWorkspace\?\.syncPrint\(\)/);assert.match(app,/crmPurchaseWorkspace\?\.syncPrint\(\)/);
+});
 test('main and portal pages load the same shared PDF dependencies before their application',()=>{
   for(const page of ['index','portal']){
     const html=fs.readFileSync(require.resolve('../public/'+page+'.html'),'utf8');let previous=-1;

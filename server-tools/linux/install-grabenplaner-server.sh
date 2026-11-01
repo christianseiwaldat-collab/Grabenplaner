@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 IFS=$'\n\t'
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+# Apply in this shell before the first interpreter call, including child tools.
+unset NODE_OPTIONS NODE_PATH BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SERVICE_USER="grabenplaner"
@@ -116,6 +120,11 @@ Optionen:
   --replace-caddy-config Vorhandene Caddy-Konfiguration root-only sichern
                          und auf diesem dedizierten Server ersetzen
   --no-start             Dienste nur installieren, noch nicht starten
+
+Voraussetzung: separat provisioniertes, geprueftes PostgreSQL-Paar mit
+/etc/grabenplaner/grabenplaner.env, postgresql-application.json,
+postgresql-operations.json und /var/lib/grabenplaner/data/postgresql-pair.json.
+Der Installer erzeugt keine SQLite-Datenbank und fuehrt keine Migration aus.
   --help                 Diese Hilfe anzeigen
 
 Das Skript laedt selbst keine Binaries herunter. Der explizite, eingefrorene
@@ -170,7 +179,7 @@ cleanup() {
     || $HOST_REBOOT_UNIT_WRITTEN -eq 1 ) ]]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
   fi
-  if [[ $exit_code -ne 0 ]]; then
+  if [[ $exit_code -ne 0 && $APP_SWAPPED -eq 1 ]]; then
     local maintenance_name target
     for maintenance_name in backup monitor stop test update uninstall; do
       target="$(readlink -- "/usr/local/sbin/grabenplaner-${maintenance_name}" 2>/dev/null || true)"
@@ -278,16 +287,21 @@ validate_secret_bytes() {
   [[ "$decoded_bytes" -eq "$expected_bytes" ]] || fail "$key hat nicht die erforderliche Laenge."
 }
 
+root_node() {
+  /usr/bin/env -i PATH="$(dirname -- "$NODE_EXECUTABLE"):/usr/sbin:/usr/bin:/sbin:/bin" \
+    HOME=/root LANG=C.UTF-8 NODE_ENV=production "$NODE_EXECUTABLE" --no-global-search-paths "$@"
+}
+
 validate_node_version() {
   local version major minor patch architecture
-  version="$($NODE_EXECUTABLE --version)"
+  version="$(root_node --version)"
   version="${version#v}"
   IFS=. read -r major minor patch <<<"$version"
   [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]] || fail "Node.js meldet eine ungueltige Version."
   if (( major < 22 || (major == 22 && minor < 13) )); then
     fail "Node.js >=22.13.0 ist erforderlich; gefunden wurde $version."
   fi
-  architecture="$($NODE_EXECUTABLE -p 'process.arch')"
+  architecture="$(root_node -p 'process.arch')"
   [[ "$architecture" == "x64" ]] || fail "Die Node.js-Runtime muss fuer x64 gebaut sein; gefunden wurde $architecture."
 }
 
@@ -300,7 +314,7 @@ resolve_pnpm() {
   else
     fail "pnpm $EXPECTED_PNPM_VERSION oder Corepack ist erforderlich."
   fi
-  version="$(run_as_build_user "$STAGE_ROOT/source" env \
+  version="$(run_as_build_user "$STAGE_ROOT/source" env -i \
     HOME="$CACHE_ROOT" XDG_CACHE_HOME="$CACHE_ROOT" PNPM_HOME="$CACHE_ROOT/pnpm" COREPACK_HOME="$CACHE_ROOT/corepack" \
     PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     "${PNPM_COMMAND[@]}" --version)"
@@ -320,7 +334,7 @@ validate_os() {
 }
 
 validate_public_url() {
-  PUBLIC_HOST="$($NODE_EXECUTABLE - "$PUBLIC_URL" <<'NODE'
+  PUBLIC_HOST="$(root_node - "$PUBLIC_URL" <<'NODE'
 const value = process.argv[2];
 let url;
 try { url = new URL(value); } catch { process.exit(1); }
@@ -368,7 +382,7 @@ validate_zip_entries() {
 }
 
 validate_manifest() {
-  APP_VERSION="$($NODE_EXECUTABLE - "$STAGE_ROOT/source" <<'NODE'
+  APP_VERSION="$(root_node - "$STAGE_ROOT/source" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -431,6 +445,8 @@ const expectedRecoveryArtifacts = [
   "server-tools/linux/recovery/lib/recovery-apply.js",
   "server-tools/linux/recovery/lib/recovery-metadata.js",
   "server-tools/linux/recovery/lib/recovery-verify.js",
+  "server-tools/linux/recovery/lib/recovery-shared.js",
+  "server-tools/linux/postgresql/preflight-install.js",
 ];
 const expectedHostControlArtifacts = [
   "server-tools/linux/host-control/lib/host-reboot-broker.js",
@@ -553,7 +569,7 @@ if (!Array.isArray(manifest.files) || !manifest.files.length) fail("Die Manifest
 const packageJsonPath = path.join(root, "package.json");
 const lockPath = path.join(root, "pnpm-lock.yaml");
 for (const required of [
-  "server.js", "package.json", "pnpm-lock.yaml", "lib/backup-commit.js", "lib/database-lock.js", "lib/amu-storage.js",
+  "server.js", "package.json", "pnpm-lock.yaml", "lib/backup-commit.js", "lib/database-lock.js", "lib/database-lock-linux.py", "lib/amu-storage.js",
   "server-tools/linux/backup-grabenplaner.sh",
   "server-tools/linux/stop-grabenplaner-server.sh",
   "server-tools/linux/test-grabenplaner-server.sh",
@@ -562,6 +578,10 @@ for (const required of [
   "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
   "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
   "server-tools/linux/lib/runtime-v5-transition.js",
+  "server-tools/linux/migrate-grabenplaner-runtime-v6.sh",
+  "server-tools/linux/lib/runtime-v6-transition.js",
+  "server-tools/linux/lib/offsite-postgresql-only-compat.js",
+  "server-tools/linux/lib/root-postgresql-dependencies.sh",
   "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
   "server-tools/linux/preflight-grabenplaner-deploy.sh",
   "server-tools/linux/lib/postgresql-backup-repair-compat.js",
@@ -605,7 +625,7 @@ const expectedRuntimeArtifacts = [
   ...expectedHostControlArtifacts,
 ];
 if (runtimeContract?.format !== "grabenplaner-linux-runtime-contract" || runtimeContract?.schemaVersion !== 1
-  || runtimeContract?.deploymentSchemaVersion !== 5 || runtimeContract?.migrationPolicy !== "explicit-maintenance"
+  || runtimeContract?.deploymentSchemaVersion !== 6 || runtimeContract?.migrationPolicy !== "explicit-maintenance"
   || !Array.isArray(runtimeContract?.managedArtifacts)
   || runtimeContract.managedArtifacts.length !== expectedRuntimeArtifacts.length
   || expectedRuntimeArtifacts.some((relative) => !runtimeContract.managedArtifacts.includes(relative))) {
@@ -615,7 +635,7 @@ const offsiteSchemaPath = path.join(root, "server-tools/linux/offsite/module-sch
 let offsiteContract;
 try { offsiteContract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Der optionale Offsite-Modulvertrag ist nicht lesbar."); }
 if (offsiteContract?.format !== "grabenplaner-linux-offsite-module-contract" || offsiteContract?.schemaVersion !== 1
-  || offsiteContract?.moduleVersion !== 12 || offsiteContract?.activationPolicy !== "explicit-root-setup"
+  || offsiteContract?.moduleVersion !== 13 || offsiteContract?.activationPolicy !== "explicit-root-setup"
   || !Array.isArray(offsiteContract?.managedArtifacts) || offsiteContract.managedArtifacts.length !== expectedOffsiteArtifacts.length
   || expectedOffsiteArtifacts.some((relative) => !offsiteContract.managedArtifacts.includes(relative))
   || offsiteContract.managedArtifacts.some((relative) => typeof relative !== "string" || !relative.startsWith("server-tools/linux/offsite/") || relative.includes("\\") || relative.split("/").some((part) => !part || part === "." || part === ".."))) {
@@ -712,7 +732,7 @@ NODE
 }
 
 validate_installed_dependencies() {
-  run_as_build_user "$STAGE_ROOT/source" env NODE_ENV=production HOME="$CACHE_ROOT" "$NODE_EXECUTABLE" - "$STAGE_ROOT/source" <<'NODE' >/dev/null
+  run_as_build_user "$STAGE_ROOT/source" env -i PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/bin:/usr/bin:/bin" NODE_ENV=production HOME="$CACHE_ROOT" "$NODE_EXECUTABLE" - "$STAGE_ROOT/source" <<'NODE' >/dev/null
 const path = require("node:path");
 const root = process.argv[2];
 const metadata = require(path.join(root, "package.json"));
@@ -725,17 +745,7 @@ NODE
 }
 
 admin_is_configured() {
-  [[ -f "$DATA_ROOT/data/dienstplan.db" ]] || return 1
-  runuser -u "$SERVICE_USER" -- "$NODE_EXECUTABLE" - "$DATA_ROOT/data/dienstplan.db" <<'NODE' >/dev/null
-const { DatabaseSync } = require("node:sqlite");
-let database;
-try {
-  database = new DatabaseSync(process.argv[2], { readOnly: true });
-  const row = database.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE active = 1 AND role IN ('developer','it_admin','admin')").get();
-  process.exit(Number(row?.count || 0) > 0 ? 0 : 1);
-} catch { process.exit(1); }
-finally { try { database?.close(); } catch {} }
-NODE
+  runuser -u "$SERVICE_USER" -- "$NODE_EXECUTABLE" "$APP_ROOT/server-tools/linux/postgresql/preflight-install.js" has-admin >/dev/null
 }
 
 wait_for_health() {
@@ -778,6 +788,24 @@ while (($#)); do
 done
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || fail "Der Installer muss mit sudo ausgefuehrt werden."
+# The authorized installer/common entrypoints must be in a root-controlled
+# directory. An unprivileged build can modify neither the verifier nor its
+# interpreter before any package-controlled code is considered.
+/usr/bin/python3 -I - "${BASH_SOURCE[0]}" "$SCRIPT_DIR/lib/common.sh" <<'PY'
+import os, stat, sys
+from pathlib import Path
+for value in sys.argv[1:]:
+    file = Path(value).absolute()
+    assert file.resolve() == file
+    info = file.lstat()
+    assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+    for item in (file, *file.parents):
+        info = item.lstat()
+        assert info.st_uid == 0 and not stat.S_ISLNK(info.st_mode) and info.st_mode & 0o022 == 0
+PY
+# shellcheck source=server-tools/linux/lib/common.sh
+source "$SCRIPT_DIR/lib/common.sh"
+
 [[ -n "$PACKAGE_PATH" && -f "$PACKAGE_PATH" ]] || fail "Ein lokales Server-ZIP muss mit --package angegeben werden."
 [[ -n "$PUBLIC_URL" ]] || fail "--public-url fehlt."
 [[ -z "$EXPECTED_SHA256" || -z "$SHA256_FILE" ]] || fail "Nur --sha256 oder --sha256-file verwenden."
@@ -788,16 +816,20 @@ fi
 [[ "$EXPECTED_SHA256" =~ ^[A-Fa-f0-9]{64}$ ]] || fail "Eine feste SHA256-Pruefsumme ist erforderlich."
 [[ "$PORT" =~ ^[0-9]+$ ]] && (( PORT >= 1 && PORT <= 65535 )) || fail "--port muss zwischen 1 und 65535 liegen."
 
-for command in awk base64 caddy chmod chown clamscan cp curl date dirname du find getent gpasswd grep groupadd groupdel head id install journalctl ln mktemp mv readlink rm rmdir runuser seq sha256sum sleep stat systemctl tr uname unzip useradd usermod wc; do
+for command in awk base64 caddy chmod chown clamscan cp curl date dirname du find getent gpasswd grep groupadd groupdel head id install journalctl ln mktemp mv python3 readlink rm rmdir runuser seq sha256sum sleep stat systemctl tr uname unzip useradd usermod wc; do
   need_command "$command"
 done
 validate_os
+[[ -x /usr/bin/python3 ]] || fail "Die feste Linux-Sperrhelfer-Laufzeit /usr/bin/python3 fehlt."
+/usr/bin/python3 -I -c 'import ctypes,fcntl,sys; sys.exit(0 if ctypes.sizeof(ctypes.c_long)==8 and hasattr(fcntl,"F_OFD_SETLK") else 1)' \
+  || fail "Der Linux-Kernel-/Python-Vertrag fuer OFD-Instanzsperren wird nicht unterstuetzt."
 if [[ -z "$NODE_EXECUTABLE" ]]; then
   need_command node
   NODE_EXECUTABLE="$(command -v node)"
 fi
 NODE_EXECUTABLE="$(readlink -f -- "$NODE_EXECUTABLE")"
-[[ -x "$NODE_EXECUTABLE" ]] || fail "Das Node.js-Binary ist nicht ausfuehrbar."
+NODE_EXECUTABLE="$(gp_assert_root_node "$NODE_EXECUTABLE")" \
+  || fail "Vor dem ersten Node-Aufruf ist ein root-geschuetztes natives Linux-Binary erforderlich."
 validate_node_version
 CLAMSCAN_EXECUTABLE="$(readlink -f -- "$(command -v clamscan)")"
 validate_public_url
@@ -812,14 +844,30 @@ ACTUAL_SHA256="$(sha256sum -- "$PACKAGE_PATH" | awk '{ print $1 }')"
 [[ "${ACTUAL_SHA256,,}" == "${EXPECTED_SHA256,,}" ]] || fail "Die SHA256-Pruefsumme des Serverpakets stimmt nicht."
 validate_zip_entries
 
-[[ -f "$SCRIPT_DIR/grabenplaner.service.in" && -f "$SCRIPT_DIR/grabenplaner-bootstrap.service.in" \
-  && -f "$SCRIPT_DIR/grabenplaner-monitor.service.in" && -f "$SCRIPT_DIR/grabenplaner-monitor.timer.in" \
-  && -f "$SCRIPT_DIR/Caddyfile.in" && -f "$SCRIPT_DIR/grabenplaner.env.example" \
-  && -f "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" \
-  && -f "$SCRIPT_DIR/host-control/lib/host-reboot-broker.js" \
-  && -f "$SCRIPT_DIR/host-control/systemd/grabenplaner-host-control.socket.in" \
-  && -f "$SCRIPT_DIR/host-control/systemd/grabenplaner-host-control@.service.in" \
-  && -f "$SCRIPT_DIR/host-control/systemd/grabenplaner-host-reboot.service.in" ]] \
+# Extract data as root into the private staging area, then independently bind
+# every source byte to the SHA-pinned original ZIP before executing any package
+# JS. This includes documents and every transitive preflight import.
+install -d -o root -g root -m 0700 "$STAGE_ROOT/source-extracted-untrusted"
+unzip -q "$STAGE_ROOT/package.zip" -d "$STAGE_ROOT/source-extracted-untrusted"
+gp_seal_build_tree "$STAGE_ROOT/source-extracted-untrusted" "$STAGE_ROOT/source" root \
+  || fail "Der entpackte Quellbaum konnte nicht mit frischen Root-Dateien versiegelt werden."
+gp_verify_sealed_zip "$STAGE_ROOT/package.zip" "$STAGE_ROOT/source" 0 \
+  || fail "Der entpackte Quellbaum weicht von den urspruenglichen ZIP-Bytes ab."
+[[ "$(du -sb "$STAGE_ROOT/source" | awk '{ print $1 }')" -le "$MAX_EXTRACTED_BYTES" ]] || fail "Das entpackte Serverpaket ist groesser als 4 GiB."
+[[ -f "$STAGE_ROOT/source/$MANIFEST_NAME" ]] || fail "Das Serverpaket-Manifest fehlt in der Archivwurzel."
+validate_manifest
+normalize_verified_archive_modes "$STAGE_ROOT/source"
+root_node "$STAGE_ROOT/source/server-tools/linux/postgresql/preflight-install.js" documents >/dev/null \
+  || fail "Vor der Installation ist ein geprueftes PostgreSQL-Paar samt geschuetzter Konfiguration, Datenanker und Schluesseln vorzubereiten. SQLite wird nicht angelegt oder automatisch migriert."
+
+[[ -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner.service.in" && -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner-bootstrap.service.in" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner-monitor.service.in" && -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner-monitor.timer.in" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/Caddyfile.in" && -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner.env.example" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/grabenplaner-bootstrap-admin.sh.in" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/host-control/lib/host-reboot-broker.js" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/host-control/systemd/grabenplaner-host-control.socket.in" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/host-control/systemd/grabenplaner-host-control@.service.in" \
+  && -f "$STAGE_ROOT/source/server-tools/linux/host-control/systemd/grabenplaner-host-reboot.service.in" ]] \
   || fail "Die Linux-Laufzeitvorlagen sind unvollstaendig."
 if [[ -s "$CADDY_CONFIG" ]] && ! caddy_config_is_managed; then
   [[ $REPLACE_CADDY_CONFIG -eq 1 ]] || fail "Die vorhandene Caddy-Konfiguration wird nicht von Grabenplaner verwaltet. Fuer einen dedizierten Server ist --replace-caddy-config erforderlich."
@@ -874,28 +922,15 @@ install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 \
   "$BACKUP_ROOT" "$LOG_ROOT/app"
 install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0750 "$CACHE_ROOT" "$CACHE_ROOT/pnpm" "$CACHE_ROOT/corepack"
 install -d -o caddy -g caddy -m 0750 "$LOG_ROOT/caddy"
-install -d -o root -g root -m 0700 "$CONFIG_ROOT"
+install -d -o root -g "$SERVICE_GROUP" -m 0750 "$CONFIG_ROOT"
 if [[ -e "$MONITOR_STATUS_ROOT" || -L "$MONITOR_STATUS_ROOT" ]]; then
   [[ -d "$MONITOR_STATUS_ROOT" && ! -L "$MONITOR_STATUS_ROOT" ]] \
     || fail "Der Monitorstatuspfad ist kein sicherer lokaler Ordner."
 fi
 install -d -o root -g "$MONITOR_STATUS_GROUP" -m 0750 "$MONITOR_STATUS_ROOT"
 
-if [[ ! -f "$ENV_FILE" ]]; then
-  AMU_KEY="$(random_base64 32)"
-  INTEGRATION_KEY="$(random_base64 32)"
-  WIFI_IDENTITY_KEY="$(random_base64 32)"
-  WIFI_WEBHOOK_SECRET="$(random_base64 48)"
-  SERVICE_CONTROL_TOKEN="$(random_base64 48)"
-  BOOTSTRAP_TOKEN="$(random_base64 32)"
-  ENV_TEMP="$(mktemp "$CONFIG_ROOT/.grabenplaner.env.XXXXXX")"
-  chmod 0600 "$ENV_TEMP"
-  render_template "$SCRIPT_DIR/grabenplaner.env.example" "$ENV_TEMP"
-  mv -- "$ENV_TEMP" "$ENV_FILE"
-  chown root:root "$ENV_FILE"
-  chmod 0600 "$ENV_FILE"
-  unset AMU_KEY INTEGRATION_KEY WIFI_IDENTITY_KEY WIFI_WEBHOOK_SECRET SERVICE_CONTROL_TOKEN BOOTSTRAP_TOKEN
-else
+[[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] \
+  || fail "Die vorbereitete PostgreSQL-Umgebungsdatei fehlt."
   [[ "$(stat -c %a "$ENV_FILE")" == "600" && "$(stat -c %U:%G "$ENV_FILE")" == "root:root" ]] \
     || fail "Die bestehende Umgebungsdatei muss root:root gehoeren und Modus 0600 haben."
   require_environment_value NODE_ENV production
@@ -906,15 +941,16 @@ else
   require_environment_value GRABENPLANER_TRUST_PROXY loopback
   require_environment_value PORT "$PORT"
   require_environment_value GRABENPLANER_DATA_DIR "$DATA_ROOT"
-  require_environment_value DB_PATH "$DATA_ROOT/data/dienstplan.db"
-  require_environment_value BACKUP_DIR "$BACKUP_ROOT"
+  require_environment_value DB_PROVIDER postgresql
+  require_environment_value DB_PATH "$DATA_ROOT/data/postgresql-pair.json"
+  require_environment_value GRABENPLANER_POSTGRESQL_APPLICATION_CONFIG "$CONFIG_ROOT/postgresql-application.json"
+  require_environment_value BACKUP_DIR /var/backups/grabenplaner-postgresql
   validate_secret_bytes GRABENPLANER_AMU_KEY 32
   validate_secret_bytes GRABENPLANER_INTEGRATION_KEY 32
   validate_secret_bytes GRABENPLANER_WIFI_IDENTITY_KEY 32
   validate_secret_bytes GRABENPLANER_WIFI_WEBHOOK_SECRET 48
   [[ "$(environment_value GRABENPLANER_SERVICE_CONTROL_TOKEN | wc -c)" -ge 32 ]] || fail "Der Dienststeuerungs-Token ist zu kurz."
-  validate_secret_bytes GRABENPLANER_BOOTSTRAP_TOKEN 32
-fi
+  if [[ -n "$(environment_value GRABENPLANER_BOOTSTRAP_TOKEN)" ]]; then validate_secret_bytes GRABENPLANER_BOOTSTRAP_TOKEN 32; fi
 
 SCANNER_PROBE="$(mktemp "$DATA_ROOT/private/.scanner-probe.XXXXXX")"
 printf '%s\n' 'Grabenplaner ClamAV readiness probe' >"$SCANNER_PROBE"
@@ -930,18 +966,12 @@ chown root:"$BUILD_GROUP" "$STAGE_ROOT"
 chmod 0750 "$STAGE_ROOT"
 chown root:"$BUILD_GROUP" "$STAGE_ROOT/package.zip"
 chmod 0640 "$STAGE_ROOT/package.zip"
-install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0750 "$STAGE_ROOT/source"
 install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0700 "$STAGE_ROOT/pnpm-store"
-run_as_build_user "$STAGE_ROOT/source" unzip -q "$STAGE_ROOT/package.zip" -d "$STAGE_ROOT/source"
-[[ -z "$(find "$STAGE_ROOT/source" ! -type f ! -type d -print -quit)" ]] || fail "Links und Spezialdateien sind im Quellpaket nicht erlaubt."
-[[ "$(du -sb "$STAGE_ROOT/source" | awk '{ print $1 }')" -le "$MAX_EXTRACTED_BYTES" ]] || fail "Das entpackte Serverpaket ist groesser als 4 GiB."
-[[ -f "$STAGE_ROOT/source/$MANIFEST_NAME" ]] || fail "Das Serverpaket-Manifest fehlt in der Archivwurzel."
-validate_manifest
-normalize_verified_archive_modes "$STAGE_ROOT/source"
+chown -R root:"$BUILD_GROUP" "$STAGE_ROOT/source"
 resolve_pnpm
 
 chown -R "$BUILD_USER:$BUILD_GROUP" "$STAGE_ROOT/source"
-run_as_build_user "$STAGE_ROOT/source" env \
+run_as_build_user "$STAGE_ROOT/source" env -i \
   HOME="$CACHE_ROOT" XDG_CACHE_HOME="$CACHE_ROOT" PNPM_HOME="$CACHE_ROOT/pnpm" COREPACK_HOME="$CACHE_ROOT/corepack" \
   PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
   NODE_ENV=production "${PNPM_COMMAND[@]}" install --prod --frozen-lockfile --config.node-linker=hoisted \
@@ -967,13 +997,22 @@ function walk(directory) {
 walk(root);
 NODE
 
-chown -hR root:"$SERVICE_GROUP" "$STAGE_ROOT/source"
-chmod -R o-rwx "$STAGE_ROOT/source"
-find "$STAGE_ROOT/source" -type d -exec chmod 0750 {} +
-find "$STAGE_ROOT/source" -type f -perm /111 -exec chmod 0750 {} +
-find "$STAGE_ROOT/source" -type f ! -perm /111 -exec chmod 0640 {} +
+# A retained build-user writer FD can survive chown. Move the entire untrusted
+# tree aside and copy fresh root inodes before checking the original ZIP again.
+mv -- "$STAGE_ROOT/source" "$STAGE_ROOT/source-built-untrusted"
+gp_seal_build_tree "$STAGE_ROOT/source-built-untrusted" "$STAGE_ROOT/source" "$SERVICE_GROUP" \
+  || fail "Der fertige Buildbaum konnte nicht mit frischen Root-Dateien versiegelt werden."
+gp_verify_sealed_zip "$STAGE_ROOT/package.zip" "$STAGE_ROOT/source" 1 \
+  || fail "Der Build hat urspruengliche Paketdateien oder das Manifest veraendert."
+gp_prepare_root_pg_dependencies "$STAGE_ROOT/package.zip" "$STAGE_ROOT/source" "$NODE_EXECUTABLE" "${PNPM_COMMAND[@]}" \
+  || fail "Die privilegierte PostgreSQL-Abhaengigkeitskette konnte nicht unabhaengig aufgebaut werden."
 [[ -x "$STAGE_ROOT/source/server-tools/linux/monitor/run-grabenplaner-monitor.sh" ]] \
   || fail "Das freigegebene Monitorwerkzeug ist nach der Berechtigungssetzung nicht ausfuehrbar."
+
+# All four application/reader logins and both environment bindings are checked
+# with read-only transactions, after package ownership is locked and before swap.
+root_node "$STAGE_ROOT/source/server-tools/linux/postgresql/preflight-install.js" check >/dev/null \
+  || fail "Das vorbereitete PostgreSQL-Paar ist nicht vollstaendig erreichbar oder passt nicht zur Installation."
 
 systemctl disable --now grabenplaner-monitor.timer grabenplaner-monitor.service >/dev/null 2>&1 || true
 systemctl stop grabenplaner-bootstrap.service grabenplaner.service >/dev/null 2>&1 || true
@@ -992,26 +1031,26 @@ HOST_CONTROL_MODULE_WRITTEN=1
 [[ -f "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" && ! -L "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" \
   && "$(stat -c '%U:%G:%a:%h' -- "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js")" == "root:root:644:1" ]] \
   || fail "Der root-geschuetzte Host-Control-Broker wurde nicht sicher installiert."
-"$NODE_EXECUTABLE" "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" --ensure-state-directory \
+root_node "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" --ensure-state-directory \
   || fail "Der Host-Neustartstatus konnte nicht sicher vorbereitet werden."
 
 monitor_status_gid="$(getent group "$MONITOR_STATUS_GROUP" | awk -F: '{print $3}')"
 [[ "$monitor_status_gid" =~ ^[0-9]+$ ]] || fail "Die Monitor-Statusgruppe konnte nicht sicher aufgeloest werden."
 monitor_status_helper="$APP_ROOT/server-tools/linux/monitor/lib/monitor-status.js"
 [[ -f "$monitor_status_helper" && ! -L "$monitor_status_helper" ]] || fail "Der Monitorstatus-Helfer fehlt im installierten Paket."
-"$NODE_EXECUTABLE" "$monitor_status_helper" --status-file "$MONITOR_STATUS_FILE" --status-gid "$monitor_status_gid" initialize >/dev/null
+root_node "$monitor_status_helper" --status-file "$MONITOR_STATUS_FILE" --status-gid "$monitor_status_gid" initialize >/dev/null
 
 UNIT_TEMP="$(mktemp)"
-render_template "$SCRIPT_DIR/grabenplaner.service.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/grabenplaner.service.in" "$UNIT_TEMP"
 APP_UNIT_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$APP_UNIT"
-render_template "$SCRIPT_DIR/grabenplaner-bootstrap.service.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/grabenplaner-bootstrap.service.in" "$UNIT_TEMP"
 BOOTSTRAP_UNIT_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$BOOTSTRAP_UNIT"
-render_template "$SCRIPT_DIR/grabenplaner-monitor.service.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/grabenplaner-monitor.service.in" "$UNIT_TEMP"
 MONITOR_UNIT_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$MONITOR_UNIT"
-render_template "$SCRIPT_DIR/grabenplaner-monitor.timer.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/grabenplaner-monitor.timer.in" "$UNIT_TEMP"
 MONITOR_TIMER_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$MONITOR_TIMER"
 host_control_render_root="$STAGE_ROOT/host-control-units"
@@ -1052,10 +1091,10 @@ install -o root -g root -m 0644 \
 mv -T -- "$HOST_CONTROL_PENDING_UNIT" "$HOST_REBOOT_UNIT"
 HOST_CONTROL_PENDING_UNIT=""
 HOST_REBOOT_UNIT_WRITTEN=1
-render_template "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/grabenplaner-bootstrap-admin.sh.in" "$UNIT_TEMP"
 BOOTSTRAP_COMMAND_WRITTEN=1
 install -o root -g root -m 0750 "$UNIT_TEMP" "$BOOTSTRAP_COMMAND"
-render_template "$SCRIPT_DIR/Caddyfile.in" "$UNIT_TEMP"
+render_template "$APP_ROOT/server-tools/linux/Caddyfile.in" "$UNIT_TEMP"
 caddy validate --config "$UNIT_TEMP" --adapter caddyfile >/dev/null
 capture_caddy_service_state
 if [[ -s "$CADDY_CONFIG" ]]; then

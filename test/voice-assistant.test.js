@@ -3,6 +3,80 @@ const test = require("node:test"), assert = require("node:assert/strict"), crypt
 const { createVoiceAssistant } = require("../lib/voice-assistant");
 const { configFromEnv, createOpenAiVoiceProvider } = require("../lib/voice-assistant-openai");
 
+test("the actual server Voice authorization uses the independent reader and preserves HTTP authentication, permissions and database failures", async t => {
+  const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
+  const source = fs.readFileSync(path.resolve(__dirname, "../server.js"), "utf8").replaceAll("\r\n", "\n");
+  function actualFunction(name) {
+    const start = source.indexOf("function " + name + "(");
+    assert.ok(start >= 0, name);
+    const end = source.indexOf("\n}\n", start); assert.ok(end > start, name);
+    return source.slice(start, end + 3);
+  }
+  const start = source.indexOf("  authorize: async request => {", source.indexOf("const voiceAssistant = createVoiceAssistant({"));
+  const end = source.indexOf("\n  },\n  balances:", start);
+  assert.ok(start >= 0 && end > start, "Extract only the actual server Voice authorization callback.");
+  const authorizeSource = source.slice(start + "  authorize: ".length, end) + "\n  }";
+  const errorStart = source.indexOf("app.use(async (error, request, response, _next) => {");
+  const errorEnd = source.indexOf("\n});\n\nlet shutdownStarted", errorStart);
+  assert.ok(errorStart >= 0 && errorEnd > errorStart, "Use the actual unchanged global error response.");
+  const errorSource = source.slice(errorStart + "app.use(".length, errorEnd) + "\n}";
+  for (const outcome of ["normal", "session revoked", "permission revoked", "database failure"]) await t.test(outcome, async () => {
+    const actor = { id: "synthetic-voice-session", employeeNumber: "SYNTHETIC-VOICE", sessionKind: "employee", isEmployee: true,
+      role: "admin", permissions: ["own_schedule:read"] };
+    const state = { actor, error: null, reads: 0, scheduleReads: 0, mutations: 0, audits: [], loggedErrors: [] };
+    const reader = Object.freeze({ syntheticAuthorizationReader: true });
+    const databaseError = new Error("SYNTHETIC_DATABASE_UNAVAILABLE");
+    const context = vm.createContext({ applicationPersistence: { ready: Promise.resolve({ authorizationRepositories: { portalAccess: reader } }) },
+      loadPortalSessionFromRequest: async (request, options) => {
+        assert.equal(request.portalSession.id, actor.id, "The request still contains its initial actor.");
+        assert.equal(options.touch, false); assert.equal(options.repository, reader, "No guarded application reader fallback.");
+        state.reads++; if (state.error) throw state.error; return state.actor;
+      }, crypto, console: { error: (...args) => state.loggedErrors.push(args.at(-1)) } });
+    vm.runInContext(["httpError", "portalSessionFromRequest", "requirePortalSession", "requireEmployeePortalSession"].map(actualFunction).join("\n"), context);
+    const authorize = vm.runInContext("(" + authorizeSource + ")", context);
+    const errorHandler = vm.runInContext("(" + errorSource + ")", context);
+    const assistant = createVoiceAssistant({ authorize, today: () => "2031-04-01",
+      config: () => ({ enabled: true, adminOnly: true, apiKey: "synthetic", maxSessionSeconds: 600, maxConversations: 8 }),
+      provider: { interpret: async () => {
+        if (outcome === "session revoked") state.actor = null;
+        if (outcome === "permission revoked") state.actor = { ...actor, permissions: [] };
+        if (outcome === "database failure") state.error = databaseError;
+        return { action: "schedule", kind: "both", dateText: "diese Woche", startTime: "", endTime: "", question: "" };
+      } }, schedule: async () => { state.scheduleReads++; return { shifts: [{ date: "2031-04-04", startTime: "09:00", endTime: "17:00" }], options: [] }; },
+      submit: async () => { state.mutations++; throw Error("A schedule message must never submit."); },
+      audit: async (_actor, action) => state.audits.push(action),
+    });
+    const app = require("express")(); app.use(require("express").json());
+    app.use((request, _response, next) => { request.portalSession = actor; next(); });
+    require("../lib/voice-assistant-routes").registerVoiceAssistantRoutes(app, { assistant, assertCsrf: () => {} });
+    app.use((error, request, response, next) => Promise.resolve(errorHandler(error, request, response, next)));
+    let server;
+    try {
+      await new Promise(resolve => { server = app.listen(0, "127.0.0.1", resolve); });
+      const base = `http://127.0.0.1:${server.address().port}/api/portal/v1/me/assistant/conversations`;
+      const started = await fetch(base, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      assert.equal(started.status, 201); const conversation = await started.json();
+      const auditsBefore = state.audits.length;
+      const response = await fetch(`${base}/${conversation.conversationId}/messages`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "Wie arbeite ich diese Woche?", operationId: crypto.randomUUID() }) });
+      const payload = await response.json();
+      const expectedStatus = { normal: 200, "session revoked": 401, "permission revoked": 403, "database failure": 500 }[outcome];
+      assert.equal(response.status, expectedStatus, JSON.stringify(payload)); assert.equal(state.mutations, 0);
+      assert.ok(state.reads >= 3, "Authorization is reread after the model finishes.");
+      if (outcome === "normal") {
+        assert.equal(payload.data.shifts[0].date, "2031-04-04"); assert.equal(state.scheduleReads, 1);
+        assert.equal(state.audits.at(-1), "assistant.schedule.read");
+      } else {
+        assert.equal(payload.code, { "session revoked": "PORTAL_LOGIN_REQUIRED", "permission revoked": "PORTAL_PERMISSION_DENIED", "database failure": "INTERNAL_ERROR" }[outcome]);
+        assert.equal(state.scheduleReads, 0); assert.equal(state.audits.length, auditsBefore);
+        assert.ok(!JSON.stringify(payload).includes("2031-04-04")); assert.ok(!JSON.stringify(payload).includes(databaseError.message));
+      }
+      if (outcome === "database failure") assert.deepEqual(state.loggedErrors, [databaseError], "The original database failure reaches the real HTTP 500 handler unchanged.");
+      else assert.deepEqual(state.loggedErrors, []);
+    } finally { if (server) await new Promise(resolve => server.close(resolve)); }
+  });
+});
+
 function fixture() {
   const value = { actor: { id: "session-A", employeeNumber: "BEISPIEL-A", isEmployee: true, role: "admin",
     permissions: ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:write", "own_schedule:read"] },

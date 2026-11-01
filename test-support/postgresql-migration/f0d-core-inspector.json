@@ -1,0 +1,666 @@
+{
+  "format": "gp-f0d-core-schema-inspector-original-v1",
+  "sourceCommit": "f0d71104bbe4926930662a20bf0660744fbcc0e5",
+  "installedManifestSha256": "61fc69f3fd40257674d01dfe277531895e7cac94503f430167c320b94bc79682",
+  "scope": "Original installed Core inspector body with unchanged, separately hash-pinned shared dependency content. This is not a full updater or application availability proof.",
+  "inspector": {
+    "bytes": 3151,
+    "path": "lib/persistence/postgresql/boundary/migrate.js",
+    "sha256": "f89627774a3580fea93a22a30910d3034296251da30c1b92728029aee5054064",
+    "sourceBase64": "J3VzZSBzdHJpY3QnOw0KY29uc3Qge3ZlcmlmeUVudmlyb25tZW50fT1yZXF1aXJlKCcuLi9jb3JlL2Vudmlyb25tZW50Jyk7DQpjb25zdCB7c2NoZW1hRmluZ2VycHJpbnR9PXJlcXVpcmUoJy4uL2NvcmUvZmluZ2VycHJpbnQnKTsNCmNvbnN0IHtjcmVhdGVTY2hlbWFQbGFufT1yZXF1aXJlKCcuLi9jb3JlL3NjaGVtYScpOw0KY29uc3Qge2NyZWF0ZUJvdW5kYXJ5Q29yZVBsYW59PXJlcXVpcmUoJy4vc2NoZW1hJyk7DQphc3luYyBmdW5jdGlvbiB2ZXJpZnlDb3JlU2NoZW1hKGNsaWVudCx7cmVxdWlyZVZvY2F0aW9uYWxTY2hvb2w9ZmFsc2UscmVxdWlyZVNlc3Npb25TZWN1cml0eT1mYWxzZX09e30pew0KICAvLyBSZXN0b3JlL3VwZ3JhZGUgdG9vbGluZyBtYXkgaW5zcGVjdCBhIHZhbGlkIGhpc3RvcmljYWwgY2hlY2twb2ludC4gUHJvZHVjdA0KICAvLyBjb25uZWN0aW9ucyBhbmQgbmV3IGV4cG9ydHMgcmVxdWlyZSBzZXNzaW9uIHNlY3VyaXR5IGV4cGxpY2l0bHk7IGEgcmVzdG9yZQ0KICAvLyBpbnNwZWN0aW9uIG11c3Qgbm90IHNpbGVudGx5IGNsYWltIHRoYXQgYW4gb2xkZXIgY2hlY2twb2ludCBoYXMgaXQuDQogIGNvbnN0IGJhc2U9KGF3YWl0IGNsaWVudC5xdWVyeSgnU0VMRUNUIHZlcnNpb24sc291cmNlX3NoYTI1NixwbGFuX3NoYTI1Nix0YXJnZXRfc2hhMjU2IEZST00gZ3AuY29yZV9taWdyYXRpb25faGlzdG9yeScpKS5yb3dzLHBsYW49Y3JlYXRlU2NoZW1hUGxhbigpOw0KICBpZihiYXNlLmxlbmd0aCE9PTF8fGJhc2VbMF0udmVyc2lvbiE9PTF8fGJhc2VbMF0uc291cmNlX3NoYTI1NiE9PXBsYW4uc291cmNlU2NoZW1hU2hhMjU2fHxiYXNlWzBdLnBsYW5fc2hhMjU2IT09cGxhbi5kaWdlc3QpdGhyb3cgbmV3IEVycm9yKCdDb3JlIGJhc2UgbWlncmF0aW9uIGRyaWZ0Jyk7DQogIGNvbnN0IGV4aXN0cz0oYXdhaXQgY2xpZW50LnF1ZXJ5KCJTRUxFQ1QgdG9fcmVnY2xhc3MoJ2dwLmJvdW5kYXJ5X21pZ3JhdGlvbl9oaXN0b3J5JykgQVMgbmFtZSIpKS5yb3dzWzBdLm5hbWU7DQogIGxldCBleHBlY3RlZD1iYXNlWzBdLnRhcmdldF9zaGEyNTY7DQogIGlmKGV4aXN0cyl7DQogICAgY29uc3Qgcm93cz0oYXdhaXQgY2xpZW50LnF1ZXJ5KCdTRUxFQ1QgKiBGUk9NIGdwLmJvdW5kYXJ5X21pZ3JhdGlvbl9oaXN0b3J5JykpLnJvd3M7DQogICAgaWYocm93cy5sZW5ndGghPT0xfHxyb3dzWzBdLnZlcnNpb24hPT03fHxyb3dzWzBdLnBsYW5fc2hhMjU2IT09Y3JlYXRlQm91bmRhcnlDb3JlUGxhbigpLmRpZ2VzdHx8cm93c1swXS5iYXNlX3RhcmdldF9zaGEyNTYhPT1leHBlY3RlZCl0aHJvdyBuZXcgRXJyb3IoJ0NvcmUgYm91bmRhcnkgbWlncmF0aW9uIGRyaWZ0Jyk7DQogICAgZXhwZWN0ZWQ9cm93c1swXS50YXJnZXRfc2hhMjU2Ow0KICB9DQogIGV4cGVjdGVkPWF3YWl0IHJlcXVpcmUoJy4uL2NvcmUvdHJhZGUtYW5ub3RhdGlvbnMnKS50YXJnZXQoY2xpZW50LGV4cGVjdGVkKTsNCiAgZXhwZWN0ZWQ9YXdhaXQgcmVxdWlyZSgnLi4vY29yZS9wZXJzb25uZWwtbGVhcm5pbmctcnVucycpLnRhcmdldChjbGllbnQsZXhwZWN0ZWQpOw0KICBleHBlY3RlZD1hd2FpdCByZXF1aXJlKCcuLi9jb3JlL3hvZmZpLXNuYXBzaG90cycpLnRhcmdldChjbGllbnQsZXhwZWN0ZWQpOw0KICBleHBlY3RlZD1hd2FpdCByZXF1aXJlKCcuLi9jb3JlL3ZvY2F0aW9uYWwtc2Nob29sJykudGFyZ2V0KGNsaWVudCxleHBlY3RlZCx7cmVxdWlyZWQ6cmVxdWlyZVZvY2F0aW9uYWxTY2hvb2x9KTsNCiAgZXhwZWN0ZWQ9YXdhaXQgcmVxdWlyZSgiLi4vY29yZS9zZXNzaW9uLXNlY3VyaXR5IikudGFyZ2V0KGNsaWVudCxleHBlY3RlZCx7cmVxdWlyZWQ6cmVxdWlyZVNlc3Npb25TZWN1cml0eX0pOw0KICBpZihleHBlY3RlZCE9PWF3YWl0IHNjaGVtYUZpbmdlcnByaW50KGNsaWVudCkpdGhyb3cgbmV3IEVycm9yKCdDb3JlIGRldmVsb3BtZW50IHNjaGVtYSBjb250cmFjdCBtaXNtYXRjaCcpOw0KICByZXR1cm4ge2JvdW5kYXJ5OkJvb2xlYW4oZXhpc3RzKSxiYXNlVGFyZ2V0OmJhc2VbMF0udGFyZ2V0X3NoYTI1Nn07DQp9DQphc3luYyBmdW5jdGlvbiBtaWdyYXRlQm91bmRhcnlDb3JlKGNsaWVudCl7DQogIGF3YWl0IHZlcmlmeUVudmlyb25tZW50KGNsaWVudCx7cHVycG9zZTonbWlncmF0b3InfSk7YXdhaXQgY2xpZW50LnF1ZXJ5KCdTRUxFQ1QgcGdfYWR2aXNvcnlfbG9jayg5MjYxMjAzKScpOw0KICB0cnl7DQogICAgYXdhaXQgY2xpZW50LnF1ZXJ5KCdCRUdJTiBJU09MQVRJT04gTEVWRUwgU0VSSUFMSVpBQkxFJyk7YXdhaXQgY2xpZW50LnF1ZXJ5KCdTRVQgTE9DQUwgUk9MRSBncF9jb3JlX293bmVyJyk7YXdhaXQgY2xpZW50LnF1ZXJ5KCdTRVQgTE9DQUwgc2VhcmNoX3BhdGg9cGdfY2F0YWxvZyxncCcpOw0KICAgIGNvbnN0IHN0YXRlPWF3YWl0IHZlcmlmeUNvcmVTY2hlbWEoY2xpZW50KSxwbGFuPWNyZWF0ZUJvdW5kYXJ5Q29yZVBsYW4oKTsNCiAgICBpZihzdGF0ZS5ib3VuZGFyeSl7YXdhaXQgY2xpZW50LnF1ZXJ5KCdDT01NSVQnKTtyZXR1cm4ge2FwcGxpZWQ6ZmFsc2Usc3RhZ2U6NyxkaWdlc3Q6cGxhbi5kaWdlc3R9O30NCiAgICBmb3IoY29uc3QgaXRlbSBvZiBwbGFuLnN0YXRlbWVudHMpYXdhaXQgY2xpZW50LnF1ZXJ5KGl0ZW0uc3FsKTsNCiAgICBjb25zdCBkaWdlc3Q9YXdhaXQgc2NoZW1hRmluZ2VycHJpbnQoY2xpZW50KTsNCiAgICBhd2FpdCBjbGllbnQucXVlcnkoJ0lOU0VSVCBJTlRPIGdwLmJvdW5kYXJ5X21pZ3JhdGlvbl9oaXN0b3J5IFZBTFVFUyg3LCQxLCQyLCQzKScsW3BsYW4uZGlnZXN0LHN0YXRlLmJhc2VUYXJnZXQsZGlnZXN0XSk7YXdhaXQgY2xpZW50LnF1ZXJ5KCdDT01NSVQnKTsNCiAgICByZXR1cm4ge2FwcGxpZWQ6dHJ1ZSxzdGFnZTo3LGRpZ2VzdDpwbGFuLmRpZ2VzdCxzdGF0ZW1lbnRzOnBsYW4uc3RhdGVtZW50cy5sZW5ndGgscHJvZHVjdEFjdGl2YXRpb246ZmFsc2V9Ow0KICB9Y2F0Y2goZXJyb3Ipe2F3YWl0IGNsaWVudC5xdWVyeSgnUk9MTEJBQ0snKTt0aHJvdyBlcnJvcjt9ZmluYWxseXthd2FpdCBjbGllbnQucXVlcnkoJ1NFTEVDVCBwZ19hZHZpc29yeV91bmxvY2soOTI2MTIwMyknKTt9DQp9DQptb2R1bGUuZXhwb3J0cz17bWlncmF0ZUJvdW5kYXJ5Q29yZSx2ZXJpZnlDb3JlU2NoZW1hfTsNCg=="
+  },
+  "sharedDependencies": [
+    {
+      "path": "lib/data-import-contract.js",
+      "gitLfSha256": "b9379939c517c64f42a6c9209b95c345e43da0ae500014350abab79f12d0fa67"
+    },
+    {
+      "path": "lib/data-import-source-catalog.js",
+      "gitLfSha256": "575deccc54cee974c7430ef8209d48c9f6462e81feb0678b411278fd934ebc78"
+    },
+    {
+      "path": "lib/flexible-search.js",
+      "gitLfSha256": "bf72f45636c21a119bc73d5c1f8a172ad36dff92441e3fc2888d3a7f691dcf78"
+    },
+    {
+      "path": "lib/persistence/catalogs/absence-management-catalog.js",
+      "gitLfSha256": "34313d88dd8ce85f1046dcdab383b4d700c53ccd0feaaee0ad58966dde17f67e"
+    },
+    {
+      "path": "lib/persistence/catalogs/application-catalog.js",
+      "gitLfSha256": "fa0f60f20546a203827a1770d740063928b0a86a33dba3e8221013e33fe3f7bf"
+    },
+    {
+      "path": "lib/persistence/catalogs/branch-article-stock-catalog.js",
+      "gitLfSha256": "02d569830e1bff2edcb951aba1bbfd28a71e01143d15bc902d6d6aedbe013ef0"
+    },
+    {
+      "path": "lib/persistence/catalogs/branch-receipt-catalog.js",
+      "gitLfSha256": "2547353a3bfbde0443bc668d0e7751881b3903361205691b3cb63209ba0c4f6b"
+    },
+    {
+      "path": "lib/persistence/catalogs/branding-snapshot-catalog.js",
+      "gitLfSha256": "c5d31db0f65d54855e18fb440f60bf3096f51de70cb17741b3acd2bb8bfe705e"
+    },
+    {
+      "path": "lib/persistence/catalogs/cash-location-reads-catalog.js",
+      "gitLfSha256": "0970da4807a36227f58817f78a3b73adc57e8fd35d21d810e23be4f996e93db5"
+    },
+    {
+      "path": "lib/persistence/catalogs/cash-publications-catalog.js",
+      "gitLfSha256": "ed782ee718243da02d8afdedd1249a5aca8b27e5d8290687ac8172474252a629"
+    },
+    {
+      "path": "lib/persistence/catalogs/cash-snapshots-catalog.js",
+      "gitLfSha256": "5ab2b0b4b4ee70ddcd9f1a4f944164f6bfcea5845daf66f4a0139a94b5d8747d"
+    },
+    {
+      "path": "lib/persistence/catalogs/collective-agreements-catalog.js",
+      "gitLfSha256": "e1b198ab37a84c9f0d86c59e0982fba16ecc49f8dc719b403058199f10e12bfb"
+    },
+    {
+      "path": "lib/persistence/catalogs/crm-customers-catalog.js",
+      "gitLfSha256": "ed94914646a38729d953a2243eba719168197e8721ebe8ec65fc738450b0ed51"
+    },
+    {
+      "path": "lib/persistence/catalogs/custom-process-management-catalog.js",
+      "gitLfSha256": "59f962ad16130350ef9edb7818f8dc06e6fa2239090929f4e6b7785bbcfcddd4"
+    },
+    {
+      "path": "lib/persistence/catalogs/custom-work-rules-catalog.js",
+      "gitLfSha256": "beb87b1972c97f5256d35fdb31668bafd8376b540f241bcd0937c87830ee9b22"
+    },
+    {
+      "path": "lib/persistence/catalogs/data-import-catalog.js",
+      "gitLfSha256": "106f124bbc41e421e55d99e5f55d7d192612830c398a13f032061b44c7123c86"
+    },
+    {
+      "path": "lib/persistence/catalogs/data-import-delete-catalog.js",
+      "gitLfSha256": "dfef0487eef2aaee19ba4065975c80d7786eeb31aefed13816ced3bb6cc57b3e"
+    },
+    {
+      "path": "lib/persistence/catalogs/data-import-recheck-catalog.js",
+      "gitLfSha256": "279732f37dc0f70e2094e2c163098db7616807434b37e442fdce7ea4479e6348"
+    },
+    {
+      "path": "lib/persistence/catalogs/data-import-runtime-catalog.js",
+      "gitLfSha256": "c1f0d83e9eff2d351b85efc28b3f758725f25dea1f7ba3de68446768e44a1442"
+    },
+    {
+      "path": "lib/persistence/catalogs/data-import-source-tolerance-catalog.js",
+      "gitLfSha256": "5ab995165453a84d1c3f328fc7aca75b864175568f147641da880d459bc0c8d4"
+    },
+    {
+      "path": "lib/persistence/catalogs/governance-store-catalog.js",
+      "gitLfSha256": "5540d7547d381a0bf854e65a1d54c7d49669ad37fd4c5930005d98da501190d1"
+    },
+    {
+      "path": "lib/persistence/catalogs/history-snapshot-selection.js",
+      "gitLfSha256": "78f1daedd34f52fe51aa491e4f4dc0534261981353d428c54aa5d602b0a6dae3"
+    },
+    {
+      "path": "lib/persistence/catalogs/import-history-catalog.js",
+      "gitLfSha256": "392d4d2f085b7e81dc7e4253720eefe951ada353a4475555d404970850905491"
+    },
+    {
+      "path": "lib/persistence/catalogs/import-history-snapshots-catalog.js",
+      "gitLfSha256": "f7c5f9099a51dbd9026cf543a708c824a681f75a96ea93cb62d844ada76c1e81"
+    },
+    {
+      "path": "lib/persistence/catalogs/import-master-catalog.js",
+      "gitLfSha256": "0ef0ebefbd05327718de5441e2e7eb5fdc1269fe1675d12c4f61cf28b3010a9f"
+    },
+    {
+      "path": "lib/persistence/catalogs/integration-runtime-catalog.js",
+      "gitLfSha256": "3d29a43f5502cdb034b38d2f9e5f1acfde86522795b589ee1f9e9e08c5a7d91f"
+    },
+    {
+      "path": "lib/persistence/catalogs/loan-module-catalog.js",
+      "gitLfSha256": "111ff0dabb4e1e80acc62295c9ac73c628af1f2d1a49a4c19f691345a87ac6ee"
+    },
+    {
+      "path": "lib/persistence/catalogs/mobile-auth-catalog.js",
+      "gitLfSha256": "627ae4222cf2e2a6d37ae3d50bf63a7aa08346e87d0b92aae53dbecb4385689f"
+    },
+    {
+      "path": "lib/persistence/catalogs/organization-personnel-catalog.js",
+      "gitLfSha256": "c6c5408c4af4798f09192d33ecad306f7b9dd072098ead581c3c815347a69fdb"
+    },
+    {
+      "path": "lib/persistence/catalogs/personal-action-log-catalog.js",
+      "gitLfSha256": "c2389c5db3eacc005829587f7cc576dc54e0dbdbb098b7c32017074fc7ebcaf9"
+    },
+    {
+      "path": "lib/persistence/catalogs/personal-notification-contacts-catalog.js",
+      "gitLfSha256": "e6183045c160da82ac464996750747f4ab2a135a24cf050d0eacc133dce643c5"
+    },
+    {
+      "path": "lib/persistence/catalogs/personnel-learning-catalog.js",
+      "gitLfSha256": "834af215f11567e95bc3639f1d401e7ed4ad57391024a4f21e3631cb37fd1c26"
+    },
+    {
+      "path": "lib/persistence/catalogs/personnel-learning-runs-catalog.js",
+      "gitLfSha256": "cbe93f4c970f14264fd5d8f1f60ba6dcee02c538c30944e813e50b524e2ab65b"
+    },
+    {
+      "path": "lib/persistence/catalogs/personnel-lifecycle-catalog.js",
+      "gitLfSha256": "1bd440e1912c1c5688f7007f42bb365f1a6eb54966022e4958ca6a1ea0d53d7a"
+    },
+    {
+      "path": "lib/persistence/catalogs/planning-settings-catalog.js",
+      "gitLfSha256": "db2c2b6e94d04c9814cc9bb9513578562497a289668e5fc4e293f41b12068f1c"
+    },
+    {
+      "path": "lib/persistence/catalogs/portal-access-catalog.js",
+      "gitLfSha256": "0d826563e659e9d26e8e37e9f079e86b914ad1d4d05931cbfe34de7abfd3015b"
+    },
+    {
+      "path": "lib/persistence/catalogs/portal-birthday-presentations.js",
+      "gitLfSha256": "f87fc0558c6b3fb4f418a2af084aa99536c43c83fa0147161fa805359816b9ee"
+    },
+    {
+      "path": "lib/persistence/catalogs/runtime-recovery-catalog.js",
+      "gitLfSha256": "20f90446a039536333b6b17e53689e92d1cff9acf73694db5dfee44597afbadc"
+    },
+    {
+      "path": "lib/persistence/catalogs/sales-analytics-catalog.js",
+      "gitLfSha256": "2e4e8a8371fa860eb7c04f4d043d011303c4dd260950bb6ddf72051701c302ac"
+    },
+    {
+      "path": "lib/persistence/catalogs/sales-article-branch-orders-catalog.js",
+      "gitLfSha256": "774b2ba8cc3da4387fa0bbffdacbb074ee4cc0de4d2edfef4f37f0b20cbdab11"
+    },
+    {
+      "path": "lib/persistence/catalogs/sales-article-catalog-catalog.js",
+      "gitLfSha256": "70e8312b1b806b56b350f276b9ce9e528e27ccc942b6ebc082317d182c7ac9c0"
+    },
+    {
+      "path": "lib/persistence/catalogs/sales-article-images-catalog.js",
+      "gitLfSha256": "9d7cd4767feebb3a709b09b8bccaf8153e7fbf84db1251b18a86c1e615de28db"
+    },
+    {
+      "path": "lib/persistence/catalogs/sales-article-search-projection-sql.js",
+      "gitLfSha256": "f40bca5f727767084bdcbd562824c16c54bd3f74236ef5d9745c733ff23f4a90"
+    },
+    {
+      "path": "lib/persistence/catalogs/sales-article-workspace-catalog.js",
+      "gitLfSha256": "fd3a05122d0aca26e80cb6b6a51c21f4b1d5e2edf216d887bf99d4269bda1487"
+    },
+    {
+      "path": "lib/persistence/catalogs/sales-report-jobs-catalog.js",
+      "gitLfSha256": "7c717b6233d0d56906787a298cb1faf11c5e3baf028ce672e9e4f3d32f4ce6f9"
+    },
+    {
+      "path": "lib/persistence/catalogs/saturday-credit-catalog.js",
+      "gitLfSha256": "439aee25f8d4ffbccebf024a81de6996957f45af6ec7f771c87db9bd62db1b2e"
+    },
+    {
+      "path": "lib/persistence/catalogs/sickness-amu-management-catalog.js",
+      "gitLfSha256": "674b2395359af0c73e54cceae9c2dfd160ecb842f012dd7d94918edff5521582"
+    },
+    {
+      "path": "lib/persistence/catalogs/staff-assignment-request-catalog.js",
+      "gitLfSha256": "a73c362ddba2b8749b1f31126a857748bf26612491056e5f8f145fc78b62ac95"
+    },
+    {
+      "path": "lib/persistence/catalogs/system-center-metrics-catalog.js",
+      "gitLfSha256": "6d1e7b17b70c4449478f56347605327d56ad87246fe26c21f725be3d39c6c1ed"
+    },
+    {
+      "path": "lib/persistence/catalogs/time-tracking-catalog.js",
+      "gitLfSha256": "b5c9c772ef2a06cdd000d0a0c1d636e2c133dc0cdf062420d967493bf0a70302"
+    },
+    {
+      "path": "lib/persistence/catalogs/trade-annotations-catalog.js",
+      "gitLfSha256": "58c8dca55b08222f7eca8b1d5c2d731693714e8c60f76f6ca63692ab0ce5fb8d"
+    },
+    {
+      "path": "lib/persistence/catalogs/trade-insights-catalog.js",
+      "gitLfSha256": "14cbde37cae13c527d00c14a3952bb792f66adcc8ff9062ca9de9768c5366c8e"
+    },
+    {
+      "path": "lib/persistence/catalogs/ui-preferences-catalog.js",
+      "gitLfSha256": "5779fe041164aeaf54f10db8fbafa8396f33ae1bcd4bc2eeb68b1209585f996d"
+    },
+    {
+      "path": "lib/persistence/catalogs/wifi-automation-catalog.js",
+      "gitLfSha256": "986e312e4142da95cf74093fe340c0fc15df4d9d0e32f29e4dc0f050ba55b89e"
+    },
+    {
+      "path": "lib/persistence/catalogs/work-rule-governance-catalog.js",
+      "gitLfSha256": "052ae57a20caa2b6b293d0ec274e1c515b3eb4aa95c71c5b336d59aa7ce46b2e"
+    },
+    {
+      "path": "lib/persistence/catalogs/work-rule-store-catalog.js",
+      "gitLfSha256": "844932f0b4d47b4ffaf8ecda4cec8121787a80b20dbbae10bab2a20b7d468b56"
+    },
+    {
+      "path": "lib/persistence/catalogs/workflow-studio-catalog.js",
+      "gitLfSha256": "9e76f4fddf11517297e85296a378c8116eb9db6d41d0f1c4cb3649d3af71cbf6"
+    },
+    {
+      "path": "lib/persistence/catalogs/xoffi-snapshots-catalog.js",
+      "gitLfSha256": "ddaec9a20c69a507e9ef8c55971f88f7f9eaf1a851f89e6a9904dd1b41820f1f"
+    },
+    {
+      "path": "lib/persistence/contract.js",
+      "gitLfSha256": "8bc7b3e111f477152fddf65040ebe4e99da96b6ce02d0b7be36683ef4983bf3c"
+    },
+    {
+      "path": "lib/persistence/errors.js",
+      "gitLfSha256": "ca5ff74ed617ed1abaecb2bc7ff9247e212bd9f5a998cfdac1aa83a56aa7915d"
+    },
+    {
+      "path": "lib/persistence/postgresql/boundary/catalog.js",
+      "gitLfSha256": "b6e3539e3228d9a8ed676d068bec9be525cb3417866688100df0aa92c4523a19"
+    },
+    {
+      "path": "lib/persistence/postgresql/boundary/schema.js",
+      "gitLfSha256": "2a878f80d892528a964bd7377c7fa4c3ca26a9dc9a51529df1103e8129c3282b"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/ascii-nocase-catalog-v1.json",
+      "gitLfSha256": "5b1ad61c9b167fbeabd7108dee4a59bfa7a164e0696155898291768cc738abec"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/authentication-catalog-v1.json",
+      "gitLfSha256": "cd58c8caceab338b70ca995e6d95d17f40d1f1e8bd2ec479cd8aadaa5bb42086"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/block-1-inventory.json",
+      "gitLfSha256": "62543b129900cd7de94be5461227512cdb93673d60e797dda94a69cf930d67fd"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/block-4-catalog.json",
+      "gitLfSha256": "3b2e1d374883a86f4f371e82dc638ec2c405b88f620c6695853346e44bf52805"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/block-7-boundary-catalog.json",
+      "gitLfSha256": "a0a7250c5a5309bc8376514109dabbb3cded6d27a82bc954988afb00a9e8c17e"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/onboarding-json-catalog-v1.json",
+      "gitLfSha256": "44d619cf3251321935b242f8abcdd0fa9d83e44af16b14b286ca79666b2a0dc6"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/onboarding-receipt-projection-catalog-v1.json",
+      "gitLfSha256": "57af8f3408c032cd39ff3e07c92f33c2a9211695fa8649eccab80da737be716a"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/payroll-handoff-department-catalog-v1.json",
+      "gitLfSha256": "e507ae2460e47f302699beefb478879788894bed9ea76403c02d02263f247aed"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/session-security-catalog-v1.json",
+      "gitLfSha256": "1fa65f55bd0867d2b0a2e69f796238c24afa2d3df1b804b631d59cc9519f9fb9"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/source-schema-v09237.json",
+      "gitLfSha256": "f74d87df15f830ede19f2cacdd986ff543ca64a77e08a1213308fc1fdeebb622"
+    },
+    {
+      "path": "lib/persistence/postgresql/contracts/vocational-school-catalog-v1.json",
+      "gitLfSha256": "9af34995c627efadbd3956b90e9465a40c83f0255176e5cc455a285abcfc7664"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/ascii-nocase-comparisons.js",
+      "gitLfSha256": "87186a430204e3a2449586e53e844161116f48ce68ba21868185b7ebe0a8072d"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/catalog.js",
+      "gitLfSha256": "1658263696f4ebf0f763313011886bd231022ea6b3aa6e5232b93ebc07d9ee8c"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/environment.js",
+      "gitLfSha256": "b0922d38c8890a1ba8f2b0e09039ceae8696faff019af737f90192171451aa67"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/fingerprint.js",
+      "gitLfSha256": "2233663ae3bb8943f8840d3b921cdde2ff00bbc4c73d841a3207fa413796d77b"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/personnel-learning-runs.js",
+      "gitLfSha256": "5f8d02519fb0346bdc29b62dfe841784b8d9e76c87160d11d94683a025b540d4"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/schema.js",
+      "gitLfSha256": "eb11b14222ac5433277eb68ddf0755f31e00bb2e82f4774dfd248f17e96f67db"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/session-security.js",
+      "gitLfSha256": "ca9d487fa8a708a8040d0a2b43dd1ed0298472e5984a6b8b5fe0f93e639f4c68"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/sql.js",
+      "gitLfSha256": "2dafea9215ceaefb63fcf549a079847c64ec98035ffd2900b7b8592a4357f140"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/trade-annotations.js",
+      "gitLfSha256": "bcc1c49c8ebc056a98be6393d1483537bdf09aa1b834e614f5d696c51754d13e"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/vocational-school.js",
+      "gitLfSha256": "127e1f093f2aa05647190735850e662e1aa16af1509091c51efefbaf38c6adaa"
+    },
+    {
+      "path": "lib/persistence/postgresql/core/xoffi-snapshots.js",
+      "gitLfSha256": "347164ff8d41c1ae7c18c9d217875ed2705913a9184c688804e1748005333ccf"
+    },
+    {
+      "path": "lib/persistence/postgresql/dialect-compiler.js",
+      "gitLfSha256": "54223989b5fc203c49d8900c1cf01a978f81cd2897067308d6bf74abaa2b866c"
+    },
+    {
+      "path": "lib/persistence/postgresql/policy.js",
+      "gitLfSha256": "e14969fc1ad2cc14407b9974776a8c2dd60281344fbbc5f731b05616a3c46f11"
+    },
+    {
+      "path": "lib/persistence/postgresql/runtime-binding.js",
+      "gitLfSha256": "0c45681ea241d8d485cf8febc28f6ce8eaef3e3ade868158aa9f1b83812cfed7"
+    },
+    {
+      "path": "lib/persistence/postgresql/sales/catalog.js",
+      "gitLfSha256": "7ecb63c02d47f28c47d2f183cf07fd0cc2c8d11b44580388a950428cac27833c"
+    },
+    {
+      "path": "lib/persistence/postgresql/sales/layout.js",
+      "gitLfSha256": "ee62ff82154157cfdb2792b5c55e2d5e7550808f1f5d8b4040390255b0745a7a"
+    },
+    {
+      "path": "lib/persistence/postgresql/sales/schema.js",
+      "gitLfSha256": "fb6bccaf98ba66e51c4eefd9ac89f7b8e356828d65c405a0c03a9916843b7df2"
+    },
+    {
+      "path": "lib/persistence/schema-definitions/personnel-learning-assignment.js",
+      "gitLfSha256": "4858692fef8d8dbeca4087372113a14914d40782ca4f72162d37afaa29fa3a11"
+    },
+    {
+      "path": "lib/persistence/schema-definitions/personnel-learning-progress.js",
+      "gitLfSha256": "34ae9051b953d78c5d83da35fa3a43dd5a9df16bebb48c20a0033690b80ce815"
+    },
+    {
+      "path": "lib/persistence/schema-definitions/personnel-learning-runs.js",
+      "gitLfSha256": "0b8ddc44e60588b29b29deb6493114574b16b1167ae6c8ec1a83184ff2ceecec"
+    },
+    {
+      "path": "lib/persistence/schema-definitions/session-security.js",
+      "gitLfSha256": "172ecf9ed13bb4452b8ba87e1bd917c91601a52c06203bd307a7acc2f13851d4"
+    },
+    {
+      "path": "lib/persistence/schema-definitions/xoffi-snapshots.js",
+      "gitLfSha256": "6e04dea3fe898613951ea0c2f8f2437a18dbf07e29c4052674a44f226da48fb2"
+    },
+    {
+      "path": "lib/persistence/statements/absence-management.js",
+      "gitLfSha256": "4993213299aa2ad60d724786e3bb2c105bd34584080740336fa5c962172c3343"
+    },
+    {
+      "path": "lib/persistence/statements/branch-article-stock.js",
+      "gitLfSha256": "8cb6b87ad6c92391e62d02c975cbeab999b6cfebd9a869ca00ee06fa283b3098"
+    },
+    {
+      "path": "lib/persistence/statements/branch-receipt.js",
+      "gitLfSha256": "2e4e54af89e7b7ac1104cdc6498036c525c9e9227baeb50038e34b8d1a30d49f"
+    },
+    {
+      "path": "lib/persistence/statements/branding-snapshot.js",
+      "gitLfSha256": "c33ad7b8443ad55836638f979642f773035d632e03adde2ecdc9c29b30e4154e"
+    },
+    {
+      "path": "lib/persistence/statements/cash-location-reads.js",
+      "gitLfSha256": "bd78bd06965c478dcadbca94245671f7f3e0808d9606a3f6f016bb1935631725"
+    },
+    {
+      "path": "lib/persistence/statements/cash-publications.js",
+      "gitLfSha256": "9eb83db15c15e46afa8b29762f1a00450ae2c47b70b6a0754f89dd7302453d4b"
+    },
+    {
+      "path": "lib/persistence/statements/cash-snapshots.js",
+      "gitLfSha256": "8902af2a05fa8544c0a92a1c477dec29a9170f4b8af1ab011aa1d313b7b8e93b"
+    },
+    {
+      "path": "lib/persistence/statements/collective-agreements.js",
+      "gitLfSha256": "723d29bb35a05924130ab0ac6c1646272c055367743a402d6dbe086a91bdec5f"
+    },
+    {
+      "path": "lib/persistence/statements/crm-customers.js",
+      "gitLfSha256": "ea1eda5cee191f79d7500120fa14ddbd031477935d397f0e3a7f79ad1cc4610e"
+    },
+    {
+      "path": "lib/persistence/statements/custom-process-management.js",
+      "gitLfSha256": "2895bf1df1755833f4f8b33ad3bfb41e367c6f60caec1b1d4fb8e87eb8bc5a31"
+    },
+    {
+      "path": "lib/persistence/statements/custom-work-rules.js",
+      "gitLfSha256": "51f22152e4a7047b7b566c6eaa04dffa92d1aa365d23d560c661746752d93e87"
+    },
+    {
+      "path": "lib/persistence/statements/data-import-recheck.js",
+      "gitLfSha256": "3f308906d49bdeb8c0efb0e0310050e240687b295aabdc5323839d81649c31ba"
+    },
+    {
+      "path": "lib/persistence/statements/data-import-runtime.js",
+      "gitLfSha256": "c76163699403dc2628d315e5930b935f687bb627c7316acabd0d8936096e167a"
+    },
+    {
+      "path": "lib/persistence/statements/data-import-source-tolerance.js",
+      "gitLfSha256": "40888098eb0215bb8c82d1c2d9d4c5d38fdfc1874c39d87954164c45c6dae70a"
+    },
+    {
+      "path": "lib/persistence/statements/data-import.js",
+      "gitLfSha256": "81f74b2010516ca61a584517ad73a86399408f7406ca9a1806dc41346559b6d1"
+    },
+    {
+      "path": "lib/persistence/statements/governance-store.js",
+      "gitLfSha256": "673a3d0e38e6170390c3a81e5518ac1c16b647b5ce4d0799cabf350aad954749"
+    },
+    {
+      "path": "lib/persistence/statements/import-history-snapshots.js",
+      "gitLfSha256": "260effdde815e74281c9f691792aaf93364c68ec66f4590f59078385e693e46f"
+    },
+    {
+      "path": "lib/persistence/statements/import-history.js",
+      "gitLfSha256": "5e9bebf7b7079682b08571814c265b9177419019d658a115c021a395c78af2ab"
+    },
+    {
+      "path": "lib/persistence/statements/import-master-data.js",
+      "gitLfSha256": "cc5c499ba3317404527014fc204de2aa13e5d2b0b3f62548bafa475c8f382d59"
+    },
+    {
+      "path": "lib/persistence/statements/integration-runtime.js",
+      "gitLfSha256": "73ed3705334919550bbbc55e1d06a72d601706bcc19b6cdf743c2a3da3cf17b2"
+    },
+    {
+      "path": "lib/persistence/statements/loan-module.js",
+      "gitLfSha256": "165cf35bbbe8743e82da5d00b244403f66984a2a3f07cef4e6e3e170274863cc"
+    },
+    {
+      "path": "lib/persistence/statements/mobile-auth.js",
+      "gitLfSha256": "b3137b7242752bf15a8df22cc45de4f5fe66e167f9d34ae5a0e62944af0b403e"
+    },
+    {
+      "path": "lib/persistence/statements/organization-personnel.js",
+      "gitLfSha256": "01eaa071155b1102b7c65157dd37024b710bd6f9f0fc6ecc80644aba128d0d31"
+    },
+    {
+      "path": "lib/persistence/statements/personal-action-log.js",
+      "gitLfSha256": "725273f1424b83cd7a285ec35eddc61334cff2a7b52bc950435c1cb78edee848"
+    },
+    {
+      "path": "lib/persistence/statements/personal-notification-contacts.js",
+      "gitLfSha256": "841a1e2a33ddf7eb5ae83ba6e9938855aa6c1aed92bfb82d2bb5cf2d373703da"
+    },
+    {
+      "path": "lib/persistence/statements/personnel-learning-runs.js",
+      "gitLfSha256": "a23a1d2b1ba4654b2c3c7db5b9c8c2488b8ce99419854a780f520635a30d993c"
+    },
+    {
+      "path": "lib/persistence/statements/personnel-learning.js",
+      "gitLfSha256": "edf51330d0c3d2213f1be7e823d68c72622166e7b5ee6348a82057840bea28a9"
+    },
+    {
+      "path": "lib/persistence/statements/personnel-lifecycle.js",
+      "gitLfSha256": "3cbf1f39e7f4d704d1ee8333d7bff649f1ae33373131f7a6737a6f5cd33be354"
+    },
+    {
+      "path": "lib/persistence/statements/planning-settings.js",
+      "gitLfSha256": "d9b0f345663d011cda0503568e6b9a107db3923d461b0369eab39c161c8ec8d8"
+    },
+    {
+      "path": "lib/persistence/statements/portal-access.js",
+      "gitLfSha256": "2a26b086ec8ec8c883c075247e4066bd6725e7619e9117012c68b5b4793cbc53"
+    },
+    {
+      "path": "lib/persistence/statements/portal-birthday-presentations.js",
+      "gitLfSha256": "1a3a71b82c696f7384ca1acefc01e8bdc00b3e61ba8648f8e5d7b69182a1b69e"
+    },
+    {
+      "path": "lib/persistence/statements/runtime-recovery.js",
+      "gitLfSha256": "572e2e354f0f8771b2692a5a849b1f0f61c34f359471871a0397565a3f96a017"
+    },
+    {
+      "path": "lib/persistence/statements/sales-analytics.js",
+      "gitLfSha256": "51e3ae211de189403df769729c43aeebc2bb5c5f350bbe3d25cbf582b3a4e3e6"
+    },
+    {
+      "path": "lib/persistence/statements/sales-article-branch-orders.js",
+      "gitLfSha256": "82e355acfadc56cd6370bc7b9593de060277a1c043e5aa3ba9e52452d56f4e76"
+    },
+    {
+      "path": "lib/persistence/statements/sales-article-catalog.js",
+      "gitLfSha256": "d9fc108e409cb08aac2e6033bd37ff0e9c645049d58c0adeb24b76909a13695d"
+    },
+    {
+      "path": "lib/persistence/statements/sales-article-images.js",
+      "gitLfSha256": "d2ac7141ba8b800e4700b7114a18cb11244a7d19aae49fdb07b8e97ca489b70a"
+    },
+    {
+      "path": "lib/persistence/statements/sales-article-workspace.js",
+      "gitLfSha256": "ad36eb9b1b3ee5329034317648122018568f006cdbda28fda7c8663cf83dd1b6"
+    },
+    {
+      "path": "lib/persistence/statements/sales-report-jobs.js",
+      "gitLfSha256": "884f469f6489a1a4d915374e7dc3972e24ef930ba2a01394c2531be9da217292"
+    },
+    {
+      "path": "lib/persistence/statements/saturday-credit.js",
+      "gitLfSha256": "1ef57442b2ce63fe1f46f6f44d2a6959192003c4e0a5c1a06ea0d51e53cdd692"
+    },
+    {
+      "path": "lib/persistence/statements/sickness-amu-management.js",
+      "gitLfSha256": "21eb101f7a7888a77d968689e3f360388c21506f4bf9482ae19e55d0cff2f7d0"
+    },
+    {
+      "path": "lib/persistence/statements/staff-assignment-requests.js",
+      "gitLfSha256": "30c81a2d7022e4b65969ed2d66f5d8d22e650a219deac6201bca4290c3a45329"
+    },
+    {
+      "path": "lib/persistence/statements/system-center-metrics.js",
+      "gitLfSha256": "c244a61867985dffde4e84c83902998866380e2d4867bea20c5a3ec7612ad1e5"
+    },
+    {
+      "path": "lib/persistence/statements/time-tracking.js",
+      "gitLfSha256": "626238ea3d3d9fe66dcf5e1bc692d791efd48169cb0b7b1bb3dfb5dc2dfbbafe"
+    },
+    {
+      "path": "lib/persistence/statements/trade-annotations.js",
+      "gitLfSha256": "9aa4b3315e7fec31d643933eccea7cf01b95c38a2a631cd12a12a68dbc9b2094"
+    },
+    {
+      "path": "lib/persistence/statements/trade-insights.js",
+      "gitLfSha256": "9507ec6144cfa79a5117d8745aac97b50179e4f0bf6a7c0c6c71169920e94316"
+    },
+    {
+      "path": "lib/persistence/statements/ui-preferences.js",
+      "gitLfSha256": "94edc88bdb07431d93a4f1864d986c0c94557e137974650fc2f95f2a5ab8eb34"
+    },
+    {
+      "path": "lib/persistence/statements/wifi-automation.js",
+      "gitLfSha256": "6eeddc1466093ba4c4920c6edb28b8817b2e2bcc76f0e5dd15b20188e4015efe"
+    },
+    {
+      "path": "lib/persistence/statements/work-rule-governance.js",
+      "gitLfSha256": "8c60158a7ca39567b679300ce0f1d3009391de0548751fa9b1501e4963667e0a"
+    },
+    {
+      "path": "lib/persistence/statements/work-rule-store.js",
+      "gitLfSha256": "6b08e53838bd868703f68937b2994b8aa1db7702d35e29320f3d90bb8c257e25"
+    },
+    {
+      "path": "lib/persistence/statements/workflow-studio.js",
+      "gitLfSha256": "11cdb08a709b5f260cd0184d6f00ef662034fc6a8fbba4b245e0673ca11a1ee8"
+    },
+    {
+      "path": "lib/persistence/statements/xoffi-snapshots.js",
+      "gitLfSha256": "115ee4c9c4c055583ddf56f6329e4af368e7a5e8e3bdf64302288dce6b815214"
+    },
+    {
+      "path": "lib/sales-article-report-statements.js",
+      "gitLfSha256": "6eef4131ff281f7c966f4a19ba0a4ac8bacf31b217f3e1bd0584eebacb72b1de"
+    },
+    {
+      "path": "lib/sales-article-sales-catalog.js",
+      "gitLfSha256": "4a9c1ab82edda74109d0b51f9577a88ffb0a38065c308aa02430d24c6ed151a3"
+    },
+    {
+      "path": "lib/sales-article-sales-statements.js",
+      "gitLfSha256": "31e93f25e2f219b73c913f0b22ea568f19b4cab838b9c721ecd00cf8af4b5fa5"
+    },
+    {
+      "path": "lib/sales-article-table.js",
+      "gitLfSha256": "0748c7fb18d18b3daf042215ecdcd869fc4c1008c59205867c6054d1f2dd2e7c"
+    },
+    {
+      "path": "lib/sales-bwl-simulation-statements.js",
+      "gitLfSha256": "0c58ee1c7bc878f1c222a14419f802a24d1748cdf1a4ff690923c3fa2c9c8def"
+    },
+    {
+      "path": "lib/tradefoto-bestell/metadata.json",
+      "gitLfSha256": "585cd5fe9d71188e6b415a9e70425aa0f9bf430b5b6a97b1291d478009a91775"
+    },
+    {
+      "path": "lib/tradefoto-bestell/profiles.js",
+      "gitLfSha256": "84f667da5614b8a7608fee520bccddd6678927903695c641307bbe1d0fba2405"
+    },
+    {
+      "path": "lib/tradefoto-full-import-source.js",
+      "gitLfSha256": "2e8e2c8c0cdfd1e7ca73829b1a1490e7ddb3c07694379cadc95926ba2dc538bc"
+    },
+    {
+      "path": "lib/tradefoto-history-metadata.json",
+      "gitLfSha256": "98770faacac73038c8e97e0cdb7770db78975d07d67b98f51e6d4d7186ef04b1"
+    },
+    {
+      "path": "lib/tradefoto-history-profiles.js",
+      "gitLfSha256": "a205882c584e1aab463f15d03fc3f10c65f3d006253cd87639894b170103fa29"
+    },
+    {
+      "path": "lib/tradefoto-master-metadata.json",
+      "gitLfSha256": "91a71f9eed6c4986e18724d84d3a5ad0c967f2b4acb57c73c03a72efcb968f2c"
+    },
+    {
+      "path": "lib/tradefoto-master-profiles.js",
+      "gitLfSha256": "5c92927c99ee6083dcbbf0bf847b46cd615e5e057e2bba8503fe0c36ed3ae19f"
+    },
+    {
+      "path": "lib/tradefoto-supplement-profiles.js",
+      "gitLfSha256": "b1b105311ff6b259dd5de5779d60736920a808e4223e1af939ef1aca7cd87c12"
+    },
+    {
+      "path": "lib/tradefoto-supplement-reader.js",
+      "gitLfSha256": "81ecdf0b5f52a69d103a2ab37f01c23f62b6a069a80f069103a1c955f931e265"
+    },
+    {
+      "path": "lib/tradefoto-supplement-schema.json",
+      "gitLfSha256": "d98a93bdff7edf53a356ce22d67e65710a0155d4496b458539791eb5fa5447aa"
+    },
+    {
+      "path": "public/sales-article-column-widths.js",
+      "gitLfSha256": "173f8c056a3eebc833a5967ab55100ad6f4a818b8427ba6d30d34a6df68a2f8d"
+    },
+    {
+      "path": "public/table-layout.js",
+      "gitLfSha256": "96bb609b3bacb75f93f4348fc5fc4d68930277d950ffbe1f2a56e0fcc517a7eb"
+    }
+  ]
+}
