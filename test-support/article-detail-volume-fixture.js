@@ -34,6 +34,9 @@ async function addArticleVolume(pg,f,{historyRows=2100000,snapshotRows=237630}={
   console.log(JSON.stringify({volumePrepared:until,elapsedMs:Math.round(performance.now()-start)}));
  }
  for(const table of ['import_history_records','import_history_versions','import_history_references','import_history_snapshot_members','import_history_snapshots'])await pg.client.query('ANALYZE integration.'+table);
+ // Seeding has a separate budget. Publication must fit the real application's
+ // ten-second statement limit, including the trigger's completeness proof.
+ await pg.client.query("SET statement_timeout='10s'");
  const certifyStarted=performance.now();
  await pg.client.query("UPDATE integration.import_history_snapshots SET status='published',payload=$2 WHERE run_id=$1",[run.id,pg.protection.seal({version:1},headerContext({...h,status:'published'}))]);
  const certificationMs=performance.now()-certifyStarted;

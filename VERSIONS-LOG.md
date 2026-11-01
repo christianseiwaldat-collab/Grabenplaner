@@ -1,5 +1,12 @@
 # Versionsstatus
 
+## v0.92.97 Beta · Quellstand
+
+Begrenzte Bestandsfreigabe beim Trade-Import und beschleunigte Aktualisierung historischer Revisionen.
+Vollständigkeits-, Rechte- und Rücknahmeprüfungen bleiben erhalten.
+Große Linux-/PostgreSQL-Regression mit der tatsächlichen Zeitgrenze der Anwendung als CI-Voraussetzung.
+Auslieferung und gemessene Importlaufzeit werden getrennt im Betriebsnachweis bestätigt.
+
 ## v0.92.96 Beta · Quellstand
 
 Beschleunigte Artikelaufrufe und SQL-Statusaktualisierungen bei Datenübernahmen.

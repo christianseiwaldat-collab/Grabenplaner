@@ -14,6 +14,7 @@ const technical = Object.freeze({
     "gp.import_delete_migration_history", "gp.import_delete_performance_history",
     "gp.import_history_snapshots_migration_history",
     "gp.import_history_attestations_migration_history",
+    "gp.import_history_publication_performance_history",
   ]),
 });
 

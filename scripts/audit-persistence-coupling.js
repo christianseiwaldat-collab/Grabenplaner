@@ -134,6 +134,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'lib/persistence/postgresql/sales/import-delete-performance.js',
   'lib/persistence/postgresql/sales/import-history-snapshots.js',
   'lib/persistence/postgresql/sales/import-history-attestations.js',
+  'lib/persistence/postgresql/sales/import-history-publication-performance.js',
   'lib/persistence/postgresql/sales/import-history-snapshots-catalog.js',
   'test/postgresql-import-history-snapshots-migration.test.js',
   'lib/persistence/postgresql/operations/restore-capacity.js',

@@ -64,6 +64,9 @@ test('Native publication proofs invalidate on data changes and cannot be forged 
   for(const damaged of [false,true]){
    await pg.client.query('BEGIN');
    try{
+    const publicationPerformance=require('../lib/persistence/postgresql/sales/import-history-publication-performance');
+    const attestationBase=(await pg.client.query('SELECT target_sha256 FROM gp.import_history_attestations_migration_history')).rows[0].target_sha256;
+    await publicationPerformance.rollbackWithinTransaction(pg.client,attestationBase);
     for(const sql of migration.statements){const match=sql.match(/^CREATE FUNCTION gp\.(\w+)\(([^)]*)\)/);if(match)await pg.client.query('DROP FUNCTION gp.'+match[1]+'('+(match[2]?'TEXT':'')+') CASCADE');}
     await pg.client.query('DROP TABLE integration.import_history_snapshot_attestations, gp.import_history_attestations_migration_history');
     if(damaged)await pg.client.query('DELETE FROM integration.import_history_snapshot_members WHERE run_id=$1 AND row_number=1',[run.id]);
