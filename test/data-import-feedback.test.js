@@ -39,6 +39,21 @@ test('invoice preview explains the same-file sequence without clearing real issu
 });
 
 function issuePage(runId='lines',after=0){return {runId,table:'ARTIKEL_ZWEITEAN',rows:[{rowNumber:after+1,state:'invalid',issue:'IMPORT_TEXT_INVALID',fields:{EAN:'0000000000042',ZweitEAN:null},invalidFields:[{field:'ZweitEAN',code:'IMPORT_TEXT_INVALID',value:null}],impact:'optional_identifier',article:{status:'same_file',articleNumber:'000042',Artikelbezeichnung:'Camera <img src=x onerror=bad()>',Verkaufspreis:'5000',Filialbestand:null,Auslaufartikel:'false'}}],next:after?null:{after:1}};}
+test('every issue-preview text and quoted attribute treats imported markup as data',()=>{
+ const payload=`"><img src=x onerror=alert(1)>&'`,encoded='&quot;&gt;&lt;img src=x onerror=alert(1)&gt;&amp;&#39;';
+ const source=invoiceSource();source.tables[1].name=payload;source.tables[1].run.id=payload;
+ const result=issuePage(payload),row=result.rows[0];result.table=payload;
+ Object.assign(row,{rowNumber:payload,state:payload,issue:payload,fields:{[payload]:payload},invalidFields:[{field:payload,code:payload,value:payload}],impact:payload});
+ Object.assign(row.article,{articleNumber:payload,Artikelbezeichnung:payload,Verkaufspreis:payload,Filialbestand:payload,'Änderungsdatum':payload});
+ const view={sourceId:source.id,runId:payload,after:1,result};
+ const render=()=>UI.renderSource(source,{...projection,issuePreviewAvailable:true,issueView:view});
+ const html=render();assert.doesNotMatch(html,/<img|<script/);assert.ok(html.split(encoded).length>12);
+ assert.ok(html.includes(`data-i-issues="${encoded}"`));
+ assert.match(html,/Diese Quellzeile wird nicht übernommen/);
+ view.error=payload;const failed=render();assert.doesNotMatch(failed,/<img|<script/);
+ assert.ok(failed.includes(`Prüffälle konnten nicht geladen werden: ${encoded}`));
+ assert.ok(failed.includes(`data-i-issues="${encoded}"`));
+});
 test('issue preview appears before takeover, shows price and unknown stock, escapes source text and pages only issues',async t=>{
  const source=invoiceSource(),ui=await mount(t,source,(url,options)=>{
   if(url.endsWith('/context'))return {available:true,projection,issuePreviewAvailable:true};

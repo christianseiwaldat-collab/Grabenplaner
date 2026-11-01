@@ -71263,14 +71263,14 @@
       "rule": "javascript.lang.security.html-in-template-string",
       "path": "public/data-import.js",
       "start": {
-        "line": 110,
+        "line": 115,
         "column": 12
       },
       "end": {
         "line": 150,
         "column": 193
       },
-      "fingerprint": "1cfcf850332ca005b668faa32535d12da9f64482e54c81ce219933241fc9c69f",
+      "fingerprint": "4c9534e4b32ee5a7112d2c67cb59f8b69b38df96e62c8bf49b5ee3b0f2689d14",
       "sourceSha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
       "sourceSha256Variants": [
         "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
@@ -71278,7 +71278,7 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Individual changed-sink review 2026-11-01: Adds bounded issue pages from the authenticated prepare-only same-file projection. Every source value, field name, reason, identifier, error and text context is escaped with the existing five-character encoder; numeric output uses finite-number locale formatting. Static impact explanations contain no external data. Parent context is displayed only for same_file; missing stock is Unknown. Generation/source tokens reject stale responses and requests use the existing CSRF API. Existing HTML sinks consume authored renderSource/renderIssues only, never raw response HTML. The complete renderSource template adds only the reviewed renderIssues output. Original unrelated interpolation and encoding rules are preserved. Fresh scanner coordinates must match; expiry retained. Historical rationale: Actual native Linux evidence 40387646755 confirms this unchanged complete sink span at public/data-import.js:91:12. Retained individual historical rationale (older line anchors remain historical): The changed full source template and nested takeover/catalog/table templates render source names, source-state labels, table names, run IDs and gate labels through escape, and quarantine/deferred/applied/catalog counts through Number-based formatting. The newly added text is authored wording or fixed enum branches. Nested log/row/undo data attributes keep escaped run IDs. Cash takeover still adds explicit gate/invalid/publication/revision blockers. No imported row description, error or identifier is newly inserted unencoded. Reachability boundary: Existing prepare/apply/undo projections, source completion and pending-action checks remain. Displaying valid-row and quarantined counts does not replace server-side import validation; that backend change requires its separate review. Technical source/finding review dated 2026-10-25 with independent technical second review; no human approval is claimed. Delta reviewed 2026-10-26: The changed renderer retains all-five-character escaping for label, status, note, unit and new remainingLabel. Progress attributes and counters derive from safe nonnegative integers; estimation is finite numeric arithmetic. No human approval is claimed.",
+      "reason": "Authenticated Linux scan 41273342372 identifies the already reviewed full renderSource template at line 115, not the earlier retirement-only branch at line 110. Corrected only this coordinate binding; the source, classification and original expiry are retained. Individual changed-sink review 2026-11-01: Adds bounded issue pages from the authenticated prepare-only same-file projection. Every source value, field name, reason, identifier, error and text context is escaped with the existing five-character encoder; numeric output uses finite-number locale formatting. Static impact explanations contain no external data. Parent context is displayed only for same_file; missing stock is Unknown. Generation/source tokens reject stale responses and requests use the existing CSRF API. Existing HTML sinks consume authored renderSource/renderIssues only, never raw response HTML. The complete renderSource template adds only the reviewed renderIssues output. Original unrelated interpolation and encoding rules are preserved. Fresh scanner coordinates must match; expiry retained. Historical rationale: Actual native Linux evidence 40387646755 confirms this unchanged complete sink span at public/data-import.js:91:12. Retained individual historical rationale (older line anchors remain historical): The changed full source template and nested takeover/catalog/table templates render source names, source-state labels, table names, run IDs and gate labels through escape, and quarantine/deferred/applied/catalog counts through Number-based formatting. The newly added text is authored wording or fixed enum branches. Nested log/row/undo data attributes keep escaped run IDs. Cash takeover still adds explicit gate/invalid/publication/revision blockers. No imported row description, error or identifier is newly inserted unencoded. Reachability boundary: Existing prepare/apply/undo projections, source completion and pending-action checks remain. Displaying valid-row and quarantined counts does not replace server-side import validation; that backend change requires its separate review. Technical source/finding review dated 2026-10-25 with independent technical second review; no human approval is claimed. Delta reviewed 2026-10-26: The changed renderer retains all-five-character escaping for label, status, note, unit and new remainingLabel. Progress attributes and counters derive from safe nonnegative integers; estimation is finite numeric arithmetic. No human approval is claimed.",
       "reviewer": "Codex technical source and actual finding review; no human approval claimed; Codex bounded release delta review 2026-11-01, no human signoff",
       "reviewedOn": "2026-10-26",
       "expiresOn": "2026-11-17",
@@ -71300,6 +71300,15 @@
             "0de5e80bdf87ccf3b8cc175a5825a07bb27b0e941676882896c254f0708b80b3"
           ],
           "reason": "Retained individual historical context: Historical baseline context: Producer, output encoder, helper or regression source required by the attached individual contract. Current source delta review (2026-10-25): The complete quarantine/progress delta was reviewed. Totals keys are authored, inputs are count-normalized, and note/status text is fixed or encoded through the existing escape path. Prior prose line anchors are historical; current finding positions come from the exact native D result. Current delta reviewed 2026-10-26: The changed renderer retains all-five-character escaping for label, status, note, unit and new remainingLabel. Progress attributes and counters derive from safe nonnegative integers; estimation is finite numeric arithmetic. Earlier prose line anchors remain historical; actual finding coordinates are authoritative."
+        },
+        {
+          "path": "test/data-import-feedback.test.js",
+          "sha256": "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+          "sha256Variants": [
+            "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+            "cd63fb81094b8bc55e64c8ceb998cf53981262484054a20b36aa283d22368037"
+          ],
+          "reason": "Positive issue paging and same-file article display plus negative markup/quoted-attribute payloads across every preview value, retry error and run ID; stale-response and permission-denial checks are preserved."
         }
       ]
     },
@@ -113568,6 +113577,446 @@
             "7a9afe3ddbdddb1080a36cd0f54a69477cb4ad340d836d68dfb637e6dbb30216"
           ],
           "reason": "Hostile content in all four rendered fields, stale success/error responses, denied access, wrong article, deduplication and explicit retry tests."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/data-import.js",
+      "start": {
+        "line": 67,
+        "column": 12
+      },
+      "end": {
+        "line": 80,
+        "column": 17
+      },
+      "fingerprint": "ca4e2f4396032fabb2cce45260c01333887a0cc14a145502b68410eef499f56a",
+      "sourceSha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+      "sourceSha256Variants": [
+        "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+        "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "The outer issues section composes only the authored nested templates reviewed below. The section requires prepare and issue-preview availability. It consumes no raw server HTML; names, fields, messages and identifiers are escaped, and pagination attributes have literal names. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval.",
+      "reviewer": "Codex individual source and authenticated native Linux finding review; no human approval claimed",
+      "reviewedOn": "2026-11-01",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/data-import.js",
+          "sha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+          "sha256Variants": [
+            "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+            "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+          ],
+          "reason": "The outer issues section composes only the authored nested templates reviewed below. The section requires prepare and issue-preview availability. It consumes no raw server HTML; names, fields, messages and identifiers are escaped, and pagination attributes have literal names. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval."
+        },
+        {
+          "path": "test/data-import-feedback.test.js",
+          "sha256": "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+          "sha256Variants": [
+            "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+            "cd63fb81094b8bc55e64c8ceb998cf53981262484054a20b36aa283d22368037"
+          ],
+          "reason": "Positive issue paging and same-file article display plus negative markup/quoted-attribute payloads across every preview value, retry error and run ID; stale-response and permission-denial checks are preserved."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/data-import.js",
+      "start": {
+        "line": 69,
+        "column": 56
+      },
+      "end": {
+        "line": 69,
+        "column": 280
+      },
+      "fingerprint": "f31607ab04437b0ea5371d164cd0ece3e208bd8cba5f751fd1164352017c6242",
+      "sourceSha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+      "sourceSha256Variants": [
+        "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+        "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "Each table button has a literal type and data-i-issues attribute. The run ID is five-character escaped inside double quotes, the table name is escaped text, counts pass through Number/toLocaleString, and aria-pressed is chosen from two authored literal attributes. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval.",
+      "reviewer": "Codex individual source and authenticated native Linux finding review; no human approval claimed",
+      "reviewedOn": "2026-11-01",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/data-import.js",
+          "sha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+          "sha256Variants": [
+            "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+            "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+          ],
+          "reason": "Each table button has a literal type and data-i-issues attribute. The run ID is five-character escaped inside double quotes, the table name is escaped text, counts pass through Number/toLocaleString, and aria-pressed is chosen from two authored literal attributes. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval."
+        },
+        {
+          "path": "test/data-import-feedback.test.js",
+          "sha256": "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+          "sha256Variants": [
+            "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+            "cd63fb81094b8bc55e64c8ceb998cf53981262484054a20b36aa283d22368037"
+          ],
+          "reason": "Positive issue paging and same-file article display plus negative markup/quoted-attribute payloads across every preview value, retry error and run ID; stale-response and permission-denial checks are preserved."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/data-import.js",
+      "start": {
+        "line": 70,
+        "column": 104
+      },
+      "end": {
+        "line": 70,
+        "column": 270
+      },
+      "fingerprint": "b9ccdd4b953ba9a4e79ffeeb6da32342f270d8dafd5cff34b30098bb09b4c736",
+      "sourceSha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+      "sourceSha256Variants": [
+        "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+        "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "The failure branch escapes the exception message as text and escapes the run ID in the quoted retry attribute. The surrounding status paragraph and button are authored markup; the error cannot supply an element or attribute. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval.",
+      "reviewer": "Codex individual source and authenticated native Linux finding review; no human approval claimed",
+      "reviewedOn": "2026-11-01",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/data-import.js",
+          "sha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+          "sha256Variants": [
+            "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+            "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+          ],
+          "reason": "The failure branch escapes the exception message as text and escapes the run ID in the quoted retry attribute. The surrounding status paragraph and button are authored markup; the error cannot supply an element or attribute. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval."
+        },
+        {
+          "path": "test/data-import-feedback.test.js",
+          "sha256": "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+          "sha256Variants": [
+            "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+            "cd63fb81094b8bc55e64c8ceb998cf53981262484054a20b36aa283d22368037"
+          ],
+          "reason": "Positive issue paging and same-file article display plus negative markup/quoted-attribute payloads across every preview value, retry error and run ID; stale-response and permission-denial checks are preserved."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/data-import.js",
+      "start": {
+        "line": 71,
+        "column": 9
+      },
+      "end": {
+        "line": 79,
+        "column": 247
+      },
+      "fingerprint": "9ba155db59e20bf0d5f9f43db30e23d7497057e731080f52d686d6f9a823b157",
+      "sourceSha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+      "sourceSha256Variants": [
+        "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+        "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "The result-page shell inserts only a Number-formatted array count, an escaped table name, the separately reviewed per-row template and fixed empty/pagination messages. Neither a source value nor an API string is used as markup. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval.",
+      "reviewer": "Codex individual source and authenticated native Linux finding review; no human approval claimed",
+      "reviewedOn": "2026-11-01",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/data-import.js",
+          "sha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+          "sha256Variants": [
+            "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+            "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+          ],
+          "reason": "The result-page shell inserts only a Number-formatted array count, an escaped table name, the separately reviewed per-row template and fixed empty/pagination messages. Neither a source value nor an API string is used as markup. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval."
+        },
+        {
+          "path": "test/data-import-feedback.test.js",
+          "sha256": "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+          "sha256Variants": [
+            "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+            "cd63fb81094b8bc55e64c8ceb998cf53981262484054a20b36aa283d22368037"
+          ],
+          "reason": "Positive issue paging and same-file article display plus negative markup/quoted-attribute payloads across every preview value, retry error and run ID; stale-response and permission-denial checks are preserved."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/data-import.js",
+      "start": {
+        "line": 73,
+        "column": 18
+      },
+      "end": {
+        "line": 77,
+        "column": 571
+      },
+      "fingerprint": "839a37d9ef2d9b01909375ddda759df5d0d94f549b8e746e7e2d587b9bef54d2",
+      "sourceSha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+      "sourceSha256Variants": [
+        "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+        "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "The row template escapes the complete composed row-status string, every field key, and all nonempty field values through known. Its nested invalid-field and article templates are separately reviewed. Impact is a closed comparison selecting authored text, including a fixed fallback for unknown values. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval.",
+      "reviewer": "Codex individual source and authenticated native Linux finding review; no human approval claimed",
+      "reviewedOn": "2026-11-01",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/data-import.js",
+          "sha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+          "sha256Variants": [
+            "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+            "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+          ],
+          "reason": "The row template escapes the complete composed row-status string, every field key, and all nonempty field values through known. Its nested invalid-field and article templates are separately reviewed. Impact is a closed comparison selecting authored text, including a fixed fallback for unknown values. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval."
+        },
+        {
+          "path": "test/data-import-feedback.test.js",
+          "sha256": "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+          "sha256Variants": [
+            "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+            "cd63fb81094b8bc55e64c8ceb998cf53981262484054a20b36aa283d22368037"
+          ],
+          "reason": "Positive issue paging and same-file article display plus negative markup/quoted-attribute payloads across every preview value, retry error and run ID; stale-response and permission-denial checks are preserved."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/data-import.js",
+      "start": {
+        "line": 75,
+        "column": 41
+      },
+      "end": {
+        "line": 75,
+        "column": 228
+      },
+      "fingerprint": "6ea61fc733c42de24da457fcc7fe7fe5bf415a902207b3c15c80ab61593c8c29",
+      "sourceSha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+      "sourceSha256Variants": [
+        "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+        "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "The optional validation list only joins the reviewed li template over invalidFields. Its surrounding ul markup is constant; array length controls presence rather than interpolating HTML. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval.",
+      "reviewer": "Codex individual source and authenticated native Linux finding review; no human approval claimed",
+      "reviewedOn": "2026-11-01",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/data-import.js",
+          "sha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+          "sha256Variants": [
+            "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+            "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+          ],
+          "reason": "The optional validation list only joins the reviewed li template over invalidFields. Its surrounding ul markup is constant; array length controls presence rather than interpolating HTML. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval."
+        },
+        {
+          "path": "test/data-import-feedback.test.js",
+          "sha256": "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+          "sha256Variants": [
+            "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+            "cd63fb81094b8bc55e64c8ceb998cf53981262484054a20b36aa283d22368037"
+          ],
+          "reason": "Positive issue paging and same-file article display plus negative markup/quoted-attribute payloads across every preview value, retry error and run ID; stale-response and permission-denial checks are preserved."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/data-import.js",
+      "start": {
+        "line": 75,
+        "column": 77
+      },
+      "end": {
+        "line": 75,
+        "column": 211
+      },
+      "fingerprint": "a8dba976deab644cb967260190ec68ec856da5f012be4e66ff4ad3cee3ef34ba",
+      "sourceSha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+      "sourceSha256Variants": [
+        "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+        "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "Each validation li escapes the field name, the fixed-label-or-raw-code result and the optional value through known. known escapes all nonempty values. None of these imported values is interpreted as a tag or attribute. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval.",
+      "reviewer": "Codex individual source and authenticated native Linux finding review; no human approval claimed",
+      "reviewedOn": "2026-11-01",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/data-import.js",
+          "sha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+          "sha256Variants": [
+            "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+            "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+          ],
+          "reason": "Each validation li escapes the field name, the fixed-label-or-raw-code result and the optional value through known. known escapes all nonempty values. None of these imported values is interpreted as a tag or attribute. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval."
+        },
+        {
+          "path": "test/data-import-feedback.test.js",
+          "sha256": "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+          "sha256Variants": [
+            "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+            "cd63fb81094b8bc55e64c8ceb998cf53981262484054a20b36aa283d22368037"
+          ],
+          "reason": "Positive issue paging and same-file article display plus negative markup/quoted-attribute payloads across every preview value, retry error and run ID; stale-response and permission-denial checks are preserved."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/data-import.js",
+      "start": {
+        "line": 76,
+        "column": 21
+      },
+      "end": {
+        "line": 76,
+        "column": 444
+      },
+      "fingerprint": "7bf4fef0d5edead864c2146e52a840520adf7c00bf62fffee64cfecff399fe92",
+      "sourceSha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+      "sourceSha256Variants": [
+        "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+        "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "Same-file article details use known for article number, description and modification date. Numeric price and stock use a finite Number/localized-number path or the five-character escape fallback. Discontinued status chooses fixed Ja/Nein/Unbekannt labels. All markup and the same-file condition are authored. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval.",
+      "reviewer": "Codex individual source and authenticated native Linux finding review; no human approval claimed",
+      "reviewedOn": "2026-11-01",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/data-import.js",
+          "sha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+          "sha256Variants": [
+            "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+            "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+          ],
+          "reason": "Same-file article details use known for article number, description and modification date. Numeric price and stock use a finite Number/localized-number path or the five-character escape fallback. Discontinued status chooses fixed Ja/Nein/Unbekannt labels. All markup and the same-file condition are authored. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval."
+        },
+        {
+          "path": "test/data-import-feedback.test.js",
+          "sha256": "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+          "sha256Variants": [
+            "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+            "cd63fb81094b8bc55e64c8ceb998cf53981262484054a20b36aa283d22368037"
+          ],
+          "reason": "Positive issue paging and same-file article display plus negative markup/quoted-attribute payloads across every preview value, retry error and run ID; stale-response and permission-denial checks are preserved."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/data-import.js",
+      "start": {
+        "line": 76,
+        "column": 446
+      },
+      "end": {
+        "line": 76,
+        "column": 619
+      },
+      "fingerprint": "5f41c71dc1628af2bbd6cc7be4f1a5e016716aed96c120391e67c534f98e54e7",
+      "sourceSha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+      "sourceSha256Variants": [
+        "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+        "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "The unavailable/ambiguous article branch compares a status value and selects one of two fixed sentences. No status or article text is reflected into this template. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval.",
+      "reviewer": "Codex individual source and authenticated native Linux finding review; no human approval claimed",
+      "reviewedOn": "2026-11-01",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/data-import.js",
+          "sha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+          "sha256Variants": [
+            "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+            "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+          ],
+          "reason": "The unavailable/ambiguous article branch compares a status value and selects one of two fixed sentences. No status or article text is reflected into this template. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval."
+        },
+        {
+          "path": "test/data-import-feedback.test.js",
+          "sha256": "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+          "sha256Variants": [
+            "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+            "cd63fb81094b8bc55e64c8ceb998cf53981262484054a20b36aa283d22368037"
+          ],
+          "reason": "Positive issue paging and same-file article display plus negative markup/quoted-attribute payloads across every preview value, retry error and run ID; stale-response and permission-denial checks are preserved."
+        }
+      ]
+    },
+    {
+      "rule": "javascript.lang.security.html-in-template-string",
+      "path": "public/data-import.js",
+      "start": {
+        "line": 79,
+        "column": 55
+      },
+      "end": {
+        "line": 79,
+        "column": 142
+      },
+      "fingerprint": "95ba09310920429cf6ef2417f807565c4efcb9e99c65e7109aceeec99ca6775d",
+      "sourceSha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+      "sourceSha256Variants": [
+        "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+        "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+      ],
+      "classification": "reviewed_false_positive",
+      "priority": "P3",
+      "reason": "The first-page button has literal markup and a quoted data-i-issues value encoded by the five-character escape function. The after flag only controls whether this fixed button is shown. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval.",
+      "reviewer": "Codex individual source and authenticated native Linux finding review; no human approval claimed",
+      "reviewedOn": "2026-11-01",
+      "expiresOn": "2026-11-17",
+      "context": [
+        {
+          "path": "public/data-import.js",
+          "sha256": "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+          "sha256Variants": [
+            "e3b38acbd484c001d32913d1d336de668d702623725d4f449e68a1e05582945b",
+            "edb7ad237129d8a3a955201c35020f02ceb559a27b4916223703852cdbb77c64"
+          ],
+          "reason": "The first-page button has literal markup and a quoted data-i-issues value encoded by the five-character escape function. The after flag only controls whether this fixed button is shown. The shared encoder replaces ampersand, both quotes and angle brackets. Synthetic hostile markup/attribute tests passed locally; no raw HTML input or permission bypass is approved. This is a technical false-positive review, not human approval."
+        },
+        {
+          "path": "test/data-import-feedback.test.js",
+          "sha256": "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+          "sha256Variants": [
+            "6e19df0f0b5d6b0d7bf3f045556b0aad359190770e935e089ac7bfbf0534be9f",
+            "cd63fb81094b8bc55e64c8ceb998cf53981262484054a20b36aa283d22368037"
+          ],
+          "reason": "Positive issue paging and same-file article display plus negative markup/quoted-attribute payloads across every preview value, retry error and run ID; stale-response and permission-denial checks are preserved."
         }
       ]
     }
