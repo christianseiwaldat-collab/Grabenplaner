@@ -7,7 +7,7 @@ Vollständigkeits-, Rechte- und Rücknahmeprüfungen bleiben erhalten.
 Große Linux-/PostgreSQL-Regression mit der tatsächlichen Zeitgrenze der Anwendung als CI-Voraussetzung.
 Auslieferung und gemessene Importlaufzeit werden getrennt im Betriebsnachweis bestätigt.
 
-## v0.92.96 Beta · Quellstand
+Ebenfalls im aktuellen Quellstand enthalten:
 
 Beschleunigte Artikelaufrufe und SQL-Statusaktualisierungen bei Datenübernahmen.
 Problematische Importzeilen mit Artikelangaben bereits vor der Übernahme sichtbar.
