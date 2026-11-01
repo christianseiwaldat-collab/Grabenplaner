@@ -91,6 +91,7 @@ jobs:
       TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/grabenplaner_test
       TEST_POSTGRESQL_BIN: /usr/lib/postgresql/18/bin
       GP_PG_API_FIXTURE_BRIDGE: '1'
+      GP_IMPORT_STATE_VOLUME_CHECK: '1'
     services:
       postgres:
         image: postgres:18.4-alpine
