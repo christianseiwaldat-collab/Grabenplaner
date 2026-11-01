@@ -7,6 +7,7 @@
     <title>Grabenplaner · Mitarbeiterportal</title>
     <link rel="icon" type="image/svg+xml" href="/assets/webicon.svg" data-brand-icon />
     <link rel="stylesheet" href="/portal.css" />
+    <link rel="stylesheet" href="/emma-contact.css" />
     <link rel="stylesheet" href="/passkey-auth.css" />
     <link rel="stylesheet" href="/learning-library.css" />
     <link rel="stylesheet" href="/personnel-learning-workspace.css" />
@@ -68,6 +69,7 @@
           <div><strong id="pendingCandidateEvaluationTitle">Bewerbung bewerten</strong><p id="pendingCandidateEvaluationSummary" role="status" aria-live="polite"></p></div>
           <a class="primary" id="pendingCandidateEvaluationLink">Bewertung öffnen</a>
         </aside>
+        <div class="portal-navigation">
         <nav class="portal-tabs" role="tablist" aria-label="Mitarbeiterportal">
           <button class="hidden mobile-home-tab" id="mobileHomeTab" data-tab="home" type="button" role="tab" aria-selected="false" aria-controls="mobileHomeView" tabindex="-1">Start</button>
           <button data-tab="settings" type="button" role="tab" aria-selected="false" aria-controls="settingsView" tabindex="-1">Einstellungen</button>
@@ -90,6 +92,12 @@
           <button id="amuTab" data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">Krank &amp; AUM</button>
           <button class="hidden leadership-tab" id="leadershipMoreTab" data-tab="leadershipMore" data-mobile-module="more" type="button" role="tab" aria-selected="false" aria-controls="leadershipMoreView" tabindex="-1">Mehr</button>
         </nav>
+              <a class="emma-contact" id="emmaWhatsappContact" hidden target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="Emma auf WhatsApp schreiben">
+                <svg class="emma-contact-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.7 15L2 22l5.2-1.3A10 10 0 1 0 12 2Zm0 2a8 8 0 1 1-4 14.9l-.4-.2-2.8.7.7-2.7-.3-.5A8 8 0 0 1 12 4Zm-3 3c-.3 0-.7.1-.9.5-.6.6-.9 1.3-.8 2.1.1 2.8 3.4 6.3 6.4 7 .7.2 1.8.2 2.4-.3.6-.4 1-1.2 1-1.7 0-.2-.1-.3-.4-.4l-1.8-.9c-.2-.1-.4-.1-.5.1l-.8 1c-.2.2-.3.2-.6.1-1.3-.5-2.4-1.5-3.1-2.7-.1-.2-.1-.4.1-.6l.6-.7c.1-.2.2-.4.1-.6l-.9-2.2C9.6 7.1 9.4 7 9 7Z"/></svg>
+                <span class="emma-contact-avatar" aria-hidden="true"><span data-emma-fallback>E</span><img alt="" hidden /></span>
+                <span class="emma-contact-copy"><strong>Emma</strong><small>schreiben</small></span>
+              </a>
+        </div>
 
         <section class="portal-view" id="branchArticlesView" role="tabpanel" aria-labelledby="branchArticlesTab">
           <div class="view-heading"><div><span class="eyebrow">Filialkonto</span><h1>Artikelsuche</h1><p>Artikelnummern, Bezeichnungen, EAN und Verkaufspreise aus dem gemeinsamen Artikelstamm.</p></div></div>
@@ -105,7 +113,7 @@
         </section>
 
         <section class="portal-view" id="settingsView" role="tabpanel">
-          <div class="view-heading"><div><span class="eyebrow">Persönlich</span><h1>Einstellungen</h1><p>Startseite, mobile Navigation, persönliches Portaldesign, freiwillige Funktionen und Sicherheit an einem Ort.</p></div><button class="text-button mobile-settings-home" id="mobileSettingsHome" type="button">Zur Startseite</button></div>
+          <div class="view-heading"><div><span class="eyebrow">Persönlich</span><h1>Einstellungen</h1><p>Startseite, persönliches Portaldesign, freiwillige Funktionen und Sicherheit an einem Ort.</p></div><button class="text-button mobile-settings-home" id="mobileSettingsHome" type="button">Zur Startseite</button></div>
           <div class="portal-settings-stack">
             <details class="portal-card portal-settings-section" id="mobileHomeSettingsCard">
               <summary class="portal-settings-summary">
@@ -293,7 +301,13 @@
         </section>
 
         <section class="portal-view mobile-home-view" id="mobileHomeView" role="tabpanel" aria-labelledby="mobileHomeTab">
-          <div class="mobile-home-heading"><span class="eyebrow">Mitarbeiterportal</span><h1>Startseite</h1><p>Wähle einen Bereich aus.</p></div>
+          <div class="mobile-home-heading">
+            <span class="eyebrow">Mitarbeiterportal</span>
+            <div class="mobile-home-title-row">
+              <h1>Startseite</h1>
+            </div>
+            <p>Wähle einen Bereich aus.</p>
+          </div>
           <nav class="portal-request-shortcuts" aria-label="Direkt beantragen">
             <button class="hidden" type="button" data-request-tab="timeOff"><strong>Zeitausgleich</strong><span>beantragen</span></button>
             <button class="hidden" type="button" data-request-tab="vacation"><strong>Urlaub</strong><span>beantragen</span></button>
@@ -410,6 +424,9 @@
             <button id="leadershipAmuShortcut" type="button" data-more-tab="amu"><strong>Krankmeldung &amp; AUM</strong><span>Krankmelden oder Dokument senden</span></button>
             <button class="hidden" id="leadershipLoanShortcut" type="button" data-more-tab="loan"><strong>Leihe</strong><span>Artikel ausgeben, offene Leihen prüfen oder zurücknehmen</span></button>
             <button id="leadershipProcessTasksShortcut" type="button" data-more-tab="processTasks"><strong>Meine Prozessaufgaben</strong><span>Offene Arbeitsschritte ansehen und abschließen</span></button>
+            <button class="hidden" type="button" data-more-tab="branchOrders"><strong>Filialbestellung</strong><span>Bestellung erfassen oder fortsetzen</span></button>
+            <button class="hidden" type="button" data-more-tab="branchVacation"><strong>Urlaubsplanung</strong><span>Genehmigte Urlaubstage ansehen</span></button>
+            <button class="hidden" type="button" data-more-tab="learningDashboard"><strong>Schulungen</strong><span>Fortschritte und Fähigkeiten</span></button>
             <button type="button" id="leadershipSettingsButton"><strong>Einstellungen</strong><span>Passwort und WLAN-Zeitvorschläge verwalten</span></button>
             <a id="leadershipDesktopLink" href="/?desktop=1"><strong>Desktop-Planung</strong><span>Vollständige Verwaltung am großen Bildschirm</span></a>
           </div>
@@ -910,6 +927,7 @@
     <script src="/gp-private-workspaces.js"></script>
     <link rel="stylesheet" href="/voice-assistant.css" />
     <script src="/voice-assistant.js"></script>
+    <script src="/emma-contact.js"></script>
     <script src="/portal.js"></script>
   </body>
 </html>

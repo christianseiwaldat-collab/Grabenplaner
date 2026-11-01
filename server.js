@@ -6374,7 +6374,7 @@ function installationFeaturesForApiPath(apiPath) {
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:wifi-automation|wifi-suggestions)|portal\/v1\/wifi-automation|wifi(?:-|\/|$)|integrations\/wifi)/.test(requestPath)) required.add("wifiSuggestions");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence|xoffi-plan-comparison)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
-  if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
+  if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|emma-contact(?:\/|$)|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
   if (/^\/portal\/v1\/personnel-lifecycle(?:\/|$)/.test(requestPath)) required.add("personnelLifecycle");
   if (/^\/portal\/v1\/me\/candidate-evaluations(?:\/|$)/.test(requestPath)) required.add("personnelLifecycle");
   if (/^\/integrations\/(?:personnel-import|payroll-export|payroll-handoffs|profiles|runs|connections|contracts)(?:\/|$)/.test(requestPath)) required.add("integrations");
@@ -51725,6 +51725,69 @@ app.put("/api/portal/v1/birthday-presentation-settings/delegates/:employeeNumber
 app.get("/api/portal/v1/greeting-settings", (request, response) => {
   requireAdminHrOrLocal(request, "hr:settings");
   response.json({ settings: portalGreetingSettings(), canChange: true });
+});
+
+const emmaContact = require("./lib/emma-contact");
+
+async function emmaContactPersonnelPhone(repository = organizationPersonnelRepository) {
+  // Publish only the explicitly designated business contact, never an arbitrary personnel record.
+  const employee = await repository.getEmployeeActivation(emmaContact.EMPLOYEE_NUMBER);
+  if (!employee || Number(employee.active) !== 1) return "";
+  const profile = await personnelSensitiveProfile(emmaContact.EMPLOYEE_NUMBER, repository);
+  try { return emmaContact.phoneNumber(profile.phone); } catch { return ""; }
+}
+
+async function emmaContactDeveloper(request) {
+  const fresh = await loadPortalSessionFromRequest(request, { touch: false });
+  requirePersonalEmailPortalSession({ portalSession: fresh });
+  const actor = requireEmployeePortalSession({ portalSession: fresh }, "settings:write");
+  if (actor.role !== "developer") throw httpError(403, "Nur der Developer kann Emmas Kontakt ändern.", "EMMA_CONTACT_DENIED");
+  return actor;
+}
+
+app.get("/api/portal/v1/emma-contact", async (request, response) => {
+  requirePersonalEmailPortalSession(request);
+  response.setHeader("Cache-Control", "private, no-store");
+  const raw = getPortalSettings()[emmaContact.SETTINGS_KEY];
+  const phone = emmaContact.storedSettings(raw).enabled ? await emmaContactPersonnelPhone() : "";
+  response.json({ contact: emmaContact.publicContact(raw, phone) });
+});
+
+app.get("/api/portal/v1/emma-contact/settings", async (request, response) => {
+  await emmaContactDeveloper(request);
+  await refreshPortalSettingsSnapshot();
+  await emmaContactDeveloper(request);
+  response.setHeader("Cache-Control", "private, no-store");
+  response.json(emmaContact.settingsPayload(getPortalSettings()[emmaContact.SETTINGS_KEY], await emmaContactPersonnelPhone()));
+});
+
+app.put("/api/portal/v1/emma-contact/settings", async (request, response) => {
+  const actor = await emmaContactDeveloper(request);
+  assertPortalCsrf(request);
+  const body = request.body;
+  if (!body || Object.keys(body).some(key => !["settings", "revision"].includes(key)) || typeof body.revision !== "string") {
+    throw httpError(400, "Bitte zuerst die gespeicherten Einstellungen laden.", "EMMA_CONTACT_INVALID");
+  }
+  const settings = await emmaContact.validateSettings(body.settings);
+  await persistenceProvider.transaction(async executor => {
+    const repositories = createApplicationRepositories(executor);
+    const liveActor = await livePersonnelLearningRoleAdministrationActor(actor, repositories.organizationPersonnel);
+    assertLivePortalRoutePermission(liveActor, "settings:write", { allowedRoles: new Set(["developer"]) });
+    if (liveActor.mustChangePassword) throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+    if (settings.enabled && !await emmaContactPersonnelPhone(repositories.organizationPersonnel)) {
+      throw httpError(400, "Bitte zuerst im Personalakt von Emma eine gültige Telefonnummer mit Landesvorwahl hinterlegen. Emma muss aktiv sein.", "EMMA_CONTACT_PHONE_REQUIRED");
+    }
+    const rows = await repositories.planningSettings.listPortalSettings();
+    const raw = rows.find(row => row.key === emmaContact.SETTINGS_KEY)?.value;
+    if (emmaContact.settingsPayload(raw).revision !== body.revision) throw httpError(409, "Emmas Kontakt wurde inzwischen geändert. Bitte den gespeicherten Stand laden.", "EMMA_CONTACT_CHANGED");
+    const before = emmaContact.storedSettings(raw);
+    await repositories.planningSettings.upsertPortalSetting({ key: emmaContact.SETTINGS_KEY, value: JSON.stringify(settings) });
+    await repositories.organizationPersonnel.insertAudit(liveActor.employeeNumber, "emma.contact.update", "portal_settings", emmaContact.SETTINGS_KEY,
+      JSON.stringify({ enabled: settings.enabled, imageChanged: before.avatar !== settings.avatar, hasImage: Boolean(settings.avatar), phoneSource: "personnel-record" }));
+  }, { isolation: "serializable" });
+  await refreshPortalSettingsSnapshot();
+  response.setHeader("Cache-Control", "private, no-store");
+  response.json(emmaContact.settingsPayload(getPortalSettings()[emmaContact.SETTINGS_KEY], await emmaContactPersonnelPhone()));
 });
 
 app.put("/api/portal/v1/greeting-settings", async (request, response) => {

@@ -1,5 +1,12 @@
 # Versionsstatus
 
+## v0.92.96 Beta · Quellstand
+
+Beschleunigte Artikelaufrufe und SQL-Statusaktualisierungen bei Datenübernahmen.
+Problematische Importzeilen mit Artikelangaben bereits vor der Übernahme sichtbar.
+Mobiler WhatsApp-Kontakt für Emma und vereinfachte Navigation im Mitarbeiterportal.
+Aktualisierte Sicherheitsbewertungen und vollständige Linux-/PostgreSQL-Prüfungen als Auslieferungsvoraussetzung.
+
 ## v0.92.95 Beta · Quellstand
 
 Optionale Passkeys mit gesonderter Schemaaktivierung und verbesserte Sicherheitsprüfungen.

@@ -55,6 +55,30 @@
     return `Zeile ${row.rowNumber} · ${states[row.state]||row.state||'Unbekannter Status'}${issue?' · '+issue:''}`;
   }
   const errorMessage=error=>error?.name==='AbortError'?'Die Anfrage wurde unterbrochen. Bitte den Status aktualisieren; eine bereits gesendete Übernahme kann am Server weiterlaufen.':error?.message||'Der Status konnte nicht geladen werden. Bitte erneut aktualisieren.';
+  const issueTables=source=>(source.tables||[]).filter(t=>t.run?.counts?.invalid>0||t.run?.counts?.conflict>0);
+  const issueKey=(source,runId)=>JSON.stringify([source.id,...(source.tables||[]).filter(t=>t.run?.id===runId||t.name==='ARTIKEL_STAMM').map(t=>[t.run?.id,t.run?.status,t.run?.counts?.invalid,t.run?.counts?.conflict])]);
+  function renderIssues(source,projection) {
+    const tables=issueTables(source);
+    if(!tables.length||source.storage==='cash-compact-v1'||!projection.issuePreviewAvailable||!projection.prepare)return '';
+    const view=projection.issueView?.sourceId===source.id?projection.issueView:null;
+    const known=value=>value===null||value===undefined||value===''?'Unbekannt':escape(value);
+    const decimal=value=>value===null||value===undefined||value===''?'Unbekannt':Number.isFinite(Number(value))?Number(value).toLocaleString('de-AT',{maximumFractionDigits:4}):escape(value);
+    const reasons={IMPORT_FIELD_MISSING:'Feld fehlt',IMPORT_TEXT_INVALID:'Fehlender oder ungültiger Text',IMPORT_FIELD_INVALID:'Ungültige Feldangabe',IMPORT_KEY_MISSING:'Zuordnung fehlt',IMPORT_INTEGER_INVALID:'Ungültige ganze Zahl',IMPORT_SOURCE_DECIMAL_INVALID:'Ungültige Zahl',IMPORT_VALUE_INVALID:'Ungültiger Wert',IMPORT_DECIMAL_INVALID:'Ungültige Dezimalzahl',IMPORT_DATE_INVALID:'Ungültiges Datum',IMPORT_CIVIL_DATETIME_INVALID:'Ungültiges Datum oder Uhrzeit'};
+    return `<section class="data-import-review-summary data-import-issues" aria-label="Problematische Importzeilen"><h3>Problematische Zeilen · vor der Übernahme prüfen</h3>
+      <p>Diese Zeilen bleiben zurückgestellt. Artikelangaben stammen aus derselben Importdatei; fehlende Angaben bedeuten nicht Bestand null. Während der Prüfung können weitere Prüffälle hinzukommen.</p>
+      <div class="data-import-actions">${tables.map(t=>`<button type="button" data-i-issues="${escape(t.run.id)}"${view?.runId===t.run.id?' aria-pressed="true"':' aria-pressed="false"'}>${escape(t.name)} · ${number((t.run.counts.invalid||0)+(t.run.counts.conflict||0))}</button>`).join('')}</div>
+      ${!view||view.loading?'<p role="status">Problematische Zeilen werden geladen …</p>':view.error?`<p role="status">Prüffälle konnten nicht geladen werden: ${escape(view.error)}</p><button type="button" data-i-issues="${escape(view.runId)}">Erneut laden</button>`:
+        `<p>${number(view.result.rows.length)} Prüffälle auf dieser Seite · ${escape(view.result.table)}.</p>${view.result.rows.map(row=>{
+          const article=row.article,found=article&&article.status==='same_file';
+          return `<article class="data-import-issue"><h4>${escape(rowStatusText(source,view.runId,row))}</h4>
+            <p>${Object.entries(row.fields||{}).map(([key,value])=>`${escape(key)}: ${known(value)}`).join(' · ')}</p>
+            ${row.invalidFields?.length?`<ul>${row.invalidFields.map(field=>`<li>${escape(field.field)}: ${escape(reasons[field.code]||field.code)}${field.value!==null?` · Wert: ${known(field.value)}`:''}</li>`).join('')}</ul>`:''}
+            ${found?`<p><strong>Artikel ${known(article.articleNumber)} · ${known(article.Artikelbezeichnung)}</strong><br>Verkaufspreis laut Quelldatei: ${decimal(article.Verkaufspreis)} · Filialbestand laut Artikelstamm: ${decimal(article.Filialbestand)}<br>Auslaufartikel: ${article.Auslaufartikel==='true'?'Ja':article.Auslaufartikel==='false'?'Nein':'Unbekannt'} · Letzte Änderung laut Quelle: ${known(article['Änderungsdatum'])}</p>`:`<p>Artikelbezeichnung, Preis und Bestand: ${article?.status==='ambiguous'?'Zuordnung mehrdeutig; keine Artikelangaben geraten.':'in dieser Vorschau nicht ermittelbar.'}</p>`}
+            <p>${row.impact==='optional_identifier'?'Nur die zusätzliche EAN-Zuordnung wird zurückgestellt. Ein ansonsten gültiger Artikel kann ohne diesen zweiten EAN übernommen werden.':row.impact==='stock_snapshot'?'Die unvollständige Bestandsaufnahme wird nicht veröffentlicht. Der bisherige vollständige Bestandsstand bleibt erhalten.':row.impact==='article'?'Diese Artikelzeile wird nicht übernommen; bestehende Artikeldaten bleiben erhalten.':'Diese Quellzeile wird nicht übernommen; weitere Auswirkungen hängen von ihren Zuordnungen ab.'}</p></article>`;
+        }).join('')}${!view.result.rows.length?'<p>Auf dieser Seite sind keine Prüffälle mehr vorhanden. Bitte den Status aktualisieren.</p>':''}
+        <div class="data-import-actions">${view.after?`<button type="button" data-i-issues="${escape(view.runId)}">Erste Prüffälle</button>`:''}${view.result.next?'<button type="button" data-i-issues-next>Weitere Prüffälle</button>':''}</div>`}
+      </section>`;
+  }
   function contentDate(source) {
     const date=source.contentDate;
     if(date?.status!=='complete')return source.complete?(source.background?.phase==='content-date'&&source.active?'Wird ermittelt …':'Noch nicht ermittelt'):'Nach dem Einlesen';
@@ -102,6 +126,7 @@
         <div class="data-import-actions">${fileDeleted?'':['paused','failed'].includes(job.status)?`<button type="button" data-i-job="retry" ${!projection.prepare||job?.phase==='applying'&&!projection.apply?'disabled':''}>${jobName} fortsetzen</button>`:`<button type="button" data-i-job="pause" ${!projection.prepare||job?.phase==='applying'&&!projection.apply?'disabled':''}>${jobName} pausieren</button>`}</div>`
         :source.error?`<p role="status">Unterbrechung: ${escape(source.error)}. Bitte denselben Dateistand erneut auswählen; bereits geprüfte Pakete bleiben erhalten.</p>`:''}
       ${renderReviewSummary(source,projection.pendingAction,projection.uncertainApply)}
+      ${renderIssues(source,projection)}
       ${renderSourceAdmission(source,projection)}
       <div class="data-import-actions">
         ${source.storage==='cash-compact-v1'?`<button type="button" data-i-action="apply" ${!projection.apply||!projection.prepare||!source.complete||source.active||source.status!=='ready'||sourceAdmission(source).blocked.length||sourceAdmission(source).invalid||!source.cashPublication?.available||source.cashPublication.active||!Number.isInteger(source.cashPublication.revision)?'disabled':''}>Übernehmen</button>`:''}
@@ -127,13 +152,13 @@
   function mount(root,{api,confirmAction=message=>globalThis.confirm(message)}) {
     const body=root.querySelector('[data-import-body]');
     let disposed=false,generation=0,controller=null,timer=null,context=null,selected=null,cursor=null,sourcePage={},working=false,pendingAction=null,unconfirmedCashSource=null,logState=null,publicationView=null,uploadPolicySave=null;
-    const progressTracker=progressUI.createTracker();
+    const progressTracker=progressUI.createTracker();let issueView=null;
     const el=name=>body.querySelector(`[data-i="${name}"]`);
     const containers=[];
     for(let node=root.parentElement;node;node=node.parentElement) if(node.matches?.('.view,.settings-section,details')) containers.push(node);
     const visible=()=>root.open && containers.every(node=>!node.classList.contains('hidden')
       && (node.matches('details')?node.open:node.classList.contains('active')));
-    const cancel=()=>{generation++;controller?.abort();controller=null;clearTimeout(timer);working=false;pendingAction=null;uploadPolicySave=null;};
+    const cancel=()=>{generation++;controller?.abort();controller=null;clearTimeout(timer);working=false;pendingAction=null;uploadPolicySave=null;if(issueView?.loading)issueView=null;};
     async function request(url,options={}) {return api(url,{...options,signal:controller?.signal});}
     const post=(url,data={})=>request(url,{method:'POST',body:JSON.stringify(data)});
     const message=text=>{if(el('message'))el('message').textContent=text;};
@@ -159,15 +184,33 @@
       }finally{if(uploadPolicySave===pending){uploadPolicySave=null;updateUploadTimeout();}}
     }
     let renderedSourceId=null;
+    async function loadIssues(runId,after=0,force=false){
+      if(!selected||!context?.issuePreviewAvailable||!context.projection?.prepare||selected.storage==='cash-compact-v1')return;
+      const tables=issueTables(selected);runId=runId||tables[0]?.run.id;
+      if(!tables.some(t=>t.run.id===runId)){issueView=null;return;}
+      const key=issueKey(selected,runId);
+      if(!force&&issueView?.key===key)return;
+      const ticket=generation,sourceId=selected.id;
+      const pending={sourceId,runId,key,after,loading:true};issueView=pending;renderSelected();
+      try {
+        const result=await post(`/api/data-import/sources/${sourceId}/issues`,{runId,after,limit:25});
+        if(disposed||ticket!==generation||selected?.id!==sourceId||issueView!==pending)return;
+        issueView={...pending,loading:false,result};
+      }catch(error){
+        if(disposed||ticket!==generation||selected?.id!==sourceId||issueView!==pending)return;
+        issueView={...pending,loading:false,error:errorMessage(error)};
+      }
+      renderSelected();
+    }
     function renderSelected(){
       updateUploadTimeout();
       const detail=el('detail');if(!detail)return;
       const sameSource=selected?.id===renderedSourceId,technicalOpen=sameSource&&detail.querySelector('.data-import-technical')?.open;
       const focused=globalThis.document?.activeElement,restoreFocus=sameSource&&focused&&detail.contains(focused);
-      const attributes=['data-i-action','data-i-job','data-i-delete-upload','data-i-delete-source','data-i-publish','data-i-log','data-i-rows','data-i-undo-preview','data-i-check-status'];
+      const attributes=['data-i-action','data-i-job','data-i-delete-upload','data-i-delete-source','data-i-publish','data-i-log','data-i-rows','data-i-issues','data-i-issues-next','data-i-undo-preview','data-i-check-status'];
       const focusedAttribute=restoreFocus&&attributes.find(name=>focused.hasAttribute(name)),focusedValue=focusedAttribute&&focused.getAttribute(focusedAttribute);
       const focusedSummary=restoreFocus&&focused.matches('.data-import-technical > summary');
-      detail.innerHTML=selected?renderSource(selected,{...context.projection,progressTracker,apply:context.projection.apply&&!working,pendingAction,uncertainApply:selected.id===unconfirmedCashSource}):'';renderedSourceId=selected?.id;
+      detail.innerHTML=selected?renderSource(selected,{...context.projection,issuePreviewAvailable:context.issuePreviewAvailable,issueView,progressTracker,apply:context.projection.apply&&!working,pendingAction,uncertainApply:selected.id===unconfirmedCashSource}):'';renderedSourceId=selected?.id;
       const technical=detail.querySelector('.data-import-technical');if(technical)technical.open=!!technicalOpen;
       if(focusedSummary)technical?.querySelector('summary')?.focus({preventScroll:true});
       else if(focusedAttribute)Array.from(detail.querySelectorAll('button')).find(button=>!button.disabled&&button.getAttribute(focusedAttribute)===focusedValue)?.focus({preventScroll:true});
@@ -187,7 +230,7 @@
         Array.from(overviewElement.querySelectorAll('details')).forEach((d,i)=>{d.open=!!opened[i];});
         if(attribute)Array.from(overviewElement.querySelectorAll('button')).find(b=>!b.disabled&&b.getAttribute(attribute)===value)?.focus({preventScroll:true});
       }
-      if(selected) {const selectedId=selected.id;const latest=await request(`/api/data-import/sources/${selectedId}`);if(disposed||ticket!==generation||selected?.id!==selectedId)return;selected=latest;renderSelected();}
+      if(selected) {const selectedId=selected.id;const latest=await request(`/api/data-import/sources/${selectedId}`);if(disposed||ticket!==generation||selected?.id!==selectedId)return;selected=latest;renderSelected();await loadIssues(issueView?.sourceId===selected.id?issueView.runId:null);if(disposed||ticket!==generation)return;}
       clearTimeout(timer);
       if(!working && visible() && !globalThis.document?.hidden && (selected?.active||result.items.some(s=>s.active)||overview?.items?.some(s=>s.active))) timer=setTimeout(refreshQuietly,2500);
     }
@@ -198,7 +241,7 @@
     async function load() {
       if(disposed||!visible())return;cancel();const ticket=generation;controller=new AbortController();body.textContent='Importanbindung wird geprüft …';
       try {
-        context=await request('/api/data-import/context');if(disposed||ticket!==generation)return;
+        context=await request('/api/data-import/context');if(disposed||ticket!==generation)return;issueView=null;
         body.innerHTML=`<div class="data-import-workspace"><div class="data-import-overview"><div class="data-import-overview-heading"><h3>Datenbanken und Aktualisierung</h3><button type="button" data-i-refresh>Aktualisieren</button></div><p class="data-import-note">Eigene Importstände · Datenstand: letztes fachliches Änderungs- oder Belegdatum in der Datei. Hochgeladen am: Eingang dieser Datei im GP. Der Status zeigt, ob die Daten bereits übernommen wurden.</p><div data-i="overview">${renderOverview([],null,context,false)}</div></div>
           <section class="data-import-upload" data-i="upload" hidden aria-labelledby="dataImportUploadTitle"><h3 data-i="upload-title" id="dataImportUploadTitle">Datenbank hochladen</h3>
           <form data-i="form" class="data-import-form" autocomplete="off"><input type="hidden" data-i="kind" value="trade"><p class="data-import-note" data-i="kind-hint" id="dataImportSourceHint">${sourceLabel('trade')}</p>
@@ -319,6 +362,8 @@
         }
         if(target.dataset.iJob&&selected){selected=await post(`/api/data-import/sources/${selected.id}/${target.dataset.iJob}`);renderSelected();await refresh();return;}
         if(target.dataset.iAction)return await runAction(target.dataset.iAction);
+        if(target.dataset.iIssues){await loadIssues(target.dataset.iIssues,0,true);await refresh();return;}
+        if(target.hasAttribute('data-i-issues-next')&&issueView?.result?.next){await loadIssues(issueView.runId,issueView.result.next.after,true);await refresh();return;}
         if(target.hasAttribute('data-i-check-status')){await refresh();if(disposed||ticket!==generation)return;message(selected.id===unconfirmedCashSource&&!selected.cashPublication?.active?'Status aktualisiert: Der neue Kassenstand ist noch nicht als übernommen bestätigt.':`Status aktualisiert: ${sourceStateLabel(selected)}.`);return;}
         if(target.hasAttribute('data-i-refresh')){clearTimeout(timer);sourcePage={};return await refresh();}
         if(target===el('next'))return await refresh(true);

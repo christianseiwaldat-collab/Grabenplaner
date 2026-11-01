@@ -2,6 +2,7 @@
   "format": "gp-postgresql-server-api-fixture-manifest-v1",
   "scope": "Explicit current-server HTTP/integration tests; seed/assertion adapter only; native PostgreSQL application provider",
   "files": [
+    "test/emma-contact-api.test.js",
     "test/assistant-management-api.test.js",
     "test/block3-personnel-rules-dashboard.test.js",
     "test/block4-collective-agreement-register.test.js",

@@ -37,7 +37,7 @@ async function removeSource(f,source){
  assert.equal(result.deleted,true);return result;
 }
 async function fixture(t,{kind='trade',values={},counts={},allowApply=true}={}) {
-  const app=openSqliteApplicationPersistence({databasePath:':memory:',catalog:SQLITE_APPLICATION_CATALOG});
+  const app=openSqliteApplicationPersistence({databasePath:':memory:',catalog:[...SQLITE_APPLICATION_CATALOG,...require('../lib/persistence/catalogs/data-import-issues-catalog').IMPORT_ISSUES_CATALOG]});
   ensureSqliteDataImportRuntimeSchema(app.database);ensureSqliteDataImportRuntimeSchema(app.database);
   const state={session:base(),failAfter:0,messages:0},getSession=async()=>state.session,keyVault=vault();
   const readSource=options=>readTradeFotoFullSource({...options,send:async message=>{
@@ -563,6 +563,10 @@ test('Access partial takeover retains a bad second EAN and completes the valid a
  f.state.session.permissions.push('sales:articles:access','sales:articles:read','sales:articles:import');
  let source=await f.upload();source=await f.finish(source,'review');assert.equal(source.status,'needs_review');
  const runId=source.tables.find(t=>t.name==='ARTIKEL_ZWEITEAN').run.id;
+ const issues=await f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId});
+ assert.equal(issues.rows.length,1);assert.equal(issues.rows[0].rowNumber,2);assert.equal(issues.rows[0].impact,'optional_identifier');
+ assert.equal(issues.rows[0].article.Artikelbezeichnung,'Synthetic retained article');
+ assert.equal(issues.rows[0].article.articleNumber,'000042');
  const row=()=>f.database.prepare("SELECT state,issue,payload FROM data_import_rows WHERE run_id=? AND state='invalid'").get(runId),before=row();assert.ok(before);
  f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');source=await f.finish(source,'apply');
  assert.equal(source.status,'applied');assert.equal(source.catalog.complete,true);assert.equal(source.catalog.changed,1);
@@ -573,6 +577,36 @@ test('Access partial takeover retains a bad second EAN and completes the valid a
  const count=f.database.prepare('SELECT count(*) n FROM import_master_records').get().n;
  f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');source=await f.finish(source,'apply');
  assert.equal(source.status,'applied');assert.equal(f.database.prepare('SELECT count(*) n FROM import_master_records').get().n,count);assert.deepEqual(row(),before);
+});
+
+test('issue preview shows same-file camera value before apply, pages only problems and never exposes unrelated source fields',async t=>{
+ const ean='0000000000042';
+ const values={ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:ean,Artikelbezeichnung:'Synthetic camera',Verkaufspreis:5000,Filialbestand:2,Auslaufartikel:false,Bemerkung:'private memo'})],
+  ARTIKEL_ZWEITEAN:[...Array.from({length:205},(_,i)=>rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:String(i),Rang:i})),
+   rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:null,Rang:206}),rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:'repeated',Rang:207}),rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:'repeated',Rang:208})]};
+ const f=await fixture(t,{values});let source=await f.upload();source=await f.finish(source,'review');
+ const runId=source.tables.find(t=>t.name==='ARTIKEL_ZWEITEAN').run.id;
+ const before=f.database.prepare('SELECT count(*) n FROM import_master_records').get().n;
+ const first=await f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId,limit:1});
+ assert.equal(first.rows[0].rowNumber,206);assert.equal(first.rows[0].state,'invalid');assert.deepEqual(first.next,{after:206});
+ assert.equal(first.rows[0].article.Verkaufspreis,'5000');assert.equal(first.rows[0].article.Filialbestand,'2');assert.equal(first.rows[0].article.Auslaufartikel,'false');
+ assert.deepEqual(first.rows[0].invalidFields.map(r=>r.field),['ZweitEAN']);assert.doesNotMatch(JSON.stringify(first),/private memo|Bemerkung/);
+ const last=await f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId,after:206});
+ assert.deepEqual(last.rows.map(r=>[r.rowNumber,r.state]),[[207,'conflict'],[208,'conflict']]);assert.equal(last.next,null);
+ assert.equal(f.database.prepare('SELECT count(*) n FROM import_master_records').get().n,before);
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId,limit:51}),code('IMPORT_INTEGER_INVALID'));
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId:'f'.repeat(64)}),code('IMPORT_RUN_NOT_FOUND'));
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId,fields:['Bemerkung']}),code('IMPORT_SHAPE_INVALID'));
+ const session=f.state.session;
+ f.state.session={...session,permissions:session.permissions.filter(p=>p!==P.PREPARE)};
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId}),code('IMPORT_FORBIDDEN'));
+ f.state.session={...session,employeeNumber:'synthetic-other',accountId:'other'};
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId}),code('IMPORT_SOURCE_NOT_FOUND'));
+ f.state.session=session;
+ let sessionReads=0;
+ await assert.rejects(f.runtime.sourceOperation(async()=>++sessionReads<=2?session:{...session,permissions:session.permissions.filter(p=>p!==P.PREPARE)},source.id,'issues',{runId}),code('IMPORT_FORBIDDEN'));
+ f.database.prepare("UPDATE data_import_rows SET payload='tampered' WHERE run_id=? AND row_number=206").run(runId);
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId}),code('IMPORT_PROTECTED_PAYLOAD_INVALID'));
 });
 
 test('Bestell partial takeover keeps an invalid repair row while importing its valid neighbour',async t=>{

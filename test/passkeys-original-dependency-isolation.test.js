@@ -29,11 +29,11 @@ function isolated(readFileSync = fs.readFileSync) {
   return { fixture: entry.exports, loaded };
 }
 
-test("all seven frozen historical blobs retain their original identities despite CAS and stock publication additions", () => {
+test("all eight frozen historical blobs retain their original identities despite current runtime additions", () => {
   assert.equal(frozen.sourceCommit, original.sourceCommit);
-  assert.equal(frozen.files.length, 7);
+  assert.equal(frozen.files.length, 8);
   assert.equal(sha(JSON.stringify(original.sharedDependencies)), frozen.sharedDependenciesSha256);
-  assert.equal(frozen.files.reduce((count, file) => count + file.bytes, 0), 82554);
+  assert.equal(frozen.files.reduce((count, file) => count + file.bytes, 0), 95701);
   for (const file of frozen.files) {
     const bytes = Buffer.from(file.sourceBase64, "base64");
     assert.equal(bytes.length, file.bytes);
@@ -50,7 +50,7 @@ test("the original closure executes frozen bytes instead of the already loaded c
   const inspector = fixture.originalInspector();
   assert.equal(typeof inspector.verifyCoreSchema, "function");
   // Exercise the original recorded compiler dependency through this same
-  // isolated resolver; it imports all seven original catalogs/statements.
+  // isolated resolver; it imports the original catalogs, statements and contract.
   loaded.get(original.inspector.path).instance.require("../core/catalog");
   for (const file of frozen.files) {
     assert.equal(loaded.get(file.path)?.sha256, file.gitLfSha256, file.path);

@@ -85,6 +85,15 @@ test('source count approval has a separate CSRF protected idle-only endpoint',as
   f.state.session=null;assert.equal((await f.request(url,options)).status,401);assert.equal(f.state.calls,1);
 });
 
+test('issue preview is CSRF protected, never cached and available while the import is busy',async t=>{
+ let idle=0;const f=await fixture(t,{jobs:{async assertIdle(){idle++;throw Object.assign(new Error(),{code:'IMPORT_SOURCE_BUSY',status:409});}}});
+ const url='/api/data-import/sources/'+'a'.repeat(64)+'/issues',options={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'b'.repeat(64),limit:25})};
+ const response=await f.request(url,options);assert.equal(response.status,200);assert.equal((await response.json()).action,'issues');assert.equal(idle,0);
+ assert.match(response.headers.get('cache-control'),/private, no-store/);
+ f.state.csrf=false;assert.equal((await f.request(url,options)).status,403);assert.equal(f.state.calls,1);
+ f.state.csrf=true;f.state.session=null;assert.equal((await f.request(url,options)).status,401);assert.equal(f.state.calls,1);
+});
+
 test('background takeover admission is a separate authenticated CSRF action, while its worker excludes interactive mutations',async t=>{
   let admitted=0;
   const jobs={async enqueueApply(get,id,input){await get();admitted++;return {id,background:{phase:'applying'},revision:input.expectedRevision};},

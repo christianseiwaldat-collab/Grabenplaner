@@ -161,6 +161,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-cash-takeover.test.js',
   'test/postgresql-transaction-activity.test.js',
   'lib/persistence/postgresql/sales/import-recheck-catalog.js',
+  'lib/persistence/postgresql/sales/import-issues-catalog.js',
+  'test/postgresql-import-issues.test.js',
   // Exact read-only audit receipt lookup; no driver, DDL or activation grant.
   'lib/persistence/postgresql/sales/import-source-tolerance-catalog.js',
   'lib/persistence/postgresql/sales/import-work-queues.js',
@@ -588,6 +590,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/import-batches.js",
   "lib/persistence/statements/import-reader-batches.js",
   "lib/persistence/statements/data-import-recheck.js",
+  "lib/persistence/statements/data-import-issues.js",
   "lib/persistence/statements/data-import-source-tolerance.js",
   "lib/persistence/catalogs/personnel-learning-runs-catalog.js",
   "lib/persistence/sqlite/operations/personnel-learning-runs-schema.js",
@@ -661,6 +664,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/data-import.js",
   "lib/persistence/catalogs/data-import-catalog.js",
   "lib/persistence/catalogs/data-import-source-tolerance-catalog.js",
+  "lib/persistence/catalogs/data-import-issues-catalog.js",
   "lib/persistence/sqlite/operations/data-import-schema.js",
   "lib/persistence/statements/data-import.js",
   "lib/persistence/application-repositories.js",
@@ -1739,6 +1743,7 @@ const TEST_SPECIAL_GROUPS = Object.freeze({
   "employee-preferences-api-fixtures": new Set([
     // Isolated synthetic API qualification; no new product database access.
     "test/employee-preferred-days-api.test.js",
+    "test/emma-contact-api.test.js",
   ]),
   "learning-and-workflow-workspace-fixtures": new Set([
     "test/dashboard-boards-api.test.js",

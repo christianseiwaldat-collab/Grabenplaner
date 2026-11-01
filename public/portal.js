@@ -313,6 +313,10 @@ function isMobileUi() {
   return document.documentElement.dataset.uiMode === "mobile";
 }
 
+const emmaWhatsappContact = window.GpEmmaContact?.shortcut(document.getElementById("emmaWhatsappContact"), {
+  api, session: () => portalState.session,
+});
+
 function dateText(value, options = { day: "2-digit", month: "2-digit", year: "numeric" }) {
   return new Intl.DateTimeFormat("de-AT", options).format(new Date(`${value}T12:00:00`));
 }
@@ -1273,6 +1277,9 @@ function renderMobileMoreShortcuts(modules = effectiveMobileModules()) {
   ].forEach(([button, module]) => {
     button?.classList.toggle("hidden", !mobileModuleAllowed(module) || direct.has(module));
   });
+  ["branchOrders", "branchVacation", "learningDashboard"].forEach((tab) => {
+    document.querySelector(`[data-more-tab="${tab}"]`)?.classList.toggle("hidden", !portalTabAllowed(tab));
+  });
 }
 
 function isBranchMobileAccount(user = portalUser()) {
@@ -1302,6 +1309,7 @@ function applyMobileLeadershipLayout() {
   portalState.mobileLeadership = compactMobile;
   document.body.classList.toggle("branch-mobile-account", branchMobile);
   document.body.classList.toggle("portal-mobile-session", mobilePortal);
+  document.querySelector(".portal-navigation")?.classList.toggle("personal-mobile-footer", compactMobile);
   document.body.classList.toggle(
     "branch-mobile-action-active",
     branchMobile && portalState.activeTab === "branchOrders",
@@ -1309,7 +1317,7 @@ function applyMobileLeadershipLayout() {
   navigation.classList.toggle("branch-mobile-navigation", branchMobile);
   navigation.classList.toggle("mobile-personal", compactMobile);
   navigation.classList.toggle("mobile-leadership", compactMobile && isLeadershipUser());
-  navigation.classList.toggle("mobile-settings-hidden", mobilePortal && portalState.activeTab === "settings");
+  navigation.classList.toggle("mobile-settings-hidden", branchMobile && portalState.activeTab === "settings");
   el.portalSettingsShortcut?.classList.toggle("hidden", !mobilePortal);
   if (branchMobile) {
     document.querySelectorAll("[data-tab]").forEach((button) => {
@@ -1358,28 +1366,15 @@ function applyMobileLeadershipLayout() {
     button.classList.add("hidden");
     button.classList.add("mobile-navigation-hidden");
   });
-  const modules = effectiveMobileModules();
   const homeButton = el.mobileHomeTab;
   homeButton?.classList.remove("hidden");
   homeButton?.classList.remove("mobile-navigation-hidden");
   if (homeButton) homeButton.style.order = "-1";
-  modules.forEach((module, index) => {
-    const button = document.querySelector(`[data-tab="${mobileModuleById.get(module)?.tab}"]`);
-    button?.classList.remove("hidden");
-    button?.classList.remove("mobile-navigation-hidden");
-    if (button) button.style.order = String(index);
-  });
-  renderMobileMoreShortcuts(modules);
-  const activeButton = document.querySelector(`[data-tab="${portalState.activeTab}"]`);
-  const activeModule = mobileModuleByTab.get(portalState.activeTab);
-  const secondaryViaMore = modules.includes("more") && mobileMoreSecondaryTabs.has(portalState.activeTab)
-    && (!activeModule || !modules.includes(activeModule));
-  const hiddenDirectViaMore = modules.includes("more") && activeModule && !modules.includes(activeModule);
-  if (activeButton?.classList.contains("hidden") && modules.length && !secondaryViaMore && !hiddenDirectViaMore) {
-    setTab(mobileModuleById.get(modules[0])?.tab || "leadershipMore");
-    return;
-  }
+  // All permitted areas remain reachable through home and More. A hidden
+  // footer tab must not redirect a valid view opened from either place.
+  renderMobileMoreShortcuts([]);
   syncPortalTabButtons(portalState.activeTab);
+  if (homeButton) homeButton.tabIndex = 0;
   renderMobileHome();
 }
 
@@ -1608,6 +1603,9 @@ function mobileNavigationItemsForSettings() {
 }
 
 function renderMobileNavigationSettings() {
+  // The personal footer now has a fixed Start / Emma layout. Preserve stored
+  // legacy preferences, but do not offer controls that no longer affect it.
+  el.mobileNavigationSettingsCard?.classList.add("hidden");
   if (!el.mobileNavigationSettingsList) return;
   const draft = currentMobileNavigationDraft();
   const items = mobileNavigationItemsForSettings();
@@ -2529,6 +2527,7 @@ function showLogin(error = "") {
   neutralizeBirthdayPresentationTheme();
   resetPersonalActionsState("");
   portalState.session = null;
+  emmaWhatsappContact?.reset();
   void privatePortalWorkspaces?.synchronize();
   syncPortalWindows();
   resetBranchSalesWorkspaces();
@@ -2656,6 +2655,7 @@ function showPortal(session) {
     neutralizeBirthdayPresentationTheme();
   }
   portalState.session = session;
+  void emmaWhatsappContact?.load();
   void portalVoiceAssistant?.synchronize();
   void privatePortalWorkspaces?.synchronize();
   syncPortalLogoutControls();
@@ -3545,7 +3545,7 @@ function renderMobileHome() {
   if (!visible) return;
   const tiles = mobileHomeTilesForCurrentAccount();
   const launches = privatePortalWorkspaces?.launches || [];
-  if (!tiles.length && !launches.length) {
+  if (!tiles.length && !launches.length && isOrganizationAccount()) {
     el.mobileHomeTiles.innerHTML = '<p class="empty-state">Für dieses Konto ist derzeit kein Portalbereich freigeschaltet.</p>';
     return;
   }
@@ -3556,6 +3556,11 @@ function renderMobileHome() {
       <b aria-hidden="true">›</b>
     </button>
   `).join("") + launches.map(item => `<button type="button" class="gp-private-launch" data-private-workspace="${esc(item.id)}" style="--private-launch-color:${safeCssColor(item.launch.color)};--mobile-home-tile-color:${safeCssColor(item.launch.color)}"><span class="mobile-home-tile-accent" aria-hidden="true"></span><span><strong>${esc(item.launch.label)}</strong></span><b aria-hidden="true">›</b></button>`).join("");
+  if (!isOrganizationAccount()) el.mobileHomeTiles.insertAdjacentHTML("beforeend", `
+    <button type="button" class="mobile-home-more" data-mobile-home-tab="leadershipMore" style="--mobile-home-tile-color:rgb(0,100,221)">
+      <span class="mobile-home-tile-accent" aria-hidden="true"></span>
+      <span><strong>Mehr</strong><small>Weitere Bereiche</small></span><b aria-hidden="true">›</b>
+    </button>`);
 }
 
 function renderBranchMobileActionBar() {

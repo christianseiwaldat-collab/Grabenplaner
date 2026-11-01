@@ -14,6 +14,7 @@ let gpDocumentPrint = null, documentPrintModelRevision = 0;
 const documentPrintModels = new WeakMap();
 const settingsSaveStatuses = new Map(), settingsSaveStatusHosts = new Map();
 let settingsSaveActor = null, settingsSavePrimary = null, settingsSaveCandidateSource = null;
+let emmaContactSettings = null;
 let settingsSaveEpoch = 0, settingsSavePrimaryEpoch = 0;
 let settingsConfirmedDraft = null, settingsConfirmedRevision = 0;
 let startDashboardVps = null;
@@ -24058,6 +24059,7 @@ function settingsPdfDraftScope() {
     || Boolean(node?.closest?.("#schedulePdfSettingsCard, #vacationPdfSettingsCard")) };
 }
 function syncSettingsSaveScopes({ force = false } = {}) {
+  emmaContactSettings?.synchronize();
   const actor = startDashboardWorkspaceActorKey();
   if (force || (settingsSaveActor !== null && settingsSaveActor !== actor)) {
     settingsSaveEpoch++;
@@ -38720,6 +38722,7 @@ function setSettingsTab(tab) {
         ? !(canSaveScheduleSettings || canSaveSchedulePdfSettings || canSaveGeneralSettings)
         : !(canSaveGeneralSettings || (activeTab === "general" && (canSaveBranding || canSaveSchedulePdfSettings)))));
   if (activeTab === "access") {
+    void emmaContactSettings?.load();
     if (!elements.portalUserAccessCard?.classList.contains("hidden")) loadPortalUsers();
     if (canManageMobilePortalLocationDisplay()) loadMobilePortalLocationDisplay();
     loadOrganizationAccounts();
@@ -43142,6 +43145,9 @@ permissionDefaultsUI = initializePermissionDefaults({
     state.portalPermissionCatalog = roleData.catalog || [];
     renderRightsManagement();
   },
+});
+emmaContactSettings = window.GpEmmaContact?.mountSettings(document.getElementById("emmaContactSettingsCard"), {
+  api, session: () => state.portalSession,
 });
 initializeSettingsCardDisclosures();
 initializeFunctionSearchUi();

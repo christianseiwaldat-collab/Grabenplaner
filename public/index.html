@@ -9,6 +9,7 @@
     <link rel="apple-touch-icon" href="/assets/webicon.svg" data-brand-icon />
     <link rel="stylesheet" href="/vendor/quill/quill.snow.css" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/emma-contact.css" />
     <link rel="stylesheet" href="/schedule-note-editor.css" />
     <link rel="stylesheet" href="/passkey-auth.css" />
     <link rel="stylesheet" href="/gp-xoffi-import.css" />
@@ -2650,6 +2651,10 @@
                 <div class="form-actions-inline"><span class="settings-note" id="amuAccessPolicyHint"></span><button class="primary-button" id="saveAmuAccessPolicyButton" type="button">AUM-Zugriffe speichern</button></div>
               </section>
             </div>
+            <div class="settings-card emma-contact-settings" id="emmaContactSettingsCard" hidden>
+              <div class="card-heading"><div class="card-icon">WA</div><div><h2>Emma auf WhatsApp</h2><p>Ein direkter Kontaktbutton für persönliche Mitarbeiterkonten in der mobilen Ansicht.</p></div></div>
+              <p class="settings-note">Sichtbarkeit und Profilbild verwaltest du hier als Developer. Die Telefonnummer stammt aus Emmas Personalakt. Emmas bereitgestelltes Profilbild ist als Standard hinterlegt. Eigene Bilder werden im GP gespeichert; eine automatische Übernahme aus WhatsApp erfolgt nicht. Der Button öffnet den Chat, sendet aber keine Nachricht und erteilt keine zusätzlichen GP-Rechte.</p>
+            </div>
             <div class="settings-card" id="greetingSettingsCard">
               <div class="card-heading"><div class="card-icon">Hallo</div><div><h2>Persönliche Begrüßungen</h2><p>Abwechslungsreiche Starttexte im Mitarbeiterportal – ohne medizinische Details oder sensible Abwesenheitsdaten.</p></div></div>
               <label class="switch-row"><span><strong>Persönliche Begrüßungen aktivieren</strong><small>Datenschutzfreundlich standardmäßig deaktiviert. Bei Deaktivierung zeigt der Kopfbereich nur Datum und Zeiterfassung.</small></span><input id="personalizedGreetingsEnabled" type="checkbox" /></label>
@@ -4721,6 +4726,7 @@
       </div>
     </dialog>
     <script src="/vps-storage.js"></script>
+    <script src="/emma-contact.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

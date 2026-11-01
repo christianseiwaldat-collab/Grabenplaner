@@ -103,6 +103,9 @@ html[data-active-page-theme="dark"] #databaseImportSettings .data-import-form bu
 .data-import-workspace .data-import-form { grid-template-columns:minmax(220px,1fr) minmax(180px,300px); gap:.65rem 1rem; }
 .data-import-workspace .data-import-form > :is(p,.data-import-actions) { grid-column:1 / -1; margin:.2rem 0; }
 .data-import-upload h3 { margin-top:0; }
+.data-import-issue { border-top:1px solid var(--line); padding:.75rem 0; overflow-wrap:anywhere; }
+.data-import-issue h4 { margin:.25rem 0; }
+.data-import-issues .data-import-actions button[aria-pressed=true] { font-weight:700; outline:2px solid var(--accent, #29594f); }
 @media(max-width:600px) { .data-import-workspace .data-import-form { grid-template-columns:minmax(0,1fr); } .data-import-catalog-table { margin-inline:-.2rem; } }
 @media(max-width:740px) {
   .data-import-catalog-table table { min-width:0 !important; table-layout:auto; }

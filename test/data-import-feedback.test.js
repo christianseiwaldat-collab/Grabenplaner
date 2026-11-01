@@ -38,6 +38,47 @@ test('invoice preview explains the same-file sequence without clearing real issu
   assert.match(UI.renderSource({...source,background:{status:'failed',phase:'applying'}},projection),/Übernahme fortsetzen/);
 });
 
+function issuePage(runId='lines',after=0){return {runId,table:'ARTIKEL_ZWEITEAN',rows:[{rowNumber:after+1,state:'invalid',issue:'IMPORT_TEXT_INVALID',fields:{EAN:'0000000000042',ZweitEAN:null},invalidFields:[{field:'ZweitEAN',code:'IMPORT_TEXT_INVALID',value:null}],impact:'optional_identifier',article:{status:'same_file',articleNumber:'000042',Artikelbezeichnung:'Camera <img src=x onerror=bad()>',Verkaufspreis:'5000',Filialbestand:null,Auslaufartikel:'false'}}],next:after?null:{after:1}};}
+test('issue preview appears before takeover, shows price and unknown stock, escapes source text and pages only issues',async t=>{
+ const source=invoiceSource(),ui=await mount(t,source,(url,options)=>{
+  if(url.endsWith('/context'))return {available:true,projection,issuePreviewAvailable:true};
+  if(url.endsWith('/issues')){const data=JSON.parse(options.body);return issuePage(data.runId,data.after);}
+ });
+ const html=ui.fields.detail.innerHTML;
+ assert.ok(html.indexOf('Problematische Zeilen · vor der Übernahme prüfen')<html.indexOf('data-i-action="apply"'));
+ assert.match(html,/5[.\s]000/);assert.match(html,/Filialbestand laut Artikelstamm: Unbekannt/);assert.match(html,/ohne diesen zweiten EAN übernommen/);
+ assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
+ assert.equal(ui.requests.filter(r=>r.url.endsWith('/issues')).length,1);
+ await ui.click({},'data-i-check-status');assert.equal(ui.requests.filter(r=>r.url.endsWith('/issues')).length,1);
+ await ui.click({},'data-i-issues-next');assert.match(ui.fields.detail.innerHTML,/Zeile 2/);
+ assert.equal(ui.requests.filter(r=>r.url.endsWith('/issues')).length,2);
+ assert.equal(ui.requests.filter(r=>r.url.endsWith('/rows')).length,0);
+});
+test('issue preview keeps a failed read visible and retries explicitly without claiming success',async t=>{
+ let fail=true;const source=invoiceSource(),ui=await mount(t,source,url=>{
+  if(url.endsWith('/context'))return {available:true,projection,issuePreviewAvailable:true};
+  if(url.endsWith('/issues'))return fail?Promise.reject(new Error('synthetic unavailable')):issuePage();
+ });
+ assert.match(ui.fields.detail.innerHTML,/Prüffälle konnten nicht geladen werden/);assert.doesNotMatch(ui.fields.detail.innerHTML,/keine Prüffälle mehr/);
+ fail=false;await ui.click({iIssues:'lines'});assert.match(ui.fields.detail.innerHTML,/Camera/);
+});
+test('late issue response cannot replace a newly selected source',async t=>{
+ let delay=false,resolve;const source=invoiceSource(),other={...source,id:'other',tables:[]};
+ const ui=await mount(t,source,url=>{
+  if(url.endsWith('/context'))return {available:true,projection,issuePreviewAvailable:true};
+  if(url.endsWith('/issues'))return delay?new Promise(r=>{resolve=r;}):issuePage();
+  if(url.endsWith('/sources/other'))return other;
+ });
+ delay=true;const pending=ui.click({iIssues:'lines'});await tick();
+ await ui.click({iSource:'other'});resolve(issuePage());await pending;
+ assert.doesNotMatch(ui.fields.detail.innerHTML,/Camera|Problematische Zeilen/);
+});
+test('issue details require prepare permission; a stock issue explains snapshot preservation',()=>{
+ const source=invoiceSource(),view={sourceId:source.id,runId:'lines',result:issuePage()};view.result.rows[0].impact='stock_snapshot';
+ assert.doesNotMatch(UI.renderSource(source,{...projection,prepare:false,issuePreviewAvailable:true,issueView:view}),/Camera/);
+ assert.match(UI.renderSource(source,{...projection,issuePreviewAvailable:true,issueView:view}),/bisherige vollständige Bestandsstand bleibt erhalten/);
+});
+
 test('invoice row explanations distinguish an expected parent from a parent still missing after apply',()=>{
   const source=invoiceSource(),row={rowNumber:1,state:'conflict',issue:'HISTORY_PARENT_REQUIRED'};
   assert.match(UI.rowStatusText(source,'lines',row),/noch nicht übernommen.*Rechnung_A derselben Datei/);
