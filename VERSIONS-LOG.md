@@ -1,6 +1,11 @@
 # Versionsstatus
 
-## v0.92.98 Beta · Quellstand
+## v0.92.99 Beta · Quellstand
+
+Artikel-Lesemodule werden beim Anwendungsstart geladen. Bei ausdrücklich firmenweiter Berechtigung einschließlich nicht zugeordneter Filialen entfallen redundante Filialzuordnungen in der ersten Bestandsansicht.
+Aktuelle Rechte, authentifizierte Quelldaten und Vollständigkeitsnachweise bleiben verpflichtend; eingeschränkte Konten verwenden weiterhin die geprüfte Filialzuordnung.
+
+Enthält die Katalog- und Bestellansicht-Korrekturen aus v0.92.98 Beta:
 
 Artikel zeigen Bestand und berechtigte Bestellmengen, bevor historische Bestellzuordnungen auf Wunsch geladen werden.
 Die Katalogübertragung von Access-Dezimalpreisen verwendet ausdrücklich zwölf Nachkommastellen; Quelldaten und Qualitätsprüfungen bleiben erhalten.

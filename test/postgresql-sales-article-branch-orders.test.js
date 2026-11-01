@@ -25,6 +25,17 @@ test('Native PostgreSQL branch orders: narrow authenticated batches, demand bran
     }
     assert.ok(Math.max(...timings)<1000,'Main article must not wait for its 106 purchase candidates');
     console.log(JSON.stringify({qualification:'article-with-purchasing-authority',candidateCount:106,mainMs:timings,includes:'native reader, authenticated stock and current purchasing scope',excludes:'HTTP, network and rendering'}));
+    const fullPermissions=session.permissions;
+    session.permissions=fullPermissions.filter(p=>p!=='sales:analytics:company:read');session.scopes=[{locationId:'18'}];
+    assert.deepEqual((await load('main')).branchStock.rows.map(r=>[r.id,r.ordered]),[['18','4'],['19',null]],'A narrower fresh scope must not inherit the initial company projection');
+    session.permissions=fullPermissions;session.scopes=[];
+    const concurrent=await Promise.all(Array.from({length:4},async()=>{
+      const start=performance.now(),value=await load('main');
+      assert.deepEqual(value.branchStock.rows.map(r=>[r.id,r.quantity,r.ordered]),[['18','3','4'],['19','0','6']]);
+      return performance.now()-start;
+    }));
+    assert.ok(Math.max(...concurrent)<700,'Concurrent main reads must retain headroom for HTTP and rendering');
+    console.log(JSON.stringify({qualification:'concurrent-authorized-article-main',concurrentMs:concurrent}));
     const rows=(await load()).branchStock.rows;
     assert.deepEqual(rows.map(row=>[row.id,row.ordered,row.orders.matched]),[['18','4',true],['19','6',true]]);
     assert.deepEqual(rows[1].orders.items.map(item=>[item.number,item.remaining]),[['101','4'],['106','2']]);

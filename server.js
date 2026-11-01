@@ -39243,6 +39243,9 @@ require('./lib/sales-price-labels-routes').registerSalesPriceLabelsRoutes(app, {
   },
 });
 
+// Load the article reader while starting the application, before readiness.
+// A user's first article request must not pay for module initialization.
+const {loadSalesArticleDetailData}=require('./lib/sales-article-detail-source');
 app.get("/api/sales/articles/detail", async (request, response) => {
   const session = salesArticleCatalogSession(
     request,
@@ -39269,7 +39272,7 @@ app.get("/api/sales/articles/detail", async (request, response) => {
     const revisions = await salesArticleCatalogRepository.listRevisions(article.productId);
     const projection = salesArticleCatalogProjectionForSession(session);
     const result = await projectSalesArticleDetail(article, revisions, projection);
-    Object.assign(result.article, await require('./lib/sales-article-detail-source').loadSalesArticleDetailData({ access: persistenceProvider, vault: integrationSecretVault, article, projection, session, section }));
+    Object.assign(result.article, await loadSalesArticleDetailData({ access: persistenceProvider, vault: integrationSecretVault, article, projection, session, section }));
     await assertFreshSalesArticleRead(request, session, projection);
     response.json(result);
   } catch (error) {
