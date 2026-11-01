@@ -486,6 +486,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/custom-work-rules-catalog.js",
   "lib/persistence/sqlite/data-import-catalog.js",
   "lib/persistence/sqlite/data-import-delete-catalog.js",
+  "lib/persistence/sqlite/data-import-issues-catalog.js",
   "lib/persistence/sqlite/data-import-recheck-catalog.js",
   "lib/persistence/sqlite/data-import-runtime-catalog.js",
   "lib/persistence/sqlite/data-import-source-tolerance-catalog.js",

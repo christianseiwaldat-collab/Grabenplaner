@@ -154,12 +154,25 @@ test("Portal: Rückkehr von der Handy-Kamera hält den AUM-Bereich aktiv", () =>
   assert.match(selectionBlock[0], /portalState\.activeTab !== "amu"\) setTab\("amu"\)/);
 });
 
-test("Portal: mobiles Scroll-Resize lässt AUM als Unterbereich von Mehr geöffnet", () => {
+test("Portal: mobiles Scroll-Resize erhält geöffnete Bereiche trotz Start-only-Fußleiste", () => {
   const source = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
-
-  assert.match(source, /const mobileMoreSecondaryTabs = new Set\(\["timeOff", "vacation", "amu", "loan", "settings"\]\)[\s\S]*?mobileMoreSecondaryTabs\.add\("branchOrders"\)[\s\S]*?mobileMoreSecondaryTabs\.add\("branchVacation"\)/);
-  assert.match(source, /const secondaryViaMore = modules\.includes\("more"\) && mobileMoreSecondaryTabs\.has\(portalState\.activeTab\)/);
-  assert.match(source, /activeButton\?\.classList\.contains\("hidden"\) && modules\.length && !secondaryViaMore/);
-  assert.match(source, /representedByMore[\s\S]*?button\.dataset\.tab === "leadershipMore"/);
+  const start = source.indexOf('function applyMobileLeadershipLayout()');
+  const code = source.slice(start, source.indexOf('\nasync function loadMobileLayout()', start));
+  assert.ok(start >= 0);
+  for (const activeTab of ['amu', 'timeOff', 'branchOrders', 'processTasks', 'leadershipMore']) {
+    const node = () => ({ classList: { add(key) { this[key] = true; }, remove(key) { this[key] = false; }, toggle(key, value) { this[key] = value; } }, style: {} });
+    const home = node(), other = node(), navigation = node(), redirects = [];
+    const context = { portalState: { activeTab }, el: { mobileHomeTab: home },
+      document: { body: node(), querySelector: selector => selector === '#loanIssueSection' ? null : navigation,
+        querySelectorAll: selector => selector === '[data-tab]' ? [home, other] : [] },
+      isMobileUi: () => true, isOrganizationAccount: () => false, isBranchMobileAccount: () => false,
+      isLeadershipUser: () => false, renderMobileMoreShortcuts() {}, renderMobileHome() {},
+      syncPortalTabButtons(tab) { assert.equal(tab, activeTab); }, setTab: tab => redirects.push(tab) };
+    require('node:vm').runInNewContext(code, context);
+    context.applyMobileLeadershipLayout(); context.applyMobileLeadershipLayout();
+    assert.equal(context.portalState.activeTab, activeTab); assert.deepEqual(redirects, []);
+    assert.equal(home.classList.hidden, false); assert.equal(other.classList.hidden, true);
+    assert.equal(home.tabIndex, 0);
+  }
   assert.match(source, /window\.addEventListener\("resize", applyDeviceMode/);
 });

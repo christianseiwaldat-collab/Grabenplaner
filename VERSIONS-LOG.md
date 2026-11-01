@@ -7,13 +7,6 @@ Problematische Importzeilen mit Artikelangaben bereits vor der Übernahme sichtb
 Mobiler WhatsApp-Kontakt für Emma und vereinfachte Navigation im Mitarbeiterportal.
 Aktualisierte Sicherheitsbewertungen und vollständige Linux-/PostgreSQL-Prüfungen als Auslieferungsvoraussetzung.
 
-## v0.92.95 Beta · Quellstand
-
-Optionale Passkeys mit gesonderter Schemaaktivierung und verbesserte Sicherheitsprüfungen.
-Schnellere Datenübernahmen bei geänderten Historien.
-Punktgenaue Bemerkungen und Feiertagsanzeige im Dienstplan-PDF.
-Verbesserte Personal- und Verkaufsfunktionen.
-
 Der installierte Serverstand wird im GP angezeigt.
 
 Der gestufte Übergang verwendet v0.92.94 als Kompatibilitätsstand.

@@ -94,7 +94,7 @@ function fixture() {
     throw new Error('Unexpected selector: ' + selector);
   } };
   const invoke = (route, options = {}) => { const call = { route, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : undefined }; calls.push(call); return handler(route, call); };
-  const context = { planningAssistantWorkspace: null, state, elements, document, settingsDraftGuard: guard, api: invoke, GpSaveStatus,
+  const context = { planningAssistantWorkspace: null, emmaContactSettings: null, state, elements, document, settingsDraftGuard: guard, api: invoke, GpSaveStatus,
     settingsSaveStatuses: new Map(), settingsSaveStatusHosts: new Map(), settingsSaveActor: null, settingsSavePrimary: null, settingsSaveCandidateSource: null, settingsSaveEpoch: 0, settingsSavePrimaryEpoch: 0, settingsConfirmedDraft: null, settingsConfirmedRevision: 0,
     showToast: (...args) => toasts.push(args), schedulePdfSettingsWritePermission: 'schedule:pdf:settings:write',
     schedulePdfDesignNamesForSave: () => ({ classic: 'Klassisch' }), canManageScheduleDutyColors: () => true,

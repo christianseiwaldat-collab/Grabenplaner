@@ -43,6 +43,32 @@ function fixture(t) {
     read: now => readSastReviews({ root: buildRoot, now: now || NOW }) };
 }
 const rejects = action => assert.throws(action, error => error.code === 'SECURITY_AUDIT_SAST_INVALID');
+
+test('A policy above 16 MiB retains exact CI, package and runtime bindings; receipts keep their smaller bound', t => {
+  const f = fixture(t);
+  const original = JSON.stringify(f.policy);
+  const bytes = Buffer.from(original + ' '.repeat(16 * 1024 * 1024 + 1 - Buffer.byteLength(original)));
+  write(f.root, 'scripts/security/sast-dispositions.json', bytes);
+  write(f.buildRoot, E.POLICY_PATH, bytes);
+  assert.equal(readSastReviews({ root: f.root, now: NOW }).reviews.length, 1);
+  const evidenceBytes = Buffer.from(JSON.stringify(f.capture()));
+  f.prepare({ evidenceBytes, evidenceSha256: E.sha(evidenceBytes) }); f.manifest();
+  assert.equal(f.read().summary.contextEvidenced, 1);
+  fs.appendFileSync(path.join(f.buildRoot, E.POLICY_PATH), ' ');
+  rejects(() => f.read());
+  fs.truncateSync(path.join(f.buildRoot, E.EVIDENCE_PATH), 16 * 1024 * 1024 + 1);
+  rejects(() => E.regularBytes(f.buildRoot, E.EVIDENCE_PATH));
+});
+
+test('Policies above 32 MiB fail closed before source capture, staging and runtime loading', t => {
+  const f = fixture(t);
+  assert.equal(E.POLICY_MAX_BYTES, 32 * 1024 * 1024);
+  for (const [root, relative] of [[f.root, 'scripts/security/sast-dispositions.json'], [f.buildRoot, E.POLICY_PATH]]) {
+    fs.truncateSync(path.join(root, relative), E.POLICY_MAX_BYTES + 1);
+    rejects(() => readSastReviews({ root, now: NOW }));
+  }
+  rejects(() => f.capture()); rejects(() => f.prepare());
+});
 test('A private exact CI receipt resolves deliberately omitted test context without installing code', t => {
   const f = fixture(t);
   assert.equal(f.read().summary.contextIncomplete, 1);

@@ -14,7 +14,7 @@ function fixture() {
   const calls = [], errors = [], renders = [];
   const state = { data: {}, vacationData: { year: 2032 }, locations: [{ id: "18" }], weekStart: "2032-07-05", vacationYear: 2032,
     locationId: "18", departmentId: "", portalSession: { user: { role: "developer" } }, allEmployees: ["kept"], brandingKits: ["kept"] };
-  const f = vm.createContext({ state, AbortController,
+  const f = vm.createContext({ state, AbortController, emmaContactSettings: null,
     elements:{settingsView:{contains:()=>true}},document:{getElementById:()=>null},settingsDraftGuard:{clear(){},snapshot:()=>new Map()},
     api(url, options = {}) { return new Promise((resolve, reject) => calls.push({ url, options, resolve, reject })); },
     contextQuery: department => `&location=${state.locationId}${department && state.departmentId ? `&departmentId=${state.departmentId}` : ""}`,

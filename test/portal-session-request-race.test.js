@@ -50,6 +50,7 @@ function logoutFixture({ flush = null } = {}) {
   const workspace = flush ? { hasUnsaved: true, flush: () => flush.promise } : null;
   const context = vm.createContext({ portalState: state, el, AbortController, privatePortalWorkspaces: { synchronize: () => effects.push("privateSync") },
     portalVoiceAssistant: { reset: () => effects.push("voiceReset"), synchronize: () => effects.push("voiceSync") },
+    emmaWhatsappContact: null,
     window: { setTimeout: () => 1, clearTimeout: () => {}, GrabenplanerSessionLifecycle: { credentials: async (operation, {prepare} = {}) => {
       if (prepare && await prepare() === false) return false;
       return operation();

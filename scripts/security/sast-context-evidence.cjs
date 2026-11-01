@@ -7,7 +7,7 @@ const E = require('../../lib/security-sast-context-evidence');
 const { projectSastReviews } = require('../../lib/security-sast-reviews');
 const POLICY_SOURCE = 'scripts/security/sast-dispositions.json';
 function policyAt(root, now) {
-  const bytes = E.regularBytes(root, POLICY_SOURCE);
+  const bytes = E.regularBytes(root, POLICY_SOURCE, E.POLICY_MAX_BYTES);
   if (!bytes) E.invalid();
   const policy = JSON.parse(bytes), policySha256 = E.sha(bytes);
   const projected = projectSastReviews(policy, { root, now, policySha256 });
@@ -65,7 +65,7 @@ function prepareEvidence({ root, buildRoot, evidenceBytes, evidenceSha256, sourc
   if (!/^[a-f0-9]{64}$/.test(evidenceSha256 || '') || E.sha(evidenceBytes) !== evidenceSha256) E.invalid();
   const { policy, policySha256 } = policyAt(root, now), document = JSON.parse(evidenceBytes);
   const contexts = E.validateEvidence(document, policy, policySha256, sourceCommit);
-  const shippedPolicy = E.regularBytes(buildRoot, E.POLICY_PATH);
+  const shippedPolicy = E.regularBytes(buildRoot, E.POLICY_PATH, E.POLICY_MAX_BYTES);
   if (!shippedPolicy || E.sha(shippedPolicy) !== policySha256) E.invalid();
   for (const [relative, item] of contexts) {
     const source = E.regularBytes(root, relative, 32 * 1024 * 1024);
@@ -90,7 +90,7 @@ function main(argv) {
   const sourceCommit = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).trim();
   execFileSync('git', ['-C', root, 'diff', '--exit-code', 'HEAD', '--'], { stdio: 'pipe', windowsHide: true });
   const tracked = new Set(execFileSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8', windowsHide: true, maxBuffer: 8 * 1024 * 1024 }).split('\0'));
-  const policy = JSON.parse(E.regularBytes(root, POLICY_SOURCE));
+  const policy = JSON.parse(E.regularBytes(root, POLICY_SOURCE, E.POLICY_MAX_BYTES));
   if (!tracked.has(POLICY_SOURCE) || !Array.isArray(policy.dispositions)
     || policy.dispositions.some(row => !Array.isArray(row.context) || row.context.some(item => !tracked.has(item.path)))) E.invalid();
   if (action === 'capture') {
