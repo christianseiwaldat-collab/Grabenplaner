@@ -71,3 +71,50 @@ test('Chromium stock preferences wait for the account baseline, retry failed loa
     assert.deepEqual(errors,[]);console.log(JSON.stringify({syntheticOnly:true,checks,passed:checks.length,pageErrors:errors}));
   } finally {await browser.close();}
 });
+
+test('Chromium loads BE details only on demand, deduplicates, retries and discards responses after identity changes',
+ {skip:process.env.GP_STOCK_PANEL_BROWSER_TEST!=='1',timeout:60000},async()=>{
+ const {chromium}=require(process.env.GP_BROWSER_TEST_MODULE || 'playwright');
+ const browser=await chromium.launch({headless:true,...(process.env.GP_BROWSER_EXECUTABLE?{executablePath:process.env.GP_BROWSER_EXECUTABLE}:{}),args:['--no-first-run']});
+ const errors=[];
+ try {
+  const page=await browser.newPage({viewport:{width:1000,height:700}});page.on('pageerror',error=>errors.push(error.message));
+  await page.route('**/*',route=>route.abort());
+  async function setup() {
+   await page.setContent('<div id="stock"></div>');
+   for(const file of ['table-layout.js','sales-article-detail-preferences.js','sales-article-layout.js','sales-article-stock-panel.js'])
+    await page.addScriptTag({path:path.join(root,'public',file)});
+   await page.evaluate(()=>{
+    window.actor='A';window.calls=[];
+    const store=SalesArticleDetailPreferences.createStore({key:()=>actor,canUse:()=>true,api:async()=>({...SalesArticleDetailPreferences.defaults(),configured:true})});
+    window.ready=store.activate();
+    window.stock={rows:[{id:'18',quantity:'3',ordered:'4',orders:{state:'deferred',items:[]}},
+      {id:'19',quantity:'0',ordered:null,orders:{state:'restricted',items:[]}}]};
+    window.result={rows:[{...stock.rows[0],orders:{state:'recorded',items:[{number:'101',remaining:'4',sourceAt:'2026-10-31'}]}},stock.rows[1]]};
+    window.panel=SalesArticleStockPanel.mount(document.querySelector('#stock'),{store,stock,
+      formats:{timestamp:x=>x},layout:SalesArticleLayout,tableLayout:GrabenplanerTableLayout,columns:SalesArticleDetailPreferences.COLUMNS,
+      canUse:()=>actor==='A',loadOrders:()=>new Promise((resolve,reject)=>calls.push({resolve,reject}))});
+   });
+   await page.evaluate(()=>ready);
+  }
+  await setup();assert.equal(await page.evaluate(()=>calls.length),0);
+  assert.equal(await page.locator('.sales-article-branch-orders').count(),1,'Restricted branches have no disclosure');
+  const summary=page.locator('[data-stock-order-id="18"] > summary');
+  await summary.click();await page.waitForFunction(()=>calls.length===1);
+  assert.match(await page.locator('.sales-article-branch-orders[open]').innerText(),/werden geladen/);
+  await summary.click();await summary.click();assert.equal(await page.evaluate(()=>calls.length),1);
+  await page.evaluate(()=>calls[0].reject(Error('temporary failure')));
+  await page.getByRole('button',{name:'Erneut laden'}).click();await page.waitForFunction(()=>calls.length===2);
+  await page.evaluate(()=>calls[1].resolve(result));
+  await page.getByText('BE 101 · Rest 4 · Stand 2026-10-31',{exact:true}).waitFor();
+  assert.equal(await page.locator('.sales-article-branch-orders[open]').count(),1);
+  await summary.click();await summary.click();assert.equal(await page.evaluate(()=>calls.length),2);
+  await setup();await summary.click();await page.waitForFunction(()=>calls.length===1);
+  await page.evaluate(()=>{actor='B';panel.render();calls[0].resolve(result);});
+  assert.equal(await page.locator('#stock').isHidden(),true);
+  assert.equal(await page.getByText('BE 101 · Rest 4 · Stand 2026-10-31',{exact:true}).count(),0);
+  await setup();await summary.click();await page.waitForFunction(()=>calls.length===1);
+  await page.evaluate(()=>{panel.destroy();document.querySelector('#stock').replaceChildren();calls[0].resolve(result);});
+  assert.equal(await page.locator('#stock').innerText(),'');assert.deepEqual(errors,[]);
+ } finally {await browser.close();}
+});

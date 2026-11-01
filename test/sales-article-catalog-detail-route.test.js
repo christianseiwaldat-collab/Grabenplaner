@@ -597,7 +597,7 @@ test("Detailroute validiert exakt und antwortet für unbekannte Artikel mit 404"
   assert.equal(extra.response.status, 400, JSON.stringify(extra.payload));
   assert.equal(extra.payload?.code, "SALES_ARTICLE_DETAIL_INVALID");
 
-  for (const suffix of ['main','notes','all']) {
+  for (const suffix of ['main','notes','orders','all']) {
     const result=await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}&section=${suffix}`);
     assert.equal(result.response.status,200,result.text);
     assert.match(result.response.headers.get('cache-control'),/private.*no-store/);

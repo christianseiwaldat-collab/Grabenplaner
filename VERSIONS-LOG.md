@@ -1,6 +1,13 @@
 # Versionsstatus
 
-## v0.92.97 Beta · Quellstand
+## v0.92.98 Beta · Quellstand
+
+Artikel zeigen Bestand und berechtigte Bestellmengen, bevor historische Bestellzuordnungen auf Wunsch geladen werden.
+Die Katalogübertragung von Access-Dezimalpreisen verwendet ausdrücklich zwölf Nachkommastellen; Quelldaten und Qualitätsprüfungen bleiben erhalten.
+Frühere wegen dieser Preisübertragung zurückgestellte Katalogeinträge können über die normale Übernahme erneut geprüft werden.
+Gemessene Laufzeiten, Linux-/PostgreSQL-Prüfungen und Auslieferung werden getrennt im Betriebsnachweis bestätigt.
+
+Enthält die Reparaturen aus v0.92.97 Beta:
 
 Begrenzte Bestandsfreigabe beim Trade-Import und beschleunigte Aktualisierung historischer Revisionen.
 Vollständigkeits-, Rechte- und Rücknahmeprüfungen bleiben erhalten.

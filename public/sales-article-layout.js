@@ -62,14 +62,18 @@
     const lines = ['Bestellt laut Bestandsimport: ' + decimal(row.ordered), 'Zuletzt belegte BE-Zuordnung; kein gesicherter aktueller Offenstand.'];
     for (const item of orders.items || []) lines.push('BE ' + item.number + ' · Rest ' + decimal(item.remaining)
       + (item.state === 'review' ? ' · prüfen' : '') + ' · Stand ' + h.timestamp(item.sourceAt));
-    if (!orders.items?.length) lines.push('Keine belastbare BE-Zuordnung verfügbar.');
+    const pending = ['deferred','loading','failed'].includes(orders.state);
+    if (pending) lines.push(orders.state === 'deferred' ? 'BE-Zuordnungen werden beim Öffnen geladen.'
+      : orders.state === 'loading' ? 'BE-Zuordnungen werden geladen…' : 'BE-Zuordnungen konnten nicht geladen werden.');
+    else if (!orders.items?.length) lines.push('Keine belastbare BE-Zuordnung verfügbar.');
     if (orders.state === 'review') lines.push('Abgleich / Prüfbedarf: Mengen, Status oder Zuordnung sind nicht vollständig bestätigt.');
     if (orders.truncated) lines.push('Begrenzte Anzeige; weitere historische Positionen können vorhanden sein.');
     if (orders.matched === true) lines.push('Die belegten Restmengen stimmen mit dem importierten Bestellt-Wert überein.');
-    return '<details class="sales-article-branch-orders"><summary title="' + esc(lines.join('\n')) + '" aria-label="Bestellt '
+    return '<details class="sales-article-branch-orders" data-stock-order-id="' + esc(row.id) + '"><summary title="' + esc(lines.join('\n')) + '" aria-label="Bestellt '
       + esc(decimal(row.ordered)) + ' · BE-Zuordnung anzeigen">' + esc(decimal(row.ordered))
       + ' <span aria-hidden="true">ⓘ</span></summary><div class="sales-article-branch-orders-note">'
-      + lines.map(line => '<p>' + esc(line) + '</p>').join('') + '</div></details>';
+      + lines.map(line => '<p>' + esc(line) + '</p>').join('')
+      + (orders.state === 'failed' ? '<button type="button" data-stock-orders-retry>Erneut laden</button>' : '') + '</div></details>';
   }
   function branchStock(stock, h, value = preferences.defaults()) {
     const rows=stock?.rows || [], hidden=new Set(value.hiddenBranchIds), columns=value.columns.map(id=>preferences.COLUMNS.find(column=>column.id===id));

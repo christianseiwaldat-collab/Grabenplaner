@@ -39259,7 +39259,7 @@ app.get("/api/sales/articles/detail", async (request, response) => {
     }
     const articleNumber = normalizeSalesArticleNumber(request.query?.articleNumber);
     const section = request.query?.section === undefined ? 'all' : request.query.section;
-    if (!['all','main','notes'].includes(section)) {
+    if (!['all','main','notes','orders'].includes(section)) {
       throw new SalesArticleCatalogError('Der Detailbereich ist ungültig.', 'SALES_ARTICLE_DETAIL_INVALID');
     }
     const article = await salesArticleCatalogRepository.getByArticleNumber(articleNumber);

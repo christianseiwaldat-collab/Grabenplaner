@@ -46,7 +46,7 @@ async function unlocked(f){assert.equal((await f.core.migrator.query("SELECT cou
 test('Native unified Trade import: dates, catalog batches, replay and undo share the production PostgreSQL facade',{skip:!enabled},()=>fixture(async f=>{
  const {definitions,readTradeFotoFullSource}=require('../lib/tradefoto-full-import-source');
  const defs=definitions('trade'),raw={...Object.fromEntries(M.tableFor('ARTIKEL_STAMM').columns.map(c=>[c.name,null])),
-  EAN:'0000000000017',Artikelbezeichnung:'Synthetic native catalog',MWST:1,Verkaufspreis:12,eNvk:10,'Änderungsdatum':new Date('2026-09-14T23:58:00Z')};
+  EAN:'0000000000017',Artikelbezeichnung:'Synthetic native catalog',MWST:1,Verkaufspreis:12,eNvk:10,EKBestell:36.229729729729726,'Änderungsdatum':new Date('2026-09-14T23:58:00Z')};
  const readerFactory=()=>({getTableNames:()=>defs.map(d=>d.name),getTable:name=>{
   const table=defs.find(d=>d.name===name),rows=name==='ARTIKEL_STAMM'?[raw]:[];
   return {rowCount:rows.length,getColumnNames:()=>table.columns.map(c=>c.name),getColumns:()=>table.columns.map(c=>({name:c.name,type:c.type})),
@@ -55,16 +55,37 @@ test('Native unified Trade import: dates, catalog batches, replay and undo share
  const vault=require('../lib/integration-secret-vault').createIntegrationSecretVault({activeKeyId:'native-synthetic',keys:{'native-synthetic':Buffer.alloc(32,71)}});
  const P=require('../lib/data-import-access').DATA_IMPORT_PERMISSIONS;
  const get=async()=>({employeeNumber:'00001',accountId:'synthetic-personal',isEmployee:true,permissions:[...Object.values(P),'sales:analytics:access','sales:analytics:company:read','sales:articles:access','sales:articles:read','sales:articles:import']});
- const runtime=require('../lib/persistence/repositories/data-import-runtime').createDataImportRuntime({access:f.access,vault,scopeId:'synthetic-native-unified',allowApply:true,sharedPayloads:true,syncArticleCatalog:true,clock:()=>TIME,
-  readSource:options=>readTradeFotoFullSource({...options,readerFactory,send:options.onMessage})});
+ const runtimeOptions={access:f.access,vault,scopeId:'synthetic-native-unified',allowApply:true,sharedPayloads:true,syncArticleCatalog:false,clock:()=>TIME,
+  readSource:options=>readTradeFotoFullSource({...options,readerFactory,send:options.onMessage})};
+ const createRuntime=()=>require('../lib/persistence/repositories/data-import-runtime').createDataImportRuntime(runtimeOptions);
+ let runtime=createRuntime();
  const buffer=Buffer.alloc(4096);buffer.write('Standard ACE DB',4);buffer[0x14]=3;
  let source=await runtime.upload(get,{buffer,kind:'trade',fileName:'Trade_Daten.accdb'});
  assert.equal(source.contentDate.value,'2026-09-14T23:58:00.000');
  const advance=async action=>{let n=0;do{source=await runtime.sourceOperation(get,source.id,action,{expectedRevision:source.revision});assert.ok(++n<500);}while(source.status===({review:'reviewing',apply:'applying',undo:'reverting'}[action]));};
  await advance('review');await advance('apply');
+ assert.equal(source.catalog,undefined);
+ await runtime.stop();
+ // Owned fixture of an old completed source whose decimal adapter rejected
+ // this article. The authenticated source and all imported table runs remain.
+ const S=require('../lib/persistence/statements/data-import-runtime').DATA_IMPORT_RUNTIME_STATEMENTS;
+ const owner={scopeId:'synthetic-native-unified',ownerId:'00001'};
+ const row=await f.access.queryOne(S.source,{id:source.id,...owner});
+ const protection=await require('../lib/data-import-managed-protection').loadManagedDataImportProtection({access:f.access,vault,create:false});
+ const context=revision=>['source',row.scopeId,row.ownerId,row.id,revision];
+ const data=protection.open(row.payload,context(row.revision));
+ data.catalog={after:0,total:1,changed:0,unchanged:0,blocked:1,complete:true,batches:[]};
+ await f.access.execute(S.updateSource,{id:row.id,...owner,revision:row.revision,updatedAt:TIME,payload:protection.seal(data,context(row.revision+1))});
+ protection.destroy();runtimeOptions.syncArticleCatalog=true;runtime=createRuntime();
+ source=await runtime.sourceOperation(get,source.id,'read');assert.equal(source.catalogUpdatePending,true);
+ await assert.rejects(runtime.sourceOperation(get,source.id,'apply',{expectedRevision:source.revision-1}),code('IMPORT_REVISION_CONFLICT'));
+ await assert.rejects(runtime.sourceOperation(async()=>({...await get(),permissions:[]}),source.id,'apply',{expectedRevision:source.revision}),code('IMPORT_FORBIDDEN'));
+ await advance('apply');
  assert.equal(source.status,'applied');assert.equal(source.catalog.changed,1);
+ assert.equal(source.catalogUpdatePending,false);assert.equal(source.catalog.blocked,0);
  const catalog=require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.access);
  assert.equal((await catalog.getByArticleNumber('000017')).description,'Synthetic native catalog');
+ assert.equal((await catalog.getByArticleNumber('000017')).prices.find(price=>price.sourceField==='EKBestell').amount,'36.229729729730');
  source=await runtime.sourceOperation(get,source.id,'apply',{expectedRevision:source.revision});assert.equal(source.catalog.batches.length,1);
  await advance('undo');assert.equal(source.status,'reverted');assert.equal((await catalog.getByArticleNumber('000017')).active,false);
  await runtime.stop();await unlocked(f);

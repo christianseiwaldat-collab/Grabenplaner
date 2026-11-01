@@ -34877,7 +34877,17 @@ function renderSalesArticleCatalogDetail() {
       store:salesArticleDetailPreferences, stock:article.branchStock, formats, layout,
       tableLayout:window.GrabenplanerTableLayout, columns:window.SalesArticleDetailPreferences.COLUMNS,
       canUse:() => canReadSalesArticles() && currentSalesArticleCatalogDetailAccessKey()===accessKey
-        && catalog.detail?.article===article && !catalog.detailLoading,
+        && catalog.detail?.article===article && !catalog.detailLoading && state.currentView==='articleCatalog',
+      loadOrders:async () => {
+        const payload=await api(`/api/sales/articles/detail?articleNumber=${encodeURIComponent(article.articleNumber)}&section=orders`);
+        if (!canReadSalesArticles() || currentSalesArticleCatalogDetailAccessKey()!==accessKey
+          || catalog.detail?.article!==article || catalog.detailLoading || state.currentView!=='articleCatalog') return null;
+        if (payload?.article?.articleNumber!==article.articleNumber || !Array.isArray(payload.article.branchStock?.rows))
+          throw new Error('Die Bestellzuordnungen passen nicht zum geöffneten Artikel.');
+        article.branchStock=payload.article.branchStock;
+        return article.branchStock;
+      },
+      onOrdersError:error => {if ([401,403].includes(error.status)) applySalesArticleCatalogReadState(false);},
     });
   }
   layout.mountDescriptions(elements.salesArticleDetailBody);
