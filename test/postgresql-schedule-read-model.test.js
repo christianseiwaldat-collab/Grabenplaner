@@ -109,12 +109,15 @@ test('native PostgreSQL: complete weeks keep parity, fresh writes and rights wit
         assert.equal(sample.queryCounts['saturday-credit.assignment-on-date']||0,0,JSON.stringify(sample));
         assert.equal(sample.queryCounts['saturday-credit.get'],1,JSON.stringify(sample));
       }
-      // Bound the remaining model work and verify duplicate location reads
-      // without requiring the actual-time eligibility reads planning removed.
+      // Compare the duplicate metadata reads directly. The optimized scope also
+      // refreshes governance metadata, so total query savings mix distinct work.
       assert.equal(evidence[0].queryCounts['organization-personnel.location.list'],5);
       assert.equal(evidence[1].queryCounts['organization-personnel.location.list'],1);
+      assert.equal(evidence[0].queryCounts['organization-personnel.department.list'],2);
+      assert.equal(evidence[1].queryCounts['organization-personnel.department.list'],1);
+      assert.equal(evidence[1].queryCounts['work-rule-governance.schema-tables'],1);
+      assert.equal(evidence[1].queryCounts['work-rule-governance.assignment-revisions-with-profile'],1);
       assert.ok(evidence[1].queries<=Object.values(distinctReads).reduce((a,b)=>a+b,0)+30,JSON.stringify(evidence));
-      assert.ok(evidence[0].queries-evidence[1].queries>=4,JSON.stringify(evidence));
       for(const week of ['2026-09-07','2026-09-21','2026-09-14']){
         const result=await request('/api/schedule?location=18&week='+week);
         assert.equal(result.body.weekStart,week);assert.equal(result.body.shifts.length,108+(week==='2026-09-07'?1:0));
