@@ -1,13 +1,5 @@
 # Security-Gates
 
-Dieser Backport aktiviert die CI-Prüfungen auf dem bestehenden main-Laufzeitstand.
-Er übernimmt die Scanner, die gebundene Compiler-Wiederverwendung, private
-CI-Nachweise und die schreibgeschützte Inventarprüfung. Die neuere SAST-Oberfläche
-und deren Integration in den Release-Paketbauer gehören nicht zu diesem Backport.
-Die zugehörigen Tests prüfen hier die CI- und Nachweisverträge direkt. Es wird
-kein Paket gebaut und kein Zielserver angesprochen. Abgelaufene Secrets-Ausnahmen
-werden nicht übernommen; sie benötigen neue, einzeln belegte Bewertungen.
-
 Der Workflow `.github/workflows/security.yml` führt SCA, SAST, Secrets-Prüfung
 und SBOM-Erzeugung für Pull Requests, `main`, manuell und täglich aus. Der stabile
 Abschlussjob `security-gates` akzeptiert ausschließlich `success` aller vier
@@ -15,14 +7,6 @@ Jobs. Fehlende Werkzeuge, ungültige Ergebnisse, Parser-/Zeitlimitfehler,
 ausgelassene Ziele und abgebrochene Jobs gelten nicht als bestandene Prüfung.
 Die verpflichtende GitHub-Branchregel und die externe Aktivierung müssen separat
 eingerichtet und an einem tatsächlichen Actions-Lauf nachgewiesen werden.
-
-`security-syntax.yml` liefert zusätzlich eine schnelle, verschlüsselte
-Parserdiagnose mit drei unveränderten syntaktischen Upstream-Regeln. Dafür wird
-der hashgebundene veröffentlichte Wrapper verwendet; diese Vorbereitung erteilt
-keine SAST-Freigabe und unterdrückt keine Befunde. Nur der bestehende vollständige
-SAST-Job mit frisch qualifiziertem Kern und allen fünf Profilen zählt zum
-verpflichtenden `security-gates`-Ergebnis. Beide Prüfungen lehnen Parserfehler,
-ausgelassene Ziele und unvollständige Analysen ab.
 
 ## Werkzeuge und Umfang
 
@@ -112,10 +96,8 @@ Ausgelassene Dateien, Regeln, Analysefehler und Zeitabbrüche bleiben blockieren
 Fingerprint, tatsächlichem Datei-/Gitblob-SHA256, Begründung, Verantwortlichkeit,
 Prüfdatum und Ablaufdatum. Keine Advisory-Ausnahmen sind genehmigt. P0/P1 sind
 auf höchstens 14, P2/P3 auf höchstens 30 Kalendertage begrenzt. Die aktuellen
-synthetischen/Shellsyntax-Treffer sind anhand ihrer tatsächlichen Quellen einzeln
-bewertet und auf 14 Tage begrenzt. Neue PR106-Bewertungen kennzeichnen den
-technischen Codex-Review ausdrücklich; die unabhängige GitHub-PR-Freigabe bleibt
-zusätzlich erforderlich. Zwei einzelne Dateien besitzen zusätzlich genau geprüfte
+synthetischen/Shellsyntax-Treffer wurden zweimal unabhängig gelesen und sind
+auf 14 Tage begrenzt. Zwei einzelne Dateien besitzen zusätzlich genau geprüfte
 LF-Checkout-Hashes; es gibt keine allgemeine Inhaltsnormalisierung. Neue oder
 verschobene Treffer, neue historische Commits und Inhaltsdrift blockieren.
 
@@ -139,24 +121,12 @@ zusätzliche Inhaltsvarianten sind nicht zulässig.
 Veraltete, doppelte, nicht zuordenbare oder unvollständige Entscheidungen
 scheitern geschlossen. Nicht geprüfte und echte Befunde bleiben blockierend.
 Eine Entscheidung kann niemals Parserfehler, Zeitlimits oder fehlende
-Dateiabdeckung aufheben. Für PR106 wurden die übernommenen Einzelbewertungen
-gegen den tatsächlichen älteren `main`-Stand und die Berichtsänderungen geprüft.
-Entfernte Fundstellen und nicht vorhandene spätere Produktfunktionen sind kein
-Freigabenachweis für diesen Stand. Jede aktuelle Entscheidung bindet deshalb
-die konkreten Quellen, Produzenten und Schutzfunktionen des Backports; veraltete
-Kontextpfade wurden durch die tatsächlich vorhandenen Implementierungen ersetzt.
-Die Bewertungen kennzeichnen den technischen Codex-Review ausdrücklich und
-ersetzen keine unabhängige GitHub-Freigabe. Bestehende Ablaufdaten werden nicht
-verlängert; neue Bewertungen gelten höchstens 14 Tage. Die normalen fünf
-SAST-Profile mit allen 158 anwendbaren Regeln aus dem unveränderten Paket mit
-169 Upstream-Regeln müssen unabhängig sämtliche aktuellen Identitäten und
-Quellhashes bestätigen. Die bereits dokumentierten elf AWS-Lambda-Regeln bleiben
-an die bestehende Anwendbarkeits- und Deploymentprüfung gebunden. Eine lokale
-Quellprojektion oder die
-Drei-Regel-Parserdiagnose ist kein vollständiger Sicherheitsnachweis.
-Historische echte Fehler bleiben als behoben dokumentiert. Neue Scannerhinweise
-werden nicht automatisch als Fehlalarm übernommen; Änderungen und Ablauf
-erfordern eine erneute Prüfung.
+Dateiabdeckung aufheben. Die am 18.10.2026 einzeln geprüften 2.983 aktuellen
+Hinweise sind an 148 Kontextdateien gebunden und bis 17.11.2026 befristet.
+Die vollständige Linux-Abdeckung wurde aus dem Vollscan und genau zwei
+quell- und regelgebundenen Nachläufen nachgewiesen. Historische echte Fehler
+bleiben als behoben dokumentiert. Neue Scannerhinweise werden nicht automatisch
+als Fehlalarm übernommen; Änderungen und Ablauf erfordern eine erneute Prüfung.
 
 Die Regel-ID wird gegen die vollständige ID-Liste des hashgeprüften
 Upstream-Profils aufgelöst, unabhängig von temporären Scannerpfaden. Der

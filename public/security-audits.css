@@ -1,0 +1,63 @@
+#securityAuditsWorkspaceHost, #securitySastWorkspaceHost { min-width:0; max-width:100%; }
+#securitySastWorkspaceHost .security-audits-summary { grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); }
+#securitySastWorkspaceHost [data-sast-content], #securitySastWorkspaceHost [data-sast-table] { min-width:0; max-width:100%; }
+#securitySastWorkspaceHost .rights-settings-table { min-width:1050px; }
+#securitySastWorkspaceHost .security-audits-link { border:0; padding:4px 2px; background:transparent; color:var(--green); text-decoration:underline; font:inherit; cursor:pointer; text-align:left; }
+.security-audits-workspace { display:grid; grid-template-columns:minmax(0,1fr); gap:15px; width:100%; max-width:1440px; min-width:0; color:var(--ink); }
+.security-audits-workspace > *, .security-audits-workspace :is([data-sa-content],[data-sa-results],[data-sa-table]) { min-width:0; max-width:100%; }
+.security-audits-workspace *, .security-audits-workspace *::before, .security-audits-workspace *::after { box-sizing:border-box; }
+.security-audits-workspace h2 { margin:0; font-size:22px; }
+.security-audits-workspace h3 { margin:0 0 9px; font-size:14px; }
+.security-audits-workspace p { line-height:1.6; }
+.security-audits-heading { display:flex; align-items:center; justify-content:space-between; gap:18px; }
+.security-audits-heading > div { min-width:0; max-width:100%; }
+.security-audits-heading p { margin:6px 0 0; color:var(--muted); font-size:12px; }
+.security-audits-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.security-audits-boundary { margin:0; padding:13px 16px; border:1px solid var(--line); border-left:3px solid var(--green); border-radius:9px; background:var(--surface-soft); color:var(--muted); font-size:12px; }
+.security-audits-notice { min-height:17px; margin:0; font-size:12px; color:var(--muted); }
+.security-audits-workspace .field { min-width:0; }
+.security-audits-workspace .field > span { color:var(--ink); }
+.security-audits-workspace select, .security-audits-workspace input:not([type=checkbox]), .security-audits-workspace textarea { max-width:100%; }
+.security-audits-run-picker { max-width:760px; margin-bottom:18px; }
+.security-audits-run-picker select { width:100%; min-width:0; }
+.security-audits-summary { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:8px; margin:15px 0 8px; }
+.security-audits-summary > div { display:grid; align-content:start; gap:7px; padding:13px 10px; border:1px solid var(--line); border-radius:9px; background:var(--surface); }
+.security-audits-summary strong { font-size:23px; font-variant-numeric:tabular-nums; }
+.security-audits-summary span { color:var(--muted); font-size:10px; line-height:1.45; }
+.security-audits-muted { color:var(--muted); font-size:11px; }
+.security-audits-warning { padding:7px 9px; border:1px solid color-mix(in srgb,var(--warning-ink,#85601e) 30%,var(--line)); border-radius:6px; color:var(--warning-ink,#85601e); background:var(--warning-surface,#fff7e7); font-size:11px; }
+.security-audits-run-details { margin:16px 0; padding:14px 16px; border:1px solid var(--line); border-radius:11px; background:var(--surface); }
+.security-audits-run-details summary { cursor:pointer; font-weight:750; font-size:12px; }
+.security-audits-run-details li { margin-bottom:6px; font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
+.security-audits-detail { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 22px; margin:18px 0; }
+.security-audits-detail > div { min-width:0; border-bottom:1px solid var(--line); padding-bottom:11px; }
+.security-audits-detail dt { margin-bottom:5px; color:var(--muted); font-size:10px; }
+.security-audits-detail dd { margin:0; font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; }
+.security-audits-detail code, .security-audits-evidence code { display:block; margin-top:6px; color:var(--muted); font-size:10px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.security-audits-panel-tabs { display:flex; flex-wrap:wrap; gap:5px; padding:5px; margin-bottom:15px; border:1px solid var(--line); border-radius:10px; background:var(--surface); }
+.security-audits-panel-tabs button { padding:10px 13px; border:0; border-radius:7px; color:var(--muted); background:transparent; font:inherit; font-size:12px; cursor:pointer; }
+.security-audits-panel-tabs button[aria-pressed=true] { background:color-mix(in srgb,var(--green) 9%,var(--surface)); color:var(--green); font-weight:700; }
+.security-audits-filters { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:12px; }
+.security-audits-filters .field { flex:1 1 180px; max-width:360px; margin:0; }
+.security-audits-workspace [data-sa-table] { min-width:0; }
+.security-audits-workspace .rights-table-scroll { max-height:62vh; }
+.security-audits-row-action { border:0; padding:4px 2px; background:transparent; color:var(--green); text-decoration:underline; font:inherit; cursor:pointer; }
+.security-audits-labels { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+.security-audits-labels span { padding:5px 8px; border:1px solid var(--line); border-radius:6px; background:var(--surface-soft); font-size:10px; }
+.security-audits-empty { padding:32px 24px; border:1px dashed var(--line); border-radius:12px; background:var(--surface); text-align:center; }
+.security-audits-empty p { max-width:70ch; margin:10px auto; color:var(--muted); font-size:12px; }
+.security-audits-dialog .field { display:grid; gap:6px; margin:0 0 15px; font-size:12px; }
+.security-audits-dialog .field > span { font-weight:700; }
+.security-audits-dialog .field input, .security-audits-dialog .field select, .security-audits-dialog .field textarea { width:100%; min-height:36px; padding:8px 10px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink); font:inherit; }
+.security-audits-dialog textarea { resize:vertical; }
+.security-audits-dialog.gp-dialog .privacy-org-editor-heading { display:none; }
+.security-audits-dialog .privacy-org-editor-body > p { margin:0 0 15px; }
+.security-audits-dialog [data-sa-form-status]:not(:empty) { padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--surface-soft); font-size:12px; }
+.security-audits-import-preview { padding:14px; border:1px solid var(--line); border-radius:9px; background:var(--surface-soft); overflow-wrap:anywhere; }
+.security-audits-import-preview p { font-size:12px; }
+.security-audits-evidence { padding-left:20px; font-size:12px; }
+.security-audits-evidence li { margin-bottom:15px; }
+.security-audits-preserve { white-space:pre-wrap; overflow-wrap:anywhere; }
+.security-audits-workspace :is(button,input,select,textarea,summary,a):focus-visible { outline:2px solid var(--green); outline-offset:3px; }
+@media (max-width:1100px) { .security-audits-summary { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+@media (max-width:650px) { .security-audits-heading { align-items:start; flex-direction:column; } .security-audits-actions { width:100%; } .security-audits-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } .security-audits-detail { grid-template-columns:1fr; } .security-audits-filters .field { max-width:none; } .security-audits-actions button { flex:1 1 auto; } }

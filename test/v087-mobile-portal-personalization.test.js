@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -12,7 +13,7 @@ const portalHtml = fs.readFileSync(path.join(projectRoot, "public", "portal.html
 const portalScript = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
 const portalStyles = fs.readFileSync(path.join(projectRoot, "public", "portal.css"), "utf8");
 
-test("v0.87: Persönliche Einstellungen sind geschlossen, Benachrichtigungen ergänzt und Passwort zuletzt", () => {
+test("v0.87: Persönliche Einstellungen sind geschlossen, Benachrichtigungen ergänzt und Passwort plus Passkeys am Ende", () => {
   const settingsView = portalHtml.match(
     /<section class="portal-view" id="settingsView"[\s\S]*?(?=<section class="portal-view active" id="scheduleView")/,
   )?.[0] || "";
@@ -21,7 +22,11 @@ test("v0.87: Persönliche Einstellungen sind geschlossen, Benachrichtigungen erg
   )?.[0] || "";
   const detailTags = [...settingsView.matchAll(/<details\b[^>]*>/g)].map((match) => match[0]);
 
-  assert.equal(detailTags.length, 9);
+  assert.equal(detailTags.length, 10);
+  assert.deepEqual(detailTags.map(tag => tag.match(/\bid="([^"]+)"/)?.[1] || null), [
+    "mobileHomeSettingsCard", "mobileNavigationSettingsCard", "mobileAppearanceSettingsCard", "wifiAutomationCard", "privacyRequestsCard",
+    "emailSettingsCard", "branchOrderSettingsCard", "branchPortalDisplaySettingsCard", "passwordSettingsCard", null,
+  ]);
   assert.equal(detailTags.every((tag) => !/\sopen(?:\s|=|>)/.test(tag)), true);
   assert.doesNotMatch(portalHtml, /Verifizierte Empfänger|sicknessNotificationPreferencesCard/);
   assert.doesNotMatch(moreView, /Externe Benachrichtigungen|emailSettingsCard/);
@@ -31,11 +36,17 @@ test("v0.87: Persönliche Einstellungen sind geschlossen, Benachrichtigungen erg
 
   const passwordSection = settingsView.indexOf('class="portal-card portal-settings-section portal-settings-password"');
   const emailSection = settingsView.indexOf('id="emailSettingsCard"');
+  const securityCards = [...settingsView.matchAll(/<details\b[^>]*>[\s\S]*?<\/details>/g)].slice(-2);
   const lastDetailsStart = settingsView.lastIndexOf("<details");
   assert.ok(emailSection >= 0);
   assert.ok(passwordSection > emailSection);
-  assert.ok(lastDetailsStart >= 0 && lastDetailsStart < passwordSection);
-  assert.match(settingsView.slice(lastDetailsStart), /^<details class="portal-card portal-settings-section portal-settings-password"[\s\S]*Passwort ändern[\s\S]*id="settingsPasswordButton"/);
+  assert.equal(securityCards.length, 2);
+  assert.ok(securityCards[0].index < passwordSection && passwordSection < lastDetailsStart);
+  assert.equal(lastDetailsStart, securityCards[1].index);
+  assert.match(securityCards[0][0], /^<details class="portal-card portal-settings-section portal-settings-password"[\s\S]*Passwort ändern[\s\S]*id="settingsPasswordButton"/);
+  assert.match(securityCards[1][0], /^<details class="portal-card portal-settings-section">[\s\S]*<strong>Passkeys<\/strong>/);
+  assert.match(securityCards[1][0], /href="\/passkeys\.html">Passkeys verwalten<\/a>/);
+  assert.match(securityCards[1][0], /Filial- und Terminalkonten werden durch die zuständige Filialleitung oder Administration verwaltet/);
 });
 
 test("v0.87: Persönliche Kanäle bleiben Self-Service, Stammdaten read-only und Fachereignisse inaktiv", () => {
@@ -120,7 +131,7 @@ function ensureEmployee(employeeNumber, fullName, locationId) {
 
 function createPortalSession(employeeNumber) {
   const token = `v087-mobile-${employeeNumber}-${crypto.randomBytes(24).toString("hex")}`;
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
@@ -131,8 +142,8 @@ function createPortalSession(employeeNumber) {
   `).run(employeeNumber);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     cookie: `grabenplaner_session=${encodeURIComponent(token)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
@@ -167,7 +178,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

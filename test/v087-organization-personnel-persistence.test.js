@@ -151,6 +151,7 @@ async function fixture() {
     CREATE TABLE portal_users (
       employee_number TEXT PRIMARY KEY,
       password_hash TEXT NOT NULL DEFAULT '',
+      password_policy_version INTEGER NOT NULL DEFAULT 0,
       role TEXT NOT NULL DEFAULT 'employee',
       role_locked INTEGER NOT NULL DEFAULT 0,
       active INTEGER NOT NULL DEFAULT 1,
@@ -206,6 +207,7 @@ async function fixture() {
       display_name TEXT NOT NULL,
       account_type TEXT NOT NULL,
       password_hash TEXT NOT NULL DEFAULT '',
+      password_policy_version INTEGER NOT NULL DEFAULT 0,
       active INTEGER NOT NULL DEFAULT 1,
       must_change_password INTEGER NOT NULL DEFAULT 1,
       last_login_at TEXT,

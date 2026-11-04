@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -66,7 +68,7 @@ function ensureEmployee(personnelNumber, locationId, departmentId, level = "C") 
 
 function session(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, role_locked, active, must_change_password,
@@ -82,8 +84,8 @@ function session(employeeNumber, role) {
   `).run(employeeNumber, role);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     cookie: `grabenplaner_session=${encodeURIComponent(token)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
@@ -111,13 +113,13 @@ test.before(async () => {
   positionId = db.prepare("SELECT id FROM positions ORDER BY sort_order, id LIMIT 1").get().id;
   const template = db.prepare("SELECT day_settings_json FROM locations ORDER BY id LIMIT 1").get();
   originalDaySettings = JSON.parse(template?.day_settings_json || "{}");
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT OR REPLACE INTO locations
       (id, name, min_staff, day_settings_json, time_tracking_enabled, time_tracking_access_mode,
        time_tracking_allowed_networks, time_tracking_variance_minutes, active)
     VALUES (?, ?, 2, ?, 0, 'anywhere', '', 15, 1)
   `).run(LOCATION, "Eigener Teststandort", JSON.stringify(originalDaySettings));
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT OR REPLACE INTO locations
       (id, name, min_staff, day_settings_json, time_tracking_enabled, time_tracking_access_mode,
        time_tracking_allowed_networks, time_tracking_variance_minutes, active)
@@ -166,7 +168,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

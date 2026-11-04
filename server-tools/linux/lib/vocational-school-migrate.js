@@ -27,7 +27,7 @@ async function main(args = process.argv.slice(2)) {
     "lib/persistence/postgresql/core/vocational-school.js",
     "lib/persistence/postgresql/core/catalog.js",
     "lib/persistence/postgresql/boundary/migrate.js",
-    "lib/persistence/sqlite/planning-settings-catalog.js",
+    "lib/persistence/catalogs/planning-settings-catalog.js",
     "lib/persistence/statements/planning-settings.js",
   ]) {
     const entry = manifest.files.find(file => file.path === relative);

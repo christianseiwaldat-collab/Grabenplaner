@@ -11,6 +11,7 @@ function source(name, text = app) {
   return text.slice(match.index, text.indexOf('\n}', match.index) + 2);
 }
 function load(context, names) {
+  context.syncSystemUtilizationWorkspace = () => {};
   vm.createContext(context);
   vm.runInContext(names.map(name => source(name)).join('\n'), context);
   return context;
@@ -60,7 +61,7 @@ function tabsFixture() {
     state:{portalStatus:{portalEnabled:true},portalSession:{user:{permissions:['settings:write','employees:read']}},
       currentView:'settings',personnelTab:'employees',employeeProfileHost:'team'},
     elements, schedulePdfSettingsWritePermission:'schedule:pdf:settings:write',
-    rightsWorkspace:null, rightsSettingsWindows:null,
+    rightsWorkspace:null, rightsSettingsWindows:null, emmaContactSettings:null,
     rightsWindowEntryGeometry:() => ({}), syncGpWindows:() => {}, syncRightsWorkspace:() => {},
     canReadSystemCenter:() => true, canAccessTeamManagement:() => true, canManageLoanSettings:() => false,
     canManageMaintenanceSchedules:() => false, canManageOffsiteFolders:() => false, employeeProfileIsOpen:() => false,
@@ -280,7 +281,7 @@ function teardownContext(workspace, priceRoot) {
     salesPriceLabelsWorkspace:workspace,window:{},document:{getElementById:id => id === 'salesPriceLabelsWorkspace' ? priceRoot : null},
     elements:{},syncPrivacyOrganizationAccess(){},syncSalesPriceLabelsNavigation(){},canUseSalesPriceLabels:() => false,
     canAccessTradeInsights:() => false,canReadTradeMovements:() => false,canReadSalesArticles:() => false};
-  for(const name of ['tradeInsightsWorkspace','salesReportJobUi','receiptSearchWorkspace','salesHistoryWorkspace',
+  for(const name of ['tradeInsightsWorkspace','tradeOrdersWorkspace','salesReportJobUi','receiptSearchWorkspace','salesHistoryWorkspace',
     'dataImportWorkspace','importMappingWorkspace','crmPurchaseWorkspace'])c[name]=null;
   return load(c,['syncSalesHistoryAccess']);
 }

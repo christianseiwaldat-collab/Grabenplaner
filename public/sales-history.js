@@ -28,7 +28,7 @@
     const heading = (key, label) => `<th scope="col" aria-sort="${sort.key === key ? sort.direction === 1 ? 'ascending' : 'descending' : 'none'}"><button type="button" data-history-sort="${key}">${label}</button></th>`;
     return `<div class="sales-history-table-scroll" tabindex="0" role="region" aria-label="Suchergebnisse, sortierbare aktuelle Seite"><table>
       <caption>Sortierung der angezeigten Seite · ${items.length} Datensätze</caption><thead><tr>${heading('date', 'Tag')}${heading('receipt', 'Beleg')}${heading('description', sales ? 'Artikel / Bezeichnung' : 'Buchung')}
-      ${sales ? '<th scope="col">Menge</th><th scope="col">Geprüft brutto</th>' : '<th scope="col">Einzahlung</th><th scope="col">Auszahlung</th>'}<th scope="col">Details</th></tr></thead>
+      ${sales ? '<th scope="col">Menge</th><th scope="col">Geprüft brutto</th>' : '<th scope="col">Einzahlung</th><th scope="col">Auszahlung</th>'}<th scope="col">Details</th>${sales ? '<th scope="col">Beleg-PDF</th>' : ''}</tr></thead>
       <tbody>${rows.map(row => `<tr><td>${escape(row.date)}</td><td>${escape(row.receipt || '–')}</td><td>${escape(row.displayDescription || row.description || 'Ohne Bezeichnung')}${ArticleHistory.referenceMarkup(row.articleDisplay,row.description)}${sales ? `<small>${escape(row.article || 'Artikelreferenz fehlt')}</small>` : ''}</td>
       ${sales ? `<td>${escape(number(row.quantity))}</td><td>${row.metric ? `${escape(number(row.metric.gross))} ${escape(row.metric.currency)}` : '<span class="sales-history-review">Prüfung offen</span>'}</td>`
         : `<td>${escape(number(row.inflow))}</td><td>${escape(number(row.outflow))}</td>`}
@@ -36,7 +36,7 @@
       ${sales ? `<dt>Artikelzuordnung</dt><dd>${escape(refLabel(row.articleReference))}</dd><dt>Quellpreis (ungeprüft)</dt><dd>${escape(number(row.sourcePrice))}</dd>` : `<dt>Konto</dt><dd>${escape(row.account || '–')}</dd>`}
       ${row.sellers ? `<dt>Positionsverkäufer</dt><dd>${escape(refLabel(row.sellers.line))}</dd><dt>Belegverkäufer</dt><dd>${escape(refLabel(row.sellers.header))}</dd>` : ''}
       <dt>Quellstand</dt><dd>${escape(row.provenance?.snapshotAt || '–')}</dd><dt>Importiert</dt><dd>${escape(row.provenance?.importedAt || '–')}</dd>
-      <dt>Prüfung</dt><dd>${escape(row.metric ? ({ sale: 'Verkauf', return: 'Rückgabe', adjustment: 'Rabatt / Gegenbuchung', deposit: 'Anzahlung / Verrechnung · ohne Rohertrag', payment: 'Zahlungsmittel', voucher_issue: 'Gutscheinausgabe · kein Warenumsatz', uid_clearing: 'UID-Zwischenbuchung · kein Warenumsatz', excluded: 'Ausgeschlossen' }[row.metric.status] || 'Geprüft') : (row.issues || []).map(issueText).join(' · '))}</dd></dl></details></td></tr>`).join('') || '<tr><td colspan="6">Keine zugeordneten Datensätze im gewählten Bereich. Das beweist keinen Umsatz von null.</td></tr>'}</tbody></table></div>`;
+      <dt>Prüfung</dt><dd>${escape(row.metric ? ({ sale: 'Verkauf', return: 'Rückgabe', adjustment: 'Rabatt / Gegenbuchung', deposit: 'Anzahlung / Verrechnung · ohne Rohertrag', payment: 'Zahlungsmittel', voucher_issue: 'Gutscheinausgabe · kein Warenumsatz', uid_clearing: 'UID-Zwischenbuchung · kein Warenumsatz', excluded: 'Ausgeschlossen' }[row.metric.status] || 'Geprüft') : (row.issues || []).map(issueText).join(' · '))}</dd></dl></details></td>${sales ? `<td>${row.receiptId ? `<button type="button" class="secondary-button" data-history-pdf="${escape(row.receiptId)}" aria-label="Vollständigen Beleg ${escape(row.receipt || '')} als PDF öffnen">Beleg-PDF</button>` : '–'}</td>` : ''}</tr>`).join('') || `<tr><td colspan="${sales ? 7 : 6}">Keine zugeordneten Datensätze im gewählten Bereich. Das beweist keinen Umsatz von null.</td></tr>`}</tbody></table></div>`;
   }
   function renderCustomerAssignment(result) {
     const assignment = result.customerAssignment;
@@ -64,13 +64,19 @@
       <details><summary>Nach Tagen aufschlüsseln</summary><div class="sales-history-days"><table><thead><tr><th scope="col">Tag</th><th scope="col">Datensätze</th><th scope="col">Prüfung offen</th><th scope="col">Geprüft brutto</th></tr></thead><tbody>
       ${result.days.map(day => `<tr><td>${escape(day.date)}</td><td>${day.records}</td><td>${day.review}</td><td>${escape(number(day.gross))}</td></tr>`).join('')}</tbody></table></div></details></section>`;
   }
-  function mount(root, { api, customerId = null, calendarFactory = globalThis.GrabenplanerDateRangeCalendar?.createDateRangeCalendar }) {
+  function mount(root, { api, rawApi, accessKey = () => '', canUse = () => true, active = () => true, windowPreferences, scale,
+    customerId = null, calendarFactory = globalThis.GrabenplanerDateRangeCalendar?.createDateRangeCalendar }) {
     const body = root.querySelector('[data-history-body]');
     let disposed = false, generation = 0, controller = null, loaded = false, context, lastResult = null, lastQuery = null, calendar = null;
     let from = '', to = '', paused = false, reading = false, analysisTicket = null, defaultSearchStarted = false, sort = { key: 'date', direction: -1 };
+    const owner = accessKey(); let receiptPdf = null;
+    const authorized = () => !disposed && accessKey() === owner && canUse();
+    const printActive = () => authorized() && root.open && active() && !globalThis.document?.hidden;
+    const receiptContext = () => JSON.stringify({ customerId, generation, query: lastQuery, sources: context?.sources });
+    function syncPrint() { if (!receiptPdf) return; if (printActive()) receiptPdf.activate(); else receiptPdf.deactivate(); receiptPdf.sync(); }
     const el = name => body.querySelector(`[data-h="${name}"]`);
     function cancel() { generation++; controller?.abort(); controller = null; }
-    function clearResults() { cancel(); reading = false; lastResult = null; lastQuery = null; if (el('results')) el('results').innerHTML = ''; for (const key of ['next', 'analyze', 'pause']) if (el(key)) { el(key).hidden = true; el(key).disabled = false; } root.removeAttribute('aria-busy'); }
+    function clearResults() { cancel(); receiptPdf?.reset(); reading = false; lastResult = null; lastQuery = null; if (el('results')) el('results').innerHTML = ''; for (const key of ['next', 'analyze', 'pause']) if (el(key)) { el(key).hidden = true; el(key).disabled = false; } root.removeAttribute('aria-busy'); }
     function selectedSource() { return context.sources.find(s => s.id === el('source').value); }
     function updateSource() {
       const source = selectedSource(), finance = el('kind').value !== 'sales';
@@ -84,6 +90,16 @@
     function renderResults() { if (lastResult) { el('results').innerHTML = renderSummary(lastResult) + renderTable(lastResult.items, lastResult.query.kind, sort); el('next').hidden = !lastResult.next;
       el('analyze').hidden = !lastResult.analysis?.cursor; } }
     const endpoint = action => customerId ? `/api/crm/customers/${encodeURIComponent(customerId)}/purchases/${action}` : `/api/sales-history/${action}`;
+    function exportReceipt(receiptId, target) {
+      if (!printActive() || !context?.available || lastResult?.query?.kind !== 'sales'
+        || !lastResult.items.some(row => row.receiptId === receiptId)) return;
+      try {
+        receiptPdf ||= root.ownerDocument.defaultView.GpReceiptPrint.mount({ document: root.ownerDocument, rawApi, key: accessKey,
+          id: customerId ? 'customer-purchase-receipt-pdf' : 'sales-history-receipt-pdf',
+          canUse: () => authorized() && Boolean(context?.available), active: printActive, contextKey: receiptContext, windowPreferences, scale });
+        receiptPdf.open([receiptId], target);
+      } catch (error) { if (authorized() && el('message')) el('message').textContent = error.message || 'Die Beleg-PDF konnte nicht geöffnet werden.'; }
+    }
     function updatePeriod(start, end) {
       from = start; to = end;
       if (customerId) { el('from').value = from; el('to').value = to; }
@@ -187,9 +203,11 @@
         ? 'Auswertung pausiert. Du kannst die Zeitraumsauswertung fortsetzen.' : 'Abruf unterbrochen. Bitte Auswerten wählen, um erneut zu laden.';
       reading = false; root.removeAttribute('aria-busy');
     }
-    function onToggle() { if (root.open) void load(); else if (customerId) pauseCustomerReads(); else suspend(); }
-    function onVisibility() { if (globalThis.document?.hidden) { if (customerId) pauseCustomerReads(); else suspend(); } else if (root.open) void load(); }
+    function onToggle() { if (root.open) void load(); else if (customerId) pauseCustomerReads(); else suspend(); syncPrint(); }
+    function onVisibility() { if (globalThis.document?.hidden) { if (customerId) pauseCustomerReads(); else suspend(); } else if (root.open) void load(); syncPrint(); }
     function onClick(event) {
+      const pdfButton = event.target.closest('[data-history-pdf]');
+      if (pdfButton && root.contains(pdfButton)) { exportReceipt(pdfButton.dataset.historyPdf, pdfButton); return; }
       const button = event.target.closest('[data-history-sort]'); if (!button || !root.contains(button) || !lastResult) return;
       const key = button.dataset.historySort; if (!['date', 'receipt', 'description'].includes(key)) return;
       sort = { key, direction: sort.key === key ? -sort.direction : 1 }; renderResults();
@@ -197,7 +215,7 @@
     }
     root.addEventListener('toggle', onToggle); root.addEventListener('click', onClick); if (root.open) void load();
     globalThis.document?.addEventListener('visibilitychange', onVisibility);
-    return { destroy() { disposed = true; cancel(); el('dialog')?.close(); root.removeEventListener('toggle', onToggle); root.removeEventListener('click', onClick);
+    return { syncPrint, destroy() { disposed = true; receiptPdf?.destroy(); cancel(); el('dialog')?.close(); root.removeEventListener('toggle', onToggle); root.removeEventListener('click', onClick);
       globalThis.document?.removeEventListener('visibilitychange', onVisibility);
       body.replaceChildren(); root.removeAttribute('aria-busy'); lastQuery = lastResult = context = calendar = null; } };
   }

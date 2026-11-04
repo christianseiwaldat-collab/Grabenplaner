@@ -44,6 +44,7 @@ function Test-ExcludedRelativePath([string]$RelativePath) {
 function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
     $normalized = $RelativePath.Replace('\', '/')
     if ($normalized -cin @('backup.js', 'scripts/run-background-backup.js', 'scripts/manage-local-backup-archive.js')) { return $true }
+    if ($normalized -cin @('services/planning-optimizer/service.py', 'services/planning-optimizer/requirements.txt')) { return $true }
     if ($normalized -in @('server.js', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'README.md', 'LICENSE.md', 'SECURITY.md', 'SERVERBETRIEB.md')) { return $true }
     return $normalized.StartsWith('lib/') -or $normalized.StartsWith('public/') -or $normalized.StartsWith('server-tools/')
 }
@@ -55,6 +56,8 @@ function Assert-RequiredRuntimeFiles([string]$Root, [string]$PackageKind) {
         'scripts\run-background-backup.js',
         'scripts\manage-local-backup-archive.js',
         'lib\backup-workspace.js',
+        'services\planning-optimizer\service.py',
+        'services\planning-optimizer\requirements.txt',
         'lib\background-backup-process.js',
         'lib\local-backup-archive.js',
         'package.json',

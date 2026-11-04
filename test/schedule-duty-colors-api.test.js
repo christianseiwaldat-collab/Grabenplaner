@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -25,7 +27,7 @@ async function request(role, method, payload, suffix = "/schedule-duty-colors", 
   return { status: result.status, body: await result.json() };
 }
 test.before(async () => {
-  db.prepare("INSERT INTO locations(id,name,active) VALUES('95','Palette Nord',1),('96','Palette Süd',1)").run();
+  prepareLocationFixture(db, "INSERT INTO locations(id,name,active) VALUES('95','Palette Nord',1),('96','Palette Süd',1)").run();
   let number = 99810;
   for (const role of ["hr", "developer", "manager", "admin", "it_admin"]) {
     const employeeNumber = String(number++);
@@ -35,8 +37,8 @@ test.before(async () => {
       VALUES(?,'test-only',?,1,0,CURRENT_TIMESTAMP)`).run(employeeNumber, role);
     db.prepare("INSERT OR IGNORE INTO portal_permission_grants(employee_number,permission,granted_by) VALUES(?,'settings:write','synthetic')").run(employeeNumber);
     db.prepare("INSERT INTO portal_access_scopes(employee_number,location_id,department_id,assigned_by) VALUES(?,'95',0,'synthetic')").run(employeeNumber);
-    const token = crypto.randomBytes(32).toString("hex"), csrf = crypto.randomBytes(24).toString("hex");
-    db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z')")
+    const token = crypto.randomBytes(32).toString("hex"), csrf = sessionCsrf(token);
+    db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
       .run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
     accounts[role] = { employeeNumber, csrf, cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}` };
   }
@@ -45,7 +47,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (httpServer) await new Promise(resolve => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   // Only the exact test-owned temporary fixture is removed.
   assert.ok(path.resolve(fixtureRoot).startsWith(path.resolve(os.tmpdir()) + path.sep));

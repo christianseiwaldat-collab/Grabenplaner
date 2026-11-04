@@ -4,35 +4,40 @@
   const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]));
   const labels = {fulfilled:"Erfüllt", dueSoon:"Bald fällig", expired:"Abgelaufen", missing:"Fehlt", lowerLevel:"Stufe fehlt", otherVersion:"Andere Fassung", notPassed:"Nachschulung", inProgress:"In Durchführung", notApplicable:"Nicht erforderlich"};
   function mount(host, {api}) {
-    let options, current, generation = 0, offset = 0, dialog = null, editingId = null;
-    function clear() { generation++; dialog?.close(); dialog?.remove(); dialog = null; editingId = null; offset = 0; options = current = null; host.replaceChildren(); }
+    let options, current, generation = 0, optionsGeneration = 0, resultGeneration = 0, offset = 0, dialog = null, editingId = null;
+    function clear() { generation++; optionsGeneration++; resultGeneration++; dialog?.close(); dialog?.remove(); dialog = null; editingId = null; offset = 0; options = current = null; host.replaceChildren(); }
     const query = () => { const p = new URLSearchParams(new FormData(host.querySelector("form[data-filters]"))); p.set("offset", String(offset)); return p; };
     const choices = (rows, empty) => `<option value="">${empty}</option>` + rows.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join("");
     function error(message) { const target = host.querySelector("[data-error]"); if (target) target.textContent = message; }
     async function results() {
-      const ticket = ++generation, queryString = query().toString();
+      const ticket = ++resultGeneration, owner = generation, context = globalThis.GpWindow?.captureContext(document), queryString = query().toString();
+      const valid = () => ticket === resultGeneration && owner === generation && (!context || globalThis.GpWindow.currentContext(context));
       error(""); host.querySelector("[data-result]").setAttribute("aria-busy", "true");
       try {
-        const value = await api(base + "/team?" + queryString); if (ticket !== generation) return;
+        const value = await api(base + "/team?" + queryString); if (!valid()) return;
         current = value;
         const s = value.summary, start = value.people.length ? value.offset + 1 : 0;
-        host.querySelector("[data-result]").innerHTML = `<p aria-live="polite"><strong>${s.percent === null ? "Keine Anforderungen" : s.percent + " % erfüllt"}</strong> · Diese Seite: ${s.fulfilled} von ${s.required} Anforderungen erfüllt · ${s.open} offen · ${s.dueSoon} bald fällig</p>
-          <div class="learning-team-table" tabindex="0" role="region" aria-label="Soll und Ist im Team, bei Bedarf seitlich scrollen"><table><thead><tr><th scope="col">Mitarbeiter/in</th>${value.rules.map(r => `<th scope="col">${esc(r.payload.title)}<small>${r.payload.type === "skill" ? "Soll: Stufe " + r.payload.minLevel : "Pflichtschulung"} · Fassung ${r.payload.moduleVersionNumber}</small></th>`).join("")}</tr></thead><tbody>${value.people.map(p => `<tr><th scope="row">${esc(p.fullName)}<small>${esc(p.employeeNumber)} · ${esc(p.locationName)}<br>${esc(p.positionName)}${p.roleName ? " · " + esc(p.roleName) : ""}</small></th>${p.cells.map(c => `<td><span class="learning-team-status" data-status="${esc(c.status)}">${esc(labels[c.status])}</span>${c.actual != null ? `<small>Ist: Stufe ${c.actual}</small>` : ""}${c.until ? `<small>Gültig bis ${esc(c.until)}</small>` : ""}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${value.rules.length + 1}">Keine Personen im gewählten Bereich.</td></tr>`}</tbody></table></div>
+        const cellMarkup = c => `<span class="learning-team-status" data-status="${esc(c.status)}">${esc(labels[c.status])}</span>${c.actual != null ? `<small>Ist: Stufe ${esc(c.actual)}</small>` : ""}${c.until ? `<small>Gültig bis ${esc(c.until)}</small>` : ""}`;
+        host.querySelector("[data-result]").innerHTML = `<div class="learning-team-page-summary" aria-live="polite"><strong>Diese Seite · ${s.percent === null ? "Keine Anforderungen" : s.percent + " % erfüllt"}</strong><p>Auswertung der ${value.people.length} angezeigten Personen; ${s.required} Anforderungen insgesamt auf dieser Seite.</p><div class="learning-team-metrics">${[["Erfüllt",s.fulfilled],["Anforderungen",s.required],["Offen",s.open],["Bald fällig",s.dueSoon]].map(([label,count])=>`<article><span>${label}</span><strong>${count}</strong></article>`).join("")}</div></div>
+          <div class="learning-team-table" tabindex="0" role="region" aria-label="Soll und Ist im Team, bei Bedarf seitlich scrollen"><table><thead><tr><th scope="col">Mitarbeiter/in</th>${value.rules.map(r => `<th scope="col">${esc(r.payload.title)}<small>${r.payload.type === "skill" ? "Soll: Stufe " + r.payload.minLevel : "Pflichtschulung"} · Fassung ${r.payload.moduleVersionNumber}</small></th>`).join("")}</tr></thead><tbody>${value.people.map(p => `<tr><th scope="row">${esc(p.fullName)}<small>${esc(p.employeeNumber)} · ${esc(p.locationName)}<br>${esc(p.positionName)}${p.roleName ? " · " + esc(p.roleName) : ""}</small></th>${p.cells.map(c => `<td>${cellMarkup(c)}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${value.rules.length + 1}">Keine Personen im gewählten Bereich.</td></tr>`}</tbody></table></div>
+          <div class="learning-team-people" aria-label="Soll und Ist je Person">${value.people.map(p=>`<article class="learning-team-person"><header><h4>${esc(p.fullName)}</h4><small>${esc(p.employeeNumber)} · ${esc(p.locationName)}</small><small>${esc(p.positionName)}${p.roleName ? " · "+esc(p.roleName):""}</small></header><dl>${p.cells.map((c,i)=>`<div><dt>${esc(value.rules[i]?.payload.title)}<small>${value.rules[i]?.payload.type === "skill" ? "Soll: Stufe "+value.rules[i]?.payload.minLevel : "Pflichtschulung"} · Fassung ${value.rules[i]?.payload.moduleVersionNumber}</small></dt><dd>${cellMarkup(c)}</dd></div>`).join("")}</dl></article>`).join("") || "<p>Keine Personen im gewählten Bereich.</p>"}</div>
           ${!value.rules.length ? "<p>Für diese Ansicht sind noch keine aktiven Anforderungen hinterlegt.</p>" : ""}
           <div class="learning-team-pagination"><button type="button" data-prev ${value.offset === 0 ? "disabled" : ""}>Zurück</button><span>${start}–${value.offset + value.people.length} von ${value.total} Personen</span><button type="button" data-next ${value.offset + value.pageSize >= value.total ? "disabled" : ""}>Weiter</button><a href="${base}/team.csv?${esc(queryString)}" download>Diese Seite als CSV</a></div>`;
-      } catch (e) { if (ticket === generation) error(e.message); }
-      finally { if (ticket === generation) host.querySelector("[data-result]")?.removeAttribute("aria-busy"); }
+      } catch (e) { if (valid()) error(e.message); }
+      finally { if (valid()) host.querySelector("[data-result]")?.removeAttribute("aria-busy"); }
     }
     function ruleList() {
       host.querySelector("[data-rules]").innerHTML = options.rules.map(r => `<div class="learning-team-rule"><span><strong>${esc(r.payload.title)}</strong> · ${r.payload.active ? "Aktiv" : "Archiviert"}<small>${esc(r.payload.scope.label || r.payload.scope.departmentName || r.payload.scope.locationName || "Gesamte Organisation")} · ${r.payload.type === "skill" ? "Soll-Stufe " + r.payload.minLevel : "Pflichtschulung"} · Fassung ${r.payload.moduleVersionNumber}${r.payload.validMonths ? " · " + r.payload.validMonths + " Monate gültig" : " · ohne Ablauf"}</small></span>${r.canManage ? `<button type="button" data-edit="${esc(r.id)}">Bearbeiten</button>` : ""}</div>`).join("") || "<p>Noch keine Anforderungen festgelegt.</p>";
     }
     async function edit(id) {
       const old = options.rules.find(r => r.id === id), value = old?.payload;
+      if (!options.canManage || id && !old?.canManage) return;
       // An open draft keeps the scope mapping and revision it was started with.
       // A refreshed options list must never silently rebase an unsaved requirement.
       const editorOptions = options;
       editingId = id || "";
       dialog?.remove(); dialog = document.createElement("dialog"); dialog.className = "learning-team-dialog";
+      dialog.dataset.gpWindowMode = "workspace";dialog.dataset.gpWindowId = "learning-team-requirement";
       dialog.setAttribute("aria-labelledby", "learningTeamRuleTitle");
       dialog.innerHTML = `<form><h3 id="learningTeamRuleTitle">${old ? "Anforderung bearbeiten" : "Anforderung festlegen"}</h3><div class="learning-team-fields">
         <label>Titel<input name="title" required minlength="3" maxlength="160" value="${esc(value?.title)}"></label>
@@ -66,23 +71,34 @@
       if (value) form.elements.scope.value = String(editorOptions.scopes.findIndex(s => s.type === value.scope.type && String(s.locationId || "") === String(value.scope.locationId || "") && Number(s.departmentId || 0) === Number(value.scope.departmentId || 0)));
       dialog.querySelector("[data-close]").onclick = () => dialog.close();
       form.onsubmit = async event => {
-        event.preventDefault(); const ticket = generation, target = dialog; const button = form.querySelector('[type="submit"]'); button.disabled = true;
+        event.preventDefault(); const ticket = generation, target = dialog;
+        const windowTicket = globalThis.GpWindow?.capture(target), contextTicket = globalThis.GpWindow?.captureContext(document);
+        const currentContext = () => ticket === generation && target === dialog && options?.canManage
+          && (!contextTicket || globalThis.GpWindow.currentContext(contextTicket));
+        const currentEditor = () => currentContext() && target.open && (!windowTicket || globalThis.GpWindow.current(windowTicket));
+        if (!currentEditor()) return;
+        const button = form.querySelector('[type="submit"]'); button.disabled = true;
+        // Keep the submitted draft stable while its revision is being stored.
+        const fields = [...form.querySelectorAll('input,select,textarea')];
+        const restoreFields = fields.map(field => field.disabled);
         try {
           const body = Object.fromEntries(new FormData(form)); body.scope = editorOptions.scopes[Number(body.scope)]; body.active = body.active === "true"; body.expectedReceipt = old?.receiptSha256 || "";
+          fields.forEach(field => { field.disabled = true; });
           await api(base + "/requirements" + (old ? "/" + encodeURIComponent(old.id) : ""), {method:old ? "PUT" : "POST", body:JSON.stringify(body)});
-          if (ticket !== generation) return;
-          target.close(); editingId = null; const loaded = await api(base + "/team/options"); if (ticket !== generation) return; options = loaded; ruleList(); await results();
-        } catch (e) { if (ticket === generation) target.querySelector("[data-dialog-error]").textContent = e.message; }
-        finally { button.disabled = false; }
+          if (!currentEditor()) return;
+          target.close(); editingId = null; await load();
+        } catch (e) { if (currentEditor()) target.querySelector("[data-dialog-error]").textContent = e.message; }
+        finally { if (target === dialog) { button.disabled = false; fields.forEach((field,i)=>{field.disabled=restoreFields[i];}); } }
       };
-      dialog.showModal();
+      globalThis.GpWindow?.prepare(dialog);dialog.showModal();
     }
     async function load() {
-      const ticket = ++generation;
+      const ticket = ++optionsGeneration, owner = generation, context = globalThis.GpWindow?.captureContext(document);
+      const valid = () => ticket === optionsGeneration && owner === generation && (!context || globalThis.GpWindow.currentContext(context));
       try {
-        const loaded = await api(base + "/team/options"); if (ticket !== generation) return; options = loaded;
+        const loaded = await api(base + "/team/options"); if (!valid()) return; options = loaded;
         const existingFilters = host.querySelector("form[data-filters]");
-        if (!existingFilters) host.innerHTML = `<h3>Team · Soll und Ist</h3><p>Dokumentierte Kompetenzen und Pflichtschulungen. Jede Anforderung gilt für ihre festgelegte Fassung.</p><form data-filters class="learning-team-filters">
+        if (!existingFilters) host.innerHTML = `<h3>Kompetenzmatrix</h3><p>Vergleiche die dokumentierten Fähigkeiten und Pflichtschulungen mit den festgelegten Anforderungen. Jede Anforderung gilt für ihre gespeicherte Fassung.</p><form data-filters class="learning-team-filters">
           <label>Name oder Personalnummer<input name="search" maxlength="150" type="search"></label>
           <label>Filiale<select name="locationId">${choices(options.locations, "Alle freigegebenen Filialen")}</select></label>
           <label>Position<select name="positionId">${choices(options.positions, "Alle Positionen")}</select></label>
@@ -103,7 +119,7 @@
         }
         host.querySelector("[data-filters]").onsubmit = event => { event.preventDefault(); offset = 0; results(); };
         ruleList(); await results();
-      } catch (e) { if (ticket === generation) { if (host.querySelector("form[data-filters]")) error(e.message); else host.textContent = e.message; } }
+      } catch (e) { if (valid()) { if (host.querySelector("form[data-filters]")) error(e.message); else host.textContent = e.message; } }
     }
     host.addEventListener("click", event => {
       const button = event.target.closest("button"); if (!button || button.disabled) return;

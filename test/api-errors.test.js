@@ -59,7 +59,7 @@ test('Both login clients preserve a useful server error when the optional error 
  for(const name of ['app.js','portal.js']){
   const source=fs.readFileSync(path.join(__dirname,'../public',name),'utf8').replaceAll('\r\n','\n');
   const start=source.indexOf('async function api('),end=source.indexOf('\n}\n',start)+2;
-  const context={window:{},document:{cookie:''},location:{hostname:'beta.grabenplaner.eu'},elements:{},FormData,Error,csrf:()=>'',showLogin:()=>{},fetch:async()=>new Response(JSON.stringify({error:'Bitte kurz warten.',code:'PERSISTENCE_BUSY'}),{status:503})};
+  const context={state:{portalSession:null},portalState:{session:null},window:{},document:{cookie:''},location:{hostname:'beta.grabenplaner.eu'},elements:{},FormData,Error,csrf:()=>'',showLogin:()=>{},fetch:async()=>new Response(JSON.stringify({error:'Bitte kurz warten.',code:'PERSISTENCE_BUSY'}),{status:503})};
   vm.createContext(context);vm.runInContext(source.slice(start,end)+'\nthis.request=api;',context);
   await assert.rejects(context.request('/api/portal/v1/auth/login'),e=>e.message==='Bitte kurz warten.'&&e.code==='PERSISTENCE_BUSY'&&e.status===503);
  }

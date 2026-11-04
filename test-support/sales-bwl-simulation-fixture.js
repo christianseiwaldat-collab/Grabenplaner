@@ -7,7 +7,7 @@ async function simulationFixture(t, options = {}) {
   f.state.session.accountId = 'synthetic-account';
   const source = options.source || [{ EAN: '0000000000042', Artikelbezeichnung: 'BEISPIEL Fernglas', Abverkauf: true, Sortiment: 'Abverkauf', DurchschnittEK: '70', MWST: 1, OhneBestand: false, Sachkonto: false }];
   await f.ingest('ARTIKEL_STAMM', source, { master: true });
-  await f.ingest('ARTIKEL_FILIALEN', options.stocks || [{ EAN: source[0].EAN, FilialID: 18, FBestand: '4', Bestellt: '0' }, { EAN: source[0].EAN, FilialID: 19, FBestand: '2', Bestellt: '0' }], { sourceInstance: 'tradefoto-trade' });
+  await f.ingest('ARTIKEL_FILIALEN', options.stocks || [{ EAN: source[0].EAN, FilialID: 18, FBestand: '4', Bestellt: '0' }, { EAN: source[0].EAN, FilialID: 19, FBestand: '2', Bestellt: '0' }], { sourceInstance: 'tradefoto-trade', legacy: options.legacyStock === true });
   const repo = require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.app.provider);
   const price = (priceType, priceBasis, amount) => ({ priceType, priceBasis, amount, currency: 'EUR', qualityStatus: 'confirmed', sourceField: 'BEISPIEL' });
   const articles = source.map(a => ({ sourceArticleKey: a.EAN, articleNumber: Report.articleNumber(a.EAN), description: a.Artikelbezeichnung, active: true, sourceUpdatedAt: null, identifiers: [],

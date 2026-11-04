@@ -1,0 +1,228 @@
+{
+  "sourcePackage": "tedious@20.0.0",
+  "purpose": "Synthetic pre-update compatibility oracle; no server, credentials or network.",
+  "login": [
+    {
+      "args": {
+        "tdsVersion": 1946157060,
+        "packetSize": 4096,
+        "clientProgVer": 0,
+        "clientPid": 0,
+        "connectionId": 0,
+        "clientTimeZone": 120,
+        "clientLcid": 1031
+      },
+      "props": {
+        "readOnlyIntent": false,
+        "initDbFatal": false,
+        "hostname": "synthetic-%.1000f",
+        "userName": "synthetic-reader",
+        "password": "synthetic-password",
+        "serverName": "local-fixture",
+        "appName": "GP Grüße %.1000f",
+        "libraryName": "Tedious",
+        "language": "German",
+        "database": "synthetic-db",
+        "attachDbFile": "",
+        "changePassword": ""
+      },
+      "text": "  Login7 - TDS:0x74000004, PacketSize:0x00001000, ClientProgVer:0x00000000, ClientPID:0x00000000, ConnectionID:0x00000000\n           Flags1:0xB0, Flags2:0x00, TypeFlags:0x00, Flags3:0x18, ClientTimezone:120, ClientLCID:0x00000407\n           Hostname:'synthetic-%.1000f', Username:'synthetic-reader', Password:'synthetic-password', AppName:'GP Grüße %.1000f', ServerName:'local-fixture', LibraryName:'Tedious'\n           Language:'German', Database:'synthetic-db', SSPI:'undefined', AttachDbFile:'', ChangePassword:''",
+      "wireSha256": "31a7be0df565b9fba7044a2cda3b76945661804a3f410b0a492beb68b0f5bed7"
+    },
+    {
+      "args": {
+        "tdsVersion": 1946157060,
+        "packetSize": 4096,
+        "clientProgVer": 1,
+        "clientPid": 1,
+        "connectionId": 1,
+        "clientTimeZone": -120,
+        "clientLcid": 1031
+      },
+      "props": {
+        "readOnlyIntent": true,
+        "initDbFatal": true,
+        "hostname": "synthetic-%.1000f",
+        "userName": "synthetic-reader",
+        "password": "synthetic-password",
+        "serverName": "local-fixture",
+        "appName": "GP Grüße %.1000f",
+        "libraryName": "Tedious",
+        "language": "German",
+        "database": "synthetic-db",
+        "attachDbFile": "",
+        "changePassword": ""
+      },
+      "text": "  Login7 - TDS:0x74000004, PacketSize:0x00001000, ClientProgVer:0x00000001, ClientPID:0x00000001, ConnectionID:0x00000001\n           Flags1:0xF0, Flags2:0x00, TypeFlags:0x20, Flags3:0x18, ClientTimezone:-120, ClientLCID:0x00000407\n           Hostname:'synthetic-%.1000f', Username:'synthetic-reader', Password:'synthetic-password', AppName:'GP Grüße %.1000f', ServerName:'local-fixture', LibraryName:'Tedious'\n           Language:'German', Database:'synthetic-db', SSPI:'undefined', AttachDbFile:'', ChangePassword:''",
+      "wireSha256": "1be8a68ad5971cb5b60cc416dc101beb7033b1c619a825d21255e4090f53481b"
+    },
+    {
+      "args": {
+        "tdsVersion": 1946157060,
+        "packetSize": 4096,
+        "clientProgVer": 255,
+        "clientPid": 255,
+        "connectionId": 255,
+        "clientTimeZone": 120,
+        "clientLcid": 1031
+      },
+      "props": {
+        "readOnlyIntent": false,
+        "initDbFatal": true,
+        "hostname": "synthetic-%.1000f",
+        "userName": "synthetic-reader",
+        "password": "synthetic-password",
+        "serverName": "local-fixture",
+        "appName": "GP Grüße %.1000f",
+        "libraryName": "Tedious",
+        "language": "German",
+        "database": "synthetic-db",
+        "attachDbFile": "",
+        "changePassword": ""
+      },
+      "text": "  Login7 - TDS:0x74000004, PacketSize:0x00001000, ClientProgVer:0x000000FF, ClientPID:0x000000FF, ConnectionID:0x000000FF\n           Flags1:0xF0, Flags2:0x00, TypeFlags:0x00, Flags3:0x18, ClientTimezone:120, ClientLCID:0x00000407\n           Hostname:'synthetic-%.1000f', Username:'synthetic-reader', Password:'synthetic-password', AppName:'GP Grüße %.1000f', ServerName:'local-fixture', LibraryName:'Tedious'\n           Language:'German', Database:'synthetic-db', SSPI:'undefined', AttachDbFile:'', ChangePassword:''",
+      "wireSha256": "a81147e661806fd6d2f6d948b113974e5049ce7406b76b7e5f82b7918bd57c7d"
+    },
+    {
+      "args": {
+        "tdsVersion": 1946157060,
+        "packetSize": 4096,
+        "clientProgVer": 65535,
+        "clientPid": 65535,
+        "connectionId": 65535,
+        "clientTimeZone": -120,
+        "clientLcid": 1031
+      },
+      "props": {
+        "readOnlyIntent": true,
+        "initDbFatal": false,
+        "hostname": "synthetic-%.1000f",
+        "userName": "synthetic-reader",
+        "password": "synthetic-password",
+        "serverName": "local-fixture",
+        "appName": "GP Grüße %.1000f",
+        "libraryName": "Tedious",
+        "language": "German",
+        "database": "synthetic-db",
+        "attachDbFile": "",
+        "changePassword": ""
+      },
+      "text": "  Login7 - TDS:0x74000004, PacketSize:0x00001000, ClientProgVer:0x0000FFFF, ClientPID:0x0000FFFF, ConnectionID:0x0000FFFF\n           Flags1:0xB0, Flags2:0x00, TypeFlags:0x20, Flags3:0x18, ClientTimezone:-120, ClientLCID:0x00000407\n           Hostname:'synthetic-%.1000f', Username:'synthetic-reader', Password:'synthetic-password', AppName:'GP Grüße %.1000f', ServerName:'local-fixture', LibraryName:'Tedious'\n           Language:'German', Database:'synthetic-db', SSPI:'undefined', AttachDbFile:'', ChangePassword:''",
+      "wireSha256": "521d72abba8132976a549347c09409620e7320ff82f3e092d36613b43c83affe"
+    },
+    {
+      "args": {
+        "tdsVersion": 1946157060,
+        "packetSize": 4096,
+        "clientProgVer": 2147483647,
+        "clientPid": 2147483647,
+        "connectionId": 2147483647,
+        "clientTimeZone": 120,
+        "clientLcid": 1031
+      },
+      "props": {
+        "readOnlyIntent": false,
+        "initDbFatal": true,
+        "hostname": "synthetic-%.1000f",
+        "userName": "synthetic-reader",
+        "password": "synthetic-password",
+        "serverName": "local-fixture",
+        "appName": "GP Grüße %.1000f",
+        "libraryName": "Tedious",
+        "language": "German",
+        "database": "synthetic-db",
+        "attachDbFile": "",
+        "changePassword": ""
+      },
+      "text": "  Login7 - TDS:0x74000004, PacketSize:0x00001000, ClientProgVer:0x7FFFFFFF, ClientPID:0x7FFFFFFF, ConnectionID:0x7FFFFFFF\n           Flags1:0xF0, Flags2:0x00, TypeFlags:0x00, Flags3:0x18, ClientTimezone:120, ClientLCID:0x00000407\n           Hostname:'synthetic-%.1000f', Username:'synthetic-reader', Password:'synthetic-password', AppName:'GP Grüße %.1000f', ServerName:'local-fixture', LibraryName:'Tedious'\n           Language:'German', Database:'synthetic-db', SSPI:'undefined', AttachDbFile:'', ChangePassword:''",
+      "wireSha256": "c096b3df85317bb84972be72ec136fd949f6418e59f368d5c77af1f494dac4a1"
+    },
+    {
+      "args": {
+        "tdsVersion": 1946157060,
+        "packetSize": 4096,
+        "clientProgVer": 4294967295,
+        "clientPid": 4294967295,
+        "connectionId": 4294967295,
+        "clientTimeZone": -120,
+        "clientLcid": 1031
+      },
+      "props": {
+        "readOnlyIntent": true,
+        "initDbFatal": true,
+        "hostname": "synthetic-%.1000f",
+        "userName": "synthetic-reader",
+        "password": "synthetic-password",
+        "serverName": "local-fixture",
+        "appName": "GP Grüße %.1000f",
+        "libraryName": "Tedious",
+        "language": "German",
+        "database": "synthetic-db",
+        "attachDbFile": "",
+        "changePassword": ""
+      },
+      "text": "  Login7 - TDS:0x74000004, PacketSize:0x00001000, ClientProgVer:0xFFFFFFFF, ClientPID:0xFFFFFFFF, ConnectionID:0xFFFFFFFF\n           Flags1:0xF0, Flags2:0x00, TypeFlags:0x20, Flags3:0x18, ClientTimezone:-120, ClientLCID:0x00000407\n           Hostname:'synthetic-%.1000f', Username:'synthetic-reader', Password:'synthetic-password', AppName:'GP Grüße %.1000f', ServerName:'local-fixture', LibraryName:'Tedious'\n           Language:'German', Database:'synthetic-db', SSPI:'undefined', AttachDbFile:'', ChangePassword:''",
+      "wireSha256": "19f7a108dc64ec2c0aca0dbe36d4b4670f053dcc54372d06831c63ca5367a57c"
+    }
+  ],
+  "prelogin": [
+    {
+      "wire": "000024000601002a000102002b000103002c0004040030000105003100240600550001ff140000ffffff02000000000000e90e4abfc960fe825c89bad32cb4d7f9652d074050094e572118a4ba1187eafc785dd76401",
+      "text": "  PreLogin - version:20.0.255.65535, encryption:0x02(NOT_SUP), instopt:0x00, threadId:0x00000000, mars:0x00(OFF), traceId:e90e4abfc960fe825c89bad32cb4d7f9652d074050094e572118a4ba1187eafc785dd764"
+    },
+    {
+      "wire": "000024000601002a000102002b000103002c0004040030000105003100240600550001ff140000ffffff01000000000000d6113b5caf817daaa9dd268d653d5d2016e56e7bc683b6c81a9461c15cea8228d6fc194601",
+      "text": "  PreLogin - version:20.0.255.65535, encryption:0x01(ON), instopt:0x00, threadId:0x00000000, mars:0x00(OFF), traceId:d6113b5caf817daaa9dd268d653d5d2016e56e7bc683b6c81a9461c15cea8228d6fc1946"
+    }
+  ],
+  "packet": [
+    {
+      "size": 0,
+      "header": "  type:0x01(SQL_BATCH), status:0x01(EOM), length:0x0008, spid:0x0000, packetId:0x11, window:0x00",
+      "dumpSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "wireSha256": "7e46f132b29257dc5375742975b8924fa4a4a7fee71a35875d69731fd072cca7"
+    },
+    {
+      "size": 1,
+      "header": "  type:0x01(SQL_BATCH), status:0x01(EOM), length:0x0009, spid:0x0000, packetId:0x11, window:0x00",
+      "dumpSha256": "a6ef712b7588d6b3b167a3279dfd21e50a7c531d13e35fc4cddf8cddf0ec391b",
+      "wireSha256": "cf3f847c6c90e50d5221686caaaf95dad2675ffa60ec21f428d3589e94513bbe"
+    },
+    {
+      "size": 4,
+      "header": "  type:0x01(SQL_BATCH), status:0x01(EOM), length:0x000C, spid:0x0000, packetId:0x11, window:0x00",
+      "dumpSha256": "9449449d9b91ad1b38931d55d9b713ae50f37db73d577a809b8c815a3f1123f5",
+      "wireSha256": "68f7f85a423bbca2a694f4cab504d16e1ba7e964bbd7328ebdad816dd6dc9d95"
+    },
+    {
+      "size": 31,
+      "header": "  type:0x01(SQL_BATCH), status:0x01(EOM), length:0x0027, spid:0x0000, packetId:0x11, window:0x00",
+      "dumpSha256": "0ee3b1e9fa7f7f25768620b02b20eda985b4245222b64b122cfa36e2fb02c72d",
+      "wireSha256": "e0ee565c4d4e453e836e75bcad9eaf999a5a4b59979a1e1c83fea158b49c557b"
+    },
+    {
+      "size": 32,
+      "header": "  type:0x01(SQL_BATCH), status:0x01(EOM), length:0x0028, spid:0x0000, packetId:0x11, window:0x00",
+      "dumpSha256": "4cbf43f22b4a66361310a548a5ffe134d6c416a8900fce3711f011d7082b5e70",
+      "wireSha256": "1c4afee28d7e62c4eb8edbd95e5e47829a54f40ed16222a79c5a86868516f41d"
+    },
+    {
+      "size": 33,
+      "header": "  type:0x01(SQL_BATCH), status:0x01(EOM), length:0x0029, spid:0x0000, packetId:0x11, window:0x00",
+      "dumpSha256": "f8c473d5b08e0a8978c23cdfb90e8e665b45b71ed687042f5fa7ccd91fee0373",
+      "wireSha256": "9c087d11e7136d3bba5577fba5b17ff173cbf8d1a632eac966ca82e0bbfa02e4"
+    },
+    {
+      "size": 256,
+      "header": "  type:0x01(SQL_BATCH), status:0x01(EOM), length:0x0108, spid:0x0000, packetId:0x11, window:0x00",
+      "dumpSha256": "fadaab66f2e7a3f47a3e28867d72d38ea0ee5569acdc55baf7bc1ad07104df29",
+      "wireSha256": "d642ce873128c9199a89076612733bdd20145be043a0432eb80cbc0b8a340e08"
+    },
+    {
+      "size": 60000,
+      "header": "  type:0x01(SQL_BATCH), status:0x01(EOM), length:0xEA68, spid:0x0000, packetId:0x11, window:0x00",
+      "dumpSha256": "a302f1c2f8f8f925d5d64189ea350f58079260b88658dd056ad677ccc06b6b06",
+      "wireSha256": "f2087d6079ca70ba2e48331390928b29a61745fbb12e0672538e800ff176061f"
+    }
+  ]
+}

@@ -8,7 +8,7 @@ readonly CADDY_SERVICE="caddy.service"
 readonly MONITOR_TIMER="grabenplaner-monitor.timer"
 readonly MONITOR_SERVICE="grabenplaner-monitor.service"
 readonly NODE_EXECUTABLE="{{NODE_EXECUTABLE}}"
-readonly DATABASE_PATH="/var/lib/grabenplaner/data/dienstplan.db"
+readonly POSTGRESQL_PREFLIGHT="/opt/grabenplaner/app/server-tools/linux/postgresql/preflight-install.js"
 readonly ENV_FILE="/etc/grabenplaner/grabenplaner.env"
 readonly HEALTH_URL="http://127.0.0.1:{{PORT}}/api/health/live"
 readonly PUBLIC_READY_URL="{{PUBLIC_URL}}/api/health/ready"
@@ -103,25 +103,8 @@ clear_bootstrap_token() {
 }
 
 admin_is_configured() {
-  [[ -f "$DATABASE_PATH" ]] || return 1
-  runuser -u grabenplaner -- "$NODE_EXECUTABLE" - "$DATABASE_PATH" <<'NODE' >/dev/null
-const { DatabaseSync } = require("node:sqlite");
-const databasePath = process.argv[2];
-let database;
-try {
-  database = new DatabaseSync(databasePath, { readOnly: true });
-  const row = database.prepare(`
-    SELECT COUNT(*) AS count
-    FROM portal_users
-    WHERE active = 1 AND role IN ('developer', 'it_admin', 'admin')
-  `).get();
-  process.exit(Number(row?.count || 0) > 0 ? 0 : 1);
-} catch {
-  process.exit(1);
-} finally {
-  try { database?.close(); } catch {}
-}
-NODE
+  [[ -f "$POSTGRESQL_PREFLIGHT" && ! -L "$POSTGRESQL_PREFLIGHT" ]] || return 1
+  runuser -u grabenplaner -- "$NODE_EXECUTABLE" "$POSTGRESQL_PREFLIGHT" has-admin >/dev/null
 }
 
 start_bootstrap() {

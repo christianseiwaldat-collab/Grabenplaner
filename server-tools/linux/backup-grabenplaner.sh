@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 IFS=$'\n\t'
+export PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+readonly PATH
+unset NODE_OPTIONS NODE_PATH BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS LD_PRELOAD LD_LIBRARY_PATH OPENSSL_CONF OPENSSL_MODULES
 
 readonly SCRIPT_SOURCE="${BASH_SOURCE[0]}"
 readonly EXPECTED_COMMAND_TARGET="/opt/grabenplaner/app/server-tools/linux/backup-grabenplaner.sh"
@@ -11,6 +14,19 @@ SCRIPT_PATH="$(readlink -f -- "$SCRIPT_SOURCE" 2>/dev/null || true)"
   || { printf '%s\n' "Der Wartungsbefehl zeigt nicht auf die erwartete Grabenplaner-Installation." >&2; exit 1; }
 readonly SCRIPT_PATH
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
+/usr/bin/python3 -I - "$SCRIPT_PATH" "$SCRIPT_DIR/lib/common.sh" "$SCRIPT_DIR/lib/postgresql-maintenance.sh" <<'PY' \
+  || { printf '%s\n' 'Der Sicherungseinstieg ist nicht root-geschuetzt.' >&2; exit 1; }
+import os, stat, sys
+from pathlib import Path
+assert os.geteuid() == 0
+for name in sys.argv[1:]:
+    file = Path(name)
+    info = file.lstat()
+    assert file.resolve() == file and stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+    for item in (file, *file.parents):
+        info = item.lstat()
+        assert info.st_uid == 0 and not stat.S_ISLNK(info.st_mode) and info.st_mode & 0o022 == 0
+PY
 # shellcheck source=server-tools/linux/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
@@ -21,7 +37,7 @@ Verwendung: sudo ./backup-grabenplaner.sh [Optionen]
   --env-file PFAD       Geschuetzte Server-Umgebungsdatei
   --app-dir PFAD        Installierte App (Standard: /opt/grabenplaner/app)
   --data-dir PFAD       Geschuetzte Daten (Standard: /var/lib/grabenplaner)
-  --database PFAD       SQLite-Datei (Standard: DB_PATH bzw. data/dienstplan.db)
+  --database PFAD       Gepruefter PostgreSQL-Paaranker
   --backup-dir PFAD     Lokales Sicherungsziel (Standard: BACKUP_DIR)
   --keep ANZAHL         Anzahl lokaler Sicherungspunkte (1..1000)
   --service UNIT        systemd-App-Unit
@@ -30,6 +46,9 @@ Verwendung: sudo ./backup-grabenplaner.sh [Optionen]
                        Archivabschluss vormerken (geerbte Wartungssperre).
   --finish-deferred    Nur vorgemerkte Archive abschliessen, ohne Dienststopp
                        oder neuen Punkt (geerbte Wartungssperre).
+  --preserve-existing-backups
+                       Interne Runtime-Migration: vorhandene Punkte erhalten
+                       (geerbte FD9-Wartungssperre und ausdruecklich --keep 1000).
 EOF
 }
 
@@ -76,222 +95,12 @@ gp_require_command sha256sum
 gp_require_command runuser
 gp_require_command getent
 gp_load_env_file "$env_file"
+unset NODE_OPTIONS NODE_PATH BASH_ENV ENV CDPATH COREPACK_INTEGRITY_KEYS LD_PRELOAD LD_LIBRARY_PATH OPENSSL_CONF OPENSSL_MODULES
 
-if [[ "${DB_PROVIDER:-sqlite}" == postgresql ]]; then
-  # shellcheck source=server-tools/linux/lib/postgresql-maintenance.sh
-  source "$SCRIPT_DIR/lib/postgresql-maintenance.sh"
-  gp_postgresql_backup
-  exit 0
-fi
-[[ "${DB_PROVIDER:-sqlite}" == sqlite ]] || gp_die "Der Datenbankprovider wird nicht unterstuetzt."
-
-app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
-data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"
-database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
-backup_dir="$(gp_safe_absolute_path "${backup_arg:-${BACKUP_DIR:-$GP_DEFAULT_BACKUP_DIR}}" "Backupordner")"
-amu_dir="$(gp_existing_directory "$data_dir/private/amu" "Geschuetzter Dokumentordner")"
-keep="${keep_arg:-${GRABENPLANER_BACKUP_RETENTION_DAYS:-20}}"
-[[ "$keep" =~ ^[0-9]+$ ]] && (( keep >= 1 && keep <= 1000 )) || gp_die "--keep muss zwischen 1 und 1000 liegen."
-archive_enabled="${GRABENPLANER_LOCAL_BACKUP_ARCHIVE:-0}"
-[[ "$archive_enabled" == "0" || "$archive_enabled" == "1" ]] \
-  || gp_die "GRABENPLANER_LOCAL_BACKUP_ARCHIVE muss 0 oder 1 sein."
-if [[ "$archive_enabled" == "1" ]]; then
-  (( keep == 20 )) || gp_die "Das lokale Archiv verwendet 20 Kalendertage mit einem Sicherungsstand je Tag."
-elif [[ -e "$backup_dir/.gp-local-archive" || -L "$backup_dir/.gp-local-archive" ]]; then
-  gp_die "Ein lokales Archiv ist vorhanden; die bisherige Vollkopien-Aufbewahrung darf nicht als Ersatz starten."
-fi
-if (( preserve_existing_backups == 1 )); then
-  (( lock_already_held == 1 && keep == 1000 && archive_enabled == 0 )) \
-    || gp_die "Das Beibehalten der Alt-Sicherungen ist nur fuer den gesperrten Uebergang ohne Archiv erlaubt."
-  [[ "$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)" == "$GP_DEFAULT_MAINTENANCE_LOCK" ]] \
-    || gp_die "Die uebernommene Wartungssperre fehlt."
-  flock --nonblock 9 || gp_die "Die uebernommene Wartungssperre ist nicht aktiv."
-fi
-
-if [[ -n "$node_arg" ]]; then
-  node="$(gp_existing_file "$node_arg" "Node.js")"
-else
-  gp_require_command node
-  node="$(command -v node)"
-fi
-"$node" -e 'const [major, minor] = process.versions.node.split(".").map(Number); if (major < 22 || (major === 22 && minor < 13)) process.exit(1)' \
-  || gp_die "Node.js >=22.13.0 wird fuer das verifizierte SQLite-Backup benoetigt."
-getent passwd "$service_user" >/dev/null || gp_die "Dienstbenutzer fehlt: $service_user"
-getent group "$service_group" >/dev/null || gp_die "Dienstgruppe fehlt: $service_group"
-
-gp_require_systemd_unit "$service"
-if (( finish_deferred == 0 )) && systemctl is-active --quiet "$service"; then
-  gp_die "$service muss fuer dieses externe Sicherungswerkzeug beendet sein. Der laufende Dienst erstellt seine eigenen konsistenten Sicherungen."
-fi
-(( lock_already_held == 1 )) || gp_acquire_maintenance_lock
-if (( defer_archive == 1 || finish_deferred == 1 )); then
-  (( defer_archive + finish_deferred == 1 && preserve_existing_backups == 0 && lock_already_held == 1 )) \
-    || gp_die "Der aufgeschobene Archivabschluss verlangt einen eindeutigen gesperrten Wartungsauftrag."
-  inherited_maintenance_fd=9
-  if [[ "$(readlink -f -- /proc/$$/fd/6 2>/dev/null || true)" == "$GP_DEFAULT_MAINTENANCE_LOCK" ]]; then inherited_maintenance_fd=6; fi
-  [[ "$(readlink -f -- /proc/$$/fd/$inherited_maintenance_fd 2>/dev/null || true)" == "$GP_DEFAULT_MAINTENANCE_LOCK" ]] \
-    && flock --nonblock "$inherited_maintenance_fd" || gp_die "Die uebernommene Wartungssperre fehlt."
-fi
-gp_acquire_backup_workspace_lock "$database" "$node" "$app_dir/lib/backup-workspace.js"
-
-database_dir="$(dirname -- "$database")"
-gp_path_is_same_or_child "$database" "$data_dir" || gp_die "Die SQLite-Datenbank muss innerhalb des geschuetzten Datenordners liegen."
-gp_path_is_same_or_child "$amu_dir" "$data_dir" || gp_die "Der Dokumentordner muss innerhalb des geschuetzten Datenordners liegen."
-gp_assert_separate_trees "$backup_dir" "$data_dir" "Backup- und Datenordner"
-gp_assert_separate_trees "$backup_dir" "$app_dir" "Backup- und App-Ordner"
-gp_assert_separate_trees "$app_dir" "$data_dir" "App- und Datenordner"
-
-deferred_helper="$app_dir/server-tools/linux/lib/deferred-backups.js"
-[[ -f "$deferred_helper" && ! -L "$deferred_helper" ]] || gp_die "Der Helfer fuer aufgeschobene Archivabschluesse fehlt."
-if (( defer_archive == 1 )); then
-  "$node" "$deferred_helper" preflight "$data_dir" "$backup_dir" >/dev/null \
-    || gp_die "Offene Archivabschluesse muessen vor einem weiteren kurzen Deploy erledigt werden."
-else
-  # Process queued points before a newer archive is published. Unknown old raw
-  # backups have no queue receipt and are never adopted or removed here.
-  "$node" "$deferred_helper" drain "$data_dir" "$backup_dir" "$service_user" "$archive_enabled" >/dev/null \
-    || gp_die "Die aufgeschobenen Archivabschluesse konnten nicht beendet werden."
-fi
-if (( finish_deferred == 1 )); then
-  gp_info "Aufgeschobene Archivabschluesse wurden ohne Dienststopp abgearbeitet."
-  exit 0
-fi
-
-database_lock_module="$app_dir/lib/database-lock.js"
-amu_module="$app_dir/lib/amu-storage.js"
-helper="$app_dir/server-tools/linux/lib/backup-snapshot.js"
-for required in "$database_lock_module" "$amu_module" "$helper"; do
-  [[ -f "$required" && ! -L "$required" ]] || gp_die "Backupmodul fehlt: $required"
-done
-
-install -d -m 0750 -o "$service_user" -g "$service_group" -- "$backup_dir"
-if [[ "$archive_enabled" == "1" ]]; then
-  archive_helper="$app_dir/server-tools/linux/lib/local-backup-archive.js"
-  [[ -f "$archive_helper" && ! -L "$archive_helper" ]] || gp_die "Das lokale Archivmodul fehlt."
-  # Archivzustand pruefen, bevor eine weitere grosse Rohkopie entsteht.
-  "$node" "$archive_helper" preflight-as "$service_user" "$backup_dir" "$keep" >/dev/null \
-    || gp_die "Die Archiv-Vorpruefung ist fehlgeschlagen; es wurde kein neuer Rohpunkt angelegt."
-fi
-timestamp="$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N')"
-runtime_directory="$(gp_prepare_runtime_directory)"
-snapshot="dienstplan-$timestamp-$("$node" -e 'process.stdout.write(require("node:crypto").randomBytes(6).toString("hex"))')"
-target_database="$backup_dir/$snapshot.db"
-target_amu="$backup_dir/$snapshot.amu"
-target_marker="$backup_dir/$snapshot.complete.json"
-# Datenbank und Dokumente koennen groesser als /run (tmpfs) sein. Nur kleine
-# Ergebnis-/Markerdateien liegen dort; Nutzdaten bleiben auf dem Backupvolume.
-staging_directory="$(mktemp --directory --tmpdir="$backup_dir" .backup-stage.XXXXXXXX)"
-result_file="$(mktemp --tmpdir="$runtime_directory" backup-result.XXXXXXXX)"
-marker_file="$(mktemp --tmpdir="$runtime_directory" backup-marker.XXXXXXXX)"
-chown "$service_user:$service_group" -- "$staging_directory"
-chmod 0750 -- "$staging_directory"
-chmod 0600 -- "$result_file" "$marker_file"
-partial_database="$staging_directory/$snapshot.db"
-partial_amu="$staging_directory/$snapshot.amu"
-snapshot_committed=0
-
-cleanup() {
-  if [[ -f "$result_file" && ! -L "$result_file" ]]; then rm -f -- "$result_file"; fi
-  if [[ -f "$marker_file" && ! -L "$marker_file" ]]; then rm -f -- "$marker_file"; fi
-  if [[ -d "$staging_directory" && ! -L "$staging_directory" ]] \
-    && [[ "$(basename -- "$staging_directory")" == .backup-stage.* ]] \
-    && gp_path_is_same_or_child "$staging_directory" "$backup_dir"; then
-    rm -rf -- "$staging_directory"
-  fi
-  if (( snapshot_committed == 0 )); then
-    if [[ -f "$target_marker" && ! -L "$target_marker" ]]; then rm -f -- "$target_marker"; fi
-    if [[ -f "$target_database" && ! -L "$target_database" ]]; then rm -f -- "$target_database"; fi
-    if [[ -d "$target_amu" && ! -L "$target_amu" ]]; then rm -rf -- "$target_amu"; fi
-  fi
-}
-trap cleanup EXIT
-
-gp_info "Erstelle gekoppelten und verifizierten SQLite-/Dokumentsicherungspunkt."
-if ! (cd -- "$data_dir" && runuser --user "$service_user" -- env -i PATH="/usr/local/bin:/usr/bin:/bin" NODE_ENV=production \
-  "$node" "$helper" \
-  "$database" "$partial_database" "$database_lock_module" "$amu_module" \
-  "$amu_dir" "$partial_amu" "$(basename -- "$target_database")") >"$result_file"; then
-  gp_die "Der gekoppelte Sicherungspunkt konnte nicht erstellt werden."
-fi
-[[ -s "$partial_database" && -d "$partial_amu" && -f "$partial_amu/manifest.json" ]] \
-  || gp_die "Der Sicherungshelfer lieferte keinen vollstaendigen Sicherungspunkt."
-
-mv -T -- "$partial_amu" "$target_amu"
-mv -T -- "$partial_database" "$target_database"
-chown "$service_user:$service_group" -- "$target_database"
-chmod 0640 -- "$target_database"
-chown -R "$service_user:$service_group" -- "$target_amu"
-find "$target_amu" -type d -exec chmod 0750 -- {} +
-find "$target_amu" -type f -exec chmod 0640 -- {} +
-
-verification_json="$(cat -- "$result_file")"
-"$node" - "$marker_file" "$snapshot" "$target_database" "$target_amu" "$verification_json" "$app_dir/lib/file-integrity.js" <<'NODE'
-const fs = require("node:fs");
-const path = require("node:path");
-const [file, snapshot, databasePath, documentsPath, raw, integrityModule] = process.argv.slice(2);
-const { sha256File } = require(integrityModule);
-const verification = JSON.parse(raw);
-const databaseStat = fs.lstatSync(databasePath);
-const manifestPath = path.join(documentsPath, "manifest.json");
-const manifestStat = fs.lstatSync(manifestPath);
-if (!databaseStat.isFile() || databaseStat.isSymbolicLink() || !manifestStat.isFile() || manifestStat.isSymbolicLink()
-  || !Number.isSafeInteger(verification.fileCount) || verification.fileCount < 0
-  || sha256File(databasePath) !== verification.databaseSha256) throw new Error("Der Sicherungsbeleg konnte nicht sicher erzeugt werden.");
-const committedAt = new Date().toISOString();
-fs.writeFileSync(file, `${JSON.stringify({
-  format: "grabenplaner-backup-commit",
-  schemaVersion: 1,
-  snapshot,
-  committedAt,
-  database: { fileName: path.basename(databasePath), sha256: verification.databaseSha256, bytes: databaseStat.size },
-  protectedDocuments: {
-    directoryName: path.basename(documentsPath),
-    files: verification.fileCount,
-    manifestFileName: "manifest.json",
-    manifestSha256: sha256File(manifestPath),
-    manifestBytes: manifestStat.size,
-  },
-  verification: { status: "verified", verifiedAt: committedAt },
-}, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-NODE
-chown "root:$service_group" -- "$marker_file"
-chmod 0640 -- "$marker_file"
-mv -T -- "$marker_file" "$target_marker"
-verifier="$app_dir/server-tools/linux/lib/verify-backup.js"
-"$node" "$verifier" "$target_database" "$target_amu" "$amu_module" "$target_marker" >/dev/null \
-  || gp_die "Der veroeffentlichte Sicherungspunkt konnte nicht erneut verifiziert werden."
-snapshot_committed=1
-if (( defer_archive == 1 )); then
-  "$node" "$deferred_helper" register "$data_dir" "$backup_dir" "$snapshot" >/dev/null \
-    || gp_die "Der gepruefte Rueckkehrpunkt bleibt erhalten; sein naechtlicher Archivauftrag konnte nicht erfasst werden."
-  gp_info "Frischer Rueckkehrpunkt vollstaendig geprueft; Archivierung und Aufbewahrung folgen nachts."
-elif [[ "$archive_enabled" == "1" ]]; then
-  # Der root-Launcher uebergibt die vorhandenen Vault-Secrets ausschliesslich
-  # als gefilterte Prozessumgebung, niemals als sichtbare Programmargumente.
-  "$node" "$archive_helper" archive-as "$service_user" "$backup_dir" "$snapshot" "$keep" >/dev/null \
-    || gp_die "Die lokale Archivierung ist fehlgeschlagen; der neue rohe Sicherungspunkt bleibt erhalten."
-elif (( preserve_existing_backups == 1 )); then
-  # The freshly published pair has passed its full verifier above. A runtime
-  # transition neither prunes nor needs to re-read unchanged historic pairs.
-  gp_info "Neuer Sicherungspunkt vollstaendig geprueft; bestehende Alt-Sicherungen bleiben unveraendert."
-else
-  pruner="$app_dir/server-tools/linux/lib/prune-backups.js"
-  [[ -f "$pruner" && ! -L "$pruner" ]] || gp_die "Das vertrauenswuerdige Aufbewahrungsmodul fehlt."
-  "$node" "$pruner" "$backup_dir" "$keep" "$verifier" "$amu_module" >/dev/null \
-    || gp_die "Die verifizierte Backup-Aufbewahrung konnte nicht sicher ausgefuehrt werden."
-fi
-"$node" - "$target_database" "$target_amu" "$target_marker" "$verification_json" <<'NODE'
-const [database, documents, marker, raw] = process.argv.slice(2);
-const verification = JSON.parse(raw);
-process.stdout.write(`${JSON.stringify({
-  ok: true,
-  path: database,
-  amuBackup: documents,
-  commitMarker: marker,
-  sha256: verification.databaseSha256,
-  protectedFiles: verification.fileCount,
-  requiredStorageKeys: verification.requiredStorageKeys,
-  createdAt: new Date().toISOString(),
-})}\n`);
-NODE
-gp_info "Sicherungspunkt erstellt: $(basename -- "$target_database")"
+[[ "${DB_PROVIDER:-}" == postgresql ]] \
+  || gp_die 'Dieser GP-Stand sichert ausschliesslich PostgreSQL-Paare. Altsicherungen nur mit der Offline-Wiederherstellungskapsel pruefen.'
+(( defer_archive == 0 )) \
+  || gp_die 'SQLite-Archivoptionen sind in diesem Serverstand nicht mehr verfuegbar.'
+# shellcheck source=server-tools/linux/lib/postgresql-maintenance.sh
+source "$SCRIPT_DIR/lib/postgresql-maintenance.sh"
+gp_postgresql_backup

@@ -129,7 +129,7 @@ function settingsFixture(permissions) {
   }
   const tabs = ["general", "backup", "systemCenter"].map(settingsTab => element({ settingsTab }));
   tabs[0].classList.toggle("active", true);
-  const calls = [];
+  const calls = [], utilizationStates = [];
   const elements = Object.fromEntries(["generalSettings", "scheduleSettings", "personnelSettings", "dataProtectionSettings", "accessSettings", "rightsSettings", "backupSettings", "systemCenterPanel", "saveSettingsButton"].map(id => [id, element()]));
   elements.generalSettings.classList.toggle("active", true);
   const context = {
@@ -141,17 +141,18 @@ function settingsFixture(permissions) {
     refreshServerDiagnostics: () => calls.push("backup"),
     canManageMaintenanceSchedules: () => false, canManageOffsiteFolders: () => false,
     clearUsbProvisioningPasswords() {}, scheduleAllSettingsPackedGrids() {}, syncRightsWorkspace() {},
+    syncSystemUtilizationWorkspace: () => utilizationStates.push(elements.systemCenterPanel.classList.contains("active")),
   };
   vm.createContext(context);
   vm.runInContext(functionSource("canReadSystemCenter", "canReadPersonnelRulesDashboard")
     + functionSource("visibleManagedTabButtons", "reconcileManagedTabs")
     + functionSource("setSettingsTab", "setPersonnelTab"), context);
-  return { context, elements, tabs, calls };
+  return { context, elements, tabs, calls, utilizationStates };
 }
 
 test("System-Center settings load only diagnostics, switch panels and hide the unrelated save action", () => {
   for (const permission of ["system:diagnostics:read", "system:diagnostics:technical"]) {
-    const { context, elements, calls, tabs } = settingsFixture([permission, "settings:write"]);
+    const { context, elements, calls, tabs, utilizationStates } = settingsFixture([permission, "settings:write"]);
     context.setSettingsTab("systemCenter");
     assert.equal(elements.systemCenterPanel.classList.contains("active"), true);
     assert.equal(elements.generalSettings.classList.contains("active"), false);
@@ -163,6 +164,7 @@ test("System-Center settings load only diagnostics, switch panels and hide the u
     assert.equal(elements.systemCenterPanel.classList.contains("active"), false);
     assert.equal(elements.backupSettings.classList.contains("active"), true);
     assert.deepEqual(calls, ["systemCenter", "backup"]);
+    assert.deepEqual(utilizationStates, [true, false], "the lightweight history workspace follows the actual active panel");
   }
 });
 

@@ -1,0 +1,82 @@
+/* Organisation: daily assignments first, configuration on demand. */
+#costCenterSection { --cost-accent: var(--green); }
+#costCenterSection .cost-center-toolbar { align-items: center; gap: 20px; margin-bottom: 22px; }
+#costCenterSection .cost-center-toolbar h2 { margin: 5px 0 8px; font-size: clamp(24px,2.4vw,32px); line-height: 1.2; }
+#costCenterSection .cost-center-toolbar p { margin: 0; max-width: 65ch; font-size: 14px; line-height: 1.6; }
+#costCenterSection .cost-center-toolbar .eyebrow { color: var(--green); font-size: 12px; }
+#costCenterSection button { min-height: 42px; font-size: 13px; }
+#costCenterSection button:focus-visible, #costCenterSection summary:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
+#costCenterSection .cost-center-overview { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin: 0 0 24px; }
+#costCenterSection .cost-center-overview > div { display: flex; flex-direction: column-reverse; gap: 6px; padding: 20px; border: 1px solid var(--line); border-top: 3px solid var(--cost-accent); border-radius: 14px; background: color-mix(in srgb,var(--cost-accent) 5%,var(--surface)); }
+#costCenterSection .cost-center-overview > div:nth-child(2) { --cost-accent: #ba822b; }
+#costCenterSection .cost-center-overview > div:nth-child(3) { --cost-accent: #5382b1; }
+#costCenterSection .cost-center-overview dt { color: var(--muted); font-size: 13px; line-height: 1.4; hyphens: auto; overflow-wrap: anywhere; }
+#costCenterSection .cost-center-overview dd { margin: 0; color: var(--ink); font-size: 30px; font-weight: 750; line-height: 1; }
+#costCenterSection .cost-center-directory { padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+#costCenterSection .cost-center-subheading { align-items: center; gap: 16px; }
+#costCenterSection .cost-center-subheading h3 { margin: 5px 0 0; font-size: 19px; }
+#costCenterSection .cost-center-subheading p { max-width: 65ch; margin: 0; font-size: 14px; line-height: 1.6; }
+#costCenterSection .eyebrow { font-size: 11px; }
+#costCenterSection .cost-center-filters { display: grid; grid-template-columns: minmax(180px,2fr) minmax(140px,1fr) minmax(110px,.7fr) auto; align-items: end; gap: 12px; margin-top: 20px; }
+#costCenterSection .cost-center-filters .field { min-width: 0; margin: 0; }
+#costCenterSection .field > span { font-size: 13px; color: var(--ink); }
+#costCenterSection .field input, #costCenterSection .field select { min-width: 0; width: 100%; min-height: 44px; font-size: 14px; }
+#costCenterSection .cost-center-result-count { margin: 16px 0 10px; color: var(--muted); font-size: 13px; }
+#costCenterSection .cost-center-list { display: grid; grid-template-columns: 1fr; gap: 10px; }
+#costCenterSection .cost-center-card { grid-template-columns: minmax(74px,110px) minmax(0,1fr) auto auto; grid-template-rows: auto; align-items: center; gap: 20px; padding: 17px; border-radius: 12px; box-shadow: none; border-left: 3px solid color-mix(in srgb,var(--green) 60%,var(--line)); }
+#costCenterSection .cost-center-card.inactive { opacity: 1; border-left-color: var(--line); background: var(--surface-soft); }
+#costCenterSection .cost-center-card-code { min-width: 0; max-width: 110px; padding: 10px; gap: 6px; border-radius: 10px; }
+#costCenterSection .cost-center-card-code strong { font-size: 15px; overflow-wrap: anywhere; }
+#costCenterSection .status-badge { font-size: 11px; }
+#costCenterSection .cost-center-card-copy { min-width: 0; }
+#costCenterSection .cost-center-card-copy h3 { margin: 4px 0; font-size: 17px; overflow-wrap: anywhere; }
+#costCenterSection .cost-center-card-copy p { margin: 4px 0 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+#costCenterSection .cost-center-card-counts { grid-column: auto; display: grid; gap: 6px; min-width: 120px; }
+#costCenterSection .cost-center-card-counts span { font-size: 13px; padding: 0; border: 0; background: transparent; }
+#costCenterSection .cost-center-card-counts strong { display: inline-block; min-width: 2ch; margin-right: 4px; }
+#costCenterSection .cost-center-card > .edit-button, #costCenterSection .cost-center-type-card > .edit-button { position: static; justify-self: end; margin: 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--green); }
+#costCenterSection .cost-center-types-panel { margin: 20px 0 0; padding: 0; background: color-mix(in srgb,#5382b1 4%,var(--surface)); border-radius: 15px; }
+#costCenterSection .cost-center-types-panel > summary { padding: 20px; cursor: pointer; color: var(--ink); }
+#costCenterSection .cost-center-types-panel > summary > span { display: inline-grid; gap: 5px; vertical-align: middle; max-width: calc(100% - 24px); }
+#costCenterSection .cost-center-types-panel > summary strong { font-size: 16px; }
+#costCenterSection .cost-center-types-panel > summary small { font-size: 13px; line-height: 1.5; color: var(--muted); }
+#costCenterSection .cost-center-type-settings { border-top: 1px solid var(--line); padding: 20px; }
+#costCenterSection .cost-center-type-list { grid-template-columns: repeat(auto-fit,minmax(min(100%,270px),1fr)); gap: 14px; margin-top: 18px; }
+#costCenterSection .cost-center-type-card { display: grid; align-content: start; gap: 8px; padding: 18px; }
+#costCenterSection .cost-center-type-card h4 { margin: 0; font-size: 17px; }
+#costCenterSection .cost-center-type-card p { margin: 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+#costCenterSection .cost-center-type-card-meta, #costCenterSection .cost-center-type-card-positions { margin: 0; }
+#costCenterSection .cost-center-type-card-meta span, #costCenterSection .cost-center-type-card-positions span { font-size: 13px; }
+#costCenterSection .cost-center-type-card > .edit-button { justify-self: start; margin-top: 6px; }
+#costCenterSection .cost-center-history-note { margin: 15px 4px 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
+#costCenterSection .cost-center-empty { padding: 32px 20px; border: 1px dashed var(--line); border-radius: 12px; text-align: center; }
+#costCenterSection .cost-center-empty strong { font-size: 16px; }
+#costCenterSection .cost-center-empty p { color: var(--muted); font-size: 14px; line-height: 1.5; }
+#costCenterModal .modal-header p, #costCenterTypeModal .modal-header p { font-size: 14px; line-height: 1.6; }
+#costCenterModal .field > span, #costCenterTypeModal .field > span { color: var(--ink); }
+#costCenterTypeModal .cost-center-type-positions-heading small { font-size: 13px; line-height: 1.5; }
+html[data-active-page-theme="dark"] #costCenterSection .primary-button { color: #10241d; }
+@media (max-width: 1000px) {
+  #costCenterSection .cost-center-filters { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  #costCenterSection .cost-center-card { grid-template-columns: minmax(74px,100px) minmax(0,1fr) auto; gap: 14px; }
+  #costCenterSection .cost-center-card-counts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 12px; min-width: 0; }
+  #costCenterSection .cost-center-card > .edit-button { grid-column: 3; grid-row: 1 / 3; }
+}
+@media (max-width: 600px) {
+  #costCenterSection .cost-center-toolbar { align-items: stretch; flex-direction: column; gap: 14px; }
+  #costCenterSection .cost-center-toolbar-actions { justify-content: stretch; }
+  #costCenterSection .cost-center-toolbar-actions > button { width: 100%; }
+  #costCenterSection .cost-center-overview { gap: 7px; }
+  #costCenterSection .cost-center-overview > div { padding: 13px 10px; }
+  #costCenterSection .cost-center-overview dd { font-size: 25px; }
+  #costCenterSection .cost-center-overview dt { font-size: 13px; }
+  #costCenterSection .cost-center-directory { padding: 15px; }
+  #costCenterSection .cost-center-search { grid-column: 1 / -1; }
+  #costCenterSection .cost-center-filters > button { grid-column: 1 / -1; }
+  #costCenterSection .cost-center-card { grid-template-columns: minmax(62px,88px) minmax(0,1fr); padding: 13px; gap: 12px; }
+  #costCenterSection .cost-center-card-code { max-width: 88px; padding: 8px; }
+  #costCenterSection .cost-center-card-counts { grid-column: 1 / -1; }
+  #costCenterSection .cost-center-card > .edit-button { grid-column: 1 / -1; grid-row: auto; justify-self: stretch; }
+  #costCenterSection .cost-center-type-settings, #costCenterSection .cost-center-types-panel > summary { padding: 15px; }
+  #costCenterSection .cost-center-subheading { align-items: stretch; flex-direction: column; }
+}

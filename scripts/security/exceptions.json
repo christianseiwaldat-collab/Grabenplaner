@@ -261,6 +261,26 @@
       "reviewedOn": "2026-11-04",
       "expiresOn": "2026-11-18",
       "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "0fb9a27c40647f20f4e57b4dcf54cc9dc36faf57d84476f97fb8509350d1bf3e",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "Codex PR107 exact source review",
+      "reason": "Current immutable source test/session-security-migration.test.js:28. The matched legacy-scrypt-v1-preserved literal is a deliberately public placeholder seeded by the BASE SQL fixture and asserted unchanged after an additive session-security migration. The SQLite case uses an in-memory database; the PostgreSQL case owns a temporary test schema and transaction. This is neither a working password hash nor a service credential and is never used for external authentication. Exact source bytes, fixture producer and assertion reviewed.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "7b84578ad7dbba8ff64fed9c9d44adf60f4143911772399d0f6f06b35ab5c8c0",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "Codex PR107 exact source review",
+      "reason": "Current immutable source test/session-security-migration.test.js:81. The matched legacy-scrypt-v1-preserved literal is a deliberately public placeholder seeded by the BASE SQL fixture and asserted unchanged after an additive session-security migration. The SQLite case uses an in-memory database; the PostgreSQL case owns a temporary test schema and transaction. This is neither a working password hash nor a service credential and is never used for external authentication. Exact source bytes, fixture producer and assertion reviewed.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
     }
   ]
 }

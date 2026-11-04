@@ -55,10 +55,10 @@ test('all source IDs include more than one index batch of 32 branches',async t=>
  await f.ingest('ARTIKEL_FILIALEN',branches.map(FilialID=>({EAN:'a',FilialID,FBestand:'2'})),{sourceInstance:'tradefoto-trade'});
  const all=await f.run('stock-summary',{});assert.equal(all.complete,true);assert.equal(all.totals.positions,40);assert.equal(all.totals.positiveQuantity,'80');assert.equal(all.totals.provisionalNet,'800');
 });
-test('duplicates, negative quantities and orphan articles cannot inflate the valuation',async t=>{
+test('legacy duplicates, negative quantities and orphan articles cannot inflate the valuation',async t=>{
  const f=await fixture(t);await prepare(f);
  await f.ingest('ARTIKEL_FILIALEN',[{EAN:'a',FilialID:18,FBestand:'2'},{EAN:'a',FilialID:18,FBestand:'3'},
- {EAN:'b',FilialID:18,FBestand:'-2'},{EAN:'missing',FilialID:18,FBestand:'100'}],{sourceInstance:'tradefoto-trade',snapshotAt:'2026-09-15T10:00:00.000Z'});
+ {EAN:'b',FilialID:18,FBestand:'-2'},{EAN:'missing',FilialID:18,FBestand:'100'}],{legacy:true,sourceInstance:'tradefoto-trade',snapshotAt:'2026-09-15T10:00:00.000Z'});
  const r=await f.run('stock-summary',{locationId:'18'});
  assert.equal(r.totals.provisionalNet,'0');assert.equal(r.totals.ambiguous,2);assert.equal(r.totals.negative,1);assert.equal(r.totals.missingArticle,1);
  assert.equal(r.totals.positiveQuantity,'0');assert.equal(r.totals.positivePositions,0);

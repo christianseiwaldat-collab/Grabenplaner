@@ -1,10 +1,13 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const tmp = path.resolve(__dirname, '../tmp');
+const tmp = fs.realpathSync(os.tmpdir());
 const root = fs.mkdtempSync(path.join(tmp, 'saturday-api-'));
 Object.assign(process.env, { DB_PATH: path.join(root, 'fixture.db'), BACKUP_DIR: path.join(root, 'backups'),
   GRABENPLANER_DATA_DIR: path.join(root, 'data'), GRABENPLANER_FORCE_PORTAL: '1', GRABENPLANER_SEED_DEMO: '1',
@@ -16,8 +19,8 @@ function session(number, role, permissions = [], location) {
   db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password,password_changed_at) VALUES(?,'test-only',?,1,0,CURRENT_TIMESTAMP)").run(number, role);
   for (const permission of permissions) db.prepare("INSERT INTO portal_permission_grants(employee_number,permission,granted_by) VALUES(?,?,'synthetic')").run(number, permission);
   if (location) db.prepare("INSERT INTO portal_access_scopes(employee_number,location_id,department_id,assigned_by) VALUES(?,?,0,'synthetic')").run(number, location);
-  const token = crypto.randomBytes(32).toString('hex'), csrf = crypto.randomBytes(24).toString('hex');
-  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z')").run(crypto.randomUUID(), number, crypto.createHash('sha256').update(token).digest('hex'));
+  const token = crypto.randomBytes(32).toString('hex'), csrf = sessionCsrf(token);
+  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(crypto.randomUUID(), number, crypto.createHash('sha256').update(token).digest('hex'));
   return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }
 async function request(actor, route, body, csrf = true, method = body ? 'POST' : 'GET') {
@@ -29,7 +32,7 @@ async function request(actor, route, body, csrf = true, method = body ? 'POST' :
 const actors = {};
 test.before(async () => {
   const day = { open: true, start: '09:00', end: '18:00', lunchEnabled: true, lunchStart: '12:30', lunchEnd: '13:00', minStaff: 0, minFrom: '09:00', minTo: '18:00' };
-  for (const id of ['91', '92']) db.prepare('INSERT INTO locations(id,name,day_settings_json,active) VALUES(?,?,?,1)').run(id, id, JSON.stringify(Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(name => [name, day]))));
+  for (const id of ['91', '92']) prepareLocationFixture(db, 'INSERT INTO locations(id,name,day_settings_json,active) VALUES(?,?,?,1)').run(id, id, JSON.stringify(Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(name => [name, day]))));
   actors.admin = session('S901', 'admin');
   actors.manager = session('S902', 'manager', ['employees:write'], '91');
   actors.hr = session('S905', 'hr', ['employees:write', 'work_rules:assign'], '91');
@@ -40,7 +43,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  db.close(); subject.releaseInstanceLockForTests();
+  await db.close(); subject.releaseInstanceLockForTests();
   assert.equal(path.dirname(fs.realpathSync(root)), tmp); fs.rmSync(root, { recursive: true });
 });
 test('employee API requires live personnel rights, scope and CSRF; cutover is fixed and assignments are explicit', async () => {

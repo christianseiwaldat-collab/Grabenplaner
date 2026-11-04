@@ -4,8 +4,8 @@
   else root.SalesArticleStockPanel=value;
 })(typeof window==='object' ? window : this,function() {
   'use strict';
-  function mount(host,{store,stock,formats,layout,tableLayout,columns,canUse}) {
-    let table=null,destroyed=false;
+  function mount(host,{store,stock,formats,layout,tableLayout,columns,canUse,loadOrders,onOrdersError}) {
+    let table=null,destroyed=false,pendingOrders=null;
     const win=host.ownerDocument.defaultView;
     const usable=()=>!destroyed && canUse();
     const writable=()=>usable() && store.ready;
@@ -13,9 +13,11 @@
       table?.destroy();table=null;
       if(!usable()) {host.hidden=true;host.replaceChildren();return;}
       const chooser=host.querySelector('[data-stock-settings]'),open=Boolean(chooser?.open);
+      const openOrder=host.querySelector('.sales-article-branch-orders[open]')?.getAttribute('data-stock-order-id');
       const focused=host.ownerDocument.activeElement,focusId=host.contains(focused)
         ? ['data-stock-branch','data-stock-column','data-stock-sort','data-stock-all','data-stock-preferences-retry'].find(name=>focused.hasAttribute(name)) : null;
       const focusChooser=Boolean(focused && focused===host.querySelector('[data-stock-settings] > summary'));
+      const focusOrder=host.contains(focused) ? focused?.closest('.sales-article-branch-orders')?.getAttribute('data-stock-order-id') : null;
       const focusValue=focusId ? focused.getAttribute(focusId) : null;
       let markup=layout.branchStock(stock,formats,store.value);
       if(!store.ready) {
@@ -29,6 +31,11 @@
         for(const control of host.querySelectorAll('['+attribute+']')) control.disabled ||= !store.ready;
       }
       const nextChooser=host.querySelector('[data-stock-settings]');if(nextChooser) nextChooser.open=open;
+      for(const disclosure of host.querySelectorAll('.sales-article-branch-orders')) {
+        const id=disclosure.getAttribute('data-stock-order-id');
+        if(id===openOrder) disclosure.open=true;
+        if(id===focusOrder) disclosure.querySelector('summary')?.focus({preventScroll:true});
+      }
       const target=focusId && [...host.querySelectorAll('['+focusId+']')].find(node=>node.getAttribute(focusId)===focusValue);
       target?.focus({preventScroll:true});
       if(focusChooser || (focusId==='data-stock-preferences-retry' && !target)) host.querySelector('[data-stock-settings] > summary')?.focus({preventScroll:true});
@@ -39,6 +46,22 @@
       });
     }
     function update(next) {if(!writable()) return;if(store.change(next)) void store.save();}
+    function orderState(state) {
+      stock={...stock,rows:(stock?.rows || []).map(row=>['deferred','loading','failed'].includes(row.orders?.state)
+        ? {...row,orders:{...row.orders,state}} : row)};
+    }
+    function requestOrders() {
+      if(!usable() || pendingOrders || typeof loadOrders!=='function') return;
+      orderState('loading');render();
+      pendingOrders=Promise.resolve().then(()=>usable() ? loadOrders() : null).then(value=>{
+        if(!usable()) return;
+        if(!value || !Array.isArray(value.rows)) throw new Error('Invalid branch order response');
+        stock=value;
+      }).catch(error=>{
+        if(!usable()) return;
+        orderState('failed');onOrdersError?.(error);
+      }).finally(()=>{pendingOrders=null;if(usable()) render();});
+    }
     function change(event) {
       if(!writable()) return;
       const branch=event.target.closest('[data-stock-branch]'),column=event.target.closest('[data-stock-column]'),value=store.value;
@@ -56,6 +79,7 @@
     function click(event) {
       if(!usable()) return;
       if(event.target.closest('[data-stock-preferences-retry]')) {if(store.failed) void store.activate({retry:true});return;}
+      if(event.target.closest('[data-stock-orders-retry]')) {requestOrders();return;}
       if(!writable()) return;
       const sort=event.target.closest('[data-stock-sort]'),all=event.target.closest('[data-stock-all]'),value=store.value;
       if(sort) {
@@ -67,6 +91,8 @@
       const disclosure=event.target;
       if(!disclosure.matches?.('.sales-article-branch-orders') || !disclosure.open) return;
       if(!usable()) {disclosure.open=false;return;}
+      const row=(stock?.rows || []).find(value=>value.id===disclosure.getAttribute('data-stock-order-id'));
+      if(row?.orders?.state==='deferred' && typeof loadOrders==='function') {requestOrders();return;}
       for(const other of host.querySelectorAll('.sales-article-branch-orders[open]')) if(other!==disclosure) other.open=false;
       const note=disclosure.querySelector('.sales-article-branch-orders-note'),anchor=disclosure.querySelector('summary').getBoundingClientRect();
       const scale=Number.parseFloat(win.getComputedStyle(host.ownerDocument.body).zoom) || 1;

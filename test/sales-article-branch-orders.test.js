@@ -7,8 +7,8 @@ const { loadSalesArticleBranchOrders, LIMIT, ITEM_LIMIT } = require('../lib/sale
 const UI = require('../public/sales-article-layout');
 async function setup(t) {
   const f = await fixture(t), seed = await seedBranchOrders({ access:f.app.provider, source:f });
-  const load = (session = f.state.session) => loadSalesArticleDetailData({ access:f.app.provider, vault:f.vault,
-    article:seed.article, projection:{read:true}, session });
+  const load = (session = f.state.session, section = 'all') => loadSalesArticleDetailData({ access:f.app.provider, vault:f.vault,
+    article:seed.article, projection:{read:true}, session, section });
   return { ...f, ...seed, load };
 }
 test('Branch quantities use source stock and BE allocations use demand branches, exact remainders and grouped parents', async t => {
@@ -25,9 +25,29 @@ test('Branch quantities use source stock and BE allocations use demand branches,
     {money:v=>v,timestamp:v=>v,date:v=>v});
   assert.match(html,/<th scope="col" data-stock-cell="quantity"[^>]*><button type="button" data-stock-sort="quantity">Bestand/);
   assert.match(html,/<th scope="col" data-stock-cell="ordered"[^>]*><button type="button" data-stock-sort="ordered">Bestellt/);
-  assert.match(html,/<details class="sales-article-branch-orders"><summary title=/);
+  assert.match(html,/<details class="sales-article-branch-orders" data-stock-order-id="18"><summary title=/);
   assert.match(html,/BE 101 · Rest 4/); assert.match(html,/Zuletzt belegte BE-Zuordnung/);
   assert.match(html,/kein gesicherter aktueller Offenstand/);
+});
+
+test('Initial article preserves scoped quantities without loading BE documents; explicit details still authenticate them', async t => {
+  const f=await setup(t);
+  const main=await f.load(f.state.session,'main');
+  assert.deepEqual(main.branchStock.rows.map(row=>[row.id,row.ordered,row.orders.state,row.orders.items]),
+    [['18','4','deferred',[]],['19','6','deferred',[]]]);
+  const detailed=await f.load(f.state.session,'orders');
+  assert.deepEqual(Object.keys(detailed),['branchStock']);
+  assert.equal(detailed.branchStock.rows[1].orders.matched,true);
+  const scoped={...f.state.session,permissions:f.state.session.permissions.filter(p=>p!=='sales:analytics:company:read'),scopes:[{locationId:'18'}]};
+  assert.equal((await f.load(scoped,'main')).branchStock.rows[1].ordered,null);
+  const revoked={...f.state.session,permissions:f.state.session.permissions.filter(p=>p!=='sales:purchasing:read')};
+  assert.ok((await f.load(revoked,'orders')).branchStock.rows.every(row=>row.ordered===null && row.orders.state==='restricted'));
+  f.app.database.prepare("UPDATE import_history_segments SET payload='tampered' WHERE data_class='internal_business' AND record_id IN (SELECT id FROM import_history_records WHERE source_table='BestellVerteilung')").run();
+  assert.equal((await f.load(f.state.session,'main')).branchStock.rows[0].ordered,'4');
+  await assert.rejects(f.load(f.state.session,'orders'));
+  await assert.rejects(f.load());
+  f.app.database.prepare("UPDATE import_history_segments SET payload='tampered' WHERE record_id IN (SELECT id FROM import_history_records WHERE source_table='ARTIKEL_FILIALEN')").run();
+  await assert.rejects(f.load(f.state.session,'main'));
 });
 test('Purchase permission and authenticated branch scope restrict new quantities and BEs without restricting article stock', async t => {
   const f = await setup(t);

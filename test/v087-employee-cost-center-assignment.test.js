@@ -1,4 +1,6 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -27,7 +29,7 @@ let disallowedPositionId;
 
 function session(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, role_locked, active, must_change_password,
@@ -42,8 +44,8 @@ function session(employeeNumber, role) {
   `).run(employeeNumber, role);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }
@@ -134,16 +136,13 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
 test("v0.87 Block 2: Migration und Datenbank sichern die führende Kostenstelle ab", () => {
-  assert.ok(db.prepare(`
-    SELECT 1 FROM schema_migrations
-    WHERE id = 'v0.87-employee-cost-center-assignment'
-  `).get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   const inconsistent = db.prepare(`
     SELECT e.personnel_number
     FROM employees e

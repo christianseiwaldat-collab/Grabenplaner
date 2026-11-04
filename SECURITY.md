@@ -15,3 +15,15 @@ Reale Daten, Branding-Kits, Schlüssel und unbereinigte Protokolle gehören nich
 Die technische Umsetzung ersetzt keine Prüfung der konkreten Berechtigungs-, Datenschutz- und Betriebskonfiguration.
 
 [Betriebs- und Recovery-Vertrag](SERVERBETRIEB.md). Kein Bug-Bounty-Programm.
+
+## Pflege und Nachweise
+
+Die [Release- und Patchpolitik](server-tools/linux/security-release-policy.md) legt die künftig
+einzuhaltenden Verantwortlichkeiten, risikobasierten Reaktionsfristen und
+Anforderungen an Ausnahmen und lokale Patches fest. Verantwortliche Personen
+müssen je Release und betriebenem System ausdrücklich benannt werden.
+
+Das [versionsgebundene Sicherheitsinventar](server-tools/linux/security-release-inventory.md)
+trennt Quellpaket, tatsächlich installierte Abhängigkeiten und Zielhost.
+Ein CI-Ergebnis oder eine lokale Prüfung belegt weder aktivierte GitHub-Regeln
+noch eine ausgelieferte oder produktiv installierte Korrektur.

@@ -81,20 +81,26 @@ test('real readiness renderer emits only HTTP(S) standard links', () => {
   assert.equal(links('https://owasp.org/projects/asvs')[0].attribs.rel, 'noopener noreferrer');
 });
 
-test('real portal presence renderer constrains employee colors', () => {
+test('real portal renderers constrain employee and workspace launch colors', () => {
   const portal = fs.readFileSync(path.join(__dirname, '../public/portal.js'), 'utf8');
   const target = () => ({ innerHTML: '', classList: { toggle() {} }, insertAdjacentHTML(position, html) { assert.equal(position, 'beforeend'); this.innerHTML += html; } });
   for (const color of ['#ffffff;position:fixed', '#ffffff" onclick="unsafe', null, '#Ab12ef']) {
     const expected = color === '#Ab12ef' ? color : '#7b8983';
-    const el = { leadershipPresenceSummary: target(), leadershipPresenceList: target() };
+    const el = { leadershipPresenceSummary: target(), leadershipPresenceList: target(), mobileHomeTiles: target() };
     const ctx = { el, portalState: { activeTab: 'home' },
       leadershipPresence: () => ({ employees: [{ color, entries: [], nickname: 'Synthetic' }] }),
-      timeStateLabels: {}, durationText: () => '0 h',
+      timeStateLabels: {}, durationText: () => '0 h', isMobileUi: () => true, isOrganizationAccount: () => false,
+      mobileHomeTilesForCurrentAccount: () => [], privatePortalWorkspaces: { launches: [
+        { id: 'synthetic', launch: { color, label: 'Synthetic' } },
+      ] },
     };
-    for (const name of ['esc', 'safeCssColor', 'renderLeadershipPresence']) load(ctx, name, portal);
-    ctx.renderLeadershipPresence();
+    for (const name of ['esc', 'safeCssColor', 'renderLeadershipPresence', 'renderMobileHome']) load(ctx, name, portal);
+    ctx.renderLeadershipPresence(); ctx.renderMobileHome();
     const presence = nodes(parseDocument(el.leadershipPresenceList.innerHTML), node => node.attribs?.class === 'leadership-person-dot');
     assert.deepEqual(presence[0].attribs, { class: 'leadership-person-dot', style: `--person-color:${expected}` });
+    const launch = nodes(parseDocument(el.mobileHomeTiles.innerHTML), node => node.name === 'button')[0];
+    assert.equal(launch.attribs.style, `--private-launch-color:${expected};--mobile-home-tile-color:${expected}`);
+    assert.equal(launch.attribs.onclick, undefined);
   }
 });
 

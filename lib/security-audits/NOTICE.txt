@@ -1,0 +1,12 @@
+OWASP Application Security Verification Standard (ASVS) 5.0.0
+Copyright OWASP Foundation and the ASVS contributors.
+Licensed under Creative Commons Attribution-ShareAlike 4.0 International:
+https://creativecommons.org/licenses/by-sa/4.0/
+
+asvs-5.0.0.json is the unmodified English release asset retrieved on 2026-10-18:
+https://github.com/OWASP/ASVS/releases/download/v5.0.0_release/OWASP_Application_Security_Verification_Standard_5.0.0_en.json
+SHA-256: bcdbec214d70abcfad9284a31d4f9e5134305831d628aad3aa85d7e26626cb35
+
+The catalogue text remains under CC-BY-SA-4.0. The surrounding application is
+separate software. GP-specific assessments are independently authored and stored
+as protected application data, not bundled with the catalogue.

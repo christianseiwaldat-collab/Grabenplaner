@@ -205,8 +205,21 @@ test("v0.72 Linux installer restores trusted shell modes after ZIP extraction", 
   assert.match(helper, /find "\$source_root" -type f -exec chmod 0640/);
   assert.doesNotMatch(helper, /-perm \/111/);
   assert.doesNotMatch(helper, /find "\$source_root" -type f -name '\*\.sh'/);
-  assert.match(installer, /validate_manifest\r?\nnormalize_verified_archive_modes "\$STAGE_ROOT\/source"\r?\nresolve_pnpm/);
-  assert.match(installer, /NODE_ENV=production "\$\{PNPM_COMMAND\[@\]\}" install[\s\S]+find "\$STAGE_ROOT\/source" -type f -perm \/111 -exec chmod 0750/);
+  const validated = installer.lastIndexOf("\nvalidate_manifest\n"), normalized = installer.indexOf('\nnormalize_verified_archive_modes "$STAGE_ROOT/source"', validated);
+  const documents = installer.indexOf('root_node "$STAGE_ROOT/source/server-tools/linux/postgresql/preflight-install.js" documents', normalized);
+  const packageManager = installer.indexOf("\nresolve_pnpm\n", documents);
+  assert.ok(validated >= 0 && normalized > validated && documents > normalized && packageManager > documents,
+    "Only verified and normalized sources may run the document preflight before resolving the package manager.");
+  const installed = installer.indexOf('NODE_ENV=production "${PNPM_COMMAND[@]}" install', packageManager);
+  const untrusted = installer.indexOf('mv -- "$STAGE_ROOT/source" "$STAGE_ROOT/source-built-untrusted"', installed);
+  const sealed = installer.indexOf('gp_seal_build_tree "$STAGE_ROOT/source-built-untrusted" "$STAGE_ROOT/source" "$SERVICE_GROUP"', untrusted);
+  const originalRechecked = installer.indexOf('gp_verify_sealed_zip "$STAGE_ROOT/package.zip" "$STAGE_ROOT/source" 1', sealed);
+  const rootPg = installer.indexOf('gp_prepare_root_pg_dependencies "$STAGE_ROOT/package.zip" "$STAGE_ROOT/source"', originalRechecked);
+  const pairPreflight = installer.indexOf('root_node "$STAGE_ROOT/source/server-tools/linux/postgresql/preflight-install.js" check', rootPg);
+  assert.ok(installed > packageManager && untrusted > installed && sealed > untrusted
+    && originalRechecked > sealed && rootPg > originalRechecked && pairPreflight > rootPg,
+  "Build output must be copied into fresh Root-owned inodes and rechecked against the original ZIP before privileged PostgreSQL work.");
+  assert.doesNotMatch(installer, /find "\$STAGE_ROOT\/source" -type f -perm \/111 -exec chmod/);
 
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-linux-zip-modes-"));
   context.after(() => fs.rmSync(temporary, { recursive: true, force: true }));

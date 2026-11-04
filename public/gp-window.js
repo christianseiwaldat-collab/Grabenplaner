@@ -15,6 +15,7 @@
   const EDGES = Object.freeze(['n','ne','e','se','s','sw','w','nw']);
   const DEFAULTS = Object.freeze({x:0,y:0,width:560,height:420,minimized:false});
   const activeWindows = new WeakMap();
+  const documentManagers = new WeakMap();
   const clamp = (value,min,max) => Math.min(Math.max(min,max),Math.max(min,Math.round(value)));
   function normalize(value = {}, options = {}) {
     const minWidth = options.minWidth || 200, minHeight = options.minHeight || 80;
@@ -87,11 +88,17 @@
     }
     function change(id,geometry) {
       synchronize(); if(!allowed() || !actor || !model.safeId(id)) return Promise.resolve(false);
-      const item=model.geometry(normalize(geometry)); dirty.set(id,item); value.windows[id]=item; publish();
+      const item=model.geometry(normalize(geometry));
+      if(loaded && !dirty.has(id) && JSON.stringify(value.windows[id])===JSON.stringify(item)) return Promise.resolve(true);
+      dirty.set(id,item); value.windows[id]=item; publish();
       const a=actor,e=epoch;
       queue=queue.catch(()=>{}).then(async()=>{
         if(!current(a,e)) return false;
         await activate(); if(!current(a,e) || !loaded) return false;
+        // One queued write captures the latest geometry of every changed window.
+        // Subsequent key-repeat events need no identical PUT; failed edits remain
+        // dirty for the next explicit movement/retry.
+        if(!dirty.size) return true;
         const snapshot=model.validate(value), controller=new AbortController(); write=controller;
         try {
           if(options.write) await options.write(snapshot,controller.signal);
@@ -115,7 +122,7 @@
     const title=resolve(options.title,'[data-gp-window-title]'), body=resolve(options.body,'[data-gp-window-body]');
     const toggle=resolve(options.toggle,'[data-gp-window-toggle]'), closeButton=resolve(options.closeButton,'[data-gp-window-close]');
     const moveHandle=options.move || title;
-    const removers=[],handles=[],ownedHandles=[],ownedTitleNodes=[],titleClasses=[];
+    const removers=[],handles=[],ownedHandles=[],ownedTitleNodes=[],decoratedClasses=[];
     const on=(target,type,fn)=>{target?.addEventListener(type,fn);removers.push(()=>target?.removeEventListener(type,fn));};
     const dimensions={minWidth:options.minWidth || 200,minHeight:options.minHeight || 80,compactWidth:options.compactWidth || 260};
     const getBounds=()=>options.bounds ? options.bounds() : viewportBounds(win.visualViewport || {width:win.innerWidth,height:win.innerHeight},options.scale?.() || 1);
@@ -134,7 +141,8 @@
     }
     const status=resolve(options.status,'[data-gp-window-status]');
     element.classList.add('gp-window','gp-window-standard'); title?.classList.add('gp-window-title','gp-window-titlebar');
-    const decorate=(node,name)=>{if(node&&!node.classList.contains(name)){node.classList.add(name);titleClasses.push([node,name]);}};
+    const decorate=(node,name)=>{if(node&&!node.classList.contains(name)){node.classList.add(name);decoratedClasses.push([node,name]);}};
+    decorate(body,'gp-window-scroll-body');
     decorate(moveHandle,'gp-window-move-handle');
     const titleText=options.titleText || title?.querySelector('strong,h2,h3');
     const fullTitle=titleText?.textContent;
@@ -162,7 +170,7 @@
       element.classList.toggle('is-minimized',preferred.minimized);
       if(titleText&&options.minimizedTitle)titleText.textContent=preferred.minimized ? String(options.minimizedTitle() || fullTitle) : fullTitle;
       if(body) {if(preferred.minimized && body.contains(doc.activeElement)) toggle?.focus({preventScroll:true});body.hidden=preferred.minimized;}
-      if(toggle) {toggle.setAttribute('aria-expanded',String(!preferred.minimized));toggle.setAttribute('aria-label',preferred.minimized?'Fenster wiederherstellen':'Fenster minimieren');toggle.textContent=preferred.minimized?'▢':'−';}
+      if(toggle) {toggle.setAttribute('aria-expanded',String(!preferred.minimized));toggle.setAttribute('aria-label',preferred.minimized?'Fenster wiederherstellen':'Fenster minimieren');const text=preferred.minimized?'▢':'−';if(toggle.textContent!==text)toggle.textContent=text;}
       for(const handle of handles) handle.hidden=preferred.minimized;
       const dimensionsKey=`${fitted.width}|${fitted.height}|${preferred.minimized}`;
       if(last!==dimensionsKey) {last=dimensionsKey;options.resize?.({...fitted});}
@@ -177,7 +185,7 @@
     }
     function begin(event,action,handle) {
       if(event.button!==0 || event.isPrimary===false || !usable() || gesture || closing || (preferred.minimized && action!=='move')) return;
-      event.preventDefault();event.stopPropagation();handle.focus?.({preventScroll:true});render();
+      event.preventDefault();event.stopPropagation();foreground();handle.focus?.({preventScroll:true});render();
       gesture={id:event.pointerId,handle,action,x:event.clientX,y:event.clientY,scale:options.scale?.() || 1,
         preferred:{...preferred},base:{...fitted},current:{...fitted}};
       element.classList.add(action==='move'?'is-moving':'is-resizing');
@@ -246,6 +254,7 @@
     on(toggle,'click',()=>minimize(!preferred.minimized));
     async function close() {
       if(!usable() || closing) return closing;
+      if(options.beforeClose?.()===false) return false;
       finish(true);const ticket=++closeTicket,target=typeof options.closeTarget==='function'?options.closeTarget():options.closeTarget || options.opener;
       const rect=element.getBoundingClientRect?.(), destination=target?.getBoundingClientRect?.(),zoom=options.scale?.() || 1;
       const reduced=win.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
@@ -256,11 +265,21 @@
         }
         if(ticket!==closeTicket || destroyed) return;
         active=false;releaseForeground();if(!options.nativeDialog) element.hidden=true;
-        options.onClose?.();target?.focus?.({preventScroll:true});
+        options.onClose?.();
+        // A domain discard/critical-action gate may keep its native dialog open.
+        if(options.nativeDialog && element.open) {active=true;render();foreground();return false;}
+        if(options.canFocus?.() ?? true) target?.focus?.({preventScroll:true});
       })();
       try {await closing;} finally {if(ticket===closeTicket) closing=null;}
     }
     on(closeButton,'click',()=>void close());
+    if(options.workspace) on(doc,'keydown',event=>{
+      if(event.key!=='Escape' || event.defaultPrevented || gesture || !usable() || activeWindows.get(doc)!==element) return;
+      if(!element.contains(doc.activeElement)) return;
+      let modal=null;try {modal=doc.querySelector?.('dialog:modal');} catch {}
+      if(modal && modal!==element) return;
+      event.preventDefault();event.stopPropagation();void close();
+    });
     on(element,'pointerdown',foreground);on(element,'focusin',foreground);
     on(win,'resize',refresh);on(win,'blur',()=>finish(true));
     on(win.visualViewport,'resize',refresh);on(win.visualViewport,'scroll',refresh);
@@ -272,62 +291,159 @@
       set(value){finish(true);preferred=normalize(value || options.initialGeometry?.() || DEFAULTS,dimensions);render();},
       activate(){closeTicket++;animation?.cancel();animation=null;closing=null;active=true;render();foreground();},
       suspend(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);active=false;releaseForeground();if(!options.nativeDialog) element.hidden=true;},
-      destroy(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);destroyed=true;releaseForeground();observer?.disconnect();for(const remove of removers) remove();for(const handle of ownedHandles) handle.remove();for(const node of ownedTitleNodes)node.remove();for(const[node,name]of titleClasses)node.classList.remove(name);if(titleText&&options.minimizedTitle)titleText.textContent=fullTitle;title?.classList.remove('gp-window-title','gp-window-titlebar');element.classList.remove('gp-window','gp-window-standard');if(!options.nativeDialog) element.hidden=true;}
+      destroy(){closeTicket++;animation?.cancel();animation=null;closing=null;finish(true);destroyed=true;releaseForeground();observer?.disconnect();for(const remove of removers) remove();for(const handle of ownedHandles) handle.remove();for(const node of ownedTitleNodes)node.remove();for(const[node,name]of decoratedClasses)node.classList.remove(name);if(titleText&&options.minimizedTitle)titleText.textContent=fullTitle;title?.classList.remove('gp-window-title','gp-window-titlebar');element.classList.remove('gp-window','gp-window-standard');if(!options.nativeDialog) element.hidden=true;}
     };
   }
   function installDocument(doc,options={}) {
-    const win=doc.defaultView,records=new Map();let destroyed=false,anonymous=0,lastOpener=doc.activeElement;
-    const trackOpener=event=>{if(!event.target.closest?.('dialog')) lastOpener=event.target.closest?.('button,a') || event.target;};
+    const existing=documentManagers.get(doc);if(existing)return existing;
+    const win=doc.defaultView,records=new Map();let destroyed=false,epoch=0,anonymous=0,lastOpener=doc.activeElement;
+    const trackOpener=event=>{if(event.type==='pointerdown' || !event.target.closest?.('dialog')) lastOpener=event.target.closest?.('button,a') || event.target;};
     doc.addEventListener('pointerdown',trackOpener,true);doc.addEventListener('focusin',trackOpener,true);
     const key=()=>String(options.actorKey?.() || '');
     const preferences=createPreferences({actorKey:key,canUse:options.canUse,api:options.api,read:options.readPreferences,write:options.writePreferences,error:options.error,
-      apply(value){for(const record of records.values()) record.controller?.set(value.windows[record.id] || record.initialGeometry);}});
+      apply(value){for(const record of records.values()) if(record.controller) {
+        const geometry=(options.canUse?.() ?? true) ? value.windows[record.id] || record.initialGeometry : record.initialGeometry;
+        record.controller.set(record.workspace ? geometry : {...geometry,minimized:false});
+      }}});
+    const scale=()=>options.scale?.() || parseFloat(win.getComputedStyle?.(doc.body)?.zoom) || 1;
+    const bounds=()=>viewportBounds(win.visualViewport || {width:win.innerWidth,height:win.innerHeight},scale());
+    const allowed=()=>!destroyed && (options.canUse?.() ?? true) && (!options.actorKey || Boolean(key()));
+    function cancel(dialog) {
+      const event=new (win.Event || Event)('cancel',{cancelable:true});
+      dialog.dispatchEvent(event);
+      return !event.defaultPrevented && dialog.open;
+    }
+    function removeChrome(dialog,record) {
+      record.controller?.destroy();record.controller=null;
+      for(const node of record.marked || []) node.classList.remove('gp-window-legacy-heading','gp-window-legacy-close');
+      record.marked=[];
+      if(record.body?.parentElement===dialog) {
+        for(const child of [...record.body.childNodes]) dialog.insertBefore(child,record.body);
+        record.body.remove();
+      }
+      record.header?.remove();record.header=null;record.body=null;
+      dialog.classList.remove('gp-dialog','gp-dialog-workspace');
+    }
+    function reconcile(dialog,record) {
+      if(record.header?.parentElement===dialog && record.body?.parentElement===dialog && record.controller) {
+        // Dynamic workspaces can replace only their content while keeping chrome.
+        const heading=record.body.querySelector('h2,h3');
+        const title=heading?.textContent || dialog.getAttribute('aria-label') || record.text.textContent;
+        if(record.text.textContent!==title)record.text.textContent=title;
+        return false;
+      }
+      const previous=record.controller?.preferred;
+      removeChrome(dialog,record);
+      const rect=dialog.getBoundingClientRect(),b=bounds(),zoom=scale();
+      const body=doc.createElement('div');body.className='gp-dialog-body';body.dataset.gpWindowBody='';
+      // Move the original nodes, including forms/file inputs, without cloning or
+      // changing their handlers, field values, validation or submit ownership.
+      for(const child of [...dialog.childNodes]) body.append(child);
+      const legacyHeader=body.querySelector('.modal-header,header,.branch-search-dialog-heading,.dialog-heading');
+      const heading=legacyHeader?.querySelector('h2,h3,strong') || body.querySelector('h2,h3');
+      const legacyClose=legacyHeader?.querySelector('.close-button,[data-close],button[aria-label*="schließen"],button[aria-label*="Schließen"]')
+        || [...(legacyHeader?.querySelectorAll('button') || [])].find(button=>['×','✕','✖'].includes(button.textContent.trim()));
+      for(const node of [heading,legacyClose]) if(node) {
+        node.classList.add(node===heading?'gp-window-legacy-heading':'gp-window-legacy-close');record.marked.push(node);
+      }
+      const header=doc.createElement('header');header.className='gp-dialog-window-title';header.dataset.gpWindowTitle='';
+      const text=doc.createElement('strong');text.textContent=heading?.textContent || dialog.getAttribute('aria-label') || 'Fenster';
+      const controls=doc.createElement('div');controls.className='gp-window-controls';
+      const toggle=record.workspace?doc.createElement('button'):null;
+      if(toggle){toggle.type='button';toggle.dataset.gpWindowToggle='';controls.append(toggle);}
+      const closeButton=doc.createElement('button');closeButton.type='button';closeButton.dataset.gpWindowClose='';closeButton.textContent='×';closeButton.setAttribute('aria-label','Fenster schließen');controls.append(closeButton);
+      header.append(text,controls);dialog.append(header,body);
+      record.header=header;record.body=body;record.text=text;record.legacyClose=legacyClose;
+      dialog.classList.add('gp-dialog');dialog.classList.toggle('gp-dialog-workspace',record.workspace);
+      if(!record.initialGeometry) {
+        const requestedWidth=Number(dialog.dataset.gpWindowWidth);
+        const initialWidth=Number.isFinite(requestedWidth)&&requestedWidth>=200&&requestedWidth<=1800?requestedWidth:null;
+        const width=Math.min(b.width,Math.max(200,initialWidth || rect.width/zoom || 560));
+        const measured=Math.max(80,rect.height/zoom || 330);
+        // Rich workspaces start with usable room. A saved user geometry always
+        // wins, and later content changes never resize a window automatically.
+        const rich=dialog.hasAttribute('data-gp-window-rich') || body.querySelectorAll('input:not([type="hidden"]),select,textarea').length>=8;
+        const height=Math.min(b.height,record.workspace&&rich?Math.max(measured,Math.min(680,b.height*.78)):measured+44);
+        record.initialGeometry={x:Math.max(0,Math.min(rect.left/zoom-b.left,b.width-width)),y:record.workspace?Math.max(0,(b.height-height)/2):Math.max(0,Math.min(rect.top/zoom-b.top,b.height-height)),width,height,minimized:false};
+      }
+      const geometry=allowed() ? previous || preferences.value.windows[record.id] || record.initialGeometry : record.initialGeometry;
+      record.controller=attach(dialog,{title:header,titleText:text,body,toggle,closeButton,nativeDialog:true,workspace:record.workspace,active:dialog.open,bounds,scale,
+        geometry:record.workspace?geometry:{...geometry,minimized:false},
+        canUse:()=>dialog.open && !destroyed && (!record.workspace || allowed()),change:value=>{if(allowed())preferences.change(record.id,value);},closeTarget:()=>record.opener,
+        beforeClose:()=>cancel(dialog),canFocus:()=>!destroyed && (!record.workspace || allowed()) && record.opener?.isConnected!==false,
+        onClose:()=>{if(!dialog.open)return;if(record.legacyClose?.isConnected!==false && record.legacyClose)record.legacyClose.click();else dialog.close();}});
+      return true;
+    }
     function install(dialog) {
-      if(records.has(dialog) || dialog.hasAttribute('data-gp-window-manual') || dialog.classList.contains('gp-window')) return;
+      if(records.has(dialog)) return records.get(dialog);
+      if(dialog.hasAttribute('data-gp-window-manual') || dialog.classList.contains('gp-window')) return null;
       const scope=dialog.parentElement?.closest?.('[id]')?.id;
       const name=dialog.getAttribute('data-po-decision')!==null?'privacy-decision':dialog.getAttribute('data-po-editor')!==null?'privacy-editor':dialog.getAttribute('data-knowledge-reader')!==null?'knowledge-reader':dialog.getAttribute('data-knowledge-editor')!==null?'knowledge-editor':dialog.getAttribute('data-r') || dialog.getAttribute('data-h') || dialog.getAttribute('aria-labelledby') || dialog.getAttribute('aria-label') || `${dialog.className || 'window'}-${++anonymous}`;
       const id=dialog.id || dialog.dataset.gpWindowId || `dialog:${scope ? scope+':' : ''}${name}`.replace(/[^a-zA-Z0-9:._-]/g,'-').slice(0,120);
-      const record={id,controller:null,opener:null,header:null,ownedHeader:false};records.set(dialog,record);
-      function open() {
-        if(!dialog.open || destroyed || !(options.canUse?.() ?? true)) {record.controller?.suspend();return;}
-        record.opener=doc.activeElement?.closest?.('dialog') ? lastOpener : doc.activeElement || lastOpener;
-        if(!record.controller) {
-          const rect=dialog.getBoundingClientRect(),zoom=options.scale?.() || parseFloat(win.getComputedStyle?.(doc.body)?.zoom) || 1;
-          let header=dialog.querySelector('.modal-header,header,.branch-search-dialog-heading');
-          if(!header) {
-            header=doc.createElement('header');header.className='gp-dialog-window-title';
-            const text=doc.createElement('strong');text.textContent=dialog.getAttribute('aria-label') || dialog.querySelector('h2,h3')?.textContent || 'Fenster';
-            const closeButton=doc.createElement('button');closeButton.type='button';closeButton.className='gp-window-control';closeButton.textContent='×';closeButton.setAttribute('aria-label','Fenster schließen');
-            closeButton.addEventListener('click',()=>void record.controller.close());header.append(text,closeButton);dialog.prepend(header);record.ownedHeader=true;
-          }
-          record.header=header;
-          const headerAddition=record.ownedHeader ? header.getBoundingClientRect().height/zoom : 0;
-          dialog.classList.add('gp-dialog');
-          const bounds=()=>viewportBounds(win.visualViewport || {width:win.innerWidth,height:win.innerHeight},options.scale?.() || parseFloat(win.getComputedStyle?.(doc.body)?.zoom) || 1);
-          const b=bounds(),initialGeometry={x:Math.max(0,rect.left/zoom-b.left),y:Math.max(0,rect.top/zoom-b.top),width:Math.max(200,rect.width/zoom),height:Math.max(80,rect.height/zoom+headerAddition),minimized:false};
-          record.initialGeometry=initialGeometry;const geometry=preferences.value.windows[id] || initialGeometry;
-          record.controller=attach(dialog,{title:header,nativeDialog:true,active:true,bounds,scale:()=>options.scale?.() || parseFloat(win.getComputedStyle?.(doc.body)?.zoom) || 1,geometry,
-            canUse:()=>dialog.open && (options.canUse?.() ?? true),change:value=>preferences.change(id,{...value,minimized:false}),closeTarget:()=>record.opener,onClose:()=>dialog.close()});
-        } else record.controller.activate();
-        void preferences.activate();
+      const record={id,intent:0,controller:null,opener:null,header:null,body:null,marked:[],workspace:dialog.dataset.gpWindowMode==='workspace'};records.set(dialog,record);
+      function open(explicit=false) {
+        if(!dialog.open || destroyed || (record.workspace && !allowed())) {record.controller?.suspend();return;}
+        if(!record.opener)record.opener=lastOpener;
+        const rebuilt=reconcile(dialog,record);
+        if(explicit || !record.wasOpen || rebuilt){if(!record.workspace && !allowed())record.controller.set({...record.initialGeometry,minimized:false});record.controller.activate();}record.wasOpen=true;
+        if(allowed())void preferences.activate();
       }
-      record.closed=()=>record.controller?.suspend();dialog.addEventListener('close',record.closed);record.open=open;
+      record.closed=()=>{if(!dialog.open){record.wasOpen=false;record.opener=null;record.controller?.suspend();}};dialog.addEventListener('close',record.closed);record.open=open;
+      // Instance-only opt-in. Native security dialogs keep their original modal
+      // semantics. Closing/minimizing never cycles through show/close.
+      if(record.workspace && typeof dialog.showModal==='function' && typeof dialog.show==='function') {
+        record.showModalDescriptor=Object.getOwnPropertyDescriptor(dialog,'showModal');
+        record.wrapper=function(){if(destroyed || !allowed())return;record.intent++;if(!dialog.open)record.opener=doc.activeElement || lastOpener;dialog.show();open(true);};
+        Object.defineProperty(dialog,'showModal',{configurable:true,writable:true,value:record.wrapper});
+      }
       if(dialog.open) open();
+      return record;
+    }
+    function prepare(dialog) {
+      const previous=records.get(dialog);
+      if(previous && !dialog.open && previous.workspace!==(dialog.dataset.gpWindowMode==='workspace'))discard(dialog,previous);
+      const record=install(dialog);if(record && dialog.open)record.open();return record?.controller || null;
     }
     function scan(node=doc) {if(node.nodeType===1 && node.tagName==='DIALOG') install(node);for(const dialog of node.querySelectorAll?.('dialog') || []) install(dialog);}
+    function discard(dialog,record) {
+      removeChrome(dialog,record);dialog.removeEventListener('close',record.closed);
+      if(record.wrapper && dialog.showModal===record.wrapper) {
+        if(record.showModalDescriptor)Object.defineProperty(dialog,'showModal',record.showModalDescriptor);else delete dialog.showModal;
+      }
+      records.delete(dialog);
+    }
     scan();
     const observer=typeof win.MutationObserver==='function'?new win.MutationObserver(changes=>{
       for(const change of changes) {
         if(change.type==='attributes' && change.target.tagName==='DIALOG') {install(change.target);records.get(change.target)?.open();}
         for(const node of change.addedNodes || []) scan(node);
+        const dialog=change.target.closest?.('dialog');
+        const record=records.get(dialog);
+        if(dialog?.open && record && !record.header?.contains(change.target)
+          && !change.target.closest?.('[data-gp-window-edge]'))record.open();
       }
-      for(const [dialog,record] of records) if(dialog.isConnected===false) {
-        record.controller?.destroy();dialog.removeEventListener('close',record.closed);records.delete(dialog);
-      }
+      for(const [dialog,record] of records) if(dialog.isConnected===false) discard(dialog,record);
     }):null;
     observer?.observe(doc.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['open']});
-    return {preferences,scan,synchronize(){preferences.invalidate();for(const [dialog,record] of records) {record.controller?.suspend();if(dialog.open)dialog.close();}},
-      destroy(){destroyed=true;observer?.disconnect();preferences.destroy();doc.removeEventListener('pointerdown',trackOpener,true);doc.removeEventListener('focusin',trackOpener,true);for(const [dialog,record] of records) {record.controller?.destroy();dialog.removeEventListener('close',record.closed);dialog.classList.remove('gp-dialog');if(record.ownedHeader) record.header?.remove();}records.clear();}};
+    function capture(dialog) {
+      const record=records.get(dialog);return record&&dialog.open&&allowed()?Object.freeze({dialog,record,intent:record.intent,actor:key()}):null;
+    }
+    function current(ticket,{allowClosed=false}={}) {
+      return Boolean(ticket&&allowed()&&ticket.actor===key()&&records.get(ticket.dialog)===ticket.record
+        &&ticket.intent===ticket.record.intent&&(allowClosed||ticket.dialog.open));
+    }
+    function begin(dialog) {const record=install(dialog);if(record){record.intent++;if(dialog.open)record.open(true);}}
+    const captureContext=()=>Object.freeze({owner:manager,epoch,actor:key()});
+    const currentContext=ticket=>Boolean(ticket&&ticket.owner===manager&&ticket.epoch===epoch&&ticket.actor===key()&&allowed());
+    const manager={preferences,scan,prepare,begin,capture,current,captureContext,currentContext,synchronize(){epoch++;preferences.invalidate();for(const [dialog,record] of records) {record.intent++;record.wasOpen=false;record.opener=null;record.controller?.suspend();if(dialog.open)dialog.close();}},
+      destroy(){destroyed=true;observer?.disconnect();preferences.destroy();doc.removeEventListener('pointerdown',trackOpener,true);doc.removeEventListener('focusin',trackOpener,true);for(const [dialog,record] of records)discard(dialog,record);documentManagers.delete(doc);}};
+    documentManagers.set(doc,manager);return manager;
   }
-  return Object.freeze({EDGES,DEFAULTS,normalize,viewportBounds,fit,adjust,persistedGeometry,createPreferences,attach,installDocument});
+  function prepare(dialog) {return dialog?.ownerDocument ? documentManagers.get(dialog.ownerDocument)?.prepare(dialog) : null;}
+  function capture(dialog) {return dialog?.ownerDocument ? documentManagers.get(dialog.ownerDocument)?.capture(dialog) : null;}
+  function current(ticket,options) {return Boolean(ticket?.dialog?.ownerDocument && documentManagers.get(ticket.dialog.ownerDocument)?.current(ticket,options));}
+  function begin(dialog) {return dialog?.ownerDocument ? documentManagers.get(dialog.ownerDocument)?.begin(dialog) : null;}
+  function captureContext(doc) {return documentManagers.get(doc)?.captureContext() || null;}
+  function currentContext(ticket) {return Boolean(ticket?.owner?.currentContext(ticket));}
+  return Object.freeze({EDGES,DEFAULTS,normalize,viewportBounds,fit,adjust,persistedGeometry,createPreferences,attach,installDocument,prepare,begin,capture,current,captureContext,currentContext});
 });

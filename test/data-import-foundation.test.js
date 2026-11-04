@@ -47,7 +47,7 @@ const TEST_CATALOG = [
   { statement: TS.remove, sql: "DELETE FROM import_fixture WHERE id=$id AND revision=$expectedRevision", returning: false },
   { statement: TS.dependencies, sql: "SELECT COUNT(*) AS count FROM import_fixture_dependencies WHERE target_id=$id", returning: false },
 ];
-async function fixture(t, { databasePath = ":memory:", withWriter = true, profile = C.defineDataImportProfile(profileInput()), failOnNumber = null } = {}) {
+async function fixture(t, { databasePath = ":memory:", withWriter = true, profile = C.defineDataImportProfile(profileInput()), failOnNumber = null, allowPartialApply = false } = {}) {
   const application = openSqliteApplicationPersistence({ databasePath, catalog: [...SQLITE_DATA_IMPORT_CATALOG, ...TEST_CATALOG] });
   ensureSqliteDataImportSchema(application.database); ensureSqliteDataImportSchema(application.database);
   application.database.exec("CREATE TABLE IF NOT EXISTS import_fixture (id TEXT PRIMARY KEY, number TEXT NOT NULL UNIQUE, revision INTEGER NOT NULL, data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS import_fixture_dependencies (target_id TEXT NOT NULL REFERENCES import_fixture(id));");
@@ -70,7 +70,7 @@ async function fixture(t, { databasePath = ":memory:", withWriter = true, profil
     async remove(tx, parameters) { return (await tx.execute(TS.remove, parameters)).rowsAffected === 1; },
   };
   const repository = createDataImportRepository(application.provider);
-  const composition = { repository, protection, profiles: [profile], writers: withWriter ? { [profile.entity]: writer } : {}, getActor: () => context.who,
+  const composition = { repository, protection, profiles: [profile], writers: withWriter ? { [profile.entity]: writer } : {}, allowPartialApply, getActor: () => context.who,
     authorize: ({ action }) => !context.denied.has(action), clock: () => context.time };
   const engine = createDataImportEngine(composition);
   let closed = false;
@@ -174,21 +174,93 @@ test('Q01: trusted exact snapshot tolerance preserves evidence, idempotence, res
   await assert.rejects(engine.checkpoint(run.id), permissionError('IMPORT_RUN_INTEGRITY'));
 });
 
-test('Q01: approved TradeFoto registry matches only two exact profiles and exposes escaped evidence', () => {
+test('approved TradeFoto registry matches only its five exact snapshot proofs and exposes escaped evidence', () => {
   const { TRADEFOTO_SOURCE_TOLERANCES: proofs } = require('../lib/tradefoto-source-tolerances');
   const { definitions } = require('../lib/tradefoto-full-import-source');
   const registry = T.sourceToleranceRegistry(proofs);
-  assert.equal(proofs.length, 2);
+  assert.equal(proofs.length, 5);
   for (const proof of proofs) {
-    const p = definitions('trade').find(t => t.name === proof.sourceTable).profile;
+    const definition = definitions('trade').find(t => t.name === proof.sourceTable);
+    const p = definition.master ? definition.profile : require('../lib/tradefoto-history-profiles').profileFor('trade',proof.sourceTable,proof.profileHash);
     const raw = C.normalizeDataImportManifest({ sourceInstance: proof.sourceInstance, fileSha256: proof.fileSha256, schemaSha256: proof.schemaSha256,
       expectedRows: proof.expectedRows, declaredRows: proof.declaredRows, snapshotAt: proof.recordedAt, gates: [] }, p);
     assert.deepEqual(T.acceptSourceTolerances(raw, p, registry).acceptedDeviations, [proof]);
+    if (definition.profile.fingerprint !== p.fingerprint)
+      assert.deepEqual(T.acceptSourceTolerances(raw, definition.profile, registry), raw);
     assert.deepEqual(T.acceptSourceTolerances(raw, { ...p, fingerprint: 'd'.repeat(64) }, registry), raw);
     const html = require('../public/data-import').renderSource({ kind: 'trade', tables: [{ name: proof.sourceTable, declaredRows: proof.declaredRows,
       run: { counts: {}, acceptedDeviations: [{ ...proof, approvalReference: '<script>bad</script>' }] } }] });
     assert.match(html, /Bestätigte Quellzähler-Abweichung/); assert.match(html, /&lt;script&gt;/); assert.doesNotMatch(html, /<script>/);
   }
+});
+
+function countProof(f, declaredRows, expectedRows, overrides = {}) {
+  return T.defineDataImportSourceTolerance({id:'synthetic-late-count-approval',recordedAt:f.context.time,
+    approvalReference:'synthetic-explicit-approval',reason:'Independent synthetic count verification',evidenceReference:'synthetic-count-evidence',
+    sourceSystem:f.profile.sourceSystem,sourceTable:f.profile.sourceTable,profileHash:f.profile.fingerprint,
+    sourceInstance:'synthetic-ledger',schemaSha256:f.profile.schemaSha256,fileSha256:HASH,declaredRows,expectedRows,...overrides});
+}
+for (const declaredRows of [0,2]) test(`late count approval (${declaredRows} declared, 1 read) preserves immutable identity, audit, restart and revocation`,async t=>{
+  const f=await fixture(t);let run=await f.ready([sourceRow()],{declaredRows});
+  const id=run.id,before=f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(id).manifest;
+  const proof=countProof(f,declaredRows,1),config={...f.composition,sourceTolerances:[proof]};
+  let engine=createDataImportEngine(config),view=await engine.preview(id);
+  assert.deepEqual(view.gates,['SOURCE_ROW_COUNT_MISMATCH']);assert.deepEqual(view.availableSourceTolerances,[proof]);
+  await assert.rejects(engine.apply(id,view.revision),permissionError('IMPORT_STATE_CONFLICT'));
+  for(const permission of ['apply','review']) {
+    f.context.denied.add(permission);await assert.rejects(engine.acceptSourceTolerance(id,view.revision),permissionError('IMPORT_FORBIDDEN'));
+    f.context.denied.delete(permission);
+  }
+  await assert.rejects(engine.acceptSourceTolerance(id,view.revision+1),permissionError('IMPORT_REVISION_CONFLICT'));
+  run=await engine.acceptSourceTolerance(id,view.revision);
+  assert.equal(run.id,id);assert.deepEqual(run.gates,[]);assert.deepEqual(run.acceptedDeviations,[proof]);
+  assert.deepEqual(run.sourceToleranceReceipts,[{fingerprint:proof.fingerprint,recordedAt:f.context.time,actorId:f.context.who.ownerId,revision:run.revision}]);
+  assert.equal(f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(id).manifest,before);
+  const revision=run.revision;
+  run=await engine.acceptSourceTolerance(id,revision);assert.equal(run.revision,revision);
+  assert.equal((await engine.events(id)).filter(e=>e.action===T.SOURCE_TOLERANCE_EVENT_PREFIX+proof.fingerprint).length,1);
+  engine=createDataImportEngine(config);assert.deepEqual((await engine.preview(id)).sourceToleranceReceipts,run.sourceToleranceReceipts);
+  run=await engine.recheck(id,run.revision);run=await engine.review(id,run.revision);assert.equal(run.status,'ready');
+  const revoked=await f.engine.preview(id);assert.ok(revoked.gates.includes('SOURCE_TOLERANCE_UNAVAILABLE'));assert.equal(revoked.canApply,false);
+  await assert.rejects(f.engine.apply(id,run.revision),permissionError('IMPORT_DECISION_GATE'));
+  const replacement=countProof(f,declaredRows,1,{reason:'Changed proof is not the recorded approval'});
+  const changed=createDataImportEngine({...config,sourceTolerances:[replacement]});
+  assert.ok((await changed.preview(id)).gates.includes('SOURCE_TOLERANCE_UNAVAILABLE'));
+  run=await engine.apply(id,run.revision);assert.equal(f.targets().length,1);
+  run=await f.engine.undo(id,run.revision);assert.equal(f.targets().length,0);
+  assert.equal(f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(id).manifest,before);
+});
+
+test('count approval requires exact evidence and never approves equal counts, source errors or other gates',async t=>{
+  const f=await fixture(t);assert.throws(()=>countProof(f,1,1),permissionError('IMPORT_TOLERANCE_INVALID'));
+  let run=await f.ready([sourceRow()],{declaredRows:2,gates:['OTHER_DECISION_REQUIRED']});
+  for(const change of [{fileSha256:'b'.repeat(64)},{schemaSha256:'b'.repeat(64)},{profileHash:'b'.repeat(64)},
+    {sourceInstance:'other'},{sourceTable:'Other'},{declaredRows:3},{expectedRows:0}]) {
+    const engine=createDataImportEngine({...f.composition,sourceTolerances:[countProof(f,2,1,change)]});
+    await assert.rejects(engine.acceptSourceTolerance(run.id,run.revision),permissionError('IMPORT_TOLERANCE_UNAVAILABLE'));
+  }
+  const engine=createDataImportEngine({...f.composition,sourceTolerances:[countProof(f,2,1)]});
+  run=await engine.acceptSourceTolerance(run.id,run.revision);assert.deepEqual(run.gates,['OTHER_DECISION_REQUIRED']);assert.equal(f.targets().length,0);
+  for(const rows of [[sourceRow('1',{Amount:'not-decimal'})],[sourceRow('2'),sourceRow('2',{Label:'Different'})]]) {
+    const g=await fixture(t),proof=countProof(g,rows.length+1,rows.length),e=createDataImportEngine({...g.composition,sourceTolerances:[proof]});
+    let blocked=await g.ready(rows,{declaredRows:rows.length+1});blocked=await e.acceptSourceTolerance(blocked.id,blocked.revision);
+    blocked=await e.recheck(blocked.id,blocked.revision);blocked=await e.review(blocked.id,blocked.revision);
+    assert.equal(blocked.status,'needs_review');assert.ok(blocked.counts.invalid||blocked.counts.conflict);assert.equal(blocked.canApply,false);
+    await assert.rejects(e.apply(blocked.id,blocked.revision),permissionError('IMPORT_STATE_CONFLICT'));assert.equal(g.targets().length,0);
+  }
+});
+
+test('count approval receipt must belong to the authenticated owner and run revision',async t=>{
+  const f=await fixture(t),proof=countProof(f,2,1),e=createDataImportEngine({...f.composition,sourceTolerances:[proof]});
+  let run=await f.ready([sourceRow()],{declaredRows:2});run=await e.acceptSourceTolerance(run.id,run.revision);
+  f.database.prepare('UPDATE data_import_events SET actor_id=? WHERE run_id=? AND action=?').run('another-owner',run.id,T.SOURCE_TOLERANCE_EVENT_PREFIX+proof.fingerprint);
+  await assert.rejects(e.checkpoint(run.id),permissionError('IMPORT_RUN_INTEGRITY'));
+});
+
+test('count approval query is registered for qualified PostgreSQL Sales runtime without migration changes',()=>{
+  const {CATALOG}=require('../lib/persistence/postgresql/sales/import-source-tolerance-catalog');
+  assert.equal(CATALOG.length,1);assert.match(CATALOG[0].sql,/integration\s*\.\s*"?data_import_events/);
+  assert.deepEqual(CATALOG[0].parameterOrder,['runId']);
 });
 
 test("Block 2: contract preserves string IDs, exact decimals, civil dates, nulls and source-only values", () => {
@@ -544,4 +616,137 @@ test("Block 2: corrupt ready state cannot bypass an incomplete or invalid previe
   f.database.prepare("UPDATE data_import_runs SET status='ready' WHERE id=?").run(run.id);
   await assert.rejects(f.engine.apply(run.id, run.revision), permissionError("IMPORT_PREVIEW_INCOMPLETE"));
   assert.equal(f.targets().length, 0);
+});
+
+test('partial apply is a trusted boolean opt-in and retains the strict default', async t => {
+  const f = await fixture(t);
+  for (const allowPartialApply of [null, 0, 1, 'true', {}]) {
+    assert.throws(() => createDataImportEngine({ ...f.composition, allowPartialApply }), permissionError('IMPORT_COMPOSITION_INVALID'));
+  }
+  const run = await f.ready([sourceRow('good'), sourceRow('bad', { Amount: 'invalid' })]);
+  assert.equal(run.partialApplyEnabled, false); assert.equal(run.canApply, false);
+  await assert.rejects(f.engine.apply(run.id, run.revision), permissionError('IMPORT_STATE_CONFLICT'));
+  assert.deepEqual(f.targets(), []);
+  const absentWriter = createDataImportEngine({ ...f.composition, allowPartialApply: true, writers: {} });
+  assert.equal((await absentWriter.checkpoint(run.id)).partialApplyEnabled, false);
+});
+
+test('partial apply preserves encrypted invalid/conflict rows through bounded resume, replay and undo', async t => {
+  const f = await fixture(t, { allowPartialApply: true });
+  const rows = [sourceRow('good-1'), sourceRow('bad', { Amount: 'invalid' }),
+    sourceRow('conflict', { Label: 'First' }), sourceRow('conflict', { Label: 'Second' }), sourceRow('good-2')];
+  let run = await f.ready(rows);
+  assert.equal(run.status, 'needs_review'); assert.equal(run.partialApplyEnabled, true); assert.equal(run.canApply, true);
+  assert.deepEqual(run.counts, { conflict: 2, create: 2, invalid: 1 });
+  const heldRows = () => f.database.prepare("SELECT row_number,state,issue,payload FROM data_import_rows WHERE run_id=? AND state IN ('invalid','conflict') ORDER BY row_number").all(run.id);
+  const originalHeld = heldRows();
+  const oneAtATime = createDataImportEngine({ ...f.composition, operationBatchSize: 1 });
+  run = await oneAtATime.apply(run.id, run.revision);
+  assert.equal(run.status, 'applying'); assert.equal(f.targets().length, 1); assert.deepEqual(heldRows(), originalHeld);
+  const resumed = createDataImportEngine({ ...f.composition, operationBatchSize: 1 });
+  run = await resumed.apply(run.id, run.revision);
+  assert.equal(run.status, 'applied'); assert.deepEqual(f.targets().map(row => row.number), ['good-1', 'good-2']);
+  assert.deepEqual(run.counts, { applied: 2, conflict: 2, invalid: 1 }); assert.deepEqual(heldRows(), originalHeld);
+  assert.deepEqual(f.database.prepare('SELECT row_number FROM data_import_changes WHERE run_id=? ORDER BY row_number').all(run.id).map(row => row.row_number), [1, 5]);
+  const replay = await resumed.start({ profileHash: f.profile.fingerprint, manifest: f.manifest(rows.length) });
+  assert.deepEqual(replay, run);
+  await assert.rejects(resumed.apply(run.id, run.revision), permissionError('IMPORT_STATE_CONFLICT'));
+  assert.equal(f.targets().length, 2); assert.deepEqual(heldRows(), originalHeld);
+  do { run = await resumed.undo(run.id, run.revision); } while (run.status === 'reverting');
+  assert.equal(run.status, 'reverted'); assert.deepEqual(f.targets(), []); assert.deepEqual(heldRows(), originalHeld);
+});
+
+test('partial apply never relaxes source gates, permissions, expiry or unfinished rechecks', async t => {
+  const gated = await fixture(t, { allowPartialApply: true });
+  let blocked = await gated.ready([sourceRow('good'), sourceRow('bad', { Amount: 'invalid' })], { declaredRows: 3 });
+  assert.equal(blocked.canApply, false); assert.ok(blocked.gates.includes('SOURCE_ROW_COUNT_MISMATCH'));
+  await assert.rejects(gated.engine.apply(blocked.id, blocked.revision), permissionError('IMPORT_DECISION_GATE'));
+  assert.deepEqual(gated.targets(), []);
+  const f = await fixture(t, { allowPartialApply: true });
+  let run = await f.ready([sourceRow('good'), sourceRow('bad', { Amount: 'invalid' })]);
+  f.context.denied.add('apply'); assert.equal((await f.engine.checkpoint(run.id)).canApply, false);
+  await assert.rejects(f.engine.apply(run.id, run.revision), permissionError('IMPORT_FORBIDDEN')); f.context.denied.clear();
+  const originalTime = f.context.time; f.context.time = '2026-11-05T10:00:00.000Z';
+  assert.equal((await f.engine.checkpoint(run.id)).canApply, false);
+  await assert.rejects(f.engine.apply(run.id, run.revision), permissionError('IMPORT_RUN_EXPIRED')); f.context.time = originalTime;
+  run = await f.engine.recheck(run.id, run.revision);
+  assert.equal(run.counts.staged, 1);
+  // Even a corrupt ready status cannot admit plans still awaiting their recheck.
+  f.database.prepare("UPDATE data_import_runs SET status='ready' WHERE id=?").run(run.id);
+  await assert.rejects(f.engine.apply(run.id, run.revision), permissionError('IMPORT_PREVIEW_INCOMPLETE'));
+  assert.deepEqual(f.targets(), []);
+});
+
+test('snapshot writers remain strict when partial apply is enabled by composition', async t => {
+  const f = await fixture(t, { allowPartialApply: true }); let finished = 0;
+  Object.assign(f.writer, { async recordSnapshotRows() {}, async finishSnapshot() { finished++; }, async withdrawSnapshot() {} });
+  const engine = createDataImportEngine(f.composition);
+  const run = await f.ready([sourceRow('good'), sourceRow('bad', { Amount: 'invalid' }), sourceRow('same'), sourceRow('same', { Label: 'Other' })]);
+  assert.equal(run.partialApplyEnabled, false); assert.equal(run.canApply, false);
+  await assert.rejects(engine.apply(run.id, run.revision), permissionError('IMPORT_STATE_CONFLICT'));
+  f.database.prepare("UPDATE data_import_runs SET status='ready' WHERE id=?").run(run.id);
+  await assert.rejects(engine.apply(run.id, run.revision), permissionError('IMPORT_PREVIEW_INCOMPLETE'));
+  assert.equal(finished, 0); assert.deepEqual(f.targets(), []);
+});
+
+test('snapshot deferral removes only building memberships and retains the complete baseline and encrypted review', async t => {
+  const f = await fixture(t, { allowPartialApply: true });
+  let original = await f.ready([sourceRow('existing')]); original = await f.engine.apply(original.id, original.revision);
+  const baseline = f.targets(), building = new Set(); let withdrawn = 0, finished = 0;
+  Object.assign(f.writer, {
+    async recordSnapshotRows(_tx, rows) { rows.forEach(row => building.add(row.rowNumber)); },
+    async finishSnapshot() { finished++; },
+    async withdrawSnapshot() { withdrawn++; building.clear(); },
+  });
+  const engine = createDataImportEngine(f.composition);
+  let run = await f.ready([sourceRow('existing'), sourceRow('bad', { Amount: 'invalid' })], { fileSha256: 'b'.repeat(64) });
+  assert.deepEqual([...building], [1]); assert.equal(run.counts.unchanged, 1); assert.equal(run.counts.invalid, 1);
+  const evidence = () => f.database.prepare('SELECT row_number,state,issue,payload FROM data_import_rows WHERE run_id=? ORDER BY row_number').all(run.id);
+  const before = evidence();
+  const strict = createDataImportEngine({ ...f.composition, allowPartialApply: false });
+  await assert.rejects(strict.deferSnapshot(run.id, run.revision), permissionError('IMPORT_STATE_CONFLICT'));
+  assert.equal(withdrawn, 0);
+  f.context.denied.add('apply');
+  await assert.rejects(engine.deferSnapshot(run.id, run.revision), permissionError('IMPORT_FORBIDDEN')); f.context.denied.clear();
+  await assert.rejects(engine.deferSnapshot(run.id, run.revision + 1), permissionError('IMPORT_REVISION_CONFLICT'));
+  run = await engine.deferSnapshot(run.id, run.revision);
+  assert.equal(run.status, 'needs_review'); assert.equal(run.canApply, false); assert.equal(run.partialApplyEnabled, false);
+  assert.equal(withdrawn, 1); assert.equal(finished, 0); assert.equal(building.size, 0);
+  assert.deepEqual(f.targets(), baseline); assert.deepEqual(evidence(), before);
+  assert.ok((await engine.events(run.id)).some(event => event.action === 'import.deferSnapshot'));
+});
+
+test('snapshot deferral rejects source gates, complete snapshots and rows already written or pending review', async t => {
+  for (const kind of ['gate', 'complete', 'staged', 'applied', 'reverted']) {
+    const f = await fixture(t, { allowPartialApply: true }); let withdrawn = 0;
+    Object.assign(f.writer, { async recordSnapshotRows() {}, async finishSnapshot() {}, async withdrawSnapshot() { withdrawn++; } });
+    const engine = createDataImportEngine(f.composition);
+    const rows = [sourceRow('good'), ...(kind === 'complete' ? [] : [sourceRow('bad', { Amount: 'invalid' })])];
+    const run = await f.ready(rows, kind === 'gate' ? { gates: ['OTHER_DECISION_REQUIRED'] } : {});
+    if (kind === 'complete') f.database.prepare("UPDATE data_import_runs SET status='needs_review' WHERE id=?").run(run.id);
+    if (['staged', 'applied', 'reverted'].includes(kind)) f.database.prepare('UPDATE data_import_rows SET state=? WHERE run_id=? AND row_number=1').run(kind, run.id);
+    await assert.rejects(engine.deferSnapshot(run.id, run.revision), permissionError(kind === 'gate' ? 'IMPORT_DECISION_GATE' : 'IMPORT_PREVIEW_INCOMPLETE'));
+    assert.equal(withdrawn, 0); assert.deepEqual(f.targets(), []);
+  }
+});
+
+test('partial article catalog projection excludes held and pending rows and advances by the raw page', async t => {
+  const profile = C.defineDataImportProfile(profileInput({ sourceSystem: 'tradefoto.master-data', sourceTable: 'ARTIKEL_ZWEITEAN', keyFields: ['EAN'], excludedFields: [], fields: [
+    { source: 'EAN', target: 'number', type: 'identifier', nullable: false },
+    { source: 'ZweitEAN', target: 'label', type: 'text', nullable: false },
+    { source: 'Rang', target: 'amount', type: 'decimal', scale: 4, nullable: false },
+  ] }));
+  const f = await fixture(t, { allowPartialApply: true, profile });
+  const valid = { EAN: 'valid', ZweitEAN: '4006381333931', Rang: '1' };
+  const rows = [...Array.from({ length: 200 }, (_, i) => ({ EAN: 'held-' + i, ZweitEAN: null, Rang: '1' })), valid];
+  let run = await f.ready(rows);
+  assert.equal(run.counts.invalid, 200); assert.equal(run.counts.create, 1);
+  const first = await f.engine.articleCatalogRows(run.id);
+  assert.deepEqual(first, { rows: [], after: 200, complete: false });
+  assert.deepEqual(await f.engine.articleCatalogRows(run.id, { after: first.after }), { rows: [], after: 201, complete: true });
+  run = await f.engine.apply(run.id, run.revision);
+  assert.deepEqual(await f.engine.articleCatalogRows(run.id, { after: first.after }), { rows: [{ ...valid, Rang: '1.0000' }], after: 201, complete: true });
+  const repeated = await f.ready([valid], { fileSha256: 'b'.repeat(64) });
+  assert.equal(repeated.counts.unchanged, 1);
+  assert.deepEqual((await f.engine.articleCatalogRows(repeated.id)).rows, [{ ...valid, Rang: '1.0000' }]);
 });

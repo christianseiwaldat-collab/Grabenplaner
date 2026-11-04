@@ -73,6 +73,27 @@ test('background progress explains automatic retry without asking for another up
   assert.match(html,/data-i-job="pause"/);
 });
 
+test('source count approval has a separate CSRF protected idle-only endpoint',async t=>{
+  let busy=false,idle=0;
+  const f=await fixture(t,{jobs:{async assertIdle(){idle++;if(busy)throw Object.assign(new Error(),{code:'IMPORT_SOURCE_BUSY',status:409});}}});
+  const url='/api/data-import/sources/'+'a'.repeat(64)+'/approve-counts';
+  const options={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expectedRevision:4})};
+  const response=await f.request(url,options);assert.equal(response.status,200);
+  assert.equal((await response.json()).action,'approve-counts');assert.match(response.headers.get('cache-control'),/private, no-store/);
+  f.state.csrf=false;assert.equal((await f.request(url,options)).status,403);assert.equal(idle,1);assert.equal(f.state.calls,1);
+  f.state.csrf=true;busy=true;assert.equal((await f.request(url,options)).status,409);assert.equal(f.state.calls,1);
+  f.state.session=null;assert.equal((await f.request(url,options)).status,401);assert.equal(f.state.calls,1);
+});
+
+test('issue preview is CSRF protected, never cached and available while the import is busy',async t=>{
+ let idle=0;const f=await fixture(t,{jobs:{async assertIdle(){idle++;throw Object.assign(new Error(),{code:'IMPORT_SOURCE_BUSY',status:409});}}});
+ const url='/api/data-import/sources/'+'a'.repeat(64)+'/issues',options={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({runId:'b'.repeat(64),limit:25})};
+ const response=await f.request(url,options);assert.equal(response.status,200);assert.equal((await response.json()).action,'issues');assert.equal(idle,0);
+ assert.match(response.headers.get('cache-control'),/private, no-store/);
+ f.state.csrf=false;assert.equal((await f.request(url,options)).status,403);assert.equal(f.state.calls,1);
+ f.state.csrf=true;f.state.session=null;assert.equal((await f.request(url,options)).status,401);assert.equal(f.state.calls,1);
+});
+
 test('background takeover admission is a separate authenticated CSRF action, while its worker excludes interactive mutations',async t=>{
   let admitted=0;
   const jobs={async enqueueApply(get,id,input){await get();admitted++;return {id,background:{phase:'applying'},revision:input.expectedRevision};},
@@ -327,7 +348,7 @@ test('Productive Block 2: mapping UI escapes imported values and requires explic
   const source=fs.readFileSync(path.join(__dirname,'../public/import-mappings.js'),'utf8');assert.doesNotMatch(source,/localStorage|sessionStorage/);
   assert.match(source,/planHash: plan.planHash/);assert.match(source,/ticket === generation/);assert.match(source,/visibilitychange/);
   const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');assert.match(server,/createDataImportMappingRuntime\(\{[^}]*allowMapping: false/);
-  assert.match(server,/createManagedSalesHistoryRuntime\(\{[^}]*enabled: false/);
+  assert.match(server,/createManagedSalesHistoryRuntime\(\{[^}]*cashEnabled: true, retainCompletedAnalyses: false/);
 });
 
 test('Productive Block 2: late mapping context is discarded after account view destruction',async()=>{

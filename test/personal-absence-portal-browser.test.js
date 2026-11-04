@@ -43,7 +43,7 @@ async function setup(browser, { timezoneId = "Europe/Vienna", now = "2031-04-01T
   await page.setContent(html);
   await page.evaluate(() => {
     window.el = Object.fromEntries([...document.querySelectorAll("[id]")].map(node => [node.id, node]));
-    window.portalState = { session: { user: { employeeNumber: "BEISPIEL-01", isEmployee: true,
+    window.portalState = { session: { authenticated:true, user: { employeeNumber: "BEISPIEL-01", isEmployee: true,
       permissions: ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:write"] } },
     editingVacationId: null, editingTimeOffId: null, vacationSubmitting: false, timeOffSubmitting: false,
     timeOffArchive: false, absenceHistory: [], vacationRequests: [], timeOffRequests: [] };
@@ -75,7 +75,7 @@ async function setup(browser, { timezoneId = "Europe/Vienna", now = "2031-04-01T
     window.setTab = () => {};
   });
   const functions = ["iso", "absenceTodayIso", "addDays", "dateText", "portalUser", "isOrganizationAccount",
-    "hasPortalPermission", "portalTabAllowed", "requestSubmissionAllowed", "updateTraffic",
+    "hasPortalPermission", "portalTabAllowed", "portalDocumentActorKey", "capturePortalContext", "portalContextCurrent", "requestSubmissionAllowed", "updateTraffic",
     "invalidateTimeOffCheck", "timeOffFormFingerprint", "timeOffMode", "timeOffPayload", "checkTimeOff",
     "loadTimeOffRequests", "submitTimeOff", "vacationFormFingerprint", "invalidateVacationCheck", "checkVacation",
     "loadVacationRequests", "resetVacationForm", "submitVacation", "loadApprovedVacations",

@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -128,7 +130,7 @@ async function extractPdfText(buffer) {
 }
 
 function ensureLocation(id, name) {
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, ?, 0, '{}', 1)
     ON CONFLICT(id) DO UPDATE SET name = excluded.name, active = 1
@@ -174,10 +176,10 @@ function ensureEmployee(employeeNumber, name, locationId, role) {
 
 function createEmployeeSession(employeeNumber) {
   const rawToken = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(rawToken);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(
     crypto.randomUUID(),
     employeeNumber,
@@ -268,7 +270,23 @@ function insertCentralArticle(articleNumber, description) {
         match_method, match_confidence, linked_by, linked_at
       ) VALUES (?, 'manual.loan', ?, ?, 'source_import', 'authoritative', 'test', ?)
     `).run(productId, articleNumber, snapshotId, timestamp);
+    const revision = db.prepare(`
+      SELECT to_jsonb(article_revision) AS data FROM sales_article_revisions article_revision
+      WHERE article_revision.product_id = ? AND article_revision.revision = 1
+    `).get(productId)?.data;
+    assert.equal(revision?.article_number, articleNumber);
+    const revisionSha = crypto.createHash("sha256").update(JSON.stringify(revision)).digest("hex");
+    db.postgresqlFixtureWrite("core", `
+      INSERT INTO gp.article_reference_snapshots(product_id,revision,source_digest,article_number)
+      VALUES (?,1,?,?)
+    `, [productId, revisionSha, articleNumber]);
     db.exec("COMMIT");
+    const published = db.postgresqlCatalogQuery("core", `
+      SELECT source_digest, article_number FROM gp.article_reference_snapshots
+      WHERE product_id = ? AND revision = 1
+    `, [productId])[0];
+    assert.equal(published?.source_digest, revisionSha);
+    assert.equal(published.article_number, articleNumber);
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
     throw error;
@@ -331,7 +349,7 @@ test.before(() => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

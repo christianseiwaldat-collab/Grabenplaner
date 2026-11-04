@@ -1,3 +1,4 @@
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -34,8 +35,8 @@ let baseUrl;
 function createSession(employeeNumber) {
   const token = crypto.randomBytes(32).toString("hex");
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(
     crypto.randomUUID(),
     employeeNumber,
@@ -96,8 +97,8 @@ function insertAssignment(id, date, startTime = null, endTime = null) {
 
 test.before(async () => {
   db.prepare("UPDATE locations SET active = 0").run();
-  db.prepare("INSERT INTO locations (id, name, min_staff, active) VALUES (?, 'Grabenweg Suche', 2, 1)").run(TARGET_LOCATION);
-  db.prepare("INSERT INTO locations (id, name, min_staff, active) VALUES (?, 'Mitterweg Suche', 2, 1)").run(HOME_LOCATION);
+  prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, active) VALUES (?, 'Grabenweg Suche', 2, 1)").run(TARGET_LOCATION);
+  prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, active) VALUES (?, 'Mitterweg Suche', 2, 1)").run(HOME_LOCATION);
   targetDepartment = Number(db.prepare(`
     INSERT INTO departments (location_id, name, min_staff, active, sort_order)
     VALUES (?, 'Fotowelt Ziel', 1, 1, 1)
@@ -146,7 +147,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

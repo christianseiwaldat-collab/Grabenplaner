@@ -204,3 +204,13 @@ test('CLI refuses missing installs, duplicate flags and overwrite of source or p
   assert.notEqual(run(args).status, 0);
   assert.notEqual(run(['generate', '--root', root, '--mode', 'source', '--output', path.join(root, 'lib/new.js')]).status, 0);
 });
+
+test('builder binds source inventory before its unchanged file manifest without running package installation', () => {
+  const builder = fs.readFileSync(path.join(repository, 'server-tools/package/New-GrabenplanerLinuxServerPackage.ps1'), 'utf8');
+  assert.ok(builder.indexOf('$inventoryCli generate --mode source') < builder.indexOf('$manifestFiles ='));
+  assert.match(builder, /--source-commit \$sourceCommit --created-at \$sourceTimestamp/);
+  assert.match(builder, /\$inventoryCli verify --root \$buildRoot --input \$sourceInventoryPath/);
+  assert.match(builder, /format = 'grabenplaner-server-package'/);
+  assert.match(builder, /files = \$manifestFiles/);
+  assert.doesNotMatch(builder, /pnpm[^\n]+install/);
+});

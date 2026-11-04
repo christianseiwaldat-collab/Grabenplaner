@@ -6,7 +6,7 @@ function harness() {
   const elements = Object.fromEntries([...html.matchAll(/id="(organizationAccount\w+)"/g)].map(([, id]) => [id,
     { value: "", checked: false, disabled: false, textContent: "", classList: { toggle() {}, add() {}, remove() {} }, focus() {}, reset() {} }]));
   const sent = [];
-  const context = { elements, state: { locations: [{ id: "93" }], organizationAccounts: [] }, organizationAccountLocationOptions: () => "",
+  const context = { elements, window: {}, state: { locations: [{ id: "93" }], organizationAccounts: [] }, organizationAccountLocationOptions: () => "",
     resetAdminCredentialVisibility() {}, showToast() {}, renderOrganizationAccounts() {},
     api: async (route, options) => { sent.push({ route, options, body: JSON.parse(options.body) }); return { accounts: [] }; } };
   vm.createContext(context);

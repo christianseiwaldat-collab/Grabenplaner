@@ -1,0 +1,12 @@
+"use strict";
+const test=require("node:test"),assert=require("node:assert/strict"),path=require("node:path"),fixture=require("../test-support/learning-workspace-ui");
+test("explicit workspace reopen and begin cancel a pending GP close while body reconciliation does not",{skip:process.env.GP_WINDOW_BROWSER_TEST!=="1",timeout:45000},async()=>{
+  const {chromium}=require(process.env.GP_BROWSER_TEST_MODULE||"playwright"),browser=await chromium.launch({headless:true,...(process.env.GP_BROWSER_EXECUTABLE?{executablePath:process.env.GP_BROWSER_EXECUTABLE}:{}),args:["--no-first-run"]});
+  try{const page=await browser.newPage({viewport:{width:1440,height:1000}});await page.setContent('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><button id="opener">BEISPIEL öffnen</button><dialog id="work" data-gp-window-mode="workspace"><form><h2>BEISPIEL Entwurf</h2><input id="draft"></form></dialog>');
+    await page.addStyleTag({path:path.join(fixture.root,"public/gp-window.css")});for(const name of ["gp-window-preferences.js","gp-window.js"])await page.addScriptTag({path:path.join(fixture.root,"public",name)});
+    await page.evaluate(()=>{window.actor="BEISPIEL";window.manager=GpWindow.installDocument(document,{actorKey:()=>actor,canUse:()=>true,readPreferences:async()=>({version:1,windows:{}}),writePreferences:async()=>{}});document.getElementById("opener").onclick=()=>document.getElementById("work").showModal();});
+    for(const method of ["showModal","begin"]){await page.locator("#opener").click();await page.locator("#draft").fill("BEISPIEL erhalten");await page.evaluate(method=>{const dialog=document.getElementById("work");GpWindow.prepare(dialog).close();if(method==="showModal")dialog.showModal();else{GpWindow.prepare(dialog);GpWindow.begin(dialog);}},method);await page.waitForTimeout(240);
+      assert.equal(await page.locator("#work").evaluate(n=>n.open),true,method+" must invalidate the older close animation");assert.equal(await page.locator("#draft").inputValue(),"BEISPIEL erhalten");await page.evaluate(()=>document.getElementById("work").close());}
+    await page.locator("#opener").click();await page.evaluate(()=>{const dialog=document.getElementById("work");GpWindow.prepare(dialog).close();dialog.querySelector("form").append(document.createElement("p"));});await page.waitForTimeout(240);assert.equal(await page.locator("#work").evaluate(n=>n.open),false,"ordinary body updates must not cancel close");
+  }finally{await browser.close();}
+});

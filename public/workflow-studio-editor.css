@@ -1,0 +1,42 @@
+.gp-linear-editor { --muted:#536168; width:min(1240px,calc(100vw - 24px)); max-width:calc(100vw - 24px); font-size:14px; color:var(--ink); background:var(--surface-soft); }
+.gp-linear-editor .gp-dialog-body { container-type:inline-size; }
+.gp-linear-editor.gp-window.gp-window-standard .gp-window-title-text { font-size:13px!important; }
+.gp-linear-editor .gp-linear-shell { padding:18px; min-width:0; box-sizing:border-box; }
+.gp-linear-editor :is(.modal-header p,.modal-header .eyebrow,.gp-linear-hint,.personnel-lifecycle-editor-hint,.personnel-lifecycle-editor-boundary p,.personnel-lifecycle-editor-boundary strong,.personnel-lifecycle-editor-status,.personnel-lifecycle-editor-validation p,.personnel-lifecycle-editor-validation li,.personnel-lifecycle-editor-validation small) { font-size:13px; line-height:1.5; color:var(--muted); }
+.gp-linear-editor .gp-linear-boundary { margin:0 0 12px; padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:var(--surface); font-size:14px; line-height:1.5; color:var(--muted); }
+.gp-linear-editor .gp-linear-status { margin:0 0 14px; font-size:14px; color:var(--muted); line-height:1.5; }
+.gp-linear-editor .gp-linear-workspace { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; align-items:start; }
+.gp-linear-editor .gp-linear-panel { min-width:0; display:grid; gap:12px; margin:0; padding:16px; border:1px solid var(--line); border-radius:14px; background:var(--surface); }
+.gp-linear-editor :is(h3,.personnel-lifecycle-editor-panel-heading h3) { font-size:18px; line-height:1.35; margin:0 0 4px; }
+.gp-linear-editor .eyebrow { font-size:13px; }
+.gp-linear-editor .field { margin:0; min-width:0; }
+.gp-linear-editor .field>span { font-size:14px; line-height:1.4; color:var(--muted); }
+.gp-linear-editor :is(input,select,textarea) { width:100%; min-width:0; min-height:44px; box-sizing:border-box; font-size:16px; color:var(--ink); border-color:var(--line); background:var(--surface-soft); }
+.gp-linear-editor textarea { min-height:78px; resize:vertical; }
+.gp-linear-editor button { min-height:44px; font-size:14px; }
+.gp-linear-editor .gp-linear-canvas>header,.gp-linear-editor .personnel-lifecycle-editor-flow-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:12px; }
+.gp-linear-editor .gp-linear-flow { display:grid; gap:18px; padding:0; margin:0; list-style:none; min-width:0; }
+.gp-linear-editor .gp-linear-flow li { position:relative; min-width:0; }
+.gp-linear-editor .gp-linear-flow li:not(:last-child)::after { content:'↓'; position:absolute; top:100%; left:18px; height:18px; width:18px; font-size:15px; line-height:18px; text-align:center; color:var(--muted); background:none; }
+.gp-linear-editor .gp-linear-flow button { display:grid; grid-template-columns:36px minmax(0,1fr); gap:12px; align-items:start; text-align:left; width:100%; min-width:0; padding:14px; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:var(--surface-soft); }
+.gp-linear-editor .gp-linear-flow button[aria-current=step] { border-color:var(--green); box-shadow:0 0 0 2px color-mix(in srgb,var(--green) 24%,transparent); background:color-mix(in srgb,var(--surface-soft) 94%,var(--green)); }
+.gp-linear-editor :is(.gp-linear-number,.personnel-lifecycle-editor-node-number) { display:grid; place-items:center; width:34px; height:34px; border-radius:50%; font-size:14px; color:var(--surface); background:var(--ink); font-weight:700; }
+.gp-linear-editor :is(.gp-linear-node-copy,.personnel-lifecycle-editor-node-copy) { display:grid; gap:5px; min-width:0; overflow-wrap:anywhere; }
+.gp-linear-editor :is(.gp-linear-node-copy strong,.personnel-lifecycle-editor-node-copy strong) { font-size:15px; line-height:1.4; }
+.gp-linear-editor :is(.gp-linear-node-copy small,.gp-linear-node-copy span,.personnel-lifecycle-editor-node-copy small,.personnel-lifecycle-editor-node-copy span) { font-size:13px; line-height:1.5; color:var(--muted); }
+.gp-linear-editor :is(.gp-linear-step-actions,.personnel-lifecycle-editor-step-actions) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.gp-linear-editor :is(.gp-linear-step-actions button,.personnel-lifecycle-editor-step-actions button) { min-width:0; padding:8px; white-space:normal; color:var(--ink); background:var(--surface-soft); border:1px solid var(--line); border-radius:9px; }
+.gp-linear-editor .danger { color:#963e32; }
+.gp-linear-editor :is(.gp-linear-actions,.personnel-lifecycle-editor-actions) { position:sticky; bottom:0; z-index:2; display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:flex-end; margin-top:16px; padding:12px 0 0; background:var(--surface-soft); border-top:1px solid var(--line); }
+.gp-linear-editor .gp-linear-actions>span { margin-right:auto; font-size:13px; color:var(--muted); }
+.gp-linear-editor .gp-linear-validation { margin-top:14px; padding:16px; border:1px solid var(--line); border-radius:12px; background:var(--surface); font-size:14px; }
+.gp-linear-editor .gp-linear-validation[hidden] { display:none; }
+.gp-linear-editor .gp-linear-validation small { font-size:13px; color:var(--muted); overflow-wrap:anywhere; }
+.gp-linear-editor .gp-linear-conflict { display:flex; flex-wrap:wrap; gap:10px; padding:14px; margin-bottom:14px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+.gp-linear-editor .gp-linear-conflict[hidden] { display:none; }
+.gp-linear-editor .gp-linear-conflict p { margin:0; width:100%; font-size:14px; line-height:1.5; }
+html[data-active-page-theme=dark] .gp-linear-editor { --ink:#edf4f1; --muted:#a5b2ad; --line:#40524b; --surface:#1b2522; --surface-soft:#202d29; --green:#63c49e; color:var(--ink); background:var(--surface-soft); }
+html[data-active-page-theme=dark] .gp-linear-editor :is(.danger,.personnel-lifecycle-editor-status.error) { color:#ffb5aa; }
+html[data-active-page-theme=dark] .gp-linear-editor .personnel-lifecycle-editor-boundary { border-color:var(--line); background:var(--surface); }
+@container(min-width:1000px) { .gp-linear-editor .gp-linear-workspace { grid-template-columns:minmax(220px,.9fr) minmax(300px,1.3fr) minmax(240px,1fr); } }
+@media(max-width:700px) { .gp-linear-editor .gp-linear-shell { padding:12px; } .gp-linear-editor .gp-linear-panel { padding:14px; } .gp-linear-editor :is(.gp-linear-actions,.personnel-lifecycle-editor-actions) { position:static; } .gp-linear-editor .gp-linear-actions>span { width:100%; } }

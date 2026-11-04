@@ -79,3 +79,23 @@ test('Portable article reader batches have native PostgreSQL counterparts', () =
     assert.ok(entry,batch.id);assert.match(entry.sql,/jsonb_array_elements/);assert.deepEqual(entry.parameterOrder,['requests']);
   }
 });
+
+test('Main article and deferred notes are independent while each authenticates its own data',async t=>{
+  const f=await fixture(t),{article}=await seedWorkspace({access:f.app.provider,source:f});
+  await f.ingest('Artikel_Bemerkungen',[{EAN:'005479',Text:'Synthetic deferred note'}],{master:true});
+  const load=section=>loadSalesArticleDetailData({access:f.app.provider,vault:f.vault,article,projection:{read:true},section});
+  const main=await load('main');assert.equal(main.notes.deferred,true);assert.equal(main.branchStock.rows.length,2);
+  const notes=await load('notes');assert.deepEqual(Object.keys(notes),['notes']);assert.equal(notes.notes.items[0].text,'Synthetic deferred note');
+  const note=f.app.database.prepare("SELECT s.* FROM import_master_segments s JOIN import_master_records r ON r.id=s.record_id WHERE r.source_table='Artikel_Bemerkungen' LIMIT 1").get();
+  f.app.database.prepare('UPDATE import_master_segments SET payload=? WHERE record_id=? AND kind=? AND data_class=?').run('invalid',note.record_id,note.kind,note.data_class);
+  assert.equal((await load('main')).branchStock.rows.length,2);
+  await assert.rejects(load('notes'),e=>String(e.code).startsWith('IMPORT_'));
+  await assert.rejects(load('all'),e=>String(e.code).startsWith('IMPORT_'));
+  f.app.database.prepare('UPDATE import_master_segments SET payload=? WHERE record_id=? AND kind=? AND data_class=?').run(note.payload,note.record_id,note.kind,note.data_class);
+  f.app.database.prepare("UPDATE import_history_references SET lookup_hash=? WHERE role='article'").run('a'.repeat(64));
+  assert.equal((await load('notes')).notes.items.length,1);
+  await assert.rejects(load('main'),{code:'IMPORT_HISTORY_INTEGRITY'});
+  await assert.rejects(load('invalid'),TypeError);
+  const denied=await loadSalesArticleDetailData({access:{transaction(){throw new Error('Denied reader must not query');}},vault:f.vault,article,projection:{read:false},section:'notes'});
+  assert.deepEqual(denied.notes.items,[]);assert.deepEqual(denied.branchStock.rows,[]);assert.equal(denied.priceMatrix.purchase,null);
+});

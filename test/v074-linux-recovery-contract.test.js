@@ -44,7 +44,7 @@ test("v0.74 freezes downloaded trees, verifies capacity and binds repository, in
 });
 
 test("v0.74 locks live data before creating a durable pre-restore safety tree", () => {
-  const apply = read("server-tools/linux/recovery/lib/recovery-apply.js");
+  const apply = fs.readFileSync(require("../test-support/legacy-baseline").legacyPath("server-tools/linux/recovery/lib/recovery-apply.js"), "utf8");
   const lockIndex = apply.indexOf("const lock = acquireDatabaseLock");
   const safetyIndex = apply.indexOf("createSafetySnapshot({", lockIndex);
   const moveIndex = apply.indexOf("fs.renameSync(item.target, item.previous)", safetyIndex);

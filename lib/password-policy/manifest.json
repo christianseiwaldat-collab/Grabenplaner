@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": 1,
+  "corpusVersion": "seclists-60e43f4d-p15-v1",
+  "sourceReviewedAt": "2026-10-18",
+  "minimumCodePoints": 15,
+  "maximumCodePoints": 256,
+  "maximumUtf8Bytes": 1024,
+  "inputSemantics": "UTF-8 strict, Unicode code points, no trim/case/NFC; LF/CRLF source row delimiters removed",
+  "sourceCommit": "60e43f4d2b0251330ff18ea4fa76aabec0515dcb",
+  "sources": {
+    "common": {
+      "path": "Passwords/Common-Credentials/xato-net-10-million-passwords.txt",
+      "url": "https://raw.githubusercontent.com/danielmiessler/SecLists/60e43f4d2b0251330ff18ea4fa76aabec0515dcb/Passwords/Common-Credentials/xato-net-10-million-passwords.txt",
+      "bytes": 48312893,
+      "sha256": "c95989fecfae9c91aa9f5c730344d5cabd6335bb094c9c60aba16bf1742a72fe"
+    },
+    "breached": {
+      "path": "Passwords/Leaked-Databases/rockyou.txt.tar.gz",
+      "url": "https://raw.githubusercontent.com/danielmiessler/SecLists/60e43f4d2b0251330ff18ea4fa76aabec0515dcb/Passwords/Leaked-Databases/rockyou.txt.tar.gz",
+      "bytes": 53291283,
+      "sha256": "47c070a029bcdb4cbd0e02c69fed136ef46dce4048ddbadf177daa5e885b8172"
+    },
+    "license": {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/danielmiessler/SecLists/60e43f4d2b0251330ff18ea4fa76aabec0515dcb/LICENSE",
+      "bytes": 1072,
+      "sha256": "3dbdc93d5f8829de0941744841730a09c106d0732e5ae0e98ca1d77be7ded66c"
+    },
+    "commonReadme": {
+      "path": "Passwords/Common-Credentials/README.md",
+      "url": "https://raw.githubusercontent.com/danielmiessler/SecLists/60e43f4d2b0251330ff18ea4fa76aabec0515dcb/Passwords/Common-Credentials/README.md",
+      "bytes": 872,
+      "sha256": "49b7d00632c09b24bfa7c21bace2164b72815f0e50344604dd63ed66db2dbd37"
+    },
+    "breachedReadme": {
+      "path": "Passwords/Leaked-Databases/README.md",
+      "url": "https://raw.githubusercontent.com/danielmiessler/SecLists/60e43f4d2b0251330ff18ea4fa76aabec0515dcb/Passwords/Leaked-Databases/README.md",
+      "bytes": 588,
+      "sha256": "fed6fdd445f13340db1919401cce54c3beb1f09ed2ed1392d4ea46a7d7d7df1b"
+    }
+  },
+  "commonSelection": {
+    "strategy": "First 3000 unique policy-compatible values in source frequency order",
+    "finalSourceRow": 790039,
+    "metrics": {
+      "rows": 5189454,
+      "invalidUtf8Rows": 0,
+      "outsidePolicyRows": 5048421,
+      "policyCompatibleRows": 141033
+    }
+  },
+  "breachedSelection": {
+    "strategy": "All distinct policy-compatible UTF-8 rows from the pinned RockYou archive",
+    "archiveMember": "rockyou.txt",
+    "archiveMemberBytes": 139921497,
+    "metrics": {
+      "rows": 14344391,
+      "invalidUtf8Rows": 218,
+      "outsidePolicyRows": 13943181,
+      "policyCompatibleRows": 400992
+    }
+  },
+  "limitations": [
+    "Historical xato frequency list and historical RockYou breach; not a current or complete worldwide breach database.",
+    "Hashes cover exact UTF-8 strings only; malformed UTF-8 source rows are excluded and counted.",
+    "Source repository labels MIT and describes its password-only/no-account-link data rule; no independent reconstruction of the original leak.",
+    "The common ranking is inherited from the source, not newly measured in the GP population."
+  ],
+  "artifacts": {
+    "common": {
+      "file": "common-sha256.txt",
+      "count": 3000,
+      "bytes": 195000,
+      "sha256": "30c1197d30a6cf571b4080ddddeb750d894e9d3bc8a7a923dec2f741eebc8aa3",
+      "format": "sha256-hex-lines"
+    },
+    "breached": {
+      "file": "breached-sha256.bin",
+      "count": 400992,
+      "bytes": 12831744,
+      "sha256": "e26c1eba937998cdef2b50f8636a238a25bdce8e42488dbfd471d7b51728e217",
+      "format": "sha256-binary-sorted"
+    }
+  }
+}

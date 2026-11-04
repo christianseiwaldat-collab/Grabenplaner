@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -160,7 +161,7 @@ function ensureEmployee(employeeNumber, fullName, active) {
 
 function createSession(employeeNumber, role) {
   const rawToken = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(rawToken);
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
@@ -169,8 +170,8 @@ function createSession(employeeNumber, role) {
       must_change_password = 0, updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, role);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber,
     crypto.createHash("sha256").update(rawToken).digest("hex"));
   return {
@@ -226,12 +227,22 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
 test("v0.83: API erzwingt Finalisierung, protokolliert Übergabe und verschlüsselt Belege", async () => {
+  const handoffsBeforeInvalidScope = db.prepare("SELECT COUNT(*) AS count FROM payroll_handoffs").get().count;
+  for (const departmentId of ["not-a-department", {}, -1]) {
+    const invalidScope = await request("/api/integrations/payroll-handoffs", {
+      method: "POST",
+      body: { month: MONTH, locationId, departmentId, fingerprint: "untrusted-scope" },
+    });
+    assert.equal(invalidScope.response.status, 400, JSON.stringify(invalidScope.payload));
+    assert.equal(Object.hasOwn(invalidScope.payload, "handoff"), false);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM payroll_handoffs").get().count, handoffsBeforeInvalidScope);
+  }
   const blocked = await request("/api/integrations/payroll-handoffs/preflight", {
     method: "POST",
     body: { month: MONTH, locationId, departmentId: null },
@@ -285,6 +296,8 @@ test("v0.83: API erzwingt Finalisierung, protokolliert Übergabe und verschlüss
   assert.equal(created.response.status, 201, JSON.stringify(created.payload));
   assert.equal(created.payload.handoff.state, "prepared");
   const handoffId = created.payload.handoff.id;
+  assert.equal(db.prepare("SELECT department_id FROM payroll_handoffs WHERE id = ?").get(handoffId).department_id, "",
+    "The historical all-departments sentinel remains exact text in PostgreSQL");
   db.prepare(`
     INSERT OR IGNORE INTO portal_permission_grants
       (employee_number, permission, granted_by, updated_at)

@@ -1,0 +1,55 @@
+# PostgreSQL-only: expliziter Linux-Runtimeübergang
+
+Der PostgreSQL-only-Server verwendet Core-Runtimevertrag 6 und Offsite-Modulvertrag 13. Ein reguläres App-Update darf einen installierten Vertrag 5 nicht als unverändert behandeln. Der koordinierte Übergang erfolgt ausschließlich mit `server-tools/linux/migrate-grabenplaner-runtime-v6.sh` aus demselben separat anhand seines SHA-256 freigegebenen Serverpaket.
+
+## Enger Vertragsumfang
+
+Der Ausgangsstand ist der qualifizierte Core-5-/Offsite-12-Vertrag der historischen Basis `b2ba03cdc0b738d44766857de052e090db557807`. Core 5 besitzt den Fingerprint `21f541a85b74ced5e5b6ec84ff2561badcd6635ad1fceb7438cb32350392cd8c`, Offsite 12 den Fingerprint `3b4f00d0ac775549f460aaeb089346f61cedf112c0fc68a4d09059b0dc6d933c`. Dabei gelten die ausdrücklich versionierten Checkoutbytes der `.gitattributes`; der Monitor-Timer verwendet CRLF. Ein abweichender Ausgangsstand erfordert eine eigene Prüfung.
+
+Von den elf verwalteten Core-Dateien ändern sich ausschließlich die PostgreSQL-Bootstrapvorlage und die Beispielumgebung. Die übrigen neun Dateien einschließlich aller systemd-Units, des Host-Control-Brokers und Caddy bleiben bytegleich. Der Core-6-Fingerprint lautet `f9c09a999f5d6b30c0df35e714d0a5ddf0ca17880ad9190ff4bc5c068c3d95fc`. Die Offsite-Dateimenge bleibt gleich; ihr eigener Übergangsprüfer begrenzt die Änderungen auf den Installer, die gemeinsame Sicherheitsbasis, den Modulvertragsprüfer und den selbständigen Verweigerungseinstieg für historische SQLite-Smoke-Aufrufe. Er prüft jede übrige Datei und jede Unit unverändert.
+
+Die echte geschützte Serverumgebung, PostgreSQL-Anwendungs- und Betriebskonfiguration, der Paaranker, Repositorykennung, Installationskennung und die vorhandenen Kennwortdateien werden unverändert gebunden. Der installierte Bootstrap-Befehl ist eine gerenderte Datei außerhalb des App-Baums. Er wird deshalb gesondert gegen die alte Vorlage geprüft, gesichert und gegen die neue Vorlage ausgetauscht. Der bereits verbrauchte Bootstrap-Schlüssel wird weder neu gesetzt noch verwendet. Ein Datenbankwechsel, eine Repositoryinitialisierung und ein Host-Neustart gehören nicht zu diesem Ablauf.
+
+Privilegierte Kandidatenprogramme laufen erst aus frischen Root-Dateien. Die Kopie hält jede Quellverzeichnisbeschreibung offen und öffnet ihre Kinder relativ dazu ohne symbolischen Links zu folgen; FIFO- und Hardlinkwechsel werden abgewiesen. Anschließend vergleicht ein unabhängiger Python-Prüfer jede ursprüngliche Datei und die vollständige Dateimenge direkt mit dem separat anhand seines SHA-256 freigegebenen Original-ZIP. Ein vom Buildkonto geänderter Manifest- oder Verifiertext kann diese Prüfung nicht ersetzen. Derselbe Beweis wird nach dem Build wiederholt.
+
+Die Core-6-Brücke bindet alte und neue Paket-, Lock- und Workspacedateien sowie das vollständige Hashinventar des rootgeschützten alten Abhängigkeitsbaums in einem eigenen Plan. pnpm 11.7.0, PostgreSQL-Treiber 8.22.0 und die übrigen direkten Produktionsabhängigkeitsangaben bleiben unverändert. Als Workspaceänderungen sind ausschließlich der geprüfte Override für body-parser 2.4.0 mit seinem zugehörigen Kommentar und der genaue Kompatibilitätspatch für `@azure/msal-node@5.4.0` zugelassen. Die neue eingefrorene Auflösung enthält auch content-type 2.1.0. Der MSAL-Eintrag muss innerhalb von `patchedDependencies` auf `lib/vendor-patches/@azure__msal-node@5.4.0.patch` zeigen; der Prüfer bindet dessen exakte Bytes zusätzlich an SHA-256 `bbdf16bb0cf6a18ab384b515bd8a378cc5c736698c486881c60c1cbb1cbeda01`. Andere Versionen, Patchpfade, Patchinhalte, doppelte Einträge oder eine Entfernung eines bereits vorhandenen Sicherheitspatches werden abgewiesen. Andere Workspace-, Hook- oder Abhängigkeitsänderungen verlangen eine neue ausdrückliche Prüfung.
+
+Die neue Lockdatei wird durch eine echte eingefrorene Installation geprüft. Bereits vor der ersten privilegierten PostgreSQL-Vorprüfung entsteht eine gesonderte rootprivate Installation aus den ursprünglichen Metadaten im SHA-256-geprüften Original-ZIP, ohne Lifecycle- oder pnpmfile-Skripte und ohne Buildkonto-Caches. Die Brücke kopiert keine alten Runtimepakete in den Kandidaten. Der normale unprivilegierte Produktionsbuild erstellt dessen vollständigen eingefrorenen Baum. Anschließend werden die Original-ZIP-Bytes erneut unabhängig geprüft und die privilegierte PostgreSQL-Closure nochmals aus einem frischen rootprivaten Install übernommen. Nur deren verifizierte PostgreSQL-Abhängigkeitsmenge darf privilegierte PostgreSQL-Aufrufe bedienen; optionale Schattenmodule aus dem Buildbaum werden entfernt. Der interne Übergangsbeleg in Version 2 bindet den Abhängigkeitsplan erneut vor dem eigentlichen Update. Der alte vollständige App-Baum bleibt bis zum normalen App-Commit für die unveränderte Rückkehr erhalten.
+
+Node und die gesamte pnpm-/Corepack-Distribution werden vor ihrer ersten Ausführung unabhängig auf Rootschutz geprüft. Privilegierte Node-Aufrufe erhalten eine leere, ausdrücklich aufgebaute Umgebung und deaktivieren globale Modulsuchpfade. Eine NODE_PATH-Ausweichauflösung gehört nicht zum Übergang. Ein ungepatchter Core-6-Zwischenrelease ist nicht vorgesehen.
+
+## Voraussetzungen und Reihenfolge
+
+Vorausgesetzt sind Linux x86_64, die qualifizierte Node.js-Version, `/usr/bin/python3`, ein grüner read-only Deploy-Vorabcheck, ein vollständig vorbereiteter produktiver PostgreSQL-Paarbetrieb, funktionierende interne und öffentliche Readiness sowie das unverändert gebundene Offsite-Modul 12. Ein SQLite-Bestand muss zuvor über die erhaltene historische Wiederherstellungs- und Migrationstoolchain kontrolliert überführt und geprüft werden. Dieser Runtimeübergang führt keine solche Datenmigration aus.
+
+| Phase | Core / externes Offsite-Modul | Bedeutung |
+| --- | --- | --- |
+| Vorprüfung | 5 / 12 | Normaler Ausgangsstand; vollständiges Paket, Einzeldateien, ClamAV, echte PostgreSQL-Rollen und Clusterbezug werden geprüft. |
+| Gesperrter Übergang | 5 / 13 | Ausschließlich kontrollierte Wartungslücke unter geerbtem FD 9 und pausierten Offsite-Timern. Die alten Modulprüfer erkennen 13 ausdrücklich nicht als unterstützten Dauerstand an. |
+| App-Update | 5 / 13 → 6 / 13 | Der normale vollständige Updater erstellt frische gekoppelte Sicherungen, verwendet die üblichen Healthchecks und Produktivprüfungen und bewahrt den vollständigen alten App-Baum für seinen Rollback. |
+| Fehler vor App-Commit | zurück zu 5 / 12 | Nach bestätigter Rückkehr der alten App werden das exakte Modul 12, sein ursprünglicher Beleg und der alte Bootstrap-Befehl wiederhergestellt. Erst bestätigte alte Betriebsprüfungen erlauben die Wiederaufnahme der vorherigen Timerzustände. |
+| Erfolgreicher App-Commit | 6 / 13 | Core-, Modul-, Bootstrap- und Providerbindung werden erneut geprüft, der Migrationsbeleg wird gespeichert und ein gesonderter Assurance-Lauf eingeplant. |
+
+Ein Fehler nach dauerhaft bestätigtem App-Commit löst keinen Teilrollback aus. Ein unklarer Rollback oder ein Signal bewahrt alle Rückkehrpunkte und Diagnosen und lässt die Offsite-Timer pausiert. PostgreSQL-Schreibvorgänge werden nicht durch ein ungesichertes Zurückspielen einer älteren Datenbank überschrieben. Die bisherigen aktivierten und laufenden Timerzustände bleiben die Vorgabe; die Migration führt keine neue Timerpolitik ein.
+
+Frische Vorwechsel-Sicherungen entstehen dabei aus dem vollständig geprüften Kandidatenbaum mit der ausdrücklichen PostgreSQL-Operation `backup-preserve`. Sie validiert auch eine bestehende Aufbewahrungspolitik, führt aber kein Pruning aus. Der historische PostgreSQL-Dispatcher ignorierte das gleichnamige Shell-Flag; allein dessen Weitergabe an das alte Skript wäre daher kein Erhaltungsnachweis. Normale Sicherungen behalten ihre bisherige Aufbewahrungspolitik.
+
+## Ausführbare Paketaliase im frischen Root-Baum
+
+Linux-pnpm erzeugt deklarierte Befehle unter `node_modules/.bin` teilweise als relative symbolische Links. Die Root-Kopie folgt diesen Links weiterhin nicht. Sie hält den Link-Inode offen und prüft erst nach dem gewöhnlichen Kopieren den bereits rootgeschützten Zielbaum: genaues `bin`-Mapping des zugehörigen Paketmanifests, reguläre Datei mit nur einem Hardlink, Ausführungsbit und Node-Shebang. Auch verschachtelte und scoped Pakete sind damit eindeutig gebunden. Eine ESM-Typdatei unterhalb der Paketwurzel ersetzt das deklarierende Manifest nicht.
+
+Nur für diese geprüften Aliase entsteht eine neue reguläre Shell-Datei, die das ursprüngliche Node-Entrypoint mit den unveränderten Argumenten per `exec` startet. Relative Imports, CJS-/ESM-Semantik und Signale bleiben dadurch erhalten; `process.argv[1]` bezeichnet das ursprüngliche Skriptziel. Das ist die normale Alias-Semantik und keine bytegleiche Kopie eines Linkpfads. Außerhalb der Paketgrenze liegende Ziele, Linkketten, andere Links, FIFO-/Hardlinkfälle, unpassende Deklarationen und fremde Interpreter bleiben unzulässig. Beim Versiegeln wird kein Paketbefehl ausgeführt.
+
+Die Interpreterprüfung akzeptiert ausschließlich drei feste Node-Zeilen:
+`#!/usr/bin/env node`, `#!/usr/bin/node` und das tatsächlich in
+`sha.js@2.4.12` enthaltene `#! /usr/bin/env node`. Das einzelne Leerzeichen
+unmittelbar nach `#!` ist eine gültige Linux-Schreibweise. Es gibt keine freie
+Whitespace-, Interpreter- oder Argumentauswertung; Shell-Interpreter und
+zusätzliche Interpreterargumente bleiben unzulässig. Der reguläre Shim führt
+weiterhin das ursprüngliche geprüfte Entrypoint aus.
+
+## Nachweise vor einer Produktivfreigabe
+
+Die fokussierten Vertragstests prüfen zulässige und unzulässige Core-Deltas, Vorgängerversionen, Dateimengen, Hardlinks, symbolische Elternpfade und ungebundene Aufrufe. Historische Core-4-/Core-5-Assertions bleiben separat an die unveränderliche Basis gebunden. Das ersetzt nicht die erforderliche isolierte Linux-Qualifikation der tatsächlichen alten und neuen Einstiegspunkte.
+
+Für eine spätere Freigabe müssen insbesondere der wirkliche Start der unveränderten alten PostgreSQL-App mit externem Modul 13 während der Wartung, ihre Live-/Ready-Antworten, die negative Prüfung aller alten Modul-/Zeitplaneinstiege, der exakte Modul-12-Rollback vor Timerfreigabe und der vollständige erfolgreiche Core-6-/Offsite-13-Ablauf nachgewiesen sein. Falls die alte App vor dem Modulrollback nicht startet, ist ein gebundener Rücktausch vor ihrem Start erforderlich. Vollständige Linux-Anwendungsprüfungen, CI/SAST und der gesonderte Assurance-Abschluss bleiben zusätzliche Nachweise. Dieses Dokument bestätigt keine bereits erfolgte Produktivmigration.

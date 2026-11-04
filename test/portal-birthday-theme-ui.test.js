@@ -67,9 +67,12 @@ test("Block 11: Theme-Aktivierung nutzt keine clientseitigen Geburts- oder Datum
 });
 
 test("Block 11: Initialisierung, Pflichtpasswort, Actorwechsel, Login und Logout sind fail-neutral", () => {
-  assert.equal((script.match(/await loadPortalData\(\);\s*await refreshBirthdayPresentationTheme\(\);\s*await claimBirthdayPresentation\(\);/g) || []).length, 3);
-  assert.match(script, /function changePassword\([\s\S]*?await refreshBirthdayPresentationTheme\(\);\s*await claimBirthdayPresentation\(\);/);
-  assert.match(script, /portalState\.session\?\.user\) portalState\.session\.user\.mustChangePassword = false/);
+  assert.equal((script.match(/await loadPortalData\(\);\s*await refreshBirthdayPresentationTheme\(\);\s*await claimBirthdayPresentation\(\);/g) || []).length, 2);
+  const passwordChange = between(script, "async function changePassword(", "function togglePassword(");
+  assert.match(passwordChange, /await refreshBirthdayPresentationTheme\(\);\s*if \(portalState\.session === replacement\) await claimBirthdayPresentation\(\);/);
+  assert.match(passwordChange, /showPortal\(replacement\)/);
+  assert.match(passwordChange, /if \(replacement\.user\?\.mustChangePassword\) return;/);
+  assert.doesNotMatch(passwordChange, /mustChangePassword = false/);
   assert.match(script, /if \(!actor \|\| portalUser\(\)\?\.mustChangePassword === true\) \{\s*neutralizeBirthdayPresentationTheme\(\)/);
   assert.match(script, /function showLogin\([^)]*\) \{[\s\S]{0,450}neutralizeBirthdayPresentationTheme\(\)/);
   assert.match(script, /if \(birthdayPresentationActor\(\) !== birthdayPresentationActor\(session\?\.user\)\) \{\s*neutralizeBirthdayPresentation\(\);\s*neutralizeBirthdayPresentationTheme\(\)/);

@@ -10,8 +10,10 @@ test('Learning and Trade retain interaction drafts while revalidating data, scop
  try{
   const page=await browser.newPage();page.setDefaultTimeout(10000);page.on('pageerror',error=>errors.push(error.message));await page.route('**/*',route=>route.abort());
   await page.setContent('<div id="team"></div><div id="trade"></div>');
-  for(const file of ['learning-team.js','trade-insight-results.js','trade-movements.js','trade-stocktakes.js','trade-suggestions.js','trade-period.js','gp-data-quality.js'])await page.addScriptTag({path:path.join(root,'public',file)});
+  await page.addStyleTag({path:path.join(root,'public/gp-window.css')});
+  for(const file of ['gp-window-preferences.js','gp-window.js','learning-team.js','trade-insight-results.js','trade-movements.js','trade-stocktakes.js','trade-suggestions.js','trade-period.js','gp-data-quality.js'])await page.addScriptTag({path:path.join(root,'public',file)});
   await page.evaluate(()=>{
+   window.gpWindows=GpWindow.installDocument(document,{actorKey:()=> 'BEISPIEL',canUse:()=>true,readPreferences:async()=>({version:1,windows:{}}),writePreferences:async()=>{}});
    window.learningOptions={locations:[{id:'18',name:'Filiale 18'}],positions:[{id:'sales',name:'Verkauf'}],roles:[{id:'employee',name:'Mitarbeiter'}],rules:[],canManage:true,
     scopes:[{type:'organization',label:'Organisation'},{type:'location',locationId:'18',label:'Filiale 18'}],modules:[{id:'skill',title:'Kassa',version:1,type:'skill',scope:{type:'organization'}}]};
    window.learningReads=[];window.learningWrites=[];window.failOptions=false;
@@ -43,7 +45,7 @@ test('Learning and Trade retain interaction drafts while revalidating data, scop
 
   await page.evaluate(()=>{
    window.GrabenplanerTradeTables={mount:()=>({attach(){},clear(){},activate(){},suspend(){},destroy(){}})};
-   window.GrabenplanerTradeExport={mount:()=>({close(){},destroy(){}})};
+   window.GrabenplanerTradeExport={mount:()=>({close(){},destroy(){},deactivate(){},activate(){},reset(){},sync(){}})};
    window.tradeContext={projection:{inventory:true,purchasing:true,customers:true,repairs:true,repairWrite:true,classify:true},locations:[{id:'18',label:'Filiale 18'}],purchasingLocations:[{id:'18',label:'Lieferstelle 18'}],today:'2026-10-06'};
    window.contextReads=0;window.tradeWrites=[];window.repairRevision=1;window.classRevision=1;window.reportNote='Erster Stand';
    window.tradeApi=async(url,options={})=>{
@@ -75,7 +77,7 @@ test('Learning and Trade retain interaction drafts while revalidating data, scop
   assert.equal(await page.evaluate(()=>contextReads),4);checks.push('trade_area_filters_and_repair_draft_preserved_fresh_revision_conflicts');
 
   await page.evaluate(async()=>{trade.setArea('stock');await trade.activate('movements');});
-  await page.locator('[data-job-open="saved"]').click();await page.waitForFunction(()=>document.querySelector('[data-ti="snapshot"]').hidden===false);
+  await page.locator('[data-ti="archive"]').evaluate(n=>{n.open=true;});await page.locator('[data-job-open="saved"]').click();await page.waitForFunction(()=>document.querySelector('[data-ti="snapshot"]').hidden===false);
   await page.locator('#trade [name="query"]').evaluate(element=>{element.value='Unfertiger neuer Filter';});
   await page.locator('[data-ti="snapshot"] [name="title"]').fill('Unfertiger Titel');
   await page.locator('[data-ti="results"] [data-sort="date"]').click();

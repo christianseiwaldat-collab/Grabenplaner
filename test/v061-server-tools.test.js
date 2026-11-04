@@ -168,6 +168,8 @@ test("Windows package assertions reject each missing runtime control module", {
     "  'lib\\offsite-provider-policy.js',",
     "  'lib\\host-reboot-control-client.js',",
     "  'lib\\controlled-host-reboot.js',",
+    "  'services\\planning-optimizer\\service.py',",
+    "  'services\\planning-optimizer\\requirements.txt',",
     "  'server-tools\\windows\\Update-GrabenplanerServer.ps1'",
     ")",
     "$base = Join-Path ([IO.Path]::GetTempPath()) ('GrabenplanerRuntimeModules-' + [guid]::NewGuid().ToString('N'))",
@@ -264,41 +266,45 @@ test("v0.61 server tools: maintenance scripts share one lock and distinct live-r
       `${label} fehlt im stabilen Fehlerergebnis.`,
     );
   }
-  for (const directive of ["base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"]) {
+  for (const directive of ["base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'"]) {
     assert.ok(health.includes(directive), `Content-Security-Policy prueft ${directive} nicht.`);
   }
   assert.doesNotMatch(allOps, /GRABENPLANER_ALLOW_UNSCANNED_AMU/);
 });
 
-test("v0.86 Windows diagnostics require complete, exact CSP directives", {
+test("security CSP: native Windows monitor rejects self, duplicate names and policy appendages", {
   skip: !powershell || !fs.existsSync(powershell),
 }, () => {
   const health = read("server-tools", "windows", "Test-GrabenplanerServer.ps1");
   const functionStart = health.indexOf("function Test-ExactCspDirectives");
   const functionEnd = health.indexOf("foreach ($serviceName", functionStart);
-  assert.notEqual(functionStart, -1, "Exakte CSP-Prueffunktion fehlt.");
-  assert.notEqual(functionEnd, -1, "Ende der CSP-Prueffunktion fehlt.");
-  const functionSource = health.slice(functionStart, functionEnd).trim();
-  const harness = [
-    functionSource,
-    "$valid = \"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\"",
-    "$frameSuffix = \"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none' https://evil.example\"",
-    "$formSuffix = \"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://evil.example; frame-ancestors 'none'\"",
-    "[pscustomobject]@{",
-    "  valid = (Test-ExactCspDirectives $valid)",
-    "  frameSuffix = (Test-ExactCspDirectives $frameSuffix)",
-    "  formSuffix = (Test-ExactCspDirectives $formSuffix)",
-    "} | ConvertTo-Json -Compress",
-    "",
+  assert.ok(functionStart >= 0 && functionEnd > functionStart);
+  assert.match(health, /contentSecurityPolicyValues.Count -eq 1/);
+  const valid = "default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+  const cases = [
+    ['valid', valid, true],
+    ['whitespace', valid.replace("base-uri 'none'", "BASE-URI\t  'none'"), true],
+    ['self', valid.replace("base-uri 'none'", "base-uri 'self'"), false],
+    ['missing', valid.replace("base-uri 'none'; ", ''), false],
+    ['baseSuffix', valid.replace("base-uri 'none'", "base-uri 'none' https://evil.example"), false],
+    ['frameSuffix', valid.replace("frame-ancestors 'none'", "frame-ancestors 'none' https://evil.example"), false],
+    ['formSuffix', valid.replace("form-action 'self'", "form-action 'self' https://evil.example"), false],
+    ['weakFirst', "base-uri 'self'; " + valid, false],
+    ['weakLast', valid + "; base-uri 'self'", false],
+    ['duplicateExact', valid + "; base-uri 'none'", false],
+    ['duplicateMixedCase', valid + "; BaSe-UrI 'self'", false],
+    ['otherDuplicate', valid + "; SCRIPT-src 'self'; script-SRC *", false],
+    ['comma', valid + ", default-src *", false],
+    ['combinedHeaders', valid + ', ' + valid, false],
+    ['embeddedNewline', valid.replace('; base-uri', ';\nbase-uri'), false],
+    ['substring', valid.replace("base-uri 'none'", "not-base-uri 'none'"), false],
+  ];
+  const encodedCases = Buffer.from(JSON.stringify(cases), 'utf8').toString('base64');
+  const harness = [health.slice(functionStart, functionEnd),
+    "$cases = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encodedCases + "')) | ConvertFrom-Json",
+    "$results = @{}; foreach ($case in $cases) { $results[[string]$case[0]] = Test-ExactCspDirectives ([string]$case[1]) }; $results | ConvertTo-Json -Compress",
   ].join("\r\n");
-  const encodedHarness = Buffer.from(harness, "utf16le").toString("base64");
-  const result = spawnSync(powershell, [
-    "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodedHarness,
-  ], { encoding: "utf8" });
+  const result = spawnSync(powershell, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(harness, 'utf16le').toString('base64')], { encoding: 'utf8', timeout: 15000, windowsHide: true });
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout.trim()), {
-    valid: true,
-    frameSuffix: false,
-    formSuffix: false,
-  });
+  assert.deepEqual(JSON.parse(result.stdout.trim()), Object.fromEntries(cases.map(([name,,expected])=>[name,expected])));
 });

@@ -4,7 +4,89 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const { createGroups, mount } = require("../public/sidebar-layout");
+const { navigationPath, createGroups, mount } = require("../public/sidebar-layout");
+
+test("Every declared sidebar child route reveals all its ancestor groups", () => {
+  const { parseDocument, DomUtils } = require("htmlparser2");
+  const document = parseDocument(fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8"));
+  const nodes = DomUtils.findAll(node => Boolean(node.attribs?.id || node.attribs?.["data-nav-toggle"]), document.children);
+  const navigation = DomUtils.findOne(node => (node.attribs?.class || "").split(/\s+/).includes("main-nav"), document.children);
+  assert.ok(navigation);
+  const toggles = DomUtils.findAll(node => Boolean(node.attribs?.["data-nav-toggle"]), navigation.children);
+  let checked = 0;
+  for (const toggle of toggles) {
+    const children = nodes.find(node => node.attribs?.id === toggle.attribs["aria-controls"]);
+    assert.ok(children, `${toggle.attribs["data-nav-toggle"]} must control an existing child container`);
+    const routes = DomUtils.findAll(node => Boolean(node.attribs?.["data-view"]), children.children);
+    // Planning and vacation contexts are populated at runtime.
+    if (!routes.length) routes.push({ attribs: { "data-view": toggle.attribs["data-nav-toggle"] } });
+    for (const node of routes) {
+      const view = node.attribs["data-view"];
+      assert.ok(navigationPath(view).includes(toggle.attribs["data-nav-toggle"]), `${view} must reveal ${toggle.attribs["data-nav-toggle"]}`);
+      checked++;
+    }
+  }
+  assert.equal(toggles.length, 8);
+  assert.ok(checked >= 35, "Audit all current groups, subsections and dynamic branches");
+});
+
+test("Artikel-Auswertung and BWL-Tools keep Verkauf open across direct and sibling navigation", () => {
+  const groups = createGroups();
+  for (const view of ["salesAdministration", "articleReport", "salesBwl", "articleCatalog", "articleReport"]) {
+    groups.sync(view, view);
+    assert.equal(groups.isOpen("salesAdministration"), true, view);
+  }
+});
+
+test("Manual disclosures persist per account and route changes only reveal the destination's ancestors", () => {
+  const values = new Map(), storage = { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value) };
+  let actor = "A";
+  const groups = createGroups({ storage, account: () => actor });
+  groups.sync("articleReport", "articleReport");
+  groups.setOpen("personnelAdministration", true);
+  groups.setOpen("salesAdministration", false);
+  groups.sync("articleReport", "articleReport");
+  assert.equal(groups.isOpen("salesAdministration"), false, "Refresh must preserve an intentional collapse");
+  groups.sync("salesBwl", "salesBwl");
+  assert.equal(groups.isOpen("salesAdministration"), true, "A new route reveals its destination even if manually collapsed before");
+  assert.equal(groups.isOpen("personnelAdministration"), true, "Navigation must preserve unrelated manual disclosures");
+  groups.sync("settings", "settings");
+  assert.equal(groups.isOpen("salesAdministration"), false, "The saved collapse applies again outside its destination");
+  assert.equal(groups.isOpen("personnelAdministration"), true);
+  groups.reset();
+  groups.sync("settings", "settings");
+  assert.equal(groups.isOpen("personnelAdministration"), true, "Re-login restores this account's preference");
+  actor = "B";
+  groups.sync("settings", "settings");
+  assert.equal(groups.isOpen("personnelAdministration"), false, "Changing accounts on the same route must not inherit A's tree");
+  groups.setOpen("logistics", true);
+  actor = "A";
+  groups.sync("settings", "settings");
+  assert.equal(groups.isOpen("personnelAdministration"), true);
+  assert.equal(groups.isOpen("logistics"), false);
+  assert.equal(values.size, 2);
+  for (const raw of values.values()) assert.deepEqual(Object.keys(JSON.parse(raw)), ["version", "disclosures"]);
+});
+
+test("Disclosure persistence accepts only known booleans and works with disabled or malformed storage", () => {
+  for (const saved of ["invalid", JSON.stringify({ version: 2, disclosures: { logistics: true } }), "x".repeat(5000)]) {
+    const groups = createGroups({ account: () => "A", storage: { getItem: () => saved, setItem() { throw new Error("disabled"); } } });
+    groups.sync("articleReport", "articleReport");
+    assert.equal(groups.isOpen("salesAdministration"), true);
+    assert.equal(groups.isOpen("logistics"), false);
+    assert.doesNotThrow(() => groups.setOpen("logistics", true));
+    assert.equal(groups.isOpen("logistics"), true);
+  }
+  const values = [];
+  const groups = createGroups({ account: () => "A", storage: { getItem: () => JSON.stringify({ version: 1, disclosures: { logistics: true, unknown: true, vacations: "true" } }), setItem: (key, value) => values.push(JSON.parse(value)) } });
+  groups.sync("settings", "settings");
+  assert.equal(groups.isOpen("logistics"), true);
+  assert.equal(groups.isOpen("vacations"), false);
+  groups.setOpen("unknown", true); groups.setOpen("vacations", "true");
+  assert.equal(values.length, 0);
+  groups.setOpen("planning", false);
+  assert.deepEqual(values, [{ version: 1, disclosures: { logistics: true, planning: false } }]);
+});
 
 test("Navigation restores only the active path, including the planning branch", () => {
   const groups = createGroups();
@@ -148,7 +230,7 @@ test("Logistik opens its child path and marks only Einkauf / Lieferstände as th
   }
   const context = {
     elements: new Proxy({}, { get: (_, id) => node(id) }),
-    state: { currentView: "logistics", portalSession: null }, privacyOrganizationTab: "overview",
+    state: { currentView: "logistics", portalSession: null }, logisticsTab: "purchasing", privacyOrganizationTab: "overview",
     sidebarNavigationGroups: createGroups(), activeLocations: () => [],
     currentAdministrationRoute: () => ({ view: "logistics", section: "purchasing" }),
     document: { getElementById: node, querySelector: selector => selector === ".main-nav" ? null : node(selector) },

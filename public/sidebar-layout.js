@@ -7,6 +7,8 @@
   "use strict";
   const DEFAULT_WIDTH = 240, MIN_WIDTH = 200, MAX_WIDTH = 380;
   const STORAGE_KEY = "grabenplaner-sidebar-width";
+  const GROUPS_STORAGE_KEY = "grabenplaner:sidebar-groups-v1:";
+  const GROUP_KEYS = ["filialManagement", "planning", "vacations", "personnelAdministration", "salesAdministration", "logistics", "privacyOrganization", "technicalSecurity"];
 
   function navigationPath(view) {
     if (["filialAdministration", "personnel", "planning", "vacations", "loans", "branchOrders"].includes(view)) {
@@ -15,24 +17,55 @@
     if (["personnelAdministration", "requests", "timeTracking"].includes(view)) return ["personnelAdministration"];
     if (view === "logistics") return ["logistics"];
     if (view === "privacyOrganization") return ["privacyOrganization"];
-    if (["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "priceLabels", "crm"].includes(view)) return ["salesAdministration"];
+    if (view === "technicalSecurity") return ["technicalSecurity"];
+    if (["salesAdministration", "salesAnalytics", "receiptSearch", "tradeInsights", "articleCatalog", "articleReport", "salesBwl", "priceLabels", "crm"].includes(view)) return ["salesAdministration"];
     return [];
   }
 
-  // Manual disclosure changes last for this visit. A new route or login reveals
-  // its own path, without inheriting another user's expanded navigation tree.
-  function createGroups() {
-    let route = null, expanded = new Set();
+  // A navigation reveals every ancestor of its target. Manual disclosures of
+  // other groups remain account-scoped; background renders never reopen them.
+  function createGroups({ storage, account = () => "" } = {}) {
+    let route = null, actor = null, expanded = new Set(), disclosures = {};
+    function currentAccount() {
+      try { return String(account() || "").slice(0, 240); } catch { return ""; }
+    }
+    function restore(nextActor) {
+      actor = nextActor;
+      disclosures = {};
+      if (!actor || !storage) return;
+      try {
+        const raw = storage.getItem(GROUPS_STORAGE_KEY + encodeURIComponent(actor));
+        if (!raw || raw.length > 4096) return;
+        const saved = JSON.parse(raw);
+        if (saved?.version !== 1 || !saved.disclosures || typeof saved.disclosures !== "object" || Array.isArray(saved.disclosures)) return;
+        for (const key of GROUP_KEYS) if (typeof saved.disclosures[key] === "boolean") disclosures[key] = saved.disclosures[key];
+      } catch {}
+    }
+    function persist() {
+      if (!actor || !storage) return;
+      try { storage.setItem(GROUPS_STORAGE_KEY + encodeURIComponent(actor), JSON.stringify({ version: 1, disclosures })); } catch {}
+    }
     return {
+      navigationPath,
       sync(nextRoute, view) {
-        if (nextRoute === route) return false;
+        const nextActor = currentAccount();
+        if (nextRoute === route && nextActor === actor) return false;
+        if (nextActor !== actor) restore(nextActor);
         route = nextRoute;
-        expanded = new Set(navigationPath(view));
+        expanded = new Set(GROUP_KEYS.filter(key => disclosures[key] === true));
+        for (const key of navigationPath(view)) expanded.add(key);
         return true;
       },
       isOpen(key) { return expanded.has(key); },
-      setOpen(key, open) { if (open) expanded.add(key); else expanded.delete(key); },
-      reset() { route = null; expanded.clear(); },
+      setOpen(key, open) {
+        if (!GROUP_KEYS.includes(key) || typeof open !== "boolean") return;
+        const nextActor = currentAccount();
+        if (nextActor !== actor) { restore(nextActor); route = null; expanded = new Set(GROUP_KEYS.filter(group => disclosures[group] === true)); }
+        disclosures[key] = open;
+        if (open) expanded.add(key); else expanded.delete(key);
+        persist();
+      },
+      reset() { route = null; actor = null; expanded.clear(); disclosures = {}; },
     };
   }
 

@@ -77,13 +77,11 @@ fi
 
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
 data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"
-database_provider="${DB_PROVIDER:-sqlite}"
+database_provider="${DB_PROVIDER:-}"
+[[ "$database_provider" == postgresql ]] || gp_die 'Dieser GP-Stand verlangt den verifizierten PostgreSQL-Paarbetrieb.'
 if [[ "$database_provider" == postgresql ]]; then
   [[ -z "$database_arg" || "$database_arg" == "$data_dir/data/postgresql-pair.json" ]] || gp_die 'Der PostgreSQL-Paarbezug ist ungueltig.'
   database="$(gp_existing_file "$data_dir/data/postgresql-pair.json" 'PostgreSQL-Paarbezug')"
-else
-  [[ "$database_provider" == sqlite ]] || gp_die 'Der Datenbankprovider wird nicht unterstuetzt.'
-  database="$(gp_existing_file "${database_arg:-${DB_PATH:-$data_dir/data/dienstplan.db}}" "SQLite-Datenbank")"
 fi
 backup_dir="$(gp_existing_directory "${backup_arg:-${BACKUP_DIR:-$GP_DEFAULT_BACKUP_DIR}}" "Backupordner")"
 public_url="${public_url_arg:-${GRABENPLANER_PUBLIC_URL:-}}"
@@ -100,7 +98,7 @@ failures=0
 check_ok() { printf 'OK\t%s\t%s\n' "$1" "$2"; }
 check_fail() { printf 'FEHLER\t%s\t%s\n' "$1" "$2"; failures=$((failures + 1)); }
 postgresql_contract_ok=0
-if [[ "${DB_PROVIDER:-sqlite}" == postgresql ]]; then
+if [[ "${DB_PROVIDER:-}" == postgresql ]]; then
   if "$node" "$app_dir/server-tools/linux/postgresql/managed-contract.js" "$app_dir" >/dev/null \
     && systemctl is-active --quiet grabenplaner-postgresql.service \
     && systemctl is-active --quiet grabenplaner-postgresql-control.socket; then
@@ -110,16 +108,32 @@ fi
 csp_has_exact_directive() {
   local policy="$1"
   local required="$2"
-  local directive
+  local directive raw_name name value found=0
+  local required_name="${required%% *}" required_value="${required#* }"
+  local -A seen=()
+  policy="${policy#"${policy%%[![:space:]]*}"}"
+  policy="${policy%"${policy##*[![:space:]]}"}"
+  # One policy only; duplicate names are case-insensitive in CSP parsing.
+  [[ "$policy" != *','* && "$policy" != *$'\r'* && "$policy" != *$'\n'* ]] || return 1
   local IFS=';'
   local -a directives=()
   read -r -a directives <<< "$policy"
   for directive in "${directives[@]}"; do
     directive="${directive#"${directive%%[![:space:]]*}"}"
     directive="${directive%"${directive##*[![:space:]]}"}"
-    [[ "$directive" == "$required" ]] && return 0
+    [[ -n "$directive" ]] || continue
+    raw_name="${directive%%[[:space:]]*}"
+    name="${raw_name,,}"
+    [[ "$name" =~ ^[a-z0-9-]+$ && -z "${seen[$name]:-}" ]] || return 1
+    seen[$name]=1
+    value="${directive#"$raw_name"}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    if [[ "$name" == "$required_name" ]]; then
+      [[ "$value" == "$required_value" ]] || return 1
+      found=1
+    fi
   done
-  return 1
+  [[ "$found" == 1 ]]
 }
 
 maintenance_schedule_state="$(gp_maintenance_schedule_state "$app_dir" "$node")" || maintenance_schedule_state=invalid
@@ -167,8 +181,9 @@ if curl --fail --silent --show-error --max-time 15 --dump-header "$headers_file"
   if grep -Eqi '^Strict-Transport-Security:[[:space:]]*max-age=31536000;[[:space:]]*includeSubDomains[[:space:]]*$' "$headers_file"; then check_ok "HSTS" "max-age=31536000; includeSubDomains"; else check_fail "HSTS" "Header fehlt oder ist falsch"; fi
   csp_header="$(grep -Eim1 '^Content-Security-Policy:' "$headers_file" || true)"
   csp_value="${csp_header#*:}"
-  if csp_has_exact_directive "$csp_value" "object-src 'none'" \
-    && csp_has_exact_directive "$csp_value" "base-uri 'self'" \
+  if [[ "$(grep -Eic '^Content-Security-Policy:' "$headers_file" || true)" == 1 ]] \
+    && csp_has_exact_directive "$csp_value" "object-src 'none'" \
+    && csp_has_exact_directive "$csp_value" "base-uri 'none'" \
     && csp_has_exact_directive "$csp_value" "form-action 'self'" \
     && csp_has_exact_directive "$csp_value" "frame-ancestors 'none'"; then
     check_ok "Content-Security-Policy" "kritische Direktiven gesetzt"
@@ -228,64 +243,6 @@ if [[ "$database_provider" == postgresql ]]; then
     check_fail 'Backup-Aktualitaet' 'gemeinsamer PostgreSQL-Sicherungsstand nicht bestaetigt'
     check_fail 'PostgreSQL-Sicherungspaar' 'Pruefung fehlgeschlagen oder Sicherung zu alt'
   fi
-else
-database_label="SQLite quick_check"
-if [[ "${short_checks:-0}" == 1 ]]; then database_label="SQLite Lesetest"; fi
-database_check="$(NODE_NO_WARNINGS=1 "$node" - "$database" "${short_checks:-0}" <<'NODE' 2>&1
-const { DatabaseSync } = require("node:sqlite");
-const db = new DatabaseSync(process.argv[2], { readOnly: true });
-try {
-  db.exec("PRAGMA busy_timeout=3000");
-  if (process.argv[3] === "1") {
-    if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_migrations'").get()) throw new Error("SCHEMA_UNAVAILABLE");
-    db.prepare("SELECT id FROM schema_migrations LIMIT 1").all();
-  } else {
-    const result = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
-    if (result.length !== 1 || result[0] !== "ok") throw new Error(result.join("; "));
-    if (db.prepare("PRAGMA foreign_key_check").all().length) throw new Error("FOREIGN_KEY_CHECK_FAILED");
-  }
-  process.stdout.write("ok");
-} finally { db.close(); }
-NODE
-)" || true
-if [[ "$database_check" == "ok" ]]; then check_ok "$database_label" "ok"; else check_fail "$database_label" "fehlgeschlagen"; fi
-
-backup_check_label="Backup DB-/Dokumentkopplung"
-if [[ "${short_checks:-0}" == 1 ]]; then backup_check_label="Backup DB-/Dokumentbeleg"; fi
-latest_marker="$(find "$backup_dir" -maxdepth 1 -type f -name 'dienstplan-*.complete.json' -printf '%T@ %p\n' | sort --numeric-sort --reverse | head --lines 1 | cut --delimiter=' ' --fields=2-)"
-if [[ -n "$latest_marker" ]]; then
-  latest_snapshot="$(basename -- "$latest_marker" .complete.json)"
-  latest_backup="$backup_dir/$latest_snapshot.db"
-  paired_amu="$backup_dir/$latest_snapshot.amu"
-  age_seconds=$(( $(date +%s) - $(stat --format='%Y' -- "$latest_marker") ))
-  if (( age_seconds < -300 )); then
-    check_fail "Backup-Aktualitaet" "Zeitstempel liegt unplausibel in der Zukunft"
-  elif (( age_seconds <= maximum_backup_age_hours * 3600 )); then
-    (( age_seconds < 0 )) && age_seconds=0
-    check_ok "Backup-Aktualitaet" "$(basename -- "$latest_backup"), $((age_seconds / 3600))h alt"
-  else
-    check_fail "Backup-Aktualitaet" "aelter als ${maximum_backup_age_hours}h"
-  fi
-  verifier="$app_dir/server-tools/linux/lib/verify-backup.js"
-  amu_module="$app_dir/lib/amu-storage.js"
-  if [[ "${short_checks:-0}" == 1 ]]; then
-    metadata_verifier="$app_dir/server-tools/linux/lib/backup-metadata.js"
-    if [[ -f "$metadata_verifier" && ! -L "$metadata_verifier" ]] \
-      && "$node" "$metadata_verifier" "$latest_backup" "$paired_amu" "$latest_marker" >/dev/null; then
-      check_ok "$backup_check_label" "Beleg, Manifest und Dateigroessen stimmen; vollstaendige Inhaltspruefung im Nachtlauf"
-    else
-      check_fail "$backup_check_label" "Belegpruefung fehlgeschlagen"
-    fi
-  elif [[ -f "$verifier" && -f "$amu_module" && -f "$latest_backup" && -d "$paired_amu" ]] \
-    && "$node" "$verifier" "$latest_backup" "$paired_amu" "$amu_module" "$latest_marker" >/dev/null; then
-    check_ok "Backup DB-/Dokumentkopplung" "Manifest, Hashes und Referenzen stimmen"
-  else
-    check_fail "Backup DB-/Dokumentkopplung" "Integritaetspruefung fehlgeschlagen"
-  fi
-else
-  check_fail "Backup-Aktualitaet" "kein lokaler Sicherungspunkt vorhanden"
-  check_fail "$backup_check_label" "kein gekoppelter Sicherungspunkt vorhanden"
-fi
 
 fi
 

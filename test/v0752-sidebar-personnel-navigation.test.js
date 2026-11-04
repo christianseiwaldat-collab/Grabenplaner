@@ -65,7 +65,7 @@ test("v0.75.2 Navigation: Personal-Unterseiten sind aufklappbar, adressierbar un
   const groups = between(app, "function navigationGroups()", "function setNavigationCurrent");
   assert.match(groups, /personnelAdministration:\s*\{\s*toggle:\s*elements\.personnelAdministrationToggle,\s*children:\s*elements\.personnelAdministrationNavChildren\s*\}/);
   const contextualNavigation = between(app, "function renderContextNavigation()", "function renderHeader()");
-  assert.match(contextualNavigation, /\["personnelAdministration", "requests", "timeTracking"\]\.includes\(state\.currentView\)/);
+  assert.match(contextualNavigation, /activePath\.includes\("personnelAdministration"\)/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "dashboard"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "employees"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "positions"/);

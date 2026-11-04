@@ -1,4 +1,7 @@
 "use strict";
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -19,11 +22,11 @@ const MANAGER = "youth-completion-manager";
 const WEEK = "2032-07-05";
 let server, baseUrl, admin, manager, locationId, schoolId;
 function session(employeeNumber, role) {
-  const token = crypto.randomBytes(32).toString("hex"), csrf = crypto.randomBytes(24).toString("hex");
+  const token = crypto.randomBytes(32).toString("hex"), csrf = sessionCsrf(token);
   db.prepare(`INSERT INTO portal_users (employee_number,password_hash,role,active,must_change_password,password_changed_at)
     VALUES (?,'test-only',?,1,0,CURRENT_TIMESTAMP)`).run(employeeNumber, role);
-  db.prepare(`INSERT INTO portal_sessions (id,employee_number,token_hash,expires_at)
-    VALUES (?,?,?,'2099-12-31T23:59:59.000Z')`).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
+  db.prepare(`INSERT INTO portal_sessions (id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?,?,?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))`).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }
 async function request(route, { method = "GET", body, auth = admin } = {}) {
@@ -65,7 +68,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -143,11 +146,16 @@ test("school evidence survives SQLite CRUD; empty travel remains unknown; mutati
 });
 
 test("editing school facts recalculates the present and future plan and preserves an immutable prior receipt", async () => {
+  const idsBeforeFuture = new Set(db.prepare("SELECT id FROM work_rule_evaluation_runs").all().map(row => row.id));
   const future = await request("/api/shifts", { method: "POST", body: {
     employeeNumber: YOUTH, locationId, departmentId: "", date: "2032-07-12", startTime: "09:00", endTime: "12:00", area: "synthetic", note: "",
   } });
   assert.equal(future.status, 201, JSON.stringify(future.payload));
-  const previous = db.prepare("SELECT id,input_sha256,result_json FROM work_rule_evaluation_runs ORDER BY rowid DESC LIMIT 1").get();
+  const futureReceipts = db.prepare("SELECT id,input_sha256,result_json FROM work_rule_evaluation_runs WHERE period_from=?")
+    .all("2032-07-12").filter(row => !idsBeforeFuture.has(row.id));
+  assert.equal(futureReceipts.length, 1, "The future shift must create its own evaluation receipt.");
+  const previous = futureReceipts[0];
+  const idsBeforeUpdate = new Set(db.prepare("SELECT id FROM work_rule_evaluation_runs").all().map(row => row.id));
   const updated = await request(`/api/week-options/${schoolId}`, { method: "PUT", body: option({
     vocationalSchool: details({ endTime: "12:00", lunchMinutes: 0, travelMinutes: 30 }), endTime: "12:00",
   }) });
@@ -156,15 +164,21 @@ test("editing school facts recalculates the present and future plan and preserve
   assert.deepEqual(db.prepare("SELECT id,input_sha256,result_json FROM work_rule_evaluation_runs WHERE id=?").get(previous.id), previous);
   const findings = (await schedule()).workRuleAssessment.findings;
   assert.ok(!findings.some(entry => entry.employeeNumber === YOUTH && entry.ruleId === "at.kjbg.school.eight-hours"));
-  const receipt = JSON.parse(db.prepare("SELECT result_json FROM work_rule_evaluation_runs WHERE period_from=? ORDER BY rowid DESC LIMIT 1").get(WEEK).result_json);
+  // Receipt IDs are UUIDs in PostgreSQL; their order is not insertion order.
+  // Bind this assertion to the receipts created by this exact school edit.
+  const editedReceipts = db.prepare("SELECT id,result_json FROM work_rule_evaluation_runs WHERE period_from=?")
+    .all(WEEK).filter(row => !idsBeforeUpdate.has(row.id));
+  assert.equal(editedReceipts.length, 1, "The school edit must create one current-week receipt.");
+  const receipt = JSON.parse(editedReceipts[0].result_json);
   const daily = receipt.employeeResults.find(entry => entry.employeeNumber === YOUTH).result.findings
     .find(entry => entry.ruleId === "at.kjbg.school.daily-combination" && entry.scope.date === "2032-07-06");
+  assert.ok(daily, "The receipt from this school edit must contain the youth's daily school-combination result.");
   assert.equal(daily.state, "pass");
 });
 
 test("receipt failure rolls back school creates, edits, and deletion atomically", async () => {
   const original = db.prepare("SELECT * FROM week_options WHERE id=?").get(schoolId);
-  db.exec(`CREATE TRIGGER youth_receipt_failure BEFORE INSERT ON work_rule_evaluation_runs BEGIN SELECT RAISE(ABORT,'synthetic receipt failure'); END`);
+  installFixtureTrigger(db, `CREATE TRIGGER test_youth_receipt_failure BEFORE INSERT ON work_rule_evaluation_runs BEGIN SELECT RAISE(ABORT,'synthetic receipt failure'); END`);
   try {
     const created = await request("/api/week-options", { method: "POST", body: option({ dateFrom: "2032-07-07", dateTo: "2032-07-07" }) });
     assert.ok(created.status >= 500, JSON.stringify(created.payload));
@@ -175,7 +189,7 @@ test("receipt failure rolls back school creates, edits, and deletion atomically"
     const deleted = await request(`/api/week-options/${schoolId}`, { method: "DELETE" });
     assert.ok(deleted.status >= 500, JSON.stringify(deleted.payload));
     assert.deepEqual(db.prepare("SELECT * FROM week_options WHERE id=?").get(schoolId), original);
-  } finally { db.exec("DROP TRIGGER youth_receipt_failure"); }
+  } finally { dropFixtureTrigger(db, "test_youth_receipt_failure"); }
 });
 
 test("Legacy BS stays all-day/null and block courses force all-day; deletion removes current school facts", async () => {

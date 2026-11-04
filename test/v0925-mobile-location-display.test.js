@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -92,11 +94,11 @@ function ensurePortalUser(employeeNumber, role) {
 function createSession(employeeNumber, role) {
   ensurePortalUser(employeeNumber, role);
   const token = `v0925-location-${employeeNumber}-${crypto.randomBytes(24).toString("hex")}`;
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     cookie: `grabenplaner_session=${encodeURIComponent(token)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
@@ -124,7 +126,7 @@ test.before(async () => {
   positionId = db.prepare("SELECT id FROM positions ORDER BY sort_order, id LIMIT 1").get().id;
   const template = db.prepare("SELECT day_settings_json FROM locations ORDER BY id LIMIT 1").get();
   for (const [id, name] of [[LOCATION, "Mobile Stammfiliale"], [REMOTE_LOCATION, "Mobile Fremdfiliale"]]) {
-    db.prepare(`
+    prepareLocationFixture(db, `
       INSERT OR REPLACE INTO locations
         (id, name, min_staff, day_settings_json, time_tracking_enabled, time_tracking_access_mode,
          time_tracking_allowed_networks, time_tracking_variance_minutes, active)
@@ -171,7 +173,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

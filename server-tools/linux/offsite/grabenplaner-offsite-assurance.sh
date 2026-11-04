@@ -52,8 +52,21 @@ else
   install -m 0600 -o root -g root /dev/null "$maintenance_lock"
 fi
 exec 6<>"$maintenance_lock"
-flock --wait 14400 6 \
-  || offsite_die "Eine laufende Grabenplaner-Wartung konnte nicht innerhalb des Wartungsfensters abgeschlossen werden."
+if ! flock --nonblock 6; then
+  maintenance_wait=14400
+  if [[ "$trigger" == scheduled-nightly ]]; then
+    deferred_wait="$("$OFFSITE_NODE" "$SCRIPT_DIR/lib/deploy-deferral.js" wait-seconds)" \
+      || offsite_die "Der Nachtlaufaufschub konnte nicht sicher geprueft werden."
+    if [[ "$deferred_wait" != normal ]]; then
+      [[ "$deferred_wait" =~ ^[0-9]+$ ]] && (( deferred_wait <= 10800 )) \
+        || offsite_die "Der Nachtlaufaufschub besitzt keine gueltige Frist."
+      (( deferred_wait > 0 )) || offsite_die "DEPLOY_NIGHTLY_DEADLINE_EXCEEDED: Der Aufschub des Nachtlaufs hat drei Stunden ueberschritten."
+      maintenance_wait="$deferred_wait"
+    fi
+  fi
+  flock --wait "$maintenance_wait" 6 \
+    || offsite_die "DEPLOY_NIGHTLY_MAINTENANCE_TIMEOUT: Die Wartung wurde nicht innerhalb der freigegebenen Frist abgeschlossen."
+fi
 offsite_acquire_assurance_lock
 offsite_assert_runtime_binaries
 

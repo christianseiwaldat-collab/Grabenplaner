@@ -14,12 +14,13 @@ function fixture() {
   const calls = [], errors = [], renders = [];
   const state = { data: {}, vacationData: { year: 2032 }, locations: [{ id: "18" }], weekStart: "2032-07-05", vacationYear: 2032,
     locationId: "18", departmentId: "", portalSession: { user: { role: "developer" } }, allEmployees: ["kept"], brandingKits: ["kept"] };
-  const f = vm.createContext({ state, AbortController,
+  const f = vm.createContext({ state, AbortController, emmaContactSettings: null,
     elements:{settingsView:{contains:()=>true}},document:{getElementById:()=>null},settingsDraftGuard:{clear(){},snapshot:()=>new Map()},
     api(url, options = {}) { return new Promise((resolve, reject) => calls.push({ url, options, resolve, reject })); },
     contextQuery: department => `&location=${state.locationId}${department && state.departmentId ? `&departmentId=${state.departmentId}` : ""}`,
     showToast: message => errors.push(message), render: () => renders.push({ week: state.data.weekStart, year: state.vacationData?.year }),
     setDefaultContext() {}, restoreRememberedOverallContext() {},
+    syncXoffiImport() {},
     applyRequestedView(options) { assert.equal(options.loadContext, false); state.currentView = "planning"; state.locationId = "05"; },
     canReadManagerRequests: () => false, canReadLoanManagement: () => false, canManageBranchOrders: () => false,
   });
@@ -30,7 +31,7 @@ const schedule = (week = "2032-07-05") => ({ weekStart: week, settings: { allow_
 
 async function resolveInitialContext(calls) {
   calls[0].resolve([{ id: "18" }]);
-  calls[1].resolve({ installationFeatures: {} });
+  calls[1].resolve({ portalEnabled: false, installationFeatures: {} });
   await new Promise(setImmediate);
 }
 

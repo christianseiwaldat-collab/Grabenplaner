@@ -37,7 +37,7 @@ async function removeSource(f,source){
  assert.equal(result.deleted,true);return result;
 }
 async function fixture(t,{kind='trade',values={},counts={},allowApply=true}={}) {
-  const app=openSqliteApplicationPersistence({databasePath:':memory:',catalog:SQLITE_APPLICATION_CATALOG});
+  const app=openSqliteApplicationPersistence({databasePath:':memory:',catalog:[...SQLITE_APPLICATION_CATALOG,...require('../lib/persistence/catalogs/data-import-issues-catalog').IMPORT_ISSUES_CATALOG]});
   ensureSqliteDataImportRuntimeSchema(app.database);ensureSqliteDataImportRuntimeSchema(app.database);
   const state={session:base(),failAfter:0,messages:0},getSession=async()=>state.session,keyVault=vault();
   const readSource=options=>readTradeFotoFullSource({...options,send:async message=>{
@@ -89,6 +89,47 @@ test('unapplied source deletion removes rows, exclusive payloads and source whil
  for(const name of ['data_import_sources','data_import_runs','data_import_rows','data_import_row_payload_refs','data_import_events','data_import_payload_blocks'])assert.equal(f.database.prepare('SELECT COUNT(*) AS n FROM '+name).get().n,0,name);
 });
 
+test('deleting an unchanged stock source removes only its unpublished membership and releases the prior undo',async t=>{
+ const name='ARTIKEL_FILIALEN',ean='0000000000042';
+ const stock={...Object.fromEntries(H.tableFor('trade',name).columns.map(c=>[c.name,null])),EAN:ean,FilialID:18,FBestand:2};
+ const f=await fixture(t,{values:{ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:ean})],
+  FILIALEN:[rawMaster('FILIALEN',{FilialID:'18'})],[name]:[stock]}});
+ let first=await f.upload();first=await f.finish(first,'review');first=await f.finish(first,'apply');
+ assert.equal(first.status,'applied');const prior=first.tables.find(table=>table.name===name).run;
+ const header=id=>f.database.prepare('SELECT * FROM import_history_snapshots WHERE run_id=?').get(id);
+ const members=id=>f.database.prepare('SELECT * FROM import_history_snapshot_members WHERE run_id=? ORDER BY row_number').all(id);
+ const versions=()=>f.database.prepare('SELECT * FROM import_history_versions ORDER BY record_id,revision').all();
+ const published={header:header(prior.id),members:members(prior.id),versions:versions()};
+ assert.equal(published.header.status,'published');assert.equal(published.members.length,1);assert.equal(published.versions.length,1);
+ const buffer=sourceBuffer();buffer[4000]=43;
+ let second=await f.upload(buffer);second=await f.finish(second,'review');
+ assert.equal(second.status,'ready');const reused=second.tables.find(table=>table.name===name).run;
+ assert.equal(reused.counts.unchanged,1);assert.equal(reused.counts.applied??0,0);
+ assert.equal(reused.counts.create??0,0);assert.equal(reused.counts.update??0,0);
+ assert.equal(header(reused.id).status,'building');assert.equal(members(reused.id).length,1);
+ assert.equal(members(reused.id)[0].record_id,published.members[0].record_id);
+ assert.equal(members(reused.id)[0].revision,published.members[0].revision);
+ const blocked=await f.runtime.sourceOperation(f.getSession,first.id,'undo-preview',{runId:prior.id});
+ assert.deepEqual(blocked.rows.map(row=>[row.canUndo,row.issue]),[[false,'IMPORT_UNDO_DEPENDENCIES']]);
+ f.state.session={...base(),employeeNumber:'synthetic-2',accountId:'personal-2'};
+ for(const action of ['delete-preview','delete'])await assert.rejects(
+  f.runtime.sourceOperation(f.getSession,second.id,action,{expectedRevision:second.revision}),code('IMPORT_SOURCE_NOT_FOUND'));
+ f.state.session=base();
+ for(const action of ['delete-preview','delete'])await assert.rejects(
+  f.runtime.sourceOperation(f.getSession,first.id,action,{expectedRevision:first.revision}),code('IMPORT_DELETE_ALREADY_APPLIED'));
+ assert.equal((await f.runtime.sourceOperation(f.getSession,second.id,'delete-preview',{expectedRevision:second.revision})).canDelete,true);
+ f.reload();await removeSource(f,second);
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,second.id,'read'),code('IMPORT_SOURCE_NOT_FOUND'));
+ assert.equal(header(reused.id),undefined);assert.deepEqual(members(reused.id),[]);
+ assert.equal(f.database.prepare('SELECT COUNT(*) n FROM data_import_runs WHERE id=?').get(reused.id).n,0);
+ assert.deepEqual({header:header(prior.id),members:members(prior.id),versions:versions()},published);
+ const allowed=await f.runtime.sourceOperation(f.getSession,first.id,'undo-preview',{runId:prior.id});
+ assert.deepEqual(allowed.rows.map(row=>[row.canUndo,row.issue]),[[true,'']]);
+ first=await f.finish(first,'undo');assert.equal(first.status,'reverted');
+ assert.equal(header(prior.id).status,'withdrawn');assert.deepEqual(members(prior.id),[]);
+ assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_history_records').get().n,0);
+});
+
 test('server import authorization uses its independent reader inside deletion transactions',async t=>{
  const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
  const f=await fixture(t),authorization=await fixture(t);
@@ -115,6 +156,18 @@ test('server import authorization uses its independent reader inside deletion tr
  assert.equal(result.deleted,true);
  f.state.session.permissions=[];
  await assert.rejects(f.runtime.sourceOperation(get,source.id,'delete-preview',{expectedRevision:result.revision||1}),code('IMPORT_FORBIDDEN'));
+});
+
+test('retired source checkpoints remain readable and never expose obsolete apply, rows or undo actions',async t=>{
+ const f=await fixture(t);let source=await f.upload();source=await f.finish(source,'review');source=await f.finish(source,'apply');
+ const protection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+ try{
+  const row=f.database.prepare('SELECT * FROM data_import_sources WHERE id=?').get(source.id),ctx=['source',row.scope_id,row.owner_id,row.id,row.revision];
+  const data=protection.open(row.payload,ctx);data.retirement={successorId:'a'.repeat(64),complete:true};data.status='purged';
+  f.database.prepare('UPDATE data_import_sources SET payload=? WHERE id=?').run(protection.seal(data,ctx),source.id);
+ }finally{protection.destroy();}
+ const view=await f.runtime.sourceOperation(f.getSession,source.id,'read');assert.equal(view.status,'purged');assert.equal(view.activationEnabled,false);
+ for(const action of ['apply','undo','rows','events','delete-preview'])await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,action,{expectedRevision:view.revision}),code('IMPORT_RUN_PURGED'));
 });
 
 test('source deletion is owner-authorized, resumable and refuses even a partially applied source',async t=>{
@@ -431,6 +484,167 @@ test('Q01: managed source persists accepted counts and audit across restart with
   assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,0);
 });
 
+function runtimeCountProof(name,declaredRows,expectedRows,extra={}) {
+  const profile=definitions('trade').find(table=>table.name===name).profile;
+  return require('../lib/data-import-source-tolerance').defineDataImportSourceTolerance({id:'synthetic-late-runtime-'+name.toLowerCase(),recordedAt:TIME,
+    approvalReference:'synthetic-explicit-approval',reason:'Independent synthetic source verification',evidenceReference:'synthetic-evidence',sourceSystem:profile.sourceSystem,
+    sourceTable:name,profileHash:profile.fingerprint,sourceInstance:'tradefoto-trade',schemaSha256:profile.schemaSha256,
+    fileSha256:crypto.createHash('sha256').update(sourceBuffer()).digest('hex'),declaredRows,expectedRows,...extra});
+}
+test('late source approval requires explicit authorized action and survives stale cache, restart and revoked registry',async t=>{
+  const f=await fixture(t,{values:{KUNDEN:[rawMaster('KUNDEN',{KUND_NR:'verified-customer'})]},counts:{KUNDEN:2}});
+  let source=await f.upload();source=await f.finish(source,'review');assert.equal(source.status,'needs_review');
+  const tableId=source.tables.find(t=>t.name==='KUNDEN').run.id;
+  const manifest=f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(tableId).manifest;
+  const proof=runtimeCountProof('KUNDEN',2,1);f.options.sourceTolerances=[proof];f.reload();
+  let read=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+  assert.deepEqual(read.tables.find(t=>t.name==='KUNDEN').run.availableSourceTolerances,[proof]);
+  assert.ok(read.tables.find(t=>t.name==='KUNDEN').run.gates.includes('SOURCE_ROW_COUNT_MISMATCH'));
+  const approve=()=>f.runtime.sourceOperation(f.getSession,source.id,'approve-counts',{expectedRevision:source.revision});
+  for(const permission of [P.APPLY,P.PREPARE]) {
+    f.state.session.permissions=f.state.session.permissions.filter(p=>p!==permission);
+    await assert.rejects(approve(),code('IMPORT_FORBIDDEN'));f.state.session=base();
+  }
+  await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'approve-counts',{expectedRevision:source.revision+1}),code('IMPORT_REVISION_CONFLICT'));
+  const staleCore=f.database.prepare('SELECT * FROM data_import_sources WHERE id=?').get(source.id);
+  source=await approve();const approvedRevision=source.revision;
+  assert.deepEqual(source.tables.find(t=>t.name==='KUNDEN').run.gates,[]);assert.equal(source.tables.find(t=>t.name==='KUNDEN').run.id,tableId);
+  assert.equal(f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(tableId).manifest,manifest);
+  assert.equal((await approve()).revision,approvedRevision);
+  // Simulate a lost source-cache save: the authoritative receipt is already
+  // committed in Sales and is recovered without rereading the Access file.
+  f.database.prepare('UPDATE data_import_sources SET revision=?,payload=? WHERE id=?').run(staleCore.revision,staleCore.payload,source.id);
+  f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+  assert.deepEqual(source.tables.find(t=>t.name==='KUNDEN').run.gates,[]);
+  assert.deepEqual(source.tables.find(t=>t.name==='KUNDEN').run.acceptedDeviations,[proof]);
+  f.options.sourceTolerances=[];f.reload();
+  read=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+  assert.ok(read.tables.find(t=>t.name==='KUNDEN').run.gates.includes('SOURCE_TOLERANCE_UNAVAILABLE'));
+  await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'apply',{expectedRevision:source.revision}),code('IMPORT_DECISION_GATE'));
+  assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,0);
+  f.options.sourceTolerances=[proof];f.reload();source=await f.finish(source,'apply');
+  assert.equal(source.status,'applied');assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,1);
+  f.database.prepare('UPDATE data_import_sources SET revision=?,payload=? WHERE id=?').run(staleCore.revision,staleCore.payload,source.id);
+  f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+  const recovered=source.tables.find(t=>t.name==='KUNDEN').run;
+  assert.equal(recovered.status,'applied');assert.deepEqual(recovered.counts,{applied:1});
+  source=await f.finish(source,'apply');assert.equal(source.status,'applied');
+  assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,1);
+  const events=await f.runtime.sourceOperation(f.getSession,source.id,'events',{runId:tableId});
+  assert.equal(events.filter(e=>e.action==='import.source-tolerance.accepted:'+proof.fingerprint).length,1);
+});
+
+test('source count approval preflights every mismatch and preserves row quarantine after a verified count receipt',async t=>{
+  const f=await fixture(t,{values:{KUNDEN:[rawMaster('KUNDEN',{KUND_NR:'verified-customer'})],ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'123'})]},counts:{KUNDEN:2,ARTIKEL_STAMM:2}});
+  let source=await f.upload();source=await f.finish(source,'review');
+  f.options.sourceTolerances=[runtimeCountProof('KUNDEN',2,1)];f.reload();
+  await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'approve-counts',{expectedRevision:source.revision}),code('IMPORT_TOLERANCE_UNAVAILABLE'));
+  assert.equal(f.database.prepare("SELECT COUNT(*) n FROM data_import_events WHERE substr(action,1,33)='import.source-tolerance.accepted:'").get().n,0);
+  f.options.sourceTolerances.push(runtimeCountProof('ARTIKEL_STAMM',2,1));f.reload();
+  source=await f.runtime.sourceOperation(f.getSession,source.id,'approve-counts',{expectedRevision:source.revision});
+  assert.equal(source.tables.flatMap(t=>t.run.sourceToleranceReceipts||[]).length,2);
+  const invalid=await fixture(t,{values:{KUNDEN:[rawMaster('KUNDEN',{})]},counts:{KUNDEN:2}});
+  let bad=await invalid.upload();bad=await invalid.finish(bad,'review');
+  invalid.options.sourceTolerances=[runtimeCountProof('KUNDEN',2,1)];invalid.reload();
+  assert.ok(bad.tables.find(t=>t.name==='KUNDEN').run.counts.invalid);
+  bad=await invalid.runtime.sourceOperation(invalid.getSession,bad.id,'approve-counts',{expectedRevision:bad.revision});
+  assert.equal(bad.tables.find(t=>t.name==='KUNDEN').run.counts.invalid,1);
+  assert.equal(bad.tables.flatMap(t=>t.run.sourceToleranceReceipts||[]).length,1);
+  assert.equal(invalid.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,0);
+});
+
+test('Access partial takeover retains a bad second EAN and completes the valid article catalog across restart',async t=>{
+ const ean='0000000000042',values={ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:ean,Artikelbezeichnung:'Synthetic retained article',MWST:1,'Änderungsdatum':new Date('2026-09-03T13:00:00Z'),Verkaufspreis:12,eNvk:10})],
+  ARTIKEL_ZWEITEAN:[rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:'4006381333931',Rang:1}),rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:null,Rang:2})]};
+ const f=await fixture(t,{values});
+ f.database.exec('CREATE TABLE audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT NOT NULL,action TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id TEXT NOT NULL,detail TEXT NOT NULL,created_at TEXT NOT NULL)');
+ require('../lib/persistence/sqlite/operations/sales-article-catalog-schema').ensureSqliteSalesArticleCatalogSchema(f.database);
+ f.options.syncArticleCatalog=true;f.options.sharedPayloads=true;f.reload();
+ f.state.session.permissions.push('sales:articles:access','sales:articles:read','sales:articles:import');
+ let source=await f.upload();source=await f.finish(source,'review');assert.equal(source.status,'needs_review');
+ const runId=source.tables.find(t=>t.name==='ARTIKEL_ZWEITEAN').run.id;
+ const issues=await f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId});
+ assert.equal(issues.rows.length,1);assert.equal(issues.rows[0].rowNumber,2);assert.equal(issues.rows[0].impact,'optional_identifier');
+ assert.equal(issues.rows[0].article.Artikelbezeichnung,'Synthetic retained article');
+ assert.equal(issues.rows[0].article.articleNumber,'000042');
+ const row=()=>f.database.prepare("SELECT state,issue,payload FROM data_import_rows WHERE run_id=? AND state='invalid'").get(runId),before=row();assert.ok(before);
+ f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');source=await f.finish(source,'apply');
+ assert.equal(source.status,'applied');assert.equal(source.catalog.complete,true);assert.equal(source.catalog.changed,1);
+ assert.equal(source.tables.find(t=>t.name==='ARTIKEL_ZWEITEAN').run.counts.invalid,1);assert.deepEqual(row(),before);
+ const catalog=require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.provider);
+ const article=await catalog.getByArticleNumber('000042');assert.equal(article.description,'Synthetic retained article');
+ assert.ok(article.identifiers.some(i=>i.canonicalGtin14==='04006381333931'));
+ const count=f.database.prepare('SELECT count(*) n FROM import_master_records').get().n;
+ f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');source=await f.finish(source,'apply');
+ assert.equal(source.status,'applied');assert.equal(f.database.prepare('SELECT count(*) n FROM import_master_records').get().n,count);assert.deepEqual(row(),before);
+});
+
+test('issue preview shows same-file camera value before apply, pages only problems and never exposes unrelated source fields',async t=>{
+ const ean='0000000000042';
+ const values={ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:ean,Artikelbezeichnung:'Synthetic camera',Verkaufspreis:5000,Filialbestand:2,Auslaufartikel:false,Bemerkung:'private memo'})],
+  ARTIKEL_ZWEITEAN:[...Array.from({length:205},(_,i)=>rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:String(i),Rang:i})),
+   rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:null,Rang:206}),rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:'repeated',Rang:207}),rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:'repeated',Rang:208})]};
+ const f=await fixture(t,{values});let source=await f.upload();source=await f.finish(source,'review');
+ const runId=source.tables.find(t=>t.name==='ARTIKEL_ZWEITEAN').run.id;
+ const before=f.database.prepare('SELECT count(*) n FROM import_master_records').get().n;
+ const first=await f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId,limit:1});
+ assert.equal(first.rows[0].rowNumber,206);assert.equal(first.rows[0].state,'invalid');assert.deepEqual(first.next,{after:206});
+ assert.equal(first.rows[0].article.Verkaufspreis,'5000');assert.equal(first.rows[0].article.Filialbestand,'2');assert.equal(first.rows[0].article.Auslaufartikel,'false');
+ assert.deepEqual(first.rows[0].invalidFields.map(r=>r.field),['ZweitEAN']);assert.doesNotMatch(JSON.stringify(first),/private memo|Bemerkung/);
+ const last=await f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId,after:206});
+ assert.deepEqual(last.rows.map(r=>[r.rowNumber,r.state]),[[207,'conflict'],[208,'conflict']]);assert.equal(last.next,null);
+ assert.equal(f.database.prepare('SELECT count(*) n FROM import_master_records').get().n,before);
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId,limit:51}),code('IMPORT_INTEGER_INVALID'));
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId:'f'.repeat(64)}),code('IMPORT_RUN_NOT_FOUND'));
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId,fields:['Bemerkung']}),code('IMPORT_SHAPE_INVALID'));
+ const session=f.state.session;
+ f.state.session={...session,permissions:session.permissions.filter(p=>p!==P.PREPARE)};
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId}),code('IMPORT_FORBIDDEN'));
+ f.state.session={...session,employeeNumber:'synthetic-other',accountId:'other'};
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId}),code('IMPORT_SOURCE_NOT_FOUND'));
+ f.state.session=session;
+ let sessionReads=0;
+ await assert.rejects(f.runtime.sourceOperation(async()=>++sessionReads<=2?session:{...session,permissions:session.permissions.filter(p=>p!==P.PREPARE)},source.id,'issues',{runId}),code('IMPORT_FORBIDDEN'));
+ f.database.prepare("UPDATE data_import_rows SET payload='tampered' WHERE run_id=? AND row_number=206").run(runId);
+ await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'issues',{runId}),code('IMPORT_PROTECTED_PAYLOAD_INVALID'));
+});
+
+test('Bestell partial takeover keeps an invalid repair row while importing its valid neighbour',async t=>{
+ const B=require('../lib/tradefoto-bestell/profiles'),raw=extra=>({...Object.fromEntries(B.tableFor('Reparatur').columns.map(c=>[c.name,null])),...extra});
+ const f=await fixture(t,{kind:'bestell',values:{Reparatur:[raw({ReparaturNr:17,FilialId:'018',Anlegedatum:new Date('2026-01-03T09:15:00Z'),AName:'Synthetic camera',erledigt:true}),raw({ReparaturNr:null,FilialId:'018'})]}});
+ let source=await f.upload();source=await f.finish(source,'review');assert.equal(source.status,'needs_review');source=await f.finish(source,'apply');
+ assert.equal(source.status,'applied');assert.equal(f.database.prepare('SELECT count(*) n FROM import_history_records').get().n,1);
+ const table=source.tables.find(t=>t.name==='Reparatur');assert.equal(table.run.counts.applied,1);assert.equal(table.run.counts.invalid,1);
+ const rows=await f.runtime.sourceOperation(f.getSession,source.id,'rows',{runId:table.run.id});assert.deepEqual(rows.rows.map(r=>r.state),['applied','invalid']);
+});
+
+test('catalog continuation quarantines an alias whose parent article was held back',async()=>{
+ const article=rawMaster('ARTIKEL_STAMM',{EAN:'0000000000042',Artikelbezeichnung:'Synthetic accepted article',MWST:1,'Änderungsdatum':'2026-09-03T13:00:00.000',Verkaufspreis:'12',eNvk:'10'});
+ const alias=rawMaster('ARTIKEL_ZWEITEAN',{EAN:'0000000000099',ZweitEAN:'4006381333931',Rang:1});
+ const sync=require('../lib/data-import-article-sync').createDataImportArticleSync();
+ const prepared=await sync.prepareSource({id:'a'.repeat(64),fileSha256:'b'.repeat(64),createdAt:TIME,tables:[{name:'ARTIKEL_STAMM',run:{id:'article-run'}},{name:'ARTIKEL_ZWEITEAN',run:{id:'alias-run'}}]},
+  async table=>({rows:table==='ARTIKEL_STAMM'?[article]:[alias],after:1,complete:true}),async()=>{});
+ assert.equal(prepared.quarantinedAliases,1);assert.equal(prepared.normalizedArticles.length,1,JSON.stringify(prepared.rows));
+ assert.equal(prepared.normalizedArticles[0].description,'Synthetic accepted article');
+});
+
+test('an incomplete stock snapshot is deferred without replacing the previous complete publication',async t=>{
+ const name='ARTIKEL_FILIALEN',ean='0000000000042';
+ const stock={...Object.fromEntries(H.tableFor('trade',name).columns.map(c=>[c.name,null])),EAN:ean,FilialID:18,FBestand:2};
+ const values={ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:ean})],FILIALEN:[rawMaster('FILIALEN',{FilialID:'18'})],[name]:[stock]};
+ const f=await fixture(t,{values});let first=await f.upload();first=await f.finish(first,'review');first=await f.finish(first,'apply');
+ const prior=first.tables.find(t=>t.name===name).run.id;
+ const header=id=>f.database.prepare('SELECT * FROM import_history_snapshots WHERE run_id=?').get(id);
+ const baseline=header(prior);assert.equal(baseline.status,'published');
+ values[name].push({...stock,EAN:null});const bytes=sourceBuffer();bytes[4000]=43;
+ let next=await f.upload(bytes);next=await f.finish(next,'review');next=await f.finish(next,'apply');
+ assert.equal(next.status,'applied');const deferred=next.tables.find(t=>t.name===name);
+ assert.equal(deferred.deferred,'INCOMPLETE_STOCK_SNAPSHOT');assert.equal(deferred.run.status,'needs_review');assert.equal(deferred.run.counts.invalid,1);
+ assert.deepEqual(header(prior),baseline);assert.equal(header(deferred.run.id).status,'withdrawn');
+ assert.equal(f.database.prepare('SELECT count(*) n FROM import_history_snapshot_members WHERE run_id=?').get(deferred.run.id).n,0);
+ f.reload();const reopened=await f.runtime.sourceOperation(f.getSession,next.id,'read');assert.equal(reopened.tables.find(t=>t.name===name).deferred,'INCOMPLETE_STOCK_SNAPSHOT');
+});
+
 test('Productive Block 1: rights are cumulative, personal and not granted by a role name',()=>{
   assert.equal(buildDataImportProjection(base()).prepare,true);
   for(const change of [{permissions:[]},{employeeNumber:null},{isEmployee:false},{mustChangePassword:true},{sessionKind:'organization'},
@@ -573,6 +787,43 @@ test('Productive Block 1: interrupted staging resumes the same source across run
   assert.equal(f.database.prepare('SELECT COUNT(*) n FROM data_import_rows').get().n,1);
   const count=f.database.prepare('SELECT COUNT(*) n FROM data_import_runs').get().n;
   await f.upload();assert.equal(f.database.prepare('SELECT COUNT(*) n FROM data_import_runs').get().n,count);
+});
+
+test('legacy branch-stock staging resumes its original v1 run while a new source selects v2',async t=>{
+ const name='ARTIKEL_FILIALEN',legacy=H.profilesFor('trade',name).find(profile=>profile.version===1);
+ const raw=extra=>({...Object.fromEntries(H.tableFor('trade',name).columns.map(c=>[c.name,null])),EAN:'0000000100430',FilialID:18,FBestand:2,...extra});
+ const rows=[raw({}),raw({EAN:'0000000100431'})], f=await fixture(t,{values:{[name]:rows}});
+ const source=await f.runtime.reserve(f.getSession,{buffer:sourceBuffer(),kind:'trade',fileName:'Synthetic.accdb'});
+ const protection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+ let legacyRun, originalManifest;
+ try {
+  const {createDataImportEngine}=require('../lib/data-import-engine');
+  const {createDataImportRepository}=require('../lib/persistence/repositories/data-import');
+  const actor={scopeId:'grabenplaner-main',ownerId:'synthetic-1'};
+  const engine=createDataImportEngine({repository:createDataImportRepository(f.provider),protection,profiles:[legacy],writers:{},getActor:()=>actor,authorize:()=>true,clock:()=>TIME});
+  legacyRun=await engine.start({profileHash:legacy.fingerprint,manifest:{sourceInstance:'tradefoto-trade',fileSha256:source.fileSha256,
+   schemaSha256:legacy.schemaSha256,expectedRows:rows.length,declaredRows:rows.length,snapshotAt:source.createdAt,gates:[]}});
+  legacyRun=await engine.stage(legacyRun.id,{expectedRevision:legacyRun.revision,startRow:1,
+   rows:[H.prepareTradeFotoHistoryRow('trade',name,rows[0],{profileHash:legacy.fingerprint,fileSha256:source.fileSha256,rowNumber:1})]});
+  originalManifest=f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(legacyRun.id).manifest;
+  const saved=f.database.prepare('SELECT * FROM data_import_sources WHERE id=?').get(source.id),context=['source',saved.scope_id,saved.owner_id,saved.id,saved.revision];
+  const data=protection.open(saved.payload,context);
+  data.tables=definitions('trade').map(def=>({name:def.name,profileHash:def.name===name?legacy.fingerprint:def.profile.fingerprint,
+   declaredRows:def.name===name?rows.length:0,run:def.name===name?legacyRun:null}));
+  f.database.prepare('UPDATE data_import_sources SET payload=? WHERE id=?').run(protection.seal(data,context),source.id);
+ } finally {protection.destroy();}
+ f.reload();const resumed=await f.upload(), table=resumed.tables.find(item=>item.name===name);
+ assert.equal(table.profileHash,legacy.fingerprint);assert.equal(table.run.id,legacyRun.id);assert.equal(table.run.receivedRows,2);
+ assert.equal(f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(legacyRun.id).manifest,originalManifest);
+ assert.equal(f.database.prepare('SELECT COUNT(*) n FROM data_import_rows WHERE run_id=?').get(legacyRun.id).n,2);
+ const decodedProtection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+ try {
+  const first=f.database.prepare('SELECT payload FROM data_import_rows WHERE run_id=? AND row_number=1').get(legacyRun.id);
+  const decoded=decodedProtection.open(first.payload,['row','grabenplaner-main',legacyRun.id,1]);
+  assert.equal(decoded.record.source._source_row,1);assert.equal(decoded.record.source._source_snapshot_sha256,source.fileSha256);
+ } finally {decodedProtection.destroy();}
+ const nextBytes=sourceBuffer();nextBytes[4000]=1;const next=await f.upload(nextBytes), nextTable=next.tables.find(item=>item.name===name);
+ assert.equal(nextTable.profileHash,H.profileFor('trade',name).fingerprint);assert.notEqual(nextTable.run.id,legacyRun.id);
 });
 test('maintenance persists an interrupted import, drains it, and resumes at the committed offset without duplicates',async t=>{
   const {createDataImportLifecycle}=require('../lib/data-import-lifecycle');

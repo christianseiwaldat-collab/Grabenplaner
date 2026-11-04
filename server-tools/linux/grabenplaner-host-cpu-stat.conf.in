@@ -1,0 +1,5 @@
+[Service]
+# The live host CPU counters remain readable while ProcSubset=pid and
+# ProtectProc=invisible keep the rest of the global proc interface hidden.
+# No recursive mount, writable access, helper process or capability is added.
+BindReadOnlyPaths=/proc/stat:/run/grabenplaner-host-cpu-stat:norbind

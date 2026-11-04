@@ -1,5 +1,8 @@
 "use strict";
 
+// Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
+// Other PostgreSQL and application assertions below still use current code.
+
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -28,7 +31,7 @@ test("standalone backup creates a verifiable committed pair on Windows-compatibl
     activeKeyId: "primary",
     scanner: async () => ({ available: true, clean: true, engine: "test" }),
   });
-  const { createPairedBackup, verifyStandaloneBackupPair } = require("../backup");
+  const { createPairedBackup, verifyStandaloneBackupPair } = require("../test-support/legacy-baseline").legacyRequire("backup.js");
   const { pruneCommittedBackups } = require("../lib/backup-commit");
   const database = new DatabaseSync(path.join(root, "source.db"));
   try {
@@ -107,7 +110,7 @@ test("Windows server backup rejects snapshots with missing protected loan or can
       "-",
       sourceDatabase,
       targetDatabase,
-      path.join(__dirname, "..", "lib", "database-lock.js"),
+      require("../test-support/legacy-baseline").legacyPath("lib/database-lock.js"),
       path.join(__dirname, "..", "lib", "amu-storage.js"),
       protectedRoot,
       protectedBackup,
@@ -138,7 +141,7 @@ test("Windows server backup rejects snapshots with missing protected loan or can
       "-",
       sourceDatabase,
       candidateTargetDatabase,
-      path.join(__dirname, "..", "lib", "database-lock.js"),
+      require("../test-support/legacy-baseline").legacyPath("lib/database-lock.js"),
       path.join(__dirname, "..", "lib", "amu-storage.js"),
       protectedRoot,
       candidateProtectedBackup,

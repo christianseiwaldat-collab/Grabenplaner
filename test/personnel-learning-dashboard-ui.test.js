@@ -31,7 +31,8 @@ test("Block 7: Verwaltung zeigt Schulungsstände und den professionellen Fähigk
     assertSingleId(adminHtml, id);
     assert.match(adminScript, new RegExp(`"${id}"`));
   }
-  assert.match(adminHtml, /Schulungsdashboard &amp; Fähigkeitsbaum/);
+  assert.match(adminHtml, /Lernen im Überblick/);
+  assert.match(adminHtml, /Kennzahlen im freigegebenen Bereich/);
   assert.match(adminScript, /\/api\/portal\/v1\/personnel-learning\/dashboard/);
   assert.match(adminScript, /data-personnel-learning-dashboard-progress/);
   assert.match(adminScript, /levelDefinitions\.map/);

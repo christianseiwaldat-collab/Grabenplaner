@@ -25,8 +25,17 @@ test('simulation variants persist as encrypted owner/account data with neutral a
   const listed = await otherStore.list(f.get); assert.equal(listed.variants[0].id, f.input.id); assert.equal(listed.variants[0].version, 1);
   assert.equal(f.rows().length, 3); assert.equal(f.audits().length, 1);
   for (const row of f.rows()) {assert.match(row.payload, /^gp-import-v[12]:/); assert.doesNotMatch(row.payload, /Fernglas|ownerId|scenarioGrossMargin/);}
-  assert.deepEqual(JSON.parse(f.audits()[0].detail), {revision: 1});
-  assert.doesNotMatch(JSON.stringify(f.audits()), /Fernglas|120|scenario/);
+  const {id: auditId, created_at: auditTimestamp, ...auditFields} = f.audits()[0];
+  assert.ok(Number.isSafeInteger(auditId) && auditId > 0);
+  assert.equal(new Date(auditTimestamp).toISOString(), auditTimestamp);
+  // Opaque IDs and timestamps may contain price digits by coincidence; verify the exact audit contract.
+  assert.deepEqual(auditFields, {
+    actor: f.state.session.employeeNumber, action: 'trade.sales-bwl-simulation-variant.create',
+    entity_type: 'trade_annotation',
+    entity_id: f.rows().find(row => row.kind === 'sales-bwl-simulation-variant').id,
+    detail: JSON.stringify({revision: 1}),
+  });
+  assert.match(auditFields.entity_id, /^[a-f0-9]{64}$/);
   const original = f.state.session;
   for (const actor of [{...original, employeeNumber: 'other'}, {...original, accountId: 'other'}]) {
     assert.deepEqual(await otherStore.list(async () => actor), {variants: []});

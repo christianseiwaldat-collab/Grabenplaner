@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -81,10 +83,10 @@ function ensurePortalUser(employeeNumber, role, scopeDepartmentId) {
 
 function createSession(employeeNumber) {
   const rawToken = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(rawToken);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(
     crypto.randomUUID(),
     employeeNumber,
@@ -142,7 +144,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -388,7 +390,7 @@ test("v0.92.20 manuelle Dienstplansperre sperrt filialweit, revisionssicher und 
   );
 
   const otherLocationId = "scope-replay-test";
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, 'Andere Filiale für Scope-Test', 0, '{}', 1)
   `).run(otherLocationId);

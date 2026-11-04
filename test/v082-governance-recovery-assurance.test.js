@@ -10,7 +10,7 @@ const { DatabaseSync } = require("node:sqlite");
 const { createAmuStorage } = require("../lib/amu-storage");
 const {
   verifyProtectedRecords,
-} = require("../server-tools/linux/recovery/lib/recovery-verify");
+} = require("../test-support/legacy-baseline").legacyRequire("server-tools/linux/recovery/lib/recovery-verify.js");
 
 function context(namespace, recordId, employeeNumber = "system") {
   const field = namespace === "privacy-request"

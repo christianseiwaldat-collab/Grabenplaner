@@ -409,6 +409,28 @@ test("Block 1: PL+-Metarecht vermittelt allein weder Planlektüre noch Antragsda
   assert.equal(itAdmin.canManageSettings, false);
 });
 
+test("Fremdansicht begrenzt Beschäftigungstage auf die angefragte Woche ohne Personalaktfelder", () => {
+  const schedule = foreignSchedule();
+  schedule.teamMembers[0].planningDates = ["2026-08-28", "2026-08-29", "2026-08-30"];
+  schedule.teamMembers[0].employment = { startDate: "2026-08-28", private: "secret" };
+  schedule.shifts.push({ ...schedule.shifts[0], date: "2026-08-28" });
+  schedule.unavailability[0].dateFrom = "2026-08-24";
+  schedule.unavailability[0].dateTo = "2026-08-30";
+  const project = () => projectCrossLocationScheduleView({ actor: principal("manager"), sourceLocationId: FOREIGN,
+    weekStart: "2026-08-24", today: "2026-08-19", schedule });
+  const result = project();
+  assert.deepEqual(result.teamMembers[0].planningDates, ["2026-08-28", "2026-08-29", "2026-08-30"]);
+  assert.deepEqual(result.shifts.map(row => row.date), ["2026-08-28"]);
+  assert.equal(result.unavailability[0].dateFrom, "2026-08-28");
+  assert.equal(result.unavailability[0].dateTo, "2026-08-30");
+  assert.doesNotMatch(JSON.stringify(result), /employment|startDate|secret|fullName|privateEmail/);
+  for (const invalid of [[], ["2026-08-23"], ["2026-08-31"], ["2026-08-26", "2026-08-28"], [null], "2026-08-28"]) {
+    schedule.teamMembers[0].planningDates = invalid;
+    const denied = project();
+    assert.equal(denied.teamMembers.length, 0); assert.equal(denied.shifts.length, 0); assert.equal(denied.unavailability.length, 0);
+  }
+});
+
 test("Block 1: Fremdansicht liefert ausschließlich die festgelegte Datenminimalprojektion", () => {
   const projected = projectCrossLocationScheduleView({
     actor: principal("manager"),

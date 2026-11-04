@@ -1,4 +1,5 @@
 'use strict';
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {spawn}=require('node:child_process');
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-sidebar-notepad-api-'));
@@ -16,15 +17,15 @@ async function close(){if(closed)return;closed=true;if(server)await new Promise(
 test.before(async()=>{
   await subject.initializeApplicationPersistence();const db=subject.db,location=db.prepare('SELECT id FROM locations WHERE active=1 ORDER BY id LIMIT 1').get();
   for(const role of ['developer','employee','hr']){
-    const id='notepad-'+role,token=crypto.randomBytes(32).toString('hex'),csrf=crypto.randomBytes(24).toString('hex');
+    const id='notepad-'+role,token=crypto.randomBytes(32).toString('hex'),csrf=sessionCsrf(token);
     db.prepare('INSERT INTO employees(personnel_number,full_name,nickname,home_location_id,active) VALUES(?,?,?,?,1)').run(id,id,id,location.id);
     db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password,password_changed_at) VALUES(?,'synthetic',?,1,0,CURRENT_TIMESTAMP)").run(id,role);
-    db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z')").run(crypto.randomUUID(),id,crypto.createHash('sha256').update(token).digest('hex'));
+    db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(crypto.randomUUID(),id,crypto.createHash('sha256').update(token).digest('hex'));
     users[role]={id,cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,csrf};
   }
-  const id='notepad-organization',token=crypto.randomBytes(32).toString('hex'),csrf=crypto.randomBytes(24).toString('hex');
+  const id='notepad-organization',token=crypto.randomBytes(32).toString('hex'),csrf=sessionCsrf(token);
   db.prepare("INSERT INTO portal_organization_accounts(id,login_name,display_name,account_type,password_hash,active,must_change_password) VALUES(?,?,?,'branch','synthetic',1,0)").run(id,id,id);
-  db.prepare("INSERT INTO portal_organization_sessions(id,account_id,token_hash,expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z')").run(crypto.randomUUID(),id,crypto.createHash('sha256').update(token).digest('hex'));
+  db.prepare("INSERT INTO portal_organization_sessions(id,account_id,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(crypto.randomUUID(),id,crypto.createHash('sha256').update(token).digest('hex'));
   users.organization={id,cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,csrf};
   server=subject.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));baseUrl='http://127.0.0.1:'+server.address().port;
 });
@@ -75,13 +76,50 @@ test('corrupt note stays unavailable and is not silently erased by unrelated pre
 });
 test('a fresh application process restores the same account note with the configured key', {timeout:30000},async()=>{
   const expected=(await request()).payload.sidebarNotepad;await close();
-  const script="const app=require(process.argv[1]);let server;process.on('message',async message=>{if(message==='stop'){await new Promise(r=>{server.close(r);server.closeAllConnections();});await app.closePersistenceForTests();app.releaseInstanceLockForTests();process.disconnect();}});(async()=>{await app.initializeApplicationPersistence();server=app.app.listen(0,'127.0.0.1',()=>process.send({port:server.address().port}));})().catch(error=>{console.error(error);process.exitCode=1;process.disconnect();});";
+  const script=`
+    const app=require(process.argv[1]);let server,stopping;
+    const starting=(async()=>{
+      await app.initializeApplicationPersistence();
+      server=app.app.listen(0,'127.0.0.1');
+      await new Promise((resolve,reject)=>{server.once('listening',resolve);server.once('error',reject);});
+      if(process.connected)process.send({port:server.address().port});
+    })();
+    function stop(){
+      if(!stopping)stopping=(async()=>{
+        await starting.catch(()=>{});
+        if(server?.listening)await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});
+        await app.closePersistenceForTests();app.releaseInstanceLockForTests();
+        if(process.connected)process.disconnect();
+      })().catch(error=>{console.error(error);process.exitCode=1;if(process.connected)process.disconnect();});
+      return stopping;
+    }
+    process.on('message',message=>{if(message==='stop')void stop();});
+    starting.catch(error=>{console.error(error);process.exitCode=1;void stop();});
+  `;
   const child=spawn(process.execPath,['-e',script,path.join(__dirname,'../server')],{env:process.env,windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});
   let stderr='';child.stderr.on('data',chunk=>{stderr=(stderr+chunk).slice(-8000);});child.stdout.resume();
   const exited=new Promise(resolve=>child.once('exit',(code,signal)=>resolve({code,signal})));
-  let startDeadline;
+  let startDeadline,failure;
   try{
-    const ready=await Promise.race([new Promise((resolve,reject)=>{child.once('message',resolve);child.once('error',reject);}),exited.then(result=>{throw Error('Restart failed: '+JSON.stringify(result)+' '+stderr);}),new Promise((resolve,reject)=>{startDeadline=setTimeout(()=>reject(Error('Synthetic restart did not become ready')),10000);})]);clearTimeout(startDeadline);
+    // PostgreSQL startup uses the same bounded twenty-second fixture window
+    // as the server-bootstrap test; the complete restart still has thirty.
+    const ready=await Promise.race([new Promise((resolve,reject)=>{child.once('message',resolve);child.once('error',reject);}),exited.then(result=>{throw Error('Restart failed: '+JSON.stringify(result)+' '+stderr);}),new Promise((resolve,reject)=>{startDeadline=setTimeout(()=>reject(Error('Synthetic restart did not become ready within 20000 ms')),20000);})]);clearTimeout(startDeadline);
+    assert.ok(Number.isInteger(ready.port)&&ready.port>0&&ready.port<=65535);
     const response=await request({url:'http://127.0.0.1:'+ready.port});assert.equal(response.status,200,JSON.stringify(response.payload));assert.deepEqual(response.payload.sidebarNotepad,expected);
-  }finally{clearTimeout(startDeadline);if(child.connected)child.send('stop');const timer=setTimeout(()=>child.kill(),5000);try{const result=await exited;assert.equal(result.code,0,stderr);}finally{clearTimeout(timer);}}
+  }catch(error){failure=error;}
+  finally{
+    clearTimeout(startDeadline);
+    let stopDeadline,reapDeadline;
+    try{
+      if(child.connected)child.send('stop');
+      const result=await Promise.race([exited,new Promise((resolve,reject)=>{stopDeadline=setTimeout(()=>reject(Error('Synthetic restart did not stop within 5000 ms')),5000);})]);
+      assert.equal(result.code,0,stderr);
+    }catch(error){
+      failure ||= error;
+      if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');
+      try{await Promise.race([exited,new Promise((resolve,reject)=>{reapDeadline=setTimeout(()=>reject(Error('Owned restart child could not be reaped')),3000);})]);}
+      catch(reapError){failure ||= reapError;}
+    }finally{clearTimeout(stopDeadline);clearTimeout(reapDeadline);}
+  }
+  if(failure)throw new Error('Synthetic restart failed; final child stderr:\n'+stderr,{cause:failure});
 });

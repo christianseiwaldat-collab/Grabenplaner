@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -79,10 +80,19 @@ function enablePersonnelLifecycle() {
 }
 
 function createOrganizationFixture() {
-  db.prepare("INSERT OR REPLACE INTO locations (id, name, active) VALUES (?, ?, 1)")
-    .run(LOCATION_A, "M5 API Standort A");
-  db.prepare("INSERT OR REPLACE INTO locations (id, name, active) VALUES (?, ?, 1)")
-    .run(LOCATION_B, "M5 API Standort B");
+  for (const [id, name] of [[LOCATION_A, "M5 API Standort A"], [LOCATION_B, "M5 API Standort B"]]) {
+    const costCenterId = `fixture-location-${id}`;
+    db.prepare(`
+      INSERT INTO cost_centers (id, code, name, type, cost_center_type_id, active)
+      VALUES (?, ?, ?, 'branch', 'branch', 1)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, active = 1
+    `).run(costCenterId, `FIXTURE-${id}`, name);
+    db.prepare(`
+      INSERT INTO locations (id, name, cost_center_id, active) VALUES (?, ?, ?, 1)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name,
+        cost_center_id = excluded.cost_center_id, active = 1
+    `).run(id, name, costCenterId);
+  }
   for (const [locationId, name] of [
     [LOCATION_A, "M5 API Abteilung A"],
     [LOCATION_B, "M5 API Abteilung B"],
@@ -118,7 +128,7 @@ function ensureEmployee(employeeNumber, label, locationId, departmentId) {
 
 function createSession(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users (
       employee_number, password_hash, role, role_locked, active,
@@ -133,8 +143,8 @@ function createSession(employeeNumber, role) {
   `).run(employeeNumber, role);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(
     crypto.randomUUID(),
     employeeNumber,
@@ -373,7 +383,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

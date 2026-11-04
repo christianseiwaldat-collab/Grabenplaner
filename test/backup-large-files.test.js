@@ -90,11 +90,11 @@ test("protected backup reference verification and restore do not retain all file
   assert.equal(sha256File(path.join(backup, "blobs", saved.storageKey)), sha256File(path.join(target, "blobs", saved.storageKey)));
 });
 
-test("all SQLite backup hash entrypoints and Offsite restart use large-data-safe contracts", () => {
+test("historical b2 SQLite backup hash entrypoints and Offsite restart use large-data-safe contracts", () => {
   const root = path.resolve(__dirname, "..");
   for (const file of ["backup.js", "lib/backup-commit.js", "server-tools/linux/lib/backup-snapshot.js",
     "server-tools/linux/lib/verify-backup.js", "server-tools/linux/lib/restore-backup.js", "server-tools/linux/backup-grabenplaner.sh"]) {
-    const source = fs.readFileSync(path.join(root, file), "utf8");
+    const source = fs.readFileSync(require("../test-support/legacy-baseline").legacyPath(file), "utf8");
     assert.match(source, /file-integrity/, file);
     assert.doesNotMatch(source, /createHash\("sha256"\)\.update\(fs\.readFileSync/, file);
   }

@@ -1,4 +1,8 @@
 "use strict";
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -59,7 +63,7 @@ function daySettings(start, end) {
 }
 
 function ensureLocation(id, name, start, end) {
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, ?, 0, ?, 1)
     ON CONFLICT(id) DO UPDATE SET name = excluded.name,
@@ -92,10 +96,10 @@ function ensureEmployee(employeeNumber, name, locationId, departmentId, role) {
 
 function createSession(employeeNumber) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(
     crypto.randomUUID(),
     employeeNumber,
@@ -191,7 +195,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -558,8 +562,8 @@ test("temporäre Filialeinsätze koppeln Urlaub, ZA-Slots, Zuständigkeit und Kr
     `).run(OPEN_SICKNESS_EMPLOYEE, HOME, DESTINATION, destinationDepartment);
 
     const sweepAtTargetDay = new Date("2031-04-02T10:00:00+02:00");
-    db.exec(`
-      CREATE TRIGGER v0921_fail_second_context_notification
+    installFixtureTrigger(db, `
+      CREATE TRIGGER test_v0921_fail_second_context_notification
       BEFORE INSERT ON portal_notifications
       WHEN NEW.recipient_employee_number = '${RETRY_DESTINATION_MANAGER}'
         AND NEW.event_type = 'protected.update'
@@ -570,7 +574,7 @@ test("temporäre Filialeinsätze koppeln Urlaub, ZA-Slots, Zuständigkeit und Kr
     try {
       await assert.rejects(runSicknessEscalationSweep(sweepAtTargetDay));
     } finally {
-      db.exec("DROP TRIGGER IF EXISTS v0921_fail_second_context_notification");
+      dropFixtureTrigger(db, "test_v0921_fail_second_context_notification", { ifExists: true });
     }
     assert.equal(notificationCount(HOME_MANAGER), homeBefore + 1);
     assert.equal(notificationCount(DESTINATION_MANAGER), targetBefore + 1);

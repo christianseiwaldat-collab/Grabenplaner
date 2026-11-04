@@ -1,0 +1,4 @@
+/* The session decides the first screen; never paint a different account surface. */
+.session-entry-status { display:none; }
+body.session-pending > :not(.session-entry-status):not(script):not(link):not(noscript) { display:none !important; }
+body.session-pending > .session-entry-status { display:grid; place-content:center; min-height:100dvh; margin:0; color:#286b56; background:#edf2ee; font:600 16px/1.5 system-ui,sans-serif; }

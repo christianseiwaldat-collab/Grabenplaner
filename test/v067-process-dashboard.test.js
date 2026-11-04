@@ -1,3 +1,5 @@
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -33,7 +35,7 @@ function setPortalSetting(key, value) {
 function createPortalSession() {
   const employeeNumber = "v067-admin";
   const token = `v067-${crypto.randomBytes(32).toString("hex")}`;
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO employees (personnel_number, full_name, nickname, home_location_id, active)
     VALUES (?, 'Paula Prozess', 'Paula', ?, 1)
@@ -49,8 +51,8 @@ function createPortalSession() {
   `).run(employeeNumber);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     cookie: `grabenplaner_session=${encodeURIComponent(token)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
@@ -98,13 +100,13 @@ test.beforeEach(resetFixture);
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
 test("v0.67: Prozessansicht und Bedienung sind vollständig verdrahtet", () => {
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.67-process-dashboard'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "..", "public", "styles.css"), "utf8");

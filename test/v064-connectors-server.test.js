@@ -1,4 +1,6 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -46,14 +48,14 @@ let apiConnection;
 
 function session(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
     VALUES (?, 'test-only', ?, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     ON CONFLICT(employee_number) DO UPDATE SET role = excluded.role, active = 1, must_change_password = 0, updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, role);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
-  db.prepare("INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')")
+  db.prepare("INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }
@@ -85,17 +87,17 @@ test.before(async () => {
 test.after(async () => {
   https.request = originalHttpsRequest;
   if (server) await new Promise((resolve) => server.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
 test("v0.64: Migration legt getrennte Verbindungs- und Zustelltabellen an", () => {
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.64-sql-api-connectors'").get());
-  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'integration_connections'").get());
-  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'integration_deliveries'").get());
-  assert.ok(db.prepare("PRAGMA table_info(integration_connections)").all().some((column) => column.name === "revision"));
-  const deliveryColumns = new Set(db.prepare("PRAGMA table_info(integration_deliveries)").all().map((column) => column.name));
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
+  assert.ok(pgSchema.tableExists(db, "integration_connections"));
+  assert.ok(pgSchema.tableExists(db, "integration_deliveries"));
+  assert.ok(pgSchema.columns(db, "integration_connections").some((column) => column.name === "revision"));
+  const deliveryColumns = new Set(pgSchema.columns(db, "integration_deliveries").map((column) => column.name));
   assert.ok(deliveryColumns.has("connection_revision"));
   assert.ok(deliveryColumns.has("connection_fingerprint"));
 });

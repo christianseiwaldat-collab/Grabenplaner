@@ -1,7 +1,10 @@
 "use strict";
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { thresholds, deviation, buildComparison } = require('../lib/xoffi-plan-comparison');
+const { thresholds, deviation, buildComparison, combineComparisons, selectImports } = require('../lib/xoffi-plan-comparison');
+const { inspectXoffiMhtmlBuffer } = require('../lib/xoffi-mhtml-import');
+const { createReviewedXoffiSnapshot } = require('../lib/xoffi-week-reconciliation');
+const { holidayFixtureHtml, mhtml } = require('../test-support/xoffi-mhtml');
 const limits = thresholds();
 
 test('signed deviation uses net plan as denominator and inclusive 5/15 boundaries', () => {
@@ -58,6 +61,60 @@ test('historical imports stay visible, unrelated branch people do not leak into 
 test('incompatible import scopes remain visible without misleading red or green percentages', () => {
   const input=fixture();input.imports[0].department_id=null;
   const row=buildComparison(input)[0];assert.equal(row.actualMinutes,1230);assert.equal(row.percent,null);assert.equal(row.severity,'scope');
+});
+
+function holidayComparison(weeklyValuedHours = '41.00') {
+  const original=inspectXoffiMhtmlBuffer(mhtml(holidayFixtureHtml({weeklyValuedHours}))).employees[0];
+  const input=fixture();input.dates=original.days.map(day=>day.workDate);input.shifts=[];
+  input.imports=[{...input.imports[0],week_start:input.dates[0],week_end:input.dates[6],
+    weekly_actual_minutes:original.weeklyActualMinutes,weekly_valued_minutes:original.weeklyValuedMinutes,weekly_surcharge_minutes:original.weeklySurchargeMinutes}];
+  input.importDays=original.days.map(day=>({employee_number:'412',import_id:'new',work_date:day.workDate,
+    actual_minutes:day.actualMinutes,valued_minutes:day.valuedMinutes,surcharge_minutes:day.surchargeMinutes,absence_code:day.absence,intervals_json:JSON.stringify(day.intervals)}));
+  input.importSnapshots=[{employeeNumber:'412',importId:'new',weekStart:input.dates[0],snapshot:createReviewedXoffiSnapshot(original.snapshot,original)}];
+  return input;
+}
+test('verified holiday credits affect the whole week only, never attendance or a fabricated day',()=>{
+  const input=holidayComparison(),row=buildComparison(input)[0];
+  assert.equal(row.actualMinutes,1500);assert.equal(row.valuedMinutes,2460);assert.equal(row.knownDailyValuedMinutes,1980);
+  assert.equal(row.unallocatedHolidayMinutes,480);assert.equal(row.valuationAllocationIncomplete,false);
+  assert.equal(row.days[5].valuedMinutes,0);assert.equal(row.days[5].actualMinutes,0);assert.deepEqual(row.days[5].intervals,[]);
+  assert.equal(row.days[3].absence,'vacation');assert.equal(row.weeklyCredits[0].status,'verified');
+  const combined=combineComparisons([[row],[row]],input.dates,limits)[0];
+  assert.equal(combined.valuedMinutes,2460);assert.equal(combined.unallocatedHolidayMinutes,480);assert.equal(combined.weeklyCredits.length,1);
+  const partial=combineComparisons([[row]],input.dates.slice(0,5),limits)[0];
+  assert.equal(partial.actualMinutes,1500);assert.equal(partial.knownDailyValuedMinutes,1980);assert.equal(partial.valuedMinutes,null);
+  assert.equal(partial.valuationAllocationIncomplete,true);assert.equal(partial.valuedComparison.percent,null);assert.equal(partial.valuedComparison.severity,'missing');
+  const next=combineComparisons([[row]],['2026-09-14'],limits)[0];assert.equal(next.weeklyCredits.length,0);assert.equal(next.unallocatedHolidayMinutes,0);
+});
+test('unbound, missing or stale weekly proofs never leak a credit or silently produce a complete daily-only sum',()=>{
+  for(const mutate of [input=>{input.importSnapshots=[];},input=>{input.importSnapshots[0].importId='foreign';},
+    input=>{input.importSnapshots[0].employeeNumber='999';},input=>{input.importSnapshots[0].weekStart='2026-08-31';},
+    input=>{input.importSnapshots[0].snapshot.balanceDate='2026-08-30';},
+    input=>{delete input.importSnapshots[0].snapshot.reviewedWeek;},
+    input=>{input.importSnapshots[0].snapshot.reviewedWeek.weeklyValuedMinutes+=1;},
+    input=>{input.importDays[0].valued_minutes+=60;},
+    input=>{input.importSnapshots[0].snapshot.weeklyHolidayMinutes=900;},]){
+    const input=holidayComparison();mutate(input);const row=buildComparison(input)[0];
+    assert.equal(row.valuedMinutes,null);assert.equal(row.unallocatedHolidayMinutes,0);assert.equal(row.valuationAllocationIncomplete,true);
+    assert.equal(row.valuedComparison.percent,null);assert.equal(row.weeklyCredits[0].minutes,null);assert.equal(row.weeklyCredits[0].status,'unknown');
+  }
+  const legacy=holidayComparison();legacy.importSnapshots=[];legacy.imports[0].weekly_valued_minutes=1980;
+  assert.equal(buildComparison(legacy)[0].valuedMinutes,1980);
+});
+test('reviewed rounding is carried once at week level while a scoped mismatch suppresses every percentage',()=>{
+  const input=holidayComparison('41.12'),row=buildComparison(input)[0];
+  assert.equal(row.valuedMinutes,2467);assert.equal(row.unallocatedHolidayMinutes,480);assert.equal(row.knownDailyValuedMinutes,1980);
+  assert.equal(row.weeklyCredits[0].roundingDifferenceMinutes,7);
+  input.imports[0].department_id=null;
+  const scoped=buildComparison(input)[0];assert.equal(scoped.valuedMinutes,2467);
+  for(const value of [scoped,scoped.valuedComparison,scoped.presenceComparison]){assert.equal(value.percent,null);assert.equal(value.severity,'scope');}
+  assert.equal(scoped.days[0].valuedComparison.severity,'scope');
+});
+test('snapshot selection uses exactly the ordered applicable import and excludes unrelated branch-wide people',()=>{
+  const input=fixture();input.imports.push({...input.imports[0],import_id:'old'},
+    {employee_number:'999',department_id:null,import_id:'private-other'},
+    {employee_number:'413',department_id:7,import_id:'former'});
+  assert.deepEqual(selectImports(input).map(row=>row.import_id),['new','former']);
 });
 
 

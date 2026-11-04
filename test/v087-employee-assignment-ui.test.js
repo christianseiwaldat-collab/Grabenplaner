@@ -17,9 +17,13 @@ function between(source, start, end) {
   assert.notEqual(endIndex, -1, `Endmarker fehlt: ${end}`);
   return source.slice(startIndex, endIndex);
 }
+function dialogTag(id) {
+  const tag = html.match(new RegExp('<dialog\\b[^>]*\\bid="' + id + '"[^>]*>'))?.[0];
+  assert.ok(tag, `Dialog fehlt: ${id}`); return tag;
+}
 
 test("v0.87 Block 2 UI: Mitarbeiteranlage beginnt bei der Kostenstelle", () => {
-  const modal = between(html, '<dialog class="modal wide-modal employee-modal" id="employeeModal">', '<dialog class="modal" id="costCenterModal">');
+  const modal = between(html, dialogTag('employeeModal'), dialogTag('costCenterModal'));
   assert.match(modal, /id="employeeCostCenter" required/);
   assert.match(modal, /id="employeePosition" required/);
   assert.match(modal, /id="employeeCostCenterHint"/);
@@ -43,7 +47,7 @@ test("v0.87 Block 2 UI: Mitarbeiteranlage beginnt bei der Kostenstelle", () => {
 });
 
 test("v0.87 Block 2 UI: Personalaktbereiche bleiben standardmäßig eingeklappt", () => {
-  const modal = between(html, '<dialog class="modal wide-modal employee-modal" id="employeeModal">', '<dialog class="modal" id="costCenterModal">');
+  const modal = between(html, dialogTag('employeeModal'), dialogTag('costCenterModal'));
   assert.equal((modal.match(/data-employee-form-section=/g) || []).length, 2);
   assert.equal((modal.match(/<details class="protected-record-section(?:\s|")/g) || []).length, 5);
   const protectionSection = modal.match(/<details\b[^>]*\bid="employeeRecordProtectionStatus"[^>]*>/)?.[0];

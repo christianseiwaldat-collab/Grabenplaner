@@ -1,0 +1,44 @@
+.emma-contact { display:none; }
+.mobile-home-title-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px; }
+html[data-ui-mode="mobile"] .emma-contact:not([hidden]) {
+  display:flex; align-items:center; flex:none; gap:6px; margin:0; padding:8px;
+  border:1px solid #abd7bb; border-radius:14px; background:#edf8f0; color:#174b32;
+  text-decoration:none; min-height:60px; box-sizing:border-box; white-space:nowrap;
+}
+.emma-contact:focus-visible { outline:3px solid #167746; outline-offset:3px; }
+.emma-contact-avatar { display:grid; place-items:center; flex:none; width:40px; height:40px;
+  border-radius:50%; background:#d3ecdd; color:#174b32; font-size:23px; font-weight:700; overflow:hidden; }
+.emma-contact-avatar img { width:100%; height:100%; object-fit:cover; }
+.emma-contact-copy { display:flex; flex-direction:column; gap:2px; flex:1; min-width:0; }
+.emma-contact-copy strong { font-size:16px; }
+.emma-contact-copy small { font-size:12px; }
+.emma-contact-icon { width:36px; height:36px; flex:none; color:#128c4a; fill:currentColor; }
+html[data-ui-mode="mobile"] body.portal-mobile-session:not(.branch-mobile-account) {
+  padding-bottom:calc(92px + env(safe-area-inset-bottom));
+}
+html[data-ui-mode="mobile"] #portalApp .portal-navigation.personal-mobile-footer {
+  position:fixed; left:8px; right:8px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:30;
+  display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px;
+  border:1px solid var(--line); border-radius:16px; background:rgba(255,253,250,.98);
+  box-shadow:0 6px 20px rgba(25,53,43,.18);
+}
+html[data-ui-mode="mobile"] #portalApp .personal-mobile-footer .portal-tabs.mobile-personal {
+  position:static; display:flex; flex:none; margin:0; padding:0; border:0; border-radius:12px;
+  background:transparent; box-shadow:none; overflow:visible;
+}
+html[data-ui-mode="mobile"] #portalApp .personal-mobile-footer #mobileHomeTab {
+  flex:none; min-width:72px; min-height:60px; padding:10px 16px; font-size:14px;
+}
+html[data-ui-mode="mobile"] #portalApp .mobile-home-more { grid-column:1; }
+.emma-contact-settings[hidden] { display:none !important; }
+.emma-contact-settings .emma-contact-editor { display:grid; gap:16px; }
+.emma-contact-settings label { display:grid; gap:6px; }
+.emma-contact-settings input[type="checkbox"] { width:24px; height:24px; margin:0; }
+.emma-contact-settings input[readonly] { background:var(--surface-muted, #f2f5f3); }
+.emma-contact-settings input:not([type="checkbox"]), .emma-contact-settings button { min-height:44px; max-width:100%; }
+.emma-contact-settings input[type="file"] { width:100%; }
+.emma-contact-settings .emma-contact-picture { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.emma-contact-settings .emma-contact-picture img { width:72px; height:72px; border-radius:50%; object-fit:cover; }
+.emma-contact-settings .emma-contact-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.emma-contact-settings .emma-contact-status { min-height:1.4em; margin:0; }
+.emma-contact-settings .emma-contact-status[data-error="true"] { color:#a12828; }

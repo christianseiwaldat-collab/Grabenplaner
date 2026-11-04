@@ -72,9 +72,11 @@ test('compact sales workspace preserves report choices, validation and graphic m
     assert.equal(await page.locator('#salesReportJobSubmit').isVisible(), true);
     assert.equal(await page.locator('#salesReportJobSubmit').isEnabled(), true);
     await screenshot('01-sales-analytics-compact-light.png');
-    // The outer panel also contains the separate data-quality summary.
     const initialHeight = (await page.locator('#salesAnalyticsRequestForm').boundingBox()).height;
-    assert.ok(initialHeight < 750, `Initial criteria stay compact (${initialHeight}px)`);
+    assert.ok(initialHeight < 650, `Initial criteria stay compact independently of the source-quality explanation (${initialHeight}px)`);
+    assert.equal(await page.locator('#salesReportDataQuality').isVisible(), true);
+    assert.match(await page.locator('#salesReportDataQuality').textContent(), /Hochgeladen am:.*01\.09\.2026/);
+    assert.match(await page.locator('#salesReportDataQuality').textContent(), /Vollständigkeit.*nicht nachgewiesen/);
     assert.ok(await page.locator('#salesReportJobFrom').isVisible());
     assert.ok(await page.locator('#salesReportJobLocations').isVisible());
     assert.ok(await page.locator('#salesReportJobMetrics').isVisible());
@@ -83,6 +85,11 @@ test('compact sales workspace preserves report choices, validation and graphic m
     await scope.locator('> summary').click();
     const manufacturers = page.locator('.sales-report-filter-disclosure').filter({ has:page.locator('#salesReportJobManufacturers') });
     await manufacturers.locator('> summary').click();
+    const brandSearch = page.getByRole('searchbox', { name:'Hersteller / Marke durchsuchen', exact:true });
+    await brandSearch.fill('Synthetic brand 2098');
+    assert.equal(await page.locator('#salesReportJobManufacturers input[type="checkbox"]').count(), 1);
+    assert.match(await page.locator('#salesReportJobManufacturers').textContent(), /Synthetic brand 2098/);
+    await brandSearch.fill('');
     await page.locator('#salesReportJobManufacturers input[type="checkbox"]').first().check();
     await page.getByRole('button', { name:'Hersteller / Marke · Hinzufügen', exact:true }).click();
     await page.waitForFunction(() => document.querySelector('.sales-report-scope-disclosure > summary small').textContent.includes('Hersteller / Marke: 1'));

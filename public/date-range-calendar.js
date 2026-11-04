@@ -148,6 +148,7 @@
         onCommit: typeof config.onCommit === "function" ? config.onCommit : () => {},
       };
       render();
+      globalThis.GpWindow?.prepare?.(dialog);
       dialog.showModal();
     }
 

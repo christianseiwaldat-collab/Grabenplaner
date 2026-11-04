@@ -1,4 +1,7 @@
 "use strict";
+const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -18,6 +21,8 @@ process.env.GRABENPLANER_TRUST_PROXY = "loopback";
 process.env.GRABENPLANER_DEPLOYMENT_KIND = "codespaces-test";
 process.env.GRABENPLANER_AMU_KEY_ID = "test-v1";
 process.env.GRABENPLANER_AMU_KEY = Buffer.alloc(32, 7).toString("base64");
+process.env.GRABENPLANER_INTEGRATION_KEY_ID = "scoped-rights-test";
+process.env.GRABENPLANER_INTEGRATION_KEY = Buffer.alloc(32, 71).toString("base64");
 process.env.GRABENPLANER_WIFI_WEBHOOK_SECRET = "test-wifi-webhook-secret-0123456789abcdef";
 process.env.GRABENPLANER_SERVICE_CONTROL_TOKEN = "test-service-control-token-0123456789abcdef";
 process.env.GRABENPLANER_FORCE_PORTAL = "1";
@@ -73,10 +78,13 @@ function setPersonnelLifecycleEnabled(enabled) {
 }
 
 function ensureOrganizationFixture() {
-  db.prepare("INSERT OR IGNORE INTO locations (id, name) VALUES (?, ?)")
-    .run(LOCATION_A, "R1 API Standort A");
-  db.prepare("INSERT OR IGNORE INTO locations (id, name) VALUES (?, ?)")
-    .run(LOCATION_B, "R1 API Standort B");
+  for (const [id, name] of [[LOCATION_A, "R1 API Standort A"], [LOCATION_B, "R1 API Standort B"]]) {
+    // A duplicate INSERT still runs the active cost-center BEFORE guard before
+    // ON CONFLICT. Retain the existing valid location on subsequent resets.
+    if (!db.prepare("SELECT 1 AS present FROM locations WHERE id = ?").get(id)) {
+      prepareLocationFixture(db, "INSERT INTO locations (id, name) VALUES (?, ?)").run(id, name);
+    }
+  }
   db.prepare("UPDATE locations SET active = 1 WHERE id IN (?, ?)")
     .run(LOCATION_A, LOCATION_B);
   for (const [locationId, name] of [
@@ -124,13 +132,11 @@ function ensureOrganizationFixture() {
 function resetFixture() {
   db.exec("BEGIN IMMEDIATE");
   try {
-    db.exec("DROP TRIGGER IF EXISTS test_portal_permission_scope_failure");
-    for (const definition of [
+    dropFixtureTrigger(db, "test_portal_permission_scope_failure", { ifExists: true });
+    const restoreResetGuards = require("../test-support/postgresql-api/trigger-fixture").suspendFixtureGuards(db, [
       ...PERSONNEL_LIFECYCLE_CONVERSION_TRIGGER_DEFINITIONS,
       ...PERSONNEL_LIFECYCLE_TRIGGER_DEFINITIONS,
-    ]) {
-      db.exec(`DROP TRIGGER IF EXISTS "${definition.name}"`);
-    }
+    ].map(definition => definition.name));
     db.prepare("DELETE FROM candidate_conversions").run();
     db.prepare("DELETE FROM candidate_events").run();
     db.prepare("DELETE FROM candidate_document_versions").run();
@@ -151,12 +157,7 @@ function resetFixture() {
          OR action LIKE 'portal.scope.%'
     `).run();
     organization = ensureOrganizationFixture();
-    for (const definition of [
-      ...PERSONNEL_LIFECYCLE_TRIGGER_DEFINITIONS,
-      ...PERSONNEL_LIFECYCLE_CONVERSION_TRIGGER_DEFINITIONS,
-    ]) {
-      db.exec(definition.sql);
-    }
+    restoreResetGuards();
     setPersonnelLifecycleEnabled(true);
     db.exec("COMMIT");
   } catch (error) {
@@ -168,7 +169,7 @@ function resetFixture() {
 function createSession(employeeNumber, role) {
   const id = crypto.randomUUID();
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users (
       employee_number, password_hash, role, role_locked, active,
@@ -183,8 +184,8 @@ function createSession(employeeNumber, role) {
   `).run(employeeNumber, role);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(id, employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     id,
@@ -394,7 +395,7 @@ test.beforeEach(resetFixture);
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -406,7 +407,7 @@ test("Personalmodul R1 HTTP: PL+ bindet Rechte atomar an Bereiche und PL delegie
   const permissions = [P.CANDIDATES_READ, P.APPLICATIONS_WRITE];
   const locationScope = [{ locationId: organization.locationA, departmentId: null }];
 
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_portal_permission_scope_failure
     BEFORE INSERT ON portal_permission_scope_grants
     BEGIN
@@ -420,7 +421,7 @@ test("Personalmodul R1 HTTP: PL+ bindet Rechte atomar an Bereiche und PL delegie
     failed = await updateRights(plPlus, EMPLOYEES.fl, permissions, locationScope);
   } finally {
     console.error = originalConsoleError;
-    db.exec("DROP TRIGGER IF EXISTS test_portal_permission_scope_failure");
+    dropFixtureTrigger(db, "test_portal_permission_scope_failure", { ifExists: true });
   }
   assert.ok(failed.response.status >= 400, JSON.stringify(failed.payload));
   assert.equal(db.prepare(`
@@ -433,16 +434,16 @@ test("Personalmodul R1 HTTP: PL+ bindet Rechte atomar an Bereiche und PL delegie
   assert.equal(db.prepare("SELECT revoked_at FROM mobile_sessions WHERE id = ?")
     .get(flMobileSessionId).revoked_at, null);
 
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_portal_permission_scope_failure
     BEFORE INSERT ON portal_permission_scope_grants
-    WHEN NEW.employee_number = '${EMPLOYEES.fl}'
+    WHEN NEW.employee_number = '${EMPLOYEES.fl}' AND NEW.approved_by = '${EMPLOYEES.plPlus}'
     BEGIN
       INSERT INTO portal_permission_scope_grants (
         employee_number, permission, location_id, department_id, approved_by
       ) VALUES (
         NEW.employee_number, NEW.permission, NEW.location_id,
-        NEW.department_id, NEW.approved_by
+        NEW.department_id, 'test-r1-scope-race'
       );
     END;
   `);
@@ -450,7 +451,7 @@ test("Personalmodul R1 HTTP: PL+ bindet Rechte atomar an Bereiche und PL delegie
   try {
     concurrent = await updateRights(plPlus, EMPLOYEES.fl, permissions, locationScope);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_portal_permission_scope_failure");
+    dropFixtureTrigger(db, "test_portal_permission_scope_failure", { ifExists: true });
   }
   assert.equal(concurrent.response.status, 409, JSON.stringify(concurrent.payload));
   assert.equal(concurrent.payload.code, "PERSONNEL_LIFECYCLE_SCOPE_CONCURRENT_CHANGE");
@@ -459,6 +460,11 @@ test("Personalmodul R1 HTTP: PL+ bindet Rechte atomar an Bereiche und PL delegie
   `).get(EMPLOYEES.fl).count, 0);
   assert.equal(permissionScopeRows(EMPLOYEES.fl).length, 0);
   assert.equal(portalScopeRows(EMPLOYEES.fl).length, 0);
+
+  assert.equal(db.prepare("SELECT revoked_at FROM portal_sessions WHERE id = ?")
+    .get(flSession.id).revoked_at, null);
+  assert.equal(db.prepare("SELECT revoked_at FROM mobile_sessions WHERE id = ?")
+    .get(flMobileSessionId).revoked_at, null);
 
   const granted = await updateRights(plPlus, EMPLOYEES.fl, permissions, locationScope);
   assert.equal(granted.response.status, 200, JSON.stringify(granted.payload));
@@ -1875,10 +1881,9 @@ test("Personalmodul R1 HTTP: IT-Admin kann weder PL noch lokal freigegebene Leit
 test("Personalmodul R1 HTTP: ein injizierter Legacy-Prinzipal local kann sich nie anmelden", async () => {
   const password = "Reserved-Local-Test-2026!";
   const passwordHash = await hashPortalPassword(password);
-  db.exec(`
-    DROP TRIGGER IF EXISTS trg_employees_reserved_principal_insert;
-    DROP TRIGGER IF EXISTS trg_employees_reserved_principal_update;
-  `);
+  const restoreReservedGuards = require("../test-support/postgresql-api/trigger-fixture").suspendFixtureGuards(db, [
+    "trg_employees_reserved_principal_insert", "trg_employees_reserved_principal_update",
+  ]);
   try {
     db.prepare(`
       INSERT INTO employees (personnel_number, full_name, nickname, active)
@@ -1914,25 +1919,6 @@ test("Personalmodul R1 HTTP: ein injizierter Legacy-Prinzipal local kann sich ni
     assert.equal(mobileLogin.payload.error?.code, "MOBILE_LOGIN_FAILED");
   } finally {
     db.prepare("DELETE FROM employees WHERE LOWER(TRIM(personnel_number)) = 'local'").run();
-    db.exec(`
-      CREATE TRIGGER IF NOT EXISTS trg_employees_reserved_principal_insert
-      BEFORE INSERT ON employees
-      WHEN LOWER(TRIM(
-        NEW.personnel_number,
-        CHAR(9) || CHAR(10) || CHAR(11) || CHAR(12) || CHAR(13) || CHAR(32)
-      )) = 'local'
-      BEGIN
-        SELECT RAISE(ABORT, 'employee principal local is reserved');
-      END;
-      CREATE TRIGGER IF NOT EXISTS trg_employees_reserved_principal_update
-      BEFORE UPDATE OF personnel_number ON employees
-      WHEN LOWER(TRIM(
-        NEW.personnel_number,
-        CHAR(9) || CHAR(10) || CHAR(11) || CHAR(12) || CHAR(13) || CHAR(32)
-      )) = 'local'
-      BEGIN
-        SELECT RAISE(ABORT, 'employee principal local is reserved');
-      END;
-    `);
+    restoreReservedGuards();
   }
 });

@@ -1,9 +1,10 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const GpWindow=require('../public/gp-window');
-const source=fs.readFileSync(path.join(__dirname,'../public/portal.js'),'utf8');
+const source=fs.readFileSync(path.join(__dirname,'../public/portal.js'),'utf8').replace(/\r\n/g,'\n');
 const start=source.indexOf('function syncPortalWindows(){'),end=source.indexOf('\nlet branchPriceLabelsWorkspace',start);
 assert.ok(start>=0 && end>start);
+const actorStart=source.indexOf("function portalDocumentActorKey() {"),actorEnd=source.indexOf("\n}\n",actorStart);
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const deferred=()=>{let resolve;const promise=new Promise(done=>{resolve=done;});return{promise,resolve};};
 const user=id=>({accountId:id,sessionKind:'organization',accountType:'branch',isEmployee:false,permissions:[],scopes:[{locationId:'18'}],mustChangePassword:false});
@@ -13,9 +14,9 @@ test('real portal window adapter binds revisions to the actor and ignores late a
   const sandbox={window:{GpWindow:{installDocument(_doc,options){const preferences=GpWindow.createPreferences({actorKey:options.actorKey,canUse:options.canUse,
     read:options.readPreferences,write:options.writePreferences,error:options.error});return{preferences,synchronize(){preferences.invalidate();}};}}},
     document:{},portalState:state,portalUser:()=>state.session.user,el:{portalLogoutStatus:{}},message:(_node,text)=>errors.push(text),
-    branchSalesWorkspaces:new Map(),syncBranchOrderPrintWindows(){},branchPriceLabelsWorkspace:null,syncPortalDocumentPrint(){},
+    renderNotifications(){},branchSalesWorkspaces:new Map(),syncBranchOrderPrintWindows(){},branchPriceLabelsWorkspace:null,syncPortalDocumentPrint(){},
     api:(url,options)=>{const request=deferred();calls.push({url,options,...request});return request.promise;}};
-  vm.createContext(sandbox);vm.runInContext("let portalWindowManager=null,portalWindowActor='';\n"+source.slice(start,end)+"\nglobalThis.sync=syncPortalWindows;globalThis.getManager=()=>portalWindowManager;",sandbox);
+  vm.createContext(sandbox);vm.runInContext("let portalWindowManager=null,portalWindowActor='',portalWindowSession=null;\n"+source.slice(actorStart,actorEnd+3)+"\n"+source.slice(start,end)+"\nglobalThis.sync=syncPortalWindows;globalThis.getManager=()=>portalWindowManager;",sandbox);
   sandbox.sync();const prefs=sandbox.getManager().preferences,loading=prefs.activate();
   assert.equal(calls[0].url,'/api/portal/v1/branch-window-preferences');calls[0].resolve({revision:7,gpWindows:empty});await loading;
   const old=prefs.change('price-label-search',{x:4,y:4,width:500,height:300,minimized:false});await tick();

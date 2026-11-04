@@ -1,3 +1,4 @@
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -34,7 +35,7 @@ function ensureEmployee(employeeNumber, fullName, locationId) {
 
 function createPortalSession(employeeNumber, role) {
   const token = `v071-${employeeNumber}-${crypto.randomBytes(24).toString("hex")}`;
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
@@ -45,8 +46,8 @@ function createPortalSession(employeeNumber, role) {
   `).run(employeeNumber, role);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     cookie: `grabenplaner_session=${encodeURIComponent(token)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
@@ -92,89 +93,109 @@ function seedSalesAnalyticsPdfFixture(locationId, {
 } = {}) {
   const reportId = crypto.createHash("sha256").update(`v071-sales-pdf-${crypto.randomUUID()}`).digest("hex");
   const sourceHash = crypto.createHash("sha256").update(`${reportId}-source`).digest("hex");
-  db.prepare(`
-    INSERT INTO sales_aggregate_reports (
-      id, source_system, source_file_sha256, parser_version, extraction, review_method,
-      report_kind, external_branch_id, location_id, currency, period_start, period_end,
-      comparison_start, comparison_end, year_to_date_start, year_to_date_comparison_start,
-      generated_on, page_count, product_group_count, issue_count, reconciliation_status,
-      imported_by, imported_at
-    ) VALUES (
-      ?, 'tradefoto_report', ?, 2, 'pdf_text_coordinates', 'source_text_confirmed',
-      'product_group_net', ?, ?, 'EUR', '2026-07-01', '2026-07-31',
-      '2025-07-01', '2025-07-31', '2026-01-01', '2025-01-01', '2026-08-03',
-      1, ?, 0, 'match', 'v071-admin', '2026-08-21T10:00:00.000Z'
-    )
-  `).run(
-    reportId,
-    sourceHash,
-    `v071-${reportId.slice(0, 12)}`,
-    locationId,
-    35 + extraYearToDateGroups,
-  );
-  const insertGroup = db.prepare(`
-    INSERT INTO sales_report_product_group_metrics (
-      report_id, horizon, external_product_group_id, product_group_label,
-      current_quantity, comparison_quantity, current_net_revenue, comparison_net_revenue,
-      current_gross_margin, comparison_gross_margin, current_customer_count,
-      comparison_customer_count, current_revenue_per_customer,
-      comparison_revenue_per_customer, source_page, source_ordinate
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-  `);
-  const groups = [
-    ["101", "Kameras", 12, 10, 1200, nonPositiveComparisons ? 0 : 1000, 320, 270, 11, 9, 109.09, 111.11],
-    ["202", "Objektive", 8, 11, 880, nonPositiveComparisons ? -100 : 1210, 250, 350, 7, 10, 125.71, 121],
-    ["303", "Zubehör", 30, 24, 750, 600, 210, 165, 25, 20, 30, 30],
-    ...Array.from({ length: 32 }, (_, index) => [
-      String(400 + index),
-      `Testgruppe ${String(index + 1).padStart(2, "0")}`,
-      10 + index,
-      9 + index,
-      400 + index * 10,
-      390 + index * 9,
-      100 + index * 3,
-      95 + index * 2,
-      8 + index,
-      7 + index,
-      40 + index,
-      39 + index,
-    ]),
-  ];
-  for (const horizon of ["period", "year_to_date"]) {
-    groups.forEach((group, index) => insertGroup.run(
-      reportId,
-      horizon,
-      group[0],
-      group[1],
-      ...group.slice(2).map((value) => Number(value).toFixed(4)),
-      String(100 + index),
-    ));
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const location = db.prepare("SELECT id, active FROM locations WHERE id = ?").get(locationId);
+    assert.ok(location && Number(location.active) === 1, "The report fixture requires an active Core location");
+    const locationSha = crypto.createHash("sha256")
+      .update(JSON.stringify({ id: location.id, active: Boolean(location.active) })).digest("hex");
+    // The real two-database boundary publishes this reference before writing a
+    // Sales report. This explicit fixture follows the same FK contract atomically.
+    db.postgresqlFixtureWrite("sales", `
+      INSERT INTO integration.core_location_references(id,source_sha256)
+      VALUES (?,?) ON CONFLICT(id) DO NOTHING
+    `, [location.id, locationSha]);
     db.prepare(`
-      INSERT INTO sales_report_total_metrics (
-        report_id, horizon, current_quantity, comparison_quantity,
-        current_net_revenue, comparison_net_revenue, current_gross_margin,
-        comparison_gross_margin, current_customer_count, comparison_customer_count,
-        current_revenue_per_customer, comparison_revenue_per_customer, source_page
-      ) VALUES (?, ?, '50.0000', '45.0000', '2830.0000', ?,
-        '780.0000', '785.0000', '43.0000', '39.0000', '65.8100', '72.0500', 1)
+      INSERT INTO sales_aggregate_reports (
+        id, source_system, source_file_sha256, parser_version, extraction, review_method,
+        report_kind, external_branch_id, location_id, currency, period_start, period_end,
+        comparison_start, comparison_end, year_to_date_start, year_to_date_comparison_start,
+        generated_on, page_count, product_group_count, issue_count, reconciliation_status,
+        imported_by, imported_at
+      ) VALUES (
+        ?, 'tradefoto_report', ?, 2, 'pdf_text_coordinates', 'source_text_confirmed',
+        'product_group_net', ?, ?, 'EUR', '2026-07-01', '2026-07-31',
+        '2025-07-01', '2025-07-31', '2026-01-01', '2025-01-01', '2026-08-03',
+        1, ?, 0, 'match', 'v071-admin', '2026-08-21T10:00:00.000Z'
+      )
     `).run(
       reportId,
-      horizon,
-      String(nonPositiveComparisons && horizon === "year_to_date" ? -1 : 2810),
+      sourceHash,
+      `v071-${reportId.slice(0, 12)}`,
+      locationId,
+      35 + extraYearToDateGroups,
     );
+    const insertGroup = db.prepare(`
+      INSERT INTO sales_report_product_group_metrics (
+        report_id, horizon, external_product_group_id, product_group_label,
+        current_quantity, comparison_quantity, current_net_revenue, comparison_net_revenue,
+        current_gross_margin, comparison_gross_margin, current_customer_count,
+        comparison_customer_count, current_revenue_per_customer,
+        comparison_revenue_per_customer, source_page, source_ordinate
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `);
+    const groups = [
+      ["101", "Kameras", 12, 10, 1200, nonPositiveComparisons ? 0 : 1000, 320, 270, 11, 9, 109.09, 111.11],
+      ["202", "Objektive", 8, 11, 880, nonPositiveComparisons ? -100 : 1210, 250, 350, 7, 10, 125.71, 121],
+      ["303", "Zubehör", 30, 24, 750, 600, 210, 165, 25, 20, 30, 30],
+      ...Array.from({ length: 32 }, (_, index) => [
+        String(400 + index),
+        `Testgruppe ${String(index + 1).padStart(2, "0")}`,
+        10 + index,
+        9 + index,
+        400 + index * 10,
+        390 + index * 9,
+        100 + index * 3,
+        95 + index * 2,
+        8 + index,
+        7 + index,
+        40 + index,
+        39 + index,
+      ]),
+    ];
+    for (const horizon of ["period", "year_to_date"]) {
+      groups.forEach((group, index) => insertGroup.run(
+        reportId,
+        horizon,
+        group[0],
+        group[1],
+        ...group.slice(2).map((value) => Number(value).toFixed(4)),
+        String(100 + index),
+      ));
+      db.prepare(`
+        INSERT INTO sales_report_total_metrics (
+          report_id, horizon, current_quantity, comparison_quantity,
+          current_net_revenue, comparison_net_revenue, current_gross_margin,
+          comparison_gross_margin, current_customer_count, comparison_customer_count,
+          current_revenue_per_customer, comparison_revenue_per_customer, source_page
+        ) VALUES (?, ?, '50.0000', '45.0000', '2830.0000', ?,
+          '780.0000', '785.0000', '43.0000', '39.0000', '65.8100', '72.0500', 1)
+      `).run(
+        reportId,
+        horizon,
+        String(nonPositiveComparisons && horizon === "year_to_date" ? -1 : 2810),
+      );
+    }
+    for (let index = 0; index < extraYearToDateGroups; index += 1) {
+      const serial = String(index + 1).padStart(3, "0");
+      insertGroup.run(
+        reportId,
+        "year_to_date",
+        `CAP-${serial}`,
+        `Seitengrenze ${serial}`,
+        ...Array.from({ length: 10 }, () => "1.0000"),
+        String(2000 + index),
+      );
+    }
+    db.exec("COMMIT");
+    assert.equal(db.postgresqlCatalogQuery("sales", `
+      SELECT source_sha256 FROM integration.core_location_references WHERE id = ?
+    `, [location.id])[0]?.source_sha256, locationSha);
+    return reportId;
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
   }
-  for (let index = 0; index < extraYearToDateGroups; index += 1) {
-    const serial = String(index + 1).padStart(3, "0");
-    insertGroup.run(
-      reportId,
-      "year_to_date",
-      `CAP-${serial}`,
-      `Seitengrenze ${serial}`,
-      ...Array.from({ length: 10 }, () => "1.0000"),
-      String(2000 + index),
-    );
-  }
-  return reportId;
 }
 
 test.before(async () => {
@@ -189,7 +210,7 @@ test.beforeEach(resetFixture);
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -264,7 +285,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(defaults.payload.vacationCalendarView.view, "year");
   assert.deepEqual(defaults.payload.personnelDashboardLayout, {
     version: 1,
-    order: ["employees", "positions", "applications", "workflows", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"],
+    order: ["employees", "positions", "applications", "workflows", "learning", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"],
     hidden: [],
   });
   assert.deepEqual(defaults.payload.startDashboardPreferences, {
@@ -280,7 +301,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
 
   const personnelDashboardLayout = {
     version: 1,
-    order: ["requests", "employees", "positions", "applications", "workflows", "tasks", "costCenters", "timeTracking", "vacations", "ruleDrafts", "collectiveAgreements", "dataRequests"],
+    order: ["requests", "employees", "positions", "applications", "workflows", "learning", "tasks", "costCenters", "timeTracking", "vacations", "ruleDrafts", "collectiveAgreements"],
     hidden: ["collectiveAgreements"],
   };
   const vacationCalendarView = {
@@ -859,4 +880,37 @@ test("Verkaufsanalyse: PDF-Detailtabelle bricht oberhalb von 24 Seiten kontrolli
   assert.equal(result.response.status, 413, JSON.stringify(result.payload));
   assert.equal(result.payload.code, "SALES_ANALYTICS_CHART_PDF_TABLE_TOO_LARGE");
   assert.match(result.payload.error, /mehr als 24 Seiten/);
+});
+
+test("Personal-Workspace: nullable absence, strict own schema and paired reset persist independently per account", async () => {
+  const model = require("../public/personnel-dashboard-workspace-preferences");
+  const admin = createPortalSession("v071-admin", "admin"), manager = createPortalSession("v071-manager", "manager");
+  assert.equal((await requestJson("/api/portal/v1/ui-preferences", { session: admin })).payload.personnelDashboardWorkspace, null);
+  const legacy = { version: 1, order: ["vacations", "employees", "positions", "applications", "workflows", "learning", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements"], hidden: ["positions"] };
+  await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session: admin, body: { personnelDashboardLayout: legacy } });
+  assert.equal((await requestJson("/api/portal/v1/ui-preferences", { session: admin })).payload.personnelDashboardWorkspace, null, "Legacy-only reads must not materialize empty new settings");
+  const custom = model.migrate(null, legacy); custom.fields["card:employees"] = { title: "Mein Team", color: "blue", geometry: { x: 30, y: 40, width: 400, height: 350 } };
+  custom.fields["card:requests"] = { content: ["absence.timeOff"] };
+  custom.fields["card:collectiveAgreements"] = { content: [], hidden: true, geometry: { x: 80, y: 100, width: 350, height: 300 } };
+  const saved = await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session: admin, body: { personnelDashboardWorkspace: custom, personnelDashboardLayout: model.layout(custom) } });
+  assert.equal(saved.response.status, 200, JSON.stringify(saved.payload)); assert.deepEqual(saved.payload.personnelDashboardWorkspace, custom);
+  assert.deepEqual((await requestJson("/api/portal/v1/ui-preferences", { session: admin })).payload.personnelDashboardWorkspace, custom);
+  assert.equal((await requestJson("/api/portal/v1/ui-preferences", { session: manager })).payload.personnelDashboardWorkspace, null);
+  const defaults = model.empty(); const reset = await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session: admin, body: { personnelDashboardWorkspace: defaults, personnelDashboardLayout: model.layout(defaults) } });
+  assert.equal(reset.response.status, 200); assert.deepEqual(reset.payload.personnelDashboardWorkspace, defaults); assert.deepEqual(reset.payload.personnelDashboardLayout, model.layout(defaults));
+  const oldClient = await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session: admin, body: { personnelDashboardLayout: { ...model.layout(defaults), order: [...model.layout(defaults).order, "dataRequests"], hidden: ["dataRequests"] } } });
+  assert.equal(oldClient.response.status, 200, JSON.stringify(oldClient.payload)); assert.deepEqual(oldClient.payload.personnelDashboardLayout, model.layout(defaults));
+  const stored = db.prepare("SELECT value FROM portal_user_preferences WHERE employee_number = ? AND preference_key = ?").get("v071-admin", model.KEY);
+  assert.deepEqual(JSON.parse(stored.value), defaults);
+});
+
+test("Personal-Workspace: invalid/cross-model input, unauthenticated/CSRF and password gates reject mutation", async () => {
+  const model = require("../public/personnel-dashboard-workspace-preferences"), session = createPortalSession("v071-admin", "admin");
+  for (const personnelDashboardWorkspace of [{ ...model.empty(), order: [] }, { version: 1, fields: { "control:center": { hidden: true } } }, { version: 1, fields: { "card:employees": { color: "url(x)" } } }, { ...model.empty(), actor: "someone-else" }, { ...model.empty(), fields: { "card:requests": { content: ["employees.total"] } } }, { ...model.empty(), fields: { "card:requests": { content: ["absence.timeOff", "absence.timeOff"] } } }]) {
+    const result = await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session, body: { personnelDashboardWorkspace } }); assert.equal(result.response.status, 400); assert.equal(result.payload.code, "UI_PREFERENCES_INVALID");
+  }
+  assert.equal((await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", body: { personnelDashboardWorkspace: model.empty() } })).response.status, 401);
+  const csrf = await fetch(`${baseUrl}/api/portal/v1/ui-preferences`, { method: "PUT", headers: { Cookie: session.cookie, "Content-Type": "application/json" }, body: JSON.stringify({ personnelDashboardWorkspace: model.empty() }) }); assert.equal(csrf.status, 403);
+  db.prepare("UPDATE portal_users SET must_change_password = 1 WHERE employee_number = ?").run("v071-admin");
+  assert.equal((await requestJson("/api/portal/v1/ui-preferences", { method: "PUT", session, body: { personnelDashboardWorkspace: model.empty() } })).response.status, 428);
 });

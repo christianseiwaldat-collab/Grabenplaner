@@ -7,6 +7,20 @@
    deliberately override older per-dialog styles; content and form styling stay
    owned by the respective workspace. Expanded dimensions are never rewritten. */
 .gp-window.gp-window-standard { border-radius:12px !important; }
+/* Workspace dialogs can live outside the themed view, directly under body. */
+html[data-active-page-theme="dark"] .gp-window.gp-window-standard {
+  --surface:#1b2522; --surface-soft:#202d29; --surface-muted:#202d29;
+  --surface-raised:#24322d; --surface-inset:#17211e;
+  --ink:#edf4f1; --muted:#a5b2ad; --line:#34443e; --line-strong:#52675f;
+  --green:#63c49e; --green-dark:#4aaa80;
+  --success-surface:#203b31; --success-ink:#a9e6cb;
+  --warning-surface:#3d331d; --warning-ink:#f2d178;
+  --danger-surface:#402825; --danger-ink:#ffb3a4;
+  color:var(--ink); background:var(--surface); color-scheme:dark;
+}
+html[data-active-page-theme="dark"] .gp-window.gp-window-standard .primary-button { color:#10241d; }
+html[data-active-page-theme="dark"] .gp-window.gp-window-standard .secondary-button { color:var(--ink); border-color:var(--line); background:var(--surface-raised); }
+html[data-active-page-theme="dark"] .gp-window.gp-window-standard .secondary-button:hover { background:var(--surface-soft); }
 .gp-window.gp-window-standard .gp-window-titlebar {
   display:flex !important; flex:0 0 44px !important; align-items:center !important;
   box-sizing:border-box !important; height:44px !important; min-height:44px !important;
@@ -59,9 +73,21 @@
 .gp-window.is-minimized .gp-window-edge { display:none; }
 /* Native dialogs also use the stored viewport geometry when attached manually. */
 dialog.gp-window[open] { inset:auto; margin:0; max-width:none; max-height:none; }
-dialog.gp-window.gp-dialog[open] { inset:auto; margin:0; max-width:none; max-height:none; overflow:auto; transform:none; }
-.gp-window.gp-dialog > form { width:auto; max-width:100%; height:auto; max-height:100%; overflow:auto; }
-.gp-window.gp-dialog > .modal-header { padding:18px 20px 0; }
+dialog.gp-window.gp-dialog[open] { display:flex; flex-direction:column; inset:auto; margin:0; max-width:none; max-height:none; padding:0; overflow:hidden; transform:none; }
+.gp-window.gp-dialog > .gp-dialog-window-title { flex:none; position:relative; z-index:1; }
+.gp-window.gp-dialog > .gp-dialog-body { flex:1 1 auto; min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; }
+/* Inner forms, textareas and tables retain native scrolling, then hand off at
+   their boundary. Only the window body contains the chain; an inner container
+   with contain can otherwise swallow wheel input even without any overflow.
+   Keep the boundary rule last so nested GP windows retain their own boundary.
+   Attached bodies must be scroll containers (overflow:auto or hidden). */
+.gp-window.gp-window-standard .gp-window-scroll-body :where(*) { overscroll-behavior:auto !important; }
+.gp-window.gp-window-standard .gp-window-scroll-body { overscroll-behavior:contain !important; }
+.gp-window.gp-dialog .gp-dialog-body > form { width:auto; max-width:100%; height:auto; max-height:none; overflow:visible; }
+.gp-window.gp-dialog .gp-window-legacy-heading,.gp-window.gp-dialog .gp-window-legacy-close { display:none !important; }
+.gp-window.gp-dialog.is-minimized > .gp-dialog-body { display:none; }
+.gp-window.gp-dialog .gp-dialog-body > .modal-header { padding:18px 20px 0; }
+.gp-window.gp-dialog .gp-dialog-body .modal-actions { bottom:0 !important; padding-bottom:8px; }
 .gp-dialog-window-title { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 18px; border-bottom:1px solid var(--line,#d7e0db); }
 .gp-dialog-window-title strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .gp-window-control { display:inline-flex; align-items:center; justify-content:center; width:30px; height:28px; padding:0; border:0; border-radius:7px; background:transparent; color:inherit; font-size:18px; }

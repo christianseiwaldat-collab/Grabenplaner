@@ -8,15 +8,21 @@ const quote = value => "'" + String(value).replaceAll("'", "''") + "'";
 // mutation authorization. Far-future fixture sessions no longer renew on each
 // request, so explicitly make this session due for renewal before arming it.
 function installSessionTouchRaceMutation(database, auth, statements) {
+  const previousActivity = auth.userActivity;
+  auth.userActivity = true;
   const trigger = "test_session_race_" + crypto.randomBytes(8).toString("hex");
   const expiry = new Date(Date.now() + 60_000).toISOString();
   assert.equal(database.prepare("UPDATE portal_sessions SET expires_at=? WHERE id=?")
     .run(expiry, auth.id).changes, 1);
-  database.exec(`CREATE TRIGGER ${trigger} AFTER UPDATE OF expires_at ON portal_sessions
-    WHEN NEW.id=${quote(auth.id)} BEGIN ${statements} END`);
+  const triggerSql = `CREATE TRIGGER ${trigger} AFTER UPDATE OF expires_at ON portal_sessions
+    WHEN NEW.id=${quote(auth.id)} BEGIN ${statements} END`;
+  const removeTrigger = database.postgresqlTestFixture
+    ? require("./postgresql-api/trigger-fixture").installFixtureTrigger(database, triggerSql)
+    : (database.exec(triggerSql), () => database.exec(`DROP TRIGGER IF EXISTS ${trigger}`));
   return () => {
+    auth.userActivity = previousActivity;
     const session = database.prepare("SELECT expires_at FROM portal_sessions WHERE id=?").get(auth.id);
-    database.exec(`DROP TRIGGER IF EXISTS ${trigger}`);
+    removeTrigger();
     assert.ok(session && session.expires_at !== expiry,
       "The request must reach the armed session-renewal race");
   };

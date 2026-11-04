@@ -699,6 +699,7 @@ async function withLiveSchema(label, work) {
   const rolePassword = randomBytes(24).toString("hex");
   const quotedSchema = `"${schemaName}"`;
   const quotedRole = `"${expectedRole}"`;
+  let quotedDatabase = null;
   let roleCreated = false;
   let primaryError = null;
   try {
@@ -713,6 +714,11 @@ async function withLiveSchema(label, work) {
       PASSWORD '${rolePassword}'
     `);
     roleCreated = true;
+    const databaseName = (await adminPool.query("SELECT current_database() AS name")).rows[0].name;
+    quotedDatabase = `"${databaseName.replaceAll('"', '""')}"`;
+    // This fixture owns one temporary role and schema. It must also work when
+    // PUBLIC has no database CONNECT permission; grant only its own role.
+    await adminPool.query(`GRANT CONNECT ON DATABASE ${quotedDatabase} TO ${quotedRole}`);
     await adminPool.query(
       `CREATE SCHEMA ${quotedSchema} AUTHORIZATION ${quotedRole}`,
     );
@@ -748,6 +754,9 @@ async function withLiveSchema(label, work) {
         `)
       : Promise.resolve(),
     () => adminPool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`),
+    () => roleCreated && quotedDatabase
+      ? adminPool.query(`REVOKE CONNECT ON DATABASE ${quotedDatabase} FROM ${quotedRole}`)
+      : Promise.resolve(),
     () => roleCreated
       ? adminPool.query(`DROP ROLE IF EXISTS ${quotedRole}`)
       : Promise.resolve(),

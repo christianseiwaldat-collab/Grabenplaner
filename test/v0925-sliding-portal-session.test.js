@@ -1,8 +1,6 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
 const test = require("node:test");
 
 const {
@@ -32,16 +30,16 @@ function fixture() {
       VALUES ('employee', 'Mitarbeiter', '[]', 1, 10);
     INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password)
       VALUES ('E18', 'hash', 'employee', 1, 0);
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-      VALUES ('employee-session', 'E18', 'employee-token', '2026-08-13T22:15:00.000Z');
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+      VALUES ('employee-session', 'E18', 'employee-token', '2026-08-13T22:15:00.000Z', '2026-08-13T18:00:00.000Z', '2026-08-14T06:00:00.000Z');
 
     INSERT INTO portal_organization_accounts (
       id, login_name, display_name, account_type, password_hash, active, must_change_password
     ) VALUES ('branch-18', 'fil18', 'Filiale 18', 'branch', 'hash', 1, 0);
     INSERT INTO portal_organization_account_scopes (account_id, location_id)
       VALUES ('branch-18', '18');
-    INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at)
-      VALUES ('branch-session', 'branch-18', 'branch-token', '2026-08-13T22:15:00.000Z');
+    INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at, authenticated_at, absolute_expires_at)
+      VALUES ('branch-session', 'branch-18', 'branch-token', '2026-08-13T22:15:00.000Z', '2026-08-13T18:00:00.000Z', '2026-08-14T06:00:00.000Z');
   `);
   return {
     ...application,
@@ -57,8 +55,8 @@ test("v0.92.5: Browser-Sitzungen erhalten bei Aktivität ein neues Ablaufdatum",
   const context = fixture();
   const extendedExpiry = "2026-08-14T06:00:00.000Z";
   try {
-    await context.repository.touchEmployeeSession({ id: "employee-session", expiresAt: extendedExpiry });
-    await context.repository.touchOrganizationSession({ id: "branch-session", expiresAt: extendedExpiry });
+    await context.repository.touchEmployeeSession({ id: "employee-session", expiresAt: extendedExpiry, now: "2026-08-13T22:00:00.000Z" });
+    await context.repository.touchOrganizationSession({ id: "branch-session", expiresAt: extendedExpiry, now: "2026-08-13T22:00:00.000Z" });
 
     assert.equal(context.database.prepare(
       "SELECT expires_at FROM portal_sessions WHERE id = 'employee-session'",
@@ -80,11 +78,5 @@ test("v0.92.5: Browser-Sitzungen erhalten bei Aktivität ein neues Ablaufdatum",
   }
 });
 
-test("v0.92.5: Server verlängert DB-Sitzung und beide Browser-Cookies gemeinsam", () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
-  assert.match(source, /function portalSessionTimeoutMinutes\(\)[\s\S]*?session_timeout_minutes \|\| 480/);
-  assert.match(source, /renewPortalSession\(\{ session, kind: 'employee'[\s\S]*?expiresAt: refreshedExpiresAt,[\s\S]*?write: value => repository\.touchEmployeeSession\(value\)/);
-  assert.match(source, /renewPortalSession\(\{ session: organizationSession, kind: 'organization'[\s\S]*?expiresAt: refreshedExpiresAt,[\s\S]*?write: value => repository\.touchOrganizationSession\(value\)/);
-  assert.match(source, /PORTAL_SESSION_COOKIE,[\s\S]*?\{ httpOnly: true, maxAge \}/);
-  assert.match(source, /PORTAL_CSRF_COOKIE,[\s\S]*?\{ maxAge \}/);
-});
+// Absolute-boundary and cookie-rotation behavior is exercised by the P2
+// repository and HTTP tests; ordinary responses no longer reissue credentials.

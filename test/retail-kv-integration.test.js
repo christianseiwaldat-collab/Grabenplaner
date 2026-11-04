@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -14,9 +15,9 @@ const FIELD = "employment.retailKv", SUBJECT = "kv-synthetic-subject", WEEK = "2
 let server, url, locationId, versionId, assignmentId, review;
 const users = {};
 function session(id, role) {
-  const token = crypto.randomBytes(32).toString("hex"), csrf = crypto.randomBytes(24).toString("hex");
+  const token = crypto.randomBytes(32).toString("hex"), csrf = sessionCsrf(token);
   db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password,password_changed_at) VALUES (?,'synthetic',?,1,0,CURRENT_TIMESTAMP)").run(id, role);
-  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES (?,?,?,'2099-12-31T23:59:59.000Z')").run(crypto.randomUUID(), id, crypto.createHash("sha256").update(token).digest("hex"));
+  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES (?,?,?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(crypto.randomUUID(), id, crypto.createHash("sha256").update(token).digest("hex"));
   return { cookie: `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`, csrf };
 }
 async function request(route, { method = "GET", body, auth = users.author, skipPlanningBasis = false } = {}) {
@@ -65,7 +66,7 @@ test.before(async () => {
   for (const date of ["2026-10-10", "2026-10-17"]) db.prepare("INSERT INTO shifts(employee_number,location_id,shift_date,start_time,end_time,area,note) VALUES (?, ?, ?, '12:00','14:00','synthetic','')").run(SUBJECT, locationId, date);
   server = app.listen(0, "127.0.0.1"); await new Promise(resolve => server.once("listening", resolve)); url = `http://127.0.0.1:${server.address().port}`;
 });
-test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); try { db.close(); } catch {} releaseInstanceLockForTests(); fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }); });
+test.after(async () => { if (server) await new Promise(resolve => server.close(resolve)); try { await db.close(); } catch {} releaseInstanceLockForTests(); fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 }); });
 test("new source-bound KV profile is seeded without an automatic applicability assignment", () => {
   const id = `${RETAIL_KV_PROFILE.id}@${RETAIL_KV_PROFILE.version}`;
   assert.equal(db.prepare("SELECT count(*) n FROM work_rule_profile_versions WHERE id=?").get(id).n, 1);

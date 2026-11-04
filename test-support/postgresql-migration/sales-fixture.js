@@ -18,11 +18,14 @@ async function withSalesFixture(stage,work){
     const current=(await client.query('SELECT max(stage)::int stage FROM gp.sales_migration_history')).rows[0].stage;
     assert.ok([5,6,7,8].includes(current)&&current>=stage,'Requested fixture needs an installed, known migration stage');stage=current;
     relations=[...stageTables(stage).map(t=>relation(t.name)),...(stage>=6?['integration.core_audit_outbox']:[]),...(stage>=7?['integration.core_audit_delivery']:[]),...(stage>=8?['integration.core_location_references']:[])];
+    if(stage>=8&&(await client.query("SELECT to_regclass('integration.import_history_snapshots') AS name")).rows[0].name)
+      relations.push('integration.import_history_snapshots','integration.import_history_snapshot_members');
     await client.query('SET ROLE gp_sales_owner');await client.query('SET search_path='+SEARCH_PATH);
     assert.equal((await client.query('SELECT * FROM gp.migration_fixture_owner')).rows.length,0,'No other fixture may own this database');
     assert.ok((await client.query(relations.map(table=>'SELECT EXISTS(SELECT 1 FROM '+table+') AS occupied').join(' UNION ALL '))).rows.every(r=>!r.occupied),'Synthetic fixture refuses existing business rows');
     await client.query('INSERT INTO gp.migration_fixture_owner(id) VALUES($1)',[marker]);owned=true;
     sqlite=createSqliteSource();seedCoreFixture(sqlite,3);
+    require('../../lib/persistence/sqlite/operations/import-history-snapshots-schema').ensureSqliteImportHistorySnapshotsSchema(sqlite);
     sqliteProvider=createSqlitePersistenceProvider({database:sqlite,catalog:SQLITE_APPLICATION_CATALOG,closeDatabase:false});
     application=await openSalesDevelopmentApplication({profile:PROFILE,databaseUrl:process.env.GP_SALES_APP_URL,tlsMode:'disable-local-only',stage});
     protection=createDataImportProtection({encryptionKey:Buffer.alloc(32,42),indexKey:Buffer.alloc(32,43),keyId:'synthetic-migration',compression:true});

@@ -1,4 +1,6 @@
 "use strict";
+const pgSchema = require("../test-support/postgresql-api/metadata");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -130,7 +132,7 @@ function insertEmployee(employeeNumber, fullName) {
 
 function createSession(employeeNumber, role) {
   const rawToken = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(rawToken);
   db.prepare(`
     INSERT INTO portal_users (
       employee_number, password_hash, role, role_locked, active,
@@ -138,8 +140,8 @@ function createSession(employeeNumber, role) {
     ) VALUES (?, 'test-only', ?, 0, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
   `).run(employeeNumber, role);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, sha256(rawToken));
   return Object.freeze({
     cookie: `grabenplaner_session=${rawToken}; grabenplaner_csrf=${csrf}`,
@@ -217,11 +219,7 @@ function normalizeSnapshotValue(value) {
 }
 
 function protectedTableNames() {
-  const existing = new Set(db.prepare(`
-    SELECT name
-    FROM sqlite_master
-    WHERE type = 'table'
-  `).all().map(({ name }) => String(name)));
+  const existing = new Set(pgSchema.tableNames(db).map(({ name }) => String(name)));
   const dynamic = [...existing].filter((tableName) => (
     tableName.startsWith("loan")
     || tableName.startsWith("personnel_lifecycle_")
@@ -344,7 +342,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

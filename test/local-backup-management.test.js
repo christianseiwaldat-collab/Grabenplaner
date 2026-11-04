@@ -1,16 +1,19 @@
 "use strict";
 
+// Legacy SQLite helper assertions use the fixed b2 source via legacy-baseline.
+// Other PostgreSQL and application assertions below still use current code.
+
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const { spawnSync } = require("node:child_process");
-const { manage, parseArguments, copyExclusiveFile, RESERVE_BYTES, RECEIPT_RESERVE_BYTES } = require("../scripts/manage-local-backup-archive");
+const { manage, parseArguments, copyExclusiveFile, RESERVE_BYTES, RECEIPT_RESERVE_BYTES } = require("../test-support/legacy-baseline").legacyRequire("scripts/manage-local-backup-archive.js");
 const { openSqliteLegacyDatabase } = require("../lib/persistence/sqlite/provider");
 const { writeBackupCommitMarker, verifyCommittedBackup } = require("../lib/backup-commit");
 const { sha256File } = require("../lib/file-integrity");
-const { verifyStandaloneBackupPair } = require("../backup");
+const { verifyStandaloneBackupPair } = require("../test-support/legacy-baseline").legacyRequire("backup.js");
 const { createAmuStorage, syncEncryptedFilesBackup } = require("../lib/amu-storage");
 const project = path.resolve(__dirname, "..");
 const unlimited = () => ({ bavail: 100 * 1024 ** 3, bsize: 1 });

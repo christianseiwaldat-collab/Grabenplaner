@@ -1,0 +1,68 @@
+'use strict';
+const test = require('node:test'), assert = require('node:assert/strict'), path = require('node:path'), fs = require('node:fs'), http = require('node:http');
+const { root, read, screenshotDirectory } = require('../test-support/learning-workspace-ui');
+const options = { skip: process.env.GP_WINDOW_BROWSER_TEST !== '1', timeout: 90000 };
+for (const width of [1440, 390]) test(`SAST reviews ${width}px: details, filters, export and account/request isolation`, options, async () => {
+  const { chromium } = require(process.env.GP_BROWSER_TEST_MODULE || 'playwright');
+  const server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end('<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><main><div id="securitySastWorkspaceHost"></div></main></body></html>'); });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const browser = await chromium.launch({ headless: true, ...(process.env.GP_BROWSER_EXECUTABLE ? { executablePath: process.env.GP_BROWSER_EXECUTABLE } : {}), args: ['--no-first-run'] });
+  try {
+    const page = await browser.newPage({ viewport: { width, height: 1000 }, ...(width < 600 ? { isMobile: true, hasTouch: true } : {}) });
+    const errors = []; page.on('pageerror', e => errors.push(e.message));
+    await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    for (const name of ['styles.css', 'privacy-organization.css', 'security-audits.css', 'table-layout.css', 'mobile-refinements.css', 'rights-management-workspace.css']) await page.addStyleTag({ content: read(name) });
+    await page.addStyleTag({ content: 'body { display:block; margin:0; } main { padding:16px; max-width:1440px; }' });
+    for (const name of ['rights-settings-table.js', 'security-audits.js', 'security-sast.js']) await page.addScriptTag({ path: path.join(root, 'public', name) });
+    await page.evaluate(async () => {
+      window.actor = { employeeNumber: 'SYNTHETIC-A', accountId: 'A', role: 'developer', isEmployee: true, accountType: 'employee', sessionKind: 'employee', permissions: ['security_audits:read'] };
+      const base = { rule: 'reviewed.rule', path: 'public/example.js', start: { line: 10, column: 1 }, end: { line: 10, column: 5 }, priority: 'P2', reason: '<img src=x onerror="window.injected=true"> Reviewed synthetic rationale.', reviewer: 'Synthetic review', reviewedOn: '2026-10-19', expiresOn: '2026-11-02', sourceSha256: 'a'.repeat(64), context: [{ path: 'test/example.js', sha256: 'b'.repeat(64), state: 'matches', reason: 'Synthetic context' }] };
+      window.payload = { capabilities: { read: true, managePolicy: false }, summary: { total: 2, expired: 1, dueSoon: 0, sourceChanged: 1, contextIncomplete: 0, nextExpiry: '2026-10-18' }, policySha256: 'c'.repeat(64), limits: ['Synthetic fixture, no production data.'], reviews: [{ ...base, fingerprint: '1'.repeat(64), deadlineState: 'current', sourceState: 'matches', requiresReview: false }, { ...base, rule: 'reviewed.expired', fingerprint: '2'.repeat(64), deadlineState: 'expired', sourceState: 'changed', requiresReview: true }] };
+      window.hold = false; window.release = null; window.rejectAccess = false;
+      window.workspace = GrabenplanerSecuritySast.mount(document.querySelector('#securitySastWorkspaceHost'), { user: () => actor, api: async () => { const data = structuredClone(payload); if (hold) await new Promise(resolve => { release = resolve; }); if (rejectAccess) throw Object.assign(Error('Synthetic access revoked'), { status: 403 }); return data; } });
+      await workspace.activate();
+    });
+    await page.locator('.security-audits-link').first().waitFor();
+    assert.equal(await page.locator('.security-audits-link').count(), 2);
+    await page.screenshot({ path: path.join(screenshotDirectory(), `sast-initial-${width}.png`), fullPage: true });
+    await page.locator('.security-audits-link').first().click();
+    assert.ok(await page.locator('[data-sast-dialog]').isVisible());
+    assert.equal(await page.locator('[data-sast-dialog] img').count(), 0);
+    assert.equal(await page.evaluate(() => window.injected), undefined);
+    await page.locator('[data-sast-action="close"]').last().click();
+    await page.locator('[data-sast-filter="pending"]').check();
+    assert.equal(await page.locator('.security-audits-link').count(), 1);
+    const downloaded = page.waitForEvent('download');
+    await page.locator('[data-sast-action="export"]').click();
+    const file = await (await downloaded).path(), exported = JSON.parse(fs.readFileSync(file));
+    assert.equal(exported.reviews.length, 1); assert.equal(exported.reviews[0].requiresReview, true);
+    assert.equal(exported.policySha256, 'c'.repeat(64));
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'The table scrolls within its container');
+    await page.screenshot({ path: path.join(screenshotDirectory(), `sast-reviews-${width}.png`), fullPage: true });
+    await page.locator('[data-sast-filter="pending"]').uncheck();
+    await page.evaluate(() => {
+      const base = payload.reviews[0];
+      payload.reviews = Array.from({ length: 3000 }, (_, index) => ({ ...base, path: `public/synthetic-${index}.js`, fingerprint: String(index).padStart(64, '0') }));
+      payload.summary = { ...payload.summary, total: 3000, expired: 0, sourceChanged: 0 };
+    });
+    await page.locator('[data-sast-action="refresh"]').click();
+    await page.waitForFunction(() => document.querySelectorAll('.security-audits-link').length === 3000);
+    await page.locator('[data-sast-table] input[type="search"]').fill('synthetic-2999.js');
+    assert.equal(await page.locator('.security-audits-link').count(), 1);
+    const selectedDownload = page.waitForEvent('download');
+    await page.locator('[data-sast-action="export"]').click();
+    const selectedExport = JSON.parse(fs.readFileSync(await (await selectedDownload).path()));
+    assert.equal(selectedExport.reviews.length, 1, 'Export must honor the visible text search as well as the explicit filters.');
+    assert.equal(selectedExport.reviews[0].path, 'public/synthetic-2999.js');
+    await page.evaluate(() => { hold = true; document.querySelector('[data-sast-action="refresh"]').click(); });
+    await page.waitForFunction(() => typeof release === 'function');
+    await page.evaluate(() => { actor = { ...actor, employeeNumber: 'SYNTHETIC-B', accountId: 'B' }; release(); });
+    await page.waitForFunction(() => !document.querySelector('#securitySastWorkspaceHost').textContent);
+    assert.equal(await page.locator('.security-audits-link').count(), 0);
+    await page.evaluate(async () => { workspace.destroy(); hold = false; rejectAccess = true; workspace = GrabenplanerSecuritySast.mount(document.querySelector('#securitySastWorkspaceHost'), { user: () => actor, api: async () => { throw Object.assign(Error('Synthetic revoked permission'), { status: 403 }); } }); await workspace.activate(); });
+    assert.match(await page.locator('[data-sast-status]').textContent(), /Zugriff nicht mehr möglich/);
+    assert.ok(await page.locator('[data-sast-action="export"]').isDisabled());
+    assert.deepEqual(errors, []);
+    await page.evaluate(() => workspace.destroy());
+  } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
+});

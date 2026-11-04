@@ -37,8 +37,9 @@ test("Block 10: Claim nutzt POST und den zentralen CSRF-API-Helfer erst nach per
   const implementation = between(script, "const birthdayPresentationPaths", "function message(");
   assert.match(implementation, /api\("\/api\/portal\/v1\/me\/birthday-presentation\/claim", \{\s*method: "POST",\s*body: "\{\}"/);
   assert.match(script, /if \(token && !\["GET", "HEAD"\][\s\S]*headers\["X-CSRF-Token"\] = token/);
-  assert.equal((script.match(/await loadPortalData\(\);\s*await refreshBirthdayPresentationTheme\(\);\s*await claimBirthdayPresentation\(\);/g) || []).length, 3);
-  assert.match(script, /function changePassword\([\s\S]*?await loadPortalData\(\);\s*await refreshBirthdayPresentationTheme\(\);\s*await claimBirthdayPresentation\(\);/);
+  assert.equal((script.match(/await loadPortalData\(\);\s*await refreshBirthdayPresentationTheme\(\);\s*await claimBirthdayPresentation\(\);/g) || []).length, 2);
+  const passwordChange = between(script, "async function changePassword(", "function togglePassword(");
+  assert.match(passwordChange, /await loadPortalData\(\);\s*if \(portalState\.session !== replacement\) return;\s*await refreshBirthdayPresentationTheme\(\);\s*if \(portalState\.session === replacement\) await claimBirthdayPresentation\(\);/);
   assert.match(implementation, /user\.isEmployee !== true \|\| isOrganizationAccount\(user\)/);
   assert.doesNotMatch(implementation, /localStorage|sessionStorage/);
 });

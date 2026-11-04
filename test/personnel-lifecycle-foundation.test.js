@@ -35,13 +35,13 @@ test("Personalmodul-Fundament: neue Einstiege bleiben Teil der bestehenden Perso
     assert.match(navigation, new RegExp(`data-personnel-administration-route="${route}"`));
   }
 
-  for (const [tabId, sectionId, route] of [
-    ["candidatePreboardingTab", "candidatePreboardingSection", "applications"],
-    ["workflowCenterTab", "workflowCenterSection", "workflows"],
-    ["personnelTasksTab", "personnelTasksSection", "tasks"],
+  for (const [titleId, sectionId] of [
+    ["candidatePreboardingTitle", "candidatePreboardingSection"],
+    ["workflowCenterTitle", "workflowCenterSection"],
+    ["personnelTasksTitle", "personnelTasksSection"],
   ]) {
-    assert.match(html, new RegExp(`id="${tabId}"[^>]*aria-controls="${sectionId}"[^>]*data-personnel-administration-tab="${route}"`));
-    assert.match(html, new RegExp(`id="${sectionId}"[^>]*aria-labelledby="${tabId}"`));
+    assert.match(html, new RegExp(`id="${titleId}"`));
+    assert.match(html, new RegExp(`id="${sectionId}"[^>]*role="region"[^>]*aria-labelledby="${titleId}"`));
   }
 
   assert.doesNotMatch(html, /data-view="(?:applications|workflows|personnelTasks)"/);
@@ -56,7 +56,7 @@ test("Personalmodul-Fundament: Feature und eigene Fachrechte sperren Navigation 
   const access = between(
     app,
     "function canReadCandidatePreboarding()",
-    "function canOpenPersonnelAdministrationView()",
+    "function canReadWorkflowStudioCatalog()",
   );
   assert.match(featureBoundary, /installationFeatures\?\.personnelLifecycle === true/);
   assert.match(access, /hasGovernancePermission\("personnel:candidates:read"\)/);
@@ -68,9 +68,6 @@ test("Personalmodul-Fundament: Feature und eigene Fachrechte sperren Navigation 
     "candidatePreboardingNavButton",
     "workflowCenterNavButton",
     "personnelTasksNavButton",
-    "candidatePreboardingTab",
-    "workflowCenterTab",
-    "personnelTasksTab",
   ]) assert.match(app, new RegExp(`elements\\.${element}\\?\\.classList\\.toggle\\("hidden", !`));
 
   assert.match(server, /id: "personnelLifecycle",[\s\S]*?defaultEnabled: false,[\s\S]*?provisionable: false/);
@@ -84,14 +81,15 @@ test("Personalmodul-Fundament: M5- und O8-Ansichten kommunizieren ihre Wirkungsg
     'id="workflowCenterSection"',
     '<section class="personnel-administration-section personnel-lifecycle-foundation personnel-workflow-tasks"',
   );
-  assert.match(workflowSection, /Versionsgebundene Ausführung/);
-  assert.match(workflowSection, /M5 \/ O8 · kontrolliert/);
+  assert.match(workflowSection, /Jede gestartete Instanz bleibt an ihre veröffentlichte Version gebunden/);
+  assert.match(workflowSection, /Personalprozesse · freigegebene Instanzen/);
   assert.match(workflowSection, /personnelLifecycleEditorSection/);
-  assert.match(workflowSection, /Arbeitsentwurf lebt nur im Arbeitsspeicher/);
+  assert.match(workflowSection, /Diese Skizze wird weder gespeichert noch veröffentlicht/);
   assert.match(workflowSection, /personnelWorkflowInstanceWorkspace/);
   assert.match(workflowSection, /personnelWorkflowInstanceList/);
   const taskSection = between(html, 'id="personnelTasksSection"', "</section>");
-  assert.match(taskSection, /Datensparsame Projektion/);
+  assert.match(taskSection, /Dein freigegebener Bereich/);
+  assert.match(taskSection, /aria-label="Aufgaben im freigegebenen Bereich"/);
   assert.match(taskSection, /personnelWorkflowTaskList/);
   assert.doesNotMatch(`${workflowSection}\n${taskSection}`, /Prozess starten|Workflow starten|Aufgabe abschließen/);
   const candidateSection = between(html, 'id="candidatePreboardingSection"', "</section>");
@@ -126,11 +124,12 @@ test("Personalmodul-Fundament: Bewerber-API bleibt zentral, sensibel und ohne un
   assert.doesNotMatch(api, /candidate-documents|documents\/:documentId/);
 });
 
-test("Personalmodul-Fundament: Import und Sicherung bleiben für alle Bewerberdaten fail-closed", () => {
-  assert.match(server, /currentCandidateDocuments[\s\S]*?AMU_FULL_RESTORE_REQUIRED/);
-  assert.match(server, /importedCandidateDocuments[\s\S]*?AMU_FULL_RESTORE_REQUIRED/);
+test("Historischer Personalimport: Altsicherungen bleiben für alle Bewerberdaten fail-closed", () => {
+  const historicalServer = fs.readFileSync(require("../test-support/legacy-baseline").legacyPath("server.js"), "utf8");
+  assert.match(historicalServer, /currentCandidateDocuments[\s\S]*?AMU_FULL_RESTORE_REQUIRED/);
+  assert.match(historicalServer, /importedCandidateDocuments[\s\S]*?AMU_FULL_RESTORE_REQUIRED/);
   const importedProtection = between(
-    server,
+    historicalServer,
     "const candidateProtectedGroups = [",
     "for (const report of protectedRows.amuReports",
   );
@@ -144,10 +143,8 @@ test("Personalmodul-Fundament: Import und Sicherung bleiben für alle Bewerberda
   ]) assert.match(importedProtection, new RegExp(contextFactory));
 });
 
-test("Personalmodul-Fundament: Dokumentregeln sind vor synchronen Startmigrationen initialisiert", () => {
-  const startupMigrationIndex = server.indexOf(
-    "runSqliteStartupSchemaMigrations(", server.indexOf("const startupSchemaMigrationState ="),
-  );
+test("Personalmodul-Fundament: Dokumentregeln sind vor der PostgreSQL-Anwendungsinitialisierung definiert", () => {
+  const startupMigrationIndex = server.indexOf("function initializeApplicationPersistence(");
   const categoriesIndex = server.indexOf("const PERSONNEL_DOCUMENT_CATEGORIES = new Set(");
   const visibilityIndex = server.indexOf(
     'const PERSONNEL_DOCUMENT_VISIBILITY = "hr_confidential";',
@@ -158,4 +155,5 @@ test("Personalmodul-Fundament: Dokumentregeln sind vor synchronen Startmigration
   assert.notEqual(visibilityIndex, -1);
   assert.ok(categoriesIndex < startupMigrationIndex);
   assert.ok(visibilityIndex < startupMigrationIndex);
+  assert.doesNotMatch(server, /runSqliteStartupSchemaMigrations\(/);
 });

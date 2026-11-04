@@ -94,8 +94,8 @@ function fixture() {
     throw new Error('Unexpected selector: ' + selector);
   } };
   const invoke = (route, options = {}) => { const call = { route, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : undefined }; calls.push(call); return handler(route, call); };
-  const context = { state, elements, document, settingsDraftGuard: guard, api: invoke, GpSaveStatus,
-    renderPlanningSaturdaySettings: () => {},
+  const context = { planningAssistantWorkspace: null, emmaContactSettings: null, state, elements, document, settingsDraftGuard: guard, api: invoke, GpSaveStatus,
+    getPlanningSaturdaySettings: () => null,
     settingsSaveStatuses: new Map(), settingsSaveStatusHosts: new Map(), settingsSaveActor: null, settingsSavePrimary: null, settingsSaveCandidateSource: null, settingsSaveEpoch: 0, settingsSavePrimaryEpoch: 0, settingsConfirmedDraft: null, settingsConfirmedRevision: 0,
     showToast: (...args) => toasts.push(args), schedulePdfSettingsWritePermission: 'schedule:pdf:settings:write',
     schedulePdfDesignNamesForSave: () => ({ classic: 'Klassisch' }), canManageScheduleDutyColors: () => true,
@@ -103,10 +103,10 @@ function fixture() {
     saveCustomManagementBranding: () => invoke('branding'), saveScheduleDutyColors: () => invoke('duty'), loadAll: () => invoke('loadAll'),
     escapeHtml: value => String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') };
   vm.createContext(context);
-  for (const name of ['settingsPdfDraftScope','syncSettingsSaveScopes','settingsSaveKey','settingsSaveAllowed','settingsSaveStatus','settingsWriteGuard','settingsSaveRemaining','rememberSettingsConfirmation','settingsConfirmationReadToken','acknowledgeSettingsRead','restoreSettingsConfirmation','restoreSettingsFormDrafts','trackSettingsSaveDraft','settingsBrandingInput','scheduleDutyDraftSignature','loadAmuSettings','saveAmuSettings','isLocalStartDashboardWorkspace', 'startDashboardWorkspaceActorKey', 'greetingTemplateLines', 'renderGreetingSettings',
+  for (const name of ['renderPlanningSaturdaySettings','settingsPdfDraftScope','syncSettingsSaveScopes','settingsSaveKey','settingsSaveAllowed','settingsSaveStatus','settingsWriteGuard','settingsSaveRemaining','rememberSettingsConfirmation','settingsConfirmationReadToken','acknowledgeSettingsRead','restoreSettingsConfirmation','restoreSettingsFormDrafts','trackSettingsSaveDraft','settingsBrandingInput','scheduleDutyDraftSignature','loadAmuSettings','saveAmuSettings','isLocalStartDashboardWorkspace', 'startDashboardWorkspaceActorKey', 'greetingTemplateLines', 'renderGreetingSettings',
     'loadGreetingSettings', 'saveGreetingSettings', 'birthdayPresentationCatalog', 'renderBirthdayPresentationCatalog', 'birthdayPresentationOptions',
     'filterBirthdayPresentationEmployees', 'birthdayPresentationChanges', 'updateBirthdayPresentationSettingsState', 'renderBirthdayPresentationSettings',
-    'loadBirthdayPresentationSettings', 'saveBirthdayPresentationSettings', 'saveBirthdayPresentationDeveloperPreview', 'saveSettings']) vm.runInContext(sourceFunction(name), context);
+    'loadBirthdayPresentationSettings', 'saveBirthdayPresentationSettings', 'saveBirthdayPresentationDeveloperPreview', 'renderPlanningAssistantSettings', 'planningAssistantSettingsInput', 'updatePlanningAssistantSettings', 'saveSettings']) vm.runInContext(sourceFunction(name), context);
   root.addEventListener('input', context.trackSettingsSaveDraft);
   context.syncSettingsSaveScopes();
   function edit(id, value) { const node = nodes.get(id) || elements[id]; assert.ok(node, id); if (node.type === 'checkbox') node.checked = value; else node.value = value;

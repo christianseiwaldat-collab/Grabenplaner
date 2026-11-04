@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "schemaDigest": "953e6e8253e814e477841e2c1c8d65c75f888d4d65feaa58a9ac9080e5954d39",
+  "entries": [
+    {
+      "id": "passkeys.available",
+      "sha256": "4c56d35ebf078ebbc2b29e3071c346f22c3850633a8b3e618ab6136a26a52ef9"
+    },
+    {
+      "id": "passkeys.subject.principal",
+      "sha256": "95043c9788a456db283f9311f421aa115a6f0bbffdcfb1c1f511db5b2053b647"
+    },
+    {
+      "id": "passkeys.subject.handle",
+      "sha256": "9bfbb2482e413c03d3f34760597f059288eb175da16702cb4bcbfde35bf33c44"
+    },
+    {
+      "id": "passkeys.subject.id",
+      "sha256": "b71ef7480625612af1a4ce37f6be1564986833bb04f6936a892d04b0c65d1d9e"
+    },
+    {
+      "id": "passkeys.subject.ensure",
+      "sha256": "f8bd49a7b3f929100a4de456e70f5971ac2ed5addcb2839c31c5b7ea4384b5e3"
+    },
+    {
+      "id": "passkeys.credential.list",
+      "sha256": "7eb77c67e7c0ad8482f46fd33163ddf3c7e6adeb2ed87043db320a3b58dd3596"
+    },
+    {
+      "id": "passkeys.credential.lookup",
+      "sha256": "b33c63f6ceb30bb2f8887ffaf772b9b2e5d7d37426f8ea2dbef2cf20034e22c8"
+    },
+    {
+      "id": "passkeys.credential.id",
+      "sha256": "fbe75fbd6262f46be94f38ed514300dcd6eb0a515e1564e084b757b95ef4a5b6"
+    },
+    {
+      "id": "passkeys.credential.register",
+      "sha256": "44535cb0984691c2e8ed26c19081cbc46f21529de01cf9f5ff52a127ede45b65"
+    },
+    {
+      "id": "passkeys.credential.use",
+      "sha256": "2717d6969feed14fc1b2365c583d2540dfd24cbeefca77adea5dd3cbdd3213f6"
+    },
+    {
+      "id": "passkeys.credential.revoke",
+      "sha256": "4edb9c478c8d4b05b7cd1e0e8952381b8805041cd1e6ac4d65bd3c8e97d0493a"
+    },
+    {
+      "id": "passkeys.subject.revoke",
+      "sha256": "3932129c64b04cc734c6e58a6666ad8f850ed093c5725cf9d66095f29641c39a"
+    },
+    {
+      "id": "passkeys.challenge.issue",
+      "sha256": "ae822639f04c304cbb2dd715b75da92c2b746d09ce393f40516140c4f6194bc4"
+    },
+    {
+      "id": "passkeys.challenge.consume",
+      "sha256": "a147a684dcddd2b303215222ed8fee5b96061b394c95a65cc3dbe88972d29e90"
+    },
+    {
+      "id": "passkeys.challenge.purge",
+      "sha256": "ac007a5d617e89ef12b5b98fb2a59a59bf6713b8208402312ebec744982f9f21"
+    }
+  ]
+}

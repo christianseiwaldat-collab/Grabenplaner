@@ -131,6 +131,86 @@ function evidence(result, id) {
   return result.cards.flatMap((entry) => entry.checks).find((entry) => entry.id === id);
 }
 
+function deploymentInput({ stale = false } = {}) {
+  const proofAt = stale ? "2026-07-21T06:00:00.000Z" : RESTORE_AT;
+  const input = healthyInput({ appSmoke: { state: "pass", checkedAt: proofAt } });
+  Object.assign(input.diagnostics.recoveryAssurance, {
+    maximumAgeHours: 24, generatedAt: proofAt, ageHours: stale ? 26 : 9, stale,
+    state: stale ? "warning" : "ok", lastErrorCode: null,
+    scheduler: { evidenceTrusted: true, timerInstalled: true, timerEnabled: true },
+    trendRuns: [{ trigger: "scheduled-nightly", at: proofAt, status: "passed", applicationSmokeState: "passed" }],
+    deployDeferral: { evidenceTrusted: true, state: "deferred", activeDeploy: true, withinGrace: true,
+      dueAt: "2026-07-22T06:00:00.000Z", deadlineAt: "2026-07-22T09:00:00.000Z" },
+  });
+  Object.assign(input.diagnostics.recovery, { isolatedRestoreTestAt: proofAt, isolatedRestoreTestAgeHours: stale ? 26 : 9 });
+  return input;
+}
+
+test("verified deployment pause retains 100 for fresh recovery and evidence fresh exactly at the due time", () => {
+  for (const stale of [false, true]) {
+    const result = buildSystemTrustIndex(deploymentInput({ stale }));
+    assert.equal(result.score, 100); assert.equal(result.coverage, 100);
+    assert.equal(evidence(result, "recovery_nightly_automation").reasonCode, "AUTOMATION_DEPLOY_DEFERRED");
+    if (stale) for (const id of ["recovery_full_run", "recovery_isolated_restore", "recovery_application_smoke"]) {
+      assert.match(evidence(result, id).reasonCode, /_DEPLOY_DEFERRED$/);
+    }
+  }
+});
+
+test("deployment pause cannot rejuvenate evidence already stale or missing when the night was due", () => {
+  for (const mutate of [
+    input => Object.assign(input.diagnostics.recoveryAssurance, { generatedAt: "2026-07-21T05:59:59Z", ageHours: 26.01 }),
+    input => { input.diagnostics.recovery.isolatedRestoreTestAt = "2026-07-21T05:59:59Z"; input.diagnostics.recovery.isolatedRestoreTestAgeHours = 26.01; },
+    input => { input.applicationSmoke.checkedAt = "2026-07-21T05:59:59Z"; },
+    input => { input.applicationSmoke = { state: "unknown" }; },
+    input => { input.diagnostics.recoveryAssurance.integrityVerified = false; },
+    input => { input.diagnostics.recoveryAssurance.state = "error"; input.diagnostics.recoveryAssurance.lastErrorCode = "RESTORE_TEST_FAILED"; },
+    input => { input.diagnostics.backups.offsite.unresolvedFailures.restoreTest = true; },
+  ]) {
+    const input = deploymentInput({ stale: true }); mutate(input);
+    assert.ok(buildSystemTrustIndex(input).score < 100);
+  }
+});
+
+test("deadline, dead owner and catchup cannot keep an old recovery green through cached automation", () => {
+  for (const mutate of [
+    input => { input.now = "2026-07-22T09:00:00Z"; },
+    input => { input.diagnostics.recoveryAssurance.deployDeferral.activeDeploy = false; },
+    input => { input.diagnostics.recoveryAssurance.deployDeferral.state = "aborted"; },
+  ]) {
+    const input = deploymentInput({ stale: true }); mutate(input);
+    const result = buildSystemTrustIndex(input);
+    assert.equal(result.capReason, "CRITICAL_CHECK_FAILED");
+    assert.equal(evidence(result, "recovery_full_run").state, "unknown");
+  }
+  const input = deploymentInput({ stale: true });
+  Object.assign(input.diagnostics.recoveryAssurance.deployDeferral, { state: "catchup-pending", activeDeploy: false, withinGrace: false });
+  assert.ok(buildSystemTrustIndex(input).score < 100);
+});
+
+test("deployment grace never changes independent monitor, backup or host freshness", () => {
+  const input = deploymentInput();
+  input.diagnostics.monitor.ageHours = 31; input.diagnostics.backups.latestAppAgeHours = 7;
+  input.diagnostics.hostSecurity.ageHours = 104;
+  const result = buildSystemTrustIndex(input);
+  for (const id of ["server_monitor_current", "backup_internal", "updates_host_automatic"]) {
+    assert.equal(evidence(result, id).state, "unknown");
+  }
+});
+
+test("timely catchup running after the start deadline does not invent a completed recovery proof", () => {
+  const input = deploymentInput({ stale: true }); input.now = "2026-07-22T10:00:00Z";
+  const assurance = input.diagnostics.recoveryAssurance;
+  Object.assign(assurance.deployDeferral, { state: "catchup-pending", activeDeploy: false, withinGrace: false });
+  assurance.recentRuns = [{ trigger: "scheduled-nightly", startedAt: "2026-07-22T08:00:00Z", completedAt: null, status: "running", phases: [] }];
+  const result = buildSystemTrustIndex(input);
+  assert.equal(evidence(result, "recovery_nightly_automation").state, "pass");
+  assert.equal(evidence(result, "recovery_nightly_automation").reasonCode, "AUTOMATION_DEPLOY_CATCHUP_RUNNING");
+  assert.equal(evidence(result, "recovery_full_run").state, "unknown");
+  assert.equal(evidence(result, "recovery_application_smoke").state, "unknown");
+  assert.ok(result.score < 100);
+});
+
 test("die freigegebenen Karten ergeben exakt 100 Gewichtspunkte", () => {
   assert.equal(CARD_DEFINITIONS.reduce((sum, entry) => sum + entry.points, 0), 100);
   assert.deepEqual(CARD_DEFINITIONS.map((entry) => entry.id), [

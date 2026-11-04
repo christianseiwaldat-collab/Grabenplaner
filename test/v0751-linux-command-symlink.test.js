@@ -34,31 +34,59 @@ test("v0.75.1 every core command resolves its canonical installed script before 
   assert.match(installer, /\[\[ -f "\$command_source" && ! -L "\$command_source" \]\]/);
 });
 
-test("v0.75.1 core commands execute help directly and reject foreign command symlinks early", (context) => {
-  const probe = spawnSync("bash", ["--version"], { encoding: "utf8" });
-  if (probe.error?.code === "ENOENT") {
-    context.skip("Bash is not installed on this test host");
-    return;
-  }
-  assert.equal(probe.status, 0, probe.stderr || probe.error?.message);
-
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-local-sbin-"));
-  try {
-    for (const [command, relative] of commands) {
-      const target = path.join(linuxRoot, relative);
-      const direct = spawnSync("bash", [target, "--help"], { encoding: "utf8" });
-      assert.equal(direct.status, 0, `${command} direct: ${direct.stderr || direct.stdout}`);
-
-      const link = path.join(temporary, `grabenplaner-${command}`);
-      fs.symlinkSync(target, link);
-      const linked = spawnSync("bash", [link, "--help"], { encoding: "utf8" });
-      assert.notEqual(linked.status, 0, `${command} accepted a foreign command target`);
-      assert.match(linked.stderr, /zeigt nicht auf die erwartete Grabenplaner-Installation/);
-      assert.doesNotMatch(linked.stderr, /local-sbin-.*lib\/common\.sh/);
-    }
-  } finally {
-    fs.rmSync(temporary, { recursive: true, force: true });
-  }
+test("v0.75.1 protected core commands execute help and reject foreign symlinks and writable parents", {
+  skip: process.platform !== "linux",
+}, () => {
+  // The real entrypoints reject runner-owned checkouts before even --help.
+  // Create fresh Root-owned copies below /root; never alter the checkout or
+  // installed product paths. No service, configuration or database is used.
+  const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
+  const files = [...new Set([...commands.map(([, relative]) => relative), "lib/common.sh", "lib/postgresql-maintenance.sh"])];
+  const script = `set -Eeuo pipefail
+umask 077
+[[ "$(id -u)" == 0 ]]
+for parent in / /root; do
+  [[ -d "$parent" && ! -L "$parent" && "$(stat --format=%u -- "$parent")" == 0 ]]
+  mode="$(stat --format=%a -- "$parent")"; (( (8#$mode & 022) == 0 ))
+done
+temporary="$(mktemp --directory --tmpdir=/root gp-command-help.XXXXXXXX)"
+identity="$(stat --format='%d:%i' -- "$temporary")"
+cleanup() {
+  [[ "$temporary" == /root/gp-command-help.* && "$(dirname -- "$temporary")" == /root && ! -L "$temporary" ]]
+  [[ "$(stat --format='%u:%d:%i' -- "$temporary")" == "0:$identity" ]]
+  rm -rf -- "$temporary"
+}
+trap cleanup EXIT
+${files.map(relative => `mkdir -p -- "$temporary/${path.posix.dirname(relative)}"
+cp -- ${quote(path.join(linuxRoot, relative))} "$temporary/${relative}"
+chown 0:0 -- "$temporary/${relative}"
+chmod 0640 -- "$temporary/${relative}"
+cmp -- ${quote(path.join(linuxRoot, relative))} "$temporary/${relative}"`).join("\n")}
+mkdir -- "$temporary/aliases"
+${commands.map(([command, relative]) => `bash "$temporary/${relative}" --help >"$temporary/output" 2>"$temporary/error"
+ln -s -- "$temporary/${relative}" "$temporary/aliases/grabenplaner-${command}"
+if bash "$temporary/aliases/grabenplaner-${command}" --help >"$temporary/output" 2>"$temporary/error"; then exit 31; fi
+grep -q 'zeigt nicht auf die erwartete Grabenplaner-Installation' "$temporary/error"
+printf '%s\\n' '${command}: direct-help and foreign-link guards passed'`).join("\n")}
+mkdir -- "$temporary/unsafe"
+chmod 0777 -- "$temporary/unsafe"
+${["backup-grabenplaner.sh", "update-grabenplaner-server.sh", "lib/common.sh", "lib/postgresql-maintenance.sh"].map(relative => `mkdir -p -- "$temporary/unsafe/${path.posix.dirname(relative)}"
+cp -- "$temporary/${relative}" "$temporary/unsafe/${relative}"
+chown 0:0 -- "$temporary/unsafe/${relative}"
+chmod 0640 -- "$temporary/unsafe/${relative}"`).join("\n")}
+for command in backup-grabenplaner.sh update-grabenplaner-server.sh; do
+  if bash "$temporary/unsafe/$command" --help >"$temporary/output" 2>"$temporary/error"; then exit 32; fi
+  grep -Eq 'root-geschuetzt|fremdschreibbar' "$temporary/error"
+done
+printf '%s\\n' 'writable-parent guards passed'
+`;
+  const rootUser = process.getuid?.() === 0;
+  const result = spawnSync(rootUser ? "/bin/bash" : "sudo", rootUser ? ["-s"] : ["-n", "/bin/bash", "-s"], {
+    input: script, encoding: "utf8", timeout: 30000,
+  });
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
+  for (const [command] of commands) assert.match(result.stdout, new RegExp(`${command}: direct-help and foreign-link guards passed`));
+  assert.match(result.stdout, /writable-parent guards passed/);
 });
 
 test("v0.75.1 optional symlink commands already use canonical or absolute installed roots", () => {

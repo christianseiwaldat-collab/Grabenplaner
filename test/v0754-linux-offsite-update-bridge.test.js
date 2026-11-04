@@ -58,7 +58,9 @@ const v6Artifacts = [
   "systemd/grabenplaner-offsite-target-control@.service.in",
 ];
 const v11Artifacts = ["lib/maintenance-schedule-broker.js"];
-const legacyV10Artifacts = relativeArtifacts.filter((relative) => !v11Artifacts.includes(relative));
+// Version 12 added deploy-deferral; older synthetic contracts must exclude it.
+const legacyV11Artifacts = relativeArtifacts.filter((relative) => relative !== "lib/deploy-deferral.js");
+const legacyV10Artifacts = legacyV11Artifacts.filter((relative) => !v11Artifacts.includes(relative));
 const legacyV5Artifacts = legacyV10Artifacts.filter((relative) => !v6Artifacts.includes(relative));
 const legacyV3Artifacts = legacyV5Artifacts.filter((relative) => !v4Artifacts.includes(relative));
 const legacyV2Artifacts = legacyV3Artifacts.filter((relative) => ![
@@ -229,7 +231,7 @@ test("v0.75.4 updater uses the installed root-protected helper and accepts both 
   assert.match(updater, /stat --format='%u:%g:%h' -- "\$offsite_gate_helper"\)" == "0:\$service_group_gid:1"/);
   assert.match(updater, /offsite_gate_helper_mode="\$\(stat --format='%a' -- "\$offsite_gate_helper"\)"/);
   assert.match(updater, /8#\$offsite_gate_helper_mode & 022/);
-  assert.match(updater, /"\$node" "\$offsite_gate_helper" "\$manifest_result_file" "\$installed_offsite_receipt"/);
+  assert.match(updater, /root_node "\$offsite_gate_helper" "\$manifest_result_file" "\$installed_offsite_receipt"/);
   assert.match(updater, /compatible\|compatible-installer-only\)\s*;;/);
 });
 

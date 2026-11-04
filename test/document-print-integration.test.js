@@ -28,25 +28,32 @@ test('monthly modal preserves its month and model and only restores a still-curr
 function loanFixture(){
   let owner='A',allowed=true,now=Date.now(),result=[],syncs=0;
   const dialog={open:true,shows:0,close(){this.open=false;},showModal(){this.open=true;this.shows++;},contains:()=>true},opener={isConnected:true};
-  const confirmation={id:'C1',loanId:'L1',status:'pending',expectedRevision:2,expiresAt:new Date(now+60000).toISOString(),loan:{revision:2},photoAttachments:[{id:'B1',revision:1,downloadUrl:'/api/portal/v1/loans/photo-attachments/B1/download'}]};
+  const confirmation={id:'C1',loanId:'L1',status:'pending',expectedRevision:2,expiresAt:new Date(now+60000).toISOString(),loan:{revision:2},photoAttachments:[{id:'B1',revision:1,previewUrl:'/api/portal/v1/loans/photo-attachments/B1/preview',downloadUrl:'/api/portal/v1/loans/photo-attachments/B1/download'}]};
   const s={Date:class extends Date{static now(){return now;}},document:{},window:{GpDocumentPrint:{visibleTarget:(_doc,target)=>target}},portalState:{activeLoanConfirmation:confirmation,pendingLoanConfirmations:[confirmation],activeTab:'loan',loanConfirmationLoading:false},
     el:{loanConfirmationDialog:dialog,loanConfirmationNote:{value:'BEISPIEL angefangene Notiz'},loanTab:opener},loanConfirmationPrintBridge:null,loanConfirmationRequestGeneration:0,
     portalDocumentActorKey:()=>owner,loanCapabilityEnabled:()=>allowed,loanPhotoAttachmentList:()=>'',loanPhotoGallery:()=>'',esc:v=>v,timestampText:v=>v,loanConditionText:v=>v,message(){},
     api:async()=>({confirmations:result}),syncPortalDocumentPrint(){syncs++;},};
   vm.createContext(s);for(const name of ['clearLoanConfirmationPrintState','loanConfirmationPrintSignature','portalLoanDocumentPrintBridge','showLoanConfirmation','presentNextLoanConfirmation','loadPendingLoanConfirmations'])vm.runInContext(fn(portal,name),s);
-  const open=()=>s.portalLoanDocumentPrintBridge({url:confirmation.photoAttachments[0].downloadUrl,target:{}});
+  const open=(kind='download')=>s.portalLoanDocumentPrintBridge({url:confirmation.photoAttachments[0][kind+'Url'],target:{}});
   return {s,dialog,confirmation,open,opener,owner:v=>owner=v,allow:v=>allowed=v,now:v=>now=v,result:v=>result=v,syncs:()=>syncs};
 }
-test('loan print pauses presentation while polling still updates pending state; close preserves the note',async()=>{
-  const f=loanFixture(),bridge=f.open();assert.equal(f.dialog.open,false);assert.equal(bridge.target,f.opener);assert.equal(bridge.canUse(),true);
+for(const kind of ['preview','download'])test('loan '+kind+' pauses presentation while polling still updates pending state; close preserves the note',async()=>{
+  const f=loanFixture(),bridge=f.open(kind);assert.equal(f.dialog.open,false);assert.equal(bridge.target,f.opener);assert.equal(bridge.canUse(),true);
   f.s.presentNextLoanConfirmation();assert.equal(f.dialog.shows,0);f.s.showLoanConfirmation(f.confirmation);assert.equal(f.dialog.shows,0);
   f.result([structuredClone(f.confirmation)]);await f.s.loadPendingLoanConfirmations();assert.equal(f.syncs(),1);assert.equal(f.dialog.open,false);assert.equal(bridge.canUse(),true);
   bridge.onClose();assert.equal(f.dialog.open,true);assert.equal(f.s.el.loanConfirmationNote.value,'BEISPIEL angefangene Notiz');assert.equal(f.s.loanConfirmationPrintBridge,null);
 });
-test('loan completion, revised source, expired request, account, rights and navigation never restore stale forms',()=>{
-  for(const change of [f=>f.s.portalState.pendingLoanConfirmations=[],f=>f.s.portalState.pendingLoanConfirmations=[{...f.confirmation,expectedRevision:3}],f=>f.now(Date.parse(f.confirmation.expiresAt)+1),f=>f.owner('B'),f=>f.allow(false),f=>f.s.portalState.activeTab='other']){
-    const f=loanFixture(),bridge=f.open();change(f);bridge.onClose();assert.equal(f.dialog.open,false);assert.equal(f.s.el.loanConfirmationNote.value,'');assert.equal(f.s.portalState.activeLoanConfirmation,null);assert.equal(f.s.loanConfirmationPrintBridge,null);
+for(const kind of ['preview','download'])test('loan '+kind+' completion, revised source, expired request, account, rights and navigation never restore stale forms',()=>{
+  for(const change of [f=>f.s.portalState.pendingLoanConfirmations=[],f=>f.s.portalState.pendingLoanConfirmations=[{...f.confirmation,expectedRevision:3}],f=>f.confirmation.photoAttachments[0].previewUrl='/api/portal/v1/loans/photo-attachments/B2/preview',f=>f.now(Date.parse(f.confirmation.expiresAt)+1),f=>f.owner('B'),f=>f.allow(false),f=>f.s.portalState.activeTab='other']){
+    const f=loanFixture(),bridge=f.open(kind);change(f);bridge.onClose();assert.equal(f.dialog.open,false);assert.equal(f.s.el.loanConfirmationNote.value,'');assert.equal(f.s.portalState.activeLoanConfirmation,null);assert.equal(f.s.loanConfirmationPrintBridge,null);
   }
+});
+test('loan photo bridge rejects unrelated attachments and routes without closing the confirmation',()=>{
+  const f=loanFixture();
+  for(const url of ['/api/portal/v1/loans/photo-attachments/OTHER/preview','/api/portal/v1/loans/photo-attachments/OTHER/download','/api/portal/v1/loans/photo-attachments/B1/preview?token=secret','/api/portal/v1/loans/photo-attachments/B1/content']){
+    assert.equal(f.s.portalLoanDocumentPrintBridge({url,target:{}}),null);assert.equal(f.dialog.open,true);
+  }
+  f.dialog.contains=()=>false;assert.equal(f.open('preview'),null);assert.equal(f.dialog.open,true);
 });
 test('late pending-confirmation requests cannot overwrite another actor or release a newer request',async()=>{
   const f=loanFixture();let resolve;f.s.api=()=>new Promise(done=>resolve=done);const request=f.s.loadPendingLoanConfirmations();f.owner('B');f.s.loanConfirmationRequestGeneration++;f.s.portalState.loanConfirmationLoading=false;const current=f.s.portalState.pendingLoanConfirmations;resolve({confirmations:[]});await request;assert.equal(f.s.portalState.pendingLoanConfirmations,current);assert.equal(f.syncs(),0);

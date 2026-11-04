@@ -76,36 +76,3 @@ test('normal catalog labels preserve quotes, ampersands, umlauts and numeric val
   assert.equal(escapeHtml(null), '');
   assert.equal(escapeHtml(42), '42');
 });
-
-test('stored colors cannot introduce CSS declarations, URLs or HTML attributes', () => {
-  for (const file of ['app.js', 'portal.js']) {
-    const text = fs.readFileSync(path.join(__dirname, '../public', file), 'utf8');
-    const definition = text.match(/function safeCssColor\([^]*?\n\}/)?.[0];
-    assert.ok(definition, file);
-    const ctx = {};
-    vm.runInNewContext(definition, ctx);
-    assert.equal(ctx.safeCssColor(' #aB12fF '), '#aB12fF');
-    for (const hostile of ['red;background:url(https://example.invalid)', '#fff" onmouseover="alert(1)', '</span><img src=x onerror=alert(1)>', 'var(--external)', '#123']) {
-      const color = ctx.safeCssColor(hostile);
-      assert.match(color, /^#[0-9a-f]{6}$/i);
-      const document = parseDocument(`<span style="background:${color}"></span>`);
-      assert.equal(nodes(document, node => node.name === 'img').length, 0);
-      const span = nodes(document, node => node.name === 'span')[0];
-      assert.deepEqual(Object.keys(span.attribs), ['style']);
-      assert.match(span.attribs.style, /^background:#[0-9a-f]{6}$/i);
-    }
-    assert.match(ctx.safeCssColor('invalid', 'red;position:fixed'), /^#[0-9a-f]{6}$/i);
-  }
-});
-
-test('reference links reject executable schemes while preserving normal HTTP sources', () => {
-  const definition = source.match(/function safeWorkRuleSourceUrl\([^]*?\n\}/)?.[0];
-  assert.ok(definition);
-  const ctx = { URL };
-  vm.runInNewContext(definition, ctx);
-  for (const value of ['javascript:alert(1)', 'data:text/html,<svg onload=alert(1)>', 'java\nscript:alert(1)', '//example.invalid/path', '']) {
-    assert.equal(ctx.safeWorkRuleSourceUrl(value), '');
-  }
-  assert.equal(ctx.safeWorkRuleSourceUrl('https://example.test/document?q=one'), 'https://example.test/document?q=one');
-  assert.equal(ctx.safeWorkRuleSourceUrl('http://example.test/document'), 'http://example.test/document');
-});

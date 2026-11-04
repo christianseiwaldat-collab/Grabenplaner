@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "scope": "onboarding-receipt-projection-application-extension",
+  "baseCatalog": "block-4-catalog.json",
+  "baseSchemaPlanSha256": "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e",
+  "productActivation": false,
+  "entries": [
+    {
+      "statementId": "custom-process-management.onboarding-operation-by-id",
+      "sourceContract": "9d2e4d8954151f7611812e9be8cb90d9cd1ff47ce5a5f3ef27dc6e30448b7e31",
+      "sqlSha256": "91a905626d16db9cfe8113ce01aff92c2a5f994fdce41535d825fd15898f01ad",
+      "baseSourceContract": "9d2e4d8954151f7611812e9be8cb90d9cd1ff47ce5a5f3ef27dc6e30448b7e31",
+      "baseSqlSha256": "690a8128d9660b929163ecca0e38d4cb8774397de16bd0af329e28a309e8b383",
+      "parameterBindingsSha256": "0988a70a943f1f79a8ebe1999a1dc5784d3980de647a2b52edf62221df2221a5",
+      "parameterOrderSha256": "8dcdf4ea2f1af90a9a1dac9830e3d632084587532c7dac6e3927e849d34a48dd"
+    }
+  ]
+}

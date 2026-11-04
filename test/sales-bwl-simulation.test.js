@@ -72,8 +72,8 @@ test('historical snapshots reduce revoked prices/costs without refreshing, but n
   const scoped = { ...restricted, scopes: [{ locationId: '18' }], permissions: restricted.permissions.filter(p => p !== 'sales:analytics:company:read') };
   assert.throws(() => M.filterHistorical(saved, M.authority(scoped)), { status: 403 });
 });
-test('duplicate protected stock rows remain unknown when all stock is selected and do not inflate physical totals', async t => {
-  const f = await simulationFixture(t, { stocks: [{ EAN: '0000000000042', FilialID: 18, FBestand: '4' }, { EAN: '0000000000042', FilialID: 18, FBestand: '100' }] });
+test('legacy duplicate protected stock rows remain unknown when all stock is selected and do not inflate physical totals', async t => {
+  const f = await simulationFixture(t, { legacyStock: true, stocks: [{ EAN: '0000000000042', FilialID: 18, FBestand: '4' }, { EAN: '0000000000042', FilialID: 18, FBestand: '100' }] });
   const all = await f.simulation('calculate', { filters: { stock: 'all' }, assumptions: {} }); assert.equal(all.snapshot.rows.length, 1); assert.equal(all.snapshot.rows[0].quantity, null); assert.equal(all.snapshot.summary.totals.scenarioQuantity.value, null);
   const positive = await f.simulation('calculate', { filters: { stock: 'positive' }, assumptions: {} }); assert.equal(positive.snapshot.rows.length, 0); assert.equal(positive.snapshot.summary.totals.scenarioQuantity.value, '0');
 });

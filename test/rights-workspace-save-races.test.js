@@ -60,7 +60,8 @@ function permissionContainer() {
         const label = { classList: classList(), querySelector: () => ({ textContent: "" }) };
         return {
           value: attrs.match(/value="([^"]+)"/)?.[1] || "",
-          dataset: { rolePermission: attrs.match(/data-role-permission="([^"]+)"/)?.[1] || "false" },
+          dataset: { rolePermission: attrs.match(/data-role-permission="([^"]+)"/)?.[1] || "false",
+            departmentId: attrs.match(/data-department-id="([^"]*)"/)?.[1] || "" },
           checked: /(?:^|\s)checked(?:\s|$)/.test(attrs),
           disabled: /(?:^|\s)disabled(?:\s|$)/.test(attrs),
           closest: () => label,
@@ -103,7 +104,7 @@ function fixture(options = {}) {
     portalSession: { authenticated: true, user: { employeeNumber: "SYN-admin", accountId: "synthetic-A",
       role: options.actorRole || "admin", sessionKind: "employee", isEmployee: true,
       active: true, mustChangePassword: false, permissions: ["rights:read"], scopes: [] } },
-    locations: [{ id: "branch-A", name: "Example branch", departments: [{ id: 7, name: "Example team" }] }],
+    locations: options.locations || [{ id: "branch-A", name: "Example branch", departments: [{ id: 7, name: "Example team" }] }],
     rightsManagement: {
       users: options.users || [user(), user("SYN-18")],
       catalog: options.catalog || [catalogEntry("loans:self:use"), catalogEntry("extra:synthetic", { scopeBehavior: "global" })],
@@ -124,12 +125,13 @@ function fixture(options = {}) {
   };
   const elements = Object.fromEntries([
     "rightsSettings", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorScope", "rightsEditorScopeHint",
-    "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement",
+    "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHomeScopeOptions",
     "rightsEditorHint", "saveRightsEditorButton", "rightsManagementHint", "rightsUserList",
     "mobileLeadershipModuleSettings", "personnelFieldRightsMatrix", "personnelFieldRightsSettingsAccess", "mobileLeadershipSettingsCard",
   ].map(name => [name, new FakeElement()]));
   elements.rightsEditorModal = modal;
   elements.rightsEditorPermissions = permissionContainer();
+  elements.rightsEditorLocationChoices = permissionContainer();
   // The table belongs to RightsManagementWorkspace. A failed load may change
   // its rows through render(), but must never destroy the table DOM outright.
   const tableSurface = { header: {}, body: {}, rows: [] };
@@ -232,6 +234,76 @@ function fixture(options = {}) {
 
 const copy = value => JSON.parse(JSON.stringify(value));
 
+function administrationFixture(options = {}) {
+  return fixture({ actorRole: "developer",
+    locations: ["branch-A", "branch-B", "branch-C"].map(id => ({ id, name: id, active: true, departments: [{ id: 7, name: "Example team" }] })),
+    catalog: ["schedule:read", "schedule:write", "employees:read"].map(id => catalogEntry(id,
+      { scopeBehavior: "organizational", eligibleRoles: ["location_planner"] })),
+    users: [user("SYN-17", { role: "location_planner", homeLocationId: "", preferredDepartmentId: null,
+      rolePermissions: ["schedule:read", "schedule:write", "employees:read"],
+      scopes: ["branch-A", "branch-B", "branch-C"].map(locationId => ({ locationId, departmentId: null })) })],
+    ...options,
+  });
+}
+
+test("independent planner rights-only revocation retains every explicitly assigned branch", async () => {
+  const f = administrationFixture(); f.open();
+  assert.equal(f.elements.rightsEditorHomeScopeOptions.classList.contains("hidden"), true);
+  assert.equal(f.elements.rightsEditorLocationChoices.classList.contains("hidden"), false);
+  f.input("employees:read").checked = false;
+  const saving = f.save(), request = f.next("/rights/SYN-17", "PUT");
+  const body = JSON.parse(request.options.body);
+  assert.deepEqual(body.scopes, f.state.rightsManagement.users[0].scopes);
+  assert.deepEqual(body.grantedPermissions, []);
+  assert.deepEqual(body.deniedPermissions, ["employees:read"]);
+  request.resolve(copy(f.state.rightsManagement)); await saving;
+});
+
+test("independent planner can select several branches and removal is explicit", async () => {
+  const f = administrationFixture(); f.open();
+  f.elements.rightsEditorLocationChoices.inputs.find(input => input.value === "branch-B").checked = false;
+  const saving = f.save(), request = f.next("/rights/SYN-17", "PUT");
+  assert.deepEqual(JSON.parse(request.options.body).scopes,
+    [{ locationId: "branch-A", departmentId: null }, { locationId: "branch-C", departmentId: null }]);
+  request.resolve(copy(f.state.rightsManagement)); await saving;
+});
+
+test("independent planner cannot save planning rights without an explicit branch", async () => {
+  const f = administrationFixture(); f.open();
+  f.elements.rightsEditorLocationChoices.inputs.forEach(input => { input.checked = false; });
+  f.handlers.refreshRightsEditorSaveState();
+  assert.equal(f.elements.saveRightsEditorButton.disabled, true);
+  await f.save();
+  assert.equal(f.requests.length, 0);
+});
+
+test("independent planner branch edits during an outstanding save survive the earlier ACK", async () => {
+  const f = administrationFixture(); f.open();
+  const saving = f.save(), request = f.next("/rights/SYN-17", "PUT");
+  const input = f.elements.rightsEditorLocationChoices.inputs.find(entry => entry.value === "branch-B");
+  input.checked = false;
+  request.resolve(copy(f.state.rightsManagement)); await saving;
+  assert.equal(f.elements.rightsEditorModal.open, true);
+  assert.equal(input.checked, false);
+  assert.equal(f.elements.rightsEditorModal.closeCount, 0);
+});
+
+test("independent planner scope mode does not apply to a non-Developer or a branch-bound employee", () => {
+  const nonDeveloper = administrationFixture({ actorRole: "admin" }); nonDeveloper.open();
+  assert.equal(nonDeveloper.handlers.rightsEditorScopeContext(nonDeveloper.state.rightsManagement.users[0]).independentPlanner, false);
+  assert.equal(nonDeveloper.elements.rightsEditorLocationChoices.classList.contains("hidden"), true);
+  const bound = administrationFixture({ users: [user("SYN-17", { role: "location_planner", homeLocationId: "branch-A" })] }); bound.open();
+  assert.equal(bound.handlers.rightsEditorScopeContext(bound.state.rightsManagement.users[0]).independentPlanner, false);
+  assert.equal(bound.elements.rightsEditorHomeScopeOptions.classList.contains("hidden"), false);
+});
+
+test("independent planner existing department scopes are retained without widening them", () => {
+  const f = administrationFixture({ users: [user("SYN-17", { role: "location_planner", homeLocationId: "",
+    rolePermissions: ["schedule:read"], scopes: [{ locationId: "branch-A", departmentId: 7 }] })] });
+  f.open();
+  assert.deepEqual(copy(f.handlers.rightsEditorSelectedScope()), [{ locationId: "branch-A", departmentId: 7 }]);
+});
+
 test("rights pending double submit sends one PUT and unchanged ACK closes exactly once", async () => {
   const f = fixture(); f.open();
   const saving = f.save();
@@ -324,6 +396,7 @@ test("rights old actor PUT ACK cannot replace a new actor roster or unlock its p
   f.actorChange();
   assert.equal(first.options.signal.aborted, true);
   assert.equal(f.context.rightsEditorSnapshot, null);
+  assert.equal(f.elements.rightsEditorLocationChoices.inputs.length, 0);
   assert.equal(f.state.rightsManagement, null);
   f.state.rightsManagement = { users: [user("SYN-18")], catalog: [catalogEntry("loans:self:use")] };
   f.open("SYN-18");
@@ -528,6 +601,7 @@ for (const status of [401, 403]) {
     assert.equal(f.elements.rightsEditorModal.open, false);
     assert.equal(f.elements.rightsEditorModal.closeCount, 1);
     assert.equal(f.elements.rightsEditorPermissions.inputs.length, 0);
+    assert.equal(f.elements.rightsEditorLocationChoices.inputs.length, 0);
     assert.equal(f.elements.rightsEditorPermissions.innerHTML, "");
     assert.equal(f.elements.rightsEditorTitle.textContent, "Rechte bearbeiten");
     assert.equal(f.elements.rightsEditorSummary.textContent, "");

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "scope": "onboarding-json-application-extension",
+  "baseCatalog": "block-4-catalog.json",
+  "baseSchemaPlanSha256": "1e7c18f7ea80e5214de4a20add006cad466e80f201663f52e5f27e7d63f3861e",
+  "productActivation": false,
+  "entries": [
+    {
+      "statementId": "custom-process-management.list-active-lifecycle-onboarding-tasks",
+      "sourceContract": "ff967ac53dcceec3cffce8d34a94e7a6d1712761faee85de29ec0a91fe23e62d",
+      "sqlSha256": "59d637590a53935f554d63982ae4b60e500ebd09f00a4905a4a091306b9c4aba",
+      "baseSourceContract": "3e8a8fd5d05c2ca41f7f9d1986bb999acde9a2d77e1e014a908f24dea34155f1",
+      "baseSqlSha256": "59d637590a53935f554d63982ae4b60e500ebd09f00a4905a4a091306b9c4aba",
+      "parameterBindingsSha256": "7305d2632e3cbf2d0e2ed70433515dbd15cc167a831d2e0585678f147324d667",
+      "parameterOrderSha256": "8dcdf4ea2f1af90a9a1dac9830e3d632084587532c7dac6e3927e849d34a48dd"
+    },
+    {
+      "statementId": "custom-process-management.lifecycle-onboarding-task-context",
+      "sourceContract": "b364de83cb60f820cb182c6dbdaa08dc27aafe8d9e4846f54858fb787b99676b",
+      "sqlSha256": "39258993b688125e909e1b179df083aeed58c4b6d6cac5f992da69968078d2b5",
+      "baseSourceContract": "54cac136159c87a02e9751377bd878aacc42d8d4162ca958c69f0a73ddd1931a",
+      "baseSqlSha256": "39258993b688125e909e1b179df083aeed58c4b6d6cac5f992da69968078d2b5",
+      "parameterBindingsSha256": "f9f4f0bb1bc7af228d815f38078ee29a7bafd193a4dd72dc0556ba6fb64c0ceb",
+      "parameterOrderSha256": "8dcdf4ea2f1af90a9a1dac9830e3d632084587532c7dac6e3927e849d34a48dd"
+    }
+  ]
+}

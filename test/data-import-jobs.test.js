@@ -95,6 +95,25 @@ test('cash pause and maintenance retain the queued request without starting acti
  assert.equal((await q.overlay(f.sources.get(f.id))).background.status,'queued');assert.equal(f.cash.sourceId,null);
 });
 
+test('cash takeover still rejects invalid rows without changing count integrity',async t=>{
+ const f=await cashJobFixture(t),q=f.original.queue;
+ const tables=[{name:'CASH',run:{gates:[],counts:{ready:1,invalid:1}}}];
+ Object.assign(f.sources.get(f.id),{status:'needs_review',tables});
+ const before=JSON.stringify(f.sources.get(f.id));
+ await assert.rejects(q.enqueueCashApply(f.getSession,{sourceId:f.id,expectedRevision:0}),{code:'IMPORT_DECISION_GATE'});
+ assert.equal(f.cash.calls,0);assert.equal(JSON.stringify(f.sources.get(f.id)),before);
+ assert.deepEqual(await fsp.readdir(f.directory),[]);
+});
+
+test('cash parent-dependent conflicts remain eligible for ordered runtime recheck',async t=>{
+ const f=await cashJobFixture(t),q=f.original.queue;
+ Object.assign(f.sources.get(f.id),{status:'needs_review',tables:[{name:'CASH',run:{gates:[],counts:{ready:1,conflict:1}}}]});
+ const before=JSON.stringify(f.sources.get(f.id));
+ const accepted=await q.enqueueCashApply(f.getSession,{sourceId:f.id,expectedRevision:0});
+ assert.equal(accepted.background.phase,'applying');assert.equal(f.cash.calls,0);
+ assert.equal(JSON.stringify(f.sources.get(f.id)),before);assert.equal((await f.store.read(f.id)).operation,'apply');
+});
+
 test('accepted file is encrypted and completes reading plus review with no browser or session token',async t=>{
  const f=await fixture(t),source=await f.enqueue();assert.equal(f.state.calls,0);
  const names=await fsp.readdir(f.directory);assert.equal(names.length,2);
@@ -102,6 +121,27 @@ test('accepted file is encrypted and completes reading plus review with no brows
  assert.equal((await f.queue.overlay(source)).background.status,'queued');
  await f.queue.tick();assert.equal(f.state.calls,1);assert.equal(f.state.reviews,1);assert.deepEqual(await fsp.readdir(f.directory),[]);
  assert.equal(f.sources.get(source.id).status,'ready');
+});
+
+test('encrypted import spool requires the complete canonical GCM envelope and authenticates before return',async t=>{
+ const f=await fixture(t);await f.store.init();
+ const source=sourceBuffer(),blob=await f.store.encrypt('a'.repeat(64),source);
+ assert.deepEqual(await f.store.decrypt(blob),source);
+ for(const length of [0,4,8,12,15,17]){
+   const tag=Buffer.alloc(length);Buffer.from(blob.tag,'base64').copy(tag);
+   await assert.rejects(f.store.decrypt({...blob,tag:tag.toString('base64')}),{code:'IMPORT_JOB_FILE_INVALID'});
+ }
+ for(const field of ['key','iv','tag']){
+   await assert.rejects(f.store.decrypt({...blob,[field]:null}),{code:'IMPORT_JOB_FILE_INVALID'});
+   await assert.rejects(f.store.decrypt({...blob,[field]:blob[field]+'\n'}),{code:'IMPORT_JOB_FILE_INVALID'});
+   await assert.rejects(f.store.decrypt({...blob,[field]:'invalid'}),{code:'IMPORT_JOB_FILE_INVALID'});
+ }
+ for(const length of [0,11,13])await assert.rejects(f.store.decrypt({...blob,iv:Buffer.alloc(length).toString('base64')}),{code:'IMPORT_JOB_FILE_INVALID'});
+ const changedTag=Buffer.from(blob.tag,'base64');changedTag[0]^=1;
+ await assert.rejects(f.store.decrypt({...blob,tag:changedTag.toString('base64')}),{code:'IMPORT_JOB_FILE_INVALID'});
+ const file=path.join(f.directory,blob.name),ciphertext=await fsp.readFile(file);ciphertext[0]^=1;
+ await fsp.writeFile(file,ciphertext);
+ await assert.rejects(f.store.decrypt(blob),{code:'IMPORT_JOB_FILE_INVALID'});
 });
 
 test('deleting a paused Access copy removes bytes and password, but never writes GP import state',async t=>{
@@ -236,6 +276,31 @@ test('only an explicit takeover starts business writes and it resumes after a tr
   await f.queue.stop();f.make();f.state.now+=30001;f.state.beforeApply=null;await f.queue.tick();
   assert.equal(f.sources.get(source.id).applied,3);assert.equal(f.sources.get(source.id).status,'applied');
   assert.deepEqual(await fsp.readdir(f.directory),[]);
+});
+
+test('non-cash takeover admits quarantined invalid and conflicting rows without altering the preview',async t=>{
+ const f=await fixture(t),source=await f.enqueue();await f.queue.tick();
+ const tables=[{name:'FILIALEN',run:{gates:[],counts:{ready:1,invalid:2,conflict:1}}}];
+ Object.assign(f.sources.get(source.id),{status:'needs_review',tables});
+ const before=JSON.stringify(f.sources.get(source.id));
+ const accepted=await f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:1});
+ assert.equal(accepted.background.phase,'applying');assert.equal(accepted.background.status,'queued');
+ assert.equal(JSON.stringify(f.sources.get(source.id)),before);
+ const job=await f.store.read(source.id);assert.equal(job.operation,'apply');assert.equal(job.requestedRevision,1);
+ assert.equal(f.sources.get(source.id).applied,undefined);
+});
+
+test('non-cash source gates reject takeover with or without quarantined rows',async t=>{
+ const f=await fixture(t),source=await f.enqueue();await f.queue.tick();
+ for(const invalid of [0,2]){
+  const tables=[{name:'FILIALEN',run:{gates:['SOURCE_SCHEMA_CHANGED'],counts:{ready:1,invalid}}}];
+  Object.assign(f.sources.get(source.id),{status:'needs_review',tables});
+  const before=JSON.stringify(f.sources.get(source.id));
+  await assert.rejects(f.queue.enqueueApply(f.getSession,source.id,{expectedRevision:1}),{code:'IMPORT_DECISION_GATE'});
+  assert.equal(JSON.stringify(f.sources.get(source.id)),before);
+  assert.equal(f.sources.get(source.id).applied,undefined);
+  assert.deepEqual(await fsp.readdir(f.directory),[]);
+ }
 });
 
 test('takeover admission checks revision and current apply rights, and pause survives a completed packet',async t=>{

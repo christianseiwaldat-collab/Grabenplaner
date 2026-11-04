@@ -1,4 +1,7 @@
 "use strict";
+const { dropFixtureTrigger, installFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -43,10 +46,10 @@ test.before(async () => {
   await initializeApplicationPersistence();
   const location = db.prepare("SELECT id,cost_center_id FROM locations WHERE active=1 ORDER BY id LIMIT 1").get(); locationId = location.id;
   for (const [key,role] of Object.entries({author:"hr", reviewer:"admin", manager:"manager", developer:"developer", itAdmin:"it_admin"})) {
-    const id = `privacy-synthetic-${key}`, token = crypto.randomBytes(32).toString("hex"), csrf = crypto.randomBytes(24).toString("hex");
+    const id = `privacy-synthetic-${key}`, token = crypto.randomBytes(32).toString("hex"), csrf = sessionCsrf(token);
     db.prepare("INSERT INTO employees(personnel_number,full_name,nickname,color,contracted_hours,target_workdays_per_week,home_location_id,cost_center_id,active) VALUES (?,?,?,'#25705d',38.5,5,?,?,1)").run(id,id,id,locationId,location.cost_center_id);
     db.prepare("INSERT INTO portal_users(employee_number,password_hash,role,active,must_change_password,password_changed_at) VALUES (?,'synthetic',?,1,0,CURRENT_TIMESTAMP)").run(id,role);
-    db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES (?,?,?,'2099-12-31T23:59:59.000Z')").run(crypto.randomUUID(),id,crypto.createHash("sha256").update(token).digest("hex"));
+    db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES (?,?,?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))").run(crypto.randomUUID(),id,crypto.createHash("sha256").update(token).digest("hex"));
     db.prepare("INSERT INTO portal_access_scopes(employee_number,location_id,assigned_by) VALUES (?,?,'synthetic')").run(id,locationId);
     if (role !== "developer") for (const permission of ["privacy_organization:read","privacy_organization:manage","privacy_organization:approve"]) db.prepare("INSERT OR IGNORE INTO portal_permission_grants(employee_number,permission,granted_by) VALUES (?,?,'synthetic')").run(id,permission);
     users[key] = {id,cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,csrf};
@@ -55,7 +58,7 @@ test.before(async () => {
 });
 test.after(async () => {
   if (server) await new Promise(resolve => server.close(resolve));
-  try {db.close();} catch {} releaseInstanceLockForTests();
+  try {await db.close();} catch {} releaseInstanceLockForTests();
   fs.rmSync(root,{recursive:true,force:true,maxRetries:8,retryDelay:100});
 });
 test("read prepares known facts without writing or creating a DPO account", async () => {
@@ -209,12 +212,12 @@ test("authenticated ciphertext corruption fails closed without replacing protect
 });
 test("audit failure rolls back the encrypted write and history together", async () => {
   const before = db.prepare("SELECT value FROM settings WHERE key=?").get(KEY).value;
-  db.exec("CREATE TRIGGER privacy_synthetic_audit_failure BEFORE INSERT ON audit_log WHEN NEW.action='privacy-organization.command' BEGIN SELECT RAISE(ABORT,'synthetic audit failure'); END");
+  installFixtureTrigger(db, "CREATE TRIGGER test_privacy_synthetic_audit_failure BEFORE INSERT ON audit_log WHEN NEW.action='privacy-organization.command' BEGIN SELECT RAISE(ABORT,'synthetic audit failure'); END");
   try {
     const result=await command({action:"update",id:"organization",payload:{notes:"Must roll back"}});
     assert.equal(result.status,500);
     assert.equal(db.prepare("SELECT value FROM settings WHERE key=?").get(KEY).value,before);
-  } finally {db.exec("DROP TRIGGER privacy_synthetic_audit_failure");}
+  } finally {dropFixtureTrigger(db, "test_privacy_synthetic_audit_failure");}
 });
 test("missing records return an explicit 404", async () => {
   const result=await command({action:"update",id:"synthetic-nonexistent",payload:{title:"Missing"}});

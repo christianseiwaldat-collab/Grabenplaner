@@ -1,4 +1,6 @@
 "use strict";
+const { installSalesOutboxFailure } = require("../test-support/postgresql-api/trigger-fixture");
+const { sessionCsrf, sessionCsrfFromCookie } = require("../test-support/portal-session-fixture");
 
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -39,8 +41,8 @@ let baseUrl;
 function createSession(employeeNumber = EMPLOYEE_NUMBER) {
   const token = crypto.randomBytes(32).toString("hex");
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(
     crypto.randomUUID(),
     employeeNumber,
@@ -97,10 +99,11 @@ async function requestMutationJson(route, {
   employeeNumber = EMPLOYEE_NUMBER,
   csrfHeader,
 } = {}) {
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const cookie = createSession(employeeNumber);
+  const csrf = sessionCsrfFromCookie(cookie);
   const headers = {
     Accept: "application/json",
-    Cookie: `${createSession(employeeNumber)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
+    Cookie: `${cookie}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
   };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (includeCsrf && !["GET", "HEAD"].includes(method)) headers["X-CSRF-Token"] = csrfHeader === undefined ? csrf : csrfHeader;
@@ -249,7 +252,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -419,11 +422,11 @@ test('Filialansicht speichert pro persönlichem Lesekonto und hält andere Präf
 test('Filialpräferenzen sperren fehlende, widerrufene und eingeschränkte Sitzungen und behandeln beschädigte Werte',async()=>{
   const model=require('../public/sales-article-detail-preferences'),route='/api/sales/articles/detail-preferences';
   assert.equal((await fetch(baseUrl+route)).status,401);
-  const accountId=crypto.randomUUID(),token=crypto.randomBytes(32).toString('hex'),csrf=crypto.randomBytes(24).toString('hex');
+  const accountId=crypto.randomUUID(),token=crypto.randomBytes(32).toString('hex'),csrf=sessionCsrf(token);
   db.prepare(`INSERT INTO portal_organization_accounts (id, login_name, display_name, account_type, password_hash, active,
     must_change_password, created_by, updated_by) VALUES (?, ?, 'Synthetic branch preferences', 'branch', 'test-only', 1, 0, 'test', 'test')`)
     .run(accountId,'stock-pref-'+accountId.slice(0,8));
-  db.prepare("INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')")
+  db.prepare("INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at, authenticated_at, absolute_expires_at) VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(crypto.randomUUID(),accountId,crypto.createHash('sha256').update(token).digest('hex'));
   const organizationHeaders={Cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`,'X-CSRF-Token':csrf,'Content-Type':'application/json'};
   assert.equal((await fetch(baseUrl+route,{headers:organizationHeaders})).status,403);
@@ -594,6 +597,19 @@ test("Detailroute validiert exakt und antwortet für unbekannte Artikel mit 404"
   assert.equal(extra.response.status, 400, JSON.stringify(extra.payload));
   assert.equal(extra.payload?.code, "SALES_ARTICLE_DETAIL_INVALID");
 
+  for (const suffix of ['main','notes','orders','all']) {
+    const result=await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}&section=${suffix}`);
+    assert.equal(result.response.status,200,result.text);
+    assert.match(result.response.headers.get('cache-control'),/private.*no-store/);
+    assert.equal(result.payload.article.articleNumber,ARTICLE_NUMBER);
+    for(const account of [WINDOW_ACCESS_ONLY,WINDOW_READ_WITHOUT_ACCESS])
+      assert.equal((await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}&section=${suffix}`,account)).response.status,403);
+  }
+  for (const suffix of ['invalid','main&section=notes','notes&section[extra]=all']) {
+    const result=await requestJson(`/api/sales/articles/detail?articleNumber=${ARTICLE_NUMBER}&section=${suffix}`);
+    assert.equal(result.response.status,400,result.text);assert.equal(result.payload.code,'SALES_ARTICLE_DETAIL_INVALID');
+  }
+
   const missing = await requestJson("/api/sales/articles/detail?articleNumber=NICHT-VORHANDEN");
   assert.equal(missing.response.status, 404, JSON.stringify(missing.payload));
   assert.equal(missing.payload?.code, "SALES_ARTICLE_NOT_FOUND");
@@ -653,25 +669,26 @@ test("Artikelmutationen sind CSRF-, Rechte-, Revisions-, Audit- und Undo-gesiche
     table,
     db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count,
   ]));
-  db.exec(`
-    CREATE TRIGGER test_article_receipt_failure
-    BEFORE INSERT ON personal_action_receipts
-    WHEN NEW.action_type = 'sales.article-catalog.create'
-    BEGIN
-      SELECT RAISE(ABORT, 'synthetic article receipt failure');
-    END
-  `);
-  const receiptFailed = await requestMutationJson("/api/sales/articles", {
-    method: "POST",
-    body: {
-      articleNumber: "A/ROLLBACK",
-      description: "Muss vollständig zurückgerollt werden",
-      identifiers: [],
-    },
+  const outboxBefore = db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_outbox")[0].count;
+  const deliveryBefore = db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_delivery")[0].count;
+  const removeReceiptFailure = installSalesOutboxFailure(db, {
+    name: "test_article_receipt_failure", receiptActionType: "sales.article-catalog.create",
   });
-  db.exec("DROP TRIGGER test_article_receipt_failure");
+  let receiptFailed;
+  try {
+    receiptFailed = await requestMutationJson("/api/sales/articles", {
+      method: "POST",
+      body: {
+        articleNumber: "A/ROLLBACK",
+        description: "Muss vollständig zurückgerollt werden",
+        identifiers: [],
+      },
+    });
+  } finally { removeReceiptFailure(); }
   assert.equal(receiptFailed.response.status, 400, receiptFailed.text);
   assert.equal(receiptFailed.payload.code, "SALES_ARTICLE_MUTATION_INVALID");
+  assert.equal(db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_outbox")[0].count, outboxBefore);
+  assert.equal(db.postgresqlCatalogQuery("sales", "SELECT COUNT(*) AS count FROM integration.core_audit_delivery")[0].count, deliveryBefore);
   for (const [table, before] of Object.entries(rollbackCounts)) {
     assert.equal(
       db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count,
@@ -948,9 +965,10 @@ test('Eigene Bilder folgen echten Portalrechten und bleiben nach Artikelbearbeit
   assert.equal(created.payload.article.image.present, false);
   const input = await require('sharp')({ create: { width: 32, height: 16, channels: 3, background: '#287c64' } }).png().toBuffer();
   const upload = async (csrf = true) => {
-    const token = crypto.randomBytes(24).toString('hex');
+    const cookie = createSession();
+    const token = sessionCsrfFromCookie(cookie);
     return fetch(`${baseUrl}/api/sales/articles/image?articleNumber=${articleNumber}`, { method: 'PUT', body: input, headers: {
-      'Content-Type': 'image/png', Cookie: `${createSession()}; grabenplaner_csrf=${token}`,
+      'Content-Type': 'image/png', Cookie: `${cookie}; grabenplaner_csrf=${token}`,
       'X-Article-Image-Revision': 'none', ...(csrf ? { 'X-CSRF-Token': token } : {}),
     } });
   };

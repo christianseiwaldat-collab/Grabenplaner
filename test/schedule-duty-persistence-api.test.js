@@ -1,4 +1,7 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const pgSchema = require("../test-support/postgresql-api/metadata");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -50,7 +53,7 @@ test.before(async () => {
   const daySettings = Object.fromEntries(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
     .map(day => [day, { open: day === "monday", start: "09:00", end: "18:00", lunchEnabled: false,
       lunchStart: "13:00", lunchEnd: "14:00", minStaff: 0, minFrom: "09:00", minTo: "18:00" }]));
-  for (const location of [LOCATION, OTHER]) db.prepare("INSERT INTO locations(id,name,day_settings_json,active) VALUES(?,?,?,1)")
+  for (const location of [LOCATION, OTHER]) prepareLocationFixture(db, "INSERT INTO locations(id,name,day_settings_json,active) VALUES(?,?,?,1)")
     .run(location, location === LOCATION ? "Prüffiliale" : "Zielfiliale", JSON.stringify(daySettings));
   departmentId = Number(db.prepare("INSERT INTO departments(location_id,name,active) VALUES(?,'Hardware',1)").run(LOCATION).lastInsertRowid);
   otherDepartmentId = Number(db.prepare("INSERT INTO departments(location_id,name,active) VALUES(?,'Fotowelt',1)").run(OTHER).lastInsertRowid);
@@ -65,8 +68,8 @@ test.before(async () => {
     db.prepare("INSERT OR IGNORE INTO portal_permission_grants(employee_number,permission,granted_by) VALUES(?,?,'synthetic')").run(ACTOR, permission);
   for (const location of [LOCATION, OTHER]) db.prepare(`INSERT INTO portal_access_scopes(employee_number,location_id,department_id,assigned_by)
     VALUES(?,?,0,'synthetic')`).run(ACTOR, location);
-  const token = crypto.randomBytes(32).toString("hex"); csrf = crypto.randomBytes(24).toString("hex");
-  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z')")
+  const token = crypto.randomBytes(32).toString("hex"); csrf = sessionCsrf(token);
+  db.prepare("INSERT INTO portal_sessions(id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES(?,?,?,'2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(crypto.randomUUID(), ACTOR, crypto.createHash("sha256").update(token).digest("hex"));
   cookie = `grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`;
   await new Promise(resolve => { httpServer = app.listen(0, "127.0.0.1", resolve); });
@@ -80,7 +83,7 @@ test.beforeEach(() => {
 });
 test.after(async () => {
   if (httpServer) await new Promise(resolve => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(fixtureRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -110,7 +113,7 @@ test("Schnellansicht liefert Raster und Stunden vor den Hintergrundprüfungen", 
 });
 
 test("Dienst wird getrennt gespeichert, gelesen und bei alten PUT-Clients bewahrt", async () => {
-  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id='schedule-duty-v1'").get());
+  assert.ok(pgSchema.assertCoreSchemaLedger(db));
   const created = assertStatus(await request("/api/shifts", "POST", body()), 201);
   assert.equal(created.dutyCode, "branch_supervision");
   const row = db.prepare("SELECT duty_code,department_id,area FROM shifts WHERE id=?").get(created.id);
@@ -126,10 +129,10 @@ test("Dienst wird getrennt gespeichert, gelesen und bei alten PUT-Clients bewahr
   assert.equal(assertStatus(await request(`/api/shifts/${created.id}`, "PUT", body()), 200).dutyCode, "branch_supervision");
   db.prepare("UPDATE shifts SET duty_code='' WHERE id=?").run(created.id);
   assert.equal(assertStatus(await request(`/api/shifts/${created.id}`, "PUT", body()), 200).dutyCode, "");
-  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='invalid' WHERE id=?").run(created.id), /CHECK/);
-  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='department',department_id=NULL WHERE id=?").run(created.id), /CHECK/);
-  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='branch_supervision',department_id=? WHERE id=?").run(departmentId, created.id), /CHECK/);
-  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='general',department_id=? WHERE id=?").run(departmentId, created.id), /CHECK/);
+  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='invalid' WHERE id=?").run(created.id), error => error.code === "23514" && /check constraint/i.test(error.message));
+  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='department',department_id=NULL WHERE id=?").run(created.id), error => error.code === "23514" && /check constraint/i.test(error.message));
+  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='branch_supervision',department_id=? WHERE id=?").run(departmentId, created.id), error => error.code === "23514" && /check constraint/i.test(error.message));
+  assert.throws(() => db.prepare("UPDATE shifts SET duty_code='general',department_id=? WHERE id=?").run(departmentId, created.id), error => error.code === "23514" && /check constraint/i.test(error.message));
 });
 
 test("Duty-Validierung verhindert vermischte Abteilungen, verleiht aber keine Qualifikation", async () => {

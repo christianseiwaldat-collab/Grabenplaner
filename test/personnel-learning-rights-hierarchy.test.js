@@ -1,4 +1,7 @@
 "use strict";
+const { installFixtureTrigger, dropFixtureTrigger } = require("../test-support/postgresql-api/trigger-fixture");
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -83,11 +86,11 @@ function employee(personnelNumber, fullName, role, locationId, departmentId = nu
 
 function session(employeeNumber) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   const id = crypto.randomUUID();
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(id, employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     id,
@@ -119,6 +122,7 @@ function mobileSession(employeeNumber) {
 
 async function request(route, { method = "GET", auth = null, body } = {}) {
   const headers = { Accept: "application/json" };
+  if (auth?.userActivity) headers["X-GP-User-Activity"] = "1";
   if (auth) headers.Cookie = auth.cookie;
   if (auth && !["GET", "HEAD"].includes(method)) headers["X-CSRF-Token"] = auth.csrf;
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -434,12 +438,16 @@ function sqliteText(value) {
 }
 
 function installSessionTouchRaceMutation(auth, statements) {
+  const previousActivity = auth.userActivity;
+  auth.userActivity = true;
   const triggerName = `test_learning_actor_race_${crypto.randomBytes(8).toString("hex")}`;
   // Force renewal: ordinary requests deliberately coalesce expiry writes.
   db.prepare("UPDATE portal_sessions SET expires_at = ? WHERE id = ?")
     .run(new Date(Date.now() + 60000).toISOString(), auth.id);
-  db.exec(`CREATE TABLE ${triggerName}_proof (fired INTEGER NOT NULL)`);
-  db.exec(`
+  db.exec(`CREATE TABLE gp.${triggerName}_proof (fired INTEGER NOT NULL)`);
+  let removeTrigger;
+  try {
+    removeTrigger = installFixtureTrigger(db, `
     CREATE TRIGGER ${triggerName}
     AFTER UPDATE OF expires_at ON portal_sessions
     WHEN NEW.id = ${sqliteText(auth.id)}
@@ -448,9 +456,16 @@ function installSessionTouchRaceMutation(auth, statements) {
       ${statements}
     END
   `);
+  } catch (error) {
+    auth.userActivity = previousActivity;
+    db.exec(`DROP TABLE gp.${triggerName}_proof`);
+    throw error;
+  }
   return () => {
+    auth.userActivity = previousActivity;
     const fired = db.prepare(`SELECT COUNT(*) AS count FROM ${triggerName}_proof`).get().count;
-    db.exec(`DROP TRIGGER IF EXISTS ${triggerName}; DROP TABLE ${triggerName}_proof`);
+    removeTrigger();
+    db.exec(`DROP TABLE gp.${triggerName}_proof`);
     assert.ok(fired > 0, "The concurrent actor mutation must actually execute");
   };
 }
@@ -504,7 +519,7 @@ test.before(async () => {
     SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 2
   `).all();
   if (locations.length < 2) {
-    db.prepare(`
+    prepareLocationFixture(db, `
       INSERT INTO locations (id, name, min_staff, active)
       VALUES ('learning-foreign-location', 'Learning Fremdfiliale', 0, 1)
     `).run();
@@ -564,7 +579,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
@@ -1316,7 +1331,9 @@ test("Live-Entzug von Learning-Delegate stoppt Rechte- und Rollenmutation atomar
     }),
   );
   assert.equal(deniedRights.response.status, 403, JSON.stringify(deniedRights.payload));
-  assert.equal(deniedRights.payload.code, "PORTAL_ROLE_HIERARCHY_DENIED");
+  // The actor is already refreshed after the armed renewal. The specific
+  // non-delegable-permission check therefore rejects before role hierarchy.
+  assert.equal(deniedRights.payload.code, "PORTAL_PERMISSION_NOT_DELEGABLE");
   assert.equal(db.prepare(`
     SELECT COUNT(*) AS count FROM portal_permission_denials
     WHERE employee_number = ? AND permission = ?
@@ -1469,7 +1486,7 @@ test("Zugang entsperren prüft Learning-Hierarchie live, bleibt bei No-op nebenw
   const rollbackTargetPortal = session(LOCAL_AL);
   const rollbackTargetMobile = mobileSession(LOCAL_AL);
   const rollbackAuditBefore = auditRowCount();
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_learning_unlock_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'portal.user.unlock'
@@ -1484,7 +1501,7 @@ test("Zugang entsperren prüft Learning-Hierarchie live, bleibt bei No-op nebenw
     assert.equal(auditRowCount(), rollbackAuditBefore);
     assertSessionNotRevoked(rollbackTargetPortal, rollbackTargetMobile);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_learning_unlock_audit_abort");
+    dropFixtureTrigger(db, "test_learning_unlock_audit_abort", { ifExists: true });
   }
 
   for (const actorEmployeeNumber of [DEVELOPER, HR]) {
@@ -1541,6 +1558,8 @@ test("No-op-Antworten aller Zugangswege nutzen den live eingeschränkten Akteur"
       method: "PUT",
       route: `/api/portal/v1/users/${LOCAL_AL}`,
       body: { role: "department_manager", active: true, mustChangePassword: false },
+      expectedStatus: 403,
+      expectedCode: "PORTAL_ROLE_HIERARCHY_DENIED",
     },
     {
       method: "POST",
@@ -1565,8 +1584,16 @@ test("No-op-Antworten aller Zugangswege nutzen den live eingeschränkten Akteur"
         ...(route.body === undefined ? {} : { body: route.body }),
       }),
     );
-    assert.equal(result.response.status, 200, `${route.route}: ${JSON.stringify(result.payload)}`);
-    assertLearningRightsHiddenInPortalUsers(result.payload);
+    assert.equal(result.response.status, route.expectedStatus || 200,
+      `${route.route}: ${JSON.stringify(result.payload)}`);
+    if (route.expectedCode) {
+      assert.equal(result.payload.code, route.expectedCode);
+      assert.equal(Object.hasOwn(result.payload, "users"), false);
+      assert.equal(Object.hasOwn(result.payload, "roles"), false);
+      assert.equal(Object.hasOwn(result.payload, "catalog"), false);
+    } else {
+      assertLearningRightsHiddenInPortalUsers(result.payload);
+    }
     assert.deepEqual(accountSecuritySnapshot(LOCAL_AL), accountBefore);
     assert.deepEqual(portalScopeSnapshot(LOCAL_AL), scopesBefore);
     assert.equal(auditRowCount(), auditBefore);
@@ -1838,6 +1865,9 @@ test("Learning-Scope-Deltas prüfen Akteursrechte und explizite FL-Scopes live e
       auth: manager,
       route: mutations[0].route,
       body: mutations[0].body,
+      // Renewal reloads the actor without the explicit assignments observed
+      // earlier in this request; the target scope check must fail closed.
+      expectedCode: "PORTAL_SCOPE_DENIED",
     });
   } finally {
     dropTrigger();
@@ -2219,7 +2249,7 @@ test("Learning-Topologiemutation rollt Ressource, Sitzungen und Audits gemeinsam
   const targetPortalSession = session(LOCAL_AL);
   const targetMobileSession = mobileSession(LOCAL_AL);
   const auditBefore = auditRowCount();
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_learning_topology_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'personnel.learning.organization-scope.update'
@@ -2239,7 +2269,7 @@ test("Learning-Topologiemutation rollt Ressource, Sitzungen und Audits gemeinsam
     assert.equal(auditRowCount(), auditBefore);
     assertSessionNotRevoked(targetPortalSession, targetMobileSession);
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_personnel_learning_topology_audit_abort");
+    dropFixtureTrigger(db, "test_personnel_learning_topology_audit_abort", { ifExists: true });
   }
 });
 
@@ -2255,7 +2285,7 @@ test("Abteilungsverschiebung meldet Mitarbeiter- und Scope-Referenzen fachlich",
     }
   }
   assert.ok(destinationLocationId, "Kein freier zweistelliger Teststandort");
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, active)
     VALUES (?, ?, 0, 1)
   `).run(destinationLocationId, `Learning Move ${destinationLocationId}`);
@@ -2380,7 +2410,7 @@ test("Denial, Provenienz, Sitzungswiderruf und Audit rollen bei Auditfehler geme
   const manager = session(MANAGER);
   const targetPortalSession = session(LOCAL_AL_TWO);
   const targetMobileSession = mobileSession(LOCAL_AL_TWO);
-  db.exec(`
+  installFixtureTrigger(db, `
     CREATE TRIGGER test_personnel_learning_audit_abort
     BEFORE INSERT ON audit_log
     WHEN NEW.action = 'personnel.learning.cross-location-right.update'
@@ -2411,7 +2441,7 @@ test("Denial, Provenienz, Sitzungswiderruf und Audit rollen bei Auditfehler geme
     assert.equal(mobile.revoked_at, null);
     assert.equal(mobile.revoked_reason, "");
   } finally {
-    db.exec("DROP TRIGGER IF EXISTS test_personnel_learning_audit_abort");
+    dropFixtureTrigger(db, "test_personnel_learning_audit_abort", { ifExists: true });
   }
 });
 

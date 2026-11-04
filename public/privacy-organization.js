@@ -325,7 +325,7 @@
       const sections = groupedFieldsMarkup(recordKind, fields, field => readOnly ? `<div class="${WIDE_FIELDS.has(field.key) ? "wide" : ""}"><dt>${escape(field.label || field.key)}</dt><dd>${escape(fieldDisplay(field, value[field.key]))}</dd></div>` : fieldMarkup(field, value, { activities, suppressSharedHelp: true }), readOnly);
       const content = `<div class="privacy-org-editor-body" tabindex="0" aria-label="Angaben und Prüfhinweise">${record ? renderReadiness(record.readiness, { compact: true }) : ""}${readOnly ? "" : `<p class="privacy-org-data-hint">${icon("shield")}<span>${escape(SHARED_FIELD_HELP)} Als Entwurf kannst du unvollständige Angaben speichern.</span></p>`}${sections}${readOnly ? renderHistory(record) : '<p data-po-form-status role="status" aria-live="polite" tabindex="-1"></p>'}</div>`;
       target.innerHTML = readOnly ? `<div class="privacy-org-dialog-shell">${heading}${content}${footer}</div>` : `<form data-po-edit-form class="privacy-org-dialog-shell" autocomplete="off">${heading}${content}${footer}</form>`;
-      target.showModal?.();
+      target.dataset.gpWindowMode="workspace";root.GpWindow?.prepare?.(target);target.showModal?.();
       (target.querySelector("input, select, textarea") || target.querySelector("[data-po-close-editor]"))?.focus?.({ preventScroll: true });
     }
     function revealProblemFields(form, details = [], message = "") {

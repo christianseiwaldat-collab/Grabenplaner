@@ -1,0 +1,53 @@
+:root { font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; color: #1f3038; background: #f4f1e9; color-scheme: light; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+a { color: #245e53; text-underline-offset: .2em; }
+button, input { font: inherit; }
+button, input { border: 1px solid #afbfb8; border-radius: .65rem; background: #fff; color: inherit; }
+button { min-height: 44px; padding: .65rem 1rem; cursor: pointer; font-weight: 650; }
+button:disabled { opacity: .55; cursor: default; }
+button.primary { background: #275f50; border-color: #275f50; color: #fff; }
+:focus-visible { outline: 3px solid #267eaf; outline-offset: 3px; }
+.passkeys-page { width: min(860px, 100%); margin: 0 auto; padding: 1.5rem; }
+.passkeys-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin: .5rem 0 1.5rem; }
+.passkeys-brand img { display: block; width: 175px; max-width: 100%; height: 52px; object-fit: contain; }
+.passkeys-heading nav, .passkeys-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.passkeys-card { margin-bottom: 1rem; padding: clamp(1.15rem, 4vw, 2rem); background: #fff; border: 1px solid #d6ded9; border-radius: 1.2rem; box-shadow: 0 8px 25px #233d3010; overflow-wrap: anywhere; }
+.passkeys-eyebrow { color: #4b7567; font-size: .8rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+h1 { margin: .3rem 0 .6rem; font-size: clamp(1.65rem, 5vw, 2rem); line-height: 1.2; }
+h2 { margin: 0 0 .75rem; font-size: 1.2rem; }
+p { margin: .75rem 0; }
+.passkeys-note { padding: .85rem 1rem; border-left: 3px solid #6b9688; background: #edf5f1; }
+.passkeys-status { min-height: 1.5em; font-weight: 600; }
+.passkeys-status[data-error="true"] { color: #9c332a; }
+.passkeys-list { list-style: none; padding: 0; margin: 0; }
+.passkeys-list li { padding: 1rem 0; display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-top: 1px solid #dce3df; }
+.passkeys-list li:first-child { border-top: 0; }
+.passkeys-list strong, .passkeys-list small { display: block; }
+.passkeys-list small { color: #5c6f73; margin-top: .25rem; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 1rem; }
+label { display: grid; gap: .4rem; font-weight: 650; }
+input { padding: .65rem .75rem; min-width: 0; width: 100%; }
+fieldset button { justify-self: start; }
+dialog { width: min(550px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; color: inherit; background: #fff; border: 1px solid #afc1b7; border-radius: 1rem; }
+dialog::backdrop { background: #15282288; }
+dialog form { display: grid; gap: .65rem; }
+dialog p { margin: .35rem 0; }
+@media (max-width: 520px) {
+  .passkeys-page { padding: .85rem; }
+  .passkeys-heading { align-items: start; flex-direction: column; }
+  .passkeys-list li { align-items: start; flex-direction: column; }
+  .passkeys-actions button { flex: 1 1 auto; }
+}
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; color: #e2ebe7; background: #15201f; }
+  .passkeys-card, dialog { background: #1c2c29; border-color: #40564e; }
+  a { color: #a0d6c0; }
+  button, input { color: #e2ebe7; background: #243b34; border-color: #657b70; }
+  button.primary { background: #286951; border-color: #518b72; }
+  .passkeys-eyebrow, .passkeys-list small { color: #a5bcb0; }
+  .passkeys-list li { border-color: #40564e; }
+  .passkeys-note { background: #233e34; }
+  .passkeys-status[data-error="true"] { color: #ffafa3; }
+}

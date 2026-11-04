@@ -141,6 +141,106 @@ function scheduler(overrides = {}) {
   };
 }
 
+function deferredAssurance(overrides = {}) {
+  return {
+    configured: true, statusAvailable: true, integrityVerified: true, state: "ok",
+    scheduler: scheduler(),
+    trendRuns: [{ trigger: "scheduled-nightly", at: "2026-07-21T01:00:00.000Z", status: "passed", applicationSmokeState: "passed" }],
+    deployDeferral: { evidenceTrusted: true, state: "deferred", activeDeploy: true, withinGrace: true,
+      dueAt: "2026-07-22T01:00:00.000Z", deadlineAt: "2026-07-22T04:00:00.000Z" },
+    ...overrides,
+  };
+}
+
+test("a verified deployment pauses only the due night inside its exact three-hour deadline", () => {
+  const a = deferredAssurance();
+  for (const now of ["2026-07-22T01:00:00Z", "2026-07-22T03:59:59.999Z"]) {
+    const result = deriveAutomationStatus(a, { now });
+    assert.equal(result.state, "healthy"); assert.equal(result.paused, true);
+    assert.equal(result.reasonCode, "AUTOMATION_DEPLOY_DEFERRED"); assert.equal(result.overdue, false);
+    assert.equal(result.lastRunAt, "2026-07-21T01:00:00.000Z");
+    assert.equal(systemCenterRecoveryAlert({ recoveryAssurance: a, automation: result }), null);
+  }
+  assert.equal(deriveAutomationStatus(a, { now: "2026-07-22T00:59:59Z" }).paused, false);
+  const expired = deriveAutomationStatus(a, { now: "2026-07-22T04:00:00Z" });
+  assert.equal(expired.state, "critical"); assert.equal(expired.paused, false);
+  assert.equal(expired.reasonCode, "AUTOMATION_DEPLOY_DEFERRAL_EXPIRED");
+  assert.equal(systemCenterRecoveryAlert({ recoveryAssurance: a, automation: expired }).kind, "deploy_deferral_expired");
+});
+
+test("deployment evidence cannot forgive an old bad or missing nightly history or broken timer", () => {
+  const now = "2026-07-22T02:00:00Z";
+  const cases = [
+    [{ statusAvailable: false }, "AUTOMATION_HISTORY_UNVERIFIED"],
+    [{ integrityVerified: false }, "AUTOMATION_HISTORY_UNVERIFIED"],
+    [{ integrityVerified: undefined }, "AUTOMATION_HISTORY_UNVERIFIED"],
+    [{ statusAvailable: undefined }, "AUTOMATION_HISTORY_UNVERIFIED"],
+    [{ scheduler: scheduler({ timerInstalled: false }) }, "AUTOMATION_TIMER_NOT_INSTALLED"],
+    [{ scheduler: scheduler({ timerEnabled: false }) }, "AUTOMATION_TIMER_DISABLED"],
+    [{ scheduler: scheduler({ evidenceTrusted: false }) }, "AUTOMATION_SCHEDULER_EVIDENCE_MISSING"],
+    [{ trendRuns: [] }, "AUTOMATION_AWAITING_FIRST_RUN"],
+    [{ trendRuns: [{ trigger: "scheduled-nightly", at: "2026-07-19T01:00:00Z", status: "passed", applicationSmokeState: "passed" }] }, "AUTOMATION_OVERDUE"],
+    [{ trendRuns: [{ trigger: "scheduled-nightly", at: "2026-07-21T01:00:00Z", status: "failed", applicationSmokeState: "passed" }] }, "AUTOMATION_RUN_FAILED"],
+    [{ trendRuns: [{ trigger: "scheduled-nightly", at: "2026-07-21T01:00:00Z", status: "passed", applicationSmokeState: "failed" }] }, "AUTOMATION_APPLICATION_SMOKE_FAILED"],
+  ];
+  for (const [patch, expected] of cases) {
+    const result = deriveAutomationStatus(deferredAssurance(patch), { now });
+    assert.equal(result.paused, false, expected); assert.equal(result.reasonCode, expected);
+  }
+});
+
+test("untrusted, forged longer or inactive deployment evidence grants no pause", () => {
+  for (const patch of [{ evidenceTrusted: false }, { deadlineAt: "2026-07-22T05:00:00Z" },
+    { deadlineAt: "invalid" }, { withinGrace: false }, { state: "catchup-pending", activeDeploy: false },
+    { state: "not-due" }]) {
+    const a = deferredAssurance(); Object.assign(a.deployDeferral, patch);
+    assert.equal(deriveAutomationStatus(a, { now: "2026-07-22T02:00:00Z" }).paused, false);
+  }
+  for (const state of ["abandoned", "aborted", "deferred"]) {
+    const a = deferredAssurance(); Object.assign(a.deployDeferral, { state, activeDeploy: false });
+    assert.equal(deriveAutomationStatus(a, { now: "2026-07-22T02:00:00Z" }).state, "critical");
+  }
+});
+
+test("catchup gains no pause and a later full signed proof settles only the deployment deferral", () => {
+  const a = deferredAssurance(); Object.assign(a.deployDeferral, { state: "catchup-pending", activeDeploy: false, withinGrace: false });
+  assert.equal(deriveAutomationStatus(a, { now: "2026-07-22T02:00:00Z" }).paused, false);
+  assert.equal(deriveAutomationStatus(a, { now: "2026-07-22T04:00:00Z" }).reasonCode, "AUTOMATION_DEPLOY_DEFERRAL_EXPIRED");
+  a.trendRuns.push({ trigger: "manual-cli", at: "2026-07-22T03:30:00Z", status: "passed", applicationSmokeState: "passed" });
+  let result = deriveAutomationStatus(a, { now: "2026-07-22T04:00:00Z" });
+  assert.equal(result.state, "healthy"); assert.equal(result.deployDeferral.satisfied, true); assert.equal(result.paused, false);
+  a.trendRuns[0].status = "failed";
+  result = deriveAutomationStatus(a, { now: "2026-07-22T04:00:00Z" });
+  assert.equal(result.state, "critical"); assert.equal(result.reasonCode, "AUTOMATION_RUN_FAILED");
+});
+
+test("a signed timely nightly start satisfies the start deadline but cannot run forever or hide failure", () => {
+  const a = deferredAssurance(); Object.assign(a.deployDeferral, { state: "catchup-pending", activeDeploy: false, withinGrace: false });
+  a.recentRuns = [{ trigger: "scheduled-nightly", startedAt: "2026-07-22T03:00:00Z", completedAt: null, status: "running", phases: [] }];
+  let result = deriveAutomationStatus(a, { now: "2026-07-22T05:00:00Z" });
+  assert.equal(result.state, "healthy"); assert.equal(result.reasonCode, "AUTOMATION_DEPLOY_CATCHUP_RUNNING");
+  assert.equal(result.paused, false); assert.equal(result.deployDeferral.catchupRunning, true);
+  assert.equal(result.deployDeferral.satisfied, false);
+  assert.equal(deriveAutomationStatus(a, { now: "2026-07-23T19:00:00Z" }).state, "critical");
+  for (const patch of [{ startedAt: "2026-07-22T04:00:01Z" }, { trigger: "manual-cli" }]) {
+    const changed = structuredClone(a); Object.assign(changed.recentRuns[0], patch);
+    assert.equal(deriveAutomationStatus(changed, { now: "2026-07-22T05:00:00Z" }).reasonCode, "AUTOMATION_DEPLOY_DEFERRAL_EXPIRED");
+  }
+  a.recentRuns[0].status = "failed";
+  assert.equal(deriveAutomationStatus(a, { now: "2026-07-22T05:00:00Z" }).reasonCode, "AUTOMATION_RUN_FAILED");
+  a.trendRuns.push({ trigger: "manual-cli", at: "2026-07-22T02:00:00Z", status: "passed", applicationSmokeState: "passed" });
+  assert.equal(deriveAutomationStatus(a, { now: "2026-07-22T05:00:00Z" }).reasonCode, "AUTOMATION_RUN_FAILED");
+});
+
+test("a deployment that ended before the due time creates no three-hour deadline incident", () => {
+  for (const state of ["completed", "aborted"]) {
+    const a = deferredAssurance(); Object.assign(a.deployDeferral, { state, activeDeploy: false, withinGrace: false, finishedAt: "2026-07-22T00:59:00Z" });
+    const result = deriveAutomationStatus(a, { now: "2026-07-22T05:00:00Z" });
+    assert.equal(result.state, "healthy"); assert.equal(result.paused, false);
+    assert.equal(result.reasonCode, "AUTOMATION_CURRENT");
+  }
+});
+
 test("v0.78: signierte RAS-Ereignisse werden zu begrenzten, redigierten Trendwerten verdichtet", () => {
   const runId = "11111111-1111-4111-8111-111111111111";
   const runs = recoveryTrendRuns([

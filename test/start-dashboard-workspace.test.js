@@ -48,16 +48,16 @@ test('real app actor key changes with account, rights, scope, type and password 
  }
 });
 
-test('field rights explicitly include parent card and hidden states even for detached widgets',()=>{
+test('field rights include parent access independently of reversible per-dashboard visibility',()=>{
  const c=appFixture();assert.equal(c.startDashboardWorkspaceFieldAllowed('widget:branchOnDuty'),true);
  assert.equal(c.startDashboardWorkspaceFieldAllowed('widget:unknown'),false);
  c.state.startDashboardPreferences.hidden=['schedule'];
- assert.equal(c.startDashboardWorkspaceFieldAllowed('widget:branchOnDuty'),false);
- assert.equal(c.startDashboardWorkspaceFieldAllowed('card:schedule'),false);
+ assert.equal(c.startDashboardWorkspaceFieldAllowed('widget:branchOnDuty'),true);
+ assert.equal(c.startDashboardWorkspaceFieldAllowed('card:schedule'),true);
  assert.equal(c.startDashboardWorkspaceFieldAllowed('group:branch'),true);
- c.state.startDashboardPreferences.hidden=['schedule','vacation'];assert.equal(c.startDashboardWorkspaceFieldAllowed('group:branch'),false);
+ c.state.startDashboardPreferences.hidden=['schedule','vacation'];assert.equal(c.startDashboardWorkspaceFieldAllowed('group:branch'),true);
  c.state.startDashboardPreferences={hidden:[],hiddenWidgets:['branchOnDuty']};
- assert.equal(c.startDashboardWorkspaceFieldAllowed('widget:branchOnDuty'),false);
+ assert.equal(c.startDashboardWorkspaceFieldAllowed('widget:branchOnDuty'),true);
  c.state.startDashboardPreferences.hiddenWidgets=[];c.startDashboardCardAccessible=()=>false;
  assert.equal(c.startDashboardWorkspaceFieldAllowed('widget:branchOnDuty'),false);
  c.state.portalSession=null;assert.equal(c.startDashboardWorkspaceFieldAllowed('control:center'),false);
@@ -73,11 +73,12 @@ test('strict bounded schema prevents unknown fields and preserves plain labels',
   {version:1,fields:JSON.parse('{"__proto__":{"title":"x"}}')}]) assert.throws(()=>model.validate(invalid));
 });
 
-test('the two control cards can independently be hidden while legacy workspace values remain valid',()=>{
+test('all registered dashboard fields can independently be hidden while legacy workspace values remain valid',()=>{
  const hidden={version:1,fields:{'control:center':{hidden:true},'control:vps':{hidden:false,title:'VPS'}}};
  assert.deepEqual(model.validate(hidden),hidden);assert.ok(model.IDS.includes('control:vps'));
  assert.deepEqual(model.validate(value('Personal')),value('Personal'));
- for(const invalid of [{version:1,fields:{'card:schedule':{hidden:true}}},{version:1,fields:{'control:center':{hidden:1}}},{version:1,fields:{'control:vps':{hidden:'true'}}}])assert.throws(()=>model.validate(invalid));
+ for(const id of model.IDS)assert.deepEqual(model.validate({version:1,fields:{[id]:{hidden:true}}}),{version:1,fields:{[id]:{hidden:true}}});
+ for(const invalid of [{version:1,fields:{'control:center':{hidden:1}}},{version:1,fields:{'control:vps':{hidden:'true'}}}])assert.throws(()=>model.validate(invalid));
 });
 
 test('field colors accept only the shared palette and defaults need no migration',()=>{

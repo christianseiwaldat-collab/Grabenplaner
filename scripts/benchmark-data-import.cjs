@@ -59,15 +59,24 @@ async function main(){
    source=await phase('first.review',()=>finish(source,'review'));
    if(kind!=='cash')source=await phase('first.apply',()=>finish(source,'apply'));
    const repeated=await phase('identical-file',()=>runtime.upload(async()=>session,{kind,buffer:buffer(1)}));assert.equal(repeated.id,source.id);
+   // A new file can contain exactly the same business records. This is the
+   // important delta case; replaying the identical file bypasses row review.
+   source=await phase('zero-percent.stage',()=>runtime.upload(async()=>session,{kind,buffer:buffer(2)}));
+   source=await phase('zero-percent.review',()=>finish(source,'review'));
+   const unchangedCounts=source.tables.find(t=>t.name===tableName).run.counts;
+   if(kind!=='cash'){
+    assert.equal(unchangedCounts.unchanged,count);
+    source=await phase('zero-percent.apply',()=>finish(source,'apply'));
+   }
    for(let i=0;i<Math.ceil(count/100);i++){
     if(kind==='trade')values[i].NACHNAME+=' changed';else if(kind==='bestell')values[i].erledigt=true;else values[i].Bondatum=new Date('2026-09-02T12:00:00Z');
    }
-   source=await phase('one-percent.stage',()=>runtime.upload(async()=>session,{kind,buffer:buffer(2)}));
+   source=await phase('one-percent.stage',()=>runtime.upload(async()=>session,{kind,buffer:buffer(3)}));
    source=await phase('one-percent.review',()=>finish(source,'review'));
    const deltaCounts=source.tables.find(t=>t.name===tableName).run.counts;
    if(kind!=='cash')source=await phase('one-percent.apply',()=>finish(source,'apply'));
    console.log(JSON.stringify({measuredAt:new Date().toISOString(),node:process.version,kind,table:tableName,rows:count,platform:process.platform,
-    measurement:'synthetic-runtime-local-postgresql-no-upload-network-no-cash-publication',phases,deltaCounts},null,2));
+    measurement:'synthetic-runtime-local-postgresql-no-upload-network-no-cash-publication',phases,unchangedCounts,deltaCounts},null,2));
   }finally{await app.close();}
  }));
 }

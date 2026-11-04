@@ -1,3 +1,5 @@
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -25,7 +27,7 @@ const locationIds = ["v071-d1", "v071-d2"];
 
 function createPortalSession(employeeNumber, role) {
   const token = `v071-dashboard-${employeeNumber}-${crypto.randomBytes(20).toString("hex")}`;
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
@@ -36,8 +38,8 @@ function createPortalSession(employeeNumber, role) {
   `).run(employeeNumber, role);
   db.prepare("DELETE FROM portal_sessions WHERE employee_number = ?").run(employeeNumber);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(crypto.randomUUID(), employeeNumber, crypto.createHash("sha256").update(token).digest("hex"));
   return {
     cookie: `grabenplaner_session=${encodeURIComponent(token)}; grabenplaner_csrf=${encodeURIComponent(csrf)}`,
@@ -71,8 +73,8 @@ function resetFixture() {
     db.prepare("DELETE FROM departments WHERE location_id IN (?, ?)").run(...locationIds);
     db.prepare("DELETE FROM locations WHERE id IN (?, ?)").run(...locationIds);
     db.prepare("UPDATE locations SET active = 0").run();
-    db.prepare("INSERT INTO locations (id, name, min_staff, active) VALUES (?, 'Nord Demo', 2, 1)").run(locationIds[0]);
-    db.prepare("INSERT INTO locations (id, name, min_staff, active) VALUES (?, 'Süd Demo', 2, 1)").run(locationIds[1]);
+    prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, active) VALUES (?, 'Nord Demo', 2, 1)").run(locationIds[0]);
+    prepareLocationFixture(db, "INSERT INTO locations (id, name, min_staff, active) VALUES (?, 'Süd Demo', 2, 1)").run(locationIds[1]);
     db.prepare("INSERT INTO departments (location_id, name, min_staff, active, sort_order) VALUES (?, 'Fotowelt', 1, 1, 1)").run(locationIds[0]);
     db.prepare("INSERT INTO departments (location_id, name, min_staff, active, sort_order) VALUES (?, 'Hardware', 1, 1, 1)").run(locationIds[1]);
     const department1 = db.prepare("SELECT id FROM departments WHERE location_id = ?").get(locationIds[0]).id;
@@ -121,7 +123,7 @@ test.beforeEach(resetFixture);
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

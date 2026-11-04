@@ -4,6 +4,7 @@ const fs = require('node:fs'), path = require('node:path'), os = require('node:o
 const E = require('../lib/security-sast-context-evidence');
 const { readSastReviews } = require('../lib/security-sast-reviews');
 const { createEvidence, prepareEvidence } = require('../scripts/security/sast-context-evidence.cjs');
+const UI = require('../public/security-sast');
 const { spawnSync, execFileSync } = require('node:child_process');
 const COMMIT = 'a'.repeat(40), NOW = '2026-10-31T08:00:00Z';
 function write(root, relative, bytes) {
@@ -194,6 +195,14 @@ test('Evidence metadata registration grants no database driver, provider or conf
     'const secret = process.env.DATABASE_URL;',
   ]) assert.ok(check(file, source).length > 0, source);
 });
+test('UI and export states distinguish CI proof from local bytes and escape hostile metadata', () => {
+  const hostile = '<img src=x onerror=alert(1)>';
+  const markup = UI.evidenceMarkup({ status: 'package_bound', ci: { runId: hostile, attempt: hostile }, sourceCommit: hostile, sha256: hostile });
+  assert.ok(!markup.includes('<img')); assert.ok(markup.includes('&lt;img'));
+  const detail = UI.detailMarkup({ sourceState: 'evidenced', context: [{ path: hostile, state: 'ci_evidence', evidenceSha256: hostile }] });
+  assert.ok(detail.includes('Nicht ausgeliefert')); assert.ok(!detail.includes('<img'));
+  assert.equal(UI.filtered([{ sourceState: 'evidenced' }, { sourceState: 'incomplete' }], '', 'evidenced', false).length, 1);
+});
 test('Real CLI captures only the clean CI commit and stages the externally pinned private receipt', t => {
   const f = fixture(t), cli = path.resolve(__dirname, '../scripts/security/sast-context-evidence.cjs');
   const now = new Date(); f.row.reviewedOn = now.toISOString().slice(0, 10);
@@ -228,8 +237,20 @@ test('Real CLI captures only the clean CI commit and stages the externally pinne
   const captured = run(captureArgs); assert.equal(captured.status, 0, captured.stderr);
   const evidenceBytes = fs.readFileSync(output); assert.equal(JSON.parse(evidenceBytes).sourceCommit, sourceCommit);
   const args = ['prepare', '--root', f.root, '--build-root', f.buildRoot, '--source-commit', sourceCommit, '--evidence', output, '--sha256', E.sha(evidenceBytes)];
-  const staged = run(args); assert.equal(staged.status, 0, staged.stderr);
-
+  if (process.platform === 'win32') {
+    const builder = fs.readFileSync(path.join(__dirname, '../server-tools/package/New-GrabenplanerLinuxServerPackage.ps1'), 'utf8');
+    const block = builder.match(/^    if \(Test-Path -LiteralPath \(Join-Path \$buildRoot 'lib\\security-sast-reviews\.js'\)\) \{[\s\S]*?^    \}/m)?.[0];
+    assert.ok(block);
+    const quote = value => "'" + value.replace(/'/g, "''") + "'";
+    const packageStep = digest => {
+      const script = `$ErrorActionPreference = 'Stop'\n$sourceRoot = ${quote(f.root)}\n$buildRoot = ${quote(f.buildRoot)}\n$sourceCommit = ${quote(sourceCommit)}\n$SastContextEvidence = ${quote(output)}\n$SastContextEvidenceSha256 = ${quote(digest)}\n${block}`;
+      return spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+    };
+    assert.notEqual(packageStep('').status, 0, 'The real package block must require an external CI pin.');
+    const staged = packageStep(E.sha(evidenceBytes)); assert.equal(staged.status, 0, staged.stderr);
+  } else {
+    const staged = run(args); assert.equal(staged.status, 0, staged.stderr);
+  }
   f.manifest({ sourceCommit }); assert.equal(f.read(now).summary.contextEvidenced, 1);
   assert.notEqual(run(args).status, 0, 'A staged receipt may not be silently replaced.');
 });

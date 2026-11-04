@@ -67,16 +67,22 @@ const BASELINE_PACKAGE_DEPENDENCY_NAMES = Object.freeze([
   "tedious",
   "tesseract.js",
 ]);
-const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemailer", "@zxing/browser", "htmlparser2"]);
+const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemailer", "@zxing/browser", "htmlparser2",
+  // Maintained WebAuthn verification and self-hosted browser serialization; no database driver.
+  "@simplewebauthn/server", "@simplewebauthn/browser"]);
 // A read-only SQLite snapshot is the source of the user-authorized Block 9
 // transfer. This exception does not permit application fallback to SQLite.
 const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresql/transfer/history.js']);
 // User-authorized 2026 migration blocks; isolated environment, never product activation.
 const MIGRATION_DEVELOPMENT_FILES = new Set([
+  "server-tools/linux/postgresql/preflight-install.js",
   // Named CRM reads, article qualifications and protected administrative statistics.
   // Registration grants no driver import, statement declaration or activation.
   'lib/persistence/postgresql/core/import-master-customer-reference.js',
+  // Three reviewed read-only adapters over existing tables; no driver or DDL grant.
+  'lib/persistence/postgresql/core/workflow-studio.js',
   'lib/persistence/postgresql/sales/cash-customer-search.js',
+  'lib/persistence/postgresql/sales/cash-snapshot-pages.js',
   'lib/persistence/postgresql/operations/sql-runtime-statistics.js',
   'test/cash-customer-search-sql.test.js',
   'test/import-master-customer-reference.test.js',
@@ -88,11 +94,57 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'server-tools/linux/lib/vocational-school-migrate.js',
   'test/postgresql-vocational-school-migration.test.js',
   'test/vocational-school-catalog-qualification.test.js',
+  // Four reviewed authentication statements; historical locks and driver gates stay fixed.
+  'lib/persistence/postgresql/contracts/authentication-catalog-v1.json',
+  'lib/persistence/postgresql/contracts/ascii-nocase-catalog-v1.json',
+  'lib/persistence/postgresql/core/ascii-nocase-comparisons.js',
+  'test/postgresql-ascii-nocase-comparisons.test.js',
+  'test/ascii-nocase-catalog-qualification.test.js',
+  'test/postgresql-ascii-nocase-parity.test.js',
+  'test/authentication-catalog-qualification.test.js',
+  // Two bounded SQLite projections retain the exact historical PostgreSQL SQL.
+  'lib/persistence/postgresql/contracts/onboarding-json-catalog-v1.json',
+  'lib/persistence/postgresql/contracts/onboarding-receipt-projection-catalog-v1.json',
+  'lib/persistence/postgresql/contracts/payroll-handoff-department-catalog-v1.json',
+  // Exact session extension artifacts; only the named maintenance CLI opens a driver.
+  'lib/persistence/postgresql/contracts/session-security-catalog-v1.json',
+  'lib/persistence/postgresql/contracts/planning-shift-precondition-catalog-v1.json',
+  'lib/persistence/postgresql/core/planning-shift-precondition-catalog.js',
+  'lib/persistence/postgresql/core/session-security-catalog.js',
+  'lib/persistence/postgresql/core/session-security.js',
+  'server-tools/linux/lib/session-security-migrate.js',
+  'test/postgresql-session-security-cli.test.js',
+  'test/session-security-catalog-qualification.test.js',
+  'lib/persistence/postgresql/transfer/session-security.js',
+  'test/session-security-transfer.test.js',
+  // Additive, separately fingerprinted Passkey DDL/catalog and the explicit
+  // verified-restore transformation. This classification grants no new driver.
+  'lib/persistence/postgresql/contracts/passkeys-catalog-v1.json',
+  'lib/persistence/postgresql/core/passkeys-catalog.js',
+  'lib/persistence/postgresql/core/passkeys.js',
+  'lib/persistence/postgresql/operations/restore-authentication.js',
+  // Separate installed-only activation under a pinned source/config/backup lease.
+  'server-tools/linux/lib/passkeys-schema-activate.js',
+  'test-support/postgresql-migration/passkeys-compatibility-transition-fixture.cjs',
+  'test-support/postgresql-migration/f0d-core-inspector.json',
+  'test/passkeys-application-schema-policy.test.js',
   'lib/persistence/postgresql/core/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete-catalog.js',
   'lib/persistence/postgresql/sales/import-delete.js',
   'lib/persistence/postgresql/sales/import-delete-performance.js',
+  'lib/persistence/postgresql/sales/import-history-snapshots.js',
+  'lib/persistence/postgresql/sales/import-history-attestations.js',
+  'lib/persistence/postgresql/sales/import-history-publication-performance.js',
+  'lib/persistence/postgresql/sales/import-history-snapshots-catalog.js',
+  'test/postgresql-import-history-snapshots-migration.test.js',
   'lib/persistence/postgresql/operations/restore-capacity.js',
+  // Exact protected maintenance targets; import caches only, with paired backup.
+  'lib/persistence/postgresql/operations/import-retention.js',
+  'lib/persistence/postgresql/operations/storage-residuals.js',
+  'server-tools/linux/postgresql/storage-worker.js',
+  'server-tools/linux/postgresql/storage-import-run.js',
+  'server-tools/linux/postgresql/storage-import-maintenance.sh',
+  'test/vps-storage-postgresql.test.js',
   'server-tools/linux/lib/import-delete-migrate.js',
   'test/postgresql-stock-import-delete.test.js',
   'test/postgresql-trade-insights.test.js',
@@ -110,6 +162,10 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-cash-takeover.test.js',
   'test/postgresql-transaction-activity.test.js',
   'lib/persistence/postgresql/sales/import-recheck-catalog.js',
+  'lib/persistence/postgresql/sales/import-issues-catalog.js',
+  'test/postgresql-import-issues.test.js',
+  // Exact read-only audit receipt lookup; no driver, DDL or activation grant.
+  'lib/persistence/postgresql/sales/import-source-tolerance-catalog.js',
   'lib/persistence/postgresql/sales/import-work-queues.js',
   'lib/persistence/postgresql/import-reader-batches.js',
   'lib/persistence/postgresql/core/import-reader-batches.js',
@@ -119,6 +175,7 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/personnel-learning-postgresql.test.js',
   'lib/persistence/postgresql/reporting/branch-article-catalog.js',
   'lib/persistence/postgresql/reporting/sales-article-workspace-catalog.js',
+  'lib/persistence/postgresql/reporting/article-stock-selection.js',
   'lib/persistence/postgresql/reporting/sales-article-branch-orders-catalog.js',
   'test/postgresql-sales-article-workspace.test.js',
 
@@ -209,6 +266,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'lib/persistence/postgresql/operations/paired-monitor.js',
   'lib/persistence/postgresql/operations/paired-retention.js',
   'lib/persistence/postgresql/operations/runtime.js',
+  // Same retained maintenance snapshot; file/record verification only.
+  'lib/persistence/postgresql/operations/protected-files.js',
   'server-tools/linux/lib/postgresql-operations.js',
   'scripts/postgresql/qualify-operations-runtime.js',
   'scripts/postgresql/qualify-paired-backup-api.js',
@@ -285,10 +344,15 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'test/postgresql-migration-queries.test.js',
 ]);
 const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
+  "server-tools/linux/postgresql/preflight-install.js",
   // Only the installed maintenance-lease migration CLI opens the driver.
+  'server-tools/linux/postgresql/storage-worker.js',
   'server-tools/linux/lib/vocational-school-migrate.js',
+  'server-tools/linux/lib/session-security-migrate.js',
   'server-tools/linux/lib/import-delete-migrate.js',
+  'server-tools/linux/lib/passkeys-schema-activate.js',
   'lib/persistence/postgresql/application-operations/system-health.js',
+  'test-support/postgresql-migration/passkeys-compatibility-transition-fixture.cjs',
   'test-support/postgresql-recovery-performance-probe.js',
   'scripts/benchmark-data-import.cjs',
   'server-tools/linux/lib/trade-annotations-migrate.js',
@@ -337,6 +401,11 @@ const ISOLATED_CASH_QUALIFICATION_CLI_FILES = new Set([
   "scripts/benchmark-sales-search.js",
   "scripts/measure-cash-history-snapshot.mjs",
   "scripts/verify-compact-cash-full.mjs",
+]);
+// Explicit paid-test opt-in, synthetic temporary database and loopback-only app.
+// This source-only harness is never an application persistence adapter.
+const ISOLATED_ASSISTANT_QUALIFICATION_CLI_FILES = new Set([
+  'scripts/verify-assistant-live.js',
 ]);
 
 const SCAN_ROOTS = Object.freeze([
@@ -396,6 +465,73 @@ const PHASE_2_CLASSIFICATION = Object.freeze({
   laterPhase: "2-5",
 });
 const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
+  "lib/retired-database-operation.js",
+  "scripts/legacy-recovery-capsule.js", // Offline source/inventory preservation; no driver or runtime-provider grant.
+  // PostgreSQL-only canonical schema sources and legacy reexports: no driver or raw-handle grant.
+  "lib/persistence/schema-definitions/personnel-learning-assignment.js",
+  "lib/persistence/schema-definitions/personnel-learning-progress.js",
+  "lib/persistence/schema-definitions/personnel-learning-runs.js",
+  "lib/persistence/schema-definitions/session-security.js",
+  "lib/persistence/schema-definitions/xoffi-snapshots.js",
+  "lib/persistence/sqlite/absence-management-catalog.js",
+  "lib/persistence/sqlite/application-catalog.js",
+  "lib/persistence/sqlite/branch-article-stock-catalog.js",
+  "lib/persistence/sqlite/branch-receipt-catalog.js",
+  "lib/persistence/sqlite/branding-snapshot-catalog.js",
+  "lib/persistence/sqlite/cash-location-reads-catalog.js",
+  "lib/persistence/sqlite/cash-publications-catalog.js",
+  "lib/persistence/sqlite/cash-snapshots-catalog.js",
+  "lib/persistence/sqlite/collective-agreements-catalog.js",
+  "lib/persistence/sqlite/crm-customers-catalog.js",
+  "lib/persistence/sqlite/custom-process-management-catalog.js",
+  "lib/persistence/sqlite/custom-work-rules-catalog.js",
+  "lib/persistence/sqlite/data-import-catalog.js",
+  "lib/persistence/sqlite/data-import-delete-catalog.js",
+  "lib/persistence/sqlite/data-import-issues-catalog.js",
+  "lib/persistence/sqlite/data-import-recheck-catalog.js",
+  "lib/persistence/sqlite/data-import-runtime-catalog.js",
+  "lib/persistence/sqlite/data-import-source-tolerance-catalog.js",
+  "lib/persistence/sqlite/governance-store-catalog.js",
+  "lib/persistence/sqlite/history-snapshot-selection.js",
+  "lib/persistence/sqlite/import-history-catalog.js",
+  "lib/persistence/sqlite/import-history-snapshots-catalog.js",
+  "lib/persistence/sqlite/import-master-catalog.js",
+  "lib/persistence/sqlite/integration-runtime-catalog.js",
+  "lib/persistence/sqlite/loan-module-catalog.js",
+  "lib/persistence/sqlite/mobile-auth-catalog.js",
+  "lib/persistence/sqlite/organization-personnel-catalog.js",
+  "lib/persistence/sqlite/personal-action-log-catalog.js",
+  "lib/persistence/sqlite/personal-notification-contacts-catalog.js",
+  "lib/persistence/sqlite/personnel-learning-catalog.js",
+  "lib/persistence/sqlite/personnel-learning-runs-catalog.js",
+  "lib/persistence/sqlite/personnel-lifecycle-catalog.js",
+  "lib/persistence/sqlite/planning-settings-catalog.js",
+  "lib/persistence/sqlite/portal-access-catalog.js",
+  "lib/persistence/sqlite/portal-birthday-presentations.js",
+  "lib/persistence/sqlite/runtime-recovery-catalog.js",
+  "lib/persistence/sqlite/sales-analytics-catalog.js",
+  "lib/persistence/sqlite/sales-article-branch-orders-catalog.js",
+  "lib/persistence/sqlite/sales-article-catalog-catalog.js",
+  "lib/persistence/sqlite/sales-article-images-catalog.js",
+  "lib/persistence/sqlite/sales-article-search-projection-sql.js",
+  "lib/persistence/sqlite/sales-article-workspace-catalog.js",
+  "lib/persistence/sqlite/sales-report-jobs-catalog.js",
+  "lib/persistence/sqlite/saturday-credit-catalog.js",
+  "lib/persistence/sqlite/sickness-amu-management-catalog.js",
+  "lib/persistence/sqlite/staff-assignment-request-catalog.js",
+  "lib/persistence/sqlite/system-center-metrics-catalog.js",
+  "lib/persistence/sqlite/time-tracking-catalog.js",
+  "lib/persistence/sqlite/trade-annotations-catalog.js",
+  "lib/persistence/sqlite/trade-insights-catalog.js",
+  "lib/persistence/sqlite/ui-preferences-catalog.js",
+  "lib/persistence/sqlite/wifi-automation-catalog.js",
+  "lib/persistence/sqlite/work-rule-governance-catalog.js",
+  "lib/persistence/sqlite/work-rule-store-catalog.js",
+  "lib/persistence/sqlite/workflow-studio-catalog.js",
+  "lib/persistence/sqlite/xoffi-snapshots-catalog.js",
+  // Pure time policy and transactional additive SQLite migration; no driver grant.
+  "lib/portal-session-security.js",
+  "lib/persistence/sqlite/operations/session-security-schema.js",
   // Encrypted privacy metadata uses existing transaction-bound repositories.
   // The contract import validates the provider and its retry errors only;
   // this classification never permits driver imports or direct SQL access.
@@ -408,8 +544,10 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/trade-annotations.js",
   "lib/persistence/statements/personnel-learning-runs.js",
   "lib/persistence/statements/xoffi-snapshots.js",
+  // Exactly three typed Studio reads over existing run tables; no driver or DDL grant.
+  "lib/persistence/statements/workflow-studio.js",
   "lib/persistence/statements/sales-article-workspace.js",
-  "lib/persistence/sqlite/sales-article-workspace-catalog.js",
+  "lib/persistence/catalogs/sales-article-workspace-catalog.js",
   "lib/persistence/repositories/sales-article-workspace.js",
   // These article tools reuse catalog-bound queries and encrypted annotations.
   // Classification does not grant a driver import or raw database access.
@@ -446,31 +584,33 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/sales-price-label-project-store.js",
   "lib/branch-window-preferences-store.js",
   "lib/branch-window-preferences-routes.js",
-  "lib/persistence/sqlite/xoffi-snapshots-catalog.js",
+  "lib/persistence/catalogs/xoffi-snapshots-catalog.js",
   "lib/persistence/sqlite/operations/xoffi-snapshots-schema.js",
   "lib/persistence/statements/cash-publication-batches.js",
   "lib/persistence/statements/cash-location-reads.js",
-  "lib/persistence/sqlite/cash-location-reads-catalog.js",
+  "lib/persistence/catalogs/cash-location-reads-catalog.js",
   "lib/persistence/statements/import-batches.js",
   "lib/persistence/statements/import-reader-batches.js",
   "lib/persistence/statements/data-import-recheck.js",
-  "lib/persistence/sqlite/personnel-learning-runs-catalog.js",
+  "lib/persistence/statements/data-import-issues.js",
+  "lib/persistence/statements/data-import-source-tolerance.js",
+  "lib/persistence/catalogs/personnel-learning-runs-catalog.js",
   "lib/persistence/sqlite/operations/personnel-learning-runs-schema.js",
-  "lib/persistence/sqlite/branch-article-stock-catalog.js",
-  "lib/persistence/sqlite/sales-article-branch-orders-catalog.js",
-  "lib/persistence/sqlite/branch-receipt-catalog.js",
-  "lib/persistence/sqlite/trade-insights-catalog.js",
-  "lib/persistence/sqlite/trade-annotations-catalog.js",
+  "lib/persistence/catalogs/branch-article-stock-catalog.js",
+  "lib/persistence/catalogs/sales-article-branch-orders-catalog.js",
+  "lib/persistence/catalogs/branch-receipt-catalog.js",
+  "lib/persistence/catalogs/trade-insights-catalog.js",
+  "lib/persistence/catalogs/trade-annotations-catalog.js",
   "lib/persistence/sqlite/operations/trade-annotations-schema.js",
 
   "lib/persistence/repositories/sales-article-images.js",
   "lib/persistence/statements/sales-article-images.js",
-  "lib/persistence/sqlite/sales-article-images-catalog.js",
+  "lib/persistence/catalogs/sales-article-images-catalog.js",
   "lib/persistence/sqlite/operations/sales-article-images-schema.js",
   "lib/sales-article-image-routes.js",
   "lib/persistence/repositories/sales-report-jobs.js",
   "lib/persistence/statements/sales-report-jobs.js",
-  "lib/persistence/sqlite/sales-report-jobs-catalog.js",
+  "lib/persistence/catalogs/sales-report-jobs-catalog.js",
   "lib/persistence/sqlite/operations/sales-report-jobs-schema.js",
   "lib/sales-report-jobs-routes.js",
   "lib/sales-report-batch-worker.js",
@@ -483,10 +623,10 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/cash-publication-runtime.js",
   "lib/persistence/repositories/cash-history-backend.js",
   "lib/persistence/statements/cash-publications.js",
-  "lib/persistence/sqlite/cash-publications-catalog.js",
+  "lib/persistence/catalogs/cash-publications-catalog.js",
   "lib/persistence/sqlite/operations/cash-publications-schema.js",
   "lib/persistence/statements/cash-snapshots.js",
-  "lib/persistence/sqlite/cash-snapshots-catalog.js",
+  "lib/persistence/catalogs/cash-snapshots-catalog.js",
   "lib/persistence/sqlite/operations/cash-snapshots-schema.js",
   "lib/data-import-routes.js",
   "lib/data-import-jobs.js",
@@ -495,12 +635,12 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/data-import-delete.js",
   "lib/persistence/repositories/data-import-mapping-runtime.js",
   "lib/persistence/repositories/sales-history-runtime.js",
-  "lib/persistence/sqlite/data-import-runtime-catalog.js",
-  "lib/persistence/sqlite/data-import-delete-catalog.js",
+  "lib/persistence/catalogs/data-import-runtime-catalog.js",
+  "lib/persistence/catalogs/data-import-delete-catalog.js",
   "lib/persistence/sqlite/operations/data-import-runtime-schema.js",
   "lib/persistence/statements/data-import-runtime.js",
   "lib/persistence/statements/saturday-credit.js",
-  "lib/persistence/sqlite/saturday-credit-catalog.js",
+  "lib/persistence/catalogs/saturday-credit-catalog.js",
   "lib/persistence/sqlite/operations/saturday-credit-schema.js",
   "lib/persistence/repositories/saturday-credit.js",
   // Read-only route bridge, composed without a production import source.
@@ -510,17 +650,23 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "scripts/verify-tradefoto-test-import.mjs",
   "lib/persistence/repositories/sales-history-workspace.js",
   "lib/persistence/repositories/import-history.js",
-  "lib/persistence/sqlite/import-history-catalog.js",
+  "lib/persistence/repositories/import-history-snapshots.js",
+  "lib/persistence/catalogs/import-history-snapshots-catalog.js",
+  "lib/persistence/sqlite/operations/import-history-snapshots-schema.js",
+  "lib/persistence/statements/import-history-snapshots.js",
+  "lib/persistence/catalogs/import-history-catalog.js",
   "lib/persistence/sqlite/operations/import-history-schema.js",
   "lib/persistence/statements/import-history.js",
   // Isolated Block-3 master-data adapters; no production import activation.
   "lib/persistence/repositories/import-master-data.js",
-  "lib/persistence/sqlite/import-master-catalog.js",
+  "lib/persistence/catalogs/import-master-catalog.js",
   "lib/persistence/sqlite/operations/import-master-schema.js",
   "lib/persistence/statements/import-master-data.js",
   // Isolated Block-2 import foundation; not part of the application startup catalog.
   "lib/persistence/repositories/data-import.js",
-  "lib/persistence/sqlite/data-import-catalog.js",
+  "lib/persistence/catalogs/data-import-catalog.js",
+  "lib/persistence/catalogs/data-import-source-tolerance-catalog.js",
+  "lib/persistence/catalogs/data-import-issues-catalog.js",
   "lib/persistence/sqlite/operations/data-import-schema.js",
   "lib/persistence/statements/data-import.js",
   "lib/persistence/application-repositories.js",
@@ -552,17 +698,17 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/wifi-automation.js",
   "lib/persistence/repositories/work-rule-store.js",
   "lib/persistence/repositories/work-rule-governance.js",
-  "lib/persistence/sqlite/application-catalog.js",
-  "lib/persistence/sqlite/absence-management-catalog.js",
-  "lib/persistence/sqlite/branding-snapshot-catalog.js",
-  "lib/persistence/sqlite/collective-agreements-catalog.js",
-  "lib/persistence/sqlite/crm-customers-catalog.js",
-  "lib/persistence/sqlite/custom-process-management-catalog.js",
-  "lib/persistence/sqlite/custom-work-rules-catalog.js",
-  "lib/persistence/sqlite/governance-store-catalog.js",
-  "lib/persistence/sqlite/integration-runtime-catalog.js",
-  "lib/persistence/sqlite/loan-module-catalog.js",
-  "lib/persistence/sqlite/mobile-auth-catalog.js",
+  "lib/persistence/catalogs/application-catalog.js",
+  "lib/persistence/catalogs/absence-management-catalog.js",
+  "lib/persistence/catalogs/branding-snapshot-catalog.js",
+  "lib/persistence/catalogs/collective-agreements-catalog.js",
+  "lib/persistence/catalogs/crm-customers-catalog.js",
+  "lib/persistence/catalogs/custom-process-management-catalog.js",
+  "lib/persistence/catalogs/custom-work-rules-catalog.js",
+  "lib/persistence/catalogs/governance-store-catalog.js",
+  "lib/persistence/catalogs/integration-runtime-catalog.js",
+  "lib/persistence/catalogs/loan-module-catalog.js",
+  "lib/persistence/catalogs/mobile-auth-catalog.js",
   "lib/persistence/sqlite/operations/audit-log.js",
   "lib/persistence/sqlite/operations/central-article-loan-migration.js",
   "lib/persistence/sqlite/operations/collective-agreements-schema.js",
@@ -598,25 +744,25 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/operations/system-diagnostics.js",
   "lib/persistence/sqlite/operations/system-center-metrics-schema.js",
   "lib/persistence/sqlite/operations/work-rule-store-schema.js",
-  "lib/persistence/sqlite/organization-personnel-catalog.js",
-  "lib/persistence/sqlite/personal-action-log-catalog.js",
-  "lib/persistence/sqlite/personal-notification-contacts-catalog.js",
-  "lib/persistence/sqlite/personnel-lifecycle-catalog.js",
-  "lib/persistence/sqlite/personnel-learning-catalog.js",
-  "lib/persistence/sqlite/portal-birthday-presentations.js",
-  "lib/persistence/sqlite/staff-assignment-request-catalog.js",
-  "lib/persistence/sqlite/planning-settings-catalog.js",
-  "lib/persistence/sqlite/portal-access-catalog.js",
+  "lib/persistence/catalogs/organization-personnel-catalog.js",
+  "lib/persistence/catalogs/personal-action-log-catalog.js",
+  "lib/persistence/catalogs/personal-notification-contacts-catalog.js",
+  "lib/persistence/catalogs/personnel-lifecycle-catalog.js",
+  "lib/persistence/catalogs/personnel-learning-catalog.js",
+  "lib/persistence/catalogs/portal-birthday-presentations.js",
+  "lib/persistence/catalogs/staff-assignment-request-catalog.js",
+  "lib/persistence/catalogs/planning-settings-catalog.js",
+  "lib/persistence/catalogs/portal-access-catalog.js",
   "lib/persistence/sqlite/provider.js",
-  "lib/persistence/sqlite/runtime-recovery-catalog.js",
-  "lib/persistence/sqlite/sales-article-catalog-catalog.js",
-  "lib/persistence/sqlite/sickness-amu-management-catalog.js",
-  "lib/persistence/sqlite/system-center-metrics-catalog.js",
-  "lib/persistence/sqlite/time-tracking-catalog.js",
-  "lib/persistence/sqlite/ui-preferences-catalog.js",
-  "lib/persistence/sqlite/wifi-automation-catalog.js",
-  "lib/persistence/sqlite/work-rule-store-catalog.js",
-  "lib/persistence/sqlite/work-rule-governance-catalog.js",
+  "lib/persistence/catalogs/runtime-recovery-catalog.js",
+  "lib/persistence/catalogs/sales-article-catalog-catalog.js",
+  "lib/persistence/catalogs/sickness-amu-management-catalog.js",
+  "lib/persistence/catalogs/system-center-metrics-catalog.js",
+  "lib/persistence/catalogs/time-tracking-catalog.js",
+  "lib/persistence/catalogs/ui-preferences-catalog.js",
+  "lib/persistence/catalogs/wifi-automation-catalog.js",
+  "lib/persistence/catalogs/work-rule-store-catalog.js",
+  "lib/persistence/catalogs/work-rule-governance-catalog.js",
   "lib/persistence/statements/branding-snapshot.js",
   "lib/persistence/statements/absence-management.js",
   "lib/persistence/statements/collective-agreements.js",
@@ -648,6 +794,51 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
 ]);
 const PHASE_3_SQLITE_PROVIDER_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_FILES);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
+  "test/linux-local-backup-archive.test.js",
+  "test-support/postgresql-api/metadata.js",
+  "test-support/postgresql-api/location-fixture.js",
+  "test-support/postgresql-api/trigger-fixture.js",
+  "test-support/postgresql-api/constraint-fixture.js",
+  "test-support/historical-server-tests.js",
+  "test/postgresql-only-historical-permissions.test.js",
+  "test/postgresql-only-historical-integrations.test.js",
+  "test/postgresql-only-historical-cost-centers.test.js",
+  "test/postgresql-only-historical-shift-locations.test.js",
+  "test/portal-foundation-legacy-migration.test.js",
+  "test/planning-assistant-preferences-api.test.js",
+  "test-support/postgresql-api/ownership.js",
+  "test-support/postgresql-api/diagnostic-shutdown.js",
+  "test/postgresql-shutdown-diagnostic.test.js",
+  "test/postgresql-api-native-fixture.test.js",
+  "test/root-postgresql-dependency-trust.test.js",
+  "test/postgresql-startup-category-defaults.test.js",
+  "test/postgresql-startup-policy-defaults.test.js",
+  "test/portal-foundation-https.test.js",
+  "test/portal-session-authority-races.test.js",
+  "test/portal-foundation-lan-pilot.test.js",
+  "test/portal-foundation-scope.test.js",
+  "test/portal-foundation-loopback.test.js",
+  "test-support/legacy-baseline.js",
+  "test/postgresql-only-retired-backup.test.js",
+  "test-support/database-lock-legacy-v09293.cjs",
+  "test-support/legacy-recovery-fixture.js",
+  "test/legacy-recovery-capsule.test.js",
+  "test/postgresql-only-install-preflight.test.js",
+  "test/postgresql-only-runtime.test.js",
+  "test/postgresql-only-catalog-boundary.test.js",
+  "test/postgresql-api-fixture-boundary.test.js",
+  "test-support/postgresql-api/preload.js",
+  "test-support/postgresql-api/worker.js",
+  "test-support/postgresql-api/backup-pools.js",
+  "test/postgresql-backup-protected-files.test.js",
+  "test-support/postgresql-api/sql.js",
+  "test-support/postgresql-api/guard.js",
+  "test-support/postgresql-migration/owned-local-fixture.js",
+  'scripts/verify-assistant-live.js',
+  'test/assistant-management-api.test.js',
+  'test/planning-optimizer-api.test.js',
+  'test/planning-optimizer.test.js',
+  'test/voice-assistant-api.test.js',
   // These synthetic tests qualify encrypted status writes and neutral receipts
   // through the existing provider repositories; no product driver is added.
   "test/maternity-protection-integration.test.js",
@@ -702,10 +893,7 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/branch-sales-api.test.js",
   "test/sales-article-images.test.js",
   "test/sales-report-jobs-routes.test.js",
-  // Report-library schema and move/delete contracts use the existing SQLite
-  // fixture. This registration grants no additional production driver access.
   "test/sales-report-library.test.js",
-  "test/security-sast-context-evidence.test.js",
   "scripts/benchmark-cash-assigned-search.js",
   "scripts/benchmark-sales-search.js",
   "test/portal-permission-defaults.test.js",
@@ -724,6 +912,14 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/backup-recovery-keys.test.js",
   "test/full-source-backup-measurement.test.js",
   "test/data-import-runtime.test.js",
+  "test/article-stock-snapshots.test.js",
+  "test/article-stock-snapshot-integrity.test.js",
+  "test/article-stock-snapshot-retention.test.js",
+  "test/data-import-unchanged-review.test.js",
+  "test/import-history-snapshots-schema.test.js",
+  "test/history-snapshot-stock-read.test.js",
+  "test/import-master-reference-prefetch.test.js",
+  "test/sales-article-import-batch-read.test.js",
   "test/data-import-jobs.test.js",
   "test/data-import-state-counts.test.js",
   "test/saturday-credit-integration.test.js",
@@ -899,10 +1095,17 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 1485;
+const PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS = Object.freeze([
+  "data-import.events.source-tolerances",
+  "workflow-studio.completion.lookup",
+  "workflow-studio.instance.steps",
+  "workflow-studio.instances.page",
+  "xoffi-snapshots.get-scoped",
+]);
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 1507;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 46;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1439;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1366;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 1461;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 1388;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 10;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -948,7 +1151,7 @@ const SALES_ANALYTICS_PERSISTENCE_SLICE_FILES = Object.freeze([
   "lib/persistence/postgresql/sales-analytics-schema.js",
   "lib/persistence/repositories/sales-analytics.js",
   "lib/persistence/sqlite/operations/sales-analytics-schema.js",
-  "lib/persistence/sqlite/sales-analytics-catalog.js",
+  "lib/persistence/catalogs/sales-analytics-catalog.js",
   "lib/persistence/statements/sales-analytics.js",
 ]);
 const SALES_ANALYTICS_PERSISTENCE_SLICE_FILE_SET =
@@ -1028,8 +1231,8 @@ const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS = Object.freeze([
 const SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_COUNT =
   SALES_ANALYTICS_EXPECTED_SCHEMA_STATEMENT_IDS.length;
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1347;
-const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 138;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 1365;
+const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 142;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
   "ui-preferences.get",
@@ -1130,6 +1333,25 @@ const PHASE_6_CLASSIFICATION = Object.freeze({
 
 const PRODUCTION_DIRECT_GROUPS = Object.freeze([
   Object.freeze({
+    id: "learning-and-workflow-workspace-ui",
+    files: Object.freeze([
+      "public/gp-window.js",
+      "public/vps-storage.js",
+      "public/learning-library.js",
+      "public/learning-team.js",
+      "public/trade-orders.js",
+      "public/workflow-studio-editor.js",
+      "public/workflow-studio-runs.js",
+    ]),
+    scope: "product-client-ui",
+    owner: "workspace-and-domain-ui",
+    targetLayer: "provider-neutral HTTP clients and account-bound DOM window preferences",
+    risk: "medium",
+    transactionContext: "server-owned persistence through existing authenticated HTTP contracts",
+    transitionException: "lexical prepare calls are DOM window preparation only; no SQL, database driver or provider activation grant",
+    laterPhase: "not-applicable",
+  }),
+  Object.freeze({
     id: "scoped-crm-maintenance-import",
     files: Object.freeze(["scripts/import-tradefoto-crm.cjs"]),
     scope: "explicit-customer-import-maintenance",
@@ -1221,6 +1443,7 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
       "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
       "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
       "server-tools/linux/migrate-grabenplaner-runtime-v5.sh",
+      "server-tools/linux/migrate-grabenplaner-runtime-v6.sh",
       "server-tools/linux/monitor/lib/monitor-status.js",
       "server-tools/linux/offsite/lib/application-smoke.js",
       "server-tools/linux/recovery/lib/recovery-apply.js",
@@ -1232,7 +1455,7 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
     targetLayer: "provider-specific snapshot, restore, verification, recovery and bootstrap adapters",
     risk: "critical",
     transactionContext: "offline snapshots, integrity checks and controlled file replacement",
-    transitionException: "the complete SQLite operating path remains supported until a separate PostgreSQL path passes all gates",
+    transitionException: "historical SQLite operating adapters remain archived source fixtures; current managed operation requires the qualified PostgreSQL pair and the bounded legacy recovery capsule",
     laterPhase: "3-6",
   }),
   Object.freeze({
@@ -1269,12 +1492,13 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
 const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
   Object.freeze({
     id: "security-sast-review-metadata",
-    files: Object.freeze(["scripts/security/sast-dispositions.json", "lib/security-sast-context-evidence.js"]),
+    files: Object.freeze(["scripts/security/sast-dispositions.json", "scripts/security/exceptions.json", "lib/security-sast-context-evidence.js"]),
     scope: "security-review-metadata",
     owner: "security-review-evidence",
     targetLayer: "private JSON review records and read-only package/hash evidence verification; legacy paths are exclusion metadata",
     risk: "low",
     transitionException: "metadata classification only; no database driver, statement, connection or runtime activation grant",
+    laterPhase: "not-applicable",
   }),
   Object.freeze({
     id: "security-release-component-inventory",
@@ -1284,6 +1508,7 @@ const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
     targetLayer: "read-only package hashes and process runtime version metadata",
     risk: "low",
     transitionException: "SQLite version comes from process.versions; no database driver, connection or business data access is authorized",
+    laterPhase: "not-applicable",
   }),
   Object.freeze({
     id: "isolated-full-source-measurement",
@@ -1497,9 +1722,65 @@ const BASELINE_TEST_FILES = Object.freeze([
 ]);
 
 const TEST_SPECIAL_GROUPS = Object.freeze({
+  "security-audit-synthetic-fixtures": new Set([
+    "test/onboarding-json-compatibility.test.js",
+    // Explicit opt-in probes and isolated integration data; no product database access.
+    "test-support/security-audit/session-audit.probe.cjs",
+    "test-support/security-audit/ui-audit.probe.cjs",
+    "test/security-audit-integration.test.js",
+    "test-support/security-audit/login-concurrency-fixture.cjs",
+    "test/portal-login-concurrency.test.js",
+    "test/portal-login-concurrency-api.test.js",
+    "test/portal-session-security.test.js",
+    "test/session-security-persistence.test.js",
+    "test/session-security-migration.test.js",
+    "test/session-security-interruption.test.js",
+    "test/security-p2-authentication-api.test.js",
+    "test/security-reauthentication-api.test.js",
+    "test/security-csp-server.test.js",
+      "test/security-release-inventory.test.js",
+    "test-support/security-audit/login-multiconnection-worker.cjs",
+    "test/portal-login-multiconnection.test.js",
+    "test-support/security-audit/linux-native-runtime.probe.cjs",
+  ]),
+  "employee-preferences-api-fixtures": new Set([
+    // Isolated synthetic API qualification; no new product database access.
+    "test/employee-preferred-days-api.test.js",
+    "test/emma-contact-api.test.js",
+  ]),
+  "learning-and-workflow-workspace-fixtures": new Set([
+    "test/dashboard-boards-api.test.js",
+    "test/gp-dashboard-boards-browser.test.js",
+    "test/personnel-dashboard-content-browser.test.js",
+    "test-support/learning-delivery-ui.js",
+    "test-support/workflow-studio-editor-ui.js",
+    "test-support/workflow-studio-persistence-ui.js",
+    "test/gp-window-browser.test.js",
+    "test/gp-window-scroll-browser.test.js",
+    "test/cost-centers-workspace-browser.test.js",
+    "test/gp-window-explicit-reopen-browser.test.js",
+    "test/learning-catalog-workspace-browser.test.js",
+    "test/learning-overview-workspace-browser.test.js",
+    "test/personnel-dashboard-layout-browser.test.js",
+    "test/personnel-dashboard-workspace-browser.test.js",
+    "test/personnel-directory-workspace-browser.test.js",
+    "test/workflow-studio-browser.test.js",
+    "test/workflow-studio-drafts-api.test.js",
+    "test/workflow-studio-drafts.test.js",
+    "test/workflow-studio-editor-browser.test.js",
+    "test/workflow-studio-executor.test.js",
+    "test/workflow-studio-instances.test.js",
+    "test/workflow-studio-persistence-browser.test.js",
+    "test/workflow-studio-portal-api.test.js",
+    "test/workflow-studio-portal-browser.test.js",
+    "test/workflow-studio-read.test.js",
+    "test/workflow-studio-runs-browser.test.js",
+  ]),
   "deployment-operations-verification": new Set([
     "test/deploy-startup.test.js",
     "test/deploy-workflow.test.js",
+    // Offline package/evidence fixtures; no database driver or product access.
+    "test/prepared-release-package.test.js", "test/security-sast-context-evidence.test.js",
     "test/v074-linux-monitor-status.test.js",
   ]),
   "portal-ui-preferences-integration": new Set([
@@ -1599,13 +1880,29 @@ const BASELINE_DIRECT_TEST_DRIVER_FILES = Object.freeze([
 const MANAGED_LINUX_SQLITE_COMPATIBILITY_DRIVER_FILES = Object.freeze([
   "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
 ]);
+const RETIRED_SQLITE_DRIVER_FILES = new Set([
+  "server-tools/linux/test-grabenplaner-server.sh",
+  "backup.js",
+  "lib/database-lock.js",
+  "server-tools/linux/grabenplaner-bootstrap-admin.sh.in",
+  "server-tools/linux/install-grabenplaner-server.sh",
+  "server-tools/linux/lib/backup-snapshot.js",
+  "server-tools/linux/lib/restore-backup.js",
+  "server-tools/linux/lib/verify-backup.js",
+  "server-tools/linux/offsite/lib/application-smoke.js",
+  "server-tools/linux/recovery/lib/recovery-apply.js",
+  "server-tools/linux/recovery/lib/recovery-verify.js"
+]);
 const PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES = Object.freeze([
   ...BASELINE_DIRECT_PRODUCTION_DRIVER_FILES.filter((file) => file !== "server.js"),
   ...PHASE_3_SQLITE_DRIVER_FILES,
   ...MANAGED_LINUX_SQLITE_COMPATIBILITY_DRIVER_FILES,
   "scripts/cleanup-branch-order-test-data.js",
-]);
+].filter(file => !RETIRED_SQLITE_DRIVER_FILES.has(file)));
 const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
+  "test-support/database-lock-legacy-v09293.cjs",
+  "test-support/legacy-recovery-fixture.js",
+  "test/legacy-recovery-capsule.test.js",
   "test/price-label-image-recovery.test.js",
   'test/sales-article-performance.test.js',
   'test/sales-article-branch-orders.test.js',
@@ -1616,6 +1913,20 @@ const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
   "test-support/cash-history-snapshot-prototype.js",
   "test/data-import-state-counts.test.js",
   ...BASELINE_DIRECT_TEST_DRIVER_FILES.filter((file) => ![
+    "test/v058-personnel-rights-encryption.test.js",
+    "test/v053-time-corrections.test.js",
+    "test/v057-codespaces-demo.test.js",
+    "test/v072-production-bootstrap.test.js",
+    "test/v082-immutable-trigger-migration.test.js",
+    "test/v087-block5-loan-photo-migration.test.js",
+    "test/v087-block7-settings-appearance.test.js",
+    "test/v087-block8-cost-center-migration.test.js",
+    "test/database-lock.test.js",
+    "test/v0862-server-backup-download.test.js",
+    "test/portal-foundation.test.js",
+    "test/v063-import-payroll.test.js",
+    "test/v071-cost-centers-personnel.test.js",
+    "test/v071-shift-locations.test.js",
     "test/block6-custom-work-rule-evaluator.test.js",
     "test/work-rule-store.test.js",
   ].includes(file)),
@@ -2759,9 +3070,11 @@ function architectureBoundaryViolationsForText(file, text) {
   ]);
   const statementDefinitionFiles = new Set([
     "lib/persistence/contract.js",
-    "lib/persistence/sqlite/data-import-delete-catalog.js",
+    "lib/persistence/catalogs/data-import-delete-catalog.js",
     ...PHASE_3_STATEMENT_FILES,
     "lib/persistence/statements/sales-analytics.js",
+    // Native-only, separately pinned credential/challenge statements.
+    "lib/persistence/statements/passkeys.js",
     "lib/persistence/postgresql/boundary/catalog.js",
     "lib/persistence/postgresql/boundary/transaction-activity.js",
     "lib/persistence/postgresql/reporting/catalog.js",
@@ -2770,24 +3083,36 @@ function architectureBoundaryViolationsForText(file, text) {
   // Installed operations select the provider but never consume web-supplied
   // connection details. The application configuration gate remains separate.
   const configurationFiles = new Set(["lib/persistence/configuration.js",
+    "server-tools/linux/grabenplaner.env.example",
+    "server-tools/linux/install-grabenplaner-server.sh",
+    "server-tools/linux/postgresql/preflight-install.js",
     'lib/persistence/postgresql/productive-configuration.js',
     'server-tools/linux/postgresql/migration-host.js',
     'server-tools/linux/recovery/lib/postgresql-application-smoke.js',
     'lib/persistence/postgresql/rehearsal-configuration.js',
     'server-tools/linux/backup-grabenplaner.sh',
+    'server-tools/linux/activate-grabenplaner-passkeys.sh',
     'server-tools/linux/lib/deploy-policy.js',
     'server-tools/linux/offsite/grabenplaner-offsite-prepare.sh',
     'server-tools/linux/offsite/install-grabenplaner-offsite.sh',
     'server-tools/linux/test-grabenplaner-server.sh',
     'server-tools/linux/preflight-grabenplaner-deploy.sh',
     'server-tools/linux/update-grabenplaner-server.sh',
+    // The exact Core5-to-Core6 entrypoint validates the root-owned installed
+    // PostgreSQL pair before its coordinated protected module transition.
+    'server-tools/linux/migrate-grabenplaner-runtime-v6.sh',
   ]);
   const persistenceInternalFiles = new Set([
+    "lib/persistence/statements/passkeys.js",
+    "lib/persistence/repositories/passkeys.js",
     'lib/persistence/postgresql/application.js',
     'lib/persistence/postgresql/read-scope.js',
     // Existing managed readers accept only a branded executor so source hints
     // can join the action CAS transaction. This grants contract assertions only.
     'lib/data-import-managed-protection.js',
+    // The audit ledger asserts the branded provider and reads shared error codes;
+    // all operations use existing repositories. This permits no driver or raw SQL.
+    'lib/security-audit-store.js',
     'lib/persistence/repositories/trade-insights.js',
     'lib/persistence/repositories/sales-bwl-abc-workspace.js',
     ...PHASE_2_CONTRACT_FILES,
@@ -2921,7 +3246,7 @@ function architectureBoundaryViolationsForText(file, text) {
 function scanPhaseBoundary(root, files) {
   const violations = [];
   for (const file of files) {
-    if (file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file) || EXCLUDED_FILES.has(file)) continue;
+    if (file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file) || ISOLATED_ASSISTANT_QUALIFICATION_CLI_FILES.has(file) || EXCLUDED_FILES.has(file)) continue;
     const text = fs.readFileSync(path.join(root, file), "utf8");
     violations.push(...architectureBoundaryViolationsForText(file, text));
   }
@@ -2998,7 +3323,7 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
   }
 
   const catalogModule = safeRequire(
-    "lib/persistence/sqlite/application-catalog.js",
+    "lib/persistence/catalogs/application-catalog.js",
     "SQLite-Anwendungskatalog",
   );
   const dialectModule = missingFiles.includes("lib/persistence/dialects/application-manifest.js")
@@ -3042,6 +3367,16 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
   const extraSqliteStatementBindings = sortedDifference(sqliteStatementIds, statementIds);
   const missingPostgresqlStatementBindings = sortedDifference(statementIds, postgresqlStatementIds);
   const extraPostgresqlStatementBindings = sortedDifference(postgresqlStatementIds, statementIds);
+  const applicationReadExtensionStatementIds = statementIds
+    .filter((id) => PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS.includes(id)).sort();
+  const applicationReadExtensionViolations = PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS
+    .filter((id) => {
+      const entries = applicationCatalog.filter((entry) => entry?.statement?.id === id);
+      return entries.length !== 1
+        || !["queryOne", "queryAll"].includes(entries[0]?.statement?.operation)
+        || entries[0]?.returning !== false
+        || !/^\s*SELECT\b/i.test(entries[0]?.sql || "");
+    });
   const sqliteBaselineStatementCount = sqliteDialectEntries
     .filter((entry) => entry?.classification === "sqlite-baseline")
     .length;
@@ -3294,6 +3629,7 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
     && missingTestFiles.length === 0
     && moduleErrors.length === 0
     && statementIds.length === PHASE_4_EXPECTED_STATEMENT_COUNT
+    && applicationReadExtensionViolations.length === 0
     && duplicateStatementIds.length === 0
     && sqliteStatementIds.length === PHASE_4_EXPECTED_STATEMENT_COUNT
     && postgresqlStatementIds.length === PHASE_4_EXPECTED_STATEMENT_COUNT
@@ -3343,6 +3679,8 @@ function inspectPhase4Persistence(root, files, phaseBoundaryViolations) {
     extraSqliteStatementBindings,
     missingPostgresqlStatementBindings,
     extraPostgresqlStatementBindings,
+    applicationReadExtensionStatementIds,
+    applicationReadExtensionViolations,
     dialectMetadataViolations: [...new Set(dialectMetadataViolations)].sort(),
     duplicateMigrationOperationIds,
     duplicateSqliteMigrationBindings,
@@ -3422,7 +3760,7 @@ function inspectPhase5Postgresql(root) {
     "lib/persistence/repositories/sales-analytics.js",
   );
   const salesAnalyticsSqliteCatalog = safeRequire(
-    "lib/persistence/sqlite/sales-analytics-catalog.js",
+    "lib/persistence/catalogs/sales-analytics-catalog.js",
   );
   const salesAnalyticsSqliteSchema = safeRequire(
     "lib/persistence/sqlite/operations/sales-analytics-schema.js",
@@ -3431,7 +3769,7 @@ function inspectPhase5Postgresql(root) {
     "lib/persistence/statements/sales-analytics.js",
   );
   const sqliteApplicationCatalog = safeRequire(
-    "lib/persistence/sqlite/application-catalog.js",
+    "lib/persistence/catalogs/application-catalog.js",
   );
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const serverText = fs.readFileSync(path.join(root, "server.js"), "utf8");
@@ -3769,7 +4107,7 @@ function inspectPhase5Postgresql(root) {
     const applicationBoundaryFiles = [
       "server.js",
       "lib/persistence/application-repositories.js",
-      "lib/persistence/sqlite/application-catalog.js",
+      "lib/persistence/catalogs/application-catalog.js",
       "lib/persistence/sqlite/operations/application-schema.js",
     ];
     const applicationBoundaryPatterns = [
@@ -3897,15 +4235,18 @@ function inspectPhase5Postgresql(root) {
     0,
   );
   const configurationStillClosed = (
-    JSON.stringify(configuration?.IMPLEMENTED_PERSISTENCE_PROVIDER_IDS) === JSON.stringify(["sqlite"])
+    JSON.stringify(configuration?.IMPLEMENTED_PERSISTENCE_PROVIDER_IDS) === JSON.stringify(["postgresql"])
+    && JSON.stringify(configuration?.PERSISTENCE_PROVIDER_IDS) === JSON.stringify(["postgresql"])
+    && [{}, {DB_PROVIDER:"sqlite"}, {DB_PROVIDER:"sqlite",DB_PATH:":memory:"}, {DATABASE_URL:"postgresql://unbound.invalid/gp"}]
+      .every(environment => {try { configuration.resolvePersistenceConfiguration({environment}); return false; } catch { return true; }})
   );
   const serverActivationReferences = [
     ...serverText.matchAll(/\b(?:open|create)Postgresql[A-Za-z0-9_]*\b/g),
     ...serverText.matchAll(/["'][^"']*\/persistence\/postgresql(?:\/[^"']*)?["']/g),
     ...serverText.matchAll(/\brequire\s*\(\s*["']pg(?:\/[^"']*)?["']\s*\)/g),
   ].length;
-  // The full server is now qualified only behind the explicit Linux/private-
-  // network rehearsal guard. Default and productive PostgreSQL remain closed.
+  // PostgreSQL is the only server provider. Unbound connections and legacy
+  // SQLite settings remain closed; productive use requires the protected pair binding.
   const rehearsalConfiguration = require('../lib/persistence/postgresql/rehearsal-configuration');
   const rehearsalGuardClosed = [
     { DB_PROVIDER: 'postgresql' },
@@ -4072,7 +4413,8 @@ function inspectPhase5Postgresql(root) {
     providerSliceStatus: providerSliceComplete ? "completed" : "in-progress",
     providerSliceComplete,
     productionActivation: false,
-    configurationStillClosed,
+    configurationStillClosed, // Historical report field: unbound/legacy activation stays closed.
+    configurationPostgresqlOnly: configurationStillClosed,
     serverActivationReferences,
     rehearsalGuardClosed,
     driverDependency: packageJson.dependencies?.pg || "",
@@ -4259,7 +4601,10 @@ function inspectPhase6PostgresqlOperations(root) {
     ? [...configuration.IMPLEMENTED_PERSISTENCE_PROVIDER_IDS]
     : [];
   const configurationStillClosed =
-    JSON.stringify(implementedProviderIds) === JSON.stringify(["sqlite"]);
+    JSON.stringify(implementedProviderIds) === JSON.stringify(["postgresql"])
+    && JSON.stringify(configuration?.PERSISTENCE_PROVIDER_IDS) === JSON.stringify(["postgresql"])
+    && [{}, {DB_PROVIDER:"sqlite"}, {DB_PROVIDER:"sqlite",DB_PATH:":memory:"}, {DATABASE_URL:"postgresql://unbound.invalid/gp"}]
+      .every(environment => {try { configuration.resolvePersistenceConfiguration({environment}); return false; } catch { return true; }});
   const serverText = fs.existsSync(path.join(root, "server.js"))
     ? fs.readFileSync(path.join(root, "server.js"), "utf8")
     : "";
@@ -4291,8 +4636,8 @@ function inspectPhase6PostgresqlOperations(root) {
   ].filter((entry) => entry.count > 0);
   const serverActivationReferences = serverActivationReferenceDetails
     .reduce((sum, entry) => sum + entry.count, 0);
-  // The default provider remains closed. The 2026 managed runtime additionally
-  // reads its protected root status; neither import can activate it by itself.
+  // Operation imports cannot bypass the protected PostgreSQL pair configuration.
+  // Arbitrary generic URLs and legacy SQLite configuration remain closed.
   const rehearsalExportOnly = serverActivationReferences === 2
     && serverActivationReferenceDetails[0]?.id === 'postgresql-operations-module'
     && countMatches(serverText, /persistence\/postgresql\/operations\/application-export/g) === 1
@@ -4362,7 +4707,8 @@ function inspectPhase6PostgresqlOperations(root) {
     productionActivation: false,
     supportApproved: false,
     cutoverImplemented: false,
-    configurationStillClosed,
+    configurationStillClosed, // Historical report field: unbound/legacy activation stays closed.
+    configurationPostgresqlOnly: configurationStillClosed,
     implementedProviderIds,
     serverActivationReferences,
     serverActivationReferenceDetails,
@@ -4386,6 +4732,9 @@ function scanRepository(root = REPOSITORY_ROOT) {
   const baselineTests = new Set([
     ...BASELINE_TEST_FILES,
     ...TEST_SPECIAL_GROUPS["deployment-operations-verification"],
+    ...TEST_SPECIAL_GROUPS["learning-and-workflow-workspace-fixtures"],
+    ...TEST_SPECIAL_GROUPS["employee-preferences-api-fixtures"],
+    ...TEST_SPECIAL_GROUPS["security-audit-synthetic-fixtures"],
   ]);
   const classificationDuplicates = [
     ...directGroups.duplicates,
@@ -4464,7 +4813,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
     .sort();
   const records = [];
   for (const file of files) {
-    const isTest = file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file);
+    const isTest = file.startsWith("test/") || file.startsWith("test-support/") || ISOLATED_CASH_QUALIFICATION_CLI_FILES.has(file) || ISOLATED_ASSISTANT_QUALIFICATION_CLI_FILES.has(file);
     const classification = MIGRATION_DEVELOPMENT_FILES.has(file) ? {
       ...PHASE_5_CLASSIFICATION,
       id: 'postgresql-core-migration-development',
@@ -4632,7 +4981,8 @@ function scanRepository(root = REPOSITORY_ROOT) {
     && /\buiPreferencesRepository\.saveChanges\s*\(/.test(uiPreferencesFunctionSources[1] || "")
     && /\buiPreferencesRepository\.get\s*\(/.test(uiPreferencesFunctionSources[2] || "")
     && /\buiPreferencesRepository\.upsert\s*\(/.test(uiPreferencesFunctionSources[3] || "")
-    && /\bopenSqliteApplicationPersistence\s*\(\s*\{[\s\S]{0,300}\bcatalog:\s*SQLITE_APPLICATION_CATALOG\b/.test(serverText)
+    && /\bopenDeferredPostgresqlApplication\s*\(\s*\{/.test(serverText)
+    && !/\bopenSqliteApplicationPersistence\s*\(/.test(serverText)
     && /\bcreateApplicationRepositories\s*\(\s*persistenceProvider\s*\)/.test(serverText)
     && /\buiPreferences:\s*uiPreferencesRepository\b/.test(serverText)
     && /\bawait\s+rightsDashboardThemeForActor\s*\(/.test(namedFunctionSource(serverText, "rightsDashboardPayload"))
@@ -4670,7 +5020,9 @@ function scanRepository(root = REPOSITORY_ROOT) {
   const providerNeutralServerPrepareCalls = countMatches(
     serverText,
     /\brequirePersonnelLifecycleOffboardingService\(\)\.prepare\s*\(/g,
-  );
+  ) + (/\bconst planningOptimizerModel\s*=\s*require\(['"]\.\/lib\/planning-optimizer['"]\)/.test(serverText)
+    && /\bconst planningOptimizer\s*=\s*planningOptimizerModel\.createPlanningOptimizer\(/.test(serverText)
+    ? countMatches(serverText, /\bplanningOptimizer\.prepare\s*\(/g) : 0);
   const remainingDomainRawAccess = productionDirect
     .filter((record) => domainRuntimeFiles.has(record.file))
     .reduce((sum, record) => (
@@ -4792,6 +5144,7 @@ function scanRepository(root = REPOSITORY_ROOT) {
     || phase4Progress.sqliteBaselineStatementCount !== PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT
     || phase4Progress.dialectVariantStatementCount !== PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT
     || phase4Progress.namedDollarParameterStatementCount !== PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT
+    || phase4Progress.applicationReadExtensionViolations.length
     || phase4Progress.duplicateStatementIds.length
     || phase4Progress.duplicateSqliteStatementBindings.length
     || phase4Progress.duplicatePostgresqlStatementBindings.length
@@ -4823,10 +5176,10 @@ function scanRepository(root = REPOSITORY_ROOT) {
     }`);
   }
   if (!phase5Progress.providerSliceComplete) {
-    errors.push("Der nicht produktive PostgreSQL-Provider-Slice ist unvollstaendig oder produktiv verdrahtet.");
+    errors.push("Die PostgreSQL-Provider-Vertraege oder die PostgreSQL-only-Konfigurationsgrenze sind unvollstaendig.");
   }
   if (!phase6Progress.operationsFoundationComplete) {
-    errors.push("Die nicht produktive PostgreSQL-Operations-Grundlage ist unvollstaendig oder produktiv verdrahtet.");
+    errors.push("Die PostgreSQL-Operations-Vertraege oder ihre geschuetzte Aktivierungsgrenze sind unvollstaendig.");
   }
   if (productionRegressions.length) errors.push(`Produktive Kopplungswerte gestiegen: ${productionRegressions.map((entry) => entry.key).join(", ")}`);
   if (serverRegressions.length) errors.push(`server.js-Kopplungswerte gestiegen: ${serverRegressions.map((entry) => entry.key).join(", ")}`);
@@ -4858,9 +5211,23 @@ function scanRepository(root = REPOSITORY_ROOT) {
   }
   if (phaseBoundaryViolations.length) errors.push("Provider-, SQLite-Treiber- oder PostgreSQL-Kopplung verletzt die freigegebene Persistenzgrenze.");
 
+  const currentRuntime = Object.freeze({
+    scope: "current-server-source-boundary",
+    supportedProviderIds: Object.freeze([...phase6Progress.implementedProviderIds]),
+    postgresqlOnlyConfiguration: phase5Progress.configurationPostgresqlOnly && phase6Progress.configurationPostgresqlOnly,
+    qualifiedComposition: /\bopenDeferredPostgresqlApplication\s*\(/.test(serverText),
+    sqliteStartupImports: [...serverText.matchAll(/require\s*\(\s*["'](?:node:sqlite|[^"']*persistence\/sqlite[^"']*)["']\s*\)/g)].length,
+    sqliteApplicationOpens: countMatches(serverText, /\bopenSqliteApplicationPersistence\s*\(/g),
+    executionEvidence: "Reported separately by the current Linux application and security suites; this inventory is a source check.",
+  });
+  if (!currentRuntime.postgresqlOnlyConfiguration || !currentRuntime.qualifiedComposition || currentRuntime.sqliteStartupImports || currentRuntime.sqliteApplicationOpens) {
+    errors.push("Die aktuelle PostgreSQL-only-Servergrenze ist verletzt.");
+  }
   return {
     generatedAt: new Date().toISOString(),
     baseline: BASELINE,
+    historicalPhaseInventories: Object.freeze({ frozen: true, scope: "migration-phase-2-through-6-contracts", currentRuntimeAcceptance: false }),
+    currentRuntime,
     summary: {
       productionDirectFiles: productionDirect.length,
       productionIndirectFiles: indirectGroups.entries.size,
@@ -4924,6 +5291,8 @@ function formatSummary(report) {
   const totals = report.productionTotals;
   return [
     `Datenbank-Kopplungsinventar (Baseline ${report.baseline.sourceCommit.slice(0, 7)})`,
+    `Aktuelle Server-Quellgrenze: Provider=${report.currentRuntime.supportedProviderIds.join(",")}; PostgreSQL-only=${report.currentRuntime.postgresqlOnlyConfiguration}; qualifizierte Komposition=${report.currentRuntime.qualifiedComposition}; SQLite-Startimporte=${report.currentRuntime.sqliteStartupImports}; SQLite-Anwendungsoeffnungen=${report.currentRuntime.sqliteApplicationOpens}`,
+    "Die folgenden Phasenwerte sind eingefrorene historische Migrationsvertraege. Ihre Aktivierungs-/Receiptzaehler sind keine Bewertung des aktuellen Serverbetriebs; Linux-Laufzeitnachweise werden separat gefuehrt.",
     `Direkt gekoppelte Produkt-/Betriebsdateien: ${report.summary.productionDirectFiles}`,
     `Indirekt inventarisierte Produkt-/Betriebsdateien: ${report.summary.productionIndirectFiles}`,
     `Explizit klassifizierte Test-/Fixture-Dateien: ${report.summary.testCandidateFiles}`,
@@ -4937,11 +5306,11 @@ function formatSummary(report) {
     `Phase 4: ${report.phase4Progress.status}; Statements SQLite/PostgreSQL=${report.phase4Progress.statementCount}/${report.phase4Progress.sqliteStatementCount}/${report.phase4Progress.postgresqlStatementCount}`,
     `Phase-4-SQL: SQLite-Baseline=${report.phase4Progress.sqliteBaselineStatementCount}, Dialektvarianten=${report.phase4Progress.dialectVariantStatementCount}, benannte Dollar-Parameter=${report.phase4Progress.namedDollarParameterStatementCount}`,
     `Phase-4-Migrationen: Operationen=${report.phase4Progress.migrationOperationCount}, SQLite-Bindungen=${report.phase4Progress.sqliteMigrationBindingCount}, PostgreSQL-Fixtures=${report.phase4Progress.postgresqlMigrationBindingCount}`,
-    `Ausfuehrbare PostgreSQL-Runtime-Artefakte: ${report.phase4Progress.executablePostgresqlRuntimeArtifacts}`,
+    `Historische Phase-4-Artefakte ausserhalb des damaligen Plans: ${report.phase4Progress.executablePostgresqlRuntimeArtifacts}`,
     `Phase 5: ${report.phase5Progress.status}; Provider-Slice=${report.phase5Progress.providerSliceStatus}; Produktivaktivierung=${report.phase5Progress.productionActivation}`,
     `Phase-5-PostgreSQL-Dateien: ${report.summary.phase5PostgresqlFiles}, Tests: ${report.summary.phase5PostgresqlTestFiles}, Treiber=${report.phase5Progress.driverDependency || "fehlt"}, Compiler=v${report.phase5Progress.compilerVersion || "fehlt"}`,
     `PostgreSQL-Dialektplan: ${report.phase5Progress.dialectPlanStatementCount} Statements, portable=${report.phase5Progress.portableDialectCount}, Override offen=${report.phase5Progress.overrideDialectCount}, ausfuehrbar=${report.phase5Progress.executableApplicationDialectCount}`,
-    `PostgreSQL-Katalogvertrag: gueltig=${report.phase5Progress.catalogContract.valid}, ausfuehrbarer Slice=${report.phase5Progress.catalogContract.executableSlice}, Vollanwendung=${report.phase5Progress.catalogContract.acceptedReceiptCount}/${report.phase5Progress.catalogContract.requiredReceiptCount}`,
+    `Historischer Phase-5-Teilkatalogvertrag: gueltig=${report.phase5Progress.catalogContract.valid}, ausfuehrbarer Slice=${report.phase5Progress.catalogContract.executableSlice}, Vollanwendung=${report.phase5Progress.catalogContract.acceptedReceiptCount}/${report.phase5Progress.catalogContract.requiredReceiptCount}`,
     `PostgreSQL-UI-Praeferenzen: ${report.phase5Progress.uiPreferencesSlice.executableStatementCount}/${report.phase5Progress.uiPreferencesSlice.expectedStatementCount} ausfuehrbar, Status=${report.phase5Progress.uiPreferencesSlice.status || "fehlt"}, Vollanwendung=${report.phase5Progress.uiPreferencesSlice.fullApplicationCatalog}`,
     `PostgreSQL-Planungseinstellungen: ${report.phase5Progress.planningSettingsSlice.executableStatementCount}/${report.phase5Progress.planningSettingsSlice.expectedStatementCount} ausfuehrbar, Status=${report.phase5Progress.planningSettingsSlice.status || "fehlt"}, Vollanwendung=${report.phase5Progress.planningSettingsSlice.fullApplicationCatalog}`,
     `PostgreSQL-Abteilungen: ${report.phase5Progress.organizationDepartmentsSlice.executableStatementCount}/${report.phase5Progress.organizationDepartmentsSlice.expectedStatementCount} ausfuehrbar, Status=${report.phase5Progress.organizationDepartmentsSlice.status || "fehlt"}, Vollanwendung=${report.phase5Progress.organizationDepartmentsSlice.fullApplicationCatalog}`,
@@ -4986,6 +5355,7 @@ module.exports = {
   PHASE_3_SQLITE_PROVIDER_TEST_FILES,
   PHASE_3_SQLITE_RAW_ACCESS_FILES,
   PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT,
+  PHASE_4_EXPECTED_APPLICATION_READ_EXTENSION_IDS,
   PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT,
   PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT,
   PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT,

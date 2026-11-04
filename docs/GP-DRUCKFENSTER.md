@@ -1,11 +1,16 @@
 # GP-Druckfenster
 
+Stand: 13.10.2026 · GP-Standard Druck & PDF, Fassung 7.
+
 Neue und überarbeitete PDF-Ausgaben verwenden den gemeinsamen Baustein `public/gp-print-window.js`. Er ergänzt den Fensterstandard aus `public/gp-window.js`; es wird kein Browserfenster geöffnet.
 
 ## Bedienung
 
 - Das Fenster lässt sich über die gesamte GP-Fläche verschieben, auch über die Sidebar. Größe an Rändern und Ecken ändern; minimiert bleiben Position und vorherige volle Größe erhalten.
-- Links stehen PDF-Titel, Dateiname, Hoch-/Querformat und die fachlichen Optionen. Rechts erscheint die tatsächlich erzeugte PDF-Datei mit Seitenzahl, Seitenwechsel und Zoom.
+- Links stehen Dateiname und fachliche Optionen. Titel und Ausrichtung sind nur einstellbar, wenn der jeweilige Renderer diese Einstellungen übernimmt. Der vorgegebene Dienstplantitel beansprucht kein Eingabefeld. Rechts erscheint die tatsächlich erzeugte PDF-Datei mit Seitenzahl, Seitenwechsel und Zoom.
+- Jede PDF-Vorschau bietet Ganze Seite, Seitenbreite, 50/60/70/80/90/100/125/150/200 % und einen eigenen Wert von 10 bis 400 % (auch Dezimalwerte). Die Vergrößerung verändert nur die Anzeige; PDF-Bytes und Seitenumbrüche bleiben gleich.
+- Beim Dienstplan gilt die Mitarbeiterauswahl für Wochenmatrix und klassisches Design. Alle auswählen wählt alle beim Öffnen verfügbaren Personen. Jede Auswahl wird als konkrete Nummernliste übermittelt und serverseitig auf den berechtigten Filial-/Abteilungsbereich begrenzt; später hinzugekommene Personen werden nicht unbemerkt ergänzt. Keine Auswahl sperrt die Ausgabe. Weder Aktivstatus noch Dienstplanung werden dadurch geändert.
+- Die Wochenmatrix verwendet kompakte Leerabstände für sechs Personen auf einer A4-Seite. Benötigen mehrere Ereignisse oder lange Hinweise mehr Platz, wachsen Zeilen bzw. folgen weitere Seiten; Inhalte werden nicht zugunsten einer erzwungenen Einseitigkeit abgeschnitten.
 - Geänderte Optionen machen die vorherige Ausgabe ungültig. Der Download verwendet exakt die erfolgreich dargestellte Datei.
 - Navigation innerhalb des GP erhält eine gültige Ausgabe. Schließen räumt die Vorschau auf und führt zum jeweiligen Öffner zurück. Konto- oder Rechtewechsel verwirft die Ausgabe.
 - Tastaturbedienung, schmale Fenster und reduzierte Bewegung gehören zum Standard. Fensterposition und Größe werden mit den vorhandenen kontogebundenen GP-Fenstereinstellungen gespeichert.
@@ -16,7 +21,23 @@ Neue und überarbeitete PDF-Ausgaben verwenden den gemeinsamen Baustein `public/
 
 Die fachliche PDF-Erstellung bleibt für Rechte, Quellstand, Berechnung, vollständige bzw. sichtbar begrenzte Auswahl und Umbrüche verantwortlich. Eine Bildschirmansicht oder ein nachgeahmtes Drucklayout ersetzt die echte PDF-Vorschau nicht.
 
-Der Standard ist schrittweise bei bestehenden Ausgaben anzuwenden. Die Definition allein behauptet keine vollständige Umstellung sämtlicher älterer Exportdialoge.
+Die gemeinsame Zoomsteuerung liegt ausschließlich in `public/sales-article-report-pdf-preview.js` (Alias `GpPdfPreview`). Fachadapter erstellen keine eigenen Zoomlisten.
+
+## Geprüfte Druckbereiche
+
+| Bereich | Fachadapter zur gemeinsamen Vorschau |
+| --- | --- |
+| Dienstplan und Urlaubsplanung | `gp-planning-print.js` |
+| Verkaufsanalysen | `gp-sales-analytics-print.js`, `sales-report-jobs.js` |
+| Kassenberichte und Belegsuche | `gp-receipt-print.js` |
+| Artikel-Auswertung und Artikelstammblatt | `sales-article-report.js`, `sales-article-tools.js` |
+| BWL: ABC, Abverkaufs-Simulation, Maßnahmen | `sales-bwl-print.js`, `sales-bwl-simulation-print.js`, `sales-bwl-actions-print.js` |
+| Preisschilder | `gp-price-label-pdf.js` |
+| Bestellungen, Lieferungen und weitere Warenwirtschaftsausgaben | Gemeinsame Ausgabeoptionen und Druckvorschau |
+| Personalnachweise, Schulungen, Leihdokumente, Assurance-Berichte | `gp-document-print.js` und explizite Fachintegration |
+| USB-Erste-Schritte-Anleitung | `gp-usb-guide-print.js` mit gebundener POST-Auswahl |
+
+Alle genannten Fachadapter führen über `GpPrintWindow` oder `GpExistingPdfWindow` zur identischen PDF.js-Vorschau. CSV-, ZIP- und Bilddownloads sind keine PDF-Druckvorschauen.
 
 Aktuell verwenden Artikel-Auswertung, Artikelstammblatt, ABC-Analyse, Abverkaufs-Simulation und Maßnahmenliste diesen Baustein. Im Artikelstamm bleiben die Bereiche, das optionale Foto, die zuletzt gestarteten Historienfilter und die Erweiterung des Dateinamens erhalten. Eigener PDF-Titel und A4-Ausrichtung werden im serverseitig erzeugten Stammblatt umgesetzt.
 

@@ -9,7 +9,7 @@
     new RegExp('^/api/(?:portal/v1/self/)?time-record-statements/' + ID + '/download$'),
     new RegExp('^/api/portal/v1/personnel-learning/assignments/' + ID + '/confirmation\\.pdf$'),
     new RegExp('^/api/portal/v1/loans/documents/' + ID + '$'),
-    new RegExp('^/api/portal/v1/loans/photo-attachments/' + ID + '/download$'),
+    new RegExp('^/api/portal/v1/loans/photo-attachments/' + ID + '/(?:preview|download)$'),
     /^\/api\/portal\/v1\/system-center\/recovery-assurance\/reports\/[a-f0-9]{64}\.pdf$/
   ];
   function matchUrl(value, origin) {

@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -69,15 +71,15 @@ let historicalRuleProfileFixture;
 
 function createSession(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
-  const csrf = crypto.randomBytes(24).toString("hex");
+  const csrf = sessionCsrf(token);
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, active, must_change_password, password_changed_at)
     VALUES (?, 'test-only', ?, 1, 0, CURRENT_TIMESTAMP)
   `).run(employeeNumber, role);
   db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at, authenticated_at, absolute_expires_at)
+    VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))
   `).run(
     crypto.randomUUID(),
     employeeNumber,
@@ -294,7 +296,7 @@ test.before(async () => {
     Array.from({ length: 30 }, (_, index) => 140 + index)
       .find((id) => !db.prepare("SELECT 1 FROM locations WHERE id = ?").get(String(id))),
   );
-  db.prepare(`
+  prepareLocationFixture(db, `
     INSERT INTO locations (id, name, min_staff, day_settings_json, active)
     VALUES (?, 'Block 7 Foreign Location', 1, '', 1)
   `).run(foreignLocationId);
@@ -432,7 +434,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  try { await db.close(); } catch {}
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

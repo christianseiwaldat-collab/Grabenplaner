@@ -25,6 +25,31 @@ test('pg client read timeout without SQLSTATE stays retryable for import recover
   assert.equal(mapPostgresqlError(sourceError).code,PERSISTENCE_ERROR_CODES.CHECK_VIOLATION);
 });
 
+test("PostgreSQL trigger conflicts retain only the exact public staff-assignment keys", () => {
+  const keys = [
+    ["STAFF_ASSIGNMENT_HOME_SHIFT_CONFLICT", "staff-assignment-home-shift-conflict"],
+    ["STAFF_ASSIGNMENT_COVERAGE_REQUIRED", "staff-assignment-coverage-required"],
+    ["STAFF_ASSIGNMENT_DIRECT_ABSENCE_CONFLICT", "staff-assignment-direct-absence-conflict"],
+  ];
+  for (const [message, key] of keys) {
+    const mapped = mapPostgresqlError(Object.assign(new Error(message), { code: "23514" }), { operation: "execute" });
+    assert.equal(mapped.code, PERSISTENCE_ERROR_CODES.CHECK_VIOLATION);
+    assert.equal(mapped.messageKey, key);
+    assert.equal(mapped.operation, "execute");
+    assert.equal(mapped.retryable, false);
+    assert.ok(!JSON.stringify(mapped).includes(message));
+    for (const changed of [`prefix ${message}`, `${message}: private employee`, message.toLowerCase()]) {
+      const unknown = mapPostgresqlError(Object.assign(new Error(changed), { code: "23514" }));
+      assert.equal(unknown.code, PERSISTENCE_ERROR_CODES.CHECK_VIOLATION);
+      assert.equal(unknown.messageKey, undefined);
+      assert.ok(!JSON.stringify(unknown).includes(changed));
+    }
+    for (const code of ["23505", "23503", "P0001", ""]) {
+      assert.equal(mapPostgresqlError(Object.assign(new Error(message), { code })).messageKey, undefined);
+    }
+  }
+});
+
 function deferred() {
   let resolve;
   let reject;

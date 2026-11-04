@@ -7,6 +7,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const protection = require("../public/planning-protection");
 const school = require("../public/vocational-school");
+const { functionSource } = require("../test-support/learning-workspace-ui");
 const root = path.resolve(__dirname, "..");
 const app = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 const html = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
@@ -269,10 +270,12 @@ test("Eingebettetes Formular: Hidden-/Read-Felder werden selbst bei manipulierte
 test("Developer-Personalakt: vollständiges Objekt wird ausschließlich mit ausdrücklichem Schreibrecht und Änderungsbasis gespeichert", async () => {
   const form = editor(status()), calls = [], toasts = [];
   const ctx = context({ elements: { personnelRecordForm: { elements: { namedItem: () => null } },
-    personnelRecordContent: { querySelector: () => form }, savePersonnelRecordButton: {}, personnelRecordMessage: { classList: { add() {}, remove() {} } } },
+    personnelRecordModal: { open: true }, personnelRecordContent: { querySelector: () => form }, savePersonnelRecordButton: {}, personnelRecordMessage: { classList: { add() {}, remove() {} } } },
     PERSONNEL_RECORD_FORM_FIELDS: [], api: async (url, request) => { calls.push(JSON.parse(request.body)); return { changedFields: [protection.FIELD_KEY] }; },
     openPersonnelRecord: async () => {}, showToast: (text) => toasts.push(text),
+    document: {}, isLocalStartDashboardWorkspace: () => false, personnelRecordAvailableInUi: () => true,
   });
+  vm.runInContext(["startDashboardWorkspaceActorKey", "captureGpContext", "gpContextCurrent", "captureGpEditor", "gpEditorCurrent"].map(name => functionSource(name)).join("\n"), ctx);
   vm.runInContext(between("async function savePersonnelRecord(", "async function uploadPersonnelDocument("), ctx);
   ctx.state.portalSession.user.role = "developer";
   ctx.state.personnelRecord = { employeeNumber: "synthetic-person", result: { access: { fieldAccess: { [protection.FIELD_KEY]: "write" } }, planningStatusBasis: { [protection.FIELD_KEY]: "a".repeat(64) } } };

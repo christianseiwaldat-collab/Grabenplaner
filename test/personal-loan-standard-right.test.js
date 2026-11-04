@@ -1,4 +1,6 @@
 "use strict";
+const { prepareLocationFixture } = require("../test-support/postgresql-api/location-fixture");
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -17,8 +19,8 @@ const USE = "loans:self:use";
 let server, base, local;
 const roleByNumber = { "loan-ma":"employee", "loan-other":"employee", "loan-fl":"manager", "loan-al":"department_manager", "loan-hr":"hr" };
 function auth(number) {
-  const token = crypto.randomBytes(32).toString("hex"), csrf = crypto.randomBytes(24).toString("hex"), id=crypto.randomUUID();
-  db.prepare("INSERT INTO portal_sessions (id,employee_number,token_hash,expires_at) VALUES (?,?,?,'2099-01-01T00:00:00.000Z')")
+  const token = crypto.randomBytes(32).toString("hex"), csrf = sessionCsrf(token), id=crypto.randomUUID();
+  db.prepare("INSERT INTO portal_sessions (id,employee_number,token_hash,expires_at, authenticated_at, absolute_expires_at) VALUES (?,?,?,'2099-01-01T00:00:00.000Z', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+8 hours'))")
     .run(id,number,crypto.createHash("sha256").update(token).digest("hex"));
   return {id,csrf,cookie:`grabenplaner_session=${token}; grabenplaner_csrf=${csrf}`};
 }
@@ -28,7 +30,7 @@ async function request(route, session, method="GET", body) {
 }
 test.before(async()=>{
   local = db.prepare("SELECT id FROM locations WHERE active=1 ORDER BY id LIMIT 1").get().id;
-  db.prepare("INSERT INTO locations (id,name,min_staff,day_settings_json,active) VALUES ('87','Andere Testfiliale',1,'{}',1)").run();
+  prepareLocationFixture(db, "INSERT INTO locations (id,name,min_staff,day_settings_json,active) VALUES ('87','Andere Testfiliale',1,'{}',1)").run();
   for (const [number,role] of Object.entries(roleByNumber)) {
     db.prepare("INSERT INTO employees (personnel_number,full_name,nickname,home_location_id,active) VALUES (?,?,?,?,1)").run(number,`Test ${number}`,number,number==="loan-other"?"87":local);
     db.prepare("INSERT INTO portal_users (employee_number,password_hash,role,active,must_change_password,password_changed_at) VALUES (?,'test-only',?,1,0,CURRENT_TIMESTAMP)").run(number,role);
@@ -38,7 +40,7 @@ test.before(async()=>{
   server=app.listen(0,"127.0.0.1");await new Promise(resolve=>server.once("listening",resolve));base=`http://127.0.0.1:${server.address().port}`;
 });
 test.after(async()=>{
-  if(server)await new Promise(resolve=>server.close(resolve));db.close();subject.releaseInstanceLockForTests();
+  if(server)await new Promise(resolve=>server.close(resolve));await db.close();subject.releaseInstanceLockForTests();
   const resolvedRoot=path.resolve(root),expectedParent=path.resolve(os.tmpdir());
   assert.equal(path.dirname(resolvedRoot),expectedParent);assert.ok(path.basename(resolvedRoot).startsWith("gp-personal-loan-right-"));
   fs.rmSync(resolvedRoot,{recursive:true,force:true,maxRetries:8,retryDelay:100});

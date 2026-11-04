@@ -1,4 +1,5 @@
 "use strict";
+const { sessionCsrf } = require("../test-support/portal-session-fixture");
 const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), os = require("node:os"), path = require("node:path"), crypto = require("node:crypto");
 const { Client } = require("pg");
@@ -38,11 +39,11 @@ test("Native PostgreSQL: MHTML migration, upload, employee mapping, retained vac
       readers: { coreUrl: process.env.GP_CORE_READER_URL, salesUrl: process.env.GP_SALES_READER_URL }, rehearsal: true });
     let subject, server;
     try {
-      const token = crypto.randomBytes(32).toString("hex"), csrf = crypto.randomBytes(24).toString("hex");
+      const token = crypto.randomBytes(32).toString("hex"), csrf = sessionCsrf(token);
       await core.migrator.query("BEGIN; SET LOCAL ROLE gp_core_owner");
       await core.migrator.query("UPDATE gp.employees SET full_name='Mara Filialleitung',nickname='Mara' WHERE personnel_number='00001'");
       await core.migrator.query("UPDATE gp.portal_users SET must_change_password=0 WHERE employee_number='00001'");
-      await core.migrator.query("INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at) VALUES($1,'00001',$2,'2099-01-01T00:00:00.000Z')", [crypto.randomUUID(), crypto.createHash("sha256").update(token).digest("hex")]);
+      await core.migrator.query(`INSERT INTO gp.portal_sessions(id,employee_number,token_hash,expires_at,authenticated_at,absolute_expires_at) VALUES($1,'00001',$2,'2099-01-01T00:00:00.000Z',to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),to_char((clock_timestamp() + interval '8 hours') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))`, [crypto.randomUUID(), crypto.createHash("sha256").update(token).digest("hex")]);
       await core.migrator.query("COMMIT");
       const before = (await core.migrator.query("SELECT * FROM gp.employees WHERE personnel_number='00001'")).rows[0];
       subject = require("../server"); await subject.initializeApplicationPersistence();

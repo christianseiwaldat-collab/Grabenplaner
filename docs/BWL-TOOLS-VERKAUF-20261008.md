@@ -10,7 +10,7 @@ Verkaufsanalysen liefern bereits Umsatz, Menge, Kundenanzahl und – mit eigenem
 
 ### ABC-Analyse
 
-- Verkauf → BWL-Werkzeuge → ABC-Analyse: Zeitraum, eine oder mehrere erlaubte Filialen, Kennzahl und A-/B-Grenzen auswählen. Standardgrenzen: 80 und 95 Prozent. Höchstens 366 Tage und 5.000 Artikel-Filial-Gruppen.
+- Verkauf → BWL-Tools → ABC-Analyse: Zeitraum, eine oder mehrere erlaubte Filialen, Kennzahl und A-/B-Grenzen auswählen. Standardgrenzen: 80 und 95 Prozent. Höchstens 366 Tage und 5.000 Artikel-Filial-Gruppen.
 - Die Auswertung liest veröffentlichte Kassenpositionen in begrenzten Stapeln. Retouren wirken mit ihrem Vorzeichen. Nicht zuordenbare und ungeklärte Positionen werden getrennt ausgewiesen; fehlende Werte werden nicht als Null behandelt.
 - Klassen beruhen auf positiven, geprüften Beiträgen. Ein Artikel, der eine Grenze überschreitet, bleibt in der Klasse, in der sein Beitrag beginnt. Nichtpositive und ungeklärte Beiträge bekommen keinen irreführenden A-/B-/C-Rang.
 - Rohertrag benötigt die bestehenden eigenen Freigaben und eine bestätigte historische Grundlage. Der heutige Durchschnitts-EK ersetzt keinen historischen Einstand.

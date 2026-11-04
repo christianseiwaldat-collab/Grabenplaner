@@ -63,8 +63,8 @@ test('Cash projection uses reconciled sales, stock branch and weighted prices wi
  await assert.rejects(f.run('prices',{query:'000042',locationId:'19'}),e=>e.status===403);
 });
 
-test('Duplicate stock rows never sum into an invented inventory value',async t=>{
+test('Legacy duplicate stock rows never sum into an invented inventory value',async t=>{
  const f=await fixture(t);await stock(f);await f.run('classification-save',{level:'wgr',key:'1',kind:'goods',expectedRevision:0});
- await f.ingest('ARTIKEL_FILIALEN',[{EAN:'000042',FilialID:18,FBestand:'2'},{EAN:'000042',FilialID:18,FBestand:'3'}],{sourceInstance:'tradefoto-trade',snapshotAt:'2026-09-14T10:00:00.000Z'});
+ await f.ingest('ARTIKEL_FILIALEN',[{EAN:'000042',FilialID:18,FBestand:'2'},{EAN:'000042',FilialID:18,FBestand:'3'}],{legacy:true,sourceInstance:'tradefoto-trade',snapshotAt:'2026-09-14T10:00:00.000Z'});
  const page=await f.run('inventory');assert.equal(page.rows.length,2);assert.ok(page.rows.every(r=>r.stock===null&&r.stockValue===null&&r.noRecordedSale===null));
 });

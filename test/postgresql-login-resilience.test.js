@@ -2,8 +2,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 test('Native PostgreSQL login with an existing cookie and concurrent import/planning requests', {skip:!process.env.GP_CORE_MIGRATOR_URL,timeout:150000},async()=>{
  for(const domain of ['CORE','SALES'])for(const purpose of ['APP','READER','MIGRATOR']){
-  const url=new URL(process.env[`GP_${domain}_${purpose}_URL`]);
-  assert.equal(url.hostname,'127.0.0.1');assert.equal(url.port,'55487');assert.equal(url.pathname,'/gp_migration_'+domain.toLowerCase());
+  require('../test-support/postgresql-migration/ci-endpoint').assertSyntheticEndpoint(
+   process.env[`GP_${domain}_${purpose}_URL`],domain.toLowerCase(),['55487']);
  }
  await require('../test-support/postgresql-migration/report-fixture').withReportFixture(async f=>{
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'gp-native-login-'));let subject,server;

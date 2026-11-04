@@ -243,20 +243,39 @@ test('batched publication preserves the scalar plan and rolls back every binding
   f.session.permissions=[];await assert.rejects(runtime.operation(f.get,'preview',{request:{...request,expectedRevision:1}}),code('IMPORT_FORBIDDEN'));
 });
 
-test('the real background worker reads a separate file connection and produces the same PDF totals', async t => {
+test('historical immutable SQLite background worker preserves separate-file PDF totals for old data', async t => {
   const fs = require('node:fs'), path = require('node:path');
   const root = fs.realpathSync(path.resolve(__dirname, '../tmp')), dir = fs.mkdtempSync(path.join(root, 'report-worker-'));
   const databasePath = path.join(dir, 'source.db'), f = await fixture(t, { databasePath, count: 205 });
   await f.activate();
-  const { createSalesReportBatchWorker } = require('../lib/sales-report-batch-worker');
+  const historical = require('../test-support/legacy-baseline');
+  historical.linkFrozenDependencies();
+  const { createSalesReportBatchWorker } = historical.legacyRequire('lib/sales-report-batch-worker.js');
   const batchWorker = createSalesReportBatchWorker({ databasePath, scopeId: f.actor.scopeId, today: '2026-09-07',
     keyConfiguration: { activeKeyId: 'synthetic', keys: { synthetic: Buffer.alloc(32, 12).toString('base64') } } });
+  // Pin the coordinating runtime to the same immutable report model as its
+  // historical worker. Current validation rules have their own source revision.
+  const legacyProvider = historical.legacyRequire('lib/persistence/sqlite/provider.js');
+  const legacyAccess = legacyProvider.createSqlitePersistenceProvider({
+    database: legacyProvider.openSqliteLegacyDatabase(databasePath, { readOnly: true, initializeConnection: false }),
+    catalog: historical.legacyRequire('lib/persistence/sqlite/application-catalog.js').SQLITE_APPLICATION_CATALOG,
+    closeDatabase: true, initializeConnection: false,
+  });
+  const legacyVault = historical.legacyRequire('lib/integration-secret-vault.js').createIntegrationSecretVault({
+    activeKeyId: 'synthetic', keys: { synthetic: Buffer.alloc(32, 12) },
+  });
+  const legacyRuntime = historical.legacyRequire('lib/persistence/repositories/sales-history-runtime.js').createManagedSalesHistoryRuntime({
+    access: legacyAccess, vault: legacyVault, scopeId: f.actor.scopeId, cashEnabled: true,
+    retainCompletedAnalyses: false, today: () => '2026-09-07',
+  });
   const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
-  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history(), resolvePrincipal: f.get, scope: f.actor.scopeId, batchWorker });
-  t.after(async () => { await jobs.stop(); assert.equal(fs.realpathSync(path.dirname(dir)), root); fs.rmSync(dir, { recursive: true }); });
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: legacyRuntime, resolvePrincipal: f.get, scope: f.actor.scopeId, batchWorker });
+  t.after(async () => { await jobs.stop(); await legacyAccess.close(); assert.equal(fs.realpathSync(path.dirname(dir)), root); fs.rmSync(dir, { recursive: true }); });
   const before = f.app.database.prepare('SELECT * FROM cash_snapshot_inventory ORDER BY dataset_slot,table_index').all();
   const job = await jobs.create(f.session, { query: f.query({ reportVersion: 3, orientation: 'landscape', chartType: 'bars' }) });
-  await jobs.tick(); assert.equal((await jobs.list(f.session))[0].processed, 200);
+  await jobs.tick();
+  const firstBatch = (await jobs.list(f.session))[0];
+  assert.equal(firstBatch.processed, 200, JSON.stringify({ status: firstBatch.status, error: firstBatch.error }));
   await jobs.tick(); await jobs.tick();
   assert.equal((await jobs.list(f.session))[0].status, 'completed');
   assert.match(await reportPdfText(await jobs.download(f.session, job.id)), /2[.\s]?050,00/);
@@ -1252,6 +1271,31 @@ test('existing verified article bindings are captured without creating or changi
   assert.equal(f.app.database.prepare('SELECT COUNT(*) n FROM sales_articles').get().n, 1);
 });
 
+
+test('single-sale PDF links address the complete authenticated receipt instead of a receipt number or page selection', async t => {
+  const f = await fixture(t, { count: 3 }), data = rows({ count: 3 });
+  data.Umsatz_KASSE.push({ ...data.Umsatz_KASSE[0], Kassenid: '02', RechnungsBetrag: '12' });
+  data.Umsatz_Kasse_Details.push({ ...data.Umsatz_Kasse_Details[0], Kassenid: '02', RepID: '00000000-0000-0000-0000-000000000099' });
+  const source = await f.build(data); await f.activate(f.request(source)); const runtime = f.history();
+  const found = await runtime.run(f.get, w => w.search(f.query({ limit: 1 })));
+  assert.equal(found.items.length, 1); assert.ok(found.next); assert.ok(found.items[0].receiptId);
+  const all = await runtime.run(f.get, w => w.search(f.query()));
+  assert.equal(new Set(all.items.map(row => row.receipt)).size, 1, 'Visible receipt numbers deliberately collide');
+  assert.equal(new Set(all.items.map(row => row.receiptId)).size, 2, 'Register identity remains distinct');
+  const threeLines = all.items.find(row => all.items.filter(other => other.receiptId === row.receiptId).length === 3);
+  const document = await runtime.run(f.get, w => w.receipts.documents({ ids: [threeLines.receiptId] }));
+  assert.equal(document.items.length, 1); assert.equal(document.items[0].register, '01');
+  assert.equal(document.items[0].lines.length, 3, 'PDF uses every position, including positions outside the visible page');
+  assert.doesNotMatch(JSON.stringify(document), /KUND_NR|00031|customerName|customerEmail/);
+  const { createReceiptInfoPdf } = require('../lib/receipt-info-pdf');
+  assert.equal((await createReceiptInfoPdf(document)).subarray(0, 5).toString(), '%PDF-');
+  const original = f.session;
+  f.session = { ...original, permissions: original.permissions.filter(p => !['sales:analytics:company:read', 'sales:history:unassigned:read'].includes(p)).concat('sales:analytics:location:read'), scopes: [{ locationId: 'branch-b', departmentId: 0 }] };
+  await assert.rejects(runtime.run(f.get, w => w.receipts.documents({ ids: [threeLines.receiptId] })), code('IMPORT_FORBIDDEN'));
+  f.session = original;
+  const replacement = await f.build(rows({ price: '24' })); await f.activate(f.request(replacement, 1));
+  await assert.rejects(runtime.run(f.get, w => w.receipts.documents({ ids: [threeLines.receiptId] })), e => e.code.startsWith('IMPORT_'));
+});
 
 test('receipt search groups complete receipts, tolerates wildcards and exports only authorized fields', async t => {
   const f = await fixture(t, { count: 3 }); await f.activate(); const runtime = f.history();

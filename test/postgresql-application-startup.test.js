@@ -55,6 +55,22 @@ test('PostgreSQL connection deadlines begin after synchronous application bootst
   assert.deepEqual(fixture.closed, ['application', 'operations', 'authorization']);
 });
 
+test('startup microtasks also finish before a PostgreSQL network deadline begins',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const order=[];
+  const fixture=applicationFixture(t,()=>{
+    order.push('connection');
+    return new Promise((resolve,reject)=>{
+      const deadline=setTimeout(()=>reject(Error('synthetic connection timeout')),5000);
+      setImmediate(()=>{clearTimeout(deadline);resolve({provider:{},close:async()=>fixture.closed.push('application')});});
+    });
+  });
+  queueMicrotask(()=>{order.push('bootstrap-microtask');t.mock.timers.tick(84000);});
+  await fixture.application.ready;
+  assert.deepEqual(order,['bootstrap-microtask','connection']);
+  await fixture.application.provider.close();
+});
+
 test('deferred PostgreSQL startup still rejects readiness and waiting operations on connection failure', async t => {
   const failure = new Error('synthetic database unavailable');
   let opens = 0;

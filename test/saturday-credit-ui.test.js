@@ -1,6 +1,7 @@
 "use strict";
 const test = require('node:test'), assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), vm = require('node:vm');
 const app = fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8');
+const { functionSource } = require('../test-support/learning-workspace-ui');
 function fixture(api) {
   const fields = new Map();
   const control = id => {
@@ -9,10 +10,11 @@ function fixture(api) {
       replaceChildren() { this.children = []; }, append(child) { this.children.push(child); } });
     return fields.get(id);
   };
-  const state = {}, messages = [];
-  const context = vm.createContext({ state, api, Date, document: { querySelector: control, createElement: () => ({ textContent: '' }) },
+  const state = {portalStatus:{portalEnabled:true},portalSession:{authenticated:true,user:{employeeNumber:'419',permissions:['employees:write']}},employeeEditMode:'full',currentView:'personnel'}, messages = [];
+  const context = vm.createContext({ state, api, Date, window:{},elements:{employeeModal:{open:true}},document: { querySelector: control, createElement: () => ({ textContent: '' }) },
     toIsoDate: () => '2026-09-07', formatDate: value => value, showToast: (...args) => messages.push(args) });
   const from = app.indexOf('async function loadEmployeeSaturdayCredit('), to = app.indexOf('async function saveEmployee(event)', from);
+  vm.runInContext(['isLocalStartDashboardWorkspace','startDashboardWorkspaceActorKey','captureGpContext','gpContextCurrent','captureGpEditor','gpEditorCurrent','canEditEmployeeWindow'].map(name=>functionSource(name)).join('\n'),context);
   assert.ok(from > 0 && to > from); vm.runInContext(app.slice(from, to), context);
   return { state, control, messages, load: context.loadEmployeeSaturdayCredit, save: context.saveEmployeeSaturdayCredit };
 }

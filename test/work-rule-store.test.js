@@ -93,6 +93,44 @@ function createFixture() {
   };
 }
 
+test("atomic planning shift update matches every authoritative old field with real parameterized SQL", async () => {
+  const fixture = createFixture();
+  const { database, repository } = fixture;
+  try {
+    const shift = { employeeNumber: "CAS-1", locationId: "18", departmentId: null, dutyCode: "",
+      shiftDate: "2031-03-04", startTime: "09:00", endTime: "17:00", area: "Verkauf", note: "  raw note  " };
+    const inserted = await repository.insertPlanningShift(shift), id = inserted.returnedRows[0].id;
+    const old = { ...database.prepare("SELECT * FROM shifts WHERE id = ?").get(id) };
+    const mutations = { employee_number: "CAS-2", location_id: "11", department_id: 3,
+      duty_code: null, shift_date: "2031-03-05", start_time: "10:00", end_time: "18:00", area: null, note: null };
+    for (const [field, value] of Object.entries(mutations)) {
+      const rejected = await repository.updatePlanningShiftIfCurrent({ ...shift, id, note: "candidate" }, { ...old, [field]: value });
+      assert.equal(rejected.rowsAffected, 0, `old ${field} must match atomically`);
+      assert.equal(database.prepare("SELECT note FROM shifts WHERE id = ?").get(id).note, shift.note);
+    }
+    const changed = await repository.updatePlanningShiftIfCurrent({ ...shift, id, note: "candidate" }, old);
+    assert.equal(changed.rowsAffected, 1);
+    assert.equal(database.prepare("SELECT note FROM shifts WHERE id = ?").get(id).note, "candidate");
+  } finally { await fixture.close(); }
+});
+
+test("atomic planning shift update cannot overwrite a late note change or recreate a deleted row", async () => {
+  const fixture = createFixture();
+  const { database, repository } = fixture;
+  try {
+    const shift = { employeeNumber: "CAS-1", locationId: "18", departmentId: 3, dutyCode: "department",
+      shiftDate: "2031-03-04", startTime: "09:00", endTime: "17:00", area: "Verkauf", note: "  raw note  " };
+    const inserted = await repository.insertPlanningShift(shift), id = inserted.returnedRows[0].id;
+    const old = { ...database.prepare("SELECT * FROM shifts WHERE id = ?").get(id) };
+    database.prepare("UPDATE shifts SET note = ? WHERE id = ?").run("concurrent note", id);
+    assert.equal((await repository.updatePlanningShiftIfCurrent({ ...shift, id, note: "candidate" }, old)).rowsAffected, 0);
+    assert.equal(database.prepare("SELECT note FROM shifts WHERE id = ?").get(id).note, "concurrent note");
+    database.prepare("DELETE FROM shifts WHERE id = ?").run(id);
+    assert.equal((await repository.updatePlanningShiftIfCurrent({ ...shift, id, note: "candidate" }, old)).rowsAffected, 0);
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM shifts").get().count, 0);
+  } finally { await fixture.close(); }
+});
+
 function seed(repository) {
   return seedBuiltinWorkRuleProfiles(
     repository,

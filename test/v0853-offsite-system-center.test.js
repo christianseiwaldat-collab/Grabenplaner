@@ -1,77 +1,47 @@
 "use strict";
 
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const os = require("node:os");
-const path = require("node:path");
+const test = require("node:test"), assert = require("node:assert/strict");
+const fs = require("node:fs"), os = require("node:os"), path = require("node:path"), crypto = require("node:crypto");
+const { execFileSync } = require("node:child_process");
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v0853-offsite-"));
-const externalBackupPath = path.join(root, "external-backups");
-const offsiteStatusPath = path.join(root, "offsite-status.json");
-const now = new Date().toISOString();
+// Execute only the explicitly selected immutable historical assertion. The
+// current server and current PostgreSQL API fixtures are never redirected.
+function runFrozenHistoricalBackupTest(t, relative, expectedSha256, pattern, expectedPass) {
+  const historical = require("../test-support/legacy-baseline");
+  assert.equal(historical.BASELINE, "b2ba03cdc0b738d44766857de052e090db557807");
+  historical.linkFrozenDependencies();
+  const original = execFileSync("git", ["--no-replace-objects", "-C", path.resolve(__dirname, ".."),
+    "show", historical.BASELINE + ":" + relative], { timeout: 30000, maxBuffer: 4 * 1024 * 1024, windowsHide: true });
+  assert.equal(crypto.createHash("sha256").update(original).digest("hex"), expectedSha256);
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "gp-immutable-backup-test-"));
+  t.after(() => {
+    assert.equal(path.dirname(fs.realpathSync(directory)), fs.realpathSync(os.tmpdir()));
+    fs.rmSync(directory, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
+  });
+  const driver = path.join(directory, "immutable-backup.test.js"), filename = historical.legacyPath(relative);
+  fs.writeFileSync(driver, `const Module=require('node:module'),path=require('node:path');
+const filename=${JSON.stringify(filename)},subject=new Module(filename,module);
+subject.filename=filename;subject.paths=Module._nodeModulePaths(path.dirname(filename));
+subject._compile(${JSON.stringify(original.toString("utf8"))},filename);\n`);
+  // execFileSync deliberately avoids the PostgreSQL fixture's spawn adapter.
+  // The child receives no inherited NODE_OPTIONS, connection URLs or owner marker.
+  const environment = { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot,
+    LANG: "C.UTF-8", NODE_ENV: "test", GP_PG_API_FIXTURE_BRIDGE: "0" };
+  let output;
+  try {
+    output = execFileSync(process.execPath, ["--no-global-search-paths", "--test", "--test-reporter=tap",
+      ...(pattern ? ["--test-name-pattern=" + pattern] : []), driver], {
+      cwd: historical.sourceRoot(), env: environment, encoding: "utf8", timeout: 180000,
+      maxBuffer: 4 * 1024 * 1024, windowsHide: true,
+    });
+  } catch (error) {
+    assert.fail(String(error.stdout || "").slice(-18000) + "\n" + String(error.stderr || error.message).slice(-4000));
+  }
+  assert.match(output, new RegExp("^# pass " + expectedPass + "$", "m"));
+  assert.match(output, /^# fail 0$/m);
+  t.diagnostic(`Immutable ${historical.BASELINE} ${relative}: ${expectedPass} original assertions passed; SHA256 ${expectedSha256}`);
+}
 
-fs.writeFileSync(offsiteStatusPath, `${JSON.stringify({
-  format: "grabenplaner-offsite-backup-status",
-  schemaVersion: 2,
-  providerId: "google_drive",
-  configured: true,
-  state: "ok",
-  generatedAt: now,
-  lastAttemptAt: now,
-  lastSuccessAt: now,
-  lastSnapshotId: "1234567890ab",
-  lastRepositoryCheckAt: now,
-  lastFullCheckAt: now,
-  lastRestoreTestAt: now,
-  lastFailureAt: null,
-  lastError: null,
-  unresolvedFailures: {
-    backup: false,
-    fullCheck: false,
-    restoreTest: false,
-  },
-  retention: {
-    daily: 14,
-    weekly: 8,
-    monthly: 12,
-  },
-}, null, 2)}\n`, "utf8");
-
-process.env.DB_PATH = path.join(root, "data", "dienstplan.db");
-process.env.BACKUP_DIR = externalBackupPath;
-process.env.GRABENPLANER_DATA_DIR = root;
-process.env.GRABENPLANER_HOST = "127.0.0.1";
-process.env.GRABENPLANER_OFFSITE_CONFIGURED = "1";
-process.env.GRABENPLANER_OFFSITE_PROVIDER = "google_drive";
-process.env.GRABENPLANER_OFFSITE_STATUS_FILE = offsiteStatusPath;
-process.env.NODE_ENV = "test";
-
-const {
-  createDatabaseBackupToDirectory,
-  db,
-  releaseInstanceLockForTests,
-  serverDiagnostics,
-} = require("../server");
-
-test.after(() => {
-  db.close();
-  releaseInstanceLockForTests();
-  fs.rmSync(root, { recursive: true, force: true });
-});
-
-test("Offsite-Provider bleibt ohne Recovery Assurance fail-closed und lokal getrennt", async () => {
-  db.prepare("UPDATE settings SET value = '1' WHERE key = 'external_backup_enabled'").run();
-  createDatabaseBackupToDirectory(externalBackupPath, "offsite-separation-test", "external");
-
-  const diagnostics = await serverDiagnostics();
-  assert.equal(diagnostics.backups.offsite.state, "ok");
-  assert.equal(diagnostics.backups.offsite.provider.selectedProviderId, "google_drive");
-  assert.equal(diagnostics.backups.offsite.providerPolicy.systemCenterOk, false);
-  assert.ok(
-    diagnostics.backups.offsite.providerPolicy.reasonCodes
-      .includes("OFFSITE_RECOVERY_ASSURANCE_UNVERIFIED"),
-  );
-  assert.equal(diagnostics.productionChecks.find((check) => check.id === "backup").ok, true);
-  assert.equal(diagnostics.alerts.some((alert) => alert.id === "BACKUP_SAME_VOLUME"), false);
+test('immutable historical SQLite offsite status keeps Recovery Assurance fail-closed', { timeout: 240000 }, t => {
+  runFrozenHistoricalBackupTest(t, 'test/v0853-offsite-system-center.test.js', '0f2724fb8ea9a23c9575b8eccee71d0b80f7bbb1afff94ea4ab4856dfd1b8714', null, 1);
 });
