@@ -148,8 +148,11 @@ Kontextpfade wurden durch die tatsächlich vorhandenen Implementierungen ersetzt
 Die Bewertungen kennzeichnen den technischen Codex-Review ausdrücklich und
 ersetzen keine unabhängige GitHub-Freigabe. Bestehende Ablaufdaten werden nicht
 verlängert; neue Bewertungen gelten höchstens 14 Tage. Die normalen fünf
-SAST-Profile mit allen 169 Upstream-Regeln müssen unabhängig sämtliche aktuellen
-Identitäten und Quellhashes bestätigen. Eine lokale Quellprojektion oder die
+SAST-Profile mit allen 158 anwendbaren Regeln aus dem unveränderten Paket mit
+169 Upstream-Regeln müssen unabhängig sämtliche aktuellen Identitäten und
+Quellhashes bestätigen. Die bereits dokumentierten elf AWS-Lambda-Regeln bleiben
+an die bestehende Anwendbarkeits- und Deploymentprüfung gebunden. Eine lokale
+Quellprojektion oder die
 Drei-Regel-Parserdiagnose ist kein vollständiger Sicherheitsnachweis.
 Historische echte Fehler bleiben als behoben dokumentiert. Neue Scannerhinweise
 werden nicht automatisch als Fehlalarm übernommen; Änderungen und Ablauf
