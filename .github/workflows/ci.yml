@@ -26,6 +26,8 @@ jobs:
           node-version: 22.13.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Recovery diagnostic contracts on Ubuntu
+        run: pnpm run test:recovery-diagnostics
       - name: Prepare separately pinned historical test dependencies
         shell: bash
         run: |

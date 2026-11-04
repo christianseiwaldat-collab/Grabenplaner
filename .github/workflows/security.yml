@@ -101,6 +101,30 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 1
+      - name: Reserve compiler space on the disposable hosted runner
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+
+          if (os.environ.get('GITHUB_ACTIONS') != 'true'
+                  or os.environ.get('RUNNER_ENVIRONMENT') != 'github-hosted'
+                  or os.environ.get('RUNNER_OS') != 'Linux'):
+              raise SystemExit('SDK cleanup requires a disposable GitHub-hosted Linux runner')
+          temporary = Path(os.environ['RUNNER_TEMP'])
+          reserve = 24 * 1024**3
+          if shutil.disk_usage(temporary).free < reserve:
+              for name in ('/usr/local/lib/android', '/usr/share/dotnet', '/opt/ghc'):
+                  directory = Path(name)
+                  if directory.is_dir() and not directory.is_symlink() and directory.resolve() == directory:
+                      subprocess.run(['sudo', 'rm', '-rf', '--one-file-system', '--', name], check=True)
+          available = shutil.disk_usage(temporary).free
+          print('Available compiler space: ' + str(available // 1024**2) + ' MiB')
+          if available < reserve:
+              raise SystemExit('Insufficient compiler space after hosted SDK cleanup')
+          PY
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12.14'
@@ -128,11 +152,11 @@ jobs:
           python scripts/security/prepare_source_core.py --root .
           --qualification "$RUNNER_TEMP/security-source-core-qualification"
           --output "$RUNNER_TEMP/security-results"
-      - name: Run sast gate
-        run: python scripts/security/gates.py sast --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
       - name: Verify response rule with actual route and unsafe controls
         if: success() || failure()
         run: python scripts/security/check_payroll_response.py --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
+      - name: Run sast gate
+        run: python scripts/security/gates.py sast --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
       - name: Bind private review contexts to the successful current SAST gate
         run: >-
           node scripts/security/sast-context-evidence.cjs capture --root .

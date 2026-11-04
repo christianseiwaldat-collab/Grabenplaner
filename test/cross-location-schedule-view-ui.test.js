@@ -172,7 +172,7 @@ test("Block 7 UI: Bearbeitungssperre wurde ohne ID- oder Wertduplikat verschoben
   assert.ok(lockStart > scheduleStart && lockStart < vacationStart);
   assert.match(app, /setManagedTabPanel\(elements\.scheduleSettings, activeTab === "schedule"\)/);
   assert.match(app, /function setManagedTabPanel\(panel, active\)[\s\S]*?panel\.classList\.toggle\("active", active\)/);
-  assert.match(app, /schedule:\s*settingsAccess \|\| scheduleSettingsAccess \|\| pdfSettingsAccess/);
+  assert.match(app, /schedule:\s*planningSaturdayAccess \|\| settingsAccess \|\| scheduleSettingsAccess \|\| pdfSettingsAccess/);
   assert.match(app, /scheduleLockSettingsCard\?\.classList\.toggle\("hidden", !settingsAccess\)/);
 });
 

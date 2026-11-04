@@ -1,6 +1,11 @@
 # Versionsstatus
 
-## v0.92.99 Beta · Quellstand
+## v0.92.100 Beta · Quellstand
+
+Berichte und Vorlagen erhalten eine kompakte Ordnerverwaltung sowie konfigurierbare Diagramm- und Artikel-PDFs.
+Der standortbezogene Samstagszuschlag gilt ausschließlich für eingeteilte Samstagszeiten ab 13 Uhr und verändert keine tatsächliche Zeiterfassung.
+
+Enthält den produktiven Stand v0.92.99 Beta:
 
 Artikel-Lesemodule werden beim Anwendungsstart geladen. Bei ausdrücklich firmenweiter Berechtigung einschließlich nicht zugeordneter Filialen entfallen redundante Filialzuordnungen in der ersten Bestandsansicht.
 Aktuelle Rechte, authentifizierte Quelldaten und Vollständigkeitsnachweise bleiben verpflichtend; eingeschränkte Konten verwenden weiterhin die geprüfte Filialzuordnung.

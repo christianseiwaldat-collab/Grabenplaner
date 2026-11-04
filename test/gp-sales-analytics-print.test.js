@@ -78,13 +78,14 @@ test('app explicit-save applies local preferences only after full actor, revisio
   }
 });
 test('completed-job UI preserves original bytes and rejects deleted jobs, hidden pages and changed accounts',async()=>{
-  const source=fs.readFileSync(require.resolve('../public/sales-report-jobs'),'utf8'),start=source.indexOf('  let pdfWindow = null'),end=source.indexOf('  const selectors =',start);
+  const source=fs.readFileSync(require.resolve('../public/sales-report-jobs'),'utf8'),start=source.indexOf('  const canPrint ='),end=source.indexOf('  const selectors =',start);
+  assert.ok(start >= 0 && end > start);
   for(const change of [()=>{},s=>s.rows=[],s=>s.generation++,s=>s.allowed=false,s=>s.active=false,s=>s.owner='two']){
     let passed,input,release;const row={id:'job/one',title:'BEISPIEL Original title',status:'completed',format:'pdf'},blob=new Blob(['%PDF-1.7\nEXAMPLE stored job'],{type:'application/pdf'});
     const controller={open(value){input=value;return passed.canUse();},activate(){},deactivate(){},sync(){}};
     const doc={defaultView:{location:{origin:'https://gp.example.test'},GpPrintWindow:{mount(config){passed=config;return controller;}},GpExistingPdfWindow:Existing}};
     const sandbox={document:doc,window:{GpExistingPdfWindow:Existing,GpSalesAnalyticsPrint:Sales},owner:'one',allowed:true,active:true,rows:[row],generation:0,context:{projection:{read:true}},rawApi:()=>new Promise(resolve=>{release=resolve;}),accessKey:()=>sandbox.owner,canUse:()=>sandbox.allowed,printActive:()=>sandbox.active,windowPreferences:null,scale:()=>1};
-    vm.createContext(sandbox);vm.runInContext(source.slice(start,end),sandbox);sandbox.openPdf(row,{id:'button'});
+    vm.createContext(sandbox);vm.runInContext('let pdfWindow = null, pdfSelection = null;\n'+source.slice(start,end),sandbox);sandbox.openPdf(row,{id:'button'});
     assert.equal(input.values.title,row.title);assert.deepEqual(JSON.parse(JSON.stringify(passed.commonFields)),{title:'readonly',filename:true,orientation:false});
     const result=passed.createPdf({payload:input.payload,values:input.values,actor:'one',signal:new AbortController().signal});await Promise.resolve();await Promise.resolve();change(sandbox);release({ok:true,headers:new Headers({'Content-Disposition':'attachment; filename="Stored.pdf"'}),blob:async()=>blob});
     if(sandbox.rows.length&&sandbox.generation===0&&sandbox.allowed&&sandbox.active&&sandbox.owner==='one'){const pdf=await result;assert.equal(pdf.blob,blob);assert.equal(pdf.filename,'Stored.pdf');}else await assert.rejects(result,{name:'AbortError'});
