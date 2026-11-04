@@ -1,0 +1,3 @@
+title = "GP default Gitleaks rules; no path or secret allowlist"
+[extend]
+useDefault = true

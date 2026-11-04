@@ -95,6 +95,7 @@ function fixture() {
   } };
   const invoke = (route, options = {}) => { const call = { route, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : undefined }; calls.push(call); return handler(route, call); };
   const context = { state, elements, document, settingsDraftGuard: guard, api: invoke, GpSaveStatus,
+    renderPlanningSaturdaySettings: () => {},
     settingsSaveStatuses: new Map(), settingsSaveStatusHosts: new Map(), settingsSaveActor: null, settingsSavePrimary: null, settingsSaveCandidateSource: null, settingsSaveEpoch: 0, settingsSavePrimaryEpoch: 0, settingsConfirmedDraft: null, settingsConfirmedRevision: 0,
     showToast: (...args) => toasts.push(args), schedulePdfSettingsWritePermission: 'schedule:pdf:settings:write',
     schedulePdfDesignNamesForSave: () => ({ classic: 'Klassisch' }), canManageScheduleDutyColors: () => true,

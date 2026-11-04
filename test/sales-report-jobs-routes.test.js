@@ -1,6 +1,23 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict'), express = require('express');
 const { registerSalesReportJobRoutes } = require('../lib/sales-report-jobs-routes');
+
+test('library routes enforce CSRF, current owner rights and late revocation for personal folder metadata', async t => {
+  const original = { employeeNumber: 'synthetic', accountId: null, isEmployee: true,
+    permissions: ['sales:analytics:access', 'sales:analytics:company:read', 'sales:history:read'] };
+  let session = original, calls = 0, revoke = false;
+  const work = async actor => { assert.equal(actor.employeeNumber, original.employeeNumber); calls++; if (revoke) session = { ...original, permissions: [] }; return { revision: calls }; };
+  const app = express(); app.use(express.json());
+  registerSalesReportJobRoutes(app, { jobs: {}, library: { get: work, update: work }, requireSession: () => original,
+    refreshSession: async () => session, assertCsrf(req) { if (req.get('X-CSRF-Token') !== 'test') throw Object.assign(Error(), { status: 403, code: 'PORTAL_CSRF_INVALID' }); } });
+  const server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r)); t.after(() => new Promise(r => server.close(r)));
+  const request = (method = 'GET', csrf = false) => fetch(`http://127.0.0.1:${server.address().port}/api/sales-report-library`, { method, headers: csrf ? { 'X-CSRF-Token': 'test' } : {} });
+  assert.equal((await request('PATCH')).status, 403); assert.equal(calls, 0);
+  assert.equal((await request('PATCH', true)).status, 200);
+  const response = await request(); assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'private, no-store');
+  revoke = true; assert.equal((await request()).status, 403);
+  const before = calls; assert.equal((await request('PATCH', true)).status, 403); assert.equal(calls, before);
+});
 test('report HTTP endpoints require personal rights and CSRF, protect downloads and suppress late revoked responses', async t => {
   const original = { employeeNumber: 'synthetic', accountId: null, isEmployee: true,
     permissions: ['sales:analytics:access', 'sales:analytics:company:read', 'sales:history:read'] };

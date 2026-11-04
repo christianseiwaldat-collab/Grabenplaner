@@ -113,7 +113,7 @@
       {label:'Artikelnummer', value:article.articleNumber, className:'master-number'}, {label:'Status', value:article.active ? 'Aktiv' : 'Inaktiv', className:'master-status'},
       {...find('master','Sortimentsart','Sortimentsart'), className:'master-assortment'},
       {label:'Bezeichnung', value:article.description}, find('master','ArtikelBezInternet','Internetbezeichnung'),
-      {label:'EH-VK brutto', value:price('sales')}, {label:'Internet-VK brutto', value:price('internet_1')},
+      {label:'EH-VK brutto', value:price('sales'),className:'article-overview-price'}, {label:'Internet-VK brutto', value:price('internet_1'),className:'article-overview-price'},
       {label:'Primäre Kennung', value:identifier || '–', ...(identifier ? {href:'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(identifier)} : {})},
       {label:'Aktuelle Revision', value:article.currentRevision},
       ...group('master').filter(f => !['Sortimentsart','Internetbezeichnung'].includes(f.label)), ...group('links'),
@@ -129,7 +129,7 @@
       + (group('supplier').some(f => f.id === 'Bestelldaten' || f.label === 'Bestelldaten') ? '<dl class="sales-article-detail-data">' + fields([{...find('supplier','Bestelldaten','Bestelldaten'),wide:true}]) + '</dl>' : '')
       + '</div><dl class="sales-article-detail-data sales-article-supplier-remark">' + fields([find('supplier','LBemerkung','Lieferantenbemerkung')]) + '</dl></div>';
     return '<div class="sales-article-detail-overview"><section class="sales-article-detail-card" id="salesArticleMasterDataSection" aria-labelledby="salesArticleMasterDataTitle">'
-      + '<header><h3 id="salesArticleMasterDataTitle">Stammdaten</h3><div class="sales-article-master-update">im GP aktualisiert:'
+      + '<header><h3 id="salesArticleMasterDataTitle">Stammdaten</h3><label class="article-overview-price-choice"><input type="checkbox" data-master-prices checked disabled>Preise anzeigen</label><div class="sales-article-master-update">im GP aktualisiert:'
       + '<time>' + esc(h.timestamp(article.provenance.updatedAt)) + '</time></div></header><dl class="sales-article-detail-data sales-article-master-data">' + fields(base) + '</dl></section>'
       + '<section class="sales-article-detail-card sales-article-branch-stock" id="salesArticleBranchStock">'+branchStock(stock,h)+'</section>'
       + '<div id="salesArticlePhotoSlot"></div></div>'
@@ -230,5 +230,13 @@
       wkzType: capabilities.costsRead ? matrix.wkzType : null,
       purchaseDate: capabilities.costsRead ? matrix.purchaseDate : null, futurePurchaseDate: capabilities.costsRead ? matrix.futurePurchaseDate : null };
   }
-  return { mountDescriptions, overview, branchStock, prices, notes, mountNotes, fieldValue, link, restrictPrices };
+  function mountMasterPrices(host,{store,canUse}) {
+    const control=host.querySelector('[data-master-prices]');if(!control)return {destroy(){}};
+    const render=()=>{const ready=canUse()&&store.ready;control.disabled=!ready;control.checked=ready&&store.value.showPrices;
+      for(const field of host.querySelectorAll('.article-overview-price'))field.hidden=!ready||!store.value.showPrices;};
+    const change=()=>{if(!canUse()||!store.ready)return;store.change({...store.value,showPrices:control.checked});void store.save();};
+    control.addEventListener('change',change);const unsubscribe=store.subscribe(render);render();
+    return {destroy(){unsubscribe();control.removeEventListener('change',change);}};
+  }
+  return { mountDescriptions, overview, branchStock, prices, notes, mountNotes, fieldValue, link, restrictPrices, mountMasterPrices };
 });

@@ -1,0 +1,167 @@
+{
+  "artifactId": 12876717179,
+  "artifactSha256": "068cd8ef41bc397bed4c6ce29a492de470ae177259f53b25c7d6ba8bd3f23897",
+  "attempt": 1,
+  "captureSha256": "86e9ca5c91c6501311cc70b4c8a45552174bf7164b6dce71448b27e48628e7c5",
+  "gpeSha256": "80800f83d43ec7c23697f20677f224c96b0d4a5630624da908e27add882f95f4",
+  "headSha": "372abb23b3fcbc23b6d4402cfff9b92d02502d62",
+  "imageId": "sha256:5c81d46d602063772cae28b8a6509f71dde253c32544bf558f4747b9ea8ed6ed",
+  "records": {
+    "conf-gmp-powm-sec.4": {
+      "changes": {
+        "bytes": 20,
+        "sha256": "46eea2d7d1c174afb9bf12f9b4ea79a5cff857d02721c0fa7fc1851a1dc59e82"
+      },
+      "install": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "opam": {
+        "bytes": 1455,
+        "sha256": "ce702f3eb7876a8c395c4290bcd7fa50fa1e52fcf963dc6ddfa2f7c3f218b5b4"
+      }
+    },
+    "conf-gmp.5": {
+      "changes": {
+        "bytes": 20,
+        "sha256": "46eea2d7d1c174afb9bf12f9b4ea79a5cff857d02721c0fa7fc1851a1dc59e82"
+      },
+      "install": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "opam": {
+        "bytes": 2198,
+        "sha256": "5460f4ade5dc80f7a90bc5d189cb9168fb2c8b1b3c25c8ca1f64be672f086ff3"
+      }
+    },
+    "conf-libev.4-13": {
+      "changes": {
+        "bytes": 20,
+        "sha256": "46eea2d7d1c174afb9bf12f9b4ea79a5cff857d02721c0fa7fc1851a1dc59e82"
+      },
+      "install": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "opam": {
+        "bytes": 1783,
+        "sha256": "468a121f5ad3cced387b6729080dfd80a6cb020c2ee576aa6552b7bfa55547ed"
+      }
+    },
+    "conf-rust-2024.1": {
+      "changes": {
+        "bytes": 20,
+        "sha256": "46eea2d7d1c174afb9bf12f9b4ea79a5cff857d02721c0fa7fc1851a1dc59e82"
+      },
+      "install": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "opam": {
+        "bytes": 1289,
+        "sha256": "6303f717d529b0f4ddd22b8303a7993c24ec256bc74f771e88204836010721a4"
+      }
+    },
+    "ocaml-compiler.5.4.0": {
+      "changes": {
+        "bytes": 174608,
+        "sha256": "c8c742712aa8a630615493d5228b9f1c19dffc03556926752436b0f1454b3c6d"
+      },
+      "install": {
+        "bytes": 118,
+        "sha256": "6cc2f66f22247927635059bb93c59a0729cca282b1961c146b1858991fa6666b"
+      },
+      "opam": {
+        "bytes": 5011,
+        "sha256": "85e4d4aa86fa48d73611f83262b326cf676ced55116ff931ebd214bfd0a13b83"
+      }
+    },
+    "opentelemetry-client-cohttp-eio.0.91.1": {
+      "changes": {
+        "bytes": 2690,
+        "sha256": "e35a2367978e1f06d8c188b92ee3de5575720bf4eccb24c817c58d418f4f9b79"
+      },
+      "install": {
+        "bytes": 2455,
+        "sha256": "10ee0c3c3d35c89b520b731d43b9f501971b21c4a6821d22ebb626135601576b"
+      },
+      "opam": {
+        "bytes": 1154,
+        "sha256": "f6627eaaadbc50092a11db3347e2babdcb6000997d6cc41f804ca73308eaa3d8"
+      }
+    },
+    "opentelemetry-client-ocurl.0.91.1": {
+      "changes": {
+        "bytes": 2811,
+        "sha256": "1c373aaf8b34c123e955883038d8ad3197f3062fb0c7d399b305ab54dcaa01ae"
+      },
+      "install": {
+        "bytes": 2598,
+        "sha256": "3743e67fa2d2b78526b85e1eac0815ab21c07aa8cdda0c45ea68df8e2161e89f"
+      },
+      "opam": {
+        "bytes": 1005,
+        "sha256": "15b1547a90aa8e294162d3671ddea396c2ffc858e99152af669d59edd7dce673"
+      }
+    },
+    "opentelemetry-client.0.91.1": {
+      "changes": {
+        "bytes": 18947,
+        "sha256": "4f235f3dd16a5ca4453e084fff1e15db507d8ec7ab71df777a719601fe8ae6fd"
+      },
+      "install": {
+        "bytes": 21278,
+        "sha256": "f7a1aee194557debf47562ac455ac0086d5bd741eb54f7dbf89c5bbbea3efb13"
+      },
+      "opam": {
+        "bytes": 882,
+        "sha256": "6be352b2559180abb82efcfacff4e227d46ca3dac8587c4e49275106ffaacfd8"
+      }
+    },
+    "opentelemetry-logs.0.91.1": {
+      "changes": {
+        "bytes": 1238,
+        "sha256": "127539f25bdd63e5fda14e1d207a1d7f5317327c0a655f5909acbd674b3bf8c3"
+      },
+      "install": {
+        "bytes": 1138,
+        "sha256": "83f982090c1e04b59a15bab797612cef6908cba431b12b83cc0bbb3fd7514e6c"
+      },
+      "opam": {
+        "bytes": 1010,
+        "sha256": "e8671cf144f8b7792ad3f6de861185e1c0b6d10d246a56935f0e687baa4f9eb1"
+      }
+    },
+    "opentelemetry.0.91.1": {
+      "changes": {
+        "bytes": 32527,
+        "sha256": "2defa31cdc186da6da6674f87544382004a047378905a8e158ce93c1b86aa473"
+      },
+      "install": {
+        "bytes": 41702,
+        "sha256": "64cd7807c670f9705300e7a5aa402f9fec3c3684cef894f870b3ec8a5572cd44"
+      },
+      "opam": {
+        "bytes": 1240,
+        "sha256": "4970ef87c5f59a8c9a988fddb6d773e008bf81b36744180059cec99a87fb5c2e"
+      }
+    },
+    "seq.base": {
+      "changes": {
+        "bytes": 91,
+        "sha256": "1ef4c761a12c66af855eaf368a5d94c15fc377f6356934d39838f8cf0d44aaa6"
+      },
+      "install": {
+        "bytes": 45,
+        "sha256": "2f5bd3420bcc4849ec66c8856a4353cef539294643135f3e181f64c2575b6751"
+      },
+      "opam": {
+        "bytes": 840,
+        "sha256": "101ac7e81efc755753f620200a0df672c3d58ef36793078744e1442a31f4530f"
+      }
+    }
+  },
+  "role": "authenticated real OPAM 2.5.2 metadata serialization only; complete P3 source closure remains separately required",
+  "runId": 40821968979
+}
