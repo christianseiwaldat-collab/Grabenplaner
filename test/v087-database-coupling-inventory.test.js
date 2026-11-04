@@ -399,12 +399,15 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // reads only the configured database path, not business records.
   // The named deploy preflight only reads the installed provider and paths.
   // The release inventory reads only component version metadata and package bytes.
-  // The exact SAST review JSON contains quoted SQL terminology, not executable persistence.
+  // The exact SAST/secret review JSON files contain quoted SQL terminology, not executable persistence.
   // The exact read-only SAST context helper adds one metadata-only file, without a driver grant.
-  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 22);
+  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 23);
   const sastMetadata = report.findings.filter(entry => entry.file === "scripts/security/sast-dispositions.json");
   assert.ok(sastMetadata.length > 0);
   assert.ok(sastMetadata.every(entry => entry.owner === "security-review-evidence"));
+  const secretMetadata = report.findings.filter(entry => entry.file === "scripts/security/exceptions.json");
+  assert.ok(secretMetadata.length > 0);
+  assert.ok(secretMetadata.every(entry => entry.owner === "security-review-evidence"));
   const sastContextMetadata = report.findings.filter(entry => entry.file === "lib/security-sast-context-evidence.js");
   assert.ok(sastContextMetadata.length > 0);
   assert.ok(sastContextMetadata.every(entry => entry.owner === "security-review-evidence"));

@@ -1492,7 +1492,7 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
 const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
   Object.freeze({
     id: "security-sast-review-metadata",
-    files: Object.freeze(["scripts/security/sast-dispositions.json", "lib/security-sast-context-evidence.js"]),
+    files: Object.freeze(["scripts/security/sast-dispositions.json", "scripts/security/exceptions.json", "lib/security-sast-context-evidence.js"]),
     scope: "security-review-metadata",
     owner: "security-review-evidence",
     targetLayer: "private JSON review records and read-only package/hash evidence verification; legacy paths are exclusion metadata",
