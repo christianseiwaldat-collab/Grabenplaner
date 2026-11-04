@@ -32,3 +32,15 @@ server-tools/linux/hardening/systemd/*.timer.in text eol=lf
 server-tools/linux/hardening/templates/* text eol=lf
 server-tools/linux/Caddyfile.in text eol=lf
 server-tools/linux/*.env.example text eol=lf
+# Security tool inputs and upstream fixtures bind exact bytes.
+scripts/security/fixtures/semgrep-1.181.0-* text eol=lf
+scripts/security/*.py text eol=lf
+scripts/security/requirements.txt text eol=lf
+scripts/security/tools.json text eol=lf
+.github/security-semgrep-core-pin.json text eol=lf
+scripts/security/fixtures/ocaml-config.3/* -text
+scripts/security/fixtures/license-declarations/* -text -whitespace
+lib/vendor-patches/*.patch text eol=lf whitespace=-blank-at-eol
+test/security-msal-auth-code-backport.test.js text eol=lf
+scripts/security/fixtures/license-extra-sources/** -text -whitespace
+scripts/security/fixtures/bsd-compat-headers/** -text -whitespace

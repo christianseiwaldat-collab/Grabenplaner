@@ -702,6 +702,10 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/branch-sales-api.test.js",
   "test/sales-article-images.test.js",
   "test/sales-report-jobs-routes.test.js",
+  // Report-library schema and move/delete contracts use the existing SQLite
+  // fixture. This registration grants no additional production driver access.
+  "test/sales-report-library.test.js",
+  "test/security-sast-context-evidence.test.js",
   "scripts/benchmark-cash-assigned-search.js",
   "scripts/benchmark-sales-search.js",
   "test/portal-permission-defaults.test.js",
@@ -1263,6 +1267,24 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
 ]);
 
 const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
+  Object.freeze({
+    id: "security-sast-review-metadata",
+    files: Object.freeze(["scripts/security/sast-dispositions.json", "lib/security-sast-context-evidence.js"]),
+    scope: "security-review-metadata",
+    owner: "security-review-evidence",
+    targetLayer: "private JSON review records and read-only package/hash evidence verification; legacy paths are exclusion metadata",
+    risk: "low",
+    transitionException: "metadata classification only; no database driver, statement, connection or runtime activation grant",
+  }),
+  Object.freeze({
+    id: "security-release-component-inventory",
+    files: Object.freeze(["lib/security-release-inventory.js"]),
+    scope: "supported-linux-server-operations",
+    owner: "security-release-evidence",
+    targetLayer: "read-only package hashes and process runtime version metadata",
+    risk: "low",
+    transitionException: "SQLite version comes from process.versions; no database driver, connection or business data access is authorized",
+  }),
   Object.freeze({
     id: "isolated-full-source-measurement",
     files: Object.freeze(["scripts/verify-tradefoto-full-import.mjs"]),
