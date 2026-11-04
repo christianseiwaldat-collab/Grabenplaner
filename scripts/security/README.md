@@ -139,12 +139,21 @@ zusätzliche Inhaltsvarianten sind nicht zulässig.
 Veraltete, doppelte, nicht zuordenbare oder unvollständige Entscheidungen
 scheitern geschlossen. Nicht geprüfte und echte Befunde bleiben blockierend.
 Eine Entscheidung kann niemals Parserfehler, Zeitlimits oder fehlende
-Dateiabdeckung aufheben. Die am 18.10.2026 einzeln geprüften 2.983 aktuellen
-Hinweise sind an 148 Kontextdateien gebunden und bis 17.11.2026 befristet.
-Die vollständige Linux-Abdeckung wurde aus dem Vollscan und genau zwei
-quell- und regelgebundenen Nachläufen nachgewiesen. Historische echte Fehler
-bleiben als behoben dokumentiert. Neue Scannerhinweise werden nicht automatisch
-als Fehlalarm übernommen; Änderungen und Ablauf erfordern eine erneute Prüfung.
+Dateiabdeckung aufheben. Für PR106 wurden die übernommenen Einzelbewertungen
+gegen den tatsächlichen älteren `main`-Stand und die Berichtsänderungen geprüft.
+Entfernte Fundstellen und nicht vorhandene spätere Produktfunktionen sind kein
+Freigabenachweis für diesen Stand. Jede aktuelle Entscheidung bindet deshalb
+die konkreten Quellen, Produzenten und Schutzfunktionen des Backports; veraltete
+Kontextpfade wurden durch die tatsächlich vorhandenen Implementierungen ersetzt.
+Die Bewertungen kennzeichnen den technischen Codex-Review ausdrücklich und
+ersetzen keine unabhängige GitHub-Freigabe. Bestehende Ablaufdaten werden nicht
+verlängert; neue Bewertungen gelten höchstens 14 Tage. Die normalen fünf
+SAST-Profile mit allen 169 Upstream-Regeln müssen unabhängig sämtliche aktuellen
+Identitäten und Quellhashes bestätigen. Eine lokale Quellprojektion oder die
+Drei-Regel-Parserdiagnose ist kein vollständiger Sicherheitsnachweis.
+Historische echte Fehler bleiben als behoben dokumentiert. Neue Scannerhinweise
+werden nicht automatisch als Fehlalarm übernommen; Änderungen und Ablauf
+erfordern eine erneute Prüfung.
 
 Die Regel-ID wird gegen die vollständige ID-Liste des hashgeprüften
 Upstream-Profils aufgelöst, unabhängig von temporären Scannerpfaden. Der

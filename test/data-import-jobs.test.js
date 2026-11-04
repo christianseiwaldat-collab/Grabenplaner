@@ -45,6 +45,19 @@ async function cashJobFixture(t,{revision=0}={}){
  Object.assign(f.sources.get(source.id),{status:'ready',complete:true,activationEnabled:false,storage:'cash-compact-v1'});
  return {...f,original:f,cash,id:source.id};
 }
+test('temporary import spool rejects truncated GCM authentication tags',async t=>{
+ const f=await fixture(t);await f.store.init();
+ const plaintext=sourceBuffer(),blob=await f.store.encrypt('a'.repeat(64),plaintext);
+ assert.deepEqual(await f.store.decrypt(blob),plaintext);
+ for(const length of [4,8,12,13,14,15]){
+  const tag=Buffer.from(blob.tag,'base64').subarray(0,length).toString('base64');
+  await assert.rejects(f.store.decrypt({...blob,tag}),{code:'IMPORT_JOB_FILE_INVALID'});
+ }
+ const modified=Buffer.from(blob.tag,'base64');modified[0]^=1;
+ await assert.rejects(f.store.decrypt({...blob,tag:modified.toString('base64')}),{code:'IMPORT_JOB_FILE_INVALID'});
+ assert.deepEqual(await f.store.decrypt(blob),plaintext);
+});
+
 test('cash takeover is durably queued without a browser and confirms the active publication',async t=>{
  const f=await cashJobFixture(t),q=f.original.queue;
  const accepted=await q.enqueueCashApply(f.getSession,{sourceId:f.id,expectedRevision:0});

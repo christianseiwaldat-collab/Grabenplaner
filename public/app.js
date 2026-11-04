@@ -5396,7 +5396,7 @@ function renderSchedulePdfExportControl() {
   const catalog = schedulePdfDesignCatalog();
   const catalogById = new Map(catalog.map((design) => [design.id, design]));
   const activeIds = schedulePdfDesignIdsFromSettings();
-  const baseUrl = `/api/schedule.pdf?week=${state.weekStart}${contextQuery(true)}`;
+  const baseUrl = `/api/schedule.pdf?week=${encodeURIComponent(state.weekStart)}${contextQuery(true)}`;
   elements.pdfButton.href = `${baseUrl}&design=${encodeURIComponent(activeIds[0])}`;
   if (!elements.schedulePdfDesignMenu) return;
   if (activeIds.length <= 1) {
@@ -5408,7 +5408,7 @@ function renderSchedulePdfExportControl() {
   elements.pdfButton.setAttribute("aria-haspopup", "menu");
   elements.schedulePdfDesignMenu.innerHTML = activeIds.map((id, index) => {
     const design = catalogById.get(id) || { label: id, description: "" };
-    return `<a href="${baseUrl}&design=${encodeURIComponent(id)}" role="menuitem" data-schedule-pdf-design-export="${escapeHtml(id)}"><strong>Rang ${index + 1} · ${escapeHtml(design.label)}</strong>${design.description ? `<small>${escapeHtml(design.description)}</small>` : ""}</a>`;
+    return `<a href="${escapeHtmlAttribute(`${baseUrl}&design=${encodeURIComponent(id)}`)}" role="menuitem" data-schedule-pdf-design-export="${escapeHtml(id)}"><strong>Rang ${index + 1} · ${escapeHtml(design.label)}</strong>${design.description ? `<small>${escapeHtml(design.description)}</small>` : ""}</a>`;
   }).join("");
   closeSchedulePdfDesignMenu();
 }
@@ -5938,7 +5938,7 @@ function renderSummary() {
   elements.departmentPdfControl?.classList.toggle("hidden", !showDepartmentPdf);
   if (showDepartmentPdf) {
     elements.departmentPdfSelect.innerHTML = departments.map((department) =>
-      `<option value="${department.id}">${escapeHtml(department.name)}</option>`,
+      `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`,
     ).join("");
     const selectedDepartment = elements.departmentPdfSelect.value || String(departments[0].id);
     elements.departmentPdfButton.href = `/api/schedule.pdf?week=${state.weekStart}&location=${encodeURIComponent(state.locationId)}&departmentId=${encodeURIComponent(selectedDepartment)}`;
@@ -22643,7 +22643,7 @@ function renderLocations() {
         departments.length ? departments.map((department) => `
           <div class="department-item">
             <span>${escapeHtml(department.name)}${department.active ? "" : " · inaktiv"} · Mindestbesetzung: ${Number(department.min_staff || 0)}</span>
-            ${canEditDepartments ? `<button type="button" class="edit-button" data-edit-department="${department.id}">Bearbeiten</button>` : ""}
+            ${canEditDepartments ? `<button type="button" class="edit-button" data-edit-department="${escapeHtmlAttribute(department.id)}">Bearbeiten</button>` : ""}
           </div>
         `).join("") : '<div class="empty-options">Keine Abteilungen angelegt.</div>'
       }</div>
@@ -23935,7 +23935,7 @@ async function loadPortalUsers() {
     elements.portalUserList.innerHTML = state.portalUsers.map((user) => {
       const scope = user.scopes?.[0] || { locationId: user.homeLocationId || state.locations[0]?.id || "", departmentId: user.preferredDepartmentId || "" };
       const locations = state.locations.map((location) => `<option value="${escapeHtml(location.id)}" ${location.id === scope.locationId ? "selected" : ""}>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
-      const departments = (state.locations.find((location) => location.id === scope.locationId)?.departments || []).map((department) => `<option value="${department.id}" ${Number(department.id) === Number(scope.departmentId) ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("");
+      const departments = (state.locations.find((location) => location.id === scope.locationId)?.departments || []).map((department) => `<option value="${escapeHtmlAttribute(department.id)}" ${Number(department.id) === Number(scope.departmentId) ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("");
       const roleEditable = mayManageUsers && portalUserManageableInUi(actorRole, user);
       const scopeEditable = mayManageScopes && portalUserManageableInUi(actorRole, user)
         && ["location_planner", "manager", "department_manager"].includes(user.role);
@@ -28810,7 +28810,7 @@ function refreshTimePresenceDepartments() {
     : allDepartments;
   const selected = elements.timeTrackingDepartment?.value || "";
   if (elements.timeTrackingDepartment) {
-    elements.timeTrackingDepartment.innerHTML = `${departmentManager ? "" : '<option value="">Gesamte Filiale</option>'}${departments.map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("")}`;
+    elements.timeTrackingDepartment.innerHTML = `${departmentManager ? "" : '<option value="">Gesamte Filiale</option>'}${departments.map((department) => `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`).join("")}`;
     elements.timeTrackingDepartment.value = departments.some((department) => String(department.id) === selected)
       ? selected
       : (departmentManager ? String(departments[0]?.id || "") : "");
@@ -30136,7 +30136,7 @@ function refreshRequestBlackoutDepartments(selectedDepartmentId = "") {
   if (!elements.requestBlackoutDepartment) return;
   const departments = departmentsForLocation(elements.requestBlackoutLocation.value, true);
   elements.requestBlackoutDepartment.innerHTML = `<option value="">Gesamte Filiale</option>${departments.map((department) =>
-    `<option value="${department.id}">${escapeHtml(department.name)}${department.active ? "" : " (inaktiv)"}</option>`,
+    `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}${department.active ? "" : " (inaktiv)"}</option>`,
   ).join("")}`;
   elements.requestBlackoutDepartment.value = departments.some((department) => String(department.id) === String(selectedDepartmentId)) ? String(selectedDepartmentId) : "";
 }
@@ -30813,7 +30813,7 @@ function renderPayrollDepartments() {
   if (!elements.payrollDepartment) return;
   const location = state.locations.find((item) => item.id === elements.payrollLocation.value);
   const selected = elements.payrollDepartment.value;
-  elements.payrollDepartment.innerHTML = `<option value="">Gesamter Standort</option>${(location?.departments || []).filter((department) => department.active !== false).map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("")}`;
+  elements.payrollDepartment.innerHTML = `<option value="">Gesamter Standort</option>${(location?.departments || []).filter((department) => department.active !== false).map((department) => `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`).join("")}`;
   if ((location?.departments || []).some((department) => String(department.id) === selected)) elements.payrollDepartment.value = selected;
 }
 
@@ -37354,7 +37354,7 @@ function updateEmployeeDepartmentOptions(selectedDepartmentId = "", center = sel
   const locationId = String(location?.id || "");
   const departments = departmentsForLocation(locationId);
   elements.employeePreferredDepartment.innerHTML = `<option value="">Keine Abteilung</option>${departments.map((department) =>
-    `<option value="${department.id}">${escapeHtml(department.name)}</option>`,
+    `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`,
   ).join("")}`;
   elements.employeePreferredDepartment.disabled = !locationId || state.employeeEditMode === "display";
   if (elements.employeePreferredDepartmentHint) {
@@ -40533,7 +40533,7 @@ function openUsbEmployeeDraft(personnelNumber = "") {
 
 function updateUsbDraftDepartments() {
   const departments = departmentsForLocation(elements.usbDraftLocation.value);
-  elements.usbDraftDepartment.innerHTML = `<option value="">Keine Abteilung</option>${departments.map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("")}`;
+  elements.usbDraftDepartment.innerHTML = `<option value="">Keine Abteilung</option>${departments.map((department) => `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`).join("")}`;
 }
 
 function updateUsbDraftRoleOptions(preferredRole = elements.usbDraftRole.value || "employee") {
@@ -41371,7 +41371,7 @@ elements.portalUserList?.addEventListener("change", (event) => {
   row.querySelector("[data-scope-department]").classList.toggle("hidden", role !== "department_manager");
   if (event.target.matches("[data-scope-location]")) {
     const departments = state.locations.find((location) => location.id === event.target.value)?.departments || [];
-    row.querySelector("[data-scope-department]").innerHTML = departments.map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("");
+    row.querySelector("[data-scope-department]").innerHTML = departments.map((department) => `<option value="${escapeHtmlAttribute(department.id)}">${escapeHtml(department.name)}</option>`).join("");
   }
 });
 elements.organizationAccountForm?.addEventListener("submit", saveOrganizationAccount);
