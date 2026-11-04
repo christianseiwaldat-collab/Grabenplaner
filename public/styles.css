@@ -7730,3 +7730,7 @@ html[data-active-page-theme="dark"] .custom-work-rule-sticky-actions {
 .sales-article-detail-heading .sales-article-detail-actions { margin:0; padding:0; border:0; display:flex; flex-wrap:wrap; gap:10px; }
 .sales-article-detail-heading .hidden { display:none!important; }.article-window-dock button,.sales-article-window-dock button { display:inline-grid!important; place-items:center!important; line-height:1!important; padding:0!important; }
 .sales-article-orders-panel { padding:16px; }.sales-article-orders-panel th button { font:inherit; }.sales-article-orders-panel table { width:100%; border-collapse:collapse; }.sales-article-orders-panel th,.sales-article-orders-panel td { padding:11px; border-bottom:1px solid var(--border); text-align:left; }
+
+.planning-saturday-inline { display:flex;align-items:center;gap:7px;font-size:12px;white-space:normal; }
+.planning-saturday-inline input { width:15px;height:15px;margin:0;accent-color:var(--green); }
+.planning-saturday-location small + small { margin-top:4px; }

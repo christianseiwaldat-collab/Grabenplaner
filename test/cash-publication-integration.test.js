@@ -418,7 +418,7 @@ test('reviewed cash rules flow from an unchanged sealed publication through rece
   const { createCashPublications } = require('../lib/persistence/repositories/cash-publications');
   const publications = createCashPublications({ access: f.app.provider, protection: f.protection, scopeId: f.actor.scopeId });
   const publication = await f.app.provider.transaction(tx => publications.active(tx), { readOnly: true });
-  assert.equal(publication.data.policy.version, 1); assert.equal(publication.policy.version, 10);
+  assert.equal(publication.data.policy.version, 1); assert.equal(publication.policy.version, 13);
   const before = C.canonical(publication.row), runtime = f.history();
   const history = await runtime.run(f.get, w => w.search(f.query()));
   assert.equal(history.totals.gross, '1273.18'); assert.equal(history.coverage.counts.review, 0);
@@ -911,6 +911,9 @@ test('personal report templates persist encrypted settings, isolate owners and r
   assert.equal((await make().list({ ...f.session, employeeNumber: 'another-user' })).length, 0);
   await assert.rejects(make().get({ ...f.session, employeeNumber: 'another-user' }, first.id), code('IMPORT_HISTORY_NOT_FOUND'));
   const updated = await make().save(f.session, { ...input, title: 'Angepasste Vorlage', revision: first.revision }, first.id);
+  assert.ok(first.created); assert.equal(first.createdBy, f.session.employeeNumber);
+  assert.equal(updated.created, first.created); assert.equal(updated.createdBy, first.createdBy);
+  assert.equal((await make().list(f.session))[0].created, first.created);
   assert.equal(updated.revision, 2); assert.equal((await make().list(f.session)).length, 1);
   await assert.rejects(make().save(f.session, { ...input, revision: first.revision }, first.id), code('IMPORT_REVISION_CONFLICT'));
   await assert.rejects(make().remove(f.session, first.id, { revision: first.revision }), code('IMPORT_REVISION_CONFLICT'));
@@ -948,6 +951,29 @@ test('compact cash completes a multi-batch period and paging never counts sales 
   assert.equal(page.analysis.processed, 200);
   result = await runtime.run(f.get, w => w.analyze({ query: f.query(), cursor: result.analysis.cursor }));
   assert.equal(result.analysis.processed, 205); assert.equal(result.totals.gross, '2460.00');
+});
+test('a newer cash publication preserves general net invoice and signed discount interpretation after changed IDs and text', async t => {
+  const f = await fixture(t), data = rows({ count: 2 });
+  Object.assign(data.Umsatz_KASSE[0], { Kassenid: '0', RechnungsNr: '70001', RechnungsBetrag: '90' });
+  for (const row of data.Umsatz_Kasse_Details) Object.assign(row, { Kassenid: '0', RechnungsNr: 70001 });
+  Object.assign(data.Umsatz_Kasse_Details[0], { VK_Preis: '120', RohertragDM: '20', Sortiment: 10102 });
+  Object.assign(data.Umsatz_Kasse_Details[1], { VK_Preis: '-12', RohertragDM: '-10', Sortiment: 170302 });
+  const firstId = await f.build(data); await f.activate(f.request(firstId)); f.session.permissions.push('sales:analytics:margin:read');
+  const runtime = f.history(), input = f.query({ reportVersion: 3, locationIds: ['branch-a'], groupBy: ['location'],
+    metrics: ['grossRevenue', 'netRevenue', 'grossMargin', 'quantity', 'receiptCount'] });
+  async function report() {
+    const context = await runtime.run(f.get, w => w.reports.metadata()); let result;
+    do { result = await runtime.run(f.get, w => w.reports.step(input, context, result?.analysis.cursor)); } while (!result.analysis.complete);
+    return result.report;
+  }
+  const before = await report(); assert.equal(before.coverage.current.review, 0);
+  assert.equal(before.total.metrics.netRevenue.current, '90.00'); assert.equal(before.total.metrics.quantity.current, '1.000000');
+  const replacement = structuredClone(data);
+  replacement.Umsatz_Kasse_Details.forEach((row, i) => { row.RepID = '00000000-0000-0000-0001-' + String(i + 1).padStart(12, '0'); row.Artikelbezeichnung = 'New import text ' + i; });
+  const nextId = await f.build(replacement); assert.notEqual(nextId, firstId); await f.activate(f.request(nextId, 1));
+  const after = await report(); assert.equal(after.coverage.current.review, 0);
+  assert.deepEqual(after.total.metrics, before.total.metrics);
+  assert.equal(f.app.database.prepare('SELECT COUNT(*) n FROM cash_snapshot_6').get().n, 5, 'both immutable imports remain stored');
 });
 test('activation keeps prior data, invalidates old cursors and rollback restores the exact previous selection', async t => {
   const f = await fixture(t, { count: 205 }); await f.activate(); const runtime = f.history();

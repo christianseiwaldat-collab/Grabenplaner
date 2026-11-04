@@ -52,6 +52,8 @@
     <link rel="stylesheet" href="/gp-dashboard-boards.css" />
     <link rel="stylesheet" href="/rights-management-workspace.css" />
     <link rel="stylesheet" href="/sales-analytics-workspace.css" />
+    <link rel="stylesheet" href="/sales-chart-design.css" />
+    <link rel="stylesheet" href="/sales-article-sheet-options.css" />
     <link rel="stylesheet" href="/sales-article-report.css" />
     <link rel="stylesheet" href="/sales-bwl.css" />
     <link rel="stylesheet" href="/gp-print-window.css" />
@@ -654,6 +656,7 @@
             <div class="hours-heading">
               <div><h2>Wochenstunden je Teammitglied</h2><p>Eingeteilte Nettozeit, gewertete Zeit und Wochen-Soll im Vergleich.</p></div>
               <div class="hours-heading-actions">
+                <label class="planning-saturday-inline" title="Planung für alle Mitarbeiter des Standorts: netto eingeteilte Zeit plus 50 % der Samstagszeit ab 13 Uhr, unabhängig von der Pausenlage. Wird sofort gespeichert."><input type="checkbox" data-saturday-planning="schedule" disabled /> Sa ab 13 Uhr +50 % · Worst Case</label>
                 <div class="hours-legend"><span>Eingeteilt = in Filiale nach Pause</span><span>Gewertet = inkl. Zeitgutschriften und Sonderfällen</span></div>
                 <button type="button" class="secondary-button hidden" id="xoffiImportButton">xoffi importieren</button>
               </div>
@@ -1918,10 +1921,10 @@
               </details>
               <details class="sales-report-disclosure" data-report-only>
                 <summary><span><strong>Darstellung &amp; PDF</strong><small>Aufschlüsselung, Diagramm und Seitenformat</small></span><b aria-hidden="true"></b></summary>
-                <div class="sales-report-disclosure-content"><fieldset class="sales-report-grouping" data-report-only><legend>Darstellung</legend><label>Aufschlüsselung<select id="salesReportJobGroupPrimary"></select></label><label>Darunter<select id="salesReportJobGroupSecondary"></select></label><label>Zusätzlich<select id="salesReportJobGroupThird"></select></label><label>PDF-Format<select id="salesReportJobOrientation"><option value="portrait">Hochformat</option><option value="landscape">Querformat</option></select></label><label>Diagramm<select id="salesReportJobChartType"><option value="auto">Automatisch passend</option><option value="bars">Balken · mit Vergleich</option><option value="shares">Anteile · Ringdiagramm</option><option value="none">Ohne Diagramm</option></select></label><label>Diagramm für<select id="salesReportJobChartMetric"></select></label><div class="sales-report-checks"><label><input type="checkbox" id="salesReportJobAbsolute" checked /> Veränderung absolut</label><label><input type="checkbox" id="salesReportJobPercent" checked /> Veränderung in Prozent</label></div><small>Alle Gruppen stehen zusätzlich in den Tabellen. Bei ungeeigneten Anteilen wird ein Balkendiagramm verwendet.</small></fieldset></div>
+                <div class="sales-report-disclosure-content"><fieldset class="sales-report-grouping" data-report-only><legend>Darstellung</legend><label>Aufschlüsselung<select id="salesReportJobGroupPrimary"></select></label><label>Darunter<select id="salesReportJobGroupSecondary"></select></label><label>Zusätzlich<select id="salesReportJobGroupThird"></select></label><label>PDF-Format<select id="salesReportJobOrientation"><option value="portrait">Hochformat</option><option value="landscape">Querformat</option></select></label><label>Diagramm<select id="salesReportJobChartType"><option value="auto">Automatisch passend</option><option value="bars">Balken · mit Vergleich</option><option value="shares">Anteile · Ringdiagramm</option><option value="none">Ohne Diagramm</option></select></label><fieldset class="sales-chart-metrics"><legend>Diagramme für</legend><div id="salesReportJobChartMetric"></div><small>Mehrere Kennzahlen wählen - jede erhält ein eigenes Diagramm in derselben PDF.</small></fieldset><div class="sales-report-checks"><label><input type="checkbox" id="salesReportJobAbsolute" checked /> Veränderung absolut</label><label><input type="checkbox" id="salesReportJobPercent" checked /> Veränderung in Prozent</label></div><small>Alle Gruppen stehen zusätzlich in den Tabellen. Bei ungeeigneten Anteilen wird ein Balkendiagramm verwendet.</small></fieldset></div>
               </details>
-              <fieldset class="sales-report-grouping sales-graphic-options" data-graphic-only hidden><legend>Grafik im Zeitverlauf</legend><label>Y-Achse · Kennzahl<select id="salesGraphicMetric"></select></label><label>X-Achse · Zeitabschnitte<select id="salesGraphicGrain"><option value="day">Tage</option><option value="week">Wochen</option><option value="month" selected>Monate</option></select></label><label>Darstellung<select id="salesGraphicGroup"></select></label><label>PDF-Format<select id="salesGraphicOrientation"><option value="landscape">Querformat</option><option value="portrait">Hochformat</option></select></label><small>Eine Grafik für die gesamte Auswahl oder je Gruppe eine eigene PDF-Seite. Rohertrag in % wird aus Rohertrag und Nettoumsatz des Zeitabschnitts berechnet.</small></fieldset>
-              <details class="sales-report-disclosure"><summary><span><strong>Meine Vorlagen</strong><small>Berichtseinstellungen speichern oder wiederverwenden</small></span><b aria-hidden="true"></b></summary><div class="sales-report-disclosure-content"><fieldset class="sales-report-templates"><legend>Meine Berichtsvorlagen</legend><label>Gespeicherte Einstellungen<select id="salesReportTemplateSelect"><option value="">Vorlage auswählen</option></select></label><p id="salesReportTemplateTitle"></p><div class="sales-report-job-actions"><button id="salesReportTemplateLoad" class="secondary-button" type="button" disabled>Laden</button><button id="salesReportTemplateSave" class="secondary-button" type="button" disabled>Als Vorlage speichern</button><button id="salesReportTemplateCopy" class="secondary-button" type="button" hidden>Als neue Vorlage speichern</button><button id="salesReportTemplateDelete" class="text-button" type="button" disabled>Vorlage löschen</button></div><small>Titel und Einstellungen werden gespeichert. Der PDF-Auftrag wird separat gestartet.</small></fieldset></div></details>
+              <fieldset class="sales-report-grouping sales-graphic-options" data-graphic-only hidden><legend>Grafik im Zeitverlauf</legend><fieldset class="sales-chart-metrics"><legend>Y-Achsen · Kennzahlen</legend><div id="salesGraphicMetric"></div></fieldset><label>Grafikdesign<select id="salesGraphicStyle"><option value="classic">Klassik · Gold auf Nachtblau</option><option value="studio">Studio · Petrol auf Weiß</option><option value="aurora">Aurora · Türkise Fläche</option><option value="editorial">Editorial · Violette Punkte</option><option value="pulse">Pulse · Korallrote Linie</option></select></label><label>X-Achse · Zeitabschnitte<select id="salesGraphicGrain"><option value="day">Tage</option><option value="week">Wochen</option><option value="month" selected>Monate</option></select></label><label>Darstellung<select id="salesGraphicGroup"></select></label><label>PDF-Format<select id="salesGraphicOrientation"><option value="landscape">Querformat</option><option value="portrait">Hochformat</option></select></label><small>Eine Grafik für die gesamte Auswahl oder je Gruppe eine eigene PDF-Seite. Rohertrag in % wird aus Rohertrag und Nettoumsatz des Zeitabschnitts berechnet.</small></fieldset>
+              <div class="sales-report-template-save"><button id="salesReportTemplateSave" class="secondary-button" type="button" disabled>Als Vorlage speichern</button><button id="salesReportTemplateCopy" class="text-button" type="button" hidden>Als neue Vorlage speichern</button><small id="salesReportTemplateTitle">Gespeicherte Vorlagen findest du unter Berichte.</small></div>
               <div class="sales-report-submit"><small>Bis zu 366 Tage je Zeitraum · Berechnung im Hintergrund</small><button class="primary-button" id="salesReportJobSubmit" type="submit" disabled>PDF-Bericht beauftragen</button></div>
             </form>
             <p class="sales-analytics-request-hint" id="salesAnalyticsRequestHint" role="status">Die Verfügbarkeit der Kassendaten wird geprüft.</p>
@@ -2032,13 +2035,22 @@
             </details>
           </section>
           <section class="sales-analytics-panel sales-analytics-intro-card" id="salesAnalyticsReportsPanel" role="tabpanel" aria-labelledby="salesAnalyticsReportsTab" tabindex="0" hidden>
-            <div class="sales-analytics-section-heading"><div><h2>Berichte</h2><p>Deine Aufträge und fertigen Ergebnisse.</p></div><button type="button" id="salesReportJobRefresh" class="secondary-button">Aktualisieren</button></div>
-            <label for="salesReportJobFilter">Berichte suchen<input id="salesReportJobFilter" type="search" placeholder="Berichtstitel" /></label>
+            <div class="sales-library-header"><h2>Berichte</h2><div class="sales-library-toolbar">
+              <button id="salesLibraryNewFolder" class="secondary-button" type="button">+ Ordner</button>
+              <label class="sales-library-search"><span class="sales-library-sr-only">Berichte und Vorlagen suchen</span><input id="salesReportJobFilter" type="search" placeholder="Berichte und Vorlagen suchen" /></label>
+              <label><span>Inhalt</span><select id="salesLibraryFilter"><option value="all">Alles</option><option value="report">PDF-Berichte</option><option value="template">Vorlagen</option></select></label>
+              <label><span>Ansicht</span><select id="salesLibraryView"><option value="icons">Symbole</option><option value="details">Details</option></select></label>
+              <button type="button" id="salesReportJobRefresh" class="sales-library-refresh" title="Aktualisieren" aria-label="Aktualisieren">↻</button>
+            </div></div>
             <p id="salesReportJobError" role="status" hidden></p>
-            <div id="salesReportJobList" aria-live="polite"></div>
+            <p id="salesLibraryFeedback" class="sales-library-sr-only" role="status" aria-live="polite"></p>
+            <div class="sales-library"><nav id="salesLibraryFolders" class="sales-library-folders" aria-label="Berichtsordner"></nav><div class="sales-library-content"><nav id="salesLibraryBreadcrumbs" class="sales-library-breadcrumbs" aria-label="Ordnerpfad"></nav><div id="salesReportJobList" aria-live="polite"></div></div></div>
+            <div id="salesLibraryContextMenu" class="sales-library-context-menu" role="menu" aria-label="Aktionen" hidden></div>
+            <dialog id="salesLibraryProperties" class="sales-library-dialog"><form method="dialog"><h3 id="salesLibraryPropertiesTitle">Eigenschaften</h3><dl id="salesLibraryPropertiesDetails" class="sales-library-properties"></dl><button class="secondary-button">Schließen</button></form></dialog>
+            <dialog id="salesLibraryDialog" class="sales-library-dialog"><form method="dialog"><h3 id="salesLibraryDialogTitle"></h3><label id="salesLibraryNameField">Name<input id="salesLibraryName" maxlength="120" required autocomplete="off" /></label><label id="salesLibraryTargetField" hidden>Zielordner<select id="salesLibraryTarget"></select></label><p id="salesLibraryDialogNote"></p><div class="sales-report-job-actions"><button class="secondary-button" value="cancel" formnovalidate>Abbrechen</button><button id="salesLibraryDialogOk" class="primary-button" value="ok">Speichern</button></div></form></dialog>
           </section>
           <section class="sales-analytics-panel sales-analytics-intro-card" id="salesAnalyticsGraphicsPanel" role="tabpanel" aria-labelledby="salesAnalyticsGraphicsTab" tabindex="0" hidden>
-            <div class="sales-analytics-section-heading"><div><h2>Grafiken</h2><p>Zeiträume und Kennzahlen als PDF darstellen – mit blauem Raster und gelben Balken auf dunklem Hintergrund.</p></div></div>
+            <div class="sales-analytics-section-heading"><div><h2>Grafiken</h2><p>Mehrere Kennzahlen als PDF darstellen. Wähle aus fünf Designs mit Balken, Flächen, Punkten und Linien.</p></div></div>
             <div class="sales-graphic-design"><strong>Verkäufe im Zeitverlauf</strong><span>PDF-Stil · Designvorschau mit Beispielwerten</span><div class="sales-graphic-design-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
             <div id="salesReportGraphicEditor"></div>
           </section>
@@ -2097,6 +2109,7 @@
                     <label class="field"><span>Mindestbesetzung</span><input id="locationMinStaff" type="number" min="0" max="99" step="1" value="0" /></label>
                   </div>
                   <label class="switch-row"><span><strong>Aktiv</strong><small>In Navigation und Planung anzeigen.</small></span><input id="locationActive" type="checkbox" checked /></label>
+                  <label class="switch-row planning-saturday-location"><span><strong>Samstagszuschlag in der Planung</strong><small>+50 % ab 13 Uhr · Worst Case für alle Mitarbeiter, unabhängig von der Pausenlage. Nur Planung.</small><small id="locationSaturdayPlanningHint">Standortweite Planung · Änderungen werden sofort gespeichert.</small></span><input type="checkbox" data-saturday-planning="editor" disabled /></label>
                   <label class="switch-row"><span><strong>Zeiterfassung aktiv</strong><small>Erlaubt Teammitgliedern dieses Standorts Kommen, Pause, Weiter und Gehen zu buchen.</small></span><input id="locationTimeTrackingEnabled" type="checkbox" /></label>
                   <div class="time-tracking-location-settings">
                     <label class="field"><span>Buchungsort</span><select id="locationTimeTrackingAccessMode"><option value="anywhere">Überall erlauben</option><option value="trusted_network">Nur im Firmennetz</option></select><small>Bei „Firmennetz“ sind lokale Netze sowie optional eingetragene IP-Bereiche zulässig.</small></label>
@@ -2551,6 +2564,11 @@
           </section>
 
           <section id="scheduleSettings" class="settings-section settings-two-column schedule-settings-section" role="tabpanel" aria-labelledby="settingsScheduleTab">
+            <div class="settings-card" id="planningSaturdaySettingsCard">
+              <div class="card-heading"><div class="card-icon">Sa</div><div><h2>Samstagszuschlag in der Planung</h2><p>Standort: <strong data-saturday-location-label="settings"></strong></p></div></div>
+              <label class="switch-row"><span><strong>Worst Case: +50 % ab 13 Uhr</strong><small>Für alle Mitarbeiter dieses Standorts. Der Zuschlag verwendet die geplante Zeit ab 13 Uhr unabhängig von Pausen. Die eingeteilte Nettozeit bleibt gleich.</small></span><input type="checkbox" data-saturday-planning="settings" disabled /></label>
+              <p class="settings-note">Wird sofort gespeichert und mit Dienstplanung und Standortverwaltung synchronisiert. Aus: kein Samstagszuschlag in der Planung. Die tatsächliche Zeiterfassung bleibt unverändert.</p>
+            </div>
             <div class="settings-card" id="crossLocationScheduleSettingsCard">
               <div class="card-heading"><div class="card-icon">Fil</div><div><h2>Standortübergreifende Dienstplanung</h2><p>Steuert die datensparsame Fremdansicht und wer Einsatzanfragen für die eigene Filiale stellen oder prüfen darf.</p></div></div>
               <label class="switch-row"><span><strong>Fremde Dienstpläne lesend anzeigen</strong><small>Zeigt nur Planzeiten und neutrale Nichtverfügbarkeit; Wochenstunden, Zeitkonten und Regelprüfungen bleiben ausgeblendet.</small></span><input id="crossLocationScheduleEnabled" type="checkbox" /></label>
@@ -4640,14 +4658,21 @@
     <script src="/schedule-duty.js"></script>
     <script src="/vocational-school.js"></script>
   <script src="/planning-protection.js"></script>
+    <script src="/planning-saturday-settings.js"></script>
   <script src="/retail-kv.js"></script>
     <script src="/rights-settings-table.js"></script>
     <script src="/permission-defaults.js"></script>
     <script src="/sales-report-controls.js"></script>
     <script src="/sales-dashboard-metrics.js"></script>
+    <script src="/sales-report-library-options.js"></script>
+    <script src="/sales-report-library.js"></script>
+    <script src="/sales-graphic-designs.js"></script>
+    <script src="/sales-chart-options.js"></script>
+    <script src="/sales-chart-design.js"></script>
     <script src="/sales-report-jobs.js"></script>
     <script src="/sales-article-image.js"></script>
     <script src="/sales-article-orders.js"></script>
+    <script src="/sales-article-sheet-options.js"></script>
     <script src="/sales-article-tools.js"></script>
     <script src="/sales-price-label-fonts.js"></script>
     <script src="/sales-price-label-layout.js"></script>

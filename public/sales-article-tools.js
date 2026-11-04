@@ -114,7 +114,7 @@
   on(noteFilter,'submit',e=>{e.preventDefault();renderNotes();});
   on(notesPanel.querySelector('.article-note-add'),'submit',async e=>{e.preventDefault();if(notesBusy||!localNotes)return;notesBusy=true;const form=e.target,text=form.elements.text.value;if(!mutation||mutation.text!==text)mutation={id:crypto.randomUUID(),text};form.querySelector('button').disabled=true;try{const value=await request('/api/sales/articles/local-notes',{articleNumber:article.articleNumber,text,expectedRevision:localNotes.revision,mutationId:mutation.id});if(!authorized())return;localNotes=value;mutation=null;form.reset();renderNotes();noteStatus.textContent='Eigene GP-Notiz gespeichert.';}catch(error){if(authorized()){noteStatus.textContent=error.message;if(error.status===409)await loadNotes();}}finally{notesBusy=false;if(authorized())form.querySelector('button').disabled=false;}});
   renderNotes();
-  let pdf=null,pdfPreparing=null,pdfConfig=null,pdfWrites=Promise.resolve();
+  let pdf=null,pdfPreparing=null,pdfConfig=null,sheetConfig=null,pdfWrites=Promise.resolve();
   async function openPdf(){
    if(!authorized()||!active())return;
    root.querySelector('[data-article-print-status]')?.remove();
@@ -124,9 +124,10 @@
     try{
      const ctx=await ensureContext();if(!authorized())return;
      if(!pdfConfig)pdfConfig=await request('/api/sales/articles/tools/pdf-options');
+     if(!sheetConfig && root.ownerDocument.defaultView.SalesArticleSheetOptions){try{sheetConfig=await request('/api/sales/articles/tools/sheet-options');}catch(error){if(error.status===403)throw error;sheetConfig=root.ownerDocument.defaultView.SalesArticleSheetOptions.uiDefaults();}}
      if(!authorized()||!active())return;
      if(!pdf)pdf=pdfWindow(ctx);
-     pdf.open({payload:{ctx,config:{...pdfConfig}},values:{title:'Artikel '+article.articleNumber,filename:'Artikel-'+article.articleNumber,orientation:'landscape'}});
+     pdf.open({payload:{ctx,config:{...pdfConfig}},values:{title:'Artikel '+article.articleNumber,filename:'Artikel-'+article.articleNumber,orientation:sheetConfig?.orientation||'landscape'}});
     }catch(error){if(authorized()&&active()){const notice=root.ownerDocument.createElement('p');notice.dataset.articlePrintStatus='';notice.className='sales-article-detail-message';notice.setAttribute('role','alert');notice.textContent='Druckfenster konnte nicht geöffnet werden: '+error.message;root.prepend(notice);}}
     finally{pdfPreparing=null;}
    })();return pdfPreparing;
@@ -134,12 +135,15 @@
   function pdfWindow(ctx){
    const doc=root.ownerDocument,win=doc.defaultView,exportModel=win.GrabenplanerTradeExport;
    return win.GpPrintWindow.mount({document:doc,id:'article-sheet-pdf',title:'Artikelstammblatt als PDF',key:accessKey,canUse:authorized,active,windowPreferences,scale,trigger,
+    geometry:{x:280,y:90,width:1160,height:850,minimized:false},
+    onState(state){if(win.SalesArticleSheetOptions){const status=doc.querySelector('[data-gp-print-id=article-sheet-pdf] [data-gp-print-save-status]');if(status)status.textContent=state.ready?'Inhalt und Layout · für dein Konto gespeichert':state.error?'Inhalt und Layout · noch nicht gespeichert':'Inhalt und Layout · Vorschau wird aktualisiert';}},
     defaults:{title:'Artikel '+article.articleNumber,filename:'Artikel-'+article.articleNumber,orientation:'landscape'},
     renderOptions(host,{payload}){
      host.innerHTML='<fieldset class="article-sheet-sections"><legend>Bereiche im Stammblatt</legend>'+Object.entries(sectionLabels).map(([id,label])=>'<label><input type="checkbox" name="section" value="'+id+'"'+(['master','prices','notes'].includes(id)?' checked':'')+((id==='sales'&&!ctx.sales||id==='movements'&&!ctx.movements)?' disabled':'')+'>'+label+'</label>').join('')+'</fieldset><label><input type="checkbox" name="image"'+(article.image?.present?' checked':' disabled')+'>Artikelfoto einfügen'+(article.image?.present?'':' (kein Foto vorhanden)')+'</label><details><summary>Dateinamen erweitern</summary><div class="article-sheet-naming"><label>Zeitblock<select name="stamp"><option value="date-time">JJMMTT-HHMM</option><option value="date">JJMMTT</option><option value="date-suffix">JJMMTT-xxx</option><option value="none">Ohne Zeitblock</option></select></label><label>Anordnung<select name="position"><option value="before">Vorne</option><option value="after">Hinten</option></select></label><label>Ergänzung (xxx)<input name="suffix" maxlength="40"></label><label>Trennzeichen<select name="separator"><option value="-">Bindestrich</option><option value="_">Unterstrich</option><option value=" ">Leerzeichen</option></select></label></div></details><p class="gp-print-hint">Historien übernehmen die zuletzt gestarteten Filter. Ohne eigene Auswahl: 90 Tage für Umlagerungen, ein Jahr für Verkäufe. Höchstens die neuesten 1.000 Einträge je Historie; begrenzte Ergebnisse werden im PDF gekennzeichnet.</p>';
      for(const [name,value]of Object.entries(payload.config)){const input=host.querySelector('[name="'+name+'"]');if(input)input.value=value;}
+     if(win.SalesArticleSheetOptions)return win.SalesArticleSheetOptions.decorate(host,sheetConfig||{},article);
     },
-    readOptions(host){return {sections:[...host.querySelectorAll('[name=section]:checked:not(:disabled)')].map(input=>input.value),includeImage:host.querySelector('[name=image]').checked,...Object.fromEntries(['stamp','position','separator','suffix'].map(name=>[name,host.querySelector('[name="'+name+'"]').value]))};},
+    readOptions(host){return {...(win.SalesArticleSheetOptions?win.SalesArticleSheetOptions.read(host):{sections:[...host.querySelectorAll('[name=section]:checked:not(:disabled)')].map(input=>input.value),includeImage:host.querySelector('[name=image]').checked}),...Object.fromEntries(['stamp','position','separator','suffix'].map(name=>[name,host.querySelector('[name="'+name+'"]').value]))};},
     validateOptions:options=>options.sections.length?'':'Bitte mindestens einen Bereich auswählen.',
     async createPdf({values,options,signal}){
      const config=Object.fromEntries(['stamp','position','separator','suffix'].map(name=>[name,options[name]]));
@@ -149,9 +153,10 @@
      if(!response.ok)throw Error('Das Stammblatt konnte nicht erstellt werden.');
      const blob=await response.blob();if(!authorized()||signal.aborted)throw new DOMException('Abgebrochen','AbortError');
      pdfWrites=pdfWrites.catch(()=>{}).then(async()=>{
-      if(!authorized()||signal.aborted||JSON.stringify(config)===JSON.stringify(pdfConfig))return;
-      await request('/api/sales/articles/tools/pdf-options',config);
-      if(authorized()&&!signal.aborted)pdfConfig={...config};
+      if(!authorized()||signal.aborted)return;
+      if(JSON.stringify(config)!==JSON.stringify(pdfConfig)){await request('/api/sales/articles/tools/pdf-options',config);
+      if(authorized()&&!signal.aborted)pdfConfig={...config};}
+      if(win.SalesArticleSheetOptions && authorized()&&!signal.aborted){const next=win.SalesArticleSheetOptions.normalize(Object.fromEntries(win.SalesArticleSheetOptions.fields.map(k=>[k,options[k]])));if(JSON.stringify(next)!==JSON.stringify(sheetConfig)){await request('/api/sales/articles/tools/sheet-options',next);if(authorized()&&!signal.aborted)sheetConfig=next;}}
      });
      await pdfWrites;
      if(!authorized()||signal.aborted)throw new DOMException('Abgebrochen','AbortError');

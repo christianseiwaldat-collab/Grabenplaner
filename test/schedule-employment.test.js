@@ -255,7 +255,7 @@ test('actual schedule read model excludes pre-entry work, credits and actual-day
     saturdayCreditService: { cutover: async () => null },
     absenceManagementRepository: { pendingTimeOffForRange: async () => [] },
     sicknessCreditsForEmployeesInRange: async () => [{ employee_number: '434', date: '2026-10-12', minutes: 30 }, { employee_number: '434', date: '2026-10-15', minutes: 30 }],
-    shiftMetrics: async () => ({ counted_minutes: 60, raw_minutes: 60, break_minutes: 0, bonus_minutes: 0 }),
+    shiftMetrics: async (shift, settings, options) => { assert.equal(options?.planning, true); return { counted_minutes: 60, raw_minutes: 60, break_minutes: 0, bonus_minutes: 0 }; },
     optionMinutesPerDay: () => 0, optionIsAllDay: () => true, isTeamWideMeetingOption: () => false,
     creditedOptionDatesInRange: () => [], claimCreditedOptionDaysInRange: () => 0, claimEmployeeDate: () => true,
     publicHolidaysForRange: () => [{ date: '2026-10-12' }, { date: '2026-10-16' }], hasNonVacationCreditOnDate: () => false, holidayCreditMinutes: () => 60,

@@ -8,7 +8,21 @@ window.createSalesReportJobUi = function ({ api, rawApi, visible, accessKey, can
   const el = id => document.getElementById(id), form = el('salesAnalyticsRequestForm'), hint = el('salesAnalyticsRequestHint'), list = el('salesReportJobList'), quality = el('salesReportDataQuality');
   let generation = 0, context = null, loading = false, busy = false, rows = [], comparisonCustom = false;
   let mode = 'report', templates = [], templatesLoaded = false, activeTemplate = null;
-  let pdfWindow = null, pdfSelection = null;
+  let pdfWindow = null, pdfSelection = null, libraryLoaded = false, chartDesigner = null, chartDesign;
+  const designButton = document.createElement('button'); designButton.type = 'button'; designButton.className = 'secondary-button'; designButton.textContent = 'Diagramme gestalten …';
+  const designHost = document.createElement('div'); designHost.className = 'sales-chart-design-launch'; designHost.append(designButton);
+  const designNote = document.createElement('small'); designNote.textContent = 'Farben, Werte, Ecken und direkte Vergleiche'; designHost.append(designNote);
+  el('salesReportJobChartType').closest('fieldset').append(designHost);
+  designButton.addEventListener('click', () => {
+    if (!context || !window.SalesChartDesign) return;
+    chartDesigner ||= window.SalesChartDesign.mount({ document, windowPreferences, scale, key: accessKey || (() => 'report'),
+      canUse: () => !!context?.projection.read && visible() && (canUse?.() ?? true),
+      onApply: value => { chartDesign = value; if(value.showComparison && ['auto','shares'].includes(el('salesReportJobChartType').value))el('salesReportJobChartType').value='bars'; designNote.textContent = 'Eigene Gestaltung übernommen · wird mit der Vorlage gespeichert'; } });
+    chartDesigner.open(chartDesign, designButton, context.metrics.filter(m => selected('salesReportJobMetrics').includes(m.id)));
+  });
+  const explorer = window.createSalesReportLibraryUi({ api, reportActions, reportSummary, onError: showError,
+    editTemplate: (id, title) => templateWork(async g => { const item = await api('/api/sales-report-templates/' + id); if (g !== generation) return; activeTemplate = item; loadSettings({ ...item, title }); }),
+    deleteTemplate: choice => templateWork(async g => { await api('/api/sales-report-templates/' + choice.id, { method: 'DELETE', body: JSON.stringify({ revision: choice.revision }) }); if (g !== generation) return; templates = templates.filter(t => t.id !== choice.id); if (activeTemplate?.id === choice.id) activeTemplate = null; renderTemplates(); }) });
   const canPrint = () => Boolean(canUse?.() && context?.projection.read && pdfSelection
     && pdfSelection.generation === generation && rows.some(row => row.id === pdfSelection.id && row.status === 'completed' && row.format === 'pdf'));
   function syncPrint() {
@@ -35,7 +49,10 @@ window.createSalesReportJobUi = function ({ api, rawApi, visible, accessKey, can
     IMPORT_REPORT_METADATA_LIMIT: 'Die Auswahl enthält zu viele Stammdatenbezeichnungen. Bitte die technische Betreuung verständigen; die importierten Verkaufsdaten bleiben erhalten.',
     IMPORT_REPORT_SELECTION: 'Bitte Kennzahlen, Filialen und Aufschlüsselung prüfen. Höchstens je 10 WGR, Sortimentsgruppen und Hersteller auswählen.', IMPORT_REPORT_GROUP_LIMIT: 'Zu viele Gruppen. Bitte nach WGR, Sortiment, Hersteller, Filiale oder MA eingrenzen. Grafiken unterstützen höchstens 50 Gruppen.',
     IMPORT_REPORT_TEMPLATE_LIMIT: 'Höchstens 50 persönliche Vorlagen. Bitte eine bestehende Vorlage bearbeiten oder entfernen.',
-    IMPORT_REVISION_CONFLICT: 'Diese Vorlage wurde inzwischen geändert. Bitte erneut laden, bevor du sie überschreibst.',
+    IMPORT_REVISION_CONFLICT: 'Die Ablage oder Vorlage wurde inzwischen geändert. Bitte aktualisieren und erneut versuchen.',
+    IMPORT_REPORT_FOLDER_NOT_EMPTY: 'Dieser Ordner enthält noch Dateien oder Unterordner. Bitte zuerst verschieben oder löschen.',
+    IMPORT_REPORT_FOLDER_DUPLICATE: 'Hier gibt es bereits einen Ordner mit diesem Namen.',
+    IMPORT_REPORT_FOLDER_LIMIT: 'Höchstens 100 Ordner. Bitte vorhandene Ordner verwenden oder leere Ordner löschen.',
     IMPORT_REPORT_PDF_LIMIT: 'Der Bericht ist zu umfangreich. Bitte weniger Kennzahlen oder Gruppen auswählen.',
     IMPORT_REPORT_DATA_LIMIT: 'Der Bericht umfasst zu viele Daten. Bitte den Zeitraum oder die Auswahl eingrenzen.',
     IMPORT_HISTORY_ANALYSIS_EXPIRED: 'Der Zwischenstand ist abgelaufen. Bitte den Bericht erneut beauftragen.',
@@ -76,12 +93,13 @@ window.createSalesReportJobUi = function ({ api, rawApi, visible, accessKey, can
     }
     el('salesReportComparisonMode').textContent = comparisonCustom ? 'Vergleichszeitraum individuell gewählt' : 'Automatisch ein Jahr zuvor';
   }
-  function chartOptions() {
+  function chartOptions(chosen) {
     if (!context) return;
-    const select = el('salesReportJobChartMetric'), previous = select.value;
-    select.replaceChildren(...context.metrics.filter(m => selected('salesReportJobMetrics').includes(m.id)).map(m => new Option(m.label, m.id)));
-    if ([...select.options].some(o => o.value === previous)) select.value = previous;
-    select.disabled = el('salesReportJobChartType').value === 'none';
+    const previous = chosen || selected('salesReportJobChartMetric');
+    const options = context.metrics.filter(m => selected('salesReportJobMetrics').includes(m.id));
+    const valid = previous.filter(id => options.some(m => m.id === id));
+    multi('salesReportJobChartMetric', options, valid.length ? valid : options.slice(0, 1).map(m => m.id), { searchable: false, all: true });
+    for (const input of el('salesReportJobChartMetric').querySelectorAll('input,button')) input.disabled = el('salesReportJobChartType').value === 'none';
   }
   function configure(next) {
     context = next;
@@ -92,7 +110,7 @@ window.createSalesReportJobUi = function ({ api, rawApi, visible, accessKey, can
     selectors.set('salesReportJobManufacturers', controls.transferPicker(el('salesReportJobManufacturers'), next.manufacturers));
     multi('salesReportJobSellers', next.sellers, [], { all: true, emptyAll: true }); el('salesReportSellerField').hidden = !next.projection.sellers;
     multi('salesReportJobMetrics', next.metrics, ['netRevenue', 'quantity', 'receiptCount'], { searchable: false });
-    el('salesGraphicMetric').replaceChildren(...next.metrics.map(m => new Option(m.label, m.id)));
+    multi('salesGraphicMetric', next.metrics, ['netRevenue'], { searchable: false, all: true });
     el('salesGraphicGroup').replaceChildren(new Option('Gesamte Auswahl gemeinsam', ''), ...next.dimensions.map(d => new Option('Eine Grafik je ' + d.label, d.id)));
     for (const [id, initial, optional] of [['salesReportJobGroupPrimary', 'productGroup', false], ['salesReportJobGroupSecondary', 'manufacturer', true], ['salesReportJobGroupThird', '', true]]) {
       el(id).replaceChildren(...(optional ? [new Option('Keine weitere Aufschlüsselung', '')] : []), ...next.dimensions.map(d => new Option(d.label, d.id))); el(id).value = initial;
@@ -108,66 +126,64 @@ window.createSalesReportJobUi = function ({ api, rawApi, visible, accessKey, can
     hint.textContent = `${next.source.label}. Der Server erstellt den PDF-Bericht im Hintergrund. Bis zu drei offene Aufträge.`;
     if (quality) quality.innerHTML = DataQuality.render({ title: 'Datengrundlage · Verkaufsanalysen', source: DataQuality.sourceInfo(next.sourceQuality), calendarUnknown: true, note: 'Der Bericht verwendet geprüfte importierte Kassenpositionen. Offene Prüfungen und fehlender Rohertrag werden im Ergebnis ausgewiesen.' });
   }
-  function render() {
-    const query = el('salesReportJobFilter').value.toLocaleLowerCase('de-AT'); list.replaceChildren();
-    for (const row of rows.filter(r => r.title.toLocaleLowerCase('de-AT').includes(query))) {
-      const card = node('article', '', 'sales-report-job');
-      card.append(node('h3', row.title), node('p', `${labels[row.status]} · ${row.format === 'pdf' ? row.query.chartType === 'timeline' ? 'Grafik-PDF' : 'PDF' : 'HTML (früherer Bericht)'} · ${row.processed} Positionen verarbeitet${row.phase === 'comparison' ? ' · Vergleichszeitraum' : ''}${row.restarts ? ` · ${row.restarts} Wiederanläufe` : ''}${row.status === 'completed' && Number.isFinite(Number(row.durationSeconds)) ? ` · Dauer: ${formatSalesReportDuration(row.durationSeconds)}` : ''}`),
-        node('p', `${row.query.dateFrom} – ${row.query.dateTo}${row.query.comparisonFrom && row.query.chartType !== 'timeline' ? ` · Vergleich ${row.query.comparisonFrom} – ${row.query.comparisonTo}` : ''} · ${new Date(row.created).toLocaleString('de-AT')}`));
-      if (row.error) card.append(node('p', errors[row.error] || 'Der Auftrag konnte nicht abgeschlossen werden. Bitte erneut beauftragen.'));
-      const actions = node('div', '', 'sales-report-job-actions');
-      const button = (text, work) => {
-        const b = node('button', text, 'secondary-button'); b.type = 'button';
-        b.addEventListener('click', async () => { b.disabled = true; const g = generation; try { await work(); if (g === generation) await refresh(); } catch (e) { if (g === generation) showError(e); } finally { b.disabled = false; } }); actions.append(b);
-      };
-      if (row.status === 'completed') { const a = node('a', row.format === 'pdf' ? 'PDF herunterladen' : 'Früheren Bericht herunterladen', 'secondary-button'); a.href = `/api/sales-report-jobs/${encodeURIComponent(row.id)}/download`;
-        if (row.format === 'pdf') a.addEventListener('click', event => { event.preventDefault(); try { openPdf(row, a); } catch (error) { showError(error); } });
-        actions.append(a); }
-      if (row.query?.sourceId === 'compact-cash') button('Einstellungen laden', async () => { activeTemplate = null; loadSettings({ title: row.title, query: row.query }); });
-      if (['queued', 'running'].includes(row.status)) button('Abbrechen', () => api(`/api/sales-report-jobs/${row.id}/cancel`, { method: 'POST', body: '{}' }));
-      else {
-        if (row.status !== 'completed') button('Erneut beauftragen', () => api('/api/sales-report-jobs', { method: 'POST', body: JSON.stringify({ title: row.title, query: row.query }) }));
-        button('Entfernen', () => api(`/api/sales-report-jobs/${row.id}`, { method: 'DELETE' }));
-      }
-      card.append(actions); list.append(card);
+  function render() { explorer.update(rows, templates); syncPrint(); }
+  function reportSummary(row) {
+    return `${labels[row.status]} · ${row.processed} Positionen verarbeitet${row.status === 'completed' && Number.isFinite(Number(row.durationSeconds)) ? ` · Dauer: ${formatSalesReportDuration(row.durationSeconds)}` : ''}`;
+  }
+  function reportActions(row) {
+    const actions = [];
+    const work = action => async target => { const g = generation; try { await action(target); if (g === generation) await refresh(); } catch (error) { if (g === generation) showError(error); } };
+    if (row.status === 'completed') actions.push({ label: row.format === 'pdf' ? 'PDF öffnen' : 'Bericht herunterladen', primary: true, run: target => {
+      if (row.format === 'pdf') openPdf(row, target);
+      else { const a = document.createElement('a'); a.href = '/api/sales-report-jobs/' + encodeURIComponent(row.id) + '/download'; a.click(); }
+    } });
+    if (row.status === 'completed' && row.format === 'pdf') actions.push({ label: 'PDF herunterladen', run: () => { const a = document.createElement('a'); a.href = '/api/sales-report-jobs/' + encodeURIComponent(row.id) + '/download'; a.download = ''; a.click(); } });
+    if (row.query?.sourceId === 'compact-cash') actions.push({ label: 'Als Vorlage für neuen Bericht verwenden', run: () => { activeTemplate = null; loadSettings({ title: row.title, query: row.query }); } });
+    if (['queued', 'running'].includes(row.status)) actions.push({ label: 'Abbrechen', run: work(() => api('/api/sales-report-jobs/' + row.id + '/cancel', { method: 'POST', body: '{}' })) });
+    else {
+      if (row.status !== 'completed') actions.push({ label: 'Erneut beauftragen', run: work(() => api('/api/sales-report-jobs', { method: 'POST', body: JSON.stringify({ title: row.title, query: row.query }) })) });
+      actions.push({ label: 'Entfernen', run: work(() => api('/api/sales-report-jobs/' + row.id, { method: 'DELETE' })) });
     }
-    if (!list.children.length) list.append(node('p', rows.length ? 'Keine passenden Berichte.' : 'Noch keine Berichte beauftragt.'));
-    syncPrint();
+    return actions;
   }
   async function refresh() {
     if (!visible() || loading) return;
     const g = generation; loading = true;
     try {
       if (!context) { const next = await api('/api/sales-report-jobs/context'); if (g !== generation) return; configure(next); }
+      if (!libraryLoaded) { const saved = await api('/api/sales-report-library'); if (g !== generation) return; explorer.update(rows, templates, saved); libraryLoaded = true; }
       if (!templatesLoaded) { const saved = await api('/api/sales-report-templates'); if (g !== generation) return; templates = saved; templatesLoaded = true; renderTemplates(); }
       const next = await api('/api/sales-report-jobs'); if (g !== generation) return; el('salesReportJobError').hidden = true;
       if (JSON.stringify(rows) !== JSON.stringify(next) || !list.children.length) { rows = next; render(); }
-    } catch (error) { if (g === generation) { if (error.code === 'IMPORT_FORBIDDEN') reset(); showError(error); context = null; rows = []; list.replaceChildren(); quality?.replaceChildren(); el('salesReportJobSubmit').disabled = true; syncPrint(); } }
+    } catch (error) { if (g === generation) { if (error.code === 'IMPORT_FORBIDDEN') reset(); showError(error); context = null; rows = []; templates = []; libraryLoaded = false; templatesLoaded = false; explorer.reset(); list.replaceChildren(); quality?.replaceChildren(); el('salesReportJobSubmit').disabled = true; syncPrint(); } }
     finally { if (g === generation) loading = false; }
   }
   form.addEventListener('submit', async event => {
     event.preventDefault(); if (busy || !context) return;
-    if (!selected('salesReportJobLocations').length || mode === 'report' && !selected('salesReportJobMetrics').length) { showError({ message: 'Bitte mindestens eine Filiale und eine Kennzahl auswählen.' }); return; }
+    if (!selected('salesReportJobLocations').length || !selected(mode === 'graphic' ? 'salesGraphicMetric' : 'salesReportJobMetrics').length) { showError({ message: 'Bitte mindestens eine Filiale und eine Kennzahl auswählen.' }); return; }
     const g = generation; busy = true; el('salesReportJobSubmit').disabled = true;
     try {
-      await api('/api/sales-report-jobs', { method: 'POST', body: JSON.stringify({ title: el('salesAnalyticsRequestQuery').value.trim() || 'Verkaufsanalyse', query: collectQuery() }) });
-      if (g === generation) { hint.textContent = 'PDF-Auftrag angenommen. Den Fortschritt und fertigen Download findest du unter „Berichte“.'; await refresh(); }
+      const created = await api('/api/sales-report-jobs', { method: 'POST', body: JSON.stringify({ title: el('salesAnalyticsRequestQuery').value.trim() || 'Verkaufsanalyse', query: collectQuery() }) });
+      if (g === generation) { await explorer.place(created, 'report'); hint.textContent = 'PDF-Auftrag angenommen. Den Fortschritt und fertigen Download findest du unter „Berichte“.'; await refresh(); }
     } catch (error) { if (g === generation) showError(error); }
     finally { if (g === generation) { busy = false; el('salesReportJobSubmit').disabled = !context?.projection.read; templateButtons(); } }
   });
   function collectQuery() {
-    const graphic = mode === 'graphic';
+    const graphic = mode === 'graphic', chartMetrics = selected(graphic ? 'salesGraphicMetric' : 'salesReportJobChartMetric');
+    if (!chartMetrics.length && (graphic || el('salesReportJobChartType').value !== 'none')) throw { message: 'Bitte mindestens eine Kennzahl für die Diagramme auswählen.' };
     return { reportVersion: 4, sourceId: 'compact-cash', dateFrom: el('salesReportJobFrom').value, dateTo: el('salesReportJobTo').value,
       comparisonFrom: graphic ? controls.previousYear(el('salesReportJobFrom').value) : el('salesReportJobComparisonFrom').value,
       comparisonTo: graphic ? controls.previousYear(el('salesReportJobTo').value) : el('salesReportJobComparisonTo').value,
       locationIds: selected('salesReportJobLocations'), productGroupIds: selected('salesReportJobProductGroups'), merchandiseGroupIds: selected('salesReportJobMerchandiseGroups'),
       manufacturerIds: selected('salesReportJobManufacturers'), sellerIds: context.projection.sellers ? [...new Set([...selected('salesReportJobSellers'), ...extras('salesReportJobSellerExtra')])] : [],
-      metrics: graphic ? [el('salesGraphicMetric').value] : selected('salesReportJobMetrics'),
+      metrics: graphic ? chartMetrics : selected('salesReportJobMetrics'),
       groupBy: graphic ? [el('salesGraphicGroup').value].filter(Boolean) : [...new Set(['salesReportJobGroupPrimary', 'salesReportJobGroupSecondary', 'salesReportJobGroupThird'].map(id => el(id).value).filter(Boolean))],
       orientation: el(graphic ? 'salesGraphicOrientation' : 'salesReportJobOrientation').value,
-      chartType: graphic ? 'timeline' : el('salesReportJobChartType').value, chartMetric: el(graphic ? 'salesGraphicMetric' : 'salesReportJobChartMetric').value,
+      chartType: graphic ? 'timeline' : el('salesReportJobChartType').value, chartMetric: chartMetrics[0] || selected('salesReportJobMetrics')[0],
+      chartMetrics: chartMetrics.length ? chartMetrics : [selected('salesReportJobMetrics')[0]],
       changes: graphic ? [] : [...(el('salesReportJobAbsolute').checked ? ['absolute'] : []), ...(el('salesReportJobPercent').checked ? ['percent'] : [])],
-      ...(graphic ? { timeGrain: el('salesGraphicGrain').value } : {}) };
+      ...(!graphic && chartDesign ? { chartDesign: { ...chartDesign, annotations: chartDesign.annotations.filter(id => selected('salesReportJobMetrics').includes(id)) } } : {}),
+      ...(graphic ? { timeGrain: el('salesGraphicGrain').value, chartStyle: el('salesGraphicStyle').value } : {}) };
   }
   function setMode(next) {
     mode = next === 'graphic' ? 'graphic' : 'report'; const graphic = mode === 'graphic';
@@ -180,6 +196,8 @@ window.createSalesReportJobUi = function ({ api, rawApi, visible, accessKey, can
   function loadSettings(item) {
     if (!context) return;
     const q = item.query, graphic = q.chartType === 'timeline';
+    chartDesign = q.chartDesign ? window.SalesChartOptions.normalize(q.chartDesign) : undefined;
+    designNote.textContent = chartDesign ? 'Eigene Gestaltung aus der Vorlage geladen' : 'Farben, Werte, Ecken und direkte Vergleiche';
     setMode(graphic ? 'graphic' : 'report'); navigate(graphic ? 'graphics' : 'create');
     el('salesAnalyticsRequestQuery').value = item.title;
     for (const [id, value] of [['salesReportJobFrom', q.dateFrom], ['salesReportJobTo', q.dateTo], ['salesReportJobComparisonFrom', q.comparisonFrom || controls.previousYear(q.dateFrom)], ['salesReportJobComparisonTo', q.comparisonTo || controls.previousYear(q.dateTo)]]) el(id).value = value;
@@ -187,11 +205,11 @@ window.createSalesReportJobUi = function ({ api, rawApi, visible, accessKey, can
     for (const [id, choices, chosen] of [['salesReportJobMerchandiseGroups', context.merchandiseGroups || [], q.merchandiseGroupIds || []], ['salesReportJobProductGroups', context.productGroups, q.productGroupIds || []], ['salesReportJobManufacturers', context.manufacturers, q.manufacturerIds || []]]) selectors.set(id, controls.transferPicker(el(id), choices, chosen));
     multi('salesReportJobSellers', context.sellers, q.sellerIds || [], { all: true, emptyAll: true });
     el('salesReportJobSellerExtra').value = (q.sellerIds || []).filter(id => !context.sellers.some(s => s.id === id)).join(', ');
-    if (graphic) { el('salesGraphicMetric').value = q.chartMetric; el('salesGraphicGrain').value = q.timeGrain || 'month'; el('salesGraphicGroup').value = q.groupBy?.[0] || ''; el('salesGraphicOrientation').value = q.orientation || 'landscape'; }
+    if (graphic) { multi('salesGraphicMetric', context.metrics, q.chartMetrics || [q.chartMetric], { searchable: false, all: true }); el('salesGraphicStyle').value = q.chartStyle || 'classic'; graphicPreview(); el('salesGraphicGrain').value = q.timeGrain || 'month'; el('salesGraphicGroup').value = q.groupBy?.[0] || ''; el('salesGraphicOrientation').value = q.orientation || 'landscape'; }
     else {
       multi('salesReportJobMetrics', context.metrics, q.metrics, { searchable: false });
       ['salesReportJobGroupPrimary', 'salesReportJobGroupSecondary', 'salesReportJobGroupThird'].forEach((id, index) => { el(id).value = (q.groupBy || ['productGroup', 'manufacturer'])[index] || ''; });
-      el('salesReportJobOrientation').value = q.orientation || 'portrait'; el('salesReportJobChartType').value = q.chartType || 'auto'; chartOptions(); el('salesReportJobChartMetric').value = q.chartMetric;
+      el('salesReportJobOrientation').value = q.orientation || 'portrait'; el('salesReportJobChartType').value = q.chartType || 'auto'; chartOptions(q.chartMetrics || [q.chartMetric]);
       el('salesReportJobAbsolute').checked = (q.changes || []).includes('absolute'); el('salesReportJobPercent').checked = (q.changes || []).includes('percent');
     }
     comparisonCustom = item.presentation?.comparisonCustom ?? true;
@@ -200,19 +218,12 @@ window.createSalesReportJobUi = function ({ api, rawApi, visible, accessKey, can
     templateButtons(); hint.textContent = 'Einstellungen geladen. Du kannst alle Felder anpassen und anschließend eine neue PDF beauftragen.';
   }
   function templateButtons() {
-    const choice = templates.find(t => t.id === el('salesReportTemplateSelect').value);
-    el('salesReportTemplateTitle').textContent = choice?.title || '';
-    el('salesReportTemplateLoad').disabled = busy || !choice || !context;
-    el('salesReportTemplateDelete').disabled = busy || !choice || !context;
+    el('salesReportTemplateTitle').textContent = activeTemplate ? 'Vorlage: ' + activeTemplate.title : 'Gespeicherte Vorlagen findest du unter Berichte.';
     el('salesReportTemplateSave').disabled = busy || !context?.projection.read;
     el('salesReportTemplateSave').textContent = activeTemplate ? 'Vorlage aktualisieren' : 'Als Vorlage speichern';
     el('salesReportTemplateCopy').hidden = !activeTemplate; el('salesReportTemplateCopy').disabled = busy;
   }
-  function renderTemplates() {
-    const select = el('salesReportTemplateSelect'), previous = activeTemplate?.id || select.value;
-    select.replaceChildren(new Option('Vorlage auswählen', ''), ...templates.map(t => new Option(`${t.kind === 'graphic' ? 'Grafik' : 'Bericht'} · ${t.title}`, t.id)));
-    select.value = templates.some(t => t.id === previous) ? previous : ''; templateButtons();
-  }
+  function renderTemplates() { templateButtons(); render(); }
   async function templateWork(work) {
     if (busy || !context) return; const g = generation; busy = true; templateButtons(); el('salesReportJobSubmit').disabled = true;
     try { await work(g); } catch (error) { if (g === generation) showError(error); }
@@ -226,31 +237,22 @@ window.createSalesReportJobUi = function ({ api, rawApi, visible, accessKey, can
       const target = copy ? null : activeTemplate;
       const item = await api('/api/sales-report-templates' + (target ? '/' + target.id : ''), { method: target ? 'PUT' : 'POST', body: JSON.stringify({ title, query: collectQuery(),
         presentation: { periodMode: currentPeriod.mode(), comparisonMode: comparisonPeriod.mode(), comparisonCustom }, ...(target ? { revision: target.revision } : {}) }) });
-      if (g !== generation) return; activeTemplate = item;
+      if (g !== generation) return; activeTemplate = item; await explorer.place(item, 'template');
       const saved = await api('/api/sales-report-templates'); if (g !== generation) return; templates = saved; renderTemplates(); hint.textContent = 'Berichtsvorlage gespeichert. Es wurde noch kein PDF-Auftrag gestartet.';
     });
   }
-  el('salesReportTemplateSelect').addEventListener('change', () => { activeTemplate = null; templateButtons(); });
   el('salesReportTemplateSave').addEventListener('click', () => { void saveTemplate(); });
   el('salesReportTemplateCopy').addEventListener('click', () => { void saveTemplate(true); });
-  el('salesReportTemplateLoad').addEventListener('click', () => { void templateWork(async g => {
-    const item = await api('/api/sales-report-templates/' + el('salesReportTemplateSelect').value);
-    if (g !== generation) return; activeTemplate = item; loadSettings(item);
-  }); });
-  el('salesReportTemplateDelete').addEventListener('click', () => { void templateWork(async g => {
-    const choice = templates.find(t => t.id === el('salesReportTemplateSelect').value); if (!choice) return;
-    await api('/api/sales-report-templates/' + choice.id, { method: 'DELETE', body: JSON.stringify({ revision: choice.revision }) });
-    if (g !== generation) return; templates = templates.filter(t => t.id !== choice.id); if (activeTemplate?.id === choice.id) activeTemplate = null;
-    renderTemplates(); hint.textContent = 'Vorlage gelöscht. Die aktuellen Eingaben und vorhandene PDFs bleiben erhalten.';
-  }); });
+  function graphicPreview() { window.renderSalesGraphicPreview?.(el('salesGraphicStyle').value); }
+  el('salesGraphicStyle').addEventListener('change', graphicPreview); graphicPreview();
   const today = () => context?.today || new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Vienna' }).format(new Date());
   const currentPeriod = controls.periodPicker(el('salesReportJobPeriod'), { from: el('salesReportJobFrom'), to: el('salesReportJobTo'), today, onChange: () => comparisonDates() });
   const comparisonPeriod = controls.periodPicker(el('salesReportJobComparisonPeriod'), { from: el('salesReportJobComparisonFrom'), to: el('salesReportJobComparisonTo'), today, onChange: () => { comparisonCustom = true; comparisonDates(); } });
-  el('salesReportJobChartType').addEventListener('change', chartOptions);
-  el('salesReportJobPreviousYear').addEventListener('click', () => comparisonDates(true)); el('salesReportJobFilter').addEventListener('input', render);
-  el('salesReportJobRefresh').addEventListener('click', () => { templatesLoaded = false; void refresh(); });
+  el('salesReportJobChartType').addEventListener('change', () => chartOptions());
+  el('salesReportJobPreviousYear').addEventListener('click', () => comparisonDates(true));
+  el('salesReportJobRefresh').addEventListener('click', () => { templatesLoaded = false; libraryLoaded = false; void refresh(); });
   setInterval(() => { if (visible() && !document.hidden) void refresh(); }, 4000);
-  function reset() { generation++; pdfWindow?.reset(); pdfSelection = null; context = null; loading = false; busy = false; rows = []; comparisonCustom = false; templates = []; templatesLoaded = false; activeTemplate = null; selectors.clear(); list.replaceChildren(); quality?.replaceChildren(); form.reset(); currentPeriod.sync('custom'); comparisonPeriod.sync('custom'); renderTemplates();
+  function reset() { generation++; chartDesigner?.reset(); chartDesign = undefined; explorer.reset(); libraryLoaded = false; pdfWindow?.reset(); pdfSelection = null; context = null; loading = false; busy = false; rows = []; comparisonCustom = false; templates = []; templatesLoaded = false; activeTemplate = null; selectors.clear(); list.replaceChildren(); quality?.replaceChildren(); form.reset(); currentPeriod.sync('custom'); comparisonPeriod.sync('custom'); renderTemplates();
     for (const id of ['salesReportJobLocations', 'salesReportJobProductGroups', 'salesReportJobMerchandiseGroups', 'salesReportJobManufacturers', 'salesReportJobSellers', 'salesReportJobMetrics', 'salesGraphicMetric', 'salesGraphicGroup']) el(id).replaceChildren();
     el('salesReportJobFilter').value = ''; el('salesReportJobSubmit').disabled = true; hint.textContent = ''; el('salesReportJobError').hidden = true; el('salesReportJobError').textContent = ''; }
   return { refresh, reset, setMode, syncPrint };
