@@ -893,6 +893,7 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/branch-sales-api.test.js",
   "test/sales-article-images.test.js",
   "test/sales-report-jobs-routes.test.js",
+  "test/sales-report-library.test.js",
   "scripts/benchmark-cash-assigned-search.js",
   "scripts/benchmark-sales-search.js",
   "test/portal-permission-defaults.test.js",
