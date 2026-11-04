@@ -128,11 +128,11 @@ jobs:
           python scripts/security/prepare_source_core.py --root .
           --qualification "$RUNNER_TEMP/security-source-core-qualification"
           --output "$RUNNER_TEMP/security-results"
-      - name: Run sast gate
-        run: python scripts/security/gates.py sast --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
       - name: Verify response rule with actual route and unsafe controls
         if: success() || failure()
         run: python scripts/security/check_payroll_response.py --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
+      - name: Run sast gate
+        run: python scripts/security/gates.py sast --root . --tools "$RUNNER_TEMP/security-tools" --output "$RUNNER_TEMP/security-results"
       - name: Bind private review contexts to the successful current SAST gate
         run: >-
           node scripts/security/sast-context-evidence.cjs capture --root .

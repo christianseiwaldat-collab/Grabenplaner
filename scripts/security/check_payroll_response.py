@@ -29,9 +29,11 @@ def main():
     assert text.count(start) == text.count(end) == 1
     route = text.split(start, 1)[1].split(end, 1)[0]
     route = start + route
-    headers = '''  response.setHeader("Content-Type", preflight.configuration.format === "xlsx"
-    ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    : "text/csv; charset=utf-8");'''
+    headers = '''  if (preflight.configuration.format === "xlsx") {
+    response.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  } else {
+    response.setHeader("Content-Type", "text/csv; charset=utf-8");
+  }'''
     assert route.count(headers) == route.count("response.send(output);") == 1
     direct_input = route.replace("response.send(output);", "response.send(request.body);")
     unsafe = direct_input.replace(headers, "")
