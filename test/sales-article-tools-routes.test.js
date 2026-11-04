@@ -84,6 +84,17 @@ async function readPdf(response) {
   } finally { await task.destroy(); }
 }
 
+test('Article PDF design defaults omit prices and persist layout/content independently for each account',async t=>{
+ const f=await fixture(t),O=require('../public/sales-article-sheet-options');
+ assert.deepEqual(await(await f.request('tools/sheet-options')).json(),O.uiDefaults());
+ const value=O.normalize({...O.uiDefaults(),sections:['master','prices'],priceParts:['sales'],layout:'editorial',orientation:'landscape',accentColor:'#2463b5'});
+ assert.equal((await f.request('tools/sheet-options',value,{csrf:''})).status,403);
+ assert.deepEqual(await(await f.request('tools/sheet-options',value)).json(),value);
+ assert.deepEqual(await(await f.request('tools/sheet-options')).json(),value);
+ assert.deepEqual(await(await f.request('tools/sheet-options',undefined,{employee:'43'})).json(),O.uiDefaults());
+ assert.equal((await f.request('tools/sheet-options',{...value,showSalesMargin:'yes'})).status,400);
+ assert.equal((await f.request('tools/sheet-options',{...value,unknown:'forged'})).status,400);
+});
 test('Article table preferences require one known column and valid widths, persist per reader and filter revoked columns', async t => {
   const f = await fixture(t), path = 'tools/table-options/article-sales';
   const saved = { columns: ['date', 'personnel', 'actualMargin'], widths: { date: 180, personnel: 210, actualMargin: 220 } };

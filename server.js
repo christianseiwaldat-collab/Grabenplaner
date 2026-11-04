@@ -117,6 +117,7 @@ const { prepareLocalBackupArchive } = require("./lib/backup-archive-workflow");
 const { localBackupArchiveEnabled } = require("./lib/local-backup-environment");
 const { createSaturdayCreditService } = require("./lib/persistence/repositories/saturday-credit");
 const { createOrganizationPersonnelRepository } = require("./lib/persistence/repositories/organization-personnel");
+const planningSaturdayCredit = require("./lib/planning-saturday-credit");
 const { allocateSaturdayMinutes, plannedWorkSegments, projectSaturdayMinutes } = require("./lib/work-rules/saturday-credit-time");
 const {
   DEFAULT_STATUS_PATH: DEFAULT_OFFSITE_STATUS_PATH,
@@ -6562,6 +6563,8 @@ async function daySettingsFromLocation(locationId, repository = null) {
 
 async function settingsForLocation(locationId, repository = null) {
   const settings = getSettings();
+  settings.planning_saturday_worst_case = planningSaturdayCredit.enabled(settings, locationId) ? "1" : "0";
+  for (const key of Object.keys(settings)) if (key.startsWith(planningSaturdayCredit.PREFIX)) delete settings[key];
   const branding = brandingForLocation(locationId, settings);
   settings.branding_company_name = branding.companyName;
   settings.branding_logo_url = branding.logoUrl;
@@ -19781,10 +19784,10 @@ async function plannedShiftBreaks(shift, settings) {
   return { start, end, rawMinutes, breakMinutes, lunchBreakMinutes, dayConfig };
 }
 
-async function shiftMetrics(shift, settings, { legacyOnly = false, saturdayCutover } = {}) {
+async function shiftMetrics(shift, settings, { legacyOnly = false, saturdayCutover, planning = false } = {}) {
   // The dated employee assignment is needed only when evaluating Saturday
   // credit below. Ordinary workdays need the immutable cutover alone.
-  const cutover = !legacyOnly && shift.employee_number && isIsoDate(shift.shift_date)
+  const cutover = !planning && !legacyOnly && shift.employee_number && isIsoDate(shift.shift_date)
     ? (saturdayCutover === undefined ? await saturdayCreditService.cutover() : saturdayCutover)
     : null;
   if (cutover && shift.shift_date < cutover.effectiveDate) {
@@ -19820,6 +19823,25 @@ async function shiftMetrics(shift, settings, { legacyOnly = false, saturdayCutov
     bonus_minutes: bonusMinutes,
     counted_minutes: countedMinutes,
   };
+  if (planning) {
+    const groups = [];
+    if (isSaturday && settings.planning_saturday_worst_case !== '0') {
+      // Include all locations for one rounding over the employee's planned day.
+      // Gross clock intervals deliberately ignore pause placement and employee KV.
+      const peers = shift.employee_number ? (await timeTrackingRepository.listPlannedDayShifts({ employeeNumber: shift.employee_number,
+        date: shift.shift_date, departmentId: null, filterDepartment: 0, locationId: '', filterLocation: 0 }))
+        .filter(peer => shift.id ? String(peer.id) !== String(shift.id)
+          : !(peer.start_time === shift.start_time && peer.end_time === shift.end_time && String(peer.location_id || '') === String(shift.location_id || ''))) : [];
+      for (const peer of peers) {
+        const peerSettings = await settingsForLocation(peer.location_id);
+        if (peerSettings.planning_saturday_worst_case === '0') { groups.push([]); continue; }
+        const from = timeToMinutes(peer.start_time); let to = timeToMinutes(peer.end_time); if (to <= from) to += 1440;
+        groups.push([{ startMinute: from, endMinute: to }]);
+      }
+      groups.push([{ startMinute: start, endMinute: end }]);
+    }
+    return planningSaturdayCredit.planningMetrics(shift, metrics, groups);
+  }
   if (!cutover || shift.shift_date < cutover.effectiveDate) return metrics;
   metrics.bonus_minutes = 0; metrics.counted_minutes = rawMinutes - breakMinutes;
   metrics.saturday_eligible_minutes = 0;
@@ -22809,7 +22831,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     .filter((employee) => String(employee.home_location_id) === String(context.locationId))
     .map((employee) => employee.personnel_number));
   const shifts = await Promise.all(
-    shiftRows.map(async (shift) => ({ ...shift, ...await shiftMetrics(shift, settings, { saturdayCutover }) })),
+    shiftRows.map(async (shift) => ({ ...shift, ...await shiftMetrics(shift, settings, { saturdayCutover, planning: true }) })),
   );
   const externalShiftRows = employeeWeekShiftRows.filter((shift) => (
     visibleEmployeeNumbers.has(shift.employee_number)
@@ -22827,7 +22849,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     ...await shiftMetrics(
       shift,
       externalLocationSettings.get(String(shift.location_id || "")) || settings,
-      { saturdayCutover },
+      { saturdayCutover, planning: true },
     ),
   })));
   const countedWeekShifts = [...shifts, ...externalShifts];
@@ -26361,7 +26383,10 @@ const salesReportJobs = createSalesReportJobs({ access: persistenceProvider, vau
 const salesReportTemplates = require('./lib/persistence/repositories/sales-report-templates').createSalesReportTemplates({
   access: persistenceProvider, vault: integrationSecretVault, normalizeQuery: (session, query) => salesReportJobs.normalize(session, query),
   scope: persistenceConfiguration.rehearsal ? 'postgresql-rehearsal-11' : 'grabenplaner-main' });
-registerSalesReportJobRoutes(app, { jobs: salesReportJobs, templates: salesReportTemplates, requireSession: requireEmployeePortalSession,
+const salesReportLibrary = require('./lib/persistence/repositories/sales-report-library').createSalesReportLibrary({
+  access: persistenceProvider, vault: integrationSecretVault, jobs: salesReportJobs, templates: salesReportTemplates,
+  scope: persistenceConfiguration.rehearsal ? 'postgresql-rehearsal-11' : 'grabenplaner-main' });
+registerSalesReportJobRoutes(app, { jobs: salesReportJobs, templates: salesReportTemplates, library: salesReportLibrary, requireSession: requireEmployeePortalSession,
   refreshSession: request => loadPortalSessionFromRequest(request, { touch: false }), assertCsrf: assertPortalCsrf });
 require("./lib/receipt-search-routes").registerReceiptSearchRoutes(app, {
   runtime: managedSalesHistoryRuntime, requireSession: requireEmployeePortalSession, assertCsrf: assertPortalCsrf,
@@ -32595,6 +32620,28 @@ app.get("/api/portal/v1/cross-location-schedules", async (request, response) => 
     ));
   }
   response.json(payload);
+});
+
+planningSaturdayCredit.registerRoutes(app, {
+  authorize: requirePortalAnyPermissionOrLocal,
+  scope: (actor, locationId) => assertSessionContextScope(actor, { locationId }),
+  validateLocation: validateActiveLocationExists,
+  read: locationId => planningSaturdayCredit.enabled(getSettings(), locationId),
+  error: httpError,
+  async write(actor, locationId, enabled) {
+    await persistenceProvider.transaction(async executor => {
+      const repositories = createApplicationRepositories(executor);
+      const liveActor = await livePersonnelLearningRoleAdministrationActor(actor, repositories.organizationPersonnel);
+      if (!isLocalSystemSession(liveActor) && !planningSaturdayCredit.WRITE_PERMISSIONS.some(permission => liveActor.permissions?.includes(permission))) {
+        throw httpError(403, "Für diese Aktion fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+      }
+      assertSessionContextScope(liveActor, { locationId });
+      await validateActiveLocationExists(locationId, repositories.organizationPersonnel);
+      await repositories.planningSettings.upsertSetting({ key: planningSaturdayCredit.settingKey(locationId), value: enabled ? "1" : "0" });
+      await repositories.organizationPersonnel.insertAudit(actor?.employeeNumber || "local", "schedule.saturday-planning.update", "location", locationId, JSON.stringify({ enabled }));
+    });
+    await refreshApplicationSettingsSnapshot();
+  },
 });
 
 app.get("/api/portal/v1/cross-location-schedule-settings", async (request, response) => {
@@ -62471,7 +62518,7 @@ async function findBestAutomaticShift(
       start_time: minutesToTime(start),
       end_time: minutesToTime(candidateEnd),
     };
-    const metrics = await shiftMetrics(shift, settings);
+    const metrics = await shiftMetrics(shift, settings, { planning: true });
     const difference = Math.abs(metrics.counted_minutes - remainingMinutes);
     if (!best || difference < best.difference) best = { shift, metrics, difference };
   }
@@ -62618,7 +62665,7 @@ app.post("/api/schedule/auto", async (request, response) => {
       }
       totals[shift.employee_number] =
         (totals[shift.employee_number] || 0)
-        + (await shiftMetrics(shift, locationSettings.get(shiftLocationId))).counted_minutes;
+        + (await shiftMetrics(shift, locationSettings.get(shiftLocationId), { planning: true })).counted_minutes;
     }
     for (const shift of existingShifts) {
       if (dayLoads[shift.shift_date] !== undefined) dayLoads[shift.shift_date] += 1;

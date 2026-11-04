@@ -7679,3 +7679,6 @@ html[data-active-page-theme="dark"] .custom-work-rule-sticky-actions {
 .sales-article-description-html pre { max-width:100%; overflow:auto; white-space:pre; }
 .sales-article-description-limit { margin:.5em 0 0; color:var(--muted); font-size:11px; }
 .sales-article-description-empty { margin:0; color:var(--muted); }
+.planning-saturday-inline { display:flex;align-items:center;gap:7px;font-size:12px;white-space:normal; }
+.planning-saturday-inline input { width:15px;height:15px;margin:0;accent-color:var(--green); }
+.planning-saturday-location small + small { margin-top:4px; }

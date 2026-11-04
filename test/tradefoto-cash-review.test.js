@@ -29,9 +29,82 @@ function report(rows, result) {
   return M.finishReport(state, query);
 }
 
+test('structured net invoices survive changed import evidence, row IDs and descriptions without approving ordinary tills', () => {
+  const h = { ...head('100'), RechnungsNr: '70001' }, rows = [line(1, { RechnungsNr: 70001 })];
+  const first = reconcile(h, rows); assert.equal(first.canAggregate, true);
+  assert.equal(first.reconciliation.headerStatus, 'checked_invoice_convention'); assert.equal(first.totals.net, '100.00');
+  const replacement = [{ ...rows[0], RepID: line(99).RepID, Artikelbezeichnung: 'Updated source text' }];
+  const renewed = R.defineTradeFotoReceiptCoverage({ ...scope, fileSha256: '3'.repeat(64), evidenceSha256: '4'.repeat(64),
+    schemaSha256: H.profileFor('cash', 'Umsatz_KASSE').schemaSha256, expectedSourceRows: 200, verifiedSourceRows: 200, head: h, lines: replacement });
+  const next = reconcile(h, replacement, { coverage: renewed });
+  assert.equal(next.canAggregate, true); assert.deepEqual(next.totals, first.totals);
+  for (const [changedHead, changedRows] of [
+    [{ ...h, RechnungsNr: '0' }, rows], [{ ...h, Kassenid: '1' }, rows.map(r => ({ ...r, Kassenid: '1' }))],
+    [h, rows.map(r => ({ ...r, RechnungsNr: 70002 }))], [h, rows.map(r => ({ ...r, Beratung: true }))],
+    [{ ...h, RechnungsBetrag: '100.01' }, rows], [h, rows.map(r => ({ ...r, VK_Preis: '121' }))]
+  ]) assert.equal(reconcile(changedHead, changedRows).canAggregate, false);
+  assert.equal(reconcile(h, rows, { coverage: null }).canAggregate, false);
+  assert.equal(reconcile(h, rows, { coverage: coverage(h, replacement) }).canAggregate, false);
+});
+test('invoice VAT-group rounding preserves positions and rejects a one-cent error with mixed rates', () => {
+  const h = { ...head('0.12'), RechnungsNr: '70002' };
+  const rows = [line(1, { VK_Preis: '0.03' }), line(2, { VK_Preis: '0.03' }), line(3, { VK_Preis: '0.04', MWST: '10' }),
+    line(4, { VK_Preis: '0.04', MWST: '10' })].map(r => ({ ...r, RechnungsNr: 70002 }));
+  const result = reconcile(h, rows); assert.equal(result.canAggregate, true);
+  assert.equal(result.reconciliation.rounding, 'vat_total'); assert.equal(result.totals.net, '0.14');
+  assert.equal(reconcile({ ...h, RechnungsBetrag: '0.11' }, rows).canAggregate, false);
+  const mixed = rows.map((r, i) => i ? r : { ...r, RechnungsNr: 70003 });
+  assert.equal(reconcile(h, mixed).canAggregate, false);
+});
+test('Access Single source totals reconcile by exact stored representation without cent tolerance or changed metrics', () => {
+  for (const sample of [
+    { amount: 406.275, price: '487.53', qty: '1', gross: '487.53', net: '406.28', basis: 'net' },
+    { amount: 373.905, price: '149.562', qty: '2.5', gross: '373.91', net: '311.59', basis: 'gross' },
+    { amount: 67025.83333333333, price: '80431', qty: '1', gross: '80431.00', net: '67025.83', basis: 'net' }
+  ]) {
+    const h = { ...head(String(Math.fround(sample.amount))), RechnungsNr: '70003' };
+    const rows = [line(1, { RechnungsNr: 70003, VK_Preis: sample.price, VKMenge: sample.qty })], before = C.canonical([h, rows]);
+    const result = reconcile(h, rows); assert.equal(result.canAggregate, true);
+    assert.equal(result.reconciliation.rounding, 'source_single_total'); assert.equal(result.reconciliation.headerBasis, sample.basis);
+    assert.equal(result.reconciliation.toleranceMinor, 0); assert.equal(result.reconciliation.difference, '0.00');
+    assert.equal(result.totals.gross, sample.gross); assert.equal(result.totals.net, sample.net);
+    assert.equal(C.canonical([h, rows]), before);
+    const rounded = Number(h.RechnungsBetrag).toFixed(2);
+    assert.equal(reconcile({ ...h, RechnungsBetrag: String(Number(rounded) + 0.02) }, rows).canAggregate, false);
+  }
+  const h = { ...head('406.27'), RechnungsNr: '70003' }, rows = [line(1, { RechnungsNr: 70003, VK_Preis: '487.53' })];
+  assert.equal(reconcile(h, rows).canAggregate, false, 'an ordinary wrong cent value is not the exact source Single');
+});
+test('a voucher invoice checks its nominal amount while all goods metrics remain zero, including cancellation', () => {
+  for (const sign of [1, -1]) {
+    const h = { ...head(String(sign * 2500)), RechnungsNr: '70004' }, rows = [line(1, { RechnungsNr: 70004,
+      Sortiment: 170101, MWST: '0', VKMenge: String(sign * 25), VK_Preis: '100', RohertragDM: '999' })];
+    const checked = reconcile(h, rows); assert.equal(checked.canAggregate, true);
+    assert.equal(checked.reconciliation.headerStatus, 'checked_invoice_voucher_amount');
+    const totals = report(rows, checked).total.metrics;
+    for (const metric of ['netRevenue', 'grossRevenue', 'grossMargin', 'receiptCount']) assert.equal(Number(totals[metric].current), 0);
+    assert.equal(reconcile({ ...h, RechnungsBetrag: String(sign * 2500 + 1) }, rows).canAggregate, false);
+  }
+});
+test('signed discounts are adjustments across source flag variants and never authorise a negative goods price', () => {
+  for (const Sortiment of [170201, 170301, 170302]) for (const AStorno of [false, true]) for (const SonderartikelS of [false, true]) {
+    for (const sign of [1, -1]) {
+      const rows = [line(1, { Sortiment, AStorno, SonderartikelS, VK_Preis: '-12', VKMenge: String(sign), RohertragDM: '-10' })];
+      const result = reconcile(head(String(sign * -12)), rows); assert.equal(result.canAggregate, true);
+      assert.equal(result.positions[0].status, 'adjustment'); assert.equal(report(rows, result).total.metrics.quantity.current, '0.000000');
+      assert.equal(report(rows, result).total.metrics.grossMargin.current, sign === 1 ? '-10.00' : '10.00');
+    }
+  }
+  const bad = reconcile(head('-12'), [line(1, { VK_Preis: '-12' })]); assert.ok(bad.issues.includes('NEGATIVE_UNIT_PRICE_REVIEW'));
+  const { fingerprint, ...definition } = policy();
+  assert.throws(() => R.defineTradeFotoSalesPolicy({ ...definition, invoiceHeaderConvention: 'any_net_match' }));
+  assert.throws(() => R.defineTradeFotoSalesPolicy({ ...definition, headerToleranceMinor: 1 }));
+  const rule = definition.statusRules.find(r => r.status === 'sale');
+  assert.throws(() => R.defineTradeFotoSalesPolicy({ ...definition, statusRules: [{ ...rule, signedAdjustmentPrice: true }] }));
+});
 test('effective cash rules preserve the sealed source contract and unrelated policies', () => {
   const old = original(), before = C.canonical(old), current = resolveCashSalesPolicy(old);
-  assert.equal(C.canonical(old), before); assert.equal(old.version, 1); assert.equal(current.version, 10);
+  assert.equal(C.canonical(old), before); assert.equal(old.version, 1); assert.equal(current.version, 13);
   assert.equal(current.id, 'cash-confirmed-20260911');
   assert.notEqual(current.fingerprint, old.fingerprint);
   assert.equal(resolveCashSalesPolicy(current), current);
@@ -155,13 +228,16 @@ test('voucher issuance retains its source value while all goods metrics and cash
   }
 });
 
-test('voucher issuance requires the confirmed group, tax code, flags and positive quantity together', () => {
+test('voucher issuance and cancellation require the confirmed group, tax code and flags together', () => {
   const issue = line(1, { VKMenge: '2', VK_Preis: '10', MWST: '0', Sortiment: 170101, RohertragDM: '0' });
   for (const extra of [{ Sortiment: 170102 }, { Sortiment: 130101 }, { MWST: '99' }, { SonderartikelS: true },
-    { Ret: true }, { VKMenge: '-2' }, { VKMenge: '0' }]) {
+    { Ret: true }, { VKMenge: '0' }]) {
     const result = reconcile(head('0'), [{ ...issue, ...extra }]);
     assert.equal(result.canAggregate, false); assert.equal(result.positions, null); assert.equal(result.totals, null);
   }
+  const cancelled = reconcile(head('0'), [{ ...issue, VKMenge: '-2' }]);
+  assert.equal(cancelled.canAggregate, true); assert.equal(cancelled.positions[0].status, 'voucher_issue');
+  assert.equal(report([{ ...issue, VKMenge: '-2' }], cancelled).total.metrics.netRevenue.current, '0.00');
   for (const Sortiment of [170101, 130101]) {
     const unchanged = reconcile(head('20'), [{ ...issue, Sortiment, MWST: '20' }]);
     assert.equal(unchanged.canAggregate, true); assert.equal(unchanged.positions[0].status, 'sale');
@@ -267,8 +343,8 @@ test('the new confirmations do not approve other special articles, status combin
   const print = line(1, { EAN: '0000000081619', Sortiment: 60401, SonderartikelS: true });
   const fee = line(2, { EAN: '0000000049742', Sortiment: 110201, SonderartikelS: true, VK_Preis: '75' });
   for (const row of [
-    { ...print, MWST: '0' }, { ...print, MWST: '99' }, { ...print, Beratung: true }, { ...print, VKMenge: '-1' },
-    { ...print, Sortiment: 60203 }, { ...fee, EAN: '0000000049743' }, { ...fee, EAN: null },
+    { ...print, MWST: '0' }, { ...print, MWST: '99' }, { ...print, Beratung: true }, { ...print, VKMenge: '0' },
+    { ...print, Sortiment: 60204 }, { ...fee, Sortiment: 170401 },
     { ...fee, Sortiment: 170102 }, { ...fee, MWST: '10' }, { ...fee, Ret: true }
   ]) {
     const result = reconcile(head('0'), [row]);
@@ -303,7 +379,7 @@ test('HD processing retains sales and cash margin while a net head requires the 
   assert.equal(open.totals, null); assert.equal(open.positions, null, 'all receipt values stay gated by the unconfirmed head');
   const uidHead = head('623.8250122070312'), uidCoverage = coverage(uidHead, rows);
   const { fingerprint, ...definition } = policy();
-  assert.equal(definition.headerBasisOverrides.length, 5, 'only the five individually confirmed real receipt sources are configured');
+  assert.equal(definition.headerBasisOverrides.length, 13, 'five earlier sources plus eight invoices independently checked against the invoice database');
   const confirmedNet = R.defineTradeFotoSalesPolicy({ ...definition, headerBasisOverrides: [...definition.headerBasisOverrides,
     { receiptFingerprint: C.fingerprint([uidCoverage.headHash, uidCoverage.lineHashes]), basis: 'net' }] });
   const before = C.canonical([uidHead, rows]);
@@ -317,7 +393,7 @@ test('HD processing retains sales and cash margin while a net head requires the 
   assert.equal(reconcile(uidHead, rows, { policy: confirmedNet, coverage: null }).canAggregate, false);
   const changed = rows.map((row, i) => i ? row : { ...row, Artikelbezeichnung: 'Changed source' });
   assert.equal(reconcile(uidHead, changed, { policy: confirmedNet }).canAggregate, false, 'a changed receipt does not inherit the exception');
-  for (const extra of [{ EAN: '0000000000012' }, { Sortiment: 60204 }, { MWST: '0' }, { VKMenge: '-1' }, { Ret: true }]) {
+  for (const extra of [{ Sortiment: 60204 }, { MWST: '0' }, { VKMenge: '0' }, { Ret: true }]) {
     const other = reconcile(head('0'), [{ ...hd[0], ...extra }]);
     assert.equal(other.canAggregate, false); assert.ok(other.issues.includes('STATUS_REVIEW_REQUIRED'));
   }
@@ -420,5 +496,124 @@ test('the used-goods zero-VAT exception requires every confirmed source field an
     [{ vatCodes: ['0'], articleNumbers: ['same', 'same'] }], [{ vatCodes: ['0'], productGroups: ['130101'], flags }],
     Array.from({ length: 11 }, () => ({ vatCodes: ['0'], productGroups: ['130101'] }))]) {
     assert.throws(() => R.defineTradeFotoSalesPolicy({ ...definition, zeroPriceVatExceptions: exceptions }), e => e instanceof C.DataImportError);
+  }
+});
+
+function withReceiptRules(h, rows, extra = {}) {
+  const proof = coverage(h, rows), hash = C.fingerprint([proof.headHash, proof.lineHashes]), { fingerprint, ...definition } = policy();
+  return { proof, hash, definition, checked: reconcile(h, rows, { coverage: proof,
+    policy: R.defineTradeFotoSalesPolicy({ ...definition, headerBasisOverrides: [...definition.headerBasisOverrides,
+      { receiptFingerprint: hash, basis: 'net', rounding: 'vat_total' }], ...extra }) }) };
+}
+test('verified net invoices check VAT totals while preserving every rounded position and historical cash margin', () => {
+  const examples = [
+    { header: '1529.949951171875', gross: '1835.94', net: '1529.96', difference: '0.01', lines: [
+      { VKMenge:'4', VK_Preis:'14.99' }, { VK_Preis:'12.99' }, { VK_Preis:'13.99' }, { VK_Preis:'1749' }] },
+    { header:'857.5', gross:'1029.00', net:'857.50', difference:'0.00', lines:[{VK_Preis:'1029'}] },
+    { header:'678.3333129882812', gross:'814.00', net:'678.34', difference:'0.01', lines:[
+      {VK_Preis:'899'},{VK_Preis:'15'},{VK_Preis:'100',VKMenge:'-1',Sortiment:170201,SonderartikelS:true,RohertragDM:'0'}] }
+  ];
+  for(const example of examples) {
+    const h=head(example.header),rows=example.lines.map((values,i)=>line(i+1,values)),before=C.canonical([h,rows]);
+    const {checked,proof,hash,definition}=withReceiptRules(h,rows);
+    assert.equal(checked.canAggregate,true);assert.deepEqual(checked.issues,[]);
+    assert.equal(checked.totals.gross,example.gross);assert.equal(checked.totals.net,example.net);
+    assert.equal(checked.reconciliation.rounding,'vat_total');assert.equal(checked.reconciliation.positionRoundingDifference,example.difference);
+    assert.equal(checked.reconciliation.difference,'0.00');assert.equal(checked.reconciliation.toleranceMinor,0);
+    const ordinary=reconcile(head(example.gross),rows);
+    assert.deepEqual(checked.positions,ordinary.positions);assert.deepEqual(checked.totals,ordinary.totals);
+    assert.equal(C.canonical([h,rows]),before);
+    assert.equal(report(rows,checked).total.metrics.grossMargin.current,report(rows,ordinary).total.metrics.grossMargin.current);
+    const bound=R.defineTradeFotoSalesPolicy({...definition,headerBasisOverrides:[...definition.headerBasisOverrides,{receiptFingerprint:hash,basis:'net',rounding:'vat_total'}]});
+    assert.equal(reconcile(h,rows,{policy:bound,coverage:null}).canAggregate,false);
+    const changed=rows.map((r,i)=>i?r:{...r,Artikelbezeichnung:'changed source'});
+    assert.equal(reconcile(h,changed,{policy:bound,coverage:coverage(h,changed)}).canAggregate,false);
+    assert.equal(reconcile(h,rows).canAggregate,false,'an unrelated source does not inherit this exact net invoice check');
+    if(example.difference!=='0.00') {
+      const oldNet=R.defineTradeFotoSalesPolicy({...definition,headerBasisOverrides:[{receiptFingerprint:hash,basis:'net'}]});
+      assert.equal(reconcile(h,rows,{policy:oldNet,coverage:proof}).canAggregate,false,'per-position reconciliation remains strict without the verified rounding option');
+    }
+  }
+});
+test('VAT-total reconciliation keeps tax rates separate, signed returns and a strict zero-cent error boundary', () => {
+  const rows=[line(1,{VK_Preis:'0.03'}),line(2,{VK_Preis:'0.03'}),line(3,{VK_Preis:'0.06',MWST:'10'}),line(4,{VK_Preis:'0.06',MWST:'10'})];
+  assert.equal(withReceiptRules(head('0.16'),rows).checked.canAggregate,true);
+  assert.equal(withReceiptRules(head('0.15'),rows).checked.canAggregate,false,'no one-cent tolerance is introduced');
+  const negative=rows.map(r=>({...r,VKMenge:'-1'}));assert.equal(withReceiptRules(head('-0.16'),negative).checked.canAggregate,true);
+  const altered=rows.map((r,i)=>i?r:{...r,VK_Preis:'0.04'});
+  assert.equal(withReceiptRules(head('0.16'),altered).checked.canAggregate,false,'a newly bound source with a real amount discrepancy is still rejected');
+});
+test('the source-family house-fair adjustment survives an import without binding a single receipt hash', () => {
+  const h={...head('2856.175048828125'),RechnungsNr:'60689'},rows=[line(1,{VK_Preis:'3899',RohertragDM:'274.51172839203855'}),line(2,{VK_Preis:'28.41',RohertragDM:'10.375'}),
+    line(3,{VKMenge:'-1',VK_Preis:'300',Sortiment:170201,SonderartikelS:true,RohertragDM:'0'}),
+    line(4,{VKMenge:'-1',VK_Preis:'200',EAN:'0000000000999',Sortiment:170301,SonderartikelS:true,RohertragDM:'166.66666666666663'})].map(row=>({...row,RechnungsNr:60689}));
+  const result=reconcile(h,rows),total=report(rows,result).total.metrics;
+  assert.equal(result.canAggregate,true);assert.equal(result.totals.gross,'3427.41');assert.equal(result.totals.net,'2856.18');
+  assert.equal(result.counts.adjustments,2);assert.equal(total.quantity.current,'2.000000');assert.equal(total.grossMargin.current,'118.22');
+  const changed=rows.map((r,i)=>i?r:{...r,Artikelbezeichnung:'different invoice source'});
+  assert.equal(reconcile(h,changed).canAggregate,true);
+  assert.equal(reconcile({...h,RechnungsBetrag:'2856.19'},changed).canAggregate,false);
+  assert.equal(reconcile(h,rows,{coverage:null}).canAggregate,false);
+});
+test('receipt-specific rounding and status bindings reject ambiguous or unsupported policy shapes',()=>{
+  const {fingerprint,...definition}=policy(),hash='a'.repeat(64);
+  for(const item of [{receiptFingerprint:hash,basis:'gross',rounding:'vat_total'},{receiptFingerprint:hash,basis:'net',rounding:'guess'},{receiptFingerprint:hash,basis:'net',toleranceMinor:1}])
+    assert.throws(()=>R.defineTradeFotoSalesPolicy({...definition,headerBasisOverrides:[item]}));
+  const rule=definition.statusRules.at(-1);
+  for(const receiptFingerprints of [[],[hash,hash],['bad']])assert.throws(()=>R.defineTradeFotoSalesPolicy({...definition,statusRules:[...definition.statusRules.slice(0,-1),{...rule,receiptFingerprints}]}));
+});
+
+function interimPaymentFixture() {
+  const initialHead=head('0'),counterHead={...head('0'),Bonnr:'2'};
+  const interim=extra=>line(1,{EAN:'0000000106030',Sortiment:170102,SonderartikelS:true,VK_Preis:'299.16',RohertragDM:'0',...extra});
+  const initial=[interim({})],counter=[interim({Bonnr:'2',VKMenge:'-1',RepID:line(2).RepID}),
+    line(3,{Bonnr:'2',EAN:'0000000058204',Sortiment:170102,AStorno:true,SonderartikelS:true,VK_Preis:'299.16',MWST:'0',RohertragDM:'0'})];
+  const receipts=[{head:initialHead,lines:initial},{head:counterHead,lines:counter}];
+  const {fingerprint,...definition}=policy(),rules=receipts.map((receipt,index)=>{
+    const proof=coverage(receipt.head,receipt.lines);
+    return {id:'synthetic-interim-'+index,status:'uid_clearing',quantitySign:index?'negative':'positive',flags:{...flags,SonderartikelS:true},
+      productGroups:['170102'],vatCodes:['20'],articleNumbers:['0000000106030'],receiptFingerprints:[C.fingerprint([proof.headHash,proof.lineHashes])]};
+  });
+  return {receipts,known:R.defineTradeFotoSalesPolicy({...definition,statusRules:[...definition.statusRules,...rules]})};
+}
+test('a verified cancelled taxable interim payment and its UID rebooking have no goods revenue, margin, quantity or receipt count',()=>{
+  const {receipts,known}=interimPaymentFixture(),state=M.accumulator(),before=C.canonical(receipts);
+  for(const [index,{head:h,lines:rows}]of receipts.entries()) {
+    assert.ok(reconcile(h,rows).issues.includes('STATUS_REVIEW_REQUIRED'),'the same article on an unrelated source stays unconfirmed');
+    const checked=reconcile(h,rows,{policy:known});assert.equal(checked.canAggregate,true);assert.deepEqual(checked.issues,[]);
+    assert.equal(checked.counts.uidClearings,rows.length);assert.equal(checked.totals.gross,'0.00');assert.equal(checked.totals.net,'0.00');
+    for(const source of rows)M.accumulate(state,'current',query,{metric:checked.positions.find(p=>p.key===source.RepID),quantity:source.VKMenge,
+      margin:M.positionMargin(source.RohertragDM,source.VKMenge),receiptKey:'interim-'+index,customerKey:null,productGroup:{id:'170102',label:'Anzahlung'}});
+  }
+  const interimReport=M.finishReport(state,query);
+  assert.equal(interimReport.coverage.current.review,0);assert.equal(interimReport.coverage.current.excluded,3);
+  assert.equal(interimReport.total.metrics.grossRevenue.current,'0.00');assert.equal(interimReport.total.metrics.netRevenue.current,'0.00');
+  assert.equal(interimReport.total.metrics.grossMargin.current,'0.00');assert.equal(interimReport.total.metrics.quantity.current,'0.000000');
+  assert.equal(interimReport.total.metrics.receiptCount.current,'0');assert.equal(C.canonical(receipts),before);
+  // A separately recorded later goods sale is valued normally, without adding
+  // the earlier payment or its cancellation to the goods sale a second time.
+  const goodsHead={...head('120'),Bonnr:'3'},goods=line(4,{Bonnr:'3'}),checked=reconcile(goodsHead,[goods],{policy:known});
+  assert.equal(checked.canAggregate,true);M.accumulate(state,'current',query,{metric:checked.positions[0],quantity:goods.VKMenge,
+    margin:M.positionMargin(goods.RohertragDM,goods.VKMenge),receiptKey:'goods',customerKey:null,productGroup:{id:'130',label:'Goods'}});
+  const total=M.finishReport(state,query).total.metrics;
+  assert.equal(total.netRevenue.current,'100.00');assert.equal(total.grossMargin.current,'20.00');assert.equal(total.quantity.current,'1.000000');assert.equal(total.receiptCount.current,'1');
+});
+test('interim payment confirmation requires complete unchanged receipts and does not approve another taxable special item',()=>{
+  const {receipts,known}=interimPaymentFixture();
+  for(const {head:h,lines:rows}of receipts) {
+    const proof=coverage(h,rows);
+    assert.equal(reconcile(h,rows,{policy:known,coverage:null}).canAggregate,false);
+    for(const changed of [{VK_Preis:'299.17'},{RohertragDM:'0.01'},{Sortiment:999},{EAN:'0000000106031'},{Beratung:true},{MWST:'10'},{Artikelbezeichnung:'changed source'}]) {
+      const altered=rows.map((r,i)=>i?r:{...r,...changed});
+      const result=reconcile(h,altered,{policy:known,coverage:coverage(h,altered)});
+      assert.equal(result.canAggregate,false);assert.equal(result.positions,null);assert.equal(result.totals,null);
+    }
+    const ordinary=rows.map((r,i)=>i?r:{...r,SonderartikelS:false});
+    const defaultResult=reconcile(h,ordinary),knownResult=reconcile(h,ordinary,{policy:known});
+    assert.deepEqual(knownResult.positions,defaultResult.positions,'independently confirmed ordinary sales/returns keep their original valuation');
+    assert.deepEqual(knownResult.totals,defaultResult.totals);
+    const otherHead={...h,Bonnr:'999'},otherRows=rows.map(r=>({...r,Bonnr:'999'}));
+    assert.equal(reconcile(otherHead,otherRows,{policy:known,coverage:coverage(otherHead,otherRows)}).canAggregate,false);
+    if(rows.length>1)assert.equal(reconcile(h,rows.slice(1),{policy:known,coverage:proof}).canAggregate,false,'partial source pages cannot authorize the rebooking');
   }
 });

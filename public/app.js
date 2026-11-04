@@ -1,3 +1,4 @@
+let planningSaturdaySettings = null;
 let personnelLearningAssessmentEditor=null, personnelLearningAssessmentPanel=null, personnelLearningTeam=null;
 const sidebarNavigationGroups = window.GrabenplanerSidebarLayout.createGroups();
 let salesPriceLabelsWorkspace = null;
@@ -2908,14 +2909,16 @@ function applyRoleVisibility() {
     elements.startDashboardControlCenterButton.dataset.startDashboardMode = startDashboardMode;
   }
   const databaseImportAccess = Boolean(state.portalSession?.user?.dataImport?.read) || canImportSalesArticles();
-  const anySettingsAccess = databaseImportAccess || settingsAccess || pdfSettingsAccess || scheduleSettingsAccess || scopeAccess || rightsAccess || brandingAccess
+  const planningSaturdayAccess = canWritePlanningSaturday();
+  document.getElementById("planningSaturdaySettingsCard")?.classList.toggle("hidden", !planningSaturdayAccess);
+  const anySettingsAccess = planningSaturdayAccess || databaseImportAccess || settingsAccess || pdfSettingsAccess || scheduleSettingsAccess || scopeAccess || rightsAccess || brandingAccess
     || wifiSettingsAccess || usbProvisioningAccess || integrationAccess
     || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || retentionReadAccess
     || loanSettingsAccess || mobilePortalLocationDisplayAccess || birthdayPresentationSettingsAccess || updateAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
     general: settingsAccess || brandingAccess || loanSettingsAccess,
-    schedule: settingsAccess || scheduleSettingsAccess || pdfSettingsAccess,
+    schedule: planningSaturdayAccess || settingsAccess || scheduleSettingsAccess || pdfSettingsAccess,
     personnel: settingsAccess || wifiSettingsAccess || integrationAccess || (features.vacation !== false && globalAdministration),
     vacation: features.vacation !== false && (settingsAccess || globalAdministration),
     timeTracking: settingsAccess || (wifiSettingsAccess && features.wifiSuggestions !== false && features.timeTracking !== false),
@@ -5923,7 +5926,7 @@ function renderSummary() {
   elements.breakRuleHint.textContent = settings.break_rule_enabled === "1"
     ? `Pause: ${Number(settings.break_after_minutes) / 60} h → ${settings.break_duration_minutes} min`
     : "Pausenregel aus";
-  elements.saturdayRuleHint.textContent = "Zeitgutschriften werden gesondert geprüft";
+  elements.saturdayRuleHint.textContent = settings.planning_saturday_worst_case !== "0" ? "Planung: Sa ab 13 Uhr +50 % (Worst Case)" : "Samstagszuschlag in der Planung aus";
   const departments = departmentsForLocation(state.locationId);
   const showDepartmentPdf = !state.departmentId && departments.length > 0;
   elements.departmentPdfControl?.classList.toggle("hidden", !showDepartmentPdf);
@@ -6460,7 +6463,31 @@ function hoursOverviewValue(value) {
     : formatHours(value);
 }
 
+function canWritePlanningSaturday(locationId = state.locationId) {
+  if (!state.portalStatus?.portalEnabled) return true;
+  const user = state.portalSession?.user;
+  if (!user || !['schedule:write', 'settings:write', 'locations:write', 'locations:operational:write'].some(p => user.permissions?.includes(p))) return false;
+  return ['developer', 'it_admin', 'admin', 'hr'].includes(user.role)
+    || (user.scopes || []).some(s => String(s.locationId) === String(locationId) && !Number(s.departmentId || 0));
+}
+
+function getPlanningSaturdaySettings() {
+  if (!planningSaturdaySettings && window.createPlanningSaturdaySettings) planningSaturdaySettings = window.createPlanningSaturdaySettings({
+    api, canWrite: canWritePlanningSaturday,
+    capture: () => captureGpContext(), isCurrent: gpContextCurrent,
+    onError: error => showToast(error.message, true),
+    onSaved: async () => { showToast('Samstagszuschlag für die Planung gespeichert.'); await loadPlanningPeriod('schedule'); },
+  });
+  return planningSaturdaySettings;
+}
+
+function renderPlanningSaturdaySettings() {
+  getPlanningSaturdaySettings()?.render(state.locationId, state.data?.settings?.planning_saturday_worst_case !== '0',
+    [state.locationId, currentLocation()?.name].filter(Boolean).join(' · '));
+}
+
 function renderHoursOverview() {
+  renderPlanningSaturdaySettings();
   const showSaturdayStats = state.data.settings.show_saturday_service_stats !== "0";
   if (elements.xoffiImportButton) {
     elements.xoffiImportButton.disabled = !canImportXoffiTime();
@@ -23066,6 +23093,7 @@ function trackSettingsSaveDraft(event) {
 elements.settingsView?.addEventListener("input", trackSettingsSaveDraft);
 elements.settingsView?.addEventListener("change", trackSettingsSaveDraft);
 function renderSettings() {
+  renderPlanningSaturdaySettings();
   syncSettingsSaveScopes();
   const brandingDirty = state.brandingFormDirty;
   const designDraft = state.schedulePdfSettingsDraftKey === settingsSaveKey("main")
@@ -33365,6 +33393,7 @@ function renderSalesArticleSourceFieldValue(field) {
 function renderSalesArticleCatalogDetail() {
   const catalog = state.salesArticleCatalog;
   catalog.stockPanel?.destroy(); catalog.stockPanel=null;
+  catalog.overviewPrices?.destroy(); catalog.overviewPrices=null;
   catalog.tools?.destroy(); catalog.tools=null;
   catalog.priceLabels?.destroy(); catalog.priceLabels=null;
   document.getElementById("salesArticlePdfButton")?.classList.add("hidden");
@@ -33459,6 +33488,8 @@ function renderSalesArticleCatalogDetail() {
     });
     void salesArticleDetailPreferences.activate();
     const accessKey=currentSalesArticleCatalogDetailAccessKey();
+    catalog.overviewPrices=layout.mountMasterPrices(elements.salesArticleDetailBody,{store:salesArticleDetailPreferences,
+      canUse:()=>canReadSalesArticles()&&currentSalesArticleCatalogDetailAccessKey()===accessKey&&catalog.detail?.article===article&&state.currentView==='articleCatalog'});
     catalog.stockPanel=window.SalesArticleStockPanel.mount(document.getElementById('salesArticleBranchStock'), {
       store:salesArticleDetailPreferences, stock:article.branchStock, formats, layout,
       tableLayout:window.GrabenplanerTableLayout, columns:window.SalesArticleDetailPreferences.COLUMNS,
@@ -38935,6 +38966,7 @@ function populateLocationCostCenter(selectedId = "", fallbackLabel = "") {
 function resetLocationForm() {
   state.editingLocationId = null;
   elements.locationForm.reset();
+  getPlanningSaturdaySettings()?.editLocation('');
   elements.locationId.disabled = false;
   elements.locationName.disabled = false;
   elements.locationActive.disabled = false;
@@ -38955,6 +38987,7 @@ function resetLocationForm() {
 }
 
 function fillLocationForm(location) {
+  getPlanningSaturdaySettings()?.editLocation(String(location.id));
   state.editingLocationId = location.id;
   elements.locationId.value = location.id;
   elements.locationId.disabled = true;

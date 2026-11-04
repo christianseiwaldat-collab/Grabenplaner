@@ -7,11 +7,12 @@
   const PREFERENCE_KEY='sales_article_detail_v1';
   const COLUMNS=Object.freeze([{id:'branch',label:'Filiale',width:100},{id:'quantity',label:'Bestand',width:90},{id:'ordered',label:'Bestellt',width:100}].map(Object.freeze));
   const ids=COLUMNS.map(c=>c.id);
-  function defaults() {return {version:1,hiddenBranchIds:[],columns:[...ids],columnWidths:{},sort:'branch',direction:'asc'};}
+  function defaults() {return {version:1,hiddenBranchIds:[],columns:[...ids],columnWidths:{},sort:'branch',direction:'asc',showPrices:true};}
   function normalize(input) {
     const fields=Object.keys(defaults());
     if(!input || typeof input!=='object' || Array.isArray(input)
-      || Object.keys(input).some(key=>!fields.includes(key)) || fields.some(key=>!Object.hasOwn(input,key))
+      || Object.keys(input).some(key=>!fields.includes(key)) || fields.filter(key=>key!=='showPrices').some(key=>!Object.hasOwn(input,key))
+      || input.showPrices!==undefined && typeof input.showPrices!=='boolean'
       || input.version!==1 || !Array.isArray(input.hiddenBranchIds) || input.hiddenBranchIds.length>500
       || input.hiddenBranchIds.some(id=>typeof id!=='string' || !id || id.length>80 || id.trim()!==id || /[\u0000-\u001f\u007f]/.test(id))
       || new Set(input.hiddenBranchIds).size!==input.hiddenBranchIds.length
@@ -20,7 +21,7 @@
       || !widths.valid(input.columnWidths,ids) || !input.columns.includes(input.sort) || !['asc','desc'].includes(input.direction)) {
       throw new TypeError('Die Einstellungen für den Filialbestand sind ungültig.');
     }
-    return {version:1,hiddenBranchIds:[...input.hiddenBranchIds],columns:[...input.columns],columnWidths:{...input.columnWidths},sort:input.sort,direction:input.direction};
+    return {version:1,hiddenBranchIds:[...input.hiddenBranchIds],columns:[...input.columns],columnWidths:{...input.columnWidths},sort:input.sort,direction:input.direction,showPrices:input.showPrices??true};
   }
   // Load the account's baseline before accepting complete preference snapshots.
   // Keep that baseline across article selections; stale account reads cannot apply.
