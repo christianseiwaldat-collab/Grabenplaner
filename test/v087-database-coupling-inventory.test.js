@@ -341,9 +341,11 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // The workspace lease reuses the existing lock adapter; Offsite staging
   // reads only the configured database path, not business records.
   // The named deploy preflight only reads the installed provider and paths.
-  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 19);
+  // Three exact security metadata/inventory entries add no driver access.
+  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 22);
   // Session fixtures, deferred PostgreSQL startup and the three named CRM/
   // article qualifications are classified; no new production access is allowed.
+  // The named report-library and receipt fixtures stay within this test boundary.
   assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 20);
   const expectedTestDriverFiles = [...PHASE_3_ALLOWED_TEST_DRIVER_FILES];
   assert.equal(report.summary.testDriverFiles, expectedTestDriverFiles.length);

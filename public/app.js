@@ -1204,15 +1204,21 @@ function vacationEntriesInRange(start, end) {
 }
 
 function escapeHtml(value) {
-  const node = document.createElement("span");
-  node.textContent = value ?? "";
-  return node.innerHTML;
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]);
 }
 
 function escapeHtmlAttribute(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[character]);
+}
+
+function safeCssColor(value, fallback = "#0b84c6") {
+  const color = String(value ?? "").trim();
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+  return /^#[0-9a-f]{6}$/i.test(fallback) ? fallback : "#0b84c6";
 }
 
 function activeLocations() {
@@ -5831,7 +5837,7 @@ function renderCrossLocationScheduleGrid(schedule) {
   const { minimum: requestMinimum, maximum: requestMaximum } = staffAssignmentRequestCalendarBounds();
   const rows = (schedule.teamMembers || []).map((teamMember) => `
     <div class="cross-location-team-member">
-      <span class="cross-location-person-color" style="background:${escapeHtmlAttribute(teamMember.color || "#87948f")}"></span>
+      <span class="cross-location-person-color" style="background:${safeCssColor(teamMember.color, "#87948f")}"></span>
       <strong>${escapeHtml(teamMember.displayName)}</strong>
       <small>${escapeHtml(teamMember.employeeNumber)}${teamMember.departmentName ? ` · ${escapeHtml(teamMember.departmentName)}` : ""}</small>
     </div>
@@ -6344,7 +6350,7 @@ function renderTimeline() {
       }).join("");
     const headers = dayEmployees.length
       ? dayEmployees.map((employee) => `
-          <div class="employee-strip" style="background:${employee.color};color:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" aria-label="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" tabindex="0">
+          <div class="employee-strip" style="background:${safeCssColor(employee.color)};color:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" aria-label="${escapeHtmlAttribute(scheduleEmployeeAccessibleLabel(employee))}" tabindex="0">
             <strong>${escapeHtml(window.GPScheduleDuty.scheduleEmployeeInitials(employee))}${xoffiImportedBadge(employee.personnel_number)}</strong><small>${escapeHtml(employee.personnel_number)}</small>
           </div>`).join("")
       : '<div class="employee-strip" style="background:#d7ddda;color:#65716c"><strong>Kein Team</strong></div>';
@@ -6406,7 +6412,7 @@ function renderTimeline() {
             const dutyColor = window.GPScheduleDuty.scheduleDutyColor(duty.code, settings.schedule_duty_colors);
             const dutyContrast = window.GPScheduleDuty.scheduleDutyTextColor(dutyColor);
             const title = `${scheduleEmployeeAccessibleLabel(employee)} · ${shift.start_time}–${shift.end_time} · ${formatHours(shift.counted_minutes)} · ${duty.label}${shift.area ? ` · ${shift.area}` : ""}`;
-            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${employee.color};--employee-contrast:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(title)}" aria-label="${escapeHtmlAttribute(title)}"><span class="shift-duty-badge" style="--duty-color:${dutyColor};--duty-contrast:${dutyContrast}" aria-hidden="true">${escapeHtml(duty.code)}</span></button>`;
+            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${safeCssColor(employee.color)};--employee-contrast:${contrastColor(employee.color)}" title="${escapeHtmlAttribute(title)}" aria-label="${escapeHtmlAttribute(title)}"><span class="shift-duty-badge" style="--duty-color:${dutyColor};--duty-contrast:${dutyContrast}" aria-hidden="true">${escapeHtml(duty.code)}</span></button>`;
           }).join("");
           const unavailableLabel = locked
             ? "gesperrt"
@@ -6442,7 +6448,7 @@ function renderRemarks() {
           <div class="remark-item"><span class="remark-color" style="background:#9aa2a4"></span>
           <span><strong>Alle:</strong> ${escapeHtml(block.reason || block.holiday_name || "Tag gesperrt")} · ${formatDate(block.block_date, { day: "2-digit", month: "2-digit" })}${block.is_public_holiday ? " · Feiertag" : ""}</span></div>`);
   const optionRemarks = options.map((option) => `
-          <div class="remark-item"><span class="remark-color" style="background:${isTeamWideMeetingOption(option) ? "#76529a" : option.color}"></span>
+          <div class="remark-item"><span class="remark-color" style="background:${isTeamWideMeetingOption(option) ? "#76529a" : safeCssColor(option.color, "#26785f")}"></span>
           <span><strong>${isTeamWideMeetingOption(option) ? "Ganzes Team" : escapeHtml(option.nickname)}:</strong> ${optionLabels[option.option_type]} · ${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` – ${escapeHtml(option.note)}` : ""}</span></div>`);
   const remarks = [...globalRemarks, ...optionRemarks];
   elements.remarks.innerHTML = `<h3>Bemerkungen / Sonderfälle</h3>${
@@ -6530,7 +6536,7 @@ function renderHoursOverview() {
     const balanceHtml = effectiveBalance ? `<div class="hours-xoffi-balance"><small>Stundenkonto laut xoffi${effectiveBalance.weekStart ? ` · Stand KW ${getIsoWeek(effectiveBalance.weekStart)}` : ""}</small><strong class="${effectiveBalance.minutes < 0 ? "negative" : "positive"}">${effectiveBalance.minutes > 0 ? "+" : ""}${formatHours(effectiveBalance.minutes)}</strong></div>` : "";
     return `<article class="hours-card">
       <div class="hours-person">
-        <span class="hours-color" style="background:${employee.color}"></span>
+        <span class="hours-color" style="background:${safeCssColor(employee.color)}"></span>
         <div><strong>${escapeHtml(employee.nickname)} ${xoffiImportedBadge(employee.personnel_number)}</strong><small>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.full_name)}</small></div>
       </div>
       <div class="hours-values">
@@ -6544,7 +6550,7 @@ function renderHoursOverview() {
       ${xoffiHtml}
       ${xoffiSnapshot ? `<div class="xoffi-source-snapshot"><strong>xoffi · Stand ${formatDate(xoffiSnapshot.balanceDate)}</strong><span>Zeitkonto: ${formatHours(xoffiSnapshot.openingBalanceMinutes)}</span><span>Resturlaub: ${Number(xoffiSnapshot.remainingVacationDays).toLocaleString("de-AT")} Tage</span><small>Ohne künftig fixierte Urlaube · separater Quellenstand</small>${xoffi?.snapshot ? `<span>Mehrstunden dieser Woche: ${formatHours(xoffiSnapshot.weeklyBalanceDeltaMinutes)}</span>` : ""}</div>` : balanceHtml}
       ${saturdayStatsHtml}
-      <div class="hours-progress"><span style="width:${percentage}%;background:${employee.color}"></span></div>
+      <div class="hours-progress"><span style="width:${percentage}%;background:${safeCssColor(employee.color)}"></span></div>
     </article>`;
   }).join("");
   if (showSaturdayStats && hasEstimatedSaturdayStats) {
@@ -6612,8 +6618,8 @@ function renderVacationMonthCard(month) {
       const visibleVacations = dayVacations.slice(0, compact ? 5 : 3);
       const overflow = dayVacations.length - visibleVacations.length;
       const markers = compact
-        ? `<div class="vacation-dot-row">${visibleVacations.map((vacation) => `<span class="vacation-dot" style="background:${vacation.color}" title="${escapeHtml(vacation.nickname)}"></span>`).join("")}${overflow > 0 ? `<span class="vacation-more">+${overflow}</span>` : ""}</div>`
-        : `<div class="vacation-day-tags">${visibleVacations.map((vacation) => `<span class="vacation-tag" style="background:${vacation.color};color:${contrastColor(vacation.color)}" title="${escapeHtml(vacation.nickname)}">${escapeHtml(vacation.nickname)}</span>`).join("")}${overflow > 0 ? `<span class="vacation-more">+${overflow}</span>` : ""}</div>`;
+        ? `<div class="vacation-dot-row">${visibleVacations.map((vacation) => `<span class="vacation-dot" style="background:${safeCssColor(vacation.color, "#9aa2a4")}" title="${escapeHtml(vacation.nickname)}"></span>`).join("")}${overflow > 0 ? `<span class="vacation-more">+${overflow}</span>` : ""}</div>`
+        : `<div class="vacation-day-tags">${visibleVacations.map((vacation) => `<span class="vacation-tag" style="background:${safeCssColor(vacation.color, "#9aa2a4")};color:${contrastColor(vacation.color)}" title="${escapeHtml(vacation.nickname)}">${escapeHtml(vacation.nickname)}</span>`).join("")}${overflow > 0 ? `<span class="vacation-more">+${overflow}</span>` : ""}</div>`;
       return `<div class="vacation-day ${inMonth ? "" : "outside-month"}">
         <span class="vacation-day-number">${Number(date.slice(-2))}</span>
         ${holiday ? '<span class="vacation-holiday">Feiertag</span>' : ""}
@@ -6631,7 +6637,7 @@ function renderVacationMonthCard(month) {
             const clippedTo = vacation.date_to > end ? end : vacation.date_to;
             const days = vacationDayCount(clippedFrom, clippedTo);
             return `<div class="vacation-item">
-              <span class="vacation-item-color" style="background:${vacation.color}"></span>
+              <span class="vacation-item-color" style="background:${safeCssColor(vacation.color, "#9aa2a4")}"></span>
               <div><strong>${escapeHtml(vacation.nickname)}</strong><small>${formatVacationDateRange(vacation, start, end)} · ${formatDays(days)}${vacation.note ? ` · ${escapeHtml(vacation.note)}` : ""}</small></div>
               <div class="vacation-actions-inline ${canWriteApprovedAbsenceEntries() ? "" : "hidden"}">
                 <button type="button" class="edit-vacation" data-edit-vacation="${escapeHtml(vacation.group_id)}">Bearbeiten</button>
@@ -6652,7 +6658,7 @@ function renderVacationEmployeeOverview(range) {
       .sort((a, b) => a.date_from.localeCompare(b.date_from));
     const totals = state.vacationData.totals[employee.personnel_number] || { entitlement: 0, planned: 0, used: 0, consumed: 0, remaining: 0 };
     return `<article class="vacation-employee-card">
-      <div class="vacation-employee-head" style="background:${employee.color};color:${contrastColor(employee.color)}">
+      <div class="vacation-employee-head" style="background:${safeCssColor(employee.color)};color:${contrastColor(employee.color)}">
         <strong>${escapeHtml(employee.personnel_number)} ${escapeHtml(employee.nickname)}</strong>
         <small><strong>Resturlaub: ${formatDaysLong(totals.remaining)}</strong> · geplant ${formatDaysLong(totals.planned ?? totals.used)} · konsumiert ${formatDaysLong(totals.consumed || 0)}</small>
       </div>
@@ -6661,7 +6667,7 @@ function renderVacationEmployeeOverview(range) {
           ? employeeVacations.map((vacation) => {
               const days = vacationDayCount(vacation.date_from, vacation.date_to);
               return `<div class="vacation-item">
-                <span class="vacation-item-color" style="background:${employee.color}"></span>
+                <span class="vacation-item-color" style="background:${safeCssColor(employee.color)}"></span>
                 <div><strong>${formatVacationDateRange(vacation)}</strong><small>${formatDays(days)}${vacation.note ? ` · ${escapeHtml(vacation.note)}` : ""}</small></div>
                 <div class="vacation-actions-inline ${canWriteApprovedAbsenceEntries() ? "" : "hidden"}">
                   <button type="button" class="edit-vacation" data-edit-vacation="${escapeHtml(vacation.group_id)}">Bearbeiten</button>
@@ -6695,7 +6701,7 @@ function renderVacations() {
     const xoffi = state.vacationData.xoffiVacationByEmployee?.[employee.personnel_number];
     return `<article class="vacation-summary-card">
       <div class="vacation-summary-head">
-        <span class="vacation-color" style="background:${employee.color}"></span>
+        <span class="vacation-color" style="background:${safeCssColor(employee.color)}"></span>
         <div><strong>${escapeHtml(employee.nickname)}</strong><small>${escapeHtml(employee.full_name)} · ${escapeHtml(employee.personnel_number)}</small></div>
       </div>
       <div class="vacation-stats">
@@ -8035,7 +8041,7 @@ function employeeDisplayRawValue(employee, columnId) {
 
 function employeeDisplayCell(employee, column) {
   const raw = employeeDisplayRawValue(employee, column.id);
-  if (column.id === "color") return `<span class="employee-color" style="background:${escapeHtmlAttribute(employee.color || "#6b7b75")}"></span>`;
+  if (column.id === "color") return `<span class="employee-color" style="background:${safeCssColor(employee.color, "#6b7b75")}"></span>`;
   if (column.id === "personnel_number") return `<strong>${escapeHtml(raw || "–")}</strong>`;
   if (column.id === "status") return `<span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span>`;
   if (column.id === "cost_center") return `<span class="status-badge ${employee.cost_center_id ? "" : "warning"}">${escapeHtml(raw || "Nicht zugeordnet")}</span>`;
@@ -13097,6 +13103,7 @@ function renderCollectiveAgreementDetail(registry) {
     ? displayedVersion.contractingParties.join(" · ")
     : "Noch nicht dokumentiert";
   const sourceHash = displayedVersion.source.sha256 || displayedVersion.contentSha256;
+  const sourceUrl = safeWorkRuleSourceUrl(displayedVersion.source.url);
   const versionHistory = agreement.versions.map((version) => `
     <article class="${version.id === agreement.currentVersionId ? "current" : ""}">
       <div><strong>${escapeHtml(version.versionLabel)}</strong><small>${escapeHtml(collectiveAgreementValidity(version.validFrom, version.validTo))}</small></div>
@@ -13118,7 +13125,7 @@ function renderCollectiveAgreementDetail(registry) {
     <div class="collective-agreement-source-card">
       <div><span>${current ? "Fassung" : "Sichtbare Fassung"}</span><strong>${escapeHtml(displayedVersion.versionLabel)}</strong><small>${escapeHtml(collectiveAgreementValidity(displayedVersion.validFrom, displayedVersion.validTo))}</small></div>
       <div><span>Vertragsparteien</span><strong>${escapeHtml(parties)}</strong><small>${displayedVersion.externalPublishedOn ? `extern veröffentlicht ${escapeHtml(formatDate(displayedVersion.externalPublishedOn))}` : "Veröffentlichungsdatum offen"}</small></div>
-      <div class="source-wide"><span>Dokumentierte Quelle</span><strong><a href="${escapeHtmlAttribute(displayedVersion.source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displayedVersion.source.title)}</a></strong><small>abgerufen ${escapeHtml(formatDate(displayedVersion.source.retrievedOn))} · Integritätswert ${escapeHtml(sourceHash.slice(0, 16))}…</small></div>
+      <div class="source-wide"><span>Dokumentierte Quelle</span><strong>${sourceUrl ? `<a href="${escapeHtmlAttribute(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displayedVersion.source.title)}</a>` : escapeHtml(displayedVersion.source.title)}</strong><small>abgerufen ${escapeHtml(formatDate(displayedVersion.source.retrievedOn))} · Integritätswert ${escapeHtml(sourceHash.slice(0, 16))}…</small></div>
     </div>
     <dl class="collective-agreement-applicability">${collectiveAgreementDefinitionList(displayedVersion)}</dl>
     ${displayedVersion.linkedProfileVersionId ? `<p class="collective-agreement-profile-link">Verknüpfte Regelprofil-Fassung: <strong>${escapeHtml(displayedVersion.linkedProfileVersionId)}</strong>. Die Dienstplanung verwendet sie nur mit ausführbaren Regeln, bestätigter persönlicher Gruppe und unabhängig freigegebener KV-Zuordnung.</p>` : ""}
@@ -26331,7 +26338,7 @@ function renderProductReadiness(payload) {
           <header><div><strong>${escapeHtml(gate.label)}</strong><small>${escapeHtml(gate.standard?.label || "Technischer Nachweis")}</small></div><span class="system-center-state ${copy.state}"><i aria-hidden="true">${copy.icon}</i>${escapeHtml(copy.label)}</span></header>
           <p>${escapeHtml(gate.detail || "")}</p>
           ${copy.state !== "ok" ? `<a href="#system-center-factor-${escapeHtml(gate.repairFactorId || (gate.id === "security" ? "server" : "recovery"))}">Beheben – betroffene Prüfungen ansehen</a> · ` : ""}
-          ${gate.standard?.url ? `<a href="${escapeHtml(gate.standard.url)}" target="_blank" rel="noreferrer">OWASP-Referenz öffnen</a>` : ""}
+          ${safeWorkRuleSourceUrl(gate.standard?.url) ? `<a href="${escapeHtmlAttribute(safeWorkRuleSourceUrl(gate.standard.url))}" target="_blank" rel="noopener noreferrer">OWASP-Referenz öffnen</a>` : ""}
         </article>`;
       }).join("")}
       ${manualGates.map((gate) => {
@@ -28536,7 +28543,7 @@ async function loadApprovalDelegations() {
     state.approvalDelegations = result.delegations || [];
     elements.delegationLocation.innerHTML = state.locations.map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.name)}</option>`).join("");
     refreshDelegationEmployees();
-    elements.delegationList.innerHTML = state.approvalDelegations.length ? state.approvalDelegations.map((item) => `<div class="delegation-row" data-delegation-id="${item.id}"><div><strong>${escapeHtml(item.location_name)} · ${escapeHtml(item.delegate_employee_number)} · ${escapeHtml(item.nickname || item.full_name)}</strong><small>${formatDate(item.date_from)}–${formatDate(item.date_to)}${item.note ? ` · ${escapeHtml(item.note)}` : ""}</small></div><button class="danger-button" data-delete-delegation type="button">Löschen</button></div>`).join("") : '<p class="settings-note">Keine zeitlich begrenzte Vertretung hinterlegt.</p>';
+    elements.delegationList.innerHTML = state.approvalDelegations.length ? state.approvalDelegations.map((item) => `<div class="delegation-row" data-delegation-id="${escapeHtmlAttribute(item.id)}"><div><strong>${escapeHtml(item.location_name)} · ${escapeHtml(item.delegate_employee_number)} · ${escapeHtml(item.nickname || item.full_name)}</strong><small>${formatDate(item.date_from)}–${formatDate(item.date_to)}${item.note ? ` · ${escapeHtml(item.note)}` : ""}</small></div><button class="danger-button" data-delete-delegation type="button">Löschen</button></div>`).join("") : '<p class="settings-note">Keine zeitlich begrenzte Vertretung hinterlegt.</p>';
   } catch (error) {
     elements.delegationSettingsCard.classList.toggle("hidden", error.status === 403);
   }
@@ -28857,9 +28864,9 @@ function renderTimePresence() {
     const entries = (employee.entries || []).map((entry) => `${escapeHtml(entry.label)} ${formatClockTimestamp(entry.timestamp)}`).join(" · ");
     const issues = timeEvaluationIssues(employee).map((issue) => issue.label || issue.code).join(" · ");
     return `<article class="time-presence-row ${escapeHtml(employee.state)}">
-      <span class="employee-color" style="background:${escapeHtml(employee.color || "#748087")}"></span>
+      <span class="employee-color" style="background:${safeCssColor(employee.color, "#748087")}"></span>
       <div class="time-presence-person"><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${entries || "Heute noch keine Buchung"}${issues ? ` · ${escapeHtml(issues)}` : ""}</small></div>
-      <span class="time-state-badge ${escapeHtml(employee.state)}">${labels[employee.state] || employee.state}</span>
+      <span class="time-state-badge ${escapeHtml(employee.state)}">${escapeHtml(labels[employee.state] || employee.state)}</span>
       <div class="time-presence-hours"><span>Plan <strong>${formatHours(employee.plannedMinutes)}</strong></span><span>Ist <strong>${formatHours(employee.actualMinutes)}</strong></span><span>Gewertet <strong>${formatHours(employee.valuedMinutes ?? employee.actualValuedMinutes)}</strong></span><span>Pause <strong>${formatHours(employee.breakMinutes)}</strong></span><span>Diff. <strong class="${Number(employee.valuedDifferenceMinutes ?? employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.valuedDifferenceMinutes ?? employee.differenceMinutes)}</strong></span></div>
       ${(employee.staleEntry && canReviewTime) || canReadPersonnelRecord ? `<div class="time-presence-actions">
         ${employee.staleEntry && canReviewTime ? `<button type="button" class="secondary-button compact-button" data-resolve-stale="${escapeHtml(employee.employeeNumber)}">Altbuchung abschließen</button>` : ""}
@@ -28933,7 +28940,7 @@ function renderTimeDayReview() {
       ? issues.map((issue) => issue.label || issue.code).join(" · ")
       : entry.excused?.excused ? entry.excused.label : "Keine Auffälligkeit";
     return `<article class="time-day-review-row ${issues.some((issue) => issue.severity === "error") ? "has-error" : issues.length ? "has-warning" : ""}" data-time-day-employee="${escapeHtml(entry.employeeNumber)}">
-      <span class="employee-color" style="background:${escapeHtml(entry.color || "#748087")}"></span>
+      <span class="employee-color" style="background:${safeCssColor(entry.color, "#748087")}"></span>
       <div class="time-day-review-person"><strong>${escapeHtml(entry.employeeNumber)} · ${escapeHtml(entry.nickname || entry.fullName || "Teammitglied")}</strong><small>${escapeHtml(issueText)}</small></div>
       ${status}
       <div class="time-day-review-values">
@@ -29858,7 +29865,7 @@ function renderManagerRequests() {
       const aumLabels = { required: "AUM erforderlich", received: "AUM eingelangt", reviewed: "AUM geprüft", not_required: "AUM nicht erforderlich" };
       const risk = entry.staffing_risk?.atRisk ? ` · Mindestbesetzung gefährdet${entry.staffing_risk.worstShortfall ? ` (−${Number(entry.staffing_risk.worstShortfall)})` : ""}` : "";
       return `<article class="manager-request-row sickness-case-row" data-sickness-case="${entry.id}">
-        <span class="employee-dot" style="--employee-color:${escapeHtml(entry.color || "#507267")}"></span>
+        <span class="employee-dot" style="--employee-color:${safeCssColor(entry.color, "#507267")}"></span>
         <div><strong><span class="request-kind-badge sickness">Krank</span> ${escapeHtml(entry.employee_number)} · ${escapeHtml(entry.nickname || entry.full_name)}</strong><small>ab ${formatDate(entry.start_date)}${returnText} · ${escapeHtml(entry.location_name || "")}${entry.department_name ? ` · ${escapeHtml(entry.department_name)}` : ""}</small><small><span class="request-status ${escapeHtml(entry.status)}">${escapeHtml(requestStatusLabels[entry.status] || entry.status)}</span> · ${escapeHtml(aumLabels[entry.amu_status] || entry.amu_status || "AUM-Status offen")}${risk ? escapeHtml(risk) : ""}</small></div>
         ${capabilities.view === true ? '<button class="secondary-button" data-open-sickness-action type="button">Fall öffnen</button>' : ""}
       </article>`;
@@ -29872,7 +29879,7 @@ function renderManagerRequests() {
       const responsibility = report.responsibility || {};
       const reportCanOpen = capabilities.view === true;
       return `<article class="manager-request-row amu-request-row" data-amu-report="${report.id}">
-        <span class="employee-dot" style="--employee-color:${escapeHtml(report.color || "#507267")}"></span>
+        <span class="employee-dot" style="--employee-color:${safeCssColor(report.color, "#507267")}"></span>
         <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatAmuPeriod(report)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(amuReportStatusLabel(report))}</span>${responsibility.label ? ` · zuständig: ${escapeHtml(responsibility.label)}` : ""}${report.reviewed_by && report.review_mode !== "automatic" ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
         ${reportCanOpen ? '<button class="secondary-button" data-open-amu-action type="button">AUM öffnen</button>' : ""}
       </article>`;
@@ -29893,7 +29900,7 @@ function renderManagerRequests() {
       const canOpen = request.capabilities?.view === true;
       return `
       <article class="manager-request-row" data-manager-request="${request.id}" data-request-kind="${escapeHtml(request.kind)}">
-        <span class="employee-dot" style="--employee-color:${escapeHtml(request.color || "#507267")}"></span>
+        <span class="employee-dot" style="--employee-color:${safeCssColor(request.color, "#507267")}"></span>
         <div><strong><span class="request-kind-badge ${escapeHtml(request.kind)}">${escapeHtml(details.label)}</span> ${escapeHtml(request.employee_number)} · ${escapeHtml(request.nickname || request.full_name)}</strong><small>${details.text}${request.note ? ` · ${escapeHtml(request.note)}` : ""}</small><small><span class="request-status ${escapeHtml(request.status)}">${escapeHtml(requestStatusLabels[request.status] || request.status)}</span>${approvals ? ` · ${approvals}` : ""}${request.decision_note ? ` · ${escapeHtml(request.decision_note)}` : ""}</small></div>
         ${canOpen ? '<button class="secondary-button" data-open-request-action type="button">Antrag öffnen</button>' : ""}
       </article>
@@ -38743,7 +38750,7 @@ function renderOptionList() {
     </div>`);
   const optionItems = options.map((option) => `
     <div class="option-item ${isTeamWideMeetingOption(option) ? "team-meeting-option-item" : ""}">
-      <span class="option-item-color" style="background:${isTeamWideMeetingOption(option) ? "#76529a" : option.color}"></span>
+      <span class="option-item-color" style="background:${isTeamWideMeetingOption(option) ? "#76529a" : safeCssColor(option.color, "#26785f")}"></span>
       <div><strong>${isTeamWideMeetingOption(option) ? `Ganzes Team (${option.team_member_count})` : `${escapeHtml(option.employee_number)} ${escapeHtml(option.nickname)}`} · ${optionLabels[option.option_type]}</strong>
       <small>${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` · ${escapeHtml(option.note)}` : ""}${isTeamWideMeetingOption(option) ? " · Krankmeldungen bleiben vorrangig" : ` · gerechnet ${formatHours(option.credited_minutes || 0)}`}</small>${option.option_type === "vocational_school" ? `<small>${escapeHtml(window.GPVocationalSchool.detailHint(window.GPVocationalSchool.readDetails(option)))}</small>` : ""}</div>
       <div class="option-actions ${isLocationPlannerSession() && !["vacation", "time_off"].includes(option.option_type) ? "hidden" : ""}">

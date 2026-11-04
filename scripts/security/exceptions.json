@@ -121,6 +121,146 @@
       "reviewedOn": "2026-10-26",
       "expiresOn": "2026-11-08",
       "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "de4c1b8ed5c7ec22aaf723f3c94a7126544f6d38614862c87fb29eaa149d8cdf",
+      "sourceSha256": "cdbd8bd3d283a295edf136de24d196d3c9f314f5629451398578f87eaaa6be1f",
+      "owner": "Codex PR106 source review",
+      "reason": "current checkout:server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:127. The matched text is shell syntax around empty rollback-password variable initialization, file-path operands and stage_failed=1 error handling. No credential literal is present; password bytes are read from protected runtime files. Exact source and location inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "ea01b0063f2041e717dc64faaadf3770d3727ce072afe0c2a441416e5bf6f7c3",
+      "sourceSha256": "cdbd8bd3d283a295edf136de24d196d3c9f314f5629451398578f87eaaa6be1f",
+      "owner": "Codex PR106 source review",
+      "reason": "current checkout:server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:138. The matched text is shell syntax around empty rollback-password variable initialization, file-path operands and stage_failed=1 error handling. No credential literal is present; password bytes are read from protected runtime files. Exact source and location inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "312f9b7a9cb188c1d05943440894ea9c96933a1e5fdb962b50950b1459796c31",
+      "sourceSha256": "cdbd8bd3d283a295edf136de24d196d3c9f314f5629451398578f87eaaa6be1f",
+      "owner": "Codex PR106 source review",
+      "reason": "current checkout:server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:139. The matched text is shell syntax around empty rollback-password variable initialization, file-path operands and stage_failed=1 error handling. No credential literal is present; password bytes are read from protected runtime files. Exact source and location inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "22dea58d3398ee38e7b65e6ae62c62cee18ae3fdd58834982ca7a77d758923cc",
+      "sourceSha256": "ef76fbb589da9d23488d4266b6d4b4cafa9f8a9014da0cc3bcd637862c42334e",
+      "owner": "Codex PR106 source review",
+      "reason": "current checkout:server-tools/linux/recovery/grabenplaner-recovery.sh:78. The scanner spans an empty uploader_credentials variable and the numeric operation_success=0 state assignment on the following line. This is recovery state initialization, not a credential or key. Exact source and both lines inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "82ca2c415a3777be082d99c1b3429ed1b3dcb21adc5da3126a94e9735ff8dce7",
+      "sourceSha256": "02e9571c37979d3a51439be045cffc9d1590a396029d702bb68fd32e7303a586",
+      "owner": "Codex PR106 source review",
+      "reason": "current checkout:test/sales-article-sales.test.js:92. The matched legacy-102607 value is an asserted synthetic article identity in an isolated sales-catalog fixture. It is compared with sourceArticleKey, never used for authentication or network authorization. Exact fixture and surrounding import assertions inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "ea6679352c885c370eaec8952411d85fd2653676e1dd46e3767d0dd9685ea10c",
+      "sourceSha256": "4c8366b17ddc1e7ff7c45944ea4ca8f545ea782bc43ace48c64f33a368150f9b",
+      "owner": "Codex PR106 source review",
+      "reason": "current checkout:test/v087-database-block5-postgresql-pool-policy.test.js:246. This isolated error-redaction unit test builds a deliberately synthetic PostgreSQL URL at db.internal.example to prove configured credentials never appear in errors. The literal is test input and is never used to connect to a real service. Exact fixture and assertion context inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "2a3fe27c586928638a075ec2ec73274aceafad499b75e6d9dcf033903d1831d0",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "Codex PR106 source review",
+      "reason": "1971f66e3b0bd0abc47e9988f5a54da1e3873fba:test/session-security-migration.test.js:28. The matched legacy-scrypt-v1-preserved string is a synthetic migration sentinel asserted unchanged after schema migration. It is not a valid password hash, key or authentication credential. Exact immutable historical fixture and SQL assertions inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "95d16169993b1b04189743b031756e70faedbebfe9d94c914eadb88b49b571f4",
+      "sourceSha256": "80b4f104ba2219aa8cce21da02e9ffe41eb42a583c5c3a26370e3f5cbc182ba6",
+      "owner": "Codex PR106 source review",
+      "reason": "1971f66e3b0bd0abc47e9988f5a54da1e3873fba:test/session-security-migration.test.js:81. The matched legacy-scrypt-v1-preserved string is a synthetic migration sentinel asserted unchanged after schema migration. It is not a valid password hash, key or authentication credential. Exact immutable historical fixture and SQL assertions inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "4409a8564e7cedad60fb27100ea7d3e4c93667cc643464947b795d73327743e2",
+      "sourceSha256": "7fea774726f147b59e1805a1bc4c8d5b7b6cde1d0a125cafebbfbaad0c7142b8",
+      "owner": "Codex PR106 source review",
+      "reason": "5f806efe50964a15190f1b929dcd2e6463a8e5d5:test/sales-article-sales.test.js:92. The matched legacy-102607 value is an asserted synthetic article identity in an isolated sales-catalog fixture. It is compared with sourceArticleKey, never used for authentication or network authorization. Exact fixture and surrounding import assertions inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "7eb479091d503289d94e6a7c3bf79bf382853d5299b0fe5a113f26b503d2bda1",
+      "sourceSha256": "4c8366b17ddc1e7ff7c45944ea4ca8f545ea782bc43ace48c64f33a368150f9b",
+      "owner": "Codex PR106 source review",
+      "reason": "623e1145fefcdc87f0d922e6c784a00f6582bc3e:test/v087-database-block5-postgresql-pool-policy.test.js:246. This isolated error-redaction unit test builds a deliberately synthetic PostgreSQL URL at db.internal.example to prove configured credentials never appear in errors. The literal is test input and is never used to connect to a real service. Exact fixture and assertion context inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "15a1dc715958ce63135a5b4e1e83cb665388a57c389bd11093c8c57e28732303",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "Codex PR106 source review",
+      "reason": "dfeb7448aa3b9aa60c114ba0ee9148595eda1d12:server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:124. The matched text is shell syntax around empty rollback-password variable initialization, file-path operands and stage_failed=1 error handling. No credential literal is present; password bytes are read from protected runtime files. Exact source and location inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "0d69da10cfd9784fdb4e6bb5c4a0c952bad96a1581b2ec97e5ccb3b53c5b3496",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "Codex PR106 source review",
+      "reason": "dfeb7448aa3b9aa60c114ba0ee9148595eda1d12:server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:135. The matched text is shell syntax around empty rollback-password variable initialization, file-path operands and stage_failed=1 error handling. No credential literal is present; password bytes are read from protected runtime files. Exact source and location inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "f6f5955119998229eed48fc461f3db22a49964d14ec07daf3e3b4c600f60b349",
+      "sourceSha256": "4749f242d468a3fb7de238b51128388c306be218f77d344866d778f96311af69",
+      "owner": "Codex PR106 source review",
+      "reason": "dfeb7448aa3b9aa60c114ba0ee9148595eda1d12:server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh:136. The matched text is shell syntax around empty rollback-password variable initialization, file-path operands and stage_failed=1 error handling. No credential literal is present; password bytes are read from protected runtime files. Exact source and location inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "90becb22e5eb74c76c68918a9ad7beab30ca170440528c704f7a9ba4adba6b25",
+      "sourceSha256": "ef76fbb589da9d23488d4266b6d4b4cafa9f8a9014da0cc3bcd637862c42334e",
+      "owner": "Codex PR106 source review",
+      "reason": "0179d7f6c424d4ae53609b71b0caff7af6c08f42:server-tools/linux/recovery/grabenplaner-recovery.sh:78. The scanner spans an empty uploader_credentials variable and the numeric operation_success=0 state assignment on the following line. This is recovery state initialization, not a credential or key. Exact source and both lines inspected.",
+      "reviewedOn": "2026-11-04",
+      "expiresOn": "2026-11-18",
+      "priority": "P2"
     }
   ]
 }

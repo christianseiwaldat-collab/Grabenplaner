@@ -111,7 +111,7 @@ test("Block 7: Leihe und Branding bleiben in den Grundeinstellungen, PDF wechsel
   assert.match(app, /Math\.ceil\(item\.offsetHeight \+ 15\)/);
   assert.match(app, /new ResizeObserver/);
   assert.match(app, /function integrateSchedulePdfSettings\(\)[\s\S]*elements\.scheduleSettings\.append\(elements\.pdfSettings\)/);
-  assert.match(app, /schedule:\s*settingsAccess \|\| scheduleSettingsAccess \|\| pdfSettingsAccess/);
+  assert.match(app, /schedule:\s*planningSaturdayAccess \|\| settingsAccess \|\| scheduleSettingsAccess \|\| pdfSettingsAccess/);
   assert.match(app, /integratedTarget === "pdf" \? "schedule"/);
   assert.match(app, /canSaveScheduleSettings \|\| canSaveSchedulePdfSettings \|\| canSaveGeneralSettings/);
   assert.ok(
