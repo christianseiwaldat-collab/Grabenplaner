@@ -2519,7 +2519,7 @@ function maskHashComments(text) {
 }
 
 function maskHtmlComments(text) {
-  return text.replace(/<!--[\s\S]*?-->/g, (comment) => comment.replace(/[^\r\n]/g, " "));
+  return text.replace(/\x3c!--[\s\S]*?--\x3e/g, (comment) => comment.replace(/[^\r\n]/g, " "));
 }
 
 function shellSegmentBefore(text, index) {

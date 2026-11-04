@@ -16,6 +16,14 @@ ausgelassene Ziele und abgebrochene Jobs gelten nicht als bestandene Prüfung.
 Die verpflichtende GitHub-Branchregel und die externe Aktivierung müssen separat
 eingerichtet und an einem tatsächlichen Actions-Lauf nachgewiesen werden.
 
+`security-syntax.yml` liefert zusätzlich eine schnelle, verschlüsselte
+Parserdiagnose mit drei unveränderten syntaktischen Upstream-Regeln. Dafür wird
+der hashgebundene veröffentlichte Wrapper verwendet; diese Vorbereitung erteilt
+keine SAST-Freigabe und unterdrückt keine Befunde. Nur der bestehende vollständige
+SAST-Job mit frisch qualifiziertem Kern und allen fünf Profilen zählt zum
+verpflichtenden `security-gates`-Ergebnis. Beide Prüfungen lehnen Parserfehler,
+ausgelassene Ziele und unvollständige Analysen ab.
+
 ## Werkzeuge und Umfang
 
 - SCA: OSV-Scanner 2.7.0 und `pnpm audit` 11.7.0. OSV muss sämtliche
@@ -104,8 +112,10 @@ Ausgelassene Dateien, Regeln, Analysefehler und Zeitabbrüche bleiben blockieren
 Fingerprint, tatsächlichem Datei-/Gitblob-SHA256, Begründung, Verantwortlichkeit,
 Prüfdatum und Ablaufdatum. Keine Advisory-Ausnahmen sind genehmigt. P0/P1 sind
 auf höchstens 14, P2/P3 auf höchstens 30 Kalendertage begrenzt. Die aktuellen
-synthetischen/Shellsyntax-Treffer wurden zweimal unabhängig gelesen und sind
-auf 14 Tage begrenzt. Zwei einzelne Dateien besitzen zusätzlich genau geprüfte
+synthetischen/Shellsyntax-Treffer sind anhand ihrer tatsächlichen Quellen einzeln
+bewertet und auf 14 Tage begrenzt. Neue PR106-Bewertungen kennzeichnen den
+technischen Codex-Review ausdrücklich; die unabhängige GitHub-PR-Freigabe bleibt
+zusätzlich erforderlich. Zwei einzelne Dateien besitzen zusätzlich genau geprüfte
 LF-Checkout-Hashes; es gibt keine allgemeine Inhaltsnormalisierung. Neue oder
 verschobene Treffer, neue historische Commits und Inhaltsdrift blockieren.
 
