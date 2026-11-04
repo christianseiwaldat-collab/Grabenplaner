@@ -253,12 +253,29 @@ test('historical immutable SQLite background worker preserves separate-file PDF 
   const { createSalesReportBatchWorker } = historical.legacyRequire('lib/sales-report-batch-worker.js');
   const batchWorker = createSalesReportBatchWorker({ databasePath, scopeId: f.actor.scopeId, today: '2026-09-07',
     keyConfiguration: { activeKeyId: 'synthetic', keys: { synthetic: Buffer.alloc(32, 12).toString('base64') } } });
+  // Pin the coordinating runtime to the same immutable report model as its
+  // historical worker. Current validation rules have their own source revision.
+  const legacyProvider = historical.legacyRequire('lib/persistence/sqlite/provider.js');
+  const legacyAccess = legacyProvider.createSqlitePersistenceProvider({
+    database: legacyProvider.openSqliteLegacyDatabase(databasePath, { readOnly: true, initializeConnection: false }),
+    catalog: historical.legacyRequire('lib/persistence/sqlite/application-catalog.js').SQLITE_APPLICATION_CATALOG,
+    closeDatabase: true, initializeConnection: false,
+  });
+  const legacyVault = historical.legacyRequire('lib/integration-secret-vault.js').createIntegrationSecretVault({
+    activeKeyId: 'synthetic', keys: { synthetic: Buffer.alloc(32, 12) },
+  });
+  const legacyRuntime = historical.legacyRequire('lib/persistence/repositories/sales-history-runtime.js').createManagedSalesHistoryRuntime({
+    access: legacyAccess, vault: legacyVault, scopeId: f.actor.scopeId, cashEnabled: true,
+    retainCompletedAnalyses: false, today: () => '2026-09-07',
+  });
   const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
-  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: f.history(), resolvePrincipal: f.get, scope: f.actor.scopeId, batchWorker });
-  t.after(async () => { await jobs.stop(); assert.equal(fs.realpathSync(path.dirname(dir)), root); fs.rmSync(dir, { recursive: true }); });
+  const jobs = createSalesReportJobs({ access: f.app.provider, vault: f.vault, runtime: legacyRuntime, resolvePrincipal: f.get, scope: f.actor.scopeId, batchWorker });
+  t.after(async () => { await jobs.stop(); await legacyAccess.close(); assert.equal(fs.realpathSync(path.dirname(dir)), root); fs.rmSync(dir, { recursive: true }); });
   const before = f.app.database.prepare('SELECT * FROM cash_snapshot_inventory ORDER BY dataset_slot,table_index').all();
   const job = await jobs.create(f.session, { query: f.query({ reportVersion: 3, orientation: 'landscape', chartType: 'bars' }) });
-  await jobs.tick(); assert.equal((await jobs.list(f.session))[0].processed, 200);
+  await jobs.tick();
+  const firstBatch = (await jobs.list(f.session))[0];
+  assert.equal(firstBatch.processed, 200, JSON.stringify({ status: firstBatch.status, error: firstBatch.error }));
   await jobs.tick(); await jobs.tick();
   assert.equal((await jobs.list(f.session))[0].status, 'completed');
   assert.match(await reportPdfText(await jobs.download(f.session, job.id)), /2[.\s]?050,00/);
