@@ -64,7 +64,8 @@
     const labels = { review: 'Prüfung offen', 'unidentified-article': 'Artikelzuordnung offen' };
     return { title: 'Datengrundlage · ABC-Analyse', source: sourceInfo(snapshot.sourceQuality, snapshot.sourceAt), calendarUnknown: snapshot.coverage?.periodCompleteness !== 'confirmed',
       coverage: snapshot.coverage?.basis === 'verified-import' ? 'Basis: geprüfte importierte Kassenpositionen.' : '',
-      issues: (snapshot.buckets || []).filter(item => own(labels, item.id)).map(item => ({ label: labels[item.id], count: item.positions })),
+      issues: [...(snapshot.buckets || []).filter(item => own(labels, item.id)).map(item => ({ label: labels[item.id], count: item.positions })),
+        ...(snapshot.summary?.receiptIssues?.count ? [{ label: 'Belege ohne auswertbare Positions- oder Datumszuordnung', count: snapshot.summary.receiptIssues.count }] : [])],
       note: 'Geprüfte importierte Positionen. Historische Daten werden durch ihr Alter nicht automatisch fehlerhaft.' };
   }
   return Object.freeze({ normalize, render, sourceInfo, stock, history, abc });

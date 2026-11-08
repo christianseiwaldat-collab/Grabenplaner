@@ -94,6 +94,32 @@ async function fixture(t, options = {}) {
   t.after(async () => { protection.destroy(); await app.provider.close(); app.database.close(); });
   return f;
 }
+
+test('reporting isolates an unknown receipt and detects a head without positions without changing the sealed source', async t => {
+  const f = await fixture(t), data = { Umsatz_KASSE: [], Umsatz_Kasse_Details: [] };
+  for (const [number, date, price, unknown] of [[1, '2010-01-02', '120', false], [2, '2010-01-03', '12', true], [3, '2009-01-02', '60', false]]) {
+    const one = rows({ price, unknown });
+    one.Umsatz_KASSE[0].Bonnr = String(number); one.Umsatz_KASSE[0].Bondatum = date + 'T00:00:00.000';
+    Object.assign(one.Umsatz_Kasse_Details[0], { Bonnr: String(number), Bondatum: date + 'T00:00:00.000',
+      RepID: '00000000-0000-0000-0000-' + String(number).padStart(12, '0') });
+    data.Umsatz_KASSE.push(...one.Umsatz_KASSE); data.Umsatz_Kasse_Details.push(...one.Umsatz_Kasse_Details);
+  }
+  data.Umsatz_KASSE.push({ ...data.Umsatz_KASSE[0], Bonnr: '4', RechnungsBetrag: '48' });
+  const id = await f.build(data); await f.activate(f.request(id));
+  const before = f.app.database.prepare('SELECT * FROM cash_snapshot_inventory ORDER BY dataset_slot,table_index').all();
+  const runtime = f.history(), input = f.query({ groupBy: ['productGroup'], metrics: ['netRevenue','receiptCount'] });
+  const metadata = await runtime.run(f.get, w => w.reports.metadata());
+  let result = await runtime.run(f.get, w => w.reports.step(input, metadata));
+  for (let i = 0; !result.analysis.complete && i < 10; i++) result = await runtime.run(f.get, w => w.reports.step(input, metadata, result.analysis.cursor));
+  assert.equal(result.analysis.complete, true); assert.equal(result.report.processed, 3);
+  assert.equal(result.report.coverage.current.unassignedReceipts, 1);
+  assert.equal(result.report.total.quality.current.reviewReceipts, 2);
+  assert.deepEqual(result.report.total.quality.current.reviewExamples.map(e => e.number).sort(), ['2','4']);
+  const metric = result.report.total.metrics.netRevenue;
+  assert.equal(metric.current, null); assert.equal(metric.verifiedCurrent, '100.00'); assert.equal(metric.previous, '50.00');
+  assert.deepEqual(metric.verifiedChange, { absolute: '50.00', percent: '100.00', basis: 'verified_subset' });
+  assert.deepEqual(f.app.database.prepare('SELECT * FROM cash_snapshot_inventory ORDER BY dataset_slot,table_index').all(), before);
+});
 test('Article archive enrichment preserves cash bindings, original text and checked amounts across imports',async t=>{
  const f=await fixture(t);await f.activate();
  const source=await require('../test-support/trade-insights-fixture').insightFixture({access:f.app.provider,protection:f.protection,...f.actor,seedBase:false});
@@ -435,7 +461,7 @@ test('reviewed cash rules flow from an unchanged sealed publication through rece
   const { createCashPublications } = require('../lib/persistence/repositories/cash-publications');
   const publications = createCashPublications({ access: f.app.provider, protection: f.protection, scopeId: f.actor.scopeId });
   const publication = await f.app.provider.transaction(tx => publications.active(tx), { readOnly: true });
-  assert.equal(publication.data.policy.version, 1); assert.equal(publication.policy.version, 13);
+  assert.equal(publication.data.policy.version, 1); assert.equal(publication.policy.version, 20);
   const before = C.canonical(publication.row), runtime = f.history();
   const history = await runtime.run(f.get, w => w.search(f.query()));
   assert.equal(history.totals.gross, '1273.18'); assert.equal(history.coverage.counts.review, 0);
@@ -749,9 +775,12 @@ test('an open companion line preserves Sony revenue and confirmed cash margin wi
   let result = await runtime.run(f.get, w => w.reports.step(input, metadata));
   result = await runtime.run(f.get, w => w.reports.step(input, metadata, result.analysis.cursor));
   const sony = result.report.rows[0]; assert.equal(result.report.rows.length, 1); assert.equal(sony.dimensions[0].id, 'sony');
-  assert.deepEqual(sony.metrics.netRevenue, { current: null, previous: '50.00', absolute: null, percent: null, verifiedCurrent: '100.00' });
-  assert.deepEqual(sony.metrics.grossMargin, { current: null, previous: '10.00', absolute: null, percent: null, verifiedCurrent: '20.12' });
-  assert.deepEqual(sony.metrics.marginRate, { current: null, previous: '20.00', absolute: null, percent: null, verifiedCurrent: '20.12' });
+  assert.deepEqual(sony.metrics.netRevenue, { current: null, previous: '50.00', absolute: null, percent: null, verifiedCurrent: '100.00',
+    verifiedChange: { absolute: '50.00', percent: '100.00', basis: 'verified_subset' } });
+  assert.deepEqual(sony.metrics.grossMargin, { current: null, previous: '10.00', absolute: null, percent: null, verifiedCurrent: '20.12',
+    verifiedChange: { absolute: '10.12', percent: '101.20', basis: 'verified_subset' } });
+  assert.deepEqual(sony.metrics.marginRate, { current: null, previous: '20.00', absolute: null, percent: null, verifiedCurrent: '20.12',
+    verifiedChange: { absolute: '0.12', percent: '0.60', basis: 'verified_subset' } });
   assert.equal(sony.quality.current.records, 2); assert.equal(sony.quality.current.checked, 1); assert.equal(sony.quality.current.review, 1);
   assert.deepEqual(sony.quality.current.issues, { VAT_CODE_UNKNOWN: 1 });
   const { createSalesReportJobs } = require('../lib/persistence/repositories/sales-report-jobs');
@@ -764,7 +793,8 @@ test('an open companion line preserves Sony revenue and confirmed cash margin wi
   assert.match(text, /historischer Kassen-Rohertrag je Stück/);
   assert.doesNotMatch(text, /Bedeutung des historischen Kassenfelds ist noch nicht bestätigt/);
   assert.match(text, /Offene Belegprüfungen/); assert.match(text, /MwSt.-Zuordnung/);
-  assert.doesNotMatch(text, /Anteile im Auswertungszeitraum|100,00\s*%/);
+  assert.doesNotMatch(text, /Anteile im Auswertungszeitraum/);
+  assert.match(text, /100,00\s*%\s*\*/); assert.match(text, /keine vollständige Gesamtveränderung/);
 });
 
 test('Online includes 0/00/70/90 across batches once, excludes unassigned sources and remains restricted to company readers', async t => {

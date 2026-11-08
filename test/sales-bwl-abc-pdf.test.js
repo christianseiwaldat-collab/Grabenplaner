@@ -8,6 +8,7 @@ function fixture(count = 85) {
   for (let i = 0; i < count; i++) M.accumulate(state, { articleNumber: 'ART-' + String(i).padStart(5, '0'), description: 'BEISPIEL-ZEILE-' + String(i).padStart(5, '0'),
     locationId: '18', location: 'BEISPIEL Filiale', metric: { status: 'sale', net: String(count - i) + '.00' }, quantity: '1.000000', margin: i % 11 ? '2.00' : null });
   M.accumulate(state, { articleNumber: null, metric: null, quantity: null, reviewIssues: ['BEISPIEL-PRUEFFALL'] });
+  M.recordReceiptIssue(state, ['RECEIPT_WITHOUT_LINES']);
   return { query, coverage: M.COVERAGE, sourceAt: '2026-10-08T12:00:00.000Z', ...M.finish(state, query, { margin: true }) };
 }
 async function read(buffer) {
@@ -43,6 +44,7 @@ test('ABC PDF has true portrait/landscape pages, custom metadata, every chosen r
     assert.equal(result.pages, parsed.pages.length); assert.equal(result.rows, snapshot.rows.length); assert.ok(result.pages > 2);
     assert.equal(parsed.metadata.info.Title, title); const text = parsed.pages.map(p => p.text).join(' ');
     assert.match(text, /Zeitraumvollständigkeit nicht nachgewiesen/); assert.match(text, /Datengrundlage und gesonderte Positionen/); assert.match(text, /Belegprüfung offen: 1 Position/); assert.match(text, /Prüfen/);
+    assert.match(text, /1 Belege ohne auswertbare Positions- oder Datumszuordnung/); assert.match(text, /kein bestätigter Nullumsatz/);
     for (const row of snapshot.rows) assert.equal(parsed.pages.flatMap(p => p.items).filter(item => item.str === row.description).length, 1, orientation + ': ' + row.description);
     for (const page of parsed.pages) {
       assert.ok(Math.abs(page.width - (orientation === 'portrait' ? 595.28 : 841.89)) < .1); assert.ok(Math.abs(page.height - (orientation === 'portrait' ? 841.89 : 595.28)) < .1);
