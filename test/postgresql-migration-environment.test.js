@@ -39,11 +39,14 @@ test('Live environment enforces bounded queries and recovers its connection afte
     await assert.rejects(pool.query('SELECT pg_sleep(2)'),{code:'57014'});
     assert.equal((await pool.query('SELECT 42 value')).rows[0].value,42);
     const session=(await pool.query("SELECT current_setting('listen_addresses') host,current_setting('max_connections') maximum,current_setting('shared_buffers') buffers")).rows[0];
-    if(process.env.GP_CI_POSTGRESQL_FIXTURE==='github-actions-service-v1'){
+    const fixture=process.env.GP_CI_POSTGRESQL_FIXTURE;
+    if(['github-actions-service-v1','owned-local-service-v1'].includes(fixture)){
       require('../test-support/postgresql-migration/ci-endpoint').assertSyntheticEndpoint(process.env.GP_CORE_APP_URL,'core',[]);
       // Docker listens on its container interface; the workflow publishes only
-      // runner loopback. Application/reader role limits remain separately bounded.
-      assert.equal(session.host,'*');assert.equal(session.maximum,'100');assert.equal(session.buffers,'128MB');
+      // runner loopback. The authenticated owned service listens on loopback.
+      // Both service fixtures retain the separately bounded application roles.
+      assert.equal(session.host,fixture==='github-actions-service-v1'?'*':'127.0.0.1');
+      assert.equal(session.maximum,'100');assert.equal(session.buffers,'128MB');
       const roles=(await pool.query("SELECT rolname,rolconnlimit FROM pg_roles WHERE rolname IN ('gp_core_app','gp_core_reader','gp_sales_app','gp_sales_reader') ORDER BY rolname")).rows;
       assert.deepEqual(roles,[{rolname:'gp_core_app',rolconnlimit:8},{rolname:'gp_core_reader',rolconnlimit:8},{rolname:'gp_sales_app',rolconnlimit:7},{rolname:'gp_sales_reader',rolconnlimit:8}]);
     }else{
