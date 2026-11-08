@@ -72,6 +72,13 @@ Die Reihenfolge fuer eine spaeter ausdruecklich freigegebene Auslieferung ist:
    Das ZIP isoliert als Build-Benutzer entpacken und mit der bestehenden
    Sicherheitsbasis in einen frischen root-eigenen Baum versiegeln. Kein
    Extrahieren als root, keine nutzerbeschreibbaren Elternverzeichnisse.
+   Fuer diesen besonderen Kandidatenbaum muss der unveraenderte Sealer
+   ausdruecklich `gp_seal_build_tree "$extract_root" "$candidate_root" root`
+   verwenden (drittes Argument `root`, also GID0). Der normale App-Sealer nutzt
+   dagegen die Dienstgruppe. Frische root:root-Inodes sind hier erforderlich;
+   ein nachtraegliches chown eines vom Build-Benutzer offenen Baums reicht nicht.
+   Vor dem Einstieg bindet `gp_verify_sealed_zip "$package" "$candidate_root" 0`
+   den so versiegelten Baum an die urspruenglichen ZIP-Bytes.
 2. Den root-geschuetzten Einstieg mit `--package`, `--sha256`,
    `--candidate-root` und gegebenenfalls `--node`/`--pnpm` aufrufen. Er prueft
    bytegleiche ZIP-/Quellbaumbindung, eigene Einstiegs-/Helperbytes,
