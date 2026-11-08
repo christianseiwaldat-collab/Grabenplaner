@@ -142,7 +142,7 @@ for relative in refresh-grabenplaner-offsite-upload.sh lib/common.sh lib/offsite
 done
 clamscan --recursive --infected --no-summary -- "$candidate" >/dev/null || gp_die 'ClamAV hat den Kandidaten abgelehnt.'
 manifest="$(root_node "$candidate/server-tools/linux/lib/verify-package.js" "$candidate")" || gp_die 'Paketmanifest und Einzeldateien sind ungueltig.'
-fingerprint="$(root_node -e 'const v=JSON.parse(process.argv[1]);if(v.deploymentSchemaVersion!==6||v.offsiteModule?.moduleVersion!==13)process.exit(1);process.stdout.write(v.offsiteModule.fingerprint)' "$manifest")" || gp_die 'Nur Core6/Offsite13 wird unterstuetzt.'
+fingerprint="$(root_node -e 'const v=JSON.parse(process.argv[1]);if(v.runtimeContract?.deploymentSchemaVersion!==6||v.offsiteModule?.moduleVersion!==13)process.exit(1);process.stdout.write(v.offsiteModule.fingerprint)' "$manifest")" || gp_die 'Nur Core6/Offsite13 wird unterstuetzt.'
 # The installed entrypoint remains the authority for the application update.
 root_node "$APP/server-tools/linux/lib/verify-package.js" --runtime-contract "$APP" >/dev/null || gp_die 'Der installierte Core-Vertrag ist nicht gueltig.'
 bash "$SCRIPT_DIR/preflight-grabenplaner-deploy.sh" "${preflight_args[@]}" >/dev/null || gp_die 'Der verpflichtende read-only Deploy-Vorabcheck ist nicht gruen.'
