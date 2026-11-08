@@ -556,6 +556,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   // Exactly two read-only membership statements for article/branch reporting.
   // Its catalog bindings grant no driver or raw database-handle capability.
   "lib/sales-article-report-statements.js",
+  "lib/sales-report-receipt-issues.js",
   // Simulation has one read-only accepted-catalog epoch and one revision-bound
   // deletion of its encrypted chunks; no driver, raw handle or migration.
   "lib/sales-bwl-simulation-statements.js",
@@ -904,6 +905,9 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/cash-history-snapshot-prototype.test.js",
   "test/cash-snapshots.test.js",
   "test/cash-publication-integration.test.js",
+  // Synthetic in-memory receipt paging; no production driver capability.
+  "test/sales-report-receipt-issues.test.js",
+  "test/sales-report-receipt-issues-postgresql.test.js",
   "test-support/large-data-backup-qualification.mjs",
   "test-support/tradefoto-full-backup-measurement.js",
   "test/background-backup-consistency.test.js",
@@ -1056,6 +1060,7 @@ const PHASE_3_STATEMENT_FILES = Object.freeze(
     // modules still cannot declare provider statements.
     || file === "lib/sales-article-sales-statements.js"
     || file === "lib/sales-article-report-statements.js"
+    || file === "lib/sales-report-receipt-issues.js"
     || file === "lib/sales-bwl-simulation-statements.js"
   )),
 );
@@ -1910,6 +1915,8 @@ const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
   "test/sales-article-catalog-search.test.js",
   "scripts/benchmark-sales-search.js",
   "test/cash-publication-integration.test.js",
+  "test/sales-report-receipt-issues.test.js",
+  "test/sales-report-receipt-issues-postgresql.test.js",
   "test-support/cash-history-snapshot-prototype.js",
   "test/data-import-state-counts.test.js",
   ...BASELINE_DIRECT_TEST_DRIVER_FILES.filter((file) => ![

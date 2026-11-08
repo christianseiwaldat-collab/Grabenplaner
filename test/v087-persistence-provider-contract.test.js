@@ -848,6 +848,28 @@ test("Article report membership grants only its exact read-only statement declar
   }
 });
 
+test("Receipt issue paging permits only its read-only statement and isolated test driver", () => {
+  const file = "lib/sales-report-receipt-issues.js";
+  assert.deepEqual(architectureBoundaryViolationsForText(file, fs.readFileSync(path.join(root, file), "utf8")), []);
+  const { statement } = require("../lib/sales-report-receipt-issues");
+  assert.equal(statement.id, "sales-report.receipt-issue-candidates");
+  assert.equal(statement.operation, "queryAll");
+  const { SQLITE_APPLICATION_CATALOG, SALES_REPORT_RECEIPT_ISSUE_CATALOG } = require("../lib/persistence/catalogs/application-catalog");
+  assert.equal(SQLITE_APPLICATION_CATALOG.length, 1507, "The historical dialect contract stays frozen");
+  assert.equal(SQLITE_APPLICATION_CATALOG.some(entry => entry.statement === statement), false);
+  assert.deepEqual(SALES_REPORT_RECEIPT_ISSUE_CATALOG.map(entry => entry.statement), [statement]);
+  assert.equal(SALES_REPORT_RECEIPT_ISSUE_CATALOG[0].returning, false);
+  assert.match(SALES_REPORT_RECEIPT_ISSUE_CATALOG[0].sql, /^SELECT\b/);
+  for (const target of [file, "lib/sales-report-receipt-issues-other.js"]) {
+    for (const [source, kind] of [
+      ["const driver = require('node:" + "sqlite');", "sqlite-driver-import-outside-boundary"],
+      ["const driver = require('pg');", "postgresql-driver-import"],
+      ["const provider = createPersistenceProviderFacade(adapter);", "provider-facade-outside-boundary"],
+      ["const configured = process.env.DB_PROVIDER;", "provider-runtime-config-outside-boundary"],
+    ]) assert.equal(architectureBoundaryViolationsForText(target, source).some(entry => entry.kind === kind), true, `${target}: ${kind}`);
+  }
+});
+
 test("Simulation registration permits only its named epoch and scoped CAS statements without raw access", () => {
   const file = "lib/sales-bwl-simulation-statements.js";
   assert.equal(PHASE_3_SQLITE_PROVIDER_FILES.filter(entry => entry === file).length, 1);
