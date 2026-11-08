@@ -1,6 +1,10 @@
 # Versionsstatus
 
-## v0.92.100 Beta · Quellstand
+## v0.92.101 Beta · Quellstand
+
+Geprüfte Kassenstatistiken bleiben bei offenen Quellbelegen mit deutlich gekennzeichneten Teilvergleichen nutzbar.
+Bestätigte Kassenregeln bleiben bei Wiederimporten stabil; Berichts-PDFs weisen die betroffenen Fälle aus.
+Die Rückbestätigung derselben Cloud-Sicherung erhält begrenzte Wiederholungen und private Fehlernachweise.
 
 Berichte und Vorlagen erhalten eine kompakte Ordnerverwaltung sowie konfigurierbare Diagramm- und Artikel-PDFs.
 Der standortbezogene Samstagszuschlag gilt ausschließlich für eingeteilte Samstagszeiten ab 13 Uhr und verändert keine tatsächliche Zeiterfassung.

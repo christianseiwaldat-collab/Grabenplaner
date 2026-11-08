@@ -37864,9 +37864,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P2",
-      "reason": "2026-11-04 forward-integration context review. The complete 36-line forward delta was reviewed: Saturday controls use a bounded permission/scope check and textContent; location selection is sent to the dedicated controller. Summary/hour rendering retains its existing encoded producers. Article price visibility mounts the account-bound preference store with current actor, article identity, permission and page guards; it neither adds a new HTML producer nor replaces existing encoders. The 1,879 unchanged enclosing functions were separately identified by exact normalized AST hashes; changed renderer bodies and their new wiring were read directly. The reviewed HTML delta adds literal form controls, styles and same-origin script references, plus the release version label. It supplies no user-controlled tag names, attribute names or inline executable source. Existing controlled markup contracts remain in place. Existing individual producer/guard rationale: Complete finding-span bytes verified unchanged from 631ab4fa; surrounding release delta reviewed on 2026-11-01. Expiry retained; fresh full Linux scan must match. Previous individual rationale: Exact complete sink-line continuity verified from a65a0f9b5b6b to the article optimization on 2026-10-31; surrounding delta reviewed without extending expiry. Fresh full Linux SAST must independently match these coordinates. Retained individual rationale (older line anchors are historical): Actual native Linux evidence 40387646755 confirms this unchanged complete sink span at public/app.js:23340:15. Retained individual historical rationale (older line anchors remain historical): Native D evidence confirms the unchanged complete sink-line span at public/app.js:23340:15. Historical individual producer/guard rationale: The loaders map contains six local functions; data-learning-area is emitted only as static known values. Server or imported learning data does not supply this attribute. Calling inherited properties requires already modifying the DOM and does not establish a privilege boundary bypass. Reachability boundary: Client opens one of six learning areas defined in static index.html. Current source-context delta review (2026-10-25): The complete changed application source was reviewed: new candidate forms/previews use the text and attribute encoders, Passkey links have fixed local prefixes with encoded identifiers, and planningDates only selects authored schedule markup. Expanded candidate/organization expressions have separate exact current reviews; retained sinks keep their individual prior producer and output-encoding contracts. The complete HTML delta adds authored Passkey controls, local links and fixed self-hosted asset paths, plus label wording. It does not change the six static data-learning-area values or their emitters used by the reviewed learning loader. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval. Delta reviewed 2026-10-26: The complete note-editor delta was individually reviewed: Quill Delta/clipboard processing replaces the old HTML rewrite; format commands and 4..72 point sizes are bounded. Existing encoders, safe URLs, CSS validators, authorization/session helpers and other producers are unchanged. The complete static HTML delta adds authored local editor controls/styles and version labels; existing loader data attributes and self-hosted script targets are unchanged. No dynamic markup or CSP relaxation. No human approval is claimed. Continuity review 2026-11-01: bounded 0.92.98 changes defer authenticated purchase details behind the existing section route and escaped stock layout, retaining current actor and permission checks; explicit decimal12 catalog projection preserves raw source evidence and normal revision, expiry, import and undo gates. CI adds the existing isolated browser regression. Authored version labels are updated. The reported sink span is unchanged; final-head Linux SAST is still required. Original classification and expiry retained.",
-      "reviewer": "Codex exact source/function continuity and current delta review; not human approval",
-      "reviewedOn": "2026-11-04",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. 2026-11-04 forward-integration context review. The complete 36-line forward delta was reviewed: Saturday controls use a bounded permission/scope check and textContent; location selection is sent to the dedicated controller. Summary/hour rendering retains its existing encoded producers. Article price visibility mounts the account-bound preference store with current actor, article identity, permission and page guards; it neither adds a new HTML producer nor replaces existing encoders. The 1,879 unchanged enclosing functions were separately identified by exact normalized AST hashes; changed renderer bodies and their new wiring were read directly. The reviewed HTML delta adds literal form controls, styles and same-origin script references, plus the release version label. It supplies no user-controlled tag names, attribute names or inline executable source. Existing controlled markup contracts remain in place. Existing individual producer/guard rationale: Complete finding-span bytes verified unchanged from 631ab4fa; surrounding release delta reviewed on 2026-11-01. Expiry retained; fresh full Linux scan must match. Previous individual rationale: Exact complete sink-line continuity verified from a65a0f9b5b6b to the article optimization on 2026-10-31; surrounding delta reviewed without extending expiry. Fresh full Linux SAST must independently match these coordinates. Retained individual rationale (older line anchors are historical): Actual native Linux evidence 40387646755 confirms this unchanged complete sink span at public/app.js:23340:15. Retained individual historical rationale (older line anchors remain historical): Native D evidence confirms the unchanged complete sink-line span at public/app.js:23340:15. Historical individual producer/guard rationale: The loaders map contains six local functions; data-learning-area is emitted only as static known values. Server or imported learning data does not supply this attribute. Calling inherited properties requires already modifying the DOM and does not establish a privilege boundary bypass. Reachability boundary: Client opens one of six learning areas defined in static index.html. Current source-context delta review (2026-10-25): The complete changed application source was reviewed: new candidate forms/previews use the text and attribute encoders, Passkey links have fixed local prefixes with encoded identifiers, and planningDates only selects authored schedule markup. Expanded candidate/organization expressions have separate exact current reviews; retained sinks keep their individual prior producer and output-encoding contracts. The complete HTML delta adds authored Passkey controls, local links and fixed self-hosted asset paths, plus label wording. It does not change the six static data-learning-area values or their emitters used by the reviewed learning loader. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval. Delta reviewed 2026-10-26: The complete note-editor delta was individually reviewed: Quill Delta/clipboard processing replaces the old HTML rewrite; format commands and 4..72 point sizes are bounded. Existing encoders, safe URLs, CSS validators, authorization/session helpers and other producers are unchanged. The complete static HTML delta adds authored local editor controls/styles and version labels; existing loader data attributes and self-hosted script targets are unchanged. No dynamic markup or CSP relaxation. No human approval is claimed. Continuity review 2026-11-01: bounded 0.92.98 changes defer authenticated purchase details behind the existing section route and escaped stock layout, retaining current actor and permission checks; explicit decimal12 catalog projection preserves raw source evidence and normal revision, expiry, import and undo gates. CI adds the existing isolated browser regression. Authored version labels are updated. The reported sink span is unchanged; final-head Linux SAST is still required. Original classification and expiry retained.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -37880,12 +37880,12 @@
         },
         {
           "path": "public/index.html",
-          "sha256": "e80cf33de1b35c0ffb2607a6c472ef63054d00efcfc34e7debb97c8bda2ed5ba",
+          "sha256": "3d0299bd87c372cfb22eae7e511bd4a08ddbd040e3de18604192dd93ad3fdec3",
           "sha256Variants": [
-            "e80cf33de1b35c0ffb2607a6c472ef63054d00efcfc34e7debb97c8bda2ed5ba",
-            "00426f65ab71fb876560b97608f52b1d95a55a91274c4bb5f1fc20caa7e6b321"
+            "3d0299bd87c372cfb22eae7e511bd4a08ddbd040e3de18604192dd93ad3fdec3",
+            "eb5c1914bdc3cbb6fb13431679850e395589d60f5f9dd8f15d9da98faf822828"
           ],
-          "reason": "Retained individual historical context: Historical baseline context: Lines 1032: All six data-learning-area attributes are static checked-in values, not server/import data. Release 0.92.91 changes only the two version labels; all six attribute values and their surrounding markup are unchanged. Context continuity review 2026-10-19 (Codex, automated review; no human approval): Static navigation, section hosts and the fixed same-origin security-sast.js script reference changed. No inline script, untrusted interpolation or external source was added. Release 0.92.92 continuity review 2026-10-20 (Codex, automated; no human approval): comparison with the previously qualified b63774c source proves that exactly two version labels changed. The six static data-learning-area values, loader map, finding source, navigation and script references remain byte-identical. Release 0.92.93 continuity review 2026-10-22 (Codex, automated review; no human approval): Exact comparison with committed 7e19e1b proves that only the two sidebar/footer version labels change from v0.92.92 Beta to v0.92.93 Beta. All six static data-learning-area attribute values, the dynamic-method allowlist/loader, finding source span, navigation, markup structure and script references are unchanged. Only this context file is rebound to its explicitly reviewed current LF/CRLF raw hashes; the original finding identity, review authority and expiry are retained. Current source delta review (2026-10-25): The complete HTML delta adds authored Passkey controls, local links and fixed self-hosted asset paths, plus label wording. It does not change the six static data-learning-area values or their emitters used by the reviewed learning loader. Prior prose line anchors are historical; current finding positions come from the exact native D result. Current delta reviewed 2026-10-26: The complete static HTML delta adds authored local editor controls/styles and version labels; existing loader data attributes and self-hosted script targets are unchanged. No dynamic markup or CSP relaxation. Earlier prose line anchors remain historical; actual finding coordinates are authoritative. Release 0.92.95 context review 2026-10-27 (Codex technical review; no human approval): exact canonical LF comparison with 0ec91e98d823072d490b9c58abf7c666634062e1 proves only two literal version labels change from 0.92.94 to 0.92.95. The six static data-learning-area values, entire remaining HTML bytes, reported public/app.js sink, loader map and trust boundary are unchanged. Identity, priority, classification and existing expiry remain unchanged. Fresh final-head Linux SAST remains required. Differential context review 2026-10-29: only a fixed ID on the existing scope-options wrapper and an initially empty authored location-choice container are added; no inline handler, script source or untrusted markup is introduced. Article delta review 2026-10-31: The only change loads the authored same-origin sales-article-deferred-notes.js before its caller. No inline script, dynamic URL, external source or CSP bypass is added. Release delta review 2026-11-01: Adds only fixed same-origin Emma script and stylesheet references and a hidden settings container with static text. No external source, inline executable code or dynamic URL is introduced. CI repair review 2026-11-01: only two authored static display versions change from 0.92.95 to 0.92.96; scripts, markup structure and all dynamic sinks remain unchanged. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves only the two authored version labels change from 0.92.96 to 0.92.97. Loader attributes, scripts, complete remaining markup and the reported sink are unchanged. Existing authority, classification and expiry are retained; final-head Linux SAST remains required. Continuity review 2026-11-01: bounded 0.92.98 changes defer authenticated purchase details behind the existing section route and escaped stock layout, retaining current actor and permission checks; explicit decimal12 catalog projection preserves raw source evidence and normal revision, expiry, import and undo gates. CI adds the existing isolated browser regression. Authored version labels are updated. The reported sink span is unchanged; final-head Linux SAST is still required. Original classification and expiry retained. Continuity review 2026-11-02: bounded 0.92.99 main-article optimization preloads pure reader modules before readiness. The initial purchase-quantity path omits redundant branch resolution only for fresh explicit purchasing, company and unassigned capabilities, equivalent to both outcomes of the existing mapping check. Stock identity, decryption, completeness and final HTTP rights checks are unchanged. Restricted scopes and detailed purchase provenance keep the original authenticated mapping path. Native PostgreSQL positive, revocation, restricted-scope and concurrent tests pass. Authored version labels are updated. Reported sink spans are unchanged; final-head Linux SAST is still required. Original classification and expiry retained. Exact static modal delta review 2026-11-04: only the two authored report-library dialogs gain the existing common modal class and fixed aria-labelledby references to their already present headings. No inline handler, script, source URL, interpolated attribute or learning-loader data value changes. The reported application sink and six-entry learning-loader allowlist remain byte-identical. Current full native SAST is still required; the original authority, priority, classification and expiry are retained."
+          "reason": "Retained individual historical context: Historical baseline context: Lines 1032: All six data-learning-area attributes are static checked-in values, not server/import data. Release 0.92.91 changes only the two version labels; all six attribute values and their surrounding markup are unchanged. Context continuity review 2026-10-19 (Codex, automated review; no human approval): Static navigation, section hosts and the fixed same-origin security-sast.js script reference changed. No inline script, untrusted interpolation or external source was added. Release 0.92.92 continuity review 2026-10-20 (Codex, automated; no human approval): comparison with the previously qualified b63774c source proves that exactly two version labels changed. The six static data-learning-area values, loader map, finding source, navigation and script references remain byte-identical. Release 0.92.93 continuity review 2026-10-22 (Codex, automated review; no human approval): Exact comparison with committed 7e19e1b proves that only the two sidebar/footer version labels change from v0.92.92 Beta to v0.92.93 Beta. All six static data-learning-area attribute values, the dynamic-method allowlist/loader, finding source span, navigation, markup structure and script references are unchanged. Only this context file is rebound to its explicitly reviewed current LF/CRLF raw hashes; the original finding identity, review authority and expiry are retained. Current source delta review (2026-10-25): The complete HTML delta adds authored Passkey controls, local links and fixed self-hosted asset paths, plus label wording. It does not change the six static data-learning-area values or their emitters used by the reviewed learning loader. Prior prose line anchors are historical; current finding positions come from the exact native D result. Current delta reviewed 2026-10-26: The complete static HTML delta adds authored local editor controls/styles and version labels; existing loader data attributes and self-hosted script targets are unchanged. No dynamic markup or CSP relaxation. Earlier prose line anchors remain historical; actual finding coordinates are authoritative. Release 0.92.95 context review 2026-10-27 (Codex technical review; no human approval): exact canonical LF comparison with 0ec91e98d823072d490b9c58abf7c666634062e1 proves only two literal version labels change from 0.92.94 to 0.92.95. The six static data-learning-area values, entire remaining HTML bytes, reported public/app.js sink, loader map and trust boundary are unchanged. Identity, priority, classification and existing expiry remain unchanged. Fresh final-head Linux SAST remains required. Differential context review 2026-10-29: only a fixed ID on the existing scope-options wrapper and an initially empty authored location-choice container are added; no inline handler, script source or untrusted markup is introduced. Article delta review 2026-10-31: The only change loads the authored same-origin sales-article-deferred-notes.js before its caller. No inline script, dynamic URL, external source or CSP bypass is added. Release delta review 2026-11-01: Adds only fixed same-origin Emma script and stylesheet references and a hidden settings container with static text. No external source, inline executable code or dynamic URL is introduced. CI repair review 2026-11-01: only two authored static display versions change from 0.92.95 to 0.92.96; scripts, markup structure and all dynamic sinks remain unchanged. Publication repair review 2026-11-01: exact comparison with 2a51b880 proves only the two authored version labels change from 0.92.96 to 0.92.97. Loader attributes, scripts, complete remaining markup and the reported sink are unchanged. Existing authority, classification and expiry are retained; final-head Linux SAST remains required. Continuity review 2026-11-01: bounded 0.92.98 changes defer authenticated purchase details behind the existing section route and escaped stock layout, retaining current actor and permission checks; explicit decimal12 catalog projection preserves raw source evidence and normal revision, expiry, import and undo gates. CI adds the existing isolated browser regression. Authored version labels are updated. The reported sink span is unchanged; final-head Linux SAST is still required. Original classification and expiry retained. Continuity review 2026-11-02: bounded 0.92.99 main-article optimization preloads pure reader modules before readiness. The initial purchase-quantity path omits redundant branch resolution only for fresh explicit purchasing, company and unassigned capabilities, equivalent to both outcomes of the existing mapping check. Stock identity, decryption, completeness and final HTTP rights checks are unchanged. Restricted scopes and detailed purchase provenance keep the original authenticated mapping path. Native PostgreSQL positive, revocation, restricted-scope and concurrent tests pass. Authored version labels are updated. Reported sink spans are unchanged; final-head Linux SAST is still required. Original classification and expiry retained. Exact static modal delta review 2026-11-04: only the two authored report-library dialogs gain the existing common modal class and fixed aria-labelledby references to their already present headings. No inline handler, script, source URL, interpolated attribute or learning-loader data value changes. The reported application sink and six-entry learning-loader allowlist remain byte-identical. Current full native SAST is still required; the original authority, priority, classification and expiry are retained. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -72847,26 +72847,26 @@
         "column": 258
       },
       "fingerprint": "e2f6a8bac3ea1ee76d9cabf99d640db502437bea5cd922766a1fa7c659c4316b",
-      "sourceSha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+      "sourceSha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
       "sourceSha256Variants": [
-        "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-        "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+        "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+        "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:40:35, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:40:35, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts."
+          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -72882,26 +72882,26 @@
         "column": 97
       },
       "fingerprint": "1a3146330272079ae5ad3021a588321db4ae0445ea2ee2abd1fee6ad66ddd4eb",
-      "sourceSha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+      "sourceSha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
       "sourceSha256Variants": [
-        "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-        "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+        "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+        "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:42:12, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:42:12, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts."
+          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -72917,26 +72917,26 @@
         "column": 183
       },
       "fingerprint": "b8eaf7788d00efff298d0b877038699f326d2d51321ccde2751c70bf9a66aac5",
-      "sourceSha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+      "sourceSha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
       "sourceSha256Variants": [
-        "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-        "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+        "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+        "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:42:131, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. The complete local AST expression graph for this exact scanner sink was checked against authored literals, bounded numeric/boolean operations, context-specific output encoding and every reachable local return expression. No unresolved dynamic expression remains; the attached graph lists each checked source location and rule.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:42:131, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. The complete local AST expression graph for this exact scanner sink was checked against authored literals, bounded numeric/boolean operations, context-specific output encoding and every reachable local return expression. No unresolved dynamic expression remains; the attached graph lists each checked source location and rule.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts."
+          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -72952,26 +72952,26 @@
         "column": 178
       },
       "fingerprint": "a034f8839038567f127d095b7ea653c412f2107c136ca0512b728c18d9c64ac5",
-      "sourceSha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+      "sourceSha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
       "sourceSha256Variants": [
-        "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-        "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+        "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+        "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:44:31, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:44:31, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts."
+          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -72987,26 +72987,26 @@
         "column": 161
       },
       "fingerprint": "8a8ad2c4cce443146accb7721d6efa1b6f4a99903edf8201586fde27ab37c2a9",
-      "sourceSha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+      "sourceSha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
       "sourceSha256Variants": [
-        "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-        "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+        "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+        "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:44:94, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:44:94, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts."
+          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -73022,26 +73022,26 @@
         "column": 59
       },
       "fingerprint": "36624c93578cb189d8a224859b954bb9ee12fb0f6100803af3e963c7d0e9bb91",
-      "sourceSha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+      "sourceSha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
       "sourceSha256Variants": [
-        "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-        "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+        "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+        "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:45:26, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. The complete local AST expression graph for this exact scanner sink was checked against authored literals, bounded numeric/boolean operations, context-specific output encoding and every reachable local return expression. No unresolved dynamic expression remains; the attached graph lists each checked source location and rule.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:45:26, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. The complete local AST expression graph for this exact scanner sink was checked against authored literals, bounded numeric/boolean operations, context-specific output encoding and every reachable local return expression. No unresolved dynamic expression remains; the attached graph lists each checked source location and rule.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts."
+          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -73057,26 +73057,26 @@
         "column": 446
       },
       "fingerprint": "ed1bbe6e40ea5aad7fa4e4259b627d779ae8793d5854085079e0b0e8f5889e6e",
-      "sourceSha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+      "sourceSha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
       "sourceSha256Variants": [
-        "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-        "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+        "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+        "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:46:31, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:46:31, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts."
+          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -73092,26 +73092,26 @@
         "column": 293
       },
       "fingerprint": "f4c9f4c6ac23a2510a29487dd33f8ff7007e0c9861ab4496348fbdf8ae413d69",
-      "sourceSha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+      "sourceSha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
       "sourceSha256Variants": [
-        "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-        "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+        "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+        "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:46:226, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:46:226, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. render first calls normalize. Numeric entries require Number.isSafeInteger/nonnegative or null; ageDays is Math.floor of timestamp arithmetic. issues is freshly mapped/filtered from an Array.isArray input. Text remains separately escaped.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts."
+          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -73127,26 +73127,26 @@
         "column": 80
       },
       "fingerprint": "26c47091d412fd902e7ce0ea8f8d2312425a8f50667446dd169a806177f9329f",
-      "sourceSha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+      "sourceSha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
       "sourceSha256Variants": [
-        "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-        "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+        "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+        "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:47:22, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. The complete local AST expression graph for this exact scanner sink was checked against authored literals, bounded numeric/boolean operations, context-specific output encoding and every reachable local return expression. No unresolved dynamic expression remains; the attached graph lists each checked source location and rule.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.lang.security.html-in-template-string at public/gp-data-quality.js:47:22, scope dataQualityModule/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. The complete local AST expression graph for this exact scanner sink was checked against authored literals, bounded numeric/boolean operations, context-specific output encoding and every reachable local return expression. No unresolved dynamic expression remains; the attached graph lists each checked source location and rule.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts."
+          "reason": "Exact reviewed source bytes for this individual current scanner sink and its local helper/dataflow contracts. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -99040,9 +99040,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.browser.security.insecure-document-method at public/sales-bwl.js:29:4, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. c.count stammt aus dem serverseitigen ABC-Finish: alle Klassenzähler beginnen bei 0 und werden ausschließlich mit count++ erhöht. Der Workspace liefert dieses berechnete Finish als snapshot zurück.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.browser.security.insecure-document-method at public/sales-bwl.js:29:4, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. c.count stammt aus dem serverseitigen ABC-Finish: alle Klassenzähler beginnen bei 0 und werden ausschließlich mit count++ erhöht. Der Workspace liefert dieses berechnete Finish als snapshot zurück.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -99056,21 +99056,21 @@
         },
         {
           "path": "lib/sales-bwl-abc-model.js",
-          "sha256": "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1",
+          "sha256": "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446",
           "sha256Variants": [
-            "9ce289caae7441440a034a5eba2d61819f92cfbd27a9e13db4f40d595decb373",
-            "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1"
+            "0b1d41ec4108442034a4dc18386d16aa84d25c9706c40816adb3320b461eab1c",
+            "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         },
         {
           "path": "lib/persistence/repositories/sales-bwl-abc-workspace.js",
-          "sha256": "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d",
+          "sha256": "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46",
           "sha256Variants": [
-            "25bbdbfc1dbae9b3d7acf369da0e7d8772641033828459af37133596bd6848ff",
-            "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d"
+            "697f98ed6e66010e5ead509abbc6d9e43d7c2671d85905665ae2712248f9b535",
+            "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -99093,9 +99093,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.browser.security.insecure-innerhtml at public/sales-bwl.js:29:4, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. c.count stammt aus dem serverseitigen ABC-Finish: alle Klassenzähler beginnen bei 0 und werden ausschließlich mit count++ erhöht. Der Workspace liefert dieses berechnete Finish als snapshot zurück.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.browser.security.insecure-innerhtml at public/sales-bwl.js:29:4, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. c.count stammt aus dem serverseitigen ABC-Finish: alle Klassenzähler beginnen bei 0 und werden ausschließlich mit count++ erhöht. Der Workspace liefert dieses berechnete Finish als snapshot zurück.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -99109,21 +99109,21 @@
         },
         {
           "path": "lib/sales-bwl-abc-model.js",
-          "sha256": "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1",
+          "sha256": "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446",
           "sha256Variants": [
-            "9ce289caae7441440a034a5eba2d61819f92cfbd27a9e13db4f40d595decb373",
-            "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1"
+            "0b1d41ec4108442034a4dc18386d16aa84d25c9706c40816adb3320b461eab1c",
+            "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         },
         {
           "path": "lib/persistence/repositories/sales-bwl-abc-workspace.js",
-          "sha256": "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d",
+          "sha256": "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46",
           "sha256Variants": [
-            "25bbdbfc1dbae9b3d7acf369da0e7d8772641033828459af37133596bd6848ff",
-            "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d"
+            "697f98ed6e66010e5ead509abbc6d9e43d7c2671d85905665ae2712248f9b535",
+            "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -99216,9 +99216,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.browser.security.insecure-document-method at public/sales-bwl.js:32:4, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. row.class wird im ABC-Modell zunächst null und beim Ranking ausschließlich zu einem der Literale A, B oder C gesetzt. Der Workspace liefert M.finish als snapshot; ein freies importiertes Klassenlabel überschreibt diesen Wert nicht. cols wird aus selected() übernommen; selected verwendet Array.filter und sort. Für colspan wird daher ausschließlich eine native Arraylänge interpoliert.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.browser.security.insecure-document-method at public/sales-bwl.js:32:4, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. row.class wird im ABC-Modell zunächst null und beim Ranking ausschließlich zu einem der Literale A, B oder C gesetzt. Der Workspace liefert M.finish als snapshot; ein freies importiertes Klassenlabel überschreibt diesen Wert nicht. cols wird aus selected() übernommen; selected verwendet Array.filter und sort. Für colspan wird daher ausschließlich eine native Arraylänge interpoliert.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -99232,21 +99232,21 @@
         },
         {
           "path": "lib/sales-bwl-abc-model.js",
-          "sha256": "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1",
+          "sha256": "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446",
           "sha256Variants": [
-            "9ce289caae7441440a034a5eba2d61819f92cfbd27a9e13db4f40d595decb373",
-            "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1"
+            "0b1d41ec4108442034a4dc18386d16aa84d25c9706c40816adb3320b461eab1c",
+            "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         },
         {
           "path": "lib/persistence/repositories/sales-bwl-abc-workspace.js",
-          "sha256": "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d",
+          "sha256": "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46",
           "sha256Variants": [
-            "25bbdbfc1dbae9b3d7acf369da0e7d8772641033828459af37133596bd6848ff",
-            "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d"
+            "697f98ed6e66010e5ead509abbc6d9e43d7c2671d85905665ae2712248f9b535",
+            "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -99269,9 +99269,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.browser.security.insecure-innerhtml at public/sales-bwl.js:32:4, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. row.class wird im ABC-Modell zunächst null und beim Ranking ausschließlich zu einem der Literale A, B oder C gesetzt. Der Workspace liefert M.finish als snapshot; ein freies importiertes Klassenlabel überschreibt diesen Wert nicht. cols wird aus selected() übernommen; selected verwendet Array.filter und sort. Für colspan wird daher ausschließlich eine native Arraylänge interpoliert.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.browser.security.insecure-innerhtml at public/sales-bwl.js:32:4, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. row.class wird im ABC-Modell zunächst null und beim Ranking ausschließlich zu einem der Literale A, B oder C gesetzt. Der Workspace liefert M.finish als snapshot; ein freies importiertes Klassenlabel überschreibt diesen Wert nicht. cols wird aus selected() übernommen; selected verwendet Array.filter und sort. Für colspan wird daher ausschließlich eine native Arraylänge interpoliert.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -99285,21 +99285,21 @@
         },
         {
           "path": "lib/sales-bwl-abc-model.js",
-          "sha256": "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1",
+          "sha256": "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446",
           "sha256Variants": [
-            "9ce289caae7441440a034a5eba2d61819f92cfbd27a9e13db4f40d595decb373",
-            "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1"
+            "0b1d41ec4108442034a4dc18386d16aa84d25c9706c40816adb3320b461eab1c",
+            "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         },
         {
           "path": "lib/persistence/repositories/sales-bwl-abc-workspace.js",
-          "sha256": "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d",
+          "sha256": "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46",
           "sha256Variants": [
-            "25bbdbfc1dbae9b3d7acf369da0e7d8772641033828459af37133596bd6848ff",
-            "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d"
+            "697f98ed6e66010e5ead509abbc6d9e43d7c2671d85905665ae2712248f9b535",
+            "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -99322,9 +99322,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.browser.security.insecure-document-method at public/sales-bwl.js:35:77, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. DataQuality.render calls normalize before constructing HTML; string labels/notes are encoded, numeric counts require nonnegative safe integers, dates are validated and all output attributes are encoded. The caller supplies a projection, not a raw HTML fragment.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.browser.security.insecure-document-method at public/sales-bwl.js:35:77, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. DataQuality.render calls normalize before constructing HTML; string labels/notes are encoded, numeric counts require nonnegative safe integers, dates are validated and all output attributes are encoded. The caller supplies a projection, not a raw HTML fragment.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -99338,12 +99338,12 @@
         },
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -99366,9 +99366,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.browser.security.insecure-innerhtml at public/sales-bwl.js:35:77, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. DataQuality.render calls normalize before constructing HTML; string labels/notes are encoded, numeric counts require nonnegative safe integers, dates are validated and all output attributes are encoded. The caller supplies a projection, not a raw HTML fragment.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.browser.security.insecure-innerhtml at public/sales-bwl.js:35:77, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. DataQuality.render calls normalize before constructing HTML; string labels/notes are encoded, numeric counts require nonnegative safe integers, dates are validated and all output attributes are encoded. The caller supplies a projection, not a raw HTML fragment.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -99382,12 +99382,12 @@
         },
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -99410,9 +99410,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.browser.security.insecure-document-method at public/sales-bwl.js:37:161, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. Bucket positions wird in emptyBucket mit 0 initialisiert und nur numerisch inkrementiert. Der snapshot wird aus dem Modellfinish erzeugt; b.positions ist kein frei formulierter API-/Importtext.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.browser.security.insecure-document-method at public/sales-bwl.js:37:161, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. Bucket positions wird in emptyBucket mit 0 initialisiert und nur numerisch inkrementiert. Der snapshot wird aus dem Modellfinish erzeugt; b.positions ist kein frei formulierter API-/Importtext.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -99426,21 +99426,21 @@
         },
         {
           "path": "lib/sales-bwl-abc-model.js",
-          "sha256": "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1",
+          "sha256": "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446",
           "sha256Variants": [
-            "9ce289caae7441440a034a5eba2d61819f92cfbd27a9e13db4f40d595decb373",
-            "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1"
+            "0b1d41ec4108442034a4dc18386d16aa84d25c9706c40816adb3320b461eab1c",
+            "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         },
         {
           "path": "lib/persistence/repositories/sales-bwl-abc-workspace.js",
-          "sha256": "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d",
+          "sha256": "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46",
           "sha256Variants": [
-            "25bbdbfc1dbae9b3d7acf369da0e7d8772641033828459af37133596bd6848ff",
-            "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d"
+            "697f98ed6e66010e5ead509abbc6d9e43d7c2671d85905665ae2712248f9b535",
+            "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -99463,9 +99463,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Current javascript.browser.security.insecure-innerhtml at public/sales-bwl.js:37:161, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. Bucket positions wird in emptyBucket mit 0 initialisiert und nur numerisch inkrementiert. Der snapshot wird aus dem Modellfinish erzeugt; b.positions ist kein frei formulierter API-/Importtext.",
-      "reviewer": "Codex app_security_review; independent context cross-check by Codex audit_plan_review (agent source reviews, not human approval)",
-      "reviewedOn": "2026-10-18",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Current javascript.browser.security.insecure-innerhtml at public/sales-bwl.js:37:161, scope mount/render, matched by actual scanner coordinates, exact sink AST and reviewed producer/context continuity. Bucket positions wird in emptyBucket mit 0 initialisiert und nur numerisch inkrementiert. Der snapshot wird aus dem Modellfinish erzeugt; b.positions ist kein frei formulierter API-/Importtext.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -99479,21 +99479,21 @@
         },
         {
           "path": "lib/sales-bwl-abc-model.js",
-          "sha256": "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1",
+          "sha256": "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446",
           "sha256Variants": [
-            "9ce289caae7441440a034a5eba2d61819f92cfbd27a9e13db4f40d595decb373",
-            "df015807bf0f78455c23e01101b6886e7468e49c1447d8a493b6719a713bafe1"
+            "0b1d41ec4108442034a4dc18386d16aa84d25c9706c40816adb3320b461eab1c",
+            "5e7259b51ca04873533b577f2f04acb9c3289f5c0e20e3aaabaee80827b7c446"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         },
         {
           "path": "lib/persistence/repositories/sales-bwl-abc-workspace.js",
-          "sha256": "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d",
+          "sha256": "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46",
           "sha256Variants": [
-            "25bbdbfc1dbae9b3d7acf369da0e7d8772641033828459af37133596bd6848ff",
-            "64585f0a9b14c0c591c21e60fd88302de3aaa0b53b01036a1cfd75f52473033d"
+            "697f98ed6e66010e5ead509abbc6d9e43d7c2671d85905665ae2712248f9b535",
+            "8e007485c8dd9336ea352e6cf82bd60ef8bdb61a8c6c9da0588cc376320c8f46"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -100121,9 +100121,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Native D evidence confirms the unchanged complete sink-line span at public/sales-history.js:58:12. Historical individual producer/guard rationale: DataQuality.render normalizes source timestamps, counters and text and then encodes source strings. The history mapper returns data only; it cannot create an unescaped HTML fragment. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. Current source-context delta review (2026-10-25): The receipt column/print delta was reviewed. Receipt identifiers and labels are encoded in attributes/text; print requests require current row membership, actor/permission/context continuity and the fixed protected export route. Added headings and column counts are authored constants. Reviewed full delta against 1f9ecab. Only backend receiptId addition reuses authenticated publication-bound detail.provenance.parentId; no receipt-number fallback, widened source fields or HTML producer. Existing policy projection, branch scope, integrity checks and numeric/date DTO producers remain unchanged. Final PDF exporter rechecks current source and every receipt position scope. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval.",
-      "reviewer": "Codex technical source/finding review with independent technical second review; no human approval",
-      "reviewedOn": "2026-10-25",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Native D evidence confirms the unchanged complete sink-line span at public/sales-history.js:58:12. Historical individual producer/guard rationale: DataQuality.render normalizes source timestamps, counters and text and then encodes source strings. The history mapper returns data only; it cannot create an unescaped HTML fragment. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. Current source-context delta review (2026-10-25): The receipt column/print delta was reviewed. Receipt identifiers and labels are encoded in attributes/text; print requests require current row membership, actor/permission/context continuity and the fixed protected export route. Added headings and column counts are authored constants. Reviewed full delta against 1f9ecab. Only backend receiptId addition reuses authenticated publication-bound detail.provenance.parentId; no receipt-number fallback, widened source fields or HTML producer. Existing policy projection, branch scope, integrity checks and numeric/date DTO producers remain unchanged. Final PDF exporter rechecks current source and every receipt position scope. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -100137,12 +100137,12 @@
         },
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         },
         {
           "path": "lib/persistence/repositories/sales-history-workspace.js",
@@ -100463,9 +100463,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Native D evidence confirms the unchanged complete sink-line span at public/sales-history.js:90:50. Historical individual producer/guard rationale: DataQuality.render normalizes source timestamps, counters and text and then encodes source strings. The history mapper returns data only; it cannot create an unescaped HTML fragment. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. renderResults übergibt lastResult.items aus dem eigenen Suchendpoint. Der Server initialisiert items=[], ergänzt Zeilen mit push und gibt items.slice als page zurück. items.length bezeichnet somit eine native Arraylänge. ArticleHistory.referenceMarkup uses the same locally reviewed escaped badge/provenance builders; raw imported descriptions are encoded, and the HTML structure contains no URL/CSS insertion. Current source-context delta review (2026-10-25): The receipt column/print delta was reviewed. Receipt identifiers and labels are encoded in attributes/text; print requests require current row membership, actor/permission/context continuity and the fixed protected export route. Added headings and column counts are authored constants. Reviewed full delta against 1f9ecab. Only backend receiptId addition reuses authenticated publication-bound detail.provenance.parentId; no receipt-number fallback, widened source fields or HTML producer. Existing policy projection, branch scope, integrity checks and numeric/date DTO producers remain unchanged. Final PDF exporter rechecks current source and every receipt position scope. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval.",
-      "reviewer": "Codex technical source/finding review with independent technical second review; no human approval",
-      "reviewedOn": "2026-10-25",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Native D evidence confirms the unchanged complete sink-line span at public/sales-history.js:90:50. Historical individual producer/guard rationale: DataQuality.render normalizes source timestamps, counters and text and then encodes source strings. The history mapper returns data only; it cannot create an unescaped HTML fragment. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. renderResults übergibt lastResult.items aus dem eigenen Suchendpoint. Der Server initialisiert items=[], ergänzt Zeilen mit push und gibt items.slice als page zurück. items.length bezeichnet somit eine native Arraylänge. ArticleHistory.referenceMarkup uses the same locally reviewed escaped badge/provenance builders; raw imported descriptions are encoded, and the HTML structure contains no URL/CSS insertion. Current source-context delta review (2026-10-25): The receipt column/print delta was reviewed. Receipt identifiers and labels are encoded in attributes/text; print requests require current row membership, actor/permission/context continuity and the fixed protected export route. Added headings and column counts are authored constants. Reviewed full delta against 1f9ecab. Only backend receiptId addition reuses authenticated publication-bound detail.provenance.parentId; no receipt-number fallback, widened source fields or HTML producer. Existing policy projection, branch scope, integrity checks and numeric/date DTO producers remain unchanged. Final PDF exporter rechecks current source and every receipt position scope. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -100479,12 +100479,12 @@
         },
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         },
         {
           "path": "lib/persistence/repositories/sales-history-workspace.js",
@@ -100525,9 +100525,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "Native D evidence confirms the unchanged complete sink-line span at public/sales-history.js:90:50. Historical individual producer/guard rationale: DataQuality.render normalizes source timestamps, counters and text and then encodes source strings. The history mapper returns data only; it cannot create an unescaped HTML fragment. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. renderResults übergibt lastResult.items aus dem eigenen Suchendpoint. Der Server initialisiert items=[], ergänzt Zeilen mit push und gibt items.slice als page zurück. items.length bezeichnet somit eine native Arraylänge. ArticleHistory.referenceMarkup uses the same locally reviewed escaped badge/provenance builders; raw imported descriptions are encoded, and the HTML structure contains no URL/CSS insertion. Current source-context delta review (2026-10-25): The receipt column/print delta was reviewed. Receipt identifiers and labels are encoded in attributes/text; print requests require current row membership, actor/permission/context continuity and the fixed protected export route. Added headings and column counts are authored constants. Reviewed full delta against 1f9ecab. Only backend receiptId addition reuses authenticated publication-bound detail.provenance.parentId; no receipt-number fallback, widened source fields or HTML producer. Existing policy projection, branch scope, integrity checks and numeric/date DTO producers remain unchanged. Final PDF exporter rechecks current source and every receipt position scope. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval.",
-      "reviewer": "Codex technical source/finding review with independent technical second review; no human approval",
-      "reviewedOn": "2026-10-25",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. Native D evidence confirms the unchanged complete sink-line span at public/sales-history.js:90:50. Historical individual producer/guard rationale: DataQuality.render normalizes source timestamps, counters and text and then encodes source strings. The history mapper returns data only; it cannot create an unescaped HTML fragment. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. Der Server erzeugt die Tagesaggregate mit records:0 und review:0; beide Werte werden ausschließlich inkrementiert und über die days-Projektion ausgegeben. In die HTML-Textstelle gelangt ein berechneter Zähler, kein unkontrollierter Feldtext. renderResults übergibt lastResult.items aus dem eigenen Suchendpoint. Der Server initialisiert items=[], ergänzt Zeilen mit push und gibt items.slice als page zurück. items.length bezeichnet somit eine native Arraylänge. ArticleHistory.referenceMarkup uses the same locally reviewed escaped badge/provenance builders; raw imported descriptions are encoded, and the HTML structure contains no URL/CSS insertion. Current source-context delta review (2026-10-25): The receipt column/print delta was reviewed. Receipt identifiers and labels are encoded in attributes/text; print requests require current row membership, actor/permission/context continuity and the fixed protected export route. Added headings and column counts are authored constants. Reviewed full delta against 1f9ecab. Only backend receiptId addition reuses authenticated publication-bound detail.provenance.parentId; no receipt-number fallback, widened source fields or HTML producer. Existing policy projection, branch scope, integrity checks and numeric/date DTO producers remain unchanged. Final PDF exporter rechecks current source and every receipt position scope. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -100541,12 +100541,12 @@
         },
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         },
         {
           "path": "lib/persistence/repositories/sales-history-workspace.js",
@@ -101393,9 +101393,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "2026-11-04 forward-integration context review. The configure delta uses the existing encoded multiselect builder and native Option/textContent assignments for labels and IDs. DataQuality.render remains the unchanged encoded producer for its existing innerHTML sink. The new explorer owns report/template rendering with actor/generation/scope guards; download IDs are URI-encoded and PDF bytes are passed through the existing print adapter. Removed footer templates are not replaced by unescaped strings. Existing individual producer/guard rationale: Native D evidence confirms the unchanged complete sink-line span at public/sales-report-jobs.js:109:18. Historical individual producer/guard rationale: DataQuality.render first normalizes the supplied object; title/note are constants and source labels are validated/escaped by that renderer. Counters and dates are bounded by that module, not assumed safe merely from the caller. Current source-context delta review (2026-10-25): The only source delta is an authored metadata-limit error string. The individual DataQuality normalization/encoding producers and configuration sink remain unchanged. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval.",
-      "reviewer": "Codex exact source/function continuity and current delta review; not human approval",
-      "reviewedOn": "2026-11-04",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. 2026-11-04 forward-integration context review. The configure delta uses the existing encoded multiselect builder and native Option/textContent assignments for labels and IDs. DataQuality.render remains the unchanged encoded producer for its existing innerHTML sink. The new explorer owns report/template rendering with actor/generation/scope guards; download IDs are URI-encoded and PDF bytes are passed through the existing print adapter. Removed footer templates are not replaced by unescaped strings. Existing individual producer/guard rationale: Native D evidence confirms the unchanged complete sink-line span at public/sales-report-jobs.js:109:18. Historical individual producer/guard rationale: DataQuality.render first normalizes the supplied object; title/note are constants and source labels are validated/escaped by that renderer. Counters and dates are bounded by that module, not assumed safe merely from the caller. Current source-context delta review (2026-10-25): The only source delta is an authored metadata-limit error string. The individual DataQuality normalization/encoding producers and configuration sink remain unchanged. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -101409,12 +101409,12 @@
         },
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
@@ -101437,9 +101437,9 @@
       ],
       "classification": "reviewed_false_positive",
       "priority": "P3",
-      "reason": "2026-11-04 forward-integration context review. The configure delta uses the existing encoded multiselect builder and native Option/textContent assignments for labels and IDs. DataQuality.render remains the unchanged encoded producer for its existing innerHTML sink. The new explorer owns report/template rendering with actor/generation/scope guards; download IDs are URI-encoded and PDF bytes are passed through the existing print adapter. Removed footer templates are not replaced by unescaped strings. Existing individual producer/guard rationale: Native D evidence confirms the unchanged complete sink-line span at public/sales-report-jobs.js:109:18. Historical individual producer/guard rationale: DataQuality.render first normalizes the supplied object; title/note are constants and source labels are validated/escaped by that renderer. Counters and dates are bounded by that module, not assumed safe merely from the caller. Current source-context delta review (2026-10-25): The only source delta is an authored metadata-limit error string. The individual DataQuality normalization/encoding producers and configuration sink remain unchanged. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval.",
-      "reviewer": "Codex exact source/function continuity and current delta review; not human approval",
-      "reviewedOn": "2026-11-04",
+      "reason": "2026-11-08 combined-candidate context review: the only index.html changes are authored 0.92.100 to 0.92.101 release labels. The complete ABC changes add a receipt-issue counter initialized at zero and incremented internally after publication-bound receipt integrity/scope checks; no imported field is introduced as markup. The only data-quality mapper change supplies an authored issue label plus snapshot.summary.receiptIssues.count. The unchanged renderer calls normalize, which accepts only nonnegative safe-integer counters (otherwise null), bounds text and arrays, validates source dates, and escapes text and attributes before producing HTML. Actual complete reported sink spans were compared byte-for-byte after CRLF/LF normalization with main7afee472 and are unchanged. Existing individual producer contracts remain in force. No expiry extension, path-wide exemption or human approval. 2026-11-04 forward-integration context review. The configure delta uses the existing encoded multiselect builder and native Option/textContent assignments for labels and IDs. DataQuality.render remains the unchanged encoded producer for its existing innerHTML sink. The new explorer owns report/template rendering with actor/generation/scope guards; download IDs are URI-encoded and PDF bytes are passed through the existing print adapter. Removed footer templates are not replaced by unescaped strings. Existing individual producer/guard rationale: Native D evidence confirms the unchanged complete sink-line span at public/sales-report-jobs.js:109:18. Historical individual producer/guard rationale: DataQuality.render first normalizes the supplied object; title/note are constants and source labels are validated/escaped by that renderer. Counters and dates are bounded by that module, not assumed safe merely from the caller. Current source-context delta review (2026-10-25): The only source delta is an authored metadata-limit error string. The individual DataQuality normalization/encoding producers and configuration sink remain unchanged. This does not assert that an expanded surrounding function is AST-identical. Technical Codex review and independent technical second review; no human approval.",
+      "reviewer": "Codex technical source review on combined candidate; no human approval claimed",
+      "reviewedOn": "2026-11-08",
       "expiresOn": "2026-11-17",
       "context": [
         {
@@ -101453,12 +101453,12 @@
         },
         {
           "path": "public/gp-data-quality.js",
-          "sha256": "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
+          "sha256": "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3",
           "sha256Variants": [
-            "5b1e8dda9a581a033c6e72324436b1eb1d198eed4af8248f859486908a8c00f4",
-            "688ec9ec353d40322d441d0bf9415560d5507d8e52a208be9b5341832713b879"
+            "97a18099702ade6245c415596fcbd366ab6e4d3dbc2e021bfe06f62230078291",
+            "a47f0d295c7f9e39db94321ee01681f4dbcc27e7aed1f65207f77f70ffa916a3"
           ],
-          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract."
+          "reason": "Producer, output encoder, helper or regression source required by the attached individual contract. Combined-candidate delta individually reviewed 2026-11-08; exact sink span unchanged and existing output encoding/bounded numeric producers retained."
         }
       ]
     },
