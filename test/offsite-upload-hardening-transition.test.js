@@ -50,11 +50,20 @@ test("generic same-version fingerprint gate remains closed for the new upload", 
   assert.equal(classify(envelope, before), "migration-required:13->13");
   assert.equal(classify(envelope, candidate), "compatible");
 });
-test("explicit coordinator binds package, keeps old updater and uses actual nonblocking locks", () => {
+test("explicit coordinator binds the candidate driver, retains installed verifier authority and actual nonblocking locks", () => {
   const source = fs.readFileSync(path.join(ROOT, "server-tools/linux/refresh-grabenplaner-offsite-upload.sh"), "utf8");
   assert.match(source, /gp_verify_sealed_zip "\$package" "\$candidate" 0/);
   assert.match(source, /cmp --silent.*\$candidate\/server-tools\/linux/);
-  assert.match(source, /bash "\$APP\/server-tools\/linux\/update-grabenplaner-server\.sh"/);
+  assert.match(source, /driver="\$candidate\/server-tools\/linux\/update-grabenplaner-server\.sh"/);
+  assert.match(source, /update_args=\(--app-dir "\$APP"/);
+  assert.match(source, /bash "\$driver" "\$\{update_args\[@\]\}"/);
+  assert.match(source, /root_node "\$APP\/server-tools\/linux\/lib\/verify-package\.js" "\$candidate"/);
+  assert.doesNotMatch(source, /root_node "\$candidate\/server-tools\/linux\/lib\/verify-package\.js"/);
+  assert.match(source, /gp_sha256 "\$driver".*\$driver_sha/);
+  assert.match(source, /gp_sha256 "\$candidate\/grabenplaner-server-manifest\.json".*\$candidate_manifest_sha/);
+  const firstPrivate = source.indexOf("\nprivate_workspace_preflight\n"), scan = source.indexOf("\nclamscan --recursive");
+  const fencedPrivate = source.indexOf("\nprivate_workspace_preflight\n", firstPrivate + 1), prepare = source.indexOf('prepared="$(root_node "$helper" prepare');
+  assert.ok(firstPrivate > 0 && firstPrivate < scan && fencedPrivate > scan && fencedPrivate < prepare);
   assert.match(source, /flock --nonblock "\$descriptor"/);
   assert.doesNotMatch(source, /offsite_acquire_(assurance|repository)_lock/);
   assert.match(source, /--verification auto/);

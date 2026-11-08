@@ -47,11 +47,11 @@ const {
 
 const root = path.resolve(__dirname, "..");
 
-test("Offsite filesystem journal fixtures gain no database driver or provider capability", () => {
-  const fixture = "test/offsite-upload-hardening-transition.test.js";
+for (const fixture of ["test/offsite-upload-hardening-transition.test.js", "test/private-workspace-preflight.test.js"]) {
+test(`${fixture}: deployment filesystem fixtures gain no database driver or provider capability`, () => {
   assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.includes(fixture), false);
   assert.deepEqual(architectureBoundaryViolationsForText(fixture, fs.readFileSync(path.join(root, fixture), "utf8")), []);
-  for (const target of [fixture, "test/offsite-upload-unclassified.test.js"]) {
+  for (const target of [fixture, "test/deployment-unclassified.test.js"]) {
     for (const [source, kind] of [
       ["require('node:" + "sqlite');", "sqlite-driver-import-outside-boundary"],
       ["require('pg');", "postgresql-driver-import"],
@@ -61,6 +61,7 @@ test("Offsite filesystem journal fixtures gain no database driver or provider ca
     ]) assert.equal(architectureBoundaryViolationsForText(target, source).some(entry => entry.kind === kind), true, `${target}: ${kind}`);
   }
 });
+}
 
 test("Paired-backup file verifier registration grants no driver, facade, statements or runtime configuration", () => {
   const file = "lib/persistence/postgresql/operations/protected-files.js";

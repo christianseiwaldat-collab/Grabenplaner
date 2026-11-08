@@ -84,7 +84,7 @@ jobs:
         run: >-
           sudo /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8
           "$(command -v node)" --no-global-search-paths --test --test-concurrency=1
-          test/offsite-upload-confirmation.test.js test/offsite-upload-hardening-transition.test.js
+          test/offsite-upload-confirmation.test.js test/offsite-upload-hardening-transition.test.js test/private-workspace-preflight.test.js
 
   postgresql-provider-development-contract:
     runs-on: ubuntu-latest
@@ -260,7 +260,7 @@ jobs:
         run: >-
           sudo /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8
           "$(command -v node)" --no-global-search-paths --test --test-concurrency=1
-          test/offsite-upload-confirmation.test.js test/offsite-upload-hardening-transition.test.js
+          test/offsite-upload-confirmation.test.js test/offsite-upload-hardening-transition.test.js test/private-workspace-preflight.test.js
       - name: Reboot module maintenance rollback (isolated temporary files)
         run: sudo python3 test/reboot-module-maintenance.test.py
 

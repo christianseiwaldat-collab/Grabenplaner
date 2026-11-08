@@ -191,6 +191,9 @@ gp_stop_service() { printf 'stop\\n' >> "$EVENTS_FILE"; }
 gp_start_service() { printf 'start\\n' >> "$EVENTS_FILE"; }
 gp_configure_nightly_backups() { printf 'schedule-converged\\n' >> "$EVENTS_FILE"; ${scenario === "failed-schedule" ? "return 1" : ":"}; }
 gp_wait_ready() { ${scenario === "failed-readiness" ? "return 1" : ":"}; }
+# This phase-order fixture supplies readiness outcomes; terminal-state timing
+# and the real guarded rollback functions are exercised separately below.
+wait_deployment_ready() { gp_wait_ready "$@"; }
 gp_apply_app_permissions() { :; }
 gp_sha256() { printf '${"a".repeat(64)}'; }
 start_database_lock() { printf 'database-lock\\n' >> "$EVENTS_FILE"; }
@@ -330,3 +333,153 @@ test("update history retains import, school and session security evidence after 
   assert.deepEqual(failed.sessionSecuritySchemaMigration,{verified:false});
   assert.deepEqual(failed.schemaMigration,importProof);
 });
+
+const restartHelpers = source.slice(source.indexOf("deployment_service_contract() {"), source.indexOf("cleanup() {"));
+assert.ok(restartHelpers.startsWith("deployment_service_contract() {"));
+assert.ok(restartHelpers.includes("rollback_update() {"));
+
+test("rollback identities are captured before any app stop or backup ownership mutation", () => {
+  const binding = source.indexOf("\nbind_rollback_service_restart\n");
+  assert.ok(binding > 0 && binding < source.indexOf(entry));
+  assert.ok(source.indexOf("\nservices_touched=1", binding) > binding);
+  const privateCheck = source.indexOf('/usr/bin/python3 -I -B "$private_workspace_preflight"');
+  assert.ok(privateCheck > source.indexOf('"$trusted_package_verifier" "$extract_root"'));
+  for (const operation of ['install --prod --frozen-lockfile', '\nscan_candidate_with_clamav\n', '\nbind_rollback_service_restart\n']) {
+    assert.ok(source.indexOf(operation, privateCheck) > privateCheck, operation);
+  }
+  assert.ok(source.indexOf('"$(stat --format=\'%u:%h\' -- "$private_workspace_preflight")"') < privateCheck);
+});
+
+for (const scenario of ["valid", "manifest-changed", "manifest-missing", "unit-changed", "loaded-unit-changed", "reload-needed",
+  "unit-property-missing", "unit-property-duplicate", "unit-unavailable", "service-changed", "pg-changed", "pg-unavailable",
+  "reset-failed", "start-failed"]) {
+  test(`actual rollback resets only the verified old service: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-rollback-startlimit-"));
+    t.after(() => { assert.equal(path.dirname(fs.realpathSync(temporary)), fs.realpathSync(os.tmpdir())); fs.rmSync(temporary, { recursive: true, force: true }); });
+    fs.mkdirSync(path.join(temporary, "app"));
+    fs.writeFileSync(path.join(temporary, "app/grabenplaner-server-manifest.json"), "old-manifest\n");
+    fs.writeFileSync(path.join(temporary, "unit"), "[Service]\nExecStart=/usr/bin/node server.js\n");
+    fs.writeFileSync(path.join(temporary, "pair"), '{"pair":"original"}');
+    fs.writeFileSync(path.join(temporary, "run.sh"), `set -Eeuo pipefail
+scenario=${quote(scenario)}
+app_dir="$PWD/app"
+service=fixture.service
+service_user=fixture-user
+service_group=fixture-group
+database_provider=postgresql
+postgresql_before_identity='{"pair":"original"}'
+rollback_expected_manifest_sha256=''
+rollback_expected_service=''
+rollback_expected_service_contract=''
+rollback_expected_pair_identity=''
+new_service_started=1
+old_app_moved=0
+rollback_root="$PWD/absent-previous"
+runtime_v6_transition=''
+node=/usr/bin/node
+internal_ready_url=http://127.0.0.1/ready
+public_ready_url=https://fixture.invalid/ready
+health_timeout=20
+phase=before
+gp_sha256() { sha256sum --binary -- "$1" | awk '{print $1}'; }
+gp_die() { printf '%s\\n' "$*" >&2; exit 42; }
+gp_warn() { :; }
+gp_log() { printf 'log:%s\\n' "$*" >> events; }
+gp_stop_service() { printf 'stop:%s\\n' "$1" >> events; }
+release_database_lock() { :; }
+gp_configure_nightly_backups() { :; }
+gp_wait_ready() { return 0; }
+root_node() {
+ [[ "$1" == "$app_dir/server-tools/linux/lib/postgresql-operations.js" && "$2" == identity && "$3" == /etc/grabenplaner/postgresql-operations.json ]] || return 90
+ [[ "$phase" != after || "$scenario" != pg-unavailable ]] || return 91
+ cat pair
+}
+systemctl() {
+ local command="$1"; shift
+ case "$command" in
+  show)
+   [[ "$phase" != after || "$scenario" != unit-unavailable ]] || return 92
+   printf 'Id=fixture.service\\nLoadState=loaded\\nFragmentPath=/owned/fixture.service\\nDropInPaths=\\n'
+   if [[ "$phase" == after && "$scenario" == loaded-unit-changed ]]; then printf 'User=other-user\\n'; else printf 'User=fixture-user\\n'; fi
+   [[ "$phase" == after && "$scenario" == unit-property-missing ]] || printf 'Group=fixture-group\\n'
+   [[ "$phase" != after || "$scenario" != unit-property-duplicate ]] || printf 'User=fixture-user\\n'
+   printf 'WorkingDirectory=%s\\nType=simple\\nRestart=on-failure\\nStartLimitBurst=5\\nStartLimitIntervalUSec=5min\\n' "$app_dir"
+   if [[ "$phase" == after && "$scenario" == reload-needed ]]; then printf 'NeedDaemonReload=yes\\n'; else printf 'NeedDaemonReload=no\\n'; fi ;;
+  cat) cat unit ;;
+  is-active) printf 'inactive\\n'; return 3 ;;
+  reset-failed) printf 'reset:%s\\n' "$1" >> events; [[ "$scenario" != reset-failed ]] ;;
+  start) printf 'start:%s\\n' "$1" >> events; [[ "$scenario" != start-failed ]] ;;
+  *) return 93 ;;
+ esac
+}
+write_receipt() { printf '%s\\n' "$1" > receipt; }
+${restartHelpers}
+bind_rollback_service_restart
+phase=after
+case "$scenario" in
+ manifest-changed) printf 'candidate-manifest\\n' > app/grabenplaner-server-manifest.json ;;
+ manifest-missing) rm -- app/grabenplaner-server-manifest.json ;;
+ unit-changed) printf '[Service]\\nExecStart=/other/node server.js\\n' > unit ;;
+ service-changed) service=other.service ;;
+ pg-changed) printf '{"pair":"other"}' > pair ;;
+esac
+rollback_update 1
+`);
+    const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: temporary, encoding: "utf8", timeout: 10000 });
+    assert.equal(result.status, 0, result.stderr);
+    const events = fs.readFileSync(path.join(temporary, "events"), "utf8");
+    const receipt = fs.readFileSync(path.join(temporary, "receipt"), "utf8").trim();
+    if (scenario === "valid") {
+      assert.equal(receipt, "rolled-back");
+      assert.match(events, /reset:fixture\.service\nstart:fixture\.service/);
+    } else {
+      assert.equal(receipt, "rollback-incomplete", events);
+      if (!["reset-failed", "start-failed"].includes(scenario)) assert.doesNotMatch(events, /^reset:/m);
+      if (scenario !== "start-failed") assert.doesNotMatch(events, /^start:/m);
+    }
+    assert.doesNotMatch(events, /(?:reset|start):other\.service/);
+  });
+}
+
+for (const scenario of ["start-limit-result", "exit-code-result", "warming", "queued-job", "restart-between-failures",
+  "missing-pid", "invalid-pid", "missing-job", "duplicate-property", "show-unavailable"]) {
+  test(`readiness respects actual terminal versus restarting unit state: ${scenario}`, { skip: !fs.existsSync(bash) }, t => {
+    const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-terminal-readiness-"));
+    t.after(() => { assert.equal(path.dirname(fs.realpathSync(temporary)), fs.realpathSync(os.tmpdir())); fs.rmSync(temporary, { recursive: true, force: true }); });
+    const helpers = restartHelpers.slice(0, restartHelpers.indexOf("rollback_update() {"));
+    fs.writeFileSync(path.join(temporary, "run.sh"), `set -Eeuo pipefail
+scenario=${quote(scenario)}
+service=fixture.service
+calls=0
+gp_wait_ready() {
+ ((calls+=1)); ((SECONDS+=2))
+ case "$scenario" in warming|queued-job|restart-between-failures) (( calls >= 5 )) && return 0 ;; esac
+ return 1
+}
+gp_log() { printf '%s\\n' "$*" >> log; }
+systemctl() {
+ [[ "$scenario" != show-unavailable ]] || return 1
+ if [[ "$scenario" == warming || "$scenario" == restart-between-failures && ( "$calls" == 2 || "$calls" == 4 ) ]]; then
+  printf 'ActiveState=activating\\nSubState=auto-restart\\nMainPID=0\\nJob=\\nResult=exit-code\\n'; return
+ fi
+ printf 'ActiveState=failed\\nSubState=failed\\n'
+ case "$scenario" in missing-pid) ;; invalid-pid) printf 'MainPID=unknown\\n' ;; *) printf 'MainPID=0\\n' ;; esac
+ case "$scenario" in missing-job) ;; queued-job) printf 'Job=165 /org/freedesktop/systemd1/job/165\\n' ;; *) printf 'Job=\\n' ;; esac
+ if [[ "$scenario" == start-limit-result ]]; then printf 'Result=start-limit-hit\\n'; else printf 'Result=exit-code\\n'; fi
+ [[ "$scenario" != duplicate-property ]] || printf 'MainPID=0\\n'
+}
+${helpers}
+if wait_deployment_ready http://127.0.0.1/ready 20; then printf 'ready:%s\\n' "$calls"; else printf 'failed:%s\\n' "$calls"; fi
+`);
+    const result = spawnSync(bash, ["--noprofile", "--norc", "run.sh"], { cwd: temporary, encoding: "utf8", timeout: 10000 });
+    assert.equal(result.status, 0, result.stderr);
+    if (["warming", "queued-job", "restart-between-failures"].includes(scenario)) assert.equal(result.stdout.trim(), "ready:5");
+    else if (["start-limit-result", "exit-code-result"].includes(scenario)) {
+      assert.equal(result.stdout.trim(), "failed:2");
+      assert.match(fs.readFileSync(path.join(temporary, "log"), "utf8"), /dauerhaft fehlgeschlagen/);
+    } else {
+      assert.equal(result.stdout.trim(), "failed:10");
+      assert.equal(fs.existsSync(path.join(temporary, "log")), false);
+    }
+  });
+}

@@ -69,6 +69,13 @@ Status-/Historienbindungen.
 Die Reihenfolge fuer eine spaeter ausdruecklich freigegebene Auslieferung ist:
 
 1. Das offizielle ZIP und seinen unabhaengig freigegebenen SHA256 bereitstellen.
+   Bei eingerichtetem privaten Workspace zuerst das regulaer gebaute private
+   Begleitartefakt fuer genau dieses endgueltige ZIP vorbereiten und mit dem
+   eigenen geprueften FD9-Verfahren uebernehmen, waehrend die alte App noch
+   installiert ist. Es muss beide Appstaende akzeptieren und alle historischen
+   Bindungen sowie die private Implementierung erhalten. Der GP-Helper fuegt
+   selbst keine Freigabe hinzu. Erst mit dieser A+B-Bindung darf die folgende
+   fruehe Vorpruefung erfolgreich sein.
    Das ZIP isoliert als Build-Benutzer entpacken und mit der bestehenden
    Sicherheitsbasis in einen frischen root-eigenen Baum versiegeln. Kein
    Extrahieren als root, keine nutzerbeschreibbaren Elternverzeichnisse.
@@ -82,18 +89,27 @@ Die Reihenfolge fuer eine spaeter ausdruecklich freigegebene Auslieferung ist:
 2. Den root-geschuetzten Einstieg mit `--package`, `--sha256`,
    `--candidate-root` und gegebenenfalls `--node`/`--pnpm` aufrufen. Er prueft
    bytegleiche ZIP-/Quellbaumbindung, eigene Einstiegs-/Helperbytes,
-   ClamAV, Paketmanifest, Core6/Modul13 und den gruenen read-only Vorabcheck.
+   die private Zusatzmodulbindung vor dem teuren Scan, ClamAV, Paketmanifest,
+   Core6/Modul13 und den gruenen read-only Vorabcheck. Die vollstaendige
+   Paketpruefung erfolgt mit dem installierten Paketverifier; der Kandidat
+   erhaelt dadurch keine eigene Verifier-Autoritaet.
 3. Unter Wartungssperre FD9 werden die urspruenglichen vier Offsite-Timerzustaende
    privat festgehalten und die Timer pausiert. Die tatsaechlichen Assurance- und
    Repository-Sperren werden ohne Warten erworben. Ein laufender Vorgang ist ein
-   Abbruchgrund.
+   Abbruchgrund. Die private Bindung wird nach Erwerb von FD9 nochmals geprueft,
+   bevor die externe Modultransaktion angelegt oder angewendet wird.
 4. Der Helper prueft alle alten Artefakte vor Ausfuehrung des alten Verifiers.
    Nur Uploadskript und providergebundener Installationsbeleg werden mit
    Write-ahead-Journal, privaten Rueckkehrkopien, atomaren Einzel-Renames und
    fsync uebernommen. Die gemeinsame Sperre schuetzt den kurzen Zwischenzustand.
-5. Nach exakt passender externer Modulbindung laeuft der **unveraenderte
-   installierte Core6-App-Updater** mit `--verification auto` und uebernommener
-   FD9. Er bestimmt und prueft den normalen kurzen oder vollstaendigen Pfad.
+5. Nach exakt passender externer Modulbindung laeuft der **vollstaendig
+   paketgepruefte Kandidaten-App-Updater** mit explizitem
+   `--app-dir /opt/grabenplaner/app`, `--verification auto` und uebernommener FD9.
+   Paket-, Manifest- und Treiberhash werden unmittelbar vor dem Aufruf nochmals
+   abgeglichen. So ist die neue Rueckkehrabsicherung bereits beim ersten Update
+   wirksam. Paket-/Laufzeit-/Baumpruefer bleiben aus der installierten App; keine
+   Verifikation wird uebersprungen. Der normale kurze oder vollstaendige Pfad
+   bleibt die Entscheidung des Updaters.
 6. Erfolg verlangt den exakten neuen Appmanifest-Hash, passende Modulbindung,
    erfolgreichen Updaterabschluss und gueltigen Laufzeitvertrag. Erst dann werden
    die urspruenglichen Timerzustaende wiederhergestellt. Der normale
@@ -143,8 +159,15 @@ Die originale installierte .100-Gate-/Verifierversion wird zusaetzlich im
 isolierten Linux-Abbild vor/nach Refresh und Rueckkehr ausgefuehrt.
 
 Diese Quell- und Helperpruefungen ersetzen nicht die Qualifikation des spaeteren
-offiziellen ZIPs samt altem/neuem App-Updater und Rueckkehr. Vor einer produktiven
+offiziellen ZIPs samt tatsaechlich verwendetem Kandidatentreiber,
+installierten Verifiern und Rueckkehr. Vor einer produktiven
 Mutation muss auch das exakte freigegebene Paket in der isolierten Umgebung
 qualifiziert sein. Ein gebautes/veroeffentlichtes Paket, ein VPS-Eingriff oder
 eine erfolgreiche produktive Nachtpruefung wird durch diese lokalen Tests nicht
 behauptet.
+
+Die private Zusatzmodulpruefung ist unter
+[`private-workspace-deploy-preflight.md`](private-workspace-deploy-preflight.md)
+beschrieben. Auch eine gruene Metadatenpruefung ersetzt nicht die echte
+Installations-/Rueckkehrmatrix des endgueltigen oeffentlichen ZIPs und seines
+separaten, exakt paketgebundenen privaten Begleitartefakts.
