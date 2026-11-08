@@ -9,6 +9,8 @@ const { spawn } = require("node:child_process");
 const { databaseForCurrentTest } = require("../test-support/postgresql-api/preload");
 
 const repositoryRoot = path.join(__dirname, "..");
+const childOutput = new WeakMap();
+const childDiagnostics = child => (childOutput.get(child) || "").slice(-8000);
 
 async function freePort() {
   return new Promise((resolve, reject) => {
@@ -21,23 +23,28 @@ async function freePort() {
   });
 }
 
-async function waitFor(url, child, headers = {}, timeoutMs = 12_000) {
+async function waitFor(url, child, headers = {}, timeoutMs = 60_000) {
+  // Native PostgreSQL startup verifies the pair and warms four qualified workers.
+  // Keep the same finite startup budget as the other current-server API tests.
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`Server vorzeitig beendet: ${child.exitCode}`);
+    if (child.exitCode !== null || child.signalCode !== null) throw new Error(`Server vorzeitig beendet: ${child.exitCode}. ${childDiagnostics(child)}`);
     try {
-      const response = await fetch(url, { headers });
+      const response = await fetch(url, { headers,
+        signal: AbortSignal.timeout(Math.min(1000, Math.max(1, deadline - Date.now()))),
+      });
       if (response.ok) return response;
+      await response.text();
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 75));
   }
-  throw new Error(`Server nicht erreichbar: ${url}`);
+  throw new Error(`Server nicht erreichbar nach ${timeoutMs} ms: ${url}. ${childDiagnostics(child)}`);
 }
 
 async function waitForExit(child, timeoutMs = 12_000) {
   if (child.exitCode !== null) return child.exitCode;
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("Server wurde nicht rechtzeitig beendet.")), timeoutMs);
+    const timer = setTimeout(() => reject(new Error("Server wurde nicht rechtzeitig beendet. " + childDiagnostics(child))), timeoutMs);
     child.once("exit", (code) => { clearTimeout(timer); resolve(code); });
   });
 }
@@ -61,12 +68,18 @@ async function rawHttpRequest(url, { method = "GET", headers = {}, body = "" } =
 }
 
 function spawnServer(environment) {
-  return spawn(process.execPath, [path.join(repositoryRoot, "server.js")], {
+  const child = spawn(process.execPath, [path.join(repositoryRoot, "server.js")], {
     cwd: repositoryRoot,
     windowsHide: true,
     env: { ...process.env, ...environment },
     stdio: ["ignore", "pipe", "pipe"],
   });
+  childOutput.set(child, "");
+  const retain = (stream, chunk) => childOutput.set(child,
+    (childOutput.get(child) + `[${stream}] ` + chunk.toString()).slice(-65536));
+  child.stdout.on("data", chunk => retain("stdout", chunk));
+  child.stderr.on("data", chunk => retain("stderr", chunk));
+  return child;
 }
 
 test("v0.57: Codespaces nutzt die Sporthandel-Demo und vertraut nur dem gleichurspruenglichen GitHub-Proxy", async () => {
@@ -98,7 +111,7 @@ test("v0.57: Codespaces nutzt die Sporthandel-Demo und vertraut nur dem gleichur
     GRABENPLANER_DEMO_PROFILE: "sporthandel",
   });
   let setupError = "";
-  setup.stderr.on("data", (chunk) => { setupError += chunk.toString(); });
+  setup.stderr.on("data", (chunk) => { setupError = (setupError + chunk.toString()).slice(-65536); });
   try {
     await waitFor(`http://127.0.0.1:${setupPort}/api/portal/v1/status`, setup);
     const configured = await fetch(`http://127.0.0.1:${setupPort}/api/portal/v1/setup/admin`, {
@@ -147,7 +160,7 @@ test("v0.57: Codespaces nutzt die Sporthandel-Demo und vertraut nur dem gleichur
     GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: "app.github.dev",
   });
   let serverError = "";
-  server.stderr.on("data", (chunk) => { serverError += chunk.toString(); });
+  server.stderr.on("data", (chunk) => { serverError = (serverError + chunk.toString()).slice(-65536); });
   const url = `http://127.0.0.1:${port}`;
   try {
     await waitFor(`${url}/api/portal/v1/status`, server, { "X-Forwarded-Proto": "https" });
