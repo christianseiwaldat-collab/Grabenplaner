@@ -19,6 +19,9 @@ test('native PostgreSQL receipt-issue paging matches SQLite for missing children
   const schema = `"${schemaName}"`;
   const head = CASH_SNAPSHOT_TABLES.find(t => t.name === 'Umsatz_KASSE').sqlName;
   const line = CASH_SNAPSHOT_TABLES.find(t => t.name === 'Umsatz_Kasse_Details').sqlName;
+  const actualHead = require('../lib/persistence/postgresql/sales/schema').createSalesSchemaPlan(5)
+    .statements.find(entry => entry.id === head);
+  assert.match(actualHead.sql, /business_date TEXT COLLATE "C"/, 'The fixture must match the real native snapshot date column');
   const db = new DatabaseSync(':memory:');
   const pool = new Pool({ connectionString: databaseUrl, max: 1, connectionTimeoutMillis: 5000 });
   let client;
@@ -26,7 +29,7 @@ test('native PostgreSQL receipt-issue paging matches SQLite for missing children
     client = await pool.connect();
     await client.query('BEGIN');
     await client.query(`CREATE SCHEMA ${schema}`);
-    await client.query(`CREATE TABLE ${schema}."${head}"(dataset_slot INTEGER,source_row INTEGER,business_date DATE);
+    await client.query(`CREATE TABLE ${schema}."${head}"(dataset_slot INTEGER,source_row INTEGER,business_date TEXT COLLATE "C");
       CREATE TABLE ${schema}."${line}"(dataset_slot INTEGER,parent_row INTEGER);`);
     db.exec(`CREATE TABLE ${head}(dataset_slot INTEGER,source_row INTEGER,business_date TEXT);
       CREATE TABLE ${line}(dataset_slot INTEGER,parent_row INTEGER);`);
