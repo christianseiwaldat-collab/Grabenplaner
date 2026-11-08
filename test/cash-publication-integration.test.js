@@ -2,7 +2,10 @@
 const test = require('node:test'), assert = require('node:assert/strict');
 const C = require('../lib/data-import-contract'), H = require('../lib/tradefoto-history-profiles');
 const { openSqliteApplicationPersistence } = require('../lib/persistence/sqlite/provider');
-const { SQLITE_APPLICATION_CATALOG } = require('../lib/persistence/sqlite/application-catalog');
+const { SQLITE_APPLICATION_CATALOG: HISTORICAL_APPLICATION_CATALOG, SALES_REPORT_RECEIPT_ISSUE_CATALOG } = require('../lib/persistence/sqlite/application-catalog');
+// The historical dialect catalog stays frozen; this fixture also exercises the
+// separately qualified current receipt-issue read used by report jobs.
+const SQLITE_APPLICATION_CATALOG = Object.freeze([...HISTORICAL_APPLICATION_CATALOG, ...SALES_REPORT_RECEIPT_ISSUE_CATALOG]);
 const { ensureSqliteDataImportRuntimeSchema } = require('../lib/persistence/sqlite/operations/data-import-runtime-schema');
 const { createIntegrationSecretVault } = require('../lib/integration-secret-vault');
 const { loadManagedDataImportProtection } = require('../lib/data-import-managed-protection');

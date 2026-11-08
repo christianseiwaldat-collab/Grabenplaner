@@ -21,11 +21,14 @@ function fixture(t) {
   const old = path.join(root, "module"), candidate = path.join(root, "candidate"), receipt = path.join(root, "receipt.json");
   for (const target of [old, candidate]) fs.cpSync(MODULE, target, { recursive: true });
   fs.copyFileSync(path.join(__dirname, "fixtures/offsite-upload-module13-predecessor.sh"), path.join(old, helper.ARTIFACT));
+  // A checkout-owned predecessor can retain its owner when copied over this file.
+  fs.chownSync(path.join(old, helper.ARTIFACT), 0, 0);
   function protect(directory) {
-    fs.chmodSync(directory, 0o755);
+    fs.chownSync(directory, 0, 0); fs.chmodSync(directory, 0o755);
     for (const item of fs.readdirSync(directory, { withFileTypes: true })) {
       const file = path.join(directory, item.name);
-      if (item.isDirectory()) protect(file); else fs.chmodSync(file, item.name.endsWith(".sh") ? 0o755 : 0o644);
+      if (item.isDirectory()) protect(file);
+      else { fs.chownSync(file, 0, 0); fs.chmodSync(file, item.name.endsWith(".sh") ? 0o755 : 0o644); }
     }
   }
   protect(old); protect(candidate);
@@ -127,7 +130,11 @@ test("unsafe receipt permissions, symlinks, hardlinks and backup tampering are r
   assert.throws(() => f.prepare(), /UPLOAD_REFRESH_PERMISSIONS/); fs.chmodSync(f.receipt, 0o600);
   const link = path.join(f.root, "link.json"); fs.symlinkSync(f.receipt, link);
   assert.throws(() => helper.verify(f.old, f.candidate, link, f.after.fingerprint), /UPLOAD_REFRESH_PATH/);
-  const upload = path.join(f.candidate, helper.ARTIFACT), hardlink = path.join(f.root, "hardlink"); fs.linkSync(upload, hardlink);
+  const upload = path.join(f.candidate, helper.ARTIFACT), hardlink = path.join(f.root, "hardlink");
+  fs.chownSync(upload, 1000, 1000);
+  try { assert.throws(() => f.prepare(), /UPLOAD_REFRESH_PERMISSIONS/); }
+  finally { fs.chownSync(upload, 0, 0); }
+  fs.linkSync(upload, hardlink);
   assert.throws(() => f.prepare(), /UPLOAD_REFRESH_PERMISSIONS/); fs.unlinkSync(hardlink);
   const tx = f.prepare(); fs.appendFileSync(path.join(tx, "old-upload"), "tamper");
   assert.throws(() => helper.apply(tx), /UPLOAD_REFRESH_BACKUP/);

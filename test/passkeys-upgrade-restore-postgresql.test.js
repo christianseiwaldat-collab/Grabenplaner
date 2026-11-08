@@ -307,7 +307,7 @@ test("a terminated native-test child stops only its bound private clone before d
   let child, closed, transcript = "", primaryError;
   try {
     child = spawn(process.execPath, ["-e", childSource, root, helper], { cwd: root,
-      env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8" }, stdio: ["ignore", "pipe", "pipe"] });
+      env: { PATH: "/usr/bin:/bin", LANG: "C.UTF-8", TMPDIR: os.tmpdir() }, stdio: ["ignore", "pipe", "pipe"] });
     let closeResolve, closeReject;
     closed = new Promise((resolve, reject) => { closeResolve = resolve; closeReject = reject; });
     child.once("close", (code, signal) => closeResolve({ code, signal })); child.once("error", closeReject);
