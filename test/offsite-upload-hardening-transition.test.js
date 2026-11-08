@@ -157,3 +157,51 @@ test("root CLI dispatch validates action and arity and completes the direct tran
   for (let attempt = 0; attempt < 2; attempt += 1) { const result = cli("finish", tx); assert.equal(result.status, 0, result.stderr); assert.equal(JSON.parse(result.stdout).state, "committed"); }
   const rejected = cli("rollback", tx); assert.equal(rejected.status, 1); assert.equal(rejected.stderr.trim(), "UPLOAD_REFRESH_APP_COMMITTED_OR_UNKNOWN");
 });
+
+function serviceGroupApp(f) {
+  const directory = path.join(f.root, "installed-app"), app = path.join(directory, "grabenplaner-server-manifest.json");
+  fs.mkdirSync(directory, { mode: 0o750 }); fs.chownSync(directory, 0, 1000);
+  fs.copyFileSync(f.app, app); fs.chownSync(app, 0, 1000); fs.chmodSync(app, 0o640);
+  return { directory, app, prepare: () => helper.prepare(f.old, f.candidate, f.receipt,
+    f.after.fingerprint, app, f.nextApp, "c".repeat(64)).transaction };
+}
+
+test("installed service-group manifest supports exact apply, rollback and idempotent commit", { skip: !rootOnly }, t => {
+  const f = fixture(t), installed = serviceGroupApp(f);
+  const first = installed.prepare(); helper.apply(first);
+  assert.equal(helper.rollback(first).state, "rolled-back");
+  const second = installed.prepare(); helper.apply(second);
+  // The normal installer preserves root:<service group> 0640 on replacement.
+  fs.writeFileSync(installed.app, fs.readFileSync(f.nextApp));
+  assert.equal(helper.finish(second).state, "committed");
+  assert.equal(helper.finish(second).state, "committed");
+  assert.throws(() => helper.rollback(second), /UPLOAD_REFRESH_APP_COMMITTED_OR_UNKNOWN/);
+  assert.equal(fs.statSync(installed.app).gid, 1000);
+  assert.equal(fs.statSync(installed.app).mode & 0o7777, 0o640);
+  assert.equal(fs.statSync(f.receipt).gid, 0);
+  for (const name of fs.readdirSync(second)) assert.equal(fs.statSync(path.join(second, name)).gid, 0);
+});
+
+test("service-group app reads do not relax write, link, owner, module or private-receipt boundaries", { skip: !rootOnly }, t => {
+  const f = fixture(t), installed = serviceGroupApp(f);
+  fs.chownSync(installed.app, 1000, 1000);
+  assert.throws(installed.prepare, /UPLOAD_REFRESH_PERMISSIONS/); fs.chownSync(installed.app, 0, 1000);
+  fs.chmodSync(installed.app, 0o660);
+  assert.throws(installed.prepare, /UPLOAD_REFRESH_PERMISSIONS/); fs.chmodSync(installed.app, 0o640);
+  fs.chmodSync(installed.directory, 0o770);
+  assert.throws(installed.prepare, /UPLOAD_REFRESH_PARENT/); fs.chmodSync(installed.directory, 0o750);
+  fs.chownSync(installed.app, 0, 0);
+  assert.throws(installed.prepare, /UPLOAD_REFRESH_APP_MANIFEST_PERMISSIONS/); fs.chownSync(installed.app, 0, 1000);
+  const hardlink = path.join(f.root, "linked-manifest"); fs.linkSync(installed.app, hardlink);
+  assert.throws(installed.prepare, /UPLOAD_REFRESH_PERMISSIONS/); fs.unlinkSync(hardlink);
+  const symlink = path.join(f.root, "symlink-manifest"); fs.symlinkSync(installed.app, symlink);
+  assert.throws(() => helper.prepare(f.old, f.candidate, f.receipt, f.after.fingerprint,
+    symlink, f.nextApp, "c".repeat(64)), /UPLOAD_REFRESH_PATH/);
+  const upload = path.join(f.old, helper.ARTIFACT); fs.chownSync(upload, 0, 1000);
+  assert.throws(installed.prepare, /UPLOAD_REFRESH_PERMISSIONS/); fs.chownSync(upload, 0, 0);
+  fs.chownSync(f.receipt, 0, 1000);
+  assert.throws(installed.prepare, /UPLOAD_REFRESH_PERMISSIONS/); fs.chownSync(f.receipt, 0, 0);
+  fs.chownSync(f.nextApp, 0, 1000);
+  assert.throws(installed.prepare, /UPLOAD_REFRESH_PERMISSIONS/); fs.chownSync(f.nextApp, 0, 0);
+  assert.equal(contract(f.old).fingerprint, helper.OLD_FINGERPRINT);
+});

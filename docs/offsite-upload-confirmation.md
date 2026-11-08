@@ -114,6 +114,12 @@ Bestaetigung. Auch ein schon bestaetigter Commit ist erneut pruefbar, falls erst
 das Wiederherstellen eines Timers scheiterte. Vor der Timerfreigabe werden
 Laufzeitvertrag sowie interne und oeffentliche Bereitschaft geprueft.
 
+Das installierte Appmanifest darf wie bei der normalen Installation root-eigen
+mit derselben leseberechtigten Dienstgruppe wie sein root-eigenes Appverzeichnis
+und Modus 0640 vorliegen. Dieser eng begrenzte Lesezugriff erlaubt keine
+Gruppen-/Fremdschreibrechte, Links oder fremden Besitzer. Moduldateien, Kandidat
+und private Transaktions-/Installationsbelege behalten die root:root-Grenze.
+
 ## Qualifikation und Grenze der Aussage
 
 `test/offsite-upload-confirmation.test.js` simuliert unter anderem

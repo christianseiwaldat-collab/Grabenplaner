@@ -9,11 +9,11 @@ const ARTIFACT = "grabenplaner-offsite-upload.sh", FORMAT = "grabenplaner-offsit
 const canonical = value => Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : value && typeof value === "object"
   ? `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}` : JSON.stringify(value);
 function fail(code) { const error = new Error(code); error.code = code; throw error; }
-function protectedPath(file, directory = false, privateMode = false) {
+function protectedPath(file, directory = false, privateMode = false, readGroup = false) {
   if (!path.isAbsolute(file) || fs.realpathSync(file) !== file) fail("UPLOAD_REFRESH_PATH");
   const stat = fs.lstatSync(file);
   if (stat.isSymbolicLink() || (directory ? !stat.isDirectory() : !stat.isFile() || stat.nlink !== 1)
-    || stat.uid !== 0 || stat.gid !== 0 || (stat.mode & 0o022) || stat.size > 8 * 1024 * 1024
+    || stat.uid !== 0 || (!readGroup && stat.gid !== 0) || (stat.mode & 0o022) || stat.size > 8 * 1024 * 1024
     || privateMode && (stat.mode & 0o777) !== (directory ? 0o700 : 0o600)) fail("UPLOAD_REFRESH_PERMISSIONS");
   for (let parent = path.dirname(file); ; parent = path.dirname(parent)) {
     const current = fs.lstatSync(parent);
@@ -25,6 +25,14 @@ function protectedPath(file, directory = false, privateMode = false) {
 function bytes(file, privateMode = false) { protectedPath(file, false, privateMode); return fs.readFileSync(file); }
 const digestBytes = value => crypto.createHash("sha256").update(value).digest("hex");
 const digest = file => digestBytes(bytes(file));
+function installedAppManifestDigest(file) {
+  // Installed app files belong to root:<service group>; only their read group
+  // differs from the root:root module and private transaction artifacts.
+  const stat = protectedPath(file, false, false, true);
+  if (stat.gid !== fs.lstatSync(path.dirname(file)).gid
+    || ![0o600, 0o640, 0o644].includes(stat.mode & 0o7777)) fail("UPLOAD_REFRESH_APP_MANIFEST_PERMISSIONS");
+  return digestBytes(fs.readFileSync(file));
+}
 const json = (file, privateMode = false) => JSON.parse(bytes(file, privateMode).toString("utf8"));
 function syncDirectory(directory) {
   const fd = fs.openSync(directory, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
@@ -98,7 +106,7 @@ function verify(oldModule, candidateModule, receiptFile, expectedFingerprint) {
 function prepare(oldModule, candidateModule, receiptFile, expectedFingerprint, appManifest, candidateManifest, packageSha) {
   if (!HASH.test(packageSha || "")) fail("UPLOAD_REFRESH_PACKAGE");
   const { receipt, next, proof } = verify(oldModule, candidateModule, receiptFile, expectedFingerprint);
-  const appBefore = digest(appManifest), appAfter = digest(candidateManifest);
+  const appBefore = installedAppManifestDigest(appManifest), appAfter = digest(candidateManifest);
   if (appBefore === appAfter) fail("UPLOAD_REFRESH_APP_DELTA");
   const root = path.join(path.dirname(oldModule), `.offsite-upload-refresh-${crypto.randomUUID()}`);
   fs.mkdirSync(root, { mode: 0o700 }); syncDirectory(path.dirname(root)); protectedPath(root, true, true);
@@ -129,7 +137,7 @@ function transaction(root) {
   if (oldReceipt.fingerprint !== OLD_FINGERPRINT || newReceipt.fingerprint !== journal.candidateFingerprint
     || oldReceipt.schemaSha256 !== OLD_SCHEMA || newReceipt.schemaSha256 !== OLD_SCHEMA
     || canonical(oldReceipt.providerBinding) !== canonical(newReceipt.providerBinding)) fail("UPLOAD_REFRESH_BINDING");
-  protectedPath(journal.module, true); protectedPath(journal.receipt, false, true); protectedPath(journal.appManifest);
+  protectedPath(journal.module, true); protectedPath(journal.receipt, false, true); installedAppManifestDigest(journal.appManifest);
   const currentUpload = digest(path.join(journal.module, ARTIFACT)), currentReceipt = digest(journal.receipt);
   if (![journal.hashes["old-upload"], journal.hashes["new-upload"]].includes(currentUpload)
     || ![journal.hashes["old-receipt"], journal.hashes["new-receipt"]].includes(currentReceipt)) fail("UPLOAD_REFRESH_UNKNOWN_STATE");
@@ -147,7 +155,7 @@ function coherent(journal, expected) {
 }
 function apply(root) {
   const journal = transaction(root);
-  if (journal.state !== "prepared" || digest(journal.appManifest) !== journal.appBefore) fail("UPLOAD_REFRESH_STATE");
+  if (journal.state !== "prepared" || installedAppManifestDigest(journal.appManifest) !== journal.appBefore) fail("UPLOAD_REFRESH_STATE");
   state(root, journal, "applying");
   atomic(path.join(journal.module, ARTIFACT), bytes(path.join(root, "new-upload"), true), journal.uploadMode);
   atomic(journal.receipt, bytes(path.join(root, "new-receipt"), true));
@@ -157,7 +165,7 @@ function apply(root) {
 function rollback(root) {
   const journal = transaction(root);
   // Never put the old module over a committed or uncertain candidate app.
-  if (journal.state === "committed" || digest(journal.appManifest) !== journal.appBefore) fail("UPLOAD_REFRESH_APP_COMMITTED_OR_UNKNOWN");
+  if (journal.state === "committed" || installedAppManifestDigest(journal.appManifest) !== journal.appBefore) fail("UPLOAD_REFRESH_APP_COMMITTED_OR_UNKNOWN");
   state(root, journal, "rolling-back");
   atomic(path.join(journal.module, ARTIFACT), bytes(path.join(root, "old-upload"), true), journal.uploadMode);
   atomic(journal.receipt, bytes(path.join(root, "old-receipt"), true));
@@ -166,7 +174,7 @@ function rollback(root) {
 }
 function finish(root) {
   const journal = transaction(root);
-  if (!["applied", "committed"].includes(journal.state) || digest(journal.appManifest) !== journal.appAfter) fail("UPLOAD_REFRESH_APP_NOT_COMMITTED");
+  if (!["applied", "committed"].includes(journal.state) || installedAppManifestDigest(journal.appManifest) !== journal.appAfter) fail("UPLOAD_REFRESH_APP_NOT_COMMITTED");
   coherent(journal, journal.candidateFingerprint); if (journal.state !== "committed") state(root, journal, "committed");
   return { ok: true, state: journal.state, fingerprint: journal.candidateFingerprint };
 }
