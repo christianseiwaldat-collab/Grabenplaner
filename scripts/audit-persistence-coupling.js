@@ -1786,6 +1786,7 @@ const TEST_SPECIAL_GROUPS = Object.freeze({
     "test/deploy-workflow.test.js",
     // Offline package/evidence fixtures; no database driver or product access.
     "test/prepared-release-package.test.js", "test/security-sast-context-evidence.test.js",
+    "test/offsite-upload-hardening-transition.test.js",
     "test/v074-linux-monitor-status.test.js",
   ]),
   "portal-ui-preferences-integration": new Set([

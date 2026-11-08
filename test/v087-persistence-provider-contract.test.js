@@ -47,6 +47,21 @@ const {
 
 const root = path.resolve(__dirname, "..");
 
+test("Offsite filesystem journal fixtures gain no database driver or provider capability", () => {
+  const fixture = "test/offsite-upload-hardening-transition.test.js";
+  assert.equal(PHASE_3_SQLITE_PROVIDER_TEST_FILES.includes(fixture), false);
+  assert.deepEqual(architectureBoundaryViolationsForText(fixture, fs.readFileSync(path.join(root, fixture), "utf8")), []);
+  for (const target of [fixture, "test/offsite-upload-unclassified.test.js"]) {
+    for (const [source, kind] of [
+      ["require('node:" + "sqlite');", "sqlite-driver-import-outside-boundary"],
+      ["require('pg');", "postgresql-driver-import"],
+      ["createPersistenceProviderFacade(adapter);", "provider-facade-outside-boundary"],
+      ["definePersistenceStatement({});", "provider-statement-outside-boundary"],
+      ["process.env.DB_PROVIDER;", "provider-runtime-config-outside-boundary"],
+    ]) assert.equal(architectureBoundaryViolationsForText(target, source).some(entry => entry.kind === kind), true, `${target}: ${kind}`);
+  }
+});
+
 test("Paired-backup file verifier registration grants no driver, facade, statements or runtime configuration", () => {
   const file = "lib/persistence/postgresql/operations/protected-files.js";
   for (const fixture of ["test-support/postgresql-api/backup-pools.js", "test/postgresql-backup-protected-files.test.js"]) {
