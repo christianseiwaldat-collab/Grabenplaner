@@ -346,7 +346,7 @@ test("v0.75 package integration never activates host hardening implicitly", () =
   assert.doesNotMatch(installer, /sshd?\s+-t/);
 });
 
-test("v0.75 Linux package builder expands the complete hardening artifact list", {
+test("v0.75 Linux package builder rejects an unsigned synthetic snapshot before publishing artifacts", {
   skip: process.platform !== "win32" ? "PowerShell-Paketbau wird im Windows-Job geprüft." : false,
 }, () => {
   withCleanGitSnapshot((snapshotRoot, outputRoot) => {
@@ -358,11 +358,15 @@ test("v0.75 Linux package builder expands the complete hardening artifact list",
       "-SourceDirectory", snapshotRoot,
       "-OutputDirectory", outputRoot,
     ], { encoding: "utf8", timeout: 120_000 });
-    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    // This fixture creates a new local commit. It cannot have an authenticated
+    // source-bound CI receipt and must never manufacture one to build a ZIP.
+    // The successful current-head package/full-verifier path is a release gate.
+    assert.notEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(`${result.stdout}\n${result.stderr}`, /authentifiziert bezogene, quellgebundene CI-SAST-Nachweis/);
     const packageVersion = JSON.parse(fs.readFileSync(path.join(snapshotRoot, "package.json"), "utf8")).version;
     const packageName = `Grabenplaner-Server-v${packageVersion}-linux-x64.zip`;
-    assert.ok(fs.existsSync(path.join(outputRoot, packageName)));
-    assert.ok(fs.existsSync(path.join(outputRoot, `${packageName}.sha256`)));
+    assert.equal(fs.existsSync(path.join(outputRoot, packageName)), false);
+    assert.equal(fs.existsSync(path.join(outputRoot, `${packageName}.sha256`)), false);
   });
 });
 

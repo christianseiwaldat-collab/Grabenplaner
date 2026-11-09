@@ -297,7 +297,17 @@ ${reports.join("\n")}
 
 test("the 1500 second value remains scoped to service readiness", () => {
   assert.match(updater, /health_timeout=1500/);
-  assert.match(updater, /gp_wait_ready "\$internal_ready_url" "\$health_timeout"/);
+  assert.match(updater, /health_timeout >= 30 && health_timeout <= 1500/);
+  for (const endpoint of ["internal_ready_url", "public_ready_url"]) {
+    assert.ok(updater.includes(`wait_deployment_ready "$${endpoint}" "$health_timeout"`));
+  }
+  const waitStart = updater.indexOf("wait_deployment_ready() {");
+  const waitEnd = updater.indexOf("\n}\n\nrollback_update()", waitStart);
+  assert.ok(waitStart > 0 && waitEnd > waitStart);
+  const readiness = updater.slice(waitStart, waitEnd);
+  assert.match(readiness, /deadline=\$\(\(SECONDS \+ \$2\)\)/);
+  assert.match(readiness, /gp_wait_ready "\$url" 2/);
+  assert.match(readiness, /SECONDS < deadline/);
   const scanStart = updater.indexOf("scan_candidate_with_clamav() {");
   const scanEnd = updater.indexOf("\n}\n\nstart_database_lock()", scanStart);
   assert.equal(updater.slice(scanStart, scanEnd).includes("health_timeout"), false);
