@@ -106,11 +106,42 @@ for (const orientation of ['portrait', 'landscape']) test(`partial manufacturer 
     assert.match(all, /1 \/ 1/); assert.match(all, /Nur offene Belege/);
     assert.match(text[0], /Vergleich: 2 passende Positionen/, 'both coverage notes stay on the overview page');
     const details = text.find(page => page.startsWith('GRABENPLANER') && page.includes('Umsatz netto · Detailwerte'));
-    assert.match(details, /Sony\s+100,00\s*€\s*\*\s+50,00\s*€\s+Nicht verfügbar\s+Nicht verfügbar/);
+    assert.match(details, /Sony\s+100,00\s*€\s*\*\s+50,00\s*€\s+50,00\s*€\s*\*\s+100,00\s*%\s*\*/);
+    assert.match(text[0], /keine vollständige Gesamtveränderung/);
     if (process.env.SALES_REPORT_PDF_PREVIEW_DIR) {
       const fs = require('node:fs'), path = require('node:path'); fs.mkdirSync(process.env.SALES_REPORT_PDF_PREVIEW_DIR, { recursive: true });
       fs.writeFileSync(path.join(process.env.SALES_REPORT_PDF_PREVIEW_DIR, `sales-analysis-partial-${orientation}.pdf`), buffer);
     }
+  } finally { await loading.destroy(); }
+});
+
+test('a wide overview keeps review warnings and an invoice example together and defers secondary notes instead of making a notes-only page', async () => {
+  const input = fixture(0, false, { orientation: 'landscape', reportVersion: 4 });
+  input.metadata.locations = ['Zentrallager','Fil Vienna','Großhandel 1 / EXPORT','Internet','B2B - Geschäftskunden',
+    'Fil Mitterweg','Fil Boznerplatz','Fil Sparkassenplatz','Fil Grabenweg','Straub Online','Fil Straub - St. Pölten',
+    'UCW Online','United Camera Handels GmbH'].map((label,i) => ({ id: String(i), label: `${String(i).padStart(2,'0')} · ${label}` }));
+  input.query.locationIds = input.metadata.locations.map(l => l.id);
+  input.query.metrics = ['netRevenue','quantity','receiptCount','grossMargin','revenuePerReceipt','marginRate'];
+  input.metadata.marginStatus = 'confirmed';
+  const state = M.accumulator();
+  for (const phase of ['current','comparison']) for(let i=0;i<5;i++) {
+    const line = { metric: { status: 'sale', net: '100.00', gross: '120.00' }, margin: null, quantity: '1',
+      date: phase === 'current' ? '2026-08-30' : '2025-08-30', receiptKey: phase+i,
+      manufacturer: { id: String(i), label: 'BEISPIEL Hersteller '+i },
+      receipt: { number: '1', invoiceNumber: '61360', locationId: '4', locationLabel: 'B2B - Geschäftskunden' } };
+    M.accumulate(state,phase,input.query,line);
+    if(phase==='current'&&i===0) M.accumulate(state,phase,input.query,{ ...line, metric: null, reviewIssues: ['RECEIPT_AMOUNT_MISMATCH'] });
+  }
+  input.report=M.finishReport(state,input.query);
+  const buffer=await createSalesAnalysisPdf(input),{getDocument}=await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const loading=getDocument({data:new Uint8Array(buffer),isEvalSupported:false}),pdf=await loading.promise;
+  try {
+    const texts=[];
+    for(let i=1;i<=pdf.numPages;i++) texts.push((await (await pdf.getPage(i)).getTextContent()).items.map(x=>x.str).join(' '));
+    assert.match(texts[0],/Vorläufige Auswertung/);assert.match(texts[0],/keine vollständige Gesamtveränderung/);
+    assert.match(texts[0],/Rechnung 61360/);assert.match(texts[0],/Letzte vorhandene Buchung/);
+    assert.match(texts[1],/Umsatz netto · Übersicht/);
+    assert.match(texts.join(' '),/Vergleich: 5 passende Positionen/);
   } finally { await loading.destroy(); }
 });
 

@@ -508,6 +508,10 @@ rollback_data_ok=1
 rollback_public_ok=1
 rollback_app_ok=1
 rollback_stop_ok=1
+rollback_expected_manifest_sha256=""
+rollback_expected_service=""
+rollback_expected_service_contract=""
+rollback_expected_pair_identity=""
 schema_migration_result="$maintenance_root/schema-migration.json"
 school_migration_result="$maintenance_root/vocational-school-migration.json"
 session_security_migration_result="$maintenance_root/session-security-migration.json"
@@ -835,6 +839,104 @@ start_database_lock() {
     || gp_die "Der Datenbank-Wartungslock meldete keinen gueltigen Prozess."
 }
 
+# Bind static unit configuration, not mutable PID/start-time/status fields.
+# This also covers all fragments/drop-ins without printing their contents.
+deployment_service_contract() {
+  local properties definition key value
+  local -A fields=()
+  properties="$(systemctl show --property=Id --property=LoadState --property=FragmentPath --property=DropInPaths \
+    --property=User --property=Group --property=WorkingDirectory --property=Type --property=Restart \
+    --property=StartLimitBurst --property=StartLimitIntervalUSec --property=NeedDaemonReload "$service")" || return 1
+  while IFS='=' read -r key value; do
+    case "$key" in
+      Id|LoadState|FragmentPath|DropInPaths|User|Group|WorkingDirectory|Type|Restart|StartLimitBurst|StartLimitIntervalUSec|NeedDaemonReload)
+        [[ ! -v "fields[$key]" ]] || return 1
+        fields["$key"]="$value" ;;
+      *) return 1 ;;
+    esac
+  done <<< "$properties"
+  (( ${#fields[@]} == 12 )) || return 1
+  [[ -n "${fields[Id]}" && "${fields[LoadState]}" == loaded && "${fields[FragmentPath]}" == /* \
+    && "${fields[NeedDaemonReload]}" == no && "${fields[User]}" == "$service_user" \
+    && "${fields[Group]}" == "$service_group" && "${fields[WorkingDirectory]}" == "$app_dir" ]] || return 1
+  definition="$(SYSTEMD_COLORS=0 systemctl cat --no-pager "$service")" || return 1
+  [[ -n "$definition" ]] || return 1
+  printf '%s\0%s\0%s' "$service" "$properties" "$definition" | sha256sum | awk '{print $1}'
+}
+
+bind_rollback_service_restart() {
+  rollback_expected_manifest_sha256="$(gp_sha256 "$app_dir/grabenplaner-server-manifest.json")" \
+    || gp_die 'Das bisherige App-Manifest konnte fuer die Rueckkehr nicht gebunden werden.'
+  [[ "$rollback_expected_manifest_sha256" =~ ^[a-f0-9]{64}$ ]] \
+    || gp_die 'Die bisherige App-Manifestbindung ist ungueltig.'
+  rollback_expected_service_contract="$(deployment_service_contract)" \
+    || gp_die 'Der bisherige Dienstvertrag konnte fuer die Rueckkehr nicht gebunden werden.'
+  [[ "$rollback_expected_service_contract" =~ ^[a-f0-9]{64}$ ]] \
+    || gp_die 'Die bisherige Dienstbindung ist ungueltig.'
+  if [[ "$database_provider" == postgresql ]]; then
+    rollback_expected_pair_identity="$(root_node "$app_dir/server-tools/linux/lib/postgresql-operations.js" identity /etc/grabenplaner/postgresql-operations.json)" \
+      || gp_die 'Der bisherige PostgreSQL-Paarstand konnte fuer die Rueckkehr nicht gebunden werden.'
+    [[ -n "$rollback_expected_pair_identity" ]] || gp_die 'Die bisherige PostgreSQL-Paarbindung ist leer.'
+  fi
+  rollback_expected_service="$service"
+}
+
+reset_verified_rollback_service() {
+  local current_manifest current_contract current_pair
+  [[ "$rollback_expected_service" == "$service" && -n "$rollback_expected_service" \
+    && "$rollback_expected_manifest_sha256" =~ ^[a-f0-9]{64}$ \
+    && "$rollback_expected_service_contract" =~ ^[a-f0-9]{64}$ \
+    && "$database_provider" == postgresql && -n "$rollback_expected_pair_identity" ]] || return 1
+  current_manifest="$(gp_sha256 "$app_dir/grabenplaner-server-manifest.json")" || return 1
+  [[ "$current_manifest" == "$rollback_expected_manifest_sha256" ]] || return 1
+  current_contract="$(deployment_service_contract)" || return 1
+  [[ "$current_contract" == "$rollback_expected_service_contract" ]] || return 1
+  current_pair="$(root_node "$app_dir/server-tools/linux/lib/postgresql-operations.js" identity /etc/grabenplaner/postgresql-operations.json)" \
+    || return 1
+  [[ -n "$current_pair" && "$current_pair" == "$rollback_expected_pair_identity" \
+    && ( -z "$postgresql_before_identity" || "$current_pair" == "$postgresql_before_identity" ) ]] || return 1
+  # Reset only the restored, identity-verified old unit. Its configured restart
+  # policy/burst stays unchanged; no candidate or unknown state is authorized.
+  systemctl reset-failed "$service"
+}
+
+deployment_service_terminal_failure() {
+  local properties key value active="" sub="" pid="" job="__missing__" result="__missing__"
+  local -A seen=()
+  properties="$(systemctl show --property=ActiveState --property=SubState --property=MainPID --property=Job --property=Result "$service")" || return 1
+  while IFS='=' read -r key value; do
+    case "$key" in
+      ActiveState|SubState|MainPID|Job|Result)
+        [[ ! -v "seen[$key]" ]] || return 1
+        seen["$key"]=1 ;;
+      *) return 1 ;;
+    esac
+    case "$key" in ActiveState) active="$value" ;; SubState) sub="$value" ;; MainPID) pid="$value" ;; Job) job="$value" ;; Result) result="$value" ;; esac
+  done <<< "$properties"
+  # Some systemd versions retain Result=exit-code after start limiting. Only a
+  # stable failed unit with no process or queued job is terminal. Warm starts
+  # and activating/auto-restart states keep their complete readiness budget.
+  [[ "$active" == failed && "$sub" == failed && "$pid" == 0 && ( -z "$job" || "$job" == 0 ) \
+    && "$result" != __missing__ ]]
+}
+
+wait_deployment_ready() {
+  local url="$1" timeout_seconds="$2" deadline=$((SECONDS + $2)) terminal_samples=0
+  while (( SECONDS < deadline )); do
+    if gp_wait_ready "$url" 2; then return 0; fi
+    if deployment_service_terminal_failure; then
+      ((terminal_samples += 1))
+      if (( terminal_samples >= 2 )); then
+        gp_log ERROR "$service ist dauerhaft fehlgeschlagen und hat weder Hauptprozess noch Startauftrag (Startlimit oder Startfehler)."
+        return 1
+      fi
+    else
+      terminal_samples=0
+    fi
+  done
+  return 1
+}
+
 rollback_update() {
   set +e
   gp_warn "Das Update ist fehlgeschlagen; automatischer Rollback wird ausgefuehrt."
@@ -897,8 +999,13 @@ rollback_update() {
     if [[ -z "$runtime_v6_transition" ]]; then
       gp_configure_nightly_backups "$app_dir" "$node" || gp_warn "Der Sicherungszeitplan muss nach der Rueckkehr geprueft werden."
     fi
-    systemctl start "$service"
-    if gp_wait_ready "$internal_ready_url" "$health_timeout" && gp_wait_ready "$public_ready_url" "$health_timeout"; then
+    rollback_restart_ok=1
+    if [[ "$database_provider" == postgresql ]] && ! reset_verified_rollback_service; then
+      rollback_restart_ok=0
+      gp_log ERROR 'Der wiederhergestellte App-/Dienst-/PostgreSQL-Vertrag ist nicht exakt gebunden; kein Startlimit-Reset und kein Dienststart.'
+    fi
+    if (( rollback_restart_ok == 1 )) && systemctl start "$service" \
+      && wait_deployment_ready "$internal_ready_url" "$health_timeout" && wait_deployment_ready "$public_ready_url" "$health_timeout"; then
       rollback_public_ok=1
       gp_warn "Vorherige App- und Datenversion wurden wiederhergestellt und sind wieder erreichbar."
     else
@@ -1048,6 +1155,16 @@ gp_verify_sealed_zip "$staged_package" "$extract_root" 0 \
   || gp_die "Der versiegelte Quellbaum stimmt nicht exakt mit dem originalen SHA-geprueften ZIP ueberein."
 
 root_node "$trusted_package_verifier" "$extract_root" >"$manifest_result_file" || gp_die "Die Einzeldatei- und Manifestpruefung ist fehlgeschlagen."
+private_workspace_preflight="$SCRIPT_DIR/lib/private-workspace-preflight.py"
+[[ -f "$private_workspace_preflight" && ! -L "$private_workspace_preflight" \
+  && "$(stat --format='%u:%h' -- "$private_workspace_preflight")" == '0:1' ]] \
+  || gp_die 'Der private Arbeitsbereich-Vorabcheck ist nicht root-geschuetzt.'
+private_workspace_preflight_mode="$(stat --format='%a' -- "$private_workspace_preflight")"
+(( (8#$private_workspace_preflight_mode & 022) == 0 )) \
+  || gp_die 'Der private Arbeitsbereich-Vorabcheck ist fremdschreibbar.'
+/usr/bin/python3 -I -B "$private_workspace_preflight" --module "${GRABENPLANER_PRIVATE_WORKSPACE_MODULE:-}" \
+  --installed-app "$app_dir" --candidate-app "$extract_root" >/dev/null \
+  || gp_die 'Der private Arbeitsbereich ist nicht exakt fuer installierte App und Kandidat gebunden; keine Installation oder Dienstunterbrechung.'
 if [[ "$database_provider" == postgresql ]]; then
   root_node "$app_dir/server-tools/linux/postgresql/managed-contract.js" "$extract_root" >/dev/null \
     || gp_die 'Der PostgreSQL-Dienstvertrag stimmt nicht mit dem Paket ueberein; eine explizite Modulwartung ist erforderlich.'
@@ -1322,6 +1439,7 @@ fi
 # A live lease suppresses redundant lifecycle copies only. The short path
 # makes one fully verified fresh rollback point; the full fallback retains
 # the pre-update offsite transfer and its second current rollback point.
+bind_rollback_service_restart
 gp_begin_update_backup_ownership "$database" "$node" "$SCRIPT_DIR/../../lib/backup-maintenance.js"
 services_touched=1
 begin_deploy_phase service-stop
@@ -1345,8 +1463,8 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$deploy_mode" == full ]
   gp_info "Starte den bisherigen Grabenplaner vor der externen Uebertragung wieder."
   begin_deploy_phase previous-start
   gp_start_service "$service"
-  gp_wait_ready "$internal_ready_url" "$health_timeout" || gp_die "Der bisherige Grabenplaner wurde vor der Offsite-Sicherung intern nicht wieder bereit."
-  gp_wait_ready "$public_ready_url" "$health_timeout" || gp_die "Der bisherige Grabenplaner wurde vor der Offsite-Sicherung oeffentlich nicht wieder bereit."
+  wait_deployment_ready "$internal_ready_url" "$health_timeout" || gp_die "Der bisherige Grabenplaner wurde vor der Offsite-Sicherung intern nicht wieder bereit."
+  wait_deployment_ready "$public_ready_url" "$health_timeout" || gp_die "Der bisherige Grabenplaner wurde vor der Offsite-Sicherung oeffentlich nicht wieder bereit."
   gp_info "Uebertrage den exakt verifizierten lokalen Sicherungspunkt vor dem App-Update ins Offsite-Repository."
   begin_deploy_phase offsite-before-update
   "$offsite_pre_update_hook" --backup-result "$backup_result_file" --lock-already-held \
@@ -1426,8 +1544,8 @@ gp_start_service "$service"
 if [[ -z "$runtime_v6_transition" ]]; then
   gp_configure_nightly_backups "$app_dir" "$node" || gp_die "Der gemeinsame naechtliche Sicherungsablauf konnte nicht aktiviert werden."
 fi
-gp_wait_ready "$internal_ready_url" "$health_timeout" || gp_die "Die neue App wurde intern nicht rechtzeitig betriebsbereit."
-gp_wait_ready "$public_ready_url" "$health_timeout" || gp_die "Der oeffentliche HTTPS-Readinesscheck ist fehlgeschlagen."
+wait_deployment_ready "$internal_ready_url" "$health_timeout" || gp_die "Die neue App wurde intern nicht rechtzeitig betriebsbereit."
+wait_deployment_ready "$public_ready_url" "$health_timeout" || gp_die "Der oeffentliche HTTPS-Readinesscheck ist fehlgeschlagen."
 begin_deploy_phase deployment-checks
 "$app_dir/server-tools/linux/test-grabenplaner-server.sh" --node "$node" --deploy-mode \
   --env-file "$env_file" --app-dir "$app_dir" --data-dir "$data_dir" --database "$database" --backup-dir "$backup_dir" \

@@ -3,7 +3,7 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const { createSalesBwlAbcWorkspace } = require('../lib/persistence/repositories/sales-bwl-abc-workspace');
 const { createSalesBwlAbcStore, TTL } = require('../lib/sales-bwl-abc-store');
 const { createDataImportProtection } = require('../lib/data-import-protection');
-function fixture(t, { count = 201 } = {}) {
+function fixture(t, { count = 201, unassignedReceipts = false } = {}) {
   const protection = createDataImportProtection({ encryptionKey: Buffer.alloc(32, 1), indexKey: Buffer.alloc(32, 2), keyId: 'test', compression: true });
   t.after(() => protection.destroy());
   const f = { session: { employeeNumber: '42', accountId: '42-a', active: true, permissions: ['sales:analytics:access', 'sales:analytics:location:read', 'sales:history:read', 'sales:analytics:margin:read'], scopes: [{ locationId: 'a', departmentId: null }] },
@@ -12,6 +12,10 @@ function fixture(t, { count = 201 } = {}) {
   const tx = { syntheticTransaction: true };
   const access = { async transaction(work, options) { f.options.push(options); return work(tx); } };
   const backend = { source: { scopeId: 'test', locations: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }] },
+    ...(unassignedReceipts ? { async reportReceiptIssueCandidates(_, query, visit) {
+      f.receiptScans = (f.receiptScans || 0) + 1;
+      await visit({ id: 'unassigned-head', businessDate: '2026-10-01', locationId: 'a' });
+    } } : {}),
     async epoch() { return [f.epoch]; },
     async search(_, q) { f.calls.push(q); assert.equal(q.limit, 201); assert.equal(q.locationId, 'a');
       return records.filter(r => r.businessDate < q.afterDate || r.businessDate === q.afterDate && r.id < q.afterId).slice(0, q.limit); },
@@ -23,10 +27,12 @@ function fixture(t, { count = 201 } = {}) {
       assert.equal(allow({ ...base, action: 'history.reference', targetKind: 'crm_customer' }), false);
       return { async detail(id) {
         await f.hook?.(id);
+        if (id === 'unassigned-head') return { table: 'Umsatz_KASSE', fields: {}, provenance: { businessDate: '2026-10-01' } };
         return id === 'head' ? { fields: { KUND_NR: 'private-customer' } } : { table: 'Umsatz_Kasse_Details',
           provenance: { businessDate: '2026-10-01', parentId: 'head' }, fields: { RepID: id, EAN: '00042', Artikelbezeichnung: 'BEISPIEL Kamera', VKMenge: '1', RohertragDM: '2.015', Filialid: '018' },
           references: [{ role: 'location.filialid', targetId: 'a', status: 'linked' }] }; },
-        async receipt() { return { canAggregate: true, positions: records.map(r => ({ key: r.id, status: 'sale', net: '10.00' })), issues: [] }; } };
+        async receipt(id) { return id === 'unassigned-head' ? { canAggregate: false, issues: ['RECEIPT_WITHOUT_LINES'] }
+          : { canAggregate: true, positions: records.map(r => ({ key: r.id, status: 'sale', net: '10.00' })), issues: [] }; } };
     } };
   f.store = createSalesBwlAbcStore({ now: () => f.now });
   f.workspace = createSalesBwlAbcWorkspace({ access, protection, backend, scopeId: 'test', today: () => '2026-10-09',
@@ -56,6 +62,14 @@ test('ABC continuation binds exact query, whole rights/account identity and curr
   const other = await f.workspace.step(f.query); f.session.accountId = 'other-account';
   await assert.rejects(f.workspace.step(f.query, other.analysis.cursor));
   await assert.rejects(f.workspace.normalize({ ...f.query, locationIds: ['b'] }), { status: 403 });
+});
+
+test('ABC preserves head-only source gaps across continuation without inventing article rows or zero turnover', async t => {
+  const f = fixture(t, { unassignedReceipts: true });
+  const first = await f.workspace.step(f.query), last = await f.workspace.step(f.query, first.analysis.cursor);
+  assert.equal(f.receiptScans, 1); assert.equal(last.snapshot.summary.processed, 201);
+  assert.deepEqual(last.snapshot.summary.receiptIssues, { count: 1, issues: { RECEIPT_WITHOUT_LINES: 1 } });
+  assert.equal(last.snapshot.rows.length, 1); assert.equal(last.snapshot.rows[0].netRevenue, '2010.00');
 });
 test('ABC export snapshot expires, loses source validity and cannot outlive permission changes', async t => {
   const f = fixture(t, { count: 1 }), result = await f.workspace.step(f.query);

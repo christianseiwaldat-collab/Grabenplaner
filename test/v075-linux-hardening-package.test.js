@@ -204,10 +204,11 @@ test("hardening stays separate from the current core runtime and binds its exact
   // Core6 requires explicit PostgreSQL-only maintenance; the immutable Core5
   // fixture above retains its original bytes and receipt contract.
   assert.equal(result.fingerprint, "f9c09a999f5d6b30c0df35e714d0a5ddf0ca17880ad9190ff4bc5c068c3d95fc");
-  // Offsite13 is adopted only by the fenced Core5/12 -> Core6/13 transition.
-  // A receipt edit cannot authorize the module or provider change.
+  // Initial Offsite13 adoption uses the fenced Core5/12 -> Core6/13 transition;
+  // the exact upload refresh has its own root-bound predecessor transaction.
+  // A receipt edit cannot authorize either module or provider change.
   assert.equal(result.offsiteModule.moduleVersion, 13);
-  assert.equal(result.offsiteModule.fingerprint, "7e7b9c89ec334c00b247db7325e5c32df487ee6af9ede21b1f8587e0416660bf");
+  assert.equal(result.offsiteModule.fingerprint, "5e3b928c04730081de555553286530b4380a4119a2b54eaf809676745e3a235b");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 
@@ -345,7 +346,7 @@ test("v0.75 package integration never activates host hardening implicitly", () =
   assert.doesNotMatch(installer, /sshd?\s+-t/);
 });
 
-test("v0.75 Linux package builder expands the complete hardening artifact list", {
+test("v0.75 Linux package builder rejects an unsigned synthetic snapshot before publishing artifacts", {
   skip: process.platform !== "win32" ? "PowerShell-Paketbau wird im Windows-Job geprüft." : false,
 }, () => {
   withCleanGitSnapshot((snapshotRoot, outputRoot) => {
@@ -357,11 +358,15 @@ test("v0.75 Linux package builder expands the complete hardening artifact list",
       "-SourceDirectory", snapshotRoot,
       "-OutputDirectory", outputRoot,
     ], { encoding: "utf8", timeout: 120_000 });
-    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    // This fixture creates a new local commit. It cannot have an authenticated
+    // source-bound CI receipt and must never manufacture one to build a ZIP.
+    // The successful current-head package/full-verifier path is a release gate.
+    assert.notEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(`${result.stdout}\n${result.stderr}`, /authentifiziert bezogene, quellgebundene CI-SAST-Nachweis/);
     const packageVersion = JSON.parse(fs.readFileSync(path.join(snapshotRoot, "package.json"), "utf8")).version;
     const packageName = `Grabenplaner-Server-v${packageVersion}-linux-x64.zip`;
-    assert.ok(fs.existsSync(path.join(outputRoot, packageName)));
-    assert.ok(fs.existsSync(path.join(outputRoot, `${packageName}.sha256`)));
+    assert.equal(fs.existsSync(path.join(outputRoot, packageName)), false);
+    assert.equal(fs.existsSync(path.join(outputRoot, `${packageName}.sha256`)), false);
   });
 });
 

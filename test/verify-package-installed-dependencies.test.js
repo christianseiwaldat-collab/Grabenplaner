@@ -167,3 +167,42 @@ test("the real package CLI separates only a real top-level installed dependency 
   });
   await t.test("all restored source bytes and the original manifest still verify", accepted);
 });
+
+
+test("offsite refresh reads the genuine full package verifier envelope and rejects incompatible runtime shapes", t => {
+  const f = fixture(t), verified = command(f.root);
+  assert.equal(verified.status, 0, verified.stderr);
+  const envelope = JSON.parse(verified.stdout);
+  assert.equal(envelope.runtimeContract.deploymentSchemaVersion, 6);
+  assert.equal(envelope.offsiteModule.moduleVersion, 13);
+  assert.equal(Object.hasOwn(envelope, "deploymentSchemaVersion"), false);
+  const source = fs.readFileSync(path.join(repository, "server-tools/linux/refresh-grabenplaner-offsite-upload.sh"), "utf8");
+  const parser = source.match(/fingerprint="\$\(root_node -e '([^']+)' "\$manifest"\)"/);
+  assert.ok(parser, "the exact coordinator parser must be exercised");
+  function parse(value) {
+    return spawnSync(process.execPath, ["-e", parser[1], typeof value === "string" ? value : JSON.stringify(value)], {
+      encoding: "utf8", timeout: 10000, windowsHide: true,
+    });
+  }
+  const accepted = parse(verified.stdout);
+  assert.equal(accepted.status, 0, accepted.stderr);
+  assert.equal(accepted.stdout, envelope.offsiteModule.fingerprint);
+  for (const mutate of [
+    value => { delete value.runtimeContract; },
+    value => { value.runtimeContract = null; },
+    value => { value.deploymentSchemaVersion = 6; value.runtimeContract.deploymentSchemaVersion = 5; },
+    value => { value.runtimeContract.deploymentSchemaVersion = 7; },
+    value => { delete value.offsiteModule; },
+    value => { value.offsiteModule.moduleVersion = 12; },
+    value => { value.offsiteModule.moduleVersion = 14; },
+  ]) {
+    const incompatible = JSON.parse(verified.stdout); mutate(incompatible);
+    const rejected = parse(incompatible);
+    assert.notEqual(rejected.status, 0, "wrong or missing Core/Offsite contracts must stay rejected");
+    assert.equal(rejected.stdout, "");
+  }
+  const flatRuntimeOnly = command(f.root, true);
+  assert.equal(flatRuntimeOnly.status, 0, flatRuntimeOnly.stderr);
+  assert.notEqual(parse(flatRuntimeOnly.stdout).status, 0, "runtime-only output must not impersonate full package verification");
+  assert.notEqual(parse("{").status, 0, "malformed verifier output remains rejected");
+});

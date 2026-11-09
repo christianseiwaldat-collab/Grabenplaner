@@ -109,7 +109,7 @@ test('unknown source periods, unverified receipts and missing margin never produ
   M.accumulate(state, 'current', q, line({ metric: null })); result = M.finishReport(state, q);
   assert.equal(result.total.metrics.netRevenue.current, null); assert.equal(result.total.metrics.customerCount.current, null);
 });
-test('one unreconciled receipt retains explicitly separate verified subtotals, never full totals or changes', () => {
+test('one unreconciled receipt retains strict full totals and separately labelled checked-subset changes', () => {
   const state = M.accumulator(), q = query({ groupBy: ['manufacturer'] });
   M.accumulate(state, 'current', q, line());
   M.accumulate(state, 'current', q, line({ metric: null, reviewIssues: ['STATUS_REVIEW_REQUIRED', 'RECEIPT_AMOUNT_MISMATCH'], receiptKey: 'open' }));
@@ -117,10 +117,60 @@ test('one unreconciled receipt retains explicitly separate verified subtotals, n
   const r = M.finishReport(JSON.parse(JSON.stringify(state)), q), money = r.rows[0].metrics.netRevenue;
   assert.equal(money.current, null); assert.equal(money.verifiedCurrent, '100.00'); assert.equal(money.previous, '50.00');
   assert.equal(money.absolute, null); assert.equal(money.percent, null); assert.equal(money.verifiedPrevious, undefined);
+  assert.deepEqual(money.verifiedChange, { absolute: '50.00', percent: '100.00', basis: 'verified_subset' });
   assert.equal(r.total.metrics.netRevenue.current, null); assert.equal(r.total.metrics.netRevenue.verifiedCurrent, '100.00');
   assert.equal(r.rows[0].metrics.quantity.verifiedCurrent, '1.000000'); assert.equal(r.rows[0].metrics.receiptCount.verifiedCurrent, '1');
   assert.deepEqual(r.rows[0].quality.current, { records: 2, checked: 1, review: 1, excluded: 0, marginMissing: 0,
-    issues: { STATUS_REVIEW_REQUIRED: 1, RECEIPT_AMOUNT_MISMATCH: 1 } });
+    issues: { STATUS_REVIEW_REQUIRED: 1, RECEIPT_AMOUNT_MISMATCH: 1 }, reviewReceipts: 1,
+    reviewExamples: [], reviewExamplesTruncated: true });
+});
+
+test('multiple open lines of one receipt remain one actionable case with no guessed amount', () => {
+  const state = M.accumulator(), q = query({ groupBy: ['manufacturer'] });
+  M.accumulate(state, 'current', q, line());
+  const receipt = { number: '83934', invoiceNumber: '62058', locationId: '18', locationLabel: 'Grabenweg' };
+  for (const issue of ['STATUS_REVIEW_REQUIRED', 'VAT_CODE_UNKNOWN']) M.accumulate(state, 'current', q,
+    line({ metric: null, date: '2026-03-11', receiptKey: 'same-open-receipt', receipt, reviewIssues: [issue] }));
+  M.accumulate(state, 'comparison', q, line({ metric: { status: 'sale', gross: '60.00', net: '50.00' } }));
+  const result = M.finishReport(JSON.parse(JSON.stringify(state)), q);
+  assert.equal(result.total.quality.current.review, 2);
+  assert.equal(result.total.quality.current.reviewReceipts, 1);
+  assert.equal(result.total.quality.current.reviewExamplesTruncated, false);
+  assert.equal(result.total.quality.current.reviewExamples[0].number, '83934');
+  assert.equal(result.total.quality.current.reviewExamples[0].invoiceNumber, '62058');
+  assert.deepEqual(result.total.quality.current.reviewExamples[0].issues, ['STATUS_REVIEW_REQUIRED','VAT_CODE_UNKNOWN']);
+  assert.equal(result.total.metrics.netRevenue.current, null);
+  assert.equal(result.total.metrics.netRevenue.verifiedCurrent, '100.00');
+  assert.equal(result.total.metrics.netRevenue.verifiedChange.absolute, '50.00');
+});
+
+test('checked-subset change preserves negative baselines, zero denominators and missing margins', () => {
+  const q = query(), state = M.accumulator();
+  M.accumulate(state, 'current', q, line({ metric: { status: 'sale', gross: '120.00', net: '100.00' }, margin: null }));
+  M.accumulate(state, 'current', q, line({ metric: null, receiptKey: 'open-current' }));
+  M.accumulate(state, 'comparison', q, line({ metric: { status: 'return', gross: '-60.00', net: '-50.00' }, quantity: '-1' }));
+  let r = M.finishReport(state, q);
+  assert.deepEqual(r.total.metrics.netRevenue.verifiedChange, { absolute: '150.00', percent: '300.00', basis: 'verified_subset' });
+  assert.equal(r.total.metrics.grossMargin.verifiedChange, undefined);
+  assert.equal(r.total.metrics.marginRate?.verifiedChange, undefined);
+  const zero = M.accumulator();
+  M.accumulate(zero, 'current', q, line());
+  M.accumulate(zero, 'current', q, line({ metric: null, receiptKey: 'open' }));
+  M.accumulate(zero, 'comparison', q, line({ metric: { status: 'sale', gross: '0.00', net: '0.00' } }));
+  r = M.finishReport(zero, q);
+  assert.deepEqual(r.total.metrics.netRevenue.verifiedChange, { absolute: '100.00', percent: null, basis: 'verified_subset' });
+});
+
+test('open receipt counts stay exact when their displayed examples are bounded', () => {
+  const state = M.accumulator(), q = query();
+  M.accumulate(state, 'current', q, line());
+  for (let i = 0; i < 105; i++) M.accumulate(state, 'current', q, line({ metric: null,
+    receiptKey: 'review-' + i, receipt: { number: String(i), locationId: '18' } }));
+  const result = M.finishReport(state, q);
+  assert.equal(result.total.quality.current.reviewReceipts, 105);
+  assert.equal(result.total.quality.current.reviewExamples.length, 100);
+  assert.equal(result.total.quality.current.reviewExamplesTruncated, true);
+  assert.equal(result.rows[0].quality.current.reviewExamples.length, 3);
 });
 test('verified subtotals preserve returns, incomplete margins and the absence of checked positions', () => {
   const state = M.accumulator(), q = query({ groupBy: ['manufacturer'] });
@@ -145,4 +195,64 @@ test('manufacturer/WGR/MA multiselect applies jointly; returns and decimals keep
   assert.equal(r.total.metrics.netRevenue.percent, '-100.00'); assert.equal(r.coverage.current.selectedRecords, 2);
   assert.deepEqual(M.comparison('5.00', '0.00'), { absolute: '5.00', percent: null });
   assert.equal(M.scaled('-1.005'), -101n); assert.equal(M.scaled('999999999999999999.999'), 100000000000000000000n);
+});
+
+test('head-only source gaps are not zero sales or positions and remain visible with filtered groups and no data', () => {
+  const q = query(), state = M.accumulator();
+  const issue = { receiptKey: 'empty-head', date: '2026-02-02', receipt: { number: '9', locationId: 'a' }, reviewIssues: ['RECEIPT_WITHOUT_LINES'] };
+  M.recordReceiptIssue(state, 'current', issue); M.recordReceiptIssue(state, 'current', issue);
+  let report = M.finishReport(JSON.parse(JSON.stringify(state)), q);
+  assert.equal(report.processed, 0); assert.equal(report.coverage.current.unassignedReceipts, 1);
+  assert.equal(report.total.quality.current.reviewReceipts, 1);
+  assert.equal(report.total.metrics.netRevenue.current, null); assert.equal(report.total.metrics.netRevenue.verifiedCurrent, undefined);
+  M.accumulate(state, 'current', q, line({ date: '2026-02-03' }));
+  M.accumulate(state, 'comparison', q, line({ date: '2025-02-03' }));
+  report = M.finishReport(state, q);
+  assert.equal(report.processed, 2); assert.equal(report.total.metrics.netRevenue.current, null);
+  assert.equal(report.total.metrics.netRevenue.verifiedChange.absolute, '0.00');
+  assert.equal(report.coverage.current.firstSourceDate, '2026-02-03');
+});
+
+test('a head-only gap affects its authenticated location and the total without marking other locations incomplete', () => {
+  const q=query({groupBy:['location']}),state=M.accumulator();
+  for(const phase of ['current','comparison']) for(const id of ['a','b']) M.accumulate(state,phase,q,line({
+    date:phase==='current'?'2026-02-03':'2025-02-03',location:{id,label:id},receiptKey:phase+id }));
+  M.recordReceiptIssue(state,'current',{receiptKey:'missing-a',date:'2026-02-03',receipt:{number:'9',locationId:'a'},reviewIssues:['RECEIPT_WITHOUT_LINES']});
+  const report=M.finishReport(JSON.parse(JSON.stringify(state)),q),a=report.rows.find(r=>r.dimensions[0].id==='a'),b=report.rows.find(r=>r.dimensions[0].id==='b');
+  assert.equal(report.total.metrics.netRevenue.current,null);assert.equal(a.metrics.netRevenue.current,null);
+  assert.equal(a.quality.current.unassignedReceipts,1);assert.equal(a.quality.current.reviewReceipts,1);
+  assert.equal(b.metrics.netRevenue.current,'100.00');assert.equal(b.metrics.netRevenue.absolute,'0.00');
+  assert.equal(b.metrics.netRevenue.verifiedChange,undefined);assert.equal(b.quality.current.unassignedReceipts,undefined);
+  M.recordReceiptIssue(state,'current',{receiptKey:'unknown-location',receipt:{number:'10'},reviewIssues:['BUSINESS_DATE_REVIEW_REQUIRED']});
+  assert.ok(M.finishReport(state,q).rows.every(r=>r.metrics.netRevenue.current===null),'a truly unknown location remains conservative for every selected group');
+});
+
+test('head-only gaps in timelines retain both known location and date scope; undated heads affect only their known location', () => {
+  const q=query({reportVersion:4,chartType:'timeline',timeGrain:'day',groupBy:['location'],chartMetric:'netRevenue'}),state=M.accumulator();
+  for(const id of ['a','b']) for(const date of ['2026-02-02','2026-02-03']) M.accumulate(state,'current',q,line({date,location:{id,label:id},receiptKey:id+date}));
+  M.recordReceiptIssue(state,'current',{receiptKey:'gap',date:'2026-02-02',receipt:{locationId:'a'},reviewIssues:['RECEIPT_WITHOUT_LINES']});
+  let result=M.finishReport(state,q).timeline.series;
+  const series=id=>result.find(r=>r.dimensions[0].id===id).points;
+  assert.equal(series('a').find(p=>p.date==='2026-02-02').value,null);
+  assert.equal(series('a').find(p=>p.date==='2026-02-03').value,'100.00');
+  assert.equal(series('b').find(p=>p.date==='2026-02-02').value,'100.00');
+  M.recordReceiptIssue(state,'current',{receiptKey:'undated-a',receipt:{locationId:'a'},reviewIssues:['BUSINESS_DATE_REVIEW_REQUIRED']});
+  result=M.finishReport(state,q).timeline.series;
+  assert.equal(series('a').find(p=>p.date==='2026-02-03').value,null);
+  assert.equal(series('b').find(p=>p.date==='2026-02-03').value,'100.00');
+});
+
+test('known margin subtotals use matching revenue and customers without filling missing margins with zero', () => {
+  const q = query(), state = M.accumulator();
+  M.accumulate(state, 'current', q, line());
+  M.accumulate(state, 'current', q, line({ receiptKey: 'missing', customerKey: 'unknown-margin-customer', margin: null,
+    metric: { status: 'sale', gross: '1200.00', net: '1000.00' } }));
+  M.accumulate(state, 'comparison', q, line({ margin: '10.00' }));
+  const report = M.finishReport(JSON.parse(JSON.stringify(state)), q), metrics = report.total.metrics;
+  assert.equal(metrics.netRevenue.current, '1100.00'); assert.equal(metrics.netRevenue.verifiedCurrent, undefined);
+  assert.equal(metrics.grossMargin.current, null); assert.equal(metrics.grossMargin.verifiedCurrent, '20.00');
+  assert.equal(metrics.marginRate.current, null); assert.equal(metrics.marginRate.verifiedCurrent, '20.00');
+  assert.equal(metrics.marginPerCustomer.verifiedCurrent, '20.00');
+  assert.deepEqual(metrics.grossMargin.verifiedChange, { absolute: '10.00', percent: '100.00', basis: 'verified_subset' });
+  assert.equal(report.coverage.current.marginMissing, 1);
 });

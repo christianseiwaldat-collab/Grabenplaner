@@ -54,6 +54,13 @@ Updates verwenden ein lokal vorliegendes geprüftes Paket, ein angekündigtes Wa
 Vor dem Austausch entsteht ein verifizierter gekoppelter Sicherungspunkt. Staging, Paketmanifest und Betriebsmodul-Kompatibilität werden geprüft.
 Dienst und Schreiber werden kontrolliert gestoppt; nach dem atomaren App-Tausch müssen Start sowie Live-/Ready-Prüfungen bestehen.
 Der Bereitschaftstest hat eine eigene Obergrenze von 1500 Sekunden. Bei Fehlern erfolgt eine kontrollierte Rücknahme auf den vorherigen Programmstand mit erneuter Prüfung.
+Zwei aufeinanderfolgende Beobachtungen einer endgültig fehlgeschlagenen Unit ohne Hauptprozess und ohne Startauftrag beenden das Warten frühzeitig;
+dies gilt auch, wenn systemd nach einem erreichten Startlimit weiterhin `Result=exit-code` meldet. Aktivierende und automatisch neu startende Dienste behalten ihr vollständiges Zeitbudget.
+Vor dem Dienststopp werden das alte App-Manifest, der unveränderte geladene Unitvertrag samt Fragmenten und der PostgreSQL-Paarstand gebunden.
+Nur nach erneuter exakter Prüfung des wiederhergestellten alten Stands darf der Updater den Fehlerzähler genau dieser Unit mit `reset-failed` zurücksetzen und sie starten.
+Die konfigurierte Startbegrenzung bleibt bestehen. Unbekannte oder abweichende App-, Unit- oder Paarbindungen verhindern Reset und Start; eine manuell unterstützte Rückkehr gilt nicht als automatischer Rollback.
+Ein konfigurierter privater Arbeitsbereich muss vor Abhängigkeitsinstallation, Virenscan und Dienststopp sowohl die installierte App als auch das geprüfte Kandidatenmanifest samt Datei- und privater Codebindung unterstützen.
+Der Vorabcheck liest ausschließlich geschützte Metadaten. Fehlende neue Releasebindungen werden als getrennte private Begleitartefakte vorbereitet und mit Hashmanifest übertragen; sie gehören nicht ins öffentliche Git oder GP-Paket.
 Ein Versions-/Vertragskonflikt wird nicht umgangen. Gleich-/Altversionen benötigen eine ausdrücklich dokumentierte Ausnahme.
 Produktive Daten, Schlüssel und Sicherungen sind kein austauschbarer Teil des App-Pakets.
 Die erstmalige Passkey-Schemaerweiterung erfolgt getrennt auf einer kompatiblen Vorabversion;

@@ -41,7 +41,8 @@ test('history and ABC preserve unknown period coverage and their saved upload me
   assert.match(history, /Hochgeladen am:/); assert.match(history, /vor 39 Tagen/); assert.match(history, /Artikelzuordnung offen/); assert.match(history, /Kalenderzeitraums ist nicht nachgewiesen/);
   const abc = Q.render(Q.abc({ sourceAt: '2026-10-09T10:00:00Z', sourceQuality: quality,
     coverage: { basis: 'verified-import', periodCompleteness: 'not-established', label: 'Geprüfte importierte Kassenpositionen; die Vollständigkeit des Kalenderzeitraums ist nicht nachgewiesen.' },
-    buckets: [{ id: 'unidentified-article', positions: 2 }] }), { now });
+    buckets: [{ id: 'unidentified-article', positions: 2 }], summary: { receiptIssues: { count: 3 } } }), { now });
   assert.match(abc, /vor 39 Tagen/); assert.doesNotMatch(abc, /vor 1 Tag</); assert.match(abc, /Artikelzuordnung offen/);
   assert.equal(abc.match(/Kalenderzeitraums ist nicht nachgewiesen/g).length, 1);
+  assert.match(abc, /Belege ohne auswertbare Positions- oder Datumszuordnung<\/dt><dd>3/);
 });

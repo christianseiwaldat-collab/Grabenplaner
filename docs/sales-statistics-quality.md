@@ -1,0 +1,49 @@
+# Verlässliche Verkaufsstatistik
+
+Diese Regeln gelten für historische Kassenquellen und neue Veröffentlichungen derselben Quellfamilie. Sie betreffen die Verkaufsanalyse, keine nachträgliche Änderung der Buchhaltung oder Originaldaten.
+
+## Bedeutung der Buchungen
+
+- Verkaufspreise, Mengen, historische Steuerprozentsätze und Kassenroherträge bleiben unverändert. Retouren behalten ihr Vorzeichen; Einkaufspreise aus dem heutigen Artikelstamm ersetzen keine fehlenden historischen Roherträge.
+- Fotoschutz zählt mit dem gebuchten Verkaufspreis als Umsatz und mit dem historischen Kassenrohertrag. Handy-Wertkarten zählen mit ihrem gebuchten Kartenwert als Umsatz. Das sind die ausdrücklich bestätigten Fachdefinitionen vom 05.11.2026.
+- Eigene Gutscheinausgaben sind bis zum Warenkauf kein Warenumsatz und kein Warenrohertrag. Das gilt auch für eindeutig bezeichnete Ausgaben eines Gutscheins für eine Dienstleistung. Einlösung, Zahlungsabwicklung und Warenverkauf dürfen keinen doppelten Umsatz erzeugen.
+- Die ausdrücklich bestätigten Quellartikel „Sonstige betriebliche Erträge 20 %“ und „Ausstehende Gutschriften 20 %“ zählen mit ihren gebuchten Vorzeichen zum Umsatz, jedoch nicht als verkaufte Stücke. Andere Sachkonten, Ankauf und interne Verrechnungen benötigen eine belegte Fachdefinition. Ein sprechender Artikeltext allein darf keine neue Umsatzregel begründen.
+- Die rückzahlbare Kaution für Verleihartikel zählt nach ausdrücklicher Fachentscheidung ebenfalls mit ihren gebuchten Vorzeichen zum Umsatz, jedoch nicht als verkaufte Ware. Der historische Quellrohertrag bleibt maßgeblich; fehlender Rohertrag wird nicht erfunden.
+- Der freie Quellartikel „HANDELSWARE 20% MWST“ zählt nach ausdrücklicher Fachentscheidung als normaler vorzeichenrichtiger Verkauf bzw. Rückgabe. Die bereits belegten UID-Zwischenzahlungen bleiben als Zahlungsabwicklung ausgenommen. Eine finanzielle Änderung an genau diesen Belegen darf diese Ausnahme nicht unbemerkt in Warenumsatz verwandeln.
+- Beim Printcenter-Auftrag entsteht der Umsatz nach ausdrücklicher Fachentscheidung mit dieser Kassenposition. Preis, signierte Menge und historischer Kassenrohertrag werden wie beim normalen Verkauf ausgewertet.
+- Die Auszahlung beim Eintausch/Ankauf von Gebrauchtware vermindert nach ausdrücklicher Fachentscheidung den Umsatz. Eine Rückbuchung wirkt umgekehrt. Die Buchung zählt nicht als verkaufte Ware. Die gesondert bestätigte UID-Zahlungsabwicklung desselben Quellartikels bleibt davon getrennt.
+- Steuerwert null wird bei bestätigten Artikelfamilien berücksichtigt. Bei vollständig referenzierten Rechnungen mit Kasse 0 wird der aufgezeichnete Prozentwert ebenfalls verwendet; der unveränderte, centgenaue Kopfvergleich bleibt Voraussetzung. Das ist keine Aussage über eine rechtliche Steuerbefreiung. Ein gewöhnlicher Kassenbeleg mit unbekannter Nullsteuerbedeutung bleibt offen.
+- Ein unabhängig belegter Netto-Halbcentsfall darf im Kopf auf die gerade Centziffer gerundet und anschließend als Access-Single gespeichert vorliegen. Diese Variante gilt nur bei vollständig referenzierten Rechnungen, einem Steuersatz, einer centgenauen Bruttosumme und einem mathematisch exakten Halbcent. Der gespeicherte Float muss exakt passen. Die Einzelpositionswerte bleiben unverändert; eine pauschale Centtoleranz entsteht dadurch nicht.
+- Zusätzlich sind belegte Rechnungskopf-Verfahren erfasst: auf zwei Nachkommastellen gerundeter Netto-Stückpreis vor der Mengenmultiplikation sowie Bruttoberechnung aus dem auf vier Nachkommastellen gerundeten Netto-Stückpreis. Nur die exakt passende gespeicherte Access-Single-Summe gilt als Nachweis. Die historischen Positionswerte und der Null-Cent-Abgleich bleiben unverändert.
+- Bei Rechnungsbuchungen mit Kasse 0 darf eine ausdrücklich andere positive Rechnungsnummer auf einer Position nicht unbemerkt unter dem falschen Kopf mitgezählt werden. Technische Leerwerte wie −1 sind keine positive Rechnungsreferenz. Eine echte Zuordnungsabweichung bleibt ein konkreter Prüffall, auch bei zufällig passender Betragsumme. Quellenbelege werden nicht allein anhand ähnlicher Geldbeträge verschoben.
+
+## Vollständigkeit und Darstellung
+
+- Vollständige Summen und vollständige Änderungen stehen nur bei vollständig geprüfter Auswahl zur Verfügung. Ein leerer Zeitraum bleibt unbekannt und wird nicht zu einem Nullumsatz.
+- Eine fachlich offene Prüfung betrifft die dazugehörigen Belege. Die geprüften Belege bleiben auswertbar. Teilwerte und deren absolute/prozentuelle Vergleiche erhalten einen Stern und einen deutlichen Hinweis, dass sie keine vollständige Gesamtveränderung darstellen. Fehlende Belege werden weder geschätzt noch als null Euro eingesetzt.
+- Fehlt nur ein historischer Rohertrag, bleiben andere Kennzahlen nutzbar. Ein Rohertragsteilwert verwendet nur Positionen mit bekanntem Rohertrag. Die zugehörige Quote verwendet den Nettoumsatz genau dieser Positionen. Werte je Kunde verwenden die passenden bekannten Kundenkonten.
+- Belegköpfe ohne Positionen und Belege ohne zuordenbares Datum müssen gesondert erfasst werden. Sie dürfen beim Lauf über die Positionen nicht verschwinden und nicht als vollständiger Nullbeleg gelten. Bei unbekannter Zuordnung kann eine betroffene Gruppe keine Vollständigkeit beanspruchen.
+- Ist der Standort eines solchen Kopfes authentifiziert bekannt, betrifft die Lücke bei einer Standortaufteilung nur diesen Standort und die Gesamtsumme. Bekannte Datumswerte begrenzen die betroffenen Zeitintervalle. Unbekannte Artikel-, Mitarbeiter- oder Datumszuordnungen werden weiterhin konservativ berücksichtigt; andere nachweislich unbetroffene Standorte werden nicht als unvollständig markiert.
+- Auch die ABC-Auswertung nennt Belege ohne auswertbare Positions- oder Datumszuordnung gesondert in der Datenqualität und PDF. Sie erfindet dafür weder Artikelzeilen noch einen Nullumsatz und zählt diese Köpfe nicht als verarbeitete Positionen.
+- Die erste PDF-Seite nennt den vorläufigen Stand, die Anzahl offener Fälle und konkrete Beispiele einschließlich vorhandener Rechnungsnummern. Die Prüfliste am Ende unterscheidet Kopfabweichungen, Rechnungszuordnung, Steuer-/Statusfragen und fehlende Positionen. Bei einer begrenzten Beispieldarstellung bleiben die Gesamtzahlen vollständig.
+- Warnung und ein kompaktes Belegbeispiel stehen bei der Übersicht. Ergänzende Hinweise, die dort nicht mehr Platz haben, erscheinen bei den Berechnungsgrundlagen statt auf einer fast leeren Zwischen-Seite. Die vollständige Prüfliste bleibt erhalten.
+- Tatsächlicher Datenhorizont und gewünschter Zeitraum bleiben getrennt. Der letzte vorhandene Buchungstag wird genannt, wenn der gewünschte Zeitraum darüber hinausgeht. Fehlende Tage sind keine nachgewiesenen Nullumsätze. Kalenderlücken werden durch dieses Verfahren nicht als vollständig bestätigt.
+
+## Sicherheit und spätere Importe
+
+- Eine neue Veröffentlichung benötigt vollständige, authentifizierte Quellenabdeckung und geprüfte Referenzen. Fehlende Abdeckung, manipulierte Quellwerte, veraltete Elternversionen, unbekannte Fehlercodes und fehlende Rechte stoppen die Auswertung. Sie dürfen niemals als harmlose fachliche Teilmenge behandelt werden.
+- Allgemeine Regeln verwenden belegte Quellmerkmale statt Belegnummern, Dateihashes oder frei editierbarer Beschreibungen. Neue, unbekannte Statuskombinationen werden nicht automatisch freigegeben.
+- Frühere belegbezogene Nachweise erhalten zusätzlich eine finanzielle Identität. Sie bindet Beleg, Standort, Kasse, Datum, Kunden-/Kontokontext und sämtliche relevanten Geld-, Mengen-, Steuer- und Statuswerte einschließlich der Anzahl identischer Positionen. Neue Import-GUIDs, eine andere Zeilenreihenfolge oder geänderte Beschreibungstexte allein entwerten diesen Nachweis nicht. Frische vollständige Quellenabdeckung bleibt trotzdem zwingend.
+- Ändert sich die Quelle, die effektive Fachregel oder die Berechtigung während eines Berichtsauftrags, wird der alte Auftrag nicht unter einem neuen Datenstand fortgesetzt. Ein neuer Bericht verwendet den aktuellen geprüften Stand. Bereits erzeugte PDFs ändern sich nicht rückwirkend.
+- Neue fachliche Sonderfälle erfordern keine Änderung des Programms, um den bereits geprüften Rest auszuwerten: Der gekennzeichnete Teilvergleich bleibt verfügbar. Eine zusätzliche Fachfreigabe darf die Quellenkontrollen nicht abschalten.
+
+## Prüfungen vor einer Freigabe
+
+1. Alle vorhandenen Quellzeilen, Zeiträume und Quellbereiche inventarisieren; Duplikate, fehlende Eltern und Köpfe ohne Positionen ausdrücklich zählen. Rechnungen nur als Gegenbeleg verwenden, nicht nochmals als Umsatz addieren.
+2. Fachregeln getrennt von Import- und Rechenfehlern belegen. Keine pauschale Centtoleranz und keine automatische Freigabe nach ähnlich aussehenden Beträgen einführen.
+3. Den Gesamtbestand und einen älteren Stand mit denselben Regeln prüfen. Verschwundene Belege, finanzielle Änderungen und zuvor geprüfte, nun offene Belege getrennt dokumentieren.
+4. Wiederimport mit neuen GUIDs, Texten und Zeilenreihenfolgen prüfen. Änderungen an Geldwerten, Mengen, Steuerwerten, Status, Kundenkontext oder Quellenabdeckung müssen frisch bewertet werden.
+5. Geld- und Mengenrechnungen unabhängig gegenprüfen. Fehlende Roherträge, Retouren, negative Vergleichswerte, Nullteiler, leere Zeiträume, eingeschränkte Rechte und manipulierte Abdeckung als Gegenproben aufnehmen.
+6. PDF-Ausgabe in Hoch- und Querformat prüfen: vollständige und vorläufige Änderungen, nachvollziehbare Belegliste, sichtbarer Datenhorizont und unveränderte Diagrammgestaltung.
+
+Die automatisierten Gegenproben stehen insbesondere in `sales-report-receipt-issues.test.js`, `sales-report-model.test.js`, `tradefoto-cash-review.test.js`, `cash-publication-integration.test.js`, `sales-analysis-pdf.test.js` und `sales-timeline-pdf.test.js`. Ein bestandener lokaler Lauf ist kein Nachweis eines Deployments oder einer produktiven Datenkorrektur.

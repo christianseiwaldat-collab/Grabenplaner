@@ -38,6 +38,9 @@ if (process.platform === "linux" && process.getuid() !== 0) {
     const oldSource = process.env.GP_TEST_OFFSITE12_SOURCE || require("../test-support/legacy-baseline").legacyPath("server-tools/linux/offsite");
     assert.ok(oldSource.includes("gp-historical-baseline-"), "only the explicitly extracted synthetic baseline may be read");
     copyModule(oldSource, oldModule); copyModule(path.join(repository, "server-tools/linux/offsite"), candidateModule);
+    // This frozen bridge qualifies the historical 12 -> original 13 step.
+    // The newer upload is a separate explicit original13 -> refreshed13 transition.
+    fs.copyFileSync(path.join(oldModule, "grabenplaner-offsite-upload.sh"), path.join(candidateModule, "grabenplaner-offsite-upload.sh"));
     fs.mkdirSync(path.dirname(candidateHelper), { recursive: true, mode: 0o700 });
     fs.copyFileSync(path.join(repository, helperRelative), candidateHelper); fs.chownSync(candidateHelper, 0, 0); fs.chmodSync(candidateHelper, 0o600);
     const previous = spawnSync(process.execPath, [path.join(oldModule, "lib/offsite-contract.js"), "contract", oldModule], { encoding: "utf8" });
@@ -50,6 +53,7 @@ if (process.platform === "linux" && process.getuid() !== 0) {
     receipt = path.join(temporary, "previous.json"); writeJson(receipt, value); oldBytes = fs.readFileSync(receipt);
     const current = spawnSync(process.execPath, [path.join(candidateModule, "lib/offsite-contract.js"), "contract", candidateModule], { encoding: "utf8" });
     assert.equal(current.status, 0, current.stderr);
+    assert.equal(JSON.parse(current.stdout).fingerprint, "7e7b9c89ec334c00b247db7325e5c32df487ee6af9ede21b1f8587e0416660bf");
     candidateContract = path.join(temporary, "candidate-contract.json"); writeJson(candidateContract, JSON.parse(current.stdout));
     // Assert fixture ownership independently before testing the production guard.
     function inspect(directory) {
@@ -79,6 +83,7 @@ if (process.platform === "linux" && process.getuid() !== 0) {
   });
   test("unreviewed unit bytes, removed mandatory delta and changed old installation all fail closed", { skip: !enabled }, () => {
     for (const [base, relative, mutate, expected] of [
+      [candidateModule, "grabenplaner-offsite-upload.sh", () => fs.readFileSync(path.join(repository, "server-tools/linux/offsite/grabenplaner-offsite-upload.sh")), "PG_OFFSITE13_UNREVIEWED_DELTA"],
       [candidateModule, "systemd/grabenplaner-offsite-check.service.in", bytes => Buffer.concat([bytes, Buffer.from("\n# unreviewed\n")]), "PG_OFFSITE13_UNREVIEWED_DELTA"],
       [candidateModule, "lib/offsite-common.sh", () => fs.readFileSync(path.join(oldModule, "lib/offsite-common.sh")), "PG_OFFSITE13_REQUIRED_DELTA"],
       [oldModule, "lib/offsite-common.sh", bytes => Buffer.concat([bytes, Buffer.from("\n# unreviewed\n")]), "PG_OFFSITE13_CONTRACT"],

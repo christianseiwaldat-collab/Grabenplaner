@@ -152,7 +152,11 @@ test("read-only key checks, fallback scans and failed metadata reads erase disca
 });
 
 test("read-only FD open rejects a regular-file to FIFO swap without blocking the actual Linux child", { skip: process.platform === "win32", timeout: 5000 }, async () => {
-  const directory = temporaryDirectory("readonly-fifo"), writer = createAmuStorage({ rootDirectory: directory, encryptionKeys: { example: key() }, activeKeyId: "example" });
+  const directory = temporaryDirectory("readonly-fifo"), writer = createAmuStorage({ rootDirectory: directory,
+    encryptionKeys: { example: key() }, activeKeyId: "example",
+    // This fixture qualifies the actual Linux FD race, independently of the
+    // host's installed antivirus database or its scan startup time.
+    scanner: async () => ({ available: true, clean: true, engine: "synthetic-fifo-fixture" }) });
   const metadata = await writer.saveBuffer({ buffer: pdfBuffer(), originalName: "proof.pdf" });
   const code = `const assert=require('node:assert/strict'),fs=require('node:fs'),{spawnSync}=require('node:child_process');
     const storage=require(process.argv[1]).createAmuStorage({rootDirectory:process.argv[2],encryptionKeys:{example:Buffer.alloc(32,7)},activeKeyId:'example',readOnly:true});

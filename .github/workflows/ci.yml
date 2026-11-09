@@ -36,6 +36,8 @@ jobs:
             --target "$RUNNER_TEMP/gp-legacy-dependencies" --pnpm "$(command -v pnpm)" \
             > "$RUNNER_TEMP/gp-legacy-dependencies-receipt.json"
           node -e 'const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));assert.equal(r.root,path.join(process.env.RUNNER_TEMP,"gp-legacy-dependencies"));assert.match(r.manifestSha256,/^[a-f0-9]{64}$/);fs.appendFileSync(process.env.GITHUB_ENV,"GP_LEGACY_DEPENDENCIES_ROOT="+r.root+"\nGP_LEGACY_DEPENDENCIES_MANIFEST_SHA256="+r.manifestSha256+"\n");' "$RUNNER_TEMP/gp-legacy-dependencies-receipt.json"
+      - name: Verify deployment contracts before the longer application qualification
+        run: node --test --test-concurrency=1 test/deploy-*.test.js
       - name: PostgreSQL-only configuration, runtime boundary and legacy recovery on minimum Node
         run: >-
           node --test --test-concurrency=1
@@ -80,6 +82,11 @@ jobs:
         run: sudo "$(command -v node)" --test test/linux-build-tree-seal.test.js
       - name: Verify migration backups preserve existing points under the actual kernel lease
         run: sudo "$(command -v node)" --test test/postgresql-backup-preserve-shell.test.js
+      - name: Verify bounded Offsite confirmation and interrupted refresh on minimum Node
+        run: >-
+          sudo /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8
+          "$(command -v node)" --no-global-search-paths --test --test-concurrency=1
+          test/offsite-upload-confirmation.test.js test/offsite-upload-hardening-transition.test.js test/private-workspace-preflight.test.js
 
   postgresql-provider-development-contract:
     runs-on: ubuntu-latest
@@ -215,6 +222,7 @@ jobs:
           test/v087-database-block6-postgresql-tools.test.js
           test/v087-database-block6-recovery-assurance.test.js
           test/v087-database-block6-no-cutover.test.js
+          test/sales-report-receipt-issues-postgresql.test.js
       - name: Full application suite with native PostgreSQL fixtures
         shell: bash
         run: |
@@ -250,6 +258,11 @@ jobs:
         run: sudo /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 "$(command -v node)" --no-global-search-paths --test --test-concurrency=1 test/preflight-root-dependency-links.test.js
       - name: Native root runtime transition dependencies
         run: sudo /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 "$(command -v node)" --no-global-search-paths --test --test-concurrency=1 test/runtime-v6-root-dependency-topology.test.js
+      - name: Native root bounded Offsite confirmation and interrupted refresh
+        run: >-
+          sudo /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8
+          "$(command -v node)" --no-global-search-paths --test --test-concurrency=1
+          test/offsite-upload-confirmation.test.js test/offsite-upload-hardening-transition.test.js test/private-workspace-preflight.test.js
       - name: Reboot module maintenance rollback (isolated temporary files)
         run: sudo python3 test/reboot-module-maintenance.test.py
 
