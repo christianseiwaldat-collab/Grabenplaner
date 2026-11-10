@@ -139,9 +139,11 @@ def install(root):
         locked = temporary / 'scanner-wheel.txt'
         locked.write_text('semgrep @ ' + wheel.as_uri() + ' --hash=sha256:'
                           + asset['patchedSha256'] + '\n', encoding='utf8')
+        # The explicit wheel must precede the named inventory requirement:
+        # pip otherwise fetches registry metadata before seeing our local link.
         subprocess.run([sys.executable, '-m', 'pip', 'install', '--disable-pip-version-check',
             '--only-binary=:all:', '--require-hashes', '--index-url', 'https://pypi.org/simple',
-            '-r', str(root / 'scripts/security/requirements.txt'), '-r', str(locked)], check=True)
+            '-r', str(locked), '-r', str(root / 'scripts/security/requirements.txt')], check=True)
         subprocess.run([sys.executable, '-m', 'pip', 'check'], check=True)
 
 
