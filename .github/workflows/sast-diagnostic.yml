@@ -46,7 +46,9 @@ jobs:
           node-version: '24.19.0'
       - name: Install the same hash-locked scanner and immutable rules as security CI
         run: |
-          python -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r scripts/security/requirements.txt
+          python -m venv "$RUNNER_TEMP/semgrep-diagnostic-venv"
+          "$RUNNER_TEMP/semgrep-diagnostic-venv/bin/python" scripts/security/install_semgrep_runtime.py --root .
+          echo "$RUNNER_TEMP/semgrep-diagnostic-venv/bin" >> "$GITHUB_PATH"
           python scripts/security/install_tools.py --tool rules --directory "$RUNNER_TEMP/sast-diagnostic-tools"
       - name: Test diagnostic completeness and publication boundaries
         run: |

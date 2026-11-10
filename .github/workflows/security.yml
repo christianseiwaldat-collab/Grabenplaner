@@ -131,7 +131,7 @@ jobs:
       - name: Install hash-locked Semgrep and immutable upstream rules
         run: |
           python -m venv "$RUNNER_TEMP/semgrep-source-venv"
-          "$RUNNER_TEMP/semgrep-source-venv/bin/python" -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r scripts/security/requirements.txt
+          "$RUNNER_TEMP/semgrep-source-venv/bin/python" scripts/security/install_semgrep_runtime.py --root .
           "$RUNNER_TEMP/semgrep-source-venv/bin/python" scripts/security/install_tools.py --tool rules --directory "$RUNNER_TEMP/security-tools"
           "$RUNNER_TEMP/semgrep-source-venv/bin/python" scripts/security/install_tools.py --tool syft --directory "$RUNNER_TEMP/security-tools"
           echo "$RUNNER_TEMP/semgrep-source-venv/bin" >> "$GITHUB_PATH"

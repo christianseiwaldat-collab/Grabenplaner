@@ -33,7 +33,7 @@ jobs:
       - name: Install the pinned upstream wrapper and immutable rules
         run: |
           python -m venv "$RUNNER_TEMP/syntax-venv"
-          "$RUNNER_TEMP/syntax-venv/bin/python" -m pip install --disable-pip-version-check --only-binary=:all: --require-hashes -r scripts/security/requirements.txt
+          "$RUNNER_TEMP/syntax-venv/bin/python" scripts/security/install_semgrep_runtime.py --root .
           echo "$RUNNER_TEMP/syntax-venv/bin" >> "$GITHUB_PATH"
           python scripts/security/install_tools.py --tool rules --directory "$RUNNER_TEMP/syntax-tools"
       - name: Verify parser diagnostics stay fail-closed and never approve SAST

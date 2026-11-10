@@ -14,6 +14,24 @@ eingerichtet und an einem tatsächlichen Actions-Lauf nachgewiesen werden.
   Paket-/Versionspaare des Lockfiles melden, einschließlich optionaler Pakete
   anderer Plattformen. Übertragen werden Paketmetadaten, keine Kennwörter.
 - SAST: Semgrep 1.181.0 mit vollständig hashgebundenen Python-Abhängigkeiten.
+  `install_semgrep_runtime.py` bindet die offiziellen Linux-/Windows-Wheels und
+  einen reproduzierbaren Patch ausschließlich ihrer sechs Abhängigkeitsfelder
+  und des zugehörigen `RECORD`. `mcp` wird auf 1.30.0 und OpenTelemetry auf
+  1.45.1/0.66b1 angehoben. Die bisherigen Hersteller-Pins verhindern diese
+  Sicherheitsupdates auch in Semgrep 1.184.0. Python-Quellen, Binärdateien,
+  Einstiegspunkte und Version bleiben bytegleich. Original und Ergebnis sind
+  durch feste SHA256-Werte gebunden; Metadatendrift blockiert. Die Installation
+  erfolgt im eigenen Venv mit normaler Pip-Abhängigkeitsauflösung,
+  `--require-hashes` und anschließendem `pip check`. `requirements.in` enthält
+  exakt die reparierten Herstelleranforderungen, `requirements.txt` deren
+  eingefrorenen vollständigen Graphen. Der Installer ist zusätzlich Teil der
+  Compiler-Eingabeidentität. Nach dem Auflösen des Transitiven-Graphen müssen
+  die beiden qualifizierten Wheel-Hashes als `semgrep==1.181.0` im Lockfile
+  erhalten bleiben; der Inventarvertrag prüft dies ausdrücklich. Dadurch bleibt
+  auch der Scanner selbst für Dependabot sichtbar. Kein Advisory wird ausgeblendet. Der Patch entfällt,
+  sobald ein vollständig qualifizierter Herstellerstand die sicheren Pins
+  selbst enthält. Die aktuelle Prüfung bestätigt ausschließlich den verwendeten
+  Scanbetrieb, keinen produktiven Semgrep-MCP-Server.
   Der unveränderliche Upstream-Regelcommit steht in `tools.json`. Ausgewählt
   werden alle Security-YAMLs unter `javascript/` und `typescript/lang/security/`.
   Der gebundene Upstream-Satz enthält 169 Regeln; Lizenz: Semgrep Rules License
