@@ -121,6 +121,19 @@ class CompilerAcquisitionTests(unittest.TestCase):
         self.assertEqual(identity.inputs(other), self.identity)
         self.assertNotIn('server.js', self.identity['programs'])
 
+    def test_legacy_pin_is_readable_but_new_installer_requires_a_cold_build(self):
+        legacy = copy.deepcopy(self.pin)
+        del legacy['buildInputs']['programs']['install_semgrep_runtime.py']
+        legacy['buildInputsSha256'] = identity.digest(identity.canonical(legacy['buildInputs']))
+        self.pin_path.write_bytes(tool.canonical(legacy))
+        with patch.object(acquisition, 'fetch', side_effect=AssertionError('legacy key must not download')), \
+                patch.object(build, 'build_core', side_effect=self.cold) as cold:
+            self.acquire()
+        cold.assert_called_once()
+        self.assertEqual(acquisition.verify(self.output, self.root, self.native)['reason'],
+                         'reviewed_inputs_changed')
+        self.assertIn('install_semgrep_runtime.py', identity.inputs(self.root)['programs'])
+
     def test_lf_checkout_policy_is_versioned_and_actual_crlf_is_rejected_not_normalized(self):
         attributes = self.root / '.gitattributes'
         original_attributes = attributes.read_bytes()

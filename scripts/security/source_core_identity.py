@@ -14,6 +14,8 @@ PROGRAMS = ('build_semgrep_source.py', 'source_core_identity.py', 'source_core_a
             'compiler_capture_archive.py', 'compiler_license_extra_sources.py',
             'compiler_license_native.py', 'prepare_source_core.py',
             'sast_profile.py', 'gates.py')
+LEGACY_PROGRAMS = PROGRAMS
+PROGRAMS = (*PROGRAMS, 'install_semgrep_runtime.py')
 PROGRAM_ATTRIBUTE = 'scripts/security/*.py text eol=lf'
 INPUT_ATTRIBUTES = (PROGRAM_ATTRIBUTE, 'scripts/security/requirements.txt text eol=lf',
                     'scripts/security/tools.json text eol=lf')
@@ -59,7 +61,8 @@ def validate(value):
     if (not isinstance(value, dict) or set(value) != set(expected) | {
             'requirementsSha256', 'toolsConfigurationSha256', 'programs'}
             or any(value.get(key) != item for key, item in expected.items())
-            or not isinstance(value['programs'], dict) or set(value['programs']) != set(PROGRAMS)):
+            or not isinstance(value['programs'], dict)
+            or set(value['programs']) not in (set(PROGRAMS), set(LEGACY_PROGRAMS))):
         raise ValueError('Unreviewed compiler build-input identity')
     hashes = [value['requirementsSha256'], value['toolsConfigurationSha256'], *value['programs'].values()]
     if any(not isinstance(item, str) or not re.fullmatch('[a-f0-9]{64}', item) for item in hashes):
@@ -81,6 +84,8 @@ def inputs(root):
             raise ValueError('Compiler input bytes violate the versioned LF checkout policy')
         return data
     programs = {}
+    # Legacy pin metadata remains readable, but only this complete current set
+    # is emitted. A legacy key can never equal this key or authorize core reuse.
     for name in PROGRAMS:
         programs[name] = digest(lf_input(name))
     value = {**fixed_inputs(), 'requirementsSha256': digest(lf_input('requirements.txt')),

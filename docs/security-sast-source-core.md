@@ -16,9 +16,15 @@ liefert keinen ausreichenden Nachweis tatsächlich abgeschlossener Konvergenz.
 
 ## Eng begrenzter Quellbau
 
-Der verpflichtende Linux-SAST-Job verwendet den unveränderten, über sämtliche
+Der verpflichtende Linux-SAST-Job verwendet den im Code unveränderten, über
 Paket-Hashes gebundenen Python-Wrapper 1.181.0 und denselben unveränderlichen
-Upstream-Regelsatz. Er bezieht einen exakt gebundenen, unabhängig geprüften
+Upstream-Regelsatz. Der in `scripts/security/README.md` beschriebene reine
+Metadatenpatch ermöglicht die behobenen MCP-/OpenTelemetry-Abhängigkeiten;
+Original und Ergebnis sind exakt gebunden und durch normale Pip-Auflösung
+geprüft. Der Installer gehört zur aktuellen Compiler-Eingabeidentität. Ein
+alter gültiger Compiler-Pin bleibt lesbar, besitzt aber einen anderen Schlüssel
+und führt zum kalten Neubau, niemals zur Wiederverwendung oder Scanfreigabe.
+Der Job bezieht einen exakt gebundenen, unabhängig geprüften
 Quellbau oder baut den nativen Kern im privaten Job aus dem offiziellen
 Upstream-Quellstand neu. Für den Kern gelten diese Bindungen:
 

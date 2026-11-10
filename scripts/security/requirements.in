@@ -1,4 +1,31 @@
-# Scanner runtime only; independent of the application dependencies.
+# Scanner dependency closure from the pinned Semgrep wheel.
+# install_semgrep_runtime.py verifies these exact metadata requirements.
 # Resolve with uv 0.9.5: uv pip compile --universal --python-version 3.12
-#   --generate-hashes requirements.in -o requirements.txt
-semgrep==1.181.0
+#   --generate-hashes scripts/security/requirements.in -o scripts/security/requirements.txt
+attrs>=21.3
+boltons~=21.0
+click-option-group~=0.5
+click~=8.4.2
+colorama~=0.4.0
+exceptiongroup~=1.2.0
+glom>=23.3
+jsonschema~=4.25.1
+mcp==1.30.0
+opentelemetry-api==1.45.1
+opentelemetry-sdk==1.45.1
+opentelemetry-exporter-otlp-proto-http==1.45.1
+opentelemetry-instrumentation-requests==0.66b1
+opentelemetry-instrumentation-threading==0.66b1
+packaging>=21.0
+peewee~=3.14
+pyjwt[crypto]<3,>=2.15.0
+requests~=2.22
+rich>=13.5.2
+ruamel.yaml>=0.18.15
+ruamel.yaml.clib==0.2.15
+semantic-version~=2.10.0
+tomli~=2.4.0
+typing-extensions~=4.2
+urllib3~=2.0
+wcmatch~=8.3
+pywin32==311; sys_platform == "win32"

@@ -40,6 +40,7 @@ server-tools/linux/*.env.example text eol=lf
 scripts/security/fixtures/semgrep-1.181.0-* text eol=lf
 # Compiler input identities bind raw Python bytes consistently on every host.
 scripts/security/*.py text eol=lf
+scripts/security/requirements.in text eol=lf
 scripts/security/requirements.txt text eol=lf
 scripts/security/tools.json text eol=lf
 .github/security-semgrep-core-pin.json text eol=lf
