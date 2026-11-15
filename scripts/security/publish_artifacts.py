@@ -39,6 +39,44 @@ def safe_component(item):
     return result
 
 
+def public_components(items, runtime_required=False):
+    # This exact versioned supplement is already bound by the runtime inventory.
+    # Its digest is also fixed here: a changed supplement needs an explicit
+    # sanitizer review, never a broader Maven/platform identity exception.
+    supplement=Path(__file__).parent/'import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/runtime-components.cdx.json'
+    data=supplement.read_bytes()
+    if supplement.is_symlink() or hashlib.sha256(data).hexdigest()!='be42284bf7bc8ae85bfb8456ad65996d974d31f3673273e2460603128f659592':
+        raise ValueError('Runtime publication identities changed')
+    components=json.loads(data)['components']
+    allowed={item['bom-ref']:item for item in components}
+    if len(components)!=6 or len(allowed)!=6:raise ValueError('Invalid runtime publication identities')
+    public=[];seen=set()
+    for item in items:
+        if not isinstance(item,dict):raise ValueError('Invalid component')
+        reference=item.get('bom-ref')
+        if isinstance(reference,str) and reference in allowed:
+            expected=allowed[reference]
+            # Check source identities, purls and byte hashes; arbitrary private
+            # properties, descriptions and paths are never copied out.
+            keys=('type','name','group','version','purl','hashes')
+            if reference in seen or any(item.get(key)!=expected.get(key) for key in keys):
+                raise ValueError('Runtime component differs from its bound identity')
+            seen.add(reference)
+            result={key:expected[key] for key in ('type','name','group','version') if key in expected}
+            result['bom-ref']=hashlib.sha256(json.dumps(result,sort_keys=True).encode()).hexdigest()
+            public.append(result)
+        elif item.get('type')=='library':
+            if (isinstance(reference,str) and reference.startswith('gp-')
+                    or str(item.get('purl','')).startswith('pkg:maven/')):
+                raise ValueError('Unknown runtime component')
+            public.append(safe_component(item))
+        elif item.get('type')!='file':
+            raise ValueError('Unexpected component kind')
+    if (seen or runtime_required) and seen!=set(allowed):raise ValueError('Incomplete runtime component set')
+    if not public:raise ValueError('Empty package SBOM')
+    return public
+
+
 def publish(source, destination, gate):
     if gate not in ('sca','sast','secrets','sbom'):raise ValueError('Invalid gate')
     if destination.exists():raise ValueError('Publication directory must be new')
@@ -65,13 +103,9 @@ def publish(source, destination, gate):
         if gate=='sbom' and code==0:
             raw=read(source/'sbom.cdx.json')
             if raw.get('bomFormat')!='CycloneDX' or not raw.get('components'):raise ValueError('Invalid SBOM')
-            # Syft also records the source lockfile as a file component with an
-            # absolute runner path. Publish libraries only, never that path.
-            libraries=[item for item in raw['components'] if item.get('type')=='library']
-            if not libraries:raise ValueError('Empty package SBOM')
-            if any(item.get('type') not in ('library','file') for item in raw['components']):raise ValueError('Unexpected component kind')
+            # File components can contain absolute runner paths and stay private.
             public={'bomFormat':'CycloneDX','specVersion':'1.6','version':1,
-                    'components':[safe_component(item) for item in libraries]}
+                    'components':public_components(raw['components'],bool(details.get('runtimeAssets')))}
             write(destination/'sbom.cdx.json',public)
             summary['sourceSbomSha256']=digest(source/'sbom.cdx.json')
             summary['publishedSbomSha256']=digest(destination/'sbom.cdx.json')

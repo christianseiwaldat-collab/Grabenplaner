@@ -6,6 +6,7 @@ const { createPersistenceProviderFacade, PERSISTENCE_ERROR_CODES } = require('..
 const { createSalesArticleCatalogRepository } = require('../lib/persistence/repositories/sales-article-catalog');
 const { enableImportBatches } = require('../lib/persistence/repositories/import-batch-support');
 const { IMPORT_READER_BATCHES } = require('../lib/persistence/statements/import-reader-batches');
+const { INSERT_ARTICLE_PRICES } = require('../lib/persistence/statements/sales-article-price-batches');
 const { SALES_ARTICLE_CATALOG_STATEMENTS: S } = require('../lib/persistence/statements/sales-article-catalog');
 const { openSqliteApplicationPersistence, SQLITE_CAPABILITIES } = require('../lib/persistence/sqlite/provider');
 const { SQLITE_SALES_ARTICLE_CATALOG } = require('../lib/persistence/sqlite/sales-article-catalog-catalog');
@@ -56,8 +57,16 @@ async function fixture(work) {
     }
     return rows;
   };
-  const execute = (statement, parameters) => {
-    calls.push(statement); return access.execute(statement, parameters);
+  const execute = async (statement, parameters) => {
+    calls.push(statement);
+    if (statement !== INSERT_ARTICLE_PRICES) return access.execute(statement, parameters);
+    assert.ok(parameters.rows.length > 0 && parameters.rows.length <= 200);
+    let rowsAffected = 0;
+    for (const price of parameters.rows) {
+      calls.push(S.insertPriceSnapshot);
+      rowsAffected += (await access.execute(S.insertPriceSnapshot, price)).rowsAffected;
+    }
+    return { rowsAffected, returnedRows: [] };
   };
   const packetProvider = createPersistenceProviderFacade({ providerId: 'sqlite', capabilities: SQLITE_CAPABILITIES,
     query, execute, close: async () => {},
@@ -135,6 +144,9 @@ test('Article commit re-inspects fresh state and keeps write lookups outside the
   f.calls.length = 0;
   await importSnapshot(f.batch, value, { expectedStateSha256: preview.stateSha256 });
   assert.ok(f.calls.includes(S.getArticleBySource) && f.calls.includes(S.getArticleByNumber), 'Persistence must perform its own current head reads');
+  assert.equal(f.calls.filter(statement => statement === INSERT_ARTICLE_PRICES).length, 1);
+  assert.equal(f.calls.filter(statement => statement === S.insertPriceSnapshot).length, 1);
+  assert.equal(f.database.prepare('SELECT count(*) AS n FROM sales_article_price_snapshots').get().n, 1);
   assert.equal(f.database.prepare('SELECT count(*) AS n FROM sales_article_revisions').get().n, 1);
   const changed = snapshot([article(1, { description: 'Incoming update' })], 'c');
   const reviewed = await f.batch.inspectImportSnapshot({ snapshot: changed });

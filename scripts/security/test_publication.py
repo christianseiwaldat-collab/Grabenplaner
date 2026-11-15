@@ -1,4 +1,5 @@
 import json
+import copy
 from pathlib import Path
 import tempfile
 import unittest
@@ -8,6 +9,64 @@ import datetime as dt
 
 
 class PublicationTests(unittest.TestCase):
+    def runtime_components(self):
+        source=Path(__file__).parent/'import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/runtime-components.cdx.json'
+        return json.loads(source.read_bytes())['components']
+
+    def publish_runtime(self,directory,components):
+        source=Path(directory)/'raw';source.mkdir();target=Path(directory)/'public'
+        (source/'gate-result.json').write_text(json.dumps({'gate':'sbom','exitCode':0,'complete':True,'passed':True,'status':'passed','details':{'runtimeAssets':{'status':'declared_source_only'}}}))
+        (source/'sbom.cdx.json').write_text(json.dumps({'bomFormat':'CycloneDX','components':components}))
+        (source/'release-inventory.json').write_text('{"private":"PRIVATE-RUNTIME-SENTINEL"}')
+        return publish(source,target,'sbom'),target
+
+    def test_real_six_runtime_components_and_npm_publish_only_selected_identities(self):
+        components=self.runtime_components()
+        for item in components:
+            item.update(properties=[{'name':'path','value':'PRIVATE-RUNTIME-SENTINEL'}],description='PRIVATE-RUNTIME-SENTINEL',source='/PRIVATE-RUNTIME-SENTINEL/source')
+        components.extend([{'type':'library','name':'@example/scoped','version':'1.0.0','properties':[{'value':'PRIVATE-RUNTIME-SENTINEL'}]},
+                           {'type':'file','name':'/PRIVATE-RUNTIME-SENTINEL/lockfile'}])
+        with tempfile.TemporaryDirectory() as directory:
+            code,target=self.publish_runtime(directory,components)
+            self.assertEqual(code,0)
+            public=json.loads((target/'sbom.cdx.json').read_bytes())['components']
+            self.assertEqual(len(public),7)
+            expected=[{k:item[k] for k in ('type','name','group','version') if k in item} for item in self.runtime_components()]
+            self.assertEqual([{k:v for k,v in item.items() if k!='bom-ref'} for item in public[:6]],expected)
+            self.assertEqual(public[-1]['group'],'@example')
+            self.assertTrue(all(set(item)<=set(('type','name','group','version','bom-ref')) for item in public))
+            self.assertNotIn('PRIVATE-RUNTIME-SENTINEL',''.join(p.read_text() for p in target.iterdir()))
+            self.assertTrue(json.loads((target/'gate-summary.json').read_bytes())['passed'])
+
+    def test_runtime_identity_hash_purl_type_and_path_drift_fail_closed(self):
+        original=self.runtime_components()
+        for index in range(6):
+            for key,value in (('name','../../PRIVATE-RUNTIME-SENTINEL'),('group','@unreviewed'),
+                              ('version','999.0'),('type','operating-system'),('bom-ref','gp-unknown'),
+                              ('purl','file:///PRIVATE-RUNTIME-SENTINEL'),
+                              ('hashes',[{'alg':'SHA-256','content':'0'*64}])):
+                components=copy.deepcopy(original);components[index][key]=value
+                with self.subTest(index=index,key=key),tempfile.TemporaryDirectory() as directory:
+                    code,target=self.publish_runtime(directory,components)
+                    self.assertEqual(code,2)
+                    self.assertFalse(json.loads((target/'gate-summary.json').read_bytes())['passed'])
+                    self.assertFalse((target/'sbom.cdx.json').exists())
+                    self.assertNotIn('PRIVATE-RUNTIME-SENTINEL',(target/'gate-summary.json').read_text())
+
+    def test_missing_duplicate_extra_runtime_kinds_and_invalid_npm_are_rejected(self):
+        original=self.runtime_components()
+        variants=[original[:-1],[],original+[copy.deepcopy(original[0])],
+                  original+[{'type':'application','name':'unreviewed','version':'1'}],
+                  original+[{'type':'platform','name':'other-runtime','version':'1'}],
+                  original+[{'type':'library','name':'x','group':'org.unreviewed','version':'1','purl':'pkg:maven/org.unreviewed/x@1'}],
+                  original+[{'type':'library','name':'../../PRIVATE-RUNTIME-SENTINEL','version':'1'}]]
+        for index,components in enumerate(variants):
+            with self.subTest(index=index),tempfile.TemporaryDirectory() as directory:
+                code,target=self.publish_runtime(directory,components)
+                self.assertEqual(code,2)
+                self.assertFalse(json.loads((target/'gate-summary.json').read_bytes())['passed'])
+                self.assertFalse((target/'sbom.cdx.json').exists())
+
     def test_unredacted_error_and_source_snippets_never_leave_runner(self):
         with tempfile.TemporaryDirectory() as directory:
             source=Path(directory)/'raw';source.mkdir();target=Path(directory)/'public'

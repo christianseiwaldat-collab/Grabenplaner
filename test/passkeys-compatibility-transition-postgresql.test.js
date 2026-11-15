@@ -36,6 +36,16 @@ test("the original installed f0d schema inspector and every reused dependency ar
     const mutated = structuredClone(original); change(mutated);
     assert.throws(() => fixture.originalInspector(mutated), /PASSKEY_TRANSITION_OLD_(?:SOURCE|DEPENDENCY)/);
   }
+  const frozen = require("../test-support/postgresql-migration/f0d-core-inspector-frozen-dependencies.json");
+  for (const change of [
+    value => { value.files.at(-1).sourceBase64 = Buffer.from("module.exports={}").toString("base64"); },
+    value => { value.files.at(-1).gitLfSha256 = "0".repeat(64); },
+    value => { value.files.pop(); },
+    value => { value.sourceCommit = "0".repeat(40); },
+  ]) {
+    const mutated = structuredClone(frozen); change(mutated);
+    assert.throws(() => fixture.originalInspector(original, mutated), /PASSKEY_TRANSITION_OLD_DEPENDENCY/);
+  }
 });
 
 test("a native isolated old-to-Passkeys schema transition is atomic and retains repository writes across compatible reopen", {

@@ -13,7 +13,7 @@
   },
   "runtimeIndex": {
     "path": "lib/import-verifier-runtime-assets.json",
-    "sha256": "b607e34b375025a9771af3520433eda97b68169cd550c8034edaeb5e9b481a82"
+    "sha256": "b230bfcccd6bdb79cfa41dfbe670715ba85716053d0082b4fb3eb8c25eed2864"
   },
   "archive": {
     "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21%2B9/OpenJDK17U-jre_x64_linux_hotspot_17.0.21_9.tar.gz",

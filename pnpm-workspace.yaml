@@ -10,6 +10,8 @@ minimumReleaseAgeExclude:
   - nodemailer@10.1.6
 
 overrides:
+  # GHSA-474x-hrwr-fgx4: fixed stop-node parsing in the Access reader's XML dependency.
+  'mdb-reader>fast-xml-parser': 5.12.0
   # Reviewed CVE-2026-111181 security fix; keep the Express major unchanged.
   body-parser: 2.4.0
   # Native parser/encoder fixes and platform SBOM; qualify PDF/OCR before release.
