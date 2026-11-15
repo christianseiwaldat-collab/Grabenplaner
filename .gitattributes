@@ -60,3 +60,8 @@ scripts/security/fixtures/bsd-compat-headers/** -text -whitespace
 scripts/security/import-verifier-assets/** -text -whitespace
 lib/import-verifier-runtime-assets.json text eol=lf
 .github/security-semgrep-core-reuse.json text eol=lf
+
+# Release entrypoints and source-bound SAST policy require exact LF checkouts.
+server-tools/linux/lib/offsite-upload-hardening-compat.js text eol=lf
+server-tools/linux/lib/private-workspace-preflight.py text eol=lf
+scripts/security/sast-dispositions.json text eol=lf

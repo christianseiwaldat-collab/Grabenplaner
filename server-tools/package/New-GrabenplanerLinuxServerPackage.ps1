@@ -630,6 +630,17 @@ try {
 
     $archiveOwned = $true
     Write-DeterministicZip -SourceRoot $buildRoot -ArchivePath $archivePath
+    # DOS creator metadata makes Linux unzip ignore otherwise correct Unix modes.
+    # The helper is build-only and deliberately absent from the runtime buildRoot.
+    $zipCreatorPython = (Get-Command python -ErrorAction Stop).Source
+    $zipCreatorTool = Join-Path $PSScriptRoot 'normalize-linux-zip-creator.py'
+    $zipCreatorJson = & $zipCreatorPython -I -B $zipCreatorTool $archivePath
+    if ($LASTEXITCODE -ne 0) { throw 'Die Unix-ZIP-Creator-Metadaten konnten nicht sicher normalisiert werden.' }
+    $zipCreatorProof = ConvertFrom-Json -InputObject ([string]$zipCreatorJson)
+    if ($zipCreatorProof.normalized -ne $true -or $zipCreatorProof.creatorSystem -ne 3 -or
+        $zipCreatorProof.originalReconstructed -ne $true -or $zipCreatorProof.payloadAndOtherMetadataUnchanged -ne $true) {
+        throw 'Die Unix-ZIP-Creator-Normalisierung besitzt keinen vollstaendigen Metadatennachweis.'
+    }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $roundtripRoot)
     Assert-BundledPasswordPolicy -Root $roundtripRoot -Node $inventoryNode
