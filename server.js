@@ -20453,6 +20453,7 @@ async function validateWeekOption(body, existingId = 0, actor = null) {
 }
 
 function optionMinutesPerDay(option, contractedHours) {
+  if (option.soft_pending === true) return 0;
   if (option.option_type === "vocational_school" && !optionIsAllDay(option)
       && isTime(option.start_time) && isTime(option.end_time)) {
     if (option.credited_minutes_per_day !== null && option.credited_minutes_per_day !== undefined
@@ -22914,6 +22915,14 @@ async function getSchedule(weekValue, contextInput = {}, session = null, options
     soft_pending: true,
   }));
   weekOptions.push(...employment.clip(pendingTimeOff));
+  const pendingVacation = (await absenceManagementRepository.pendingVacationForRange({
+    dateFrom: weekStart, dateTo: weekEnd,
+  })).filter(item => visibleEmployeeNumbers.has(item.employee_number)).map(item => ({
+    ...item, id: `pending-vacation-${item.id}`, group_id: null, week_start: weekStart,
+    option_type: "vacation", all_day: 1, start_time: null, end_time: null,
+    note: "Beantragt", credited_minutes_per_day: 0, soft_pending: true,
+  }));
+  weekOptions.push(...employment.clip(pendingVacation));
   const sicknessCredits = (await sicknessCreditsForEmployeesInRange(
     employees.map((employee) => employee.personnel_number), weekStart, weekEnd,
   )).filter(credit => employment.allows(credit.employee_number, credit.date))
@@ -57959,6 +57968,25 @@ app.post("/api/portal/v1/me/time-off-check", async (request, response) => {
   response.json(await evaluateTimeOffRequest(session.employeeNumber, request.body));
 });
 
+require("./lib/emma-absence-requests").registerEmmaAbsenceRoutes(app, {
+  repository: absenceManagementRepository, assertCsrf: assertPortalCsrf, today: viennaTodayIso,
+  async authorize(request, input = null, repository = absenceManagementRepository, context = null) {
+    assertAssistantFeatures("employeePortal", "schedule", "requests", ...(input?.kind === "vacation" ? ["vacation"] : []));
+    return require("./lib/emma-absence-requests").authorizeEmmaAbsence({ request, input, repository, context,
+      requireSession: requirePortalSession, loadSession: loadPortalSessionFromRequest,
+      effectivePermissions: effectivePortalPermissionState, assertScope: assertSessionContextScope, today: viennaTodayIso });
+  },
+  async context(input, repository) {
+    if (input.kind === "time_off") return assertTimeOffResponsibility(input.employeeNumber, input, repository);
+    await assertNoVacationLendingOverlap(input.employeeNumber, input.dateFrom, input.dateTo, repository);
+    return absenceEmployeeRequestContext(input.employeeNumber, input.dateFrom, {}, repository);
+  },
+  evaluate: (input, context, repository) => input.kind === "vacation"
+    ? evaluateVacationRequest(input.employeeNumber, input, repository)
+    : evaluateTimeOffRequest(input.employeeNumber, input, context, repository),
+  decision: recordRequestDecision, notify: notifyAbsenceRequestReviewers, audit: auditAbsence,
+});
+
 // Branch accounts submit through the same approval workflow as personal accounts.
 // The employee is a separate subject; the authenticated account remains the actor.
 async function currentBranchTimeOffContext(request, expected = null, repository = portalAccessRepository) {
@@ -63651,7 +63679,7 @@ function optionRemarkText(option) {
       option.is_public_holiday ? " · Feiertag" : ""
     }`;
   }
-  return `${isTeamWideMeetingOption(option) ? "Ganzes Team" : option.nickname}: ${optionLabel(option.option_type)} · ${formatOptionDateRange(option)} · ${formatOptionTimeRange(option)}${
+  return `${isTeamWideMeetingOption(option) ? "Ganzes Team" : option.nickname}: ${option.soft_pending ? (option.option_type === "vacation" ? "Urlaub beantragt" : "ZA beantragt") : optionLabel(option.option_type)} · ${formatOptionDateRange(option)} · ${formatOptionTimeRange(option)}${
     option.note ? ` · ${option.note}` : ""
   }`;
 }
@@ -64668,7 +64696,7 @@ async function drawScheduleTimelinePdf(schedule, response, createdAt = new Date(
       }
       doc.restore();
       doc.strokeColor("#7e8588").lineWidth(0.4).rect(x, y, width, height).stroke();
-      const label = optionLabel(option.option_type);
+      const label = option.soft_pending ? (option.option_type === "vacation" ? "Urlaub beantragt" : "ZA beantragt") : optionLabel(option.option_type);
       const labelFontSize = Math.max(4.2, Math.min(5.2, height / 7));
       doc.save();
       doc
@@ -64921,6 +64949,7 @@ function scheduleMatrixOptionTimeText(option) {
 }
 
 function scheduleMatrixOptionText(option) {
+  if (option.soft_pending) return [option.option_type === "vacation" ? "Urlaub beantragt" : "ZA beantragt", scheduleMatrixOptionTimeText(option)].filter(Boolean).join(" · ");
   const code = scheduleMatrixOptionCode(option.option_type);
   const time = scheduleMatrixOptionTimeText(option);
   if (option.option_type === "branch") {
@@ -64932,6 +64961,7 @@ function scheduleMatrixOptionText(option) {
 }
 
 function scheduleMatrixOptionDetailLines(option, settings = {}) {
+  if (option.soft_pending) return [option.option_type === "vacation" ? "Urlaub beantragt" : "ZA beantragt", scheduleMatrixOptionTimeText(option)].filter(Boolean);
   const time = scheduleMatrixOptionTimeText(option);
   const safeReason = ["vacation", "special_leave", "time_off"].includes(option.option_type)
     ? String(option.note || option.reason || "").trim() : "";
