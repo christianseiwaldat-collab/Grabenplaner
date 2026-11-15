@@ -1,10 +1,10 @@
 "use strict";
 const test = require("node:test"), assert = require("node:assert/strict"), fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
-const { createEmmaAbsenceRequests, authorizeEmmaAbsence, registerEmmaAbsenceRoutes, PREFIX } = require("../lib/emma-absence-requests");
+const { createEmmaAbsenceRequests, authorizeEmmaAbsence, registerEmmaAbsenceRoutes, publicCheck, PREFIX } = require("../lib/emma-absence-requests");
 const period = date => ({ dateFrom: date, dateTo: date, allDay: true, startTime: null, endTime: null });
 const body = () => ({ employeeNumber: "SELF", kind: "vacation", periods: [period("2031-04-08"), period("2031-04-10"), period("2031-04-12")], note: "Eigener Antrag" });
 function fixture() {
-  const state = { rows: [], events: [], next: 1, authorizationCalls: 0, blocked: new Set(), subjectRights: ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:write"],
+  const state = { rows: [], events: [], next: 1, authorizationCalls: 0, blocked: new Set(), staffingWarnings: new Set(), subjectRights: ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:write"],
     actor: { id: "emma-session", sessionKind: "employee", employeeNumber: "Emma", permissions: ["schedule:read", "schedule:write", "absence_entries:write"], scopes: [{ locationId: "18" }] } };
   const repository = {
     portalAccess: { async getReportPrincipal({ employeeNumber }) { return employeeNumber === "SELF" && !state.subjectDisabled
@@ -39,9 +39,13 @@ function fixture() {
       if (state.contextConflict === value.dateFrom) throw Object.assign(Error("Berufsschule blockiert den Tag."), { status: 409, code: "VOCATIONAL_SCHOOL_CONFLICT" });
       return { locationId: "18", originLocationId: "18", departmentId: null, lendingId: null };
     },
-    async evaluate(value) { return { allowed: !state.blocked.has(value.dateFrom), trafficLight: state.blocked.has(value.dateFrom) ? "red" : "yellow",
-      submissionAllowed: true, manualReview: true, reason: state.blocked.has(value.dateFrom) ? "Mindestbesetzung nicht erfüllt." : "Manuelle Freigabe erforderlich.",
-      code: state.blocked.has(value.dateFrom) ? "VACATION_STAFFING_INSUFFICIENT" : "MANUAL_REVIEW" }; },
+    async evaluate(value) {
+      const hardBlock = state.blocked.has(value.dateFrom), staffing = state.staffingWarnings.has(value.dateFrom);
+      return require("../lib/absence-request-policy").absenceRequestSubmissionAssessment({ allowed: !hardBlock && !staffing,
+        trafficLight: hardBlock || staffing ? "red" : "yellow", manualReview: true,
+        reason: hardBlock ? "Antragssperre für diesen Tag." : staffing ? "Mindestbesetzung nicht erfüllt." : "Manuelle Freigabe erforderlich.",
+        code: hardBlock ? "REQUEST_BLACKOUT" : staffing ? (value.kind === "vacation" ? "VACATION_STAFFING_INSUFFICIENT" : "TIME_OFF_STAFFING_INSUFFICIENT") : "MANUAL_REVIEW" });
+    },
     async decision(kind, id, stage, action, actor) { state.events.push({ type: "decision", kind, id, stage, action, actor }); },
     async notify(_repo, row, kind, stage, actor) { state.events.push({ type: "notify", subject: row.employee_number, kind, stage, actor }); },
     async audit(_repo, actor, action) { state.events.push({ type: "audit", actor, action }); },
@@ -62,12 +66,37 @@ test("batch creates only eligible native pending rows and reviewer notifications
   assert(f.state.events.filter(event => event.type === "notify").every(event => event.subject === "SELF" && event.actor === "Emma"));
   assert(!f.state.events.some(event => /approve/.test(event.action || "")));
 });
-test("staffing blocks despite the regular portal advisory submission flag; school and closed-day conflicts do not create that period", async () => {
-  const f = fixture(); f.state.blocked.add("2031-04-08"); f.state.contextConflict = "2031-04-10";
+test("native staffing warning saves an open request and reports conflict, while school blocks only its own period", async () => {
+  const f = fixture(); f.state.staffingWarnings.add("2031-04-08"); f.state.contextConflict = "2031-04-10";
   const result = await f.service.submit({}, body());
-  assert.equal(result.requests.length, 1); assert.equal(result.blocked.length, 2);
-  assert.equal(result.blocked[1].code, "VOCATIONAL_SCHOOL_CONFLICT");
-  assert.equal(f.state.rows.length, 1);
+  assert.equal(result.requests.length, 2); assert.equal(result.blocked.length, 1);
+  assert.equal(result.blocked[0].code, "VOCATIONAL_SCHOOL_CONFLICT");
+  assert.equal(result.conflicts.length, 1); assert.equal(result.conflicts[0].code, "VACATION_STAFFING_INSUFFICIENT");
+  assert.equal(result.conflicts[0].submissionAllowed, true); assert.equal(result.conflicts[0].allowed, false);
+  assert.equal(result.requests[0].status, "pending"); assert.equal(result.requests[0].nativeStatus, "pending_local");
+  assert.equal(result.requests[0].assessment.trafficLight, "red"); assert.equal(f.state.rows.length, 2);
+});
+test("all red staffing periods still become pending requests, with one explicit conflict per saved period", async () => {
+  for (const kind of ["vacation", "time_off"]) {
+    const f = fixture(); for (const item of body().periods) f.state.staffingWarnings.add(item.dateFrom);
+    const check = await f.service.check({}, { ...body(), kind });
+    assert.equal(check.allowed, false); assert.equal(check.submissionAllowed, true);
+    const result = await f.service.submit({}, { ...body(), kind });
+    assert.equal(result.requests.length, 3); assert.equal(result.conflicts.length, 3); assert.deepEqual(result.blocked, []);
+    assert(f.state.rows.every(row => row.status === "pending_local"));
+    assert(result.requests.every(row => row.assessment.allowed === false && row.assessment.submissionAllowed === true));
+    assert(!f.state.events.some(event => /approve/.test(event.action || "")));
+  }
+});
+test("conflict capability is explicit and only native staffing advisories can admit a red pending request", async () => {
+  const f = fixture(), capabilities = await f.service.capabilities({});
+  assert.equal(capabilities.conflictPolicy, "submit_with_warning"); assert.equal(capabilities.pendingOnly, true);
+  const red = { allowed: false, trafficLight: "red", reason: "Konflikt", submissionAllowed: true };
+  assert.equal(publicCheck({ ...red, code: "VACATION_STAFFING_INSUFFICIENT" }).submissionAllowed, true);
+  assert.equal(publicCheck({ ...red, code: "TIME_OFF_STAFFING_INSUFFICIENT" }).submissionAllowed, true);
+  assert.equal(publicCheck({ ...red, code: "VOCATIONAL_SCHOOL_CONFLICT" }).submissionAllowed, false);
+  assert.equal(publicCheck({ ...red, code: "REQUEST_BLACKOUT" }).submissionAllowed, false);
+  assert.equal(publicCheck({ ...red, code: "VACATION_STAFFING_INSUFFICIENT", submissionAllowed: false }).submissionAllowed, false);
 });
 test("all blocked periods return explicit conflicts and create no rows", async () => {
   const f = fixture(); for (const item of body().periods) f.state.blocked.add(item.dateFrom);
