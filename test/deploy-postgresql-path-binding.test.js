@@ -26,7 +26,7 @@ test("PostgreSQL path binding precedes all costly or disruptive update operation
   }
 });
 
-for (const scenario of ["correct", "previous-wrong-backup-directory", "wrong-data-directory"]) {
+for (const scenario of ["correct", "previous-wrong-backup-directory", "wrong-data-directory", "missing-asset-verifier"]) {
   test("real updater gate and operations helper validate configured paths: " + scenario,
     { skip: process.platform !== "linux" }, t => {
       const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-deploy-path-binding-"));
@@ -43,6 +43,14 @@ for (const scenario of ["correct", "previous-wrong-backup-directory", "wrong-dat
       // recovery-file traversal use synthetic data; no production DB is opened.
       write("candidate/server-tools/linux/lib/postgresql-operations.js",
         fs.readFileSync(path.join(root, "server-tools/linux/lib/postgresql-operations.js")));
+      // Retain the shipped asset guard and policy in this path-only legacy
+      // fixture. An absent asset declaration needs no payload; a missing guard
+      // must still stop the actual updater before any recovery work.
+      if (scenario !== "missing-asset-verifier") {
+        for (const file of ["server-tools/linux/lib/import-verifier-assets.js", "lib/import-verifier-runtime-assets.js"]) {
+          write("candidate/" + file, fs.readFileSync(path.join(root, file)));
+        }
+      }
       const eventsFile = path.join(temporary, "events");
       write("installed/node_modules/pg/index.js", "throw new Error('UNEXPECTED_INSTALLED_DRIVER_LOAD');");
       write("candidate/lib/persistence/postgresql/operations/runtime.js", `
@@ -78,7 +86,8 @@ exports.recoveryFilesPreflight = () => {
         assert.equal(events, "recovery-files\ncontinue\n");
       } else {
         assert.equal(result.status, 42, result.stderr);
-        assert.match(result.stderr, /PG_OPERATIONS_PATH_BINDING/);
+        assert.match(result.stderr, scenario === "missing-asset-verifier"
+          ? /PG_OPERATIONS_VERIFIER_ASSET_MODE/ : /PG_OPERATIONS_PATH_BINDING/);
         assert.match(result.stderr, /vor Abhaengigkeiten, Virenscan und Dienststopp/);
         assert.equal(events, "");
       }
