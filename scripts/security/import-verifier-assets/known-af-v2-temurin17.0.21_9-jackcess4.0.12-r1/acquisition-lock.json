@@ -1,0 +1,272 @@
+{
+  "format": "gp-af-build-acquisition-lock-v2",
+  "schemaVersion": 2,
+  "assetId": "known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1",
+  "installPrefix": "lib/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1",
+  "descriptor": {
+    "path": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/descriptor.json",
+    "sha256": "5730aa3a7269b2283cbe879cb52123d42a238606cd5840ec3f8108e4ba523d93"
+  },
+  "materializationPlan": {
+    "path": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/materialization-plan.json",
+    "sha256": "3b87e74a586e8b2837986359ac29f939dc701b577e5d7543839a0ff18329413a"
+  },
+  "runtimeIndex": {
+    "path": "lib/import-verifier-runtime-assets.json",
+    "sha256": "b607e34b375025a9771af3520433eda97b68169cd550c8034edaeb5e9b481a82"
+  },
+  "archive": {
+    "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21%2B9/OpenJDK17U-jre_x64_linux_hotspot_17.0.21_9.tar.gz",
+    "sha256": "9f41bf88c7900c7097444a1bdeb84146ae692bc08842490ab098063c74bf9a8a",
+    "bytes": 46726088,
+    "cacheObject": "sha256/9f41bf88c7900c7097444a1bdeb84146ae692bc08842490ab098063c74bf9a8a.blob",
+    "upstreamRoot": "jdk-17.0.21+9-jre"
+  },
+  "jars": [
+    {
+      "coordinate": "com.healthmarketscience.jackcess:jackcess:4.0.12",
+      "path": "jars/jackcess-4.0.12.jar",
+      "bytes": 1337927,
+      "sha256": "ffa5e772cd92da56b5c84b3cb969fab421d8c4a7ca40922b61f895d6c0f66ac9",
+      "url": "https://repo.maven.apache.org/maven2/com/healthmarketscience/jackcess/jackcess/4.0.12/jackcess-4.0.12.jar",
+      "cacheObject": "sha256/ffa5e772cd92da56b5c84b3cb969fab421d8c4a7ca40922b61f895d6c0f66ac9.blob"
+    },
+    {
+      "coordinate": "org.apache.commons:commons-lang3:3.18.0",
+      "path": "jars/commons-lang3-3.18.0.jar",
+      "bytes": 702952,
+      "sha256": "4eeeae8d20c078abb64b015ec158add383ac581571cddc45c68f0c9ae0230720",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/commons/commons-lang3/3.18.0/commons-lang3-3.18.0.jar",
+      "cacheObject": "sha256/4eeeae8d20c078abb64b015ec158add383ac581571cddc45c68f0c9ae0230720.blob"
+    },
+    {
+      "coordinate": "commons-logging:commons-logging:1.2",
+      "path": "jars/commons-logging-1.2.jar",
+      "bytes": 61829,
+      "sha256": "daddea1ea0be0f56978ab3006b8ac92834afeefbd9b7e4e6316fca57df0fa636",
+      "url": "https://repo.maven.apache.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar",
+      "cacheObject": "sha256/daddea1ea0be0f56978ab3006b8ac92834afeefbd9b7e4e6316fca57df0fa636.blob"
+    },
+    {
+      "coordinate": "com.google.code.gson:gson:2.13.2",
+      "path": "jars/gson-2.13.2.jar",
+      "bytes": 289901,
+      "sha256": "dd0ce1b55a3ed2080cb70f9c655850cda86c206862310009dcb5e5c95265a5e0",
+      "url": "https://repo.maven.apache.org/maven2/com/google/code/gson/gson/2.13.2/gson-2.13.2.jar",
+      "cacheObject": "sha256/dd0ce1b55a3ed2080cb70f9c655850cda86c206862310009dcb5e5c95265a5e0.blob"
+    }
+  ],
+  "trackedFiles": [
+    {
+      "path": "helper/classes/KnownAfCountVerifier$Deadline.class",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/helper/classes/KnownAfCountVerifier$Deadline.class",
+      "bytes": 568,
+      "sha256": "d50de1362a46f2d797c4d5afbf68b3e1c5a1d11e5cba88bc934632d84cbe0c88",
+      "mode": 420
+    },
+    {
+      "path": "helper/classes/KnownAfCountVerifier$Input.class",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/helper/classes/KnownAfCountVerifier$Input.class",
+      "bytes": 1900,
+      "sha256": "23fe3ac608cd8a260b5a491b2772d3f4cbbe9e03533d67e56cdf2fcd6c6837d9",
+      "mode": 420
+    },
+    {
+      "path": "helper/classes/KnownAfCountVerifier$Options.class",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/helper/classes/KnownAfCountVerifier$Options.class",
+      "bytes": 1685,
+      "sha256": "aa99a77ec8538c1a961a4c209ee2ba6ed7cf5ac315a53a82ef3360869d80675e",
+      "mode": 420
+    },
+    {
+      "path": "helper/classes/KnownAfCountVerifier$Rejected.class",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/helper/classes/KnownAfCountVerifier$Rejected.class",
+      "bytes": 454,
+      "sha256": "d2c0d1d63363ec364b4ddb8bad5f2678352056d758b188cb0903c5b6d09da361",
+      "mode": 420
+    },
+    {
+      "path": "helper/classes/KnownAfCountVerifier.class",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/helper/classes/KnownAfCountVerifier.class",
+      "bytes": 26596,
+      "sha256": "e161466fca3edcb5990f45e3f072990f426eb9a195fd45b6fc387ca9a09ed184",
+      "mode": 420
+    },
+    {
+      "path": "helper/source/KnownAfCountVerifier.java",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/helper/source/KnownAfCountVerifier.java",
+      "bytes": 20149,
+      "sha256": "54818552ffa7aa488712d355ac4a7ba22289e1d45c874c351e0c1378a9a7898a",
+      "mode": 420
+    },
+    {
+      "path": "license-manifest.json",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/license-manifest.json",
+      "bytes": 44023,
+      "sha256": "335d68e86dee504b86235d5cef300214ac02c73d5e5931c16523cf4e09ff1a7d",
+      "mode": 420
+    },
+    {
+      "path": "licenses/Apache-2.0.txt",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/licenses/Apache-2.0.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "mode": 420
+    },
+    {
+      "path": "licenses/Grabenplaner-LICENSE.md",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/licenses/Grabenplaner-LICENSE.md",
+      "bytes": 1041,
+      "sha256": "ac3a13778f28d67f96354bf138f950c732253cf1cc750358d386f4d87f31a2d8",
+      "mode": 420
+    },
+    {
+      "path": "licenses/commons-lang3-3.18.0/LICENSE.txt",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/licenses/commons-lang3-3.18.0/LICENSE.txt",
+      "bytes": 11359,
+      "sha256": "b1d2870f1a00e4d7f56576e5f0870cba109e041f8af66866cf5b499478e654e7",
+      "mode": 420
+    },
+    {
+      "path": "licenses/commons-lang3-3.18.0/NOTICE.txt",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/licenses/commons-lang3-3.18.0/NOTICE.txt",
+      "bytes": 174,
+      "sha256": "64bc8696af3f6c770521412b85d3a733fa44b2ef5b0f4bd739e0c4d02eca492a",
+      "mode": 420
+    },
+    {
+      "path": "licenses/commons-logging-1.2/LICENSE.txt",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/licenses/commons-logging-1.2/LICENSE.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "mode": 420
+    },
+    {
+      "path": "licenses/commons-logging-1.2/NOTICE.txt",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/licenses/commons-logging-1.2/NOTICE.txt",
+      "bytes": 177,
+      "sha256": "785071a94ab6133000164bc6ed8543da88231503768dfeadcc83847af99cf8f8",
+      "mode": 420
+    },
+    {
+      "path": "provenance-manifest.json",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance-manifest.json",
+      "bytes": 37878,
+      "sha256": "a45e7edade579f583fad44356e56076a2568c72706a4869ab6e878f174f51a1a",
+      "mode": 420
+    },
+    {
+      "path": "provenance/maven/apache-13.pom",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/maven/apache-13.pom",
+      "bytes": 13974,
+      "sha256": "ff513db0361fd41237bef4784968bc15aae478d4ec0a9496f811072ccaf3841d",
+      "mode": 420
+    },
+    {
+      "path": "provenance/maven/apache-35.pom",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/maven/apache-35.pom",
+      "bytes": 24249,
+      "sha256": "ea297dcd114136e8b8e8b630230d52a76c2fc69f6c5db25d672b1857000728b8",
+      "mode": 420
+    },
+    {
+      "path": "provenance/maven/commons-lang3-3.18.0.pom",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/maven/commons-lang3-3.18.0.pom",
+      "bytes": 32038,
+      "sha256": "aa254b373b6f6d46bc9dca86331b072a8ab86eb25ea9921fd439618392e98a16",
+      "mode": 420
+    },
+    {
+      "path": "provenance/maven/commons-logging-1.2.pom",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/maven/commons-logging-1.2.pom",
+      "bytes": 19206,
+      "sha256": "c91ab5aa570d86f6fd07cc158ec6bc2c50080402972ee9179fe24100739fbb20",
+      "mode": 420
+    },
+    {
+      "path": "provenance/maven/commons-parent-34.pom",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/maven/commons-parent-34.pom",
+      "bytes": 55943,
+      "sha256": "3a2e69d06d641d1f3b293126dc9e2e4ea6563bf8c36c87e0ab6fa4292d04b79c",
+      "mode": 420
+    },
+    {
+      "path": "provenance/maven/commons-parent-85.pom",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/maven/commons-parent-85.pom",
+      "bytes": 78337,
+      "sha256": "d189ff2c0027e96bb65d31e6f227ed2af966169b36af1e973dd5ba08926dc7b5",
+      "mode": 420
+    },
+    {
+      "path": "provenance/maven/gson-2.13.2.pom",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/maven/gson-2.13.2.pom",
+      "bytes": 13490,
+      "sha256": "3aa06aa7c0f9af092961a42d09578e4324be146348a0ee6ed47857f7c2677b76",
+      "mode": 420
+    },
+    {
+      "path": "provenance/maven/jackcess-4.0.12.pom",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/maven/jackcess-4.0.12.pom",
+      "bytes": 12319,
+      "sha256": "55e505113b65cef6af26e2e5fb625a231edca4bebdf2228c83ea35e37528b851",
+      "mode": 420
+    },
+    {
+      "path": "provenance/temurin/OpenJDK17-jdk-release-notes_17.0.21_9.json",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/temurin/OpenJDK17-jdk-release-notes_17.0.21_9.json",
+      "bytes": 67316,
+      "sha256": "75d266c2e0fcc034ce2b1f155671d01d85c65d0587df701979766b0063e5e711",
+      "mode": 420
+    },
+    {
+      "path": "provenance/temurin/OpenJDK17U-jre_x64_linux_hotspot_17.0.21_9.tar.gz.json",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/temurin/OpenJDK17U-jre_x64_linux_hotspot_17.0.21_9.tar.gz.json",
+      "bytes": 29057,
+      "sha256": "be7a4697b3bd75d65c2cfe9fb7526501d204931c064600a78d7fd46cec3ec7f1",
+      "mode": 420
+    },
+    {
+      "path": "provenance/temurin/OpenJDK17U-jre_x64_linux_hotspot_17.0.21_9.tar.gz.sha256.txt",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/temurin/OpenJDK17U-jre_x64_linux_hotspot_17.0.21_9.tar.gz.sha256.txt",
+      "bytes": 116,
+      "sha256": "bd84e711a48f5f3a648359451058d48b41366c544a59e3b0a80524348d6038c2",
+      "mode": 420
+    },
+    {
+      "path": "provenance/temurin/OpenJDK17U-jre_x64_linux_hotspot_17.0.21_9.tar.gz.sig",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/temurin/OpenJDK17U-jre_x64_linux_hotspot_17.0.21_9.tar.gz.sig",
+      "bytes": 310,
+      "sha256": "e0d08cd31f24ce16fcbdd9783c82399ce1de7b3c0c45142ac58dbd55b327e6ac",
+      "mode": 420
+    },
+    {
+      "path": "provenance/temurin/OpenJDK17U-sbom_x64_linux_hotspot_17.0.21_9-metadata.json",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/temurin/OpenJDK17U-sbom_x64_linux_hotspot_17.0.21_9-metadata.json",
+      "bytes": 29058,
+      "sha256": "9294e50890f6d24c01e9eb6b8be5b8a2b326c9e7e515b8b4d38ffb9ee055983e",
+      "mode": 420
+    },
+    {
+      "path": "provenance/temurin/OpenJDK17U-sbom_x64_linux_hotspot_17.0.21_9.json",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/provenance/temurin/OpenJDK17U-sbom_x64_linux_hotspot_17.0.21_9.json",
+      "bytes": 160753,
+      "sha256": "ce8f388e6e2732be46f712cd0cc41bc2ea49afc929d3194e1a3dff8fb7fa6d61",
+      "mode": 420
+    },
+    {
+      "path": "runtime-components.cdx.json",
+      "source": "scripts/security/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/payload/runtime-components.cdx.json",
+      "bytes": 5478,
+      "sha256": "be42284bf7bc8ae85bfb8456ad65996d974d31f3673273e2460603128f659592",
+      "mode": 420
+    }
+  ],
+  "completeTreeSha256": "1dcc2d6be1936c6d83a0798123e19e9b6452027f567ffdc92313420db939cfe6",
+  "policy": {
+    "physicalFileCount": 291,
+    "perFileBytesExclusive": 134217728,
+    "totalBytesExclusive": 268435456,
+    "runtimeFetchOrCache": false,
+    "sourceBytesOrApprovals": false
+  }
+}

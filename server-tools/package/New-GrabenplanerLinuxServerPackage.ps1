@@ -6,6 +6,9 @@ param(
     [string]$SastContextEvidence,
     [string]$SastContextEvidenceSha256,
 
+    # Explicit offline build input, outside the clean checkout; never app state.
+    [string]$VerifierAssetsCacheRoot,
+
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory
 )
@@ -173,6 +176,23 @@ function Remove-TemporaryTreeBestEffort([string]$Path, [string]$ExpectedParent) 
 }
 
 function Write-DeterministicZip([string]$SourceRoot, [string]$ArchivePath) {
+    # Exact release-owned ELF files only; no extension/prefix execute exception.
+    $assetModes = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
+    $assetPolicy = Join-Path $SourceRoot 'lib\import-verifier-runtime-assets.js'
+    $assetBase = Join-Path $SourceRoot 'lib\import-verifier-assets'
+    $assetIndex = Join-Path $SourceRoot 'lib\import-verifier-runtime-assets.json'
+    if (Test-Path -LiteralPath $assetPolicy -PathType Leaf) {
+        $assetNode = (Get-Command node -ErrorAction Stop).Source
+        $assetJson = & $assetNode $assetPolicy --mode-map $SourceRoot
+        if ($LASTEXITCODE -ne 0) { throw 'Der feste Import-Verifier-Dateivertrag ist unvollstaendig oder veraendert.' }
+        $parsedAssetModes = ConvertFrom-Json -InputObject ([string]$assetJson)
+        foreach ($assetMode in $parsedAssetModes) {
+            if ([int]$assetMode.mode -ne 493 -or [string]$assetMode.sha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Ungueltiger Import-Verifier-Dateimodus.' }
+            $assetModes.Add([string]$assetMode.path, [string]$assetMode.sha256)
+        }
+    } elseif ((Test-Path -LiteralPath $assetBase) -or (Test-Path -LiteralPath $assetIndex)) {
+        throw 'Import-Verifier-Dateien besitzen keine feste Paketpruefung.'
+    }
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $fixedTimestamp = [DateTimeOffset]::new(1980, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
@@ -188,7 +208,10 @@ function Write-DeterministicZip([string]$SourceRoot, [string]$ArchivePath) {
                 $relative = $file.FullName.Substring($prefix.Length).Replace('\', '/')
                 $entry = $archive.CreateEntry($relative, [IO.Compression.CompressionLevel]::Optimal)
                 $entry.LastWriteTime = $fixedTimestamp
-                $mode = if ($relative.EndsWith('.sh', [StringComparison]::OrdinalIgnoreCase)) { 493 } else { 420 }
+                $mode = if ($assetModes.ContainsKey($relative)) {
+                    if ((Get-Sha256File -Path $file.FullName) -cne $assetModes[$relative]) { throw 'Import-Verifier-Datei waehrend Paketbau veraendert.' }
+                    493
+                } elseif ($relative.EndsWith('.sh', [StringComparison]::OrdinalIgnoreCase)) { 493 } else { 420 }
                 $entry.ExternalAttributes = ((32768 + $mode) -shl 16)
                 $input = [IO.File]::OpenRead($file.FullName)
                 $output = $entry.Open()
@@ -328,6 +351,7 @@ try {
         'scripts\manage-local-backup-archive.js',
         'lib\backup-workspace.js',
         'lib\security-release-inventory.js',
+        'server-tools\linux\lib\import-verifier-assets.js',
         'server-tools\linux\security-release-inventory.js',
         'services\planning-optimizer\service.py',
         'services\planning-optimizer\requirements.txt',
@@ -548,6 +572,21 @@ try {
             & node (Join-Path $sourceRoot 'scripts\security\sast-context-evidence.cjs') prepare --root $sourceRoot --build-root $buildRoot --source-commit $sourceCommit --evidence $SastContextEvidence --sha256 $SastContextEvidenceSha256
             if ($LASTEXITCODE -ne 0) { throw 'Der CI-SAST-Kontextnachweis passt nicht zum Serverpaket.' }
         }
+    }
+
+    # The source collector stays git ls-files. Only this closed lock-bound
+    # materializer can add the declared external JRE/JAR bytes to package staging.
+    $verifierIndexSource = Join-Path $sourceRoot 'lib\import-verifier-runtime-assets.json'
+    if (Test-Path -LiteralPath $verifierIndexSource -PathType Leaf) {
+        if ([string]::IsNullOrWhiteSpace($VerifierAssetsCacheRoot)) { throw 'Der explizite Build-Cache fuer die gebundenen Verifier-Dateien fehlt.' }
+        $verifierCache = Resolve-SafeDirectory -Path $VerifierAssetsCacheRoot -MustExist
+        $verifierBuilder = Join-Path $sourceRoot 'scripts\security\materialize_import_verifier_assets.py'
+        if (-not (Test-Path -LiteralPath $verifierBuilder -PathType Leaf)) { throw 'Der versionierte Verifier-Materializer fehlt.' }
+        $verifierPython = (Get-Command python -ErrorAction Stop).Source
+        & $verifierPython -I -B $verifierBuilder --source-root $sourceRoot --build-root $buildRoot --cache-root $verifierCache
+        if ($LASTEXITCODE -ne 0) { throw 'Die exakt gebundenen Verifier-Dateien konnten nicht materialisiert werden.' }
+    } elseif (-not [string]::IsNullOrWhiteSpace($VerifierAssetsCacheRoot)) {
+        throw 'Ein Verifier-Build-Cache darf nur mit versionierter Deklaration verwendet werden.'
     }
 
     # Bind the deterministic source inventory through the existing file/hash

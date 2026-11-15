@@ -1,0 +1,12 @@
+{
+  "format": "gp-af-verifier-runtime-assets-index-v1",
+  "schemaVersion": 1,
+  "currentAsset": "known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1",
+  "assets": [
+    {
+      "assetId": "known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1",
+      "descriptorPath": "lib/import-verifier-assets/known-af-v2-temurin17.0.21_9-jackcess4.0.12-r1/descriptor.json",
+      "sha256": "5730aa3a7269b2283cbe879cb52123d42a238606cd5840ec3f8108e4ba523d93"
+    }
+  ]
+}

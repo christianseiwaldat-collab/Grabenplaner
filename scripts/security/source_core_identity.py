@@ -92,3 +92,22 @@ def inputs(root):
         'toolsConfigurationSha256': digest(lf_input('tools.json')),
         'programs': programs}
     return validate(value)
+
+
+def native_compiler_identity(value):
+    """Stable native construction inputs, never permission to reuse a tool.
+
+    Only the separately reviewed, exact producer/current approval in
+    source_core_acquisition may authorize a legacy transition. The complete
+    current identity (including requirements and installer) remains mandatory
+    for every consuming qualification and full scan.
+    """
+    validate(value)
+    consumer_programs = {'source_core_identity.py', 'source_core_acquisition.py', 'gates.py'}
+    protected = set(LEGACY_PROGRAMS) - consumer_programs
+    return {
+        'format': 'gp-semgrep-native-construction/v1',
+        **{name: value[name] for name in ('source', 'patchRecipe', 'toolchain',
+            'wrapperVersion', 'inputLineEndings', 'toolsConfigurationSha256')},
+        'programs': {name: value['programs'][name] for name in sorted(protected)},
+    }

@@ -29,6 +29,35 @@ test('quarantined rows allow evidenced count approval while the source gate stil
   assert.match(html,/1 ungültige Zeile/);assert.match(html,/1 offener Prüffall/);
 });
 
+test('independently verified counts display their date while owner approval remains pending',()=>{
+  const value=source(),run=value.tables[0].run;
+  run.availableSourceTolerances=[{...proof,requiresExplicitApproval:true,recordedAt:'2026-11-11T08:06:13.000Z',approvalReference:'explicit-owner-receipt-required'}];
+  const html=UI.renderSource(value,projection);
+  assert.match(html,/Prüfdatum:/);assert.match(html,/Persönliche Freigabe ausstehend/);
+  assert.match(html,/data-i-action="approve-counts" >Geprüfte/);
+  assert.match(html,/data-i-action="apply" disabled/);
+  assert.doesNotMatch(html,/explicit-owner-receipt-required|Bestätigte Quellzähler-Abweichung|Freigabe protokolliert/);
+});
+
+test('evidence date and actual matching owner receipt remain separate in accepted count display',()=>{
+  const value=source(),run=value.tables[0].run;
+  const verified={...proof,requiresExplicitApproval:true,recordedAt:'2026-11-11T08:06:13.000Z',approvalReference:'explicit-owner-receipt-required'};
+  run.gates=[];run.availableSourceTolerances=[];run.acceptedDeviations=[verified];
+  for(const receipts of [[],[{fingerprint:'b'.repeat(64),recordedAt:'2026-11-12T12:00:00Z',actorId:'unrelated-owner',revision:13}]]){
+    run.sourceToleranceReceipts=receipts;
+    const pending=UI.renderSource(value,projection);
+    assert.match(pending,/Geprüfte Quellzähler-Abweichung/);assert.match(pending,/Persönliche Freigabe ausstehend/);
+    assert.doesNotMatch(pending,/Bestätigte Quellzähler-Abweichung|explicit-owner-receipt-required/);
+  }
+  run.sourceToleranceReceipts=[{fingerprint:proof.fingerprint,recordedAt:'2026-11-12T12:00:00Z',actorId:'owner<&',revision:13}];
+  const html=UI.renderSource(value,projection);
+  const renderedDate=value=>new Date(value).toLocaleString('de-AT',{dateStyle:'short',timeStyle:'short'});
+  assert.ok(html.includes('Prüfdatum: '+renderedDate(verified.recordedAt)));
+  assert.ok(html.includes('Freigabe protokolliert · ARTIKEL · '+renderedDate(run.sourceToleranceReceipts[0].recordedAt)));
+  assert.match(html,/Bestätigte Quellzähler-Abweichung/);assert.match(html,/Akteur owner&lt;&amp; · Revision 13/);
+  assert.doesNotMatch(html,/Persönliche Freigabe ausstehend|explicit-owner-receipt-required/);
+});
+
 test('additional source gates block count approval and apply with or without row errors',()=>{
   for(const invalid of [0,1]){
     const value=source();

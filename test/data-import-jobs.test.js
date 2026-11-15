@@ -13,7 +13,10 @@ async function fixture(t,{advancingClock=false,cashPublications=null}={}){
  const parent=await fsp.mkdtemp(path.join(temporaryRoot,'gp-import-jobs-')),directory=path.join(parent,'spool');
  const vault=createIntegrationSecretVault({activeKeyId:'test',keys:{test:Buffer.alloc(32,7)}}),sources=new Map();
  const state={principal:session(),now:Date.now(),calls:0,failures:0,failCode:'IMPORT_SOURCE_READ_TIMEOUT',reviews:0},getSession=async()=>state.principal;
- const runtime={reserve:async(get,{buffer,kind})=>{const user=await get(),id=crypto.createHash('sha256').update(user.employeeNumber).update(kind).update(buffer).digest('hex');
+ const runtime={
+  verificationRequest:async()=>null,
+  attachIndependentCountProof:async()=>{throw new Error('Unexpected independent count proof attachment in legacy runtime mock');},
+  reserve:async(get,{buffer,kind})=>{const user=await get(),id=crypto.createHash('sha256').update(user.employeeNumber).update(kind).update(buffer).digest('hex');
    if(!sources.has(id))sources.set(id,{id,kind,status:'queued',complete:false,activationEnabled:true,revision:1,received:0});return {...sources.get(id)};},
   upload:async(get,{buffer,signal})=>{assert.equal((await get()).employeeNumber,'synthetic');assert.ok(buffer.includes(Buffer.from('private synthetic input')));state.calls++;
    const s=[...sources.values()][0];if(state.block)await state.block(signal);s.received++;

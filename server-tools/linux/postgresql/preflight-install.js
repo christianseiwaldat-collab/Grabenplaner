@@ -117,6 +117,10 @@ if (require.main === module) Promise.resolve().then(async () => {
     if (!result.adminConfigured) process.exitCode = 1;
     return result;
   }
+  // Old installers strip ELF modes. Reject that intermediate state before
+  // reading productive configuration or allowing any installation mutation.
+  try { require('../lib/import-verifier-assets').verifyRuntimeAssets(require('node:path').resolve(__dirname, '../../..')); }
+  catch { fail('PG_INSTALL_VERIFIER_ASSET_MODE'); }
   const prepared = readPreparedDocuments();
   if (mode === "documents") return { ok: true, providerId: "postgresql", databasePairPrepared: true, liveConnectionsChecked: false };
   return verifyPreparedPair(prepared, require("pg").Client);

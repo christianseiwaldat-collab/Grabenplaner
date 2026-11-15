@@ -491,12 +491,12 @@ function runtimeCountProof(name,declaredRows,expectedRows,extra={}) {
     sourceTable:name,profileHash:profile.fingerprint,sourceInstance:'tradefoto-trade',schemaSha256:profile.schemaSha256,
     fileSha256:crypto.createHash('sha256').update(sourceBuffer()).digest('hex'),declaredRows,expectedRows,...extra});
 }
-test('late source approval requires explicit authorized action and survives stale cache, restart and revoked registry',async t=>{
+for (const requiresExplicitApproval of [undefined,true]) test(`late source approval (${requiresExplicitApproval?'pending evidence':'historical proof'}) requires explicit authorized action and survives stale cache, restart and revoked registry`,async t=>{
   const f=await fixture(t,{values:{KUNDEN:[rawMaster('KUNDEN',{KUND_NR:'verified-customer'})]},counts:{KUNDEN:2}});
   let source=await f.upload();source=await f.finish(source,'review');assert.equal(source.status,'needs_review');
   const tableId=source.tables.find(t=>t.name==='KUNDEN').run.id;
   const manifest=f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(tableId).manifest;
-  const proof=runtimeCountProof('KUNDEN',2,1);f.options.sourceTolerances=[proof];f.reload();
+  const proof=runtimeCountProof('KUNDEN',2,1,requiresExplicitApproval?{requiresExplicitApproval}:{});f.options.sourceTolerances=[proof];f.reload();
   let read=await f.runtime.sourceOperation(f.getSession,source.id,'read');
   assert.deepEqual(read.tables.find(t=>t.name==='KUNDEN').run.availableSourceTolerances,[proof]);
   assert.ok(read.tables.find(t=>t.name==='KUNDEN').run.gates.includes('SOURCE_ROW_COUNT_MISMATCH'));
@@ -532,6 +532,38 @@ test('late source approval requires explicit authorized action and survives stal
   assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_master_records').get().n,1);
   const events=await f.runtime.sourceOperation(f.getSession,source.id,'events',{runId:tableId});
   assert.equal(events.filter(e=>e.action==='import.source-tolerance.accepted:'+proof.fingerprint).length,1);
+});
+
+test('a new v2 stock source with verified pending evidence remains blocked until separate owner approval',async t=>{
+  const name='ARTIKEL_FILIALEN',ean='0000000000042';
+  const stock={...Object.fromEntries(H.tableFor('trade',name).columns.map(column=>[column.name,null])),EAN:ean,FilialID:18,FBestand:2};
+  const f=await fixture(t,{values:{ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:ean})],
+    FILIALEN:[rawMaster('FILIALEN',{FilialID:'18'})],[name]:[stock]},counts:{[name]:2}});
+  const proof=runtimeCountProof(name,2,1,{requiresExplicitApproval:true});
+  f.options.sourceTolerances=[proof];f.reload();
+  let source=await f.upload();source=await f.finish(source,'review');
+  const before=source.tables.find(table=>table.name===name);
+  assert.equal(before.profileHash,H.profileFor('trade',name).fingerprint);
+  assert.equal(source.status,'needs_review');assert.deepEqual(before.run.gates,['SOURCE_ROW_COUNT_MISMATCH']);
+  assert.equal(before.run.acceptedDeviations,undefined);assert.deepEqual(before.run.availableSourceTolerances,[proof]);
+  const manifest=f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(before.run.id).manifest;
+  assert.equal(f.database.prepare("SELECT COUNT(*) n FROM data_import_events WHERE action LIKE 'import.source-tolerance.accepted%'").get().n,0);
+  await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,'apply',{expectedRevision:source.revision}),code('IMPORT_DECISION_GATE'));
+  assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_history_snapshot_members').get().n,0);
+  f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+  assert.deepEqual(source.tables.find(table=>table.name===name).run.gates,['SOURCE_ROW_COUNT_MISMATCH']);
+  source=await f.runtime.sourceOperation(f.getSession,source.id,'approve-counts',{expectedRevision:source.revision});
+  const accepted=source.tables.find(table=>table.name===name).run;
+  assert.equal(accepted.id,before.run.id);assert.deepEqual(accepted.gates,[]);
+  assert.deepEqual(accepted.acceptedDeviations,[proof]);assert.equal(accepted.sourceToleranceReceipts.length,1);
+  assert.equal(f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(before.run.id).manifest,manifest);
+  assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_history_snapshot_members').get().n,0);
+  f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');
+  assert.deepEqual(source.tables.find(table=>table.name===name).run.sourceToleranceReceipts,accepted.sourceToleranceReceipts);
+  source=await f.finish(source,'apply');assert.equal(source.status,'applied');
+  const snapshot=f.database.prepare('SELECT status FROM import_history_snapshots WHERE run_id=?').get(before.run.id);
+  assert.equal(snapshot.status,'published');
+  assert.equal(f.database.prepare('SELECT COUNT(*) n FROM import_history_snapshot_members WHERE run_id=?').get(before.run.id).n,1);
 });
 
 test('source count approval preflights every mismatch and preserves row quarantine after a verified count receipt',async t=>{
@@ -577,6 +609,46 @@ test('Access partial takeover retains a bad second EAN and completes the valid a
  const count=f.database.prepare('SELECT count(*) n FROM import_master_records').get().n;
  f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');source=await f.finish(source,'apply');
  assert.equal(source.status,'applied');assert.equal(f.database.prepare('SELECT count(*) n FROM import_master_records').get().n,count);assert.deepEqual(row(),before);
+});
+
+test('catalog-only label and alias projection preserves authenticated source rows across apply and restart',async t=>{
+ const ean='0000000000042',values={ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:ean,Artikelbezeichnung:'Synthetic\r\narticle\tlabel',MWST:1,'Änderungsdatum':new Date('2026-09-03T13:00:00Z'),Verkaufspreis:12,eNvk:10})],
+  ARTIKEL_ZWEITEAN:[rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:'4006381333931',Rang:1}),
+   rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:'4006381333932',Rang:2}),rawMaster('ARTIKEL_ZWEITEAN',{EAN:ean,ZweitEAN:'internal-code',Rang:3})]};
+ const original=JSON.stringify(values),f=await fixture(t,{values});
+ f.database.exec('CREATE TABLE audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT NOT NULL,action TEXT NOT NULL,entity_type TEXT NOT NULL,entity_id TEXT NOT NULL,detail TEXT NOT NULL,created_at TEXT NOT NULL)');
+ require('../lib/persistence/sqlite/operations/sales-article-catalog-schema').ensureSqliteSalesArticleCatalogSchema(f.database);
+ f.options.syncArticleCatalog=true;f.options.sharedPayloads=true;f.reload();
+ f.state.session.permissions.push('sales:articles:access','sales:articles:read','sales:articles:import');
+ let source=await f.finish(await f.upload(),'review');
+ const archive=()=>f.database.prepare('SELECT run_id,row_number,payload FROM data_import_rows ORDER BY run_id,row_number').all();
+ const archivedSource=async()=>{
+  const protection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+  try{
+   const actor=f.database.prepare('SELECT scope_id,owner_id FROM data_import_runs LIMIT 1').get();
+   const engine=require('../lib/data-import-engine').createDataImportEngine({
+    repository:require('../lib/persistence/repositories/data-import').createDataImportRepository(f.provider),protection,
+    profiles:['ARTIKEL_STAMM','ARTIKEL_ZWEITEAN'].map(M.profileFor),
+    getActor:()=>({scopeId:actor.scope_id,ownerId:actor.owner_id}),authorize:()=>true,clock:()=>TIME});
+   const rows={};for(const name of ['ARTIKEL_STAMM','ARTIKEL_ZWEITEAN']){
+    const table=source.tables.find(row=>row.name===name);rows[name]=(await engine.articleCatalogRows(table.run.id,{after:0})).rows;
+   }
+   return C.canonical(rows);
+  }finally{protection.destroy();}
+ };
+ // Runtime deliberately rechecks before Apply and may reseal a review plan.
+ // Compare the authenticated source bytes across that phase, then compare exact
+ // ciphertext only across the subsequent catalog-only replay.
+ const before=await archivedSource();f.reload();source=await f.finish(source,'apply');
+ assert.equal(source.status,'applied');assert.equal(source.catalog.complete,true);assert.equal(source.catalog.blocked,0);
+ assert.equal(source.catalog.changed,1);assert.equal(source.catalog.quarantinedAliases,2);
+ assert.deepEqual(source.tables.find(row=>row.name==='ARTIKEL_ZWEITEAN').run.counts,{applied:3});
+ assert.equal(await archivedSource(),before);assert.equal(JSON.stringify(values),original);
+ const catalog=require('../lib/persistence/repositories/sales-article-catalog').createSalesArticleCatalogRepository(f.provider);
+ const result=await catalog.getByArticleNumber('000042');assert.equal(result.description,'Synthetic article label');
+ assert.deepEqual(result.identifiers.map(row=>row.identifierValue),['4006381333931']);
+ const ciphertext=archive();f.reload();source=await f.runtime.sourceOperation(f.getSession,source.id,'read');source=await f.finish(source,'apply');
+ assert.equal(source.catalog.changed,1);assert.equal(source.catalog.quarantinedAliases,2);assert.deepEqual(archive(),ciphertext);
 });
 
 test('issue preview shows same-file camera value before apply, pages only problems and never exposes unrelated source fields',async t=>{

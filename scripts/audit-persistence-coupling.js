@@ -75,6 +75,9 @@ const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemaile
 const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresql/transfer/history.js']);
 // User-authorized 2026 migration blocks; isolated environment, never product activation.
 const MIGRATION_DEVELOPMENT_FILES = new Set([
+  // Exact synthetic native import/recovery qualifications; no driver grant.
+  "test/postgresql-import-trade-ready-validation.test.js",
+  "test/postgresql-import-dynamic-af-proof-compatibility.test.js",
   "server-tools/linux/postgresql/preflight-install.js",
   // Named CRM reads, article qualifications and protected administrative statistics.
   // Registration grants no driver import, statement declaration or activation.
@@ -228,6 +231,10 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'lib/persistence/postgresql/application-operations/protected-storage.js',
   'lib/persistence/postgresql/application-operations/startup.js',
   'lib/persistence/postgresql/boundary/personal-actions.js',
+  'lib/persistence/postgresql/boundary/import-audit-delivery-policy.js',
+  'test/postgresql-import-audit-delivery.test.js',
+  'lib/persistence/postgresql/sales/article-price-batches.js',
+  'test/postgresql-sales-article-price-batches.test.js',
   'lib/persistence/postgresql/operations/restore-privileges.js',
   'lib/persistence/postgresql/contracts/manifest.json',
   'lib/persistence/postgresql/contracts/source-schema-v09237.json',
@@ -591,6 +598,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/cash-location-reads.js",
   "lib/persistence/catalogs/cash-location-reads-catalog.js",
   "lib/persistence/statements/import-batches.js",
+  "lib/persistence/statements/sales-article-price-batches.js",
   "lib/persistence/statements/import-reader-batches.js",
   "lib/persistence/statements/data-import-recheck.js",
   "lib/persistence/statements/data-import-issues.js",
@@ -692,6 +700,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/portal-access.js",
   "lib/persistence/repositories/runtime-recovery.js",
   "lib/persistence/repositories/sales-article-catalog.js",
+  "lib/persistence/repositories/sales-article-price-batches.js",
   "lib/persistence/repositories/sickness-amu-management.js",
   "lib/persistence/repositories/system-center-metrics.js",
   "lib/persistence/repositories/time-tracking.js",
@@ -938,6 +947,11 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/tradefoto-master-data.test.js",
   "test/tradefoto-crm-maintenance-import.test.js",
   "test/data-import-foundation.test.js",
+  // Reuses the isolated SQLite import fixture to prove protected plan validation.
+  "test/data-import-ready-plan-validation.test.js",
+  // Known-AF proof tests use only the named isolated SQLite fixture.
+  "test/data-import-known-af-proof.test.js",
+  "test-support/data-import-known-af-fixture.js",
   "test/data-import-payload-storage.test.js",
   "test/data-import-payload-reuse.test.js",
   "test/schedule-duty-persistence-api.test.js",

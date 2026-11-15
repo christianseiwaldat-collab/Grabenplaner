@@ -100,7 +100,7 @@ test('missing tables, count mismatch, review gates and invalid rows keep previou
     assert.equal(I.planSources([old.source,next.source],new Map([...old.runs,...next.runs])).pairs.length,0);
   }
 });
-function approvedCountSource() {
+function approvedCountSource(proofOptions = {}) {
   const T = require('../lib/data-import-source-tolerance');
   const f = source({seed:'approved-count',at:'2026-10-01T12:00:00.000Z'}), table = f.source.data.tables[0];
   const run = f.runs.get(table.run.id), profile = definitions('trade')[0].profile;
@@ -110,7 +110,7 @@ function approvedCountSource() {
   const proof=T.defineDataImportSourceTolerance({id:'synthetic-retention-count',recordedAt:'2026-10-01T12:01:00.000Z',
     approvalReference:'synthetic:approval',reason:'Synthetic exact source-count qualification',evidenceReference:'synthetic:row-counts',
     sourceSystem:profile.sourceSystem,sourceInstance:run.manifest.sourceInstance,sourceTable:profile.sourceTable,
-    profileHash:profile.fingerprint,schemaSha256:profile.schemaSha256,fileSha256:f.source.data.fileSha256,declaredRows:2,expectedRows:1});
+    profileHash:profile.fingerprint,schemaSha256:profile.schemaSha256,fileSha256:f.source.data.fileSha256,declaredRows:2,expectedRows:1,...proofOptions});
   run.sourceToleranceEvents=[{runId:run.id,actorId:run.owner_id,revision:2,at:'2026-10-01T12:01:00.000Z',
     action:'import.source-tolerance.accepted:'+proof.fingerprint}];
   return {...f,run,table,proof,options:{sourceTolerances:[proof]}};
@@ -122,6 +122,20 @@ test('an exact registered count approval qualifies a complete successor without 
   assert.equal(plan.pairs.length,1);assert.equal(plan.pairs[0].sourceId,old.source.row.id);
   assert.equal(JSON.stringify(f.run.manifest),manifest);assert.deepEqual(f.run.manifest.gates,['SOURCE_ROW_COUNT_MISMATCH']);
 });
+test('pending count evidence qualifies retention only after its matching authenticated owner receipt',()=>{
+  const f=approvedCountSource({requiresExplicitApproval:true}),manifest=JSON.stringify(f.run.manifest);
+  const receipt=f.run.sourceToleranceEvents[0];
+  f.run.sourceToleranceEvents=[];
+  assert.equal(I.completeSuccessor(f.source,f.runs,f.options),false);
+  f.run.sourceToleranceEvents=[receipt];
+  assert.equal(I.completeSuccessor(f.source,f.runs,f.options),true);
+  assert.equal(JSON.stringify(f.run.manifest),manifest);
+  f.run.sourceToleranceEvents=[{...receipt,actorId:'another-owner'}];
+  assert.equal(I.completeSuccessor(f.source,f.runs,f.options),false);
+  f.run.sourceToleranceEvents=[receipt];f.options.sourceTolerances=[];
+  assert.equal(I.completeSuccessor(f.source,f.runs,f.options),false);
+});
+
 test('count receipts never replace an exact trusted proof or bypass other import defects',()=>{
   const alterations=[
     f=>{f.options.sourceTolerances=[];},

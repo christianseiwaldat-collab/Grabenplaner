@@ -26,7 +26,8 @@ Paketbauer übergeben:
   -SourceDirectory <sauberer-gepruefter-checkout> `
   -OutputDirectory <neues-ausgabeverzeichnis> `
   -SastContextEvidence <privater-verifizierter-kontextbeleg.json> `
-  -SastContextEvidenceSha256 <extern-verifizierter-sha256>
+  -SastContextEvidenceSha256 <extern-verifizierter-sha256> `
+  -VerifierAssetsCacheRoot <externer-gepruefter-C-Build-Cache>
 ```
 
 Ein selbst berechneter Hash einer beliebigen JSON-Datei ist keine

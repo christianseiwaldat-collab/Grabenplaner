@@ -7,7 +7,7 @@
     needs_review:'Vorschau abgeschlossen · Prüffälle offen',ready:'Vorschau geprüft',applying:'Übernahme läuft',applied:'Übernommen',reverting:'Rücknahme läuft',reverted:'Zurückgenommen',deleting:'Endgültige Löschung begonnen',purged:'Ersetzte Importkopien bereinigt',retiring:'Importbereinigung noch nicht abgeschlossen'};
   const label=state=>labels[state]||'Prüfung erforderlich';
   const sourceState=source=>source.retirement?source.retirement.complete?'purged':'retiring':source.cashPublication?.active?'applied':source.background?.status||source.status;
-  const sourceStateLabel=source=>sourceState(source)==='applied'&&source.storage!=='cash-compact-v1'&&((source.tables||[]).some(t=>t.deferred==='INCOMPLETE_STOCK_SNAPSHOT'||t.run?.counts?.invalid||t.run?.counts?.conflict))?'Übernommen · Prüffälle zurückgestellt':label(sourceState(source));
+  const sourceStateLabel=source=>source.background?.independentCountVerification?'Quellenzähler werden unabhängig geprüft':sourceState(source)==='applied'&&source.storage!=='cash-compact-v1'&&((source.tables||[]).some(t=>t.deferred==='INCOMPLETE_STOCK_SNAPSHOT'||t.run?.counts?.invalid||t.run?.counts?.conflict))?'Übernommen · Prüffälle zurückgestellt':label(sourceState(source));
   const number=value=>Number(value||0).toLocaleString('de-AT');
   const sourceLabel=kind=>({cash:'Kassen-Umsätze',trade:'Stammdaten und Historie',bestell:'Bestellungen, Rechnungen und Reparaturen'})[kind]||'Unbekannte Quelle';
   const sourceFileName=source=>source.fileName||({cash:'Kassen_Umsätze.accdb',trade:'Trade_Daten.accdb',bestell:'Trade_DatenBestell.accdb',weum:'WEUM.accdb',inventur:'InventurProtokoll.accdb'})[source.kind]||'Unbekannte Datenbank';
@@ -21,6 +21,12 @@
     const approvable=!invalid&&blocked.length>0&&blocked.every(t=>t.run.gates.includes('SOURCE_ROW_COUNT_MISMATCH')&&t.run.gates.every(g=>['SOURCE_ROW_COUNT_MISMATCH','SOURCE_TOLERANCE_UNAVAILABLE'].includes(g))&&t.run.availableSourceTolerances?.length);
     return {blocked,invalid,pending,approvable};
   }
+  function renderPendingCountVerification(source,projection) {
+    if(!source.independentCountVerification?.required)return '<p>Ohne passenden unabhängigen Prüfnachweis ist keine Zählerfreigabe möglich.</p>';
+    if(source.background?.independentCountVerification)return '<p role="status">Die unabhängige Quellenprüfung läuft. Das Ergebnis erscheint hier.</p>';
+    if(source.uploadFileAvailable)return '<p>Die Quelldatei ist noch gespeichert. Mit „Prüfung fortsetzen“ kann die unabhängige Quellenprüfung erneut gestartet werden.</p>';
+    return `<p>Für die unabhängige Quellenprüfung wird derselbe Dateistand noch einmal benötigt. Bereits eingelesene Daten bleiben erhalten. Eine inzwischen geänderte Datei wird als neuer Import behandelt.</p><button type="button" data-i-upload="${escape(source.kind)}" ${!projection.prepare||source.active||projection.pendingAction?'disabled':''}>Dateistand zur Quellprüfung auswählen</button>`;
+  }
   function renderSourceAdmission(source,projection) {
     const admission=sourceAdmission(source);
     if(!source.complete||source.retirement||source.cashPublication?.active||!['ready','needs_review'].includes(source.status))return '';
@@ -28,8 +34,8 @@
     return `<aside class="data-import-review-summary"><strong>Übernahme gesperrt</strong>
       ${admission.invalid?'<p>Ungültige Daten müssen vor der Freigabe des Kassenstands korrigiert werden.</p>':''}
       ${admission.blocked.length?`<p>Quellprüfung: ${admission.blocked.map(t=>`${escape(t.name)} · ${t.run.gates.map(g=>g==='SOURCE_ROW_COUNT_MISMATCH'?'abweichender Quellzähler':escape(g)).join(', ')}`).join('; ')}.</p>`:''}
-      ${admission.pending.length?`<p>Ein unabhängiger Prüfnachweis liegt für diesen Dateistand vor:</p><ul>${admission.pending.map(({table,proof})=>`<li>${escape(table)}: ${number(proof.expectedRows)} gelesene / ${number(proof.declaredRows)} deklarierte Zeilen.<small>Nachweis: ${escape(proof.evidenceReference)}</small></li>`).join('')}</ul>
-      <button type="button" data-i-action="approve-counts" ${!projection.apply||!projection.prepare||source.active||!admission.approvable||projection.pendingAction?'disabled':''}>Geprüfte Zählerabweichung freigeben</button><p>Die Freigabe wird protokolliert. Ungültige Zeilen und offene Prüffälle bleiben zurückgestellt.</p>`:'<p>Ohne passenden unabhängigen Prüfnachweis ist keine Zählerfreigabe möglich.</p>'}</aside>`;
+      ${admission.pending.length?`<p>Ein unabhängiger Prüfnachweis liegt für diesen Dateistand vor:</p><ul>${admission.pending.map(({table,proof})=>`<li>${escape(table)}: ${number(proof.expectedRows)} gelesene / ${number(proof.declaredRows)} deklarierte Zeilen.<small>${proof.requiresExplicitApproval?`Prüfdatum: ${escape(dateTime(proof.recordedAt))} · Persönliche Freigabe ausstehend.<br>`:''}Nachweis: ${escape(proof.evidenceReference)}</small></li>`).join('')}</ul>
+      <button type="button" data-i-action="approve-counts" ${!projection.apply||!projection.prepare||source.active||!admission.approvable||projection.pendingAction?'disabled':''}>Geprüfte Zählerabweichung freigeben</button><p>Die Freigabe wird protokolliert. Ungültige Zeilen und offene Prüffälle bleiben zurückgestellt.</p>`:renderPendingCountVerification(source,projection)}</aside>`;
   }
   function renderReviewSummary(source,pendingAction,uncertainApply) {
     if(pendingAction==='apply'&&source.storage==='cash-compact-v1')return '<aside class="data-import-review-summary" role="status"><strong>Kassenstand wird übernommen …</strong><p>Die Rückmeldung des Servers steht noch aus. Der angezeigte Stand wird danach aktualisiert.</p></aside>';
@@ -91,6 +97,12 @@
     return `<div class="data-import-scroll data-import-source-table" tabindex="0" role="region" aria-label="Datenquellen und Datenstand"><table><caption>Datenquellen · Details mit Klick auf den Namen</caption><thead><tr><th scope="col">Datenquelle</th><th scope="col">Datenstand</th></tr></thead><tbody>${items.map(s=>`<tr${s.id===selectedId?' class="is-selected"':''}><th scope="row"><button type="button" data-i-source="${escape(s.id)}"${s.id===selectedId?' aria-current="true"':''}>${escape(sourceFileName(s))}</button><small>${escape(sourceStateLabel(s))}${s.uploadFileAvailable?' · Access-Datei noch vorhanden':''}</small>${!s.fileName?'<small>Bei älteren Importen ohne Originalnamen wird der Dateityp angezeigt.</small>':''}</th><td>${contentDate(s)}</td></tr>`).join('')}</tbody></table></div>`;
   }
   const defaultCatalog=[['trade','Trade_Daten.accdb'],['cash','Kassen_Umsätze.accdb'],['bestell','Trade_DatenBestell.accdb']].map(([kind,fileName])=>({kind,fileName,purpose:sourceLabel(kind),group:'recommended',available:true}));
+  const fileSelectionIssue=(name,kind,catalog=defaultCatalog)=>{
+    const known=catalog.find(source=>typeof source.fileName==='string'&&source.fileName.toLowerCase()===name.toLowerCase());
+    if(known?.available===false)return 'IMPORT_SOURCE_UNSUPPORTED';
+    const recognized=known?.kind||kindForFile(name);
+    return recognized&&recognized!==kind?'IMPORT_SOURCE_FILE_KIND_MISMATCH':null;
+  };
   function renderOverview(items=[],selectedId,context={},complete=true) {
     const catalog=context.sourceCatalog||defaultCatalog;
     const latest=new Map(items.map(source=>[source.kind,source]));
@@ -105,6 +117,11 @@
       (catalog.some(s=>s.group==='optional')?`<details class="data-import-other"><summary>Weitere Datenquellen bei Bedarf</summary>${table(catalog.filter(s=>s.group==='optional'),'Optionale Datenquellen')}</details>`:'')+
       (catalog.some(s=>s.group==='local')?`<details class="data-import-other"><summary>Lokal behalten · kein Import vorgesehen</summary><ul>${catalog.filter(s=>s.group==='local').map(s=>`<li><strong>${escape(s.fileName)}</strong><small>${escape(s.purpose)}</small></li>`).join('')}</ul></details>`:'')+
       (!complete?'<p class="data-import-note">Die Übersicht enthält die neuesten gefundenen Importe. Nicht gefundene Quellen können in älteren Importen liegen; bitte den Importverlauf prüfen.</p>':'');
+  }
+  function renderCountEvidence(table,proof) {
+    if(!proof.requiresExplicitApproval)return `<aside class="data-import-tolerance"><strong>Bestätigte Quellzähler-Abweichung · ${escape(table.name)}</strong><p>${number(proof.expectedRows)} lesbare / ${number(proof.declaredRows)} deklarierte Zeilen. Nur für diesen Dateistand akzeptiert.</p><small>Freigabe: ${escape(proof.approvalReference)} · ${escape(proof.recordedAt)}<br>Prüfnachweis: ${escape(proof.evidenceReference)} · ${escape(proof.id)}</small></aside>`;
+    const approved=!!table.run?.sourceToleranceReceipts?.some(receipt=>receipt.fingerprint===proof.fingerprint);
+    return `<aside class="data-import-tolerance"><strong>${approved?'Bestätigte':'Geprüfte'} Quellzähler-Abweichung · ${escape(table.name)}</strong><p>${number(proof.expectedRows)} lesbare / ${number(proof.declaredRows)} deklarierte Zeilen. ${approved?'Persönliche Freigabe für diesen Dateistand protokolliert.':'Persönliche Freigabe ausstehend.'}</p><small>Prüfdatum: ${escape(dateTime(proof.recordedAt))}<br>Prüfnachweis: ${escape(proof.evidenceReference)} · ${escape(proof.id)}</small></aside>`;
   }
   function renderSource(source,projection={}) {
     if(source.retirement) return `<header><h3>${escape(sourceFileName(source))}</h3><p>${escape(label(sourceState(source)))} · Datenstand: ${contentDate(source)}</p></header><p class="data-import-note">${source.retirement.complete?'Die ersetzten Roh-, Prüf- und Rücknahmekopien wurden entfernt.':'Die Bereinigung ist noch nicht abgeschlossen. Der gespeicherte Stand kann unter Einstellungen → System &amp; Backups → VPS-Speicher erneut geprüft werden.'} Geschäftsdaten und benötigte Zuordnungen bleiben erhalten. Für diesen Vorgänger ist keine Rücknahme mehr verfügbar.</p>`;
@@ -142,7 +159,7 @@
       ${source.storage==='cash-compact-v1'?`<p class="data-import-note">${number(source.verifiedRows)} gespeicherte Zeilen vollständig zurückgelesen und verglichen. Die Filialzuordnung dient nur der Auswertung; sie schränkt den Import nicht ein.</p>`:''}
       <p class="data-import-note">${number(received)} gelesene / ${number(expected)} ${source.selection?'ausgewählte':'deklarierte'} Zeilen · Hochgeladen: ${escape(dateTime(source.createdAt))} · GP-Bearbeitung: ${escape(dateTime(source.updatedAt||source.createdAt))}</p><p class="data-import-note">Dateifingerabdruck <code>${escape(source.fileSha256)}</code></p>
       ${source.contentDate?.evidence?`<p class="data-import-note">Datenstand ermittelt aus ${escape(source.contentDate.evidence.table)} · ${escape(source.contentDate.evidence.field)}.</p>`:''}
-      ${tables.flatMap(t=>(t.run?.acceptedDeviations||[]).map(p=>`<aside class="data-import-tolerance"><strong>Bestätigte Quellzähler-Abweichung · ${escape(t.name)}</strong><p>${number(p.expectedRows)} lesbare / ${number(p.declaredRows)} deklarierte Zeilen. Nur für diesen Dateistand akzeptiert.</p><small>Freigabe: ${escape(p.approvalReference)} · ${escape(p.recordedAt)}<br>Prüfnachweis: ${escape(p.evidenceReference)} · ${escape(p.id)}</small></aside>`)).join('')}
+      ${tables.flatMap(t=>(t.run?.acceptedDeviations||[]).map(p=>renderCountEvidence(t,p))).join('')}
       ${tables.flatMap(t=>(t.run?.sourceToleranceReceipts||[]).map(r=>`<p class="data-import-note">Freigabe protokolliert · ${escape(t.name)} · ${escape(dateTime(r.recordedAt))} · Akteur ${escape(r.actorId)} · Revision ${number(r.revision)}<br>Nachweis-Fingerabdruck: <code>${escape(r.fingerprint)}</code></p>`)).join('')}
       ${source.storage==='cash-compact-v1'?'':`<button type="button" data-i-action="undo" ${!projection.undo||source.active||!['applied','applying','reverting'].includes(source.status)?'disabled':''}>Rücknahme starten / fortsetzen</button>`}
       <div class="data-import-scroll" tabindex="0" role="region" aria-label="Tabellen und Prüfstatus"><table><thead><tr><th scope="col">Quelltabelle</th><th scope="col">Gelesen / ${source.selection?'ausgewählt':'deklariert'}</th><th scope="col">Status / Hinweise</th><th scope="col">Prüfung</th></tr></thead><tbody>
@@ -207,7 +224,7 @@
       const detail=el('detail');if(!detail)return;
       const sameSource=selected?.id===renderedSourceId,technicalOpen=sameSource&&detail.querySelector('.data-import-technical')?.open;
       const focused=globalThis.document?.activeElement,restoreFocus=sameSource&&focused&&detail.contains(focused);
-      const attributes=['data-i-action','data-i-job','data-i-delete-upload','data-i-delete-source','data-i-publish','data-i-log','data-i-rows','data-i-issues','data-i-issues-next','data-i-undo-preview','data-i-check-status'];
+      const attributes=['data-i-upload','data-i-action','data-i-job','data-i-delete-upload','data-i-delete-source','data-i-publish','data-i-log','data-i-rows','data-i-issues','data-i-issues-next','data-i-undo-preview','data-i-check-status'];
       const focusedAttribute=restoreFocus&&attributes.find(name=>focused.hasAttribute(name)),focusedValue=focusedAttribute&&focused.getAttribute(focusedAttribute);
       const focusedSummary=restoreFocus&&focused.matches('.data-import-technical > summary');
       detail.innerHTML=selected?renderSource(selected,{...context.projection,issuePreviewAvailable:context.issuePreviewAvailable,issueView,progressTracker,apply:context.projection.apply&&!working,pendingAction,uncertainApply:selected.id===unconfirmedCashSource}):'';renderedSourceId=selected?.id;
@@ -379,7 +396,7 @@
       const kind=el('kind').value,definition=(context.sourceCatalog||defaultCatalog).find(s=>s.kind===kind&&s.available);
       if(!definition||!context.available||!context.projection?.prepare){message('Für diese Datenbank ist derzeit kein Upload möglich.');return;}
       const file=el('file').files[0];if(!file||file.size<4096||file.size>context.maxBytes||!file.name.toLowerCase().endsWith('.accdb')){message('Bitte eine vollständige ACCDB-Datei bis 512 MiB auswählen.');return;}
-      const recognized=kindForFile(file.name);if(recognized&&recognized!==kind){message(`Die ausgewählte Datei gehört zu einer anderen Datenbank. Bitte ${definition.fileName} auswählen.`);return;}
+      const fileIssue=fileSelectionIssue(file.name,kind,context.sourceCatalog||defaultCatalog);if(fileIssue){message(fileIssue==='IMPORT_SOURCE_UNSUPPORTED'?'Für diese Datenbank ist derzeit kein Import angebunden. Bitte eine unterstützte Datenquelle auswählen.':`Die ausgewählte Datei gehört zu einer anderen Datenbank. Bitte ${definition.fileName} auswählen.`);return;}
       const ticket=generation;working=true;updateUploadTimeout();message('Datei wird geschützt übertragen …');
       let password=el('password').value,uploadStarted=false,uploadAccepted=false;el('password').value='';
       try {
@@ -410,8 +427,8 @@
       }
       if(event.target===el('kind')) el('kind-hint').textContent=sourceLabel(el('kind').value);
       if(event.target===el('file')) {
-        const name=el('file').files[0]?.name||'',kind=kindForFile(name);el('file-name').textContent=name;
-        message(kind&&kind!==el('kind').value?'Diese Datei gehört zu einer anderen Datenbank. Bitte die Datei für die ausgewählte Zeile verwenden.':'');
+        const name=el('file').files[0]?.name||'',fileIssue=fileSelectionIssue(name,el('kind').value,context.sourceCatalog||defaultCatalog);el('file-name').textContent=name;
+        message(fileIssue==='IMPORT_SOURCE_UNSUPPORTED'?'Für diese Datenbank ist derzeit kein Import angebunden. Bitte eine unterstützte Datenquelle auswählen.':fileIssue?'Diese Datei gehört zu einer anderen Datenbank. Bitte die Datei für die ausgewählte Zeile verwenden.':'');
       }
     };
     root.addEventListener('toggle',visibility);body.addEventListener('click',click);body.addEventListener('submit',submit);body.addEventListener('change',change);
@@ -429,5 +446,5 @@
     visibility();
     return {destroy(){disposed=true;cancel();publicationView?.destroy();observer?.disconnect();root.removeEventListener('toggle',visibility);body.removeEventListener('click',click);body.removeEventListener('submit',submit);body.removeEventListener('change',change);globalThis.document?.removeEventListener('visibilitychange',documentVisibility);body.replaceChildren();selected=null;logState=null;}};
   }
-  return {mount,renderSource,renderSources,renderOverview,contentDate,kindForFile,rowStatusText};
+  return {mount,renderSource,renderSources,renderOverview,contentDate,kindForFile,fileSelectionIssue,rowStatusText};
 }));

@@ -194,3 +194,143 @@ test('Native mixed apply respects the budget between groups and a restarted engi
   assert.equal((await f.client.query('SELECT count(*)::int count FROM trade.import_master_records')).rows[0].count,6);
   for(const key of [2,3,4,6])assert.equal((await target(f,key)).revision,2);
  }));
+
+
+// Qualify a larger pendingApply fetch independently from the
+// existing <=50 target-write groups. Production's 750 ms budget is unchanged.
+async function wideReady(f, keys, label, version='original') {
+  const e=engine(f,{operationBatchSize:200});
+  return ready(e,keys.map(key=>raw(key,version)),C.fingerprint(label));
+}
+
+test('Native apply fetch fills several <=50 create groups in one atomic call when its budget permits',
+ {skip:!enabled},()=>withSalesFixture(8,async f=>{
+  const keys=Array.from({length:200},(_,i)=>1000+i),run=await wideReady(f,keys,'prefetch-create');
+  const base=createImportMasterWriters({protection:f.protection})[profile.entity],groups=[];
+  const writer={...base,async createBatch(tx,inputs,value){
+    assert.ok(inputs.length>0&&inputs.length<=50);groups.push(inputs.length);
+    return base.createBatch(tx,inputs,value);
+  }};
+  const before=await rowEvidence(f,run.id);
+  // Infinity is an existing test composition option: this case proves the
+  // fetch/subgroup distinction, not a machine-dependent 750 ms throughput claim.
+  const applied=await engine(f,{writer,operationBatchSize:200,operationBudgetMs:Infinity}).apply(run.id,run.revision);
+  assert.equal(applied.status,'applied');assert.deepEqual(applied.counts,{applied:200});
+  assert.deepEqual(groups,[50,50,50,50]);
+  assert.deepEqual(await rowEvidence(f,run.id),before);
+  assert.equal((await f.client.query('SELECT count(*)::int n FROM integration.data_import_changes WHERE run_id=$1',[run.id])).rows[0].n,200);
+  assert.equal((await f.client.query('SELECT count(*)::int n FROM trade.import_master_records')).rows[0].n,200);
+}));
+
+test('Native apply fetch stops at the unchanged 750 ms group boundary and resumes only the remaining rows',
+ {skip:!enabled},()=>withSalesFixture(8,async f=>{
+  const keys=Array.from({length:125},(_,i)=>2000+i),run=await wideReady(f,keys,'prefetch-budget');
+  const base=createImportMasterWriters({protection:f.protection})[profile.entity],groups=[];
+  const writer={...base,async createBatch(tx,inputs,value){
+    assert.ok(inputs.length<=50);groups.push(inputs.length);
+    const result=await base.createBatch(tx,inputs,value);
+    await new Promise(resolve=>setTimeout(resolve,775));return result;
+  }};
+  const before=await rowEvidence(f,run.id);
+  // Discard this successful reply. Only one complete group may be durable;
+  // the prefetched remainder must remain pending rather than be acknowledged.
+  await engine(f,{writer,operationBatchSize:200,operationBudgetMs:750}).apply(run.id,run.revision);
+  assert.deepEqual(groups,[50]);
+  const resumed=engine(f,{operationBatchSize:200}),checkpoint=await resumed.checkpoint(run.id);
+  assert.equal(checkpoint.status,'applying');assert.equal(checkpoint.revision,run.revision+1);
+  const rows=await f.postgres.queryAll(D.listRows,{runId:run.id,after:0,limit:200});
+  assert.deepEqual(rows.map(row=>row.state),[...Array(50).fill('applied'),...Array(75).fill('create')]);
+  const created=await target(f,keys[0]),partial=await allStored(f);
+  await assert.rejects(resumed.apply(run.id,run.revision),code('IMPORT_REVISION_CONFLICT'));
+  assert.deepEqual(await allStored(f),partial);
+  const applied=await finish(resumed,checkpoint,'apply');
+  assert.equal(applied.status,'applied');assert.deepEqual(applied.counts,{applied:125});
+  assert.deepEqual(await target(f,keys[0]),created);
+  assert.deepEqual(await rowEvidence(f,run.id),before);
+  assert.equal((await f.client.query('SELECT count(*)::int n FROM integration.data_import_changes WHERE run_id=$1',[run.id])).rows[0].n,125);
+  assert.equal((await f.client.query('SELECT count(*)::int n FROM trade.import_master_records')).rows[0].n,125);
+}));
+
+test('Native apply prefetch never enlarges the update writer contract beyond fifty inputs',
+ {skip:!enabled},()=>withSalesFixture(8,async f=>{
+  const keys=Array.from({length:120},(_,i)=>3000+i),base=createImportMasterWriters({protection:f.protection})[profile.entity];
+  await finish(engine(f),await wideReady(f,keys,'prefetch-update-baseline'),'apply');
+  const run=await wideReady(f,keys,'prefetch-update-new','updated'),groups=[];
+  assert.deepEqual(run.counts,{update:120});
+  const writer={...base,async updateBatch(tx,inputs,value){
+    assert.ok(inputs.length>0&&inputs.length<=50);groups.push(inputs.length);
+    return base.updateBatch(tx,inputs,value);
+  }};
+  const before=await rowEvidence(f,run.id);
+  const applied=await engine(f,{writer,operationBatchSize:200,operationBudgetMs:Infinity}).apply(run.id,run.revision);
+  assert.equal(applied.status,'applied');assert.deepEqual(groups,[50,50,20]);
+  assert.deepEqual(await rowEvidence(f,run.id),before);
+  for(const index of [0,49,50,99,119]){
+    const current=await target(f,keys[index]);assert.equal(current.revision,2);
+    assert.deepEqual(current.data,normalized(keys[index],'updated').data);
+  }
+  assert.equal((await f.client.query('SELECT count(*)::int n FROM integration.data_import_changes WHERE run_id=$1',[run.id])).rows[0].n,120);
+}));
+
+test('Native multi-group apply rolls back the first fifty creates on a later partial CAS or protected read-back failure',
+ {skip:!enabled},async t=>withSalesFixture(8,async f=>{
+  const base=createImportMasterWriters({protection:f.protection})[profile.entity];
+  const existing=Array.from({length:75},(_,i)=>4050+i);
+  await finish(engine(f),await wideReady(f,existing,'prefetch-late-failure-baseline'),'apply');
+  const keys=Array.from({length:125},(_,i)=>4000+i),run=await wideReady(f,keys,'prefetch-late-failure-new','updated');
+  assert.deepEqual(run.counts,{create:50,update:75});
+  const before=await allStored(f);
+  for(const mode of ['partial-cas','protected-read-back'])await t.test(mode,async()=>{
+    let created=0,updates=0;
+    const writer={...base,async createBatch(tx,inputs,value){
+      assert.ok(inputs.length<=50);created+=inputs.length;return base.createBatch(tx,inputs,value);
+    },async updateBatch(tx,inputs,value){
+      assert.equal(created,50,'The previous full create group executed in this same transaction');
+      assert.ok(inputs.length<=50);updates++;
+      const wrapped=delegate(tx),execute=wrapped.execute;
+      wrapped.execute=async(statement,parameters)=>{
+        if(mode==='partial-cas'&&statement===B.updateMasterRecords){
+          const stale=inputs.at(-1);
+          await tx.execute(S.update,{id:stale.id,scopeId:context.scopeId,expectedRevision:stale.expectedRevision,
+            profileHash:profile.fingerprint,updatedBy:context.ownerId,updatedAt:TIME});
+        }
+        return execute(statement,mode==='protected-read-back'&&statement===B.masterSegments?
+          {rows:parameters.rows.map((row,index)=>index?row:{...row,payload:'tampered'})}:parameters);
+      };
+      return base.updateBatch(wrapped,inputs,value);
+    }};
+    await assert.rejects(engine(f,{writer,operationBatchSize:200,operationBudgetMs:Infinity}).apply(run.id,run.revision),
+      code(mode==='partial-cas'?'IMPORT_CONCURRENT_CHANGE':'IMPORT_PROTECTED_PAYLOAD_INVALID'));
+    assert.equal(updates,1);assert.deepEqual(await allStored(f),before);
+    assert.equal(await target(f,4000),null);
+  });
+  const applied=await finish(engine(f),run,'apply');assert.equal(applied.status,'applied');
+  assert.equal((await f.client.query('SELECT count(*)::int n FROM trade.import_master_records')).rows[0].n,125);
+}));
+
+test('Native multi-group fetch retains snapshot hook ordering and publishes only after every pending row is applied',
+ {skip:!enabled},()=>withSalesFixture(8,async f=>{
+  const keys=Array.from({length:125},(_,i)=>5000+i),run=await wideReady(f,keys,'prefetch-snapshot-hook');
+  const base=createImportMasterWriters({protection:f.protection})[profile.entity],members=[];
+  let publications=0;
+  const hooks={
+    async recordSnapshotRows(_tx,entries){members.push(...entries.map(entry=>entry.rowNumber));},
+    async finishSnapshot(tx,value){
+      assert.deepEqual(await tx.queryAll(D.pendingApply,{runId:value.runId,limit:1}),[]);
+      assert.equal(members.length,125);assert.equal(new Set(members).size,125);publications++;
+    },
+    async withdrawSnapshot(){throw new Error('Unexpected synthetic snapshot withdrawal');},
+  };
+  const slow={...base,...hooks,async createBatch(tx,inputs,value){
+    assert.ok(inputs.length<=50);const result=await base.createBatch(tx,inputs,value);
+    await new Promise(resolve=>setTimeout(resolve,775));return result;
+  }};
+  let partial=await engine(f,{writer:slow,operationBatchSize:200,operationBudgetMs:750}).apply(run.id,run.revision);
+  assert.equal(partial.status,'applying');assert.equal(members.length,50);assert.equal(publications,0);
+  const fast={...base,...hooks};
+  const applied=await finish(engine(f,{writer:fast,operationBatchSize:200}),partial,'apply');
+  assert.equal(applied.status,'applied');assert.equal(publications,1);
+  assert.deepEqual(members,Array.from({length:125},(_,i)=>i+1));
+  // This hook-contract test complements, never replaces, the real stock
+  // publication/attestation/reference/undo qualification in the existing suite.
+}));

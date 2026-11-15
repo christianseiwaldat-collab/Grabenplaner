@@ -3,7 +3,11 @@ const R=require('../../../lib/persistence/postgresql/operations/runtime');
 const {connectionStateReasons}=require('../../../lib/persistence/postgresql/operations/paired-monitor');
 const {prunePairedSnapshots,configuredPairedRetention}=require('../../../lib/persistence/postgresql/operations/paired-retention');
 async function main(){
- const [action,file,...args]=process.argv.slice(2),config=R.loadConfiguration(file);
+ const [action,file,...args]=process.argv.slice(2);
+ // Installed older updaters already invoke this candidate-local read-only gate
+ // before dependency builds, backup or service stop. No Java or DB is opened.
+ if(action==='check-paths'){try{require('./import-verifier-assets').verifyRuntimeAssets(require('node:path').resolve(__dirname,'../../..'));}catch{throw Object.assign(new Error('PG_OPERATIONS_VERIFIER_ASSET_MODE'),{code:'PG_OPERATIONS_VERIFIER_ASSET_MODE'});}}
+ const config=R.loadConfiguration(file);
  if(action==='check-paths'&&args.length===2){if(config.sourceFiles!==args[0]||config.backupDirectory!==args[1])throw new Error('PG_OPERATIONS_PATH_BINDING');return {verified:true};}
  if(action==='identity'&&!args.length)return require('./deploy-policy').postgresqlPairIdentity(await R.inspectPair(config));
  if(['backup','backup-preserve'].includes(action)&&!args.length){

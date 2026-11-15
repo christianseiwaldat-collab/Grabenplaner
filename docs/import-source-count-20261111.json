@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "purpose": "Independent aggregate source-count evidence for one exact file and import profile",
+  "recordedAt": "2026-11-11T08:06:13.686Z",
+  "recordedAtProvenance": {
+    "basis": "Observed local diagnostic JSONL LastWriteTimeUtc after the successful process completed",
+    "observedLastWriteTimeUtc": "2026-11-11T08:06:13.6862611Z",
+    "absoluteTimestampInJavaOutput": false
+  },
+  "approval": {
+    "status": "pending",
+    "requiresExplicitApproval": true,
+    "approvalReference": "explicit-owner-receipt-required",
+    "meaning": "This document records independent verification only. The owner must separately approve the exact count evidence through an authenticated import receipt. No import or approval was performed by the diagnostic."
+  },
+  "binding": {
+    "sourceSystem": "tradefoto.history.trade",
+    "sourceInstance": "tradefoto-trade",
+    "sourceTable": "ARTIKEL_FILIALEN",
+    "fileSha256": "4c25531eee514cff4c5fbc0e608338bbf4e8c11196c7b55f2758589869808ca7",
+    "fileBytes": 263016448,
+    "schemaSha256": "6eb145ac270d384c290e3f8f67d888c31b6bf75f13b04ac312cbcc1255d6ef7e",
+    "profileHash": "6f0b0798b089440320a755b9999334aad7ef858a28cb1efacf2e63437eb52a41",
+    "profileVersion": 2,
+    "profileBindingProvenance": "Captured import manifest; the independent diagnostic verifies file identity and table counts, not the application profile algorithm",
+    "declaredRows": 238147,
+    "expectedRows": 238160,
+    "differenceReadMinusDeclared": 13
+  },
+  "independentVerification": {
+    "status": "completed",
+    "parser": "Jackcess",
+    "parserVersion": "4.0.12",
+    "runtime": "OpenJDK Temurin 17.0.20.1+1",
+    "accessEngine": false,
+    "readOnly": true,
+    "linkedResolution": false,
+    "verifiedInput": true,
+    "sourceUnchanged": true,
+    "sourceUnchangedChecks": ["SHA-256 before and after", "size before and after", "last modification time before and after"],
+    "logicalRows": 238160,
+    "uniqueLogicalRowIds": 238160,
+    "checkedIndexes": 4,
+    "checkedPrimaryIndexes": 1,
+    "allCheckedIndexesCoverExactlyTheLogicalRowIdSet": true,
+    "durationMs": 6424,
+    "canImport": false,
+    "canApprove": false,
+    "indexes": [
+      {"ordinal": 1, "primary": false, "ignoresNulls": false, "checked": true, "rows": 238160, "uniqueRowIds": 238160, "duplicateRowIds": 0, "extraRowIds": 0, "logicalRowsMissingFromIndex": 0, "exactLogicalCoverage": true},
+      {"ordinal": 2, "primary": true, "ignoresNulls": false, "checked": true, "rows": 238160, "uniqueRowIds": 238160, "duplicateRowIds": 0, "extraRowIds": 0, "logicalRowsMissingFromIndex": 0, "exactLogicalCoverage": true},
+      {"ordinal": 3, "primary": false, "ignoresNulls": false, "checked": true, "rows": 238160, "uniqueRowIds": 238160, "duplicateRowIds": 0, "extraRowIds": 0, "logicalRowsMissingFromIndex": 0, "exactLogicalCoverage": true},
+      {"ordinal": 4, "primary": false, "ignoresNulls": false, "checked": true, "rows": 238160, "uniqueRowIds": 238160, "duplicateRowIds": 0, "extraRowIds": 0, "logicalRowsMissingFromIndex": 0, "exactLogicalCoverage": true}
+    ]
+  },
+  "artifacts": [
+    {"name": "VerifyImportSource.java", "sha256": "60cb045a9bb41834e44a66fe7a1122307c274e8fa477569512ee2f8916ad866e"},
+    {"name": "VerifyImportSource.class", "sha256": "e3407a1eeed0506ccd77c27fa3d0c61bff392580315a1fe601e965c95dbe5046"},
+    {"name": "independent-count-actual-001.jsonl", "sha256": "45e15f2c2a95daa1fc7823ce3fb3b803799a258fdd52f8d3fa271e4a39618c8c"}
+  ],
+  "scope": {
+    "verified": ["Exact source-file identity", "ARTIKEL_FILIALEN declared and logical row counts", "Unique logical RowId membership", "Identical RowId membership in the primary index and every non-null-suppressing index"],
+    "notVerified": ["Business correctness of field values", "Other source tables", "Cause of the stale declared count", "Business-data changes", "Import activation", "Owner approval"],
+    "policy": "No percentage threshold, future-file waiver, row repair or stock correction. Existing row validation, quarantine, source gates, permissions and explicit owner receipt remain required."
+  }
+}

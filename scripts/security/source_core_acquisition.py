@@ -8,13 +8,79 @@ for the selected key stays a hard failure.
 import base64
 import lzma
 import os
+import re
 
-from source_core_identity import inputs, canonical, digest, regular
+from source_core_identity import (inputs, canonical, digest, regular, native_compiler_identity,
+                                 LEGACY_PROGRAMS, PROGRAMS)
 from semgrep_core_tool import ToolUnavailable, fetch, validate_pin, unique_json
 
 PIN = '.github/security-semgrep-core-pin.json'
 RECEIPT = 'sourcebuild-acquisition.json'
 INPUTS = 'sourcebuild-input-identity.json'
+APPROVAL = '.github/security-semgrep-core-reuse.json'
+
+
+def reuse_approval(root, pin, pin_bytes, identity):
+    """Authenticate an explicitly reviewed exact legacy/current transition.
+
+    This versioned approval is not generated or learned by a consuming job.
+    Original producer documents retain their original identities. A stale
+    approval is not authority for later input changes; selected corruption is
+    a hard failure, never a reason to conceal evidence with a cold retry.
+    """
+    path = root / APPROVAL
+    if not path.exists() and not path.is_symlink():
+        return None
+    raw = regular(path)
+    approval = unique_json(raw)
+    fields = {'format', 'migration', 'producerPinSha256', 'producerBuildInputsSha256',
+              'consumerBuildInputsSha256', 'native', 'compilerInputsSha256',
+              'freshCurrentQualificationRequired', 'fullProjectScanApproved',
+              'requirements', 'installer'}
+    hashes = ('producerPinSha256', 'producerBuildInputsSha256',
+              'consumerBuildInputsSha256', 'compilerInputsSha256')
+    if (not isinstance(approval, dict) or set(approval) != fields
+            or canonical(approval) != raw
+            or approval.get('format') != 'gp-semgrep-core-reuse-approval/v1'
+            or approval.get('migration') != 'legacy-native-current-wrapper-v1'
+            or any(not isinstance(approval.get(name), str)
+                   or not re.fullmatch('[a-f0-9]{64}', approval[name]) for name in hashes)
+            or approval.get('freshCurrentQualificationRequired') is not True
+            or approval.get('fullProjectScanApproved') is not False
+            or not isinstance(approval.get('requirements'), dict)
+            or set(approval['requirements']) != {'producerSha256', 'consumerSha256'}
+            or any(not isinstance(value, str) or not re.fullmatch('[a-f0-9]{64}', value)
+                   for value in approval['requirements'].values())
+            or not isinstance(approval.get('installer'), dict)
+            or set(approval['installer']) != {'path', 'sha256'}
+            or approval['installer']['path'] != 'install_semgrep_runtime.py'
+            or not isinstance(approval['installer']['sha256'], str)
+            or not re.fullmatch('[a-f0-9]{64}', approval['installer']['sha256'])
+            or not isinstance(approval.get('native'), dict)
+            or set(approval['native']) != {'sha256', 'bytes'}
+            or not isinstance(approval['native']['sha256'], str)
+            or not re.fullmatch('[a-f0-9]{64}', approval['native']['sha256'])
+            or type(approval['native']['bytes']) is not int
+            or not 0 < approval['native']['bytes'] <= 256 * 1024**2):
+        raise ValueError('Invalid reviewed compiler reuse approval')
+    current_key = digest(canonical(identity))
+    if (approval['producerPinSha256'] != digest(pin_bytes)
+            or approval['consumerBuildInputsSha256'] != current_key):
+        return None
+    producer = pin['buildInputs']
+    producer_native = native_compiler_identity(producer)
+    current_native = native_compiler_identity(identity)
+    if (set(producer['programs']) != set(LEGACY_PROGRAMS)
+            or set(identity['programs']) != set(PROGRAMS)
+            or approval['producerBuildInputsSha256'] != pin['buildInputsSha256']
+            or approval['native'] != pin['native']
+            or producer_native != current_native
+            or approval['compilerInputsSha256'] != digest(canonical(current_native))
+            or approval['requirements'] != {'producerSha256': producer['requirementsSha256'],
+                                             'consumerSha256': identity['requirementsSha256']}
+            or approval['installer']['sha256'] != identity['programs']['install_semgrep_runtime.py']):
+        raise ValueError('Reviewed compiler reuse approval contradicts protected inputs')
+    return {'path': APPROVAL, 'sha256': digest(raw)}
 
 
 def acquire(root, tools, work, output, source, recipe, commands, force_cold=False):
@@ -24,15 +90,17 @@ def acquire(root, tools, work, output, source, recipe, commands, force_cold=Fals
     (output / INPUTS).write_bytes(canonical(identity))
     pin_path = root / PIN
     reason, producer, pin = 'explicit_producer_build' if force_cold else 'no_reviewed_pin', None, None
+    approval = None
     if not force_cold and (pin_path.exists() or pin_path.is_symlink()):
         pin_bytes = regular(pin_path)
         pin = validate_pin(unique_json(pin_bytes))
         if canonical(pin) != pin_bytes:
             raise ValueError('Reviewed compiler pin is not canonical')
         if pin['buildInputs'] != identity or pin['buildInputsSha256'] != key:
-            # This is a valid compiler for another key, never authority to run
-            # it against changed rules/wrapper/recipe. Build the current key.
-            reason, pin = 'reviewed_inputs_changed', None
+            approval = reuse_approval(root, pin, pin_bytes, identity)
+            if approval is None:
+                # A valid tool for another key is not permission to reuse it.
+                reason, pin = 'reviewed_inputs_changed', None
     if pin is not None:
         # The reviewed producer must belong to this repository, including when
         # the consuming workflow runs for a fork pull request. Metadata cannot
@@ -83,6 +151,8 @@ def acquire(root, tools, work, output, source, recipe, commands, force_cold=Fals
         'buildInputsSha256': key, 'nativeSha256': digest(data), 'nativeBytes': len(data),
         'producer': producer, 'freshCurrentQualificationRequired': True,
         'fullProjectScanApproved': False}
+    if producer is not None and approval is not None:
+        receipt.update(format='gp-semgrep-core-acquisition/v2', reuseApproval=approval)
     write(output / RECEIPT, receipt)
     return binary
 
@@ -95,17 +165,21 @@ def verify(directory, root, native):
         raise ValueError('Compiler inputs changed after acquisition')
     key = digest(canonical(identity))
     receipt = unique_json(regular(directory / RECEIPT))
-    if (not isinstance(receipt, dict) or set(receipt) != {'format', 'mode', 'reason',
+    fields = {'format', 'mode', 'reason',
             'buildInputsSha256', 'nativeSha256', 'nativeBytes', 'producer',
             'freshCurrentQualificationRequired', 'fullProjectScanApproved'}
-            or receipt.get('format') != 'gp-semgrep-core-acquisition/v1'
+    bridged = isinstance(receipt, dict) and receipt.get('format') == 'gp-semgrep-core-acquisition/v2'
+    if bridged:
+        fields.add('reuseApproval')
+    if (not isinstance(receipt, dict) or set(receipt) != fields
+            or receipt.get('format') not in ('gp-semgrep-core-acquisition/v1', 'gp-semgrep-core-acquisition/v2')
             or receipt.get('buildInputsSha256') != key or receipt.get('nativeSha256') != digest(native)
             or receipt.get('nativeBytes') != len(native)
             or receipt.get('freshCurrentQualificationRequired') is not True
             or receipt.get('fullProjectScanApproved') is not False):
         raise ValueError('Compiler acquisition is incomplete or unbound')
     if receipt['mode'] == 'cold_build':
-        if receipt['producer'] is not None or receipt['reason'] not in (
+        if bridged or receipt['producer'] is not None or receipt['reason'] not in (
                 'no_reviewed_pin', 'reviewed_artifact_unavailable', 'explicit_producer_build', 'reviewed_inputs_changed'):
             raise ValueError('Invalid cold compiler acquisition evidence')
     elif receipt['mode'] == 'reviewed_reuse':
@@ -115,14 +189,18 @@ def verify(directory, root, native):
         pin = validate_pin(unique_json(pin_bytes))
         expected_producer = {name: pin[name] for name in ('repository', 'run', 'artifact', 'manifestSha256')}
         expected_producer['pinSha256'] = digest(pin_bytes)
+        exact_identity = pin['buildInputs'] == identity and pin['buildInputsSha256'] == key
+        approval = reuse_approval(root, pin, pin_bytes, identity) if not exact_identity else None
+        if (bridged and (approval is None or receipt['reuseApproval'] != approval)
+                or not bridged and not exact_identity):
+            raise ValueError('Reused compiler has no matching reviewed current-input approval')
         if (receipt['reason'] is not None or receipt['producer'] != expected_producer
-                or pin['buildInputs'] != identity or pin['buildInputsSha256'] != key
                 or pin['native'] != {'sha256': digest(native), 'bytes': len(native)}):
             raise ValueError('Reused compiler differs from its reviewed producer pin')
         manifest_bytes = regular(directory / 'sourcebuild-reuse-manifest.json')
         manifest = unique_json(manifest_bytes)
-        if (digest(manifest_bytes) != pin['manifestSha256'] or manifest['buildInputs'] != identity
-                or manifest['buildInputsSha256'] != key):
+        if (digest(manifest_bytes) != pin['manifestSha256'] or manifest['buildInputs'] != pin['buildInputs']
+                or manifest['buildInputsSha256'] != pin['buildInputsSha256']):
             raise ValueError('Reused compiler manifest changed after acquisition')
         public_bytes = regular(directory / 'sourcebuild-reuse-provenance.json')
         sbom = regular(directory / 'sourcebuild-toolchain-sbom.json')

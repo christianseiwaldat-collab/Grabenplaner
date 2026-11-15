@@ -12,6 +12,7 @@ import sys
 import time
 from sast_profile import source_partition, deployment_guard, build_rule_profiles, PROFILE_TIMEOUTS
 from sast_dispositions import canonical_rule_id, finding_identity, apply_dispositions, scanner_position
+from runtime_assets import load_runtime_assets, merge_runtime_sbom, check_runtime_sca_result
 
 HERE = Path(__file__).resolve().parent
 
@@ -355,11 +356,20 @@ class Gate:
         count=registry_vulnerability_count(audit)
         if (pnpm.returncode==1)!=bool(count):raise ValueError('Inconsistent pnpm audit exit/result')
         registry=verified_registry_patch_remediations(audit,expected,patch_verification,read(HERE/'patch-policy.json').get('securityBackports'))
+        runtime=load_runtime_assets(self.root,self.command,declared_source=True)
+        runtime_findings=[]
+        if runtime:
+            runtime_path=self.output/'sca-runtime-osv.json'
+            runtime_run=self.command([self.tool('osv-scanner'),'scan','source','--sbom',self.root/runtime['sbom']['path'],'--all-packages','--all-vulns','--no-call-analysis','all','--format','json','--output-file',runtime_path],'osv-runtime',(0,1))
+            runtime_findings=check_runtime_sca_result(read(runtime_path),runtime)
+            if (runtime_run.returncode==1)!=bool(runtime_findings):raise ValueError('Inconsistent runtime OSV exit/result')
         return {'scannedPackages':len(expected),'scope':'All lockfile packages including optional packages for other operating systems; OSV + npm registry metadata. Raw advisories are retained; a source-bound verified security backport may account for repaired code. No reachability waiver.',
                 'findings':findings,'remediatedFindings':disposition['remediatedFindings'],'verifiedSecurityPatches':disposition['verifiedSecurityPatches'],
                 'registryVulnerabilities':audit['metadata']['vulnerabilities'],'registryFindings':registry['findings'],
                 'registryRemediatedFindings':registry['remediatedFindings'],
-                'blockingFindings':disposition['blockingFindings']+registry['blockingFindings']}
+                'runtimeAssets':runtime,'runtimeFindings':runtime_findings,
+                'runtimeAssessmentScope':'Exact four Maven coordinates; native JVM/internal libraries are not cleared by a generic purl lookup. No reachability waiver.',
+                'blockingFindings':disposition['blockingFindings']+registry['blockingFindings']+runtime_findings}
 
     def secrets(self):
         entries=source_files(self.root);stage=self.output/'secrets-source';stage_sources(self.root,stage,entries);write(self.output/'secrets-targets.json',entries)
@@ -394,13 +404,18 @@ class Gate:
         components={(str(p.get('group','')).rstrip('/')+'/'+p['name'] if p.get('group') else p['name'],p.get('version')) for p in data['components']}
         if not lock_packages(self.root/'pnpm-lock.yaml').issubset(components):raise ValueError('SBOM omits locked dependency versions')
         if not any(p.get('name')=='brace-expansion' and p.get('version')=='5.0.12' for p in data['components']):raise ValueError('SBOM missing required transitive dependency')
+        runtime=load_runtime_assets(self.root,self.command,declared_source=True)
+        if runtime:
+            data=merge_runtime_sbom(data,runtime['componentSbom'])
+            write(path,data)
         # Linux Node can legitimately resolve a declared package from Debian's
         # managed module trees. Opt into the CLI's fixed-root/dpkg policy rather
         # than changing the runner's global lookup or suppressing an escape.
         host_policy=['--host-policy','debian-nodejs-v1'] if sys.platform=='linux' else []
-        self.command(['node',self.root/'scripts/security-release-inventory.js','generate','--root',self.root,'--output',self.output/'release-inventory.json',*host_policy],'release-inventory')
-        self.command(['node',self.root/'scripts/security-release-inventory.js','verify','--root',self.root,'--input',self.output/'release-inventory.json',*host_policy],'verify-inventory')
-        return {'components':len(data['components']),'sbomSha256':sha(path),'inventorySha256':sha(self.output/'release-inventory.json'),'inventoryHostPolicy':'debian-nodejs-v1' if host_policy else None,'scope':'CycloneDX source SBOM from the exact package/lock/workspace manifests. Separate release-inventory.json verifies the active runner installation/native dependencies and, on Linux, its declared resolution under the explicit fixed-root/dpkg host policy. This observes the CI process, not a production service; not a built release, full system SBOM, upstream authenticity or vulnerability clearance.','blockingFindings':[]}
+        runtime_scope=['--runtime-assets-mode','declared-source']if runtime else []
+        self.command(['node',self.root/'scripts/security-release-inventory.js','generate','--root',self.root,'--output',self.output/'release-inventory.json',*host_policy,*runtime_scope],'release-inventory')
+        self.command(['node',self.root/'scripts/security-release-inventory.js','verify','--root',self.root,'--input',self.output/'release-inventory.json',*host_policy,*runtime_scope],'verify-inventory')
+        return {'runtimeAssets':runtime,'components':len(data['components']),'sbomSha256':sha(path),'inventorySha256':sha(self.output/'release-inventory.json'),'inventoryHostPolicy':'debian-nodejs-v1' if host_policy else None,'scope':'CycloneDX source SBOM from the exact package/lock/workspace manifests. Separate release-inventory.json verifies the active runner installation/native dependencies and, on Linux, its declared resolution under the explicit fixed-root/dpkg host policy. This observes the CI process, not a production service; not a built release, full system SBOM, upstream authenticity or vulnerability clearance.','blockingFindings':[]}
 
 
 def main():

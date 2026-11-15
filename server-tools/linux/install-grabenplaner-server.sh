@@ -104,6 +104,12 @@ normalize_verified_archive_modes() {
     script_count=$((script_count + 1))
   done < <(find "$linux_tools_root" -type f -name '*.sh' -print0)
   (( script_count > 0 )) || fail "Das Serverpaket enthaelt keine freigegebenen Linux-Shellwerkzeuge."
+  # The ZIP bytes and fresh root-owned source were verified before this call.
+  # Restore only the seven individually pinned ELF modes; never execute Java.
+  if [[ -e "$source_root/lib/import-verifier-runtime-assets.json" || -e "$source_root/lib/import-verifier-assets" ]]; then
+    root_node "$source_root/server-tools/linux/lib/import-verifier-assets.js" normalize "$source_root" >/dev/null \
+      || fail "Die gebundenen Import-Verifier-Dateimodi konnten nicht hergestellt werden."
+  fi
 }
 
 usage() {

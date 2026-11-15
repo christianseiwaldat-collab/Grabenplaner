@@ -174,20 +174,39 @@ test('Q01: trusted exact snapshot tolerance preserves evidence, idempotence, res
   await assert.rejects(engine.checkpoint(run.id), permissionError('IMPORT_RUN_INTEGRITY'));
 });
 
-test('approved TradeFoto registry matches only its five exact snapshot proofs and exposes escaped evidence', () => {
+test('TradeFoto registry preserves five approved fingerprints and keeps the current v2 evidence pending', () => {
   const { TRADEFOTO_SOURCE_TOLERANCES: proofs } = require('../lib/tradefoto-source-tolerances');
   const { definitions } = require('../lib/tradefoto-full-import-source');
   const registry = T.sourceToleranceRegistry(proofs);
-  assert.equal(proofs.length, 5);
+  const historicalFingerprints = {
+    'q01-20260905-artikel-stamm': '1f2a59afa42788c3f900856d32251555e302807eaafd773ceab6c76542dca679',
+    'q01-20260905-artikel-filialen': 'b38ba14259d62b01b062326d4e707cb7b7c4c26bf077457ae356889245d8aeee',
+    'verified-20261014-artikel-stamm': 'ab1bb434fe28fc4885afe7cbcc4b89dca0dc224ed8aec794a4b6418871812ef7',
+    'verified-20261014-artikel-filialen': '90eaf882de1de36e58d469a4c53af873a657f4c344c16bc0c90dcebb52f6e191',
+    'verified-20261014-artikel-zweitean': '896b45ffb1bbc421e8677fa2a40251acb235fed27eaf7a1cf2fa7b869d3dcb6c',
+  };
+  assert.equal(proofs.length, 6);
+  assert.deepEqual(Object.fromEntries(proofs.filter(proof => !proof.requiresExplicitApproval).map(proof => [proof.id, proof.fingerprint])), historicalFingerprints);
+  const pending = proofs.filter(proof => proof.requiresExplicitApproval);
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].sourceTable, 'ARTIKEL_FILIALEN');
+  assert.equal(pending[0].profileHash, definitions('trade').find(table => table.name === 'ARTIKEL_FILIALEN').profile.fingerprint);
+  assert.equal(pending[0].fileSha256, '4c25531eee514cff4c5fbc0e608338bbf4e8c11196c7b55f2758589869808ca7');
+  assert.equal(pending[0].declaredRows, 238147);assert.equal(pending[0].expectedRows, 238160);
   for (const proof of proofs) {
     const definition = definitions('trade').find(t => t.name === proof.sourceTable);
     const p = definition.master ? definition.profile : require('../lib/tradefoto-history-profiles').profileFor('trade',proof.sourceTable,proof.profileHash);
     const raw = C.normalizeDataImportManifest({ sourceInstance: proof.sourceInstance, fileSha256: proof.fileSha256, schemaSha256: proof.schemaSha256,
       expectedRows: proof.expectedRows, declaredRows: proof.declaredRows, snapshotAt: proof.recordedAt, gates: [] }, p);
-    assert.deepEqual(T.acceptSourceTolerances(raw, p, registry).acceptedDeviations, [proof]);
+    if (proof.requiresExplicitApproval) {
+      assert.equal(T.acceptSourceTolerances(raw, p, registry), raw);
+      assert.equal(T.matchingSourceTolerance(raw, p, registry), proof);
+      assert.deepEqual(T.effectiveSourceGates(raw, p, registry), ['SOURCE_ROW_COUNT_MISMATCH']);
+    } else assert.deepEqual(T.acceptSourceTolerances(raw, p, registry).acceptedDeviations, [proof]);
     if (definition.profile.fingerprint !== p.fingerprint)
       assert.deepEqual(T.acceptSourceTolerances(raw, definition.profile, registry), raw);
     assert.deepEqual(T.acceptSourceTolerances(raw, { ...p, fingerprint: 'd'.repeat(64) }, registry), raw);
+    if (proof.requiresExplicitApproval) continue;
     const html = require('../public/data-import').renderSource({ kind: 'trade', tables: [{ name: proof.sourceTable, declaredRows: proof.declaredRows,
       run: { counts: {}, acceptedDeviations: [{ ...proof, approvalReference: '<script>bad</script>' }] } }] });
     assert.match(html, /Bestätigte Quellzähler-Abweichung/); assert.match(html, /&lt;script&gt;/); assert.doesNotMatch(html, /<script>/);
@@ -200,6 +219,29 @@ function countProof(f, declaredRows, expectedRows, overrides = {}) {
     sourceSystem:f.profile.sourceSystem,sourceTable:f.profile.sourceTable,profileHash:f.profile.fingerprint,
     sourceInstance:'synthetic-ledger',schemaSha256:f.profile.schemaSha256,fileSha256:HASH,declaredRows,expectedRows,...overrides});
 }
+test('pending evidence from the start needs a separate receipt and cannot appear as an automatic approval', async t => {
+  const f = await fixture(t), proof = countProof(f, 2, 1, {requiresExplicitApproval: true});
+  const registry = T.sourceToleranceRegistry([proof]);
+  const engine = createDataImportEngine({...f.composition, sourceTolerances: registry});
+  const raw = C.normalizeDataImportManifest(f.manifest(1, {declaredRows: 2}), f.profile);
+  assert.equal(T.acceptSourceTolerances(raw, f.profile, registry), raw);
+  let run = await engine.start({profileHash: f.profile.fingerprint, manifest: raw});
+  assert.deepEqual(run.gates, ['SOURCE_ROW_COUNT_MISMATCH']);
+  assert.equal(run.acceptedDeviations, undefined);
+  assert.deepEqual(run.availableSourceTolerances, [proof]);
+  run = await engine.stage(run.id, {expectedRevision: run.revision, startRow: 1, rows: [sourceRow()]});
+  run = await engine.seal(run.id, run.revision);run = await engine.review(run.id, run.revision);
+  assert.equal(run.canApply, false);
+  const before = f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(run.id).manifest;
+  assert.equal((await engine.events(run.id)).filter(event => event.action.startsWith('import.source-tolerance.accepted')).length, 0);
+  const accepted = await engine.acceptSourceTolerance(run.id, run.revision);
+  assert.deepEqual(accepted.gates, []);assert.deepEqual(accepted.acceptedDeviations, [proof]);
+  assert.equal(accepted.id, run.id);
+  assert.equal(f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(run.id).manifest, before);
+  assert.equal(accepted.sourceToleranceReceipts[0].fingerprint, proof.fingerprint);
+  assert.equal(f.targets().length, 0);
+});
+
 for (const declaredRows of [0,2]) test(`late count approval (${declaredRows} declared, 1 read) preserves immutable identity, audit, restart and revocation`,async t=>{
   const f=await fixture(t);let run=await f.ready([sourceRow()],{declaredRows});
   const id=run.id,before=f.database.prepare('SELECT manifest FROM data_import_runs WHERE id=?').get(id).manifest;

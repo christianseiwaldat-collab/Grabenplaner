@@ -1,6 +1,11 @@
 # Versionsstatus
 
-## v0.92.101 Beta · Quellstand
+## v0.92.102 Beta · Quellstand
+
+Importkorrekturen fuer die unabhaengige Pruefung bekannter ARTIKEL_FILIALEN-Zaehlerabweichungen und den Umgang mit optionalen Zweit-EANs.
+Die gepruefte Compilerwiederverwendung vermeidet einen unnoetigen Neubau; aktuelle Qualifikation und vollstaendige Sicherheitsscans bleiben erforderlich.
+
+Enthaelt den bisherigen Quellstand v0.92.101 Beta:
 
 Geprüfte Kassenstatistiken bleiben bei offenen Quellbelegen mit deutlich gekennzeichneten Teilvergleichen nutzbar.
 Bestätigte Kassenregeln bleiben bei Wiederimporten stabil; Berichts-PDFs weisen die betroffenen Fälle aus.
