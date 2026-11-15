@@ -29,11 +29,11 @@ function isolated(readFileSync = fs.readFileSync) {
   return { fixture: entry.exports, loaded };
 }
 
-test("all eight frozen historical blobs retain their original identities despite current runtime additions", () => {
+test("all nine frozen historical blobs retain their original identities despite current runtime additions", () => {
   assert.equal(frozen.sourceCommit, original.sourceCommit);
-  assert.equal(frozen.files.length, 8);
+  assert.equal(frozen.files.length, 9);
   assert.equal(sha(JSON.stringify(original.sharedDependencies)), frozen.sharedDependenciesSha256);
-  assert.equal(frozen.files.reduce((count, file) => count + file.bytes, 0), 95701);
+  assert.equal(frozen.files.reduce((count, file) => count + file.bytes, 0), 106237);
   for (const file of frozen.files) {
     const bytes = Buffer.from(file.sourceBase64, "base64");
     assert.equal(bytes.length, file.bytes);

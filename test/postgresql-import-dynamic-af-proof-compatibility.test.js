@@ -1,10 +1,18 @@
 'use strict';
-// PREPARED ONLY. Real old/new graphs and real default Java factory; no virtual modules.
+// Separate external qualification: real old/new graphs and default Java factory.
+// Normal CI covers current proof/owner gates in data-import-known-af-proof.test.js.
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {createRequire}=require('node:module'),{pathToFileURL}=require('node:url');
 const {spawnSync}=require('node:child_process');
-const LIVE=process.env.GP_PG_MIGRATION_LIVE==='1';
+const EXTERNAL_LIVE=process.env.GP_IMPORT_AF_COMPATIBILITY_LIVE==='1';
+function compatibilityOptIn(environment){
+ if(environment.GP_IMPORT_AF_COMPATIBILITY_LIVE!=='1')return false;
+ assert.equal(environment.GP_PG_MIGRATION_LIVE,'1','Explicit AF compatibility qualification also requires live PostgreSQL');
+ for(const name of ['GP_IMPORT_CANDIDATE_ROOT','GP_IMPORT_OLD_SOURCE_ROOT','GP_IMPORT_OLD_MANIFEST_PATH','GP_AF_TEST_TOOLS_ROOT'])
+  assert(typeof environment[name]==='string'&&environment[name].length>0,name+' is required for explicit AF compatibility qualification');
+ return true;
+}
 const AF='ARTIKEL_FILIALEN',INSTANCE='tradefoto-trade',BOUND=2400;
 const TIME='2026-11-11T12:00:00.000Z',PREVIOUS='2026-11-10T12:00:00.000Z';
 const OLD_MANIFEST_SHA='806580e889bd7aca42d5c3c75180c3f1d2faa6566fe850b57dbdd6f95b749425';
@@ -148,7 +156,18 @@ async function oldBusinessReads(s,today=TIME.slice(0,10)){const {oldReq}=s.g;
  const hidden=await publicRuntime.run(narrow,'inventory',{});assert.equal(hidden.rows.length,0,'Foreign authorized location must not reveal unmapped source branch');
 }
 
-test('Native new-hash AF proof: separate owner approval and old006 authenticated business-reader compatibility',{skip:!LIVE,timeout:600000},async t=>{
+test('external AF compatibility qualification requires its own complete explicit opt-in',()=>{
+ assert.equal(compatibilityOptIn({GP_PG_MIGRATION_LIVE:'1'}),false,'General native CI must not imply an external old006/Java fixture');
+ const complete={GP_IMPORT_AF_COMPATIBILITY_LIVE:'1',GP_PG_MIGRATION_LIVE:'1',GP_IMPORT_CANDIDATE_ROOT:'/candidate',
+  GP_IMPORT_OLD_SOURCE_ROOT:'/old006',GP_IMPORT_OLD_MANIFEST_PATH:'/manifest',GP_AF_TEST_TOOLS_ROOT:'/tools'};
+ assert.equal(compatibilityOptIn(complete),true);
+ for(const name of ['GP_PG_MIGRATION_LIVE','GP_IMPORT_CANDIDATE_ROOT','GP_IMPORT_OLD_SOURCE_ROOT','GP_IMPORT_OLD_MANIFEST_PATH','GP_AF_TEST_TOOLS_ROOT']){
+  const missing={...complete};delete missing[name];assert.throws(()=>compatibilityOptIn(missing),assert.AssertionError,name);
+ }
+});
+
+test('Native new-hash AF proof: separate owner approval and old006 authenticated business-reader compatibility',{skip:!EXTERNAL_LIVE&&'External old006/default-Java qualification requires GP_IMPORT_AF_COMPATIBILITY_LIVE=1',timeout:600000},async t=>{
+ assert.equal(compatibilityOptIn(process.env),true);
  async function sub(name,work){let completed=false;await t.test(name,async()=>{await work();completed=true;});assert(completed,'Stop after failed compatibility subcase: '+name);}
  const g=loadGraphs(),bytes=syntheticBytes(g);
  try{await ownedFixture(g,async f=>{const s=await setup(g,f,bytes);try{
