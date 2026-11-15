@@ -1,5 +1,12 @@
 # Versionsstatus
 
+## v0.92.103 Beta · Quellstand
+
+Emma kann ausdrücklich beauftragte Urlaubs- und Zeitausgleichswünsche über den vorgesehenen Zugang als offene Mitarbeiteranträge erfassen. GP prüft dabei aktuelle Rechte, Zuständigkeit, Überschneidungen und Antragssperren erneut.
+Unterbesetzung wird als Konflikt mitgeteilt; sofern die Antragstellung zulässig ist, bleibt der Antrag trotzdem offen gespeichert und im Dienstplan als beantragt sichtbar. Eine Genehmigung wird damit nicht erteilt.
+
+Enthält den bisherigen Quellstand v0.92.102 Beta:
+
 ## v0.92.102 Beta · Quellstand
 
 Importkorrekturen fuer die unabhaengige Pruefung bekannter ARTIKEL_FILIALEN-Zaehlerabweichungen und den Umgang mit optionalen Zweit-EANs.
