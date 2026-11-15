@@ -7,6 +7,9 @@ const transition = require("../server-tools/linux/lib/runtime-v6-transition.js")
 const ROOT = path.resolve(__dirname, "..");
 const FIXTURE = path.join(ROOT, "test-support/runtime-v6/installed-addd4c3-pnpm-workspace.yaml");
 const FIXTURE_SHA = "64509458e01c67fe9a97e59870d25dd636239db9fe06cdb7187756555f49ae35";
+// Exact Git blob from the qualified v0.92.101 deployment, not the moving app workspace.
+const QUALIFIED_WORKSPACE = path.join(ROOT, "test-support/runtime-v6/qualified-e4d8139-pnpm-workspace.yaml");
+const QUALIFIED_WORKSPACE_SHA = "4fefb2fe2c9123e3be64b8fb8921f9693eab1d48e6f4dec5d8692f00aef01b79";
 const MSAL = "lib/vendor-patches/@azure__msal-node@5.4.0.patch";
 const nativeOnly = { skip: process.platform !== "linux" || process.getuid?.() !== 0 };
 const digest = value => crypto.createHash("sha256").update(value).digest("hex");
@@ -46,7 +49,7 @@ function fixture(t) {
     put(path.join(target, globPatch), fs.readFileSync(path.join(ROOT, globPatch)));
   }
   put(path.join(oldRoot, "pnpm-workspace.yaml"), fs.readFileSync(FIXTURE));
-  put(path.join(candidateRoot, "pnpm-workspace.yaml"), fs.readFileSync(path.join(ROOT, "pnpm-workspace.yaml")));
+  put(path.join(candidateRoot, "pnpm-workspace.yaml"), fs.readFileSync(QUALIFIED_WORKSPACE));
   const dependencies = path.join(oldRoot, "node_modules");
   put(path.join(dependencies, "pg/index.js"), "module.exports = {};\n");
   const targets = new Set();
@@ -67,6 +70,7 @@ function pipe(file) { const result = spawnSync("/usr/bin/mkfifo", ["--", file], 
 
 test("runtime-v6 native fixture pins actual installed workspace and the bridge imports only Node builtins", () => {
   assert.equal(fs.readFileSync(FIXTURE).length, 359); assert.equal(digest(fs.readFileSync(FIXTURE)), FIXTURE_SHA);
+  assert.equal(fs.readFileSync(QUALIFIED_WORKSPACE).length, 832); assert.equal(digest(fs.readFileSync(QUALIFIED_WORKSPACE)), QUALIFIED_WORKSPACE_SHA);
   const source = fs.readFileSync(path.join(ROOT, "server-tools/linux/lib/runtime-v6-transition.js"), "utf8");
   const imports = [...source.matchAll(/require\("([^"]+)"\)/g)].map(match => match[1]);
   assert(imports.length > 0 && imports.every(value => value.startsWith("node:")));
@@ -89,13 +93,14 @@ test("runtime-v6 root dependency inventory accepts all eleven actual bin link sh
 });
 
 test("runtime-v6 root frozen plan admits only the exact additive WebAuthn pair and root-only workspace", nativeOnly, t => {
-  const f = fixture(t), candidateMetadata = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json")));
+  const f = fixture(t), candidateMetadata = JSON.parse(fs.readFileSync(path.join(f.candidateRoot, "package.json")));
+  const pair = { "@simplewebauthn/browser": "14.0.0", "@simplewebauthn/server": "14.0.3" };
+  Object.assign(candidateMetadata.dependencies, pair);
   const previousMetadata = structuredClone(candidateMetadata);
   delete previousMetadata.dependencies["@simplewebauthn/browser"]; delete previousMetadata.dependencies["@simplewebauthn/server"];
   put(path.join(f.oldRoot, "package.json"), JSON.stringify(previousMetadata));
   put(path.join(f.candidateRoot, "package.json"), JSON.stringify(candidateMetadata));
   const before = plan(f);
-  const pair = { "@simplewebauthn/browser": "14.0.0", "@simplewebauthn/server": "14.0.3" };
   assert.deepEqual(before.reviewedWebAuthnDependencies, { previous: null, candidate: pair });
   assert.deepEqual(before.reviewedRootOnlyWorkspace, { previous: false, candidate: true });
   put(path.join(f.oldRoot, "package.json"), JSON.stringify(candidateMetadata));

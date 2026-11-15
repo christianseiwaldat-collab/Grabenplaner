@@ -5,6 +5,24 @@ const { spawnSync } = require("node:child_process");
 const transition = require("../server-tools/linux/lib/runtime-v6-transition");
 const { legacyPath } = require("../test-support/legacy-baseline");
 const root = path.resolve(__dirname, "..");
+const QUALIFIED_COMMIT = "e4d813960bd80978e258937a3846999b7ff53acd";
+const QUALIFIED_METADATA = Object.freeze({
+  "package.json": { bytes: 1316, sha256: "705b71c6a2ccf8c6b2e2f3e61a3d0f3c9bdeac49a5acdbfc0119a12acd2aad7d" },
+  "pnpm-lock.yaml": { bytes: 100707, sha256: "376cec280822562427c15b8627fa7b0514af2fe8f38fb2ff2620c92a39d1711b" },
+  "pnpm-workspace.yaml": { bytes: 832, sha256: "4fefb2fe2c9123e3be64b8fb8921f9693eab1d48e6f4dec5d8692f00aef01b79" },
+});
+const qualifiedCache = new Map();
+function qualifiedMetadata(relative) {
+  const pin = QUALIFIED_METADATA[relative]; assert(pin, "Only pinned metadata from " + QUALIFIED_COMMIT + " may enter the Core5-to-Core6 fixture");
+  if (!qualifiedCache.has(relative)) {
+    // Committed exact Git blobs keep shallow CI and the root-only fixture independent of a new historical fetch.
+    const bytes = fs.readFileSync(path.join(root, "test-support/runtime-v6", "qualified-e4d8139-" + relative));
+    assert.equal(bytes.length, pin.bytes);
+    assert.equal(crypto.createHash("sha256").update(bytes).digest("hex"), pin.sha256);
+    qualifiedCache.set(relative, bytes);
+  }
+  return Buffer.from(qualifiedCache.get(relative));
+}
 function fixture(t) {
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "gp-core6-contract-"));
   t.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
@@ -215,7 +233,7 @@ for (const mutation of ["version","patchVersion","path","duplicateOverride","dup
 }
 
 test("Core6 frozen dependency plan rejects unreviewed package and workspace changes", t => {
-  for (const key of ["packageManager", "dependencies", "pnpm", "buildHook", "otherOverride", "parserVersion", "duplicateParser", "parserOutsideOverrides"]) {
+  for (const key of ["packageManager", "dependencies", "pnpm", "buildHook", "otherOverride", "xmlOverride", "parserVersion", "duplicateParser", "parserOutsideOverrides"]) {
     const values = dependencyFixture(t), metadata = path.join(values.candidateRoot, "package.json"), workspace = path.join(values.candidateRoot, "pnpm-workspace.yaml");
     const body = JSON.parse(fs.readFileSync(metadata));
     if (key === "packageManager") body.packageManager = "pnpm@different";
@@ -225,6 +243,7 @@ test("Core6 frozen dependency plan rejects unreviewed package and workspace chan
     const text = fs.readFileSync(workspace, "utf8");
     if (key === "buildHook") fs.writeFileSync(workspace, text.replace("sharp: true", "sharp: false"));
     if (key === "otherOverride") fs.appendFileSync(workspace, "  unexpected: 1.0.0\n");
+    if (key === "xmlOverride") fs.writeFileSync(workspace, text.replace("overrides:\n", "overrides:\n  'mdb-reader>fast-xml-parser': 5.12.0\n"));
     if (key === "parserVersion") fs.appendFileSync(workspace, "  body-parser: 2.5.0\n");
     if (key === "duplicateParser") fs.appendFileSync(workspace, "  body-parser: 2.4.0\n  body-parser: 2.4.0\n");
     if (key === "parserOutsideOverrides") fs.writeFileSync(workspace, "  body-parser: 2.4.0\n" + text);
@@ -363,19 +382,19 @@ test("Core6 frozen dependency plan rejects other MSAL entries, altered bytes and
     assert.throws(() => transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false }), change);
   }
 });
-test("Core6 frozen dependency plan accepts the exact final repository workspace security delta against the immutable predecessor", t => {
+test("Core6 frozen dependency plan accepts the qualified v0.92.101 metadata security delta against the immutable predecessor", t => {
   const values = dependencyFixture(t);
   fs.copyFileSync(legacyPath("package.json"), path.join(values.oldRoot, "package.json"));
-  fs.copyFileSync(path.join(root, "package.json"), path.join(values.candidateRoot, "package.json"));
+  fs.writeFileSync(path.join(values.candidateRoot, "package.json"), qualifiedMetadata("package.json"));
   fs.copyFileSync(legacyPath("pnpm-workspace.yaml"), path.join(values.oldRoot, "pnpm-workspace.yaml"));
-  fs.copyFileSync(path.join(root, "pnpm-workspace.yaml"), path.join(values.candidateRoot, "pnpm-workspace.yaml"));
-  fs.copyFileSync(path.join(root, "pnpm-lock.yaml"), path.join(values.candidateRoot, "pnpm-lock.yaml"));
+  fs.writeFileSync(path.join(values.candidateRoot, "pnpm-workspace.yaml"), qualifiedMetadata("pnpm-workspace.yaml"));
+  fs.writeFileSync(path.join(values.candidateRoot, "pnpm-lock.yaml"), qualifiedMetadata("pnpm-lock.yaml"));
   const patch = path.join(values.candidateRoot, msalPatchRelative); fs.mkdirSync(path.dirname(patch), { recursive: true });
   fs.copyFileSync(path.join(root, msalPatchRelative), patch);
   const actual = transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false });
   assert.equal(actual.reviewedBodyParserOverride.candidate, "2.4.0");
   assert.equal(actual.reviewedMsalPatch.candidate, sha(patch));
-  assert.equal(actual.candidate.lockSha256, sha(path.join(root, "pnpm-lock.yaml")));
+  assert.equal(actual.candidate.lockSha256, QUALIFIED_METADATA["pnpm-lock.yaml"].sha256);
   assert.deepEqual(actual.reviewedWebAuthnDependencies, { previous: null, candidate: reviewedWebAuthn });
   assert.deepEqual(actual.reviewedRootOnlyWorkspace, { previous: false, candidate: true });
 });
@@ -393,16 +412,16 @@ function actualWorkspaceFixture(t, previousCurrent = false) {
     fs.copyFileSync(path.join(root, msalPatchRelative), target);
   }
   fs.writeFileSync(path.join(values.oldRoot, "pnpm-workspace.yaml"), previousCurrent
-    ? fs.readFileSync(path.join(root, "pnpm-workspace.yaml")) : original);
-  fs.copyFileSync(path.join(root, "pnpm-workspace.yaml"), path.join(values.candidateRoot, "pnpm-workspace.yaml"));
-  fs.copyFileSync(path.join(root, "pnpm-lock.yaml"), path.join(values.candidateRoot, "pnpm-lock.yaml"));
+    ? qualifiedMetadata("pnpm-workspace.yaml") : original);
+  fs.writeFileSync(path.join(values.candidateRoot, "pnpm-workspace.yaml"), qualifiedMetadata("pnpm-workspace.yaml"));
+  fs.writeFileSync(path.join(values.candidateRoot, "pnpm-lock.yaml"), qualifiedMetadata("pnpm-lock.yaml"));
   return values;
 }
 test("Core6 actual installed addd workspace accepts exactly the qualified Canvas body-parser MSAL delta", t => {
   const values = actualWorkspaceFixture(t);
   const result = transition.verifyFrozenDependencyPlan(values.oldRoot, values.candidateRoot, { requireRoot: false });
   assert.equal(result.predecessor.workspaceSha256, actualAdddWorkspaceSha256);
-  assert.equal(result.candidate.workspaceSha256, sha(path.join(root, "pnpm-workspace.yaml")));
+  assert.equal(result.candidate.workspaceSha256, QUALIFIED_METADATA["pnpm-workspace.yaml"].sha256);
   assert.deepEqual(result.reviewedCanvasOverride, { previous: null, candidate: "1.0.13" });
   assert.deepEqual(result.reviewedBodyParserOverride, { previous: null, candidate: "2.4.0" });
   assert.equal(result.reviewedMsalPatch.candidate, sha(path.join(root, msalPatchRelative)));
