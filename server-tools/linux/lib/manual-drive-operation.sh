@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 umask 077
-export PATH=/usr/bin:/bin
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 unset NODE_OPTIONS NODE_PATH BASH_ENV ENV LD_PRELOAD LD_LIBRARY_PATH
 readonly APP=/opt/grabenplaner/app
 readonly CONTROL="$APP/server-tools/linux/lib/manual-drive-control.js"

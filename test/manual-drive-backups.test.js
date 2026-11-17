@@ -1,5 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const {spawnSync}=require('node:child_process');
 const P=require('../lib/manual-drive-backups');
 const ID='12345678-1234-4123-8123-123456789abc',OTHER='12345678-1234-4123-8123-123456789abd',host='grabenplaner-'+'a'.repeat(32),sha='b'.repeat(64),newest='c'.repeat(64),time='2026-11-17T10:00:00.000Z';
 const raw=(overrides={})=>({id:sha,hostname:host,paths:[P.STAGE],tags:['grabenplaner-offsite','manual-admin-ui','gp-manual-'+ID],time,summary:{total_bytes_processed:42},...overrides});
@@ -76,6 +77,15 @@ test('privileged manual operation uses fixed inherited locks and exact deletion 
  assert.match(shell,/index<1\|\|!rows\[index\]\.manual/);
  assert.match(shell,/a\.length!==b\.length\+1/);
  assert.ok(shell.indexOf('flock --unlock 9')<shell.indexOf('phase "$id" uploading'));
+});
+
+test('manual worker finds required system-account tools with a minimal inherited environment',{skip:process.platform!=='linux'},()=>{
+ const shell=fs.readFileSync(path.join(__dirname,'../server-tools/linux/lib/manual-drive-operation.sh'),'utf8');
+ const fixedPath=shell.match(/^export PATH=[^\r\n]+$/m);
+ assert.ok(fixedPath,'worker must declare its own fixed search path');
+ const probe=spawnSync('/bin/bash',['--noprofile','--norc','-c',fixedPath[0]+'\ncommand -v runuser\ncommand -v getent\ncommand -v flock'],{encoding:'utf8',env:{PATH:'/usr/bin:/bin'},timeout:5000});
+ assert.equal(probe.status,0,probe.stderr);
+ assert.equal(probe.stdout.trim().split('\n').length,3,'all three account and locking tools must be found');
 });
 
 test('normal installers and committed updater provision only the optional protected capability',()=>{
