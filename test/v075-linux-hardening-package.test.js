@@ -208,7 +208,17 @@ test("hardening stays separate from the current core runtime and binds its exact
   // the exact upload refresh has its own root-bound predecessor transaction.
   // A receipt edit cannot authorize either module or provider change.
   assert.equal(result.offsiteModule.moduleVersion, 13);
-  assert.equal(result.offsiteModule.fingerprint, "5e3b928c04730081de555553286530b4380a4119a2b54eaf809676745e3a235b");
+  assert.equal(result.offsiteModule.fingerprint, "21f31991ebeededd6b1c13d559b30132bf69f5a4d296879f264384959a0496b4");
+  // The new optional socket setup changes only the installer. The installed
+  // module's 42 operational files and the generic fingerprint gate stay fixed.
+  const offsite = spawnSync(process.execPath, [path.join(root, "server-tools/linux/offsite/lib/offsite-contract.js"), "contract", path.join(root, "server-tools/linux/offsite")], { encoding: "utf8" });
+  assert.equal(offsite.status, 0, offsite.stderr);
+  const original = JSON.parse(offsite.stdout);
+  original.files = original.files.map(item => item.path === "install-grabenplaner-offsite.sh" ? { ...item, sha256: "cd7bc215f517d5781287796b9ea8cf66906569d0a498c831439f5ced25a5ae0e" } : item);
+  const { classify, fingerprint } = require("../server-tools/linux/lib/offsite-update-compat");
+  original.fingerprint = fingerprint(new Map(original.files.map(item => [item.path, item.sha256])));
+  assert.equal(original.fingerprint, "5e3b928c04730081de555553286530b4380a4119a2b54eaf809676745e3a235b");
+  assert.equal(classify(result, original), "compatible-installer-only");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 

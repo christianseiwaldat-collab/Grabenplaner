@@ -10,8 +10,6 @@ Eigene Artikelbilder, manuelle Änderungen und erforderliche GP-Identitäten ble
 
 Enthält den bisherigen Quellstand v0.92.102 Beta:
 
-## v0.92.102 Beta · Quellstand
-
 Importkorrekturen fuer die unabhaengige Pruefung bekannter ARTIKEL_FILIALEN-Zaehlerabweichungen und den Umgang mit optionalen Zweit-EANs.
 Die gepruefte Compilerwiederverwendung vermeidet einen unnoetigen Neubau; aktuelle Qualifikation und vollstaendige Sicherheitsscans bleiben erforderlich.
 

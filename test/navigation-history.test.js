@@ -105,7 +105,7 @@ function functionSource(source, name) {
 }
 function element(dataset = {}) {
   const classes = new Set(), attributes = new Map();
-  return { dataset, append() {}, setAttribute: (name, value) => attributes.set(name, String(value)),
+  return { dataset, value: '', type: 'password', open: false, close() { this.open = false; }, append() {}, setAttribute: (name, value) => attributes.set(name, String(value)),
     getAttribute: name => attributes.get(name) ?? null, removeAttribute: name => attributes.delete(name),
     classList: { contains: value => classes.has(value), toggle(value, on) { if (on) classes.add(value); else classes.delete(value); } } };
 }
@@ -115,12 +115,12 @@ function administration() {
     element({ view: 'personnelAdministration', personnelAdministrationRoute: 'workflows' })];
   const settings = ['general', 'rights', 'schedule', 'developer', 'systemCenter'].map(settingsTab => element({ settingsTab }));
   settings[0].classList.toggle('active', true); settings[3].classList.toggle('hidden', true);
-  const win = browser(), calls = [], elements = new Proxy({}, { get(target, key) { return target[key] ||= element(); } });
+  const win = browser(), calls = [], timeoutHandles = new Set(), elements = new Proxy({}, { get(target, key) { return target[key] ||= element(); } });
   const documentElements = new Map(['salesPriceLabelsView', 'tradeInsightsWorkspace', 'logisticsWorkspaceHost', 'privacyOrganizationView', 'privacyOrganizationWorkspaceHost', 'technicalSecurityView', 'securitySastWorkspaceHost', 'securityAuditsWorkspaceHost'].map(id => [id, element()]));
   win.GrabenplanerTradeInsights = require('../public/trade-insights');
   win.GrabenplanerPrivacyOrganization = require('../public/privacy-organization');
   win.GrabenplanerSecurityAudits = require('../public/security-audits');
-  const ctx = { window: win, URLSearchParams, state: { currentView: 'startDashboard', portalStatus: {}, crm: {}, salesArticleCatalog: {},
+  const ctx = { window: win, URLSearchParams, clearTimeout: handle => { timeoutHandles.delete(handle); }, resetAdminCredentialVisibility: input => { input.type = 'password'; }, state: { currentView: 'startDashboard', portalStatus: {}, crm: {}, salesArticleCatalog: {},
     salesAnalytics: { tab: 'create' }, personnelAdministrationTab: 'dashboard', personnelTab: 'employees',
     requestKindTab: 'vacation', rightsDashboardMode: 'rights', locationId: '18', departmentId: '',
     locations: [{ id: '18', active: true, departments: [{ id: 1, active: true }] }, { id: '20', active: true, departments: [{ id: 2, active: true }] }] },
@@ -158,8 +158,17 @@ function administration() {
   vm.runInContext(['activeLocations', 'departmentsForLocation', 'setDefaultContext', 'pageViewElement', 'functionSearchSettingsTabButton', 'planningContextNeedsReload', 'loadPlanningView', 'activateTradeArea', 'canAccessPrivacyOrganization', 'normalizePrivacyOrganizationTab', 'firstAccessiblePrivacyOrganizationTab', 'canOpenPrivacyOrganizationTab', 'activatePrivacyOrganizationView', 'normalizeTechnicalSecurityTab', 'activateTechnicalSecurityView', 'setNavigationCurrent', 'setView', 'applyRequestedView', 'currentAdministrationRoute'].map(name => functionSource(appSource, name)).join('\n'), ctx);
   ctx.grabenplanerNavigation = create({ window: win, app: 'admin', keys: ['view', 'section', 'kind', 'dashboard', 'process', 'location', 'department'],
     read: ctx.currentAdministrationRoute, apply: () => ctx.applyRequestedView({ fromHistory: true }) });
-  ctx.grabenplanerNavigation.start(); return { ctx, win, calls, navigation };
+  ctx.grabenplanerNavigation.start(); return { ctx, win, calls, navigation, timeoutHandles };
 }
+
+test('Actual view navigation cancels only its pending manual Drive timer and closes the credential dialog', () => {
+  const { ctx, timeoutHandles } = administration();
+  timeoutHandles.add(17); timeoutHandles.add(18); ctx.state.manualDriveBackupsTimer = 17;
+  ctx.elements.manualDriveBackupDeletePassword.value = 'temporary-secret'; ctx.elements.manualDriveBackupDeletePassword.type = 'text'; ctx.elements.manualDriveBackupDeleteDialog.open = true;
+  ctx.setView('startDashboard');
+  assert.deepEqual([...timeoutHandles], [18]); assert.equal(ctx.state.manualDriveBackupsTimer, null);
+  assert.equal(ctx.elements.manualDriveBackupDeletePassword.value, ''); assert.equal(ctx.elements.manualDriveBackupDeletePassword.type, 'password'); assert.equal(ctx.elements.manualDriveBackupDeleteDialog.open, false);
+});
 
 test('Administration actual navigation keeps aria-current and active leaves aligned through Home, Settings and Back/Forward', () => {
   const {ctx,win,navigation} = administration();

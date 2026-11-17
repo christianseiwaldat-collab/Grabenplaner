@@ -37,7 +37,7 @@ function constantSource(name, source) {
 function element(id = "", dataset = {}) {
   const classes = new Set(), attributes = new Map();
   return {
-    id, dataset,
+    id, dataset, value: "", type: "password", open: false, close() { this.open = false; },
     classList: {
       contains: name => classes.has(name),
       toggle(name, on) { if (on) classes.add(name); else classes.delete(name); },
@@ -72,7 +72,7 @@ function principalContext(permissions = [], { portalEnabled = true, role = "mana
 
 function navigationContext(permissions, options = {}) {
   const context = principalContext(permissions, options);
-  const nodes = new Map(), calls = [];
+  const nodes = new Map(), calls = [], timeoutHandles = new Set();
   context.elements = new Proxy({}, {
     get(target, key) { return target[key] ||= nodes.get(key) || element(key); },
   });
@@ -85,6 +85,7 @@ function navigationContext(permissions, options = {}) {
     querySelector: () => settingsTab,
   };
   Object.assign(context, {
+    clearTimeout: handle => { timeoutHandles.delete(handle); }, resetAdminCredentialVisibility: input => { input.type = "password"; },
     window: {}, privacyOrganizationTab: "overview", technicalSecurityTab: "sast", activateTechnicalSecurityView: () => {}, timePresenceRefreshTimer: null,
     receiptSearchWorkspace: null, tradeInsightsWorkspace: null, salesPriceLabelsWorkspace: null, tradeOrdersWorkspace: null,
     salesArticleReportWorkspace: null, salesBwlWorkspace: null, gpDefinitionsWorkspace: null,

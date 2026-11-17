@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8").replace(/\r\n/g, "\n");
@@ -89,12 +90,18 @@ test("Alle statischen und dynamischen Passwortoberflächen fallen unter den zent
   const staticPasswordInputs = [...adminHtml.matchAll(/<input\b[^>]*type="password"[^>]*>/g)];
   const portalPasswordInputs = [...portalHtml.matchAll(/<input\b[^>]*type="password"[^>]*>/g)];
   const dynamicPasswordInputs = [...adminScript.matchAll(/<input\b[^>`]*type="password"[^>`]*>/g)];
-  assert.equal(staticPasswordInputs.length, 17);
+  const adminPasswordIds = staticPasswordInputs.map(([input]) => input.match(/\bid="([^"]+)"/)?.[1]).sort();
+  assert.deepEqual(adminPasswordIds, [
+    "adminLoginPassword", "adminSetupPassword", "adminSetupPasswordRepeat", "branchAccountPasswordNew", "branchAccountPasswordRepeat",
+    "databaseDownloadCurrentPassword", "integrationCredentialBasicPassword", "integrationCredentialApiKey", "integrationCredentialPassword", "integrationCredentialToken",
+    "manualDriveBackupDeletePassword", "offsiteActivateCurrentPassword", "offsiteCreateCurrentPassword", "organizationAccountPassword",
+    "salesArticleImportDatabasePassword", "usbCreatorPassword", "usbDraftPassword", "vpsRebootCurrentPassword",
+  ].sort());
   assert.equal(portalPasswordInputs.length, 6);
   assert.equal(dynamicPasswordInputs.length, 3);
   assert.match(boundaries, /function hardenRoot\(root\)[\s\S]*?input\[type="password"\][\s\S]*?forEach\(reconcilePassword\)/);
   assert.match(boundaries, /function surfaceIsActive\(input\)[\s\S]*?dialog && !dialog\.open[\s\S]*?\[hidden\], \.hidden[\s\S]*?getClientRects\(\)\.length === 0/);
-  for (const inputName of ["databaseDownloadCurrentPassword", "salesArticleImportDatabasePassword", "vpsRebootCurrentPassword", "offsiteCreateCurrentPassword", "offsiteActivateCurrentPassword"]) {
+  for (const inputName of ["databaseDownloadCurrentPassword", "salesArticleImportDatabasePassword", "vpsRebootCurrentPassword", "offsiteCreateCurrentPassword", "offsiteActivateCurrentPassword", "manualDriveBackupDeletePassword"]) {
     assert.match(adminScript, new RegExp(`setAdminCredentialDisabled\\(\\s*elements\\.${inputName}`));
   }
   assert.match(adminHtml, /data-usb-wizard-panel="team" data-gp-credential-preserve-on-hide="true"/);
@@ -106,6 +113,50 @@ test("Alle statischen und dynamischen Passwortoberflächen fallen unter den zent
   assert.match(adminScript, /usbEmployeeSelection\.querySelectorAll\("\[data-usb-employee\]"\)[\s\S]*?input\.value = override\?\.startPassword \?\? draft\?\.startPassword \?\? ""[\s\S]*?input\.removeAttribute\("value"\)/);
   assert.match(adminScript, /function setView\(view\)[\s\S]*?state\.currentView === "settings" && view !== "settings"[\s\S]*?clearUsbProvisioningPasswords\(\)/);
   assert.match(adminScript, /function setSettingsTab\(tab\)[\s\S]*?backupSettings\.classList\.contains\("active"\) && activeTab !== "backup"[\s\S]*?clearUsbProvisioningPasswords\(\)/);
+});
+
+test("Die neue Drive-Löschfreigabe wird durch den tatsächlichen Credential-Guardian und ihre UI-Ereignisse geleert", () => {
+  let observer;
+  const listeners = new Map(), dialogListeners = new Map(), visibility = { hidden: false, locked: false };
+  class Element {}
+  class HTMLFormElement extends Element {
+    constructor() { super(); this.id = "manualDriveBackupDeleteForm"; this.dataset = {}; }
+    querySelectorAll() { return [input]; }
+    setAttribute() {}
+  }
+  class HTMLInputElement extends Element {
+    constructor() { super(); this.id = "manualDriveBackupDeletePassword"; this.type = "password"; this.value = ""; this.defaultValue = ""; this.dataset = {}; this.attrs = new Map(); }
+    setAttribute(key, value) { this.attrs.set(key, value); if (key.startsWith("data-")) this.dataset[key.slice(5).replace(/-([a-z])/g, (_, char) => char.toUpperCase())] = value; }
+    getAttribute(key) { return this.attrs.get(key) ?? null; }
+    removeAttribute(key) { this.attrs.delete(key); }
+    closest(selector) { return selector === "dialog" ? dialog : selector.startsWith("[hidden]") && visibility.hidden ? {} : null; }
+    getClientRects() { return dialog.open && !visibility.hidden ? [{}] : []; }
+    matches() { return this.dataset.gpPasswordManagerIgnore === "true"; }
+  }
+  const input = new HTMLInputElement(), form = new HTMLFormElement(); input.form = form;
+  const dialog = { open: false, querySelectorAll: () => [input], addEventListener: (type, handler) => dialogListeners.set(type, handler),
+    close() { if (!this.open) return; this.open = false; dialogListeners.get("close")?.(); observer?.([{ type: "attributes", addedNodes: [] }]); } };
+  const document = { documentElement: {}, body: { classList: { contains: name => name === "portal-locked" && visibility.locked } }, visibilityState: "visible",
+    querySelector: () => null, querySelectorAll: selector => selector === "form" ? [form] : selector === "dialog[open]" ? dialog.open ? [dialog] : [] : [input],
+    addEventListener: (type, handler) => listeners.set(type, handler) };
+  const window = { addEventListener() {} }, elements = { manualDriveBackupDeletePassword: input, manualDriveBackupDeleteDialog: dialog };
+  const state = { manualDriveBackupsActor: "previous-admin", manualDriveBackupsEpoch: 0 };
+  const context = vm.createContext({ document, window, elements, state, Element, HTMLFormElement, HTMLInputElement,
+    MutationObserver: class { constructor(handler) { observer = handler; } observe() {} }, queueMicrotask: callback => callback(),
+    clearTimeout() {}, canManageManualDriveBackups: () => false, manualDriveBackupsVisible: () => false });
+  vm.runInContext(boundaries, context);
+  const source = name => { const start = adminScript.indexOf(`function ${name}(`); assert.ok(start >= 0); return adminScript.slice(start, adminScript.indexOf("\n}", start) + 2); };
+  for (const name of ["resetAdminCredentialVisibility", "syncManualDriveBackupsActor", "closeAdminCredentialDialogsForLogin"]) vm.runInContext(source(name), context);
+  vm.runInContext(adminScript.match(/elements\.manualDriveBackupDeleteDialog\?\.addEventListener\("close", \(\) => \{[\s\S]*?\n\}\);/)[0], context);
+  vm.runInContext(adminScript.match(/document\.addEventListener\("visibilitychange", \(\) => \{[\s\S]*?\n\}\);/)[0], context);
+  const fill = () => { visibility.hidden = false; visibility.locked = false; dialog.open = true; window.GrabenplanerCredentialBoundaries.reconcileAll(); input.value = "temporary-delete-secret"; input.defaultValue = "temporary-delete-secret"; input.setAttribute("value", "temporary-delete-secret"); input.type = "text"; input.readOnly = false; };
+  const cleared = label => { assert.equal(input.value, "", label); assert.equal(input.defaultValue, "", label); assert.equal(input.getAttribute("value"), null, label); assert.equal(input.type, "password", label); assert.equal(input.disabled, true, label); assert.equal(input.readOnly, true, label); };
+  assert.equal(input.dataset.gpCredentialField, "true"); assert.equal(input.dataset.gpPasswordManagerIgnore, "true"); assert.equal(input.getAttribute("autocomplete"), "off");
+  fill(); dialog.close(); cleared("normal close and default Escape cancel close");
+  fill(); visibility.hidden = true; window.GrabenplanerCredentialBoundaries.reconcileAll(); cleared("hidden credential surface");
+  fill(); visibility.locked = true; context.closeAdminCredentialDialogsForLogin(); cleared("logout or expired-session login gate");
+  fill(); context.syncManualDriveBackupsActor(); cleared("role or actor revocation");
+  fill(); document.visibilityState = "hidden"; listeners.get("visibilitychange")(); cleared("browser tab hidden");
 });
 
 test("Jedes statische Passwortfeld deklariert seinen Browserzweck", () => {

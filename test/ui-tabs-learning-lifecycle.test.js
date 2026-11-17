@@ -41,7 +41,7 @@ function visit(element) {
 visit(parseDocument(html));
 const SETTINGS = ['general','schedule','personnel','access','rights','dataProtection','backup','systemCenter'];
 function tabsFixture() {
-  let records=0, profileClosed=0;
+  let records=0, profileClosed=0, manualBackupLoads=0;
   const settings = [...ids.values()].filter(item => item.attribs?.['data-settings-tab']).map(item => {
     const button=node({settingsTab:item.attribs['data-settings-tab']},item.attribs.class);
     button.id=item.attribs.id;button.closest=selector => selector.includes('data-settings-tab') ? button : null;return button;
@@ -52,7 +52,8 @@ function tabsFixture() {
   });
   const elements = Object.fromEntries(['generalSettings','scheduleSettings','personnelSettings','accessSettings','rightsSettings',
     'dataProtectionSettings','backupSettings','systemCenterPanel','employeeSettings','locationSettings','saveSettingsButton',
-    'teamDisplayColumnsButton','pdfSettings','brandingSettings','filialTeamsNavButton'].map(id => [id,node()]));
+    'teamDisplayColumnsButton','pdfSettings','brandingSettings','filialTeamsNavButton',
+    'manualDriveBackupDeletePassword','manualDriveBackupDeleteDialog'].map(id => [id,node()]));
   elements.generalSettings.classList.add('active');elements.employeeSettings.classList.add('active');
   const body=node();
   for(const element of [...settings,...team,...Object.values(elements)])element.parentElement=body;
@@ -77,6 +78,11 @@ function tabsFixture() {
     },
     grabenplanerNavigation:{record:() => {records++;}},
     restoreRememberedOverallContext:() => false, planningContextNeedsReload:() => false,
+    resetAdminCredentialVisibility:input => { input.type='password'; },
+    loadManualDriveBackups:options => {
+      assert.equal(context.elements.backupSettings.classList.contains('active'),true,'manual backup reads require the active backup panel');
+      assert.equal(options.force,true);manualBackupLoads++;return Promise.resolve();
+    },
   };
   for(const name of ['clearUsbProvisioningPasswords','loadLoanSettings','loadPortalUsers','loadOrganizationAccounts','loadAmuSettings',
     'loadAmuAccessPolicy','loadGreetingSettings','loadBirthdayPresentationSettings','loadWorkflowSettings','loadApprovalDelegations',
@@ -93,7 +99,7 @@ function tabsFixture() {
     context.handleManagedTabKeydown({target:button,key:value,preventDefault(){prevented=true;}},kind);
     return prevented;
   };
-  return {context,settings,team,key,get records(){return records;},get profileClosed(){return profileClosed;}};
+  return {context,settings,team,key,get records(){return records;},get profileClosed(){return profileClosed;},get manualBackupLoads(){return manualBackupLoads;}};
 }
 function selected(buttons) { return buttons.filter(button => button.getAttribute('aria-selected') === 'true'); }
 
@@ -137,6 +143,16 @@ test('Settings revocation replaces a hidden active tab and denied direct selecti
   f.settings.forEach(button => {button.hidden=true;});c.reconcileManagedTabs('settings');
   assert.equal(selected(f.settings).length,0);assert.equal(f.settings.filter(button => button.tabIndex === 0).length,0);
   for(const id of ['generalSettings','scheduleSettings','rightsSettings','systemCenterPanel'])assert.equal(c.elements[id].classList.contains('active'),false);
+});
+
+test('Manual Drive status loads only on the backup panel and leaving it clears the deletion credential',() => {
+  const f=tabsFixture(),c=f.context;
+  c.setSettingsTab('general');c.setSettingsTab('schedule');assert.equal(f.manualBackupLoads,0);
+  c.setSettingsTab('backup');assert.equal(f.manualBackupLoads,1);
+  c.elements.manualDriveBackupDeletePassword.value='temporary-secret';c.elements.manualDriveBackupDeletePassword.type='text';
+  c.elements.manualDriveBackupDeleteDialog.open=true;
+  c.setSettingsTab('general');assert.equal(f.manualBackupLoads,1);
+  assert.equal(c.elements.manualDriveBackupDeletePassword.value,'');assert.equal(c.elements.manualDriveBackupDeletePassword.type,'password');assert.equal(c.elements.manualDriveBackupDeleteDialog.open,false);
 });
 
 test('Team keyboard navigation respects location visibility, profile close, access denial and history',() => {

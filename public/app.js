@@ -3226,6 +3226,7 @@ function applyRoleVisibility() {
   elements.maintenanceScheduleCard?.classList.toggle("hidden", !serverBackupAdministrationAccess);
   renderDeployBackupScope();
   renderManualDriveBackups();
+  setAdminCredentialDisabled(elements.manualDriveBackupDeletePassword, !serverBackupAdministrationAccess);
   elements.databaseBackupSettingsCard?.classList.toggle("hidden", serverActive ? !serverBackupAdministrationAccess : !backupWriteAccess);
   elements.legacyLocalBackupControls?.classList.toggle("hidden", serverActive);
   elements.serverDatabaseDownloadPanel?.classList.toggle("hidden", !serverBackupAdministrationAccess);
@@ -7721,7 +7722,10 @@ function syncManualDriveBackupsActor() {
     state.manualDriveBackupsTimer = null;
     state.manualDriveBackupsTable?.destroy();
     state.manualDriveBackupsTable = null;
-    if (elements.manualDriveBackupDeletePassword) elements.manualDriveBackupDeletePassword.value = "";
+    if (elements.manualDriveBackupDeletePassword) {
+      elements.manualDriveBackupDeletePassword.value = "";
+      resetAdminCredentialVisibility(elements.manualDriveBackupDeletePassword);
+    }
     elements.manualDriveBackupDeleteDialog?.close();
   }
   return actor;
@@ -38847,7 +38851,10 @@ function setView(view) {
   if (view !== "settings") {
     clearTimeout(state.manualDriveBackupsTimer);
     state.manualDriveBackupsTimer = null;
-    if (elements.manualDriveBackupDeletePassword) elements.manualDriveBackupDeletePassword.value = "";
+    if (elements.manualDriveBackupDeletePassword) {
+      elements.manualDriveBackupDeletePassword.value = "";
+      resetAdminCredentialVisibility(elements.manualDriveBackupDeletePassword);
+    }
     elements.manualDriveBackupDeleteDialog?.close();
   }
   if (view === 'personnel' && state.personnelTab === 'employees') resumeEmployeeProfile('team');
@@ -39115,6 +39122,11 @@ function setSettingsTab(tab) {
     ? requestedTab : buttons[0]?.dataset.settingsTab || "";
   if (elements.backupSettings.classList.contains("active") && activeTab !== "backup") {
     clearUsbProvisioningPasswords();
+    if (elements.manualDriveBackupDeletePassword) {
+      elements.manualDriveBackupDeletePassword.value = "";
+      resetAdminCredentialVisibility(elements.manualDriveBackupDeletePassword);
+    }
+    elements.manualDriveBackupDeleteDialog?.close();
   }
   syncManagedTabSelection("settings", activeTab);
   document.querySelector(`[data-settings-tab="${activeTab}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
@@ -43767,6 +43779,13 @@ elements.manualDriveBackupTableContainer?.addEventListener("click", event => {
 document.addEventListener("visibilitychange", () => {
   clearTimeout(state.manualDriveBackupsTimer);
   state.manualDriveBackupsTimer = null;
+  if (document.visibilityState === "hidden") {
+    if (elements.manualDriveBackupDeletePassword) {
+      elements.manualDriveBackupDeletePassword.value = "";
+      resetAdminCredentialVisibility(elements.manualDriveBackupDeletePassword);
+    }
+    elements.manualDriveBackupDeleteDialog?.close();
+  }
   if (manualDriveBackupsVisible()) void loadManualDriveBackups({ force: true });
 });
 elements.maintenanceScheduleRows?.addEventListener("change", updateMaintenanceScheduleDraft);
