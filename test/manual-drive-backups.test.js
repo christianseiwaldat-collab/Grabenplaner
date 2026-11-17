@@ -61,7 +61,9 @@ test('delete queue requires fresh exact selectable remote snapshot, and cannot t
 test('every accepted socket instance uses one fixed root state flock before queue/list/dispatch',async()=>{
  const unit=fs.readFileSync(path.join(__dirname,'../server-tools/linux/drive-control/grabenplaner-drive-control@.service'),'utf8');
  assert.match(unit,/^ExecStart=\/usr\/bin\/flock --exclusive --wait 3 \/run\/grabenplaner-drive-control\/broker\.lock \/usr\/bin\/node \/opt\/grabenplaner\/app\/server-tools\/linux\/lib\/manual-drive-control\.js broker$/m);
- assert.match(unit,/^User=root$/m);assert.match(unit,/^RuntimeDirectoryMode=0755$/m);
+ assert.doesNotMatch(unit,/^User=/m);assert.match(unit,/^Group=root$/m);
+ assert.match(unit,/^NoNewPrivileges=yes$/m);assert.match(broker,/process\.getuid\(\)!==0/);
+ assert.match(unit,/^RuntimeDirectoryMode=0755$/m);
  const f=fixture(),results=await Promise.allSettled([Promise.resolve().then(()=>f.run('create',ID)),Promise.resolve().then(()=>f.run('create',OTHER))]);
  assert.equal(results.filter(v=>v.status==='fulfilled').length,1);assert.equal(results.find(v=>v.status==='rejected').reason.code,'DRIVE_BACKUP_BUSY');assert.equal(f.jobs.size,1);
  assert.equal(f.calls.filter(v=>v==='probe').length,1);

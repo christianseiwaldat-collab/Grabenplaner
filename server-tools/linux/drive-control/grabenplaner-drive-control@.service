@@ -5,7 +5,8 @@ After=grabenplaner-drive-control.socket network-online.target
 
 [Service]
 Type=oneshot
-User=root
+# Keep the default system-service root identity, as in the existing Offsite
+# units, for the dedicated uploader handoff under NoNewPrivileges.
 Group=root
 ExecStart=/usr/bin/flock --exclusive --wait 3 /run/grabenplaner-drive-control/broker.lock /usr/bin/node /opt/grabenplaner/app/server-tools/linux/lib/manual-drive-control.js broker
 StandardInput=socket
