@@ -3,9 +3,13 @@ const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const helper = require("../server-tools/linux/lib/offsite-upload-hardening-compat.js");
-const { classify } = require("../server-tools/linux/lib/offsite-update-compat.js");
+const { classify, fingerprint } = require("../server-tools/linux/lib/offsite-update-compat.js");
 const ROOT = path.resolve(__dirname, ".."), MODULE = path.join(ROOT, "server-tools/linux/offsite");
 const digest = file => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+// The upload-only historical transition must keep its authentic installer.
+// Frozen from a8691d40ef2d46897f8f38be4cb206faa93b0b56; never executed here.
+const HISTORICAL_INSTALLER = path.join(__dirname, "fixtures/offsite-module13-installer.fixture");
+const HISTORICAL_INSTALLER_SHA = "cd7bc215f517d5781287796b9ea8cf66906569d0a498c831439f5ced25a5ae0e";
 const rootOnly = process.platform === "linux" && process.getuid() === 0;
 function contract(root) {
   const result = spawnSync(process.execPath, [path.join(MODULE, "lib/offsite-contract.js"), "contract", root], { encoding: "utf8" });
@@ -19,7 +23,11 @@ function fixture(t) {
   const root = fs.mkdtempSync("/root/gp-offsite-upload-refresh-test-"); fs.chmodSync(root, 0o700);
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const old = path.join(root, "module"), candidate = path.join(root, "candidate"), receipt = path.join(root, "receipt.json");
-  for (const target of [old, candidate]) fs.cpSync(MODULE, target, { recursive: true });
+  assert.equal(digest(HISTORICAL_INSTALLER), HISTORICAL_INSTALLER_SHA);
+  for (const target of [old, candidate]) {
+    fs.cpSync(MODULE, target, { recursive: true });
+    fs.copyFileSync(HISTORICAL_INSTALLER, path.join(target, "install-grabenplaner-offsite.sh"));
+  }
   fs.copyFileSync(path.join(__dirname, "fixtures/offsite-upload-module13-predecessor.sh"), path.join(old, helper.ARTIFACT));
   // A checkout-owned predecessor can retain its owner when copied over this file.
   fs.chownSync(path.join(old, helper.ARTIFACT), 0, 0);
@@ -43,7 +51,8 @@ function fixture(t) {
 }
 test("generic same-version fingerprint gate remains closed for the new upload", () => {
   const candidate = contract(MODULE);
-  const before = { ...candidate, fingerprint: helper.OLD_FINGERPRINT, files: candidate.files.map(item => item.path === helper.ARTIFACT ? { ...item, sha256: helper.OLD_UPLOAD } : item) };
+  const files = candidate.files.map(item => item.path === helper.ARTIFACT ? { ...item, sha256: helper.OLD_UPLOAD } : item);
+  const before = { ...candidate, fingerprint: fingerprint(new Map(files.map(item => [item.path, item.sha256]))), files };
   const envelope = { offsiteModule: { schemaVersion: 1, moduleVersion: 13, activationPolicy: "explicit-root-setup", fingerprint: candidate.fingerprint,
     installerSha256: candidate.files.find(item => item.path === "install-grabenplaner-offsite.sh").sha256,
     managedArtifacts: candidate.files.map(item => `server-tools/linux/offsite/${item.path}`) } };

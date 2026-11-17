@@ -6,6 +6,8 @@ public/fonts/price-labels/*/*.txt -whitespace
 # The password corpus manifest binds the exact LF bytes, not checkout line endings.
 lib/password-policy/common-sha256.txt -text
 *.sh text eol=lf
+# Historical upload-only transition binds the original installer bytes.
+test/fixtures/offsite-module13-installer.fixture -text
 pnpm-workspace.yaml text eol=lf
 lib/database-lock-linux.py text eol=lf
 # Qualified PostgreSQL contracts and SQL bind exact source bytes on every host.
