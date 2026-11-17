@@ -3,6 +3,31 @@
 Dieses Prozedere ergänzt [SERVERBETRIEB.md](../SERVERBETRIEB.md) für ausdrücklich freigegebene GP-Releases.
 Es verändert keine Recovery-Gates, Berechtigungen, Sicherungsanforderungen oder Laufzeitgrenzen.
 
+Der gesondert entwickelte Umfang `deploy-owned` hat einen eigenen Vertrag unter
+[Core und eigene GP-Inhalte](DEPLOY-CORE-OWNED-RECOVERY.md). Er ist noch nicht
+produktiv qualifiziert. Die aktuelle sparsame Auswahl V4 berücksichtigt alle
+sechs Access-Importarten, einschließlich rekonstruierbarer Historien und
+technischer Beziehungen und noch nicht angewendeter authentifizierter
+Access-Vorschauen. Core, eigene und unbekannte GP-Inhalte, bereits teilweise angewendete Vorgänge
+und erforderliche ursprüngliche Anker bleiben erhalten. Alte Access-Originale,
+deren Hashes und ein Quellarchiv sind keine Voraussetzung des kleineren
+Sicherungspunkts. Der spätere Importneuaufbau verwendet sechs frisch
+bereitgestellte Dateien als neue Generation. Reine Importhistorien und
+technische IDs dürfen neu entstehen; V4 verspricht keine bytegleiche alte
+Importgeneration und führt keine Rezepte für jede Importzeile. Herkunfts-, SQL-
+und Dateiprüfungen bleiben erforderlich. Die native V4-Qualifikation mit sechs
+neuen Testdateien ist bestanden. Der echte V4-Punkt auf einer isolierten
+Bestandskopie umfasst 580723970 Byte (0,581 GB); die Sicherungsoperation dauerte
+15 min 35 s. Restore, Neuaufbau und Inhaltsprüfungen sind gesonderte Phasen.
+Die globale
+Auswahl unter **Einstellungen → System & Backups → Sicherungsumfang bei Updates**
+gilt für `--verification auto`; vorgeschriebene Vollabläufe haben Vorrang. Der vollständige
+Vergleichspunkt umfasst 14092664854 Byte einschließlich Manifest und Marker;
+Core und private Dateien allein bestimmen die neue Punktgröße nicht.
+Die folgenden Voll-/Kurzabläufe und ihre
+Nachweise bleiben bis zur gesonderten Einführung maßgeblich; diese Einführung
+benötigt selbst den Vollablauf.
+
 ## Vor dem Paketbau: Bereitschaft und Zeitbedarf
 
 1. Checkout, Branch, Commit und Arbeitsstand sowie den tatsächlichen produktiven Stand feststellen. Installierte Pfade aus den Dienstverträgen ableiten.

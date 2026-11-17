@@ -53,7 +53,9 @@ async function qualifyHttp({root,config,rehearsal='application-11',connectionPor
    progress(route);
    const started=performance.now(),response=await fetch('http://127.0.0.1:55488'+route,{signal:AbortSignal.timeout(180000)}),body=await response.json();
    fs.writeFileSync(root+'/http-last-response-private.json',JSON.stringify({route,status:response.status,body}),{mode:0o600});
-   if(managed&&response.status!==200)fs.writeFileSync(root+'/diagnostics-private.json',JSON.stringify(await subject.serverDiagnostics()),{mode:0o600});
+   if(response.status!==200)try{
+    fs.writeFileSync(root+'/diagnostics-private.json',JSON.stringify(await subject.serverDiagnostics()),{mode:0o600});
+   }catch{/* A closed/failed pool or diagnostic write must not mask the health assertion. */}
    diagnostic.response(response.status,200);assert.equal(response.status,200,route);assert.equal(body.ok??body.ready??body.status==='ok',true,route);
    endpoints.push({route,status:response.status,milliseconds:Math.round(performance.now()-started)});
   }
@@ -82,6 +84,19 @@ async function qualifyHttp({root,config,rehearsal='application-11',connectionPor
    step('login');
    await request('/api/portal/v1/auth/login',{method:'POST',body:{employeeNumber:identity,password},anonymous:true});
    if(extraScenario){step('extra-scenario');return await extraScenario({request,subject,endpoints,identity,password});}
+   if(scenario==='deploy-owned'){
+    step('concurrent-reads');await request('/api/locations');await request('/api/system-info');
+    step('schedule');await request('/api/schedule?week=2026-09-07&locationId='+encodeURIComponent(location.id));
+    step('schedule-pdf');
+    const pdf=await request('/api/schedule.pdf?week=2026-09-07&locationId='+encodeURIComponent(location.id));
+    assert.ok(Buffer.isBuffer(pdf)&&pdf.subarray(0,5).toString()==='%PDF-');
+    await Promise.all(Array.from({length:8},()=>request('/api/locations')));
+    step('work-rule-integrity');const workRuleReceipts=await subject.ensureWorkRuleEvaluationReceiptIntegrity({deep:true});assert.ok(Number.isSafeInteger(workRuleReceipts));
+    await fixtureAccess.prepare('UPDATE portal_users SET active=0 WHERE employee_number=?').run(identity);
+    step('revoked-session');await request('/api/locations',{expected:401});
+    return {passed:true,provider:'postgresql-deploy-owned',http:true,fullApplicationSmoke:false,ownedApplicationSmoke:true,
+     authenticatedLogin:true,schedulePdfBytes:pdf.length,concurrentAuthorizedReads:8,workRuleReceipts,revokedSessionRejected:true,endpoints};
+   }
    if(scenario!=='full'){
     step('resume-report');
     const job=interrupted||await request('/api/sales-report-jobs',{method:'POST',body:{title:'PostgreSQL Wiederanlaufprobe',query:{sourceId:'compact-cash',reportVersion:3,kind:'sales',dateFrom:'2026-01-01',dateTo:'2026-01-31',locationIds:['18'],groupBy:['manufacturer'],metrics:['netRevenue','grossMargin','quantity','receiptCount'],orientation:'landscape',chartType:'bars'}}});

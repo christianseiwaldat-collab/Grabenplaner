@@ -76,6 +76,36 @@ Update, Neustart und Hostneustart sind getrennte administrativ freizugebende Vor
 Kompatible kurze Updates binden die vollständige Folgeprüfung an den Nachtablauf; der vollständige Ablauf prüft sie direkt.
 Eine Deploypause bleibt wirksam. Bewusst deaktivierte Timer bleiben deaktiviert; unveränderte Timer werden nicht neu gestartet.
 
+Der neue, noch nicht produktiv qualifizierte Umfang `deploy-owned` trennt einen
+Deploy-Test der Core- und eigenen GP-Inhalte von der vollständigen Sales-Recovery.
+Die aktuelle Auswahl V4 behält Core vollständig und schützt eigene, unbekannte
+und bereits teilweise angewendete Sales-Inhalte samt erforderlichen ursprünglichen Ankern. Exakt 32
+Sales-Tabellendaten werden ausgelassen oder durch eine sparsame geschützte
+Auswahl ersetzt. Authentifizierte, tatsächlich noch nicht angewendete
+Access-Vorschauen werden ebenfalls ausgelassen; GP-Prüfentscheidungen bleiben
+in Core, Laufmanifesten und Ereignissen erhalten. Rekonstruierbare Historien und technische Importgraphen aller
+sechs Access-Importarten dürfen aus sechs frisch bereitgestellten Dateien als
+neue Generation entstehen. Alte Originaldateien, alte Datei-Hashes und ein
+Quellarchiv sind keine Voraussetzung für den Sicherungspunkt. V4 führt keine
+Rezepte für jede Importzeile und verspricht keine bytegleiche frühere
+Importhistorie. Eigene Werte und erforderliche ursprüngliche Anker bleiben
+geschützt. Der kleinere Punkt benötigt für den vollständigen Importneuaufbau
+neue Access-Dateien. Vollständige Nacht-,
+Offsite- und Assurance-Nachweise behalten ihre bisherige Bedeutung. Die erste
+Einführung erfordert den Vollablauf. Grenzen, Quellarchiv, Rückfallregeln und der lokale
+Qualifikationsstand stehen unter [Core und eigene GP-Inhalte](docs/DEPLOY-CORE-OWNED-RECOVERY.md).
+Der native durchgängige V4-Test mit sechs neuen Testdateien ist bestanden.
+Der echte kleinere Punkt ist auf einer isolierten Bestandskopie versiegelt und
+gemessen: 580723970 Byte (0,581 GB) gegenüber 14092664854 Byte (14,09 GB) für
+den vollständigen Vergleichspunkt, jeweils einschließlich Manifest und
+Abschlussdatei. Restore und frischer Importneuaufbau werden getrennt geprüft.
+Unter **Einstellungen → System & Backups → Sicherungsumfang
+bei Updates** kann die berechtigte Serveradministration für automatische
+Updates Core mit eigenen Inhalten oder Core mit vollständigem Sales wählen.
+Ohne gespeicherte Auswahl gilt vollständig; vorgeschriebene Vollabläufe haben
+Vorrang. Der frühere exakte Archivweg bleibt getrennt; ältere Nachweise
+bestätigen diesen neuen Umfang nicht.
+
 ### Lokal vorbereitete Beschleunigung
 
 Die folgenden vier Blöcke ändern keine Produktivfreigabe und begründen keine feste Laufzeit. Ihre Einführung bleibt ein gesonderter geprüfter Betriebsübergang.

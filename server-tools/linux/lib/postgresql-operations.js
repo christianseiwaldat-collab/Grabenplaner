@@ -8,8 +8,14 @@ async function main(){
  // before dependency builds, backup or service stop. No Java or DB is opened.
  if(action==='check-paths'){try{require('./import-verifier-assets').verifyRuntimeAssets(require('node:path').resolve(__dirname,'../../..'));}catch{throw Object.assign(new Error('PG_OPERATIONS_VERIFIER_ASSET_MODE'),{code:'PG_OPERATIONS_VERIFIER_ASSET_MODE'});}}
  const config=R.loadConfiguration(file);
+ if(action==='deploy-backup-scope'&&!args.length)return R.readDeployBackupScope(config);
  if(action==='check-paths'&&args.length===2){if(config.sourceFiles!==args[0]||config.backupDirectory!==args[1])throw new Error('PG_OPERATIONS_PATH_BINDING');return {verified:true};}
  if(action==='identity'&&!args.length)return require('./deploy-policy').postgresqlPairIdentity(await R.inspectPair(config));
+ if(action==='backup-deploy-owned'&&!args.length){
+  const result=await R.createBackup(config,{scope:'deploy-owned'});
+  return {...result,retention:await prunePairedSnapshots(config.backupDirectory,{scope:'deploy-owned',keepCount:2})};
+ }
+ if(action==='verify-deploy-owned'&&args.length===2)return require('../../../lib/persistence/postgresql/operations/paired-bundle').verifyPairBundle(args[0],args[1],{scope:'deploy-owned'});
  if(['backup','backup-preserve'].includes(action)&&!args.length){
   const policy=configuredPairedRetention(config);
   const result=await R.createBackup(config);

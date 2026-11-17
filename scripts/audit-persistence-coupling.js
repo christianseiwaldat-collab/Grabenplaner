@@ -141,6 +141,46 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   'lib/persistence/postgresql/sales/import-history-snapshots-catalog.js',
   'test/postgresql-import-history-snapshots-migration.test.js',
   'lib/persistence/postgresql/operations/restore-capacity.js',
+  // Exact reduced-deploy recovery contracts over the existing paired snapshot.
+  // These helpers grant neither a new driver import nor schema activation.
+  'lib/persistence/postgresql/operations/cash-rehydration.js',
+  'lib/persistence/postgresql/operations/deploy-data-policy.js',
+  'lib/persistence/postgresql/operations/deploy-owned-contract.js',
+  'lib/persistence/postgresql/operations/owned-recovery.js',
+  'lib/persistence/postgresql/operations/access-value-recipes.js',
+  'lib/persistence/postgresql/operations/access-recipe-disk-index.js',
+  'lib/persistence/postgresql/operations/access-recovery-projection.js',
+  'lib/persistence/postgresql/operations/access-owned-state.js',
+  'lib/persistence/postgresql/operations/access-source-replay.js',
+  'lib/persistence/postgresql/operations/access-fresh-rebuild.js',
+  'lib/persistence/postgresql/operations/access-replay-order.js',
+  // Synthetic relational adapter qualification; no productive database access.
+  'test/postgresql-cash-rehydration.test.js',
+  'test/postgresql-access-value-recipes.test.js',
+  'test/access-recipe-disk-index.test.js',
+  'test/postgresql-access-recovery-projection.test.js',
+  'test/postgresql-owned-replay-transport.test.js',
+  'test/postgresql-access-source-replay.test.js',
+  'test/postgresql-access-fresh-rebuild.test.js',
+  'test/postgresql-access-content-proof.test.js',
+  'test/postgresql-access-owned-state.test.js',
+  'test/postgresql-access-replay-order.test.js',
+  // Exact update-scope preference and synthetic API/UI/client contracts.
+  // These pure/source-extracted tests grant no database driver or schema access.
+  'lib/deploy-backup-scope.js',
+  'test/deploy-backup-scope.test.js',
+  'test/deploy-backup-scope-api.test.js',
+  'test/deploy-backup-scope-ui.test.js',
+  // Explicit opt-in creates its own fresh Unix-socket-only native cluster.
+  'test/postgresql-deploy-owned-native.test.js',
+  'test/postgresql-cash-rehydration-native.test.js',
+  // Native complete-schema owned HTTP smoke on a fixed private synthetic pair.
+  'test-support/postgresql-deploy-owned-application.cjs',
+  'test-support/postgresql-deploy-owned-pair.cjs',
+  'test-support/postgresql-deploy-owned-bootstrap.cjs',
+  'test-support/postgresql-access-recovery-fixture.cjs',
+  'test-support/access-recovery-content-proof.cjs',
+  'test-support/postgresql-legacy-cash-seed.cjs',
   // Exact protected maintenance targets; import caches only, with paired backup.
   'lib/persistence/postgresql/operations/import-retention.js',
   'lib/persistence/postgresql/operations/storage-residuals.js',
@@ -352,6 +392,13 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
 ]);
 const MIGRATION_DEVELOPMENT_DRIVER_FILES = new Set([
   "server-tools/linux/postgresql/preflight-install.js",
+  // Native-only synthetic selective dump/restore; never consumes GP endpoints.
+  'test/postgresql-deploy-owned-native.test.js',
+  'test/postgresql-cash-rehydration-native.test.js',
+  'test-support/postgresql-deploy-owned-application.cjs',
+  'test-support/postgresql-deploy-owned-pair.cjs',
+  'test-support/postgresql-deploy-owned-bootstrap.cjs',
+  'lib/persistence/postgresql/operations/access-recovery-projection.js',
   // Only the installed maintenance-lease migration CLI opens the driver.
   'server-tools/linux/postgresql/storage-worker.js',
   'server-tools/linux/lib/vocational-school-migrate.js',
@@ -1510,6 +1557,22 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
 
 const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
   Object.freeze({
+    id: "manual-drive-backup-capability",
+    files: Object.freeze([
+      "lib/manual-drive-backups.js",
+      "server-tools/linux/lib/manual-drive-control.js",
+      "server-tools/linux/lib/manual-drive-operation.sh",
+      "server-tools/linux/install-manual-drive-control.sh",
+    ]),
+    scope: "supported-linux-server-operations",
+    owner: "backup-administration",
+    targetLayer: "permission-gated local socket capability over the installed Offsite capture, Restic and repository locks",
+    risk: "critical",
+    transactionContext: "audited asynchronous operation; fixed root-owned job state and exact confirmed snapshot identity",
+    transitionException: "no database driver, statement, provider or raw business-data access; no assurance, restore or retention-policy activation",
+    laterPhase: "not-applicable",
+  }),
+  Object.freeze({
     id: "security-sast-review-metadata",
     files: Object.freeze(["scripts/security/sast-dispositions.json", "scripts/security/exceptions.json", "lib/security-sast-context-evidence.js"]),
     scope: "security-review-metadata",
@@ -1600,6 +1663,7 @@ const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
       "server-tools/linux/lib/hold-database-lock.js",
       "server-tools/linux/lib/backup-metadata.js",
       "server-tools/linux/lib/deploy-policy.js",
+      "server-tools/linux/lib/deploy-owned-policy.js",
       "server-tools/linux/lib/prune-backups.js",
       "server-tools/linux/lib/verify-package.js",
       "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",
@@ -1796,6 +1860,10 @@ const TEST_SPECIAL_GROUPS = Object.freeze({
     "test/workflow-studio-runs-browser.test.js",
   ]),
   "deployment-operations-verification": new Set([
+    // Synthetic capability/API/DOM contracts only; no driver or native repository access.
+    "test/manual-drive-backups.test.js",
+    "test/manual-drive-backups-api.test.js",
+    "test/manual-drive-backup-ui.test.js",
     "test/deploy-startup.test.js",
     "test/deploy-workflow.test.js",
     // Offline package/evidence fixtures; no database driver or product access.
@@ -1921,6 +1989,8 @@ const PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES = Object.freeze([
   "scripts/cleanup-branch-order-test-data.js",
 ].filter(file => !RETIRED_SQLITE_DRIVER_FILES.has(file)));
 const PHASE_3_ALLOWED_TEST_DRIVER_FILES = Object.freeze([
+  // In-memory relational/FK/crypto proof of the sparse recovery selection.
+  'test/postgresql-access-owned-state.test.js',
   "test-support/database-lock-legacy-v09293.cjs",
   "test-support/legacy-recovery-fixture.js",
   "test/legacy-recovery-capsule.test.js",
@@ -3151,7 +3221,8 @@ function architectureBoundaryViolationsForText(file, text) {
     "lib/persistence/sqlite/migrations/application-bindings.js",
   ]);
   const configurationConsumers = new Set(["server.js", ...PHASE_2_CONTRACT_FILES]);
-  const sqliteDriverFiles = new Set([...PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES,...HISTORICAL_SOURCE_DRIVER_FILES]);
+  const sqliteDriverFiles = new Set([...PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES,...HISTORICAL_SOURCE_DRIVER_FILES,
+    'test/postgresql-access-owned-state.test.js']);
   const rules = [
     {
       id: "provider-contract-outside-boundary",
@@ -3220,7 +3291,8 @@ function architectureBoundaryViolationsForText(file, text) {
     {
       id: "postgresql-runtime-provider",
       pattern: /\b(?:createPostgres(?:ql)?(?:Persistence)?Provider|Postgres(?:ql)?(?:Persistence)?Provider)\b/g,
-      allowedFiles: new Set([...PHASE_5_POSTGRESQL_RUNTIME_FILE_SET,'lib/persistence/postgresql/core/application.js','lib/persistence/postgresql/sales/application.js']),
+      allowedFiles: new Set([...PHASE_5_POSTGRESQL_RUNTIME_FILE_SET,'lib/persistence/postgresql/core/application.js','lib/persistence/postgresql/sales/application.js',
+        'test/postgresql-cash-rehydration-native.test.js','lib/persistence/postgresql/operations/access-recovery-projection.js']),
       source: "code",
     },
     {

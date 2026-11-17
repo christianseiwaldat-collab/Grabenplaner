@@ -1158,6 +1158,11 @@ done
 
 # A successful installation no longer needs automatic cleanup.
 APP_SWAPPED=0
+if [[ $START_AFTER_INSTALL -eq 1 && -f /etc/grabenplaner/offsite/installed-contract.json ]]; then
+  if ! /bin/bash "$APP_ROOT/server-tools/linux/install-manual-drive-control.sh"; then
+    printf '%s\n' 'Die optionale manuelle Google-Drive-Sicherung bleibt bis zur sicheren Einrichtung nicht verfuegbar.' >&2
+  fi
+fi
 if [[ -n "$CADDY_CONFIG_BACKUP" ]]; then
   printf 'Die vorherige Caddy-Konfiguration wurde root-only gesichert: %s\n' "$CADDY_CONFIG_BACKUP"
 fi

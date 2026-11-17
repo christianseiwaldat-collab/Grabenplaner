@@ -170,6 +170,22 @@ test('retired source checkpoints remain readable and never expose obsolete apply
  for(const action of ['apply','undo','rows','events','delete-preview'])await assert.rejects(f.runtime.sourceOperation(f.getSession,source.id,action,{expectedRevision:view.revision}),code('IMPORT_RUN_PURGED'));
 });
 
+test('recovery proof metadata stays private in source reads, overview and history while reupload status remains visible',async t=>{
+ const f=await fixture(t);let source=await f.upload();source=await f.finish(source,'review');
+ const protection=await loadManagedDataImportProtection({access:f.provider,vault:f.keyVault});
+ try{
+  const row=f.database.prepare('SELECT * FROM data_import_sources WHERE id=?').get(source.id),ctx=['source',row.scope_id,row.owner_id,row.id,row.revision],data=protection.open(row.payload,ctx);
+  data.complete=false;data.status='interrupted';data.error='IMPORT_SOURCE_REUPLOAD_REQUIRED';
+  data.freshSourceRecovery={format:'internal-recovery-marker',planSha256:'a'.repeat(64),requiresFreshAccess:true,previousIndependentCountProof:{privateEvidence:'PRIVATE_SOURCE_COUNT_PROOF'}};
+  f.database.prepare('UPDATE data_import_sources SET payload=? WHERE id=?').run(protection.seal(data,ctx),source.id);
+ }finally{protection.destroy();}
+ const views=[await f.runtime.sourceOperation(f.getSession,source.id,'read'),...(await f.runtime.overview(f.getSession)).items,...(await f.runtime.list(f.getSession,{})).items];
+ assert.equal(views.length,3);
+ for(const view of views){assert.equal(view.status,'interrupted');assert.equal(view.complete,false);assert.equal(view.requiresFreshAccess,true);
+  assert.equal(Object.hasOwn(view,'freshSourceRecovery'),false);assert.equal(JSON.stringify(view).includes('PRIVATE_SOURCE_COUNT_PROOF'),false);assert.equal(JSON.stringify(view).includes('previousIndependentCountProof'),false);
+ }
+});
+
 test('source deletion is owner-authorized, resumable and refuses even a partially applied source',async t=>{
  const f=await fixture(t,{values:{ARTIKEL_STAMM:[rawMaster('ARTIKEL_STAMM',{EAN:'123'})]}});
  let source=await f.upload();source=await f.finish(source,'review');

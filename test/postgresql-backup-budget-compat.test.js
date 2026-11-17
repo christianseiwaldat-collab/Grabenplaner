@@ -100,7 +100,9 @@ test('explicit bridge preserves preflight, full candidate selection and fresh fi
  assert.match(create,/postgresql_backup_budget_repair:-0[\s\S]*backup_app_dir="\$extract_root"/);
  assert.match(create,/postgresql-backup-budget-compat\.js" "\$app_dir" "\$backup_app_dir"/);
  assert.match(create,/"\$backup_script" --env-file[\s\S]*--app-dir "\$backup_app_dir"/);
- assert.match(create,/"\$backup_app_dir\/server-tools\/linux\/lib\/postgresql-operations\.js" verify/);
+ assert.match(create,/local verify_action=verify\s+\[\[ "\$deploy_mode" != owned \]\] \|\| verify_action=verify-deploy-owned/,
+   'full backups retain verify; only the explicit owned branch selects its scoped verifier');
+ assert.match(create,/"\$backup_app_dir\/server-tools\/linux\/lib\/postgresql-operations\.js" "\$verify_action"/);
  assert.equal((shell.match(/^create_exact_local_backup$/gm)||[]).length,1);
  assert.match(shell,/begin_deploy_phase final-rollback-backup\s+create_exact_local_backup/);
  assert.ok(shell.indexOf('"$trusted_package_verifier" "$extract_root"')<shell.indexOf('if (( postgresql_backup_budget_repair == 1 )); then',shell.indexOf('"$trusted_package_verifier" "$extract_root"')));

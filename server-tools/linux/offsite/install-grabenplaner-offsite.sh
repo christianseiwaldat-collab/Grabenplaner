@@ -997,6 +997,11 @@ gp_wait_ready "http://127.0.0.1:${app_port}/api/health/ready" 1500 \
 # zurueckrollen; der Installer meldet ihn deutlich und die Pruefung kann manuell
 # erneut gestartet werden.
 setup_complete=1
+if [[ -f "$OFFSITE_APP_ROOT/server-tools/linux/install-manual-drive-control.sh" && ! -L "$OFFSITE_APP_ROOT/server-tools/linux/install-manual-drive-control.sh" ]]; then
+  if ! /bin/bash "$OFFSITE_APP_ROOT/server-tools/linux/install-manual-drive-control.sh"; then
+    offsite_warn 'Die manuelle Google-Drive-Sicherungssteuerung bleibt bis zur sicheren Einrichtung nicht verfuegbar.'
+  fi
+fi
 assurance_trigger="offsite-config-changed"
 [[ -n "$module_previous" ]] && assurance_trigger="offsite-module-changed"
 app_version="$($OFFSITE_NODE -e 'const value=require("/opt/grabenplaner/app/package.json");const version=String(value.version||"");if(!/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version))process.exit(1);process.stdout.write(version)')" \

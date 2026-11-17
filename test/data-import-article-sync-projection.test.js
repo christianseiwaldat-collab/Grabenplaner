@@ -18,6 +18,26 @@ async function prepare(sync,articles,aliases=[]){
  },async()=>{});
 }
 const freshSync=()=>require(SYNC).createDataImportArticleSync();
+const gtin=number=>{
+ const body=String(number).padStart(12,'0');let sum=0;
+ for(let i=0;i<body.length;i++)sum+=Number(body[i])*(i%2?3:1);
+ return body+String((10-sum%10)%10);
+};
+const decoded=entries=>({sourceFileSha256:'b'.repeat(64),safeFileName:'synthetic-articles.json',payload:{
+ format:P.TRADEFOTO_ARTICLE_IMPORT_FORMAT,sourceSystem:P.TRADEFOTO_ARTICLE_SOURCE_SYSTEM,
+ sourceProfileVersion:P.TRADEFOTO_ARTICLE_SOURCE_PROFILE_VERSION,sourceSchemaSha256:P.TRADEFOTO_ARTICLE_SOURCE_SCHEMA_SHA256,
+ snapshotAt:TIME,currency:'EUR',articles:entries.map(({articleRow,aliasRows})=>({
+  articleRow:Object.fromEntries(P.TRADEFOTO_ARTICLE_ROW_FIELDS.map(field=>[field,articleRow[field]])),aliasRows,
+ })),
+}});
+function inspectorBeforeBatching(){
+ const fs=require('node:fs'),path=require('node:path'),Module=require('node:module');
+ const filename=require.resolve('../lib/tradefoto-article-import'),compiled=new Module(filename,module);
+ compiled.filename=filename;compiled.paths=Module._nodeModulePaths(path.dirname(filename));
+ const baseline=fs.readFileSync(path.join(__dirname,'../test-support/fixtures/tradefoto-article-inspector-before-batching.cjs'),'utf8');
+ compiled._compile(fs.readFileSync(filename,'utf8')+'\n'+baseline+'\nmodule.exports.inspectBeforeBatching=inspectTradeFotoArticleImportPayloadBeforeBatching;\n',filename);
+ return compiled.exports.inspectBeforeBatching;
+}
 function repositorySync(t,repository){
  const module=require('../lib/persistence/repositories/sales-article-catalog');
  t.mock.method(module,'createSalesArticleCatalogRepository',()=>repository);
@@ -141,4 +161,152 @@ test('an already committed old intent replays after a lost reply without new pro
  assert.equal(writes,1);assert.equal(reads,0);assert.deepEqual(previous,before);
  assert.equal(committed.pending,undefined);assert.equal(committed.changed,1);assert.equal(committed.complete,true);
  assert.equal(sync.needsRefresh(committed),true);
+});
+
+test('40-row inspection packets preserve the complete legacy result including cross-packet blocked owners and finding hashes',()=>{
+ const entries=Array.from({length:125},(_,index)=>{
+  const key=String(index+1).padStart(13,'0');
+  return {articleRow:article(key),aliasRows:[alias(key,gtin(100000+index))]};
+ });
+ // Source identities reserve ownership even when an unrelated price gate blocks the first owner.
+ entries[0].articleRow.NNPreis='-1';
+ entries[40].articleRow.EAN=entries[0].articleRow.EAN;
+ entries[40].aliasRows[0].EAN=entries[0].articleRow.EAN;
+ // Raw alias ownership also survives tax-invalid and invalid-source-key articles.
+ entries[1].articleRow.MWST=null;
+ entries[1].aliasRows=[alias(entries[1].articleRow.EAN,'4006381333931')];
+ entries[81].aliasRows=[alias(entries[81].articleRow.EAN,'4006381333931')];
+ entries[2].articleRow.EAN='1234567890123';
+ entries[2].aliasRows=[alias(entries[2].articleRow.EAN,'96385074')];
+ entries[82].aliasRows=[alias(entries[82].articleRow.EAN,'96385074')];
+ // Keep representative local findings in the byte comparison as well.
+ entries[3].aliasRows.push(alias('0000000000999','036000291452',2));
+ entries[4].articleRow.Verkaufspreis='15';entries[4].articleRow.eNvk='10';
+ entries[5].articleRow.Artikelbezeichnung='Synthetic\u0000article';
+ entries[6].aliasRows.push(alias(entries[6].articleRow.EAN,entries[6].articleRow.EAN,2));
+ // Repeated observations and equivalent GTIN widths on one row have only one owner.
+ const lastKey=entries[124].articleRow.EAN;
+ entries[124].aliasRows=[alias(lastKey,'036000291452',3),alias(lastKey,'0036000291452',2),
+  alias(lastKey,'00036000291452',1),alias(lastKey,'036000291452',4)];
+ const legacy=inspectorBeforeBatching()(decoded(structuredClone(entries)));
+ const input=decoded(structuredClone(entries)),session=I.createTradeFotoArticleImportInspectionSession(input);
+ for(let after=0;after<input.payload.articles.length;after+=40)session.consume(input.payload.articles.slice(after,after+40));
+ const actual=session.finish();
+ assert.equal(JSON.stringify(actual),JSON.stringify(legacy),'Packet inspection must be byte-identical to the saved pre-batching algorithm');
+ assert.equal(JSON.stringify(I.inspectTradeFotoArticleImportPayload(decoded(structuredClone(entries)))),JSON.stringify(legacy));
+ assert.equal(actual.rows.length,125);assert.equal(actual.source.articleCount,125);
+ for(const rowNumber of [1,41]){
+  assert.ok(actual.rows[rowNumber-1].issueCodes.includes('duplicate_source_key'));
+  assert.ok(actual.rows[rowNumber-1].issueCodes.includes('duplicate_article_number'));
+ }
+ for(const rowNumber of [2,3,82,83])assert.ok(actual.rows[rowNumber-1].issueCodes.includes('duplicate_gtin'));
+ assert.ok(actual.rows[0].issueCodes.includes('negative_price'));
+ assert.ok(actual.rows[1].issueCodes.includes('tax_code_unknown'));
+ assert.ok(actual.rows[2].issueCodes.includes('invalid_source_key'));
+ assert.equal(actual.rows[124].action,'ready');assert.equal(actual.rows[124].identifierCount,1);
+ assert.equal(actual.normalizedArticles.find(row=>row.articleNumber==='000125').identifiers[0].identifierValue,'00036000291452');
+ const expectedHash=require('node:crypto').createHash('sha256').update(JSON.stringify({
+  rowNumber:82,articleNumber:'000082',code:'duplicate_gtin',detail:'',
+ })).digest('hex');
+ assert.equal(actual.findings.find(row=>row.rowNumber===82&&row.code==='duplicate_gtin').detailSha256,expectedHash);
+ assert.equal(actual.counts.identifierCount,actual.normalizedArticles.reduce((sum,row)=>sum+row.identifiers.length,0));
+ assert.equal(actual.counts.priceCount,actual.normalizedArticles.reduce((sum,row)=>sum+row.prices.length,0));
+});
+
+test('standalone limits remain bounded while Full Access prepares all 19,762 articles and 38,924 aliases',async()=>{
+ assert.equal(I.TRADEFOTO_ARTICLE_IMPORT_MAX_ROWS,25000);
+ assert.equal(I.TRADEFOTO_ARTICLE_IMPORT_MAX_WORK_UNITS,750000);
+ assert.equal(I.TRADEFOTO_ARTICLE_IMPORT_WORK_UNITS_PER_ROW,36);
+ const articles=Array.from({length:19762},(_,index)=>article(String(index+1).padStart(13,'0'),
+  index===19761?{'Änderungsdatum':'2026-11-11T12:34:56.789'}:{}));
+ const aliases=Array.from({length:38924},(_,index)=>alias(articles[Math.floor(index/2)].EAN,gtin(100000+index),index%2));
+ assert.equal(articles.length*36+aliases.length,750356);
+ const byKey=new Map();
+ for(const row of aliases){const list=byKey.get(row.EAN)||[];list.push(row);byKey.set(row.EAN,list);}
+ const standalone=decoded(articles.map(articleRow=>({articleRow,aliasRows:byKey.get(articleRow.EAN)||[]})));
+ assert.throws(()=>I.inspectTradeFotoArticleImportPayload(standalone),error=>error.code==='SALES_ARTICLE_IMPORT_WORK_BUDGET_EXCEEDED'&&error.status===413);
+ const before=JSON.stringify({articles,aliases}),result=await prepare(freshSync(),articles,aliases);
+ assert.equal(result.rows.length,19762);assert.equal(result.source.articleCount,19762);
+ assert.equal(result.normalizedArticles.length,19762);assert.equal(result.quarantinedAliases,0);
+ assert.equal(result.counts.identifierCount,38924);assert.deepEqual(result.findings,[]);
+ assert.ok(result.rows.every(row=>row.action==='ready'));
+ assert.equal(result.source.snapshotAt,'2026-11-11T12:34:56.789Z','Every packet shares the dataset-wide source date');
+ assert.equal(JSON.stringify({articles,aliases}),before);
+});
+
+test('standalone envelope, per-parent aliases and normalized identifier limits remain unchanged',()=>{
+ const key='0000000000042',entry={articleRow:article(key),aliasRows:[]};
+ const tooManyRows=decoded(Array.from({length:25001},()=>entry));
+ assert.throws(()=>I.decodeTradeFotoArticleImportBuffer(Buffer.from(JSON.stringify(tooManyRows.payload)),{fileName:'synthetic.json'}),
+  error=>error.code==='SALES_ARTICLE_IMPORT_ROW_LIMIT'&&error.status===413);
+ const tooManyAliases=decoded([{articleRow:article(key),aliasRows:Array.from({length:257},(_,index)=>alias(key,'internal-'+index))}]);
+ assert.throws(()=>I.inspectTradeFotoArticleImportPayload(tooManyAliases),error=>error.code==='SALES_ARTICLE_IMPORT_SCHEMA_MISMATCH');
+ const tooManyIdentifiers=I.inspectTradeFotoArticleImportPayload(decoded([{articleRow:article(key),
+  aliasRows:Array.from({length:33},(_,index)=>alias(key,gtin(100000+index)))}]));
+ assert.equal(tooManyIdentifiers.normalizedArticles.length,0);
+ assert.deepEqual(tooManyIdentifiers.rows[0].issueCodes,['row_invalid']);
+});
+
+test('Full Access retains its dataset article and raw-alias bounds before optional quarantine',async()=>{
+ const key='0000000000042',row=article(key);
+ await assert.rejects(prepare(freshSync(),Array.from({length:25001},()=>row)),
+  error=>error.code==='IMPORT_ARTICLE_CATALOG_LIMIT'&&error.status===413);
+ const orphan=alias('0000000000999','internal-code');
+ await assert.rejects(prepare(freshSync(),[row],Array.from({length:750001},()=>orphan)),
+  error=>error.code==='IMPORT_ARTICLE_CATALOG_LIMIT'&&error.status===413);
+});
+
+test('the finding cap covers all packets and final duplicate findings together',()=>{
+ const key='0000000000042',entry={articleRow:article(key,{NNPreis:'-1',MWST:null}),
+  aliasRows:[alias(key,'4006381333931'),alias(key,'internal-code',2),alias(key,key,3)]};
+ // Four local findings and three global duplicate findings per row cross 100,000.
+ const entries=Array.from({length:14300},()=>entry),matchesFindingLimit=error=>
+  error.code==='SALES_ARTICLE_IMPORT_FINDING_LIMIT'&&error.status===413;
+ assert.equal(I.TRADEFOTO_ARTICLE_IMPORT_MAX_FINDINGS,100000);
+ assert.throws(()=>inspectorBeforeBatching()(decoded(structuredClone(entries))),matchesFindingLimit);
+ assert.throws(()=>{
+  const input=decoded(entries),session=I.createTradeFotoArticleImportInspectionSession(input);
+  for(let after=0;after<input.payload.articles.length;after+=40)session.consume(input.payload.articles.slice(after,after+40));
+  session.finish();
+ },matchesFindingLimit);
+});
+
+test('late GTIN-owner ordering matches legacy key order and hashes through the final packet row',()=>{
+ const entries=Array.from({length:125},(_,index)=>{
+  const key=String(index+1).padStart(13,'0');
+  return {articleRow:article(key),aliasRows:[]};
+ });
+ for(const index of [0,124])entries[index].aliasRows=[alias(entries[index].articleRow.EAN,'4006381333931')];
+ for(const index of [1,80])entries[index].aliasRows=[alias(entries[index].articleRow.EAN,'96385074')];
+ const legacy=inspectorBeforeBatching()(decoded(structuredClone(entries)));
+ const input=decoded(entries),session=I.createTradeFotoArticleImportInspectionSession(input);
+ for(let after=0;after<input.payload.articles.length;after+=40)session.consume(input.payload.articles.slice(after,after+40));
+ const actual=session.finish();
+ assert.deepEqual(legacy.findings.map(row=>[row.rowNumber,row.code]),
+  [[1,'duplicate_gtin'],[125,'duplicate_gtin'],[2,'duplicate_gtin'],[81,'duplicate_gtin']],
+  'The earlier source key is finalized first even though its collision is discovered last');
+ assert.equal(JSON.stringify(actual.findings),JSON.stringify(legacy.findings),'Finding order and each global-ordinal hash must match');
+ assert.equal(JSON.stringify(actual),JSON.stringify(legacy));
+ assert.deepEqual(actual.rows[124].issueCodes,['duplicate_gtin']);
+ assert.equal(actual.rows[124].action,'blocked');assert.equal(actual.normalizedArticles.length,121);
+});
+
+test('an over-budget consume poisons the inspection session and cannot return a partial result',()=>{
+ const input=decoded([{articleRow:article(),aliasRows:[]}]);
+ const entry=input.payload.articles[0],session=I.createTradeFotoArticleImportInspectionSession(input);
+ session.consume([entry]);
+ assert.throws(()=>session.consume(Array.from({length:20834},()=>entry)),
+  error=>error.code==='SALES_ARTICLE_IMPORT_WORK_BUDGET_EXCEEDED'&&error.status===413);
+ for(const operation of [()=>session.finish(),()=>session.consume([entry])]){
+  assert.throws(operation,error=>error.code==='SALES_ARTICLE_IMPORT_SESSION_STATE'&&error.status===409);
+ }
+});
+
+test('the cumulative session row bound covers earlier packets and poisons a failed continuation',()=>{
+ const input=decoded([{articleRow:article(),aliasRows:[]}]);
+ const entry=input.payload.articles[0],session=I.createTradeFotoArticleImportInspectionSession(input);
+ session.consume(Array.from({length:12500},()=>entry));
+ session.consume(Array.from({length:12500},()=>entry));
+ assert.throws(()=>session.consume([entry]),error=>error.code==='SALES_ARTICLE_IMPORT_ROW_LIMIT'&&error.status===413);
+ assert.throws(()=>session.finish(),error=>error.code==='SALES_ARTICLE_IMPORT_SESSION_STATE'&&error.status===409);
 });

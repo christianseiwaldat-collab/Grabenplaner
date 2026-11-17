@@ -173,3 +173,14 @@ test('an aborted stale refresh cannot overwrite an in-flight cash takeover messa
   assert.doesNotMatch(ui.fields.detail.innerHTML,/Es läuft derzeit kein Hintergrundauftrag/);
   resolveApply();await applying;assert.match(ui.fields.message.textContent,/Kassenstand übernommen/);
 });
+
+test('archive admission errors explain the next action and do not become an uncertain cash-commit warning',async t=>{
+ const source=cashSource(),ui=await mount(t,source,url=>{
+   if(url==='/api/data-import/cash/apply')throw Object.assign(new Error('private/path/key/password'),{code:'IMPORT_SOURCE_ARCHIVE_INVALID',status:503});
+ });
+ await ui.click({iAction:'apply'});assert.match(ui.fields.message.textContent,/Verwaltung verständigen/);assert.doesNotMatch(ui.fields.message.textContent,/private\/path|password|Übernahme wurde nicht bestätigt/);
+ const missing=UI.renderSource({...source,sourceRecoveryAvailable:false},projection);assert.match(missing,/Übernahme bleibt auch ohne erneuten Upload möglich/);
+ const retained=UI.renderSource({...source,sourceRecoveryAvailable:true},projection);assert.match(retained,/verschlüsselt für die Wiederherstellung hinterlegt/);assert.doesNotMatch(retained,/Keine Access-Datei auf dem Server/);
+ const retry=UI.renderSource({...source,background:{status:'failed',phase:'applying',error:'IMPORT_SOURCE_ARCHIVE_REUPLOAD_REQUIRED'}},projection);
+ assert.match(retry,/dieselbe Access-Datei erneut hochladen/);assert.match(retry,/Dieselbe Access-Datei auswählen/);assert.doesNotMatch(retry,/data-i-job="retry"|kein erneuter Upload nötig/);
+});

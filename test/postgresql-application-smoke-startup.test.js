@@ -7,7 +7,7 @@ const {createSalesReportBatchWorker}=require('../lib/sales-report-batch-worker')
 const file=path.resolve(__dirname,'../server-tools/linux/recovery/lib/postgresql-application-smoke.js');
 const source=fs.readFileSync(file,'utf8'),localRequire=createRequire(file);
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
-function harness(t,{initialize,health=()=>({status:200,body:{ok:true}})}={}){
+function harness(t,{initialize,health=()=>({status:200,body:{ok:true}}),diagnose=async()=>({syntheticFixture:true})}={}){
  const workspace=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'gp-smoke-startup-'))),root=path.join(workspace,'work','application');
  fs.mkdirSync(root,{recursive:true});
  t.after(()=>{assert.ok(workspace.startsWith(fs.realpathSync(os.tmpdir())+path.sep));fs.rmSync(workspace,{recursive:true});});
@@ -18,7 +18,7 @@ function harness(t,{initialize,health=()=>({status:200,body:{ok:true}})}={}){
  const subject={
   async initializeApplicationPersistence(options){events.push('init-start');await initialize?.(options);initialized=true;events.push('init-done');},
   app:{listen(_port,_host,done){assert.equal(initialized,true,'listener must follow complete initialization');events.push('listen');queueMicrotask(done);return server;}},
-  async closePersistenceForTests(){events.push('closed');},
+  async closePersistenceForTests(){events.push('closed');},serverDiagnostics:diagnose,
  };
  const context={module:{exports:{}},Buffer,URL,performance,setTimeout,setInterval,clearInterval,queueMicrotask,
   process:{env:{},platform:process.platform,memoryUsage:process.memoryUsage},
@@ -62,6 +62,12 @@ test('an initialization failure starts neither listener nor HTTP request and pre
  await assert.rejects(h.run(),error=>error===reason);
  assert.deepEqual(h.routes,[]);assert.deepEqual(h.budgets,[]);assert.deepEqual(h.events,['init-start','closed']);
  assert.equal(h.phases().at(-1),'initialization-failed');
+});
+
+test('failed private diagnostics never mask the original readiness assertion or skip cleanup',async t=>{
+ const h=harness(t,{health:route=>({status:route.endsWith('/ready')?503:200,body:{ok:true}}),diagnose:async()=>{throw new Error('synthetic pool already closed');}});
+ await assert.rejects(h.run(),error=>error.code==='ERR_ASSERTION'&&error.message.includes('/api/health/ready'));
+ assert.equal(h.events.includes('data-checks'),false);assert.equal(h.events.at(-1),'closed');
 });
 
 for(const startupPhase of ['receipt-workers','report-worker'])test(startupPhase+' failure survives thread transport and private recovery projection',async t=>{

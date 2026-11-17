@@ -9,9 +9,9 @@ function fixture(t){
  t.after(()=>{assert.ok(workspace.startsWith(fs.realpathSync(os.tmpdir())+path.sep));fs.rmSync(workspace,{recursive:true});});
  fs.writeFileSync(path.join(root,'source-encryption.env'),'');return {workspace,root};
 }
-function harness(t,{badLogin=false,badPreview=false,integrityError=null}={}){
- const {workspace,root}=fixture(t),routes=[];let imported=false,closed=false;
- const access={prepare(){return {get:async()=>({id:'synthetic-location'}),run:async()=>({})};},transaction:async work=>work(),close:async()=>{}};
+function harness(t,{badLogin=false,badPreview=false,integrityError=null,scenario='full'}={}){
+ const {workspace,root}=fixture(t),routes=[];let imported=false,closed=false,revoked=false;
+ const access={prepare(sql){return {get:async()=>({id:'synthetic-location'}),run:async()=>{if(sql.startsWith('UPDATE portal_users SET active=0'))revoked=true;return {};}};},transaction:async work=>work(),close:async()=>{}};
  const server={once(){},close(done){done();},closeAllConnections(){}};
  const subject={initializeApplicationPersistence:async()=>{},app:{listen(_port,_host,done){queueMicrotask(done);return server;}},hashPortalPassword:async()=>'synthetic-hash',
   closePersistenceForTests:async()=>{closed=true;},ensureWorkRuleEvaluationReceiptIntegrity:async()=>{if(integrityError)throw integrityError;return 1;},runSalesReportQueueForTests:async()=>{}};
@@ -20,6 +20,7 @@ function harness(t,{badLogin=false,badPreview=false,integrityError=null}={}){
   async fetch(url,options={}){
    const route=new URL(url).pathname;routes.push(route);let status=200,body={ok:true},pdf=false;
    if(route==='/api/portal/v1/auth/login'&&badLogin){status=403;body={error:'SECRET',employee:'PRIVATE'};}
+   else if(route==='/api/locations'&&revoked)status=401;
    else if(route==='/api/sales/articles')body={total:new URL(url).searchParams.get('query')==='Sony'||imported?1:0,items:new URL(url).searchParams.get('query')==='Sony'||imported?[{name:'PRIVATE'}]:[]};
    else if(route.endsWith('.pdf')||route.endsWith('/download'))pdf=true;
    else if(route==='/api/receipt-search/context')body={available:true};
@@ -39,7 +40,7 @@ function harness(t,{badLogin=false,badPreview=false,integrityError=null}={}){
   require(name){if(name==='../../../../server')return subject;if(name==='../../../../lib/persistence/postgresql/application-operations/access')return {openCoreOperations:async()=>access};return localRequire(name);},
  };
  vm.runInNewContext(source,context,{filename:file});
- return {workspace,root,routes,isClosed:()=>closed,run:()=>context.module.exports.qualifyHttp({root,config:{recoveryAccounts:{gp_core_app:'synthetic-only'}}})};
+ return {workspace,root,routes,isClosed:()=>closed,run:()=>context.module.exports.qualifyHttp({root,config:{recoveryAccounts:{gp_core_app:'synthetic-only'}},scenario})};
 }
 for(const [label,options,expected] of [
  ['login HTTP rejection',{badLogin:true},{step:'login',errorClass:'http-status',status:403,expected:200}],
@@ -55,6 +56,15 @@ for(const [label,options,expected] of [
 test('successful full smoke leaves no failure diagnostic and performs the final revocation check',async t=>{
  const h=harness(t),result=await h.run();assert.equal(result.fullApplicationSmoke,true);assert.equal(result.revokedSessionRejected,true);
  assert.equal(h.routes.at(-1),'/api/sales-report-jobs');assert.equal(safeDiagnostics(h.workspace).smokeFailure,undefined);
+});
+
+test('owned smoke uses registered diagnostic steps and verifies core HTTP/PDF/session behavior without a full Sales claim',async t=>{
+ const h=harness(t,{scenario:'deploy-owned'}),result=await h.run();
+ assert.equal(result.ownedApplicationSmoke,true);assert.equal(result.fullApplicationSmoke,false);
+ assert.equal(result.revokedSessionRejected,true);assert.ok(result.schedulePdfBytes>5);
+ assert.equal(h.routes.filter(route=>route==='/api/locations').length,10);
+ assert.ok(!h.routes.some(route=>route.startsWith('/api/sales')||route.startsWith('/api/receipt')));
+ assert.equal(h.isClosed(),true);assert.equal(safeDiagnostics(h.workspace).smokeFailure,undefined);
 });
 test('failure projection rejects unknown steps/classes and oversized files',t=>{
  const {workspace,root}=fixture(t);

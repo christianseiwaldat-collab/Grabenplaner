@@ -53,11 +53,14 @@ Aenderung mit dem Hinweis auf eine explizite Servermigration abgelehnt.
                                  Muss vor Paketbau und Upload erfolgreich sein.
   --minimum-free-bytes ZAHL      Mindestfreiraum des Vorabchecks; Standard 5 GiB.
 
-  --verification auto|full       Standard auto: kurzer Ablauf nur mit aktuellem,
+  --verification auto|full|deploy-owned
+                                 Standard auto: kurzer Ablauf nur mit aktuellem,
                                  gebundenem vollstaendigem Recovery-Nachweis.
                                  full erzwingt den umfassenden Ablauf.
+                                 deploy-owned prueft Core und eigene Sales-Daten;
+                                 fehlende Voraussetzungen erzwingen full.
 Archivabschluss und vollstaendiger Restore folgen beim kurzen Ablauf nachts.
-Ein frischer, vollstaendig gepruefter Rueckkehrpunkt bleibt immer erforderlich.
+Ein frischer, zum ausgewaehlten Umfang gepruefter Rueckkehrpunkt bleibt erforderlich.
   --package-verifier-sha256 HEX  Expliziter Vertrauenswechsel auf den separat
                                  geprueften Paketpruefer neben diesem Skript;
                                  erzwingt full. Installierter Runtimevertrag,
@@ -174,7 +177,7 @@ fi
 for command_name in cmp cp rmdir realpath readlink flock sha256sum unzip zipinfo systemctl curl find grep sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
 [[ "$(uname -m)" == "x86_64" ]] || gp_die "Das Serverpaket wird derzeit nur auf Linux x86_64 unterstuetzt."
 [[ -n "$package_arg" ]] || gp_die "--package ist erforderlich."
-[[ "$verification_policy" == auto || "$verification_policy" == full ]] || gp_die "--verification erlaubt auto oder full."
+[[ "$verification_policy" == auto || "$verification_policy" == full || "$verification_policy" == deploy-owned ]] || gp_die "--verification erlaubt auto, full oder deploy-owned."
 [[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 1500 )) || gp_die "--health-timeout muss zwischen 30 und 1500 liegen."
 [[ "$maximum_expanded_bytes" =~ ^[0-9]+$ ]] && (( maximum_expanded_bytes >= 1048576 && maximum_expanded_bytes <= 4294967296 )) \
   || gp_die "--maximum-expanded-bytes liegt ausserhalb des erlaubten Bereichs."
@@ -1045,7 +1048,11 @@ create_exact_local_backup() {
   local backup_script="$app_dir/server-tools/linux/backup-grabenplaner.sh"
   local backup_app_dir="$app_dir"
   local -a retention_args=()
-  if [[ -n "$runtime_v5_transition" || -n "$runtime_v6_transition" ]] || (( ${xoffi_snapshots_migration:-0} == 1 || ${postgresql_backup_repair:-0} == 1 || ${postgresql_backup_budget_repair:-0} == 1 )); then
+  if [[ "$deploy_mode" == owned ]]; then
+    backup_app_dir="$extract_root"
+    backup_script="$backup_app_dir/server-tools/linux/backup-grabenplaner.sh"
+    retention_args=(--deploy-owned)
+  elif [[ -n "$runtime_v5_transition" || -n "$runtime_v6_transition" ]] || (( ${xoffi_snapshots_migration:-0} == 1 || ${postgresql_backup_repair:-0} == 1 || ${postgresql_backup_budget_repair:-0} == 1 )); then
     # This complete candidate tree has already passed manifest, dependency,
     # ClamAV and permission checks. The Xoffi release also carries the bounded
     # backup query budget needed by large existing pairs. The probe repair is
@@ -1069,14 +1076,25 @@ create_exact_local_backup() {
   if [[ "$database_provider" == postgresql ]]; then
     postgresql_before_identity="$(root_node "$backup_app_dir/server-tools/linux/lib/postgresql-operations.js" identity /etc/grabenplaner/postgresql-operations.json)" || gp_die 'Der PostgreSQL-Paarstand konnte nicht gebunden werden.'
   fi
-  "$backup_script" --env-file "$env_file" --app-dir "$backup_app_dir" --data-dir "$data_dir" --database "$database" \
+  if ! "$backup_script" --env-file "$env_file" --app-dir "$backup_app_dir" --data-dir "$data_dir" --database "$database" \
     --backup-dir "$backup_dir" --keep "$backup_keep" --service "$service" --node "$node" \
-    --service-user "$service_user" --service-group "$service_group" --lock-already-held "${retention_args[@]}" >"$backup_result_file"
+    --service-user "$service_user" --service-group "$service_group" --lock-already-held "${retention_args[@]}" >"$backup_result_file"; then
+    if [[ "$deploy_mode" == owned ]]; then
+      gp_warn 'Der kleinere Sicherungspunkt ist nicht nachgewiesen; erstelle vor dem App-Tausch den vollstaendigen Paarpunkt.'
+      deploy_mode=full
+      deploy_decision='{"mode":"full","reason":"OWNED_BACKUP_UNAVAILABLE"}'
+      create_exact_local_backup
+      return
+    fi
+    gp_die 'Der frische PostgreSQL-Rueckkehrpunkt ist fehlgeschlagen.'
+  fi
   backup_database="$(root_node -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).path))' "$backup_result_file")"
   backup_amu="$(root_node -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).amuBackup))' "$backup_result_file")"
   if [[ "$database_provider" == postgresql ]]; then
     [[ -d "$backup_database" && -d "$backup_amu" ]] || gp_die 'Die gekoppelte PostgreSQL-Sicherung ist unvollstaendig.'
-    root_node "$backup_app_dir/server-tools/linux/lib/postgresql-operations.js" verify /etc/grabenplaner/postgresql-operations.json "$backup_database" "$backup_database.complete.json" >/dev/null || gp_die 'Die PostgreSQL-Sicherung konnte nicht bestaetigt werden.'
+    local verify_action=verify
+    [[ "$deploy_mode" != owned ]] || verify_action=verify-deploy-owned
+    root_node "$backup_app_dir/server-tools/linux/lib/postgresql-operations.js" "$verify_action" /etc/grabenplaner/postgresql-operations.json "$backup_database" "$backup_database.complete.json" >/dev/null || gp_die 'Die PostgreSQL-Sicherung konnte nicht bestaetigt werden.'
   else
     [[ -f "$backup_database" && -d "$backup_amu" ]] || gp_die "Das Sicherheitsbackup vor dem Update ist unvollstaendig."
   fi
@@ -1418,20 +1436,32 @@ begin_deploy_phase maintenance-lock
 (( maintenance_lock_held == 1 )) && flock --nonblock 9 \
   || gp_die "Der im Preflight reservierte Wartungskorridor ist nicht mehr aktiv."
 begin_deploy_phase verification-policy
+effective_verification_policy="$verification_policy"
+if [[ "$verification_policy" == auto && "$database_provider" == postgresql ]]; then
+  # A GP preference selects the protected classifier; it never authorizes a
+  # reduced point on its own. Unreadable/old settings keep the full Sales path.
+  if preference_result="$(root_node "$extract_root/server-tools/linux/lib/postgresql-operations.js" deploy-backup-scope /etc/grabenplaner/postgresql-operations.json)"; then
+    effective_verification_policy="$(root_node -e 'const v=JSON.parse(process.argv[1]),p=require(process.argv[2]); if(v.appliesTo!=="deploy-auto"||v.available!==true||(!v.valid&&v.scope!=="full"))process.exit(1);process.stdout.write(p.effectivePolicy("auto",v.scope))' "$preference_result" "$extract_root/lib/deploy-backup-scope.js")" || effective_verification_policy=auto
+  else
+    gp_warn "Die gespeicherte Sicherungswahl ist nicht lesbar; die vollstaendige Sales-Sicherung bleibt aktiv."
+  fi
+fi
 if [[ "$verification_policy" == full || -n "$runtime_v5_transition" ]]; then
   deploy_decision='{"mode":"full","reason":"EXPLICIT_FULL_VERIFICATION"}'
 elif [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 ]]; then
+  decision_helper="$SCRIPT_DIR/lib/deploy-policy.js"
+  [[ "$effective_verification_policy" != deploy-owned ]] || decision_helper="$extract_root/server-tools/linux/lib/deploy-owned-policy.js"
   nightly_timer_active=0
   # Our own maintenance pause must not invalidate a previously active schedule.
   # Preserve both states: an enabled but already inactive timer is not ready.
   if [[ "${deploy_timer_was_enabled[grabenplaner-offsite-assurance.timer]:-0}" == 1 \
     && "${deploy_timer_was_active[grabenplaner-offsite-assurance.timer]:-0}" == 1 ]]; then nightly_timer_active=1; fi
-  deploy_decision="$(root_node "$SCRIPT_DIR/lib/deploy-policy.js" decide \
+  deploy_decision="$(root_node "$decision_helper" decide \
     "$app_dir" "$extract_root" "$database" "$env_file" "$nightly_timer_active:${deploy_assurance_scheduled_epoch_ms:-}")" \
     || gp_die "Die Deploy-Pruefstrategie konnte nicht bestimmt werden."
 fi
-deploy_mode="$(root_node -e 'const value=JSON.parse(process.argv[1]); if(!["short","full"].includes(value.mode))process.exit(1); process.stdout.write(value.mode)' "$deploy_decision")"
-gp_info "Deploy-Pruefstrategie: $deploy_mode. Der frische gekoppelte Rueckkehrpunkt bleibt verpflichtend."
+deploy_mode="$(root_node -e 'const value=JSON.parse(process.argv[1]); if(!["short","full","owned"].includes(value.mode))process.exit(1); process.stdout.write(value.mode)' "$deploy_decision")"
+gp_info "Deploy-Pruefstrategie: $deploy_mode. Der frische gebundene Rueckkehrpunkt bleibt verpflichtend."
 if [[ -n "$runtime_v6_transition" ]]; then
   root_node "$SCRIPT_DIR/lib/runtime-v6-transition.js" invocation "$runtime_v6_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
     || gp_die "Die geschuetzte Runtime-v6-Bindung wurde vor dem Dienststopp veraendert."
@@ -1497,6 +1527,15 @@ if [[ "$deploy_mode" == short ]]; then
     || gp_die "Der Kurzpfad ist nach der Sicherung nicht mehr gueltig; die bisherige App bleibt erhalten."
 fi
 
+if [[ "$deploy_mode" == owned ]]; then
+  begin_deploy_phase owned-policy-recheck
+  owned_recheck="$(root_node "$extract_root/server-tools/linux/lib/deploy-owned-policy.js" decide \
+    "$app_dir" "$extract_root" "$database" "$env_file" "1:${deploy_assurance_scheduled_epoch_ms:-}")" \
+    || gp_die 'Der kleinere Recovery-Vertrag konnte vor dem App-Tausch nicht erneut bestaetigt werden.'
+  root_node -e 'if(JSON.parse(process.argv[1]).mode!=="owned")process.exit(1)' "$owned_recheck" \
+    || gp_die 'Der kleinere Recovery-Vertrag ist nach der Sicherung nicht mehr gueltig.'
+fi
+
 begin_deploy_phase application-swap
 start_database_lock
 mv -- "$app_dir" "$rollback_root"
@@ -1551,10 +1590,27 @@ begin_deploy_phase deployment-checks
   --env-file "$env_file" --app-dir "$app_dir" --data-dir "$data_dir" --database "$database" --backup-dir "$backup_dir" \
   --public-url "$public_url" --service "$service" --caddy-service "$caddy_service" >&2 \
   || gp_die "Die kurzen Betriebspruefungen nach dem Versionswechsel sind fehlgeschlagen."
+if [[ "$deploy_mode" == owned ]]; then
+  begin_deploy_phase owned-recovery
+  owned_recovery_result="$maintenance_root/owned-recovery-result.json"
+  root_node "$app_dir/server-tools/linux/lib/deploy-owned-recovery.js" "$backup_database" "$backup_database.complete.json" "$rollback_root" "$app_dir" >"$owned_recovery_result" \
+    || gp_die 'Die isolierte Wiederherstellung der Core- und eigenen GP-Inhalte ist fehlgeschlagen.'
+  deploy_decision="$(root_node -e 'const fs=require("node:fs");const d=JSON.parse(process.argv[1]),r=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));if(r.ok!==true||r.fullRecovery!==false||r.ownedApplicationSmoke!==true||r.providerId!=="postgresql-deploy-owned")process.exit(1);d.ownedRecovery={verified:true,manifestSha256:r.pairManifestSha256,verifiedAt:r.verifiedAt,fullRecovery:false};process.stdout.write(JSON.stringify(d))' "$deploy_decision" "$owned_recovery_result")" \
+    || gp_die 'Der kleinere Recovery-Nachweis passt nicht zur Bereitstellung.'
+fi
 finish_deploy_phase
 receipt="$(write_receipt "success")"
 write_commit_marker
 update_committed=1
+
+# Provision the fixed app capability only after the app/data commit. A failed
+# optional socket setup cannot roll back a healthy release; the API stays
+# unavailable, and the setup helper removes only newly created control units.
+if [[ "$app_dir" == /opt/grabenplaner/app && -f /etc/grabenplaner/offsite/installed-contract.json ]]; then
+  if ! /bin/bash "$app_dir/server-tools/linux/install-manual-drive-control.sh"; then
+    gp_warn 'Die manuelle Google-Drive-Sicherungssteuerung bleibt bis zur sicheren Einrichtung nicht verfuegbar.'
+  fi
+fi
 
 # Nach einem bereits erfolgreich und atomar abgeschlossenen App-Update wird
 # zuerst ein signierter, fuer die App sichtbarer Queue-Beleg geschrieben und
@@ -1573,7 +1629,7 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transiti
     offsite_acquire_assurance_lock
     offsite_assert_runtime_binaries
     offsite_record_assurance_queue update-queued app-updated "$candidate_version"
-    if [[ "$deploy_mode" == short ]]; then
+    if [[ "$deploy_mode" == short || "$deploy_mode" == owned ]]; then
       root_node "$app_dir/server-tools/linux/lib/deploy-recovery-queue.js" record "$deploy_assurance_scheduled_epoch_ms"
     fi
   ); then
@@ -1581,7 +1637,7 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && -z "$runtime_v5_transiti
   fi
   if [[ -n "${deploy_deferral_generation:-}" && "$(root_node "$deploy_deferral_helper" due)" == due ]]; then
     gp_info "Der bereits faellige Nachtlauf prueft die neue Version unmittelbar nach Freigabe der Wartungssperre."
-  elif [[ "$deploy_mode" == short ]]; then
+  elif [[ "$deploy_mode" == short || "$deploy_mode" == owned ]]; then
     gp_info "Der vollstaendige Recovery-Nachweis fuer die neue Version folgt im aktivierten Nachtlauf."
   elif ! systemctl start --no-block grabenplaner-offsite-assurance@app-updated.service >/dev/null; then
     gp_warn "Die Recovery-Assurance-Pruefung nach dem App-Update konnte nicht eingeplant werden."

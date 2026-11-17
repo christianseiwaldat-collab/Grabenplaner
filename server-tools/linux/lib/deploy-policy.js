@@ -248,4 +248,5 @@ if (require.main === module) {
     process.stderr.write("Die Deploy-Pruefgrundlage konnte nicht bestaetigt werden.\n"); process.exitCode = 1;
   });
 }
-module.exports = { applicationContract, criticalPath, databaseIdentity, postgresqlPairIdentity, sameDatabaseIdentity, evaluateDeploy, MAX_AGE_MS, FORMAT, POLICY_VERSION, POLICY_ID };
+module.exports = { applicationContract, criticalPath, databaseIdentity, postgresqlPairIdentity, sameDatabaseIdentity, evaluateDeploy, MAX_AGE_MS, FORMAT, POLICY_VERSION, POLICY_ID,
+  readRegular, inspectedHistory, configurationIdentity, configuredDatabaseIdentity };

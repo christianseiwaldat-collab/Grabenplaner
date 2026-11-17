@@ -49,6 +49,8 @@ Verwendung: sudo ./backup-grabenplaner.sh [Optionen]
   --preserve-existing-backups
                        Interne Runtime-Migration: vorhandene Punkte erhalten
                        (geerbte FD9-Wartungssperre und ausdruecklich --keep 1000).
+  --deploy-owned       Interner Deploy-Punkt: Core und eigene Sales-Inhalte;
+                       verlangt geerbte Wartungssperre und gepruefte Quellen.
 EOF
 }
 
@@ -66,6 +68,7 @@ lock_already_held=0
 preserve_existing_backups=0
 defer_archive=0
 finish_deferred=0
+deploy_owned=0
 
 while (($#)); do
   case "$1" in
@@ -83,6 +86,7 @@ while (($#)); do
     --preserve-existing-backups) preserve_existing_backups=1; shift ;;
     --defer-archive) defer_archive=1; shift ;;
     --finish-deferred) finish_deferred=1; shift ;;
+    --deploy-owned) deploy_owned=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) gp_die "Unbekannte Option: $1" ;;
   esac

@@ -27,5 +27,6 @@ output/pdf/260901_Bewerbungsbewertung-Muster_*.pdf
 /.nyc_output/
 /playwright-report/
 /test-results/
+/.local/
 .DS_Store
 Thumbs.db

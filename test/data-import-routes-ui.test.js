@@ -117,6 +117,18 @@ test('cash takeover HTTP acknowledges the durable job instead of holding the req
   f.state.csrf=false;assert.equal((await send()).status,403);
   f.state.csrf=true;f.state.session=null;assert.equal((await send()).status,401);assert.equal(admitted,1);assert.equal(published,0);
 });
+
+test('legacy direct Apply and manual cash activation use the guarded job admissions and sanitize archive failures',async t=>{
+ let direct=0,manual=0;const code='IMPORT_SOURCE_ARCHIVE_REUPLOAD_REQUIRED';
+ const f=await fixture(t,{jobs:{async assertIdle(){},async enqueueApply(){direct++;throw Object.assign(new Error('private/path/key/password'),{code,status:409});},
+   async activateCashPublication(){manual++;throw Object.assign(new Error('private/path/key/password'),{code:'IMPORT_SOURCE_ARCHIVE_INVALID',status:503});}},
+   cashPublications:{operation(){throw new Error('unguarded publication must never run');}}});
+ const options={method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expectedRevision:4})};
+ const apply=await f.request('/api/data-import/sources/'+'a'.repeat(64)+'/apply',options),message=await apply.json();
+ assert.equal(apply.status,409);assert.equal(message.code,code);assert.match(message.error,/dieselbe Access-Datei erneut hochladen/);assert.doesNotMatch(message.error,/private\/path|password/);assert.equal(direct,1);assert.equal(f.state.calls,0);
+ const activate=await f.request('/api/data-import/cash/activate',options),failure=await activate.json();assert.equal(activate.status,503);assert.match(failure.error,/Verwaltung verständigen/);assert.doesNotMatch(failure.error,/private\/path|password/);assert.equal(manual,1);
+ f.state.csrf=false;assert.equal((await f.request('/api/data-import/cash/activate',options)).status,403);assert.equal(manual,1);
+});
 test('Productive Block 1: routes require personal company rights, CSRF and no-store, with no role-only grants',async t=>{
   const f=await fixture(t);let res=await f.request('/api/data-import/context');assert.equal(res.status,200);assert.match(res.headers.get('cache-control'),/no-store/);
   f.state.csrf=false;res=await f.request('/api/data-import/sources/search',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});assert.equal(res.status,403);

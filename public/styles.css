@@ -7734,3 +7734,15 @@ html[data-active-page-theme="dark"] .custom-work-rule-sticky-actions {
 .planning-saturday-inline { display:flex;align-items:center;gap:7px;font-size:12px;white-space:normal; }
 .planning-saturday-inline input { width:15px;height:15px;margin:0;accent-color:var(--green); }
 .planning-saturday-location small + small { margin-top:4px; }
+
+.manual-drive-backup-form { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 18px; margin:16px 0; }
+.manual-drive-backup-form > .field { flex:1 1 240px; max-width:380px; }
+.manual-drive-backup-form .backup-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.manual-drive-backup-table { max-width:100%; overflow:auto; }
+.manual-drive-backup-table table { width:100%; border-collapse:collapse; }
+.manual-drive-backup-table th,.manual-drive-backup-table td { padding:11px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:middle; }
+.manual-drive-backup-table th { white-space:nowrap; }
+.manual-drive-backup-table th > button:not(.gp-column-resizer) { border:0; background:none; color:inherit; padding:0; font:inherit; font-weight:600; cursor:pointer; }
+.manual-drive-backup-table td small { display:block; overflow-wrap:anywhere; }
+#manualDriveBackupStatus[data-state="error"],#manualDriveBackupDeleteStatus[data-state="error"] { color:var(--danger,#b42318); }
+#manualDriveBackupJobStatus:empty { display:none; }

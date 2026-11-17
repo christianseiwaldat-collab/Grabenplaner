@@ -704,6 +704,13 @@ const state = {
   serverDiagnostics: null,
   serverDiagnosticsLoading: false,
   maintenanceSchedules: null,
+  deployBackupScope: null,
+  deployBackupScopeDraft: "full",
+  deployBackupScopeLoadState: "idle",
+  deployBackupScopeMessage: "",
+  deployBackupScopePending: false,
+  deployBackupScopeActor: "",
+  deployBackupScopeEpoch: 0,
   maintenanceSchedulesLoadState: "idle",
   maintenanceSchedulesMessage: "",
   maintenanceSchedulesPending: false,
@@ -722,6 +729,16 @@ const state = {
   offsiteFoldersLoadError: "",
   offsiteFolderMutationPending: "",
   offsiteFolderReturnFocus: null,
+  manualDriveBackups: null,
+  manualDriveBackupsLoadState: "idle",
+  manualDriveBackupsMessage: "",
+  manualDriveBackupsPending: "",
+  manualDriveBackupsActor: "",
+  manualDriveBackupsEpoch: 0,
+  manualDriveBackupsTimer: null,
+  manualDriveBackupsTable: null,
+  manualDriveBackupsSort: { key: "createdAt", direction: "desc" },
+  manualDriveBackupDeleteId: "",
   updateStatus: null,
   selectedColor: "#0b84c6",
   integrations: {
@@ -859,6 +876,8 @@ const elements = Object.fromEntries(
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "vpsRebootModal", "vpsRebootForm", "vpsRebootCloseButton", "vpsRebootCancelButton", "vpsRebootConfirmButton", "vpsRebootCurrentPassword", "vpsRebootMessage", "maintenanceScheduleCard", "maintenanceScheduleStatus", "maintenanceScheduleForm", "maintenanceScheduleRows", "reloadMaintenanceSchedulesButton", "saveMaintenanceSchedulesButton", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "offsiteProviderSelect", "offsiteProviderPolicyHint", "googleDriveManagementStatus", "googleDriveFolderControls", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
+    "deployBackupScopeCard", "deployBackupScopeForm", "deployBackupScopeSelect", "deployBackupScopeDescription", "deployBackupScopeStatus", "reloadDeployBackupScopeButton", "saveDeployBackupScopeButton",
+    "manualDriveBackupCard", "manualDriveBackupForm", "manualDriveBackupCreateButton", "manualDriveBackupReloadButton", "manualDriveBackupStatus", "manualDriveBackupJobStatus", "manualDriveBackupTableContainer", "manualDriveBackupDeleteDialog", "manualDriveBackupDeleteForm", "manualDriveBackupDeletePassword", "manualDriveBackupDeleteDescription", "manualDriveBackupDeleteStatus", "manualDriveBackupDeleteConfirmButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "scheduleLockSettingsCard", "planningAssistantSettingsCard", "planningAssistantEnabled", "planningAssistantAutoCheck", "planningAssistantShowInformational", "planningAssistantSettingsState", "branchSupervisionSettingsCard", "branchSupervisionMode", "branchSupervisionIntensity", "branchSupervisionThresholds", "branchSupervisionPrimaryCoveragePercent", "branchSupervisionDepartmentGapMinutes", "branchSupervisionSettingsHint", "crossLocationScheduleSettingsCard", "crossLocationScheduleEnabled", "crossLocationScheduleHorizonWeeks", "staffAssignmentManagerCreateEnabled", "staffAssignmentDepartmentManagerCreateEnabled", "staffAssignmentDepartmentManagerReviewEnabled", "staffAssignmentNotificationSettingsCard", "staffAssignmentEmailSubmittedEnabled", "staffAssignmentEmailDecisionEnabled", "staffAssignmentChangeSettingsCard", "staffAssignmentChangePolicy", "staffAssignmentCancellationPolicy", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
@@ -3205,6 +3224,8 @@ function applyRoleVisibility() {
   elements.serverDiagnosticsCard?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
   elements.refreshServerDiagnosticsButton?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
   elements.maintenanceScheduleCard?.classList.toggle("hidden", !serverBackupAdministrationAccess);
+  renderDeployBackupScope();
+  renderManualDriveBackups();
   elements.databaseBackupSettingsCard?.classList.toggle("hidden", serverActive ? !serverBackupAdministrationAccess : !backupWriteAccess);
   elements.legacyLocalBackupControls?.classList.toggle("hidden", serverActive);
   elements.serverDatabaseDownloadPanel?.classList.toggle("hidden", !serverBackupAdministrationAccess);
@@ -7344,6 +7365,134 @@ function canManageMaintenanceSchedules() {
     && permissions.includes("backup:write");
 }
 
+function syncDeployBackupScopeActor() {
+  const user = state.portalSession?.user;
+  const actor = canManageMaintenanceSchedules()
+    ? JSON.stringify([user?.employeeNumber || "", user?.id || "", user?.sessionKind || "", user?.role || ""]) : "";
+  if (state.deployBackupScopeActor !== actor) {
+    state.deployBackupScopeActor = actor;
+    state.deployBackupScopeEpoch = (state.deployBackupScopeEpoch || 0) + 1;
+    state.deployBackupScope = null;
+    state.deployBackupScopeDraft = "full";
+    state.deployBackupScopeLoadState = "idle";
+    state.deployBackupScopeMessage = "";
+    state.deployBackupScopePending = false;
+  }
+  return actor;
+}
+
+function validDeployBackupScope(result) {
+  return Boolean(result && ["full", "deploy-owned"].includes(result.scope)
+    && typeof result.revision === "string" && result.revision.length > 0
+    && result.available === true && result.appliesTo === "deploy-auto");
+}
+
+function renderDeployBackupScope() {
+  const actor = syncDeployBackupScopeActor();
+  elements.deployBackupScopeCard?.classList.toggle("hidden", !actor);
+  const confirmed = validDeployBackupScope(state.deployBackupScope);
+  const busy = state.deployBackupScopePending || state.deployBackupScopeLoadState === "loading";
+  const draft = state.deployBackupScopeDraft;
+  const changed = confirmed && (draft !== state.deployBackupScope.scope || state.deployBackupScope.valid === false);
+  if (elements.deployBackupScopeSelect) {
+    elements.deployBackupScopeSelect.value = draft === "deploy-owned" ? "deploy-owned" : "full";
+    elements.deployBackupScopeSelect.disabled = !actor || !confirmed || busy;
+  }
+  if (elements.deployBackupScopeDescription) elements.deployBackupScopeDescription.textContent = draft === "deploy-owned"
+    ? "GP Core und eigene GP-Inhalte einschließlich Bildern und manuellen Änderungen bleiben gesichert. Importwerte, zugehörige Historien und abgeleitete Zuordnungen werden bei Bedarf aus sechs neuen Access-Dateien wieder aufgebaut. Falls eine vollständige Sicherung erforderlich ist, wird sie weiterhin verwendet."
+    : "Die vollständige Sicherung enthält GP Core und die gesamte Sales-Datenbank einschließlich der importierten Daten.";
+  if (elements.deployBackupScopeStatus) {
+    elements.deployBackupScopeStatus.textContent = state.deployBackupScopeMessage || (busy
+      ? "Die gespeicherte Auswahl wird geladen …" : confirmed && state.deployBackupScope.valid === false
+        ? "Die bisherige Auswahl ist ungültig. Vollständig: GP Core und Sales wird verwendet. Bitte die gewünschte Auswahl erneut speichern."
+        : changed ? "Die geänderte Auswahl ist noch nicht gespeichert."
+        : confirmed ? `Gespeichert: ${state.deployBackupScope.scope === "deploy-owned" ? "GP Core und eigene Inhalte" : "Vollständig: GP Core und Sales"}.`
+          : "Die gespeicherte Auswahl wird beim Öffnen geladen.");
+    elements.deployBackupScopeStatus.dataset.state = state.deployBackupScopeLoadState;
+  }
+  elements.deployBackupScopeForm?.setAttribute("aria-busy", busy ? "true" : "false");
+  if (elements.reloadDeployBackupScopeButton) elements.reloadDeployBackupScopeButton.disabled = !actor || busy;
+  if (elements.saveDeployBackupScopeButton) {
+    elements.saveDeployBackupScopeButton.disabled = !actor || !confirmed || !changed || busy;
+    elements.saveDeployBackupScopeButton.textContent = state.deployBackupScopePending ? "Auswahl wird gespeichert …" : "Auswahl speichern";
+  }
+}
+
+function updateDeployBackupScopeDraft(event) {
+  event?.stopPropagation();
+  if (!syncDeployBackupScopeActor() || state.deployBackupScopePending || state.deployBackupScopeLoadState === "loading" || !validDeployBackupScope(state.deployBackupScope)) return;
+  const scope = elements.deployBackupScopeSelect?.value;
+  if (!["full", "deploy-owned"].includes(scope)) return;
+  state.deployBackupScopeDraft = scope;
+  state.deployBackupScopeMessage = "";
+  state.deployBackupScopeLoadState = "ready";
+  renderDeployBackupScope();
+}
+
+async function loadDeployBackupScope({ announce = false } = {}) {
+  const actor = syncDeployBackupScopeActor();
+  if (!actor || state.deployBackupScopePending || state.deployBackupScopeLoadState === "loading") return false;
+  if (!announce && validDeployBackupScope(state.deployBackupScope)) return true;
+  const epoch = state.deployBackupScopeEpoch;
+  state.deployBackupScopeLoadState = "loading";
+  state.deployBackupScopeMessage = "Die gespeicherte Auswahl wird geladen …";
+  renderDeployBackupScope();
+  try {
+    const result = await api("/api/backup/deploy-scope");
+    if (syncDeployBackupScopeActor() !== actor || state.deployBackupScopeEpoch !== epoch) return false;
+    if (!validDeployBackupScope(result)) throw new Error("Der Sicherungsumfang ist derzeit nicht verfügbar. Bitte erneut laden.");
+    state.deployBackupScope = result;
+    state.deployBackupScopeDraft = result.scope;
+    state.deployBackupScopeLoadState = "ready";
+    state.deployBackupScopeMessage = "";
+    if (announce) showToast("Sicherungsumfang aktualisiert.");
+    return true;
+  } catch (error) {
+    if (syncDeployBackupScopeActor() !== actor || state.deployBackupScopeEpoch !== epoch) return false;
+    state.deployBackupScopeLoadState = "error";
+    state.deployBackupScopeMessage = error.message;
+    if (announce) showToast(error.message, true);
+    return false;
+  } finally {
+    if (state.deployBackupScopeActor === actor && state.deployBackupScopeEpoch === epoch) renderDeployBackupScope();
+  }
+}
+
+async function saveDeployBackupScope(event) {
+  event?.preventDefault();
+  const actor = syncDeployBackupScopeActor(), scope = state.deployBackupScopeDraft;
+  if (!actor || state.deployBackupScopePending || state.deployBackupScopeLoadState === "loading" || !validDeployBackupScope(state.deployBackupScope)
+    || !["full", "deploy-owned"].includes(scope) || (scope === state.deployBackupScope.scope && state.deployBackupScope.valid !== false)) return false;
+  const epoch = state.deployBackupScopeEpoch, expectedRevision = state.deployBackupScope.revision;
+  state.deployBackupScopePending = true;
+  state.deployBackupScopeMessage = "Die Auswahl wird gespeichert …";
+  renderDeployBackupScope();
+  try {
+    const result = await api("/api/backup/deploy-scope", { method: "PUT", body: JSON.stringify({ scope, expectedRevision }) });
+    if (syncDeployBackupScopeActor() !== actor || state.deployBackupScopeEpoch !== epoch) return false;
+    if (!validDeployBackupScope(result) || result.scope !== scope || result.valid === false) throw new Error("Die Auswahl wurde nicht bestätigt. Bitte den gespeicherten Stand neu laden.");
+    state.deployBackupScope = result;
+    state.deployBackupScopeDraft = result.scope;
+    state.deployBackupScopeLoadState = "ready";
+    state.deployBackupScopeMessage = "";
+    showToast("Sicherungsumfang für Updates gespeichert.");
+    return true;
+  } catch (error) {
+    if (syncDeployBackupScopeActor() !== actor || state.deployBackupScopeEpoch !== epoch) return false;
+    state.deployBackupScope = null;
+    state.deployBackupScopeLoadState = "error";
+    state.deployBackupScopeMessage = error.status === 409
+      ? "Der gespeicherte Umfang wurde inzwischen geändert. Bitte neu laden und die Auswahl erneut prüfen." : error.message;
+    showToast(state.deployBackupScopeMessage, true);
+    return false;
+  } finally {
+    if (state.deployBackupScopeActor === actor && state.deployBackupScopeEpoch === epoch) {
+      state.deployBackupScopePending = false;
+      renderDeployBackupScope();
+    }
+  }
+}
+
 function maintenanceScheduleCadenceLabel(value, task) {
   if (value === "interval") return `Alle ${Number(task.intervalMinutes || 5)} Minuten`;
   if (value === "hours") return "Mehrmals täglich";
@@ -7550,6 +7699,234 @@ function updateMaintenanceScheduleDraft(event) {
   renderMaintenanceSchedules();
 }
 
+function canManageManualDriveBackups() {
+  return canManageMaintenanceSchedules()
+    && state.serverStatus?.backups?.offsite?.provider?.selectedProviderId === "google_drive";
+}
+
+function syncManualDriveBackupsActor() {
+  const user = state.portalSession?.user;
+  const actor = canManageManualDriveBackups()
+    ? JSON.stringify([user?.employeeNumber || "", user?.id || "", user?.sessionKind || "", user?.role || ""]) : "";
+  if (state.manualDriveBackupsActor !== actor) {
+    state.manualDriveBackupsActor = actor;
+    state.manualDriveBackupsEpoch = (state.manualDriveBackupsEpoch || 0) + 1;
+    state.manualDriveBackups = null;
+    state.manualDriveBackupsLoadState = "idle";
+    state.manualDriveBackupsMessage = "";
+    state.manualDriveBackupsPending = "";
+    state.manualDriveBackupDeleteId = "";
+    state.manualDriveBackupsSort = { key: "createdAt", direction: "desc" };
+    clearTimeout(state.manualDriveBackupsTimer);
+    state.manualDriveBackupsTimer = null;
+    state.manualDriveBackupsTable?.destroy();
+    state.manualDriveBackupsTable = null;
+    if (elements.manualDriveBackupDeletePassword) elements.manualDriveBackupDeletePassword.value = "";
+    elements.manualDriveBackupDeleteDialog?.close();
+  }
+  return actor;
+}
+
+function normalizedManualDriveBackups(result) {
+  const time = value => typeof value === "string" && Number.isFinite(Date.parse(value));
+  const hash = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+  const uuid = value => typeof value === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value);
+  const valid = result && result.available === true && result.providerId === "google_drive"
+    && time(result.generatedAt) && typeof result.stale === "boolean" && (result.stale ? result.verifiedAt === null || time(result.verifiedAt) : time(result.verifiedAt))
+    && typeof result.busy === "boolean" && Array.isArray(result.backups) && result.backups.length <= 10000
+    && new Set(result.backups.map(row => row?.snapshotId)).size === result.backups.length
+    && result.backups.every(row => row && hash(row.snapshotId) && time(row.createdAt)
+      && (row.sizeBytes === null || Number.isSafeInteger(row.sizeBytes) && row.sizeBytes >= 0)
+      && row.scope === "full" && row.status === "confirmed" && typeof row.manual === "boolean" && typeof row.deletable === "boolean"
+      && [null, "NEWEST_BACKUP", "AUTOMATIC_BACKUP", "OPERATION_BUSY"].includes(row.blockedDeleteReason)
+      && (!row.deletable || row.manual && row.blockedDeleteReason === null));
+  const operation = result?.operation;
+  if (!valid || operation !== null && !(operation && uuid(operation.requestId) && ["create", "delete"].includes(operation.action)
+    && ["queued", "running", "succeeded", "failed"].includes(operation.state) && typeof operation.phase === "string"
+    && time(operation.requestedAt) && [operation.startedAt, operation.finishedAt].every(value => value === null || time(value))
+    && (operation.snapshotId === null || hash(operation.snapshotId)) && (operation.errorCode === null || typeof operation.errorCode === "string")
+    && (!(operation.action === "create" && operation.state === "succeeded") || hash(operation.snapshotId)))) {
+    throw new Error("Die Sicherungsliste wurde nicht vollständig bestätigt. Bitte neu laden.");
+  }
+  return result;
+}
+
+function manualDriveBackupsVisible() {
+  return document.visibilityState !== "hidden" && state.currentView === "settings"
+    && elements.backupSettings?.classList.contains("active") && Boolean(syncManualDriveBackupsActor());
+}
+
+function scheduleManualDriveBackupsRefresh() {
+  clearTimeout(state.manualDriveBackupsTimer);
+  state.manualDriveBackupsTimer = null;
+  if (!state.manualDriveBackups?.busy || state.manualDriveBackupsLoadState === "error" || !manualDriveBackupsVisible()) return;
+  state.manualDriveBackupsTimer = setTimeout(() => {
+    state.manualDriveBackupsTimer = null;
+    if (manualDriveBackupsVisible()) void loadManualDriveBackups({ force: true });
+  }, 30000);
+}
+
+function manualDriveBackupTablePreferences(actor) {
+  if (!window.GrabenplanerTradeTables?.mount) return null;
+  const key = `grabenplaner.manual-drive-backups.table.v1:${actor}`;
+  return window.GrabenplanerTradeTables.mount({ api: async (_route, value) => {
+    if (syncManualDriveBackupsActor() !== actor) throw Object.assign(new Error("Sitzung geändert"), { name: "AbortError" });
+    if (value === undefined) {
+      try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; }
+    }
+    localStorage.setItem(key, JSON.stringify(value));
+    return value;
+  } });
+}
+
+function renderManualDriveBackupTable() {
+  const container = elements.manualDriveBackupTableContainer;
+  if (!container) return;
+  state.manualDriveBackupsTable?.clear(container);
+  const model = state.manualDriveBackups;
+  if (!model) {
+    container.innerHTML = '<p class="settings-note">Noch keine bestätigte Sicherungsliste geladen.</p>';
+    return;
+  }
+  if (!model.backups.length) {
+    container.innerHTML = '<p class="settings-note">Im eingerichteten Ziel sind noch keine bestätigten Grabenplaner-Sicherungen vorhanden.</p>';
+    return;
+  }
+  const sort = state.manualDriveBackupsSort || { key: "createdAt", direction: "desc" };
+  const columns = [{ id: "createdAt", label: "Erstellt" }, { id: "sizeBytes", label: "Größe" }, { id: "scope", label: "Umfang" }, { id: "manual", label: "Auslöser" }, { id: "status", label: "Status" }];
+  const rows = [...model.backups].sort((a, b) => {
+    const value = row => sort.key === "createdAt" ? Date.parse(row.createdAt) : sort.key === "sizeBytes" ? row.sizeBytes ?? -1 : sort.key === "manual" ? Number(row.manual) : row[sort.key];
+    const aa = value(a), bb = value(b), compared = aa < bb ? -1 : aa > bb ? 1 : a.snapshotId.localeCompare(b.snapshotId);
+    return compared * (sort.direction === "asc" ? 1 : -1);
+  });
+  const blocked = row => model.stale ? "Liste zuerst aktualisieren" : model.busy || state.manualDriveBackupsPending ? "Ein Vorgang läuft" : row.blockedDeleteReason === "NEWEST_BACKUP" ? "Jüngste Sicherung bleibt erhalten" : row.blockedDeleteReason === "AUTOMATIC_BACKUP" ? "Automatische Sicherung wird vom Server verwaltet" : "Diese Sicherung ist geschützt";
+  container.innerHTML = `<table aria-label="Grabenplaner-Sicherungen auf Google Drive"><thead><tr>${columns.map(column => `<th aria-sort="${sort.key === column.id ? sort.direction === "asc" ? "ascending" : "descending" : "none"}"><button type="button" data-sort="${column.id}">${column.label}${sort.key === column.id ? sort.direction === "asc" ? " ↑" : " ↓" : ""}</button></th>`).join("")}<th>Aktion</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(diagnosticTimestamp(row.createdAt))}<small>${escapeHtml(row.snapshotId.slice(0, 12))}</small></td><td>${escapeHtml(row.sizeBytes === null ? "Nicht verfügbar" : systemCenterByteLabel(row.sizeBytes))}</td><td>GP Core und Sales</td><td>${row.manual ? "Manuell" : "Automatisch"}</td><td><span class="status-badge active">Auf Drive bestätigt</span></td><td><button type="button" class="danger-button compact-button" data-manual-drive-delete="${row.snapshotId}" ${!row.deletable || model.stale || model.busy || state.manualDriveBackupsPending ? `disabled title="${escapeHtml(blocked(row))}"` : ""}>Löschen</button>${!row.deletable ? `<small>${escapeHtml(blocked(row))}</small>` : ""}</td></tr>`).join("")}</tbody></table>`;
+  if (!state.manualDriveBackupsTable) state.manualDriveBackupsTable = manualDriveBackupTablePreferences(state.manualDriveBackupsActor);
+  state.manualDriveBackupsTable?.attach(container, "manual-drive-backups", { onSort(key, direction) {
+    if (state.manualDriveBackupsSort?.key === key && state.manualDriveBackupsSort?.direction === direction) return;
+    state.manualDriveBackupsSort = { key, direction };
+    renderManualDriveBackupTable();
+  } });
+}
+
+function renderManualDriveBackups() {
+  const actor = syncManualDriveBackupsActor(), model = state.manualDriveBackups;
+  elements.manualDriveBackupCard?.classList.toggle("hidden", !actor);
+  const unavailable = !actor || !model || model.busy || model.stale || state.manualDriveBackupsPending || state.manualDriveBackupsLoadState !== "ready";
+  if (elements.manualDriveBackupCreateButton) elements.manualDriveBackupCreateButton.disabled = Boolean(unavailable);
+  if (elements.manualDriveBackupReloadButton) elements.manualDriveBackupReloadButton.disabled = !actor || state.manualDriveBackupsLoadState === "loading" || Boolean(state.manualDriveBackupsPending);
+  if (elements.manualDriveBackupStatus) {
+    elements.manualDriveBackupStatus.textContent = state.manualDriveBackupsMessage || (state.manualDriveBackupsLoadState === "loading"
+      ? "Sicherungsstand wird geladen …" : model?.stale ? `Letzter bestätigter Listenstand: ${diagnosticTimestamp(model.verifiedAt)}. Nach dem laufenden Vorgang wird die Liste aktualisiert.`
+        : model ? `Sicherungsliste bestätigt: ${diagnosticTimestamp(model.verifiedAt)}.` : "Sicherungen werden beim Öffnen geladen.");
+    elements.manualDriveBackupStatus.dataset.state = state.manualDriveBackupsLoadState;
+  }
+  const operation = model?.operation;
+  if (elements.manualDriveBackupJobStatus) elements.manualDriveBackupJobStatus.textContent = !operation ? model?.busy ? "Ein Sicherungs- oder Wartungsvorgang läuft auf dem Server." : ""
+    : operation.state === "queued" ? `${operation.action === "create" ? "Sicherung" : "Löschung"} ist beauftragt und wartet auf den Start.`
+      : operation.state === "running" ? `${operation.action === "create" ? "Sicherung und Upload laufen" : "Löschung läuft"}. Du kannst diese Ansicht schließen.`
+        : operation.state === "succeeded" ? operation.action === "create" ? "Sicherung abgeschlossen und auf Google Drive bestätigt." : "Die ausgewählte Sicherung wurde gelöscht."
+          : `${operation.action === "create" ? "Sicherung" : "Löschung"} ist fehlgeschlagen. Bitte die Liste aktualisieren und den Serverstatus prüfen.`;
+  const selected = model?.backups.find(row => row.snapshotId === state.manualDriveBackupDeleteId);
+  if (elements.manualDriveBackupDeleteConfirmButton) elements.manualDriveBackupDeleteConfirmButton.disabled = Boolean(unavailable || !selected?.deletable);
+  renderManualDriveBackupTable();
+  scheduleManualDriveBackupsRefresh();
+}
+
+async function loadManualDriveBackups({ force = false } = {}) {
+  const actor = syncManualDriveBackupsActor();
+  if (!actor || state.manualDriveBackupsPending || state.manualDriveBackupsLoadState === "loading") return false;
+  if (!force && state.manualDriveBackupsLoadState === "ready") return true;
+  const epoch = state.manualDriveBackupsEpoch;
+  state.manualDriveBackupsLoadState = "loading";
+  state.manualDriveBackupsMessage = "";
+  renderManualDriveBackups();
+  try {
+    const result = await api("/api/backup/drive");
+    if (syncManualDriveBackupsActor() !== actor || state.manualDriveBackupsEpoch !== epoch) return false;
+    state.manualDriveBackups = normalizedManualDriveBackups(result);
+    state.manualDriveBackupsLoadState = "ready";
+    return true;
+  } catch (error) {
+    if (syncManualDriveBackupsActor() !== actor || state.manualDriveBackupsEpoch !== epoch) return false;
+    state.manualDriveBackups = null;
+    state.manualDriveBackupsLoadState = "error";
+    state.manualDriveBackupsMessage = `Der aktuelle Sicherungsstatus ist nicht erreichbar. Ein bereits beauftragter Vorgang läuft unabhängig weiter. Bitte nach Wiederverbindung die Liste aktualisieren. ${error.message}`;
+    return false;
+  } finally {
+    if (state.manualDriveBackupsActor === actor && state.manualDriveBackupsEpoch === epoch) renderManualDriveBackups();
+  }
+}
+
+async function requestManualDriveBackup(event) {
+  event.preventDefault();
+  return mutateManualDriveBackup("create");
+}
+
+async function mutateManualDriveBackup(action) {
+  const actor = syncManualDriveBackupsActor(), model = state.manualDriveBackups;
+  if (!actor || !model || model.busy || model.stale || state.manualDriveBackupsPending || state.manualDriveBackupsLoadState !== "ready") return false;
+  const selected = model.backups.find(row => row.snapshotId === state.manualDriveBackupDeleteId);
+  const currentPassword = elements.manualDriveBackupDeletePassword?.value || "";
+  if (action === "delete" && (!selected?.deletable || !currentPassword)) {
+    if (elements.manualDriveBackupDeleteStatus) elements.manualDriveBackupDeleteStatus.textContent = "Bitte die Freigabe prüfen und das aktuelle Passwort eingeben.";
+    return false;
+  }
+  const epoch = state.manualDriveBackupsEpoch, requestId = window.crypto?.randomUUID?.();
+  if (!requestId) {
+    state.manualDriveBackupsMessage = "Dieser Browser kann den Auftrag nicht sicher kennzeichnen. Bitte einen aktuellen Browser verwenden.";
+    renderManualDriveBackups();
+    return false;
+  }
+  state.manualDriveBackupsPending = action;
+  state.manualDriveBackupsMessage = action === "create" ? "Sicherungsauftrag wird übermittelt …" : "Löschauftrag wird übermittelt …";
+  renderManualDriveBackups();
+  try {
+    const send = () => api(action === "create" ? "/api/backup/drive" : `/api/backup/drive/${selected.snapshotId}`, {
+      method: action === "create" ? "POST" : "DELETE",
+      body: JSON.stringify(action === "create" ? { requestId } : { requestId, currentPassword, confirmation: "DELETE_BACKUP" }),
+    });
+    const result = action === "delete" ? await withAdminReauthentication(send) : await send();
+    if (syncManualDriveBackupsActor() !== actor || state.manualDriveBackupsEpoch !== epoch) return false;
+    const confirmed = normalizedManualDriveBackups(result);
+    if (confirmed.operation?.requestId !== requestId || confirmed.operation.action !== action) throw new Error("Der Auftrag wurde nicht eindeutig bestätigt. Bitte den Status neu laden.");
+    state.manualDriveBackups = confirmed;
+    state.manualDriveBackupsMessage = "";
+    if (action === "delete") elements.manualDriveBackupDeleteDialog?.close();
+    return true;
+  } catch (error) {
+    if (syncManualDriveBackupsActor() !== actor || state.manualDriveBackupsEpoch !== epoch) return false;
+    state.manualDriveBackups = null;
+    state.manualDriveBackupsLoadState = "error";
+    state.manualDriveBackupsMessage = error.status === 409
+      ? "Der Sicherungsstand hat sich geändert oder ein Vorgang läuft bereits. Bitte die Liste neu laden."
+      : `${error.message} Der Auftragsstatus ist unklar; bitte nach Wiederverbindung die Liste aktualisieren. Ein bereits beauftragter Vorgang läuft serverseitig weiter. Der Auftrag wird nicht automatisch wiederholt.`;
+    if (elements.manualDriveBackupDeleteStatus) elements.manualDriveBackupDeleteStatus.textContent = state.manualDriveBackupsMessage;
+    return false;
+  } finally {
+    if (state.manualDriveBackupsActor === actor && state.manualDriveBackupsEpoch === epoch) {
+      state.manualDriveBackupsPending = "";
+      if (elements.manualDriveBackupDeletePassword) {
+        elements.manualDriveBackupDeletePassword.value = "";
+        resetAdminCredentialVisibility(elements.manualDriveBackupDeletePassword);
+      }
+      renderManualDriveBackups();
+    }
+  }
+}
+
+function openManualDriveBackupDelete(snapshotId) {
+  if (!syncManualDriveBackupsActor() || state.manualDriveBackupsPending || state.manualDriveBackupsLoadState !== "ready") return;
+  const model = state.manualDriveBackups, row = model?.backups.find(item => item.snapshotId === snapshotId);
+  if (!row?.deletable || model.busy || model.stale) return;
+  state.manualDriveBackupDeleteId = snapshotId;
+  if (elements.manualDriveBackupDeleteDescription) elements.manualDriveBackupDeleteDescription.textContent = `Vollständige Sicherung vom ${diagnosticTimestamp(row.createdAt)} (${row.snapshotId.slice(0, 12)}${row.sizeBytes === null ? "" : ` · ${systemCenterByteLabel(row.sizeBytes)}`}).`;
+  if (elements.manualDriveBackupDeletePassword) elements.manualDriveBackupDeletePassword.value = "";
+  if (elements.manualDriveBackupDeleteStatus) elements.manualDriveBackupDeleteStatus.textContent = "";
+  renderManualDriveBackups();
+  elements.manualDriveBackupDeleteDialog?.showModal();
+}
+
 function canManageOffsiteFolders() {
   const role = state.portalSession?.user?.role || "";
   const permissions = state.portalSession?.user?.permissions || [];
@@ -7720,6 +8097,8 @@ async function loadManagedOffsiteFolders({ force = false } = {}) {
 function renderServerDiagnostics(status, technical = null) {
   if (!elements.serverDiagnostics || !status) return;
   renderGoogleDriveManagementStatus(status);
+  renderManualDriveBackups();
+  if (manualDriveBackupsVisible() && state.manualDriveBackupsLoadState === "idle") void loadManualDriveBackups();
   const alerts = Array.isArray(status.alerts) ? status.alerts : [];
   const alertMarkup = alerts.length
     ? `<div class="diagnostic-alerts">${alerts.map((alert) => `<article class="${escapeHtml(alert.severity || "warning")}"><strong>${escapeHtml(alert.title || "Serverzustand prüfen")}</strong><span>${escapeHtml(alert.message || "")}</span></article>`).join("")}</div>`
@@ -38465,6 +38844,12 @@ function setView(view) {
   )) clearPersonnelLifecycleAutomationState();
   if (state.currentView === "settings" && view !== "settings") clearUsbProvisioningPasswords();
   state.currentView = view;
+  if (view !== "settings") {
+    clearTimeout(state.manualDriveBackupsTimer);
+    state.manualDriveBackupsTimer = null;
+    if (elements.manualDriveBackupDeletePassword) elements.manualDriveBackupDeletePassword.value = "";
+    elements.manualDriveBackupDeleteDialog?.close();
+  }
   if (view === 'personnel' && state.personnelTab === 'employees') resumeEmployeeProfile('team');
   if (view === "requests") ensureAccessibleManagerRequestTab();
   if (view === "personnelAdministration") setPersonnelAdministrationTab(state.personnelAdministrationTab);
@@ -38795,7 +39180,11 @@ function setSettingsTab(tab) {
   if (activeTab === "timeTracking") loadWifiAutomationSettings();
   if (activeTab === "backup") {
     refreshServerDiagnostics();
-    if (canManageMaintenanceSchedules()) loadMaintenanceSchedules();
+    void loadManualDriveBackups({ force: true });
+    if (canManageMaintenanceSchedules()) {
+      loadMaintenanceSchedules();
+      loadDeployBackupScope();
+    }
     if (canManageOffsiteFolders()) loadManagedOffsiteFolders();
   }
   if (personnelTarget || databaseTarget) {
@@ -43349,6 +43738,37 @@ elements.validatePersonnelLifecycleEditorButton?.addEventListener("click", () =>
 elements.refreshServerDiagnosticsButton?.addEventListener("click", () => refreshServerDiagnostics({ announce: true }));
 elements.reloadMaintenanceSchedulesButton?.addEventListener("click", () => loadMaintenanceSchedules({ announce: true }));
 elements.maintenanceScheduleForm?.addEventListener("submit", saveMaintenanceSchedules);
+elements.reloadDeployBackupScopeButton?.addEventListener("click", () => loadDeployBackupScope({ announce: true }));
+elements.deployBackupScopeSelect?.addEventListener("change", updateDeployBackupScopeDraft);
+elements.deployBackupScopeForm?.addEventListener("input", event => event.stopPropagation());
+elements.deployBackupScopeForm?.addEventListener("submit", saveDeployBackupScope);
+elements.manualDriveBackupForm?.addEventListener("submit", requestManualDriveBackup);
+elements.manualDriveBackupForm?.addEventListener("input", event => event.stopPropagation());
+elements.manualDriveBackupReloadButton?.addEventListener("click", () => loadManualDriveBackups({ force: true }));
+elements.manualDriveBackupDeleteForm?.addEventListener("input", event => event.stopPropagation());
+elements.manualDriveBackupDeleteForm?.addEventListener("submit", event => { event.preventDefault(); return mutateManualDriveBackup("delete"); });
+elements.manualDriveBackupDeleteDialog?.addEventListener("close", () => {
+  state.manualDriveBackupDeleteId = "";
+  if (elements.manualDriveBackupDeletePassword) {
+    elements.manualDriveBackupDeletePassword.value = "";
+    resetAdminCredentialVisibility(elements.manualDriveBackupDeletePassword);
+  }
+});
+elements.manualDriveBackupTableContainer?.addEventListener("click", event => {
+  const deletion = event.target.closest("[data-manual-drive-delete]");
+  if (deletion && !deletion.disabled) return openManualDriveBackupDelete(deletion.dataset.manualDriveDelete);
+  const sorting = event.target.closest("[data-sort]");
+  if (!sorting || !["createdAt", "sizeBytes", "scope", "manual", "status"].includes(sorting.dataset.sort)) return;
+  const key = sorting.dataset.sort, direction = state.manualDriveBackupsSort?.key === key && state.manualDriveBackupsSort.direction === "asc" ? "desc" : "asc";
+  state.manualDriveBackupsSort = { key, direction };
+  state.manualDriveBackupsTable?.setSort("manual-drive-backups", key, direction);
+  renderManualDriveBackupTable();
+});
+document.addEventListener("visibilitychange", () => {
+  clearTimeout(state.manualDriveBackupsTimer);
+  state.manualDriveBackupsTimer = null;
+  if (manualDriveBackupsVisible()) void loadManualDriveBackups({ force: true });
+});
 elements.maintenanceScheduleRows?.addEventListener("change", updateMaintenanceScheduleDraft);
 elements.serverDiagnostics?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-server-monitor-action]");

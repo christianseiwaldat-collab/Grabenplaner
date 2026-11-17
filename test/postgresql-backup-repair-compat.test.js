@@ -51,6 +51,12 @@ function fixture(t) {
   assert.equal(require("node:crypto").createHash("sha256").update(reviewedOperations.toString("utf8").replace(/\r\n/g, "\n")).digest("hex"),
     "a0699ec58917ae64fe3e5d36894ccf8eed7bc88d7fd438be4d3e16972d552006");
   fs.writeFileSync(path.join(candidate, "server-tools/linux/lib/postgresql-operations.js"), reviewedOperations);
+  // Both trees use the pinned historical verifier and its historical module
+  // set. The installed verifier must remain independently runnable unchanged.
+  const reviewedBundle = require("../test-support/legacy-baseline").legacyPath(
+    "lib/persistence/postgresql/operations/paired-bundle.js");
+  for (const root of [installed, candidate]) fs.copyFileSync(reviewedBundle,
+    path.join(root, "lib/persistence/postgresql/operations/paired-bundle.js"));
   const metadata = JSON.parse(fs.readFileSync(path.join(installed, "package.json"), "utf8"));
   metadata.version = "0.92.58-beta";
   fs.writeFileSync(path.join(installed, "package.json"), JSON.stringify(metadata));

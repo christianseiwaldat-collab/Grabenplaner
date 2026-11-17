@@ -19,3 +19,23 @@ test('partial, invalid and overflowing measurements fail closed',()=>{
   assert.throws(()=>restoreCapacity({checkpoint:{databaseBytes:measurement},files:[]}),/PG_PAIR_RESTORE_SIZE_INVALID/);
  }
 });
+
+test('reduced restore and emergency Access replay reserve the full databases and encrypted materialization scratch',()=>{
+ const manifest={checkpoint:{databaseBytes:{core:GiB,sales:GiB}},
+  recovery:{rehydrationDatabaseBytes:{core:GiB,sales:40*GiB}},files:[{file:'private/import-sources/fixture.source',bytes:GiB}]};
+ assert.deepEqual(restoreCapacity(manifest),{requiredBytes:10*GiB,basis:'measured-database-size'});
+ const replay={requiredBytes:104.5*GiB,basis:'measured-full-before-rehydration',accessScratchBytes:40*GiB};
+ assert.deepEqual(restoreCapacity(manifest,{rehydrate:true}),replay);
+ assert.deepEqual(assertRestoreCapacity(manifest,105*GiB,{rehydrate:true}),replay);
+ assert.throws(()=>assertRestoreCapacity(manifest,65*GiB,{rehydrate:true}),/PG_PAIR_RESTORE_DISK_RESERVE/);
+ assert.throws(()=>assertRestoreCapacity(manifest,10*GiB,{rehydrate:true}),/PG_PAIR_RESTORE_DISK_RESERVE/);
+});
+
+test('emergency replay refuses unknown, partial, zero and overflowing full measurements instead of estimating from small dumps',()=>{
+ for(const measurement of [undefined,null,{}, {core:GiB},{core:GiB,sales:0},{core:0,sales:GiB},
+  {core:GiB,sales:-1},{core:GiB,sales:null},{core:Number.MAX_SAFE_INTEGER,sales:1}]){
+  const manifest={checkpoint:{databaseBytes:{core:GiB,sales:GiB}},recovery:{rehydrationDatabaseBytes:measurement},files:[{file:'sales.dump',bytes:1}]};
+  assert.throws(()=>restoreCapacity(manifest,{rehydrate:true}),/PG_PAIR_RESTORE_SIZE_INVALID/);
+ }
+ assert.throws(()=>restoreCapacity({},{rehydrate:'true'}),/PG_PAIR_RESTORE_SIZE_INVALID/);
+});

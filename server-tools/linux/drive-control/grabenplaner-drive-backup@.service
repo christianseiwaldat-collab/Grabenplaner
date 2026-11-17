@@ -1,0 +1,25 @@
+[Unit]
+Description=Grabenplaner manual Google Drive backup operation
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/node /opt/grabenplaner/app/server-tools/linux/lib/manual-drive-control.js worker %i
+UMask=0077
+TimeoutStartSec=4h
+TimeoutStopSec=25min
+KillMode=control-group
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=4G
+TasksMax=256
+LimitCORE=0

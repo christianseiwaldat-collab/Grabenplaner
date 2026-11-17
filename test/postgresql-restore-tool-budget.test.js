@@ -44,7 +44,7 @@ test('restore disables autovacuum only in its disposable cluster before starting
    statSync:()=>({uid:500}),readdirSync:()=>[],statfsSync:()=>({bavail:20,bsize:1024**3}),
    mkdtempSync:prefix=>{assert.equal(prefix,'/tmp/gp-pg-recovery-');return socket;},chmodSync:scope,unlinkSync:scope,rmSync:scope,
    writeFileSync(name,text){scope(name);writes.push([name,text]);},appendFileSync(name,text){scope(name);writes.push([name,text]);},
-   readFileSync:name=>{assert.equal(name,'/synthetic/bundle/postgresql-operations.json');return JSON.stringify(config);},
+   readFileSync:name=>{if(name==='/synthetic/bundle/configuration.env')return 'SYNTHETIC_FIXTURE=1\n';assert.equal(name,'/synthetic/bundle/postgresql-operations.json');return JSON.stringify(config);},
    lstatSync:()=>({uid:0,mode:0o755,isFile:()=>true}),realpathSync:name=>name,openSync:name=>{scope(name);return 3;},closeSync(){},
   };
   const mocks={

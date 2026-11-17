@@ -44,6 +44,38 @@ const {
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
+test("deploy-scope preference and synthetic tests gain no database driver or runtime-provider grant", () => {
+  for (const file of ["lib/deploy-backup-scope.js", "test/deploy-backup-scope.test.js", "test/deploy-backup-scope-api.test.js", "test/deploy-backup-scope-ui.test.js"]) {
+    for (const driver of ["pg", "node:sqlite"]) {
+      assert.equal(architectureBoundaryViolationsForText(file, `const driver = require(${JSON.stringify(driver)});`)
+        .some(entry => /driver-import/.test(entry.kind)), true, file + ":" + driver);
+    }
+    assert.equal(architectureBoundaryViolationsForText(file, "function createPostgresqlPersistenceProvider() {}")
+      .some(entry => entry.kind === "postgresql-runtime-provider"), true, file);
+  }
+});
+
+test("manual Drive backup capability and synthetic UI/API contracts gain no persistence capability", () => {
+  for (const file of [
+    "lib/manual-drive-backups.js",
+    "server-tools/linux/lib/manual-drive-control.js",
+    "server-tools/linux/lib/manual-drive-operation.sh",
+    "server-tools/linux/install-manual-drive-control.sh",
+    "test/manual-drive-backups.test.js",
+    "test/manual-drive-backups-api.test.js",
+    "test/manual-drive-backup-ui.test.js",
+  ]) {
+    assert.deepEqual(architectureBoundaryViolationsForText(file, read(file)), [], file);
+    const executable = source => file.endsWith(".sh") ? `node - <<'NODE'\n${source}\nNODE\n` : source;
+    for (const driver of ["pg", "node:sqlite"]) {
+      assert.ok(architectureBoundaryViolationsForText(file, executable(`const driver = require(${JSON.stringify(driver)});`))
+        .some(entry => /driver-import/.test(entry.kind)), file + ":" + driver);
+    }
+    assert.ok(architectureBoundaryViolationsForText(file, executable("function createPostgresqlPersistenceProvider() {}"))
+      .some(entry => entry.kind === "postgresql-runtime-provider"), file);
+  }
+});
+
 test("PostgreSQL-only retired online entrypoints cannot regain a SQLite driver grant", () => {
   for (const file of ["backup.js", "lib/database-lock.js", "server-tools/linux/lib/backup-snapshot.js",
     "server-tools/linux/lib/restore-backup.js", "server-tools/linux/lib/verify-backup.js",
@@ -267,6 +299,35 @@ test("Studio-Statementregistrierung bleibt exakt benannt und erlaubt keinen Trei
     .some((entry) => entry.kind === "postgresql-driver-import"));
 });
 
+test("native Access recovery qualification has one exact PostgreSQL fixture exception", () => {
+  const file = 'test/postgresql-cash-rehydration-native.test.js';
+  assert.deepEqual(architectureBoundaryViolationsForText(file, read(file)), []);
+  const source = 'require("pg"); createPostgresqlPersistenceProvider({});';
+  assert.deepEqual(architectureBoundaryViolationsForText(file, source), []);
+  const sibling = architectureBoundaryViolationsForText('test/postgresql-cash-rehydration-unreviewed.test.js', source);
+  assert.ok(sibling.some(entry => entry.kind === 'postgresql-driver-import'));
+  assert.ok(sibling.some(entry => entry.kind === 'postgresql-runtime-provider'));
+  const pair = 'test-support/postgresql-deploy-owned-pair.cjs';
+  assert.deepEqual(architectureBoundaryViolationsForText(pair, read(pair)), []);
+  const bootstrap = 'test-support/postgresql-deploy-owned-bootstrap.cjs';
+  assert.deepEqual(architectureBoundaryViolationsForText(bootstrap, read(bootstrap)), []);
+  assert.ok(architectureBoundaryViolationsForText('test-support/postgresql-deploy-owned-unreviewed.cjs', 'require("pg")')
+    .some(entry => entry.kind === 'postgresql-driver-import'));
+  const relational='test/postgresql-access-owned-state.test.js';
+  assert.deepEqual(architectureBoundaryViolationsForText(relational,read(relational)),[]);
+  assert.deepEqual(architectureBoundaryViolationsForText(relational,'require("node:sqlite")'),[]);
+  assert.ok(architectureBoundaryViolationsForText('test/postgresql-access-owned-unreviewed.test.js','require("node:sqlite")')
+    .some(entry=>entry.kind==='sqlite-driver-import-outside-boundary'));
+  assert.ok(architectureBoundaryViolationsForText(relational,'require("pg")').some(entry=>entry.kind==='postgresql-driver-import'));
+  // Fresh reconstruction composes existing import facades and private clients;
+  // exact development classification grants no new PostgreSQL driver/provider.
+  for(const file of ['lib/persistence/postgresql/operations/access-fresh-rebuild.js','test/postgresql-access-fresh-rebuild.test.js']){
+    const violations=architectureBoundaryViolationsForText(file,'require("pg"); createPostgresqlPersistenceProvider({});');
+    assert.ok(violations.some(entry=>entry.kind==='postgresql-driver-import'));
+    assert.ok(violations.some(entry=>entry.kind==='postgresql-runtime-provider'));
+  }
+});
+
 test("Security-Audit-Store darf den Providervertrag prüfen, aber keine Statements oder Treiber einführen", () => {
   const file = "lib/security-audit-store.js";
   assert.deepEqual(architectureBoundaryViolationsForText(file,
@@ -401,7 +462,11 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   // The release inventory reads only component version metadata and package bytes.
   // The exact SAST/secret review JSON files contain quoted SQL terminology, not executable persistence.
   // The exact read-only SAST context helper adds one metadata-only file, without a driver grant.
-  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 23);
+  // The explicit owned-deploy chooser reads protected package metadata only;
+  // its named orchestration classification grants no application DB access.
+  // The four named manual Drive capability files orchestrate the installed
+  // Offsite module; this metadata classification permits no persistence access.
+  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 28);
   const sastMetadata = report.findings.filter(entry => entry.file === "scripts/security/sast-dispositions.json");
   assert.ok(sastMetadata.length > 0);
   assert.ok(sastMetadata.every(entry => entry.owner === "security-review-evidence"));

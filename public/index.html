@@ -2986,6 +2986,19 @@
                 <div class="backup-actions"><button type="button" class="secondary-button" id="reloadMaintenanceSchedulesButton">Neu laden</button><button type="submit" class="primary-button" id="saveMaintenanceSchedulesButton">Zeitpläne speichern</button></div>
               </form>
             </div>
+            <div class="settings-card full-settings-card hidden" id="deployBackupScopeCard">
+              <div class="card-heading"><div class="card-icon">Backup</div><div><h2>Sicherungsumfang bei Updates</h2><p>Den bevorzugten Umfang der Vorsicherung bei Updates mit automatischer Auswahl festlegen.</p></div></div>
+              <form id="deployBackupScopeForm" aria-describedby="deployBackupScopeHint deployBackupScopeStatus">
+                <label class="field"><span>Bevorzugter Sicherungsumfang</span><select id="deployBackupScopeSelect" disabled>
+                  <option value="full" selected>Vollständig: GP Core und Sales</option>
+                  <option value="deploy-owned">GP Core und eigene Inhalte</option>
+                </select></label>
+                <p class="settings-note" id="deployBackupScopeDescription">Die vollständige Sicherung enthält GP Core und die gesamte Sales-Datenbank einschließlich der importierten Daten.</p>
+                <p class="settings-note" id="deployBackupScopeHint">Für Vorsicherungen bei Updates mit automatischer Auswahl. Erforderliche Vollprüfungen und nächtliche Vollsicherungen haben Vorrang.</p>
+                <p class="settings-note" id="deployBackupScopeStatus" role="status" aria-live="polite">Die gespeicherte Auswahl wird beim Öffnen geladen.</p>
+                <div class="backup-actions"><button type="button" class="secondary-button" id="reloadDeployBackupScopeButton">Neu laden</button><button type="submit" class="primary-button" id="saveDeployBackupScopeButton" disabled>Auswahl speichern</button></div>
+              </form>
+            </div>
             <div class="settings-card full-settings-card hidden" id="databaseBackupSettingsCard">
               <div class="card-heading"><div class="card-icon">DB</div><div><h2>Datenbank &amp; Backups</h2><p>Interne Sicherungen, ein geprüfter Datenbankexport und die externe Wiederherstellbarkeit werden passend zur Betriebsart bereitgestellt.</p></div></div>
               <div class="database-backup-path"><span>Interne Startsicherung</span><strong id="appBackupDirectoryText">geschützter interner Sicherungsbereich</strong></div>
@@ -3030,6 +3043,16 @@
                 </div>
               </div>
               <p class="settings-note" id="googleDriveManagementHint">Verfügbar sind ausschließlich von Grabenplaner verwaltete Ordnernamen. Es gibt keine freie Pfadeingabe und keinen Zugriff auf andere Bereiche in Google Drive.</p>
+            </div>
+            <div class="settings-card full-settings-card hidden" id="manualDriveBackupCard">
+              <div class="card-heading"><div class="card-icon">Drive</div><div><h2>Manuelle Google-Drive-Sicherungen</h2><p>Eine vollständige Sicherung von GP Core, Sales und eigenen GP-Dateien im eingerichteten Google-Drive-Ziel erstellen.</p></div></div>
+              <p class="settings-note" id="manualDriveBackupHint">Während der vollständigen Sicherung ist GP vorübergehend nicht erreichbar. Der Auftrag läuft auf dem Server weiter, auch wenn du diese Ansicht schließt. Ein Wiederherstellungstest wird dabei nicht gestartet.</p>
+              <form id="manualDriveBackupForm" class="manual-drive-backup-form" aria-describedby="manualDriveBackupHint manualDriveBackupStatus">
+                <div class="backup-actions"><button type="submit" class="primary-button" id="manualDriveBackupCreateButton" disabled>Vollständig auf Google Drive sichern</button><button type="button" class="secondary-button" id="manualDriveBackupReloadButton">Liste aktualisieren</button></div>
+              </form>
+              <p class="settings-note" id="manualDriveBackupStatus" role="status" aria-live="polite">Sicherungen werden beim Öffnen geladen.</p>
+              <p class="settings-note" id="manualDriveBackupJobStatus" role="status" aria-live="polite"></p>
+              <div class="manual-drive-backup-table table-scroll" id="manualDriveBackupTableContainer"><p class="settings-note">Noch keine bestätigte Sicherungsliste geladen.</p></div>
             </div>
             <div class="settings-card full-settings-card hidden" id="backupRestoreGuidanceCard">
               <div class="card-heading"><div class="card-icon">Restore</div><div><h2>Wiederherstellung im Wartungsfenster</h2><p>In der produktiven Installation ist ein Datenbankimport absichtlich gesperrt. Datenbank, verschlüsselte Dokumentablage und zugehörige Schlüssel müssen gemeinsam durch die technische Administration wiederhergestellt und geprüft werden.</p></div></div>
@@ -4437,6 +4460,17 @@
         <label class="field"><span>Prüfbemerkung</span><textarea id="timeDayReviewNote" rows="3" maxlength="500" placeholder="Optional"></textarea></label>
         <p class="message hidden" id="timeDayReviewMessage"></p>
         <div class="modal-actions"><button type="button" class="secondary-button hidden" id="removeTimeDayReviewButton">Prüfung aufheben</button><span></span><button type="button" class="secondary-button" data-close="timeDayReviewModal">Abbrechen</button><button type="submit" class="primary-button">Als geprüft speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="manualDriveBackupDeleteDialog" aria-labelledby="manualDriveBackupDeleteTitle" aria-describedby="manualDriveBackupDeleteDescription">
+      <form id="manualDriveBackupDeleteForm">
+        <div class="modal-header"><div><span class="eyebrow">Google-Drive-Sicherung</span><h2 id="manualDriveBackupDeleteTitle">Diese Sicherung löschen?</h2></div><button type="button" class="close-button" data-close="manualDriveBackupDeleteDialog" aria-label="Dialog schließen">×</button></div>
+        <p id="manualDriveBackupDeleteDescription"></p>
+        <p class="settings-note">Die ausgewählte Sicherung steht danach nicht mehr für eine Wiederherstellung zur Verfügung. Andere Sicherungen bleiben erhalten. Nicht mehr benötigter Speicherplatz wird bei der regulären automatischen Bereinigung freigegeben.</p>
+        <label class="field"><span>Aktuelles Passwort</span><input id="manualDriveBackupDeletePassword" type="password" autocomplete="current-password" required /></label>
+        <p class="settings-note" id="manualDriveBackupDeleteStatus" role="status" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><button type="button" class="secondary-button" data-close="manualDriveBackupDeleteDialog">Abbrechen</button><button type="submit" class="danger-button" id="manualDriveBackupDeleteConfirmButton">Diese Sicherung löschen</button></div>
       </form>
     </dialog>
 

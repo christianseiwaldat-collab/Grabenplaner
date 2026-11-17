@@ -132,6 +132,8 @@ const {
   writeBackupCommitMarker,
 } = require("./lib/backup-commit");
 const { prepareLocalBackupArchive } = require("./lib/backup-archive-workflow");
+const deployBackupScope = require("./lib/deploy-backup-scope");
+const manualDriveBackups = require("./lib/manual-drive-backups");
 const { localBackupArchiveEnabled } = require("./lib/local-backup-environment");
 const { createSaturdayCreditService } = require("./lib/persistence/repositories/saturday-credit");
 const { createOrganizationPersonnelRepository } = require("./lib/persistence/repositories/organization-personnel");
@@ -26378,6 +26380,7 @@ const dataImportRuntime=createDataImportRuntime({ access: persistenceProvider, v
 const cashPublicationRuntime=createCashPublicationRuntime({ access: persistenceProvider, vault: integrationSecretVault, enabled: true, policies: CASH_SOURCE_POLICIES });
 const dataImportJobs=require('./lib/data-import-jobs').createDataImportJobs({
   directory:path.join(dataRootDirectory,'import-jobs'),vault:integrationSecretVault,runtime:dataImportRuntime,cashPublications:cashPublicationRuntime,
+  sourceArchive:integrationSecretVault?require('./lib/data-import-source-archive').createImportSourceArchive({directory:path.join(privateDataDirectory,'import-sources'),vault:integrationSecretVault}):null,
   lifecycle:dataImportLifecycle,resolvePrincipal:resolveSalesReportPrincipal,
   onError:code=>console.warn('Datenbankimport-Auftrag:',code),
 });
@@ -28563,6 +28566,126 @@ app.put("/api/portal/v1/maintenance-schedules", async (request, response) => {
     response.json(result);
   } catch (error) {
     throw maintenanceScheduleHttpError(error);
+  }
+});
+
+function driveBackupHttpError(error) {
+  const code = manualDriveBackups.CODES.includes(error?.code) ? error.code : "DRIVE_BACKUP_UNAVAILABLE";
+  const messages = {
+    DRIVE_BACKUP_INVALID: "Die Sicherungsanforderung ist unvollständig oder ungültig.",
+    DRIVE_BACKUP_BUSY: "Eine Sicherung oder Wartung läuft bereits. Bitte später erneut versuchen.",
+    DRIVE_BACKUP_NOT_FOUND: "Die ausgewählte Sicherung ist nicht mehr verfügbar. Bitte neu laden.",
+    DRIVE_BACKUP_PROTECTED: "Die neueste Sicherung und automatisch erstellte Sicherungen werden hier nicht gelöscht.",
+    DRIVE_BACKUP_REQUEST_CONFLICT: "Diese Anforderungskennung wurde bereits für eine andere Aktion verwendet.",
+  };
+  return httpError(code === "DRIVE_BACKUP_INVALID" ? 400 : ["DRIVE_BACKUP_BUSY", "DRIVE_BACKUP_NOT_FOUND", "DRIVE_BACKUP_PROTECTED", "DRIVE_BACKUP_REQUEST_CONFLICT"].includes(code) ? 409 : 503,
+    messages[code] || "Die geschützte Google-Drive-Sicherungsverwaltung ist derzeit nicht verfügbar.", code);
+}
+
+async function authorizeDriveBackupMutation(request, action, requestId, snapshotId = null) {
+  const actor = requireMaintenanceScheduleActor(request, { write: true });
+  return persistenceProvider.transaction(async executor => {
+    const repositories = createApplicationRepositories(executor);
+    const live = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+    if (!live || live.id !== actor.id) throw httpError(401, "Bitte erneut anmelden.", "PORTAL_LOGIN_REQUIRED");
+    if (live.mustChangePassword) throw httpError(428, "Bitte zuerst das Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+    assertLivePortalRoutePermission(live, "backup:write", { allowedRoles: BACKUP_ADMIN_ROLES });
+    await repositories.organizationPersonnel.insertAudit(live.employeeNumber, `backup.drive.${action}.requested`, "manual_backup", requestId,
+      JSON.stringify({ requestId, ...(snapshotId ? { snapshotId } : {}), scope: "full", restoreRequested: false }));
+    return live;
+  }, { isolation: "serializable" });
+}
+
+function dispatchDriveBackupAfterResponse(response, model) {
+  // The accepted job survives an app restart. A later authorized status read
+  // can dispatch the same queued ID again, without creating another backup.
+  if (model.operation?.state !== "queued") return;
+  const requestId = model.operation.requestId;
+  response.once("finish", () => {
+    manualDriveBackups.exchange("dispatch", { requestId }).catch(() => {
+      console.warn("Google-Drive-Sicherung wartet auf erneute Statusabfrage.");
+    });
+  });
+}
+
+app.get("/api/backup/drive", async (request, response) => {
+  requireMaintenanceScheduleActor(request);
+  try {
+    const model = await manualDriveBackups.exchange("list");
+    response.setHeader("Cache-Control", "no-store");
+    dispatchDriveBackupAfterResponse(response, model);
+    response.json(model);
+  } catch (error) { throw driveBackupHttpError(error); }
+});
+
+app.post("/api/backup/drive", async (request, response) => {
+  requireMaintenanceScheduleActor(request, { write: true });
+  try {
+    const body = manualDriveBackups.body(request.body, "create");
+    await authorizeDriveBackupMutation(request, "create", body.requestId);
+    const model = await manualDriveBackups.exchange("create", { requestId: body.requestId });
+    response.setHeader("Cache-Control", "no-store");
+    dispatchDriveBackupAfterResponse(response, model);
+    response.status(202).json(model);
+  } catch (error) {
+    if (error.status) throw error;
+    throw driveBackupHttpError(error);
+  }
+});
+
+app.delete("/api/backup/drive/:snapshotId", async (request, response) => {
+  requireMaintenanceScheduleActor(request, { write: true });
+  try {
+    const body = manualDriveBackups.body(request.body, "delete"), snapshotId = request.params.snapshotId;
+    if (!manualDriveBackups.SHA.test(snapshotId)) throw Object.assign(new Error("DRIVE_BACKUP_INVALID"), { code: "DRIVE_BACKUP_INVALID" });
+    await requireBackupAdminReauthentication(request, response, { operation: "drive-backup-delete" });
+    await authorizeDriveBackupMutation(request, "delete", body.requestId, snapshotId);
+    const model = await manualDriveBackups.exchange("delete", { requestId: body.requestId, snapshotId });
+    response.setHeader("Cache-Control", "no-store");
+    dispatchDriveBackupAfterResponse(response, model);
+    response.status(202).json(model);
+  } catch (error) {
+    if (error.status) throw error;
+    throw driveBackupHttpError(error);
+  }
+});
+
+app.get("/api/backup/deploy-scope", async (request, response) => {
+  requireMaintenanceScheduleActor(request);
+  const rows = await planningSettingsRepository.listSettings();
+  const value = rows.find(row => row.key === deployBackupScope.KEY)?.value;
+  response.setHeader("Cache-Control", "no-store");
+  response.json(deployBackupScope.response(deployBackupScope.read(value)));
+});
+
+app.put("/api/backup/deploy-scope", async (request, response) => {
+  const actor = requireMaintenanceScheduleActor(request, { write: true });
+  try {
+    const input = deployBackupScope.validateChange(request.body);
+    const state = await persistenceProvider.transaction(async executor => {
+      const repositories = createApplicationRepositories(executor);
+      const live = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+      if (!live || live.id !== actor.id) throw httpError(401, "Bitte erneut anmelden.", "PORTAL_LOGIN_REQUIRED");
+      if (live.mustChangePassword) throw httpError(428, "Bitte zuerst das Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+      assertLivePortalRoutePermission(live, "backup:write");
+      if (!BACKUP_ADMIN_ROLES.has(live.role)) throw httpError(403, "Für diese Sicherungseinstellung fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+      const rows = await repositories.planningSettings.listSettings();
+      const raw = rows.find(row => row.key === deployBackupScope.KEY)?.value;
+      const changed = deployBackupScope.change(raw, input);
+      if (changed.changed) {
+        await repositories.planningSettings.upsertSetting({ key: deployBackupScope.KEY, value: changed.value });
+        await repositories.organizationPersonnel.insertAudit(live.employeeNumber, "backup.deploy_scope.update", "settings", deployBackupScope.KEY,
+          JSON.stringify({ before: deployBackupScope.read(raw).scope, after: changed.state.scope, revision: changed.state.revision }));
+      }
+      return changed.state;
+    }, { isolation: "serializable" });
+    response.setHeader("Cache-Control", "no-store");
+    response.json(deployBackupScope.response(state));
+  } catch (error) {
+    if (error.code === "DEPLOY_BACKUP_SCOPE_INVALID") throw httpError(400, "Bitte einen gültigen Sicherungsumfang wählen.", error.code);
+    if (["DEPLOY_BACKUP_SCOPE_STALE", "PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"].includes(error.code))
+      throw httpError(409, "Der Sicherungsumfang wurde inzwischen geändert. Bitte neu laden; es wurde nichts überschrieben.", "DEPLOY_BACKUP_SCOPE_STALE");
+    throw error;
   }
 });
 
@@ -61430,6 +61553,7 @@ app.get("/api/settings", async (request, response) => {
     settings.backup_directory = "";
     settings.backup_interval_hours = "";
   }
+  delete settings[deployBackupScope.KEY];
   response.json(settings);
 });
 
@@ -61795,6 +61919,9 @@ function assertRequestPermission(request, permission) {
 }
 
 app.put("/api/settings", async (request, response) => {
+  if (Object.hasOwn(request.body || {}, deployBackupScope.KEY)) {
+    throw httpError(400, "Der Sicherungsumfang wird unter System & Backups gespeichert.", "DEPLOY_BACKUP_SCOPE_DEDICATED_API_REQUIRED");
+  }
   if (Object.keys(request.body || {}).some(isSystemNotificationReceiptSettingKey)) {
     throw httpError(400, "Empfangsbestätigungen werden ausschließlich im System-Center erfasst.", "NOTIFICATION_RECEIPT_PROTECTED_SETTING");
   }

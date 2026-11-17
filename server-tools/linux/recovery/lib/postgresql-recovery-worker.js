@@ -2,6 +2,11 @@
 const fs=require('node:fs'),path=require('node:path');
 const {restorePair}=require('../../../../lib/persistence/postgresql/operations/paired-restore');
 const {phaseReporter}=require('./postgresql-recovery-activity');
+function applicationScenario({scope,rehydrate=false,basis}={}){
+ if(scope==='full')return 'full';
+ if(scope!=='deploy-owned'||basis!==undefined&&basis!=='fresh-source-rebuild')throw new Error('PG_RECOVERY_SCOPE_INVALID');
+ return rehydrate&&basis!=='fresh-source-rebuild'?'full':'deploy-owned';
+}
 async function prepareRestoredSchema({config,connect}){
  const core=config.domains.find(domain=>domain.domain==='core');
  if(!core)throw new Error('PG_RECOVERY_CORE_MISSING');
@@ -29,10 +34,12 @@ async function main(){
  const [root]=process.argv.slice(2);
  if(process.platform!=='linux'||process.getuid()===0||!/^\/var\/lib\/grabenplaner-offsite\/postgresql-recovery\/[a-f0-9-]{36}$/.test(root||'')||fs.realpathSync(root)!==root||fs.statSync(root).uid!==process.getuid())throw new Error('PG_RECOVERY_WORKER_ROOT');
  const request=JSON.parse(fs.readFileSync(root+'/request.json','utf8'));
- if(!/^[a-f0-9-]{36}\.pair$/.test(request.bundle)||request.commitMarker!==request.bundle+'.complete.json')throw new Error('PG_RECOVERY_WORKER_REQUEST');
+ const scope=require('../../../../lib/persistence/postgresql/operations/deploy-data-policy').normalizeScope(request.scope);
+ const bundlePattern=scope==='full'?/^[a-f0-9-]{36}\.pair$/:/^[a-f0-9-]{36}\.owned$/;
+ if(!bundlePattern.test(request.bundle)||request.commitMarker!==request.bundle+'.complete.json')throw new Error('PG_RECOVERY_WORKER_REQUEST');
  const bundle=path.join(root,'source',request.bundle),commitMarker=path.join(root,'source',request.commitMarker);
  const progress=phaseReporter(root);
- const result=await restorePair({bundle,commitMarker,workRoot:root+'/work',onProgress:progress,privateApplicationNetwork:true,async onRestored({config,connect,workRoot}){
+ const smoke=async({config,connect,workRoot,recoveryBasis})=>{
   progress('verify-application-schema');
   const client=connect(config.domains[0].database,'gp_core_reader');
   try{
@@ -48,12 +55,14 @@ async function main(){
   fs.copyFileSync(bundle+'/configuration.env',applicationRoot+'/source-encryption.env');fs.chmodSync(applicationRoot+'/source-encryption.env',0o600);
   for(const name of ['private','branding-kits'])if(fs.existsSync(bundle+'/'+name))fs.cpSync(bundle+'/'+name,applicationRoot+'/'+name,{recursive:true,errorOnExist:true,force:false});
   progress('verify-application-http');
-  const smoke=await require('./postgresql-application-smoke').qualifyHttp({root:applicationRoot,config,rehearsal:'paired-restore',connectionPort:55484});
-  if(smoke.fullApplicationSmoke!==true||smoke.passed!==true)throw new Error('PG_RECOVERY_APPLICATION_SMOKE');
+  const smoke=await require('./postgresql-application-smoke').qualifyHttp({root:applicationRoot,config,rehearsal:'paired-restore',connectionPort:55484,scenario:applicationScenario({scope,rehydrate:request.rehydrate===true,basis:recoveryBasis})});
+  if(smoke.passed!==true||(scope==='full'?smoke.fullApplicationSmoke!==true:request.rehydrate!==true&&smoke.ownedApplicationSmoke!==true))throw new Error('PG_RECOVERY_APPLICATION_SMOKE');
   return {...smoke,compatibility:true,schemaUpgrades};
- }});
+ };
+ const result=await restorePair({bundle,commitMarker,scope,rehydrate:request.rehydrate===true,...(scope!=='full'&&request.rehydrate===true?request.freshAccess===true?{freshSourceDirectory:root+'/fresh-access'}:{sourceArchiveDirectory:root+'/access-sources'}:{}),workRoot:root+'/work',onProgress:progress,privateApplicationNetwork:true,
+  ...(scope==='full'?{onRestored:smoke}:{onOwnedRestored:smoke})});
  fs.writeFileSync(root+'/result.json',JSON.stringify(result)+'\n',{flag:'wx',mode:0o600});
  progress('complete');
 }
 if(require.main===module)main().catch(error=>{process.stderr.write(JSON.stringify({failed:true,code:error.code||null,error:/^PG_/.test(error.message)?error.message:'PostgreSQL recovery failed'})+'\n');process.exitCode=1;});
-module.exports={prepareRestoredSchema};
+module.exports={prepareRestoredSchema,applicationScenario};
