@@ -130,6 +130,7 @@ function settingsFixture(permissions) {
   const tabs = ["general", "backup", "systemCenter"].map(settingsTab => element({ settingsTab }));
   tabs[0].classList.toggle("active", true);
   const calls = [], utilizationStates = [];
+  let manualBackupReads = 0;
   const elements = Object.fromEntries(["generalSettings", "scheduleSettings", "personnelSettings", "dataProtectionSettings", "accessSettings", "rightsSettings", "backupSettings", "systemCenterPanel", "saveSettingsButton"].map(id => [id, element()]));
   elements.generalSettings.classList.toggle("active", true);
   const context = {
@@ -139,6 +140,12 @@ function settingsFixture(permissions) {
     schedulePdfSettingsWritePermission: "schedule:pdf:settings:write",
     loadSystemCenter: () => calls.push("systemCenter"),
     refreshServerDiagnostics: () => calls.push("backup"),
+    loadManualDriveBackups: options => {
+      assert.equal(elements.backupSettings.classList.contains("active"), true, "manual backup reads require the active backup panel");
+      assert.equal(options.force, true);
+      manualBackupReads++;
+      return Promise.resolve();
+    },
     canManageMaintenanceSchedules: () => false, canManageOffsiteFolders: () => false,
     clearUsbProvisioningPasswords() {}, scheduleAllSettingsPackedGrids() {}, syncRightsWorkspace() {},
     syncSystemUtilizationWorkspace: () => utilizationStates.push(elements.systemCenterPanel.classList.contains("active")),
@@ -147,12 +154,13 @@ function settingsFixture(permissions) {
   vm.runInContext(functionSource("canReadSystemCenter", "canReadPersonnelRulesDashboard")
     + functionSource("visibleManagedTabButtons", "reconcileManagedTabs")
     + functionSource("setSettingsTab", "setPersonnelTab"), context);
-  return { context, elements, tabs, calls, utilizationStates };
+  return { context, elements, tabs, calls, utilizationStates, get manualBackupReads() { return manualBackupReads; } };
 }
 
 test("System-Center settings load only diagnostics, switch panels and hide the unrelated save action", () => {
   for (const permission of ["system:diagnostics:read", "system:diagnostics:technical"]) {
-    const { context, elements, calls, tabs, utilizationStates } = settingsFixture([permission, "settings:write"]);
+    const fixture = settingsFixture([permission, "settings:write"]);
+    const { context, elements, calls, tabs, utilizationStates } = fixture;
     context.setSettingsTab("systemCenter");
     assert.equal(elements.systemCenterPanel.classList.contains("active"), true);
     assert.equal(elements.generalSettings.classList.contains("active"), false);
@@ -160,10 +168,12 @@ test("System-Center settings load only diagnostics, switch panels and hide the u
     assert.equal(tabs[2].getAttribute("aria-selected"), "true");
     assert.equal(tabs[2].tabIndex, 0);
     assert.deepEqual(calls, ["systemCenter"]);
+    assert.equal(fixture.manualBackupReads, 0, "System-Center must not request the unrelated Drive backup list");
     context.setSettingsTab("backup");
     assert.equal(elements.systemCenterPanel.classList.contains("active"), false);
     assert.equal(elements.backupSettings.classList.contains("active"), true);
     assert.deepEqual(calls, ["systemCenter", "backup"]);
+    assert.equal(fixture.manualBackupReads, 1);
     assert.deepEqual(utilizationStates, [true, false], "the lightweight history workspace follows the actual active panel");
   }
 });
