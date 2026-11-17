@@ -1,5 +1,15 @@
 # Versionsstatus
 
+## v0.92.103 Beta · Quellstand
+
+Updates können GP Core und eigene Inhalte mit einem kleineren Sicherungspunkt prüfen. Die vollständige Sales-Sicherung und nächtliche Recovery Assurance bleiben unabhängig davon erhalten.
+
+Die Einstellungen bieten manuelle vollständige Google-Drive-Sicherungen, eine bestätigte Sicherungsliste und das geschützte Löschen älterer manueller Sicherungspunkte.
+
+Eigene Artikelbilder, manuelle Änderungen und erforderliche GP-Identitäten bleiben im kleineren Sicherungspunkt enthalten. Rekonstruierbare Access-Importdaten werden bei Bedarf aus aktuellen Exporten aufgebaut.
+
+Enthält den bisherigen Quellstand v0.92.102 Beta:
+
 ## v0.92.102 Beta · Quellstand
 
 Importkorrekturen fuer die unabhaengige Pruefung bekannter ARTIKEL_FILIALEN-Zaehlerabweichungen und den Umgang mit optionalen Zweit-EANs.
