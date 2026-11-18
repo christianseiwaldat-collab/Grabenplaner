@@ -260,21 +260,21 @@ jeweils nur ihr damaliges Verfahren.
 Nach abgeschlossener Qualifikation kann der reguläre Updater ausdrücklich
 `--verification deploy-owned` verwenden. Bei `auto` wählt die gespeicherte
 GP-Einstellung den bestehenden vollständigen oder den kleineren geschützten
-Entscheider; ohne gültige Auswahl bleibt der vollständige Weg aktiv. `full`
-erzwingt weiterhin den Vollablauf. Die erste Auslieferung des Recovery-Vertrags benötigt
-selbst den Vollablauf.
+Entscheider. Eine fehlende Einstellung verwendet den Standardumfang `full`.
+Bei einem unlesbaren oder ungültigen Wert bricht der Updater vor der Sicherung ab.
+`full` wählt den Vollablauf ausdrücklich.
 
 Der kleinere Weg benötigt weiterhin einen gültigen signierten Vollnachweis
 innerhalb von 36 Stunden, unveränderte Paar-/Schema- und Konfigurationsbindungen
 sowie den bestätigten Nachttermin mit unveränderlicher Frist. Er erlaubt nur
 Änderungen an bereits bekannten GP-Geschäftsdateien. Änderungen an Sales, Import,
 Persistenz, Schema, Backup/Recovery, Serverwerkzeugen, Abhängigkeiten oder der
-Dateiliste erzwingen `full`. Ein weiterer kleiner Deploy vor dem nächsten
-passenden Vollnachweis fällt ebenfalls konservativ auf `full` zurück.
+Dateiliste verlangen den gesondert gewählten Vollablauf. Bei gewähltem
+Core-Umfang beendet der Updater einen solchen Lauf vor der Sicherung. Das
+gilt auch bei einem weiteren kleinen Deploy vor dem nächsten passenden Nachweis.
 
-Fehlen beim frischen Sicherungspunkt andere Voraussetzungen, erstellt der
-Updater vor dem App-Tausch den vollständigen Paarpunkt und verwendet den
-Vollablauf. Das bloße Fehlen alter Access-Dateien verhindert den V4-Punkt nicht.
+Schlägt der frische Core-Sicherungspunkt fehl, beendet der Updater den Lauf
+vor dem App-Tausch. Das Fehlen alter Access-Dateien allein verhindert den V4-Punkt nicht.
 Ein Fehler im gewählten Restore-/GP-Test verhindert den erfolgreichen
 Update-Abschluss. Die signierte Nachtqueue und ihre feste Frist werden dadurch
 nicht als bestanden markiert.

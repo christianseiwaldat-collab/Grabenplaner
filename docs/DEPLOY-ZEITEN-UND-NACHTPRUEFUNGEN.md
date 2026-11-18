@@ -21,7 +21,8 @@ Bestandskopie umfasst 580723970 Byte (0,581 GB); die Sicherungsoperation dauerte
 15 min 35 s. Restore, Neuaufbau und Inhaltsprüfungen sind gesonderte Phasen.
 Die globale
 Auswahl unter **Einstellungen → System & Backups → Sicherungsumfang bei Updates**
-gilt für `--verification auto`; vorgeschriebene Vollabläufe haben Vorrang. Der vollständige
+gilt für `--verification auto`. Erfordert ein Kandidat den Vollablauf, endet ein
+Lauf mit gewähltem Core-Umfang vor der Sicherung. Der vollständige
 Vergleichspunkt umfasst 14092664854 Byte einschließlich Manifest und Marker;
 Core und private Dateien allein bestimmen die neue Punktgröße nicht.
 Die folgenden Voll-/Kurzabläufe und ihre

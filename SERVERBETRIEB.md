@@ -102,9 +102,9 @@ Abschlussdatei. Restore und frischer Importneuaufbau werden getrennt geprüft.
 Unter **Einstellungen → System & Backups → Sicherungsumfang
 bei Updates** kann die berechtigte Serveradministration für automatische
 Updates Core mit eigenen Inhalten oder Core mit vollständigem Sales wählen.
-Ohne gespeicherte Auswahl gilt vollständig; vorgeschriebene Vollabläufe haben
-Vorrang. Der frühere exakte Archivweg bleibt getrennt; ältere Nachweise
-bestätigen diesen neuen Umfang nicht.
+Ohne gespeicherte Auswahl gilt der vollständige Umfang. Bei gewähltem Core-Umfang
+und einem unzulässigen Paket oder fehlgeschlagenen Sicherungspunkt beendet der
+Updater den Lauf. Der frühere exakte Archivweg behält seinen eigenen Nachweis.
 
 ### Lokal vorbereitete Beschleunigung
 

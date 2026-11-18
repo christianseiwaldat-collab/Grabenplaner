@@ -17,14 +17,14 @@ const nodePrelude=`node=${quote(process.execPath.replaceAll('\\','/'))}\nroot_no
 for (const scenario of [
  {name:'saved-core',scope:'deploy-owned',verification:'auto',expected:'owned',reads:1},
  {name:'saved-full',scope:'full',verification:'auto',expected:'full',reads:1},
- {name:'unreadable',scope:'deploy-owned',verification:'auto',expected:'full',reads:1,unreadable:true},
- {name:'malformed-response',scope:'unknown',verification:'auto',expected:'full',reads:1},
- {name:'corrupt-storage-default',scope:'full',valid:false,verification:'auto',expected:'full',reads:1},
- {name:'invalid-reduced-response',scope:'deploy-owned',valid:false,verification:'auto',expected:'full',reads:1},
+ {name:'unreadable',scope:'deploy-owned',verification:'auto',expected:'blocked',reads:1,unreadable:true},
+ {name:'malformed-response',scope:'unknown',verification:'auto',expected:'blocked',reads:1},
+ {name:'corrupt-storage',scope:'full',valid:false,verification:'auto',expected:'blocked',reads:1},
+ {name:'invalid-reduced-response',scope:'deploy-owned',valid:false,verification:'auto',expected:'blocked',reads:1},
  {name:'explicit-full-wins',scope:'deploy-owned',verification:'full',expected:'full',reads:0},
  {name:'explicit-core-wins',scope:'full',verification:'deploy-owned',expected:'owned',reads:0},
- {name:'mandatory-transition-wins',scope:'deploy-owned',verification:'auto',expected:'full',reads:1,transition:'protected'},
- {name:'missing-assurance-keeps-full',scope:'deploy-owned',verification:'auto',expected:'full',reads:1,offsite:0},
+ {name:'mandatory-transition-stops-core',scope:'deploy-owned',verification:'auto',expected:'blocked',reads:1,transition:'protected'},
+ {name:'missing-assurance-stops-core',scope:'deploy-owned',verification:'auto',expected:'blocked',reads:1,offsite:0},
 ]) test('actual updater backup preference: '+scenario.name,{skip:!fs.existsSync(bash)},t=>{
  const f=fixture(t),start=source.indexOf('effective_verification_policy="$verification_policy"'),end=source.indexOf('\ngp_info "Deploy-Pruefstrategie:',start);
  assert.ok(start>0&&end>start);
@@ -49,7 +49,13 @@ gp_die() { exit 42; }
 ${source.slice(start,end)}
 printf 'mode:%s\\n' "$deploy_mode" >> "$EVENTS_FILE"
 `);
- assert.equal(r.status,0,r.stderr);assert.equal(r.events.filter(event=>event==='read-preference').length,scenario.reads);
+ assert.equal(r.events.filter(event=>event==='read-preference').length,scenario.reads);
+ if(scenario.expected==='blocked'){
+  assert.equal(r.status,42,r.stderr);
+  assert.ok(!r.events.some(event=>event.startsWith('mode:')));
+  return;
+ }
+ assert.equal(r.status,0,r.stderr);
  assert.ok(r.events.includes('mode:'+scenario.expected),JSON.stringify(r.events));
  if(scenario.transition||scenario.verification==='full'||scenario.offsite===0) assert.ok(!r.events.some(event=>event.startsWith('classifier:')));
  else assert.ok(r.events.includes('classifier:'+scenario.expected));
@@ -89,24 +95,15 @@ create_exact_local_backup
 printf 'final-mode:%s\\n' "$deploy_mode" >> "$EVENTS_FILE"
 printf 'final-decision:%s\\n' "$deploy_decision" >> "$EVENTS_FILE"
 `);
- if(scenario==='invalid-owned-verification'){
-  assert.equal(r.status,42,r.stderr);assert.ok(r.events.includes('operation:candidate:verify-deploy-owned'));assert.ok(!r.events.some(event=>event.startsWith('backup:installed:')));return;
- }
- assert.equal(r.status,0,r.stderr);
  const candidate=r.events.find(event=>event.startsWith('backup:candidate:'));assert.ok(candidate?.includes('--deploy-owned'));
  assert.ok(r.events.includes('operation:candidate:identity'));
- if(scenario==='owned'){
-  assert.ok(r.events.includes('operation:candidate:verify-deploy-owned'));assert.ok(r.events.includes('final-mode:owned'));
-  assert.ok(!r.events.some(event=>event.startsWith('backup:installed:')));
- }else{
-  const installed=r.events.find(event=>event.startsWith('backup:installed:'));assert.ok(installed&&!installed.includes('--deploy-owned'));
-  assert.ok(r.events.includes('operation:installed:identity'));assert.ok(r.events.includes('operation:installed:verify'));
-  assert.ok(r.events.includes('final-mode:full'));assert.ok(r.events.some(event=>event.includes('OWNED_BACKUP_UNAVAILABLE')));
-  assert.ok(!r.events.includes('operation:candidate:verify-deploy-owned'));
- }
+ assert.ok(!r.events.some(event=>event.startsWith('backup:installed:')));
+ assert.equal(r.events.includes('operation:candidate:verify-deploy-owned'),scenario!=='missing-source');
+ assert.equal(r.status,scenario==='owned'?0:42,r.stderr);
+ assert.equal(r.events.includes('final-mode:owned'),scenario==='owned');
 });
 
-for(const scenario of ['owned','policy-drift','failed-owned-recovery','invalid-owned-proof','failed-readiness','fallback-full'])test('actual owned updater phase ordering: '+scenario,{skip:!fs.existsSync(bash)},t=>{
+for(const scenario of ['owned','policy-drift','failed-owned-recovery','invalid-owned-proof','failed-readiness','explicit-full'])test('actual updater phase ordering: '+scenario,{skip:!fs.existsSync(bash)},t=>{
  const f=fixture(t),entry='gp_begin_update_backup_ownership "$database"',start=source.indexOf(entry);assert.ok(start>0);
  const workflow=source.slice(start).replaceAll('/usr/local/sbin/grabenplaner-offsite-pre-update','$TEST_MODULE_ROOT/grabenplaner-offsite-pre-update.sh').replaceAll('/opt/grabenplaner-offsite/module','$TEST_MODULE_ROOT');
  f.write('app/old.txt','old synthetic app');
@@ -136,7 +133,7 @@ health_timeout=1500;internal_ready_url=http://127.0.0.1/ready;public_ready_url=h
 old_version=0.92.102-beta;candidate_version=0.92.104-beta;actual_package_sha256=synthetic
 runtime_v5_transition='';runtime_v6_transition='';xoffi_snapshots_migration=0
 GRABENPLANER_OFFSITE_CONFIGURED=1;GRABENPLANER_OFFSITE_STATUS_FILE=/var/lib/grabenplaner-offsite/status.json
-deploy_mode=owned;deploy_decision='{"mode":"owned"}'
+deploy_mode=${scenario==='explicit-full'?'full':'owned'};deploy_decision='{"mode":"${scenario==='explicit-full'?'full':'owned'}"}'
 schema_migration_result="$PWD/migration.json";school_migration_result="$PWD/school.json";session_security_migration_result="$PWD/session-security.json"
 backup_count=0;new_service_started=0
 gp_info() { :; }
@@ -155,7 +152,6 @@ start_database_lock() { printf 'database-lock\\n' >> "$EVENTS_FILE"; }
 release_database_lock() { :; }
 create_exact_local_backup() {
  backup_count=$((backup_count + 1));printf 'verified-backup\\n' >> "$EVENTS_FILE"
- ${scenario==='fallback-full'?`deploy_mode=full;deploy_decision='{"mode":"full","reason":"OWNED_BACKUP_UNAVAILABLE"}'`:':' }
  backup_database="$PWD/point-$backup_count";backup_amu="$backup_database/private/amu";mkdir -p "$backup_amu"
 }
 write_receipt() { printf 'success-receipt\\n' >> "$EVENTS_FILE"; printf '%s\\n' "$PWD/receipt"; }

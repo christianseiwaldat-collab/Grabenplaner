@@ -1080,11 +1080,7 @@ create_exact_local_backup() {
     --backup-dir "$backup_dir" --keep "$backup_keep" --service "$service" --node "$node" \
     --service-user "$service_user" --service-group "$service_group" --lock-already-held "${retention_args[@]}" >"$backup_result_file"; then
     if [[ "$deploy_mode" == owned ]]; then
-      gp_warn 'Der kleinere Sicherungspunkt ist nicht nachgewiesen; erstelle vor dem App-Tausch den vollstaendigen Paarpunkt.'
-      deploy_mode=full
-      deploy_decision='{"mode":"full","reason":"OWNED_BACKUP_UNAVAILABLE"}'
-      create_exact_local_backup
-      return
+      gp_die 'Core und eigene GP-Inhalte konnten nicht gesichert werden. Der App-Tausch wird abgebrochen.'
     fi
     gp_die 'Der frische PostgreSQL-Rueckkehrpunkt ist fehlgeschlagen.'
   fi
@@ -1441,9 +1437,10 @@ if [[ "$verification_policy" == auto && "$database_provider" == postgresql ]]; t
   # A GP preference selects the protected classifier; it never authorizes a
   # reduced point on its own. Unreadable/old settings keep the full Sales path.
   if preference_result="$(root_node "$extract_root/server-tools/linux/lib/postgresql-operations.js" deploy-backup-scope /etc/grabenplaner/postgresql-operations.json)"; then
-    effective_verification_policy="$(root_node -e 'const v=JSON.parse(process.argv[1]),p=require(process.argv[2]); if(v.appliesTo!=="deploy-auto"||v.available!==true||(!v.valid&&v.scope!=="full"))process.exit(1);process.stdout.write(p.effectivePolicy("auto",v.scope))' "$preference_result" "$extract_root/lib/deploy-backup-scope.js")" || effective_verification_policy=auto
+    effective_verification_policy="$(root_node -e 'const v=JSON.parse(process.argv[1]),p=require(process.argv[2]); if(v.appliesTo!=="deploy-auto"||v.available!==true||v.valid!==true)process.exit(1);process.stdout.write(p.effectivePolicy("auto",v.scope))' "$preference_result" "$extract_root/lib/deploy-backup-scope.js")" \
+      || gp_die 'Die gespeicherte Sicherungswahl ist ungueltig. Der Deploy wird vor der Sicherung abgebrochen.'
   else
-    gp_warn "Die gespeicherte Sicherungswahl ist nicht lesbar; die vollstaendige Sales-Sicherung bleibt aktiv."
+    gp_die 'Die gespeicherte Sicherungswahl ist nicht lesbar. Der Deploy wird vor der Sicherung abgebrochen.'
   fi
 fi
 if [[ "$verification_policy" == full || -n "$runtime_v5_transition" ]]; then
@@ -1461,6 +1458,10 @@ elif [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == 1 ]]; then
     || gp_die "Die Deploy-Pruefstrategie konnte nicht bestimmt werden."
 fi
 deploy_mode="$(root_node -e 'const value=JSON.parse(process.argv[1]); if(!["short","full","owned"].includes(value.mode))process.exit(1); process.stdout.write(value.mode)' "$deploy_decision")"
+if [[ "$effective_verification_policy" == deploy-owned && "$deploy_mode" != owned ]]; then
+  owned_rejection="$(root_node -e 'const {reason}=JSON.parse(process.argv[1]);process.stdout.write(typeof reason==="string"&&/^[A-Z0-9_]{1,80}$/.test(reason)?reason:"OWNED_VERIFICATION_UNAVAILABLE")' "$deploy_decision")"
+  gp_die "Core und eigene GP-Inhalte sind fuer dieses Update noch nicht qualifiziert ($owned_rejection). Der Deploy wird vor der Sicherung abgebrochen."
+fi
 gp_info "Deploy-Pruefstrategie: $deploy_mode. Der frische gebundene Rueckkehrpunkt bleibt verpflichtend."
 if [[ -n "$runtime_v6_transition" ]]; then
   root_node "$SCRIPT_DIR/lib/runtime-v6-transition.js" invocation "$runtime_v6_transition" "$commit_marker" "$SCRIPT_PATH" "${sha256_arg,,}" >/dev/null \
