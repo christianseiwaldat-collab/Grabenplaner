@@ -6671,7 +6671,7 @@ function renderTimeline() {
             const top = ((optionStart - start) / range) * 100;
             const height = Math.max(2.5, ((optionEnd - optionStart) / range) * 100);
             const title = `${optionLabels[option.option_type]} · ${formatOptionTime(option)}${option.note ? ` – ${option.note}` : ""}`;
-            return `<span class="option-block ${option.soft_pending ? "soft-pending-option" : ""}" data-option-title="${escapeHtmlAttribute(title)}" style="top:${top}%;height:${height}%"><em>${escapeHtml(option.soft_pending ? "ZA beantragt" : optionLabels[option.option_type])}</em></span>`;
+            return `<span class="option-block ${option.soft_pending ? "soft-pending-option" : ""}" data-option-title="${escapeHtmlAttribute(title)}" style="top:${top}%;height:${height}%"><em>${escapeHtml(option.soft_pending ? (option.option_type === "vacation" ? "Urlaub beantragt" : "ZA beantragt") : optionLabels[option.option_type])}</em></span>`;
           }).join("");
           const assignmentBlocks = [...outgoingAssignments, ...incomingAssignments].map((assignment) => {
             const incoming = String(assignment.destination_location_id || assignment.destinationLocationId) === String(state.locationId);
@@ -6688,7 +6688,7 @@ function renderTimeline() {
             const height = Math.max(2.5, ((assignmentEnd - assignmentStart) / range) * 100);
             return `<span class="employee-lending-marker ${incoming ? "incoming" : "outgoing"}" style="top:${top}%;height:${height}%" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
           }).join("");
-          const softPendingBlock = softPending ? '<span class="option-block soft-pending-option soft-pending-all-day"><em>ZA beantragt</em></span>' : "";
+          const softPendingBlock = softPending ? `<span class="option-block soft-pending-option soft-pending-all-day"><em>${softPending.option_type === "vacation" ? "Urlaub beantragt" : "ZA beantragt"}</em></span>` : "";
           const shifts = state.data.shifts.filter((shift) => shift.shift_date === date && shift.employee_number === employee.personnel_number);
           const bars = shifts.map((shift) => {
             const barStart = Math.max(start, timeToMinutes(shift.start_time));

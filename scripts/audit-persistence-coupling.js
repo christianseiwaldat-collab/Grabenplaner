@@ -75,6 +75,10 @@ const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["mdb-reader", "nodemaile
 const HISTORICAL_SOURCE_DRIVER_FILES = Object.freeze(['lib/persistence/postgresql/transfer/history.js']);
 // User-authorized 2026 migration blocks; isolated environment, never product activation.
 const MIGRATION_DEVELOPMENT_FILES = new Set([
+  // One read-only native request projection and its owned synthetic HTTP test.
+  // Classification grants neither database-driver imports nor schema writes.
+  'lib/persistence/postgresql/core/emma-absence-requests.js',
+  'test/emma-absence-requests-postgresql.test.js',
   // Exact synthetic native import/recovery qualifications; no driver grant.
   "test/postgresql-import-trade-ready-validation.test.js",
   "test/postgresql-import-dynamic-af-proof-compatibility.test.js",
@@ -823,6 +827,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/catalogs/work-rule-governance-catalog.js",
   "lib/persistence/statements/branding-snapshot.js",
   "lib/persistence/statements/absence-management.js",
+  "lib/persistence/statements/emma-absence-requests.js",
   "lib/persistence/statements/collective-agreements.js",
   "lib/persistence/statements/crm-customers.js",
   "lib/persistence/statements/custom-process-management.js",
