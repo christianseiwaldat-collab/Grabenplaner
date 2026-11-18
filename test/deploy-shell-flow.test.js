@@ -8,7 +8,7 @@ const { spawnSync } = require("node:child_process");
 const bash = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "/bin/bash";
 const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
 const source = fs.readFileSync(path.join(__dirname, "../server-tools/linux/update-grabenplaner-server.sh"), "utf8").replace(/\r\n/g, "\n");
-const entry = 'gp_begin_update_backup_ownership "$database"';
+const entry = '\ngp_begin_update_backup_ownership "$database"';
 const workflow = source.slice(source.indexOf(entry))
   .replaceAll("/usr/local/sbin/grabenplaner-offsite-pre-update", "$TEST_MODULE_ROOT/grabenplaner-offsite-pre-update.sh")
   .replaceAll("/opt/grabenplaner-offsite/module", "$TEST_MODULE_ROOT");

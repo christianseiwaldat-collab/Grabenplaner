@@ -281,6 +281,16 @@
       "reviewedOn": "2026-11-04",
       "expiresOn": "2026-11-18",
       "priority": "P2"
+    },
+    {
+      "scanner": "secrets",
+      "fingerprint": "ebb80f580342b1c1de8ed464c94100ab96940b9de2264f489d48145cad3f09a8",
+      "sourceSha256": "7381561d90184ad68657c2f7a7210f06d8ef44fffc2d7814726f2bd5379fb7e3",
+      "owner": "Codex (technical review); operational owner 252, deputy 353; no human approval claimed",
+      "reason": "Technically re-reviewed by Codex on 2026-11-18 against these exact LF source bytes. Line 97 assigns the public before-passkeys-v1 opt-in marker to an isolated synthetic upgrade fixture. It is a control-flow marker, not a credential. The surrounding command selects the explicitly isolated native compatibility phase. Exact scanner fingerprint and full source hash only; no path or history waiver and no human approval claimed.",
+      "reviewedOn": "2026-11-18",
+      "expiresOn": "2026-12-02",
+      "priority": "P2"
     }
   ]
 }
