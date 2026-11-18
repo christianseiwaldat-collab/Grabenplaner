@@ -45,7 +45,25 @@ CREATE TABLE sales_article_own_images(article_number TEXT PRIMARY KEY,content BL
 CREATE TABLE own_unknown_notes(id TEXT PRIMARY KEY,note TEXT);
 `;
 function client(database) {
-  const result = { database, writes: 0, connectionParameters: { host: '/tmp/gp-pg-recovery-ownedfixture', port: 55484 }, async query(sql, args = []) {
+  const cursors = new Map();
+  const result = { database, cursors, writes: 0, connectionParameters: { host: '/tmp/gp-pg-recovery-ownedfixture', port: 55484 }, async query(sql, args = []) {
+    if (sql.startsWith('DECLARE ')) {
+      const match = /^DECLARE "(gp_owned_export_[a-f0-9]{16})" NO SCROLL CURSOR FOR (SELECT .*)$/.exec(sql);
+      assert.ok(match); assert.equal(match[2].includes('LIMIT'), false);
+      assert.equal(cursors.has(match[1]), false);
+      cursors.set(match[1], { rows: (await this.query(match[2])).rows, offset: 0 });
+      return { rows: [] };
+    }
+    if (sql.startsWith('FETCH FORWARD ')) {
+      const match = /^FETCH FORWARD 100 FROM "(gp_owned_export_[a-f0-9]{16})"$/.exec(sql);
+      assert.ok(match); const cursor = cursors.get(match[1]); assert.ok(cursor);
+      const rows = cursor.rows.slice(cursor.offset, cursor.offset + 100); cursor.offset += rows.length;
+      return { rows };
+    }
+    if (sql.startsWith('CLOSE ')) {
+      const match = /^CLOSE "(gp_owned_export_[a-f0-9]{16})"$/.exec(sql);
+      assert.ok(match); assert.equal(cursors.delete(match[1]), true); return { rows: [] };
+    }
     if (sql.startsWith('CREATE TEMP TABLE ')) assert.equal(/\btext\b(?! COLLATE "C")/.test(sql), false, 'temporary text keys must match the source C collation for recursive closure');
     if (sql.startsWith("SELECT current_setting('unix_socket_directories')")) return { rows: [{ socket: this.connectionParameters.host, port: '55484', listen: '' }] };
     if (sql.startsWith('SELECT to_regclass')) {
@@ -204,6 +222,26 @@ test('completed imported row volume does not enlarge the sparse state file or ma
   const a = await P.exportOwnedState(small), b = await P.exportOwnedState(large);
   assert.equal(a.rows, b.rows); assert.equal(a.bytes, b.bytes); assert.equal(JSON.stringify(a).length, JSON.stringify(b).length);
   assert.equal(a.tables.find(t => t.table === 'import_history_records').rows, 2);
+});
+
+test('retained pending work crosses cursor batches without gaps and closes its portal', async t => {
+  const f = await fixture(t, { bulk: 1 });
+  for (let number = 2; number <= 251; number++) insert(f.salesDb, 'data_import_rows', { run_id: f.pendingRun,
+    row_number: number, identity_hash: sha('link-3'), payload: 'pending-' + number, state: 'conflict' });
+  const plan = await P.exportOwnedState(f), target = new DatabaseSync(':memory:');
+  target.exec('PRAGMA foreign_keys=OFF;' + DDL); t.after(() => target.close()); copyNormal(f, target);
+  await P.restoreOwnedState({ ...f, sales: client(target), plan, isolatedRecovery: true });
+  assert.deepEqual(target.prepare('SELECT row_number,payload FROM data_import_rows WHERE run_id=? ORDER BY row_number').all(f.pendingRun),
+    f.salesDb.prepare('SELECT row_number,payload FROM data_import_rows WHERE run_id=? ORDER BY row_number').all(f.pendingRun), 'same rows and original order');
+  assert.equal(f.sales.cursors.size, 0);
+});
+
+test('a cursor fetch failure retains its original error and removes the incomplete export', async t => {
+  const f = await fixture(t, { bulk: 1 }), query = f.sales.query.bind(f.sales), failure = new Error('synthetic cursor read failure');
+  f.sales.query = async (...args) => { if (args[0].startsWith('FETCH FORWARD ')) throw failure; return query(...args); };
+  await assert.rejects(P.exportOwnedState(f), error => error === failure);
+  assert.equal(f.sales.cursors.size, 0);
+  await assert.rejects(fs.access(path.join(f.directory, P.FILE)), { code: 'ENOENT' });
 });
 
 test('pending rows and changes retain their original links even when the last linked run is reconstructible',async t=>{
