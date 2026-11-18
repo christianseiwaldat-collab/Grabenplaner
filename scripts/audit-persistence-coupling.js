@@ -79,6 +79,8 @@ const MIGRATION_DEVELOPMENT_FILES = new Set([
   // Classification grants neither database-driver imports nor schema writes.
   'lib/persistence/postgresql/core/emma-absence-requests.js',
   'test/emma-absence-requests-postgresql.test.js',
+  'lib/persistence/postgresql/core/staffing-reservations.js',
+  'test/staffing-reservations.test.js',
   // Exact synthetic native import/recovery qualifications; no driver grant.
   "test/postgresql-import-trade-ready-validation.test.js",
   "test/postgresql-import-dynamic-af-proof-compatibility.test.js",

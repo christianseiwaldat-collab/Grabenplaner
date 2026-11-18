@@ -6,11 +6,12 @@ const { createPersistenceProviderFacade, definePersistenceStatement } = require(
 const { POSTGRESQL_CAPABILITIES: capabilities } = require("../lib/persistence/postgresql/provider");
 const { createAbsenceManagementRepository } = require("../lib/persistence/repositories/absence-management");
 const { pendingVacationForRange } = require("../lib/persistence/statements/emma-absence-requests");
+const { STAFF_ASSIGNMENT_REQUEST_STATEMENTS } = require("../lib/persistence/statements/staff-assignment-requests");
 
 // Exercise the actual two-database routing/coordinator and native repository.
 // Only transport/storage is synthetic here. The guarded HTTP PostgreSQL suite
 // additionally proves the complete deferred app and real SQL schedule projection.
-async function fixture() {
+async function fixture(expectedStatement = pendingVacationForRange, reservation = null) {
   const row = { id: 7, employee_number: "synthetic-self", date_from: "2031-04-08", date_to: "2031-04-10" };
   const state = { allowed: true, reads: [], commits: 0, rollbacks: 0, authorizations: [] };
   const core = createPersistenceProviderFacade({ providerId: "postgresql", capabilities,
@@ -19,8 +20,8 @@ async function fixture() {
     async beginTransaction(options) {
       assert.equal(options.readOnly, true);
       return { query: async (statement, parameters) => {
-        assert.equal(statement, pendingVacationForRange);
-        state.reads.push(parameters); return [{ data: row }];
+        assert.equal(statement, expectedStatement);
+        state.reads.push(parameters); return [reservation || { data: row }];
       }, execute: async () => { throw Error("The projection must not write"); },
       commit: async () => { state.commits++; }, rollback: async () => { state.rollbacks++; } };
     } });
@@ -55,4 +56,16 @@ test("pending vacation boundary read preserves the final authorization check", a
   const f = await fixture(); t.after(() => f.app.close()); f.state.allowed = false;
   await assert.rejects(f.repository.pendingVacationForRange({ dateFrom: "2031-04-07", dateTo: "2031-04-13" }));
   assert.equal(f.state.reads.length, 1); assert.equal(f.state.commits, 0); assert.equal(f.state.rollbacks, 1);
+});
+
+test("staffing conflict reaches the Core owner with the exact approval span", async t => {
+  const statement = STAFF_ASSIGNMENT_REQUEST_STATEMENTS.findReservationConflict;
+  const reservation = { reservationId: "staff-reservation-" + "a".repeat(64) };
+  const f = await fixture(statement, reservation);
+  t.after(() => f.app.close());
+  const range = { employeeNumber: "synthetic-self", locationId: "18",
+    dateFrom: "2031-04-07", dateTo: "2031-04-13", retainedFrom: "", retainedTo: "" };
+  assert.deepEqual(await f.repository.staffAssignmentRequests.findReservationConflict(range), reservation);
+  assert.deepEqual(f.state.reads, [range]);
+  assert.deepEqual(f.state.authorizations, [{ statementIds: [statement.id], readOnly: true }]);
 });

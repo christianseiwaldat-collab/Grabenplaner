@@ -491,6 +491,15 @@ const {
   transitionStaffAssignmentRequestHistory,
 } = require("./lib/staff-assignment-requests");
 const {
+  PERMISSION: STAFFING_RESERVATION_PERMISSION,
+  assertReservationReviewer,
+  assertStaffingReservationAllowsAbsence,
+  findStaffingReservationConflict,
+  isStaffingReservation,
+  registerStaffingReservationRoutes,
+  writeWeekOptionWithReservationCheck,
+} = require("./lib/staffing-reservations");
+const {
   assertStaffAssignmentRequestAssignmentAvailable,
   boundAssignmentFromRequest,
   staffAssignmentRequestIdFromAssignmentId,
@@ -872,6 +881,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.READ, label: "Fremde Dienstpläne eingeschränkt lesen", description: "Aktuelle und nächste Dienstplanwoche anderer Filialen rein lesend und ohne Wochenstunden, Regelprüfungen, Zeitkonten oder Abwesenheitsgründe ansehen.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_CREATE, label: "Standortübergreifenden Einsatz für die eigene Filiale anfragen", description: "Aus einem fremden Dienstplan einen stundenweisen, ganztägigen oder mehrtägigen Einsatz für die eigene Filiale und den eigenen Abteilungsbereich anfragen; noch keine Einsatzfreigabe.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.REQUEST_REVIEW, label: "Einsatzanfragen der eigenen Stammfiliale entscheiden", description: "Anfragen zu Teammitgliedern des eigenen Verantwortungsbereichs prüfen und entscheiden; direkte Filialeinsätze bleiben ein getrenntes Recht.", group: "Dienstplanung", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: STAFFING_RESERVATION_PERMISSION, label: "Filialreservierungen über Emma verwalten", description: "Individuelle Freigabe für Emmas Konto und zugewiesene ganze Filialen. Aktive Reservierungen sperren die endgültige Urlaubs- und ZA-Freigabe in der Quellfiliale.", group: "Dienstplanung", warningLevel: "critical", eligibleRoles: ["employee", "department_manager", "manager", "hr", "admin"] },
   { id: CROSS_LOCATION_SCHEDULE_PERMISSIONS.SETTINGS_WRITE, label: "Standortübergreifende Einsatzanfragen konfigurieren", description: "PL+-Metarecht für Sicht-, AL- und Benachrichtigungseinstellungen; vermittelt allein keinen Zugriff auf fremde Dienstpläne oder Anfragen.", group: "Dienstplanung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: SCHEDULE_PDF_SETTINGS_WRITE_PERMISSION, label: "Dienstplan-PDF im eigenen Bereich gestalten", description: "Titel, Dateiname, Designauswahl und Wochenmatrix-Darstellung ausschließlich im freigegebenen Filial- oder Abteilungsbereich bearbeiten.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: PORTAL_BIRTHDAY_PRESENTATION_PERMISSIONS.TEAM_WRITE, label: "Geburtstagsdarstellung im eigenen Team festlegen", description: "Wählt ausschließlich eine freigegebene Darstellungs-ID für das eigene aktive Filial- oder Abteilungsteam; vermittelt keinen Zugriff auf Geburtsdatum, Alter oder Geburtstagslisten.", group: "Mitarbeiterportal", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "developer"] },
@@ -6369,7 +6379,7 @@ function installationFeaturesForApiPath(apiPath) {
     required.add("employeePortal");
     if (requestPath.endsWith("/schedule")) required.add("schedule");
   }
-  if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/(?:me\/schedule|location-dashboard\/schedule|cross-location-schedules|cross-location-schedule-settings|staff-assignment-requests)(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
+  if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/(?:me\/schedule|location-dashboard\/schedule|cross-location-schedules|cross-location-schedule-settings|staff-assignment-requests|emma\/staffing-reservations)(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
   if (/^\/(?:vacations?(?:$|\/|\.pdf$|-preview\.pdf$)|vacation-entitlements(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/personnel-vacations(?:\/|$)/.test(requestPath)) required.add("vacation");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:absence(?:-|\/|$)|vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$)|time-off(?:-|\/|$)|approved-time-off(?:\/|$)|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))/.test(requestPath)) required.add("requests");
@@ -16021,6 +16031,7 @@ async function insertApprovedTimeOff(
   actor = "system",
   boundRepository = null,
   prepared = null,
+  previous = null,
 ) {
   const {
     shifts,
@@ -16029,6 +16040,15 @@ async function insertApprovedTimeOff(
     evaluations,
   } = prepared || await prepareApprovedTimeOffMutation(entry);
   const mutate = async (absence) => {
+    await assertStaffingReservationAllowsAbsence(absence.staffAssignmentRequests, {
+      optionType: "time_off", employeeNumber: entry.employee_number, locationId: entry.location_id,
+      dateFrom: entry.date_from || entry.request_date, dateTo: entry.date_to || entry.request_date,
+      allDay: entry.all_day, startTime: entry.start_time, endTime: entry.end_time,
+    }, previous && previous.location_id === entry.location_id ? {
+      optionType: "time_off", employeeNumber: previous.employee_number,
+      dateFrom: previous.date_from || previous.request_date, dateTo: previous.date_to || previous.request_date,
+      allDay: previous.all_day, startTime: previous.start_time, endTime: previous.end_time,
+    } : null);
     const repository = absence.workRules;
     await repository.updateTimeOffOriginalShifts(Number(entry.id), shifts);
     for (const shift of shifts) await repository.deletePlanningShift(Number(shift.id));
@@ -22219,6 +22239,9 @@ async function decideStaffAssignmentRequest(session, requestId, input = {}) {
           "Die Einsatzanfrage wurde nicht gefunden.",
         );
       }
+      if (isStaffingReservation(requestId)) {
+        assertReservationReviewer(liveSession, request.createdByEmployeeNumber);
+      }
       const [employees, locations, departments] = await Promise.all([
         organization.listEmployees(),
         organization.listLocations(false),
@@ -23686,7 +23709,10 @@ function createVacationGroupId() {
   return `vac-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function insertVacationEntries(vacation, groupId, repository = absenceManagementRepository) {
+async function insertVacationEntries(vacation, groupId, repository = absenceManagementRepository, previous = null) {
+  await assertStaffingReservationAllowsAbsence(repository.staffAssignmentRequests, {
+    ...vacation, optionType: "vacation", allDay: true,
+  }, previous && { ...previous, optionType: "vacation", allDay: true });
   let date = vacation.dateFrom;
   let created = 0;
   while (date <= vacation.dateTo) {
@@ -23845,7 +23871,7 @@ async function replaceVacationGroup(groupId, vacation, actor = "system", options
     const before = await vacationGroupSnapshot(groupId, repository);
     if (!before) throw httpError(404, "Der Urlaubseintrag wurde nicht gefunden.");
     await deleteVacationRows(groupId, repository);
-    const created = await insertVacationEntries(vacation, groupId, repository);
+    const created = await insertVacationEntries(vacation, groupId, repository, before);
     await recordVacationHistory("replaced", groupId, {
       ...await vacationGroupSnapshot(groupId, repository),
       previous: before,
@@ -32857,6 +32883,21 @@ app.put("/api/portal/v1/staff-assignment-requests/:requestId/decision", async (r
       request.body || {},
     ),
   });
+});
+
+registerStaffingReservationRoutes(app, {
+  transaction: (work, options) => persistenceProvider.transaction(
+    executor => work(createApplicationRepositories(executor)), options,
+  ),
+  async authorize(request, repositories) {
+    assertAssistantFeatures("employeePortal", "schedule", "requests");
+    const prior = requireEmployeePortalSession(request, STAFFING_RESERVATION_PERMISSION);
+    const actor = await loadPortalSessionFromRequest(request, { touch: false, repository: repositories.portalAccess });
+    return actor?.id === prior.id ? actor : null;
+  },
+  assertCsrf: assertPortalCsrf,
+  mapError: staffAssignmentRequestHttpError,
+  periodForLocation: staffAssignmentRequestPeriodForLocation,
 });
 
 app.put("/api/schedule-note", async (request, response) => {
@@ -58105,9 +58146,19 @@ require("./lib/emma-absence-requests").registerEmmaAbsenceRoutes(app, {
     await assertNoVacationLendingOverlap(input.employeeNumber, input.dateFrom, input.dateTo, repository);
     return absenceEmployeeRequestContext(input.employeeNumber, input.dateFrom, {}, repository);
   },
-  evaluate: (input, context, repository) => input.kind === "vacation"
-    ? evaluateVacationRequest(input.employeeNumber, input, repository)
-    : evaluateTimeOffRequest(input.employeeNumber, input, context, repository),
+  async evaluate(input, context, repository) {
+    const check = await (input.kind === "vacation"
+      ? evaluateVacationRequest(input.employeeNumber, input, repository)
+      : evaluateTimeOffRequest(input.employeeNumber, input, context, repository));
+    if (absenceRequestSubmissionAllowed(check) && await findStaffingReservationConflict(
+      repository.staffAssignmentRequests, { ...input, locationId: context.locationId },
+    )) {
+      return { ...check, allowed: false, trafficLight: "red", manualReview: true,
+        code: "STAFFING_RESERVATION_ABSENCE_HOLD",
+        reason: "Für diesen Zeitraum besteht eine Personalreservierung in der Filiale. Der Antrag bleibt bis zur Freigabe offen." };
+    }
+    return check;
+  },
   decision: recordRequestDecision, notify: notifyAbsenceRequestReviewers, audit: auditAbsence,
 });
 
@@ -58713,6 +58764,7 @@ async function finalizeTimeOffChangeRequest(
 ) {
   const preparation = prepared || await prepareTimeOffChangeFinalization(entry);
   let { original } = preparation;
+  const previous = original;
   const { check } = preparation;
 
   await restoreApprovedTimeOff(
@@ -58752,6 +58804,7 @@ async function finalizeTimeOffChangeRequest(
       actor,
       repository,
       preparation.replacementMutation,
+      previous,
     );
     await repository.setOriginalTimeOffOption({
       id: Number(original.id),
@@ -58816,7 +58869,7 @@ async function finalizeVacationChangeRequest(
     repository,
   );
   if (replacement) {
-    await insertVacationEntries(replacement, entry.vacation_group_id, repository);
+    await insertVacationEntries(replacement, entry.vacation_group_id, repository, current);
   }
   await repository.finalizeVacationChange({
     id: Number(entry.id),
@@ -62741,7 +62794,7 @@ app.post("/api/week-options", async (request, response) => {
       ({ result, workRuleAssessments } = await mutateVocationalSchoolOption(
         prepared, (repository) => repository.insertWeekOption(option), request.portalSession?.employeeNumber,
       ));
-    } else result = await planningSettingsRepository.insertWeekOption(option);
+    } else result = await writeWeekOptionWithReservationCheck(planningSettingsRepository, option);
   } catch (error) {
     throw staffAssignmentAbsenceConstraintError(error);
   }
@@ -62831,12 +62884,12 @@ app.put("/api/week-options/:id", async (request, response) => {
     if (option.optionType === "vocational_school" || existing.option_type === "vocational_school") {
       ({ result: updated, workRuleAssessments } = await mutateVocationalSchoolOption(
         prepared, async (repository) => {
-          const result = await repository.updateWeekOption({ id, ...option });
+          const result = await writeWeekOptionWithReservationCheck(repository, option, id);
           if (!result.rowsAffected) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
           return result;
         }, request.portalSession?.employeeNumber,
       ));
-    } else updated = await planningSettingsRepository.updateWeekOption({ id, ...option });
+    } else updated = await writeWeekOptionWithReservationCheck(planningSettingsRepository, option, id);
   } catch (error) {
     throw staffAssignmentAbsenceConstraintError(error);
   }
